@@ -9,13 +9,32 @@ struct AffiliateAdBanner: View {
     @State private var storeKit = StoreKitService.shared
     @State private var affiliateService = AffiliateAdService.shared
 
+    private let tracking = AdTrackingService.shared
+
     var body: some View {
         // Only show to free-tier users
         if storeKit.currentTier == .free,
            let partner = affiliateService.currentPartner,
            let imageURL = affiliateService.imageURL(for: placement),
-           let affiliateURL = affiliateService.affiliateURL {
+           let affiliateURL = affiliateService.affiliateURL,
+           // Affiliate target is config/backend-supplied — gate it through the
+           // same http(s) allowlist as other content links so a non-web scheme
+           // is never handed to the system (IOS-AUDIT-SEC-002 / -012 parity).
+           affiliateURL.isSafeWebLink {
             adContent(partner: partner, imageURL: imageURL, affiliateURL: affiliateURL)
+                // Affiliate fill is tracked distinctly (IOS-ADS-014) on the same
+                // viewability bar as paid + house inventory.
+                .trackAdViewability {
+                    tracking.logAffiliateImpression(partner: partner.name, placement: placementKey)
+                }
+        }
+    }
+
+    /// Stable string for the placement, used in affiliate analytics.
+    private var placementKey: String {
+        switch placement {
+        case .banner:  return "banner"
+        case .compact: return "compact"
         }
     }
 
@@ -38,6 +57,9 @@ struct AffiliateAdBanner: View {
                 .clipShape(RoundedRectangle(cornerRadius: 12))
                 .shadow(color: .black.opacity(0.08), radius: 6, x: 0, y: 2)
             }
+            .simultaneousGesture(TapGesture().onEnded {
+                tracking.logAffiliateClick(partner: partner.name, placement: placementKey)
+            })
             .accessibilityLabel("\(partner.name) hotel advertisement. Tap to learn more.")
             .accessibilityAddTraits(.isLink)
 

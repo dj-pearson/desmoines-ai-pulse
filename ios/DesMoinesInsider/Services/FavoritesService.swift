@@ -14,6 +14,11 @@ final class FavoritesService {
     private(set) var favoriteEventIds: Set<String> = []
     private(set) var favoriteRestaurantIds: Set<String> = []
     private(set) var favoriteAttractionIds: Set<String> = []
+    /// Saved articles/guides (IOS-PARITY-002). Intentionally kept OUT of the
+    /// premium favorites cap below — saving editorial content is always free
+    /// and shouldn't consume the "3 favorites" gate that covers
+    /// events/restaurants/attractions.
+    private(set) var favoriteArticleIds: Set<String> = []
     private(set) var isLoading = false
 
     private let supabase: SupabaseClient? = SupabaseService.shared.client
@@ -21,6 +26,39 @@ final class FavoritesService {
     private func db() throws -> SupabaseClient {
         guard let supabase else { throw FavoritesError.notConfigured }
         return supabase
+    }
+
+    // MARK: - Favorites Cap (IOS-SUB-011)
+
+    /// Total saved items across events, restaurants and attractions. The free
+    /// cap (`SubscriptionTier.free.maxFavorites` = 3) is a TOTAL, matching the
+    /// web "Save up to 3 favorites".
+    var totalFavoritesCount: Int {
+        favoriteEventIds.count + favoriteRestaurantIds.count + favoriteAttractionIds.count
+    }
+
+    /// The current user's favorites limit (`-1` = unlimited). Resolved from the
+    /// user's ACTUAL tier (StoreKit + backend), not hardcoded to free — so
+    /// Insider/VIP get unlimited saves.
+    private var favoritesLimit: Int {
+        StoreKitService.shared.currentTier.maxFavorites
+    }
+
+    /// Throws (and broadcasts) when adding one more favorite would exceed the
+    /// free cap. The notification drives the single app-level upsell paywall
+    /// (see MainTabView), so every save surface gets the soft gate for free.
+    private func enforceFavoritesCap() throws {
+        let limit = favoritesLimit
+        guard limit > 0, totalFavoritesCount >= limit else { return }
+        NotificationCenter.default.post(name: .favoritesLimitReached, object: nil)
+        throw FavoritesError.limitReached(max: limit)
+    }
+
+    /// Whether an error thrown by a toggle was the favorites cap, so callers can
+    /// suppress a redundant error toast (the global paywall already shows).
+    static func isLimitReached(_ error: Error) -> Bool {
+        if case FavoritesError.limitReached = error { return true }
+        return false
     }
 
     // ================================================================
@@ -32,7 +70,8 @@ final class FavoritesService {
         async let events: () = loadEventFavorites()
         async let restaurants: () = loadRestaurantFavorites()
         async let attractions: () = loadAttractionFavorites()
-        _ = await (events, restaurants, attractions)
+        async let articles: () = loadArticleFavorites()
+        _ = await (events, restaurants, attractions, articles)
         isLoading = false
     }
 
@@ -76,10 +115,7 @@ final class FavoritesService {
     }
 
     private func addEventFavorite(userId: String, eventId: String) async throws -> Bool {
-        let maxFavorites = SubscriptionTier.free.maxFavorites
-        if maxFavorites > 0 && favoriteEventIds.count >= maxFavorites {
-            throw FavoritesError.limitReached(max: maxFavorites)
-        }
+        try enforceFavoritesCap()
 
         struct InsertRow: Encodable {
             let user_id: String
@@ -94,6 +130,7 @@ final class FavoritesService {
             .execute()
 
         favoriteEventIds.insert(eventId)
+        SoftPaywallService.shared.considerAfterFavorite(totalFavorites: totalFavoritesCount)
         return true
     }
 
@@ -218,6 +255,8 @@ final class FavoritesService {
     }
 
     private func addRestaurantFavorite(userId: String, restaurantId: String) async throws -> Bool {
+        try enforceFavoritesCap()
+
         do {
             struct InsertRow: Encodable {
                 let user_id: String
@@ -236,6 +275,7 @@ final class FavoritesService {
         }
 
         favoriteRestaurantIds.insert(restaurantId)
+        SoftPaywallService.shared.considerAfterFavorite(totalFavorites: totalFavoritesCount)
         return true
     }
 
@@ -347,10 +387,7 @@ final class FavoritesService {
     }
 
     private func addAttractionFavorite(userId: String, attractionId: String) async throws -> Bool {
-        let maxFavorites = SubscriptionTier.free.maxFavorites
-        if maxFavorites > 0 && favoriteAttractionIds.count >= maxFavorites {
-            throw FavoritesError.limitReached(max: maxFavorites)
-        }
+        try enforceFavoritesCap()
 
         do {
             struct InsertRow: Encodable {
@@ -369,6 +406,7 @@ final class FavoritesService {
         }
 
         favoriteAttractionIds.insert(attractionId)
+        SoftPaywallService.shared.considerAfterFavorite(totalFavorites: totalFavoritesCount)
         return true
     }
 
@@ -432,6 +470,118 @@ final class FavoritesService {
     }
 
     // ================================================================
+    // MARK: - Article Favorites (IOS-PARITY-002)
+    // ================================================================
+    //
+    // Saved guides/blog posts. Uses `user_article_interactions` when present,
+    // falling back to on-device UserDefaults (the table isn't shipped yet, so
+    // saves persist locally until it is — same pattern as restaurants). These
+    // are NOT cap-enforced: editorial saves are always free.
+
+    private func loadArticleFavorites() async {
+        guard let userId = AuthService.shared.currentUser?.id.uuidString else {
+            favoriteArticleIds = loadLocalArticleFavorites()
+            return
+        }
+
+        do {
+            let client = try db()
+            struct FavoriteRow: Decodable {
+                let article_id: String
+            }
+            let rows: [FavoriteRow] = try await client
+                .from("user_article_interactions")
+                .select("article_id")
+                .eq("user_id", value: userId)
+                .eq("interaction_type", value: "favorite")
+                .execute()
+                .value
+
+            favoriteArticleIds = Set(rows.map(\.article_id))
+        } catch {
+            // Table may not exist yet — fall back to local storage.
+            favoriteArticleIds = loadLocalArticleFavorites()
+        }
+    }
+
+    /// Toggle an article favorite. Returns `true` if now saved, `false` if removed.
+    @discardableResult
+    func toggleFavoriteArticle(articleId: String) async throws -> Bool {
+        if favoriteArticleIds.contains(articleId) {
+            return try await removeArticleFavorite(articleId: articleId)
+        } else {
+            return try await addArticleFavorite(articleId: articleId)
+        }
+    }
+
+    private func addArticleFavorite(articleId: String) async throws -> Bool {
+        if let userId = AuthService.shared.currentUser?.id.uuidString {
+            do {
+                struct InsertRow: Encodable {
+                    let user_id: String
+                    let article_id: String
+                    let interaction_type: String
+                }
+                let client = try db()
+                try await client
+                    .from("user_article_interactions")
+                    .insert(InsertRow(user_id: userId, article_id: articleId, interaction_type: "favorite"))
+                    .execute()
+            } catch {
+                saveLocalArticleFavorite(articleId, add: true)
+            }
+        } else {
+            // Signed-out reading still allows saving locally.
+            saveLocalArticleFavorite(articleId, add: true)
+        }
+
+        favoriteArticleIds.insert(articleId)
+        return true
+    }
+
+    private func removeArticleFavorite(articleId: String) async throws -> Bool {
+        if let userId = AuthService.shared.currentUser?.id.uuidString {
+            do {
+                let client = try db()
+                try await client
+                    .from("user_article_interactions")
+                    .delete()
+                    .eq("user_id", value: userId)
+                    .eq("article_id", value: articleId)
+                    .eq("interaction_type", value: "favorite")
+                    .execute()
+            } catch {
+                saveLocalArticleFavorite(articleId, add: false)
+            }
+        } else {
+            saveLocalArticleFavorite(articleId, add: false)
+        }
+
+        favoriteArticleIds.remove(articleId)
+        return false
+    }
+
+    func isArticleFavorited(_ articleId: String) -> Bool {
+        favoriteArticleIds.contains(articleId)
+    }
+
+    /// Fetch the full saved Article rows (for the Dashboard "Saved" overview).
+    func fetchFavoriteArticles() async throws -> [Article] {
+        let ids = Array(favoriteArticleIds)
+        guard !ids.isEmpty else { return [] }
+        return try await withRetry {
+            let client = try self.db()
+            return try await client
+                .from("articles")
+                .select()
+                .in("id", values: ids)
+                .order("published_at", ascending: false, nullsFirst: false)
+                .execute()
+                .value
+        }
+    }
+
+    // ================================================================
     // MARK: - Sign-Out Cleanup
     // ================================================================
 
@@ -441,8 +591,10 @@ final class FavoritesService {
         favoriteEventIds = []
         favoriteRestaurantIds = []
         favoriteAttractionIds = []
+        favoriteArticleIds = []
         UserDefaults.standard.removeObject(forKey: localRestaurantKey)
         UserDefaults.standard.removeObject(forKey: localAttractionKey)
+        UserDefaults.standard.removeObject(forKey: localArticleKey)
     }
 
     // ================================================================
@@ -451,6 +603,7 @@ final class FavoritesService {
 
     private let localRestaurantKey = "localRestaurantFavorites"
     private let localAttractionKey = "localAttractionFavorites"
+    private let localArticleKey = "localArticleFavorites"
 
     private func loadLocalRestaurantFavorites() -> Set<String> {
         let array = UserDefaults.standard.stringArray(forKey: localRestaurantKey) ?? []
@@ -482,6 +635,21 @@ final class FavoritesService {
         UserDefaults.standard.set(Array(favorites), forKey: localAttractionKey)
     }
 
+    private func loadLocalArticleFavorites() -> Set<String> {
+        let array = UserDefaults.standard.stringArray(forKey: localArticleKey) ?? []
+        return Set(array)
+    }
+
+    private func saveLocalArticleFavorite(_ id: String, add: Bool) {
+        var favorites = loadLocalArticleFavorites()
+        if add {
+            favorites.insert(id)
+        } else {
+            favorites.remove(id)
+        }
+        UserDefaults.standard.set(Array(favorites), forKey: localArticleKey)
+    }
+
     // ================================================================
     // MARK: - Error Types
     // ================================================================
@@ -502,4 +670,11 @@ final class FavoritesService {
             }
         }
     }
+}
+
+extension Notification.Name {
+    /// Posted when a free user tries to save past the favorites cap. A single
+    /// app-level listener (MainTabView) presents the unlimited-favorites paywall
+    /// so every save surface gets the soft gate without per-call-site code.
+    static let favoritesLimitReached = Notification.Name("favoritesLimitReached")
 }

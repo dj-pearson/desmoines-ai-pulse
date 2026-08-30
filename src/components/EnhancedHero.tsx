@@ -1,4 +1,4 @@
-import { Suspense, lazy } from "react";
+import { Suspense, lazy, useState, useEffect } from "react";
 import { Brain, MessageSquare, Mic, Sparkles } from "lucide-react";
 import { Link } from "react-router-dom";
 import { QuickActions, QuickActionsMobile } from "./QuickActions";
@@ -18,24 +18,45 @@ const HeroCityLite = IS_NATIVE
   : lazy(() => import("./HeroCityLite"));
 
 interface EnhancedHeroProps {
-  eventsToday?: number;
-  restaurantsCount?: number;
-  newThisWeek?: number;
+  // null = not known (still loading, or the count query failed). WEB-QA-024:
+  // these must never fall back to 0 — a confident "0 Events Today" is how a
+  // failed query reached visitors as a plausible number.
+  eventsToday?: number | null;
+  restaurantsCount?: number | null;
+  newThisWeek?: number | null;
   isLoadingStats?: boolean;
   onAIPlanClick?: () => void;
   className?: string;
 }
 
 export function EnhancedHero({
-  eventsToday = 0,
-  restaurantsCount = 0,
-  newThisWeek = 0,
+  eventsToday = null,
+  restaurantsCount = null,
+  newThisWeek = null,
   isLoadingStats = false,
   onAIPlanClick,
   className,
 }: EnhancedHeroProps) {
   const isMobile = useMediaQuery("(max-width: 768px)");
   const isNativeApp = isMobileApp();
+
+  // Defer the heavy 3D scene (three.js) off the critical path until the browser
+  // is idle, so it never rides first paint of `/` (WEB-PERF-003). The static
+  // gradient below fills the exact same space, so the upgrade causes no CLS.
+  const [show3D, setShow3D] = useState(false);
+  useEffect(() => {
+    if (isMobile || IS_NATIVE) return;
+    const w = window as Window & {
+      requestIdleCallback?: (cb: () => void, opts?: { timeout: number }) => number;
+      cancelIdleCallback?: (handle: number) => void;
+    };
+    if (typeof w.requestIdleCallback === "function") {
+      const handle = w.requestIdleCallback(() => setShow3D(true), { timeout: 3000 });
+      return () => w.cancelIdleCallback?.(handle);
+    }
+    const t = window.setTimeout(() => setShow3D(true), 1200);
+    return () => clearTimeout(t);
+  }, [isMobile]);
   // Compute greeting synchronously to avoid CLS from empty-to-filled text
   const hour = new Date().getHours();
   const greeting = hour < 12
@@ -53,22 +74,30 @@ export function EnhancedHero({
         ? "Find the perfect dinner reservation or tonight's entertainment"
         : "Late-night dining, live music, and events happening right now";
 
-  // Use zero as placeholder so the numeric width stays stable (prevents CLS)
-  const statPlaceholder = 0;
+  // An em dash, not a zero. The tile keeps its min-h and tabular-nums so the
+  // CLS guard the placeholder existed for still holds, but an unknown count now
+  // reads as unknown instead of as "none" (WEB-QA-024).
+  const statPlaceholder = "—";
+  const formatStat = (value: number | null) =>
+    isLoadingStats || value === null ? statPlaceholder : value.toLocaleString();
 
   return (
     <section
       className={cn(
         "relative bg-[#0a0a1a] overflow-hidden",
-        isNativeApp ? "min-h-[70vh] py-10 pt-14" : "min-h-screen py-16",
+        isNativeApp ? "min-h-[70vh] py-10 pt-14" : "min-h-[80vh] md:min-h-screen py-10 md:py-16",
         className
       )}
     >
-      {/* 3D City Background – skip on mobile web (saves 800KB Three.js) and native apps */}
-      {HeroCityLite && !isMobile ? (
+      {/* 3D City Background – skip on mobile web (saves 800KB Three.js) and native
+          apps, and defer to idle on desktop so it's off the critical path. */}
+      {HeroCityLite && !isMobile && show3D ? (
         <Suspense fallback={<div className="absolute inset-0 bg-gradient-to-br from-[#0a0a1a] via-[#1a1a2e] to-[#2D1B69]" />}>
           <HeroCityLite />
         </Suspense>
+      ) : HeroCityLite && !isMobile ? (
+        // Desktop, pre-idle: identical static gradient so the 3D swap is CLS-free.
+        <div className="absolute inset-0 bg-gradient-to-br from-[#0a0a1a] via-[#1a1a2e] to-[#2D1B69]" />
       ) : (
         <div className="absolute inset-0 bg-gradient-to-br from-[#071e62] via-[#1a1a2e] to-[#2D1B69]">
           {/* Subtle grid pattern */}
@@ -87,6 +116,20 @@ export function EnhancedHero({
       {/* Animated background gradient overlay for extra depth */}
       <div className="absolute inset-0 bg-gradient-to-br from-[#2D1B69]/10 via-transparent to-[#8B0000]/10 pointer-events-none" />
 
+      {/* Light-mode seam softener (WEB-QA-006).
+          The hero art is intentionally dark in BOTH themes, but the nav above it
+          follows the theme. In dark mode the header (rgba(6,10,19,.6)) sits flush
+          against this hero and the edge is invisible; in light mode the header is
+          near-white and produced a hard white-to-navy line directly under the nav.
+          This fades the top edge of the hero toward the page background so the
+          transition reads as intentional depth instead of a clipping artifact.
+          Dark-mode is explicitly zeroed out so the existing (already correct)
+          appearance is untouched. */}
+      <div
+        aria-hidden="true"
+        className="pointer-events-none absolute inset-x-0 top-0 h-12 bg-gradient-to-b from-background/70 to-transparent dark:hidden"
+      />
+
       {/* Content */}
       <div className="relative z-10 max-w-7xl mx-auto px-4 sm:px-6 lg:px-8">
         {/* Top badge */}
@@ -102,21 +145,43 @@ export function EnhancedHero({
           </div>
         </div>
 
-        {/* Main headline - Dynamic based on time */}
+        {/* Main headline.
+
+            SEO-008: THE GREETING IS NO LONGER INSIDE THE <h1>. It is clock
+            state, not content, and it was the first thing in the page's only
+            H1 - so the homepage's heading read "Good Afternoon!Find things to
+            do in Des Moines, right now" to anything parsing the document.
+
+            It reached far beyond the homepage. With entity prerendering off,
+            every one of ~1,070 restaurant, event, attraction and playground
+            URLs served the homepage shell, so THAT string was the H1 of the
+            entire site to any crawler that does not run JavaScript (SEO-001).
+
+            It still renders, immediately above, where a person reads it and no
+            parser mistakes it for the page's subject. The visual result is the
+            same; the document outline is not. */}
         <div className="text-center mb-8 animate-slide-in">
+          <p className="text-lg md:text-2xl font-semibold text-[#FFD700] mb-2">{greeting}</p>
+          {/* Deliberately NOT "Things to Do in Des Moines". That is
+              /things-to-do's head term, and the homepage already competed with
+              two of its own pages - its title targeted "things to do in des
+              moines this weekend", which is what /events/this-weekend and
+              /weekend are for. The homepage takes the broad "what is on right
+              now" intent; the hubs keep their own terms. */}
           <h1 className="text-4xl md:text-6xl font-bold text-white mb-4 md:drop-shadow-lg">
-            <span className="block text-lg md:text-2xl font-semibold text-[#FFD700] mb-2">Des Moines Insider</span>
-            {greeting}
+            What's Happening in Des Moines
           </h1>
           <p className="text-xl md:text-2xl text-white/90 mb-4 max-w-3xl mx-auto md:drop-shadow-md">
             {subheading}
           </p>
 
-          {/* WEB-LEGAL-002: a trust bar sat here claiming "15,000+ locals trust us",
-              "4.8/5 user rating" and "500+ events weekly". Nothing counts users, there
-              is no review system to average, and the event figure was not merely
-              unverifiable but wrong. Re-add individual figures only when a real query
-              backs them - see SocialProof.tsx for the pattern. */}
+          {/* WEB-SEO-016: a trust bar sat here claiming "15,000+ locals trust
+              us", "4.8/5 user rating" and "500+ events weekly". Removed at the
+              owner's request — there is no review system to produce a rating,
+              nothing measures the user count, and the events figure was false
+              rather than merely unverifiable (284 upcoming events in total).
+              The database-driven tiles immediately below already carry real
+              numbers, so nothing of substance is lost. */}
         </div>
 
         {/* Live Stats - Database-driven
@@ -124,10 +189,23 @@ export function EnhancedHero({
              consistent space regardless of loading state. */}
         <div className="grid grid-cols-2 md:grid-cols-4 gap-4 mb-12 max-w-4xl mx-auto">
           {([
-            { to: "/events/today", value: isLoadingStats ? statPlaceholder : eventsToday, label: "Events Today" },
-            { to: "/restaurants/open-now", value: isLoadingStats ? statPlaceholder : restaurantsCount, label: "Restaurants" },
-            { to: "/events", value: isLoadingStats ? statPlaceholder : newThisWeek, label: "New This Week" },
-            { to: "/trip-planner", value: "24/7", label: "AI Assistant" },
+            { to: "/events/today", value: formatStat(eventsToday), label: "Events Today" },
+            { to: "/restaurants/open-now", value: formatStat(restaurantsCount), label: "Restaurants" },
+            { to: "/events", value: formatStat(newThisWeek), label: "New This Week" },
+            // NOT "24/7 / AI Assistant". Two things were wrong with it and the
+            // tile sits among three LIVE COUNTS, so a reader takes it for a
+            // measured figure like the others (WEB-QA-005 AC2, XPLAT-009 AC4).
+            //
+            //   web has no AI assistant at all. Ask Pulse (discover-chat) ships
+            //   on iOS and Android and has never been built here - XPLAT-009 AC1
+            //   is the open decision about whether it comes to web.
+            //   the tile links to /trip-planner, which is a different feature
+            //   and is gated behind <PremiumGate requiredTier="insider">.
+            //
+            // So it now names the thing it actually opens. The Insider
+            // requirement is carried by the AI Plan My Night CTA below rather
+            // than repeated on a four-word tile.
+            { to: "/trip-planner", value: "AI", label: "Trip Planner" },
           ] as const).map((stat) => (
             <Link
               key={stat.to}

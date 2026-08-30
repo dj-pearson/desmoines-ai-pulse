@@ -1,5 +1,5 @@
 import { Link } from "react-router-dom";
-import { MapPin, Users, Calendar, Star } from "lucide-react";
+import { Star } from "lucide-react";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
@@ -9,9 +9,14 @@ import LocalSEO from "@/components/LocalSEO";
 import { FAQSection } from "@/components/FAQSection";
 import { Breadcrumbs } from "@/components/ui/breadcrumbs";
 import { useDocumentTitle } from "@/hooks/useDocumentTitle";
+import { formatCount } from "@/lib/pluralize";
+import { SpriteIcon } from "@/components/ui/SpriteIcon";
 
 export default function NeighborhoodsPage() {
-  useDocumentTitle("Neighborhoods");
+  // WEB-SEO-002: useDocumentTitle runs after LocalSEO's Helmet and was winning,
+  // so the shipped title was the bare word "Neighborhoods" rather than the
+  // keyword-bearing pageTitle passed to LocalSEO below. Keep the two in sync.
+  useDocumentTitle("Des Moines Neighborhoods Guide");
 
   const neighborhoods = [
     {
@@ -103,7 +108,7 @@ export default function NeighborhoodsPage() {
   return (
     <div className="min-h-screen bg-background">
       <LocalSEO 
-        pageTitle="Des Moines Neighborhoods Guide - Local Events & Dining"
+        pageTitle="Des Moines Neighborhoods Guide"
         pageDescription="Explore Des Moines neighborhoods including East Village, West Des Moines, Ankeny, and more. Find local events, restaurants, and attractions in each Des Moines area community."
         breadcrumbs={[
           { name: "Home", url: "/" },
@@ -125,7 +130,7 @@ export default function NeighborhoodsPage() {
         {/* Hero Section */}
         <div className="bg-gradient-to-r from-blue-600 to-purple-600 text-white p-8 rounded-lg mb-8">
           <div className="flex items-center gap-2 mb-4">
-            <MapPin className="h-8 w-8" />
+            <SpriteIcon name="map-pin" className="h-8 w-8" />
             <h1 className="text-3xl font-bold">Des Moines Neighborhoods</h1>
           </div>
           <p className="text-xl text-blue-100 mb-4">
@@ -158,7 +163,7 @@ export default function NeighborhoodsPage() {
                 <div className="flex justify-between items-start">
                   <CardTitle className="text-xl">{neighborhood.name}</CardTitle>
                   <Badge variant="secondary" className="text-xs">
-                    {neighborhood.eventCount} events
+                    {formatCount(neighborhood.eventCount, 'event')}
                   </Badge>
                 </div>
               </CardHeader>
@@ -182,12 +187,12 @@ export default function NeighborhoodsPage() {
                 {/* Stats */}
                 <div className="grid grid-cols-3 gap-2 text-center text-xs">
                   <div>
-                    <Calendar className="h-4 w-4 mx-auto mb-1 text-blue-600" />
+                    <SpriteIcon name="calendar" className="h-4 w-4 mx-auto mb-1 text-blue-600" />
                     <div className="font-medium">{neighborhood.eventCount}</div>
                     <div className="text-muted-foreground">Events</div>
                   </div>
                   <div>
-                    <Users className="h-4 w-4 mx-auto mb-1 text-green-600" />
+                    <SpriteIcon name="users" className="h-4 w-4 mx-auto mb-1 text-green-600" />
                     <div className="font-medium">{neighborhood.restaurantCount}</div>
                     <div className="text-muted-foreground">Dining</div>
                   </div>

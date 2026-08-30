@@ -19,16 +19,20 @@
     <!-- The warning about frame-ancestors being ignored in meta tags is expected -->
 
     <!-- Open Graph -->
-    <meta
-      property="og:title"
-      content="Des Moines Insider: Events, Restaurants & Attractions"
+    <!-- Fallback og tags for routes served the raw shell. data-rh hands them to
+         Helmet so per-page values replace rather than duplicate (WEB-SEO-002).
+         Kept query-led rather than product-led, same as the description. -->
+    <meta data-rh="true" property="og:title"
+      content="Things to Do in Des Moines | Events, Restaurants & Attractions"
     />
-    <meta
-      property="og:description"
-      content="Beyond search. Beyond directories. Des Moines Insider is the first truly conversational city guide. Access via web, SMS, voice, or ChatGPT. Context-aware intelligence that learns your preferences and proactively assists you."
+    <meta data-rh="true" property="og:description"
+      content="Find what's happening in Des Moines, Iowa today and this weekend — events, concerts, festivals, family activities, and restaurants open right now across the metro."
     />
     <meta property="og:type" content="website" />
-    <meta property="og:url" content="https://desmoinesinsider.com" />
+    <!-- No static og:url on purpose (WEB-SEO-002): this shell serves every route,
+         so a hardcoded one claimed the homepage as every page's share URL, and
+         Helmet appends rather than replaces. Helmet supplies the real one. -->
+
     <meta
       property="og:image"
       content="https://desmoinesinsider.com/DMI-Logo.png"
@@ -237,8 +241,9 @@
     <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
 
     <!-- Database: Critical for interactivity (crossorigin needed for fetch/XHR requests) -->
-    <link rel="preconnect" href="https://wtkhfqpmcegzcbngroui.supabase.co" crossorigin />
-    <link rel="dns-prefetch" href="https://wtkhfqpmcegzcbngroui.supabase.co" />
+    <!-- Project URL is injected at build time from VITE_SUPABASE_URL (no hardcoded project ref) -->
+    <link rel="preconnect" href="%VITE_SUPABASE_URL%" crossorigin />
+    <link rel="dns-prefetch" href="%VITE_SUPABASE_URL%" />
 
     <!-- Analytics: Non-critical, DNS prefetch only -->
     <link rel="dns-prefetch" href="https://www.googletagmanager.com" />
@@ -351,13 +356,15 @@
     </script>
 
     <!-- Google Analytics, consent-gated (WEB-LEGAL-001) and deferred to protect INP.
-         Sets Consent Mode v2 defaults to DENIED and does NOT load gtag.js.
-         src/lib/analyticsConsent.ts is the only caller of __dmiLoadAnalytics(),
-         and calls it only once the visitor grants the analytics category.
-         Denial is the default even if the app never boots, which is what
-         PrivacyPolicy.tsx promises.
-         NOTE: pinned by a SHA-256 hash in public/_headers CSP script-src. If you
-         edit this block, regenerate the hash per _headers. -->
+         This block sets Consent Mode v2 defaults to DENIED and does NOT load
+         gtag.js. src/lib/analyticsConsent.ts is the only caller of
+         __dmiLoadAnalytics(), and it calls it only once the visitor has granted
+         the analytics category in the cookie banner. Denial is the default even
+         if the app never boots, which is what PrivacyPolicy.tsx promises. -->
+    <!-- NOTE: this inline script is pinned by a SHA-256 hash in public/_headers
+         CSP script-src. Do NOT env-template it (a templated body changes the
+         served bytes and breaks the hash); a GA4 measurement id is public, not
+         a secret. If you edit this block, regenerate the hash per _headers. -->
     <script>
       window.dataLayer = window.dataLayer || [];
       function gtag() {
@@ -402,12 +409,34 @@
     </script>
 
     <title>Des Moines Insider: Events, Restaurants & Attractions</title>
+    <!-- Site-wide fallback description (WEB-SEO-002/012). data-rh hands it to
+         Helmet so per-page descriptions REPLACE it instead of duplicating.
+         Do not add data-rh to viewport/theme-color/verification tags — Helmet
+         deletes any data-rh tag it does not re-emit. -->
     <meta
+      data-rh="true"
       name="description"
-      content="First truly conversational AI city guide for Des Moines, Iowa. Get personalized recommendations via web, SMS, voice assistant, or ChatGPT. Context-aware search that understands intent, learns preferences, and proactively assists you in discovering the best events, restaurants, and attractions across the Des Moines metro."
+      content="Events, restaurants, and things to do in Des Moines, Iowa. Find what's happening today and this weekend across Des Moines, West Des Moines, Ankeny, Urbandale and the metro — updated daily."
     />
     <meta name="author" content="Des Moines Insider" />
-    <link rel="canonical" href="https://desmoinesinsider.com/" />
+    <!--
+      NO STATIC CANONICAL HERE ON PURPOSE.
+
+      This file is the shell for every route, so a hardcoded canonical link
+      pointing at the site root claimed the HOMEPAGE as the canonical URL of
+      all 31 prerendered routes. Helmet adds the correct per-route canonical on
+      top, so every prerendered page shipped TWO conflicting canonical tags,
+      one of them pointing at "/". Google treats conflicting canonicals as
+      untrustworthy and may ignore both, which is the opposite of what the
+      prerender step (PROD-SEO-001) exists to achieve.
+
+      SEOHead supplies the canonical per route, including the homepage.
+
+      (Deliberately no example tag in this comment: the prerenderer serializes
+      comments into every shipped route, so a literal link tag here shows up in
+      text-based audits as a phantom second canonical.)
+    -->
+
     <meta
       name="keywords"
       content="Des Moines AI guide, conversational city assistant, AI event recommendations Des Moines, intelligent local guide, SMS concierge Des Moines, voice assistant Des Moines events, ChatGPT Des Moines plugin, semantic search events, predictive analytics restaurants, context-aware recommendations, AI trip planner Des Moines, personalized Des Moines guide, multi-channel city guide, behavioral intelligence, proactive event alerts, Des Moines conversational AI"
@@ -416,8 +445,9 @@
     <!-- Enhanced meta tags for AI optimization -->
     <meta name="article:publisher" content="Des Moines Insider" />
     <meta name="article:author" content="Des Moines Insider Team" />
-    <meta name="article:published_time" content="2024-01-01T00:00:00Z" />
-    <meta name="article:modified_time" content="2025-11-27T00:00:00Z" />
+    <!-- No static article:published_time/modified_time (WEB-SEO-015): this shell
+         serves every route, so they dated all content alike and shipped a stale
+         freshness signal. Real articles get accurate values from SEOHead. -->
     <meta name="article:section" content="Local Guide" />
     <meta
       name="article:tag"
@@ -434,12 +464,10 @@
     <meta name="twitter:card" content="summary_large_image" />
     <meta name="twitter:site" content="@desmoinessider" />
     <meta name="twitter:creator" content="@desmoinessider" />
-    <meta
-      name="twitter:title"
+    <meta data-rh="true" name="twitter:title"
       content="Des Moines Insider: Events, Restaurants & Attractions"
     />
-    <meta
-      name="twitter:description"
+    <meta data-rh="true" name="twitter:description"
       content="Beyond directories. Get AI-powered recommendations via web, SMS, voice, or ChatGPT. Context-aware, learns from behavior, proactively assists. Des Moines redefined."
     />
     <meta

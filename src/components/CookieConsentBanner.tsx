@@ -16,6 +16,9 @@
  *    cookies when navigator.globalPrivacyControl === true (required by CPA/CPRA)
  *  - Emits a window event `cookie-consent-changed` so analytics/marketing scripts
  *    can react without coupling to this component
+ *  - Can be reopened at any time via `reopenConsentBanner()` (e.g. the footer
+ *    "Your Privacy Choices" link) WITHOUT discarding the user's stored choice —
+ *    the panel re-appears pre-filled with the current selections.
  */
 
 import { useState, useEffect, useCallback } from "react";
@@ -28,6 +31,8 @@ import { logCookieConsent } from "@/lib/consentLog";
 import { Cookie, X } from "lucide-react";
 
 const STORAGE_KEY = "cookie-consent";
+/** Window event that asks the mounted banner to reappear (see reopenConsentBanner). */
+const REOPEN_EVENT = "cookie-consent-reopen";
 const CONSENT_VERSION = "2026-04-13";
 const CONSENT_LIFETIME_MS = 13 * 30 * 24 * 60 * 60 * 1000; // ~13 months
 
@@ -117,6 +122,27 @@ export function CookieConsentBanner() {
     setVisible(true);
   }, []);
 
+  // Allow the banner to be reopened from anywhere (e.g. the footer "Your Privacy
+  // Choices" link) without clearing the stored record. We pre-fill the toggles
+  // with the current choices so the user edits rather than starts over — required
+  // for a functional, non-destructive CPRA opt-out control.
+  useEffect(() => {
+    const handleReopen = () => {
+      const current = getStoredConsent();
+      if (current) {
+        setPrefs({
+          preferences: current.preferences,
+          analytics: current.analytics,
+          advertising: current.advertising,
+        });
+      }
+      setShowDetails(true);
+      setVisible(true);
+    };
+    window.addEventListener(REOPEN_EVENT, handleReopen);
+    return () => window.removeEventListener(REOPEN_EVENT, handleReopen);
+  }, []);
+
   const acceptAll = useCallback(() => {
     saveConsent({
       version: CONSENT_VERSION,
@@ -195,7 +221,7 @@ export function CookieConsentBanner() {
               type="button"
               onClick={rejectNonEssential}
               aria-label="Reject non-essential cookies and close banner"
-              className="text-muted-foreground hover:text-foreground focus:outline-none focus:ring-2 focus:ring-primary rounded-sm p-1"
+              className="tap-area-44 text-muted-foreground hover:text-foreground focus:outline-none focus:ring-2 focus:ring-primary rounded-sm p-1"
             >
               <X className="h-4 w-4" aria-hidden="true" />
             </button>
@@ -362,8 +388,23 @@ export function hasConsent(
 }
 
 /**
+ * Reopen the consent banner without discarding the user's current choice.
+ * The mounted banner listens for this event and reappears pre-filled with the
+ * stored selections. Preferred over resetConsentPrompt() for "manage/change my
+ * choices" entry points (footer link, Cookie Policy page) because it never
+ * silently wipes an existing opt-out.
+ */
+export function reopenConsentBanner() {
+  if (typeof window !== "undefined") {
+    window.dispatchEvent(new CustomEvent(REOPEN_EVENT));
+  }
+}
+
+/**
  * Allows the user to reopen and change their choices (e.g. from a footer link).
- * Clears the current record so the banner reappears on next render.
+ * Clears the current record so the banner reappears on next render. Prefer
+ * reopenConsentBanner() where the banner is mounted; this hard-reset remains for
+ * callers that need the record fully cleared.
  */
 export function resetConsentPrompt() {
   storage.remove(STORAGE_KEY);

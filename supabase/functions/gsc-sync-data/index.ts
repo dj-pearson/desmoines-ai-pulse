@@ -8,6 +8,10 @@
 import { serve } from "https://deno.land/std@0.168.0/http/server.ts";
 import { createClient } from "https://esm.sh/@supabase/supabase-js@2.39.3";
 
+import { errorResponse } from "../_shared/errorResponse.ts";
+import { fetchWithTimeout } from "../_shared/fetchWithTimeout.ts";
+import { requireAdminOrApiKey } from "../_shared/apiKeyAuth.ts";
+
 const corsHeaders = {
   "Access-Control-Allow-Origin": "*",
   "Access-Control-Allow-Headers":
@@ -23,6 +27,17 @@ serve(async (req) => {
   if (req.method === "OPTIONS") {
     return new Response(null, { headers: corsHeaders });
   }
+
+  // Runs as service_role and had no caller check. verify_jwt is not a gate:
+  // it defaults to true, and true only means "a valid Supabase JWT" - which
+  // the publishable anon key is, in every client bundle.
+  //
+  // Every caller is admin-gated already: SearchTrafficDashboard, mounted at
+  // /admin/analytics-dashboard behind <ProtectedRoute requireAdmin>. No cron job posts here.
+  // So the route assumed admin and the server did not enforce it; the admin
+  // JWT that functions.invoke sends is what requireAdminOrApiKey checks.
+  const authFailure = await requireAdminOrApiKey(req, corsHeaders);
+  if (authFailure) return authFailure;
 
   let propertyId: string | undefined;
 
@@ -93,7 +108,7 @@ serve(async (req) => {
       const googleClientId = Deno.env.get("GOOGLE_CLIENT_ID");
       const googleClientSecret = Deno.env.get("GOOGLE_CLIENT_SECRET");
 
-      const refreshResponse = await fetch("https://oauth2.googleapis.com/token", {
+      const refreshResponse = await fetchWithTimeout("https://oauth2.googleapis.com/token", {
         method: "POST",
         headers: { "Content-Type": "application/x-www-form-urlencoded" },
         body: new URLSearchParams({
@@ -158,7 +173,7 @@ serve(async (req) => {
 
     // Use ["query", "date"] only — adding "page" creates an explosion of rows
     // (same keyword × many pages × many dates) that causes timeouts.
-    const keywordResponse = await fetch(
+    const keywordResponse = await fetchWithTimeout(
       `https://www.googleapis.com/webmasters/v3/sites/${encodeURIComponent(
         property.property_url
       )}/searchAnalytics/query`,
@@ -225,7 +240,7 @@ serve(async (req) => {
     // ========================================================================
     console.log("Fetching page performance...");
 
-    const pageResponse = await fetch(
+    const pageResponse = await fetchWithTimeout(
       `https://www.googleapis.com/webmasters/v3/sites/${encodeURIComponent(
         property.property_url
       )}/searchAnalytics/query`,
@@ -397,15 +412,10 @@ serve(async (req) => {
       } catch { /* best-effort cleanup */ }
     }
 
-    return new Response(
-      JSON.stringify({
-        error: error.message,
-        details: error.stack,
-      }),
-      {
-        status: 500,
-        headers: { ...corsHeaders, "Content-Type": "application/json" },
-      }
-    );
+    return errorResponse(error, {
+      status: 500,
+      headers: corsHeaders,
+      logContext: "gsc-sync-data",
+    });
   }
 });

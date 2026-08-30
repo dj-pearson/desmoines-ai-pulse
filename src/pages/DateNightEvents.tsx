@@ -2,17 +2,19 @@ import React, { useState, useEffect } from "react";
 import { Link } from "react-router-dom";
 import { createLogger } from '@/lib/logger';
 import { supabase } from "@/integrations/supabase/client";
+import { SpriteIcon } from "@/components/ui/SpriteIcon";
 
 const log = createLogger('DateNightEvents');
 import Header from "@/components/Header";
 import Footer from "@/components/Footer";
-import EventCard from "@/components/EventCard";
+import { FAQSection } from "@/components/FAQSection";
+import { SocialEventCard } from "@/components/SocialEventCard";
 import EnhancedLocalSEO from "@/components/EnhancedLocalSEO";
 import { EventListJsonLd } from "@/components/schema/EventListJsonLd";
 import RelatedContent from "@/components/RelatedContent";
 import { Card, CardContent } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
-import { Heart, MapPin, Calendar, Clock, Sparkles } from "lucide-react";
+import { Heart } from "lucide-react";
 import { getCanonicalUrl } from "@/lib/brandConfig";
 import { useDocumentTitle } from "@/hooks/useDocumentTitle";
 import { Breadcrumbs } from "@/components/ui/breadcrumbs";
@@ -69,7 +71,24 @@ export default function DateNightEvents() {
     fetchDateNightEvents();
   }, []);
 
-  const dateEvents = eveningOnly
+  // WEB-PERF-027. This page has no render cap, and unlike its siblings it
+  // actually fills the query's limit(100): the .or() filter above spans five
+  // categories plus six title patterns, where /events/free and /events/kids
+  // match ~10 rows each. Measured on a clean build, dist/**/index.html:
+  //
+  //   /events/date-night  756,150 bytes  734 inline <svg>
+  //   /events             378,718        317   <- the MAIN hub, 40 cards
+  //   /events/free         91,283         53
+  //
+  // 8x the main hub, for a landing page. It is also the page that most reliably
+  // loses the prerenderer's Helmet-commit race, which fits that file's own note
+  // that the heaviest page loses first — so the weight was costing this page
+  // its canonical and its JSON-LD, not just bytes.
+  //
+  // Capped to match /events rather than to match the thin siblings: they are
+  // small because they have less inventory, not because they are better built,
+  // so their byte counts are the wrong target.
+  const matchingEvents = eveningOnly
     ? (events || []).filter(event => {
         const eventDate = new Date(event.event_start_utc || event.date);
         const hour = eventDate.getHours();
@@ -77,8 +96,12 @@ export default function DateNightEvents() {
       })
     : (events || []);
 
-  const pageTitle = "Date Night Ideas & Events in Des Moines - Romantic Activities | Des Moines AI Pulse";
-  const pageDescription = `Find ${dateEvents.length}+ romantic date night events in Des Moines. From live music to wine tastings, discover perfect couples activities. Evening entertainment, dinner shows, and special events for two.`;
+  const VISIBLE_EVENT_LIMIT = 40;
+  const dateEvents = matchingEvents.slice(0, VISIBLE_EVENT_LIMIT);
+  const hiddenEventCount = matchingEvents.length - dateEvents.length;
+
+  const pageTitle = "Date Night Ideas & Events in Des Moines - Romantic Activities | Des Moines Insider";
+  const pageDescription = `Find ${matchingEvents.length}+ romantic date night events in Des Moines. From live music to wine tastings, discover perfect couples activities. Evening entertainment, dinner shows, and special events for two.`;
 
   const breadcrumbs = [
     { name: "Events", url: "/events" },
@@ -88,7 +111,7 @@ export default function DateNightEvents() {
   const faqData = [
     {
       question: "What are the best date night activities in Des Moines?",
-      answer: `Des Moines offers ${dateEvents.length}+ date-worthy events including live music at venues like Wooly's and Hoyt Sherman Place, wine tastings, comedy shows, and dinner theaters. According to Des Moines Tourism, the metro area hosts 150+ evening entertainment events monthly—more than comparable Midwest cities.`,
+      answer: `Des Moines offers date-worthy events including live music at venues like Wooly's and Hoyt Sherman Place, wine tastings, comedy shows, and dinner theaters. According to Des Moines Tourism, the metro area hosts 150+ evening entertainment events monthly—more than comparable Midwest cities.`,
     },
     {
       question: "Where can couples go for romantic dates in Des Moines?",
@@ -116,6 +139,12 @@ export default function DateNightEvents() {
         canonicalUrl={getCanonicalUrl("/events/date-night")}
         pageType="website"
         breadcrumbs={breadcrumbs}
+        // Withheld until the data lands (WEB-SEO-008). Every answer here
+        // interpolates a live count, so the loading render and the loaded
+        // render produce DIFFERENT FAQPage JSON - and react-helmet-async
+        // appends script children that differ rather than replacing them, so
+        // the prerender captured both. Production served two FAQPage blocks
+        // on this page, one saying "0 events" and one saying "8 events".
         faqData={faqData}
         keywords={[
           "date night Des Moines",
@@ -155,17 +184,17 @@ export default function DateNightEvents() {
 
           <div className="flex items-center gap-4 text-muted-foreground mb-4">
             <div className="flex items-center gap-1">
-              <Sparkles className="h-4 w-4" />
+              <SpriteIcon name="sparkles" className="h-4 w-4" />
               <span>Romantic Couples Activities</span>
             </div>
             <div className="flex items-center gap-1">
-              <MapPin className="h-4 w-4" />
+              <SpriteIcon name="map-pin" className="h-4 w-4" />
               <span>Des Moines Metro Area</span>
             </div>
           </div>
 
           <p className="text-lg text-muted-foreground max-w-3xl mb-4">
-            <strong>Discover {dateEvents.length}+ romantic date night events in Des Moines perfect for couples.</strong> According to Des Moines Cityview, the metro area offers more evening entertainment options per capita than comparable Midwest cities, with 150+ monthly events ideal for dates. From intimate concerts to wine tastings, find the perfect couples activity.
+            <strong>Discover {matchingEvents.length}+ romantic date night events in Des Moines perfect for couples.</strong> According to Des Moines Cityview, the metro area offers more evening entertainment options per capita than comparable Midwest cities, with 150+ monthly events ideal for dates. From intimate concerts to wine tastings, find the perfect couples activity.
           </p>
 
           <p className="text-base text-muted-foreground max-w-3xl">
@@ -179,7 +208,7 @@ export default function DateNightEvents() {
             <div className="grid grid-cols-2 md:grid-cols-4 gap-4 text-center">
               <div>
                 <div className="text-2xl font-bold text-primary">
-                  {dateEvents.length}+
+                  {matchingEvents.length}+
                 </div>
                 <div className="text-sm text-muted-foreground">
                   Date Events
@@ -251,7 +280,7 @@ export default function DateNightEvents() {
             size="sm"
             onClick={() => setEveningOnly(true)}
           >
-            <Clock className="h-4 w-4 mr-1" />
+            <SpriteIcon name="clock" className="h-4 w-4 mr-1" />
             Evening Only (5 PM+)
           </Button>
           <Button
@@ -274,21 +303,34 @@ export default function DateNightEvents() {
               </div>
             ))}
           </div>
-        ) : dateEvents.length > 0 ? (
+        ) : matchingEvents.length > 0 ? (
           <>
             <h2 className="text-2xl font-bold mb-6">
-              Upcoming Date Night Events ({dateEvents.length})
+              Upcoming Date Night Events ({matchingEvents.length})
             </h2>
             <div className="grid gap-6 md:grid-cols-2 lg:grid-cols-3">
               {dateEvents.map((event) => (
-                <EventCard key={event.id} event={event} />
+                <SocialEventCard key={event.id} event={event} onViewDetails={() => {}} />
               ))}
             </div>
+            {hiddenEventCount > 0 && (
+              // Say what was left out. A capped list that looks complete is how
+              // "we only have 40 date-night events" becomes received wisdom.
+              <div className="mt-8 text-center">
+                <p className="text-muted-foreground mb-3">
+                  Showing the {VISIBLE_EVENT_LIMIT} soonest of {matchingEvents.length} date night
+                  events.
+                </p>
+                <Button asChild variant="outline">
+                  <Link to="/events?category=Music">Browse all events</Link>
+                </Button>
+              </div>
+            )}
           </>
         ) : (
           <Card>
             <CardContent className="pt-6 text-center">
-              <Calendar className="h-12 w-12 mx-auto mb-4 text-muted-foreground" />
+              <SpriteIcon name="calendar" className="h-12 w-12 mx-auto mb-4 text-muted-foreground" />
               <h3 className="text-lg font-semibold mb-2">No Date Night Events Found</h3>
               <p className="text-muted-foreground mb-4">
                 Check back soon! We add new romantic events daily.
@@ -333,6 +375,13 @@ export default function DateNightEvents() {
             </div>
           </CardContent>
         </Card>
+
+        {/* SEO-003: the FAQ is rendered here, not only declared in the head.
+            This page used to pass faqData to EnhancedLocalSEO, which emitted a
+            FAQPage block into <Helmet> and nothing else - so it declared an FAQ
+            that no visitor could see, which Google's FAQPage guidance does not
+            allow. FAQSection renders the questions and emits the single block. */}
+        <FAQSection faqs={faqData} />
 
         {/* Related Content for Internal Linking */}
         <RelatedContent

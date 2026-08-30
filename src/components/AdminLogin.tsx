@@ -62,7 +62,7 @@ export default function AdminLogin({ onLoginSuccess }: AdminLoginProps) {
           </div>
           <CardTitle className="text-2xl">Admin Access</CardTitle>
           <CardDescription>
-            Sign in to access the Des Moines AI Pulse admin dashboard
+            Sign in to access the Des Moines Insider admin dashboard
           </CardDescription>
         </CardHeader>
         <CardContent>

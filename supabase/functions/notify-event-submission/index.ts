@@ -12,6 +12,8 @@ import { serve } from "https://deno.land/std@0.190.0/http/server.ts";
 import { createClient } from "https://esm.sh/@supabase/supabase-js@2.45.0";
 import { handleCors, getCorsHeaders, isOriginAllowed } from "../_shared/cors.ts";
 import { escapeHtml } from "../_shared/escapeHtml.ts";
+import { fetchWithTimeout } from "../_shared/fetchWithTimeout.ts";
+import { checkRateLimit } from "../_shared/rateLimit.ts";
 
 serve(async (req) => {
   const corsResponse = handleCors(req);
@@ -19,6 +21,22 @@ serve(async (req) => {
 
   const origin = req.headers.get("origin") || "";
   const corsHeaders = getCorsHeaders(isOriginAllowed(origin) ? origin : undefined);
+
+  // BOUNDED. This endpoint is public by necessity - the caller is a member of
+  // the public submitting an event - and it sends mail, so the only control
+  // available is a limit on how often one client can do it. og-image,
+  // log-content-metrics and check-login-attempt already use this helper; this
+  // one and oauth-callback were the two that did not.
+  //
+  // Generous on purpose: a submitter legitimately triggers one notification per
+  // submission, and an admin reviewing a queue triggers one per decision. 20 in
+  // the default 15-minute window is far above either and still stops a loop.
+  const rateLimit = checkRateLimit(req, {
+    max: 20,
+    endpoint: "notify-event-submission",
+    message: "Notification rate limit exceeded.",
+  });
+  if (!rateLimit.success) return rateLimit.response!;
 
   if (req.method !== "POST") {
     return new Response(JSON.stringify({ error: "Method not allowed" }), {
@@ -56,6 +74,53 @@ serve(async (req) => {
       );
     }
 
+    // THE RECIPIENT AND THE TITLE COME FROM THE DATABASE, NOT THE CALLER.
+    //
+    // submitterEmail used to be taken straight off the request body and used as
+    // the `to:` address. This function is deployed, has no caller check, and
+    // verify_jwt only requires a valid Supabase JWT - which the publishable anon
+    // key is, in every client bundle. So anyone who had loaded the site could
+    // POST {notificationType:"event_approved", eventId:"anything",
+    // submitterEmail:"<victim>", eventTitle:"<their text>"} and this would send
+    // mail FROM the site's domain TO an arbitrary address with their wording in
+    // the subject. That is an open relay, and eventId was required but never
+    // used to look anything up.
+    //
+    // It cannot be fixed with an auth guard: the real caller is
+    // useUserSubmittedEvents, i.e. a member of the public submitting an event.
+    // The fix is to stop trusting the body for anything that decides WHO is
+    // mailed or WHAT the subject says.
+    //
+    // Safe on ordering: useUserSubmittedEvents.ts inserts the row (:92) and only
+    // then invokes this with eventId: data.id (:104-106).
+    const { data: submission, error: submissionError } = await supabase
+      .from("user_submitted_events")
+      .select("id, title, contact_email")
+      .eq("id", eventId)
+      .maybeSingle();
+
+    // Checked, not discarded (WEB-BE-032): a failed read must not fall through
+    // to "no submission" and silently drop a real notification.
+    if (submissionError) {
+      console.error("[notify-event-submission] submission lookup failed:", submissionError);
+      return new Response(
+        JSON.stringify({ error: "Could not read the submission" }),
+        { status: 503, headers: { ...corsHeaders, "Content-Type": "application/json" } }
+      );
+    }
+    if (!submission) {
+      return new Response(
+        JSON.stringify({ error: "No such event submission" }),
+        { status: 404, headers: { ...corsHeaders, "Content-Type": "application/json" } }
+      );
+    }
+
+    // Authoritative values. The body may still carry eventDate/eventVenue/
+    // eventCategory, which appear only in the admin mail whose recipient is the
+    // env-configured ADMIN_NOTIFICATION_EMAIL.
+    const submitterAddress: string | null = submission.contact_email ?? null;
+    const verifiedTitle: string = submission.title ?? "";
+
     const resendApiKey = Deno.env.get("RESEND_API_KEY");
     const sendgridApiKey = Deno.env.get("SENDGRID_API_KEY");
     const fromEmail = Deno.env.get("NOTIFICATION_FROM_EMAIL") || "noreply@desmoinesinsider.com";
@@ -69,13 +134,16 @@ serve(async (req) => {
     switch (notificationType) {
       case "event_submitted": {
         recipientEmail = adminEmail;
-        emailSubject = `New Event Submission: ${escapeHtml(eventTitle)}`;
+        // Recipient is the env-configured admin, so the risk here is not who
+        // gets mailed but what they are told. Title and submitter address come
+        // from the row so a caller cannot show the admin a false submitter.
+        emailSubject = `New Event Submission: ${escapeHtml(verifiedTitle)}`;
         emailHtml = buildAdminNotificationEmail({
-          eventTitle,
+          eventTitle: verifiedTitle,
           eventDate,
           eventVenue,
           eventCategory,
-          submitterEmail,
+          submitterEmail: submitterAddress ?? submitterEmail,
           submitterName,
           siteUrl,
         });
@@ -83,10 +151,10 @@ serve(async (req) => {
       }
 
       case "event_approved": {
-        recipientEmail = submitterEmail;
-        emailSubject = `Your event "${escapeHtml(eventTitle)}" has been approved!`;
+        recipientEmail = submitterAddress ?? "";
+        emailSubject = `Your event "${escapeHtml(verifiedTitle)}" has been approved!`;
         emailHtml = buildSubmitterEmail({
-          eventTitle,
+          eventTitle: verifiedTitle,
           status: "approved",
           message: "Great news! Your event has been approved and is now live on Des Moines Insider.",
           siteUrl,
@@ -96,10 +164,10 @@ serve(async (req) => {
       }
 
       case "event_rejected": {
-        recipientEmail = submitterEmail;
-        emailSubject = `Update on your event "${escapeHtml(eventTitle)}`;
+        recipientEmail = submitterAddress ?? "";
+        emailSubject = `Update on your event "${escapeHtml(verifiedTitle)}`;
         emailHtml = buildSubmitterEmail({
-          eventTitle,
+          eventTitle: verifiedTitle,
           status: "rejected",
           message: "Unfortunately, your event submission was not approved at this time.",
           siteUrl,
@@ -109,10 +177,10 @@ serve(async (req) => {
       }
 
       case "event_needs_revision": {
-        recipientEmail = submitterEmail;
-        emailSubject = `Action needed: Your event "${escapeHtml(eventTitle)}" needs changes`;
+        recipientEmail = submitterAddress ?? "";
+        emailSubject = `Action needed: Your event "${escapeHtml(verifiedTitle)}" needs changes`;
         emailHtml = buildSubmitterEmail({
-          eventTitle,
+          eventTitle: verifiedTitle,
           status: "needs_revision",
           message: "Your event submission needs some changes before it can be approved. Please review the notes below and resubmit.",
           siteUrl,
@@ -136,7 +204,7 @@ serve(async (req) => {
     if (recipientEmail) {
       if (resendApiKey) {
         try {
-          const res = await fetch("https://api.resend.com/emails", {
+          const res = await fetchWithTimeout("https://api.resend.com/emails", {
             method: "POST",
             headers: {
               Authorization: `Bearer ${resendApiKey}`,
@@ -158,7 +226,7 @@ serve(async (req) => {
         }
       } else if (sendgridApiKey) {
         try {
-          const res = await fetch("https://api.sendgrid.com/v3/mail/send", {
+          const res = await fetchWithTimeout("https://api.sendgrid.com/v3/mail/send", {
             method: "POST",
             headers: {
               Authorization: `Bearer ${sendgridApiKey}`,

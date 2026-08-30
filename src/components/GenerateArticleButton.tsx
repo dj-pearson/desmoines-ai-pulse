@@ -12,9 +12,10 @@ import { Textarea } from '@/components/ui/textarea';
 import { Label } from '@/components/ui/label';
 import { useArticles } from '@/hooks/useArticles';
 import { useAuth } from '@/hooks/useAuth';
-import { FileText, Sparkles } from 'lucide-react';
+import { FileText } from "lucide-react";
 import { useToast } from '@/hooks/use-toast';
 import { createLogger } from '@/lib/logger';
+import { SpriteIcon } from "@/components/ui/SpriteIcon";
 
 const log = createLogger('GenerateArticleButton');
 
@@ -92,7 +93,7 @@ const GenerateArticleButton: React.FC<GenerateArticleButtonProps> = ({
       <DialogContent className="sm:max-w-[600px]">
         <DialogHeader>
           <DialogTitle className="flex items-center gap-2">
-            <Sparkles className="h-5 w-5 text-primary" />
+            <SpriteIcon name="sparkles" className="h-5 w-5 text-primary" />
             Generate Article from AI Suggestion
           </DialogTitle>
           <DialogDescription>
@@ -161,7 +162,7 @@ const GenerateArticleButton: React.FC<GenerateArticleButtonProps> = ({
                 </>
               ) : (
                 <>
-                  <Sparkles className="h-4 w-4" />
+                  <SpriteIcon name="sparkles" className="h-4 w-4" />
                   Generate Article
                 </>
               )}

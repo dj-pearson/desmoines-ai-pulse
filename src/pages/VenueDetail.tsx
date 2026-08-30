@@ -7,7 +7,8 @@ import { Card, CardContent } from '@/components/ui/card';
 import { Badge } from '@/components/ui/badge';
 import { Skeleton } from '@/components/ui/skeleton';
 import { Button } from '@/components/ui/button';
-import { MapPin, Users, ExternalLink, Calendar, Navigation } from 'lucide-react';
+import { Navigation } from "lucide-react";
+import { SpriteIcon } from "@/components/ui/SpriteIcon";
 
 const VENUE_TYPE_LABELS: Record<string, string> = {
   arena: 'Arena',
@@ -87,7 +88,7 @@ export default function VenueDetail() {
               )}
               {venue.capacity && (
                 <Badge variant="outline">
-                  <Users className="h-3 w-3 mr-1" />
+                  <SpriteIcon name="users" className="h-3 w-3 mr-1" />
                   Capacity: {venue.capacity.toLocaleString()}
                 </Badge>
               )}
@@ -101,7 +102,7 @@ export default function VenueDetail() {
           <div className="grid grid-cols-1 md:grid-cols-3 gap-6 mb-10">
             <Card>
               <CardContent className="p-5">
-                <h3 className="font-semibold mb-2 flex items-center gap-2"><MapPin className="h-4 w-4" /> Location</h3>
+                <h3 className="font-semibold mb-2 flex items-center gap-2"><SpriteIcon name="map-pin" className="h-4 w-4" /> Location</h3>
                 {venue.address && <p className="text-sm text-muted-foreground mb-3">{venue.address}</p>}
                 {directionsUrl && (
                   <a href={directionsUrl} target="_blank" rel="noopener noreferrer">
@@ -115,7 +116,7 @@ export default function VenueDetail() {
             {venue.website && (
               <Card>
                 <CardContent className="p-5">
-                  <h3 className="font-semibold mb-2 flex items-center gap-2"><ExternalLink className="h-4 w-4" /> Website</h3>
+                  <h3 className="font-semibold mb-2 flex items-center gap-2"><SpriteIcon name="external-link" className="h-4 w-4" /> Website</h3>
                   <a href={venue.website} target="_blank" rel="noopener noreferrer" className="text-primary hover:underline text-sm break-all">
                     {venue.website.replace(/^https?:\/\//, '')}
                   </a>
@@ -127,7 +128,7 @@ export default function VenueDetail() {
           {/* Upcoming Events */}
           <section>
             <div className="flex items-center gap-2 mb-4">
-              <Calendar className="h-5 w-5 text-primary" />
+              <SpriteIcon name="calendar" className="h-5 w-5 text-primary" />
               <h2 className="text-2xl font-bold">Upcoming Events at {venue.name}</h2>
             </div>
             {events && events.length > 0 ? (

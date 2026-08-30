@@ -28,9 +28,9 @@ import { checkRateLimit, addRateLimitHeaders } from '../_shared/rateLimit.ts';
 
 const EXPECTED_BUNDLE_ID = 'com.desmoines.aipulse';
 
-/** Product IDs from App Store Connect. */
-const INSIDER_PRODUCT_IDS = new Set(['prod_U4oa7Cpn0bRnuo']);
-const VIP_PRODUCT_IDS = new Set(['prod_U4oaGFEy12auTx']);
+/** Product IDs from App Store Connect (monthly + annual — IOS-SUB-012). */
+const INSIDER_PRODUCT_IDS = new Set(['prod_U4oa7Cpn0bRnuo', 'prod_insider_annual']);
+const VIP_PRODUCT_IDS = new Set(['prod_U4oaGFEy12auTx', 'prod_vip_annual']);
 const ALL_PRODUCT_IDS = new Set([...INSIDER_PRODUCT_IDS, ...VIP_PRODUCT_IDS]);
 
 /** Apple App Store Server API base URLs. */
@@ -456,12 +456,18 @@ serve(async (req) => {
     // -----------------------------------------------------------------------
 
     // Look up the matching subscription plan
-    const { data: plan } = await supabase
+    const { data: plan, error: planError } = await supabase
       .from('subscription_plans')
       .select('id')
       .ilike('name', `%${tier}%`)
       .limit(1)
       .single();
+
+    // Survivable: plan_id is spread in only when present, so a failed lookup
+    // writes the subscription without it rather than losing the purchase. Logged
+    // because a run of these produces entitlements nothing can price
+    // (WEB-BE-032 AC3).
+    if (planError) console.warn(`[validate-ios-receipt] subscription_plans lookup failed: ${planError.message}`);
 
     const subscriptionData = {
       user_id: user.id,
@@ -477,12 +483,22 @@ serve(async (req) => {
 
     // Check if user already has an iOS subscription record. Scoped to
     // platform='ios' so we don't clobber a web/Stripe or Android row.
-    const { data: existing } = await supabase
+    const { data: existing, error: existingError } = await supabase
       .from('user_subscriptions')
       .select('id')
       .eq('user_id', user.id)
       .eq('platform', 'ios')
       .maybeSingle();
+
+    // This read decides UPDATE vs INSERT. A dropped error reads as "no row"
+    // and takes the INSERT branch, so every renewal validation would add
+    // ANOTHER user_subscriptions row for the same user and platform and the
+    // entitlement a reader sees would depend on row order. The store retries
+    // receipt validation, so failing is recoverable and duplicating is not
+    // (WEB-BE-032 AC2).
+    if (existingError) {
+      throw new Error(`user_subscriptions lookup failed: ${existingError.message}`);
+    }
 
     if (existing) {
       const { error: updateError } = await supabase

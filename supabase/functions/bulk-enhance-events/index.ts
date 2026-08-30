@@ -7,7 +7,9 @@
 import "https://deno.land/x/xhr@0.1.0/mod.ts";
 import { serve } from "https://deno.land/std@0.168.0/http/server.ts";
 import { createClient } from "https://esm.sh/@supabase/supabase-js@2.43.1";
-import { getAIConfig, buildClaudeRequest, getClaudeHeaders } from "../_shared/aiConfig.ts";
+import { getAIConfig, buildClaudeRequest, getClaudeHeaders, getAnthropicApiKey, extractClaudeText } from "../_shared/aiConfig.ts";
+import { requireAdminOrApiKey } from "../_shared/apiKeyAuth.ts";
+import { fetchWithTimeout } from "../_shared/fetchWithTimeout.ts";
 
 const corsHeaders = {
   "Access-Control-Allow-Origin": "*",
@@ -39,10 +41,13 @@ serve(async (req) => {
     return new Response(null, { headers: corsHeaders });
   }
 
+  const authFailure = await requireAdminOrApiKey(req, corsHeaders);
+  if (authFailure) return authFailure;
+
   try {
     const supabaseUrl = Deno.env.get("SUPABASE_URL")!;
     const supabaseServiceKey = Deno.env.get("SUPABASE_SERVICE_ROLE_KEY")!;
-    const claudeApiKey = Deno.env.get("CLAUDE_API");
+    const claudeApiKey = getAnthropicApiKey();
 
     if (!claudeApiKey) {
       throw new Error("Claude API key not configured");
@@ -220,11 +225,11 @@ Generate writeups for ALL ${eventsToEnhance.length} events listed above. Each wr
       }
     );
 
-    const claudeResponse = await fetch(config.api_endpoint, {
+    const claudeResponse = await fetchWithTimeout(config.api_endpoint, {
       method: "POST",
       headers,
       body: JSON.stringify(requestBody)
-    });
+    }, 60_000);
 
     if (!claudeResponse.ok) {
       const errorText = await claudeResponse.text();
@@ -233,7 +238,12 @@ Generate writeups for ALL ${eventsToEnhance.length} events listed above. Each wr
     }
 
     const claudeData = await claudeResponse.json();
-    const aiResponseText = claudeData.content[0].text;
+    const extracted = extractClaudeText(claudeData);
+    if (!extracted.ok) {
+      console.error("Claude response not usable:", extracted.reason, extracted.detail);
+      throw new Error(`AI response ${extracted.reason}: ${extracted.detail}`);
+    }
+    const aiResponseText = extracted.text;
 
     console.log('📝 Received response from Claude, parsing results...');
 

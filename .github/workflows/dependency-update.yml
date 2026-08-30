@@ -1,0 +1,115 @@
+# Dependency update agent (AOS-DEV-003)
+# Weekly: applies grouped NON-BREAKING (patch/minor) dependency updates, gates
+# them on validate + build, and opens a PR only when green. Major-version bumps
+# are escalated to tier-2 review tasks (they can break). Security-affected
+# packages (open CVE tasks, AOS-SEC-002) are prioritized.
+
+name: Dependency Update Agent
+
+on:
+  schedule:
+    - cron: '0 5 * * 1' # weekly, Monday 05:00 UTC
+  workflow_dispatch:
+
+permissions:
+  contents: write
+  pull-requests: write
+
+jobs:
+  update:
+    runs-on: ubuntu-latest
+    timeout-minutes: 30
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          ref: develop
+
+      - name: Set up Node 20
+        uses: actions/setup-node@v4
+        with:
+          node-version: '20'
+          cache: 'npm'
+
+      - name: Install deps
+        run: npm ci
+
+      - name: Compute updates (non-breaking vs majors, CVE-priority)
+        id: plan
+        env:
+          SUPABASE_URL: ${{ secrets.SUPABASE_URL }}
+          EDGE_FUNCTION_API_KEY: ${{ secrets.EDGE_FUNCTION_API_KEY }}
+        run: |
+          npm outdated --json > outdated.json || true
+          # Security-priority packages (open CVE tasks).
+          PRIORITY='[]'
+          if [ -n "$SUPABASE_URL" ] && [ -n "$EDGE_FUNCTION_API_KEY" ]; then
+            PRIORITY=$(curl -sS -X POST "${SUPABASE_URL}/functions/v1/agent-dep-update" \
+              -H "x-api-key: ${EDGE_FUNCTION_API_KEY}" -H "Content-Type: application/json" \
+              --data '{"mode":"priority"}' | node -e "let s='';process.stdin.on('data',d=>s+=d).on('end',()=>{try{process.stdout.write(JSON.stringify(JSON.parse(s).packages||[]))}catch(e){process.stdout.write('[]')}})")
+          fi
+          node <<'EOF'
+          const fs = require('fs');
+          const outdated = JSON.parse(fs.readFileSync('outdated.json','utf8') || '{}');
+          const priority = new Set(JSON.parse(process.env.PRIORITY || '[]'));
+          const nonBreaking = [], majors = [];
+          const major = (v) => String(v||'').replace(/^[^\d]*/,'').split('.')[0];
+          for (const [name, info] of Object.entries(outdated)) {
+            const cur = info.current, wanted = info.wanted, latest = info.latest;
+            if (!cur || !latest) continue;
+            if (major(cur) === major(latest)) nonBreaking.push({ name, wanted: wanted || latest });
+            else majors.push({ name, current: cur, latest });
+          }
+          // Prioritize security-affected packages to the front.
+          nonBreaking.sort((a,b) => (priority.has(b.name)?1:0) - (priority.has(a.name)?1:0));
+          fs.writeFileSync('nonbreaking.json', JSON.stringify(nonBreaking));
+          fs.writeFileSync('majors.json', JSON.stringify(majors));
+          console.log(`non-breaking=${nonBreaking.length} majors=${majors.length}`);
+          EOF
+          echo "PRIORITY<<E" >> "$GITHUB_ENV"; echo "$PRIORITY" >> "$GITHUB_ENV"; echo "E" >> "$GITHUB_ENV"
+
+      - name: Escalate majors to tier-2
+        env:
+          SUPABASE_URL: ${{ secrets.SUPABASE_URL }}
+          EDGE_FUNCTION_API_KEY: ${{ secrets.EDGE_FUNCTION_API_KEY }}
+        run: |
+          [ -z "$SUPABASE_URL" ] && exit 0
+          COUNT=$(node -e "console.log(require('./majors.json').length)")
+          [ "$COUNT" == "0" ] && { echo "no majors"; exit 0; }
+          curl -sS -X POST "${SUPABASE_URL}/functions/v1/agent-dep-update" \
+            -H "x-api-key: ${EDGE_FUNCTION_API_KEY}" -H "Content-Type: application/json" \
+            --data "{\"mode\":\"majors\",\"majors\":$(cat majors.json)}" \
+            && echo "escalated $COUNT major(s)"
+
+      - name: Apply non-breaking updates + gate on validate/build
+        id: apply
+        run: |
+          set +e
+          COUNT=$(node -e "console.log(require('./nonbreaking.json').length)")
+          if [ "$COUNT" == "0" ]; then echo "green=skip" >> "$GITHUB_OUTPUT"; echo "no non-breaking updates"; exit 0; fi
+          node -e "require('./nonbreaking.json').forEach(u=>console.log(u.name+'@'+u.wanted))" > targets.txt
+          xargs -a targets.txt npm install --save
+          npm run validate && npm run build
+          echo "green=$?" >> "$GITHUB_OUTPUT"
+
+      - name: Open PR when green
+        if: steps.apply.outputs.green == '0'
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        run: |
+          if git diff --quiet; then echo "no dep changes"; exit 0; fi
+          git config user.name "dependency-update-agent"
+          git config user.email "automation@desmoinesinsider.com"
+          git checkout -B chore/deps-update
+          git add package.json package-lock.json
+          git commit -m "chore(deps): grouped non-breaking dependency updates"
+          git push -u origin chore/deps-update --force-with-lease
+          gh pr create --base develop \
+            --title "chore(deps): grouped non-breaking dependency updates" \
+            --body "Automated non-breaking (patch/minor) dependency bumps. Passed validate + build. Security-affected packages prioritized. Majors are escalated as separate tier-2 review tasks." \
+            2>/dev/null || echo "PR may already exist"
+
+      - name: Annotate on red
+        if: steps.apply.outputs.green != '0' && steps.apply.outputs.green != 'skip'
+        run: |
+          echo "::warning::Non-breaking dependency updates failed validate/build — no PR opened. Review the logs."
+          echo "## Dependency update: FAILED validate/build (no PR opened)" >> "$GITHUB_STEP_SUMMARY"

@@ -7,6 +7,7 @@ import androidx.compose.ui.semantics.Role
 import androidx.compose.ui.semantics.clearAndSetSemantics
 import androidx.compose.ui.semantics.contentDescription
 import androidx.compose.ui.semantics.role
+import androidx.compose.ui.unit.Dp
 import androidx.compose.ui.unit.dp
 
 /**
@@ -18,10 +19,18 @@ import androidx.compose.ui.unit.dp
  */
 
 /**
+ * Minimum interactive touch-target size (WCAG 2.5.5 / Material Design). The
+ * Android floor is 48dp — parity with the iOS 44pt target. Single-sourced so
+ * [minHitTarget] and any callsite that needs the value can't drift below it.
+ */
+val MinTouchTargetDp: Dp = 48.dp
+
+/**
  * Guarantee a minimum 48x48 dp touch target as required by Material Design
  * and WCAG 2.5.5. Apply to any clickable icon-only button.
  */
-fun Modifier.minHitTarget(): Modifier = this.defaultMinSize(minWidth = 48.dp, minHeight = 48.dp)
+fun Modifier.minHitTarget(): Modifier =
+    this.defaultMinSize(minWidth = MinTouchTargetDp, minHeight = MinTouchTargetDp)
 
 /**
  * Aggregate a card's children into a single accessibility element with the

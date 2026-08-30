@@ -66,6 +66,48 @@ export function resolveHighestSubscription(
   }, null);
 }
 
+/**
+ * Number of days a past_due subscription keeps premium access after its paid
+ * period ends, giving Stripe's dunning retries time to recover payment before
+ * we drop the user to free (PROD-SUB-003).
+ */
+export const GRACE_PERIOD_DAYS = 14;
+
+/**
+ * The instant premium access lapses for a row. For past_due rows this is the
+ * paid period end plus the grace window; for other statuses it is the period
+ * end itself. A missing period end is treated as the epoch (i.e. lapsed).
+ */
+export function gracePeriodEnd(sub: UserSubscription): Date {
+  const base = sub.current_period_end ? new Date(sub.current_period_end) : new Date(0);
+  if (sub.status === "past_due") {
+    base.setDate(base.getDate() + GRACE_PERIOD_DAYS);
+  }
+  return base;
+}
+
+/**
+ * Whether a single subscription row currently grants premium entitlement:
+ * `active` and `trialing` always do; `past_due` does only within the grace
+ * window; `canceled`/`paused` never do. This is what gates premium features —
+ * a failed renewal no longer instantly revokes access, and a row lapsed beyond
+ * grace correctly stops granting a tier.
+ */
+export function isSubscriptionEntitled(
+  sub: UserSubscription,
+  now: Date = new Date(),
+): boolean {
+  switch (sub.status) {
+    case "active":
+    case "trialing":
+      return true;
+    case "past_due":
+      return now.getTime() <= gracePeriodEnd(sub).getTime();
+    default:
+      return false;
+  }
+}
+
 export function useSubscription() {
   const { user } = useAuth();
   const queryClient = useQueryClient();
@@ -107,7 +149,10 @@ export function useSubscription() {
       const { data, error } = await subQuery
         .select('*, plan:subscription_plans(*)')
         .eq("user_id", user.id)
-        .eq("status", "active");
+        // Include trialing + past_due (not just active) so trial users aren't
+        // read as free and a failed renewal can be held in its grace window.
+        // Entitlement (below) decides which of these actually grant a tier.
+        .in("status", ["active", "trialing", "past_due"]);
 
       if (error) throw error;
       if (!data || (data as unknown[]).length === 0) return [];
@@ -136,19 +181,36 @@ export function useSubscription() {
   // expects one canonical row.
   const subscription = resolveHighestSubscription(subscriptions);
 
+  // Entitlement is computed from rows that CURRENTLY grant access (active,
+  // trialing, or past_due within grace). `subscription` above stays the highest
+  // row of ANY status for display (e.g. showing "Past Due" in the portal),
+  // while tier/limits/features below derive from the entitled set so a failed
+  // payment doesn't instantly revoke access and a beyond-grace row drops to free.
+  const entitledSubscription = resolveHighestSubscription(
+    subscriptions.filter((s) => isSubscriptionEntitled(s)),
+  );
+
+  // A past_due row (if any) drives the "payment failed" grace banner.
+  const pastDueSubscription = subscriptions.find((s) => s.status === "past_due") ?? null;
+  const inGracePeriod =
+    !!pastDueSubscription && isSubscriptionEntitled(pastDueSubscription);
+  const gracePeriodEndsAt = pastDueSubscription
+    ? gracePeriodEnd(pastDueSubscription).toISOString()
+    : null;
+
   // Determine current tier
   const getCurrentTier = (): SubscriptionTier => {
     if (!user) return "free";
-    if (!subscription) return "free";
-    return (subscription.plan?.name || "free") as SubscriptionTier;
+    if (!entitledSubscription) return "free";
+    return (entitledSubscription.plan?.name || "free") as SubscriptionTier;
   };
 
   const tier = getCurrentTier();
 
   // Get current limits based on tier
   const getLimits = (): SubscriptionLimits => {
-    if (subscription?.plan?.limits) {
-      return subscription.plan.limits;
+    if (entitledSubscription?.plan?.limits) {
+      return entitledSubscription.plan.limits;
     }
     return FREE_LIMITS;
   };
@@ -220,8 +282,8 @@ export function useSubscription() {
 
   // Check if subscription is expiring soon (within 7 days)
   const isExpiringSoon = (): boolean => {
-    if (!subscription?.current_period_end) return false;
-    const endDate = new Date(subscription.current_period_end);
+    if (!entitledSubscription?.current_period_end) return false;
+    const endDate = new Date(entitledSubscription.current_period_end);
     const now = new Date();
     const daysUntilExpiry = Math.ceil(
       (endDate.getTime() - now.getTime()) / (1000 * 60 * 60 * 24)
@@ -315,6 +377,11 @@ export function useSubscription() {
     isVIP: tier === "vip",
     isExpiringSoon: isExpiringSoon(),
     cancelAtPeriodEnd: subscription?.cancel_at_period_end || false,
+    // Payment-failed grace state (PROD-SUB-003): isPastDue surfaces a banner,
+    // inGracePeriod means access is still granted, gracePeriodEndsAt is when it lapses.
+    isPastDue: !!pastDueSubscription,
+    inGracePeriod,
+    gracePeriodEndsAt,
 
     // Checkout functions
     createCheckoutSession,

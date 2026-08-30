@@ -1,4 +1,5 @@
 import { useState, useEffect } from "react";
+import { useTabState } from "@/hooks/useTabState";
 import { useParams, useNavigate } from "react-router-dom";
 import { useAdminCampaigns, CampaignWithUser } from "@/hooks/useAdminCampaigns";
 import { useDocumentTitle } from "@/hooks/useDocumentTitle";
@@ -12,8 +13,10 @@ import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { Alert, AlertDescription } from "@/components/ui/alert";
 import { Skeleton } from "@/components/ui/skeleton";
-import { ArrowLeft, Check, X, DollarSign, Calendar, User, Image as ImageIcon, ExternalLink, AlertCircle } from "lucide-react";
+import { ArrowLeft, Check, X, DollarSign, User, Image as ImageIcon, AlertCircle } from "lucide-react";
 import { CampaignCreative } from "@/hooks/useCampaigns";
+import { CreativePreview } from "@/components/advertising/CreativePreview";
+import { SpriteIcon } from "@/components/ui/SpriteIcon";
 
 export default function AdminCampaignDetail() {
   const { campaignId } = useParams<{ campaignId: string }>();
@@ -31,6 +34,10 @@ export default function AdminCampaignDetail() {
   const [isLoading, setIsLoading] = useState(true);
   const [selectedCreative, setSelectedCreative] = useState<CampaignCreative | null>(null);
   const [rejectDialogOpen, setRejectDialogOpen] = useState(false);
+  const [creativeTab, setCreativeTab] = useTabState("pending", {
+    param: "creatives",
+    validTabs: ["pending", "approved"],
+  });
   const [rejectionReason, setRejectionReason] = useState("");
   const [overrideDialogOpen, setOverrideDialogOpen] = useState(false);
   const [overridePrice, setOverridePrice] = useState("");
@@ -201,7 +208,7 @@ export default function AdminCampaignDetail() {
         <Card>
           <CardHeader className="pb-3">
             <CardTitle className="text-sm font-medium flex items-center gap-2">
-              <Calendar className="h-4 w-4" />
+              <SpriteIcon name="calendar" className="h-4 w-4" />
               Campaign Duration
             </CardTitle>
           </CardHeader>
@@ -275,7 +282,7 @@ export default function AdminCampaignDetail() {
           </CardDescription>
         </CardHeader>
         <CardContent>
-          <Tabs defaultValue="pending">
+          <Tabs value={creativeTab} onValueChange={setCreativeTab}>
             <TabsList className="grid w-full grid-cols-2">
               <TabsTrigger value="pending">
                 Pending Review ({getPendingCreatives().length})
@@ -299,17 +306,13 @@ export default function AdminCampaignDetail() {
                   {getPendingCreatives().map((creative) => (
                     <Card key={creative.id} className="overflow-hidden">
                       <div className="aspect-video relative bg-muted">
-                        {creative.image_url ? (
-                          <img
-                            src={creative.image_url}
-                            alt={creative.title || 'Ad creative'}
-                            className="w-full h-full object-cover"
-                          />
-                        ) : (
-                          <div className="flex items-center justify-center h-full">
-                            <ImageIcon className="h-12 w-12 text-muted-foreground" />
-                          </div>
-                        )}
+                        {/* WEB-LEGAL-011: an unapproved creative has no public
+                            URL, so this signs its private review path. */}
+                        <CreativePreview
+                          imageUrl={creative.image_url}
+                          reviewPath={creative.review_path}
+                          alt={creative.title || 'Ad creative'}
+                        />
                       </div>
                       <CardContent className="pt-4">
                         <div className="mb-4">
@@ -328,13 +331,28 @@ export default function AdminCampaignDetail() {
                               className="text-sm text-primary hover:underline inline-flex items-center gap-1"
                             >
                               {creative.link_url}
-                              <ExternalLink className="h-3 w-3" />
+                              <SpriteIcon name="external-link" className="h-3 w-3" />
                             </a>
                           )}
                           <div className="mt-2 text-xs text-muted-foreground">
                             <p>CTA: "{creative.cta_text}"</p>
                             <p>Size: {creative.dimensions_width}×{creative.dimensions_height}px</p>
                           </div>
+                          {/* Auto-review failure reasons (WEB-AUTO-010) */}
+                          {creative.auto_reviewed &&
+                            Array.isArray(creative.auto_review_reasons) &&
+                            creative.auto_review_reasons.length > 0 && (
+                              <div className="mt-3 rounded-md bg-amber-500/10 border border-amber-500/30 p-2">
+                                <p className="text-xs font-medium text-amber-700 dark:text-amber-400">
+                                  Auto-review held this creative:
+                                </p>
+                                <ul className="mt-1 list-disc pl-4 text-xs text-muted-foreground">
+                                  {creative.auto_review_reasons.map((r: string, i: number) => (
+                                    <li key={i}>{r}</li>
+                                  ))}
+                                </ul>
+                              </div>
+                            )}
                         </div>
                         <div className="flex gap-2">
                           <Button
@@ -377,17 +395,13 @@ export default function AdminCampaignDetail() {
                   {getApprovedCreatives().map((creative) => (
                     <Card key={creative.id} className="overflow-hidden border-green-200">
                       <div className="aspect-video relative bg-muted">
-                        {creative.image_url ? (
-                          <img
-                            src={creative.image_url}
-                            alt={creative.title || 'Ad creative'}
-                            className="w-full h-full object-cover"
-                          />
-                        ) : (
-                          <div className="flex items-center justify-center h-full">
-                            <ImageIcon className="h-12 w-12 text-muted-foreground" />
-                          </div>
-                        )}
+                        {/* WEB-LEGAL-011: an unapproved creative has no public
+                            URL, so this signs its private review path. */}
+                        <CreativePreview
+                          imageUrl={creative.image_url}
+                          reviewPath={creative.review_path}
+                          alt={creative.title || 'Ad creative'}
+                        />
                         <div className="absolute top-2 right-2">
                           <Badge className="bg-green-500">Approved</Badge>
                         </div>

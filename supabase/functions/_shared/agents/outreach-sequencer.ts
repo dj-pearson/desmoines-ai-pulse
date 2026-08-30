@@ -1,0 +1,148 @@
+/**
+ * agent outreach-sequencer (AOS-PROSPECT-004) — guardrailed outreach sequencing.
+ *
+ * Sends a personalized multi-step sequence to QUALIFIED leads with a
+ * business-contact email. Guardrails:
+ *   - the step-1 template must be APPROVED (createApproval → AOS-CORE-007);
+ *     until then the sequence cannot auto-run.
+ *   - suppression list + opt-out respected; sequence halts on reply
+ *     (outreach_stopped) — the agent never negotiates or commits pricing.
+ *   - CAN-SPAM: emailLayout marketing footer (physical address + one-click
+ *     unsubscribe); frequency cap between steps; AOS-GOV-004 quality gate;
+ *     every send audited.
+ *
+ * Consolidated into `agent-runner` (was `agent-outreach/index.ts`).
+ */
+import { scoreOutput } from "../scoreOutput.ts";
+import { fetchWithTimeout } from "../fetchWithTimeout.ts";
+import { createApproval } from "../agentApprovals.ts";
+import { writeAgentAudit } from "../auditLog.ts";
+import { renderEmail } from "../emailLayout.ts";
+import type { AgentRun } from "./types.ts";
+
+const AGENT_KEY = "outreach-sequencer";
+const BATCH = 100;
+const STEP_GAP_DAYS = 4; // frequency cap between steps
+const MAX_STEP = 3;
+const DAY = 24 * 60 * 60 * 1000;
+
+// deno-lint-ignore no-explicit-any
+type Client = any;
+
+function fill(t: string, name: string): string {
+  return t.replace(/\{\{business_name\}\}/g, name);
+}
+
+async function suppressed(supabase: Client, email: string): Promise<boolean> {
+  const domain = email.split("@")[1] ?? "";
+  const { data, error } = await supabase.from("outreach_suppression").select("id").or(`email.eq.${email},domain.eq.${domain}`).limit(1);
+  // FAIL CLOSED, and this is the one in this file that is not merely a cadence
+  // question. Returning false means NOT suppressed, which sends - so a dropped
+  // error emails everyone on the suppression list. A suppression list is the
+  // one place where "we could not check" has to mean "do not send"
+  // (WEB-BE-032 AC2).
+  if (error) {
+    console.warn(`[outreach-sequencer] suppression check failed for ${email}; treating as suppressed: ${error.message}`);
+    return true;
+  }
+  return (data ?? []).length > 0;
+}
+
+export const run: AgentRun = async (ctx, { supabase }) => {
+  const from = Deno.env.get("OUTREACH_FROM") || Deno.env.get("NURTURE_FROM") || "Des Moines Insider <partnerships@desmoinesinsider.com>";
+  const apiKey = Deno.env.get("RESEND_API_KEY");
+
+  const now = Date.now();
+
+  // ── Guardrail: step-1 template must be approved before ANY auto-run. ──
+  const { data: templates, error: templatesError } = await supabase.from("outreach_templates").select("step, subject, body, approved").order("step");
+  // WEB-BE-032. This one already failed in the SAFE direction and did so
+  // silently: a dropped error left tByStep empty, step1 undefined, and the
+  // guardrail below stopped the sequence - which is right, and is
+  // indistinguishable from the template genuinely not being approved. Someone
+  // chasing "why is outreach not sending" would have gone looking for an
+  // approval that was already granted.
+  if (templatesError) console.error(`[outreach-sequencer] outreach_templates read failed; treating step 1 as unapproved: ${templatesError.message}`);
+  const tByStep = new Map<number, { subject: string; body: string; approved: boolean }>();
+  for (const t of (templates ?? []) as { step: number; subject: string; body: string; approved: boolean }[]) tByStep.set(t.step, t);
+  const step1 = tByStep.get(1);
+  if (!step1?.approved) {
+    // Queue the one-time approval (deduped) and stop — nothing sends.
+    await createApproval(supabase, { agentKey: AGENT_KEY, actionType: "send_outreach", payload: { step: 1, reason: "approve outreach step-1 template before the sequence runs" } });
+    ctx.summary("step-1 template not approved — approval queued, no sends");
+    return { sent: 0, blocked: "awaiting_template_approval" };
+  }
+
+  // ── Qualified leads with a contact email, sequence not stopped. ───────
+  const { data: leads, error: leadsError } = await supabase
+    .from("crm_leads")
+    .select("id, business_name, contact_email")
+    .eq("status", "qualified")
+    .eq("outreach_stopped", false)
+    .not("contact_email", "is", null)
+    .limit(BATCH);
+  // THE work list. A dropped error sent no outreach at all and reported
+  // success, indistinguishable from having no qualified leads.
+  if (leadsError) throw new Error(`outreach-sequencer: could not read qualified leads: ${leadsError.message}`);
+  const rows = (leads ?? []) as { id: string; business_name: string; contact_email: string }[];
+
+  let sent = 0, skipped = 0, gated = 0, done = 0;
+
+  for (const l of rows) {
+    const email = l.contact_email;
+    if (await suppressed(supabase, email)) { skipped++; continue; }
+
+    // Determine next step from prior sends + cadence.
+    const { data: prior, error: priorError } = await supabase.from("outreach_sends").select("step, created_at").eq("lead_id", l.id).order("created_at", { ascending: false });
+    // FAIL CLOSED. An empty list makes lastStep 0, which RESTARTS THE SEQUENCE
+    // at step 1 for a lead that may already have had all of them - a cold
+    // outreach email sent again to someone who has stopped replying.
+    if (priorError) {
+      console.warn(`[outreach-sequencer] prior sends read failed for lead ${l.id}; skipping: ${priorError.message}`);
+      skipped++; continue;
+    }
+    const sends = (prior ?? []) as { step: number; created_at: string }[];
+    const lastStep = sends.length ? Math.max(...sends.map((s) => s.step)) : 0;
+    if (lastStep >= MAX_STEP) { done++; continue; }
+    if (sends.length && now - new Date(sends[0].created_at).getTime() < STEP_GAP_DAYS * DAY) { skipped++; continue; }
+    const nextStep = lastStep + 1;
+    const tpl = tByStep.get(nextStep);
+    if (!tpl?.approved) { skipped++; continue; } // every step template must be approved
+
+    const subject = fill(tpl.subject, l.business_name);
+    const bodyText = fill(tpl.body, l.business_name);
+
+    // Quality/safety gate before any send.
+    const gate = await scoreOutput(supabase, { agentKey: AGENT_KEY, category: "prospect", content: `${subject}\n\n${bodyText}` });
+    if (!gate.passed) { gated++; continue; }
+
+    // CAN-SPAM compliant render (physical address + one-click unsubscribe).
+    const rendered = renderEmail({
+      bodyHtml: `<p>${bodyText.replace(/\n/g, "<br>")}</p>`,
+      bodyText,
+      recipient: { email, preferencesPath: "/unsubscribe" },
+      category: "marketing",
+    });
+
+    let status = "skipped", messageId: string | null = null;
+    if (apiKey) {
+      try {
+        const headers: Record<string, string> = { Authorization: `Bearer ${apiKey}`, "Content-Type": "application/json" };
+        if (rendered.listUnsubscribe) headers["List-Unsubscribe"] = rendered.listUnsubscribe;
+        if (rendered.listUnsubscribePost) headers["List-Unsubscribe-Post"] = rendered.listUnsubscribePost;
+        const res = await fetchWithTimeout("https://api.resend.com/emails", { method: "POST", headers, body: JSON.stringify({ from, to: [email], subject, html: rendered.html, text: rendered.text }) });
+        const jb = await res.json().catch(() => ({}));
+        if (res.ok) { status = "queued"; messageId = jb?.id ?? null; sent++; } else status = "failed";
+      } catch { status = "failed"; }
+    }
+
+    await supabase.from("outreach_sends").insert({ lead_id: l.id, step: nextStep, email, resend_message_id: messageId, status });
+    if (nextStep === 1) await supabase.from("crm_leads").update({ status: "contacted" }).eq("id", l.id);
+    await writeAgentAudit(supabase, { agentKey: AGENT_KEY, actionType: "outreach_sent", targetRef: `crm_leads:${l.id}`, after: { step: nextStep, status, qualityScore: gate.score } });
+  }
+
+  ctx.processed(rows.length);
+  ctx.summary(`outreach: ${sent} sent, ${skipped} skipped, ${gated} quality-gated, ${done} sequence-complete`);
+  ctx.meta({ sent, skipped, gated, done });
+  return { sent, skipped, gated, done };
+};

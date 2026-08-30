@@ -10,6 +10,9 @@ struct MapTimeSlider: View {
     let eventCount: Int
     let restaurantCount: Int
 
+    // Honor Reduce Motion like the rest of the app (IOS-AUDIT-UX-047).
+    @Environment(\.accessibilityReduceMotion) private var reduceMotion
+
     var body: some View {
         VStack(spacing: 8) {
             // Top pill — count summary for the current slider position
@@ -27,7 +30,7 @@ struct MapTimeSlider: View {
                 ForEach(MapTimeSliderStop.stops()) { stop in
                     Button {
                         UIImpactFeedbackGenerator(style: .light).impactOccurred()
-                        withAnimation(.easeInOut(duration: 0.2)) {
+                        withAnimation(reduceMotion ? nil : .easeInOut(duration: 0.2)) {
                             mapTime = stop.date
                         }
                     } label: {
@@ -51,11 +54,20 @@ struct MapTimeSlider: View {
         }
     }
 
+    /// Cached formatter — `countPillText` recomputes on every render while the
+    /// slider is dragged, so avoid re-allocating a DateFormatter each time.
+    private static let pillTimeFormatter: DateFormatter = {
+        let f = DateFormatter()
+        f.dateFormat = "h:mm a EEEE"
+        return f
+    }()
+
     private var countPillText: String {
         guard let mapTime else { return "" }
-        let formatter = DateFormatter()
-        formatter.dateFormat = "h:mm a EEEE"
-        return "\(eventCount) events + \(restaurantCount) restaurants open at \(formatter.string(from: mapTime))"
+        // Events are filtered to a window around the slider time (not opening
+        // hours), so don't claim they're "open at" it (IOS-AUDIT-UX-027).
+        let time = Self.pillTimeFormatter.string(from: mapTime)
+        return "\(eventCount) events near \(time) · \(restaurantCount) restaurants open"
     }
 
     private func isActive(_ stop: MapTimeSliderStop) -> Bool {

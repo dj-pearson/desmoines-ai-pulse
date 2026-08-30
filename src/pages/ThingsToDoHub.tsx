@@ -10,26 +10,9 @@ import Header from '@/components/Header';
 import Footer from '@/components/Footer';
 import SEOHead from '@/components/SEOHead';
 import { getCanonicalUrl } from '@/lib/brandConfig';
-import {
-  MapPin,
-  Users,
-  Heart,
-  DollarSign,
-  TreePine,
-  Music,
-  Utensils,
-  Camera,
-  Baby,
-  Sunset,
-  CalendarDays,
-  Clock,
-  Snowflake,
-  Sun,
-  Leaf,
-  Flower2,
-  ChevronRight,
-} from 'lucide-react';
+import { Users, Heart, DollarSign, TreePine, Music, Utensils, Camera, Baby, Sunset, CalendarDays, Clock, Snowflake, Sun, Leaf, Flower2, ChevronRight } from "lucide-react";
 import { Badge } from '@/components/ui/badge';
+import { SpriteIcon } from "@/components/ui/SpriteIcon";
 
 // ---------------------------------------------------------------------------
 // Data
@@ -104,13 +87,15 @@ export default function ThingsToDoHub() {
 
       <Header />
 
-      <main className="min-h-screen bg-background">
+      {/* Plain <div>, not <main>: App.tsx already provides the single
+          top-level <main id="main-content"> landmark (WCAG 1.3.1). */}
+      <div className="min-h-screen bg-background">
         {/* Hero */}
         <section className="bg-gradient-to-br from-primary/10 via-background to-secondary/10 border-b border-border">
           <div className="container mx-auto px-4 py-14 md:py-20">
             <div className="max-w-3xl">
               <div className="flex items-center gap-2 text-sm text-primary font-medium mb-3">
-                <MapPin className="h-4 w-4" aria-hidden="true" />
+                <SpriteIcon name="map-pin" className="h-4 w-4" aria-hidden="true" />
                 Des Moines Metro Area
               </div>
               <h1 className="text-4xl font-bold tracking-tight text-foreground sm:text-5xl lg:text-6xl mb-4">
@@ -268,7 +253,7 @@ export default function ThingsToDoHub() {
           </section>
 
         </div>
-      </main>
+      </div>
 
       <Footer />
     </>

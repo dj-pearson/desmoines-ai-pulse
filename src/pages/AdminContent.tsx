@@ -1,6 +1,7 @@
 import { useState, useEffect, useCallback } from "react";
 import { createLogger } from '@/lib/logger';
 import { useAdminAuth } from "@/hooks/useAdminAuth";
+import { useTabState } from "@/hooks/useTabState";
 
 const log = createLogger('AdminContent');
 import { useDocumentTitle } from "@/hooks/useDocumentTitle";
@@ -10,6 +11,8 @@ import ContentTemplateSelector from "@/components/ContentTemplateSelector";
 import ContentTable from "@/components/ContentTable";
 import ArticlesManager from "@/components/ArticlesManager";
 import VenuesManager from "@/components/admin/VenuesManager";
+import MergeReviewPanel from "@/components/admin/MergeReviewPanel";
+import ModerationQueuePanel from "@/components/admin/ModerationQueuePanel";
 import GooglePlacesRestaurantTools from "@/components/GooglePlacesRestaurantTools";
 import GooglePlacesHotelTools from "@/components/GooglePlacesHotelTools";
 import { RestaurantBulkUpdaterSimple } from "@/components/RestaurantBulkUpdaterSimple";
@@ -27,6 +30,8 @@ import {
   MapPin,
   FileText,
   Plus,
+  GitMerge,
+  ShieldAlert,
 } from "lucide-react";
 import { useEvents } from "@/hooks/useEvents";
 import { useRestaurants } from "@/hooks/useRestaurants";
@@ -47,15 +52,20 @@ const CONTENT_TABS = [
   { id: "attractions", label: "Attractions", icon: Camera },
   { id: "playgrounds", label: "Playgrounds", icon: Play },
   { id: "venues", label: "Known Venues", icon: MapPin },
+  { id: "duplicates", label: "Duplicates", icon: GitMerge },
+  { id: "moderation", label: "Moderation", icon: ShieldAlert },
   { id: "articles", label: "Articles", icon: FileText },
   { id: "article-editor", label: "New Article", icon: Plus },
 ];
+
+const CONTENT_TAB_IDS = CONTENT_TABS.map((tab) => tab.id);
 
 export default function AdminContent() {
   const { userRole } = useAdminAuth();
   useDocumentTitle("Content Management");
   const queryClient = useQueryClient();
-  const [activeTab, setActiveTab] = useState("events");
+  const [activeTab, setActiveTab] = useTabState("events", { validTabs: CONTENT_TAB_IDS });
+  const [brokenLinksOnly, setBrokenLinksOnly] = useState(false);
 
   // Search state for each content type
   const [searchTerms, setSearchTerms] = useState({
@@ -388,9 +398,23 @@ export default function AdminContent() {
               <CatchDesmoinUrlExtractor />
               <FixBrokenEventUrls />
               <DomainHighlightManager />
+              <label className="flex items-center gap-2 text-sm text-muted-foreground">
+                <input
+                  type="checkbox"
+                  checked={brokenLinksOnly}
+                  onChange={(e) => setBrokenLinksOnly(e.target.checked)}
+                />
+                Show only events with broken source links (WEB-AUTO-004)
+              </label>
               <ContentTable
                 type="event"
-                items={events.events}
+                items={
+                  brokenLinksOnly
+                    ? events.events.filter(
+                        (e) => (e as { source_url_broken?: boolean }).source_url_broken,
+                      )
+                    : events.events
+                }
                 isLoading={events.isLoading}
                 totalCount={events.events.length}
                 searchValue={inputValues.events}
@@ -531,6 +555,10 @@ export default function AdminContent() {
           )}
 
           {activeTab === "venues" && <VenuesManager />}
+
+          {activeTab === "duplicates" && <MergeReviewPanel />}
+
+          {activeTab === "moderation" && <ModerationQueuePanel />}
 
           {activeTab === "articles" && <ArticlesManager />}
 

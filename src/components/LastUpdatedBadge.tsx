@@ -1,4 +1,5 @@
-import { CheckCircle, Clock } from "lucide-react";
+import { CheckCircle } from "lucide-react";
+import { SpriteIcon } from "@/components/ui/SpriteIcon";
 
 interface LastUpdatedBadgeProps {
   updatedAt?: string;
@@ -37,7 +38,7 @@ export function LastUpdatedBadge({ updatedAt, className = "" }: LastUpdatedBadge
       {isRecent ? (
         <CheckCircle className="h-3.5 w-3.5 text-emerald-500" />
       ) : (
-        <Clock className="h-3.5 w-3.5" />
+        <SpriteIcon name="clock" className="h-3.5 w-3.5" />
       )}
       <span>
         {isRecent && <span className="text-emerald-600 font-medium">Verified</span>}

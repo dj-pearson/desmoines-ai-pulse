@@ -5,10 +5,11 @@ import { useDocumentTitle } from "@/hooks/useDocumentTitle";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import { Alert, AlertDescription } from "@/components/ui/alert";
-import { ArrowLeft, Calendar, LogIn } from "lucide-react";
+import { ArrowLeft, LogIn } from "lucide-react";
 import { Breadcrumbs } from "@/components/ui/breadcrumbs";
 import EventSubmissionForm from "@/components/EventSubmissionForm";
 import { toast } from "sonner";
+import { SpriteIcon } from "@/components/ui/SpriteIcon";
 
 export default function SubmitEvent() {
   const { user, isLoading: authLoading } = useAuth();
@@ -46,7 +47,7 @@ export default function SubmitEvent() {
           <Card className="text-center">
             <CardHeader>
               <div className="mx-auto mb-4 p-4 rounded-full bg-primary/10">
-                <Calendar className="h-10 w-10 text-primary" />
+                <SpriteIcon name="calendar" className="h-10 w-10 text-primary" />
               </div>
               <CardTitle className="text-2xl">Submit Your Event</CardTitle>
               <CardDescription className="text-base">
@@ -90,7 +91,7 @@ export default function SubmitEvent() {
               Back
             </Button>
             <div className="flex items-center gap-2">
-              <Calendar className="h-5 w-5 text-primary" />
+              <SpriteIcon name="calendar" className="h-5 w-5 text-primary" />
               <h1 className="text-xl font-bold">Submit an Event</h1>
             </div>
             <div className="w-20" />

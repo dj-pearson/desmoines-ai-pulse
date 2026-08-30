@@ -11,6 +11,9 @@ import { defineConfig, devices } from '@playwright/test';
  */
 export default defineConfig({
   testDir: './tests',
+  // route-smoke.spec.ts must run against a production build, not the dev server —
+  // see playwright.smoke.config.ts for why. Run it with `npm run test:smoke`.
+  testIgnore: 'route-smoke.spec.ts',
   /* Run tests in files in parallel */
   fullyParallel: true,
   /* Fail the build on CI if you accidentally left test.only in the source code. */

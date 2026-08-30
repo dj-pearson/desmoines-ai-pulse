@@ -12,6 +12,9 @@ import SwiftUI
 struct PremiumGate<Content: View>: View {
     let requiredTier: SubscriptionTier
     let feature: String
+    /// Optional tailored paywall context. When nil, a generic context is built
+    /// from `requiredTier` + `feature` (IOS-SUB-010).
+    var context: PaywallContext? = nil
     @ViewBuilder let content: () -> Content
 
     @State private var storeKit = StoreKitService.shared
@@ -45,6 +48,7 @@ struct PremiumGate<Content: View>: View {
 
                 Text("\(requiredTier.displayName) Feature")
                     .font(.subheadline.weight(.semibold))
+                    .accessibilityAddTraits(.isHeader)
 
                 Spacer()
             }
@@ -59,8 +63,8 @@ struct PremiumGate<Content: View>: View {
             } label: {
                 Text("Unlock with \(requiredTier.displayName)")
                     .font(.caption.weight(.semibold))
-                    .frame(maxWidth: .infinity)
-                    .padding(.vertical, 10)
+                    // ≥44pt tap target (IOS-AUDIT-UX-012) without changing the type size.
+                    .frame(maxWidth: .infinity, minHeight: 44)
                     .background(Color.accentColor, in: RoundedRectangle(cornerRadius: 10))
                     .foregroundStyle(.white)
             }
@@ -73,8 +77,15 @@ struct PremiumGate<Content: View>: View {
                 .stroke(Color.orange.opacity(0.2), lineWidth: 1)
         )
         .sheet(isPresented: $showSubscription) {
-            SubscriptionView()
+            PaywallView(context: context ?? .generic(tier: requiredTier, feature: feature))
         }
+        // IOS-AUDIT-UX-052 AC4. Without this VoiceOver walks four separate
+        // elements - a lock glyph, a tier heading, the feature text, then the
+        // button - and the first three are context for the fourth. `.contain`
+        // rather than `.combine` keeps the button independently focusable and
+        // tappable, which `.combine` would flatten away.
+        .accessibilityElement(children: .contain)
+        .accessibilityLabel("\(requiredTier.displayName) feature: \(feature)")
     }
 }
 
@@ -87,6 +98,7 @@ struct PremiumBadge: View {
         HStack(spacing: 4) {
             Image(systemName: "lock.fill")
                 .font(.system(size: 9))
+                .accessibilityHidden(true)
             Text(tier.displayName)
                 .font(.system(size: 10, weight: .semibold))
         }
@@ -94,6 +106,9 @@ struct PremiumBadge: View {
         .padding(.horizontal, 7)
         .padding(.vertical, 3)
         .background(tier == .vip ? Color.purple : Color.orange, in: Capsule())
+        // Read as one element: "Insider feature, locked" (IOS-AUDIT-UX-012).
+        .accessibilityElement(children: .ignore)
+        .accessibilityLabel("\(tier.displayName) feature, locked")
     }
 }
 

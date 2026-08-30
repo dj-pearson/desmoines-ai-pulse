@@ -3,7 +3,8 @@ import { createRoot } from "react-dom/client";
 import { QueryClient, QueryClientProvider } from "@tanstack/react-query";
 import { HelmetProvider } from "react-helmet-async";
 import { ThemeProvider } from "@/components/ThemeProvider";
-import { initSentry, Sentry } from "@/lib/sentry";
+import { initSentry, getSentryDsn, captureException, captureMessage } from "@/lib/sentry";
+import { ErrorBoundary } from "@/components/ui/error-boundary";
 import { initErrorTracking } from "@/lib/errorHandler";
 import '@/lib/env'; // Validate environment variables at startup
 import { initAnalyticsConsent } from "@/lib/analyticsConsent";
@@ -11,6 +12,7 @@ import { initAnalyticsConsent } from "@/lib/analyticsConsent";
 import App from "./App";
 import "./index.css";
 import { initializeOnInteraction } from "./lib/lazyInit";
+import { GC_TIME, STALE_TIME, shouldRetry, retryDelay } from "@/lib/queryConfig";
 
 // Initialize Sentry before anything else (only when DSN is configured)
 initSentry();
@@ -21,17 +23,20 @@ initSentry();
 // index.html already defaults every non-essential category to denied.
 initAnalyticsConsent();
 
-// Wire Sentry into the centralized error handler
-if (import.meta.env.VITE_SENTRY_DSN) {
+// Wire Sentry into the centralized error handler (matches initSentry's DSN
+// resolution so the bridge activates whenever Sentry itself does).
+if (getSentryDsn()) {
+  // These forward into a buffer until the Sentry chunk lands, so an error
+  // during boot is delayed rather than dropped (WEB-PERF-020).
   initErrorTracking({
     captureException(error, context) {
-      Sentry.captureException(error, {
+      captureException(error, {
         tags: { component: context.component, action: context.action },
         extra: context.metadata,
       });
     },
     captureMessage(message, level) {
-      Sentry.captureMessage(message, level as 'info' | 'warning' | 'error');
+      captureMessage(message, level as 'info' | 'warning' | 'error');
     },
   });
 }
@@ -161,14 +166,19 @@ if (Array.isArray((window as any).__earlyErrors) && (window as any).__earlyError
   }
 }
 
-// Optimized query client with minimal configuration for faster TTI
+// Query client tuned per data class (WEB-PERF-006). Defaults are the safe
+// floor for queries that don't override; per-hook staleTime (see
+// @/lib/queryConfig STALE_TIME) does the per-data-class tuning. Long gcTime
+// keeps inactive lists cached so back-navigation renders instantly.
 const queryClient = new QueryClient({
   defaultOptions: {
     queries: {
-      retry: 1,
+      // Retry transient network/5xx with backoff; never retry 401/403/404.
+      retry: shouldRetry,
+      retryDelay,
       refetchOnWindowFocus: false,
-      staleTime: 60 * 1000,
-      gcTime: 5 * 60 * 1000,
+      staleTime: STALE_TIME.SHORT,
+      gcTime: GC_TIME,
       // Use "always" so queries fire even if Capacitor's Network plugin
       // hasn't reported online status yet. "online" can silently block
       // all queries until a network status event arrives.
@@ -204,7 +214,12 @@ function initializeApp() {
     // Render immediately - this is the critical path
     root.render(
       <StrictMode>
-        <Sentry.ErrorBoundary fallback={<p>An unexpected error occurred.</p>}>
+        {/* Was Sentry.ErrorBoundary, which pinned @sentry/react into the entry
+            chunk - 27% of it - for a component that renders nothing until
+            something throws. The app's own boundary now reports through
+            captureHandledError, so React render errors still reach Sentry
+            (WEB-PERF-020). */}
+        <ErrorBoundary>
           <ThemeProvider defaultTheme="system" storageKey="dmi-theme">
             <HelmetProvider>
               <QueryClientProvider client={queryClient}>
@@ -212,7 +227,7 @@ function initializeApp() {
               </QueryClientProvider>
             </HelmetProvider>
           </ThemeProvider>
-        </Sentry.ErrorBoundary>
+        </ErrorBoundary>
       </StrictMode>
     );
   } catch (err: any) {
@@ -231,6 +246,15 @@ function initializeApp() {
 
   // Defer all non-critical features until after interaction
   initializeOnInteraction();
+
+  // Real-user web-vitals reporting (WEB-PERF-007) — load web-vitals on idle so
+  // it never blocks rendering and stays off the critical path.
+  const startVitals = () => import("@/lib/webVitals").then((m) => m.initWebVitals());
+  if ("requestIdleCallback" in window) {
+    (window as unknown as { requestIdleCallback: (cb: () => void) => void }).requestIdleCallback(startVitals);
+  } else {
+    setTimeout(startVitals, 2000);
+  }
 }
 
 // Start as soon as DOM is ready

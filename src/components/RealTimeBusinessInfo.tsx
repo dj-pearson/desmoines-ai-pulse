@@ -1,39 +1,39 @@
 import React, { useState, useEffect } from 'react';
-import { Clock, MapPin, Phone, Globe, AlertCircle, CheckCircle } from 'lucide-react';
+import { Phone, Globe, AlertCircle, CheckCircle } from "lucide-react";
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { Badge } from '@/components/ui/badge';
-import { Button } from '@/components/ui/button';
-import { createLogger } from '@/lib/logger';
+import { supabase } from '@/integrations/supabase/client';
+import { getRestaurantOpenStatus } from '@/lib/restaurantHours';
+import { RESTAURANT_LIST_COLUMNS } from '@/lib/listColumns';
+import { handleError } from '@/lib/errorHandler';
+import { SpriteIcon } from "@/components/ui/SpriteIcon";
 
-const log = createLogger('RealTimeBusinessInfo');
-
-interface BusinessHours {
-  [key: string]: {
-    open: string;
-    close: string;
-    isOpen: boolean;
-  };
-}
-
+/**
+ * WEB-LEGAL-010: every field here now has a column behind it.
+ *
+ * What was removed, and why: this component used to seed itself with three
+ * real, named Des Moines businesses carrying invented seven-day opening hours,
+ * invented phone numbers, and invented wait times and capacity, all rendered
+ * under a "real-time" heading. A visitor could act on that and drive to a
+ * closed restaurant, and the businesses never agreed to have hours published
+ * in their name.
+ *
+ * `waitTime`, `capacity`, `specialOffers` and `specialHours` are gone rather
+ * than rewired: nothing in the schema records any of them, so keeping the
+ * fields would only invite the placeholders back. The structured seven-day
+ * `hours` object is gone too - `restaurants.opening` is free-form text
+ * ("Mon-Sat 11am-10pm"), so it is shown as written instead of being parsed
+ * into a week we cannot actually fill.
+ */
 interface RealTimeBusinessInfo {
   id: string;
   name: string;
-  category: 'restaurant' | 'attraction' | 'service';
+  category: 'restaurant';
   status: 'open' | 'closed' | 'closing-soon' | 'unknown';
-  hours: BusinessHours;
+  /** Raw text from restaurants.opening, shown as stored. */
+  openingText: string | null;
   phone?: string;
   website?: string;
-  lastUpdated: string;
-  specialHours?: {
-    date: string;
-    hours: string;
-    note: string;
-  };
-  liveUpdates?: {
-    waitTime?: number;
-    capacity?: 'low' | 'moderate' | 'high';
-    specialOffers?: string[];
-  };
 }
 
 /**
@@ -46,97 +46,66 @@ export default function RealTimeBusinessInfo() {
   const [loading, setLoading] = useState(true);
   const [lastUpdate, setLastUpdate] = useState<Date>(new Date());
 
-  // Mock real-time business data - would integrate with actual APIs
+  // Real data only (WEB-LEGAL-010). Status is derived from restaurants.opening
+  // by the same parser the rest of the site uses, so this page agrees with the
+  // Open Now badges elsewhere instead of asserting its own version of reality.
   useEffect(() => {
-    const fetchRealTimeData = () => {
-      const currentTime = new Date();
-      const currentDay = currentTime.toLocaleDateString('en-US', { weekday: 'short' }).toLowerCase(); // mon, tue, etc.
-      
-      const mockBusinesses: RealTimeBusinessInfo[] = [
-        {
-          id: '1',
-          name: 'Zombie Burger + Drink Lab',
-          category: 'restaurant',
-          status: 'open',
-          hours: {
-            mon: { open: '11:00', close: '21:00', isOpen: true },
-            tue: { open: '11:00', close: '21:00', isOpen: true },
-            wed: { open: '11:00', close: '21:00', isOpen: true },
-            thu: { open: '11:00', close: '22:00', isOpen: true },
-            fri: { open: '11:00', close: '23:00', isOpen: true },
-            sat: { open: '11:00', close: '23:00', isOpen: true },
-            sun: { open: '11:00', close: '21:00', isOpen: true }
-          },
-          phone: '(515) 244-6060',
-          website: 'https://zombieburger.com',
-          lastUpdated: new Date().toISOString(),
-          liveUpdates: {
-            waitTime: 15,
-            capacity: 'moderate',
-            specialOffers: ['Happy Hour until 6pm']
-          }
-        },
-        {
-          id: '2', 
-          name: 'Science Center of Iowa',
-          category: 'attraction',
-          status: 'open',
-          hours: {
-            mon: { open: '10:00', close: '17:00', isOpen: true },
-            tue: { open: '10:00', close: '17:00', isOpen: true },
-            wed: { open: '10:00', close: '17:00', isOpen: true },
-            thu: { open: '10:00', close: '17:00', isOpen: true },
-            fri: { open: '10:00', close: '17:00', isOpen: true },
-            sat: { open: '10:00', close: '17:00', isOpen: true },
-            sun: { open: '12:00', close: '17:00', isOpen: true }
-          },
-          phone: '(515) 274-6868',
-          website: 'https://sciowa.org',
-          lastUpdated: new Date().toISOString(),
-          specialHours: {
-            date: '2024-12-25',
-            hours: 'Closed',
-            note: 'Closed for Christmas Day'
-          },
-          liveUpdates: {
-            capacity: 'low',
-            specialOffers: ['Family 4-pack discount available']
-          }
-        },
-        {
-          id: '3',
-          name: 'Proof Restaurant',
-          category: 'restaurant', 
-          status: 'closing-soon',
-          hours: {
-            mon: { open: '16:00', close: '22:00', isOpen: false },
-            tue: { open: '16:00', close: '22:00', isOpen: true },
-            wed: { open: '16:00', close: '22:00', isOpen: true },
-            thu: { open: '16:00', close: '23:00', isOpen: true },
-            fri: { open: '16:00', close: '24:00', isOpen: true },
-            sat: { open: '16:00', close: '24:00', isOpen: true },
-            sun: { open: '16:00', close: '22:00', isOpen: false }
-          },
-          phone: '(515) 244-7765',
-          website: 'https://proofrestaurant.com',
-          lastUpdated: new Date().toISOString(),
-          liveUpdates: {
-            waitTime: 45,
-            capacity: 'high'
-          }
-        }
-      ];
+    let cancelled = false;
 
-      setBusinesses(mockBusinesses);
-      setLoading(false);
-      setLastUpdate(new Date());
+    const fetchRealTimeData = async () => {
+      try {
+        const { data, error } = await supabase
+          .from('restaurants')
+          .select(RESTAURANT_LIST_COLUMNS)
+          .not('opening', 'is', null)
+          .order('popularity_score', { ascending: false, nullsFirst: false })
+          .limit(24);
+
+        if (error) throw error;
+        if (cancelled) return;
+
+        const rows = (data ?? []) as unknown as {
+          id: string;
+          name: string | null;
+          opening: string | null;
+          phone: string | null;
+          website: string | null;
+          is_merged?: boolean | null;
+        }[];
+
+        const mapped: RealTimeBusinessInfo[] = rows
+          .filter((r) => r.name && !r.is_merged)
+          .map((r) => ({
+            id: r.id,
+            name: r.name as string,
+            category: 'restaurant' as const,
+            status: getRestaurantOpenStatus(r.opening).status,
+            openingText: r.opening,
+            phone: r.phone ?? undefined,
+            website: r.website ?? undefined,
+          }))
+          // A business whose hours we cannot parse is not "real-time" anything,
+          // so it is left out rather than shown as Hours Unknown.
+          .filter((b) => b.status !== 'unknown');
+
+        setBusinesses(mapped);
+        setLastUpdate(new Date());
+      } catch (err) {
+        handleError(err, { component: 'RealTimeBusinessInfo', action: 'fetchRealTimeData' });
+        if (!cancelled) setBusinesses([]);
+      } finally {
+        if (!cancelled) setLoading(false);
+      }
     };
 
     fetchRealTimeData();
 
-    // Update every 5 minutes for real-time accuracy
+    // Re-derive open/closed as the clock moves.
     const interval = setInterval(fetchRealTimeData, 5 * 60 * 1000);
-    return () => clearInterval(interval);
+    return () => {
+      cancelled = true;
+      clearInterval(interval);
+    };
   }, []);
 
   const getStatusColor = (status: string) => {
@@ -152,7 +121,7 @@ export default function RealTimeBusinessInfo() {
     switch (status) {
       case 'open': return <CheckCircle className="h-4 w-4" />;
       case 'closed': return <AlertCircle className="h-4 w-4" />;
-      case 'closing-soon': return <Clock className="h-4 w-4" />;
+      case 'closing-soon': return <SpriteIcon name="clock" className="h-4 w-4" />;
       default: return <AlertCircle className="h-4 w-4" />;
     }
   };
@@ -188,7 +157,7 @@ export default function RealTimeBusinessInfo() {
         <div>
           <h2 className="text-2xl font-bold">What's Open Right Now</h2>
           <p className="text-sm text-muted-foreground">
-            Live business hours and availability • Updated {lastUpdate.toLocaleTimeString()}
+            Open now, from posted hours • Checked {lastUpdate.toLocaleTimeString()}
           </p>
         </div>
         <Badge variant="outline" className="flex items-center gap-1">
@@ -236,70 +205,16 @@ export default function RealTimeBusinessInfo() {
               </div>
 
               {/* Live Updates Section */}
-              {business.liveUpdates && (
-                <div className="bg-blue-50 p-3 rounded-lg">
-                  <h4 className="font-medium text-sm mb-2">Live Information</h4>
-                  <div className="space-y-2 text-sm">
-                    {business.liveUpdates.waitTime && (
-                      <div className="flex items-center gap-2">
-                        <Clock className="h-4 w-4 text-blue-600" />
-                        <span>Current wait time: ~{business.liveUpdates.waitTime} minutes</span>
-                      </div>
-                    )}
-                    
-                    {business.liveUpdates.capacity && (
-                      <div className="flex items-center gap-2">
-                        <MapPin className="h-4 w-4 text-blue-600" />
-                        <span>Capacity: {business.liveUpdates.capacity}</span>
-                        <Badge 
-                          variant="secondary" 
-                          className={
-                            business.liveUpdates.capacity === 'low' ? 'bg-green-100 text-green-800' :
-                            business.liveUpdates.capacity === 'moderate' ? 'bg-yellow-100 text-yellow-800' :
-                            'bg-red-100 text-red-800'
-                          }
-                        >
-                          {business.liveUpdates.capacity === 'low' ? 'Good availability' :
-                           business.liveUpdates.capacity === 'moderate' ? 'Moderate crowd' :
-                           'Very busy'}
-                        </Badge>
-                      </div>
-                    )}
-                    
-                    {business.liveUpdates.specialOffers && business.liveUpdates.specialOffers.length > 0 && (
-                      <div className="mt-2">
-                        <div className="font-medium text-green-700 mb-1">Current Offers:</div>
-                        {business.liveUpdates.specialOffers.map((offer, index) => (
-                          <div key={index} className="text-green-700">• {offer}</div>
-                        ))}
-                      </div>
-                    )}
-                  </div>
+              {/* Hours as recorded. Free-form text from restaurants.opening,
+                  shown as stored rather than reformatted into a structure the
+                  data does not support (WEB-LEGAL-010). */}
+              {business.openingText && (
+                <div className="flex items-start gap-2 text-sm">
+                  <SpriteIcon name="clock" className="h-4 w-4 mt-0.5 text-muted-foreground shrink-0" />
+                  <span className="text-muted-foreground">{business.openingText}</span>
                 </div>
               )}
 
-              {/* Special Hours Notice */}
-              {business.specialHours && (
-                <div className="bg-amber-50 p-3 rounded-lg border border-amber-200">
-                  <div className="flex items-center gap-2 text-amber-800">
-                    <AlertCircle className="h-4 w-4" />
-                    <span className="font-medium">Special Hours Notice</span>
-                  </div>
-                  <p className="text-sm text-amber-700 mt-1">
-                    {business.specialHours.date}: {business.specialHours.hours} - {business.specialHours.note}
-                  </p>
-                </div>
-              )}
-
-              {/* Quick Action Buttons */}
-              <div className="flex gap-2">
-                <Button variant="outline" size="sm" className="flex-1">
-                  Get Directions
-                </Button>
-                <Button variant="outline" size="sm" className="flex-1">
-                  Call Now
-                </Button>
-              </div>
             </CardContent>
           </Card>
         ))}
@@ -308,19 +223,21 @@ export default function RealTimeBusinessInfo() {
       {/* Real-time Features Explanation */}
       <Card className="bg-gradient-to-r from-blue-50 to-indigo-50 border-blue-200">
         <CardContent className="p-6">
-          <h3 className="font-semibold text-blue-900 mb-2">Why Real-Time Information Matters</h3>
+          {/* WEB-LEGAL-010: this card used to promise live wait times, current
+              capacity and special offers. None of those were ever measured, and
+              the badges advertised them alongside fabricated values. Claims here
+              must stay within what the data supports. */}
+          <h3 className="font-semibold text-blue-900 mb-2">How this page works</h3>
           <p className="text-blue-800 text-sm leading-relaxed">
-            Unlike static tourism guides, Des Moines Insider provides live business information 
-            updated every 5 minutes. Check current wait times, availability, and special offers 
-            before you visit. Perfect for Des Moines residents who need reliable, up-to-date 
-            information about local businesses and attractions.
+            Open and closed status is worked out from each restaurant&apos;s posted
+            hours and the current time in Des Moines, and re-checked while this page
+            is open. Hours come from the venue as they published them, so call ahead
+            for holidays and late changes.
           </p>
-          
+
           <div className="mt-4 flex flex-wrap gap-2">
-            <Badge variant="secondary" className="bg-white/50">Live wait times</Badge>
-            <Badge variant="secondary" className="bg-white/50">Current capacity</Badge>
-            <Badge variant="secondary" className="bg-white/50">Special offers</Badge>
-            <Badge variant="secondary" className="bg-white/50">Real-time hours</Badge>
+            <Badge variant="secondary" className="bg-white/50">Open now, from posted hours</Badge>
+            <Badge variant="secondary" className="bg-white/50">Central Time</Badge>
           </div>
         </CardContent>
       </Card>
@@ -332,69 +249,37 @@ export default function RealTimeBusinessInfo() {
  * Real-time search component for voice queries
  * Targets "open now" and "near me" searches
  */
-export const RealTimeSearch = () => {
+export const RealTimeSearch = ({
+  onQueryChange,
+}: {
+  onQueryChange?: (query: string) => void;
+}) => {
+  // WEB-LEGAL-010: this box used to render an input and three buttons whose
+  // handler only wrote a debug log - it looked like search and did nothing, and
+  // a comment promised "mock results based on query". It now reports the query
+  // upward so the caller can filter the real list, and the preset buttons are
+  // gone because they mapped to categories this page does not have.
   const [query, setQuery] = useState('');
-  const [results, setResults] = useState<RealTimeBusinessInfo[]>([]);
 
   const handleSearch = (searchQuery: string) => {
     setQuery(searchQuery);
-    
-    // Voice search optimization for common queries
-    const voiceQueries = {
-      'restaurants open now': 'restaurant',
-      'what restaurants are open': 'restaurant', 
-      'things to do right now': 'attraction',
-      'whats open in des moines': 'all'
-    };
-    
-    // This would integrate with your real-time business API
-    // For now, return mock results based on query
-    log.debug('search', `Real-time search: ${searchQuery}`);
+    onQueryChange?.(searchQuery);
   };
 
   return (
     <div className="space-y-4">
       <div className="relative">
+        <label htmlFor="realtime-search" className="sr-only">
+          Filter restaurants by name
+        </label>
         <input
+          id="realtime-search"
           type="text"
-          placeholder="What's open right now in Des Moines?"
+          placeholder="Filter by name"
           value={query}
-          onChange={(e) => setQuery(e.target.value)}
-          onKeyPress={(e) => e.key === 'Enter' && handleSearch(query)}
+          onChange={(e) => handleSearch(e.target.value)}
           className="w-full p-3 pr-12 border rounded-lg focus:ring-2 focus:ring-blue-500"
         />
-        <Button 
-          size="sm" 
-          className="absolute right-2 top-1/2 transform -translate-y-1/2"
-          onClick={() => handleSearch(query)}
-        >
-          Search
-        </Button>
-      </div>
-      
-      {/* Quick search buttons for common voice queries */}
-      <div className="flex flex-wrap gap-2">
-        <Button 
-          variant="outline" 
-          size="sm" 
-          onClick={() => handleSearch('restaurants open now')}
-        >
-          Restaurants Open Now
-        </Button>
-        <Button 
-          variant="outline" 
-          size="sm"
-          onClick={() => handleSearch('attractions open today')}
-        >
-          Attractions Open Today  
-        </Button>
-        <Button 
-          variant="outline" 
-          size="sm"
-          onClick={() => handleSearch('happy hour specials')}
-        >
-          Current Specials
-        </Button>
       </div>
     </div>
   );

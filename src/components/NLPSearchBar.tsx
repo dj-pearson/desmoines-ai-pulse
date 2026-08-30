@@ -8,20 +8,8 @@ import { ScrollArea } from "@/components/ui/scroll-area";
 import { Skeleton } from "@/components/ui/skeleton";
 import { useNLPSearch, NLP_SEARCH_EXAMPLES } from "@/hooks/useNLPSearch";
 import { Link } from "react-router-dom";
-import {
-  Search,
-  Sparkles,
-  Calendar,
-  Utensils,
-  MapPin,
-  Loader2,
-  X,
-  ArrowRight,
-  Clock,
-  DollarSign,
-  Star,
-  Lightbulb,
-} from "lucide-react";
+import { Search, Utensils, Loader2, X, DollarSign, Star, Lightbulb } from "lucide-react";
+import { SpriteIcon } from "@/components/ui/SpriteIcon";
 
 interface NLPSearchBarProps {
   placeholder?: string;
@@ -61,6 +49,7 @@ export function NLPSearchBar({
     results,
     parsedIntent,
     isSearching,
+    isError,
     hasResults,
     totalResults,
     responseTime,
@@ -115,12 +104,13 @@ export function NLPSearchBar({
           {isSearching ? (
             <Loader2 className="h-5 w-5 text-primary animate-spin" />
           ) : (
-            <Sparkles className="h-5 w-5 text-primary" />
+            <SpriteIcon name="sparkles" className="h-5 w-5 text-primary" />
           )}
         </div>
         <Input
           ref={inputRef}
           type="text"
+          aria-label="Search naturally for events, restaurants, and things to do"
           placeholder={placeholder}
           value={query}
           onChange={(e) => setQuery(e.target.value)}
@@ -135,8 +125,13 @@ export function NLPSearchBar({
               size="sm"
               className="h-8 w-8 p-0"
               onClick={handleClear}
+              aria-label="Clear search"
             >
-              <X className="h-4 w-4" />
+              {/* Icon-only buttons expose no accessible name — the SVG is the
+                  only child and carries no text — so a screen reader announced
+                  these as just "button". WCAG 4.1.2 (axe button-name, critical).
+                  The icons are decorative once the button is labelled. */}
+              <X className="h-4 w-4" aria-hidden="true" />
             </Button>
           )}
           <Button
@@ -144,8 +139,9 @@ export function NLPSearchBar({
             onClick={() => query.length >= 3 && search(query)}
             disabled={query.length < 3 || isSearching}
             className="h-8"
+            aria-label="Search"
           >
-            <Search className="h-4 w-4" />
+            <Search className="h-4 w-4" aria-hidden="true" />
           </Button>
         </div>
       </div>
@@ -197,7 +193,7 @@ export function NLPSearchBar({
                 {/* Intent Summary */}
                 {intentSummary && (
                   <div className="flex items-center gap-2 text-sm">
-                    <Sparkles className="h-4 w-4 text-primary" />
+                    <SpriteIcon name="sparkles" className="h-4 w-4 text-primary" />
                     <span className="text-muted-foreground">Understood:</span>
                     <span className="font-medium">{intentSummary}</span>
                   </div>
@@ -210,7 +206,7 @@ export function NLPSearchBar({
                       All ({totalResults})
                     </TabsTrigger>
                     <TabsTrigger value="events" disabled={results.events.length === 0}>
-                      <Calendar className="h-3 w-3 mr-1" />
+                      <SpriteIcon name="calendar" className="h-3 w-3 mr-1" />
                       Events ({results.events.length})
                     </TabsTrigger>
                     <TabsTrigger value="restaurants" disabled={results.restaurants.length === 0}>
@@ -218,7 +214,7 @@ export function NLPSearchBar({
                       Food ({results.restaurants.length})
                     </TabsTrigger>
                     <TabsTrigger value="attractions" disabled={results.attractions.length === 0}>
-                      <MapPin className="h-3 w-3 mr-1" />
+                      <SpriteIcon name="map-pin" className="h-3 w-3 mr-1" />
                       Places ({results.attractions.length})
                     </TabsTrigger>
                   </TabsList>
@@ -231,7 +227,7 @@ export function NLPSearchBar({
                           key={`event-${event.id}`}
                           item={event}
                           type="events"
-                          icon={<Calendar className="h-4 w-4" />}
+                          icon={<SpriteIcon name="calendar" className="h-4 w-4" />}
                           onClick={onResultClick}
                         />
                       ))}
@@ -251,7 +247,7 @@ export function NLPSearchBar({
                           key={`attraction-${attraction.id}`}
                           item={attraction}
                           type="attractions"
-                          icon={<MapPin className="h-4 w-4" />}
+                          icon={<SpriteIcon name="map-pin" className="h-4 w-4" />}
                           onClick={onResultClick}
                         />
                       ))}
@@ -263,7 +259,7 @@ export function NLPSearchBar({
                           key={`event-${event.id}`}
                           item={event}
                           type="events"
-                          icon={<Calendar className="h-4 w-4" />}
+                          icon={<SpriteIcon name="calendar" className="h-4 w-4" />}
                           onClick={onResultClick}
                         />
                       ))}
@@ -287,7 +283,7 @@ export function NLPSearchBar({
                           key={`attraction-${attraction.id}`}
                           item={attraction}
                           type="attractions"
-                          icon={<MapPin className="h-4 w-4" />}
+                          icon={<SpriteIcon name="map-pin" className="h-4 w-4" />}
                           onClick={onResultClick}
                         />
                       ))}
@@ -305,14 +301,31 @@ export function NLPSearchBar({
                     className="flex items-center gap-1 text-primary hover:underline"
                   >
                     View all results
-                    <ArrowRight className="h-3 w-3" />
+                    <SpriteIcon name="arrow-right" className="h-3 w-3" />
                   </Link>
                 </div>
               </div>
             )}
 
+            {/* Error → keyword fallback */}
+            {!isSearching && isError && query.length >= 3 && (
+              <div className="space-y-3 py-2 text-center">
+                <p className="text-sm text-muted-foreground">
+                  AI search is temporarily unavailable. You can still search by keyword.
+                </p>
+                <Link
+                  to={`/search?q=${encodeURIComponent(query)}`}
+                  className="inline-flex items-center gap-1 text-sm font-medium text-primary hover:underline"
+                >
+                  <Search className="h-4 w-4" />
+                  Search "{query}" by keyword
+                  <SpriteIcon name="arrow-right" className="h-3 w-3" />
+                </Link>
+              </div>
+            )}
+
             {/* No Results */}
-            {!isSearching && query.length >= 3 && !hasResults && parsedIntent && (
+            {!isSearching && !isError && query.length >= 3 && !hasResults && parsedIntent && (
               <div className="text-center py-6">
                 <Search className="h-8 w-8 mx-auto text-muted-foreground mb-2" />
                 <p className="text-muted-foreground">
@@ -388,13 +401,13 @@ function ResultItem({
         <div className="flex items-center gap-3 mt-1 text-xs text-muted-foreground">
           {item.location && (
             <span className="flex items-center gap-1">
-              <MapPin className="h-3 w-3" />
+              <SpriteIcon name="map-pin" className="h-3 w-3" />
               {item.location}
             </span>
           )}
           {item.date && (
             <span className="flex items-center gap-1">
-              <Clock className="h-3 w-3" />
+              <SpriteIcon name="clock" className="h-3 w-3" />
               {new Date(item.date).toLocaleDateString()}
             </span>
           )}
@@ -403,7 +416,7 @@ function ResultItem({
           )}
         </div>
       </div>
-      <ArrowRight className="h-4 w-4 text-muted-foreground shrink-0 mt-1" />
+      <SpriteIcon name="arrow-right" className="h-4 w-4 text-muted-foreground shrink-0 mt-1" />
     </Link>
   );
 }

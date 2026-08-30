@@ -10,8 +10,22 @@ final class EventDetailViewModel {
     private(set) var isLoading = false
     private(set) var errorMessage: String?
 
-    private let service = EventsService.shared
+    /// A background re-fetch is running behind content that is already on
+    /// screen. Distinct from isLoading, which means "there is nothing to show
+    /// yet" - conflating the two is what made the prefetched path raise a
+    /// loading flag for work the user was not waiting on (IOS-AUDIT-UX-058).
+    private(set) var isRefreshing = false
+
+    private let service: EventDetailProviding
     private let favorites = FavoritesService.shared
+
+    /// Defaults to the shared service, so no call site changes and no view is
+    /// touched. The parameter exists so a test can arrange what the fetch
+    /// returns, which is the only way the background-refresh behaviour in
+    /// IOS-AUDIT-UX-058 can be asserted at all (IOS-AUDIT-TEST-006).
+    init(service: EventDetailProviding = EventsService.shared) {
+        self.service = service
+    }
 
     // MARK: - Load Event
 
@@ -31,20 +45,67 @@ final class EventDetailViewModel {
         isLoading = false
     }
 
-    /// Load from a pre-fetched event (avoids re-fetch when navigating from list).
+    /// Show a pre-fetched event immediately, then refresh it behind the scenes.
+    ///
+    /// The prefetched row is whatever the list had, which may have come from
+    /// the on-disk query cache and be as old as its TTL. This used to be the
+    /// end of it: the event was displayed and never re-read, so a listing whose
+    /// time, venue or price had changed since the list was cached showed the
+    /// old values indefinitely.
+    ///
+    /// isLoading is deliberately NOT raised here. There is already something on
+    /// screen; a loading flag would describe work the user is not waiting for.
     func loadEvent(_ prefetched: Event) async {
         event = prefetched
-        isLoading = true
 
+        async let related: Void = loadRelated(id: prefetched.id, category: prefetched.category)
+        async let refreshed: Void = refreshFromServer(id: prefetched.id)
+        _ = await (related, refreshed)
+    }
+
+    private func loadRelated(id: String, category: String?) async {
+        guard let category else { return }
         do {
-            if let category = prefetched.category {
-                relatedEvents = try await service.fetchRelatedEvents(eventId: prefetched.id, category: category)
-            }
+            relatedEvents = try await service.fetchRelatedEvents(eventId: id, category: category)
         } catch {
             relatedEvents = []
         }
+    }
 
-        isLoading = false
+    /// Re-read the full row and swap it in only if the CONTENT differs.
+    ///
+    /// NOT `fresh != event`. Event implements `==` as `lhs.id == rhs.id` for
+    /// SwiftUI navigation identity, so comparing with it is asking "is this the
+    /// same event", which is always true here - the whole refresh silently threw
+    /// its result away. Caught by EventDetailRefreshTests the first time this
+    /// could be tested at all (IOS-AUDIT-TEST-006).
+    ///
+    /// Comparing the encoded bytes asks the question that was meant: did any
+    /// field change. It runs once per detail open, against a struct that is
+    /// already Codable, and it cannot be quietly broken by a change to `==`.
+    ///
+    /// A failure is silent on purpose. The user is looking at a complete event
+    /// already; an error banner over working content would be worse than the
+    /// stale field it is warning about.
+    private func refreshFromServer(id: String) async {
+        isRefreshing = true
+        defer { isRefreshing = false }
+
+        guard let fresh = try? await service.fetchEvent(id: id) else { return }
+        guard Self.contentDiffers(fresh, from: event) else { return }
+        event = fresh
+    }
+
+    /// Whether two events differ in any field, rather than in identity.
+    ///
+    /// An encode failure reports "differs", so the refresh is applied. Skipping
+    /// it would mean a comparison problem silently became a staleness problem.
+    static func contentDiffers(_ lhs: Event, from rhs: Event?) -> Bool {
+        guard let rhs else { return true }
+        let encoder = JSONEncoder()
+        encoder.outputFormatting = [.sortedKeys]
+        guard let a = try? encoder.encode(lhs), let b = try? encoder.encode(rhs) else { return true }
+        return a != b
     }
 
     // MARK: - Favorites
@@ -65,12 +126,23 @@ final class EventDetailViewModel {
 
     // MARK: - Calendar Integration
 
+    // Cached formatters (reused across calendarURL / shareText access).
+    private static let calendarFormatter: DateFormatter = {
+        let f = DateFormatter()
+        f.dateFormat = "yyyyMMdd'T'HHmmss"
+        return f
+    }()
+    private static let shareFormatter: DateFormatter = {
+        let f = DateFormatter()
+        f.dateStyle = .medium
+        f.timeStyle = .short
+        return f
+    }()
+
     var calendarURL: URL? {
         guard let event, let date = event.parsedDate else { return nil }
-        let formatter = DateFormatter()
-        formatter.dateFormat = "yyyyMMdd'T'HHmmss"
-        let dateStr = formatter.string(from: date)
-        let endDate = formatter.string(from: date.addingTimeInterval(7200)) // 2h default
+        let dateStr = Self.calendarFormatter.string(from: date)
+        let endDate = Self.calendarFormatter.string(from: date.addingTimeInterval(7200)) // 2h default
 
         var components = URLComponents(string: "https://calendar.google.com/calendar/render")!
         components.queryItems = [
@@ -128,10 +200,7 @@ final class EventDetailViewModel {
         guard let event else { return "" }
         var text = "\(event.title)"
         if let date = event.parsedDate {
-            let formatter = DateFormatter()
-            formatter.dateStyle = .medium
-            formatter.timeStyle = .short
-            text += " - \(formatter.string(from: date))"
+            text += " - \(Self.shareFormatter.string(from: date))"
         }
         text += " at \(event.displayLocation)"
         text += "\n\nFound on Des Moines Insider"

@@ -1,6 +1,7 @@
 import { useState, useEffect } from "react";
 import { useAuth } from "@/hooks/useAuth";
 import { useProfile } from "@/hooks/useProfile";
+import { supabase } from "@/integrations/supabase/client";
 import {
   Card,
   CardContent,
@@ -21,20 +22,8 @@ import {
 } from "@/components/ui/select";
 import { Separator } from "@/components/ui/separator";
 import { useToast } from "@/hooks/use-toast";
-import {
-  Coffee,
-  Music,
-  Gamepad2,
-  Palette,
-  Heart,
-  Camera,
-  User,
-  Calendar,
-  MapPin,
-  Settings,
-  Save,
-  TrendingUp,
-} from "lucide-react";
+import { Coffee, Music, Gamepad2, Palette, Heart, Camera, User, Calendar, Settings, Save } from "lucide-react";
+import { SpriteIcon } from "@/components/ui/SpriteIcon";
 
 const INTERESTS = [
   {
@@ -140,10 +129,35 @@ export default function PreferencesManager() {
 
     setIsUpdating(true);
     try {
+      // communication_preferences IS A SHARED BAG, and this screen owns three of
+      // its keys. Two other writers keep their own:
+      //   useUserPreferences.ts    taste_preferences
+      //   use-user-preferences.ts  ui_preferences
+      // and the lifecycle classifier reads `marketing` and `email` out of it
+      // (supabase/functions/_shared/agents/lifecycle-classifier.ts:121).
+      // Writing a fresh three-key object here replaced the whole JSONB column,
+      // so pressing Save on this form deleted every one of those. Both other
+      // writers already read-then-merge for exactly this reason; one says so in
+      // a comment. This one did not.
+      const { data: current, error: readError } = await supabase
+        .from("profiles")
+        .select("communication_preferences")
+        .eq("user_id", user.id)
+        .single();
+
+      // A failed read cannot be treated as an empty bag - that is the write
+      // that loses the other keys. Fail the save instead: the catch below
+      // already surfaces it, and a visible retry beats silent data loss.
+      if (readError) throw readError;
+
+      const existing =
+        (current?.communication_preferences as Record<string, unknown>) ?? {};
+
       await updateProfile({
         interests: formData.interests,
         location: formData.location,
         communication_preferences: {
+          ...existing,
           email_notifications: formData.emailNotifications,
           sms_notifications: formData.smsNotifications,
           event_recommendations: formData.eventRecommendations,
@@ -197,7 +211,7 @@ export default function PreferencesManager() {
       <Card>
         <CardHeader>
           <CardTitle className="flex items-center gap-2">
-            <TrendingUp className="h-5 w-5" />
+            <SpriteIcon name="trending-up" className="h-5 w-5" />
             Your Interests
           </CardTitle>
           <CardDescription>
@@ -247,7 +261,7 @@ export default function PreferencesManager() {
       <Card>
         <CardHeader>
           <CardTitle className="flex items-center gap-2">
-            <MapPin className="h-5 w-5" />
+            <SpriteIcon name="map-pin" className="h-5 w-5" />
             Location Preferences
           </CardTitle>
           <CardDescription>

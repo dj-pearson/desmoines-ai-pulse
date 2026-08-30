@@ -7,16 +7,7 @@ import React, { useState } from 'react';
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from './ui/card';
 import { Badge } from './ui/badge';
 import { Button } from './ui/button';
-import {
-  AlertTriangle,
-  AlertCircle,
-  Info,
-  CheckCircle,
-  Wrench,
-  ExternalLink,
-  ChevronDown,
-  ChevronRight
-} from 'lucide-react';
+import { AlertTriangle, AlertCircle, Info, CheckCircle, Wrench, ChevronDown, ChevronRight } from "lucide-react";
 import { useDataQuality, QualitySummary, QualityIssue } from '@/hooks/useDataQuality';
 import { Alert, AlertDescription } from './ui/alert';
 import {
@@ -26,6 +17,7 @@ import {
   SelectTrigger,
   SelectValue,
 } from './ui/select';
+import { SpriteIcon } from "@/components/ui/SpriteIcon";
 
 interface DataQualityDashboardProps {
   events: any[];
@@ -201,7 +193,7 @@ export function DataQualityDashboard({
                           </div>
                           <p className="text-sm text-gray-600">{issue.issue}</p>
                           {issue.currentValue && (
-                            <p className="text-xs text-gray-400 mt-1">
+                            <p className="text-xs text-gray-500 mt-1">
                               Current: {String(issue.currentValue)}
                             </p>
                           )}
@@ -229,7 +221,7 @@ export function DataQualityDashboard({
                             variant="ghost"
                             onClick={() => onViewItem(quality.contentType, issue.contentId)}
                           >
-                            <ExternalLink className="h-4 w-4" />
+                            <SpriteIcon name="external-link" className="h-4 w-4" />
                           </Button>
                         )}
                       </div>

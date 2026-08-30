@@ -24,6 +24,8 @@ import { handleCors, getCorsHeaders, isOriginAllowed } from "../_shared/cors.ts"
 import { escapeHtml } from "../_shared/escapeHtml.ts";
 import { checkRateLimit } from "../_shared/rateLimit.ts";
 import { renderEmail } from "../_shared/emailLayout.ts";
+import { fetchWithTimeout } from "../_shared/fetchWithTimeout.ts";
+import { isAdminUserId } from "../_shared/apiKeyAuth.ts";
 
 serve(async (req) => {
   const corsResponse = handleCors(req);
@@ -72,14 +74,15 @@ serve(async (req) => {
       );
     }
 
-    // Check if user is admin or campaign owner
-    const { data: profile } = await supabase
-      .from("profiles")
-      .select("role")
-      .eq("id", user.id)
-      .single();
-
-    const isAdmin = profile?.role === "admin";
+    // Check if user is admin or campaign owner.
+    // WEB-SEC-023: was profiles.role keyed by the row PK — a column that is not
+    // in the schema, so isAdmin was always false and admins were treated as
+    // ordinary users. isAdminUserId is the one shared definition.
+    const isAdmin = await isAdminUserId(
+      supabase,
+      user.id,
+      "send-campaign-notification",
+    );
 
     const body = await req.json();
     const {
@@ -185,7 +188,7 @@ serve(async (req) => {
 
       if (resendApiKey) {
         try {
-          const res = await fetch("https://api.resend.com/emails", {
+          const res = await fetchWithTimeout("https://api.resend.com/emails", {
             method: "POST",
             headers: {
               Authorization: `Bearer ${resendApiKey}`,
@@ -205,7 +208,7 @@ serve(async (req) => {
         }
       } else if (sendgridApiKey) {
         try {
-          const res = await fetch("https://api.sendgrid.com/v3/mail/send", {
+          const res = await fetchWithTimeout("https://api.sendgrid.com/v3/mail/send", {
             method: "POST",
             headers: {
               Authorization: `Bearer ${sendgridApiKey}`,

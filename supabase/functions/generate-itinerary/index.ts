@@ -1,13 +1,30 @@
 import "https://deno.land/x/xhr@0.1.0/mod.ts";
 import { serve } from "https://deno.land/std@0.168.0/http/server.ts";
 import { createClient } from 'https://esm.sh/@supabase/supabase-js@2.53.0';
-import { getAIConfig, buildClaudeRequest, getClaudeHeaders } from "../_shared/aiConfig.ts";
-import { checkRateLimit } from "../_shared/rateLimit.ts";
+import { getAIConfig, buildClaudeRequest, getClaudeHeaders, getAnthropicApiKey, extractClaudeText } from "../_shared/aiConfig.ts";
+import { detectCrisisIntent, crisisPayload } from '../_shared/crisisSupport.ts';
+import { checkRateLimitPersistent } from "../_shared/rateLimit.ts";
+import { resolveEntitledTier, hasFeatureAccess } from "../_shared/entitlements.ts";
+import { getCorsHeaders, isOriginAllowed } from "../_shared/cors.ts";
+import { fetchWithTimeout } from "../_shared/fetchWithTimeout.ts";
+import { recordAnthropicUsage } from "../_shared/providerUsage.ts";
 
-const corsHeaders = {
-  'Access-Control-Allow-Origin': '*',
-  'Access-Control-Allow-Headers': 'authorization, x-client-info, apikey, content-type',
+// Monthly trip-planner quota per tier (matches the web useSubscription copy /
+// WEB-FEAT-011). -1 = unlimited. Enforced server-side so the client gate can't
+// be bypassed by calling the function directly.
+const TRIP_PLANNER_MONTHLY_QUOTA: Record<'free' | 'insider' | 'vip', number> = {
+  free: 0, // free has no trip_planner access at all (gated above)
+  insider: 5,
+  vip: -1,
 };
+
+// Origin-validated CORS: this endpoint returns a user's private itinerary, so
+// it echoes only an allowlisted Origin (native apps send no Origin and are
+// unaffected — CORS is browser-enforced).
+function corsFor(req: Request): Record<string, string> {
+  const origin = req.headers.get('origin');
+  return getCorsHeaders(origin && isOriginAllowed(origin) ? origin : undefined);
+}
 
 /**
  * AI Trip Planner - Intelligent Itinerary Generator
@@ -32,8 +49,17 @@ interface TripPlannerRequest {
     mustSee?: string[];             // Specific places they want to include
     avoidCategories?: string[];     // Categories to avoid
   };
-  // Optional: existing trip plan to update/enhance
-  existingTripId?: string;
+  // XPLAT-010 AC3: `existingTripId` used to be declared here as "existing trip
+  // plan to update/enhance". It was removed 2026-08-22 because the capability
+  // existed on NEITHER side: no client ever sent it - not web, not iOS, not
+  // Android, confirmed by the XPLAT-011 contract scan - and the handler
+  // destructured it and never read it again. It documented a feature nobody
+  // could use.
+  //
+  // Not a backward-compatibility break under CLAUDE.md. That rule protects a
+  // field shipped binaries SEND, and none do; and the wire behaviour is
+  // unchanged either way, since a request carrying an extra property still
+  // parses and the property was already ignored.
 }
 
 interface ItineraryItem {
@@ -63,14 +89,9 @@ interface GeneratedItinerary {
 }
 
 serve(async (req) => {
+  const corsHeaders = corsFor(req);
   if (req.method === 'OPTIONS') {
     return new Response(null, { headers: corsHeaders });
-  }
-
-  // Rate limit: 10 AI requests per 15 minutes per client
-  const rateLimit = checkRateLimit(req, { max: 10, message: 'AI itinerary rate limit exceeded. Please try again later.' });
-  if (!rateLimit.success) {
-    return rateLimit.response!;
   }
 
   try {
@@ -78,7 +99,7 @@ serve(async (req) => {
     const supabaseServiceKey = Deno.env.get('SUPABASE_SERVICE_ROLE_KEY') ?? '';
     const supabaseClient = createClient(supabaseUrl, supabaseServiceKey);
 
-    const claudeApiKey = Deno.env.get('CLAUDE_API') || Deno.env.get('CLAUDE_API_KEY');
+    const claudeApiKey = getAnthropicApiKey();
     if (!claudeApiKey) {
       throw new Error('CLAUDE_API key is required');
     }
@@ -92,12 +113,132 @@ serve(async (req) => {
       throw new Error('Authentication required');
     }
 
+    // PROD-SUB-001: enforce the Trip Planner paywall SERVER-side. The web/iOS
+    // PremiumGate is client-only and bypassable by calling this function
+    // directly, so verify the caller is entitled to the trip_planner feature
+    // (Insider+) here too.
+    const tier = await resolveEntitledTier(supabaseClient, user.id);
+    if (!hasFeatureAccess(tier, 'trip_planner')) {
+      return new Response(
+        JSON.stringify({
+          error: 'Trip Planner is an Insider feature. Please upgrade to continue.',
+          code: 'upgrade_required',
+          feature: 'trip_planner',
+          requiredTier: 'insider',
+          tier,
+        }),
+        { status: 403, headers: { ...corsHeaders, 'Content-Type': 'application/json' } },
+      );
+    }
+
+    // Persistent, per-user burst limit (survives edge cold starts; keyed by the
+    // verified user id, not a spoofable IP). Generous enough not to interfere
+    // with legitimate use or older iOS clients that retry.
+    const burst = await checkRateLimitPersistent(req, {
+      endpoint: 'generate-itinerary',
+      userId: user.id,
+      windowMs: 15 * 60 * 1000,
+      max: 10,
+      message: 'AI itinerary rate limit exceeded. Please try again later.',
+    });
+    if (!burst.success) return burst.response!;
+
+    // PREFLIGHT: trip_plans must be reachable before we spend a model call.
+    //
+    // WEB-QA-005 / WEB-QA-018. The failure order used to be: quota count on
+    // trip_plans errors and FAILS OPEN by design, the Claude call goes out and
+    // is paid for, the insert at the end hits 42P01, and the user is shown
+    // "Failed to save trip plan". trip_plans is one of the tables whose
+    // migration is ledgered as applied and produced nothing, so on production
+    // that is EVERY attempt: a real API bill and an error page, every time.
+    //
+    // Fail-open on a transient error is still right - never block a paying user
+    // on our own bug - so this closes exactly one case and leaves that intact:
+    // the table not existing, where continuing is guaranteed to cost money and
+    // end in the same error. head:true so it costs a count and no rows.
+    const { error: storageProbeError } = await supabaseClient
+      .from('trip_plans')
+      .select('id', { count: 'exact', head: true })
+      .limit(1);
+
+    // 42P01 is Postgres; PGRST205 is PostgREST's schema-cache equivalent. Both
+    // mean "no such relation" as opposed to "the database is briefly unhappy".
+    if (storageProbeError && ['42P01', 'PGRST205'].includes(storageProbeError.code ?? '')) {
+      console.error(
+        '[generate-itinerary] trip_plans is missing (' + storageProbeError.code +
+          ') - refusing before the model call so the request is not billed.',
+      );
+      // Same 500 and the same { success, error } envelope the catch block
+      // already returns, so no shipped client sees a status or shape it does
+      // not handle. `code` is additive; older clients ignore unknown keys.
+      return new Response(
+        JSON.stringify({
+          success: false,
+          error:
+            'Trip planning is temporarily unavailable. No plan was used from your monthly allowance.',
+          code: 'trip_storage_unavailable',
+        }),
+        { status: 500, headers: { ...corsHeaders, 'Content-Type': 'application/json' } },
+      );
+    }
+
+    // Monthly quota per tier (Insider 5 / VIP unlimited). Counts itineraries
+    // this calendar month from trip_plans (no new table needed). Returns a
+    // structured 429 the web client surfaces as an upgrade prompt.
+    const monthlyQuota = TRIP_PLANNER_MONTHLY_QUOTA[tier];
+    if (monthlyQuota !== -1) {
+      const monthStart = new Date();
+      monthStart.setUTCDate(1);
+      monthStart.setUTCHours(0, 0, 0, 0);
+      const { count: usedThisMonth, error: quotaErr } = await supabaseClient
+        .from('trip_plans')
+        .select('id', { count: 'exact', head: true })
+        .eq('user_id', user.id)
+        .eq('ai_generated', true)
+        .gte('created_at', monthStart.toISOString());
+
+      // Fail open on a quota-count error — never block a paying user on our bug.
+      if (quotaErr) {
+        console.warn('[generate-itinerary] monthly quota count failed, allowing:', quotaErr.message);
+      } else if ((usedThisMonth ?? 0) >= monthlyQuota) {
+        return new Response(
+          JSON.stringify({
+            error: `You've used all ${monthlyQuota} trip plans included this month.`,
+            code: 'quota_exceeded',
+            feature: 'trip_planner',
+            tier,
+            limit: monthlyQuota,
+            used: usedThisMonth,
+            requiredTier: tier === 'insider' ? 'vip' : 'insider',
+            upgradeHint: tier === 'insider' ? 'vip' : 'insider',
+          }),
+          { status: 429, headers: { ...corsHeaders, 'Content-Type': 'application/json' } },
+        );
+      }
+    }
+
     const {
       startDate,
       endDate,
       preferences = {},
-      existingTripId
     }: TripPlannerRequest = await req.json();
+
+    // Crisis check on the free-text preference fields (WEB-LEGAL-005). The
+    // itinerary planner is mostly structured input, but mustSee and the other
+    // string arrays are typed by the user and reach the model. Checked before
+    // any model call; nothing is logged or stored.
+    const freeText = [
+      ...(Array.isArray(preferences.mustSee) ? preferences.mustSee : []),
+      ...(Array.isArray(preferences.interests) ? preferences.interests : []),
+      ...(Array.isArray(preferences.accessibilityNeeds) ? preferences.accessibilityNeeds : []),
+      ...(Array.isArray(preferences.dietaryRestrictions) ? preferences.dietaryRestrictions : []),
+    ];
+    if (freeText.some((t) => detectCrisisIntent(t))) {
+      return new Response(
+        JSON.stringify(crisisPayload()),
+        { status: 200, headers: { ...corsHeaders, 'Content-Type': 'application/json' } },
+      );
+    }
 
     // Validate dates
     const start = new Date(startDate);
@@ -130,7 +271,9 @@ serve(async (req) => {
     // Fetch restaurants
     const { data: restaurants, error: restaurantsError } = await supabaseClient
       .from('restaurants')
-      .select('id, name, description, cuisine, location, price_range, rating, image_url, hours, latitude, longitude')
+      // `hours` DROPPED: restaurants has no opening-hours column, so asking for it
+      // failed the whole select with 42703 and the planner got zero restaurants.
+      .select('id, name, description, cuisine, location, price_range, rating, image_url, latitude, longitude')
       .order('rating', { ascending: false, nullsFirst: false })
       .limit(50);
 
@@ -139,7 +282,10 @@ serve(async (req) => {
     // Fetch attractions
     const { data: attractions, error: attractionsError } = await supabaseClient
       .from('attractions')
-      .select('id, name, description, category, location, hours, admission, website, image_url, latitude, longitude')
+      // category -> type (attractions stores the kind in `type`), and admission ->
+      // is_free, the only cost signal the table carries. `hours` DOES exist here,
+      // unlike on restaurants, so it stays.
+      .select('id, name, description, type, location, hours, is_free, website, image_url, latitude, longitude')
       .limit(50);
 
     if (attractionsError) console.error('Error fetching attractions:', attractionsError);
@@ -170,9 +316,12 @@ serve(async (req) => {
       id: a.id,
       name: a.name,
       description: (a.description || '').substring(0, 150),
-      category: a.category,
+      category: a.type,
       location: a.location,
-      admission: a.admission,
+      // The model is told free/paid rather than a price string, because that is
+      // what the schema actually knows. Inventing an admission line would be worse
+      // than omitting one in an itinerary the user acts on.
+      admission: a.is_free === true ? 'Free' : a.is_free === false ? 'Paid admission' : null,
     }));
 
     // Build preferences context
@@ -301,11 +450,11 @@ Return ONLY the JSON object, no additional text.`;
       }
     );
 
-    const aiResponse = await fetch(config.api_endpoint, {
+    const aiResponse = await fetchWithTimeout(config.api_endpoint, {
       method: 'POST',
       headers,
       body: JSON.stringify(requestBody)
-    });
+    }, 60_000);
 
     if (!aiResponse.ok) {
       const errorData = await aiResponse.text();
@@ -314,7 +463,28 @@ Return ONLY the JSON object, no additional text.`;
     }
 
     const aiResult = await aiResponse.json();
-    const itineraryText = aiResult.content[0].text;
+
+    // AOS-MANAGE-005: record the spend BEFORE anything that can throw.
+    //
+    // Everything below here can fail - an unusable response, unparseable JSON, a
+    // trip_plans insert - and every one of those failures happens AFTER
+    // Anthropic has billed for this call. Recording later would mean the runs
+    // that cost money and delivered nothing are exactly the ones the budget
+    // watchdog never sees. That is the WEB-QA-005 case: billed, thrown away,
+    // invisible.
+    await recordAnthropicUsage(supabaseClient, {
+      source: "generate-itinerary",
+      model: String(requestBody.model ?? config.default_model),
+      usage: aiResult?.usage ?? {},
+      extra: { tier, days: numDays },
+    });
+
+    const extracted = extractClaudeText(aiResult);
+    if (!extracted.ok) {
+      console.error("Claude response not usable:", extracted.reason, extracted.detail);
+      throw new Error(`AI response ${extracted.reason}: ${extracted.detail}`);
+    }
+    const itineraryText = extracted.text;
 
     let generatedItinerary: GeneratedItinerary;
     try {
@@ -384,8 +554,27 @@ Return ONLY the JSON object, no additional text.`;
       .insert(itemsToInsert);
 
     if (itemsError) {
-      console.error('Error creating trip items:', itemsError);
-      // Don't fail - trip plan is still created
+      // WEB-BE-006: the plan row is quota-counted (ai_generated=true) but is
+      // useless without its items. Rather than charge the user a quota unit for
+      // a broken empty plan, compensate by deleting the just-created plan and
+      // return a retriable error. (A monthly quota counts trip_plans rows, so
+      // removing the plan means it is not counted.)
+      console.error('Error creating trip items; rolling back the trip plan:', itemsError);
+      const { error: rollbackError } = await supabaseClient
+        .from('trip_plans')
+        .delete()
+        .eq('id', tripPlan.id);
+      if (rollbackError) {
+        console.error('Failed to roll back trip plan after items error:', rollbackError);
+      }
+      return new Response(JSON.stringify({
+        success: false,
+        error: 'Failed to save your itinerary. Please try again.',
+        code: 'itinerary_save_failed',
+      }), {
+        status: 500,
+        headers: { ...corsHeaders, 'Content-Type': 'application/json' },
+      });
     }
 
     // Fetch the complete itinerary with item details
@@ -415,10 +604,11 @@ Return ONLY the JSON object, no additional text.`;
     });
 
   } catch (error) {
+    // Sanitized: full error logged server-side; clients get a generic message.
     console.error('Error in generate-itinerary function:', error);
     return new Response(JSON.stringify({
       success: false,
-      error: error.message
+      error: 'Failed to generate itinerary. Please try again.'
     }), {
       status: 500,
       headers: { ...corsHeaders, 'Content-Type': 'application/json' },

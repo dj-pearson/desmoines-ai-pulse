@@ -27,24 +27,11 @@ import {
   DialogHeader,
   DialogTitle,
 } from "@/components/ui/dialog";
-import {
-  MapPin,
-  Search,
-  AlertTriangle,
-  CheckCircle,
-  XCircle,
-  Loader2,
-  Plus,
-  RefreshCw,
-  Info,
-  Ban,
-  Trash2,
-  Eye,
-  EyeOff,
-} from "lucide-react";
+import { Search, AlertTriangle, CheckCircle, XCircle, Loader2, Plus, RefreshCw, Info, Ban, Trash2, Eye, EyeOff } from "lucide-react";
 import { useToast } from "@/hooks/use-toast";
 import { supabase } from "@/integrations/supabase/client";
 import { createLogger } from '@/lib/logger';
+import { SpriteIcon } from "@/components/ui/SpriteIcon";
 
 const log = createLogger('GooglePlacesRestaurantTools');
 
@@ -537,7 +524,7 @@ export default function GooglePlacesRestaurantTools() {
                       <div className="flex-1">
                         <h5 className="font-medium">{restaurant.name}</h5>
                         <p className="text-sm text-muted-foreground flex items-center gap-1">
-                          <MapPin className="h-3 w-3" />
+                          <SpriteIcon name="map-pin" className="h-3 w-3" />
                           {restaurant.formatted_address}
                         </p>
                         {restaurant.rating && (
@@ -738,7 +725,7 @@ export default function GooglePlacesRestaurantTools() {
                         <h5 className="font-medium">{entry.restaurant_name}</h5>
                         {entry.formatted_address && (
                           <p className="text-sm text-muted-foreground flex items-center gap-1">
-                            <MapPin className="h-3 w-3" />
+                            <SpriteIcon name="map-pin" className="h-3 w-3" />
                             {entry.formatted_address}
                           </p>
                         )}

@@ -11,18 +11,8 @@ import SEOHead from "@/components/SEOHead";
 import { Breadcrumbs } from "@/components/ui/breadcrumbs";
 import { useAuth } from "@/hooks/useAuth";
 import { useBusinessPartnership } from "@/hooks/useBusinessPartnership";
-import { 
-  Building2, 
-  Star, 
-  Users, 
-  BarChart3, 
-  Megaphone,
-  CheckCircle,
-  ArrowRight,
-  Target,
-  Globe,
-  TrendingUp
-} from "lucide-react";
+import { Star, BarChart3, Megaphone, CheckCircle, Target, Globe } from "lucide-react";
+import { SpriteIcon } from "@/components/ui/SpriteIcon";
 
 export default function BusinessPartnership() {
   const { user } = useAuth();
@@ -36,7 +26,7 @@ export default function BusinessPartnership() {
       description: "Get priority placement in search results and category listings"
     },
     {
-      icon: <Users className="w-6 h-6" />,
+      icon: <SpriteIcon name="users" className="w-6 h-6" />,
       title: "Customer Engagement",
       description: "Connect directly with potential customers through reviews and messaging"
     },
@@ -164,7 +154,7 @@ export default function BusinessPartnership() {
                     className="gap-2"
                   >
                     Start Your Application
-                    <ArrowRight className="w-4 h-4" />
+                    <SpriteIcon name="arrow-right" className="w-4 h-4" />
                   </Button>
                 </section>
               </TabsContent>
@@ -243,7 +233,7 @@ export default function BusinessPartnership() {
 
                 {!businessProfile && (
                   <div className="text-center p-6 bg-muted/30 rounded-lg">
-                    <Building2 className="w-12 h-12 mx-auto mb-4 text-muted-foreground" />
+                    <SpriteIcon name="building-2" className="w-12 h-12 mx-auto mb-4 text-muted-foreground" />
                     <h3 className="text-xl font-semibold mb-2">Partnership Required</h3>
                     <p className="text-muted-foreground mb-4">
                       You need to apply for a business partnership before accessing advertising packages.

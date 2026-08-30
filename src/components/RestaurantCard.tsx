@@ -1,17 +1,36 @@
 import { Link } from "react-router-dom";
 import { Badge } from "@/components/ui/badge";
-import { ChefHat, Star, MapPin, Flame, Sparkles, Leaf, Wheat } from "lucide-react";
-import { memo, useState, useMemo, useCallback } from "react";
+import { Star, Flame, Leaf, Wheat } from "lucide-react";
+// map-pin renders once per card and this card renders on nine pages. It is a
+// two-shape lucide icon, so inline costs 3 nodes and the sprite costs 2.
+//
+// Star STAYS INLINE deliberately and so does ChefHat. Per the membership rules
+// in scripts/generate-icon-sprite.mjs a sprite instance is always 2 nodes, so a
+// single-path icon like star saves nothing - and star is the highest-count icon
+// on /restaurants/dietary at 197. ChefHat would save one node per card and
+// every sprite symbol ships on every page whether used or not.
+import { memo, useState, useMemo, useCallback, useRef } from "react";
 import { OptimizedImage } from "@/components/OptimizedImage";
 import { SocialProofBadge } from "@/components/SocialProofBadge";
 import { getRestaurantOpenStatus } from "@/lib/restaurantHours";
 import { SponsoredBadge } from "@/components/SponsoredBadge";
 import { usePrefetchRestaurant } from "@/hooks/usePrefetchDetail";
+import { getCuisineGradient, STATUS_BADGE } from "@/lib/categoryStyles";
+import { FavoriteButton } from "@/components/FavoriteButton";
+import { isSponsoredActive, logSponsoredClick } from "@/lib/sponsored";
+import { useSponsoredImpression } from "@/hooks/useSponsoredImpression";
+import { SpriteIcon } from "@/components/ui/SpriteIcon";
 
+// WEB-UX-030: each entry carries its own dark pair. The render used to append
+// `dark:bg-opacity-20 dark:text-opacity-90`, which are no-ops — an opacity
+// modifier needs a colour utility in the same variant to act on, so in dark
+// mode these chips kept their LIGHT background and light text, measuring
+// 3.02:1 for green-700 on a slate card. text-green-600 was also below AA on
+// the light surface (3.30:1), so the vegetarian chip moves to -700 as well.
 const DIETARY_TAGS = [
-  { id: "vegan", label: "Vegan", icon: Leaf, bg: "bg-green-50", text: "text-green-700", keywords: ["vegan"] },
-  { id: "vegetarian", label: "Vegetarian", icon: Leaf, bg: "bg-green-50", text: "text-green-600", keywords: ["vegetarian", "veggie"] },
-  { id: "gluten-free", label: "GF", icon: Wheat, bg: "bg-amber-50", text: "text-amber-700", keywords: ["gluten free", "gluten-free", "celiac"] },
+  { id: "vegan", label: "Vegan", icon: Leaf, bg: "bg-green-50 dark:bg-green-950", text: "text-green-700 dark:text-green-300", keywords: ["vegan"] },
+  { id: "vegetarian", label: "Vegetarian", icon: Leaf, bg: "bg-green-50 dark:bg-green-950", text: "text-green-700 dark:text-green-300", keywords: ["vegetarian", "veggie"] },
+  { id: "gluten-free", label: "GF", icon: Wheat, bg: "bg-amber-50 dark:bg-amber-950", text: "text-amber-800 dark:text-amber-300", keywords: ["gluten free", "gluten-free", "celiac"] },
 ] as const;
 
 function inferDietaryTags(description?: string, cuisine?: string): typeof DIETARY_TAGS[number][] {
@@ -35,6 +54,7 @@ interface RestaurantCardProps {
     opening?: string;
     is_featured?: boolean;
     is_sponsored?: boolean;
+    sponsored_until?: string | null;
     image_url?: string;
     phone?: string;
     website?: string;
@@ -42,33 +62,6 @@ interface RestaurantCardProps {
     created_at?: string;
   };
   variant?: "default" | "compact" | "featured";
-}
-
-const cuisineGradients: Record<string, string> = {
-  Italian: "from-red-600 to-orange-500",
-  Mexican: "from-green-600 to-yellow-500",
-  Chinese: "from-red-700 to-amber-500",
-  Japanese: "from-pink-600 to-red-400",
-  Thai: "from-orange-500 to-yellow-400",
-  Indian: "from-orange-600 to-red-500",
-  American: "from-blue-600 to-red-500",
-  French: "from-blue-500 to-indigo-600",
-  Mediterranean: "from-sky-500 to-emerald-400",
-  Korean: "from-rose-500 to-orange-400",
-  Vietnamese: "from-emerald-500 to-lime-400",
-  BBQ: "from-amber-700 to-red-600",
-  Seafood: "from-cyan-500 to-blue-600",
-  Pizza: "from-red-500 to-yellow-500",
-  Steakhouse: "from-stone-700 to-red-800",
-  default: "from-[#2D1B69] to-[#DC143C]",
-};
-
-function getGradient(cuisine?: string): string {
-  if (!cuisine) return cuisineGradients.default;
-  for (const [key, value] of Object.entries(cuisineGradients)) {
-    if (cuisine.toLowerCase().includes(key.toLowerCase())) return value;
-  }
-  return cuisineGradients.default;
 }
 
 function StarRating({ rating }: { rating: number }) {
@@ -101,7 +94,7 @@ function StarRating({ rating }: { rating: number }) {
 
 function RestaurantCardComponent({ restaurant, variant = "default" }: RestaurantCardProps) {
   const [imageError, setImageError] = useState(false);
-  const gradient = getGradient(restaurant.cuisine);
+  const gradient = getCuisineGradient(restaurant.cuisine);
   const showImage = restaurant.image_url && !imageError;
   const isFeatured = variant === "featured" || restaurant.is_featured;
   const openStatus = useMemo(() => getRestaurantOpenStatus(restaurant.opening), [restaurant.opening]);
@@ -117,16 +110,25 @@ function RestaurantCardComponent({ restaurant, variant = "default" }: Restaurant
     prefetchRestaurant(restaurant.slug || restaurant.id);
   }, [prefetchRestaurant, restaurant.slug, restaurant.id]);
 
+  // Sponsored listing (WEB-FEAT-005): active only while not expired.
+  const sponsoredActive = isSponsoredActive(restaurant);
+  const articleRef = useRef<HTMLElement>(null);
+  useSponsoredImpression(articleRef, "restaurant", restaurant.id, sponsoredActive);
+
   return (
     <Link
       to={`/restaurants/${restaurant.slug || restaurant.id}`}
       className="group block focus:outline-none focus-visible:ring-2 focus-visible:ring-primary focus-visible:ring-offset-2 rounded-2xl"
-      aria-label={`View ${restaurant.name} - ${restaurant.cuisine || "Restaurant"} in ${restaurant.city || "Des Moines"}`}
+      aria-label={`${sponsoredActive ? "Sponsored: " : ""}View ${restaurant.name} - ${restaurant.cuisine || "Restaurant"} in ${restaurant.city || "Des Moines"}`}
       onMouseEnter={handleMouseEnter}
+      onClick={() => {
+        if (sponsoredActive) logSponsoredClick("restaurant", restaurant.id);
+      }}
     >
       <article
+        ref={articleRef}
         className={`relative h-full rounded-2xl overflow-hidden border bg-card transition-all duration-200 group-hover:shadow-xl group-hover:-translate-y-1.5 ${
-          restaurant.is_sponsored ? "ring-2 ring-amber-400 shadow-lg" : isFeatured ? "ring-2 ring-amber-400/50 shadow-lg" : "shadow-sm"
+          sponsoredActive ? "ring-2 ring-amber-400 shadow-lg" : isFeatured ? "ring-2 ring-amber-400/50 shadow-lg" : "shadow-sm"
         }`}
       >
         {/* Image / Gradient Header */}
@@ -154,20 +156,32 @@ function RestaurantCardComponent({ restaurant, variant = "default" }: Restaurant
           {/* Dark overlay for text readability */}
           <div className="absolute inset-0 bg-gradient-to-t from-black/70 via-black/20 to-transparent" />
 
+          {/* Save (favorite) overlay — stopPropagation handled inside the button */}
+          <div className="absolute top-3 right-3 z-20">
+            <FavoriteButton
+              contentType="restaurant"
+              contentId={restaurant.id}
+              itemName={restaurant.name}
+              size="icon"
+              variant="ghost"
+              className="h-9 w-9 rounded-full bg-white/90 hover:bg-white shadow-md backdrop-blur"
+            />
+          </div>
+
           {/* Top badges */}
           <div className="absolute top-3 left-3 flex flex-wrap gap-1.5 z-10">
-            {restaurant.is_sponsored && <SponsoredBadge />}
-            {!restaurant.is_sponsored && isFeatured && (
-              <Badge className="bg-amber-500 text-white border-0 shadow-md text-xs font-semibold px-2.5 py-0.5">
-                <Sparkles className="h-3 w-3 mr-1" />
+            {sponsoredActive && <SponsoredBadge />}
+            {!sponsoredActive && isFeatured && (
+              <Badge className={`${STATUS_BADGE.featured} border-0 shadow-md text-xs font-semibold px-2.5 py-0.5`}>
+                <SpriteIcon name="sparkles" className="h-3 w-3 mr-1" />
                 Featured
               </Badge>
             )}
-            {!restaurant.is_sponsored && !isFeatured && isNew && (
+            {!sponsoredActive && !isFeatured && isNew && (
               <SocialProofBadge type="new" size="sm" />
             )}
             {openStatus.isOpen && (
-              <Badge className={`${openStatus.closingSoon ? 'bg-amber-500' : 'bg-emerald-500'} text-white border-0 shadow-md text-xs font-semibold px-2.5 py-0.5`}>
+              <Badge className={`${openStatus.closingSoon ? STATUS_BADGE.closingSoon : STATUS_BADGE.open} border-0 shadow-md text-xs font-semibold px-2.5 py-0.5`}>
                 <span className="relative flex h-2 w-2 mr-1.5">
                   <span className="animate-ping absolute inline-flex h-full w-full rounded-full bg-white opacity-75" />
                   <span className="relative inline-flex rounded-full h-2 w-2 bg-white" />
@@ -193,7 +207,7 @@ function RestaurantCardComponent({ restaurant, variant = "default" }: Restaurant
             </h3>
             {restaurant.cuisine && (
               <div className="flex items-center gap-1.5 mt-1">
-                <ChefHat className="h-3.5 w-3.5 text-white/80" />
+                <SpriteIcon name="chef-hat" className="h-3.5 w-3.5 text-white/80" />
                 <span className="text-white/90 text-sm font-medium">
                   {restaurant.cuisine}
                 </span>
@@ -218,8 +232,11 @@ function RestaurantCardComponent({ restaurant, variant = "default" }: Restaurant
                 <span className="text-xs text-muted-foreground">No rating yet</span>
               )}
             </div>
+            {/* WEB-UX-030: text-orange-600 on bg-orange-50 measured 3.35:1.
+                orange-700 is 4.88:1 on the same tint. Dark side untouched —
+                orange-400 on orange-950 already clears AA. */}
             {restaurant.popularity_score && restaurant.popularity_score > 70 && (
-              <Badge variant="outline" className="text-xs border-orange-200 text-orange-600 bg-orange-50 dark:bg-orange-950 dark:border-orange-800 dark:text-orange-400 gap-1">
+              <Badge variant="outline" className="text-xs border-orange-200 text-orange-700 bg-orange-50 dark:bg-orange-950 dark:border-orange-800 dark:text-orange-400 gap-1">
                 <Flame className="h-3 w-3" />
                 Popular
               </Badge>
@@ -237,7 +254,7 @@ function RestaurantCardComponent({ restaurant, variant = "default" }: Restaurant
           {dietaryTags.length > 0 && (
             <div className="flex flex-wrap gap-1">
               {dietaryTags.map(tag => (
-                <span key={tag.id} className={`inline-flex items-center gap-1 ${tag.bg} ${tag.text} dark:bg-opacity-20 dark:text-opacity-90 text-xs font-medium px-2 py-0.5 rounded-full`}>
+                <span key={tag.id} className={`inline-flex items-center gap-1 ${tag.bg} ${tag.text} text-xs font-medium px-2 py-0.5 rounded-full`}>
                   <tag.icon className="h-3 w-3" aria-hidden="true" />
                   {tag.label}
                 </span>
@@ -248,7 +265,7 @@ function RestaurantCardComponent({ restaurant, variant = "default" }: Restaurant
           {/* Location */}
           {(restaurant.location || restaurant.city) && (
             <div className="flex items-center gap-1.5 text-xs text-muted-foreground pt-1 border-t border-gray-100 dark:border-gray-800">
-              <MapPin className="h-3.5 w-3.5 shrink-0" />
+              <SpriteIcon name="map-pin" className="h-3.5 w-3.5 shrink-0" />
               <span className="line-clamp-1">
                 {restaurant.location || restaurant.city}
               </span>

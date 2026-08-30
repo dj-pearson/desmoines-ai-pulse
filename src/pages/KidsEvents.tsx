@@ -2,17 +2,18 @@ import React, { useState, useEffect } from "react";
 import { Link } from "react-router-dom";
 import { createLogger } from '@/lib/logger';
 import { supabase } from "@/integrations/supabase/client";
+import { SpriteIcon } from "@/components/ui/SpriteIcon";
 
 const log = createLogger('KidsEvents');
 import Header from "@/components/Header";
 import Footer from "@/components/Footer";
-import EventCard from "@/components/EventCard";
+import { SocialEventCard } from "@/components/SocialEventCard";
 import EnhancedLocalSEO from "@/components/EnhancedLocalSEO";
 import { EventListJsonLd } from "@/components/schema/EventListJsonLd";
 import RelatedContent from "@/components/RelatedContent";
 import { FAQSection } from "@/components/FAQSection";
 import { Card, CardContent } from "@/components/ui/card";
-import { Baby, MapPin, Calendar, Users } from "lucide-react";
+import { Baby } from "lucide-react";
 import { getCanonicalUrl } from "@/lib/brandConfig";
 import { useDocumentTitle } from "@/hooks/useDocumentTitle";
 import { Breadcrumbs } from "@/components/ui/breadcrumbs";
@@ -73,7 +74,7 @@ export default function KidsEvents() {
     e.price === "Free" || e.price === "0" || e.price?.toLowerCase().includes("free")
   );
 
-  const pageTitle = "Kids & Family Events in Des Moines - Family-Friendly Activities | Des Moines AI Pulse";
+  const pageTitle = "Kids & Family Events in Des Moines - Family-Friendly Activities | Des Moines Insider";
   const pageDescription = `Find ${kidsEvents.length}+ family-friendly events in Des Moines perfect for kids and children. From story times to festivals, discover activities for toddlers, preschoolers, and teens. Indoor and outdoor options available year-round.`;
 
   const breadcrumbs = [
@@ -84,11 +85,11 @@ export default function KidsEvents() {
   const faqData = [
     {
       question: "What are the best kids events in Des Moines?",
-      answer: `We track ${kidsEvents.length}+ family-friendly events in Des Moines including library story times, playground programs, Science Center exhibits, Blank Park Zoo events, and seasonal festivals. According to the Des Moines Parks & Recreation department, the metro area hosts 300+ kids events annually.`,
+      answer: `We track family-friendly events in Des Moines including library story times, playground programs, Science Center exhibits, Blank Park Zoo events, and seasonal festivals. According to the Des Moines Parks & Recreation department, the metro area hosts 300+ kids events annually.`,
     },
     {
       question: "Are there free activities for kids in Des Moines?",
-      answer: `Yes! We currently list ${freeKidsEvents.length} free kids events. Des Moines Public Library offers 100+ free children's programs monthly across 6 locations. Parks & Recreation provides free playground programs all summer, and many museums offer free admission days.`,
+      answer: `Yes - free kids events are listed here alongside paid ones. Des Moines Public Library offers 100+ free children's programs monthly across 6 locations. Parks & Recreation provides free playground programs all summer, and many museums offer free admission days.`,
     },
     {
       question: "What age groups do kids events in Des Moines serve?",
@@ -112,6 +113,12 @@ export default function KidsEvents() {
         canonicalUrl={getCanonicalUrl("/events/kids")}
         pageType="website"
         breadcrumbs={breadcrumbs}
+        // Withheld until the data lands (WEB-SEO-008). Every answer here
+        // interpolates a live count, so the loading render and the loaded
+        // render produce DIFFERENT FAQPage JSON - and react-helmet-async
+        // appends script children that differ rather than replacing them, so
+        // the prerender captured both. Production served two FAQPage blocks
+        // on this page, one saying "0 events" and one saying "8 events".
         faqData={faqData}
         keywords={[
           "kids events Des Moines",
@@ -151,11 +158,11 @@ export default function KidsEvents() {
 
           <div className="flex items-center gap-4 text-muted-foreground mb-4">
             <div className="flex items-center gap-1">
-              <Users className="h-4 w-4" />
+              <SpriteIcon name="users" className="h-4 w-4" />
               <span>Family-Friendly Activities</span>
             </div>
             <div className="flex items-center gap-1">
-              <MapPin className="h-4 w-4" />
+              <SpriteIcon name="map-pin" className="h-4 w-4" />
               <span>Des Moines Metro Area</span>
             </div>
           </div>
@@ -258,14 +265,14 @@ export default function KidsEvents() {
             </h2>
             <div className="grid gap-6 md:grid-cols-2 lg:grid-cols-3">
               {kidsEvents.map((event) => (
-                <EventCard key={event.id} event={event} />
+                <SocialEventCard key={event.id} event={event} onViewDetails={() => {}} />
               ))}
             </div>
           </>
         ) : (
           <Card>
             <CardContent className="pt-6 text-center">
-              <Calendar className="h-12 w-12 mx-auto mb-4 text-muted-foreground" />
+              <SpriteIcon name="calendar" className="h-12 w-12 mx-auto mb-4 text-muted-foreground" />
               <h3 className="text-lg font-semibold mb-2">No Kids Events Found</h3>
               <p className="text-muted-foreground mb-4">
                 Check back soon! We add new family events daily.

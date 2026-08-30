@@ -1,5 +1,6 @@
 package com.desmoines.aipulse.ui.screens.favorites
 
+import com.desmoines.aipulse.util.UiFormatLocale
 import androidx.compose.animation.animateColorAsState
 import androidx.compose.animation.animateContentSize
 import androidx.compose.animation.core.tween
@@ -47,6 +48,8 @@ import androidx.compose.material3.Text
 import androidx.compose.material3.TopAppBarDefaults
 import androidx.compose.material3.pulltorefresh.PullToRefreshBox
 import androidx.compose.runtime.Composable
+import androidx.compose.foundation.lazy.LazyListState
+import androidx.compose.foundation.lazy.rememberLazyListState
 import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.getValue
 import androidx.compose.ui.Alignment
@@ -75,6 +78,7 @@ import com.desmoines.aipulse.ui.theme.DesMoinesInsiderTheme
 import com.desmoines.aipulse.util.rememberHapticPerformer
 import java.time.OffsetDateTime
 import java.time.format.DateTimeFormatter
+import java.util.Locale
 
 /**
  * Favorites/Saved screen matching iOS FavoritesView.swift.
@@ -91,8 +95,15 @@ fun FavoritesScreen(
     onRemoveEventFavorite: (String) -> Unit = {},
     onRemoveRestaurantFavorite: (String) -> Unit = {},
     onRefresh: () -> Unit = {},
+    scrollToTopTrigger: Int = 0,
 ) {
     val scrollBehavior = TopAppBarDefaults.exitUntilCollapsedScrollBehavior()
+    val listState = rememberLazyListState()
+
+    // Scroll to top when the user re-taps the active bottom nav tab (ANDP-071).
+    LaunchedEffect(scrollToTopTrigger) {
+        if (scrollToTopTrigger > 0) listState.animateScrollToItem(0)
+    }
 
     Scaffold(
         topBar = {
@@ -126,6 +137,7 @@ fun FavoritesScreen(
                 else -> {
                     SavedContent(
                         state = state,
+                        listState = listState,
                         onNavigateToEventDetail = onNavigateToEventDetail,
                         onNavigateToRestaurantDetail = onNavigateToRestaurantDetail,
                         onNavigateToSubscription = onNavigateToSubscription,
@@ -141,6 +153,7 @@ fun FavoritesScreen(
 @Composable
 private fun SavedContent(
     state: FavoritesScreenState,
+    listState: LazyListState,
     onNavigateToEventDetail: (String) -> Unit,
     onNavigateToRestaurantDetail: (String) -> Unit,
     onNavigateToSubscription: () -> Unit,
@@ -148,6 +161,7 @@ private fun SavedContent(
     onRemoveRestaurantFavorite: (String) -> Unit,
 ) {
     LazyColumn(
+        state = listState,
         modifier = Modifier.fillMaxSize(),
         verticalArrangement = Arrangement.spacedBy(12.dp),
     ) {
@@ -431,7 +445,7 @@ private fun FavoriteEventRow(
                             tint = if (isPast) MaterialTheme.colorScheme.outline else MaterialTheme.colorScheme.onSurfaceVariant,
                         )
                         Text(
-                            text = date.format(DateTimeFormatter.ofPattern("MMM d, h:mm a")),
+                            text = date.format(DateTimeFormatter.ofPattern("MMM d, h:mm a", UiFormatLocale)),
                             style = MaterialTheme.typography.labelSmall,
                             color = if (isPast) MaterialTheme.colorScheme.outline else MaterialTheme.colorScheme.onSurfaceVariant,
                         )
@@ -568,7 +582,7 @@ private fun FavoriteRestaurantRow(
                             tint = Color(0xFFFFD600), // yellow
                         )
                         Text(
-                            text = String.format("%.1f", rating),
+                            text = String.format(Locale.US, "%.1f", rating),
                             style = MaterialTheme.typography.labelSmall,
                             fontWeight = FontWeight.Medium,
                             color = MaterialTheme.colorScheme.onSurfaceVariant,

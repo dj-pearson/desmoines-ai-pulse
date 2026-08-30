@@ -8,6 +8,7 @@
 
 import React from 'react';
 import { SecurityUtils } from './security';
+import { sessionStore } from '@/lib/safeStorage';
 
 const CSRF_TOKEN_KEY = 'csrf_token';
 const CSRF_HEADER_NAME = 'X-CSRF-Token';
@@ -22,9 +23,9 @@ export class CSRFProtection {
     const token = SecurityUtils.generateSecureToken(32);
     this.token = token;
 
-    // Store in sessionStorage (cleared on tab close)
+    // Store in sessionStorage (cleared on tab close) via safeStorage.
     if (typeof window !== 'undefined') {
-      sessionStorage.setItem(CSRF_TOKEN_KEY, token);
+      sessionStore.setString(CSRF_TOKEN_KEY, token);
     }
 
     return token;
@@ -40,7 +41,7 @@ export class CSRFProtection {
 
     // Try to load from sessionStorage
     if (typeof window !== 'undefined') {
-      const stored = sessionStorage.getItem(CSRF_TOKEN_KEY);
+      const stored = sessionStore.getString(CSRF_TOKEN_KEY);
       if (stored) {
         this.token = stored;
         return stored;
@@ -97,7 +98,7 @@ export class CSRFProtection {
   static clearToken(): void {
     this.token = null;
     if (typeof window !== 'undefined') {
-      sessionStorage.removeItem(CSRF_TOKEN_KEY);
+      sessionStore.remove(CSRF_TOKEN_KEY);
     }
   }
 

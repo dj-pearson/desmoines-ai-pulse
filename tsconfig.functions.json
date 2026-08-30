@@ -1,0 +1,43 @@
+{
+  // Type coverage for functions/ - the Cloudflare Pages Functions - which no
+  // tsconfig included.
+  //
+  // These two files are not build tooling. functions/_middleware.ts runs on
+  // EVERY production request: it decides what a social crawler is served, it
+  // rewrites the canonical and og:url on the SPA fallback (WEB-SEO-006), and it
+  // chooses whether a path reaches the asset handler at all.
+  // functions/media/[[path]].ts forwards a caller-supplied path to a storage
+  // origin behind an allowlist (WEB-OPS-023). Neither had ever been read by the
+  // compiler, and _middleware.ts imports EventContext from a package that is
+  // not installed - so its only import has never resolved.
+  //
+  // The repo's own note on this class of gap is in WEB-SEO-006: the HTMLRewriter
+  // transform "cannot be executed in CI" because HTMLRewriter does not exist
+  // outside the Workers runtime. Static checking is therefore most of the
+  // coverage available here, and there was none.
+  //
+  // Settings match tsconfig.scripts.json rather than turning strict on: the
+  // point is to catch syntax errors and real type errors in a directory that
+  // had NO checking.
+  "compilerOptions": {
+    "target": "ES2022",
+    // DOM supplies Request, Response, Headers, URL and fetch, which is what
+    // Workers implements. It is the same trade recorded in tsconfig.scripts.json
+    // - Response.json() becomes `any` rather than `unknown` - and it is
+    // unavoidable here, since these files are entirely built out of those types.
+    "lib": ["ES2023", "DOM", "DOM.Iterable"],
+    "module": "ESNext",
+    "moduleResolution": "bundler",
+    "noEmit": true,
+    "skipLibCheck": true,
+    "strict": false,
+    "strictNullChecks": false,
+    "noImplicitAny": false,
+    "noUnusedLocals": false,
+    "noUnusedParameters": false,
+    "allowJs": true,
+    "checkJs": false,
+    "moduleDetection": "force"
+  },
+  "include": ["functions/**/*.ts", "functions/_typecheck/*.d.ts"]
+}

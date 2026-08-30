@@ -9,6 +9,7 @@ import { serve } from "https://deno.land/std@0.168.0/http/server.ts";
 import { createClient } from "https://esm.sh/@supabase/supabase-js@2.39.3";
 import { handleCors, getCorsHeaders, isOriginAllowed } from "../_shared/cors.ts";
 import { checkRateLimit } from "../_shared/rateLimit.ts";
+import { fetchWithTimeout } from "../_shared/fetchWithTimeout.ts";
 
 serve(async (req) => {
   const corsResponse = handleCors(req);
@@ -78,7 +79,7 @@ serve(async (req) => {
       console.log("Exchanging authorization code for tokens...");
 
       // Exchange code for tokens
-      const tokenResponse = await fetch("https://oauth2.googleapis.com/token", {
+      const tokenResponse = await fetchWithTimeout("https://oauth2.googleapis.com/token", {
         method: "POST",
         headers: {
           "Content-Type": "application/x-www-form-urlencoded",
@@ -286,7 +287,7 @@ serve(async (req) => {
       console.log("Refreshing access token...");
 
       // Refresh token
-      const tokenResponse = await fetch("https://oauth2.googleapis.com/token", {
+      const tokenResponse = await fetchWithTimeout("https://oauth2.googleapis.com/token", {
         method: "POST",
         headers: {
           "Content-Type": "application/x-www-form-urlencoded",

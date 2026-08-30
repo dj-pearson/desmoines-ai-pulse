@@ -20,6 +20,7 @@ import {
   isOriginAllowed,
 } from "../_shared/cors.ts";
 import { checkRateLimit, addRateLimitHeaders } from "../_shared/rateLimit.ts";
+import { requireAdminOrApiKey } from "../_shared/apiKeyAuth.ts";
 
 interface KpiTile {
   key: string;
@@ -46,7 +47,6 @@ interface AdminHomeStatsResponse {
   generatedAt: string;
 }
 
-const ADMIN_ROLES = ["admin", "root_admin"] as const;
 
 async function countSince(
   supabase: ReturnType<typeof createClient>,
@@ -114,42 +114,11 @@ serve(async (req) => {
       Deno.env.get("SUPABASE_SERVICE_ROLE_KEY") ?? "",
     );
 
-    const authHeader = req.headers.get("Authorization");
-    if (!authHeader) {
-      return new Response(
-        JSON.stringify({ error: "Authorization required" }),
-        {
-          status: 401,
-          headers: { ...corsHeaders, "Content-Type": "application/json" },
-        },
-      );
-    }
-
-    const token = authHeader.replace("Bearer ", "");
-    const { data: { user }, error: authError } = await supabase.auth.getUser(
-      token,
-    );
-    if (authError || !user) {
-      return new Response(JSON.stringify({ error: "Invalid authentication" }), {
-        status: 401,
-        headers: { ...corsHeaders, "Content-Type": "application/json" },
-      });
-    }
-
-    const { data: profile } = await supabase
-      .from("profiles")
-      .select("role")
-      .eq("id", user.id)
-      .single();
-    if (
-      !profile ||
-      !ADMIN_ROLES.includes(profile.role as typeof ADMIN_ROLES[number])
-    ) {
-      return new Response(JSON.stringify({ error: "Admin access required" }), {
-        status: 403,
-        headers: { ...corsHeaders, "Content-Type": "application/json" },
-      });
-    }
+    // WEB-SEC-023: was a hand-rolled gate on profiles.role keyed by the row PK.
+    // That column is not in the schema, so the check failed closed for every
+    // real admin. requireAdminOrApiKey is the one sanctioned admin gate.
+    const authFailure = await requireAdminOrApiKey(req, corsHeaders);
+    if (authFailure) return authFailure;
 
     const now = new Date();
     const sevenDaysAgo = new Date(

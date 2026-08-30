@@ -1,15 +1,20 @@
 package com.desmoines.aipulse.ui.screens.restaurants
 
-import android.util.Log
+import com.desmoines.aipulse.util.AppLogger
 import androidx.lifecycle.ViewModel
 import androidx.lifecycle.viewModelScope
 import com.desmoines.aipulse.data.model.Restaurant
 import com.desmoines.aipulse.data.model.RestaurantSortOption
 import com.desmoines.aipulse.data.model.SubscriptionTier
+import com.desmoines.aipulse.data.remote.BillingService
 import com.desmoines.aipulse.data.remote.RestaurantsQuery
 import com.desmoines.aipulse.data.repository.RestaurantsRepository
 import com.desmoines.aipulse.util.Config
+import com.desmoines.aipulse.util.FetchGeneration
 import com.desmoines.aipulse.util.NetworkMonitor
+import com.desmoines.aipulse.util.PaginationGuard
+import com.desmoines.aipulse.util.RECONNECT_DEBOUNCE_MS
+import com.desmoines.aipulse.util.onReconnect
 import dagger.hilt.android.lifecycle.HiltViewModel
 import kotlinx.coroutines.Job
 import kotlinx.coroutines.delay
@@ -21,9 +26,6 @@ import kotlinx.coroutines.flow.combine
 import kotlinx.coroutines.flow.stateIn
 import kotlinx.coroutines.launch
 import javax.inject.Inject
-
-private const val TAG = "RestaurantsViewModel"
-
 /**
  * State holder for the Restaurants (Dining) screen.
  */
@@ -53,6 +55,7 @@ data class RestaurantsScreenState(
 class RestaurantsViewModel @Inject constructor(
     private val restaurantsRepository: RestaurantsRepository,
     private val networkMonitor: NetworkMonitor,
+    private val billingService: BillingService,
 ) : ViewModel() {
 
     // region State
@@ -79,6 +82,9 @@ class RestaurantsViewModel @Inject constructor(
     private val pageSize = Config.DEFAULT_PAGE_SIZE
     private var fetchJob: Job? = null
     private var hasLoadedInitialData = false
+
+    // Stale-result guard: a reset supersedes any in-flight restaurants fetch (ANDP-061).
+    private val restaurantsFetch = FetchGeneration()
 
     // endregion
 
@@ -148,6 +154,23 @@ class RestaurantsViewModel @Inject constructor(
     // endregion
 
     // region Public API
+
+    init {
+        // Auto-refetch the visible first page when connectivity returns (ANDP-069).
+        viewModelScope.launch {
+            networkMonitor.isConnected.onReconnect().collect {
+                delay(RECONNECT_DEBOUNCE_MS)
+                if (hasLoadedInitialData && networkMonitor.isConnected.value) refresh()
+            }
+        }
+
+        // Mirror the live entitlement. This flow was a MutableStateFlow pinned
+        // to FREE with no writer, so paying subscribers were shown the
+        // free-tier UI (locked advanced filters, ad banners, the save cap).
+        viewModelScope.launch {
+            billingService.currentTier.collect { _currentTier.value = it }
+        }
+    }
 
     fun loadInitialData() {
         if (hasLoadedInitialData) return
@@ -229,6 +252,10 @@ class RestaurantsViewModel @Inject constructor(
     // region Private
 
     private suspend fun fetchRestaurants(reset: Boolean) {
+        // A reset supersedes any in-flight fetch; a load-more rides the current token
+        // and is dropped if a reset lands while it's in flight.
+        val token = if (reset) restaurantsFetch.bump() else restaurantsFetch.current()
+
         if (reset) {
             currentOffset = 0
             if (_restaurants.value.isEmpty()) _isLoading.value = true
@@ -240,6 +267,17 @@ class RestaurantsViewModel @Inject constructor(
         val query = buildQuery().copy(offset = currentOffset)
 
         restaurantsRepository.fetchRestaurants(query).onSuccess { response ->
+            if (!restaurantsFetch.isCurrent(token)) return@onSuccess // superseded — drop stale result
+            // Reject a desynced page (oversized, or overlapping the loaded list) instead
+            // of corrupting the list — surface a retry instead. (ANDP-062)
+            val existingIds: Set<String> = if (reset) emptySet() else _allRestaurants.value.mapTo(HashSet()) { it.id }
+            val check = PaginationGuard.validatePage(response.restaurants, pageSize, existingIds) { it.id }
+            if (check is PaginationGuard.Result.Invalid) {
+                AppLogger.ui.warning("restaurants pagination guard tripped: ${check.reason}")
+                _hasMore.value = false
+                _errorMessage.value = "Something went wrong loading restaurants. Pull to refresh."
+                return@onSuccess
+            }
             if (reset) {
                 _allRestaurants.value = response.restaurants
             } else {
@@ -249,15 +287,20 @@ class RestaurantsViewModel @Inject constructor(
             _totalCount.value = response.totalCount
             _hasMore.value = response.hasMore
             currentOffset = _allRestaurants.value.size
+            // Surface this page to on-device system search (ANDP-070).
         }.onFailure { error ->
-            Log.e(TAG, "fetchRestaurants failed: ${error.message}", error)
+            if (!restaurantsFetch.isCurrent(token)) return@onFailure
+            AppLogger.ui.error("fetchRestaurants failed: ${error.message}", error)
             if (_restaurants.value.isEmpty()) {
                 _errorMessage.value = error.localizedMessage ?: "Failed to load restaurants"
             }
         }
 
-        _isLoading.value = false
-        _isLoadingMore.value = false
+        // Only the latest request owns the loading flags.
+        if (restaurantsFetch.isCurrent(token)) {
+            _isLoading.value = false
+            _isLoadingMore.value = false
+        }
     }
 
     private fun buildQuery(): RestaurantsQuery = RestaurantsQuery(
@@ -281,7 +324,7 @@ class RestaurantsViewModel @Inject constructor(
         restaurantsRepository.fetchAvailableCuisines().onSuccess { cuisines ->
             _availableCuisines.value = cuisines
         }.onFailure {
-            Log.e(TAG, "loadCuisines failed: ${it.message}", it)
+            AppLogger.ui.error("loadCuisines failed: ${it.message}", it)
             _availableCuisines.value = emptyList()
         }
     }

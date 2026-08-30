@@ -51,6 +51,15 @@ struct ProfileView: View {
                 .padding(.vertical, 4)
             }
 
+            // Dashboard — the signed-in home base (IOS-PARITY-007).
+            Section {
+                NavigationLink {
+                    DashboardView(ownsNavigationStack: false)
+                } label: {
+                    Label("Dashboard", systemImage: "rectangle.stack.person.crop")
+                }
+            }
+
             // Subscription Status — prominent upgrade CTA for free users
             Section {
                 SubscriptionBanner(style: .full)
@@ -96,6 +105,7 @@ struct ProfileView: View {
                                 .clipShape(Capsule())
                         }
                         .buttonStyle(.plain)
+                    .minHitTarget()
                     .accessibilityAddTraits(viewModel.selectedInterests.contains(interest) ? .isSelected : [])
                     .accessibilityLabel(interest)
                     }
@@ -121,6 +131,13 @@ struct ProfileView: View {
                 .disabled(viewModel.isSaving)
             }
 
+            // For Businesses — advertiser-acquisition funnel (IOS-ADS-016).
+            // Opens the web advertiser portal in Safari (not StoreKit) because
+            // this is advertising for a real-world business, not an in-app good.
+            Section("For Businesses") {
+                PromoteListingButton(listing: nil, style: .row)
+            }
+
             // App Section
             Section {
                 Button {
@@ -139,6 +156,9 @@ struct ProfileView: View {
                     Label("Sign Out", systemImage: "rectangle.portrait.and.arrow.right")
                         .foregroundStyle(.red)
                 }
+                // Don't let Sign Out race an in-flight delete/save, which both
+                // call auth.signOut() (IOS-AUDIT-UX-029).
+                .disabled(viewModel.isDeleting || viewModel.isSaving)
 
                 Button(role: .destructive) {
                     viewModel.showDeleteConfirmation = true
@@ -162,6 +182,9 @@ struct ProfileView: View {
                 .accessibilityLabel("Delete your account")
             }
         }
+        // The phone field uses .phonePad (no return key); without this the user
+        // can be stranded with the keyboard covering Save (IOS-AUDIT-UX-039).
+        .scrollDismissesKeyboard(.interactively)
         .alert("Profile Updated", isPresented: $viewModel.showSaveSuccess) {
             Button("OK", role: .cancel) {}
         }
@@ -173,11 +196,23 @@ struct ProfileView: View {
         } message: {
             Text("This will permanently delete your account, favorites, and all associated data. This action cannot be undone.")
         }
-        .alert("Error", isPresented: .init(
-            get: { viewModel.errorMessage != nil },
-            set: { if !$0 { viewModel.clearError() } }
-        )) {
-            Button("OK", role: .cancel) {}
+        // IOS-AUDIT-BUG-018 AC3: a failed deletion gets a retry. Gated on
+        // deletionFailed because this alert is shared with profile-save errors,
+        // so an unconditional Retry would offer to delete the account after a
+        // failed save.
+        .alert(
+            viewModel.deletionFailed ? "Couldn't Delete Account" : "Error",
+            isPresented: .init(
+                get: { viewModel.errorMessage != nil },
+                set: { if !$0 { viewModel.clearError() } }
+            )
+        ) {
+            if viewModel.deletionFailed {
+                Button("Try Again") {
+                    Task { await viewModel.deleteAccount() }
+                }
+            }
+            Button(viewModel.deletionFailed ? "Cancel" : "OK", role: .cancel) {}
         } message: {
             Text(viewModel.errorMessage ?? "")
         }

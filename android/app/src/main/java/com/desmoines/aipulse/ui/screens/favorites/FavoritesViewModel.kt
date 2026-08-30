@@ -7,7 +7,13 @@ import com.desmoines.aipulse.data.model.Restaurant
 import com.desmoines.aipulse.data.model.SubscriptionTier
 import com.desmoines.aipulse.data.repository.FavoritesRepository
 import com.desmoines.aipulse.data.repository.AuthRepository
+import com.desmoines.aipulse.data.remote.BillingService
+import com.desmoines.aipulse.util.FetchGeneration
+import com.desmoines.aipulse.util.NetworkMonitor
+import com.desmoines.aipulse.util.RECONNECT_DEBOUNCE_MS
+import com.desmoines.aipulse.util.onReconnect
 import dagger.hilt.android.lifecycle.HiltViewModel
+import kotlinx.coroutines.delay
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.SharingStarted
 import kotlinx.coroutines.flow.StateFlow
@@ -27,6 +33,8 @@ private const val TAG = "FavoritesViewModel"
 class FavoritesViewModel @Inject constructor(
     private val favoritesRepository: FavoritesRepository,
     private val authRepository: AuthRepository,
+    private val networkMonitor: NetworkMonitor,
+    private val billingService: BillingService,
 ) : ViewModel() {
 
     private val _upcomingEvents = MutableStateFlow<List<Event>>(emptyList())
@@ -80,6 +88,26 @@ class FavoritesViewModel @Inject constructor(
 
     private var hasLoadedInitialData = false
 
+    // Stale-result guard: a refresh supersedes any in-flight favorites load (ANDP-061).
+    private val favoritesFetch = FetchGeneration()
+
+    init {
+        // Mirror the live entitlement so premium surfaces reflect what the user
+        // actually paid for. This was a MutableStateFlow pinned to FREE, so
+        // paying subscribers saw the free-tier UI everywhere it was read.
+        viewModelScope.launch {
+            billingService.currentTier.collect { _currentTier.value = it }
+        }
+
+        // Auto-refetch favorites when connectivity returns (ANDP-069).
+        viewModelScope.launch {
+            networkMonitor.isConnected.onReconnect().collect {
+                delay(RECONNECT_DEBOUNCE_MS)
+                if (hasLoadedInitialData && networkMonitor.isConnected.value) refresh()
+            }
+        }
+    }
+
     fun loadFavorites() {
         if (hasLoadedInitialData) return
         hasLoadedInitialData = true
@@ -106,20 +134,26 @@ class FavoritesViewModel @Inject constructor(
             return
         }
 
+        // A concurrent refresh supersedes this load so a slow response can't clobber it.
+        val token = favoritesFetch.bump()
+
         viewModelScope.launch {
             _isLoading.value = true
             _errorMessage.value = null
 
             // Load favorite IDs
             favoritesRepository.loadFavorites(userId).onSuccess { state ->
+                if (!favoritesFetch.isCurrent(token)) return@launch
                 _favoriteEventIds.value = state.favoriteEventIds
                 _favoriteRestaurantIds.value = state.favoriteRestaurantIds
             }.onFailure {
+                if (!favoritesFetch.isCurrent(token)) return@launch
                 _errorMessage.value = it.message
             }
 
             // Fetch full event objects and split into upcoming/past
             favoritesRepository.fetchFavoriteEvents(_favoriteEventIds.value).onSuccess { allEvents ->
+                if (!favoritesFetch.isCurrent(token)) return@launch
                 val now = OffsetDateTime.now()
                 _upcomingEvents.value = allEvents.filter { event ->
                     val date = event.parsedDate ?: return@filter true
@@ -130,26 +164,34 @@ class FavoritesViewModel @Inject constructor(
                     date.isBefore(now)
                 }
             }.onFailure {
+                if (!favoritesFetch.isCurrent(token)) return@launch
                 _errorMessage.value = it.message
             }
 
             // Fetch full restaurant objects
             favoritesRepository.fetchFavoriteRestaurants(_favoriteRestaurantIds.value).onSuccess { restaurants ->
+                if (!favoritesFetch.isCurrent(token)) return@launch
                 _favoriteRestaurants.value = restaurants
             }.onFailure {
+                if (!favoritesFetch.isCurrent(token)) return@launch
                 // Restaurant favorites table may not exist yet — that's OK
                 _favoriteRestaurants.value = emptyList()
             }
 
-            _isLoading.value = false
-            _isRefreshing.value = false
+            // Only the latest load owns the loading flags.
+            if (favoritesFetch.isCurrent(token)) {
+                _isLoading.value = false
+                _isRefreshing.value = false
+            }
         }
     }
 
     fun removeEventFavorite(eventId: String) {
         val userId = getCurrentUserId() ?: return
         viewModelScope.launch {
-            favoritesRepository.toggleEventFavorite(userId, eventId, _favoriteEventIds.value)
+            favoritesRepository.toggleEventFavorite(
+                userId, eventId, _favoriteEventIds.value, _currentTier.value,
+            )
                 .onSuccess {
                     _favoriteEventIds.value = _favoriteEventIds.value - eventId
                     _upcomingEvents.value = _upcomingEvents.value.filter { it.id != eventId }
@@ -162,7 +204,9 @@ class FavoritesViewModel @Inject constructor(
     fun removeRestaurantFavorite(restaurantId: String) {
         val userId = getCurrentUserId() ?: return
         viewModelScope.launch {
-            favoritesRepository.toggleRestaurantFavorite(userId, restaurantId, _favoriteRestaurantIds.value)
+            favoritesRepository.toggleRestaurantFavorite(
+                userId, restaurantId, _favoriteRestaurantIds.value, _currentTier.value,
+            )
                 .onSuccess {
                     _favoriteRestaurantIds.value = _favoriteRestaurantIds.value - restaurantId
                     _favoriteRestaurants.value = _favoriteRestaurants.value.filter { it.id != restaurantId }

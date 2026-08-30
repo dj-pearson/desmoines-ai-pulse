@@ -2,9 +2,8 @@ import SwiftUI
 import CoreLocation
 
 /// "Right Now" contextual ribbon shown at the top of the Home tab. Composes
-/// a single sentence from { temperature, conditions, time-of-day, location,
-/// matching-item count } and tapping opens DiscoverView pre-filtered to the
-/// matching slice.
+/// a single sentence from { temperature, conditions, time-of-day, location }
+/// and tapping opens DiscoverView pre-filtered to the matching slice.
 ///
 /// Hidden when location is denied or weather fetches fail (no broken state).
 ///
@@ -12,7 +11,6 @@ import CoreLocation
 struct RightNowRibbon: View {
     @State private var weather = WeatherService.shared
     @State private var location = LocationService.shared
-    @State private var matchingCount: Int = 0
     @State private var template: Template?
     @State private var isLoading = false
 
@@ -32,7 +30,7 @@ struct RightNowRibbon: View {
                             .foregroundStyle(template.tint)
                             .accessibilityHidden(true)
                         VStack(alignment: .leading, spacing: 2) {
-                            Text(template.headline(temperatureF: snap.temperatureF, count: matchingCount))
+                            Text(template.headline(temperatureF: snap.temperatureF))
                                 .font(.subheadline.weight(.semibold))
                                 .foregroundStyle(.primary)
                                 .multilineTextAlignment(.leading)
@@ -54,7 +52,7 @@ struct RightNowRibbon: View {
                     )
                 }
                 .buttonStyle(.plain)
-                .accessibilityLabel(template.accessibilityLabel(temperatureF: snap.temperatureF, count: matchingCount))
+                .accessibilityLabel(template.accessibilityLabel(temperatureF: snap.temperatureF))
                 .accessibilityHint("Opens swipe discovery filtered to this slice")
             } else {
                 EmptyView()
@@ -71,6 +69,21 @@ struct RightNowRibbon: View {
         guard !isLoading else { return }
         isLoading = true
         defer { isLoading = false }
+
+        // The in-app location toggle gates the THIRD-PARTY call, on top of the OS
+        // permission checked below (IOS-AUDIT-SEC-010 AC3). This is the only
+        // request that leaves coordinates with a host that is not ours -
+        // api.open-meteo.com - so a user who turned the toggle off in Settings
+        // should stop it even while iOS permission remains granted.
+        //
+        // `hasCompletedConsent` is load-bearing, not belt-and-braces.
+        // UserDefaults.bool returns false for "never asked" exactly as it does
+        // for "declined", so gating on locationConsent alone would silently kill
+        // the ribbon for every user who installed before the consent flow existed
+        // or has not reached it yet. Only an explicit decline blocks.
+        if ConsentService.shared.hasCompletedConsent && !ConsentService.shared.locationConsent {
+            return
+        }
 
         // Bail silently if the user denied location — we don't want a broken
         // ribbon that says "78° in cupertino" when the user is in Iowa.
@@ -99,12 +112,8 @@ struct RightNowRibbon: View {
         let weekday = Calendar.current.component(.weekday, from: now)
         let chosen = Template.choose(snapshot: snap, hour: hour, weekday: weekday)
 
-        // Count matching items so the headline reads "4 patios open within
-        // 10 min of you" instead of an unspecific "patios are open".
-        let count = await chosen.estimateCount()
         await MainActor.run {
             self.template = chosen
-            self.matchingCount = count
         }
     }
 }
@@ -119,19 +128,14 @@ extension RightNowRibbon {
         let tint: Color
         let mode: DiscoverMode
         let filter: DiscoverFilterContext
-        private let headlineFn: (Double, Int) -> String
-        private let countFetcher: () async -> Int
+        private let headlineFn: (Double) -> String
 
-        func headline(temperatureF: Double, count: Int) -> String {
-            headlineFn(temperatureF, count)
+        func headline(temperatureF: Double) -> String {
+            headlineFn(temperatureF)
         }
 
-        func accessibilityLabel(temperatureF: Double, count: Int) -> String {
-            headline(temperatureF: temperatureF, count: count) + ". Tap to swipe through them."
-        }
-
-        func estimateCount() async -> Int {
-            await countFetcher()
+        func accessibilityLabel(temperatureF: Double) -> String {
+            headline(temperatureF: temperatureF) + ". Tap to swipe through them."
         }
 
         // MARK: Choose
@@ -179,14 +183,8 @@ extension RightNowRibbon {
                 tint: .orange,
                 mode: .restaurants,
                 filter: ctx,
-                headlineFn: { temp, count in
-                    let countText = count > 0 ? "— \(count) patios open within 10 min of you" : "— check out the patio scene"
-                    return "It's \(Int(temp.rounded()))° and sunny \(countText)"
-                },
-                countFetcher: {
-                    // We don't have a cheap "count restaurants with patio + open"
-                    // query; approximate with "open now" count from cache.
-                    return 0
+                headlineFn: { temp in
+                    "It's \(Int(temp.rounded()))° and sunny — check out the patio scene"
                 },
             )
         }
@@ -200,11 +198,9 @@ extension RightNowRibbon {
                 tint: .blue,
                 mode: .restaurants,
                 filter: ctx,
-                headlineFn: { temp, count in
-                    let countText = count > 0 ? "— try one of these \(count) cozy spots" : "— let's find a cozy spot"
-                    return "Cold and wet (\(Int(temp.rounded()))°) \(countText)"
+                headlineFn: { temp in
+                    "Cold and wet (\(Int(temp.rounded()))°) — let's find a cozy spot"
                 },
-                countFetcher: { 0 },
             )
         }
 
@@ -217,11 +213,9 @@ extension RightNowRibbon {
                 tint: .cyan,
                 mode: .restaurants,
                 filter: ctx,
-                headlineFn: { temp, count in
-                    let suffix = count > 0 ? "— \(count) comfort-food picks open" : "— let's find comfort food"
-                    return "Snowing — \(suffix)"
+                headlineFn: { _ in
+                    "Snowing — let's find comfort food"
                 },
-                countFetcher: { 0 },
             )
         }
 
@@ -235,11 +229,7 @@ extension RightNowRibbon {
                 tint: .purple,
                 mode: .events,
                 filter: ctx,
-                headlineFn: { _, count in
-                    let suffix = count > 0 ? "\(count) live music shows tonight" : "Live music tonight"
-                    return suffix
-                },
-                countFetcher: { 0 },
+                headlineFn: { _ in "Live music tonight" },
             )
         }
 
@@ -252,11 +242,7 @@ extension RightNowRibbon {
                 tint: .green,
                 mode: .restaurants,
                 filter: ctx,
-                headlineFn: { _, count in
-                    let suffix = count > 0 ? "\(count) lunch spots open right now" : "Lunch spots open right now"
-                    return suffix
-                },
-                countFetcher: { 0 },
+                headlineFn: { _ in "Lunch spots open right now" },
             )
         }
 
@@ -269,11 +255,7 @@ extension RightNowRibbon {
                 tint: .accentColor,
                 mode: .restaurants,
                 filter: ctx,
-                headlineFn: { _, count in
-                    let suffix = count > 0 ? "\(count) spots open near you" : "Spots open near you"
-                    return suffix
-                },
-                countFetcher: { 0 },
+                headlineFn: { _ in "Spots open near you" },
             )
         }
     }

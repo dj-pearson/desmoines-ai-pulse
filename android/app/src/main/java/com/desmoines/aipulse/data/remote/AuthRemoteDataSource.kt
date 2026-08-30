@@ -1,6 +1,6 @@
 package com.desmoines.aipulse.data.remote
 
-import android.util.Log
+import com.desmoines.aipulse.util.AppLogger
 import io.github.jan.supabase.SupabaseClient
 import io.github.jan.supabase.auth.auth
 import io.github.jan.supabase.auth.providers.Google
@@ -14,15 +14,30 @@ import kotlinx.serialization.SerialName
 import kotlinx.serialization.Serializable
 import kotlinx.serialization.json.buildJsonObject
 import kotlinx.serialization.json.put
+import io.github.jan.supabase.postgrest.query.Columns
+import kotlinx.serialization.json.JsonObject
 import com.desmoines.aipulse.data.model.UserProfile
 import javax.inject.Inject
 import javax.inject.Singleton
-
-private const val TAG = "AuthRemoteDataSource"
-
 /**
  * Remote data source for authentication operations.
- * Mirrors iOS AuthService.swift — uses Supabase Auth for email/password and Google Sign-In.
+ *
+ * DOES NOT MIRROR iOS, and the line that used to say it did was wrong in both
+ * directions (XPLAT-003 AC4). It read "Mirrors iOS AuthService.swift - uses
+ * Supabase Auth for email/password and Google Sign-In". iOS has NO Google
+ * Sign-In (grep for google across AuthService.swift and Views/Auth returns
+ * nothing), and this file has no Apple Sign-In. The two clients offer
+ * DIFFERENT provider sets:
+ *
+ *   web      email + apple + google
+ *   Android  email + google
+ *   iOS      email + apple
+ *
+ * That is not cosmetic. Measured against auth.identities on 2026-08-23:
+ * 5 email-only, 3 apple-only, 2 apple+google, 1 google-only. So one user
+ * cannot reach their account on iOS, and THREE cannot reach theirs here.
+ * Counting raw_app_meta_data->>'provider' instead overstates the iOS side
+ * 2x, because a linked apple+google user signs in fine on both.
  */
 @Singleton
 class AuthRemoteDataSource @Inject constructor(
@@ -118,7 +133,7 @@ class AuthRemoteDataSource @Inject constructor(
                 }
                 .decodeSingle<UserProfile>()
         } catch (e: Exception) {
-            Log.d(TAG, "Profile not found for user $userId: ${e.message}")
+            AppLogger.auth.debug("Profile not found for user $userId: ${e.message}")
             null
         }
     }
@@ -161,6 +176,52 @@ class AuthRemoteDataSource @Inject constructor(
                 filter {
                     eq("user_id", userId)
                 }
+            }
+    }
+
+    // MARK: - Communication Preferences (WEB-LEGAL-012)
+
+    @Serializable
+    private data class CommPrefRow(
+        @SerialName("communication_preferences") val communicationPreferences: JsonObject? = null,
+    )
+
+    @Serializable
+    private data class CommPrefUpdate(
+        @SerialName("communication_preferences") val communicationPreferences: JsonObject,
+    )
+
+    /**
+     * The stored bag, or an empty one when the profile has never had preferences.
+     *
+     * THROWS rather than returning empty on failure, and the difference decides
+     * whether a stored opt-out survives. An empty bag and a bag that could not be
+     * read are indistinguishable to a caller that merges into them, and merging
+     * into an empty bag is exactly the write that deleted the marketing key on
+     * web. See CommunicationPreferences.
+     */
+    suspend fun fetchCommunicationPreferences(userId: String): JsonObject {
+        val client = supabaseClient ?: throw AuthException.NotConfigured
+        val row = client.from("profiles")
+            .select(Columns.list("communication_preferences")) {
+                filter { eq("user_id", userId) }
+            }
+            .decodeSingleOrNull<CommPrefRow>()
+        return row?.communicationPreferences ?: JsonObject(emptyMap())
+    }
+
+    /**
+     * Set one key in the bag, preserving every other key.
+     *
+     * The read is not an optimisation. Skipping it, or swallowing its failure,
+     * turns one toggle into a destructive write across three unrelated features.
+     */
+    suspend fun setCommunicationPreference(userId: String, key: String, value: Boolean) {
+        val client = supabaseClient ?: throw AuthException.NotConfigured
+        val merged = CommunicationPreferences.merge(fetchCommunicationPreferences(userId), key, value)
+        client.from("profiles")
+            .update(CommPrefUpdate(communicationPreferences = merged)) {
+                filter { eq("user_id", userId) }
             }
     }
 

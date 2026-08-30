@@ -13,20 +13,7 @@ import {
 import { Badge } from "@/components/ui/badge";
 import { Alert, AlertDescription } from "@/components/ui/alert";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
-import {
-  Globe,
-  Bot,
-  Loader2,
-  CheckCircle,
-  AlertCircle,
-  Calendar,
-  MapPin,
-  Utensils,
-  Play,
-  Camera,
-  Building,
-  Database,
-} from "lucide-react";
+import { Globe, Bot, Loader2, CheckCircle, AlertCircle, Calendar, Utensils, Play, Camera, Building, Database } from "lucide-react";
 import { supabase } from "@/integrations/supabase/client";
 import URLSourceManager from "./URLSourceManager";
 import { createLogger } from '@/lib/logger';

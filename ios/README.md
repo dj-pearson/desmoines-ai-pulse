@@ -246,6 +246,10 @@ make clean     # Remove build artifacts
 
 ## App Store Checklist
 
+> **Before release, also work through [`RELEASE_ACTIONS.md`](RELEASE_ACTIONS.md)** —
+> manual App Store Connect / deploy steps the monetization work depends on
+> (annual IAP products + free trial, edge-function redeploys, analytics wiring).
+
 - [ ] App icon (1024x1024)
 - [ ] Screenshots for iPhone (6.7", 6.5", 5.5") and iPad
 - [ ] Privacy policy URL (https://desmoinesinsider.com/privacy-policy)

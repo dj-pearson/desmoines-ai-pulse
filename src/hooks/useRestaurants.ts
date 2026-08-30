@@ -1,7 +1,13 @@
 import { useState, useEffect, useCallback } from "react";
+import { useQuery } from "@tanstack/react-query";
 import { supabase } from "@/integrations/supabase/client";
 import { Database } from "@/integrations/supabase/types";
 import { getRestaurantRotationSeed } from "@/lib/restaurantRotation";
+import { RESTAURANT_LIST_COLUMNS } from "@/lib/listColumns";
+import { STALE_TIME } from "@/lib/queryConfig";
+import { createLogger } from "@/lib/logger";
+
+const logger = createLogger("useRestaurants");
 
 type Restaurant = Database["public"]["Tables"]["restaurants"]["Row"];
 type RestaurantInsert = Database["public"]["Tables"]["restaurants"]["Insert"];
@@ -33,6 +39,56 @@ interface RestaurantFilters {
   dietary?: string[];
   limit?: number;
   offset?: number;
+}
+
+/** Full rating range — i.e. the user has not actually narrowed by rating.
+ *
+ *  Sending these bounds anyway is not harmless (WEB-QA-011). The filter compares
+ *  `rating >= min AND rating <= max`, and for a restaurant with a NULL rating
+ *  both comparisons evaluate to NULL, so the row is dropped. The default [0, 5]
+ *  therefore silently excluded every unrated restaurant — 46 of 480 (~10%),
+ *  which are disproportionately the newest listings. Treat the full range as
+ *  "no filter" and send NULL so the predicate is skipped entirely.
+ */
+const RATING_MIN = 0;
+const RATING_MAX = 5;
+
+// Type predicate, not a plain boolean: callers index `rating[0]`/`rating[1]`
+// straight after this check, and under strictNullChecks a boolean return would
+// not narrow `number[] | undefined`. Narrowing to a fixed-length tuple lets that
+// indexing typecheck without a non-null assertion.
+function hasRatingFilter(
+  rating: number[] | undefined
+): rating is [number, number] {
+  if (!rating || rating.length !== 2) return false;
+  return rating[0] > RATING_MIN || rating[1] < RATING_MAX;
+}
+
+/** Statuses a visitor cannot actually go and eat at today. */
+const UNVISITABLE_STATUSES = new Set(["opening_soon", "closed"]);
+
+/**
+ * Sink not-yet-open and closed venues below the ones a visitor can visit now,
+ * preserving relative order within each group (WEB-QA-004).
+ *
+ * The default sort routes through `get_rotated_restaurants`, which deliberately
+ * shuffles by a rotation seed so the top of the list isn't identical on every
+ * visit. That shuffle ignores `status`, so "Opening Soon" venues regularly
+ * landed in the first row of cards — the QA pass saw three of them leading the
+ * list. This is a stable partition rather than a re-sort, so the rotation's
+ * variety is kept intact within each group.
+ *
+ * Done client-side on purpose: the ordering lives in the RPC, and changing that
+ * is a migration. This needs no schema change and no shape change.
+ */
+function deprioritizeUnvisitable(list: Restaurant[]): Restaurant[] {
+  const visitable: Restaurant[] = [];
+  const unvisitable: Restaurant[] = [];
+  for (const r of list) {
+    const status = (r as { status?: string | null }).status ?? "";
+    (UNVISITABLE_STATUSES.has(status) ? unvisitable : visitable).push(r);
+  }
+  return [...visitable, ...unvisitable];
 }
 
 export function useRestaurants(filters: RestaurantFilters = {}) {
@@ -90,14 +146,8 @@ export function useRestaurants(filters: RestaurantFilters = {}) {
             filters.location && filters.location.length > 0
               ? filters.location
               : null,
-          min_rating:
-            filters.rating && filters.rating.length === 2
-              ? filters.rating[0]
-              : null,
-          max_rating:
-            filters.rating && filters.rating.length === 2
-              ? filters.rating[1]
-              : null,
+          min_rating: hasRatingFilter(filters.rating) ? filters.rating[0] : null,
+          max_rating: hasRatingFilter(filters.rating) ? filters.rating[1] : null,
           featured_only: !!filters.featuredOnly,
           limit_count: limit,
           offset_count: offset,
@@ -105,7 +155,9 @@ export function useRestaurants(filters: RestaurantFilters = {}) {
 
         if (!rpcError && rpcData) {
           setState({
-            restaurants: rpcData.map((r) => r.restaurant_data),
+            restaurants: deprioritizeUnvisitable(
+              rpcData.map((r) => r.restaurant_data)
+            ),
             isLoading: false,
             error: null,
             totalCount:
@@ -116,14 +168,29 @@ export function useRestaurants(filters: RestaurantFilters = {}) {
         // Fall through to the legacy query path on RPC error so the page
         // still renders if the migration hasn't been applied yet.
         if (rpcError) {
-          console.warn(
-            "useRestaurants: rotation RPC failed, falling back to direct query",
-            rpcError
+          logger.warn(
+            'fetchRestaurants',
+            'rotation RPC failed, falling back to direct query',
+            { error: rpcError }
           );
         }
       }
 
-      let query = supabase.from("restaurants").select("*", { count: "exact" });
+      let query = supabase
+        .from("restaurants")
+        // Project only the card/list fields (WEB-PERF-009) — drops heavy
+        // SEO/GEO/tsvector/geometry columns the list never renders.
+        //
+        // Count is "estimated", not "planned" (WEB-QA-004). A "planned" count is
+        // purely the planner's row estimate and comes back NULL whenever the
+        // planner has no usable statistic for the filtered query — which is why
+        // the results header rendered a blank number before "found". "estimated"
+        // returns an exact count under PostgREST's threshold and falls back to
+        // the planner estimate only for large result sets, so it keeps the
+        // WEB-PERF-009 intent (no forced full-table count on every filter/sort)
+        // while always yielding a number.
+        .select(RESTAURANT_LIST_COLUMNS, { count: "estimated" })
+        .neq("is_merged", true); // Hide rows merged into a duplicate (WEB-AUTO-005)
 
       // Use full-text search with tsvector for better performance and relevance ranking
       if (filters.search) {
@@ -145,8 +212,10 @@ export function useRestaurants(filters: RestaurantFilters = {}) {
         query = query.in("price_range", filters.priceRange);
       }
 
-      // Apply rating filter
-      if (filters.rating && filters.rating.length === 2) {
+      // Apply rating filter. Same guard as the RPC path above — the default
+      // [0, 5] must not be sent, or unrated restaurants get filtered out
+      // (WEB-QA-011).
+      if (hasRatingFilter(filters.rating)) {
         query = query
           .gte("rating", filters.rating[0])
           .lte("rating", filters.rating[1]);
@@ -237,7 +306,7 @@ export function useRestaurants(filters: RestaurantFilters = {}) {
 
       // Fallback to fuzzy search if no results found with full-text search
       if (filters.search && (!data || data.length === 0)) {
-        console.log('useRestaurants: No results with full-text search, trying fuzzy search...');
+        logger.debug('fetchRestaurants', 'No results with full-text search, trying fuzzy search', { search: filters.search });
         try {
           const { data: fuzzyData, error: fuzzyError } = await supabase
             .rpc('fuzzy_search_restaurants', {
@@ -248,11 +317,11 @@ export function useRestaurants(filters: RestaurantFilters = {}) {
           if (!fuzzyError && fuzzyData) {
             data = fuzzyData as unknown as Restaurant[];
             count = fuzzyData.length;
-            console.log('useRestaurants: Fuzzy search found', fuzzyData.length, 'restaurants');
+            logger.info('fetchRestaurants', 'Fuzzy search found restaurants', { count: fuzzyData.length });
           }
         } catch (fuzzyErr) {
           // Fuzzy search function not available yet - silently continue
-          console.log('useRestaurants: Fuzzy search not available, using existing results');
+          logger.debug('fetchRestaurants', 'Fuzzy search not available, using existing results', { error: fuzzyErr });
         }
       }
 
@@ -263,7 +332,7 @@ export function useRestaurants(filters: RestaurantFilters = {}) {
         totalCount: count || 0,
       });
     } catch (error) {
-      console.error("Error fetching restaurants:", error);
+      logger.error('fetchRestaurants', 'Error fetching restaurants', { error });
       setState((prev) => ({
         ...prev,
         isLoading: false,
@@ -299,7 +368,7 @@ export function useRestaurants(filters: RestaurantFilters = {}) {
       fetchRestaurants();
       return data;
     } catch (error) {
-      console.error("Error creating restaurant:", error);
+      logger.error('createRestaurant', 'Error creating restaurant', { error });
       throw error;
     }
   };
@@ -318,7 +387,7 @@ export function useRestaurants(filters: RestaurantFilters = {}) {
       fetchRestaurants();
       return data;
     } catch (error) {
-      console.error("Error updating restaurant:", error);
+      logger.error('updateRestaurant', 'Error updating restaurant', { error });
       throw error;
     }
   };
@@ -334,7 +403,7 @@ export function useRestaurants(filters: RestaurantFilters = {}) {
 
       fetchRestaurants();
     } catch (error) {
-      console.error("Error deleting restaurant:", error);
+      logger.error('deleteRestaurant', 'Error deleting restaurant', { error });
       throw error;
     }
   };
@@ -352,101 +421,99 @@ export function useRestaurants(filters: RestaurantFilters = {}) {
   };
 }
 
+// ── Restaurant filter options (WEB-PERF-002) ────────────────────────────────
+// Distinct cuisines (with counts) + locations come from a server-side RPC
+// (get_restaurant_filter_options) instead of fetching whole columns to dedupe
+// in JS. Cached client-side for an hour (REFERENCE). Falls back to the legacy
+// client-side scan if the RPC isn't deployed yet.
+
+const RESTAURANT_TAGS = [
+  "Takeout",
+  "Delivery",
+  "Outdoor Seating",
+  "Family Friendly",
+  "Date Night",
+  "Happy Hour",
+];
+
+interface FilterOptionsResult {
+  cuisines: { cuisine: string; count: number }[];
+  locations: string[];
+}
+
+async function fetchFilterOptionsRpc(): Promise<FilterOptionsResult | null> {
+  // get_restaurant_filter_options is added in a new migration and isn't in the
+  // generated Database types yet.
+  const { data, error } = await (
+    supabase.rpc as unknown as (
+      fn: string
+    ) => Promise<{ data: FilterOptionsResult | null; error: { message: string } | null }>
+  )("get_restaurant_filter_options");
+  if (error || !data) return null;
+  return data;
+}
+
+async function fetchFilterOptionsFallback(): Promise<FilterOptionsResult> {
+  const { data: cuisineData } = await supabase
+    .from("restaurants")
+    .select("cuisine")
+    .not("cuisine", "is", null);
+  const { data: locationData } = await supabase
+    .from("restaurants")
+    .select("location")
+    .not("location", "is", null);
+
+  const counts: Record<string, number> = {};
+  cuisineData?.forEach((r) => {
+    if (r.cuisine) counts[r.cuisine] = (counts[r.cuisine] || 0) + 1;
+  });
+  const cuisines = Object.entries(counts)
+    .map(([cuisine, count]) => ({ cuisine, count }))
+    .sort((a, b) => b.count - a.count);
+  const locations = (
+    [...new Set(locationData?.map((r) => r.location).filter(Boolean))] as string[]
+  ).sort();
+
+  return { cuisines, locations };
+}
+
+async function getRestaurantFilterOptions(): Promise<FilterOptionsResult> {
+  return (await fetchFilterOptionsRpc()) ?? (await fetchFilterOptionsFallback());
+}
+
+/**
+ * Cached cuisine/location facets for consumers outside the hook layer
+ * (SearchSection's subcategory list, WEB-PERF-002).
+ *
+ * This export was missing while SearchSection imported it, which crashed the
+ * homepage into the route error boundary — a missing named export is an
+ * `undefined` binding once bundled (React error #130). See WEB-QA-001/003.
+ */
+export async function fetchRestaurantFilterFacets(): Promise<FilterOptionsResult> {
+  return getRestaurantFilterOptions();
+}
+
 // Hook to get cuisine counts for "Browse by Cuisine" section
 export function useCuisineCounts() {
-  const [cuisineCounts, setCuisineCounts] = useState<{ cuisine: string; count: number }[]>([]);
-  const [isLoading, setIsLoading] = useState(true);
-
-  useEffect(() => {
-    const fetchCuisineCounts = async () => {
-      try {
-        const { data } = await supabase
-          .from("restaurants")
-          .select("cuisine")
-          .not("cuisine", "is", null);
-
-        if (data) {
-          const counts: Record<string, number> = {};
-          data.forEach((r) => {
-            if (r.cuisine) {
-              counts[r.cuisine] = (counts[r.cuisine] || 0) + 1;
-            }
-          });
-
-          const sorted = Object.entries(counts)
-            .map(([cuisine, count]) => ({ cuisine, count }))
-            .filter((item) => item.count >= 1)
-            .sort((a, b) => b.count - a.count);
-
-          setCuisineCounts(sorted);
-        }
-      } catch {
-        // Silently fail — section just won't render
-      } finally {
-        setIsLoading(false);
-      }
-    };
-
-    fetchCuisineCounts();
-  }, []);
-
-  return { cuisineCounts, isLoading };
+  const { data, isLoading } = useQuery({
+    queryKey: ["restaurant-filter-options"],
+    queryFn: getRestaurantFilterOptions,
+    staleTime: STALE_TIME.REFERENCE,
+  });
+  return { cuisineCounts: data?.cuisines ?? [], isLoading };
 }
 
 // Utility hook to get available filter options
 export function useRestaurantFilterOptions() {
-  const [options, setOptions] = useState({
-    cuisines: [] as string[],
-    locations: [] as string[],
-    tags: [] as string[],
-    isLoading: true,
+  const { data, isLoading } = useQuery({
+    queryKey: ["restaurant-filter-options"],
+    queryFn: getRestaurantFilterOptions,
+    staleTime: STALE_TIME.REFERENCE,
   });
-
-  useEffect(() => {
-    const fetchFilterOptions = async () => {
-      try {
-        // Get unique cuisines
-        const { data: cuisineData } = await supabase
-          .from("restaurants")
-          .select("cuisine")
-          .not("cuisine", "is", null);
-
-        // Get unique locations from the location column
-        const { data: locationData } = await supabase
-          .from("restaurants")
-          .select("location")
-          .not("location", "is", null);
-
-        const uniqueCuisines = [
-          ...new Set(cuisineData?.map((r) => r.cuisine).filter(Boolean)),
-        ] as string[];
-
-        // Use the location column for location filtering
-        const uniqueLocations = [
-          ...new Set(locationData?.map((r) => r.location).filter(Boolean)),
-        ] as string[];
-
-        setOptions({
-          cuisines: uniqueCuisines.sort(),
-          locations: uniqueLocations.sort(),
-          tags: [
-            "Takeout",
-            "Delivery",
-            "Outdoor Seating",
-            "Family Friendly",
-            "Date Night",
-            "Happy Hour",
-          ], // Common restaurant tags
-          isLoading: false,
-        });
-      } catch (error) {
-        console.error("Error fetching filter options:", error);
-        setOptions((prev) => ({ ...prev, isLoading: false }));
-      }
-    };
-
-    fetchFilterOptions();
-  }, []);
-
-  return options;
+  return {
+    cuisines: (data?.cuisines ?? []).map((c) => c.cuisine),
+    locations: data?.locations ?? [],
+    tags: RESTAURANT_TAGS,
+    isLoading,
+  };
 }

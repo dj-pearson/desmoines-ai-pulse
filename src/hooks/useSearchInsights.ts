@@ -39,9 +39,11 @@ export function useSearchInsights() {
 
       const { data: searchData, error } = await supabase
         .from('search_analytics')
-        .select('query, category, created_at')
+        // `query`/`category` are not columns; the text is `search_query` and the
+        // facets live inside the `search_filters` JSON (WEB-QA-012).
+        .select('search_query, search_filters, created_at')
         .gte('created_at', sevenDaysAgo.toISOString())
-        .not('query', 'is', null)
+        .not('search_query', 'is', null)
         .order('created_at', { ascending: false });
 
       if (error) {
@@ -76,7 +78,7 @@ export function useSearchInsights() {
     const queryCount: { [key: string]: { count: number; category?: string; recent: boolean } } = {};
     
     searchData.forEach((search, index) => {
-      const query = search.query.toLowerCase().trim();
+      const query = String(search.search_query ?? '').toLowerCase().trim();
       if (query.length < 2) return; // Skip very short queries
       
       if (!queryCount[query]) {
@@ -90,7 +92,7 @@ export function useSearchInsights() {
     const trending: { [key: string]: number } = {};
     
     searchData.forEach((search) => {
-      const query = search.query.toLowerCase().trim();
+      const query = String(search.search_query ?? '').toLowerCase().trim();
       const age = (now.getTime() - new Date(search.created_at).getTime()) / (1000 * 60 * 60); // hours
       const recencyScore = Math.max(0, 24 - age) / 24; // Higher score for more recent
       trending[query] = (trending[query] || 0) + recencyScore;
@@ -130,7 +132,7 @@ export function useSearchInsights() {
 
     // Recent unique searches
     const recentSearches = Array.from(new Set(
-      searchData.slice(0, 50).map(s => s.query)
+      searchData.slice(0, 50).map(s => s.search_query)
     )).slice(0, 10);
 
     return {

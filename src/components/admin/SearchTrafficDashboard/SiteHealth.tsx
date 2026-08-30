@@ -42,7 +42,7 @@ export function SiteHealth({ dateRange, propertyId, connectedProviders }: SiteHe
       // site_health_metrics is populated by external crawlers, not GSC sync.
       // Attempt to load it; silently show empty state if table doesn't exist yet.
       const { data, error } = await supabase
-        .from("site_health_metrics" as any)
+        .from("site_health_metrics")
         .select("*")
         .gte("check_date", format(dateRange.from, "yyyy-MM-dd"))
         .lte("check_date", format(dateRange.to, "yyyy-MM-dd"))

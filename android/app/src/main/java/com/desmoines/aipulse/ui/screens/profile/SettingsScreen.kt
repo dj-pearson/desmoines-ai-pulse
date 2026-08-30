@@ -76,7 +76,8 @@ fun SettingsScreen(
     onToggleBiometric: (Boolean) -> Unit = {},
     // Consent / Privacy
     locationConsent: Boolean = false,
-    emailConsent: Boolean = false,
+    emailConsent: Boolean = true,
+    emailConsentError: String? = null,
     analyticsConsent: Boolean = false,
     onToggleLocationConsent: (Boolean) -> Unit = {},
     onToggleEmailConsent: (Boolean) -> Unit = {},
@@ -195,6 +196,19 @@ fun SettingsScreen(
                 checked = emailConsent,
                 onCheckedChange = onToggleEmailConsent,
             )
+
+            // WEB-LEGAL-012. The toggle rolls back when the write fails, so
+            // without this the row simply snaps back with no explanation - which
+            // reads as the app ignoring the tap. A consent control is the last
+            // place to fail silently.
+            if (emailConsentError != null) {
+                Text(
+                    text = emailConsentError,
+                    style = MaterialTheme.typography.bodySmall,
+                    color = MaterialTheme.colorScheme.error,
+                    modifier = Modifier.padding(start = 52.dp, end = 16.dp, bottom = 8.dp),
+                )
+            }
 
             SettingsToggleRow(
                 icon = Icons.Default.Info,

@@ -1,8 +1,9 @@
-import { ReactNode, useEffect } from "react";
+import { ReactNode, useEffect, useRef } from "react";
 import { Navigate, useLocation, useNavigate } from "react-router-dom";
 import { useAuth } from "@/hooks/useAuth";
 import { usePermission } from "@/hooks/usePermission";
 import { type Permission, type UserRole } from "@/lib/security";
+import { sessionStore } from "@/lib/safeStorage";
 import { ShieldAlert, ArrowLeft } from "lucide-react";
 import { Button } from "@/components/ui/button";
 
@@ -87,11 +88,7 @@ export function ProtectedRoute({
   // Clear any stored errors on successful navigation to a protected route
   useEffect(() => {
     if (user && !isLoading) {
-      try {
-        sessionStorage.removeItem('app_errors');
-      } catch (e) {
-        // Ignore storage errors
-      }
+      sessionStore.remove('app_errors');
     }
   }, [user, isLoading]);
 
@@ -103,7 +100,39 @@ export function ProtectedRoute({
     (requireAdmin && isAdminLoading) ||
     (needsPermissionCheck && permissionLoading);
 
-  if (stillLoading) {
+  // Whether this user currently satisfies every check on this route.
+  const passesAllChecks =
+    !!user &&
+    !(requireAdmin && !isAdmin) &&
+    !(minRole && !hasMinimumRole(minRole)) &&
+    !(permission && !hasPermission(permission)) &&
+    !(anyPermissions && anyPermissions.length > 0 && !hasAnyPermission(anyPermissions));
+
+  // Remember that this user was fully verified for this route.
+  //
+  // Once the page is on screen we must never swap it back out for a spinner:
+  // unmounting it destroys everything the user was doing — the open tab, the
+  // scroll position, half-filled forms. Auth layers re-report "loading" for
+  // reasons that have nothing to do with the user (a session refresh when the
+  // browser tab regains focus, a permission re-fetch), and those re-checks
+  // belong in the background. Real access loss is still enforced: the
+  // authorization checks below run on every render, and a sign-out clears the
+  // grant via `user` going null. (WEB-UX-008)
+  const verifiedUserIdRef = useRef<string | null>(null);
+  useEffect(() => {
+    if (!user) {
+      verifiedUserIdRef.current = null;
+      return;
+    }
+    if (!stillLoading && passesAllChecks) {
+      verifiedUserIdRef.current = user.id;
+    }
+  }, [user, stillLoading, passesAllChecks]);
+
+  const isReVerifyingInBackground =
+    stillLoading && !!user && verifiedUserIdRef.current === user.id;
+
+  if (stillLoading && !isReVerifyingInBackground) {
     return (
       <div className="min-h-screen bg-background flex items-center justify-center">
         <div className="text-center space-y-4">

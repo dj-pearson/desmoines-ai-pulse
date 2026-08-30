@@ -1,8 +1,9 @@
-import { Calendar, MapPin, Users, Sparkles, TrendingUp, Heart } from "lucide-react";
+import { Calendar, MapPin, Users, Heart } from "lucide-react";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import { Link } from "react-router-dom";
+import { SpriteIcon } from "@/components/ui/SpriteIcon";
 
 interface LocalContentSectionProps {
   className?: string;
@@ -117,7 +118,7 @@ export default function LocalContentSection({ className }: LocalContentSectionPr
       <Card className="bg-gradient-to-r from-blue-50 to-purple-50">
         <CardHeader>
           <CardTitle className="flex items-center gap-2">
-            <TrendingUp className="h-6 w-6 text-blue-600" />
+            <SpriteIcon name="trending-up" className="h-6 w-6 text-blue-600" />
             What Des Moines Locals Are Searching For
           </CardTitle>
         </CardHeader>
@@ -140,7 +141,7 @@ export default function LocalContentSection({ className }: LocalContentSectionPr
       <Card>
         <CardHeader>
           <CardTitle className="flex items-center gap-2">
-            <Sparkles className="h-6 w-6 text-yellow-500" />
+            <SpriteIcon name="sparkles" className="h-6 w-6 text-yellow-500" />
             Seasonal Des Moines Activities
           </CardTitle>
         </CardHeader>
@@ -151,7 +152,7 @@ export default function LocalContentSection({ className }: LocalContentSectionPr
               <div className="grid md:grid-cols-2 gap-2">
                 {content.items.map((item, itemIndex) => (
                   <div key={itemIndex} className="flex items-center gap-2 text-sm text-gray-600">
-                    <Calendar className="h-4 w-4 text-blue-500" />
+                    <SpriteIcon name="calendar" className="h-4 w-4 text-blue-500" />
                     {item}
                   </div>
                 ))}

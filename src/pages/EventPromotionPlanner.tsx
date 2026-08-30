@@ -6,10 +6,11 @@
 import { useState, useEffect } from 'react';
 import { createLogger } from '@/lib/logger';
 import { Helmet } from 'react-helmet-async';
+import { SpriteIcon } from "@/components/ui/SpriteIcon";
 
 const log = createLogger('EventPromotionPlanner');
 import { useSearchParams, useNavigate } from 'react-router-dom';
-import { Calendar, Download, Share2, TrendingUp, Users, Zap, ArrowRight } from 'lucide-react';
+import { Download, Zap } from "lucide-react";
 import { Button } from '@/components/ui/button';
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card';
 import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs';
@@ -202,7 +203,7 @@ export default function EventPromotionPlanner() {
                 className="h-14 px-8 text-lg bg-gradient-to-r from-primary to-blue-600"
               >
                 Create My Free Timeline
-                <ArrowRight className="ml-2 h-5 w-5" />
+                <SpriteIcon name="arrow-right" className="ml-2 h-5 w-5" />
               </Button>
             </div>
 
@@ -233,12 +234,12 @@ export default function EventPromotionPlanner() {
             {/* Features */}
             <div className="grid grid-cols-1 md:grid-cols-3 gap-6 mb-12">
               <FeatureCard
-                icon={<Calendar className="h-8 w-8" />}
+                icon={<SpriteIcon name="calendar" className="h-8 w-8" />}
                 title="Week-by-Week Plan"
                 description="Detailed timeline from 8 weeks out to event day"
               />
               <FeatureCard
-                icon={<TrendingUp className="h-8 w-8" />}
+                icon={<SpriteIcon name="trending-up" className="h-8 w-8" />}
                 title="Channel Strategy"
                 description="Know exactly where and when to promote"
               />
@@ -253,7 +254,7 @@ export default function EventPromotionPlanner() {
                 Event Organizers" and quoting "Sarah M., Downtown Farmers Market
                 Coordinator" saying the timeline raised attendance 40%. Nothing counts
                 organizers, no such person exists, and the 40% figure was a quantified
-                efficacy claim with no measurement behind it. */}
+                efficacy claim with no measurement behind it at all. */}
 
             {/* How It Works */}
             <Card className="mb-8">
@@ -294,7 +295,7 @@ export default function EventPromotionPlanner() {
                 className="h-14 px-8 text-lg bg-gradient-to-r from-primary to-blue-600"
               >
                 Start Creating My Timeline
-                <ArrowRight className="ml-2 h-5 w-5" />
+                <SpriteIcon name="arrow-right" className="ml-2 h-5 w-5" />
               </Button>
               <p className="text-sm text-gray-500 mt-4">
                 No credit card required • 100% Free • 2-minute setup
@@ -463,7 +464,7 @@ function FeatureCard({ icon, title, description }: { icon: React.ReactNode; titl
 function StepCard({ number, title, description }: { number: string; title: string; description: string }) {
   return (
     <div className="text-center">
-      <div className="w-12 h-12 bg-primary text-white rounded-full flex items-center justify-center text-xl font-bold mx-auto mb-3">
+      <div className="w-12 h-12 bg-primary text-primary-foreground rounded-full flex items-center justify-center text-xl font-bold mx-auto mb-3">
         {number}
       </div>
       <h3 className="font-semibold mb-2">{title}</h3>

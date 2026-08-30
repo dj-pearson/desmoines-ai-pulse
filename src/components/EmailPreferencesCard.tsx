@@ -4,7 +4,8 @@ import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/com
 import { Label } from '@/components/ui/label';
 import { Switch } from '@/components/ui/switch';
 import { Skeleton } from '@/components/ui/skeleton';
-import { Mail, Clock, Calendar } from 'lucide-react';
+import { Mail } from "lucide-react";
+import { SpriteIcon } from "@/components/ui/SpriteIcon";
 
 export function EmailPreferencesCard() {
   const { preferences, isLoading, updatePreferences, isUpdating } = useEmailPreferences();
@@ -74,7 +75,7 @@ export function EmailPreferencesCard() {
         {preferences.weekly_digest_enabled && (
           <div className="space-y-3 p-4 bg-muted/50 rounded-lg border border-border">
             <div className="flex items-start gap-3">
-              <Calendar className="h-5 w-5 text-primary mt-0.5" />
+              <SpriteIcon name="calendar" className="h-5 w-5 text-primary mt-0.5" />
               <div>
                 <p className="font-medium text-sm">Delivery Schedule</p>
                 <p className="text-sm text-muted-foreground">
@@ -108,7 +109,7 @@ export function EmailPreferencesCard() {
         {/* Info Banner */}
         <div className="bg-primary/5 border border-primary/20 rounded-lg p-4">
           <div className="flex items-start gap-3">
-            <Clock className="h-5 w-5 text-primary mt-0.5 flex-shrink-0" />
+            <SpriteIcon name="clock" className="h-5 w-5 text-primary mt-0.5 flex-shrink-0" />
             <div className="space-y-1">
               <h4 className="font-semibold text-sm">Smart Personalization</h4>
               <p className="text-xs text-muted-foreground">

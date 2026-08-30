@@ -1,27 +1,31 @@
-What's New in 1.1.9:
+What's New in 1.2.0:
 
-SMARTER SEARCH ON DINING & HOME
-- New Quick Picks row with one-tap filter combos:
-  • Dining: Date Night, Quick Lunch, Family, Late Night, Brunch,
-    Happy Hour, Healthy, With Kids
-  • Home: Free Weekend, Live Music, Food & Drink, Family Fun,
-    Art & Culture, Outdoors, Tonight, This Week, Featured
-- Always-visible filter pills replace the old "Filters" sheet —
-  no more tapping through multiple screens to narrow results
+A MUCH BIGGER DES MOINES INSIDER
+This is our largest update yet — full feature parity with the web, plus new
+ways to plan and save.
 
-DINING TAB REBUILT
-- Filter by cuisine, price, neighborhood, rating, and dietary
-  (vegan, vegetarian, gluten-free, keto, halal) right from the top
-- Neighborhoods now pulled from live data instead of a static list
-- Sort moved to the toolbar for more room to browse
+PLAN A TRIP WITH AI
+- New AI Trip Planner builds a Des Moines itinerary around who you're with,
+  what you love, and how long you have. Save it and take it with you.
 
-ACTIVE FILTER CHIPS
-- See every applied filter at a glance
-- Tap × on any chip to remove just that one filter
-- One tap to clear everything
+LOCAL GUIDES & STORIES
+- Browse curated guides and articles — brunch spots, date-night ideas,
+  neighborhood roundups, and seasonal picks — in a native reader.
 
-UNDER THE HOOD
-- Fixed pagination bug when client-side filters were active
-- Swift compilation fixes (duplicate type declarations)
-- Improved build stability on Xcode 26 / Swift 6.2
-- Automated version bumping in CI
+DEALS & SPECIALS
+- Find current local deals with live "active now" status.
+
+MORE WAYS TO EXPLORE
+- This Weekend guide, Best-Of community voting, Where to Stay hotels, and
+  Music / Sports / Outdoors / Neighborhood hubs are now all native.
+- A new Discover hub puts every section one tap away.
+- Saved searches with custom alerts, reviews & ratings, and a personal
+  Dashboard that brings your stuff together.
+
+POLISH & ACCESSIBILITY
+- Full VoiceOver, Dynamic Type, and Reduce Motion pass across the app.
+- Every screen now handles offline and error states gracefully, with cached
+  content shown when you're without a connection.
+
+Insider and VIP memberships unlock the Trip Planner, saved searches & alerts,
+unlimited favorites, reviews, exclusive content, and an ad-free experience.

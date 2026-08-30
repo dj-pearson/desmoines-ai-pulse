@@ -1,5 +1,6 @@
 package com.desmoines.aipulse.ui.screens.map
 
+import com.desmoines.aipulse.util.UiFormatLocale
 import android.content.Intent
 import androidx.compose.animation.AnimatedVisibility
 import androidx.compose.animation.core.Spring
@@ -81,6 +82,7 @@ import com.desmoines.aipulse.data.model.Event
 import com.desmoines.aipulse.data.model.EventCategory
 import com.desmoines.aipulse.data.model.Restaurant
 import com.desmoines.aipulse.ui.components.CachedAsyncImage
+import com.desmoines.aipulse.util.minHitTarget
 import com.desmoines.aipulse.util.rememberShouldReduceAnimations
 import com.google.android.gms.maps.model.CameraPosition
 import com.google.android.gms.maps.model.LatLng
@@ -91,9 +93,10 @@ import com.google.maps.android.compose.GoogleMap
 import com.google.maps.android.compose.MapProperties
 import com.google.maps.android.compose.MapUiSettings
 import com.google.maps.android.compose.MarkerComposable
-import com.google.maps.android.compose.MarkerState
+import com.google.maps.android.compose.rememberMarkerState
 import com.google.maps.android.compose.rememberCameraPositionState
 import java.time.format.DateTimeFormatter
+import java.util.Locale
 
 /**
  * Map/Explore screen showing nearby events, restaurants, and attractions
@@ -157,7 +160,7 @@ fun MapScreen(
                 val isSelected = state.selectedEvent?.id == annotation.event.id
                 MarkerComposable(
                     keys = arrayOf<Any>(annotation.id, isSelected),
-                    state = MarkerState(position = annotation.position),
+                    state = rememberMarkerState(key = annotation.id, position = annotation.position),
                     title = annotation.event.title,
                     onClick = {
                         onSelectEvent(annotation.event)
@@ -177,7 +180,7 @@ fun MapScreen(
                 val isSelected = state.selectedRestaurant?.id == annotation.restaurant.id
                 MarkerComposable(
                     keys = arrayOf<Any>(annotation.id, isSelected),
-                    state = MarkerState(position = annotation.position),
+                    state = rememberMarkerState(key = annotation.id, position = annotation.position),
                     title = annotation.restaurant.name,
                     onClick = {
                         onSelectRestaurant(annotation.restaurant)
@@ -193,7 +196,7 @@ fun MapScreen(
                 val isSelected = state.selectedAttraction?.id == annotation.attraction.id
                 MarkerComposable(
                     keys = arrayOf<Any>(annotation.id, isSelected),
-                    state = MarkerState(position = annotation.position),
+                    state = rememberMarkerState(key = annotation.id, position = annotation.position),
                     title = annotation.attraction.name,
                     onClick = {
                         onSelectAttraction(annotation.attraction)
@@ -555,7 +558,7 @@ private fun EventPopup(
     onNavigate: () -> Unit,
     onDismiss: () -> Unit,
 ) {
-    val dateFormatter = remember { DateTimeFormatter.ofPattern("MMM d, h:mm a") }
+    val dateFormatter = remember { DateTimeFormatter.ofPattern("MMM d, h:mm a", UiFormatLocale) }
 
     PopupCard {
         Row(
@@ -622,7 +625,7 @@ private fun EventPopup(
             }
 
             // Close button
-            IconButton(onClick = onDismiss, modifier = Modifier.size(36.dp)) {
+            IconButton(onClick = onDismiss, modifier = Modifier.minHitTarget()) {
                 Icon(
                     Icons.Filled.Close,
                     contentDescription = "Dismiss",
@@ -700,7 +703,7 @@ private fun RestaurantPopup(
                                 modifier = Modifier.size(12.dp),
                             )
                             Text(
-                                String.format("%.1f", rating),
+                                String.format(Locale.US, "%.1f", rating),
                                 style = MaterialTheme.typography.labelSmall,
                             )
                         }
@@ -740,7 +743,7 @@ private fun RestaurantPopup(
             }
 
             // Close button
-            IconButton(onClick = onDismiss, modifier = Modifier.size(36.dp)) {
+            IconButton(onClick = onDismiss, modifier = Modifier.minHitTarget()) {
                 Icon(
                     Icons.Filled.Close,
                     contentDescription = "Dismiss",
@@ -815,7 +818,7 @@ private fun AttractionPopup(
                             modifier = Modifier.size(12.dp),
                         )
                         Text(
-                            String.format("%.1f", rating),
+                            String.format(Locale.US, "%.1f", rating),
                             style = MaterialTheme.typography.labelSmall,
                         )
                     }
@@ -846,7 +849,7 @@ private fun AttractionPopup(
             }
 
             // Close button
-            IconButton(onClick = onDismiss, modifier = Modifier.size(36.dp)) {
+            IconButton(onClick = onDismiss, modifier = Modifier.minHitTarget()) {
                 Icon(
                     Icons.Filled.Close,
                     contentDescription = "Dismiss",

@@ -219,5 +219,4 @@ final class FavoritesViewModel {
         favoritesService.isFavorited(eventId)
     }
 
-    var favoriteCount: Int { totalFavoriteCount }
 }

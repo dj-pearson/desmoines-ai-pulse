@@ -3,7 +3,19 @@
  * Used by ai-crawler (new crawls) and backfill-images (existing records).
  */
 
+import { validateURLForSSRF } from "./validation.ts";
+
 export const IMAGE_MAX_BYTES = 8 * 1024 * 1024; // 8 MB
+
+/**
+ * Minimum width/height (px) for a stored image. Below this a candidate is almost
+ * certainly a tracking pixel, favicon, badge, or logo rather than real listing
+ * art — storing it counts a record as "has image" while showing junk. The HTML
+ * extractor already drops `<img>` smaller than this when the size is declared
+ * inline, but most responsive images don't declare it, so we re-check the
+ * decoded header bytes here (covers ai-crawler / Places / og:image too).
+ */
+export const MIN_IMAGE_DIMENSION = 100;
 
 export const ALLOWED_IMAGE_MIME = new Set([
   "image/jpeg",
@@ -30,6 +42,90 @@ export const CONTENT_TYPE_MAP: Record<string, string> = {
   attractions: "attraction",
   playgrounds: "playground",
 };
+
+/**
+ * Best-effort image dimension reader from the decoded header bytes. Supports
+ * JPEG, PNG, GIF, and WebP (VP8/VP8L/VP8X). Returns null when the format is
+ * unknown or the header is incomplete — callers should treat null as "unknown"
+ * and NOT reject, so we never drop a valid image we simply couldn't measure.
+ */
+export function imageDimensions(b: Uint8Array): { width: number; height: number } | null {
+  if (b.length < 24) return null;
+
+  // PNG: 89 50 4E 47 0D 0A 1A 0A, then IHDR with 32-bit BE width/height.
+  if (
+    b[0] === 0x89 && b[1] === 0x50 && b[2] === 0x4e && b[3] === 0x47 &&
+    b[12] === 0x49 && b[13] === 0x48 && b[14] === 0x44 && b[15] === 0x52
+  ) {
+    const width = (b[16] << 24) | (b[17] << 16) | (b[18] << 8) | b[19];
+    const height = (b[20] << 24) | (b[21] << 16) | (b[22] << 8) | b[23];
+    if (width > 0 && height > 0) return { width, height };
+    return null;
+  }
+
+  // GIF: "GIF8", then little-endian 16-bit width/height.
+  if (b[0] === 0x47 && b[1] === 0x49 && b[2] === 0x46 && b[3] === 0x38) {
+    const width = b[6] | (b[7] << 8);
+    const height = b[8] | (b[9] << 8);
+    if (width > 0 && height > 0) return { width, height };
+    return null;
+  }
+
+  // WebP: "RIFF"...."WEBP" + a VP8/VP8L/VP8X chunk.
+  if (
+    b[0] === 0x52 && b[1] === 0x49 && b[2] === 0x46 && b[3] === 0x46 &&
+    b[8] === 0x57 && b[9] === 0x45 && b[10] === 0x42 && b[11] === 0x50
+  ) {
+    const fourcc = String.fromCharCode(b[12], b[13], b[14], b[15]);
+    if (fourcc === "VP8X" && b.length >= 30) {
+      const width = 1 + ((b[24]) | (b[25] << 8) | (b[26] << 16));
+      const height = 1 + ((b[27]) | (b[28] << 8) | (b[29] << 16));
+      return { width, height };
+    }
+    if (fourcc === "VP8 " && b.length >= 30) {
+      // Lossy: 14-bit dimensions at offset 26/28.
+      const width = ((b[26] | (b[27] << 8)) & 0x3fff);
+      const height = ((b[28] | (b[29] << 8)) & 0x3fff);
+      if (width > 0 && height > 0) return { width, height };
+    }
+    if (fourcc === "VP8L" && b.length >= 25 && b[20] === 0x2f) {
+      // Lossless: 14-bit width-1 / height-1 packed after the 0x2f signature.
+      const bits = b[21] | (b[22] << 8) | (b[23] << 16) | (b[24] << 24);
+      const width = (bits & 0x3fff) + 1;
+      const height = ((bits >> 14) & 0x3fff) + 1;
+      return { width, height };
+    }
+    return null;
+  }
+
+  // JPEG: FF D8, then scan segments for a Start-Of-Frame marker.
+  if (b[0] === 0xff && b[1] === 0xd8) {
+    let i = 2;
+    while (i + 9 < b.length) {
+      if (b[i] !== 0xff) {
+        i++;
+        continue;
+      }
+      const marker = b[i + 1];
+      // SOF0..SOF15, excluding DHT(C4), JPG(C8), DAC(CC).
+      if (
+        marker >= 0xc0 && marker <= 0xcf &&
+        marker !== 0xc4 && marker !== 0xc8 && marker !== 0xcc
+      ) {
+        const height = (b[i + 5] << 8) | b[i + 6];
+        const width = (b[i + 7] << 8) | b[i + 8];
+        if (width > 0 && height > 0) return { width, height };
+        return null;
+      }
+      const len = (b[i + 2] << 8) | b[i + 3];
+      if (len <= 0) return null;
+      i += 2 + len;
+    }
+    return null;
+  }
+
+  return null;
+}
 
 /**
  * Extract the best image URL from raw HTML.
@@ -320,7 +416,29 @@ async function sha256Hex(data: ArrayBuffer): Promise<string> {
 /**
  * Build the public CDN URL for a stored file_path.
  */
+/**
+ * The public URL written into events.image_url and the other content tables.
+ *
+ * WEB-OPS-023. This used to return the supabase.co storage URL unconditionally,
+ * which meant every card image on every page view was billed as SUPABASE
+ * EGRESS - once per viewer, forever, for an object that was downloaded once.
+ * public/_headers' immutable cache rules did not help: they apply to files
+ * Cloudflare Pages serves out of dist/, not to a URL on another origin.
+ *
+ * With MEDIA_CDN_BASE set, this emits our own domain instead and
+ * functions/media/[[path]].ts serves the bytes through the Cloudflare edge
+ * cache. The first request per object still costs Supabase egress; nothing
+ * after it does.
+ *
+ * UNSET IS THE OLD BEHAVIOUR, on purpose. This is a value that goes into a
+ * column all three clients read, so the switch is an environment variable
+ * somebody sets deliberately rather than a deploy that silently changes what
+ * gets written. Rows written before the switch keep their supabase.co URLs and
+ * keep resolving; scripts/repoint-media-urls.ts moves them when you are ready.
+ */
 function cdnUrlFor(filePath: string): string {
+  const cdnBase = Deno.env.get("MEDIA_CDN_BASE");
+  if (cdnBase) return `${cdnBase.replace(/\/+$/, "")}/media/${filePath}`;
   const supabaseUrl = Deno.env.get("SUPABASE_URL")!;
   return `${supabaseUrl}/storage/v1/object/public/media/${filePath}`;
 }
@@ -380,29 +498,51 @@ export async function fetchAndStoreImage(
   if (!sourceImageUrl) return null;
 
   try {
-    const parsed = new URL(sourceImageUrl);
-    if (!["http:", "https:"].includes(parsed.protocol)) return null;
+    // SSRF guard: image URLs come from scraped pages / DB rows (attacker-
+    // influenceable), so block private/internal addresses and non-web schemes
+    // before we ever fetch them.
+    const ssrf = validateURLForSSRF(sourceImageUrl, {
+      allowedProtocols: ["http:", "https:"],
+      blockPrivateIPs: true,
+    });
+    if (!ssrf.valid) {
+      console.warn(`⚠️ Refusing unsafe image URL (${ssrf.error}): ${sourceImageUrl}`);
+      return null;
+    }
 
     const mediaContentType = CONTENT_TYPE_MAP[category] || category;
 
     // Guard against re-running on the same record.
-    const { data: existing } = await supabase
+    //
+    // This and the two dedup passes below are IDEMPOTENCY reads: a dropped
+    // error reads as "not stored yet" and the image is downloaded and written
+    // again. The cost is duplicate bytes and a duplicate media_assets row, not
+    // a wrong result, so they stay best-effort - but they are logged, because a
+    // media_assets table that has gone unreadable turns every hero image into a
+    // fresh download and nothing would have said so (WEB-BE-032 AC3).
+    const { data: existing, error: existingError } = await supabase
       .from("media_assets")
       .select("file_path")
       .eq("content_type", mediaContentType)
       .eq("content_id", contentId)
       .maybeSingle();
+    if (existingError) {
+      console.warn(`[imageStorage] re-run guard read failed for ${contentId}: ${existingError.message}`);
+    }
     if (existing?.file_path) {
       return cdnUrlFor(existing.file_path);
     }
 
     // ── Dedup pass 1: same source URL already downloaded for someone else? ──
-    const { data: bySource } = await supabase
+    const { data: bySource, error: bySourceError } = await supabase
       .from("media_assets")
       .select("file_path, mime_type, file_size, content_hash")
       .eq("source_url", sourceImageUrl)
       .limit(1)
       .maybeSingle();
+    if (bySourceError) {
+      console.warn(`[imageStorage] source-url dedup read failed: ${bySourceError.message}`);
+    }
 
     if (bySource?.file_path) {
       await insertSharedAssetRow(supabase, {
@@ -452,14 +592,27 @@ export async function fetchAndStoreImage(
       return null;
     }
 
+    // ── Reject tiny images (tracking pixels / icons / logos) ──────────────────
+    // Only reject when dimensions parse with confidence; unknown formats pass.
+    const dims = imageDimensions(new Uint8Array(buffer));
+    if (dims && (dims.width < MIN_IMAGE_DIMENSION || dims.height < MIN_IMAGE_DIMENSION)) {
+      console.warn(
+        `⚠️ Skipping tiny image (${dims.width}x${dims.height}, likely pixel/icon/logo): ${sourceImageUrl}`,
+      );
+      return null;
+    }
+
     // ── Dedup pass 2: same byte content already stored under a different URL? ──
     const contentHash = await sha256Hex(buffer);
-    const { data: byHash } = await supabase
+    const { data: byHash, error: byHashError } = await supabase
       .from("media_assets")
       .select("file_path, mime_type, file_size")
       .eq("content_hash", contentHash)
       .limit(1)
       .maybeSingle();
+    if (byHashError) {
+      console.warn(`[imageStorage] content-hash dedup read failed: ${byHashError.message}`);
+    }
 
     if (byHash?.file_path) {
       await insertSharedAssetRow(supabase, {
@@ -490,7 +643,7 @@ export async function fetchAndStoreImage(
 
     const cdnUrl = cdnUrlFor(filePath);
 
-    const { data: insertedAsset } = await supabase
+    const { data: insertedAsset, error: insertedAssetError } = await supabase
       .from("media_assets")
       .insert({
         file_name: `hero.${ext}`,
@@ -507,6 +660,18 @@ export async function fetchAndStoreImage(
       })
       .select("id")
       .single();
+    // WEB-BE-032, and this one LEAKS STORAGE. The bytes are already uploaded by
+    // the time this runs. A dropped error left the file in the bucket with no
+    // media_assets row pointing at it: invisible to every consumer, and invisible
+    // to scripts/reclaim-venue-images.ts too, which finds files THROUGH
+    // media_assets and so can never reclaim an orphan. Logged with the path,
+    // because that log is the only record anyone would have of it.
+    if (insertedAssetError) {
+      console.error(
+        `[imageStorage] ORPHANED FILE: uploaded ${filePath} but the media_assets ` +
+          `insert failed, so nothing references it: ${insertedAssetError.message}`,
+      );
+    }
 
     if (insertedAsset?.id) {
       await supabase.from("image_optimization_queue").insert({

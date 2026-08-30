@@ -1,45 +1,77 @@
 /**
- * SECURITY: verify_jwt = false
- * Reason: Serves personalized recommendations without requiring JWT to support both authenticated and anonymous visitors
- * Alternative measures: userId parameter validation, row-level filtering ensures users can only access their own recommendation data
- * Risk level: MEDIUM
+ * SECURITY: verify_jwt = true (gateway) + in-function token validation.
+ * The user id is derived from the verified JWT, never from the request body, so
+ * a caller cannot fetch another user's profile/feedback/recommendations. A body
+ * `userId` that does not match the authenticated user is rejected (403).
+ * (PROD-API-003 — see docs/SECURITY_AUDIT.md #10.)
  */
 import "https://deno.land/x/xhr@0.1.0/mod.ts";
 import { serve } from "https://deno.land/std@0.168.0/http/server.ts";
 import { createClient } from 'https://esm.sh/@supabase/supabase-js@2';
-import { checkRateLimit } from "../_shared/rateLimit.ts";
-
-const corsHeaders = {
-  'Access-Control-Allow-Origin': '*',
-  'Access-Control-Allow-Headers': 'authorization, x-client-info, apikey, content-type',
-};
+import { checkRateLimitPersistent } from "../_shared/rateLimit.ts";
+import { getCorsHeaders, isOriginAllowed } from "../_shared/cors.ts";
+import { fetchWithTimeout } from "../_shared/fetchWithTimeout.ts";
 
 const supabaseUrl = Deno.env.get('SUPABASE_URL')!;
 const supabaseKey = Deno.env.get('SUPABASE_SERVICE_ROLE_KEY')!;
 const openAIApiKey = Deno.env.get('OPENAI_API_KEY');
 
 serve(async (req) => {
+  // Origin-validated CORS: returns a user's private recommendations, so only an
+  // allowlisted Origin is echoed (native apps send no Origin and are unaffected).
+  const origin = req.headers.get('origin');
+  const corsHeaders = getCorsHeaders(origin && isOriginAllowed(origin) ? origin : undefined);
+
   if (req.method === 'OPTIONS') {
     return new Response(null, { headers: corsHeaders });
   }
 
-  // Rate limit: 10 AI requests per 15 minutes per client
-  const rateLimit = checkRateLimit(req, { max: 10, message: 'AI recommendation rate limit exceeded. Please try again later.' });
-  if (!rateLimit.success) {
-    return rateLimit.response!;
-  }
-
   try {
-    const { userId } = await req.json();
+    const supabase = createClient(supabaseUrl, supabaseKey);
 
-    if (!userId) {
-      return new Response(JSON.stringify({ error: 'User ID is required' }), {
-        status: 400,
+    // Authenticate: the user id MUST come from the verified JWT, never the body.
+    // This endpoint reads user-specific data with the service-role key, so
+    // trusting a body `userId` would let anyone fetch another user's profile,
+    // feedback, and recommendations (PROD-API-003 / docs/SECURITY_AUDIT.md #10).
+    const token = (req.headers.get('Authorization') || '').replace('Bearer ', '').trim();
+    if (!token) {
+      return new Response(JSON.stringify({ error: 'Authentication required' }), {
+        status: 401,
         headers: { ...corsHeaders, 'Content-Type': 'application/json' },
       });
     }
 
-    const supabase = createClient(supabaseUrl, supabaseKey);
+    const { data: { user }, error: authError } = await supabase.auth.getUser(token);
+    if (authError || !user) {
+      return new Response(JSON.stringify({ error: 'Invalid authentication' }), {
+        status: 401,
+        headers: { ...corsHeaders, 'Content-Type': 'application/json' },
+      });
+    }
+
+    const userId = user.id;
+
+    // Persistent, per-user rate limit (survives cold starts; keyed by the
+    // verified user id so a shared IP can't exhaust everyone's budget).
+    const rateLimit = await checkRateLimitPersistent(req, {
+      endpoint: 'personalized-recommendations',
+      userId,
+      max: 10,
+      message: 'AI recommendation rate limit exceeded. Please try again later.',
+    });
+    if (!rateLimit.success) {
+      return rateLimit.response!;
+    }
+
+    // Reject a caller trying to request a different user's data outright,
+    // rather than silently ignoring it.
+    const body = await req.json().catch(() => ({} as { userId?: string }));
+    if (body?.userId && body.userId !== userId) {
+      return new Response(
+        JSON.stringify({ error: 'userId does not match authenticated user' }),
+        { status: 403, headers: { ...corsHeaders, 'Content-Type': 'application/json' } },
+      );
+    }
 
     // Get user profile and preferences
     const { data: profile } = await supabase
@@ -151,7 +183,7 @@ serve(async (req) => {
         }
         `;
 
-        const response = await fetch('https://api.openai.com/v1/chat/completions', {
+        const response = await fetchWithTimeout('https://api.openai.com/v1/chat/completions', {
           method: 'POST',
           headers: {
             'Authorization': `Bearer ${openAIApiKey}`,
@@ -166,7 +198,7 @@ serve(async (req) => {
             temperature: 0.7,
             max_tokens: 1000,
           }),
-        });
+        }, 60_000);
 
         if (response.ok) {
           const aiData = await response.json();

@@ -76,5 +76,5 @@ Write-Host "      - https://YOUR_PROJECT.supabase.co/functions/v1/api-restaurant
 Write-Host "   4. Verify manifest: https://desmoinesinsider.com/.well-known/ai-plugin.json" -ForegroundColor White
 Write-Host "   5. Register plugin at: https://chat.openai.com" -ForegroundColor White
 Write-Host ""
-Write-Host "Full documentation: CHATGPT_INTEGRATION_GUIDE.md" -ForegroundColor Cyan
+Write-Host "Full documentation: docs/integrations/CHATGPT_INTEGRATION_GUIDE.md" -ForegroundColor Cyan
 Write-Host ""

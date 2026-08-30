@@ -42,7 +42,7 @@ export function SEOOpportunities({ dateRange, propertyId, connectedProviders }: 
 
       // Pull keyword performance data and derive opportunities client-side
       let query = supabase
-        .from("gsc_keyword_performance" as any)
+        .from("gsc_keyword_performance")
         .select("query, page_url, impressions, clicks, ctr, position")
         .gte("date", format(dateRange.from, "yyyy-MM-dd"))
         .lte("date", format(dateRange.to, "yyyy-MM-dd"));

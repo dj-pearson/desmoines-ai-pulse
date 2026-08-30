@@ -1,4 +1,5 @@
 import "https://deno.land/x/xhr@0.1.0/mod.ts";
+import { fetchWithTimeout } from "../_shared/fetchWithTimeout.ts";
 import { serve } from "https://deno.land/std@0.168.0/http/server.ts";
 
 const corsHeaders = {
@@ -49,7 +50,7 @@ serve(async (req) => {
 
       try {
         // Check restaurant status using Google Places API (New)
-        const response = await fetch(
+        const response = await fetchWithTimeout(
           `https://places.googleapis.com/v1/places/${restaurant.google_place_id}`,
           {
             method: "GET",

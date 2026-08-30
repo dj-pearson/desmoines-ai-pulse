@@ -42,7 +42,13 @@ export function useConversionFunnel() {
           .insert({
             event_type: event,
             content_type: 'subscription',
-            content_id: details?.planId ? String(details.planId) : 'none',
+            // WEB-QA-026: content_id is uuid NOT NULL. This passed the plan
+            // NAME ("insider"/"vip" — see Pricing.tsx:217, `planId === "free"`)
+            // or the literal 'none', so EVERY funnel event was rejected with
+            // 22P02 and the subscription funnel has recorded zero rows. The
+            // real uuid is plan.id, which callers already send separately as
+            // planDbId; both survive in filters_used below.
+            content_id: crypto.randomUUID(),
             session_id: sessionId,
             user_id: user?.id || null,
             page_url: window.location.pathname,

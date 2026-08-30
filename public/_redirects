@@ -1,0 +1,57 @@
+# Cloudflare Pages redirects. Processed before the SPA fallback.
+
+# WEB-UX-016: canonical Visitor Guide is /visitors-guide. The pSEO
+# /things-to-do/tourists page duplicated that concept — 301 to the canonical.
+/things-to-do/tourists  /visitors-guide  301
+
+# WEB-SEO-007: /weekend and /events/this-weekend targeted the same query.
+# /events/this-weekend is the canonical one — it declares its own canonical URL,
+# emits EventListJsonLd and carries FAQ content, none of which /weekend did.
+# The route in App.tsx stays for now: per the Backward Compatibility rules in
+# CLAUDE.md a public route needs its 301 in place for at least one release
+# cycle before the route itself is removed.
+/weekend  /events/this-weekend  301
+
+# WEB-SEO-019: two restaurants existed twice at the same address. The row that
+# Google had indexed was the one with the -2 slug in both cases - the clean
+# slugs had zero impressions in the whole GSC window - so the duplicate that
+# was removed is the clean-slugged one, and these keep its URL alive.
+# Renaming the survivor instead would have moved a URL that ranks at position
+# 11.9 with 388 impressions, which is the one thing worth not doing here.
+/restaurants/daves-hot-chicken   /restaurants/daves-hot-chicken-2   301
+/restaurants/outback-steakhouse  /restaurants/outback-steakhouse-2  301
+
+# SEO-005: NO REDIRECT HERE, DELIBERATELY, and this note is the point of the
+# entry. Both remaining -2 pairs on this site are TWO REAL RESTAURANTS:
+#
+#   texas-roadhouse        Johnston        texas-roadhouse-2        West Des Moines
+#   flipn-jacks-...        Des Moines      flipn-jacks-...-2        Altoona
+#
+# A first pass here nearly 301'd the Flip'N Jacks pair as a duplicate. The
+# evidence for that was an og:description read through a regex that stopped at
+# the apostrophe in "Flip'N", so both pages appeared to say only "Discover
+# Flip". Read in full they name different cities. The two rows DO spell the
+# apostrophe differently - one U+0027, one U+2019 - which is why the slug
+# collided and took a -2, but a slug collision is not a duplicate record.
+#
+# scripts/check-duplicate-entities.ts already says this in its own header and
+# matches on name AND address for exactly this reason. It runs in CI
+# (rls-config-audit.yml). Trust it over a slug that looks suspicious.
+#
+# What these pairs actually needed was distinct TITLES - both branches served
+# one identical <title> - and that is qualifyTitleWithCity in
+# src/lib/seoTitleLocation.ts, not a redirect.
+
+# WEB-SEO-019: the slug generator used to DELETE accented letters instead of
+# folding them, so "Cafe" with an acute e became "caf". These eight had no
+# Search Console impressions at all, so renaming them costs nothing; the six
+# that DO rank (atlas-caf among them, 7 of the site's 72 clicks) were left
+# alone deliberately - a nicer slug is not worth moving a URL that works.
+/restaurants/brick-street-market-caf       /restaurants/brick-street-market-cafe  301
+/restaurants/caf-madeleine                 /restaurants/cafe-madeleine  301
+/restaurants/chteau-burgers-and-crepes     /restaurants/chateau-burgers-and-crepes  301
+/restaurants/cozy-caf-johnston             /restaurants/cozy-cafe-johnston  301
+/restaurants/crme                          /restaurants/creme  301
+/restaurants/el-fogn                       /restaurants/el-fogon  301
+/restaurants/ritual-caf                    /restaurants/ritual-cafe  301
+/restaurants/trellis-caf                   /restaurants/trellis-cafe  301

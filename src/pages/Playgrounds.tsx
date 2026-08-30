@@ -2,6 +2,7 @@ import React, { useState, useMemo, lazy } from "react";
 import Header from "@/components/Header";
 import Footer from "@/components/Footer";
 import EnhancedLocalSEO from "@/components/EnhancedLocalSEO";
+import ItemListSchema from "@/components/schema/ItemListSchema";
 import { Breadcrumbs } from "@/components/ui/breadcrumbs";
 import { FAQSection } from "@/components/FAQSection";
 import { usePlaygrounds } from "@/hooks/usePlaygrounds";
@@ -31,7 +32,12 @@ import {
   SheetTitle,
   SheetTrigger,
 } from "@/components/ui/sheet";
-import { MapPin, Star, Users, Filter, List, Map, TreePine, SlidersHorizontal, ChevronRight, Check } from "lucide-react";
+import { Star, Filter, List, Map, TreePine, SlidersHorizontal, ChevronRight } from "lucide-react";
+// map-pin and users render once per card. Both are multi-shape lucide icons, so
+// the sprite costs 2 nodes where inline costs 3 and 5 - see the membership rules
+// in scripts/generate-icon-sprite.mjs. Measured saving on this route: 154 of
+// 2,388 elements (WEB-PERF-023).
+import { SpriteIcon } from "@/components/ui/SpriteIcon";
 import { Link } from "react-router-dom";
 
 // Lazy load map to prevent react-leaflet bundling issues
@@ -64,7 +70,11 @@ export default function Playgrounds() {
   // Get unique age ranges and locations for filter options
   const ageRanges = useMemo(() => {
     const uniqueRanges = new Set(
-      allPlaygrounds.map((playground) => playground.age_range).filter(Boolean)
+      allPlaygrounds
+        .map((playground) => playground.age_range)
+        // Type predicate, not .filter(Boolean): the latter does not narrow away
+        // `null` in TypeScript, so consumers below still saw `string | null`.
+        .filter((r): r is string => Boolean(r))
     );
     return Array.from(uniqueRanges).sort();
   }, [allPlaygrounds]);
@@ -73,7 +83,7 @@ export default function Playgrounds() {
     const uniqueLocations = new Set(
       allPlaygrounds
         .map((playground) => playground.location)
-        .filter(Boolean)
+        .filter((l): l is string => Boolean(l))
         .map((loc) => {
           const parts = loc.split(",");
           return parts[parts.length - 2]?.trim() || parts[0]?.trim() || loc;
@@ -180,8 +190,26 @@ export default function Playgrounds() {
     return Array.from(amenitySet).sort();
   }, [allPlaygrounds]);
 
+  // The rendered set, capped, so every URL here is a link the crawler can
+  // also see on the page. createSlug above is the same function the cards
+  // use, so the schema URL and the href cannot drift apart.
+  const SCHEMA_LIMIT = 20;
+  const schemaItems = filteredPlaygrounds
+    .slice(0, SCHEMA_LIMIT)
+    .map((item) => ({
+      name: item.name,
+      url: getCanonicalUrl(`/playgrounds/${createSlug(item.name)}`),
+      ...(item.image_url && { image: item.image_url }),
+      ...(item.description && { description: item.description }),
+    }));
+
   return (
     <div className="min-h-screen bg-background">
+      <ItemListSchema
+        name="Playgrounds in Des Moines, Iowa"
+        description="Public playgrounds, splash pads and accessible play equipment across the Greater Des Moines area."
+        items={schemaItems}
+      />
       <EnhancedLocalSEO
         pageTitle={pageTitle}
         pageDescription={pageDescription}
@@ -378,7 +406,7 @@ export default function Playgrounds() {
                   value={selectedAgeRange}
                   onValueChange={setSelectedAgeRange}
                 >
-                  <SelectTrigger>
+                  <SelectTrigger aria-label="Age Range">
                     <SelectValue />
                   </SelectTrigger>
                   <SelectContent>
@@ -397,7 +425,7 @@ export default function Playgrounds() {
                   Location
                 </label>
                 <Select value={location} onValueChange={setLocation}>
-                  <SelectTrigger>
+                  <SelectTrigger aria-label="Location">
                     <SelectValue />
                   </SelectTrigger>
                   <SelectContent>
@@ -423,7 +451,7 @@ export default function Playgrounds() {
                   Featured
                 </label>
                 <Select value={featuredOnly} onValueChange={setFeaturedOnly}>
-                  <SelectTrigger>
+                  <SelectTrigger aria-label="Featured">
                     <SelectValue />
                   </SelectTrigger>
                   <SelectContent>
@@ -476,7 +504,7 @@ export default function Playgrounds() {
           </div>
         ) : error ? (
           <div className="text-center py-16">
-            <TreePine className="h-16 w-16 text-gray-400 mx-auto mb-4" />
+            <TreePine className="h-16 w-16 text-gray-500 mx-auto mb-4" />
             <h3 className="text-xl font-medium mb-2">Error Loading Playgrounds</h3>
             <p className="text-muted-foreground">
               Please try again later.
@@ -484,7 +512,7 @@ export default function Playgrounds() {
           </div>
         ) : filteredPlaygrounds.length === 0 ? (
           <div className="text-center py-16">
-            <TreePine className="h-16 w-16 text-gray-400 mx-auto mb-4" />
+            <TreePine className="h-16 w-16 text-gray-500 mx-auto mb-4" />
             <h3 className="text-xl font-medium mb-2">No playgrounds found</h3>
             <p className="text-muted-foreground mb-6">
               {hasActiveFilters
@@ -527,7 +555,7 @@ export default function Playgrounds() {
                           variant="outline"
                           className="bg-[#2D1B69]/10 text-[#2D1B69] text-xs"
                         >
-                          <Users className="h-3 w-3 mr-1" />
+                          <SpriteIcon name="users" className="h-3 w-3 mr-1" />
                           Ages {playground.age_range}
                         </Badge>
                       )}
@@ -547,7 +575,7 @@ export default function Playgrounds() {
                       )}
                       {playground.location && (
                         <div className="flex items-center gap-2">
-                          <MapPin className="h-4 w-4" />
+                          <SpriteIcon name="map-pin" className="h-4 w-4" />
                           <span className="line-clamp-1">{playground.location}</span>
                         </div>
                       )}
@@ -561,7 +589,10 @@ export default function Playgrounds() {
                       <div className="flex flex-wrap gap-1 mt-3">
                         {playground.amenities.slice(0, 3).map((amenity, index) => (
                           <Badge key={index} variant="outline" className="text-xs bg-emerald-50 text-emerald-700 border-emerald-200">
-                            <Check className="h-2.5 w-2.5 mr-0.5" />
+                            {/* No check icon. It cost 2 nodes x 75 badges and
+                                said nothing the amenity name does not: a badge
+                                in this list means the playground HAS that
+                                amenity. WEB-PERF-023. */}
                             {amenity}
                           </Badge>
                         ))}
@@ -608,7 +639,7 @@ export default function Playgrounds() {
                       </span>
                       <span className="block text-xs text-gray-500">{count} playgrounds</span>
                     </div>
-                    <ChevronRight className="h-4 w-4 text-gray-400 group-hover:text-[#2D1B69]" />
+                    <ChevronRight className="h-4 w-4 text-gray-500 group-hover:text-[#2D1B69]" />
                   </button>
                 );
               })}
@@ -641,9 +672,15 @@ export default function Playgrounds() {
                     }}
                     className="inline-flex items-center gap-1.5 px-3 py-2 rounded-full border hover:border-emerald-500 hover:bg-emerald-50 transition-colors text-sm group"
                   >
-                    <Check className="h-3.5 w-3.5 text-emerald-500" />
+                    {/* No check icon here either, and this one was not merely
+                        decorative - it was wrong. These chips have NO selected
+                        state: clicking one sets the search query. A check mark
+                        is the universal "this is on" affordance, so 99 of them
+                        told the visitor every amenity filter was already
+                        applied. Removing it fixes the affordance and takes 198
+                        nodes off the prerendered page. WEB-PERF-023. */}
                     <span className="text-gray-700 group-hover:text-emerald-700">{amenity}</span>
-                    <span className="text-xs text-gray-400">({count})</span>
+                    <span className="text-xs text-gray-500">({count})</span>
                   </button>
                 );
               })}

@@ -1,0 +1,231 @@
+# RLS / config drift audit (AOS-SEC-006)
+# Regenerates the RLS audit + security config snapshot, diffs them against the
+# committed baselines, and reports drift to agent-config-audit (which opens a
+# tier-2 security task on new findings). Keeps WEB-SEC-005 from going stale.
+
+name: RLS Config Drift Audit
+
+on:
+  schedule:
+    - cron: '15 7 * * *' # daily at 07:15 UTC
+  workflow_dispatch:
+
+jobs:
+  audit:
+    runs-on: ubuntu-latest
+    # SUPABASE_SERVICE_ROLE_KEY is an environment secret scoped to "Scrape", not
+    # a repository secret. The bucket-posture step below needs it, and a job
+    # without this line silently receives an empty string (WEB-SEO-017).
+    environment: Scrape
+    timeout-minutes: 15
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Set up Node 20
+        uses: actions/setup-node@v4
+        with:
+          node-version: '20'
+          cache: 'npm'
+
+      - name: Install deps
+        run: npm ci
+
+      - name: Regenerate audit + config snapshot
+        run: |
+          npx tsx scripts/audit-rls.ts --json
+          npx tsx scripts/security-config-snapshot.ts
+
+      # WEB-SEC-021 AC7. audit-rls.ts reads the migrations; this asks the
+      # question an attacker asks — does a GET with the anon key that ships in
+      # the client bundle return rows. A table added without an explicit policy
+      # is anon-readable the moment it exists, and no migration parse sees that
+      # if the policy was added by hand or applied out of order.
+      #
+      # Fails only on a NEWLY readable table. The 40 already readable are
+      # baselined, because fixing them needs migrations that are not applied
+      # yet (WEB-QA-020) and a check that is red on day one gets switched off.
+      - name: Anon-read exposure ratchet
+        env:
+          VITE_SUPABASE_URL: ${{ secrets.VITE_SUPABASE_URL }}
+          VITE_SUPABASE_ANON_KEY: ${{ secrets.VITE_SUPABASE_ANON_KEY }}
+        run: npx tsx scripts/check-anon-exposure.ts
+
+      # WEB-QA-020. storage-bucket-posture.test.ts reads the MIGRATIONS, so it
+      # proves a bucket-closing migration was WRITTEN, not that it was APPLIED.
+      # On 2026-08-22 that gap was real: user-uploads was still public in
+      # production while the test sat green, because the closing migration had
+      # been merged in August and never run. This asks production directly.
+      #
+      # It parses its expectations out of that same test file, so there is one
+      # list and the offline and live checks cannot drift apart. Needs a
+      # service-role key: measured with the anon key, GET /storage/v1/bucket
+      # returns [] and GET /storage/v1/bucket/<id> returns 400 for every bucket
+      # regardless of posture, so anon cannot tell public from private.
+      - name: Storage bucket posture drift
+        env:
+          SUPABASE_URL: ${{ secrets.SUPABASE_URL }}
+          SUPABASE_SERVICE_ROLE_KEY: ${{ secrets.SUPABASE_SERVICE_ROLE_KEY }}
+        run: npx tsx scripts/check-bucket-posture.ts
+
+      # WEB-OPS-007. The scheduler keeps its own verdict in cron.job_run_details,
+
+      # which PostgREST cannot reach, so nothing had ever read it. WEB-AUTO-001
+
+      # shipped "cron/job observability" over automation_job_runs -- a table the
+
+      # edge functions write WHEN THEY RUN -- so a job that never fires writes no
+
+      # row and looks like an agent with nothing to do. That is how 57 of 61 jobs
+
+      # failed every run for thirteen months without a single alert.
+
+      #
+
+      # Ratchets rather than demanding zero: the 44 currently failing are
+
+      # baselined, because one of the two causes needs a service-role key this
+
+      # repo must never write down, and a check that is red on day one gets
+
+      # switched off.
+
+      # WEB-SEO-019 AC5. Two restaurants existed twice at the same address, the
+      # second pair written EIGHT SECONDS apart - one ingest run inserting the
+      # same record twice, because the scraper checks for an existing row with a
+      # SELECT before its INSERT and nothing stands behind that. Both records in
+      # one batch pass the check, since neither is in the table when the other is
+      # looked up.
+      #
+      # A detector rather than a unique index: an index would convert a duplicate
+      # insert into a hard failure inside a per-record loop that does not handle
+      # one, which is a tightening in the CLAUDE.md sense.
+      - name: Duplicate entity detector
+        env:
+          SUPABASE_URL: ${{ secrets.SUPABASE_URL }}
+          SUPABASE_SERVICE_ROLE_KEY: ${{ secrets.SUPABASE_SERVICE_ROLE_KEY }}
+        run: npx tsx scripts/check-duplicate-entities.ts
+
+      # WEB-OPS-007: 62 of 157 edge functions in the repo have never been
+      # deployed, so 34 of the 56 cron jobs that post to a function post to a
+      # 404. A function directory looks identical to a deployed function and
+      # there is no deploy step in CI, so nothing surfaced it. Probes with the
+      # anon key; sends {} so nothing is executed.
+      # WEB-BE-032 AC4: `{ data }` without `error` cannot tell a missing table
+      # from an empty one, which is why 29 missing tables went unnoticed for
+      # months. Baselined at the existing sites; fails only on new ones.
+      # Offline; no credentials needed.
+      - name: Discarded Supabase errors
+        run: node scripts/check-discarded-supabase-errors.mjs
+
+      - name: Edge-function deploy ratchet
+        env:
+          SUPABASE_URL: ${{ secrets.SUPABASE_URL }}
+          VITE_SUPABASE_ANON_KEY: ${{ secrets.VITE_SUPABASE_ANON_KEY }}
+        run: npx tsx scripts/check-edge-deploys.ts
+
+      # WEB-SEC-025: step 3 replaces the USING (true) SELECT policy on
+      # votes. A read that is not scoped to the caller returns ballots today
+      # and an empty array after, silently - a denied SELECT under RLS is an
+      # empty result, not an error. Offline; no credentials needed.
+      - name: Ballot read guard
+        run: bash scripts/check-ballot-reads.sh
+
+      # WEB-SEO-011. How far behind the database the live sitemaps are, and how
+      # long the oldest un-advertised event has been waiting. Reports, never
+      # gates: a sitemap lagging during a quiet week is expected, and gating on
+      # it is the permanently-red trap WEB-CI-020/021 already cost two lanes.
+      # WEB-SEO-013 AC5 on the hand-built hubs, which never had an inventory
+      # gate - check-pseo-inventory covers only the generated pSEO pages. Asks
+      # the database rather than the built HTML, because a hub that renders
+      # nothing emits no ItemList and would be skipped by a DOM count. Reports;
+      # each entry needs the 301-or-unpublish decision AC5 describes.
+      - name: Hand-built hub inventory
+        env:
+          VITE_SUPABASE_URL: ${{ secrets.VITE_SUPABASE_URL }}
+          VITE_SUPABASE_ANON_KEY: ${{ secrets.VITE_SUPABASE_ANON_KEY }}
+        run: node scripts/check-hub-inventory.mjs
+
+      - name: Sitemap freshness
+        env:
+          VITE_SUPABASE_URL: ${{ secrets.VITE_SUPABASE_URL }}
+          VITE_SUPABASE_ANON_KEY: ${{ secrets.VITE_SUPABASE_ANON_KEY }}
+        run: npx tsx scripts/check-sitemap-freshness.ts
+
+      # WEB-OPS-023. The /media route caches; rows written before the ingest
+      # switch is set bypass it and cost egress per view. The count re-accrues
+      # every crawl until MEDIA_CDN_BASE is set in the SUPABASE secrets (not
+      # only in Pages), so it is worth watching rather than gating.
+      - name: Images still served off the storage origin
+        env:
+          VITE_SUPABASE_URL: ${{ secrets.VITE_SUPABASE_URL }}
+          VITE_SUPABASE_ANON_KEY: ${{ secrets.VITE_SUPABASE_ANON_KEY }}
+        run: node scripts/check-media-url-drift.mjs
+
+      # WEB-OPS-007. A pg_cron job succeeds when net.http_post ENQUEUES, not
+      # when the call lands - so a job posting to a function that was never
+      # deployed reports healthy forever, and writes no automation_job_runs row
+      # either. Offline: migration URLs against the deploy baseline.
+      - name: Scheduled jobs point at functions that exist
+        run: node scripts/check-cron-targets.mjs
+
+      - name: Scheduled-job health ratchet
+
+        env:
+
+          SUPABASE_URL: ${{ secrets.SUPABASE_URL }}
+
+          SUPABASE_SERVICE_ROLE_KEY: ${{ secrets.SUPABASE_SERVICE_ROLE_KEY }}
+
+        run: npx tsx scripts/check-cron-health.ts
+
+      # WEB-OPS-007 AC4. The step above reads cron.job_run_details, which says
+      # the POST was ENQUEUED. This reads net._http_response, which says what
+      # came back. Reading it for the first time on 2026-08-29 found three
+      # scheduled jobs getting 404s and 500s while every other monitor was
+      # green. Ratchets: fails on a failure signature that is not baselined.
+      - name: What the scheduled POSTs got back
+        env:
+          SUPABASE_URL: ${{ secrets.SUPABASE_URL }}
+          SUPABASE_SERVICE_ROLE_KEY: ${{ secrets.SUPABASE_SERVICE_ROLE_KEY }}
+        run: npx tsx scripts/check-cron-http-responses.ts
+
+
+
+      - name: Diff against committed baselines and report drift
+        env:
+          SUPABASE_URL: ${{ secrets.SUPABASE_URL }}
+          EDGE_FUNCTION_API_KEY: ${{ secrets.EDGE_FUNCTION_API_KEY }}
+        run: |
+          node <<'EOF' > drift.json
+          const { execSync } = require('child_process');
+          const fs = require('fs');
+          const readCommitted = (p) => { try { return JSON.parse(execSync(`git show HEAD:${p}`, {encoding:'utf8'})); } catch { return null; } };
+          const cur = JSON.parse(fs.readFileSync('docs/rls-audit-findings.json','utf8'));
+          const baseFindings = readCommitted('docs/rls-audit-findings.json') || { findingKeys: [] };
+          const baseSet = new Set(baseFindings.findingKeys || []);
+          const newFindings = (cur.findingKeys || []).filter((k) => !baseSet.has(k));
+
+          const curCfg = JSON.parse(fs.readFileSync('docs/security-config-baseline.json','utf8'));
+          const baseCfg = readCommitted('docs/security-config-baseline.json') || {};
+          const configDrift = [];
+          const curJwt = new Set(curCfg.verifyJwtFalse || []);
+          const baseJwt = new Set(baseCfg.verifyJwtFalse || []);
+          for (const f of curJwt) if (!baseJwt.has(f)) configDrift.push(`verify_jwt_added:${f}`);
+          for (const f of baseJwt) if (!curJwt.has(f)) configDrift.push(`verify_jwt_removed:${f}`);
+          if (baseCfg.cspPresent && !curCfg.cspPresent) configDrift.push('csp_removed');
+          if (baseCfg.cspHash && curCfg.cspHash !== baseCfg.cspHash) configDrift.push('csp_changed');
+          if (baseCfg.corsHash && curCfg.corsHash !== baseCfg.corsHash) configDrift.push('cors_changed');
+
+          process.stdout.write(JSON.stringify({ newFindings, configDrift }));
+          EOF
+          echo "drift: $(cat drift.json)"
+          if [ -z "$SUPABASE_URL" ] || [ -z "$EDGE_FUNCTION_API_KEY" ]; then
+            echo "SUPABASE_URL / EDGE_FUNCTION_API_KEY not set — skipping report."
+            exit 0
+          fi
+          curl -sS -X POST \
+            "${SUPABASE_URL}/functions/v1/agent-config-audit" \
+            -H "x-api-key: ${EDGE_FUNCTION_API_KEY}" \
+            -H "Content-Type: application/json" \
+            --data-binary @drift.json \
+            && echo "reported drift"

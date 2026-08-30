@@ -106,4 +106,56 @@ final class QueryCacheTests: XCTestCase {
         XCTAssertNil(expired)
         XCTAssertEqual(fresh, "new")
     }
+
+    // MARK: - Size Cap / LRU Eviction (IOS-AUDIT-PERF-005)
+
+    /// A payload large enough that a handful of entries blow past a small cap.
+    private func makePayload(_ marker: String, bytes: Int = 4_000) -> [String] {
+        // Each element is ~length chars; JSON-encoded this comfortably exceeds
+        // `bytes` once a few entries accumulate.
+        [marker, String(repeating: "x", count: bytes)]
+    }
+
+    func testSizeCapKeepsTotalBounded() async {
+        // Tiny cap so a few writes must trigger eviction.
+        let cap = 10_000
+        await cache.setMaxDiskBytesForTesting(cap)
+
+        for i in 0..<20 {
+            await cache.set("entry-\(i)", value: makePayload("entry-\(i)"), ttl: 300)
+        }
+
+        let total = await cache.totalDiskBytesForTesting()
+        XCTAssertLessThanOrEqual(total, cap, "On-disk cache size must stay under the configured cap")
+    }
+
+    func testEvictsLeastRecentlyUsedFirst() async {
+        let cap = 12_000
+        await cache.setMaxDiskBytesForTesting(cap)
+
+        // Write three entries that together would exceed the cap.
+        await cache.set("oldest", value: makePayload("oldest", bytes: 5_000), ttl: 300)
+        try? await Task.sleep(for: .milliseconds(20))
+        await cache.set("middle", value: makePayload("middle", bytes: 5_000), ttl: 300)
+        try? await Task.sleep(for: .milliseconds(20))
+
+        // Access "oldest" so it becomes most-recently-used (touches mtime).
+        let _: [String]? = await cache.get("oldest")
+        try? await Task.sleep(for: .milliseconds(20))
+
+        // This write pushes total over the cap; "middle" is now the LRU entry
+        // and should be evicted before the freshly-accessed "oldest".
+        await cache.set("newest", value: makePayload("newest", bytes: 5_000), ttl: 300)
+
+        let oldest: [String]? = await cache.get("oldest")
+        let middle: [String]? = await cache.get("middle")
+        let newest: [String]? = await cache.get("newest")
+
+        XCTAssertNotNil(newest, "Most recently written entry should survive")
+        XCTAssertNotNil(oldest, "Recently accessed entry should survive over the LRU one")
+        XCTAssertNil(middle, "Least recently used entry should be evicted first")
+
+        let total = await cache.totalDiskBytesForTesting()
+        XCTAssertLessThanOrEqual(total, cap)
+    }
 }

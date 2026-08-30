@@ -77,7 +77,12 @@ export function DealCard({ deal, onClaim }: DealCardProps) {
               <div className="flex-1 bg-muted rounded px-3 py-2 text-center font-mono font-bold tracking-wider">
                 {deal.code}
               </div>
-              <Button variant="outline" size="icon" onClick={handleCopyCode}>
+              <Button
+                variant="outline"
+                size="icon"
+                onClick={handleCopyCode}
+                aria-label={copied ? "Promo code copied" : "Copy promo code"}
+              >
                 {copied ? <Check className="h-4 w-4" /> : <Copy className="h-4 w-4" />}
               </Button>
             </div>

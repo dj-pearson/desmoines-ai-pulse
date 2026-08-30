@@ -341,10 +341,36 @@ export type SecurityErrorCode =
 /**
  * Resource types that support ownership checking
  */
+/**
+ * Resource types that can be ownership-checked.
+ *
+ * REMOVED 2026-07-18 (WEB-SEC-020): 'advertisement', 'trip_plan' and
+ * 'event_alert'. Each mapped to a table that does not exist in the schema, so
+ * getTableName returned null for them and isResourceOwner could only ever deny.
+ * That fails closed, so it was never a vulnerability, but a union that advertises
+ * ownership checks the system cannot actually perform is worse than one that
+ * does not promise them — a caller reading this type would reasonably assume a
+ * check exists.
+ *
+ * They were referenced nowhere outside src/lib/security, and
+ * useResourceOwnership has no consumers at all, so removal is inert.
+ *
+ * REMOVED IN THE SAME PASS: 'event', 'restaurant' and 'attraction'. Verified
+ * against the live schema — the events, restaurants and attractions tables have
+ * NO owner column of any kind (no created_by, claimed_by, user_id or
+ * equivalent). They are crawler-ingested editorial content that nobody owns in
+ * the database, so an ownership check on them cannot be expressed, let alone
+ * pass. OWNERSHIP_COLUMNS previously claimed 'created_by'/'claimed_by' for them;
+ * those columns do not exist and the query returned 42703.
+ *
+ * TO RE-ADD ONE: add the literal here, add its owner column to
+ * OWNERSHIP_COLUMNS, and add a real table to the map in ownership.ts — the map
+ * is typed against keyof Database['public']['Tables'], so the compiler will
+ * reject a table that does not exist. Verify the owner column identifies the
+ * same principal the check assumes; a column named user_id that refers to a
+ * different entity would make the check fail OPEN.
+ */
 export type OwnableResource =
-  | 'event'
-  | 'restaurant'
-  | 'attraction'
   | 'review'
   | 'rating'
   | 'favorite'
@@ -352,11 +378,8 @@ export type OwnableResource =
   | 'discussion_reply'
   | 'photo'
   | 'campaign'
-  | 'advertisement'
   | 'profile'
-  | 'trip_plan'
-  | 'saved_search'
-  | 'event_alert';
+  | 'saved_search';
 
 /**
  * Ownership check configuration
@@ -382,21 +405,15 @@ export interface OwnershipConfig {
  * Default ownership column mappings
  */
 export const OWNERSHIP_COLUMNS: Record<OwnableResource, string> = {
-  event: 'created_by',
-  restaurant: 'claimed_by',
-  attraction: 'created_by',
   review: 'user_id',
   rating: 'user_id',
   favorite: 'user_id',
   discussion: 'user_id',
-  discussion_reply: 'user_id',
+  discussion_reply: 'created_by', // verified: this table has created_by, not user_id
   photo: 'user_id',
   campaign: 'user_id',
-  advertisement: 'campaign_id', // Linked via campaign
   profile: 'id', // profile.id = user.id
-  trip_plan: 'user_id',
   saved_search: 'user_id',
-  event_alert: 'user_id',
 };
 
 // =============================================================================

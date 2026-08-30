@@ -1,11 +1,50 @@
 import { serve } from "https://deno.land/std@0.168.0/http/server.ts";
 import { createClient } from 'https://esm.sh/@supabase/supabase-js@2';
 import { validateURLForSSRF } from '../_shared/validation.ts';
+import { runJob } from '../_shared/jobRunner.ts';
+import { fetchWithTimeout } from '../_shared/fetchWithTimeout.ts';
+import { getAnthropicApiKey } from '../_shared/aiConfig.ts';
 
 const corsHeaders = {
   'Access-Control-Allow-Origin': '*',
   'Access-Control-Allow-Headers': 'authorization, x-client-info, apikey, content-type',
 };
+
+/** Liveness check (WEB-AUTO-004): a recovered URL must resolve 2xx/3xx before
+ * we apply it. SSRF-guarded; treats network/abort as not-live. */
+async function isUrlLive(url: string): Promise<boolean> {
+  if (!validateURLForSSRF(url).valid) return false;
+  try {
+    const ctrl = new AbortController();
+    const t = setTimeout(() => ctrl.abort(), 8000);
+    let res: Response;
+    try {
+      res = await fetchWithTimeout(url, { method: 'HEAD', redirect: 'follow', signal: ctrl.signal });
+      // Some servers reject HEAD; retry with GET on 405/501.
+      if (res.status === 405 || res.status === 501) {
+        res = await fetchWithTimeout(url, { method: 'GET', redirect: 'follow', signal: ctrl.signal });
+      }
+    } finally {
+      clearTimeout(t);
+    }
+    return res.status >= 200 && res.status < 400;
+  } catch {
+    return false;
+  }
+}
+
+/** Wayback Machine fallback: latest archived snapshot of a dead URL, if any. */
+async function waybackLookup(url: string): Promise<string | null> {
+  try {
+    const res = await fetchWithTimeout(`https://archive.org/wayback/available?url=${encodeURIComponent(url)}`);
+    if (!res.ok) return null;
+    const data = await res.json();
+    const snap = data?.archived_snapshots?.closest;
+    return snap?.available && snap.url ? snap.url.replace(/^http:/, 'https:') : null;
+  } catch {
+    return null;
+  }
+}
 
 /**
  * Validate and Fix Event Source URLs
@@ -79,7 +118,7 @@ async function findActualEventUrl(event: any): Promise<string | null> {
     }
 
     // Fetch the aggregator page
-    const response = await fetch(event.source_url, {
+    const response = await fetchWithTimeout(event.source_url, {
       headers: {
         'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36'
       }
@@ -177,7 +216,7 @@ Instructions:
 
 URL:`;
 
-    const response = await fetch('https://api.anthropic.com/v1/messages', {
+    const response = await fetchWithTimeout('https://api.anthropic.com/v1/messages', {
       method: 'POST',
       headers: {
         'Content-Type': 'application/json',
@@ -192,7 +231,7 @@ URL:`;
           content: prompt
         }]
       })
-    });
+    }, 60_000);
 
     if (!response.ok) {
       console.log(`⚠️ Claude API error: ${response.status}`);
@@ -229,7 +268,7 @@ serve(async (req) => {
   try {
     const supabaseUrl = Deno.env.get('SUPABASE_URL')!;
     const supabaseKey = Deno.env.get('SUPABASE_SERVICE_ROLE_KEY')!;
-    const claudeApiKey = Deno.env.get('CLAUDE_API');
+    const claudeApiKey = getAnthropicApiKey();
     const supabase = createClient(supabaseUrl, supabaseKey);
 
     console.log('🚀 Starting source URL validation...');
@@ -242,10 +281,31 @@ serve(async (req) => {
     } = body;
 
     // Find events with aggregator URLs that are happening in the future
+    // NARROW TO AGGREGATORS IN THE QUERY, NOT AFTER IT.
+    //
+    // This used to take `limit` arbitrary future events and THEN filter to
+    // aggregator URLs, which is the wrong order: 26 of 416 future events carry
+    // one, so a batch of 50 yielded about 1 candidate. Across 22 recorded runs
+    // it checked FIVE distinct events, and every run reported checked: 1.
+    //
+    // The or(ilike) below is a deliberate SUPERSET of isAggregatorUrl - it
+    // matches the domain anywhere in the URL rather than in the hostname - so
+    // the in-code predicate still decides and the semantics do not change.
+    // It only stops the batch being spent on events that were never candidates.
+    //
+    // Ordering by source_url_checked_at with nulls first is the other half:
+    // the query had no order at all, so each run re-drew from the same pool and
+    // could re-check an event it had already flagged instead of advancing.
+    // Unchecked events now go first, then the least recently checked.
+    const aggregatorFilter = AGGREGATOR_DOMAINS
+      .map((d) => `source_url.ilike.*${d}*`)
+      .join(',');
     const { data: eventsToFix, error: fetchError } = await supabase
       .from('events')
       .select('id, title, date, source_url, venue')
       .gte('date', new Date().toISOString())
+      .or(aggregatorFilter)
+      .order('source_url_checked_at', { ascending: true, nullsFirst: true })
       .limit(limit);
 
     if (fetchError) {
@@ -270,6 +330,8 @@ serve(async (req) => {
 
     const updates: Array<{ id: string; title: string; oldUrl: string; newUrl: string }> = [];
     const errors: Array<{ id: string; title: string; error: string }> = [];
+    // WEB-AUTO-004: events whose link we could NOT recover -> flag broken.
+    const unrecovered: string[] = [];
 
     // Process each event
     for (const event of aggregatorEvents) {
@@ -280,24 +342,37 @@ serve(async (req) => {
         // Fallback to AI if enabled and no URL found
         if (!actualUrl && useAI && claudeApiKey) {
           const aiFetchCheck = validateURLForSSRF(event.source_url);
-          if (!aiFetchCheck.valid) {
+          if (aiFetchCheck.valid) {
+            const response = await fetchWithTimeout(event.source_url);
+            if (response.ok) {
+              const html = await response.text();
+              actualUrl = await findUrlWithAI(event, html, claudeApiKey);
+            }
+          } else {
             console.log(`⚠️ SSRF blocked AI fallback fetch: ${event.source_url}`);
-            continue;
           }
-          const response = await fetch(event.source_url);
-          if (response.ok) {
-            const html = await response.text();
-            actualUrl = await findUrlWithAI(event, html, claudeApiKey);
+        }
+
+        // WEB-AUTO-004: a recovered URL must be LIVE before we apply it.
+        if (actualUrl && actualUrl !== event.source_url && !(await isUrlLive(actualUrl))) {
+          console.log(`⚠️ Candidate URL not live, discarding: ${actualUrl}`);
+          actualUrl = null;
+        }
+
+        // WEB-AUTO-004: Wayback Machine fallback when no live candidate found.
+        if (!actualUrl) {
+          const archived = await waybackLookup(event.source_url);
+          if (archived && (await isUrlLive(archived))) {
+            actualUrl = archived;
+            console.log(`🕰️ Recovered via Wayback: ${archived}`);
           }
         }
 
         if (actualUrl && actualUrl !== event.source_url) {
-          updates.push({
-            id: event.id,
-            title: event.title,
-            oldUrl: event.source_url,
-            newUrl: actualUrl
-          });
+          updates.push({ id: event.id, title: event.title, oldUrl: event.source_url, newUrl: actualUrl });
+        } else if (!actualUrl) {
+          // Could not recover a working link for this event.
+          unrecovered.push(event.id);
         }
 
         // Rate limiting - wait 1 second between requests
@@ -337,11 +412,61 @@ serve(async (req) => {
       }
     }
 
+    // WEB-AUTO-004: flag outcomes so the public detail page can hide dead links
+    // and the admin can filter broken events. Recovered -> not broken.
+    const nowIso = new Date().toISOString();
+    const recoveredIds = updates.map((u) => u.id);
+    if (recoveredIds.length > 0) {
+      await supabase
+        .from('events')
+        .update({ source_url_broken: false, source_url_checked_at: nowIso })
+        .in('id', recoveredIds);
+    }
+    let flaggedCount = 0;
+    if (unrecovered.length > 0) {
+      const { error: flagErr } = await supabase
+        .from('events')
+        .update({ source_url_broken: true, source_url_checked_at: nowIso })
+        .in('id', unrecovered);
+      if (!flagErr) flaggedCount = unrecovered.length;
+    }
+
+    // Record the run via the WEB-AUTO-001 jobRunner (recovery rate + counts).
+    await runJob('validate-source-urls', async (ctx) => {
+      ctx.processed(updatedCount);
+      // FLAGGING A DEAD LINK IS THIS JOB SUCCEEDING, NOT FAILING.
+      //
+      // This was `ctx.failed(flaggedCount + errors.length)`, which counted every
+      // event we correctly identified as having an unrecoverable source URL as a
+      // failed item. Finding and flagging those is WEB-AUTO-004's entire purpose,
+      // so the job reported status=partial on any run that did its job.
+      //
+      // It has done exactly that on all 22 runs in the ledger: every one records
+      // errors: 0 and flaggedBroken: 1, so items_failed was 100% flagged links
+      // and 0% errors, and the job has never once reported success. jobRunner
+      // treats partial as ok=true, so nothing alerted - it just sat permanently
+      // amber to anything reading run status, including WEB-AUTO-001's job
+      // observability and AOS-MANAGE-007's review.
+      //
+      // flaggedBroken is already carried in ctx.meta below, so nothing is lost by
+      // counting only real errors here.
+      ctx.failed(errors.length);
+      ctx.meta({
+        checked: aggregatorEvents.length,
+        recovered: updatedCount,
+        flaggedBroken: flaggedCount,
+        errors: errors.length,
+        recoveryRate: aggregatorEvents.length > 0 ? Math.round((updatedCount / aggregatorEvents.length) * 100) : null,
+      });
+      return { updatedCount, flaggedCount };
+    });
+
     const response = {
       success: true,
-      message: `URL validation completed: ${updatedCount} events updated`,
+      message: `URL validation completed: ${updatedCount} events updated, ${flaggedCount} flagged broken`,
       checked: aggregatorEvents.length,
       updated: updatedCount,
+      flaggedBroken: flaggedCount,
       errors: errors.length,
       updates: updates.map(u => ({
         title: u.title,

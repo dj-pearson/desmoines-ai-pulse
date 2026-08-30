@@ -4,10 +4,12 @@ import com.desmoines.aipulse.data.remote.BillingService
 import com.desmoines.aipulse.data.repository.AuthRepository
 import com.desmoines.aipulse.ui.screens.auth.AuthViewModel.PasswordStrength
 import com.desmoines.aipulse.util.BiometricAuthService
+import com.desmoines.aipulse.util.SessionTimeoutService
 import io.mockk.coEvery
 import io.mockk.coVerify
 import io.mockk.every
 import io.mockk.mockk
+import io.mockk.verify
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.ExperimentalCoroutinesApi
 import kotlinx.coroutines.flow.emptyFlow
@@ -32,6 +34,7 @@ class AuthViewModelTest {
     private lateinit var authRepository: AuthRepository
     private lateinit var biometricAuthService: BiometricAuthService
     private lateinit var billingService: BillingService
+    private lateinit var sessionTimeoutService: SessionTimeoutService
     private lateinit var viewModel: AuthViewModel
 
     @BeforeEach
@@ -40,13 +43,32 @@ class AuthViewModelTest {
         authRepository = mockk(relaxed = true)
         biometricAuthService = mockk(relaxed = true)
         billingService = mockk(relaxed = true)
+        sessionTimeoutService = mockk(relaxed = true)
         every { authRepository.sessionStatus } returns emptyFlow()
-        viewModel = AuthViewModel(authRepository, biometricAuthService, billingService)
+        viewModel = AuthViewModel(
+            authRepository,
+            biometricAuthService,
+            billingService,
+            sessionTimeoutService,
+        )
     }
 
     @AfterEach
     fun tearDown() {
         Dispatchers.resetMain()
+    }
+
+    @Test
+    fun `signing out leaves the biometric lock alone`() = runTest {
+        // signOut used to call biometricAuthService.reset(), which deleted the
+        // biometric preference. That was a second path to the same defect
+        // AND-AUDIT-024 fixes in SecureStorage: making deleteUserData() preserve
+        // the key achieves nothing while another caller clears it directly.
+        // Biometric enrolment belongs to the device, not the account.
+        viewModel.signOut()
+        advanceUntilIdle()
+
+        verify(exactly = 0) { biometricAuthService.disable() }
     }
 
     @Nested

@@ -55,6 +55,8 @@ struct RecentSearchesList: View {
                     Spacer()
                     Button("Clear all", action: onClearAll)
                         .font(.subheadline)
+                        .minHitTarget()
+                        .accessibilityHint("Clears your recent search history")
                 }
                 .padding(.horizontal, 16)
                 .padding(.vertical, 6)
@@ -100,6 +102,8 @@ private struct SuggestionChip: View {
                 .clipShape(Capsule())
         }
         .buttonStyle(.plain)
+        .minHitTarget()
+        .accessibilityLabel(text)
     }
 }
 

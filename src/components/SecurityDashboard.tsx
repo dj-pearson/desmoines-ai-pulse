@@ -6,18 +6,9 @@ import { Input } from '@/components/ui/input';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
 import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs';
 import { useSecurityAudit } from '@/hooks/useSecurityAudit';
-import { 
-  Shield, 
-  AlertTriangle, 
-  Lock, 
-  Eye, 
-  TrendingUp, 
-  Calendar,
-  Filter,
-  Download,
-  RefreshCw
-} from 'lucide-react';
+import { Shield, AlertTriangle, Lock, Eye, Filter, Download, RefreshCw } from "lucide-react";
 import { format } from 'date-fns';
+import { SpriteIcon } from "@/components/ui/SpriteIcon";
 
 export default function SecurityDashboard() {
   const { 
@@ -85,7 +76,7 @@ export default function SecurityDashboard() {
 
   const getEventTypeIcon = (type: string) => {
     switch (type) {
-      case 'rate_limit': return <TrendingUp className="h-4 w-4" />;
+      case 'rate_limit': return <SpriteIcon name="trending-up" className="h-4 w-4" />;
       case 'auth_failure': return <Lock className="h-4 w-4" />;
       case 'validation_error': return <AlertTriangle className="h-4 w-4" />;
       case 'suspicious_activity': return <Eye className="h-4 w-4" />;
@@ -140,7 +131,7 @@ export default function SecurityDashboard() {
           <Card>
             <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
               <CardTitle className="text-sm font-medium">Rate Limits</CardTitle>
-              <TrendingUp className="h-4 w-4 text-muted-foreground" />
+              <SpriteIcon name="trending-up" className="h-4 w-4 text-muted-foreground" />
             </CardHeader>
             <CardContent>
               <div className="text-2xl font-bold text-orange-600">{stats.rateLimit}</div>

@@ -97,7 +97,7 @@ function buildContentLocationPrompt(ctx: EnhancedPromptContext): StructuredPromp
   const location = ctx.dimensions.location!;
 
   const user = `## TASK
-Generate a "${content.name} in ${location.name}" page for Des Moines AI Pulse.
+Generate a "${content.name} in ${location.name}" page for Des Moines Insider.
 
 ## TAXONOMY CONTEXT — Content Type
 ${JSON.stringify(content.context, null, 2)}

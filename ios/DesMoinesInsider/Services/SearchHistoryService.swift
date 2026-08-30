@@ -35,6 +35,14 @@ final class SearchHistoryService {
         save()
     }
 
+    /// Remove an entry by value. Safer than `remove(at:)` from a view, where the
+    /// list can mutate between render and tap and an index would delete the wrong
+    /// row. Entries are unique (case-insensitive) so this removes exactly one.
+    func remove(_ query: String) {
+        recentSearches.removeAll { $0.caseInsensitiveCompare(query) == .orderedSame }
+        save()
+    }
+
     /// Clear all history.
     func clearAll() {
         recentSearches = []

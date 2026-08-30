@@ -12,6 +12,7 @@ struct EmptyStateView: View {
     var secondaryAction: (() -> Void)?
 
     @State private var visible = false
+    @Environment(\.accessibilityReduceMotion) private var reduceMotion
 
     var body: some View {
         VStack(spacing: 18) {
@@ -32,13 +33,13 @@ struct EmptyStateView: View {
                     .symbolRenderingMode(.hierarchical)
             }
             .accessibilityHidden(true)
-            .scaleEffect(visible ? 1 : 0.85)
+            .scaleEffect((visible || reduceMotion) ? 1 : 0.85)
 
             Text(title)
-                .font(.title3.bold())
+                .appText(.title)
 
             Text(message)
-                .font(.subheadline)
+                .appText(.bodySmall)
                 .foregroundStyle(.secondary)
                 .multilineTextAlignment(.center)
                 .padding(.horizontal, 40)
@@ -48,12 +49,13 @@ struct EmptyStateView: View {
                     HapticFeedback.shared.light()
                     action()
                 }
-                .font(.subheadline.weight(.semibold))
+                .appText(.bodyEmphasized)
                 .padding(.horizontal, 26)
                 .padding(.vertical, 12)
                 .foregroundStyle(Color.accentColor)
                 .glassChip()
                 .buttonStyle(.pressableCard)
+                .minHitTarget()
                 .padding(.top, 8)
             }
 
@@ -61,8 +63,9 @@ struct EmptyStateView: View {
                 Button(secondaryActionTitle) {
                     secondaryAction()
                 }
-                .font(.subheadline)
+                .appText(.bodySmall)
                 .foregroundStyle(.secondary)
+                .minHitTarget()
             }
         }
         .padding(.vertical, 32)
@@ -71,8 +74,9 @@ struct EmptyStateView: View {
         .glassCard(cornerRadius: PremiumTokens.cornerXl, material: .ultraThinMaterial, elevation: PremiumTokens.elevation8)
         .padding(.horizontal, 24)
         .opacity(visible ? 1 : 0)
-        .offset(y: visible ? 0 : 16)
-        .animation(PremiumTokens.springSmooth, value: visible)
+        // Reduce Motion (IOS-COMPLY-003): drop the rise/scale entrance; fade only.
+        .offset(y: (visible || reduceMotion) ? 0 : 16)
+        .animation(reduceMotion ? .linear(duration: 0.15) : PremiumTokens.springSmooth, value: visible)
         .onAppear { visible = true }
         .accessibilityElement(children: .contain)
         .accessibilityLabel("\(title). \(message)")

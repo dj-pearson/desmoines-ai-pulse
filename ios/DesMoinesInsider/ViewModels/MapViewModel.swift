@@ -74,13 +74,21 @@ final class MapViewModel {
     // MARK: - Load Data
 
     func loadNearbyContent() async {
-        // Cancel any in-flight fetch
+        // Run as the single cancellable fetch so a later search() (or reload)
+        // cancels this load instead of letting it finish and clobber newer
+        // results. Previously this cancelled fetchTask but never registered
+        // itself, so a search racing a nearby load could be overwritten.
         fetchTask?.cancel()
+        let task = Task { await performNearbyLoad() }
+        fetchTask = task
+        await task.value
+    }
 
+    private func performNearbyLoad() async {
         // In UI testing mode, skip location services entirely to avoid
         // permission dialogs and network delays on CI simulators.
         if Config.isUITesting {
-            await loadDefaultArea()
+            await performDefaultAreaLoad()
             return
         }
 
@@ -103,20 +111,29 @@ final class MapViewModel {
         } catch {
             guard !Task.isCancelled else { return }
             // Fall back to Des Moines center
-            await loadDefaultArea()
+            await performDefaultAreaLoad()
         }
 
+        guard !Task.isCancelled else { return }
         isLoading = false
         hasLoadedOnce = true
     }
 
     func loadDefaultArea() async {
+        fetchTask?.cancel()
+        let task = Task { await performDefaultAreaLoad() }
+        fetchTask = task
+        await task.value
+    }
+
+    private func performDefaultAreaLoad() async {
         isLoading = true
         currentLatitude = Config.defaultLatitude
         currentLongitude = Config.defaultLongitude
 
         await fetchAllContent()
 
+        guard !Task.isCancelled else { return }
         isLoading = false
         hasLoadedOnce = true
     }
@@ -143,6 +160,9 @@ final class MapViewModel {
         }()
 
         let (e, r, a) = await (fetchedEvents, fetchedRestaurants, fetchedAttractions)
+        // Don't let a superseded nearby/default load overwrite newer results
+        // (e.g. a search the user kicked off while this was in flight).
+        guard !Task.isCancelled else { return }
         events = e
         restaurants = r
         attractions = a
@@ -162,11 +182,32 @@ final class MapViewModel {
 
     func search() async {
         guard !searchText.trimmingCharacters(in: .whitespaces).isEmpty else {
-            // Clear search - reload nearby content
-            await fetchAllContent()
+            // Clear search — reload content for the current area as a fresh
+            // cancellable task so it can't race a subsequent search.
+            fetchTask?.cancel()
+            let task = Task {
+                isLoading = true
+                await fetchAllContent()
+                guard !Task.isCancelled else { return }
+                isLoading = false
+            }
+            fetchTask = task
+            await task.value
             return
         }
 
+        // Cancel any in-flight search/nearby fetch and run this one as the new
+        // cancellable task. Without this, two rapid searches (or a search racing
+        // a nearby load) both run to completion and whichever finishes LAST wins,
+        // so a slow earlier search can overwrite newer results.
+        fetchTask?.cancel()
+        let query = searchText
+        let task = Task { await performSearch(query: query) }
+        fetchTask = task
+        await task.value
+    }
+
+    private func performSearch(query: String) async {
         isLoading = true
         errorMessage = nil
         clearSelection()
@@ -174,29 +215,33 @@ final class MapViewModel {
         // Search events by text
         let searchedEvents: [Event]
         do {
-            searchedEvents = try await eventsService.fuzzySearchEvents(query: searchText)
+            searchedEvents = try await eventsService.fuzzySearchEvents(query: query)
         } catch {
             searchedEvents = []
         }
+        guard !Task.isCancelled else { return }
 
         // Search restaurants by text
         let searchedRestaurants: [Restaurant]
         do {
-            searchedRestaurants = try await restaurantsService.fuzzySearchRestaurants(query: searchText)
+            searchedRestaurants = try await restaurantsService.fuzzySearchRestaurants(query: query)
         } catch {
             searchedRestaurants = []
         }
+        guard !Task.isCancelled else { return }
 
         // Search attractions by text
         let searchedAttractions: [Attraction]
         do {
             let response = try await attractionsService.fetchAttractions(
-                query: .init(searchText: searchText, limit: 50)
+                query: .init(searchText: query, limit: 50)
             )
             searchedAttractions = response.attractions
         } catch {
             searchedAttractions = []
         }
+        // Don't let a superseded search overwrite newer results.
+        guard !Task.isCancelled else { return }
 
         events = searchedEvents
         restaurants = searchedRestaurants
@@ -208,11 +253,12 @@ final class MapViewModel {
                          + restaurants.compactMap(\.coordinate)
                          + attractions.compactMap(\.coordinate))
         if let region = await Self.regionFitting(coordinates: allCoords) {
+            guard !Task.isCancelled else { return }
             cameraPosition = .region(region)
         }
 
         if events.isEmpty && restaurants.isEmpty && attractions.isEmpty {
-            errorMessage = "No results found for \"\(searchText)\""
+            errorMessage = "No results found for \"\(query)\""
         }
 
         isLoading = false
@@ -234,6 +280,20 @@ final class MapViewModel {
 
     // MARK: - Annotation Refresh
 
+    /// Cached ISO parsers — `refreshEventAnnotations` runs on every map-time
+    /// slider change and parses each event's timestamp, so re-allocating
+    /// ISO8601DateFormatters per refresh (with 100+ pins) is wasteful.
+    private static let isoFormatter: ISO8601DateFormatter = {
+        let f = ISO8601DateFormatter()
+        f.formatOptions = [.withInternetDateTime, .withFractionalSeconds]
+        return f
+    }()
+    private static let isoFormatterFallback: ISO8601DateFormatter = {
+        let f = ISO8601DateFormatter()
+        f.formatOptions = [.withInternetDateTime]
+        return f
+    }()
+
     private func refreshEventAnnotations() {
         guard showEvents else {
             if !eventAnnotations.isEmpty { eventAnnotations = [] }
@@ -242,10 +302,6 @@ final class MapViewModel {
         let timeWindow: (Date, Date)? = mapTime.map { t in
             (t.addingTimeInterval(-2 * 3600), t.addingTimeInterval(2 * 3600))
         }
-        let isoFormatter = ISO8601DateFormatter()
-        isoFormatter.formatOptions = [.withInternetDateTime, .withFractionalSeconds]
-        let isoFormatterFallback = ISO8601DateFormatter()
-        isoFormatterFallback.formatOptions = [.withInternetDateTime]
         eventAnnotations = events.compactMap { event in
             guard let coord = event.coordinate else { return nil }
             // IOS-DISCOVER-2026-004: filter events to ±2h window when slider
@@ -253,7 +309,7 @@ final class MapViewModel {
             if let (lo, hi) = timeWindow {
                 let candidates = [event.eventStartLocal, event.date].compactMap { $0 }
                 let parsed = candidates.compactMap { s in
-                    isoFormatter.date(from: s) ?? isoFormatterFallback.date(from: s)
+                    Self.isoFormatter.date(from: s) ?? Self.isoFormatterFallback.date(from: s)
                 }
                 guard let when = parsed.first, when >= lo && when <= hi else { return nil }
             }
@@ -358,6 +414,18 @@ final class MapViewModel {
         let lng: Int
     }
 
+    /// Resolves a cluster's member ids back to their models so the UI can offer
+    /// a disambiguation list when zooming can't separate co-located pins
+    /// (IOS-AUDIT-UX-027).
+    func members(in cluster: MapCluster) -> [MapMember] {
+        let ids = Set(cluster.memberIds)
+        var members: [MapMember] = []
+        members += eventAnnotations.filter { ids.contains($0.id) }.map { .event($0.event) }
+        members += restaurantAnnotations.filter { ids.contains($0.id) }.map { .restaurant($0.restaurant) }
+        members += attractionAnnotations.filter { ids.contains($0.id) }.map { .attraction($0.attraction) }
+        return members
+    }
+
     var isEmpty: Bool {
         hasLoadedOnce && !isLoading && totalPinCount == 0
     }
@@ -457,5 +525,45 @@ struct MapCluster: Identifiable {
         if kinds.contains(.event) { return .red }
         if kinds.contains(.restaurant) { return .orange }
         return .green
+    }
+}
+
+/// A single resolved member of a `MapCluster`, used by the disambiguation sheet
+/// so co-located pins remain selectable (IOS-AUDIT-UX-027).
+enum MapMember: Identifiable {
+    case event(Event)
+    case restaurant(Restaurant)
+    case attraction(Attraction)
+
+    var id: String {
+        switch self {
+        case .event(let e): return "event-\(e.id)"
+        case .restaurant(let r): return "restaurant-\(r.id)"
+        case .attraction(let a): return "attraction-\(a.id)"
+        }
+    }
+
+    var title: String {
+        switch self {
+        case .event(let e): return e.title
+        case .restaurant(let r): return r.name
+        case .attraction(let a): return a.name
+        }
+    }
+
+    var icon: String {
+        switch self {
+        case .event: return "calendar"
+        case .restaurant: return "fork.knife"
+        case .attraction: return "star.fill"
+        }
+    }
+
+    var tint: Color {
+        switch self {
+        case .event: return .red
+        case .restaurant: return .orange
+        case .attraction: return .green
+        }
     }
 }

@@ -2,10 +2,11 @@ import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import { Progress } from "@/components/ui/progress";
-import { Calendar, Users, Trophy, Timer, Camera, MapPin } from "lucide-react";
+import { Users, Trophy, Timer, Camera, MapPin } from "lucide-react";
 import { CommunityChallenge as ChallengeType, useGamification } from "@/hooks/useGamification";
 import { useAuth } from "@/hooks/useAuth";
 import { formatDistanceToNow } from "date-fns";
+import { SpriteIcon } from "@/components/ui/SpriteIcon";
 
 interface CommunityChallengeProps {
   challenge: ChallengeType;
@@ -87,7 +88,7 @@ export function CommunityChallenge({ challenge }: CommunityChallengeProps) {
             )}
             {challenge.requirements.venue_type && (
               <div className="flex items-center gap-2">
-                <MapPin className="h-4 w-4" />
+                <SpriteIcon name="map-pin" className="h-4 w-4" />
                 Visit {challenge.requirements.venue_type}s
               </div>
             )}
@@ -120,7 +121,7 @@ export function CommunityChallenge({ challenge }: CommunityChallengeProps) {
           <div className="space-y-2">
             <div className="flex items-center justify-between text-sm">
               <span className="flex items-center gap-1">
-                <Users className="h-4 w-4" />
+                <SpriteIcon name="users" className="h-4 w-4" />
                 Participants
               </span>
               <span>{challenge.user_participation?.length || 0} / {challenge.max_participants}</span>

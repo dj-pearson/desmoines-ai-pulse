@@ -7,12 +7,15 @@ import {
   CONTENT_TYPE_MAP,
 } from "../_shared/imageStorage.ts";
 import { requireAdminOrApiKey } from "../_shared/apiKeyAuth.ts";
+import { validateURLForSSRF } from "../_shared/validation.ts";
+import { runAgent } from "../_shared/agentRun.ts";
 import {
   findExistingVenueRecord,
   scrapeImageFromWebsite,
   getGooglePlacesPhoto,
   getCategoryDefaultImage,
 } from "../_shared/imageFallbacks.ts";
+import { venueImageForSourceUrl } from "../_shared/venueImage.ts";
 
 const corsHeaders = {
   "Access-Control-Allow-Origin": "*",
@@ -103,6 +106,16 @@ const SELECT_COLS: Record<Category, string> = {
 async function scrapeImageUrl(pageUrl: string): Promise<string | null> {
   if (!pageUrl) return null;
 
+  // SSRF guard — pageUrl comes from a DB row (scraped source_url/website).
+  const ssrf = validateURLForSSRF(pageUrl, {
+    allowedProtocols: ["http:", "https:"],
+    blockPrivateIPs: true,
+  });
+  if (!ssrf.valid) {
+    console.warn(`⚠️ Refusing unsafe page URL (${ssrf.error}): ${pageUrl}`);
+    return null;
+  }
+
   try {
     const response = await fetch(pageUrl, {
       headers: {
@@ -178,6 +191,13 @@ Deno.serve(async (req) => {
     // Today's date (YYYY-MM-DD) for filtering past events out of the backfill —
     // there's no point fetching images for events that have already happened.
     const todayIso = new Date().toISOString().slice(0, 10);
+    const nowIso = new Date().toISOString();
+    // Re-try a row that previously failed at most once a week (its source page
+    // may have gained an image since) — but never every run. Drop milliseconds
+    // so the timestamp parses cleanly inside a PostgREST .or() filter.
+    const retryBefore = new Date(Date.now() - 7 * 24 * 60 * 60 * 1000)
+      .toISOString()
+      .replace(/\.\d{3}Z$/, "Z");
 
     console.log(
       `🖼️ backfill-images: category=${category} batchSize=${batchSize} offset=${offset} dryRun=${dryRun}${
@@ -191,7 +211,12 @@ Deno.serve(async (req) => {
     let recordsQuery = supabase
       .from(table)
       .select(SELECT_COLS[category])
-      .or("image_url.is.null,image_url.eq.");
+      .or("image_url.is.null,image_url.eq.")
+      // Skip rows attempted within the retry window so permanent failures don't
+      // get re-tried every run (image_checked_at stamped below on each attempt).
+      .or(`image_checked_at.is.null,image_checked_at.lt."${retryBefore}"`)
+      // Never-checked rows first, then oldest-checked — drains new backlog fast.
+      .order("image_checked_at", { ascending: true, nullsFirst: true });
 
     if (category === "events") {
       recordsQuery = recordsQuery.gte("date", todayIso).order("date", { ascending: true });
@@ -239,7 +264,8 @@ Deno.serve(async (req) => {
     let countQuery = supabase
       .from(table)
       .select("id", { count: "exact", head: true })
-      .or("image_url.is.null,image_url.eq.");
+      .or("image_url.is.null,image_url.eq.")
+      .or(`image_checked_at.is.null,image_checked_at.lt."${retryBefore}"`);
     if (category === "events") {
       countQuery = countQuery.gte("date", todayIso);
     }
@@ -253,13 +279,22 @@ Deno.serve(async (req) => {
       updated: 0,
       skipped: 0,
       failed: 0,
-      nextOffset:
-        offset + batchSize < (totalRemaining ?? 0)
-          ? offset + batchSize
-          : null,
+      // On a real run every processed row leaves the working set (image filled,
+      // or image_checked_at stamped), so keep draining from offset 0 rather than
+      // advancing past rows that shifted up. Dry runs change nothing, so they
+      // page normally.
+      nextOffset: dryRun
+        ? (offset + batchSize < (totalRemaining ?? 0) ? offset + batchSize : null)
+        : ((totalRemaining ?? 0) - records.length > 0 ? 0 : null),
       dryRun,
       details: [],
     };
+
+    // Record this invocation in the unified agent run ledger (AOS-CORE-002).
+    // Fail-open: runAgent never throws, so a ledger hiccup can't break the
+    // backfill itself. Dry runs are marked skipped (no writes happen).
+    await runAgent("backfill-images", async (ctx) => {
+      if (dryRun) ctx.skip("dry run — preview only, no writes");
 
     for (const record of records) {
       const id: string = record.id;
@@ -289,6 +324,38 @@ Deno.serve(async (req) => {
       // ── Fallback chain ──────────────────────────────────────────────────
       let rawImageUrl: string | null = null;
       let source: ImageSource = "none";
+
+      // 0) Venue default, for events from a single-venue source.
+      //
+      // Ahead of the scrape deliberately: this is the only step in the chain
+      // that costs nothing. The event goes straight to the venue's image with
+      // no page fetch, no image download, no storage object and no
+      // media_assets row, which is the same saving the ingest paths now take.
+      // Events only - a restaurant's website is not a venue source, and gating
+      // on the category says so rather than relying on no host ever matching.
+      if (category === "events" && pageUrl) {
+        const venueDefault = await venueImageForSourceUrl(supabase, pageUrl);
+        if (venueDefault) {
+          const { error: setError } = await supabase
+            .from(table)
+            .update({ image_url: venueDefault, image_checked_at: new Date().toISOString() })
+            .eq("id", id);
+          if (setError) {
+            console.error(`  ! venue-default update failed for ${id}: ${setError.message}`);
+          } else {
+            result.details.push({
+              id,
+              name,
+              sourceUrl: pageUrl,
+              imageUrl: venueDefault,
+              status: "updated",
+              reason: "venue default (no fetch)",
+            });
+            result.updated++;
+            continue;
+          }
+        }
+      }
 
       // 1) source_url scrape (primary)
       if (pageUrl) {
@@ -331,6 +398,9 @@ Deno.serve(async (req) => {
 
       if (!rawImageUrl) {
         result.failed++;
+        // Stamp the attempt so this row drops out of the working set for the
+        // retry window instead of being re-scraped every single run.
+        await supabase.from(table).update({ image_checked_at: nowIso }).eq("id", id);
         result.details.push({
           id,
           name,
@@ -350,6 +420,7 @@ Deno.serve(async (req) => {
 
       if (!cdnUrl) {
         result.failed++;
+        await supabase.from(table).update({ image_checked_at: nowIso }).eq("id", id);
         result.details.push({
           id,
           name,
@@ -362,10 +433,10 @@ Deno.serve(async (req) => {
         continue;
       }
 
-      // Update the record
+      // Update the record (stamp image_checked_at so we don't re-process it)
       const { error: updateError } = await supabase
         .from(table)
-        .update({ image_url: cdnUrl, updated_at: new Date().toISOString() })
+        .update({ image_url: cdnUrl, image_checked_at: nowIso, updated_at: nowIso })
         .eq("id", id);
 
       if (updateError) {
@@ -392,6 +463,23 @@ Deno.serve(async (req) => {
         source,
       });
     }
+
+      // Report outcome to the ledger. Image work uses no LLM tokens; cost is
+      // effectively storage/egress, left at 0 here.
+      ctx.processed(result.updated);
+      ctx.failed(result.failed);
+      ctx.meta({
+        category,
+        batchSize,
+        offset,
+        skippedCount: result.skipped,
+        nextOffset: result.nextOffset,
+      });
+      ctx.summary(
+        `[${category}] updated ${result.updated}, failed ${result.failed}, skipped ${result.skipped} of ${result.processed} processed`,
+      );
+      return result;
+    }, { client: supabase });
 
     console.log(
       `✅ backfill-images done: updated=${result.updated} skipped=${result.skipped} failed=${result.failed} nextOffset=${result.nextOffset}`

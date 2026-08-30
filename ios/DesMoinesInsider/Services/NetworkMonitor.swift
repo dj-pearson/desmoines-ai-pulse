@@ -50,6 +50,8 @@ final class NetworkMonitor {
                 guard !Task.isCancelled else { return }
                 showReconnected = false
             }
+            // Flush any ad telemetry that queued while offline (IOS-ADS-014).
+            Task { await AdTrackingService.shared.flushPendingEvents() }
         }
 
         isConnected = connected

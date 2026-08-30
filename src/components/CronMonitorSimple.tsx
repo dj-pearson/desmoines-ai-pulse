@@ -4,18 +4,10 @@ import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import { ScrollArea } from "@/components/ui/scroll-area";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
-import { 
-  Activity, 
-  Clock, 
-  CheckCircle, 
-  XCircle, 
-  AlertTriangle,
-  Play,
-  Pause,
-  RotateCw
-} from "lucide-react";
+import { Activity, CheckCircle, XCircle, AlertTriangle, Play, Pause, RotateCw } from "lucide-react";
 import { toast } from "sonner";
 import { createLogger } from '@/lib/logger';
+import { SpriteIcon } from "@/components/ui/SpriteIcon";
 
 const log = createLogger('CronMonitorSimple');
 
@@ -69,7 +61,7 @@ export default function CronMonitor() {
       case 'idle': return <CheckCircle className="h-4 w-4" />;
       case 'error':
       case 'failed': return <XCircle className="h-4 w-4" />;
-      case 'pending': return <Clock className="h-4 w-4" />;
+      case 'pending': return <SpriteIcon name="clock" className="h-4 w-4" />;
       default: return <AlertTriangle className="h-4 w-4" />;
     }
   };
@@ -171,7 +163,7 @@ export default function CronMonitor() {
           <Card>
             <CardHeader>
               <CardTitle className="flex items-center gap-2">
-                <Clock className="h-5 w-5" />
+                <SpriteIcon name="clock" className="h-5 w-5" />
                 Recent Execution Logs
               </CardTitle>
             </CardHeader>
@@ -179,7 +171,7 @@ export default function CronMonitor() {
               <ScrollArea className="h-[400px]">
                 {logs.length === 0 ? (
                   <div className="text-center py-8 text-muted-foreground">
-                    <Clock className="h-12 w-12 mx-auto mb-4 opacity-50" />
+                    <SpriteIcon name="clock" className="h-12 w-12 mx-auto mb-4 opacity-50" />
                     <p>No execution logs found</p>
                     <p className="text-sm">Logs will appear here when jobs are executed</p>
                   </div>

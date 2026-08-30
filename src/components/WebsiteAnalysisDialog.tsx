@@ -11,17 +11,11 @@ import { Badge } from "@/components/ui/badge";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { ScrollArea } from "@/components/ui/scroll-area";
-import {
-  Sparkles,
-  Loader2,
-  AlertCircle,
-  CheckCircle,
-  Copy,
-  RefreshCw,
-} from "lucide-react";
+import { Loader2, AlertCircle, CheckCircle, Copy, RefreshCw } from "lucide-react";
 import { useToast } from "@/hooks/use-toast";
 import { supabase } from "@/integrations/supabase/client";
 import { createLogger } from '@/lib/logger';
+import { SpriteIcon } from "@/components/ui/SpriteIcon";
 
 const log = createLogger('WebsiteAnalysisDialog');
 
@@ -328,7 +322,7 @@ export default function WebsiteAnalysisDialog({
       <DialogContent className="max-w-4xl max-h-[80vh]">
         <DialogHeader>
           <DialogTitle className="flex items-center gap-2">
-            <Sparkles className="h-5 w-5" />
+            <SpriteIcon name="sparkles" className="h-5 w-5" />
             AI Website Analysis: {scrapingJob.name}
           </DialogTitle>
           <DialogDescription>
@@ -507,7 +501,7 @@ export default function WebsiteAnalysisDialog({
 
           {!analysisResult && (
             <div className="text-center py-12 text-muted-foreground">
-              <Sparkles className="h-12 w-12 mx-auto mb-4 text-muted-foreground/50" />
+              <SpriteIcon name="sparkles" className="h-12 w-12 mx-auto mb-4 text-muted-foreground/50" />
               <h3 className="text-lg font-medium mb-2">Ready to Analyze</h3>
               <p>
                 Click "Start Analysis" to have AI examine the website structure

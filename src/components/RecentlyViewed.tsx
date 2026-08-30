@@ -2,10 +2,11 @@ import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
 import { useRecentlyViewed } from "@/hooks/useRecentlyViewed";
-import { Clock, X, Calendar, MapPin } from "lucide-react";
+import { X } from "lucide-react";
 import { Link } from "react-router-dom";
 import { formatEventDateShort } from "@/lib/timezone";
 import { cn } from "@/lib/utils";
+import { SpriteIcon } from "@/components/ui/SpriteIcon";
 
 interface RecentlyViewedProps {
   limit?: number;
@@ -42,7 +43,7 @@ export function RecentlyViewed({
       <div className={cn("space-y-3", className)}>
         <div className="flex items-center justify-between">
           <h3 className="text-lg font-semibold flex items-center gap-2">
-            <Clock className="h-5 w-5 text-muted-foreground" />
+            <SpriteIcon name="clock" className="h-5 w-5 text-muted-foreground" />
             Recently Viewed
           </h3>
           {displayItems.length > 0 && (
@@ -95,6 +96,7 @@ export function RecentlyViewed({
                   variant="ghost"
                   size="icon"
                   className="h-6 w-6 opacity-0 group-hover:opacity-100 transition-opacity"
+                  aria-label="Remove from recently viewed"
                   onClick={(e) => {
                     e.preventDefault();
                     e.stopPropagation();
@@ -124,7 +126,7 @@ export function RecentlyViewed({
       <CardHeader>
         <div className="flex items-center justify-between">
           <CardTitle className="flex items-center gap-2">
-            <Clock className="h-5 w-5 text-primary" />
+            <SpriteIcon name="clock" className="h-5 w-5 text-primary" />
             Recently Viewed Events
           </CardTitle>
           {displayItems.length > 0 && (
@@ -176,13 +178,13 @@ export function RecentlyViewed({
 
                   <div className="space-y-1 text-sm text-muted-foreground">
                     <div className="flex items-center gap-2">
-                      <Calendar className="h-3 w-3" />
+                      <SpriteIcon name="calendar" className="h-3 w-3" />
                       <span className="text-xs">
                         {formatEventDateShort({ date: item.date } as any)}
                       </span>
                     </div>
                     <div className="flex items-center gap-2">
-                      <MapPin className="h-3 w-3" />
+                      <SpriteIcon name="map-pin" className="h-3 w-3" />
                       <span className="text-xs line-clamp-1">
                         {item.venue || item.location}
                       </span>
@@ -194,6 +196,7 @@ export function RecentlyViewed({
                   variant="ghost"
                   size="icon"
                   className="opacity-0 group-hover:opacity-100 transition-opacity"
+                  aria-label="Remove from recently viewed"
                   onClick={(e) => {
                     e.preventDefault();
                     e.stopPropagation();

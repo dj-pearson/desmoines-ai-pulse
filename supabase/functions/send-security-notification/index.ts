@@ -22,6 +22,7 @@ import { createClient } from "https://esm.sh/@supabase/supabase-js@2.45.0";
 import { handleCors, getCorsHeaders, isOriginAllowed } from "../_shared/cors.ts";
 import { escapeHtml } from "../_shared/escapeHtml.ts";
 import { renderEmail, SITE_URL } from "../_shared/emailLayout.ts";
+import { fetchWithTimeout } from "../_shared/fetchWithTimeout.ts";
 
 type EventType =
   | "new_device_login"
@@ -212,7 +213,7 @@ serve(async (req) => {
       );
     }
 
-    const resendResponse = await fetch("https://api.resend.com/emails", {
+    const resendResponse = await fetchWithTimeout("https://api.resend.com/emails", {
       method: "POST",
       headers: {
         "Content-Type": "application/json",

@@ -1,5 +1,6 @@
 package com.desmoines.aipulse.ui.screens.home
 
+import com.desmoines.aipulse.util.UiFormatLocale
 import androidx.compose.foundation.background
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
@@ -141,7 +142,7 @@ fun FeaturedEventCard(
                         tint = MaterialTheme.colorScheme.onSurfaceVariant
                     )
                     Text(
-                        text = date.format(DateTimeFormatter.ofPattern("MMM d", Locale.US)),
+                        text = date.format(DateTimeFormatter.ofPattern("MMM d", UiFormatLocale)),
                         style = MaterialTheme.typography.bodySmall,
                         color = MaterialTheme.colorScheme.onSurfaceVariant
                     )

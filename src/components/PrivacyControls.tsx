@@ -46,6 +46,7 @@ import { Alert, AlertDescription } from "@/components/ui/alert";
 import { useToast } from "@/hooks/use-toast";
 import { useAuth } from "@/hooks/useAuth";
 import { supabase } from "@/integrations/supabase/client";
+import { reopenConsentBanner } from "@/components/CookieConsentBanner";
 import {
   Shield,
   Download,
@@ -72,14 +73,51 @@ export function PrivacyControls() {
       // can only read their own rows, so this is safe without extra filters.
       // We query each table independently so that a missing table or permission
       // error on one doesn't block the whole export.
+      //
+      // THREE OF THESE NAMES WERE WRONG AND THE INDEPENDENT-QUERY DESIGN HID IT
+      // (XPLAT-007). `favorites`, `ratings` and `reviews` do not exist - all
+      // three answer 42P01 - so a user exercising their right of access received
+      // an export with three error strings where their favourites, ratings and
+      // reviews should have been. The real tables are content_favorites,
+      // user_ratings and event_reviews, and all three are in the erasure path's
+      // PURGE_TABLES, so we were deleting that data and declining to show it.
+      // A right of access is not a right of erasure; data we hold is data the
+      // user is entitled to see.
+      //
+      // THIS LIST IS STILL THE WRONG MECHANISM. It is eight names maintained by
+      // hand against a schema that has renamed three of them already, while
+      // supabase/functions/export-user-data walks all 62 entries of
+      // PURGE_TABLES and is covered by user-data-tables.test.ts, which fails
+      // when a table carrying user_id appears in neither list. That function is
+      // built and NOT DEPLOYED (an anon POST answers 404), so this client-side
+      // list is what a user actually gets. Point this at the function once it is
+      // deployed and delete the list - do not grow the list.
+      //
+      // THE SIZE OF THE GAP, measured 2026-08-28 rather than estimated, because
+      // "eight names" does not convey it. Against _shared/userDataTables.ts:
+      //     62  PURGE_TABLES     rows we DELETE on request
+      //      8  shown here
+      //     54  deleted but never shown
+      //     18  RETAINED_TABLES  kept with a stated legal basis, 0 shown
+      // The 18 are the sharper half: data we decline to delete is data the user
+      // is MORE entitled to see, not less.
+      //
+      // All 8 below were re-probed against production on 2026-08-28 and every
+      // one returns 200 with a user_id column, so the three renamed names stay
+      // fixed. export-user-data is still 404 - and it is safe to deploy on its
+      // own: it has no config.toml entry, so verify_jwt defaults to true and it
+      // is not among the 71 verify_jwt=false functions that deploy-edge-functions
+      // deliberately withholds. Its erasure counterpart delete-user-account is
+      // already live (401 on an anon POST).
       const tables = [
         "profiles",
         "user_event_interactions",
         "user_restaurant_interactions",
-        "favorites",
-        "ratings",
-        "reviews",
+        "content_favorites",
+        "user_ratings",
+        "event_reviews",
         "user_subscriptions",
+        "user_analytics",
       ];
 
       const exported: Record<string, unknown> = {
@@ -88,8 +126,15 @@ export function PrivacyControls() {
           email: user.email,
           generated_at: new Date().toISOString(),
           format_version: "1.0",
+          // NAME WHAT IS COVERED. A user cannot tell a category they have no
+          // data in from one this export does not read, and an export that
+          // lists nothing implies it read everything.
+          tables_included: tables,
           notice:
-            "This export contains personal data we hold about your account. Certain records we are legally required to retain (e.g., invoices for tax purposes) may not be included; see our Privacy Policy for retention details.",
+            "This export covers the record types listed in tables_included. It is not yet " +
+            "a complete copy of every record associated with your account - a fuller export " +
+            "is being prepared. Records we are legally required to retain (for example " +
+            "invoices for tax purposes) are described in our Privacy Policy.",
         },
       };
 
@@ -231,8 +276,8 @@ export function PrivacyControls() {
               </h3>
               <p className="text-sm text-muted-foreground">
                 Get a machine-readable JSON copy of the profile, preferences,
-                favorites, reviews, and subscription records we hold about your
-                account.
+                favorites, reviews, subscription, and usage-analytics records we
+                hold about your account.
               </p>
             </div>
           </div>
@@ -278,8 +323,8 @@ export function PrivacyControls() {
               </p>
             </div>
           </div>
-          <Button asChild variant="outline">
-            <Link to="/cookie-policy">Manage cookie preferences</Link>
+          <Button variant="outline" onClick={reopenConsentBanner}>
+            Manage cookie preferences
           </Button>
         </div>
 

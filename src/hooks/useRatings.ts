@@ -1,8 +1,11 @@
 import { useState, useEffect } from "react";
 import { supabase } from "@/integrations/supabase/client";
+import { createLogger } from "@/lib/logger";
 import { Database } from "@/integrations/supabase/types";
 import { useAuth } from "@/hooks/useAuth";
 import { useToast } from "@/hooks/use-toast";
+
+const logger = createLogger("useRatings");
 
 type Rating = Database["public"]["Tables"]["user_ratings"]["Row"];
 type RatingInsert = Database["public"]["Tables"]["user_ratings"]["Insert"];
@@ -77,15 +80,24 @@ export function useRatings({ contentType, contentId }: UseRatingsProps) {
         throw aggregateError;
       }
 
+      // WEB-AUTO-009: hide reviews that haven't cleared moderation (pending /
+      // flagged / rejected). Unknown/null status is treated as visible so older
+      // rows are unaffected. The author still sees their own review via
+      // `userRating` (derived from the full set above).
+      const HIDDEN = new Set(["pending", "flagged", "rejected"]);
+      const visibleRatings = (ratings || []).filter(
+        (r) => !HIDDEN.has((r as { moderation_status?: string }).moderation_status ?? "approved"),
+      );
+
       setState({
-        ratings: ratings || [],
+        ratings: visibleRatings,
         userRating,
         aggregate: aggregate || null,
         isLoading: false,
         error: null,
       });
     } catch (error) {
-      console.error("Error fetching ratings:", error);
+      logger.error('fetchRatings', 'Error fetching ratings', { error });
       setState(prev => ({
         ...prev,
         isLoading: false,
@@ -94,7 +106,7 @@ export function useRatings({ contentType, contentId }: UseRatingsProps) {
     }
   };
 
-  const submitRating = async (rating: RatingValue, reviewText?: string) => {
+  const submitRating = async (rating: RatingValue, reviewText?: string, photoUrls?: string[]) => {
     if (!user) {
       toast({
         title: "Authentication Required",
@@ -105,12 +117,18 @@ export function useRatings({ contentType, contentId }: UseRatingsProps) {
     }
 
     try {
+      // WEB-AUTO-009: a review with text is held hidden (moderation_status
+      // 'pending') until moderate-content scores it. A bare star rating with no
+      // review body carries no text to moderate, so it stays visible.
+      const hasText = !!reviewText && reviewText.trim().length > 0;
       const ratingData: RatingInsert = {
         user_id: user.id,
         content_type: contentType,
         content_id: contentId,
         rating,
         review_text: reviewText,
+        photo_urls: photoUrls ?? [],
+        moderation_status: hasText ? "pending" : "approved",
       };
 
       const { data, error } = await supabase
@@ -123,16 +141,46 @@ export function useRatings({ contentType, contentId }: UseRatingsProps) {
 
       if (error) throw error;
 
-      toast({
-        title: "Rating Submitted",
-        description: "Thank you for your feedback!",
-      });
+      // Score the review text (toxicity / spam) before it goes public. Awaited
+      // so we can give the author an honest, polite verdict; fails OPEN (treat
+      // as submitted) so a moderation outage never blocks feedback — the nightly
+      // sweep re-moderates anything left pending.
+      let verdict: string | null = null;
+      if (hasText && data?.id) {
+        try {
+          const { data: modRes } = await supabase.functions.invoke("moderate-content", {
+            body: { contentType: "review", contentId: data.id },
+          });
+          verdict = (modRes as { decision?: string } | null)?.decision ?? null;
+        } catch {
+          verdict = null; // fail open
+        }
+      }
+
+      if (verdict === "rejected") {
+        toast({
+          title: "Review not posted",
+          description:
+            "Your review couldn't be published because it may not meet our community guidelines.",
+          variant: "destructive",
+        });
+      } else if (verdict === "flagged") {
+        toast({
+          title: "Review submitted",
+          description: "Thanks! Your review is being reviewed and will appear shortly.",
+        });
+      } else {
+        toast({
+          title: "Rating Submitted",
+          description: "Thank you for your feedback!",
+        });
+      }
 
       // Refresh ratings to get updated data
       await fetchRatings();
       return true;
     } catch (error) {
-      console.error("Error submitting rating:", error);
+      logger.error('submitRating', 'Error submitting rating', { error });
       toast({
         title: "Error",
         description: "Failed to submit rating. Please try again.",
@@ -163,10 +211,38 @@ export function useRatings({ contentType, contentId }: UseRatingsProps) {
       await fetchRatings();
       return true;
     } catch (error) {
-      console.error("Error deleting rating:", error);
+      logger.error('deleteRating', 'Error deleting rating', { error });
       toast({
         title: "Error",
         description: "Failed to delete rating. Please try again.",
+        variant: "destructive",
+      });
+      return false;
+    }
+  };
+
+  const reportReview = async (ratingId: string) => {
+    if (!user) {
+      toast({
+        title: "Authentication Required",
+        description: "Please log in to report a review",
+        variant: "destructive",
+      });
+      return false;
+    }
+    try {
+      const { error } = await supabase.rpc("report_review", { p_rating_id: ratingId });
+      if (error) throw error;
+      toast({
+        title: "Report submitted",
+        description: "Thanks — our team will take a look.",
+      });
+      return true;
+    } catch (error) {
+      logger.error('reportReview', 'Error reporting review', { error });
+      toast({
+        title: "Error",
+        description: "Couldn't submit your report. Please try again.",
         variant: "destructive",
       });
       return false;
@@ -204,7 +280,7 @@ export function useRatings({ contentType, contentId }: UseRatingsProps) {
       await fetchRatings();
       return true;
     } catch (error) {
-      console.error("Error voting:", error);
+      logger.error('voteHelpful', 'Error voting', { error });
       toast({
         title: "Error",
         description: "Failed to record vote. Please try again.",
@@ -223,6 +299,7 @@ export function useRatings({ contentType, contentId }: UseRatingsProps) {
     submitRating,
     deleteRating,
     voteHelpful,
+    reportReview,
     refetch: fetchRatings,
   };
 }
@@ -255,7 +332,7 @@ export function useUserReputation(userId?: string) {
         setReputation(data || null);
         setError(null);
       } catch (err) {
-        console.error("Error fetching user reputation:", err);
+        logger.error('useUserReputation', 'Error fetching user reputation', { error: err });
         setError(err instanceof Error ? err.message : "Failed to fetch reputation");
       } finally {
         setIsLoading(false);

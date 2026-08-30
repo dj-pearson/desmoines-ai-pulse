@@ -21,13 +21,19 @@ struct ParallaxHeroHeader<Content: View>: View {
     var parallaxFactor: CGFloat = 0.5
     @ViewBuilder var content: () -> Content
 
+    // Reduce Motion (IOS-COMPLY-003): honor the system setting so users who opt
+    // out of motion get a static header that scrolls 1:1 — no parallax translate
+    // and no rubber-band stretch.
+    @Environment(\.accessibilityReduceMotion) private var reduceMotion
+
     var body: some View {
         GeometryReader { proxy in
             let minY = proxy.frame(in: .global).minY
             // When pulled down (minY > 0) the hero stretches.
             // When scrolled up (minY < 0) the hero translates at parallax rate.
-            let offset = minY > 0 ? -minY : -minY * (1 - parallaxFactor)
-            let stretchedHeight = minY > 0 ? height + minY : height
+            // Reduce Motion disables both (offset 0, no stretch).
+            let offset = reduceMotion ? 0 : (minY > 0 ? -minY : -minY * (1 - parallaxFactor))
+            let stretchedHeight = (!reduceMotion && minY > 0) ? height + minY : height
 
             ZStack(alignment: .bottom) {
                 content()

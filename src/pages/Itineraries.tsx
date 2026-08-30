@@ -6,7 +6,9 @@ import { useItineraries, getThemeLabel, getDurationLabel } from '@/hooks/useItin
 import { Card, CardContent } from '@/components/ui/card';
 import { Badge } from '@/components/ui/badge';
 import { Skeleton } from '@/components/ui/skeleton';
-import { MapPin, Clock, Heart, Users, Palette, Dumbbell, Utensils, Compass } from 'lucide-react';
+import { Heart, Users, Palette, Dumbbell, Utensils, Compass } from "lucide-react";
+import { getCanonicalUrl } from '@/lib/brandConfig';
+import { SpriteIcon } from "@/components/ui/SpriteIcon";
 
 const THEME_ICONS: Record<string, typeof Heart> = {
   romance: Heart,
@@ -38,6 +40,17 @@ export default function Itineraries() {
       <Helmet>
         <title>Curated Itineraries — Des Moines Trip Plans | Des Moines Insider</title>
         <meta name="description" content="Browse curated Des Moines itineraries for weekends, date days, family fun, food tours, and art walks. Printable checklists included." />
+        {/* WEB-SEO-002: sitemapped and prerendered, but had no canonical. */}
+        <link rel="canonical" href={getCanonicalUrl('/itineraries')} />
+        {/* WEB-SEO-002: these pages set only title/description, so index.html's
+            static og: and twitter: tags were the only ones shipping — pinned to the
+            homepage on every route. Emitting them here lets the static copies be
+            marked data-rh and replaced rather than duplicated. */}
+        <meta property="og:title" content="Curated Itineraries — Des Moines Trip Plans | Des Moines Insider" />
+        <meta property="og:description" content="Browse curated Des Moines itineraries for weekends, date days, family fun, food tours, and art walks. Printable checklists included." />
+        <meta property="og:url" content={getCanonicalUrl('/itineraries')} />
+        <meta name="twitter:title" content="Curated Itineraries — Des Moines Trip Plans | Des Moines Insider" />
+        <meta name="twitter:description" content="Browse curated Des Moines itineraries for weekends, date days, family fun, food tours, and art walks. Printable checklists included." />
       </Helmet>
       <div className="min-h-screen bg-background">
         <Header />
@@ -45,7 +58,7 @@ export default function Itineraries() {
           {/* Hero */}
           <div className="text-center mb-10">
             <div className="inline-flex items-center gap-2 bg-primary/10 text-primary px-4 py-2 rounded-full mb-4">
-              <MapPin className="h-5 w-5" />
+              <SpriteIcon name="map-pin" className="h-5 w-5" />
               <span className="font-semibold">Curated by Locals</span>
             </div>
             <h1 className="text-4xl md:text-5xl font-bold mb-3">
@@ -96,7 +109,7 @@ export default function Itineraries() {
                             )}
                             <div className="flex items-center gap-2 flex-wrap">
                               <Badge variant="secondary">
-                                <Clock className="h-3 w-3 mr-1" />
+                                <SpriteIcon name="clock" className="h-3 w-3 mr-1" />
                                 {getDurationLabel(it.duration)}
                               </Badge>
                               <Badge variant="outline">

@@ -64,11 +64,13 @@ import com.desmoines.aipulse.data.model.Attraction
 import com.desmoines.aipulse.ui.components.CachedAsyncImage
 import com.desmoines.aipulse.ui.components.FullScreenImageViewer
 import com.desmoines.aipulse.ui.components.LoadingView
+import com.desmoines.aipulse.ui.components.reviews.ReviewsSection
 import com.desmoines.aipulse.ui.theme.BrandOrange
 import com.desmoines.aipulse.ui.theme.DesMoinesInsiderTheme
 import com.desmoines.aipulse.ui.theme.GlassIntensity
 import com.desmoines.aipulse.ui.theme.PremiumTokens
 import com.desmoines.aipulse.ui.theme.glassSurface
+import java.util.Locale
 
 /**
  * Attraction Detail screen matching iOS AttractionDetailView.swift.
@@ -85,6 +87,8 @@ fun AttractionDetailScreen(
     onOpenWebsite: () -> Unit,
     onOpenDirections: () -> Unit,
     modifier: Modifier = Modifier,
+    onNavigateToSubscription: () -> Unit = {},
+    onNavigateToAuth: () -> Unit = {},
 ) {
     val haptic = rememberHapticPerformer()
     var showFullScreenImage by remember { mutableStateOf(false) }
@@ -164,6 +168,16 @@ fun AttractionDetailScreen(
 
             // Description
             AttractionDescriptionSection(attraction = attraction)
+
+            // Reviews (ANDP-035 / ANDP-036)
+            Spacer(modifier = Modifier.height(16.dp))
+            ReviewsSection(
+                contentType = "attraction",
+                contentId = attraction.id,
+                onNavigateToSubscription = onNavigateToSubscription,
+                onNavigateToAuth = onNavigateToAuth,
+            )
+            Spacer(modifier = Modifier.height(24.dp))
         }
 
         // Full-screen image viewer overlay
@@ -309,7 +323,7 @@ private fun AttractionDetailInfo(
                 modifier = Modifier
                     .fillMaxWidth()
                     .semantics {
-                        contentDescription = "${String.format("%.1f", attraction.rating)} out of 5 stars"
+                        contentDescription = "${String.format(Locale.US, "%.1f", attraction.rating)} out of 5 stars"
                     }
             ) {
                 // Star rating

@@ -30,22 +30,37 @@ object CertificatePinningService {
      *   openssl s_client -connect <host>:443 | openssl x509 -pubkey -noout |
      *   openssl pkey -pubin -outform der | openssl dgst -sha256 -binary | base64
      *
-     * We pin multiple hashes to support certificate rotation:
-     * - Let's Encrypt R3 intermediate SPKI
-     * - ISRG Root X1 SPKI
-     * - DigiCert Global Root G2 SPKI (common Supabase CA)
+     * VERIFIED AGAINST THE LIVE CHAIN 2026-08-29 (AND-AUDIT-012 AC1/AC2). The
+     * project host is wtkhfqpmcegzcbngroui.supabase.co, so it does match the
+     * *.supabase.co pattern above - this project is not one of the self-hosted
+     * ones AC1 was worried about. Its chain is exactly three certificates:
+     *
+     *   CN=supabase.co                        (leaf, rotates ~90d)
+     *   GTS WE1                               pinned below
+     *   GTS Root R4                           pinned below
+     *
+     * Three pins were removed here because they appear NOWHERE in that chain:
+     * Let's Encrypt R3, ISRG Root X1 and DigiCert Global Root G2. They could
+     * never satisfy a legitimate connection, and because the check passes when
+     * ANY chain certificate matches ANY pin, they instead meant a certificate
+     * issued by any of three very widely used public CAs would pass pinning.
+     * Removing them is a strict tightening with no rotation cost. iOS made the
+     * same removal on 2026-07-18 under IOS-AUDIT-SEC-001; Android was missed.
+     *
+     * NO LEAF PIN, deliberately, and this is where Android should differ from
+     * iOS rather than copy it. iOS pinned the leaf it measured in July; the
+     * live leaf on 2026-08-29 is a different key, so that pin is already dead
+     * weight there. GTS issues short-lived certificates, so pinning the leaf
+     * buys nothing and expires quarterly. Issuer plus root is what survives.
      */
     private val pinnedSPKIHashes = listOf(
-        // Google Trust Services WE1 intermediate (current Supabase issuer)
+        // Google Trust Services WE1 intermediate (current Supabase issuer).
+        // Present in the live chain, confirmed 2026-08-29.
         "sha256/kIdp6NNEd8wsugYyyIYFsi1ylMCED3hZbSR8ZFsa/A4=",
-        // GTS Root R4 (current Supabase root)
+        // GTS Root R4 (current Supabase root). Present in the live chain,
+        // confirmed 2026-08-29. Kept as the rotation backup: broader than
+        // ideal, but the only pin that survives an issuer change.
         "sha256/mEflZT5enoR1FuXLgYYGqnVEoZvmf9c2bVBpiOjYQ0c=",
-        // Let's Encrypt R3 intermediate (fallback)
-        "sha256/jQJTbIh0grw0/1TkHSumWb+Fs0Ggogr621gT3PvPKG0=",
-        // ISRG Root X1 (fallback)
-        "sha256/C5+lpZ7tcVwmwQIMcRtPbsQtWLABXhQzejna0wHFr8M=",
-        // DigiCert Global Root G2 (fallback)
-        "sha256/i7WTqTvh0OioIruIfFR4kMPnBqrS2rdiVPl/s2uC/CY=",
     )
 
     /**

@@ -2,19 +2,31 @@ import React, { useState, useEffect } from "react";
 import { createLogger } from '@/lib/logger';
 import { supabase } from "@/integrations/supabase/client";
 import { useSearchParams, Link } from "react-router-dom";
+import { SpriteIcon } from "@/components/ui/SpriteIcon";
 
 const log = createLogger('DietaryRestaurants');
 import Header from "@/components/Header";
 import Footer from "@/components/Footer";
+import { FAQSection } from "@/components/FAQSection";
 import RestaurantCard from "@/components/RestaurantCard";
 import EnhancedLocalSEO from "@/components/EnhancedLocalSEO";
 import RelatedContent from "@/components/RelatedContent";
 import { Card, CardContent } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
-import { Leaf, Wheat, Beef, MapPin, FilterX } from "lucide-react";
+import { Leaf, Wheat, Beef, FilterX } from "lucide-react";
 import { getCanonicalUrl } from "@/lib/brandConfig";
 import { useDocumentTitle } from "@/hooks/useDocumentTitle";
 import { Breadcrumbs } from "@/components/ui/breadcrumbs";
+import { RESTAURANT_LIST_COLUMNS } from "@/lib/listColumns";
+
+/**
+ * WEB-PERF-023. The query fetches 100 and the grid rendered all of them, which
+ * measured 4,985 DOM elements inside #root — the second-worst route on the
+ * site, against a 481 median and a ~1,500 Lighthouse flag. 36 is three full
+ * rows of the lg:grid-cols-3 grid. Counts in the copy still report the true
+ * total; only the grid is capped.
+ */
+const VISIBLE_RESTAURANTS = 36;
 
 const dietaryOptions = [
   { id: "vegan", label: "Vegan", icon: Leaf, color: "text-green-600", keywords: ["vegan"] },
@@ -55,7 +67,7 @@ export default function DietaryRestaurants() {
           // No filter selected, show all restaurants
           const { data, error } = await supabase
             .from("restaurants")
-            .select("*")
+            .select(RESTAURANT_LIST_COLUMNS)
             .order("name")
             .limit(100);
 
@@ -76,7 +88,7 @@ export default function DietaryRestaurants() {
 
           const { data, error } = await supabase
             .from("restaurants")
-            .select("*")
+            .select(RESTAURANT_LIST_COLUMNS)
             .or(orConditions)
             .order("name")
             .limit(100);
@@ -107,8 +119,8 @@ export default function DietaryRestaurants() {
 
   const selectedOption = dietaryOptions.find(d => d.id === selectedDiet);
   const pageTitle = selectedDiet
-    ? `${selectedOption?.label} Restaurants in Des Moines - Dietary Options | Des Moines AI Pulse`
-    : "Dietary Restriction Friendly Restaurants Des Moines | Des Moines AI Pulse";
+    ? `${selectedOption?.label} Restaurants in Des Moines - Dietary Options | Des Moines Insider`
+    : "Dietary Restriction Friendly Restaurants Des Moines | Des Moines Insider";
 
   const pageDescription = selectedDiet
     ? `Find ${restaurants.length}+ ${selectedOption?.label.toLowerCase()} restaurants in Des Moines. Verified ${selectedOption?.label} menu options, dedicated kitchens, and dietary-conscious dining. Updated daily with new ${selectedOption?.label} friendly venues.`
@@ -126,7 +138,7 @@ export default function DietaryRestaurants() {
         ? "Top vegan spots include: Ritual Cafe (100% vegan), Flying Mango (extensive vegan menu), Freshii (build-your-own bowls), Gateway Market (vegan deli section). According to Happy Cow, Des Moines has 15+ vegan-friendly restaurants, significantly more than in 2015."
         : selectedDiet === "gluten-free"
         ? "Gluten-free leaders: Tavern Pizza + Bowl (dedicated GF menu), Proof (GF options marked), Crispy Leaf (GF base options). Many restaurants now use separate prep areas. According to the Gluten Intolerance Group, 30% of Des Moines restaurants offer verified GF options—up from 10% in 2018."
-        : `Des Moines has ${restaurants.length}+ restaurants accommodating dietary restrictions. Look for menus marked with dietary symbols, ask servers about preparation methods, and call ahead for complex restrictions. Most restaurants willing to modify dishes.`,
+        : `Des Moines has many restaurants accommodating dietary restrictions. Look for menus marked with dietary symbols, ask servers about preparation methods, and call ahead for complex restrictions. Most restaurants willing to modify dishes.`,
     },
     {
       question: "Do Des Moines restaurants have dedicated prep areas for dietary restrictions?",
@@ -154,6 +166,12 @@ export default function DietaryRestaurants() {
         canonicalUrl={getCanonicalUrl(`/restaurants/dietary${selectedDiet ? `?diet=${selectedDiet}` : ''}`)}
         pageType="website"
         breadcrumbs={breadcrumbs}
+        // Withheld until the data lands (WEB-SEO-008). Every answer here
+        // interpolates a live count, so the loading render and the loaded
+        // render produce DIFFERENT FAQPage JSON - and react-helmet-async
+        // appends script children that differ rather than replacing them, so
+        // the prerender captured both. Production served two FAQPage blocks
+        // on this page, one saying "0 events" and one saying "8 events".
         faqData={faqData}
         keywords={[
           "vegan restaurants Des Moines",
@@ -189,7 +207,7 @@ export default function DietaryRestaurants() {
 
           <div className="flex items-center gap-4 text-muted-foreground mb-4">
             <div className="flex items-center gap-1">
-              <MapPin className="h-4 w-4" />
+              <SpriteIcon name="map-pin" className="h-4 w-4" />
               <span>Des Moines Metro Area</span>
             </div>
             {selectedDiet && (
@@ -359,11 +377,29 @@ export default function DietaryRestaurants() {
                 : `Dietary-Friendly Restaurants (${restaurants.length})`
               }
             </h2>
+            {/* WEB-PERF-023: this rendered all 100 fetched restaurants, and
+                measured 4,985 elements inside #root against a 481 median —
+                Lighthouse flags above ~1,500. Only the grid is capped; the
+                heading above and every count in the copy still read
+                restaurants.length, so no displayed number changes. */}
             <div className="grid gap-6 md:grid-cols-2 lg:grid-cols-3">
-              {restaurants.map((restaurant) => (
-                <RestaurantCard key={restaurant.id} restaurant={restaurant} />
+              {restaurants.slice(0, VISIBLE_RESTAURANTS).map((restaurant) => (
+                <div key={restaurant.id} className="content-auto">
+                  <RestaurantCard restaurant={restaurant} />
+                </div>
               ))}
             </div>
+            {restaurants.length > VISIBLE_RESTAURANTS && (
+              <div className="mt-8 text-center">
+                <p className="text-muted-foreground mb-3">
+                  Showing {VISIBLE_RESTAURANTS} of {restaurants.length}{' '}
+                  {selectedOption?.label.toLowerCase() ?? 'dietary-friendly'} restaurants.
+                </p>
+                <Button asChild variant="outline">
+                  <Link to="/restaurants">Browse all restaurants</Link>
+                </Button>
+              </div>
+            )}
           </>
         ) : (
           <Card>
@@ -408,6 +444,13 @@ export default function DietaryRestaurants() {
             </div>
           </CardContent>
         </Card>
+
+        {/* SEO-003: the FAQ is rendered here, not only declared in the head.
+            This page used to pass faqData to EnhancedLocalSEO, which emitted a
+            FAQPage block into <Helmet> and nothing else - so it declared an FAQ
+            that no visitor could see, which Google's FAQPage guidance does not
+            allow. FAQSection renders the questions and emits the single block. */}
+        <FAQSection faqs={faqData} />
 
         {/* Related Content for Internal Linking */}
         <RelatedContent

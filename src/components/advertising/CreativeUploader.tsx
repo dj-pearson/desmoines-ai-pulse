@@ -231,7 +231,7 @@ export function CreativeUploader({
               isDragging ? "bg-primary/20" : "bg-gray-100"
             )}
           >
-            <Upload className={cn("h-8 w-8", isDragging ? "text-primary" : "text-gray-400")} />
+            <Upload className={cn("h-8 w-8", isDragging ? "text-primary" : "text-gray-500")} />
           </div>
 
           <div>

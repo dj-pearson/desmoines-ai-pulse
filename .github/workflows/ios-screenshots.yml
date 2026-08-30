@@ -8,6 +8,8 @@
 # Devices captured (App Store-compliant dimensions):
 #   - iPhone 11 Pro Max (6.5")  → 1242×2688px
 #   - iPhone 16 Plus (6.7")     → 1284×2778px
+#   - iPhone 15 Pro Max         → 1290×2796px
+#   - iPhone 16 Pro Max (6.9")  → 1320×2868px
 #   - iPad Pro 13" (M4)
 #
 # Screens captured (8 per device):
@@ -20,7 +22,7 @@
 #   07. Event Detail
 #   08. Restaurant Detail
 #
-# Total: ~24 screenshots per run (3 devices x 8 screens)
+# Total: ~40 screenshots per run (5 devices x 8 screens)
 #
 # Triggers:
 #   - Manual dispatch (workflow_dispatch) with optional device filter
@@ -163,6 +165,8 @@ jobs:
           DEVICES=(
             "iPhone 11 Pro Max"
             "iPhone 16 Plus"
+            "iPhone 15 Pro Max"
+            "iPhone 16 Pro Max"
             "iPad Pro 13-inch (M4)"
           )
 
@@ -231,6 +235,8 @@ jobs:
           DEVICES=(
             "iPhone 11 Pro Max"
             "iPhone 16 Plus"
+            "iPhone 15 Pro Max"
+            "iPhone 16 Pro Max"
             "iPad Pro 13-inch (M4)"
           )
           for DEVICE in "${DEVICES[@]}"; do
@@ -351,6 +357,8 @@ jobs:
             echo "|--------|------|-------------|" >> $GITHUB_STEP_SUMMARY
             echo "| iPhone 11 Pro Max | 6.5\" (1242×2688) | Required |" >> $GITHUB_STEP_SUMMARY
             echo "| iPhone 16 Plus | 6.7\" (1284×2778) | Required |" >> $GITHUB_STEP_SUMMARY
+            echo "| iPhone 15 Pro Max | 1290×2796 | Committed assets |" >> $GITHUB_STEP_SUMMARY
+            echo "| iPhone 16 Pro Max | 6.9\" (1320×2868) | Required |" >> $GITHUB_STEP_SUMMARY
             echo "| iPad Pro 13\" (M4) | 13\" | Required |" >> $GITHUB_STEP_SUMMARY
             echo "" >> $GITHUB_STEP_SUMMARY
             echo "### Screens" >> $GITHUB_STEP_SUMMARY

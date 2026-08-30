@@ -1,8 +1,9 @@
 import { useState } from "react";
-import { MapPin, Calendar, Users, Star, ExternalLink } from "lucide-react";
+import { Star } from "lucide-react";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
+import { SpriteIcon } from "@/components/ui/SpriteIcon";
 
 interface NeighborhoodData {
   description: string;
@@ -126,7 +127,7 @@ export default function NeighborhoodGuide({
       {/* Neighborhood Header */}
       <div className="bg-gradient-to-r from-blue-600 to-purple-600 text-white p-6 rounded-lg">
         <div className="flex items-center gap-2 mb-2">
-          <MapPin className="h-6 w-6" />
+          <SpriteIcon name="map-pin" className="h-6 w-6" />
           <h1 className="text-2xl font-bold">
             {neighborhood} Events & Activities
           </h1>
@@ -154,7 +155,7 @@ export default function NeighborhoodGuide({
           onClick={() => setActiveTab("events")}
           className="flex-1"
         >
-          <Calendar className="h-4 w-4 mr-2" />
+          <SpriteIcon name="calendar" className="h-4 w-4 mr-2" />
           Events ({events.length})
         </Button>
         <Button
@@ -162,7 +163,7 @@ export default function NeighborhoodGuide({
           onClick={() => setActiveTab("dining")}
           className="flex-1"
         >
-          <Users className="h-4 w-4 mr-2" />
+          <SpriteIcon name="users" className="h-4 w-4 mr-2" />
           Dining ({restaurants.length})
         </Button>
         <Button
@@ -188,7 +189,7 @@ export default function NeighborhoodGuide({
                   <CardHeader className="pb-2">
                     <CardTitle className="text-lg">{event.title}</CardTitle>
                     <div className="flex items-center text-sm text-muted-foreground">
-                      <Calendar className="h-4 w-4 mr-1" />
+                      <SpriteIcon name="calendar" className="h-4 w-4 mr-1" />
                       {new Date(event.start_date).toLocaleDateString()}
                     </div>
                   </CardHeader>
@@ -197,7 +198,7 @@ export default function NeighborhoodGuide({
                     <div className="flex justify-between items-center">
                       <Badge variant="outline">{event.category}</Badge>
                       <Button size="sm" variant="outline">
-                        <ExternalLink className="h-3 w-3 mr-1" />
+                        <SpriteIcon name="external-link" className="h-3 w-3 mr-1" />
                         Details
                       </Button>
                     </div>
@@ -208,7 +209,7 @@ export default function NeighborhoodGuide({
           ) : (
             <Card>
               <CardContent className="text-center p-8">
-                <Calendar className="h-12 w-12 mx-auto mb-4 text-muted-foreground" />
+                <SpriteIcon name="calendar" className="h-12 w-12 mx-auto mb-4 text-muted-foreground" />
                 <p className="text-muted-foreground">
                   No events currently listed for {neighborhood}. Check back soon or explore nearby areas!
                 </p>
@@ -230,7 +231,7 @@ export default function NeighborhoodGuide({
                   <CardHeader className="pb-2">
                     <CardTitle className="text-lg">{restaurant.name}</CardTitle>
                     <div className="flex items-center text-sm text-muted-foreground">
-                      <MapPin className="h-4 w-4 mr-1" />
+                      <SpriteIcon name="map-pin" className="h-4 w-4 mr-1" />
                       {restaurant.location}
                     </div>
                   </CardHeader>
@@ -239,7 +240,7 @@ export default function NeighborhoodGuide({
                     <div className="flex justify-between items-center">
                       <Badge variant="outline">{restaurant.cuisine_type}</Badge>
                       <Button size="sm" variant="outline">
-                        <ExternalLink className="h-3 w-3 mr-1" />
+                        <SpriteIcon name="external-link" className="h-3 w-3 mr-1" />
                         Visit
                       </Button>
                     </div>
@@ -250,7 +251,7 @@ export default function NeighborhoodGuide({
           ) : (
             <Card>
               <CardContent className="text-center p-8">
-                <Users className="h-12 w-12 mx-auto mb-4 text-muted-foreground" />
+                <SpriteIcon name="users" className="h-12 w-12 mx-auto mb-4 text-muted-foreground" />
                 <p className="text-muted-foreground">
                   Restaurant listings for {neighborhood} coming soon!
                 </p>
@@ -272,7 +273,7 @@ export default function NeighborhoodGuide({
                   <CardHeader className="pb-2">
                     <CardTitle className="text-lg">{attraction.name}</CardTitle>
                     <div className="flex items-center text-sm text-muted-foreground">
-                      <MapPin className="h-4 w-4 mr-1" />
+                      <SpriteIcon name="map-pin" className="h-4 w-4 mr-1" />
                       {attraction.location}
                     </div>
                   </CardHeader>
@@ -281,7 +282,7 @@ export default function NeighborhoodGuide({
                     <div className="flex justify-between items-center">
                       <Badge variant="outline">{attraction.category}</Badge>
                       <Button size="sm" variant="outline" aria-label={`Learn more about ${attraction.name}`}>
-                        <ExternalLink className="h-3 w-3 mr-1" />
+                        <SpriteIcon name="external-link" className="h-3 w-3 mr-1" />
                         <span aria-hidden="true">Learn More</span>
                         <span className="sr-only"> about {attraction.name}</span>
                       </Button>

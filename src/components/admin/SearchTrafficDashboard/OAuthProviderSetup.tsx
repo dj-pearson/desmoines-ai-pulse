@@ -117,7 +117,7 @@ export function OAuthProviderSetup({ onComplete }: OAuthProviderSetupProps) {
 
       // Generic OAuth flow for other providers (reads from oauth_providers table)
       const { data: providerData, error: providerError } = await supabase
-        .from("oauth_providers" as any)
+        .from("oauth_providers")
         .select("*")
         .eq("provider_name", providerName)
         .single();

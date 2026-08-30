@@ -7,7 +7,12 @@ import AuthenticationServices
 @Observable
 final class AuthViewModel {
     var email = ""
-    var password = ""
+    var password = "" {
+        didSet {
+            guard password != oldValue else { return }
+            passwordStrength = Self.strength(of: password)
+        }
+    }
     var confirmPassword = ""
     var firstName = ""
     var lastName = ""
@@ -18,6 +23,11 @@ final class AuthViewModel {
     var errorMessage: String?
     var showError = false
     var showVerificationAlert = false
+    /// Neutral, non-error informational feedback (e.g. "reset email sent") so
+    /// success messages aren't shown under the red "Sign In Error" alert
+    /// (IOS-AUDIT-UX-017).
+    var infoMessage: String?
+    var showInfo = false
 
     // MARK: - Rate Limiting
 
@@ -31,7 +41,14 @@ final class AuthViewModel {
 
     var isLockedOut: Bool { lockoutSecondsRemaining > 0 }
 
-    private let auth = AuthService.shared
+    /// Injected so the error/info routing below can be tested without a network
+    /// round-trip (IOS-AUDIT-TEST-002). Defaults to the shared instance, so the
+    /// single production call site, AuthView.swift:6, is unchanged.
+    private let auth: AuthProviding
+
+    init(auth: AuthProviding = AuthService.shared) {
+        self.auth = auth
+    }
 
     var isAuthenticated: Bool { auth.isAuthenticated }
     var currentUser: UserProfile? { auth.currentProfile }
@@ -45,8 +62,19 @@ final class AuthViewModel {
         return email.range(of: pattern, options: .regularExpression) != nil
     }
 
-    /// Password strength: .none (empty), .weak, .medium, .strong
-    var passwordStrength: PasswordStrength {
+    /// Password strength: .none (empty), .weak, .medium, .strong.
+    ///
+    /// Stored and recomputed in `password`'s didSet (IOS-AUDIT-PERF-022). As a
+    /// computed property it ran up to four regex scans on every read, and the
+    /// sign-up form reads it from the strength meter, its label and the submit
+    /// guard - so it ran several times per keystroke, on the main actor, while the
+    /// user was typing.
+    ///
+    /// Unlike the deals list this is safe to cache outright: it depends only on
+    /// `password`, and nothing else can change it.
+    private(set) var passwordStrength: PasswordStrength = .none
+
+    private static func strength(of password: String) -> PasswordStrength {
         guard !password.isEmpty else { return .none }
         var score = 0
         if password.count >= 8 { score += 1 }
@@ -177,7 +205,15 @@ final class AuthViewModel {
                 setError(error.localizedDescription)
             }
         case .failure(let error):
-            if (error as NSError).code != ASAuthorizationError.canceled.rawValue {
+            // Treat user-initiated dismissals (cancel, or the sheet being
+            // dismissed → .unknown / .notInteractive) as no-ops rather than
+            // presenting a hard "Sign In Error" (IOS-AUDIT-UX-029).
+            let dismissCodes: Set<Int> = [
+                ASAuthorizationError.canceled.rawValue,
+                ASAuthorizationError.unknown.rawValue,
+                ASAuthorizationError.notInteractive.rawValue,
+            ]
+            if !dismissCodes.contains((error as NSError).code) {
                 setError(error.localizedDescription)
             }
         }
@@ -202,7 +238,7 @@ final class AuthViewModel {
         }
         do {
             try await auth.resetPassword(email: email)
-            setError("Password reset email sent. Check your inbox.")
+            setInfo("Password reset email sent. Check your inbox.")
         } catch {
             setError(error.localizedDescription)
         }
@@ -223,6 +259,14 @@ final class AuthViewModel {
         errorMessage = message
         showError = true
         UINotificationFeedbackGenerator().notificationOccurred(.error)
+    }
+
+    /// Neutral success/info feedback — distinct from setError so it isn't shown
+    /// as a "Sign In Error" with an error haptic (IOS-AUDIT-UX-017).
+    private func setInfo(_ message: String) {
+        infoMessage = message
+        showInfo = true
+        UINotificationFeedbackGenerator().notificationOccurred(.success)
     }
 
     // MARK: - Rate Limiting

@@ -2,19 +2,20 @@ import React, { useState, useEffect } from "react";
 import { Link } from "react-router-dom";
 import { createLogger } from '@/lib/logger';
 import { supabase } from "@/integrations/supabase/client";
+import { SpriteIcon } from "@/components/ui/SpriteIcon";
 
 const log = createLogger('FreeEvents');
 import Header from "@/components/Header";
 import Footer from "@/components/Footer";
-import EventCard from "@/components/EventCard";
+import { SocialEventCard } from "@/components/SocialEventCard";
 import EnhancedLocalSEO from "@/components/EnhancedLocalSEO";
 import { EventListJsonLd } from "@/components/schema/EventListJsonLd";
 import RelatedContent from "@/components/RelatedContent";
 import { FAQSection } from "@/components/FAQSection";
 import { Card, CardContent } from "@/components/ui/card";
-import { DollarSign, MapPin, Calendar, Gift } from "lucide-react";
+import { DollarSign, Gift } from "lucide-react";
 import { format } from "date-fns";
-import { getCanonicalUrl } from "@/lib/brandConfig";
+import { BRAND, getCanonicalUrl } from "@/lib/brandConfig";
 import { useDocumentTitle } from "@/hooks/useDocumentTitle";
 import { Breadcrumbs } from "@/components/ui/breadcrumbs";
 
@@ -75,7 +76,8 @@ export default function FreeEvents() {
     return acc;
   }, {});
 
-  const pageTitle = "Free Events in Des Moines - No-Cost Activities & Entertainment | Des Moines AI Pulse";
+  // WEB-SEO-002: was 84 chars and used the retired "Des Moines AI Pulse" brand.
+  const pageTitle = `Free Events in Des Moines - Free Things to Do | ${BRAND.name}`;
   const pageDescription = `Discover ${freeEvents.length}+ free events in Des Moines and surrounding areas. From family activities to concerts, find no-cost entertainment happening now. Updated daily with verified free admission events.`;
 
   const breadcrumbs = [
@@ -86,7 +88,7 @@ export default function FreeEvents() {
   const faqData = [
     {
       question: "What free events are happening in Des Moines?",
-      answer: `We track ${freeEvents.length}+ free events across Des Moines and surrounding areas. Our listings include community festivals, concerts in the park, farmers markets, art exhibitions, library programs, and family-friendly activities—all with free admission.`,
+      answer: `We track free events across Des Moines and surrounding areas. Our listings include community festivals, concerts in the park, farmers markets, art exhibitions, library programs, and family-friendly activities—all with free admission.`,
     },
     {
       question: "Are these events really free?",
@@ -94,7 +96,7 @@ export default function FreeEvents() {
     },
     {
       question: "What types of free events are available in Des Moines?",
-      answer: `Des Moines offers diverse free activities including: concerts and live music (${categoryCounts['Music'] || 0}), community festivals, outdoor movies, farmers markets, art gallery openings, library programs, nature walks, fitness classes in parks, and seasonal celebrations. Something for everyone!`,
+      answer: `Des Moines offers diverse free activities including concerts and live music, community festivals, outdoor movies, farmers markets, art gallery openings, library programs, nature walks, fitness classes in parks, and seasonal celebrations. Something for everyone!`,
     },
     {
       question: "How do I find family-friendly free events?",
@@ -118,6 +120,12 @@ export default function FreeEvents() {
         canonicalUrl={getCanonicalUrl("/events/free")}
         pageType="website"
         breadcrumbs={breadcrumbs}
+        // Withheld until the data lands (WEB-SEO-008). Every answer here
+        // interpolates a live count, so the loading render and the loaded
+        // render produce DIFFERENT FAQPage JSON - and react-helmet-async
+        // appends script children that differ rather than replacing them, so
+        // the prerender captured both. Production served two FAQPage blocks
+        // on this page, one saying "0 events" and one saying "8 events".
         faqData={faqData}
         keywords={[
           "free events Des Moines",
@@ -159,10 +167,10 @@ export default function FreeEvents() {
             <div className="flex items-center gap-1">
               <DollarSign className="h-4 w-4" />
               <span className="line-through">$0.00</span>
-              <span className="font-semibold text-green-600 ml-2">Free Admission</span>
+              <span className="font-semibold text-green-700 ml-2">Free Admission</span>
             </div>
             <div className="flex items-center gap-1">
-              <MapPin className="h-4 w-4" />
+              <SpriteIcon name="map-pin" className="h-4 w-4" />
               <span>Des Moines Metro Area</span>
             </div>
           </div>
@@ -201,7 +209,7 @@ export default function FreeEvents() {
                 <div className="text-sm text-muted-foreground">Locations</div>
               </div>
               <div>
-                <div className="text-2xl font-bold text-green-600">
+                <div className="text-2xl font-bold text-green-700">
                   100%
                 </div>
                 <div className="text-sm text-muted-foreground">Free Admission</div>
@@ -222,7 +230,7 @@ export default function FreeEvents() {
                     <div key={category} className="flex items-center justify-between p-3 bg-muted rounded-lg">
                       <span className="text-sm font-medium">{category}</span>
                       <span className="text-xs bg-primary text-primary-foreground px-2 py-1 rounded-full">
-                        {count}
+                        {count as number}
                       </span>
                     </div>
                   ))}
@@ -268,14 +276,14 @@ export default function FreeEvents() {
             </h2>
             <div className="grid gap-6 md:grid-cols-2 lg:grid-cols-3">
               {freeEvents.map((event) => (
-                <EventCard key={event.id} event={event} />
+                <SocialEventCard key={event.id} event={event} onViewDetails={() => {}} />
               ))}
             </div>
           </>
         ) : (
           <Card>
             <CardContent className="pt-6 text-center">
-              <Calendar className="h-12 w-12 mx-auto mb-4 text-muted-foreground" />
+              <SpriteIcon name="calendar" className="h-12 w-12 mx-auto mb-4 text-muted-foreground" />
               <h3 className="text-lg font-semibold mb-2">No Free Events Found</h3>
               <p className="text-muted-foreground mb-4">
                 Check back soon! We add new free events daily as they're announced.

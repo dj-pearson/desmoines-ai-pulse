@@ -6,13 +6,14 @@ import { Input } from "@/components/ui/input";
 import { Badge } from "@/components/ui/badge";
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table";
 import { AlertDialog, AlertDialogAction, AlertDialogCancel, AlertDialogContent, AlertDialogDescription, AlertDialogFooter, AlertDialogHeader, AlertDialogTitle, AlertDialogTrigger } from "@/components/ui/alert-dialog";
-import { FileText, Plus, Edit, Trash2, Eye, Calendar, User, Search, Send, LayoutDashboard } from "lucide-react";
+import { FileText, Plus, Edit, Trash2, Eye, User, Search, Send, LayoutDashboard } from "lucide-react";
 import { toast } from "sonner";
 import { Link } from "react-router-dom";
 import { ArticleWebhookConfig } from "./ArticleWebhookConfig";
 import { supabase } from "@/integrations/supabase/client";
 import { useMutation, useQuery } from "@tanstack/react-query";
 import { createLogger } from '@/lib/logger';
+import { SpriteIcon } from "@/components/ui/SpriteIcon";
 
 const log = createLogger('ArticlesManager');
 
@@ -238,7 +239,22 @@ export default function ArticlesManager() {
                   <TableRow key={article.id}>
                     <TableCell>
                       <div className="max-w-xs">
-                        <div className="font-medium truncate">{article.title}</div>
+                        <div className="font-medium truncate flex items-center gap-1.5">
+                          <span className="truncate">{article.title}</span>
+                          {article.is_auto_published && (
+                            <Badge
+                              variant="secondary"
+                              className="shrink-0 bg-purple-100 text-purple-700"
+                              title={
+                                article.quality_score != null
+                                  ? `Auto-published by the AI pipeline (quality score ${article.quality_score})`
+                                  : "Auto-published by the AI pipeline"
+                              }
+                            >
+                              AI Auto{article.quality_score != null ? ` ${article.quality_score}` : ""}
+                            </Badge>
+                          )}
+                        </div>
                         {article.excerpt && (
                           <div className="text-sm text-muted-foreground truncate">
                             {article.excerpt}
@@ -260,7 +276,7 @@ export default function ArticlesManager() {
                     </TableCell>
                     <TableCell>
                       <div className="flex items-center gap-1 text-sm text-muted-foreground">
-                        <Calendar className="h-3 w-3" />
+                        <SpriteIcon name="calendar" className="h-3 w-3" />
                         {formatDate(article.created_at)}
                       </div>
                     </TableCell>

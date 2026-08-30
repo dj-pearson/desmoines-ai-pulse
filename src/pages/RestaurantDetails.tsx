@@ -2,12 +2,15 @@ import { useParams, Link } from "react-router-dom";
 import { Helmet } from "react-helmet-async";
 import { useQuery } from "@tanstack/react-query";
 import { supabase } from "@/integrations/supabase/client";
+import { RESTAURANT_LIST_COLUMNS } from "@/lib/listColumns";
 import { Card, CardContent } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
+import { FavoriteButton } from "@/components/FavoriteButton";
 import { Separator } from "@/components/ui/separator";
 import { Breadcrumbs } from "@/components/ui/breadcrumbs";
 import SEOHead from "@/components/SEOHead";
+import { ogImageUrl } from "@/lib/ogImage";
 import Header from "@/components/Header";
 import Footer from "@/components/Footer";
 import AIWriteup from "@/components/AIWriteup";
@@ -19,36 +22,20 @@ import { BackToTop } from "@/components/BackToTop";
 import { BreadcrumbListSchema } from "@/components/schema/BreadcrumbListSchema";
 import SpeakableSchema from "@/components/schema/SpeakableSchema";
 import { getCanonicalUrl } from "@/lib/brandConfig";
-import {
-  MapPin,
-  Phone,
-  ExternalLink,
-  Star,
-  Clock,
-  DollarSign,
-  ArrowLeft,
-  Navigation,
-  Share2,
-  Heart,
-  MessageCircle,
-  Award,
-  Utensils,
-  ChefHat,
-  Sparkles,
-  Globe,
-  Check,
-  BookOpen,
-  Info,
-  Map,
-} from "lucide-react";
+import { qualifyTitleWithCity } from "@/lib/seoTitleLocation";
+import { Phone, Star, DollarSign, ArrowLeft, Navigation, Heart, MessageCircle, Award, Utensils, Globe, Check, BookOpen, Info, Map } from "lucide-react";
 import { useState, useMemo } from "react";
 import { useContentTracking } from "@/hooks/useContentTracking";
-import { getRestaurantOpenStatus } from "@/lib/restaurantHours";
+import { getRestaurantOpenStatus, getOpeningHoursSpecification } from "@/lib/restaurantHours";
+import { LazyLocationMap } from "@/components/LazyLocationMap";
+import { getDirectionsUrl } from "@/lib/directions";
 import { StickyMobileCTA } from "@/components/StickyMobileCTA";
 import { LastUpdatedBadge } from "@/components/LastUpdatedBadge";
 import { NearbyContent } from "@/components/NearbyContent";
 import { RestaurantMenuSection } from "@/components/RestaurantMenuSection";
+import { RatingSystem } from "@/components/RatingSystem";
 import { CollapsibleSection } from "@/components/CollapsibleSection";
+import { SpriteIcon } from "@/components/ui/SpriteIcon";
 
 export default function RestaurantDetails() {
   const { slug } = useParams();
@@ -83,7 +70,7 @@ export default function RestaurantDetails() {
   });
 
   // Track page view and content interactions
-  const { trackShare } = useContentTracking(restaurant?.id, 'restaurant');
+  const { trackShare, trackClick } = useContentTracking(restaurant?.id, 'restaurant');
 
   const { data: relatedRestaurants } = useQuery({
     queryKey: ["related-restaurants", restaurant?.cuisine, restaurant?.id],
@@ -91,7 +78,7 @@ export default function RestaurantDetails() {
       if (!restaurant) return [];
       const { data, error } = await supabase
         .from("restaurants")
-        .select("*")
+        .select(RESTAURANT_LIST_COLUMNS)
         .eq("cuisine", restaurant.cuisine)
         .neq("id", restaurant.id)
         .limit(4);
@@ -108,7 +95,7 @@ export default function RestaurantDetails() {
       if (!restaurant) return [];
       const { data, error } = await supabase
         .from("restaurants")
-        .select("*")
+        .select(RESTAURANT_LIST_COLUMNS)
         .eq("city", restaurant.city || "Des Moines")
         .neq("id", restaurant.id)
         .neq("cuisine", restaurant.cuisine)
@@ -156,13 +143,13 @@ export default function RestaurantDetails() {
               <div className="h-80 bg-gray-200 rounded-3xl" />
               <div className="grid md:grid-cols-3 gap-4">
                 <div className="h-24 bg-gray-200 rounded-2xl relative">
-                  <span className="absolute inset-0 flex items-center justify-center text-xs text-gray-400 font-medium">Restaurant Info</span>
+                  <span className="absolute inset-0 flex items-center justify-center text-xs text-gray-500 font-medium">Restaurant Info</span>
                 </div>
                 <div className="h-24 bg-gray-200 rounded-2xl relative">
-                  <span className="absolute inset-0 flex items-center justify-center text-xs text-gray-400 font-medium">Hours & Location</span>
+                  <span className="absolute inset-0 flex items-center justify-center text-xs text-gray-500 font-medium">Hours & Location</span>
                 </div>
                 <div className="h-24 bg-gray-200 rounded-2xl relative">
-                  <span className="absolute inset-0 flex items-center justify-center text-xs text-gray-400 font-medium">Reviews & Rating</span>
+                  <span className="absolute inset-0 flex items-center justify-center text-xs text-gray-500 font-medium">Reviews & Rating</span>
                 </div>
               </div>
               <div className="h-48 bg-gray-200 rounded-2xl" />
@@ -185,7 +172,7 @@ export default function RestaurantDetails() {
         <div className="min-h-screen bg-gray-50 flex items-center justify-center">
           <Card className="max-w-md mx-auto text-center shadow-lg rounded-2xl">
             <CardContent className="p-8">
-              <Utensils className="h-16 w-16 text-gray-400 mx-auto mb-4" />
+              <Utensils className="h-16 w-16 text-gray-500 mx-auto mb-4" />
               <h2 className="text-2xl font-bold text-gray-800 mb-2">
                 Restaurant Not Found
               </h2>
@@ -213,8 +200,29 @@ export default function RestaurantDetails() {
     : cityName;
 
   // Comprehensive SEO
-  const seoTitle = restaurant.seo_title ||
-    `${restaurant.name} - ${restaurant.cuisine || "Restaurant"} in ${cityName}, Iowa | Menu, Hours & Reviews`;
+  //
+  // SEO-005: a hand-set seo_title overrides the generated fallback, and the
+  // fallback is the only one of the two that names the city. Texas Roadhouse has
+  // two real Des Moines-area locations - Johnston and Mills Civic Pkwy in West
+  // Des Moines - and BOTH rows carry seo_title "Texas Roadhouse", so two
+  // different restaurants served one identical title and neither told a searcher
+  // which branch they had found.
+  //
+  // qualifyTitleWithCity fills that gap and never overrides an editor: a title
+  // that already names a place is returned untouched, and a row with no city
+  // gets nothing appended rather than an invented one.
+  //
+  // This is worth doing beyond the one collision. The suburb-qualified branded
+  // lookup is one of the most common query shapes this site receives -
+  // "dave's hot chicken west des moines" at 1,184 impressions, "bonchon west
+  // des moines" at 1,391, "atlas cafe west des moines" at 282, plus marvs
+  // norwalk, bubbies bbq pleasant hill and others - and a title with no suburb
+  // in it cannot match any of them well.
+  const seoTitle = qualifyTitleWithCity(
+    restaurant.seo_title ||
+      `${restaurant.name} - ${restaurant.cuisine || "Restaurant"} in ${cityName}, Iowa | Menu, Hours & Reviews`,
+    restaurant.city,
+  );
 
   const seoDescription = restaurant.seo_description ||
     (restaurant.description
@@ -240,15 +248,12 @@ export default function RestaurantDetails() {
     "Iowa restaurants",
   ].filter(Boolean);
 
-  // Estimated review count for schema
-  const getEstimatedReviewCount = (rating: number | null, popularityScore: number | null): number => {
-    if (!rating) return 0;
-    const baseCount = rating >= 4.5 ? 150 : rating >= 4.0 ? 100 : rating >= 3.5 ? 50 : 25;
-    const popularityMultiplier = popularityScore ? (popularityScore / 50) : 1;
-    return Math.round(baseCount * popularityMultiplier);
-  };
-
-  const estimatedReviewCount = getEstimatedReviewCount(restaurant.rating, restaurant.popularity_score);
+  // WEB-SEO-016: getEstimatedReviewCount() used to synthesise a review count
+  // from the rating and popularity score (rating >= 4.5 ? 150 : 100 : 50 : 25,
+  // scaled by popularity) and feed it to aggregateRating on all ~480 restaurant
+  // pages. Google requires ratingCount/reviewCount to reflect real reviews;
+  // inventing one is a review-snippet policy breach. There is no reviews table
+  // in the schema, so there is no real count to use and the block is gone.
 
   // Comprehensive Restaurant schema for AI search engines
   const restaurantSchema = {
@@ -263,36 +268,22 @@ export default function RestaurantDetails() {
       streetAddress: restaurant.location,
       addressLocality: cityName,
       addressRegion: "Iowa",
-      postalCode: "50309",
       addressCountry: "US",
     },
     ...(restaurant.phone && { telephone: restaurant.phone }),
     ...(restaurant.website && { url: restaurant.website }),
     priceRange: restaurant.price_range,
     ...(restaurant.image_url && { image: [restaurant.image_url] }),
-    aggregateRating: restaurant.rating
-      ? {
-          "@type": "AggregateRating",
-          ratingValue: restaurant.rating.toFixed(1),
-          ratingCount: estimatedReviewCount,
-          reviewCount: estimatedReviewCount,
-          bestRating: "5",
-          worstRating: "1",
-        }
-      : undefined,
     geo: {
       "@type": "GeoCoordinates",
       latitude: restaurant.latitude || 41.5868,
       longitude: restaurant.longitude || -93.6250,
     },
-    openingHoursSpecification: restaurant.opening ? [
-      "Monday", "Tuesday", "Wednesday", "Thursday", "Friday", "Saturday", "Sunday"
-    ].map((day) => ({
-      "@type": "OpeningHoursSpecification",
-      dayOfWeek: day,
-      opens: "11:00",
-      closes: "22:00",
-    })) : undefined,
+    // Derived from the same parser as the visible open/closed badge; omitted
+    // entirely when the free-form hours can't be parsed (no fabricated hours).
+    ...(getOpeningHoursSpecification(restaurant.opening)
+      ? { openingHoursSpecification: getOpeningHoursSpecification(restaurant.opening) }
+      : {}),
     paymentAccepted: "Cash, Credit Card, Debit Card",
     currenciesAccepted: "USD",
     hasMenu: {
@@ -301,7 +292,6 @@ export default function RestaurantDetails() {
       name: `${restaurant.name} Menu`,
       url: `https://desmoinespulse.com/restaurants/${restaurant.slug || restaurant.id}#menu`,
     },
-    acceptsReservations: true,
     areaServed: {
       "@type": "City",
       name: "Des Moines",
@@ -350,7 +340,7 @@ export default function RestaurantDetails() {
     },
     ...(restaurant.rating ? [{
       question: `What is the rating for ${restaurant.name}?`,
-      answer: `${restaurant.name} has a rating of ${restaurant.rating.toFixed(1)} out of 5 stars based on local reviews. ${restaurant.rating >= 4.5 ? "It's one of the highest-rated restaurants in the Des Moines area." : restaurant.rating >= 4.0 ? "It's a highly-rated restaurant in Des Moines." : "Diners appreciate its " + (restaurant.cuisine || "diverse") + " cuisine offerings."} ${restaurant.is_featured ? "It's also featured as an editor's pick on Des Moines AI Pulse." : ""}`,
+      answer: `${restaurant.name} has a rating of ${restaurant.rating.toFixed(1)} out of 5 stars based on local reviews. ${restaurant.rating >= 4.5 ? "It's one of the highest-rated restaurants in the Des Moines area." : restaurant.rating >= 4.0 ? "It's a highly-rated restaurant in Des Moines." : "Diners appreciate its " + (restaurant.cuisine || "diverse") + " cuisine offerings."} ${restaurant.is_featured ? "It's also featured as an editor's pick on Des Moines Insider." : ""}`,
     }] : []),
   ];
 
@@ -364,7 +354,7 @@ export default function RestaurantDetails() {
         keywords={seoKeywords}
         structuredData={restaurantSchema}
         url={`/restaurants/${restaurant.slug || restaurant.id}`}
-        imageUrl={restaurant.image_url}
+        imageUrl={ogImageUrl("restaurant", restaurant.id)}
         breadcrumbs={breadcrumbs}
         location={{
           name: restaurant.name,
@@ -418,15 +408,20 @@ export default function RestaurantDetails() {
                 onShare={trackShare}
                 trigger={
                   <Button variant="outline" size="sm" className="rounded-xl">
-                    <Share2 className="h-4 w-4 mr-1.5" />
+                    <SpriteIcon name="share-2" className="h-4 w-4 mr-1.5" />
                     Share
                   </Button>
                 }
               />
-              <Button variant="outline" size="sm" className="rounded-xl">
-                <Heart className="h-4 w-4 mr-1.5" />
-                Save
-              </Button>
+              <FavoriteButton
+                contentType="restaurant"
+                contentId={restaurant.id}
+                variant="outline"
+                size="sm"
+                showText
+                itemName={restaurant.name}
+                className="rounded-xl"
+              />
             </div>
           </div>
 
@@ -459,7 +454,7 @@ export default function RestaurantDetails() {
               <div className="absolute top-4 left-4 flex gap-2 z-10">
                 {restaurant.is_featured && (
                   <Badge className="bg-amber-500 text-white border-0 shadow-lg text-sm font-semibold px-3 py-1">
-                    <Sparkles className="h-3.5 w-3.5 mr-1.5" />
+                    <SpriteIcon name="sparkles" className="h-3.5 w-3.5 mr-1.5" />
                     Featured
                   </Badge>
                 )}
@@ -479,7 +474,7 @@ export default function RestaurantDetails() {
                 <div className="max-w-3xl">
                   {restaurant.cuisine && (
                     <div className="flex items-center gap-2 mb-2">
-                      <ChefHat className="h-4 w-4 text-white/70" />
+                      <SpriteIcon name="chef-hat" className="h-4 w-4 text-white/70" />
                       <span className="text-white/80 text-sm font-medium uppercase tracking-wider">
                         {restaurant.cuisine} Cuisine
                       </span>
@@ -503,7 +498,7 @@ export default function RestaurantDetails() {
                     )}
                     {restaurant.location && (
                       <div className="flex items-center gap-1.5 bg-white/20 backdrop-blur-sm rounded-full px-3 py-1">
-                        <MapPin className="h-4 w-4" />
+                        <SpriteIcon name="map-pin" className="h-4 w-4" />
                         <span className="text-sm">{neighborhoodText}</span>
                       </div>
                     )}
@@ -532,7 +527,7 @@ export default function RestaurantDetails() {
               )}
               {restaurant.location && (
                 <a
-                  href={`https://www.google.com/maps/search/?api=1&query=${encodeURIComponent(restaurant.name + " " + restaurant.location)}`}
+                  href={getDirectionsUrl({ latitude: restaurant.latitude, longitude: restaurant.longitude, address: `${restaurant.name} ${restaurant.location}` })}
                   target="_blank"
                   rel="noopener noreferrer"
                 >
@@ -598,7 +593,7 @@ export default function RestaurantDetails() {
                   </div>
                 </div>
                 <div className="text-center p-4 bg-blue-50 rounded-2xl border border-blue-100">
-                  <ChefHat className="h-6 w-6 text-blue-500 mx-auto mb-2" />
+                  <SpriteIcon name="chef-hat" className="h-6 w-6 text-blue-500 mx-auto mb-2" />
                   <div className="text-lg font-bold text-gray-900 line-clamp-1">
                     {restaurant.cuisine || "Various"}
                   </div>
@@ -638,18 +633,18 @@ export default function RestaurantDetails() {
                 {/* Contact & Location */}
                 <div>
                   <h2 className="text-xl font-bold text-gray-900 mb-4 flex items-center gap-2">
-                    <MapPin className="h-5 w-5 text-[#2D1B69]" />
+                    <SpriteIcon name="map-pin" className="h-5 w-5 text-[#2D1B69]" />
                     Location & Contact
                   </h2>
                   <div className="space-y-3">
                     {restaurant.location && (
                       <div className="flex items-start gap-3 p-4 bg-gray-50 rounded-xl">
-                        <MapPin className="h-5 w-5 text-gray-500 mt-0.5 shrink-0" />
+                        <SpriteIcon name="map-pin" className="h-5 w-5 text-gray-500 mt-0.5 shrink-0" />
                         <div>
                           <p className="text-gray-900 font-medium">{restaurant.location}</p>
                           <p className="text-sm text-gray-500">{cityName}, Iowa</p>
                           <a
-                            href={`https://www.google.com/maps/search/?api=1&query=${encodeURIComponent(restaurant.name + " " + restaurant.location)}`}
+                            href={getDirectionsUrl({ latitude: restaurant.latitude, longitude: restaurant.longitude, address: `${restaurant.name} ${restaurant.location}` })}
                             target="_blank"
                             rel="noopener noreferrer"
                             className="inline-flex items-center text-sm text-[#2D1B69] hover:underline mt-1"
@@ -658,6 +653,17 @@ export default function RestaurantDetails() {
                             Get Directions
                           </a>
                         </div>
+                      </div>
+                    )}
+                    {restaurant.latitude && restaurant.longitude && (
+                      <div className="overflow-hidden rounded-xl">
+                        <LazyLocationMap
+                          latitude={restaurant.latitude}
+                          longitude={restaurant.longitude}
+                          venue={restaurant.name}
+                          location={restaurant.location}
+                          className="h-48 w-full"
+                        />
                       </div>
                     )}
                     {restaurant.phone && (
@@ -676,7 +682,7 @@ export default function RestaurantDetails() {
                         rel="noopener noreferrer"
                         className="flex items-center gap-3 p-4 bg-gray-50 rounded-xl hover:bg-gray-100 transition-colors"
                       >
-                        <ExternalLink className="h-5 w-5 text-gray-500 shrink-0" />
+                        <SpriteIcon name="external-link" className="h-5 w-5 text-gray-500 shrink-0" />
                         <span className="text-[#2D1B69] hover:underline">Visit Website</span>
                       </a>
                     )}
@@ -710,7 +716,7 @@ export default function RestaurantDetails() {
                     {restaurant.opening && (
                       <div className="flex items-start justify-between p-4 bg-gray-50 rounded-xl">
                         <span className="text-gray-600 flex items-center gap-1.5">
-                          <Clock className="h-4 w-4" />
+                          <SpriteIcon name="clock" className="h-4 w-4" />
                           Hours
                         </span>
                         <span className="text-gray-900 text-right text-sm">
@@ -755,7 +761,7 @@ export default function RestaurantDetails() {
                           {restaurant.rating ? ` Rated ${restaurant.rating.toFixed(1)} out of 5 stars by local diners.` : ""}
                           {restaurant.price_range ? ` The price range is ${restaurant.price_range} (${getPriceDescription(restaurant.price_range)}).` : ""}
                           {restaurant.phone ? ` Call ${restaurant.phone} for reservations.` : ""}
-                          {restaurant.is_featured ? " This restaurant is an editor's pick on Des Moines AI Pulse." : ""}
+                          {restaurant.is_featured ? " This restaurant is an editor's pick on Des Moines Insider." : ""}
                         </p>
                       </div>
                     </div>
@@ -829,6 +835,11 @@ export default function RestaurantDetails() {
             </CardContent>
           </Card>
 
+          {/* Ratings & Reviews (WEB-FEAT-010) */}
+          <div id="reviews" className="mb-8">
+            <RatingSystem contentType="restaurant" contentId={restaurant.id} showReviews />
+          </div>
+
           {/* Restaurant-Specific FAQ */}
           <Card id="faq" className="shadow-lg rounded-2xl border-0 mb-8 overflow-hidden">
             <FAQSection
@@ -840,8 +851,8 @@ export default function RestaurantDetails() {
             />
           </Card>
 
-          {/* Related Restaurants - Same Cuisine */}
-          {relatedRestaurants && relatedRestaurants.length > 0 && (
+          {/* Related Restaurants - Same Cuisine — hidden when fewer than 3 matches */}
+          {relatedRestaurants && relatedRestaurants.length >= 3 && (
             <section className="mb-8" aria-labelledby="related-heading">
               <h2 id="related-heading" className="text-2xl font-bold text-gray-900 mb-2">
                 More {restaurant.cuisine} Restaurants in Des Moines
@@ -849,7 +860,7 @@ export default function RestaurantDetails() {
               <p className="text-gray-600 mb-6">
                 Explore other {restaurant.cuisine} dining options near {cityName}
               </p>
-              <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-5">
+              <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-5" onClick={trackClick}>
                 {relatedRestaurants.map((related) => (
                   <RestaurantCard
                     key={related.id}
@@ -910,7 +921,7 @@ export default function RestaurantDetails() {
         primaryAction={
           restaurant.phone
             ? {
-                label: "Call Now",
+                label: "Call to Reserve",
                 href: `tel:${restaurant.phone}`,
                 icon: "phone",
               }
@@ -927,7 +938,7 @@ export default function RestaurantDetails() {
           restaurant.location
             ? {
                 label: "Directions",
-                href: `https://www.google.com/maps/search/?api=1&query=${encodeURIComponent(restaurant.name + " " + restaurant.location)}`,
+                href: getDirectionsUrl({ latitude: restaurant.latitude, longitude: restaurant.longitude, address: `${restaurant.name} ${restaurant.location}` }),
                 icon: "directions",
                 isExternal: true,
               }

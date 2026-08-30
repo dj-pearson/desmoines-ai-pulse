@@ -9,28 +9,12 @@ import { Badge } from '@/components/ui/badge';
 import { Switch } from '@/components/ui/switch';
 import { Separator } from '@/components/ui/separator';
 import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs';
-import { 
-  Sparkles, 
-  Brain, 
-  Target, 
-  MapPin, 
-  TrendingUp, 
-  FileText, 
-  Plus, 
-  X,
-  Loader2,
-  CheckCircle,
-  AlertCircle,
-  Lightbulb,
-  RefreshCw,
-  Clock,
-  Users,
-  Star
-} from 'lucide-react';
+import { Brain, Target, FileText, Plus, X, Loader2, CheckCircle, AlertCircle, Lightbulb, RefreshCw, Star } from "lucide-react";
 import { supabase } from '@/integrations/supabase/client';
 import { toast } from 'sonner';
 import { useNavigate } from 'react-router-dom';
 import { createLogger } from '@/lib/logger';
+import { SpriteIcon } from "@/components/ui/SpriteIcon";
 
 const log = createLogger('AIArticleGenerator');
 
@@ -286,7 +270,7 @@ const AIArticleGenerator: React.FC = () => {
                   <div className="flex items-center justify-between">
                     <div>
                       <CardTitle className="flex items-center gap-2">
-                        <Sparkles className="h-5 w-5 text-primary" />
+                        <SpriteIcon name="sparkles" className="h-5 w-5 text-primary" />
                         AI-Powered Topic Suggestions
                       </CardTitle>
                       <CardDescription>
@@ -360,7 +344,7 @@ const AIArticleGenerator: React.FC = () => {
                                   variant="secondary" 
                                   className={`text-xs ${getSEOPotentialColor(suggestion.seo_potential)}`}
                                 >
-                                  <TrendingUp className="h-3 w-3 mr-1" />
+                                  <SpriteIcon name="trending-up" className="h-3 w-3 mr-1" />
                                   {suggestion.seo_potential} SEO
                                 </Badge>
                                 <Badge 
@@ -373,7 +357,7 @@ const AIArticleGenerator: React.FC = () => {
 
                               <div className="flex items-center justify-between text-xs text-muted-foreground">
                                 <div className="flex items-center gap-1">
-                                  <Users className="h-3 w-3" />
+                                  <SpriteIcon name="users" className="h-3 w-3" />
                                   {suggestion.target_audience}
                                 </div>
                                 <div className="flex items-center gap-1">
@@ -410,7 +394,7 @@ const AIArticleGenerator: React.FC = () => {
 
                         <div>
                           <h4 className="font-semibold mb-3 flex items-center gap-2">
-                            <Clock className="h-4 w-4 text-green-500" />
+                            <SpriteIcon name="clock" className="h-4 w-4 text-green-500" />
                             Seasonal Opportunities
                           </h4>
                           <div className="space-y-2">
@@ -614,7 +598,7 @@ const AIArticleGenerator: React.FC = () => {
               <Card>
                 <CardHeader>
                   <CardTitle className="flex items-center gap-2">
-                    <MapPin className="h-5 w-5" />
+                    <SpriteIcon name="map-pin" className="h-5 w-5" />
                     Local SEO Optimization
                   </CardTitle>
                   <CardDescription>
@@ -655,7 +639,7 @@ const AIArticleGenerator: React.FC = () => {
               <Card>
                 <CardHeader>
                   <CardTitle className="flex items-center gap-2">
-                    <TrendingUp className="h-5 w-5" />
+                    <SpriteIcon name="trending-up" className="h-5 w-5" />
                     Custom Instructions
                   </CardTitle>
                 </CardHeader>
@@ -691,7 +675,7 @@ const AIArticleGenerator: React.FC = () => {
                       </>
                     ) : (
                       <>
-                        <Sparkles className="h-5 w-5 mr-2" />
+                        <SpriteIcon name="sparkles" className="h-5 w-5 mr-2" />
                         Generate AI Article
                       </>
                     )}

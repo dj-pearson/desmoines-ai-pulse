@@ -1,5 +1,6 @@
 import { z } from "zod";
 import DOMPurify from "dompurify";
+import { isValidRedirectUrl, getSafeRedirectUrl } from "@/lib/redirectSafety";
 
 /**
  * Security utilities for input validation and sanitization
@@ -30,6 +31,28 @@ export class SecurityUtils {
       ALLOWED_TAGS: ['b', 'i', 'em', 'strong', 'a', 'p', 'br', 'ul', 'ol', 'li'],
       ALLOWED_ATTR: ['href', 'target'],
       ALLOW_DATA_ATTR: false,
+    });
+  }
+
+  /**
+   * Sanitize RICH HTML (newsletter bodies, message threads) for display.
+   *
+   * Unlike sanitizeHTML's tight allowlist, this preserves common formatting
+   * (headings, images, tables, lists, inline styling) so rich content still
+   * renders, while DOMPurify strips <script>, event-handler attributes,
+   * javascript: URLs, <iframe>, and SVG/MathML vectors. Use this for any
+   * database-sourced HTML rendered via dangerouslySetInnerHTML — including
+   * "trusted admin" content, since those tables can also hold user-submitted
+   * HTML (e.g. feedback replies).
+   */
+  static sanitizeRichHTML(dirty: string): string {
+    if (typeof window === 'undefined') {
+      // SSR/non-DOM fallback: escape rather than risk unsanitized passthrough.
+      return SecurityUtils.sanitizeHTML(dirty);
+    }
+    return DOMPurify.sanitize(dirty, {
+      USE_PROFILES: { html: true },
+      FORBID_TAGS: ['style'],
     });
   }
 
@@ -291,57 +314,22 @@ export class SecurityUtils {
    * Validate redirect URL to prevent open redirect attacks
    * Only allows relative paths (starting with /) and blocks external URLs
    */
+  /**
+   * Delegates to redirectSafety.ts, which carries the implementation and no
+   * imports. AuthContext is on the critical path and needed only this function;
+   * reaching it through this class dragged zod and dompurify into the entry
+   * chunk - 20% of the first paint for twenty lines of string checks
+   * (WEB-PERF-020). Kept here so existing SecurityUtils callers are unchanged.
+   */
   static isValidRedirectUrl(url: string | null): boolean {
-    if (!url || typeof url !== 'string') {
-      return false;
-    }
-
-    // Trim whitespace
-    const trimmedUrl = url.trim();
-
-    // Must start with a single forward slash (relative path)
-    // Block protocol-relative URLs (//evil.com) and absolute URLs
-    if (!trimmedUrl.startsWith('/') || trimmedUrl.startsWith('//')) {
-      return false;
-    }
-
-    // Block URLs containing protocol indicators
-    if (trimmedUrl.includes(':')) {
-      return false;
-    }
-
-    // Block encoded characters that could bypass validation
-    // Check for URL-encoded slashes, colons, and other bypass attempts
-    const decoded = decodeURIComponent(trimmedUrl);
-    if (decoded.startsWith('//') || decoded.includes(':')) {
-      return false;
-    }
-
-    // Block common bypass patterns
-    const bypassPatterns = [
-      /^\/\\/i,           // /\evil.com
-      /^\/[^/]*@/i,       // /@evil.com
-      /^\/[^/]*%/i,       // /%2F pattern at start
-      /javascript:/i,     // javascript: protocol
-      /data:/i,           // data: protocol
-      /vbscript:/i,       // vbscript: protocol
-    ];
-
-    if (bypassPatterns.some(pattern => pattern.test(trimmedUrl))) {
-      return false;
-    }
-
-    return true;
+    return isValidRedirectUrl(url);
   }
 
   /**
    * Get a safe redirect URL, falling back to default if invalid
    */
   static getSafeRedirectUrl(url: string | null, defaultUrl: string = '/'): string {
-    if (this.isValidRedirectUrl(url)) {
-      return url!;
-    }
-    return defaultUrl;
+    return getSafeRedirectUrl(url, defaultUrl);
   }
 }
 

@@ -1,0 +1,205 @@
+name: E2E (critical suites)
+
+# Three lanes, on purpose (WEB-CI-003, WEB-CI-021):
+#
+#   1. `smoke`     — BLOCKING. A small critical-journey suite that must stay
+#                    green. No continue-on-error. This is the lane in the branch
+#                    ruleset's required status checks.
+#   2. `a11y-axe`  — BLOCKING. The axe describe block only. Promoted out of the
+#                    quarantine lane once its backlog reached zero: 20 failed /
+#                    28 passed at the start of the WEB-CI-021 work, 48 passed /
+#                    0 failed now. Axe is deterministic — it reads the rendered
+#                    DOM against fixed WCAG rules — so it can gate. The
+#                    keyboard, focus and heading-hierarchy blocks stay advisory
+#                    below, because their remaining failures have not been shown
+#                    to be real.
+#   3. `e2e`       — NON-BLOCKING quarantine. The rest of the broad suites,
+#                    which carry a known failure backlog. Keeps producing signal
+#                    + an uploaded report without freezing merges.
+#
+# Why a separate blocking lane instead of just un-quarantining the broad suites:
+# ~28% of the full Playwright run was failing, so making it required would block
+# every PR on pre-existing failures. A stable subset that gates real regressions
+# today beats a comprehensive gate that has to be bypassed. Grow `smoke` as the
+# quarantine lane's backlog shrinks; the end state is one required lane.
+#
+# The smoke suite runs against a PRODUCTION BUILD (playwright.smoke.config.ts),
+# not the dev server, because the regressions it guards — undefined-component
+# crashes from missing named exports — only reproduce once bundled.
+
+on:
+  pull_request:
+    branches: [main, develop]
+  workflow_dispatch:
+
+concurrency:
+  group: e2e-${{ github.head_ref || github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  smoke:
+    name: Smoke (critical journeys, required)
+    runs-on: ubuntu-latest
+    timeout-minutes: 20
+    env:
+      CI: 'true'
+      # The smoke suite asserts on real data paths (events queries, route mounts),
+      # so it needs real credentials. Without them the build still succeeds but
+      # the data assertions are meaningless.
+      VITE_SUPABASE_URL: ${{ secrets.VITE_SUPABASE_URL }}
+      VITE_SUPABASE_ANON_KEY: ${{ secrets.VITE_SUPABASE_ANON_KEY }}
+      VITE_SITE_URL: ${{ secrets.VITE_SITE_URL || 'https://desmoinesinsider.com' }}
+
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v4
+
+      - name: Set up Node.js 20
+        uses: actions/setup-node@v4
+        with:
+          node-version: 20
+          cache: npm
+
+      - name: Install dependencies
+        run: npm ci
+
+      - name: Install Playwright Chromium + system deps
+        run: npx playwright install --with-deps chromium
+
+      # Catches named imports with no matching export. These do not fail
+      # type-check and esbuild strips types without checking them, so they reach
+      # production as undefined components (React #130). Cheap, so run it first.
+      - name: Check import/export integrity
+        run: npm run check-imports
+
+      - name: Run smoke suite against a production build
+        run: npm run test:smoke
+
+      - name: Upload smoke report
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: playwright-smoke-report
+          path: playwright-report/
+          retention-days: 7
+          if-no-files-found: ignore
+
+  # WEB-CI-021 ACs 1 and 2. AC1 offered "remove continue-on-error, or split
+  # accessibility into its own blocking job"; this is the split, because the
+  # other blocks in that file are not ready and removing the flag wholesale
+  # would gate on failures nobody has confirmed are real.
+  #
+  # AC3 offered a failure baseline instead. Not needed: the axe block is at
+  # zero, and a ratchet over zero is just a gate with extra machinery.
+  #
+  # Real credentials, like `smoke` and unlike the quarantine lane. With
+  # placeholder creds the data-driven pages render error states, so the scan
+  # would pass by testing a different page than production serves.
+  a11y-axe:
+    name: Accessibility (axe, required)
+    runs-on: ubuntu-latest
+    timeout-minutes: 20
+    env:
+      CI: 'true'
+      VITE_SUPABASE_URL: ${{ secrets.VITE_SUPABASE_URL }}
+      VITE_SUPABASE_ANON_KEY: ${{ secrets.VITE_SUPABASE_ANON_KEY }}
+      VITE_SITE_URL: ${{ secrets.VITE_SITE_URL || 'https://desmoinesinsider.com' }}
+
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v4
+
+      - name: Set up Node.js 20
+        uses: actions/setup-node@v4
+        with:
+          node-version: 20
+          cache: npm
+
+      - name: Install dependencies
+        run: npm ci
+
+      - name: Install Playwright Chromium + system deps
+        run: npx playwright install --with-deps chromium
+
+      # Against a PRODUCTION BUILD, via playwright.a11y.config.ts. The first
+      # version of this lane reused the dev-server config and ran 1.2 minutes
+      # locally but over 20 minutes here, where the job was killed at its
+      # timeout: locally the dev server is warm and reuseExistingServer hands
+      # the tests a populated Vite cache, while CI pays on-demand transform on
+      # every first page load and the spec allows 120s per test.
+      - name: Run the axe accessibility block
+        run: npm run test:a11y:axe
+
+      - name: Upload axe report
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: playwright-a11y-axe-report
+          path: playwright-report/
+          retention-days: 7
+          if-no-files-found: ignore
+
+  # QUARANTINE LANE — non-blocking by design. Do not add to required checks
+  # until its backlog is worked down; see docs/E2E_TRIAGE.md for the current
+  # pass rate and what is quarantined.
+  e2e:
+    name: Playwright (broad suites, quarantined)
+    runs-on: ubuntu-latest
+    timeout-minutes: 30
+    env:
+      CI: 'true'
+      # Use repo secrets when present; fall back to placeholders so the Vite dev
+      # server boots even without backend creds (structural tests still run).
+      VITE_SUPABASE_URL: ${{ secrets.VITE_SUPABASE_URL || 'https://placeholder.supabase.co' }}
+      VITE_SUPABASE_ANON_KEY: ${{ secrets.VITE_SUPABASE_ANON_KEY || 'placeholder-anon-key' }}
+      VITE_SITE_URL: ${{ secrets.VITE_SITE_URL || 'https://desmoinesinsider.com' }}
+
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v4
+
+      - name: Set up Node.js 20
+        uses: actions/setup-node@v4
+        with:
+          node-version: 20
+          cache: npm
+
+      - name: Install dependencies
+        run: npm ci
+
+      - name: Install Playwright Chromium + system deps
+        run: npx playwright install --with-deps chromium
+
+      # --global-timeout is what makes this lane usable. The step is
+      # continue-on-error, so a failing suite is absorbed by design - but the
+      # broad suites do not finish inside the 30-minute JOB timeout, and a
+      # job cancelled by timeout is not something continue-on-error can
+      # absorb. Every run of this lane has been cancelled, so it has produced
+      # a permanent red mark and no report at all.
+      #
+      # At 25 minutes Playwright stops itself, writes the report for what it
+      # did run, and exits non-zero - which continue-on-error then swallows.
+      # The lane goes from "cancelled, no artifact" to "green, partial report",
+      # which is the difference between a signal and a habit of ignoring one.
+      # Five minutes of headroom is left for the upload step.
+      - name: Run critical E2E suites (Chromium only)
+        continue-on-error: true
+        run: >-
+          npx playwright test
+          --global-timeout=1500000
+          tests/accessibility.spec.ts
+          tests/links-and-buttons.spec.ts
+          tests/forms.spec.ts
+          tests/mobile-responsive.spec.ts
+          --project=chromium-desktop
+          --project=mobile-chrome
+          --grep-invert "Automated Accessibility Testing with Axe"
+
+      - name: Upload Playwright report
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: playwright-report
+          path: playwright-report/
+          retention-days: 7
+          if-no-files-found: ignore

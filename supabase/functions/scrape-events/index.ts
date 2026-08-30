@@ -5,9 +5,17 @@
  * Risk level: MEDIUM
  */
 import "https://deno.land/x/xhr@0.1.0/mod.ts";
+import {
+  generateEventFingerprint,
+  isDuplicateEvent,
+  type ExistingEvent,
+} from "../_shared/eventDedup.ts";
+import { isHubOwned } from "../_shared/eventSourceProfiles.ts";
+import { fetchWithTimeout } from "../_shared/fetchWithTimeout.ts";
 import { serve } from "https://deno.land/std@0.168.0/http/server.ts";
 import { createClient } from "https://esm.sh/@supabase/supabase-js@2";
-import { getAIConfig, buildClaudeRequest, getClaudeHeaders } from "../_shared/aiConfig.ts";
+import { getAIConfig, buildClaudeRequest, getClaudeHeaders, getAnthropicApiKey } from "../_shared/aiConfig.ts";
+import { requireAdminOrApiKey } from "../_shared/apiKeyAuth.ts";
 
 const corsHeaders = {
   "Access-Control-Allow-Origin": "*",
@@ -50,132 +58,6 @@ interface ScrapedEvent {
   enhanced_description?: string;
   is_enhanced?: boolean;
   fingerprint?: string;
-}
-
-interface ExistingEvent {
-  id: string;
-  title: string;
-  date: string;
-  venue: string;
-  source_url: string;
-  fingerprint?: string;
-}
-
-// Generate a unique fingerprint for an event to detect duplicates
-function generateEventFingerprint(event: {
-  title: string;
-  date: Date;
-  venue: string;
-  source_url: string;
-}): string {
-  // Normalize the data for consistent comparison
-  const normalizedTitle = event.title
-    .toLowerCase()
-    .replace(/[^a-z0-9]/g, "") // Remove special chars and spaces
-    .substring(0, 50); // Limit length
-
-  const normalizedVenue = event.venue
-    .toLowerCase()
-    .replace(/[^a-z0-9]/g, "")
-    .substring(0, 30);
-
-  const dateString = event.date.toISOString().split("T")[0]; // YYYY-MM-DD format
-  const domain = event.source_url.replace(/^https?:\/\//, "").split("/")[0];
-
-  return `${normalizedTitle}_${dateString}_${normalizedVenue}_${domain}`;
-}
-
-// Check if an event is likely a duplicate based on multiple criteria
-function isDuplicateEvent(
-  newEvent: ScrapedEvent,
-  existingEvents: ExistingEvent[]
-): { isDuplicate: boolean; reason?: string; existingEvent?: ExistingEvent } {
-  for (const existing of existingEvents) {
-    // 1. Exact fingerprint match (most reliable)
-    if (
-      newEvent.fingerprint &&
-      existing.fingerprint &&
-      newEvent.fingerprint === existing.fingerprint
-    ) {
-      return {
-        isDuplicate: true,
-        reason: "exact_fingerprint_match",
-        existingEvent: existing,
-      };
-    }
-
-    // 2. Same source URL, same date, similar title
-    if (existing.source_url === newEvent.source_url) {
-      const existingDate = new Date(existing.date);
-      const sameDate =
-        existingDate.toDateString() === newEvent.date.toDateString();
-
-      if (sameDate) {
-        // Calculate title similarity (simple approach)
-        const titleSimilarity = calculateTitleSimilarity(
-          newEvent.title,
-          existing.title
-        );
-
-        if (titleSimilarity > 0.8) {
-          // 80% similar
-          return {
-            isDuplicate: true,
-            reason: "same_source_date_similar_title",
-            existingEvent: existing,
-          };
-        }
-      }
-    }
-
-    // 3. Same title, same venue, date within 1 day (for recurring events)
-    const titleMatch =
-      newEvent.title.toLowerCase().trim() ===
-      existing.title.toLowerCase().trim();
-    const venueMatch =
-      newEvent.venue.toLowerCase().trim() ===
-      existing.venue.toLowerCase().trim();
-
-    if (titleMatch && venueMatch) {
-      const existingDate = new Date(existing.date);
-      const timeDiff = Math.abs(
-        newEvent.date.getTime() - existingDate.getTime()
-      );
-      const hoursDiff = timeDiff / (1000 * 60 * 60);
-
-      // If same title/venue and within 24 hours, likely duplicate
-      if (hoursDiff < 24) {
-        return {
-          isDuplicate: true,
-          reason: "same_title_venue_within_24h",
-          existingEvent: existing,
-        };
-      }
-    }
-  }
-
-  return { isDuplicate: false };
-}
-
-// Simple title similarity calculation using character overlap
-function calculateTitleSimilarity(title1: string, title2: string): number {
-  const normalize = (str: string) =>
-    str.toLowerCase().replace(/[^a-z0-9]/g, "");
-  const norm1 = normalize(title1);
-  const norm2 = normalize(title2);
-
-  if (norm1.length === 0 || norm2.length === 0) return 0;
-
-  // Simple character overlap ratio
-  const minLength = Math.min(norm1.length, norm2.length);
-  const maxLength = Math.max(norm1.length, norm2.length);
-
-  let matches = 0;
-  for (let i = 0; i < minLength; i++) {
-    if (norm1[i] === norm2[i]) matches++;
-  }
-
-  return matches / maxLength;
 }
 
 // Check if we should skip scraping a job based on recent scraping history
@@ -443,13 +325,14 @@ Only include actual events, not navigation items, headers, or generic text. If n
       }
     );
 
-    const claudeResponse = await fetch(
+    const claudeResponse = await fetchWithTimeout(
       aiConfig.api_endpoint,
       {
         method: "POST",
         headers: claudeHeaders,
         body: JSON.stringify(claudeRequestBody),
-      }
+      },
+      60_000
     );
 
     if (claudeResponse.ok) {
@@ -1248,7 +1131,7 @@ async function scrapeWebsite(
   try {
     console.log(`🔍 Scraping ${job.name} from ${job.config.url}`);
 
-    const response = await fetch(job.config.url, {
+    const response = await fetchWithTimeout(job.config.url, {
       headers: {
         "User-Agent":
           "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/91.0.4472.124 Safari/537.36",
@@ -1433,7 +1316,7 @@ async function analyzeWebsiteStructure(
     console.log(`🔍 Analyzing website structure for: ${url}`);
 
     // Fetch the website HTML
-    const response = await fetch(url, {
+    const response = await fetchWithTimeout(url, {
       headers: {
         "User-Agent":
           "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/91.0.4472.124 Safari/537.36",
@@ -1638,13 +1521,14 @@ Format your response as JSON:
         { supabaseUrl, supabaseKey, customMaxTokens: 1000 }
       );
 
-      const claudeResponse = await fetch(
+      const claudeResponse = await fetchWithTimeout(
         aiConfig.api_endpoint,
         {
           method: "POST",
           headers,
           body: JSON.stringify(requestBody),
-        }
+        },
+        60_000
       );
 
       console.log(`🔍 Claude response status: ${claudeResponse.status}`);
@@ -1717,13 +1601,14 @@ Enhanced description:`,
         { supabaseUrl, supabaseKey, customMaxTokens: 200 }
       );
 
-      const claudeResponse = await fetch(
+      const claudeResponse = await fetchWithTimeout(
         aiConfig.api_endpoint,
         {
           method: "POST",
           headers,
           body: JSON.stringify(requestBody),
-        }
+        },
+        60_000
       );
 
       if (claudeResponse.ok) {
@@ -1758,6 +1643,9 @@ serve(async (req) => {
   if (req.method === "OPTIONS") {
     return new Response("ok", { headers: corsHeaders });
   }
+
+  const authFailure = await requireAdminOrApiKey(req, corsHeaders);
+  if (authFailure) return authFailure;
 
   try {
     const url = new URL(req.url);
@@ -1812,7 +1700,7 @@ serve(async (req) => {
         );
       }
 
-      const claudeApiKey = Deno.env.get("CLAUDE_API");
+      const claudeApiKey = getAnthropicApiKey();
 
       console.log(
         `🔑 API Keys availability - Claude: ${
@@ -2042,7 +1930,7 @@ serve(async (req) => {
     const supabaseKey = Deno.env.get("SUPABASE_SERVICE_ROLE_KEY")!;
     const supabase = createClient(supabaseUrl, supabaseKey);
 
-    const claudeApiKey = Deno.env.get("CLAUDE_API");
+    const claudeApiKey = getAnthropicApiKey();
 
     // Fetch existing events from the last 60 days for duplicate checking
     console.log("Fetching existing events for duplicate detection...");
@@ -2144,6 +2032,23 @@ serve(async (req) => {
         events_found: jobRow.events_found,
       };
 
+      // DMI-013 — a hub-owned source is not this producer's to scrape.
+      //
+      // Derived from `ownership` on the profile, never from a list kept here.
+      // The check runs BEFORE the recency check so a hub-owned job is reported
+      // as "not ours" rather than as "scraped too recently", which are different
+      // facts and would send an operator to the wrong place.
+      //
+      // A url matching no profile falls through and is scraped as before: an
+      // unrecognised source keeps its old behaviour rather than being silently
+      // dropped by both producers.
+      if (job.config?.url && isHubOwned(job.config.url)) {
+        const reason = "owned by the ADE Hub ingest run (eventSourceProfiles.ownership = 'hub')";
+        console.log(`⏭️ Skipping ${job.name}: ${reason}`);
+        skippedJobs.push({ name: job.name, reason });
+        continue;
+      }
+
       const skipCheck = shouldSkipJobScraping(job, isAdminDashboard);
       if (skipCheck.skip) {
         console.log(`⏭️ Skipping ${job.name}: ${skipCheck.reason}`);
@@ -2204,11 +2109,34 @@ serve(async (req) => {
       `Processed ${jobsToProcess.length} jobs, found ${totalEventsFound} total events`
     );
 
-    // Return comprehensive results
+    // EVERY JOB FAILING IS NOT A SUCCESSFUL SCRAPE.
+    //
+    // This returned `success: true` with HTTP 200 unconditionally, so a run where
+    // all ten sources failed was byte-indistinguishable from a run where all ten
+    // worked and the calendar was simply quiet. It has been returning exactly
+    // that for days:
+    //
+    //   {"success":true,"message":"Scraping completed: 0 events found across 10
+    //    jobs","total_events_found":0,"total_errors":10, ...}
+    //   every job_results entry: "Edge Function returned a non-2xx status code"
+    //
+    // pg_cron recorded "succeeded", cron_health saw a healthy job, and SeatGeek -
+    // 375 events, the largest single source in the corpus - stopped ingesting on
+    // 2026-08-21 with nothing anywhere reporting a problem. This is WEB-OPS-007
+    // AC4's rule ("re-verify by outcome, not by absence of error") applied to the
+    // scraper itself.
+    //
+    // Total failure is reported as failure. A partial run stays 200 with
+    // success: true and its error count, because losing one source of ten is a
+    // normal Tuesday and should not page anyone.
+    const everyJobFailed = jobsToProcess.length > 0 && totalErrors >= jobsToProcess.length;
+
     return new Response(
       JSON.stringify({
-        success: true,
-        message: `Scraping completed: ${totalEventsFound} events found across ${jobsToProcess.length} jobs`,
+        success: !everyJobFailed,
+        message: everyJobFailed
+          ? `Scraping FAILED: all ${jobsToProcess.length} jobs errored, 0 events found`
+          : `Scraping completed: ${totalEventsFound} events found across ${jobsToProcess.length} jobs`,
         jobs_processed: jobsToProcess.length,
         jobs_skipped: skippedJobs.length,
         total_events_found: totalEventsFound,
@@ -2218,34 +2146,20 @@ serve(async (req) => {
       }),
       {
         headers: { ...corsHeaders, "Content-Type": "application/json" },
-        status: 200,
+        status: everyJobFailed ? 500 : 200,
       }
     );
 
-    if (insertError) {
-      console.error("Database insert error:", insertError);
-      throw insertError;
-    }
-
-    console.log(`Successfully processed ${insertedEvents?.length || 0} events`);
-
-    return new Response(
-      JSON.stringify({
-        success: true,
-        message: `Successfully scraped and processed ${enhancedEvents.length} new events`,
-        events_processed: enhancedEvents.length,
-        events_enhanced: enhancedCount,
-        duplicates_skipped: totalDuplicatesSkipped,
-        jobs_processed: jobsToProcess.length,
-        jobs_skipped: skippedJobs.length,
-        skipped_jobs: skippedJobs,
-        claude_available: !!claudeApiKey,
-      }),
-      {
-        headers: { ...corsHeaders, "Content-Type": "application/json" },
-        status: 200,
-      }
-    );
+    // A second return block used to sit here, unreachable behind the return
+    // above and referencing five identifiers that are not in scope -
+    // insertError, insertedEvents, enhancedEvents, enhancedCount and
+    // totalDuplicatesSkipped. Left over from an earlier shape of this function.
+    //
+    // It never ran, so nothing was broken by it, and that is the problem: it
+    // read as if this function checks its insert error and reports
+    // duplicates_skipped and events_enhanced. It does neither. Whoever needs
+    // those numbers should add them to the response above rather than restoring
+    // this (found by the edge type check, 2026-08-27).
   } catch (error) {
     console.error("Error in scrape-events function:", error);
 

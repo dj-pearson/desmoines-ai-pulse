@@ -5,6 +5,8 @@ import AuthenticationServices
 struct AuthView: View {
     @State private var viewModel = AuthViewModel()
     @State private var isSignUpMode = false
+    @State private var showPassword = false
+    @State private var showConfirmPassword = false
     @Environment(\.dismiss) private var dismiss
 
     var body: some View {
@@ -38,9 +40,11 @@ struct AuthView: View {
                         HStack(spacing: 12) {
                             TextField("First Name", text: $viewModel.firstName)
                                 .textContentType(.givenName)
+                                .submitLabel(.next)
                                 .textFieldStyle(.glassInput)
                             TextField("Last Name", text: $viewModel.lastName)
                                 .textContentType(.familyName)
+                                .submitLabel(.next)
                                 .textFieldStyle(.glassInput)
                         }
                     }
@@ -48,6 +52,7 @@ struct AuthView: View {
                     VStack(alignment: .leading, spacing: 4) {
                         TextField("Email", text: $viewModel.email)
                             .textContentType(.emailAddress)
+                            .submitLabel(.next)
                             .keyboardType(.emailAddress)
                             .autocapitalization(.none)
                             .textFieldStyle(.glassInput)
@@ -61,10 +66,15 @@ struct AuthView: View {
                     }
 
                     VStack(alignment: .leading, spacing: 4) {
-                        SecureField("Password", text: $viewModel.password)
-                            .textContentType(isSignUpMode ? .newPassword : .password)
-                            .textFieldStyle(.glassInput)
-                            .accessibilityHint(isSignUpMode ? "Must be at least 8 characters with uppercase, lowercase, and a number" : "")
+                        passwordField(
+                            title: "Password",
+                            text: $viewModel.password,
+                            isVisible: $showPassword,
+                            contentType: isSignUpMode ? .newPassword : .password,
+                            // Sign-in ends here; sign-up still has Confirm below.
+                            isFinalField: !isSignUpMode
+                        )
+                        .accessibilityHint(isSignUpMode ? "Must be at least 8 characters with uppercase, lowercase, and a number" : "")
 
                         if isSignUpMode && !viewModel.password.isEmpty {
                             PasswordStrengthBar(strength: viewModel.passwordStrength)
@@ -73,9 +83,13 @@ struct AuthView: View {
 
                     if isSignUpMode {
                         VStack(alignment: .leading, spacing: 4) {
-                            SecureField("Confirm Password", text: $viewModel.confirmPassword)
-                                .textContentType(.newPassword)
-                                .textFieldStyle(.glassInput)
+                            passwordField(
+                                title: "Confirm Password",
+                                text: $viewModel.confirmPassword,
+                                isVisible: $showConfirmPassword,
+                                contentType: .newPassword,
+                                isFinalField: true
+                            )
 
                             if !viewModel.confirmPassword.isEmpty && !viewModel.passwordsMatch {
                                 Text("Passwords do not match")
@@ -105,27 +119,14 @@ struct AuthView: View {
 
                 // Primary action
                 Button {
-                    Task {
-                        if isSignUpMode {
-                            await viewModel.signUp()
-                        } else {
-                            await viewModel.signIn()
-                        }
-                        if viewModel.isAuthenticated {
-                            dismiss()
-                        }
-                    }
+                    submit()
                 } label: {
-                    HStack {
-                        if viewModel.isSigningIn || viewModel.isSigningUp {
-                            ProgressView()
-                                .tint(.white)
-                        }
-                        Text(isSignUpMode ? "Create Account" : "Sign In")
-                    }
+                    Text(isSignUpMode ? "Create Account" : "Sign In")
                 }
                 .buttonStyle(.brandPrimary)
-                .disabled(viewModel.isSigningIn || viewModel.isSigningUp || viewModel.isLockedOut)
+                // Announces "Loading", dims, and disables while submitting (UX-008).
+                .brandLoading(viewModel.isSigningIn || viewModel.isSigningUp)
+                .disabled(viewModel.isLockedOut)
                 .padding(.horizontal)
 
                 // Forgot password
@@ -171,6 +172,9 @@ struct AuthView: View {
             }
             .padding(.bottom, 40)
         }
+        // Let the user dismiss the keyboard by dragging; in sign-up mode the
+        // lower fields + Create Account button sit below it (IOS-AUDIT-UX-045).
+        .scrollDismissesKeyboard(.interactively)
         .navigationBarTitleDisplayMode(.inline)
         .alert("Sign In Error", isPresented: $viewModel.showError) {
             Button("OK", role: .cancel) {}
@@ -181,6 +185,73 @@ struct AuthView: View {
             Button("OK", role: .cancel) { dismiss() }
         } message: {
             Text("We've sent a verification link to your email. Please verify your account to continue.")
+        }
+        .alert("Email Sent", isPresented: $viewModel.showInfo) {
+            Button("OK", role: .cancel) {}
+        } message: {
+            Text(viewModel.infoMessage ?? "")
+        }
+    }
+
+    // MARK: - Password field with show/hide toggle (IOS-AUDIT-UX-008)
+
+    /// The form's primary action, shared by the button and by the keyboard's
+    /// submit key (IOS-AUDIT-UX-045 AC3).
+    ///
+    /// Extracted rather than duplicated: a `.go` submit label that does nothing
+    /// when pressed is worse than no label at all, because the keyboard now
+    /// advertises an action the form does not perform. Both paths run the same
+    /// code, so they cannot drift.
+    private func submit() {
+        Task {
+            if isSignUpMode {
+                await viewModel.signUp()
+            } else {
+                await viewModel.signIn()
+            }
+            if viewModel.isAuthenticated {
+                dismiss()
+            }
+        }
+    }
+
+    @ViewBuilder
+    private func passwordField(
+        title: String,
+        text: Binding<String>,
+        isVisible: Binding<Bool>,
+        contentType: UITextContentType,
+        isFinalField: Bool
+    ) -> some View {
+        Group {
+            if isVisible.wrappedValue {
+                TextField(title, text: text)
+            } else {
+                SecureField(title, text: text)
+            }
+        }
+        .textContentType(contentType)
+        // The last field a user fills submits; earlier ones advance. In sign-up
+        // the confirm field follows the password, so only confirm is final.
+        //
+        // A Bool rather than passing a SubmitLabel and comparing it: SwiftUI's
+        // SubmitLabel is not Equatable, so `submitLabel == .go` does not compile.
+        .submitLabel(isFinalField ? .go : .next)
+        .onSubmit { if isFinalField { submit() } }
+        .textFieldStyle(.glassInput)
+        // Persistent label independent of the placeholder.
+        .accessibilityLabel(title)
+        .overlay(alignment: .trailing) {
+            Button {
+                isVisible.wrappedValue.toggle()
+            } label: {
+                Image(systemName: isVisible.wrappedValue ? "eye.slash.fill" : "eye.fill")
+                    .foregroundStyle(.secondary)
+                    .frame(minWidth: 44, minHeight: 44)
+                    .contentShape(Rectangle())
+            }
+            .padding(.trailing, 4)
+            .accessibilityLabel(isVisible.wrappedValue ? "Hide \(title.lowercased())" : "Show \(title.lowercased())")
         }
     }
 

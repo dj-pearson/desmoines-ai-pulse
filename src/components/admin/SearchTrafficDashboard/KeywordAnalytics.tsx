@@ -51,7 +51,7 @@ export function KeywordAnalytics({ dateRange, propertyId, connectedProviders }: 
       const toStr = format(dateRange.to, "yyyy-MM-dd");
 
       let query = supabase
-        .from("gsc_keyword_performance" as any)
+        .from("gsc_keyword_performance")
         .select("query, date, impressions, clicks, ctr, position")
         .gte("date", fromStr)
         .lte("date", toStr);

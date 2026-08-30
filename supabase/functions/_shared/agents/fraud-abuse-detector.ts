@@ -1,0 +1,165 @@
+/**
+ * agent fraud-monitor (AOS-SEC-004) — Subscription & AI-endpoint abuse/fraud.
+ *
+ * Correlates payments (refunds/chargebacks), user_subscriptions (entitlement),
+ * and usage_events (AI-quota) to flag: rapid signup+refund, per-user quota
+ * abuse, and mismatched entitlements. Account-affecting responses escalate to
+ * tier-2 with evidence; tier-1 is limited to safe throttling within the existing
+ * rate-limit infra and NEVER tightens shipped client limits below their retry
+ * thresholds (WEB-SEC-002).
+ *
+ * Consolidated into `agent-runner` (was `agent-fraud-monitor/index.ts`).
+ */
+import { createAgentTask } from "../agentTasks.ts";
+import { notifyOps } from "../notifyOps.ts";
+import type { AgentRun } from "./types.ts";
+
+const AGENT_KEY = "fraud-abuse-detector";
+const WINDOW_H = 24;
+const QUOTA_ABUSE_UNITS = 2000; // AI usage units/user/24h that warrants review
+
+interface Finding {
+  key: string;
+  tier: 2 | 3;
+  title: string;
+  evidence: Record<string, unknown>;
+}
+
+/**
+ * WEB-BE-032. Both reads below dropped their error, and both tables are among
+ * the ones WEB-QA-018 confirmed absent (payments, usage_events are 42P01), so
+ * these two detectors have never seen a row and have always reported nothing.
+ * The failure is raised as a finding rather than thrown, for the reason the
+ * security detector gives: independent detectors run here, one unreadable table
+ * must not stop the others, and createAgentTask dedupes on the key so a
+ * persistent failure opens one task rather than one per run.
+ */
+function blindSource(table: string, error: { message?: string } | null): Finding | null {
+  if (!error) return null;
+  console.error(`[fraud-abuse-detector] ${table} unreadable:`, error.message);
+  return {
+    key: `detector_source_unreadable:${table}`,
+    tier: 3,
+    title: `Fraud detector BLIND - ${table} could not be read`,
+    evidence: { table, error: error.message ?? String(error) },
+  };
+}
+
+export const run: AgentRun = async (ctx, { supabase }) => {
+  const sinceIso = new Date(Date.now() - WINDOW_H * 60 * 60 * 1000).toISOString();
+  const findings: Finding[] = [];
+
+  // ── 1. Refund / chargeback risk (rapid signup + refund) ─────────────────
+  const { data: refunds, error: refundsError } = await supabase
+    .from("payments")
+    .select("user_id, amount, status, refunded_amount, created_at")
+    .or("status.eq.refunded,status.eq.partially_refunded,refunded_amount.gt.0")
+    .gte("created_at", sinceIso)
+    .limit(2000);
+  const refundsBlind = blindSource("payments", refundsError);
+  if (refundsBlind) findings.push(refundsBlind);
+  const byUserRefunds = new Map<string, { count: number; total: number }>();
+  for (const p of (refunds ?? []) as { user_id: string | null; refunded_amount: number; amount: number }[]) {
+    if (!p.user_id) continue;
+    const cur = byUserRefunds.get(p.user_id) ?? { count: 0, total: 0 };
+    cur.count += 1;
+    cur.total += Number(p.refunded_amount || p.amount || 0);
+    byUserRefunds.set(p.user_id, cur);
+  }
+  for (const [userId, r] of byUserRefunds) {
+    findings.push({
+      key: `refund:${userId}`,
+      tier: 2,
+      title: `Refund/chargeback risk for user (${r.count} refund(s), $${r.total.toFixed(2)}/${WINDOW_H}h)`,
+      evidence: { userId, refunds: r.count, totalRefunded: r.total, windowH: WINDOW_H },
+    });
+  }
+
+  // ── 2. Per-user AI quota abuse ──────────────────────────────────────────
+  const { data: usage, error: usageError } = await supabase
+    .from("usage_events")
+    .select("user_id, quantity")
+    .gte("created_at", sinceIso)
+    .limit(20000);
+  const usageBlind = blindSource("usage_events", usageError);
+  if (usageBlind) findings.push(usageBlind);
+  const byUserUsage = new Map<string, number>();
+  for (const u of (usage ?? []) as { user_id: string | null; quantity: number }[]) {
+    if (!u.user_id) continue;
+    byUserUsage.set(u.user_id, (byUserUsage.get(u.user_id) ?? 0) + (u.quantity ?? 0));
+  }
+  for (const [userId, units] of byUserUsage) {
+    if (units >= QUOTA_ABUSE_UNITS) {
+      findings.push({
+        key: `quota_user:${userId}`,
+        tier: 2, // throttling a paid account is account-affecting -> human
+        title: `AI quota abuse: user consumed ${units} units/${WINDOW_H}h`,
+        evidence: { userId, units, threshold: QUOTA_ABUSE_UNITS },
+      });
+    }
+  }
+
+  // ── 3. Mismatched entitlements (active sub, no successful payment) ───────
+  const { data: activeSubs, error: activeSubsError } = await supabase
+    .from("user_subscriptions")
+    .select("id, user_id, status, trial_end")
+    .eq("status", "active")
+    .limit(5000);
+  // Users who have at least one successful payment ever.
+  const { data: paidRows, error: paidRowsError } = await supabase
+    .from("payments")
+    .select("user_id")
+    .eq("status", "succeeded")
+    .limit(20000);
+  // RAISE, do not let this fall to an empty set. paidUsers is built from
+  // paidRows, and the loop below flags every active subscriber who is NOT in
+  // it. A dropped error empties the set, so a single failed read against
+  // payments raises a fraud finding against EVERY PAYING CUSTOMER. The
+  // subscriptions read is raised for the same reason: a partial view of one
+  // side of this comparison produces confident wrong answers, not fewer
+  // answers (WEB-BE-032 AC2).
+  if (activeSubsError) throw new Error(`active subscriptions read failed: ${activeSubsError.message}`);
+  if (paidRowsError) throw new Error(`succeeded payments read failed: ${paidRowsError.message}`);
+  const paidUsers = new Set<string>((paidRows ?? []).map((p: { user_id: string | null }) => p.user_id).filter(Boolean) as string[]);
+  const nowMs = Date.now();
+  for (const s of (activeSubs ?? []) as { id: string; user_id: string; trial_end: string | null }[]) {
+    const trialing = s.trial_end && new Date(s.trial_end).getTime() > nowMs;
+    if (!trialing && !paidUsers.has(s.user_id)) {
+      findings.push({
+        key: `entitlement:${s.id}`,
+        tier: 2,
+        title: `Entitlement mismatch: active subscription with no successful payment`,
+        evidence: { subscriptionId: s.id, userId: s.user_id },
+      });
+    }
+  }
+
+  // ── Open incident tasks (idempotent, account-affecting -> human) ────────
+  let opened = 0;
+  for (const f of findings) {
+    const task = await createAgentTask(supabase, {
+      agentKey: AGENT_KEY,
+      category: "security",
+      title: f.title,
+      confidence: 0,
+      forceTier: f.tier,
+      dedupeKey: f.key,
+      payload: { finding: f.key, evidence: f.evidence, note: "account-affecting action requires human review (WEB-SEC-002)" },
+    });
+    if (task.ok) { opened++; ctx.escalated(1); }
+  }
+
+  if (findings.length > 0) {
+    await notifyOps(supabase, {
+      severity: "high",
+      title: `Billing/AI abuse signals (${findings.length})`,
+      body: findings.map((f) => `- ${f.title}`).join("\n"),
+      dedupeKey: "fraud-abuse-summary",
+    });
+  }
+
+  ctx.processed((refunds?.length ?? 0) + (usage?.length ?? 0) + (activeSubs?.length ?? 0));
+  ctx.summary(`${findings.length} abuse/fraud finding(s); ${opened} incident(s)`);
+  ctx.meta({ findings: findings.map((f) => f.key), opened });
+  return { findings: findings.length, opened };
+};

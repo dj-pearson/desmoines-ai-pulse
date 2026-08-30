@@ -3,7 +3,8 @@ import { InteractiveButton } from "./ui/interactive-button"
 import { InteractiveCard, InteractiveCardContent, InteractiveCardDescription, InteractiveCardHeader, InteractiveCardTitle } from "./ui/interactive-card"
 import { InteractiveInput } from "./ui/interactive-input"
 import { Badge } from "./ui/badge"
-import { Heart, Star, Bookmark, Share2, Play, Download, Search, Settings } from "lucide-react"
+import { Heart, Star, Bookmark, Play, Download, Search, Settings } from "lucide-react";
+import { SpriteIcon } from "@/components/ui/SpriteIcon";
 
 /**
  * Demo component showcasing various micro-interactions
@@ -51,7 +52,7 @@ export function MicroInteractionDemo() {
           </InteractiveButton>
           
           <InteractiveButton variant="tilt">
-            <Share2 className="h-4 w-4" />
+            <SpriteIcon name="share-2" className="h-4 w-4" />
             Tilt Effect
           </InteractiveButton>
           

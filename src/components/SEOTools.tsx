@@ -13,25 +13,7 @@ import { Alert, AlertDescription } from "@/components/ui/alert";
 import { Textarea } from "@/components/ui/textarea";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
-import {
-  Globe,
-  FileText,
-  Bot,
-  Search,
-  Share2,
-  Rss,
-  Copy,
-  Download,
-  CheckCircle,
-  ExternalLink,
-  MapPin,
-  Calendar,
-  Utensils,
-  Camera,
-  Play,
-  Sparkles,
-  Zap,
-} from "lucide-react";
+import { Globe, FileText, Bot, Search, Rss, Copy, Download, CheckCircle, Utensils, Camera, Play, Zap } from "lucide-react";
 import { useToast } from "@/hooks/use-toast";
 import { useEvents } from "@/hooks/useEvents";
 import { useRestaurants } from "@/hooks/useRestaurants";
@@ -40,6 +22,7 @@ import { createEventSlugWithCentralTime } from "@/lib/timezone";
 import { usePlaygrounds } from "@/hooks/usePlaygrounds";
 import { supabase } from "@/integrations/supabase/client";
 import { createLogger } from '@/lib/logger';
+import { SpriteIcon } from "@/components/ui/SpriteIcon";
 
 const log = createLogger('SEOTools');
 
@@ -110,7 +93,7 @@ export default function SEOTools() {
       id: "opengraph",
       title: "Open Graph Tags",
       description: "Social media sharing optimization",
-      icon: <Share2 className="h-5 w-5" />,
+      icon: <SpriteIcon name="share-2" className="h-5 w-5" />,
       category: "meta",
     },
     {
@@ -268,6 +251,17 @@ Sitemap: https://desmoinesinsider.com/sitemap.xml
 Crawl-delay: 1`;
   };
 
+  // WEB-QA-003 AC5: the Key Data Points below are hand-maintained and were the
+  // last place the old overstated counts survived. public/llms.txt was corrected
+  // under WEB-SEO-015, but this generator still emitted "500+ monthly events",
+  // "50+ attractions" and "100+ playgrounds" — so regenerating and publishing
+  // would have silently reverted that fix.
+  //
+  // Measured against the production database 2026-08-22: 341 upcoming events,
+  // 480 restaurants, 22 attractions, 69 playgrounds. Figures are rounded DOWN
+  // and kept identical to public/llms.txt so this generator reproduces the
+  // corrected file rather than a third set of numbers. Re-measure before editing;
+  // generating both from the database alongside the sitemaps would end the drift.
   const generateLLMsTxt = () => {
     return `# Des Moines Insider - AI Crawler Instructions
 # This file provides guidance for AI crawlers like Perplexity, OpenAI, Claude, etc.
@@ -294,10 +288,10 @@ Des Moines Insider is your AI-powered guide to events, restaurants, attractions,
 - All venue information is checked for accuracy
 
 ### Key Data Points:
-- 500+ monthly events tracked
-- 200+ restaurants catalogued  
-- 50+ attractions documented
-- 100+ playgrounds mapped
+- 250+ upcoming events tracked
+- 450+ restaurants catalogued
+- 20+ attractions documented
+- 65+ family activity locations mapped
 
 ### Local Focus:
 - Primary coverage: Des Moines metro area
@@ -375,10 +369,9 @@ Last updated: ${new Date().toLocaleDateString()}`;
             name: event.venue,
             address: event.location,
           },
-          organizer: {
-            "@type": "Organization",
-            name: "Des Moines Insider",
-          },
+          // WEB-SEO-010: no organizer. This admin tool generates schema markup
+          // for an operator to paste elsewhere, so a false organizer here
+          // propagates off-site where we cannot correct it.
         },
       })),
     };
@@ -400,9 +393,9 @@ ${JSON.stringify(eventListSchema, null, 2)}
 <meta property="og:description" content="Discover the best events, restaurants, attractions, and family activities in Des Moines, Iowa. Real-time updates and personalized recommendations." />
 <meta property="og:type" content="website" />
 <meta property="og:url" content="https://desmoinesinsider.com" />
-<meta property="og:image" content="https://desmoinesinsider.com/og-image.jpg" />
-<meta property="og:image:width" content="1200" />
-<meta property="og:image:height" content="630" />
+<meta property="og:image" content="https://desmoinesinsider.com/DMI-Logo.png" />
+<meta property="og:image:width" content="800" />
+<meta property="og:image:height" content="800" />
 <meta property="og:locale" content="en_US" />
 <meta property="og:site_name" content="Des Moines Insider" />
 
@@ -410,7 +403,7 @@ ${JSON.stringify(eventListSchema, null, 2)}
 <meta name="twitter:card" content="summary_large_image" />
 <meta name="twitter:title" content="Des Moines Insider - Your AI-Powered Local Guide" />
 <meta name="twitter:description" content="Discover the best events, restaurants, attractions, and family activities in Des Moines, Iowa." />
-<meta name="twitter:image" content="https://desmoinesinsider.com/og-image.jpg" />
+<meta name="twitter:image" content="https://desmoinesinsider.com/DMI-Logo.png" />
 
 <!-- Additional Meta Tags -->
 <meta name="description" content="Discover the best events, restaurants, attractions, and family activities in Des Moines, Iowa. AI-powered recommendations, real-time updates, and comprehensive local insights." />
@@ -637,7 +630,7 @@ ${JSON.stringify(eventListSchema, null, 2)}
       <div className="mobile-grid sm:grid-cols-2 lg:grid-cols-4 gap-4 mb-6">
         <Card className="text-center">
           <CardContent className="pt-4">
-            <Calendar className="h-8 w-8 mx-auto text-[#DC143C] mb-2" />
+            <SpriteIcon name="calendar" className="h-8 w-8 mx-auto text-[#DC143C] mb-2" />
             <div className="text-2xl font-bold">{events.length}</div>
             <div className="text-sm text-muted-foreground">Events</div>
           </CardContent>
@@ -905,7 +898,7 @@ ${JSON.stringify(eventListSchema, null, 2)}
       <Card>
         <CardHeader>
           <CardTitle className="flex items-center gap-2">
-            <Sparkles className="h-5 w-5" />
+            <SpriteIcon name="sparkles" className="h-5 w-5" />
             AI SEO Content Generation
           </CardTitle>
           <CardDescription>
@@ -926,7 +919,7 @@ ${JSON.stringify(eventListSchema, null, 2)}
               <Card>
                 <CardHeader className="pb-2">
                   <CardTitle className="flex items-center gap-2 text-lg">
-                    <Calendar className="h-5 w-5" />
+                    <SpriteIcon name="calendar" className="h-5 w-5" />
                     Event Pages SEO
                   </CardTitle>
                   <CardDescription>

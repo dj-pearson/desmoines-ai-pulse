@@ -1,5 +1,6 @@
 import { serve } from "https://deno.land/std@0.168.0/http/server.ts";
 import { createClient } from 'https://esm.sh/@supabase/supabase-js@2';
+import { requireAdminOrApiKey } from "../_shared/apiKeyAuth.ts";
 
 const corsHeaders = {
   'Access-Control-Allow-Origin': '*',
@@ -28,6 +29,17 @@ serve(async (req) => {
   if (req.method === 'OPTIONS') {
     return new Response('ok', { headers: corsHeaders });
   }
+
+  // No caller check existed, and this runs as service_role. verify_jwt is not
+  // a gate here: it defaults to true, and true only means "a valid Supabase
+  // JWT" - which the publishable anon key is, in every client bundle.
+  //
+  // The ONLY caller is pg_cron (20260823000008:53), which sends
+  // Bearer <service_role_key> and raises rather than posting unauthenticated.
+  // requireAdminOrApiKey accepts that key explicitly, for exactly this case,
+  // so the scheduled path is unchanged.
+  const authFailure = await requireAdminOrApiKey(req, corsHeaders);
+  if (authFailure) return authFailure;
 
   try {
     const supabaseUrl = Deno.env.get('SUPABASE_URL')!;

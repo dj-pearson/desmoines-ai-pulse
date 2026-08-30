@@ -36,22 +36,35 @@ PaginationItem.displayName = "PaginationItem"
 
 type PaginationLinkProps = {
   isActive?: boolean
+  /**
+   * Renders the link as unavailable. Call sites used to express this as
+   * `className="pointer-events-none opacity-50"`, which leaves an <a> that is
+   * still in the tab order, still announced as a link, and — because it is not
+   * a real disabled control — still subject to WCAG 1.4.3. The homepage's
+   * greyed-out "Previous" was the last color-contrast violation on the site at
+   * 3.58:1 for exactly that reason (WEB-UX-030).
+   */
+  disabled?: boolean
 } & Pick<ButtonProps, "size"> &
   React.ComponentProps<"a">
 
 const PaginationLink = ({
   className,
   isActive,
+  disabled,
   size = "icon",
   ...props
 }: PaginationLinkProps) => (
   <a
     aria-current={isActive ? "page" : undefined}
+    aria-disabled={disabled || undefined}
+    tabIndex={disabled ? -1 : props.tabIndex}
     className={cn(
       buttonVariants({
         variant: isActive ? "outline" : "ghost",
         size,
       }),
+      disabled && "pointer-events-none text-muted-foreground opacity-70",
       className
     )}
     {...props}

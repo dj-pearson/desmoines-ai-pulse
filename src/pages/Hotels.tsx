@@ -1,4 +1,4 @@
-import { useState, useMemo } from "react";
+import { useState, useMemo, useRef, useEffect } from "react";
 import { Helmet } from "react-helmet-async";
 import { useHotels, useHotelFilterOptions } from "@/hooks/useHotels";
 import HotelCard from "@/components/HotelCard";
@@ -21,18 +21,16 @@ import {
 } from "@/components/ui/sheet";
 import { Checkbox } from "@/components/ui/checkbox";
 import { Label } from "@/components/ui/label";
-import {
-  Search,
-  SlidersHorizontal,
-  X,
-  Building2,
-  MapPin,
-} from "lucide-react";
+import { Search, SlidersHorizontal, X, Building2 } from "lucide-react";
 import { Skeleton } from "@/components/ui/skeleton";
+import { EmptyState } from "@/components/ui/empty-state";
+import { ErrorState } from "@/components/ui/error-state";
 import { useDocumentTitle } from "@/hooks/useDocumentTitle";
+import { getCanonicalUrl } from "@/lib/brandConfig";
 import AffiliateDisclosureBanner from "@/components/AffiliateDisclosureBanner";
 import Header from "@/components/Header";
 import Footer from "@/components/Footer";
+import { SpriteIcon } from "@/components/ui/SpriteIcon";
 
 const AREAS = [
   "Downtown",
@@ -96,17 +94,25 @@ export default function Hotels() {
   const [selectedAmenities, setSelectedAmenities] = useState<string[]>([]);
   const [sortBy, setSortBy] = useState<SortOption>("featured");
   const [filtersOpen, setFiltersOpen] = useState(false);
+  const searchTimeoutRef = useRef<ReturnType<typeof setTimeout>>();
 
   // Debounce search
   const handleSearch = (value: string) => {
     setSearch(value);
-    clearTimeout((window as any).__hotelSearchTimeout);
-    (window as any).__hotelSearchTimeout = setTimeout(() => {
+    if (searchTimeoutRef.current) clearTimeout(searchTimeoutRef.current);
+    searchTimeoutRef.current = setTimeout(() => {
       setDebouncedSearch(value);
     }, 300);
   };
 
-  const { hotels, isLoading, totalCount } = useHotels({
+  // Clear any pending debounce timeout on unmount
+  useEffect(() => {
+    return () => {
+      if (searchTimeoutRef.current) clearTimeout(searchTimeoutRef.current);
+    };
+  }, []);
+
+  const { hotels, isLoading, totalCount, error: hotelsError, refetch } = useHotels({
     search: debouncedSearch,
     area: selectedAreas.length > 0 ? selectedAreas : undefined,
     priceRange: selectedPriceRanges.length > 0 ? selectedPriceRanges : undefined,
@@ -119,6 +125,17 @@ export default function Hotels() {
     () => hotels.filter((h) => h.is_featured),
     [hotels]
   );
+
+  // Two full rows of the xl:grid-cols-3 grid below. /stay prerendered
+  // 3,773 elements inside #root against a median of 496 across all 35
+  // routes, and Lighthouse flags above ~1,500 - paid in HTML parse, DOM
+  // memory and hydration, all main-thread (WEB-PERF-023).
+  //
+  // ONLY THE RENDERED LIST IS CAPPED. totalCount comes from the query and is
+  // what the result counter reads, so no number on the page changes.
+  const VISIBLE_HOTELS = 24;
+  const visibleHotels = hotels.slice(0, VISIBLE_HOTELS);
+  const hiddenHotelCount = hotels.length - visibleHotels.length;
 
   const activeFilterCount =
     selectedAreas.length +
@@ -247,7 +264,18 @@ export default function Hotels() {
           content="Find the best hotels in Des Moines, Iowa. Browse downtown hotels, West Des Moines accommodations, and hotels near popular event venues. Book your stay today."
         />
         <meta name="keywords" content="Des Moines hotels, where to stay Des Moines, hotels downtown Des Moines, West Des Moines hotels, Iowa hotels" />
-        <link rel="canonical" href="/stay" />
+        {/* WEB-SEO-002: was a RELATIVE canonical (href="/stay"). Valid, but an
+            absolute URL is unambiguous for crawlers and matches every other page. */}
+        <link rel="canonical" href={getCanonicalUrl('/stay')} />
+        {/* WEB-SEO-002: these pages set only title/description, so index.html's
+            static og: and twitter: tags were the only ones shipping — pinned to the
+            homepage on every route. Emitting them here lets the static copies be
+            marked data-rh and replaced rather than duplicated. */}
+        <meta property="og:title" content="Stay in Des Moines - Hotels & Accommodations | Des Moines Insider" />
+        <meta property="og:description" content="Find the best hotels in Des Moines, Iowa. Browse downtown hotels, West Des Moines accommodations, and hotels near popular event venues. Book your stay today." />
+        <meta property="og:url" content={getCanonicalUrl('/stay')} />
+        <meta name="twitter:title" content="Stay in Des Moines - Hotels & Accommodations | Des Moines Insider" />
+        <meta name="twitter:description" content="Find the best hotels in Des Moines, Iowa. Browse downtown hotels, West Des Moines accommodations, and hotels near popular event venues. Book your stay today." />
       </Helmet>
 
       <div className="min-h-screen bg-background pb-24">
@@ -258,7 +286,7 @@ export default function Hotels() {
           <div className="container mx-auto px-4">
             <div className="max-w-3xl mx-auto text-center">
               <div className="flex items-center justify-center gap-2 mb-4">
-                <Building2 className="h-8 w-8" />
+                <SpriteIcon name="building-2" className="h-8 w-8" />
                 <h1 className="text-3xl md:text-5xl font-bold">
                   Stay in Des Moines
                 </h1>
@@ -269,7 +297,7 @@ export default function Hotels() {
 
               {/* Search bar */}
               <div className="max-w-xl mx-auto relative">
-                <Search className="absolute left-4 top-1/2 -translate-y-1/2 h-5 w-5 text-gray-400" />
+                <Search className="absolute left-4 top-1/2 -translate-y-1/2 h-5 w-5 text-gray-500" />
                 <Input
                   value={search}
                   onChange={(e) => handleSearch(e.target.value)}
@@ -281,7 +309,7 @@ export default function Hotels() {
                     variant="ghost"
                     size="sm"
                     onClick={() => { setSearch(""); setDebouncedSearch(""); }}
-                    className="absolute right-2 top-1/2 -translate-y-1/2 h-8 w-8 p-0 text-gray-400 hover:text-gray-600"
+                    className="absolute right-2 top-1/2 -translate-y-1/2 h-8 w-8 p-0 text-gray-500 hover:text-gray-600"
                   >
                     <X className="h-4 w-4" />
                   </Button>
@@ -331,7 +359,7 @@ export default function Hotels() {
                   className="cursor-pointer"
                   onClick={() => toggleArrayFilter(selectedAreas, setSelectedAreas, area)}
                 >
-                  <MapPin className="h-3 w-3 mr-1" />
+                  <SpriteIcon name="map-pin" className="h-3 w-3 mr-1" />
                   {area}
                 </Badge>
               ))}
@@ -429,8 +457,13 @@ export default function Hotels() {
                 </div>
               )}
 
+              {/* Error state */}
+              {!isLoading && hotelsError && (
+                <ErrorState error={hotelsError} onRetry={() => refetch()} />
+              )}
+
               {/* Featured hotels section */}
-              {!isLoading && featuredHotels.length > 0 && !debouncedSearch && activeFilterCount === 0 && (
+              {!isLoading && !hotelsError && featuredHotels.length > 0 && !debouncedSearch && activeFilterCount === 0 && (
                 <section className="mb-8">
                   <h2 className="text-xl font-semibold mb-4">Featured Hotels</h2>
                   <div className="grid grid-cols-1 md:grid-cols-2 xl:grid-cols-3 gap-6">
@@ -442,25 +475,39 @@ export default function Hotels() {
               )}
 
               {/* All hotels grid */}
-              {!isLoading && (
+              {!isLoading && !hotelsError && (
                 <>
                   {hotels.length > 0 ? (
                     <div className="grid grid-cols-1 md:grid-cols-2 xl:grid-cols-3 gap-6">
-                      {hotels.map((hotel) => (
+                      {visibleHotels.map((hotel) => (
                         <HotelCard key={hotel.id} hotel={hotel} />
                       ))}
                     </div>
+                  ) : null}
+                  {hiddenHotelCount > 0 && (
+                    // Say what is not shown. A grid that stops at 36 without
+                    // saying so reads as "there are 36 hotels", which is how
+                    // a truncation becomes a fact (WEB-PERF-023).
+                    <p className="mt-6 text-sm text-muted-foreground">
+                      Showing the first {VISIBLE_HOTELS} of {hotels.length} hotels. Use search or
+                      the filters above to narrow the list.{' '}
+                    </p>
+                  )}
+                  {hotels.length === 0 && (debouncedSearch || activeFilterCount > 0) ? (
+                    <EmptyState
+                      icon={Building2}
+                      title="No hotels match your filters"
+                      description="Try adjusting your filters or search terms to see more results."
+                      actions={[
+                        { label: 'Clear All Filters', variant: 'outline', onClick: clearAllFilters },
+                      ]}
+                    />
                   ) : (
-                    <div className="text-center py-16">
-                      <Building2 className="h-12 w-12 mx-auto text-muted-foreground mb-4" />
-                      <h3 className="text-lg font-semibold mb-2">No hotels found</h3>
-                      <p className="text-muted-foreground mb-4">
-                        Try adjusting your filters or search terms
-                      </p>
-                      <Button variant="outline" onClick={clearAllFilters}>
-                        Clear All Filters
-                      </Button>
-                    </div>
+                    <EmptyState
+                      icon={Building2}
+                      title="No hotels available yet"
+                      description="Check back soon — we're adding places to stay across Des Moines."
+                    />
                   )}
                 </>
               )}

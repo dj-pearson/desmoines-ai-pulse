@@ -168,7 +168,23 @@ export function useTripPlanner() {
         body: { startDate, endDate, preferences },
       });
 
-      if (error) throw error;
+      if (error) {
+        // Surface the structured server body for upgrade/quota responses
+        // (403 upgrade_required, 429 quota_exceeded) instead of the generic
+        // "non-2xx" FunctionsHttpError message.
+        const ctx = (error as { context?: Response }).context;
+        if (ctx && typeof ctx.json === 'function') {
+          const body = await ctx.json().catch(() => null) as
+            | { error?: string; code?: string }
+            | null;
+          if (body?.error) {
+            const err = new Error(body.error) as Error & { code?: string };
+            if (body.code) err.code = body.code;
+            throw err;
+          }
+        }
+        throw error;
+      }
       if (!data.success) throw new Error(data.error);
 
       return data;
@@ -286,6 +302,33 @@ export function useTripPlanner() {
     },
     onError: (error: Error) => {
       toast.error(`Failed to update item: ${error.message}`);
+    },
+  });
+
+  // Reorder itinerary items (WEB-FEAT-011): persist new order_index values in
+  // one go and refetch once (no per-swap toast/refetch noise).
+  const reorderItemsMutation = useMutation({
+    mutationFn: async (
+      swaps: { id: string; order_index: number }[]
+    ) => {
+      await Promise.all(
+        swaps.map((s) =>
+          // @ts-ignore -- Supabase SDK deep-type instantiation under strict mode
+          supabase.from('trip_plan_items').update({ order_index: s.order_index }).eq('id', s.id)
+        )
+      );
+    },
+    onSuccess: () => {
+      if (selectedTrip) {
+        fetchTripDetails(selectedTrip.id)
+          .then(setSelectedTrip)
+          .catch((error: unknown) =>
+            log.error('reorderItems', 'Failed to refresh trip details', { error })
+          );
+      }
+    },
+    onError: (error: Error) => {
+      toast.error(`Failed to reorder: ${error.message}`);
     },
   });
 
@@ -424,6 +467,7 @@ export function useTripPlanner() {
 
     // Item CRUD
     updateItem: updateItemMutation.mutateAsync,
+    reorderItems: reorderItemsMutation.mutateAsync,
     addItem: addItemMutation.mutateAsync,
     removeItem: removeItemMutation.mutateAsync,
 

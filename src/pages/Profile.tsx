@@ -13,16 +13,17 @@ import { FavoritesView } from "@/components/FavoritesView";
 import { MFAManagement } from "@/components/auth/MFAManagement";
 import { SessionManagementDashboard } from "@/components/auth/SessionManagementDashboard";
 import { PrivacyControls } from "@/components/PrivacyControls";
-import { User, Mail, Phone, MapPin, Settings, Save, Edit, Users, Heart, Calendar, Trophy } from "lucide-react";
+import { User, Mail, Phone, Settings, Save, Edit, Heart, Trophy } from "lucide-react";
 import { useSocialFeatures } from "@/hooks/useSocialFeatures";
 import { useUserSubmittedEvents } from "@/hooks/useUserSubmittedEvents";
 import { useGamification } from "@/hooks/useGamification";
-import { useSearchParams } from "react-router-dom";
+import { useTabState } from "@/hooks/useTabState";
 import { Breadcrumbs } from "@/components/ui/breadcrumbs";
 import { format } from "date-fns";
 import { Badge } from "@/components/ui/badge";
 import { Alert, AlertDescription } from "@/components/ui/alert";
 import { CheckCircle, XCircle, AlertTriangle, Clock } from "lucide-react";
+import { SpriteIcon } from "@/components/ui/SpriteIcon";
 
 export default function Profile() {
   const { profile, updateProfile, isLoading } = useProfile();
@@ -31,8 +32,7 @@ export default function Profile() {
   const { data: submittedEvents } = useUserSubmittedEvents();
   const { userLevel, userXP, badges } = useGamification();
   const { toast } = useToast();
-  const [searchParams] = useSearchParams();
-  const [activeTab, setActiveTab] = useState(searchParams.get("tab") || "overview");
+  const [activeTab, setActiveTab] = useTabState("overview");
   const [isEditing, setIsEditing] = useState(false);
   const [isUpdating, setIsUpdating] = useState(false);
   const [formData, setFormData] = useState({
@@ -144,7 +144,7 @@ export default function Profile() {
               <span className="hidden sm:inline text-xs sm:text-sm">Favorites</span>
             </TabsTrigger>
             <TabsTrigger value="events" className="flex items-center gap-1 sm:gap-2 px-2 sm:px-3 py-2">
-              <Calendar className="h-4 w-4 flex-shrink-0" />
+              <SpriteIcon name="calendar" className="h-4 w-4 flex-shrink-0" />
               <span className="hidden sm:inline text-xs sm:text-sm">Events</span>
             </TabsTrigger>
             <TabsTrigger value="activity" className="flex items-center gap-1 sm:gap-2 px-2 sm:px-3 py-2">
@@ -237,7 +237,7 @@ export default function Profile() {
                 )}
                 {profile?.location && (
                   <div className="flex items-center gap-2">
-                    <MapPin className="h-4 w-4 text-gray-500" />
+                    <SpriteIcon name="map-pin" className="h-4 w-4 text-gray-500" />
                     <span>{profile.location}</span>
                   </div>
                 )}
@@ -252,7 +252,7 @@ export default function Profile() {
         <Card>
           <CardHeader>
             <CardTitle className="flex items-center gap-2">
-              <Users className="h-5 w-5" />
+              <SpriteIcon name="users" className="h-5 w-5" />
               Social Activity
             </CardTitle>
             <CardDescription>
@@ -310,7 +310,7 @@ export default function Profile() {
             <Card>
               <CardHeader>
                 <CardTitle className="flex items-center gap-2">
-                  <Calendar className="h-5 w-5" />
+                  <SpriteIcon name="calendar" className="h-5 w-5" />
                   My Submitted Events
                 </CardTitle>
                 <CardDescription>
@@ -358,7 +358,7 @@ export default function Profile() {
                   </div>
                 ) : (
                   <div className="text-center py-8">
-                    <Calendar className="h-12 w-12 text-muted-foreground mx-auto mb-4" />
+                    <SpriteIcon name="calendar" className="h-12 w-12 text-muted-foreground mx-auto mb-4" />
                     <h3 className="text-lg font-semibold mb-2">No events submitted yet</h3>
                     <p className="text-muted-foreground mb-4">
                       Have an event to share? Submit it to the community!
@@ -422,7 +422,7 @@ export default function Profile() {
                   </Button>
                   <Button asChild variant="outline" className="flex-1">
                     <a href="/social">
-                      <Users className="h-4 w-4 mr-2" />
+                      <SpriteIcon name="users" className="h-4 w-4 mr-2" />
                       Social Hub
                     </a>
                   </Button>
@@ -435,7 +435,7 @@ export default function Profile() {
             <Card>
               <CardHeader>
                 <CardTitle className="flex items-center gap-2">
-                  <Users className="h-5 w-5" />
+                  <SpriteIcon name="users" className="h-5 w-5" />
                   Social Activity
                 </CardTitle>
                 <CardDescription>

@@ -1,15 +1,22 @@
-import React, { useState } from "react";
-import { Star, ThumbsUp, ThumbsDown, Flag, Edit, Trash2 } from "lucide-react";
+import React, { useState, useRef } from "react";
+import { Link } from "react-router-dom";
+import { Star, ThumbsUp, ThumbsDown, Flag, Edit, Trash2, ImagePlus, X, Loader2 } from "lucide-react";
 import { hapticTap } from "@/lib/capacitorUtils";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
 import { Textarea } from "@/components/ui/textarea";
+import { Dialog, DialogContent } from "@/components/ui/dialog";
 import { useRatings, useUserReputation } from "@/hooks/useRatings";
 import { useAuth } from "@/hooks/useAuth";
+import { useToast } from "@/hooks/use-toast";
 import { PremiumGate } from "@/components/PremiumGate";
+import { supabase } from "@/integrations/supabase/client";
+import { resizeImageFile } from "@/lib/imageResize";
 import { Database } from "@/integrations/supabase/types";
-import { format } from "date-fns";
+import { format, formatDistanceToNow } from "date-fns";
+
+const MAX_REVIEW_PHOTOS = 3;
 
 type ContentType = Database["public"]["Enums"]["content_type"];
 type RatingValue = Database["public"]["Enums"]["rating_value"];
@@ -28,32 +35,97 @@ interface StarRatingProps {
   size?: "sm" | "md" | "lg";
 }
 
-const StarRating: React.FC<StarRatingProps> = ({ 
-  rating, 
-  onRatingChange, 
+const StarRating: React.FC<StarRatingProps> = ({
+  rating,
+  onRatingChange,
   readonly = false,
-  size = "md" 
+  size = "md"
 }) => {
   const [hoverRating, setHoverRating] = useState(0);
-  
+  const starRefs = useRef<Array<HTMLButtonElement | null>>([]);
+
   const starSize = size === "sm" ? "h-4 w-4" : size === "lg" ? "h-6 w-6" : "h-5 w-5";
-  
-  return (
-    <div className="flex gap-1">
-      {[1, 2, 3, 4, 5].map((star) => {
-        const isFilled = star <= (hoverRating || rating);
-        return (
+
+  // Read-only display: expose the value as a single labelled image and hide the
+  // decorative star glyphs from assistive tech.
+  if (readonly) {
+    return (
+      <div className="flex gap-1" role="img" aria-label={`Rated ${rating} out of 5 stars`}>
+        {[1, 2, 3, 4, 5].map((star) => (
           <Star
             key={star}
-            className={`${starSize} cursor-pointer transition-colors ${
-              isFilled 
-                ? "fill-yellow-400 text-yellow-400" 
-                : "text-muted-foreground hover:text-yellow-400"
-            } ${readonly ? "cursor-default" : ""}`}
-            onClick={() => { if (!readonly) { hapticTap(); onRatingChange?.(star.toString() as RatingValue); } }}
-            onMouseEnter={() => !readonly && setHoverRating(star)}
-            onMouseLeave={() => !readonly && setHoverRating(0)}
+            aria-hidden="true"
+            className={`${starSize} ${star <= rating ? "fill-yellow-400 text-yellow-400" : "text-muted-foreground"}`}
           />
+        ))}
+      </div>
+    );
+  }
+
+  const display = hoverRating || rating || 0;
+  const select = (star: number) => {
+    hapticTap();
+    onRatingChange?.(star.toString() as RatingValue);
+  };
+  const handleKey = (e: React.KeyboardEvent, star: number) => {
+    let next = 0;
+    switch (e.key) {
+      case "ArrowRight":
+      case "ArrowUp":
+        next = Math.min(5, (rating || star) + 1);
+        break;
+      case "ArrowLeft":
+      case "ArrowDown":
+        next = Math.max(1, (rating || star) - 1);
+        break;
+      case "Home":
+        next = 1;
+        break;
+      case "End":
+        next = 5;
+        break;
+      case " ":
+      case "Enter":
+        e.preventDefault();
+        select(star);
+        return;
+      default:
+        return;
+    }
+    e.preventDefault();
+    select(next);
+    starRefs.current[next - 1]?.focus();
+  };
+
+  // Interactive: a radiogroup with roving tabindex + arrow/Home/End/Enter/Space.
+  return (
+    <div className="flex gap-1" role="radiogroup" aria-label="Your rating">
+      {[1, 2, 3, 4, 5].map((star) => {
+        const isFilled = star <= display;
+        return (
+          <button
+            key={star}
+            type="button"
+            role="radio"
+            ref={(el) => (starRefs.current[star - 1] = el)}
+            aria-checked={rating === star}
+            aria-label={`${star} ${star === 1 ? "star" : "stars"}`}
+            tabIndex={star === (rating || 1) ? 0 : -1}
+            className="rounded p-0.5 focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-yellow-400"
+            onClick={() => select(star)}
+            onKeyDown={(e) => handleKey(e, star)}
+            onMouseEnter={() => setHoverRating(star)}
+            onMouseLeave={() => setHoverRating(0)}
+          >
+            <Star
+              aria-hidden="true"
+              className={`${starSize} cursor-pointer transition-colors ${
+                isFilled
+                  ? "fill-yellow-400 text-yellow-400"
+                  : "text-muted-foreground hover:text-yellow-400"
+              }`}
+            />
+          </button>
         );
       })}
     </div>
@@ -87,6 +159,7 @@ export const RatingSystem: React.FC<RatingSystemProps> = ({
   compact = false,
 }) => {
   const { user } = useAuth();
+  const { toast } = useToast();
   const {
     ratings,
     userRating,
@@ -95,23 +168,66 @@ export const RatingSystem: React.FC<RatingSystemProps> = ({
     submitRating,
     deleteRating,
     voteHelpful,
+    reportReview,
   } = useRatings({ contentType, contentId });
 
   const [showRatingForm, setShowRatingForm] = useState(false);
   const [selectedRating, setSelectedRating] = useState<RatingValue>("5");
   const [reviewText, setReviewText] = useState("");
   const [isSubmitting, setIsSubmitting] = useState(false);
+  const [photoUrls, setPhotoUrls] = useState<string[]>([]);
+  const [uploadingPhoto, setUploadingPhoto] = useState(false);
+
+  const handleAddPhotos = async (files: FileList | null) => {
+    if (!files || !user) return;
+    const room = MAX_REVIEW_PHOTOS - photoUrls.length;
+    const chosen = Array.from(files).slice(0, room);
+    if (chosen.length === 0) {
+      toast({ title: `Up to ${MAX_REVIEW_PHOTOS} photos`, variant: "destructive" });
+      return;
+    }
+    setUploadingPhoto(true);
+    try {
+      for (const file of chosen) {
+        const blob = await resizeImageFile(file);
+        const path = `${user.id}/${crypto.randomUUID()}.jpg`;
+        const { error } = await supabase.storage
+          .from("review-photos")
+          .upload(path, blob, { contentType: "image/jpeg", upsert: false });
+        if (error) throw error;
+        const { data } = supabase.storage.from("review-photos").getPublicUrl(path);
+        setPhotoUrls((prev) => [...prev, data.publicUrl]);
+      }
+    } catch (err) {
+      toast({
+        title: "Photo upload failed",
+        description: err instanceof Error ? err.message : "Please try a different image.",
+        variant: "destructive",
+      });
+    } finally {
+      setUploadingPhoto(false);
+    }
+  };
+
+  const removePhoto = (url: string) => setPhotoUrls((prev) => prev.filter((u) => u !== url));
+
+  const resetForm = () => {
+    setShowRatingForm(false);
+    setReviewText("");
+    setSelectedRating("5");
+    setPhotoUrls([]);
+  };
 
   const handleSubmitRating = async () => {
     if (!user) return;
-    
+
     setIsSubmitting(true);
-    const success = await submitRating(selectedRating, reviewText.trim() || undefined);
-    if (success) {
-      setShowRatingForm(false);
-      setReviewText("");
-      setSelectedRating("5");
-    }
+    const success = await submitRating(
+      selectedRating,
+      reviewText.trim() || undefined,
+      photoUrls.length ? photoUrls : undefined,
+    );
+    if (success) resetForm();
     setIsSubmitting(false);
   };
 
@@ -119,6 +235,16 @@ export const RatingSystem: React.FC<RatingSystemProps> = ({
     setIsSubmitting(true);
     await deleteRating();
     setIsSubmitting(false);
+  };
+
+  // Editing an existing review: prefill the form from the user's current row so
+  // their stars/text/photos aren't wiped on save (submitRating upserts the row).
+  const startEdit = () => {
+    if (!userRating) return;
+    setSelectedRating(userRating.rating);
+    setReviewText(userRating.review_text ?? "");
+    setPhotoUrls(Array.isArray(userRating.photo_urls) ? userRating.photo_urls : []);
+    setShowRatingForm(true);
   };
 
   if (isLoading && !aggregate) {
@@ -189,7 +315,8 @@ export const RatingSystem: React.FC<RatingSystemProps> = ({
           {/* User Rating Section */}
           {user && (
             <div className="mt-6 pt-4 border-t">
-              {userRating ? (
+              {/* Editing falls through to the form branch below (prefilled by startEdit). */}
+              {userRating && !showRatingForm ? (
                 <div className="space-y-3">
                   <div className="flex items-center justify-between">
                     <div className="flex items-center gap-2">
@@ -200,7 +327,7 @@ export const RatingSystem: React.FC<RatingSystemProps> = ({
                       <Button
                         variant="outline"
                         size="sm"
-                        onClick={() => setShowRatingForm(true)}
+                        onClick={startEdit}
                         disabled={isSubmitting}
                       >
                         <Edit className="h-3 w-3 mr-1" />
@@ -256,20 +383,58 @@ export const RatingSystem: React.FC<RatingSystemProps> = ({
                         />
                       </div>
 
+                      {/* Photos (up to 3, client-resized) */}
+                      <div className="space-y-2">
+                        <label className="text-sm font-medium">
+                          Photos (optional, up to {MAX_REVIEW_PHOTOS})
+                        </label>
+                        <div className="flex flex-wrap gap-2">
+                          {photoUrls.map((url) => (
+                            <div key={url} className="relative h-20 w-20 overflow-hidden rounded-md border">
+                              <img src={url} alt="Review upload" className="h-full w-full object-cover" />
+                              <button
+                                type="button"
+                                onClick={() => removePhoto(url)}
+                                aria-label="Remove photo"
+                                className="absolute right-0.5 top-0.5 rounded-full bg-black/60 p-0.5 text-white"
+                              >
+                                <X className="h-3 w-3" />
+                              </button>
+                            </div>
+                          ))}
+                          {photoUrls.length < MAX_REVIEW_PHOTOS && (
+                            <label className="flex h-20 w-20 cursor-pointer items-center justify-center rounded-md border border-dashed text-muted-foreground hover:bg-muted">
+                              {uploadingPhoto ? (
+                                <Loader2 className="h-5 w-5 animate-spin" />
+                              ) : (
+                                <ImagePlus className="h-5 w-5" />
+                              )}
+                              <input
+                                type="file"
+                                accept="image/*"
+                                multiple
+                                className="sr-only"
+                                disabled={uploadingPhoto}
+                                onChange={(e) => {
+                                  handleAddPhotos(e.target.files);
+                                  e.target.value = "";
+                                }}
+                              />
+                            </label>
+                          )}
+                        </div>
+                      </div>
+
                       <div className="flex gap-2">
                         <Button
                           onClick={handleSubmitRating}
-                          disabled={isSubmitting}
+                          disabled={isSubmitting || uploadingPhoto}
                         >
                           {isSubmitting ? "Submitting..." : "Submit Rating"}
                         </Button>
                         <Button
                           variant="outline"
-                          onClick={() => {
-                            setShowRatingForm(false);
-                            setReviewText("");
-                            setSelectedRating("5");
-                          }}
+                          onClick={resetForm}
                           disabled={isSubmitting}
                         >
                           Cancel
@@ -280,6 +445,18 @@ export const RatingSystem: React.FC<RatingSystemProps> = ({
                 </div>
                 </PremiumGate>
               )}
+            </div>
+          )}
+
+          {/* Guest sign-in prompt */}
+          {!user && (
+            <div className="mt-6 pt-4 border-t text-center">
+              <p className="text-sm text-muted-foreground mb-3">
+                Sign in to rate and review this {contentType}.
+              </p>
+              <Button asChild size="sm">
+                <Link to="/auth">Sign in to review</Link>
+              </Button>
             </div>
           )}
         </CardContent>
@@ -294,12 +471,13 @@ export const RatingSystem: React.FC<RatingSystemProps> = ({
           <CardContent>
             <div className="space-y-6">
               {ratings
-                .filter(rating => rating.review_text)
+                .filter((rating) => rating.review_text || (rating.photo_urls && rating.photo_urls.length > 0))
                 .map((rating) => (
-                  <ReviewCard 
-                    key={rating.id} 
-                    rating={rating} 
+                  <ReviewCard
+                    key={rating.id}
+                    rating={rating}
                     onVoteHelpful={voteHelpful}
+                    onReport={reportReview}
                     currentUserId={user?.id}
                   />
                 ))}
@@ -314,12 +492,15 @@ export const RatingSystem: React.FC<RatingSystemProps> = ({
 interface ReviewCardProps {
   rating: any;
   onVoteHelpful: (ratingId: string, isHelpful: boolean) => Promise<boolean>;
+  onReport: (ratingId: string) => Promise<boolean>;
   currentUserId?: string;
 }
 
-const ReviewCard: React.FC<ReviewCardProps> = ({ rating, onVoteHelpful, currentUserId }) => {
+const ReviewCard: React.FC<ReviewCardProps> = ({ rating, onVoteHelpful, onReport, currentUserId }) => {
   const { reputation } = useUserReputation(rating.user_id);
   const isOwnReview = currentUserId === rating.user_id;
+  const [lightbox, setLightbox] = useState<string | null>(null);
+  const photos: string[] = Array.isArray(rating.photo_urls) ? rating.photo_urls : [];
 
   return (
     <div className="space-y-3">
@@ -327,29 +508,54 @@ const ReviewCard: React.FC<ReviewCardProps> = ({ rating, onVoteHelpful, currentU
         <div className="space-y-2">
           <div className="flex items-center gap-2">
             <StarRating rating={Number(rating.rating)} readonly size="sm" />
-            <span className="text-sm text-muted-foreground">
-              {format(new Date(rating.created_at), "MMM d, yyyy")}
+            <span
+              className="text-sm text-muted-foreground"
+              title={format(new Date(rating.created_at), "MMM d, yyyy")}
+            >
+              {formatDistanceToNow(new Date(rating.created_at), { addSuffix: true })}
             </span>
             {reputation && (
-              <ReputationBadge 
-                level={reputation.level} 
-                points={reputation.points} 
+              <ReputationBadge
+                level={reputation.level}
+                points={reputation.points}
               />
             )}
           </div>
           <div className="text-sm font-medium">
-            {rating.profiles?.first_name 
+            {rating.profiles?.first_name
               ? `${rating.profiles.first_name} ${rating.profiles.last_name || ''}`.trim()
               : "Anonymous User"
             }
           </div>
         </div>
       </div>
-      
+
       {rating.review_text && (
         <p className="text-sm leading-relaxed">{rating.review_text}</p>
       )}
-      
+
+      {photos.length > 0 && (
+        <div className="flex flex-wrap gap-2">
+          {photos.map((url) => (
+            <button
+              key={url}
+              type="button"
+              onClick={() => setLightbox(url)}
+              className="h-24 w-24 overflow-hidden rounded-md border"
+              aria-label="View review photo"
+            >
+              <img src={url} alt="Review photo" loading="lazy" className="h-full w-full object-cover" />
+            </button>
+          ))}
+        </div>
+      )}
+
+      <Dialog open={!!lightbox} onOpenChange={(o) => !o && setLightbox(null)}>
+        <DialogContent className="max-w-3xl p-2">
+          {lightbox && <img src={lightbox} alt="Review photo" className="w-full rounded-md" />}
+        </DialogContent>
+      </Dialog>
+
       {!isOwnReview && (
         <div className="flex items-center gap-2">
           <span className="text-xs text-muted-foreground">Was this helpful?</span>
@@ -376,6 +582,7 @@ const ReviewCard: React.FC<ReviewCardProps> = ({ rating, onVoteHelpful, currentU
             size="sm"
             className="h-8 px-2 text-red-500"
             aria-label="Report this review"
+            onClick={() => onReport(rating.id)}
           >
             <Flag className="h-3 w-3" aria-hidden="true" />
           </Button>

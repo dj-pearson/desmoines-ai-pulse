@@ -21,21 +21,7 @@ import {
   DialogFooter,
 } from "@/components/ui/dialog";
 import { Alert, AlertDescription } from "@/components/ui/alert";
-import {
-  Edit3,
-  Trash2,
-  Play,
-  Pause,
-  Clock,
-  Globe,
-  AlertCircle,
-  Save,
-  X,
-  Settings,
-  Calendar,
-  MapPin,
-  Eye,
-} from "lucide-react";
+import { Edit3, Trash2, Play, Pause, Globe, AlertCircle, Save, X, Settings, Eye } from "lucide-react";
 import { useScraping } from "@/hooks/useScraping";
 import { useToast } from "@/components/ui/use-toast";
 import { supabase } from "@/integrations/supabase/client";
@@ -45,6 +31,7 @@ import {
   friendlyToCron,
 } from "@/lib/cronUtils";
 import { createLogger } from '@/lib/logger';
+import { SpriteIcon } from "@/components/ui/SpriteIcon";
 
 const log = createLogger('ScrapingJobManager');
 
@@ -349,7 +336,7 @@ const ScrapingJobManager: React.FC<ScrapingJobManagerProps> = ({
                       <div>
                         <p className="font-medium text-gray-600">Schedule:</p>
                         <p className="flex items-center gap-1">
-                          <Clock className="h-3 w-3" />
+                          <SpriteIcon name="clock" className="h-3 w-3" />
                           {cronToFriendly(job.config.schedule || "")}
                         </p>
                       </div>
@@ -428,7 +415,7 @@ const ScrapingJobManager: React.FC<ScrapingJobManagerProps> = ({
                     {expandedJobs.has(job.id) && (
                       <div className="mt-4 pt-4 border-t border-gray-200">
                         <div className="flex items-center gap-2 mb-3">
-                          <Calendar className="h-4 w-4 text-blue-600" />
+                          <SpriteIcon name="calendar" className="h-4 w-4 text-blue-600" />
                           <h4 className="font-semibold">Recent Events (Last 7 Days)</h4>
                           {loadingEvents.has(job.id) && (
                             <div className="w-4 h-4 border-2 border-blue-600 border-t-transparent rounded-full animate-spin"></div>
@@ -450,13 +437,13 @@ const ScrapingJobManager: React.FC<ScrapingJobManagerProps> = ({
                                       </h5>
                                       <div className="flex items-center gap-4 mt-1 text-xs text-gray-600">
                                         <div className="flex items-center gap-1">
-                                          <Calendar className="h-3 w-3" />
+                                          <SpriteIcon name="calendar" className="h-3 w-3" />
                                           <span>
                                             {new Date(event.date).toLocaleDateString()}
                                           </span>
                                         </div>
                                         <div className="flex items-center gap-1">
-                                          <MapPin className="h-3 w-3" />
+                                          <SpriteIcon name="map-pin" className="h-3 w-3" />
                                           <span className="truncate">{event.venue}</span>
                                         </div>
                                       </div>
@@ -478,7 +465,7 @@ const ScrapingJobManager: React.FC<ScrapingJobManagerProps> = ({
                             </div>
                           ) : (
                             <div className="text-center py-4 text-gray-500">
-                              <Calendar className="h-8 w-8 mx-auto mb-2 text-gray-300" />
+                              <SpriteIcon name="calendar" className="h-8 w-8 mx-auto mb-2 text-gray-300" />
                               <p>No events found in the last 7 days</p>
                               <p className="text-xs">
                                 Try running the scraper to find new events

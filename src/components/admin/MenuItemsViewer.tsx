@@ -333,6 +333,7 @@ export function MenuItemsViewer({
                           variant="ghost"
                           size="icon"
                           className="h-6 w-6 text-muted-foreground hover:text-destructive"
+                          aria-label="Delete menu item"
                           disabled={deletingItem === item.id}
                           onClick={() => {
                             setDeletingItem(item.id);

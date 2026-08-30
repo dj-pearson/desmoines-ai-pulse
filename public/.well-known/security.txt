@@ -1,4 +1,4 @@
-# Security Policy for Des Moines AI Pulse
+# Security Policy for Des Moines Insider
 # https://securitytxt.org/
 
 Contact: mailto:security@desmoinespulse.com

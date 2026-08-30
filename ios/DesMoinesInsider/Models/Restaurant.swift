@@ -24,6 +24,10 @@ struct Restaurant: Identifiable, Codable, Hashable {
     var dietaryOptions: [String]?
     var createdAt: String?
     var updatedAt: String?
+    /// First-party sponsored-listing flag (IOS-ADS-011). Set by the backend
+    /// while a paid sponsorship is active; `sponsored_until` is informational.
+    var isSponsored: Bool?
+    var sponsoredUntil: String?
 
     enum CodingKeys: String, CodingKey {
         case id, name, cuisine, location, city, rating, description, phone, website, status, slug
@@ -37,41 +41,88 @@ struct Restaurant: Identifiable, Codable, Hashable {
         case dietaryOptions = "dietary_options"
         case createdAt = "created_at"
         case updatedAt = "updated_at"
+        case isSponsored = "is_sponsored"
+        case sponsoredUntil = "sponsored_until"
     }
+
+    /// Whether this listing currently carries an active paid sponsorship
+    /// (IOS-ADS-011). Mirrors the web, which keys off the `is_sponsored` flag.
+    var isActivelySponsored: Bool { isSponsored == true }
 
     // MARK: - Open/Closed Status
 
     /// Determines if the restaurant is currently open based on business_hours.
     /// Returns nil if hours data is unavailable.
+    /// Shared calendar so the "Open Now" filter doesn't allocate Calendar.current
+    /// for every restaurant on every toggle/page — the dominant per-call cost on
+    /// a 100+ list (IOS-AUDIT-PERF-009). Captures the user's timezone once.
+    private static let sharedCalendar = Calendar.current
+
     func isOpenNow(at date: Date = .now) -> Bool? {
         guard let hours = businessHours else { return nil }
 
-        let calendar = Calendar.current
-        let weekday = calendar.component(.weekday, from: date) // 1=Sun, 2=Mon...
-        let dayName = Self.dayNames[weekday - 1]
-
-        guard let dayHours = hours.hours(for: dayName) else { return nil }
-        if dayHours.isEmpty || dayHours.lowercased() == "closed" { return false }
-
-        // Parse "HH:mm - HH:mm" or "11:00 AM - 10:00 PM" format
-        let components = dayHours.components(separatedBy: " - ")
-        guard components.count == 2,
-              let open = Self.parseTime(components[0].trimmingCharacters(in: .whitespaces)),
-              let close = Self.parseTime(components[1].trimmingCharacters(in: .whitespaces)) else {
-            // Can't parse → unknown
+        // One dateComponents call instead of three component(_:from:) calls.
+        let parts = Self.sharedCalendar.dateComponents([.weekday, .hour, .minute], from: date)
+        guard let weekday = parts.weekday, let hour = parts.hour, let minute = parts.minute else {
             return nil
         }
+        let dayName = Self.dayNames[weekday - 1] // 1=Sun, 2=Mon...
 
-        let hour = calendar.component(.hour, from: date)
-        let minute = calendar.component(.minute, from: date)
-        let currentMinutes = hour * 60 + minute
+        guard let dayHours = hours.hours(for: dayName) else { return nil }
 
-        // Handle overnight hours (close < open means past midnight)
-        if close < open {
-            return currentMinutes >= open || currentMinutes < close
+        // The parsed open/close range is memoized by the hours string so the
+        // string-splitting + AM/PM parsing doesn't re-run for every restaurant on
+        // every "Open Now" evaluation (IOS-AUDIT-PERF-021).
+        switch Self.dayRange(for: dayHours) {
+        case .closed:
+            return false
+        case .unknown:
+            return nil
+        case .open(let open, let close):
+            let currentMinutes = hour * 60 + minute
+            // Handle overnight hours (close < open means past midnight)
+            if close < open {
+                return currentMinutes >= open || currentMinutes < close
+            }
+            return currentMinutes >= open && currentMinutes < close
+        }
+    }
+
+    /// Parsed open/close minutes for a day's hours string.
+    private enum DayRange { case open(Int, Int), closed, unknown }
+
+    private static let rangeCacheLock = NSLock()
+    private static var rangeCache: [String: DayRange] = [:]
+
+    /// Memoized parse of a "11:00 AM - 10:00 PM"-style string into minutes.
+    /// Thread-safe: the Open Now filter runs on a detached task.
+    private static func dayRange(for dayHours: String) -> DayRange {
+        rangeCacheLock.lock()
+        if let cached = rangeCache[dayHours] {
+            rangeCacheLock.unlock()
+            return cached
+        }
+        rangeCacheLock.unlock()
+
+        let computed: DayRange
+        let trimmed = dayHours.trimmingCharacters(in: .whitespaces)
+        if trimmed.isEmpty || trimmed.lowercased() == "closed" {
+            computed = .closed
+        } else {
+            let components = dayHours.components(separatedBy: " - ")
+            if components.count == 2,
+               let open = parseTime(components[0].trimmingCharacters(in: .whitespaces)),
+               let close = parseTime(components[1].trimmingCharacters(in: .whitespaces)) {
+                computed = .open(open, close)
+            } else {
+                computed = .unknown
+            }
         }
 
-        return currentMinutes >= open && currentMinutes < close
+        rangeCacheLock.lock()
+        rangeCache[dayHours] = computed
+        rangeCacheLock.unlock()
+        return computed
     }
 
     var openStatusText: String {
@@ -106,8 +157,9 @@ struct Restaurant: Identifiable, Codable, Hashable {
     // MARK: - Computed Properties
 
     var coordinate: CLLocationCoordinate2D? {
-        guard let lat = latitude, let lng = longitude,
-              lat != 0, lng != 0 else { return nil }
+        // A missing coordinate is null in the DB (Double? == nil); a literal 0.0
+        // is a valid location and must not be masked (IOS-AUDIT-BUG-016).
+        guard let lat = latitude, let lng = longitude else { return nil }
         return CLLocationCoordinate2D(latitude: lat, longitude: lng)
     }
 
@@ -134,10 +186,10 @@ struct Restaurant: Identifiable, Codable, Hashable {
         return URL(string: "tel://\(cleaned)")
     }
 
+    /// Safe http/https website URL only (IOS-AUDIT-SEC-002) — an unsafe scheme
+    /// in the content row yields nil so no button renders.
     var websiteURL: URL? {
-        guard let website, !website.isEmpty else { return nil }
-        if website.hasPrefix("http") { return URL(string: website) }
-        return URL(string: "https://\(website)")
+        website.flatMap { $0.safeWebURL }
     }
 
     func hash(into hasher: inout Hasher) {

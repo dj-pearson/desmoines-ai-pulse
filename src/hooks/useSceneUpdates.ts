@@ -34,7 +34,7 @@ export function useSceneUpdates(filters?: SceneUpdateFilters) {
     queryKey: ['scene-updates', filters],
     queryFn: async (): Promise<SceneUpdate[]> => {
       let query = supabase
-        .from('scene_updates' as string)
+        .from('scene_updates')
         .select('*')
         .eq('is_published', true)
         .order('publish_date', { ascending: false });

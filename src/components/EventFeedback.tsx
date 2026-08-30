@@ -4,9 +4,10 @@ import { Badge } from "@/components/ui/badge";
 import { useToast } from "@/hooks/use-toast";
 import { useFeedback } from "@/hooks/useFeedback";
 import { useAuth } from "@/hooks/useAuth";
-import { ThumbsUp, ThumbsDown, Heart, HeartOff, TrendingUp } from "lucide-react";
+import { ThumbsUp, ThumbsDown, Heart, HeartOff } from "lucide-react";
 import { cn } from "@/lib/utils";
 import { createLogger } from '@/lib/logger';
+import { SpriteIcon } from "@/components/ui/SpriteIcon";
 
 const log = createLogger('EventFeedback');
 
@@ -137,7 +138,7 @@ export default function EventFeedback({ eventId, className, showStats = false }:
           "p-2 h-8 w-8",
           currentFeedback?.feedback_type === 'interested'
             ? "text-red-500 hover:text-red-600"
-            : "text-gray-400 hover:text-red-500"
+            : "text-gray-500 hover:text-red-500"
         )}
       >
         {currentFeedback?.feedback_type === 'interested' ? (
@@ -157,7 +158,7 @@ export default function EventFeedback({ eventId, className, showStats = false }:
           "p-2 h-8 w-8",
           currentFeedback?.feedback_type === 'thumbs_up'
             ? "text-green-500 hover:text-green-600 bg-green-50"
-            : "text-gray-400 hover:text-green-500"
+            : "text-gray-500 hover:text-green-500"
         )}
       >
         <ThumbsUp className="h-4 w-4" />
@@ -173,7 +174,7 @@ export default function EventFeedback({ eventId, className, showStats = false }:
           "p-2 h-8 w-8",
           currentFeedback?.feedback_type === 'thumbs_down'
             ? "text-red-500 hover:text-red-600 bg-red-50"
-            : "text-gray-400 hover:text-red-500"
+            : "text-gray-500 hover:text-red-500"
         )}
       >
         <ThumbsDown className="h-4 w-4" />
@@ -206,7 +207,7 @@ export default function EventFeedback({ eventId, className, showStats = false }:
       {/* Learning indicator */}
       {currentFeedback && (
         <Badge variant="outline" className="text-xs ml-2">
-          <TrendingUp className="h-3 w-3 mr-1" />
+          <SpriteIcon name="trending-up" className="h-3 w-3 mr-1" />
           Learning
         </Badge>
       )}

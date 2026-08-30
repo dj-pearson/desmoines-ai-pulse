@@ -1,7 +1,9 @@
 import "https://deno.land/x/xhr@0.1.0/mod.ts";
+import { requireAdminOrApiKey } from "../_shared/apiKeyAuth.ts";
+import { fetchWithTimeout } from "../_shared/fetchWithTimeout.ts";
 import { serve } from "https://deno.land/std@0.168.0/http/server.ts";
 import { createClient } from "https://esm.sh/@supabase/supabase-js@2.43.1";
-import { getAIConfig, buildClaudeRequest, getClaudeHeaders } from "../_shared/aiConfig.ts";
+import { getAIConfig, buildClaudeRequest, getClaudeHeaders, getAnthropicApiKey, extractClaudeText } from "../_shared/aiConfig.ts";
 
 const corsHeaders = {
   "Access-Control-Allow-Origin": "*",
@@ -69,6 +71,17 @@ serve(async (req) => {
     return new Response(null, { headers: corsHeaders });
   }
 
+  // Runs as service_role and had no caller check. verify_jwt is not a gate:
+  // it defaults to true, and true only means "a valid Supabase JWT", which
+  // the publishable anon key is.
+  //
+  // Callers, enumerated before guarding:
+  //   pg_cron (20250815040232, 20250825174423) plus SocialMediaManager -> AdminTools
+  // requireAdminOrApiKey accepts the service-role key the cron sends and an
+  // admin user JWT, so every real caller is unaffected.
+  const authFailure = await requireAdminOrApiKey(req, corsHeaders);
+  if (authFailure) return authFailure;
+
   // Helper function to check if we should post now based on time
   const shouldPostNow = (contentType: string): boolean => {
     const now = new Date();
@@ -128,7 +141,7 @@ serve(async (req) => {
     
     console.log(`Checking for posts between ${centralStartUTC.toISOString()} and ${centralEndUTC.toISOString()}`);
     
-    const { data: todayPosts } = await supabase
+    const { data: todayPosts, error: todayPostsError } = await supabase
       .from("social_media_posts")
       .select("id, created_at")
       .eq("content_type", contentType)
@@ -136,6 +149,17 @@ serve(async (req) => {
       .lte("created_at", centralEndUTC.toISOString())
       .eq("status", "posted");
     
+    // FAILS CLOSED. This is the "have we already posted today?" guard, and it
+    // read `(todayPosts?.length || 0) > 0` with the error discarded - so a
+    // failed query meant "nothing posted yet" and the job posted again. The
+    // output is a PUBLIC social post, so the permissive branch duplicates
+    // something the audience can see and nobody can unsee. Skipping a day is
+    // recoverable; double-posting is not.
+    if (todayPostsError) {
+      console.error(`hasPostedToday(${contentType}): read failed, assuming posted -`, todayPostsError.message);
+      return true;
+    }
+
     const hasPosted = (todayPosts?.length || 0) > 0;
     console.log(`Already posted ${contentType} today: ${hasPosted} (found ${todayPosts?.length || 0} posts)`);
     if (todayPosts && todayPosts.length > 0) {
@@ -163,7 +187,7 @@ serve(async (req) => {
     
     console.log(`Checking for generated posts between ${centralStartUTC.toISOString()} and ${centralEndUTC.toISOString()}`);
     
-    const { data: todayPosts } = await supabase
+    const { data: todayPosts, error: todayPostsError } = await supabase
       .from("social_media_posts")
       .select("id, created_at, status")
       .eq("content_type", contentType)
@@ -171,6 +195,13 @@ serve(async (req) => {
       .lte("created_at", centralEndUTC.toISOString())
       .in("status", ["draft", "posted"]);
     
+    // Same guard, same direction: an unreadable result is treated as "already
+    // generated" rather than as a licence to generate another.
+    if (todayPostsError) {
+      console.error(`hasGeneratedToday(${contentType}): read failed, assuming generated -`, todayPostsError.message);
+      return true;
+    }
+
     const hasGenerated = (todayPosts?.length || 0) > 0;
     console.log(`Already generated ${contentType} today: ${hasGenerated} (found ${todayPosts?.length || 0} posts)`);
     if (todayPosts && todayPosts.length > 0) {
@@ -182,7 +213,7 @@ serve(async (req) => {
   try {
     const supabaseUrl = Deno.env.get("SUPABASE_URL")!;
     const supabaseServiceKey = Deno.env.get("SUPABASE_SERVICE_ROLE_KEY")!;
-    const claudeApiKey = Deno.env.get("CLAUDE_API");
+    const claudeApiKey = getAnthropicApiKey();
 
     if (!claudeApiKey) {
       throw new Error("Claude API key not configured");
@@ -190,7 +221,11 @@ serve(async (req) => {
 
     const supabase = createClient(supabaseUrl, supabaseServiceKey);
     const requestBody = await req.json();
-    const { action, contentType, subjectType, postId, triggerSource } = requestBody;
+    // targetContentId (optional, additive) lets a caller pick the exact event/
+    // restaurant to feature instead of the default random selection. Used by the
+    // social-daily-poster orchestrator (WEB-AUTO-012); absent for all existing
+    // callers, which keep their current behavior.
+    const { action, contentType, subjectType, postId, triggerSource, targetContentId } = requestBody;
 
     console.log(
       "Social Media Manager - Action:",
@@ -339,7 +374,7 @@ serve(async (req) => {
                     };
                   }
       
-                  const response = await fetch(webhookUrl, {
+                  const response = await fetchWithTimeout(webhookUrl, {
                     method: "POST",
                     headers: {
                       "Content-Type": "application/json",
@@ -423,14 +458,24 @@ serve(async (req) => {
       // Debug endpoint to check available content
       const { data: events, error: eventsError } = await supabase
         .from("events")
-        .select("id, title, name, date")
+        // `name` is a restaurants column; events have `title`. Asking for it
+        // 42703d, so this debug endpoint returned an error instead of events.
+        // The consumers already read `title || name` because they handle both
+        // entity types, so dropping it here changes nothing downstream.
+        .select("id, title, date")
         .gte("date", new Date().toISOString())
         .order("date", { ascending: true })
         .limit(5);
 
-      const { data: allEvents, error: allEventsError } = await supabase
+      // count, NOT data.length. Both of these asked for { count: "exact" } and
+      // then ignored the count, measuring data.length instead - but PostgREST
+      // caps a response at 1000 rows, so "totalEvents" silently stopped being
+      // the total at 1000 and this debug view would report a growing table as
+      // permanently stuck there. head: true also stops us transferring every
+      // id in the table to count it.
+      const { count: allEventsCount, error: allEventsError } = await supabase
         .from("events")
-        .select("id", { count: "exact" });
+        .select("id", { count: "exact", head: true });
 
       const { data: restaurants, error: restaurantsError } = await supabase
         .from("restaurants")
@@ -438,22 +483,29 @@ serve(async (req) => {
         .order("created_at", { ascending: false })
         .limit(5);
 
-      const { data: allRestaurants, error: allRestaurantsError } =
-        await supabase.from("restaurants").select("id", { count: "exact" });
+      const { count: allRestaurantsCount, error: allRestaurantsError } =
+        await supabase
+          .from("restaurants")
+          .select("id", { count: "exact", head: true });
 
       return new Response(
         JSON.stringify({
           success: true,
           debug: {
             upcomingEvents: events?.length || 0,
-            totalEvents: allEvents?.length || 0,
+            totalEvents: allEventsCount ?? 0,
             recentRestaurants: restaurants?.length || 0,
-            totalRestaurants: allRestaurants?.length || 0,
+            totalRestaurants: allRestaurantsCount ?? 0,
             sampleUpcomingEvents: events || [],
             sampleRecentRestaurants: restaurants || [],
             errors: {
               events: eventsError?.message,
               restaurants: restaurantsError?.message,
+              // Both count reads were unreported, so a failed count arrived
+              // here as a confident 0 - the worst answer a debug endpoint can
+              // give, because it looks like a finding.
+              totalEvents: allEventsError?.message,
+              totalRestaurants: allRestaurantsError?.message,
             },
           },
         }),
@@ -466,8 +518,8 @@ serve(async (req) => {
 
     if (action === "generate" || action === "generate_and_publish") {
       const autoPublish = action === "generate_and_publish";
-      
-      const result = await generateAndPublishPost(supabase, claudeApiKey, contentType, subjectType, autoPublish);
+
+      const result = await generateAndPublishPost(supabase, claudeApiKey, contentType, subjectType, autoPublish, targetContentId);
       
       return new Response(
         JSON.stringify({
@@ -533,7 +585,7 @@ serve(async (req) => {
               };
             }
 
-            const response = await fetch(webhookUrl, {
+            const response = await fetchWithTimeout(webhookUrl, {
               method: "POST",
               headers: {
                 "Content-Type": "application/json",
@@ -608,12 +660,13 @@ async function generateAndPublishPost(
   claudeApiKey: string,
   contentType: string,
   subjectType: string,
-  autoPublish: boolean = true
+  autoPublish: boolean = true,
+  targetContentId?: string
 ) {
-  console.log(`Starting generation for ${contentType} with auto-publish: ${autoPublish}`);
+  console.log(`Starting generation for ${contentType} with auto-publish: ${autoPublish}${targetContentId ? ` (target ${targetContentId})` : ""}`);
   
   // Get recent posts to avoid repetition
-  const { data: recentPosts } = await supabase
+  const { data: recentPosts, error: recentPostsError } = await supabase
     .from("social_media_posts")
     .select("content_id, content_type, subject_type, created_at")
     .gte(
@@ -623,6 +676,12 @@ async function generateAndPublishPost(
     .order("created_at", { ascending: false })
     .limit(50);
 
+  // An empty avoid-list because the read failed looks exactly like an empty
+  // one because nothing has been posted, and the consequence is featuring the
+  // same restaurant twice in a week.
+  if (recentPostsError) {
+    console.error("Could not read recent posts - repetition avoidance is off for this run:", recentPostsError.message);
+  }
   const recentContentIds = recentPosts?.map((p) => p.content_id).filter((id) => id) || [];
   console.log(`Found ${recentContentIds.length} recent content IDs to avoid`);
 
@@ -630,14 +689,42 @@ async function generateAndPublishPost(
   let selectedContent: Record<string, unknown> | null = null;
   let contentUrl = "";
 
-  if (contentType === "event") {
-    const { data: allEvents } = await supabase
+  // If a specific content id was requested (e.g. by the daily-poster
+  // orchestrator), feature exactly that row and skip random selection.
+  if (targetContentId) {
+    const table = contentType === "event" ? "events" : "restaurants";
+    const { data: target, error: targetError } = await supabase
+      .from(table)
+      .select("*")
+      .eq("id", targetContentId)
+      .maybeSingle();
+    // A failed read is NOT "not found". Falling through to random selection
+    // would post a different thing than the orchestrator asked for and report
+    // success for it, so the caller believes a specific item was featured
+    // when something else was.
+    if (targetError) {
+      throw new Error(`Could not read ${table} ${targetContentId}: ${targetError.message}`);
+    }
+    if (target) {
+      selectedContent = target;
+      contentUrl = generateContentUrl(contentType, target);
+      console.log(`Using targeted ${contentType}: ${target.title || target.name} (${targetContentId})`);
+    } else {
+      console.warn(`targetContentId ${targetContentId} not found in ${table}; falling back to default selection`);
+    }
+  }
+
+  if (!selectedContent && contentType === "event") {
+    const { data: allEvents, error: allEventsError } = await supabase
       .from("events")
       .select("*")
       .gte("date", new Date().toISOString())
       .order("date", { ascending: true })
       .limit(50);
 
+    if (allEventsError) {
+      throw new Error(`Could not read events to feature: ${allEventsError.message}`);
+    }
     if (allEvents && allEvents.length > 0) {
       // Filter out recently posted events
       let availableEvents = allEvents.filter(
@@ -667,13 +754,16 @@ async function generateAndPublishPost(
         console.log(`Selected event: ${selectedContent.title} (ID: ${selectedContent.id})`);
       }
     }
-  } else if (contentType === "restaurant") {
-    const { data: allRestaurants } = await supabase
+  } else if (!selectedContent && contentType === "restaurant") {
+    const { data: allRestaurants, error: allRestaurantsError } = await supabase
       .from("restaurants")
       .select("*")
       .order("created_at", { ascending: false })
       .limit(50);
 
+    if (allRestaurantsError) {
+      throw new Error(`Could not read restaurants to feature: ${allRestaurantsError.message}`);
+    }
     if (allRestaurants && allRestaurants.length > 0) {
       // Filter out recently posted restaurants
       let availableRestaurants = allRestaurants.filter(
@@ -697,6 +787,21 @@ async function generateAndPublishPost(
     throw new Error(`No suitable ${contentType} content found for automated posting.`);
   }
 
+  // Event date formatted in America/Chicago so the generated copy reads in local
+  // time (WEB-AUTO-012). Intl with the Central tz is equivalent to date-fns-tz here.
+  const centralDate =
+    contentType === "event" && selectedContent.date
+      ? new Intl.DateTimeFormat("en-US", {
+          timeZone: "America/Chicago",
+          weekday: "short",
+          month: "short",
+          day: "numeric",
+          year: "numeric",
+          hour: "numeric",
+          minute: "2-digit",
+        }).format(new Date(selectedContent.date as string))
+      : "";
+
   // Generate AI content
   const shortPrompt = `Create a compelling social media post (under 200 characters) for ${subjectType.replace(
     "_",
@@ -711,9 +816,10 @@ Description: ${
     ""
   }
 Location: ${selectedContent.location || ""}
-${contentType === "event" ? `Date: ${selectedContent.date}` : ""}
+${contentType === "event" ? `Date: ${centralDate} (Central Time)` : ""}
 ${contentType === "event" ? `Venue: ${selectedContent.venue || ""}` : ""}
 ${contentType === "restaurant" ? `Cuisine: ${selectedContent.cuisine || ""}` : ""}
+Link: ${contentUrl}
 
 Make it engaging, use relevant hashtags, and keep it under 200 characters for Twitter/Threads. Include a call to action.`;
 
@@ -730,9 +836,10 @@ Description: ${
     ""
   }
 Location: ${selectedContent.location || ""}
-${contentType === "event" ? `Date: ${selectedContent.date}` : ""}
+${contentType === "event" ? `Date: ${centralDate} (Central Time)` : ""}
 ${contentType === "event" ? `Venue: ${selectedContent.venue || ""}` : ""}
 ${contentType === "restaurant" ? `Cuisine: ${selectedContent.cuisine || ""}` : ""}
+Link: ${contentUrl}
 
 Make it detailed and engaging for Facebook/LinkedIn. Include compelling details, storytelling elements, and a strong call to action.`;
 
@@ -751,11 +858,11 @@ Make it detailed and engaging for Facebook/LinkedIn. Include compelling details,
     }
   );
 
-  const shortResponse = await fetch(config.api_endpoint, {
+  const shortResponse = await fetchWithTimeout(config.api_endpoint, {
     method: "POST",
     headers,
     body: JSON.stringify(shortRequestBody)
-  });
+  }, 60_000);
 
   if (!shortResponse.ok) {
     const errorData = await shortResponse.json();
@@ -763,10 +870,12 @@ Make it detailed and engaging for Facebook/LinkedIn. Include compelling details,
   }
 
   const shortData = await shortResponse.json();
-  if (!shortData.content || !shortData.content[0] || !shortData.content[0].text) {
-    throw new Error("Invalid response format from Claude API for short content");
+  const shortExtracted = extractClaudeText(shortData);
+  if (!shortExtracted.ok) {
+    console.error("Claude response not usable:", shortExtracted.reason, shortExtracted.detail);
+    throw new Error(`AI response ${shortExtracted.reason}: ${shortExtracted.detail}`);
   }
-  const shortContent = shortData.content[0].text;
+  const shortContent = shortExtracted.text;
 
   // Generate long post
   const longRequestBody = await buildClaudeRequest(
@@ -778,11 +887,11 @@ Make it detailed and engaging for Facebook/LinkedIn. Include compelling details,
     }
   );
 
-  const longResponse = await fetch(config.api_endpoint, {
+  const longResponse = await fetchWithTimeout(config.api_endpoint, {
     method: "POST",
     headers,
     body: JSON.stringify(longRequestBody)
-  });
+  }, 60_000);
 
   if (!longResponse.ok) {
     const errorData = await longResponse.json();
@@ -790,17 +899,25 @@ Make it detailed and engaging for Facebook/LinkedIn. Include compelling details,
   }
 
   const longData = await longResponse.json();
-  if (!longData.content || !longData.content[0] || !longData.content[0].text) {
-    throw new Error("Invalid response format from Claude API for long content");
+  const longExtracted = extractClaudeText(longData);
+  if (!longExtracted.ok) {
+    console.error("Claude response not usable:", longExtracted.reason, longExtracted.detail);
+    throw new Error(`AI response ${longExtracted.reason}: ${longExtracted.detail}`);
   }
-  const longContent = longData.content[0].text;
+  const longContent = longExtracted.text;
 
   // Get active webhooks
-  const { data: webhooks } = await supabase
+  const { data: webhooks, error: webhooksError } = await supabase
     .from("social_media_webhooks")
     .select("*")
     .eq("is_active", true);
 
+  // No webhooks means the post is written to the table and delivered NOWHERE,
+  // while the run still reports success. A failed read produced exactly that
+  // and looked identical to a deliberately empty webhook list.
+  if (webhooksError) {
+    throw new Error(`Could not read social webhooks: ${webhooksError.message}`);
+  }
   const webhookUrls = webhooks?.map((w) => w.webhook_url) || [];
   console.log(`Found ${webhookUrls.length} active webhooks`);
 
@@ -875,7 +992,7 @@ Make it detailed and engaging for Facebook/LinkedIn. Include compelling details,
           metadata: savedPost.metadata,
         };
 
-        const response = await fetch(webhookUrl, {
+        const response = await fetchWithTimeout(webhookUrl, {
           method: "POST",
           headers: {
             "Content-Type": "application/json",

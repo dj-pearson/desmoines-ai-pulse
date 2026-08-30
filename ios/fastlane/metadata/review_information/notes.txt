@@ -1,0 +1,46 @@
+REVIEW NOTES — Des Moines Insider 1.2.0
+
+Thank you for reviewing. This update brings the app to feature parity with our
+web product (AI Trip Planner, guides, deals, content hubs, dashboard) and adds
+two monetization paths. Notes on the review-sensitive areas:
+
+1. CONSUMER SUBSCRIPTIONS (Apple In-App Purchase)
+   - Insider and VIP memberships are auto-renewable subscriptions sold through
+     StoreKit / Apple IAP only (subscription group 21957951).
+   - They unlock app features for the purchasing user: AI Trip Planner, saved
+     searches & custom alerts, unlimited favorites, writing reviews, ad-free
+     browsing, and exclusive content.
+   - Restore Purchases and links to our Terms of Use (EULA) and Privacy Policy
+     are on the subscription screen.
+   - Cross-platform entitlements: a user who already subscribed on our website
+     or Android is honored on iOS so they are never charged twice. We never
+     direct users to an external purchase flow for these digital memberships.
+
+2. ADVERTISER / "PROMOTE" FLOW (NOT a digital good for the app user)
+   - Some screens show a "Promote your business" / advertiser entry point.
+   - This is a business-to-business service for local venues to buy promotional
+     placement. It is a real-world advertising service, not a digital good or
+     feature consumed inside the app by the end user, so per App Store Review
+     Guideline 3.1.3(e)/3.1.5(a) it is handled outside IAP. The button links
+     out to our web advertiser portal in an in-app browser; no purchase is made
+     inside the app. The typical app user never sees a charge here.
+
+3. SPONSORED / AD CONTENT LABELING
+   - Free-tier users may see ads and sponsored listings. All such content is
+     clearly labeled: banner ads carry an "Ad" tag, and sponsored/featured
+     listings and deals carry a "Sponsored" badge (with a matching VoiceOver
+     label, e.g. "Sponsored content"). Paid subscribers see no ads.
+
+4. DEMO ACCOUNT FOR PREMIUM REVIEW
+   - A demo account with an active premium (VIP) entitlement is provided in the
+     "Sign-In Information" fields of this App Review submission so you can review
+     all gated features without purchasing. (Credentials are entered directly in
+     App Store Connect and are intentionally not stored in our source repo.)
+   - To exercise IAP itself, use the StoreKit sandbox on the subscription screen.
+
+5. ACCESSIBILITY & OFFLINE
+   - The app supports VoiceOver, Dynamic Type up to AX5, and Reduce Motion.
+   - Screens degrade gracefully offline (cached content + retry), so a flaky or
+     absent network shows cached data or a retry affordance rather than a blank.
+
+Contact us via the support URL in this submission with any questions. Thanks!

@@ -1,10 +1,19 @@
-Des Moines Insider is your all-in-one guide to the best events, restaurants, and attractions in Des Moines, Iowa.
+Des Moines Insider is your all-in-one guide to the best events, restaurants, and attractions in Des Moines, Iowa — now with an AI trip planner, local guides, and exclusive deals.
 
 DISCOVER EVENTS
 Browse hundreds of upcoming events — from live music and food festivals to art shows and family activities. Filter by date, category, or location to find exactly what you're looking for.
 
 EXPLORE RESTAURANTS
 Find the perfect place to eat with detailed listings, cuisine filters, ratings, and real-time open/closed status. Save your favorites for quick access.
+
+PLAN A TRIP WITH AI
+Tell our AI Trip Planner who you're going with, what you love, and how long you have — and get a ready-to-go Des Moines itinerary in seconds. Save it, tweak it, and take it with you.
+
+LOCAL GUIDES & STORIES
+Read curated guides and articles — the best brunch spots, date-night ideas, neighborhood roundups, seasonal things to do, and insider picks across the metro.
+
+DEALS & SPECIALS
+Find current local deals and specials — happy hours, dining offers, and limited-time discounts — with live "active now" status so you never miss out.
 
 PLAN YOUR VISIT
 Use the interactive map to explore nearby events and attractions. Get directions, check hours, and discover hidden gems across the city.
@@ -13,9 +22,9 @@ AI-POWERED INSIGHTS
 Get personalized insider tips and AI-generated summaries to help you make the most of every outing.
 
 SAVE & ORGANIZE
-Heart your favorite events and restaurants to build your personal Des Moines bucket list. Get reminders so you never miss out.
+Heart your favorite events, restaurants, and guides to build your personal Des Moines bucket list. Save searches and get alerts so you never miss what's new.
 
-PREMIUM FEATURES (Optional)
-Upgrade to Insider or VIP for advanced search, unlimited favorites, exclusive insider tips, and an ad-free experience.
+INSIDER & VIP MEMBERSHIPS (Optional)
+Upgrade to Insider or VIP for the AI Trip Planner, advanced and saved searches with custom alerts, unlimited favorites, the ability to write reviews, exclusive insider content, and an ad-free experience. Subscriptions are billed through your Apple ID, and any plan you've already purchased on the web or Android is honored automatically.
 
 Whether you're a local looking for something new or a visitor planning your trip, Des Moines Insider has everything you need to explore the city.

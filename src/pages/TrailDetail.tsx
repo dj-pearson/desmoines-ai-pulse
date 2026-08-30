@@ -7,7 +7,8 @@ import { Card, CardContent } from '@/components/ui/card';
 import { Badge } from '@/components/ui/badge';
 import { Skeleton } from '@/components/ui/skeleton';
 import { Button } from '@/components/ui/button';
-import { MapPin, Ruler, Navigation, ExternalLink, Mountain, TreePine } from 'lucide-react';
+import { Ruler, Navigation, Mountain, TreePine } from "lucide-react";
+import { SpriteIcon } from "@/components/ui/SpriteIcon";
 
 const DIFFICULTY_COLORS: Record<string, string> = {
   easy: 'bg-green-500/10 text-green-700 dark:text-green-400',
@@ -120,7 +121,7 @@ export default function TrailDetail() {
             {/* Location */}
             <Card>
               <CardContent className="p-5">
-                <h3 className="font-semibold mb-3 flex items-center gap-2"><MapPin className="h-4 w-4" /> Trailhead</h3>
+                <h3 className="font-semibold mb-3 flex items-center gap-2"><SpriteIcon name="map-pin" className="h-4 w-4" /> Trailhead</h3>
                 {trail.trailhead_address && (
                   <p className="text-sm text-muted-foreground mb-3">{trail.trailhead_address}</p>
                 )}
@@ -149,7 +150,7 @@ export default function TrailDetail() {
             <div className="mt-6">
               <a href={trail.website} target="_blank" rel="noopener noreferrer">
                 <Button variant="outline">
-                  <ExternalLink className="h-4 w-4 mr-1" /> More Info
+                  <SpriteIcon name="external-link" className="h-4 w-4 mr-1" /> More Info
                 </Button>
               </a>
             </div>

@@ -2,8 +2,49 @@ import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { Progress } from "@/components/ui/progress";
-import * as LucideIcons from "lucide-react";
+import {
+  Award,
+  Calendar,
+  Camera,
+  Crown,
+  Home,
+  MapPin,
+  Share2,
+  Star,
+  Sunrise,
+  Trophy,
+  UtensilsCrossed,
+  type LucideIcon,
+} from "lucide-react";
 import { Badge as BadgeType, useGamification } from "@/hooks/useGamification";
+
+// WEB-PERF-026. This file used to be `import * as LucideIcons` plus
+// `(LucideIcons as any)[badge.icon]`. Rollup cannot tree-shake a namespace
+// import indexed by a runtime string, and vite.config.ts routes lucide-react
+// into the `vendor-icons` chunk that index.html references — so all 1,500-odd
+// icons (780 KB raw / 133 KB gz) shipped on first paint for every visitor,
+// because of one component behind /gamification.
+//
+// The keys are every `icon` value seeded into public.badges by
+// supabase/migrations/20250805010931_*.sql:223-233. Nothing in src/ or in any
+// edge function writes that table, so this is the complete set. If a badge is
+// ever added with a new icon name, it renders the Award fallback rather than
+// crashing — which is what the old code did, since indexing the namespace with
+// an unknown name yields undefined and React throws on an undefined element
+// type.
+const BADGE_ICONS: Record<string, LucideIcon> = {
+  Award,
+  Calendar,
+  Camera,
+  Crown,
+  Home,
+  MapPin,
+  Share2,
+  Star,
+  Sunrise,
+  Trophy,
+  UtensilsCrossed,
+};
 
 const getRarityColor = (rarity: string) => {
   switch (rarity) {
@@ -32,7 +73,7 @@ interface BadgeCardProps {
 }
 
 function BadgeCard({ badge, earned = false, progress }: BadgeCardProps) {
-  const IconComponent = badge.icon ? (LucideIcons as any)[badge.icon] : LucideIcons.Award;
+  const IconComponent = (badge.icon && BADGE_ICONS[badge.icon]) || Award;
   
   return (
     <Card className={`relative ${earned ? '' : 'opacity-60'} ${getRarityBorder(badge.rarity)} border-2`}>
@@ -101,7 +142,7 @@ export function BadgeCollection() {
     <Card>
       <CardHeader>
         <CardTitle className="flex items-center gap-2">
-          <LucideIcons.Award className="h-5 w-5" />
+          <Award className="h-5 w-5" />
           Badge Collection ({badges.length}/{availableBadges.length})
         </CardTitle>
       </CardHeader>
@@ -115,7 +156,7 @@ export function BadgeCollection() {
           <TabsContent value="earned" className="space-y-4">
             {badges.length === 0 ? (
               <div className="text-center py-8">
-                <LucideIcons.Award className="h-12 w-12 text-muted-foreground mx-auto mb-4" />
+                <Award className="h-12 w-12 text-muted-foreground mx-auto mb-4" />
                 <p className="text-muted-foreground">No badges earned yet. Start exploring to earn your first badge!</p>
               </div>
             ) : (

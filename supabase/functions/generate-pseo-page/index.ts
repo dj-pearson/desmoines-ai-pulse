@@ -17,8 +17,9 @@
 import "https://deno.land/x/xhr@0.1.0/mod.ts";
 import { serve } from "https://deno.land/std@0.168.0/http/server.ts";
 import { createClient } from 'https://esm.sh/@supabase/supabase-js@2';
-import { getAIConfig, getClaudeHeaders } from "../_shared/aiConfig.ts";
+import { getAIConfig, getClaudeHeaders, getAnthropicApiKey } from "../_shared/aiConfig.ts";
 import { checkRateLimit } from "../_shared/rateLimit.ts";
+import { requireAdminOrApiKey } from "../_shared/apiKeyAuth.ts";
 
 const corsHeaders = {
   'Access-Control-Allow-Origin': '*',
@@ -46,6 +47,17 @@ serve(async (req) => {
     return new Response(null, { headers: corsHeaders });
   }
 
+  // Runs as service_role and had no caller check. verify_jwt is not a gate:
+  // it defaults to true, and true only means "a valid Supabase JWT" - which
+  // the publishable anon key is, in every client bundle.
+  //
+  // Every caller is admin-gated already: PseoAdmin via usePseoAdmin, mounted at
+  // /admin/ai behind <ProtectedRoute requireAdmin>. No cron job posts here.
+  // So the route assumed admin and the server did not enforce it; the admin
+  // JWT that functions.invoke sends is what requireAdminOrApiKey checks.
+  const authFailure = await requireAdminOrApiKey(req, corsHeaders);
+  if (authFailure) return authFailure;
+
   const rateLimit = checkRateLimit(req, {
     max: 20,
     message: 'pSEO generation rate limit exceeded.',
@@ -64,7 +76,7 @@ serve(async (req) => {
 
     const supabaseUrl = Deno.env.get('SUPABASE_URL') ?? '';
     const supabaseKey = Deno.env.get('SUPABASE_SERVICE_ROLE_KEY') ?? '';
-    const claudeApiKey = Deno.env.get('CLAUDE_API');
+    const claudeApiKey = getAnthropicApiKey();
 
     if (!claudeApiKey) {
       return jsonResponse({ error: 'Claude API key not configured' }, 500);
@@ -79,11 +91,21 @@ serve(async (req) => {
 
     // Check if page already exists
     if (!forceRegenerate) {
-      const { data: existing } = await supabase
+      const { data: existing, error: existingError } = await supabase
         .from('pseo_pages')
         .select('id')
         .eq('id', pageId)
         .single();
+
+      // The caller passed forceRegenerate=false, i.e. explicitly asked NOT to
+      // overwrite an existing page. A dropped error reads as "no page yet" and
+      // regenerates over one that exists (WEB-BE-032 AC2).
+      //
+      // PGRST116 is excluded: .single() reports "no rows" as an error, and that
+      // is the ordinary first-generation case this branch exists for.
+      if (existingError && existingError.code !== 'PGRST116') {
+        return jsonResponse({ success: false, error: `Could not check for an existing page: ${existingError.message}` }, 500);
+      }
 
       if (existing) {
         return jsonResponse({

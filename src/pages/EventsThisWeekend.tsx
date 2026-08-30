@@ -2,11 +2,14 @@ import { useQuery } from "@tanstack/react-query";
 import { supabase } from "@/integrations/supabase/client";
 import Header from "@/components/Header";
 import Footer from "@/components/Footer";
-import EventCard from "@/components/EventCard";
+import { ListFreshness } from "@/components/ListFreshness";
+import { MonthLinks } from "@/components/seo/MonthLinks";
+import { FAQSection } from "@/components/FAQSection";
+import { SocialEventCard } from "@/components/SocialEventCard";
 import EnhancedLocalSEO from "@/components/EnhancedLocalSEO";
 import { EventListJsonLd } from "@/components/schema/EventListJsonLd";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
-import { Calendar, MapPin, Clock, Filter } from "lucide-react";
+import { Filter } from "lucide-react";
 import {
   format,
   isWeekend,
@@ -22,6 +25,27 @@ import { toZonedTime, fromZonedTime } from "date-fns-tz";
 import { BRAND, getCanonicalUrl } from "@/lib/brandConfig";
 import { useDocumentTitle } from "@/hooks/useDocumentTitle";
 import { Breadcrumbs } from "@/components/ui/breadcrumbs";
+import { EVENT_LIST_COLUMNS } from "@/lib/listColumns";
+import { formatCount } from "@/lib/pluralize";
+import { SpriteIcon } from "@/components/ui/SpriteIcon";
+
+/**
+ * WEB-PERF-023. The grid rendered every event in the weekend window and this
+ * page measured 4,374 DOM elements inside #root - the worst route on the site
+ * once the four month pages were capped, against a 1,139 median and a ~1,500
+ * Lighthouse flag. 85 events are in the window today.
+ *
+ * 36 is twelve full rows of the lg:grid-cols-3 grid, the same cap as
+ * MonthlyEventsPage and DietaryRestaurants. The cap applies AFTER the category
+ * and location filters, so a filtered view still shows its first 36 matches
+ * rather than 36 of the unfiltered set.
+ *
+ * Same trade-off as the month pages and it is the owner's: this is a landing
+ * page and it now lists 36 of 85. Every event stays reachable through /events
+ * and its own detail page. If the whole window must render, the fix is a
+ * cheaper card rather than a bigger cap.
+ */
+const VISIBLE_EVENTS = 36;
 
 export default function EventsThisWeekend() {
   const [selectedCategory, setSelectedCategory] = useState<string>("all");
@@ -47,7 +71,7 @@ export default function EventsThisWeekend() {
 
       const { data, error } = await supabase
         .from("events")
-        .select("*")
+        .select(EVENT_LIST_COLUMNS)
         .gte("date", startUtc)
         .lte("date", endUtc)
         .order("event_start_utc", { ascending: true, nullsFirst: false })
@@ -108,7 +132,7 @@ export default function EventsThisWeekend() {
   const faqData = [
     {
       question: "What's happening this weekend in Des Moines?",
-      answer: `We have ${weekendEvents.length} events happening this weekend in Des Moines and surrounding areas. See our complete list with dates, times, and maps on one page.`,
+      answer: `See everything happening this weekend in Des Moines and surrounding areas, with dates, times and maps on one page. The list is rebuilt daily as events are announced.`,
     },
     {
       question: "Are there kid-friendly events this weekend?",
@@ -135,11 +159,28 @@ export default function EventsThisWeekend() {
         canonicalUrl={getCanonicalUrl('/events/this-weekend')}
         pageType="website"
         breadcrumbs={breadcrumbs}
+        // SEO-003: this prop no longer emits anything. EnhancedLocalSEO stopped
+        // emitting FAQPage - <FAQSection> below is the single emitter, and it
+        // renders the questions too, so the schema cannot describe content that
+        // is not on the page. Kept as a signal that this page has an FAQ.
+        //
+        // The WEB-SEO-008 hazard this comment used to describe is still real and
+        // is worth keeping written down: react-helmet-async APPENDS script
+        // children that differ rather than replacing them, so an FAQ answer
+        // interpolating a live count produces different JSON on the loading
+        // render and the loaded render, and the prerender captures BOTH.
+        // Production once served two FAQPage blocks here, one saying "0 events"
+        // and one saying "8 events". The answers below are static for that
+        // reason. Do not interpolate a count into them.
         faqData={faqData}
         isTimeSensitive={true}
       />
+      {/* The schema must describe what the page SHOWS: the grid is capped at
+          VISIBLE_EVENTS and EventListJsonLd defaults maxItems to 50, so the
+          full list here would advertise events a reader cannot see. */}
       <EventListJsonLd
-        events={filteredEvents}
+        events={filteredEvents.slice(0, VISIBLE_EVENTS)}
+        maxItems={VISIBLE_EVENTS}
         listName="Des Moines Weekend Events"
         listDescription={pageDescription}
         listUrl={getCanonicalUrl('/events/this-weekend')}
@@ -159,17 +200,32 @@ export default function EventsThisWeekend() {
         {/* Hero Section */}
         <div className="mb-8">
           <div className="flex items-center gap-2 mb-4">
-            <Calendar className="h-6 w-6 text-primary" />
+            <SpriteIcon name="calendar" className="h-6 w-6 text-primary" />
             <h1 className="text-3xl font-bold">This Weekend in Des Moines</h1>
           </div>
 
+          {/* SEO-009: a visible, absolute freshness date. These are the pages
+              somebody checks again next Friday, and the only freshness claim on
+              them lived in the meta description ("Updated daily"), where the
+              reader it is aimed at cannot check it. Absolute rather than
+              relative on purpose - these pages are prerendered, so a relative
+              string is computed once at build time and frozen, and would still
+              read "2 hours ago" days later. Renders nothing when no row carries
+              a usable date. */}
+          <ListFreshness rows={weekendEvents} className="mb-4" />
+
+          {/* SEO-016: the month index pages existed, worked, and were linked
+              from nowhere on the whole site. Crawlers follow links; a URL that
+              appears only in a sitemap is a weak signal. */}
+          <MonthLinks className="mb-6" />
+
           <div className="flex items-center gap-4 text-muted-foreground mb-4">
             <div className="flex items-center gap-1">
-              <Clock className="h-4 w-4" />
+              <SpriteIcon name="clock" className="h-4 w-4" />
               <span>Weekend of {format(new Date(), "MMMM d, yyyy")}</span>
             </div>
             <div className="flex items-center gap-1">
-              <MapPin className="h-4 w-4" />
+              <SpriteIcon name="map-pin" className="h-4 w-4" />
               <span>Des Moines Metro Area</span>
             </div>
           </div>
@@ -329,10 +385,21 @@ export default function EventsThisWeekend() {
         ) : filteredEvents.length > 0 ? (
           <>
             <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6 mb-8">
-              {filteredEvents.map((event) => (
-                <EventCard key={event.id} event={event} onViewDetails={() => {}} />
+              {filteredEvents.slice(0, VISIBLE_EVENTS).map((event) => (
+                <SocialEventCard key={event.id} event={event} onViewDetails={() => {}} />
               ))}
             </div>
+
+            {filteredEvents.length > VISIBLE_EVENTS && (
+              <div className="mb-8 text-center">
+                <p className="text-muted-foreground mb-3">
+                  Showing {VISIBLE_EVENTS} of {formatCount(filteredEvents.length, 'event')} this weekend.
+                </p>
+                <Button asChild variant="outline">
+                  <Link to="/events">Browse all events</Link>
+                </Button>
+              </div>
+            )}
 
             {/* Related Links */}
             <Card className="mb-8">
@@ -374,25 +441,19 @@ export default function EventsThisWeekend() {
               </CardContent>
             </Card>
 
-            {/* FAQ Section */}
-            <Card>
-              <CardHeader>
-                <CardTitle>Frequently Asked Questions</CardTitle>
-              </CardHeader>
-              <CardContent className="space-y-4">
-                {faqData.map((faq, index) => (
-                  <div key={index} className="border-b pb-4 last:border-b-0">
-                    <h3 className="font-semibold mb-2">{faq.question}</h3>
-                    <p className="text-muted-foreground">{faq.answer}</p>
-                  </div>
-                ))}
-              </CardContent>
-            </Card>
+            {/* SEO-003: FAQSection renders the questions AND emits the single
+                FAQPage block. It used to be hand-rolled markup here with the
+                schema emitted separately by EnhancedLocalSEO, which is how the
+                two could disagree — and on this page the markup sits inside a
+                conditional, so there were states that shipped FAQ schema for an
+                FAQ nobody could see. One component owning both makes "schema
+                only when the content is visible" true by construction. */}
+            <FAQSection faqs={faqData} />
           </>
         ) : (
           <Card>
             <CardContent className="pt-6 text-center">
-              <Calendar className="h-12 w-12 text-muted-foreground mx-auto mb-4" />
+              <SpriteIcon name="calendar" className="h-12 w-12 text-muted-foreground mx-auto mb-4" />
               <h2 className="text-xl font-semibold mb-2">
                 No Weekend Events Found
               </h2>

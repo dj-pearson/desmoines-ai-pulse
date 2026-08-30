@@ -5,6 +5,9 @@
     { "path": "./tsconfig.node.json" }
   ],
   "compilerOptions": {
+    // TS 5.x flags the legacy `baseUrl` deprecation as an error; we still rely on
+    // baseUrl + paths for the "@/*" alias, so silence it until the 7.0 migration.
+    "ignoreDeprecations": "5.0",
     "baseUrl": ".",
     "paths": {
       "@/*": ["./src/*"]

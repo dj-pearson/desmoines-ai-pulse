@@ -55,7 +55,7 @@ function getSessionId(): string {
 
 async function fetchExperimentFlag(flagKey: string): Promise<ExperimentFlag | null> {
   const { data, error } = await supabase
-    .from('feature_flags' as string)
+    .from('feature_flags')
     .select('flag_key, enabled, variants, traffic_split')
     .eq('flag_key', flagKey)
     .single();
@@ -117,7 +117,7 @@ export function useExperiment(flagKey: string): {
 
     // Fire-and-forget: track assignment in user_analytics
     supabase
-      .from('user_analytics' as string)
+      .from('user_analytics')
       .insert({
         event_type: 'experiment_assigned',
         page_path: window.location.pathname,

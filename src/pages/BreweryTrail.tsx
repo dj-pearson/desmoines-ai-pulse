@@ -10,7 +10,7 @@ import { Badge } from '@/components/ui/badge';
 import { Skeleton } from '@/components/ui/skeleton';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
-import { Beer, MapPin, CheckCircle2, Circle, Star, Trophy } from 'lucide-react';
+import { Beer, CheckCircle2, Circle, Star, Trophy } from "lucide-react";
 import { toast } from 'sonner';
 import {
   Dialog,
@@ -19,6 +19,7 @@ import {
   DialogTitle,
   DialogTrigger,
 } from '@/components/ui/dialog';
+import { SpriteIcon } from "@/components/ui/SpriteIcon";
 
 export default function BreweryTrail() {
   const { user } = useAuth();
@@ -136,7 +137,7 @@ export default function BreweryTrail() {
                             <h3 className="text-lg font-semibold">{brewery.name}</h3>
                             {brewery.location && (
                               <p className="text-sm text-muted-foreground flex items-center gap-1">
-                                <MapPin className="h-3 w-3" /> {brewery.location}
+                                <SpriteIcon name="map-pin" className="h-3 w-3" /> {brewery.location}
                               </p>
                             )}
                           </div>

@@ -10,6 +10,7 @@ import {
   Ticket,
   PartyPopper,
 } from "lucide-react";
+import { SpriteIcon } from "@/components/ui/SpriteIcon";
 
 interface EventPreset {
   id: string;
@@ -119,7 +120,7 @@ export function EventSmartPresets({
   return (
     <div className="space-y-2">
       <div className="flex items-center gap-2 text-sm font-medium text-white/60 px-1">
-        <Sparkles className="h-3.5 w-3.5" />
+        <SpriteIcon name="sparkles" className="h-3.5 w-3.5" />
         <span>Quick picks</span>
       </div>
       <div className="flex gap-2 overflow-x-auto pb-2 scrollbar-hide snap-x snap-mandatory">

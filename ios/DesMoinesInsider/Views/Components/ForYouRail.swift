@@ -39,16 +39,22 @@ struct ForYouRail: View {
                 ScrollView(.horizontal, showsIndicators: false) {
                     HStack(spacing: 12) {
                         ForEach(service.recommendations) { rec in
-                            // Card-style row. Navigation lives in the
-                            // .navigationDestination on the parent — we
-                            // deep-link via the rec.id when available so
-                            // the EventDetailView fetches by id.
-                            ForYouCard(rec: rec)
+                            // Tapping resolves the recommendation (a partial
+                            // event) to its full Event and opens the detail
+                            // (IOS-AUDIT-FEAT-014). The destination is registered
+                            // below so the rail works in any enclosing stack.
+                            NavigationLink(value: rec) {
+                                ForYouCard(rec: rec)
+                            }
+                            .buttonStyle(.plain)
                         }
                     }
                     .padding(.horizontal)
                 }
             }
+        }
+        .navigationDestination(for: ForYouService.Recommendation.self) { rec in
+            ForYouRecommendationDetailView(recommendation: rec)
         }
         .task { await service.refresh() }
     }
@@ -67,8 +73,8 @@ private struct ForYouCard: View {
     var body: some View {
         VStack(alignment: .leading, spacing: 6) {
             ZStack {
-                if let urlString = rec.imageUrl, let url = URL(string: urlString) {
-                    CachedAsyncImage(url: url)
+                if let urlString = rec.imageUrl, URL(string: urlString) != nil {
+                    CachedAsyncImage(url: urlString)
                         .scaledToFill()
                 } else {
                     Color.secondary.opacity(0.15)
@@ -93,6 +99,54 @@ private struct ForYouCard: View {
         .frame(width: 200, alignment: .leading)
         .accessibilityElement(children: .combine)
         .accessibilityLabel("\(rec.title ?? "Event"). \(rec.recommendationReason ?? "")")
+    }
+}
+
+/// Resolves a For You recommendation (which carries only a partial event) to a
+/// full `Event` and shows its detail screen. Mirrors the deep-link resolver's
+/// loading/failed phases so a tapped card never dead-ends (IOS-AUDIT-FEAT-014).
+private struct ForYouRecommendationDetailView: View {
+    let recommendation: ForYouService.Recommendation
+
+    @State private var phase: Phase = .loading
+
+    private enum Phase {
+        case loading
+        case failed
+        case loaded(Event)
+    }
+
+    var body: some View {
+        Group {
+            switch phase {
+            case .loading:
+                ProgressView("Loading…")
+                    .frame(maxWidth: .infinity, maxHeight: .infinity)
+            case .failed:
+                EmptyStateView(
+                    icon: "exclamationmark.triangle",
+                    title: "Couldn't Load",
+                    message: "This recommendation couldn't be opened. It may have been removed or you're offline.",
+                    actionTitle: "Try Again",
+                    action: { Task { await load() } }
+                )
+            case .loaded(let event):
+                EventDetailView(event: event)
+            }
+        }
+        .navigationTitle(recommendation.title ?? "Event")
+        .navigationBarTitleDisplayMode(.inline)
+        .task { await load() }
+    }
+
+    private func load() async {
+        phase = .loading
+        do {
+            let event = try await EventsService.shared.fetchEvent(id: recommendation.id.uuidString)
+            phase = .loaded(event)
+        } catch {
+            phase = .failed
+        }
     }
 }
 

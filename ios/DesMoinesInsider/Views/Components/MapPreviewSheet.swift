@@ -20,13 +20,10 @@ struct MapPreviewSheet: View {
                 .padding(.top, 8)
 
             HStack(spacing: 12) {
-                AsyncImage(url: imageURL) { phase in
-                    switch phase {
-                    case .success(let image):
-                        image.resizable().scaledToFill()
-                    default:
-                        Color(.secondarySystemBackground)
-                    }
+                // Use the shared two-tier cache (memory + disk) so repeated
+                // marker taps don't re-fetch the same thumbnail from the network.
+                CachedAsyncImage(url: imageURL?.absoluteString) {
+                    Color(.secondarySystemBackground)
                 }
                 .frame(width: 64, height: 64)
                 .clipShape(RoundedRectangle(cornerRadius: PremiumTokens.cornerMd))
@@ -63,6 +60,10 @@ struct MapPreviewSheet: View {
             }
             .padding(.horizontal, 16)
             .padding(.top, 12)
+            // Combine only the info block so the action buttons below stay as
+            // separate, focusable/activatable VoiceOver elements (IOS-AUDIT-UX-035).
+            .accessibilityElement(children: .combine)
+            .accessibilityLabel(a11yLabel(name, category, ratingText.map { "\($0) stars" }, distanceText))
 
             HStack(spacing: 10) {
                 Button(action: onDirections) {
@@ -77,6 +78,7 @@ struct MapPreviewSheet: View {
                         .foregroundStyle(Color.accentColor)
                 }
                 .buttonStyle(.plain)
+                .accessibilityLabel("Directions to \(name)")
 
                 Button(action: onDetails) {
                     Text("Details")
@@ -88,6 +90,7 @@ struct MapPreviewSheet: View {
                         .clipShape(RoundedRectangle(cornerRadius: PremiumTokens.cornerMd))
                 }
                 .buttonStyle(.plain)
+                .accessibilityLabel("View details for \(name)")
             }
             .padding(.horizontal, 16)
             .padding(.top, 16)
@@ -102,8 +105,6 @@ struct MapPreviewSheet: View {
                 topTrailingRadius: 24
             )
         )
-        .accessibilityElement(children: .combine)
-        .accessibilityLabel("\(name), \(category)")
     }
 }
 

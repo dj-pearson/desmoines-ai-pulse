@@ -1,7 +1,7 @@
 import { Link, useLocation } from "react-router-dom";
-import { Home, Calendar, UtensilsCrossed, Compass, User } from "lucide-react";
+import { Home, Calendar, Navigation, UtensilsCrossed, Map, User } from "lucide-react";
 import { cn } from "@/lib/utils";
-import { useAuth } from "@/hooks/useAuth";
+import { useAuthFlags } from "@/contexts/AuthContext";
 import { prefetchRoute } from "@/lib/prefetch";
 import { hapticTap } from "@/lib/capacitorUtils";
 
@@ -13,7 +13,8 @@ interface NavItem {
 }
 
 export default function BottomNav() {
-  const { isAuthenticated } = useAuth();
+  // Flags-only so the tab bar doesn't re-render on token-refresh. (WEB-PERF-005)
+  const { isAuthenticated } = useAuthFlags();
   const location = useLocation();
 
   const navItems: NavItem[] = [
@@ -28,14 +29,19 @@ export default function BottomNav() {
       icon: Calendar,
     },
     {
+      href: "/events/near-me",
+      label: "Near Me",
+      icon: Navigation,
+    },
+    {
       href: "/restaurants",
       label: "Dine",
       icon: UtensilsCrossed,
     },
     {
-      href: "/attractions",
-      label: "Explore",
-      icon: Compass,
+      href: "/map",
+      label: "Map",
+      icon: Map,
     },
     {
       href: isAuthenticated ? "/dashboard" : "/auth",
@@ -44,7 +50,7 @@ export default function BottomNav() {
     },
   ];
 
-  const isActivePath = (path: string) => {
+  const matchesPath = (path: string) => {
     if (path === "/") {
       return location.pathname === "/";
     }
@@ -52,6 +58,14 @@ export default function BottomNav() {
       location.pathname === path || location.pathname.startsWith(path + "/")
     );
   };
+
+  // Only the most-specific matching item should appear active, so a deeper
+  // route like /events/near-me highlights "Near Me" and not the "/events" tab.
+  const activeHref = navItems
+    .filter((item) => matchesPath(item.href))
+    .sort((a, b) => b.href.length - a.href.length)[0]?.href;
+
+  const isActivePath = (path: string) => path === activeHref;
 
   return (
     <nav
@@ -69,7 +83,7 @@ export default function BottomNav() {
               key={item.href}
               to={item.href}
               className={cn(
-                "relative flex flex-col items-center justify-center min-w-[60px] h-full px-3 smooth-transition touch-feedback rounded-xl",
+                "relative flex flex-1 min-w-0 flex-col items-center justify-center h-full px-1 smooth-transition touch-feedback rounded-xl",
                 isActive
                   ? "text-primary bg-primary/10"
                   : "text-muted-foreground hover:text-foreground hover:bg-muted/50 dark:hover:bg-muted/30 active:scale-95"

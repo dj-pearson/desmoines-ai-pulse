@@ -2,43 +2,34 @@ import { useParams, Link } from "react-router-dom";
 import { Helmet } from "react-helmet-async";
 import { useQuery } from "@tanstack/react-query";
 import { supabase } from "@/integrations/supabase/client";
+import { ATTRACTION_LIST_COLUMNS } from "@/lib/listColumns";
 import { Card, CardContent } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
+import { FavoriteButton } from "@/components/FavoriteButton";
 import { Separator } from "@/components/ui/separator";
 import { Breadcrumbs } from "@/components/ui/breadcrumbs";
 import Header from "@/components/Header";
 import Footer from "@/components/Footer";
+import { LazyLocationMap } from "@/components/LazyLocationMap";
+import { getDirectionsUrl } from "@/lib/directions";
+import { STATUS_BADGE } from "@/lib/categoryStyles";
+import { OpenStatusChip } from "@/components/OpenStatusChip";
 import ShareDialog from "@/components/ShareDialog";
 import { FAQSection } from "@/components/FAQSection";
+import { RatingSystem } from "@/components/RatingSystem";
 import { BackToTop } from "@/components/BackToTop";
 import EnhancedAttractionSEO from "@/components/EnhancedAttractionSEO";
 import SEOHead from "@/components/SEOHead";
 import { BRAND, getCanonicalUrl } from "@/lib/brandConfig";
-import {
-  MapPin,
-  Star,
-  ExternalLink,
-  ArrowLeft,
-  Navigation,
-  Share2,
-  Heart,
-  Sparkles,
-  Globe,
-  Info,
-  Camera,
-  Landmark,
-  ChevronRight,
-  Clock,
-  Ticket,
-  TreePine,
-} from "lucide-react";
+import { Star, ArrowLeft, Navigation, Heart, Globe, Info, Camera, Landmark, ChevronRight, TreePine } from "lucide-react";
 import { useState } from "react";
 import { useDocumentTitle } from "@/hooks/useDocumentTitle";
 import { useContentTracking } from "@/hooks/useContentTracking";
 import { StickyMobileCTA } from "@/components/StickyMobileCTA";
 import { LastUpdatedBadge } from "@/components/LastUpdatedBadge";
 import { NearbyContent } from "@/components/NearbyContent";
+import { SpriteIcon } from "@/components/ui/SpriteIcon";
 
 // Estimated visit duration by attraction type (in minutes)
 const VISIT_DURATION_BY_TYPE: Record<string, { min: number; max: number }> = {
@@ -87,21 +78,31 @@ export default function AttractionDetails() {
   } = useQuery({
     queryKey: ["attraction", slug],
     queryFn: async () => {
-      const { data: attractions, error } = await supabase
+      // attractions has no slug column, so we match the createSlug(name) the
+      // routes use. Scan only (id, name) instead of downloading every full row,
+      // then fetch the single matched attraction's full row (SEO/GEO intact).
+      const { data: index, error } = await supabase
         .from("attractions")
-        .select("*");
+        .select("id, name");
 
       if (error) throw error;
 
-      const foundAttraction = attractions?.find(
-        (a) => createSlug(a.name) === slug
-      );
-      return foundAttraction || null;
+      const match = index?.find((a) => createSlug(a.name) === slug);
+      if (!match) return null;
+
+      const { data, error: rowError } = await supabase
+        .from("attractions")
+        .select("*")
+        .eq("id", match.id)
+        .maybeSingle();
+
+      if (rowError) throw rowError;
+      return data || null;
     },
   });
 
   // Track page view and content interactions
-  const { trackShare } = useContentTracking(attraction?.id, 'attraction');
+  const { trackShare, trackClick } = useContentTracking(attraction?.id, 'attraction');
 
   const { data: relatedAttractions } = useQuery({
     queryKey: ["related-attractions", attraction?.type, attraction?.id],
@@ -109,7 +110,7 @@ export default function AttractionDetails() {
       if (!attraction) return [];
       const { data, error } = await supabase
         .from("attractions")
-        .select("*")
+        .select(ATTRACTION_LIST_COLUMNS)
         .eq("type", attraction.type)
         .neq("id", attraction.id)
         .limit(4);
@@ -126,7 +127,7 @@ export default function AttractionDetails() {
       if (!attraction) return [];
       const { data, error } = await supabase
         .from("attractions")
-        .select("*")
+        .select(ATTRACTION_LIST_COLUMNS)
         .neq("id", attraction.id)
         .neq("type", attraction.type)
         .order("rating", { ascending: false })
@@ -174,7 +175,7 @@ export default function AttractionDetails() {
         <div className="min-h-screen bg-gray-50 flex items-center justify-center">
           <Card className="max-w-md mx-auto text-center shadow-lg rounded-2xl">
             <CardContent className="p-8">
-              <Landmark className="h-16 w-16 text-gray-400 mx-auto mb-4" />
+              <Landmark className="h-16 w-16 text-gray-500 mx-auto mb-4" />
               <h2 className="text-2xl font-bold text-gray-800 mb-2">
                 Attraction Not Found
               </h2>
@@ -213,7 +214,7 @@ export default function AttractionDetails() {
       ? [
           {
             question: `What is the rating for ${attraction.name}?`,
-            answer: `${attraction.name} has a rating of ${attraction.rating.toFixed(1)} out of 5 stars based on visitor reviews. ${attraction.rating >= 4.5 ? `It's one of the highest-rated attractions in ${BRAND.city}.` : attraction.rating >= 4.0 ? `It's a highly-rated attraction in the ${BRAND.region}.` : `Visitors appreciate its unique ${attraction.type?.toLowerCase()} experience.`} ${attraction.is_featured ? "It's also featured as an editor's pick on Des Moines AI Pulse." : ""}`,
+            answer: `${attraction.name} has a rating of ${attraction.rating.toFixed(1)} out of 5 stars based on visitor reviews. ${attraction.rating >= 4.5 ? `It's one of the highest-rated attractions in ${BRAND.city}.` : attraction.rating >= 4.0 ? `It's a highly-rated attraction in the ${BRAND.region}.` : `Visitors appreciate its unique ${attraction.type?.toLowerCase()} experience.`} ${attraction.is_featured ? "It's also featured as an editor's pick on Des Moines Insider." : ""}`,
           },
         ]
       : []),
@@ -295,15 +296,20 @@ export default function AttractionDetails() {
                 onShare={trackShare}
                 trigger={
                   <Button variant="outline" size="sm" className="rounded-xl">
-                    <Share2 className="h-4 w-4 mr-1.5" />
+                    <SpriteIcon name="share-2" className="h-4 w-4 mr-1.5" />
                     Share
                   </Button>
                 }
               />
-              <Button variant="outline" size="sm" className="rounded-xl">
-                <Heart className="h-4 w-4 mr-1.5" />
-                Save
-              </Button>
+              <FavoriteButton
+                contentType="attraction"
+                contentId={attraction.id}
+                variant="outline"
+                size="sm"
+                showText
+                itemName={attraction.name}
+                className="rounded-xl"
+              />
             </div>
           </div>
 
@@ -335,8 +341,8 @@ export default function AttractionDetails() {
               {/* Badges */}
               <div className="absolute top-4 left-4 flex gap-2 z-10">
                 {attraction.is_featured && (
-                  <Badge className="bg-amber-500 text-white border-0 shadow-lg text-sm font-semibold px-3 py-1">
-                    <Sparkles className="h-3.5 w-3.5 mr-1.5" />
+                  <Badge className={`${STATUS_BADGE.featured} border-0 shadow-lg text-sm font-semibold px-3 py-1`}>
+                    <SpriteIcon name="sparkles" className="h-3.5 w-3.5 mr-1.5" />
                     Featured
                   </Badge>
                 )}
@@ -365,7 +371,7 @@ export default function AttractionDetails() {
                     )}
                     {attraction.location && (
                       <div className="flex items-center gap-1.5 bg-white/20 backdrop-blur-sm rounded-full px-3 py-1">
-                        <MapPin className="h-4 w-4" />
+                        <SpriteIcon name="map-pin" className="h-4 w-4" />
                         <span className="text-sm">{attraction.location}</span>
                       </div>
                     )}
@@ -375,7 +381,12 @@ export default function AttractionDetails() {
             </div>
 
             {/* Quick Actions Bar */}
-            <div className="flex flex-wrap gap-3 p-4 md:p-6 bg-gray-50 border-b">
+            <div className="flex flex-wrap items-center gap-3 p-4 md:p-6 bg-gray-50 border-b">
+              <OpenStatusChip
+                hours={attraction.hours}
+                website={attraction.website}
+                className="self-center"
+              />
               {attraction.website && (
                 <a href={attraction.website} target="_blank" rel="noopener noreferrer">
                   <Button className="bg-[#2D1B69] hover:bg-[#2D1B69]/90 text-white rounded-xl">
@@ -386,7 +397,7 @@ export default function AttractionDetails() {
               )}
               {attraction.location && (
                 <a
-                  href={`https://www.google.com/maps/search/?api=1&query=${encodeURIComponent(attraction.name + " " + attraction.location)}`}
+                  href={getDirectionsUrl({ latitude: attraction.latitude, longitude: attraction.longitude, address: `${attraction.name} ${attraction.location}` })}
                   target="_blank"
                   rel="noopener noreferrer"
                 >
@@ -422,14 +433,14 @@ export default function AttractionDetails() {
                   <div className="text-sm text-gray-600">Category</div>
                 </div>
                 <div className="text-center p-4 bg-blue-50 rounded-2xl border border-blue-100">
-                  <MapPin className="h-6 w-6 text-blue-500 mx-auto mb-2" />
+                  <SpriteIcon name="map-pin" className="h-6 w-6 text-blue-500 mx-auto mb-2" />
                   <div className="text-lg font-bold text-gray-900 line-clamp-1">
                     {BRAND.city}
                   </div>
                   <div className="text-sm text-gray-600">Location</div>
                 </div>
                 <div className="text-center p-4 bg-emerald-50 rounded-2xl border border-emerald-100">
-                  <Clock className="h-6 w-6 text-emerald-500 mx-auto mb-2" />
+                  <SpriteIcon name="clock" className="h-6 w-6 text-emerald-500 mx-auto mb-2" />
                   <div className="text-lg font-bold text-gray-900">
                     {getEstimatedDuration(attraction.type)}
                   </div>
@@ -444,18 +455,18 @@ export default function AttractionDetails() {
                 {/* Location & Access */}
                 <div>
                   <h2 className="text-xl font-bold text-gray-900 mb-4 flex items-center gap-2">
-                    <MapPin className="h-5 w-5 text-[#2D1B69]" />
+                    <SpriteIcon name="map-pin" className="h-5 w-5 text-[#2D1B69]" />
                     Location & Access
                   </h2>
                   <div className="space-y-3">
                     {attraction.location && (
                       <div className="flex items-start gap-3 p-4 bg-gray-50 rounded-xl">
-                        <MapPin className="h-5 w-5 text-gray-500 mt-0.5 shrink-0" />
+                        <SpriteIcon name="map-pin" className="h-5 w-5 text-gray-500 mt-0.5 shrink-0" />
                         <div>
                           <p className="text-gray-900 font-medium">{attraction.location}</p>
                           <p className="text-sm text-gray-500">{BRAND.city}, {BRAND.state}</p>
                           <a
-                            href={`https://www.google.com/maps/search/?api=1&query=${encodeURIComponent(attraction.name + " " + attraction.location)}`}
+                            href={getDirectionsUrl({ latitude: attraction.latitude, longitude: attraction.longitude, address: `${attraction.name} ${attraction.location}` })}
                             target="_blank"
                             rel="noopener noreferrer"
                             className="inline-flex items-center text-sm text-[#2D1B69] hover:underline mt-1"
@@ -466,6 +477,17 @@ export default function AttractionDetails() {
                         </div>
                       </div>
                     )}
+                    {attraction.latitude && attraction.longitude && (
+                      <div className="overflow-hidden rounded-xl">
+                        <LazyLocationMap
+                          latitude={attraction.latitude}
+                          longitude={attraction.longitude}
+                          venue={attraction.name}
+                          location={attraction.location}
+                          className="h-48 w-full"
+                        />
+                      </div>
+                    )}
                     {attraction.website && (
                       <a
                         href={attraction.website}
@@ -473,7 +495,7 @@ export default function AttractionDetails() {
                         rel="noopener noreferrer"
                         className="flex items-center gap-3 p-4 bg-gray-50 rounded-xl hover:bg-gray-100 transition-colors"
                       >
-                        <ExternalLink className="h-5 w-5 text-gray-500 shrink-0" />
+                        <SpriteIcon name="external-link" className="h-5 w-5 text-gray-500 shrink-0" />
                         <span className="text-[#2D1B69] hover:underline">Visit Website</span>
                       </a>
                     )}
@@ -509,7 +531,7 @@ export default function AttractionDetails() {
                     {attraction.is_featured && (
                       <div className="p-4 bg-gradient-to-r from-amber-50 to-orange-50 rounded-xl border border-amber-200">
                         <div className="flex items-center text-amber-700">
-                          <Sparkles className="h-5 w-5 mr-2" />
+                          <SpriteIcon name="sparkles" className="h-5 w-5 mr-2" />
                           <span className="font-medium">Editor's Pick - Featured Attraction</span>
                         </div>
                         <p className="text-sm text-amber-600 mt-1">
@@ -587,7 +609,7 @@ export default function AttractionDetails() {
                           className="text-sm text-[#2D1B69] hover:underline inline-flex items-center gap-1"
                         >
                           Official Website
-                          <ExternalLink className="h-3 w-3" />
+                          <SpriteIcon name="external-link" className="h-3 w-3" />
                         </a>
                       </div>
                     )}
@@ -605,6 +627,11 @@ export default function AttractionDetails() {
             </CardContent>
           </Card>
 
+          {/* Ratings & Reviews (WEB-FEAT-010) */}
+          <div id="reviews" className="mb-8">
+            <RatingSystem contentType="attraction" contentId={attraction.id} showReviews />
+          </div>
+
           {/* Attraction-Specific FAQ */}
           <Card className="shadow-lg rounded-2xl border-0 mb-8 overflow-hidden">
             <FAQSection
@@ -616,8 +643,8 @@ export default function AttractionDetails() {
             />
           </Card>
 
-          {/* Related Attractions - Same Type */}
-          {relatedAttractions && relatedAttractions.length > 0 && (
+          {/* Related Attractions - Same Type — hidden when fewer than 3 matches */}
+          {relatedAttractions && relatedAttractions.length >= 3 && (
             <section className="mb-8" aria-labelledby="related-heading">
               <h2 id="related-heading" className="text-2xl font-bold text-gray-900 mb-2">
                 More {attraction.type} Attractions in {BRAND.city}
@@ -625,7 +652,7 @@ export default function AttractionDetails() {
               <p className="text-gray-600 mb-6">
                 Explore other {attraction.type?.toLowerCase()} attractions in the {BRAND.region}
               </p>
-              <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-5">
+              <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-5" onClick={trackClick}>
                 {relatedAttractions.map((related) => (
                   <Link
                     key={related.id}
@@ -745,7 +772,7 @@ export default function AttractionDetails() {
           attraction.location
             ? {
                 label: "Get Directions",
-                href: `https://www.google.com/maps/search/?api=1&query=${encodeURIComponent(attraction.name + " " + attraction.location)}`,
+                href: getDirectionsUrl({ latitude: attraction.latitude, longitude: attraction.longitude, address: `${attraction.name} ${attraction.location}` }),
                 icon: "directions",
                 isExternal: true,
               }

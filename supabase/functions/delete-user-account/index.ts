@@ -12,11 +12,24 @@
  *   - Validates the token against stored value and expiry
  *   - Proceeds with account deletion if valid
  *
- * Legacy: POST without action field treated as direct deletion (backwards compat)
- *   - Only allowed if the account_deletion_tokens table doesn't exist yet
+ * Legacy: POST without an action field is treated as direct deletion, for
+ * backwards compatibility with shipped iOS/Android binaries that predate the
+ * two-step flow. See the branch at the bottom of the handler for the removal
+ * condition (XPLAT-001).
  *
- * Permanently deletes from: user_event_interactions, user_restaurant_interactions,
- * user_subscriptions, profiles, and auth.users.
+ * Permanently deletes every table listed in _shared/userDataTables.ts
+ * (PURGE_TABLES), plus newsletter_subscribers (by email) and auth.users.
+ * Tables kept on purpose, each with its stated basis, are RETAINED_TABLES in
+ * the same file. Both lists are covered by _tests/user-data-tables.test.ts.
+ *
+ * Also purges uploaded files from every user-writable storage bucket
+ * (WEB-LEGAL-003). See _shared/purgeUserStorage.ts for the bucket list and for
+ * why ad-creatives is excluded.
+ *
+ * GDPR Art. 17 (right to erasure) — the delete set is kept aligned with every
+ * table that stores user-identifiable data. Records with an independent legal
+ * basis for retention (e.g. append-only consent_records kept as proof of
+ * consent, invoices kept for tax) are intentionally NOT purged here.
  *
  * Required by Apple App Store Review for apps that support account creation.
  */
@@ -24,7 +37,9 @@
 import { serve } from "https://deno.land/std@0.190.0/http/server.ts";
 import { createClient } from "https://esm.sh/@supabase/supabase-js@2.45.0";
 import { handleCors, getCorsHeaders, isOriginAllowed } from "../_shared/cors.ts";
+import { writeAuditLog, auditIp } from "../_shared/auditLog.ts";
 import { purgeUserStorage, type BucketPurgeResult } from "../_shared/purgeUserStorage.ts";
+import { PURGE_TABLES } from "../_shared/userDataTables.ts";
 
 const TOKEN_EXPIRY_MS = 15 * 60 * 1000; // 15 minutes
 
@@ -35,6 +50,140 @@ function generateToken(): string {
   const bytes = new Uint8Array(32);
   crypto.getRandomValues(bytes);
   return Array.from(bytes).map(b => b.toString(16).padStart(2, '0')).join('');
+}
+
+/**
+ * Irreversibly erase the account. Shared by the confirmed two-step flow and the
+ * legacy no-body flow so the two can never drift in what they delete.
+ */
+async function performDeletion(
+  // deno-lint-ignore no-explicit-any
+  supabase: any,
+  // deno-lint-ignore no-explicit-any
+  user: any,
+  req: Request,
+  corsHeaders: Record<string, string>,
+): Promise<Response> {
+  const userId = user.id;
+
+  // Delete user data in dependency order. The list, and the tables deliberately
+  // kept with their basis, live in _shared/userDataTables.ts, which is covered
+  // by a test that fails if a user_id table is left unclassified (WEB-LEGAL-004).
+  const tableFailures: { table: string; code?: string; message: string }[] = [];
+
+  for (const table of PURGE_TABLES) {
+    const { error } = await supabase
+      .from(table)
+      .delete()
+      .eq("user_id", userId);
+
+    if (!error) continue;
+
+    // Keep going so one failure never leaves the erasure half-done, but record
+    // it. The previous version warned and moved on, which made a delete against
+    // a table that does not exist (42P01) indistinguishable from a successful
+    // one - and console.* is stripped from production builds, so the warning did
+    // not even reach a log.
+    tableFailures.push({ table, code: error.code, message: error.message });
+
+    if (error.code === "42P01") {
+      console.error(
+        `Erasure targeted a non-existent table "${table}". The delete list has ` +
+        `drifted from the schema; see _shared/userDataTables.ts.`,
+      );
+    } else {
+      console.error(`Failed deleting from ${table} (${error.code}):`, error.message);
+    }
+  }
+
+  // Newsletter subscriptions are keyed by email, not user_id. Remove any
+  // subscription tied to this account's email so marketing data is purged too.
+  if (user.email) {
+    const { error: newsletterError } = await supabase
+      .from("newsletter_subscribers")
+      .delete()
+      .eq("email", user.email.toLowerCase());
+    if (newsletterError) {
+      tableFailures.push({
+        table: "newsletter_subscribers",
+        code: newsletterError.code,
+        message: newsletterError.message,
+      });
+      console.error(
+        "Failed deleting from newsletter_subscribers:",
+        newsletterError.message,
+      );
+    }
+  }
+
+  // Purge uploaded files (WEB-LEGAL-003). Runs BEFORE the auth user is deleted:
+  // the service-role client works either way, but the audit entry below should
+  // be written while the subject is still resolvable. Every upload bucket is
+  // public, so a file left here stays fetchable by URL forever.
+  const storageResults: BucketPurgeResult[] = await purgeUserStorage(supabase, userId);
+  const storageRemoved = storageResults.reduce((n, r) => n + r.removed, 0);
+  const storageFailures = storageResults.filter((r) => r.error);
+  for (const failure of storageFailures) {
+    console.warn(`Warning purging storage bucket ${failure.bucket}:`, failure.error);
+  }
+
+  // Delete the auth user entry
+  const { error: deleteAuthError } =
+    await supabase.auth.admin.deleteUser(userId);
+
+  if (deleteAuthError) {
+    console.error("Error deleting auth user:", deleteAuthError.message);
+    return new Response(
+      JSON.stringify({
+        error: "Failed to delete authentication record. Please contact support.",
+      }),
+      {
+        status: 500,
+        headers: { ...corsHeaders, "Content-Type": "application/json" },
+      }
+    );
+  }
+
+  console.log(`Successfully deleted account for user: ${userId}`);
+
+  await writeAuditLog(supabase, {
+    eventType: "account_deletion",
+    actorId: userId,
+    action: "delete_account",
+    resource: "profiles",
+    severity: "high",
+    ipAddress: auditIp(req),
+    userAgent: req.headers.get("user-agent"),
+    details: {
+      target_user_id: userId,
+      storage_files_removed: storageRemoved,
+      storage_buckets: storageResults,
+      tables_attempted: PURGE_TABLES.length,
+      table_failures: tableFailures,
+    },
+  });
+
+  return new Response(
+    JSON.stringify({
+      // The auth record is gone, so the account is unrecoverable either way and
+      // the client should still sign out. But do not claim a clean erasure when
+      // rows or files were left behind - reporting success regardless is what
+      // hid this for so long.
+      success: true,
+      complete: tableFailures.length === 0 && storageFailures.length === 0,
+      storage_files_removed: storageRemoved,
+      ...(storageFailures.length > 0
+        ? { storage_incomplete: storageFailures.map((f) => f.bucket) }
+        : {}),
+      ...(tableFailures.length > 0
+        ? { tables_incomplete: tableFailures.map((f) => f.table) }
+        : {}),
+    }),
+    {
+      status: 200,
+      headers: { ...corsHeaders, "Content-Type": "application/json" },
+    }
+  );
 }
 
 serve(async (req) => {
@@ -191,76 +340,29 @@ serve(async (req) => {
         .delete()
         .eq("user_id", userId);
 
-      // Delete user data in order (respect foreign key constraints)
-      const tables = [
-        "user_event_interactions",
-        "user_restaurant_interactions",
-        "favorites",
-        "ratings",
-        "reviews",
-        "user_subscriptions",
-        "profiles",
-      ];
-
-      for (const table of tables) {
-        const { error } = await supabase
-          .from(table)
-          .delete()
-          .eq("user_id", userId);
-
-        if (error) {
-          console.warn(`Warning deleting from ${table}:`, error.message);
-        }
-      }
-
-      // Purge uploaded files (WEB-LEGAL-003). Runs BEFORE the auth user is
-      // deleted, and covers every user-writable bucket. All of them are public,
-      // so a file left behind stays fetchable by URL forever, while the Privacy
-      // Policy promises erasure of the account and associated data.
-      const storageResults: BucketPurgeResult[] = await purgeUserStorage(supabase, userId);
-      const storageRemoved = storageResults.reduce((n, r) => n + r.removed, 0);
-      const storageFailures = storageResults.filter((r) => r.error);
-      for (const failure of storageFailures) {
-        console.warn(`Warning purging storage bucket ${failure.bucket}:`, failure.error);
-      }
-
-      // Delete the auth user entry
-      const { error: deleteAuthError } =
-        await supabase.auth.admin.deleteUser(userId);
-
-      if (deleteAuthError) {
-        console.error("Error deleting auth user:", deleteAuthError.message);
-        return new Response(
-          JSON.stringify({
-            error: "Failed to delete authentication record. Please contact support.",
-          }),
-          {
-            status: 500,
-            headers: { ...corsHeaders, "Content-Type": "application/json" },
-          }
-        );
-      }
-
-      console.log(`Successfully deleted account for user: ${userId}`);
-
-      return new Response(
-        JSON.stringify({
-          success: true,
-          // Reported rather than assumed: a purge that silently removed nothing
-          // is the defect this guards against.
-          storage_files_removed: storageRemoved,
-          ...(storageFailures.length > 0
-            ? { storage_incomplete: storageFailures.map((f) => f.bucket) }
-            : {}),
-        }),
-        {
-          status: 200,
-          headers: { ...corsHeaders, "Content-Type": "application/json" },
-        }
-      );
+      return await performDeletion(supabase, user, req, corsHeaders);
     }
 
-    // No action specified — return error
+    // Legacy: no action field — direct deletion (XPLAT-001).
+    //
+    // Every shipped iOS and Android binary invokes this function with an empty
+    // body. The two-step token flow (SEC-025) was added without a
+    // MIN_SUPPORTED_APP_VERSION bump, so those binaries have been getting a 400
+    // and account deletion has been broken on both stores — an App Store
+    // 5.1.1(v) violation. This branch restores the contract they were built
+    // against. Both clients run their own confirmation dialog before calling, so
+    // the user-facing "are you sure" step still exists; what is missing versus
+    // the two-step flow is the server-side proof of it.
+    //
+    // DEPRECATION (CLAUDE.md multi-release flow): the current clients now use
+    // request+confirm. Once MIN_SUPPORTED_APP_VERSION excludes every binary that
+    // predates that change, delete this branch and restore the 400.
+    if (action === undefined || action === null) {
+      console.log(`Legacy no-body deletion for user: ${userId}`);
+      return await performDeletion(supabase, user, req, corsHeaders);
+    }
+
+    // An action was supplied but is not one we handle.
     return new Response(
       JSON.stringify({
         error: "Invalid action. Use action: 'request' to get a confirmation token, then action: 'confirm' with the token.",

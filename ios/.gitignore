@@ -22,6 +22,7 @@ xcuserdata/
 # Secrets (NEVER commit)
 Secrets.xcconfig
 DesMoinesInsider/Configuration/Secrets.generated.swift
+DesMoinesInsiderClip/ClipSecrets.generated.swift
 
 # Swift Package Manager
 .build/

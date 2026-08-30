@@ -1,23 +1,25 @@
 import { useState, useEffect } from "react";
 import { supabase } from "@/integrations/supabase/client";
 import { useAuth } from "./useAuth";
+import { createLogger } from "@/lib/logger";
 import { Database } from "@/integrations/supabase/types";
+
+const logger = createLogger("useProfile");
 
 type Profile = Database["public"]["Tables"]["profiles"]["Row"];
 
-export interface UserProfile {
-  id: string;
-  user_id: string;
-  first_name: string | null;
-  last_name: string | null;
-  phone: string | null;
-  email: string | null;
-  communication_preferences: any;
-  interests: string[];
-  location: string | null;
-  created_at: string;
-  updated_at: string;
-}
+/**
+ * Derived from the generated schema rather than hand-maintained (WEB-CI-007).
+ *
+ * The previous hand-written interface had drifted: it declared
+ * `interests: string[]` where the column is nullable and
+ * `communication_preferences: any` where it is Json, so a row read straight from
+ * `profiles` did not satisfy the type the hook claimed to hold. Aliasing the Row
+ * type means it cannot drift again — a schema change surfaces at compile time.
+ *
+ * Per CLAUDE.md: prefer the generated Supabase types over local redefinitions.
+ */
+export type UserProfile = Database["public"]["Tables"]["profiles"]["Row"];
 
 export function useProfile() {
   const [profile, setProfile] = useState<UserProfile | null>(null);
@@ -43,7 +45,7 @@ export function useProfile() {
         .maybeSingle();
 
       if (error) {
-        console.error("Error fetching profile:", error);
+        logger.error('fetchProfile', 'Error fetching profile', { error });
         setError(error.message);
         return;
       }
@@ -62,7 +64,7 @@ export function useProfile() {
           .single();
 
         if (createError) {
-          console.error("Error creating profile:", createError);
+          logger.error('fetchProfile', 'Error creating profile', { error: createError });
           setError(createError.message);
           return;
         }
@@ -72,7 +74,7 @@ export function useProfile() {
         setProfile(data);
       }
     } catch (error) {
-      console.error("Error fetching profile:", error);
+      logger.error('fetchProfile', 'Error fetching profile', { error });
       setError(error instanceof Error ? error.message : "Failed to fetch profile");
     } finally {
       setIsLoading(false);
@@ -99,7 +101,7 @@ export function useProfile() {
       setProfile(data);
       return data;
     } catch (error) {
-      console.error("Error updating profile:", error);
+      logger.error('updateProfile', 'Error updating profile', { error });
       throw error;
     }
   };

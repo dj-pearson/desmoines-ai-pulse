@@ -1,0 +1,111 @@
+# AOS Autonomous Fix Agent (AOS-DEV-002)
+# Formalizes the Ralph loop for tier-1 dev tasks: claims a task, implements a
+# scoped fix on a claude/aos-fix branch, runs validate, and opens a DRAFT PR for
+# a human to merge. Manual dispatch only (safe rollout) — never auto-merges and
+# never pushes to main/develop.
+
+name: AOS Fix Agent
+
+on:
+  workflow_dispatch: {}
+
+permissions:
+  contents: write
+  pull-requests: write
+
+jobs:
+  fix:
+    runs-on: ubuntu-latest
+    timeout-minutes: 30
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+          ref: develop
+
+      - name: Set up Node 20
+        uses: actions/setup-node@v4
+        with:
+          node-version: '20'
+          cache: 'npm'
+
+      - name: Install deps
+        run: npm ci
+
+      - name: Claim a tier-1 dev task
+        id: claim
+        env:
+          SUPABASE_URL: ${{ secrets.SUPABASE_URL }}
+          EDGE_FUNCTION_API_KEY: ${{ secrets.EDGE_FUNCTION_API_KEY }}
+        run: |
+          if [ -z "$SUPABASE_URL" ] || [ -z "$EDGE_FUNCTION_API_KEY" ]; then
+            echo "secrets not set — nothing to do."; echo "task=" >> "$GITHUB_OUTPUT"; exit 0
+          fi
+          resp=$(curl -sS -X POST "${SUPABASE_URL}/functions/v1/agent-dev-fix" \
+            -H "x-api-key: ${EDGE_FUNCTION_API_KEY}" -H "Content-Type: application/json" \
+            --data '{"mode":"claim"}')
+          echo "$resp" > claim.json
+          taskId=$(node -e "try{console.log(require('./claim.json').task?.id||'')}catch(e){console.log('')}")
+          echo "task=$taskId" >> "$GITHUB_OUTPUT"
+          echo "Claimed task: ${taskId:-none}"
+
+      - name: Install Claude Code
+        if: steps.claim.outputs.task != ''
+        run: npm install -g @anthropic-ai/claude-code
+
+      - name: Implement fix + verify
+        id: fix
+        if: steps.claim.outputs.task != ''
+        env:
+          ANTHROPIC_API_KEY: ${{ secrets.ANTHROPIC_API_KEY }}
+          AOS_TASK: ${{ steps.claim.outputs.task }}
+        run: |
+          set +e
+          git config user.name "aos-fix-agent"
+          git config user.email "automation@desmoinesinsider.com"
+          git checkout -B "claude/aos-fix-${AOS_TASK}"
+          # Drive the fix with the scoped instructions. Claude Code makes the
+          # edits; we gate on validate below.
+          AOS_TASK="${AOS_TASK}" claude -p "$(cat scripts/ralph/AOS-FIX.md)\n\nTask id: ${AOS_TASK}" \
+            --dangerously-skip-permissions || true
+          npm run type-check && npm run lint
+          echo "checks=$?" >> "$GITHUB_OUTPUT"
+
+      - name: Open draft PR on success
+        id: pr
+        if: steps.claim.outputs.task != '' && steps.fix.outputs.checks == '0'
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          AOS_TASK: ${{ steps.claim.outputs.task }}
+        run: |
+          if git diff --quiet && git diff --cached --quiet; then
+            echo "no changes produced"; echo "url=" >> "$GITHUB_OUTPUT"; exit 0
+          fi
+          git add -A
+          git commit -m "fix(aos): autonomous fix for dev task ${AOS_TASK}"
+          git push -u origin "claude/aos-fix-${AOS_TASK}"
+          url=$(gh pr create --draft --base develop \
+            --title "fix(aos): autonomous fix for dev task ${AOS_TASK}" \
+            --body "Autonomous tier-1 fix by the AOS fix agent. Draft — human review + merge required. Task: ${AOS_TASK}" \
+            2>/dev/null || echo "")
+          echo "url=$url" >> "$GITHUB_OUTPUT"
+
+      - name: Record outcome
+        if: steps.claim.outputs.task != ''
+        env:
+          SUPABASE_URL: ${{ secrets.SUPABASE_URL }}
+          EDGE_FUNCTION_API_KEY: ${{ secrets.EDGE_FUNCTION_API_KEY }}
+          AOS_TASK: ${{ steps.claim.outputs.task }}
+          CHECKS: ${{ steps.fix.outputs.checks }}
+          PR_URL: ${{ steps.pr.outputs.url }}
+        run: |
+          [ -z "$SUPABASE_URL" ] && exit 0
+          if [ "$CHECKS" == "0" ] && [ -n "$PR_URL" ]; then
+            OUTCOME=success
+          else
+            OUTCOME=failure
+          fi
+          curl -sS -X POST "${SUPABASE_URL}/functions/v1/agent-dev-fix" \
+            -H "x-api-key: ${EDGE_FUNCTION_API_KEY}" -H "Content-Type: application/json" \
+            --data "{\"mode\":\"record\",\"taskId\":\"${AOS_TASK}\",\"outcome\":\"${OUTCOME}\",\"prUrl\":\"${PR_URL}\"}" \
+            && echo "recorded ${OUTCOME}"

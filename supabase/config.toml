@@ -1,5 +1,17 @@
 project_id = "wtkhfqpmcegzcbngroui"
 
+# Launch-time min-supported-version gate (IOS-AUDIT-REL-001). Called by the
+# mobile apps BEFORE the user signs in, so JWT must be optional. Does no DB work
+# and holds no secrets — only returns compile-time version constants.
+[functions.version-check]
+verify_jwt = false
+
+# Sponsored picks for AI discovery flows (IOS-ADS-015). Public sponsored content,
+# so JWT is optional — tier is resolved opportunistically from the bearer token
+# when present (premium users get no ads); anonymous/free callers are eligible.
+[functions.get-sponsored-pick]
+verify_jwt = false
+
 [functions.restaurant-opening-scraper]
 verify_jwt = false
 
@@ -18,37 +30,20 @@ verify_jwt = false
 [functions.log-content-metrics]
 verify_jwt = false
 
-[functions.test-ai-model]
-verify_jwt = true
-
 [functions.publish-article-webhook]
-verify_jwt = false
-
-[functions.test-article-webhook]
 verify_jwt = false
 
 [functions.scrape-events]
 verify_jwt = false
 
 [functions.personalized-recommendations]
-verify_jwt = false
+# Accesses user-specific data; user id is derived from the JWT, never the body.
+verify_jwt = true
 
 [functions.geocode-location]
 verify_jwt = false
 
-[functions.bulk-event-updater]
-verify_jwt = false
-
-[functions.backfill-all-coordinates-force]
-verify_jwt = false
-
-[functions.populate-playgrounds]
-verify_jwt = false
-
 [functions.extract-catchdesmoines-urls]
-verify_jwt = false
-
-[functions.backfill-coordinates]
 verify_jwt = false
 
 [functions.generate-seo-content]
@@ -57,5 +52,300 @@ verify_jwt = false
 [functions.image-transform]
 verify_jwt = false
 
-[functions.batch-process-images]
-verify_jwt = true
+# Weekly duplicate detection + merge (WEB-AUTO-005). Admin/internal tooling:
+# does its own auth via requireAdminOrApiKey (cron service-role key or admin JWT).
+[functions.dedupe-content]
+verify_jwt = false
+
+# Nightly stale-event lifecycle cleanup (WEB-AUTO-006). Admin/internal tooling:
+# does its own auth via requireAdminOrApiKey (cron service-role key or admin JWT).
+[functions.cleanup-old-events]
+verify_jwt = false
+
+# Event-driven sitemap regeneration (WEB-AUTO-011). Admin/internal tooling:
+# does its own auth via requireAdminOrApiKey (cron service-role key or admin JWT).
+[functions.regenerate-sitemaps]
+verify_jwt = false
+
+# Daily social auto-posting orchestrator (WEB-AUTO-012). Admin/internal tooling:
+# does its own auth via requireAdminOrApiKey (cron service-role key or admin JWT).
+[functions.social-daily-poster]
+verify_jwt = false
+
+# Nightly saved-search event-alert digest (WEB-FEAT-003). Admin/internal tooling:
+# does its own auth via requireAdminOrApiKey (cron service-role key or admin JWT).
+[functions.saved-search-alerts]
+verify_jwt = false
+
+# Dynamic OG-image cards for social shares (WEB-FEAT-008). Public: crawlers hit it
+# with no auth, so verify_jwt=false (like image-transform). Rate-limited in-fn.
+[functions.og-image]
+verify_jwt = false
+
+# Escalation router (AOS-CORE-005). Cron control-plane job: routes tier-2/3
+# agent_tasks to the right human queue and coalesces duplicates. Does its own
+# auth via requireAdminOrApiKey (cron service-role key or admin JWT).
+[functions.agent-escalation-router]
+verify_jwt = false
+
+# Consolidated AOS agent dispatcher — hosts the 34 former agent-<name> cron
+# functions, routed by agent_key at /functions/v1/agent-runner/<agent_key>.
+# Cron control-plane job; auth via requireAdminOrApiKey (same gate the individual
+# agents used). See supabase/functions/_shared/agents/.
+[functions.agent-runner]
+verify_jwt = false
+
+# Agent action approvals (AOS-CORE-007). Admin approve/reject + cron sweep of
+# expired approvals. Does its own auth via requireAdminOrApiKey.
+[functions.agent-approvals]
+verify_jwt = false
+
+# Agent control plane (AOS-CORE-008). Admin toggle-enabled + run-now for agents.
+# Does its own auth via requireAdminOrApiKey (admin JWT).
+[functions.agent-control]
+verify_jwt = false
+
+# Daily ops digest (AOS-CORE-010). Cron: batched summary of escalations,
+# auto-resolutions, and failures. Does its own auth via requireAdminOrApiKey.
+[functions.agent-ops-digest]
+verify_jwt = false
+
+# Executive KPI roll-up (AOS-MANAGE-001). Cron: aggregate counts across
+# content/users/revenue/support/ops. Own auth gate via requireAdminOrApiKey.
+[functions.executive-digest]
+verify_jwt = false
+
+# Weekly OS self-review (AOS-MANAGE-007). Cron: aggregates automation_job_runs.
+# Own auth gate via requireAdminOrApiKey.
+[functions.agent-performance-review]
+verify_jwt = false
+
+# Security anomaly detector (AOS-SEC-001). Cron: reads login/rate-limit/audit
+# signals and opens incident tasks. Does its own auth via requireAdminOrApiKey.
+[functions.agent-security-monitor]
+verify_jwt = false
+
+# Dependency CVE scan ingest (AOS-SEC-002). CI posts npm audit results here to
+# open/close remediation tasks. Does its own auth via requireAdminOrApiKey.
+[functions.agent-dep-scan]
+verify_jwt = false
+
+# Secret-leak scan ingest (AOS-SEC-003). CI posts finding locations (no values)
+# here to open a tier-3 incident. Does its own auth via requireAdminOrApiKey.
+[functions.agent-secret-scan]
+verify_jwt = false
+
+# Fraud & abuse detector (AOS-SEC-004). Cron: correlates billing/subscription/AI
+# usage and opens incident tasks. Does its own auth via requireAdminOrApiKey.
+[functions.agent-fraud-monitor]
+verify_jwt = false
+
+# Incident-response runbook executor (AOS-SEC-005). Admin responder endpoint:
+# runs safe steps, queues approvals for account-affecting ones. Auth via
+# requireAdminOrApiKey.
+[functions.agent-runbook]
+verify_jwt = false
+
+# RLS/config drift audit ingest (AOS-SEC-006). CI posts drift here to open a
+# tier-2 review task. Does its own auth via requireAdminOrApiKey.
+[functions.agent-config-audit]
+verify_jwt = false
+
+# Compliance monitor (AOS-SEC-007). Weekly cron: deletion SLA / retention /
+# consent checks. Does its own auth via requireAdminOrApiKey.
+[functions.agent-compliance-monitor]
+verify_jwt = false
+
+# Production error sink (AOS-DEV-001). Public: the web client posts errors, so
+# verify_jwt=false; rate-limited + PII-scrubbed in-fn.
+[functions.log-error]
+verify_jwt = false
+
+# Error triage clustering agent (AOS-DEV-001). Cron: clusters error_events into
+# dev tasks. Does its own auth via requireAdminOrApiKey.
+[functions.agent-error-triage]
+verify_jwt = false
+
+# Autonomous fix agent claim/record (AOS-DEV-002). CI calls this to claim tier-1
+# dev tasks and record attempts. Does its own auth via requireAdminOrApiKey.
+[functions.agent-dev-fix]
+verify_jwt = false
+
+# Dependency-update coordination (AOS-DEV-003). CI calls this for CVE-priority
+# packages and to escalate majors. Does its own auth via requireAdminOrApiKey.
+[functions.agent-dep-update]
+verify_jwt = false
+
+# Test-coverage agent coordination (AOS-DEV-004). CI calls this to pick test
+# targets and record outcomes. Does its own auth via requireAdminOrApiKey.
+[functions.agent-test-gen]
+verify_jwt = false
+
+# CI health watcher (AOS-DEV-005). CI posts run outcomes (ingest); cron analyzes
+# for flakiness/regressions. Does its own auth via requireAdminOrApiKey.
+[functions.agent-ci-health]
+verify_jwt = false
+
+# PR review record (AOS-DEV-006). CI posts the review summary here for an
+# audited run record. Does its own auth via requireAdminOrApiKey.
+[functions.agent-pr-review]
+verify_jwt = false
+
+# Release-notes draft record (AOS-DEV-007). CI posts the changelog-draft summary
+# here for an audited run record. Does its own auth via requireAdminOrApiKey.
+[functions.agent-release-notes]
+verify_jwt = false
+
+# Uptime / synthetic-monitoring agent (AOS-MAINT-001). Cron-invoked; probes
+# public routes + edge-function health (non-mutating). Auth via requireAdminOrApiKey.
+[functions.agent-uptime-monitor]
+verify_jwt = false
+
+# Database health agent (AOS-MAINT-002). Cron-invoked; read-only inspection via
+# the admin-only db_health_report RPC. Auth via requireAdminOrApiKey.
+[functions.agent-db-health]
+verify_jwt = false
+
+# Backup verification agent (AOS-MAINT-003). Cron-invoked; checks backup recency
+# + row-count restore-sanity (read-only). Auth via requireAdminOrApiKey.
+[functions.agent-backup-verify]
+verify_jwt = false
+
+# Data-quality sweeper (AOS-MAINT-004). Cron-invoked; auto-fills content gaps via
+# existing enrichment fns + escalates. Auth via requireAdminOrApiKey.
+[functions.agent-data-quality]
+verify_jwt = false
+
+# Broken-link & dead-content monitor (AOS-MAINT-005). Cron-invoked; probes
+# outbound links, unpublishes past events (reversible). Auth via requireAdminOrApiKey.
+[functions.agent-link-monitor]
+verify_jwt = false
+
+# External-API cost & quota watchdog (AOS-MAINT-006). Cron-invoked; aggregates
+# per-provider MTD spend vs budget, throttles/pauses. Auth via requireAdminOrApiKey.
+[functions.agent-api-watchdog]
+verify_jwt = false
+
+# Edge-function error-rate & cold-start monitor (AOS-MAINT-007). Cron-invoked;
+# aggregates edge_function_metrics + ledger for regressions. Auth via requireAdminOrApiKey.
+[functions.agent-edge-metrics]
+verify_jwt = false
+
+# Support KB embed (AOS-CS-003). Cron + admin-invoked; re-embeds KB articles.
+# Auth via requireAdminOrApiKey.
+[functions.support-kb-embed]
+verify_jwt = false
+
+# Support KB admin CRUD (AOS-CS-003). Admin console writes + inline re-embed.
+# Auth via requireAdminOrApiKey.
+[functions.support-kb-admin]
+verify_jwt = false
+
+# Support KB retrieval (AOS-CS-003). Grounded top-passage retrieval with sources.
+# Auth via requireAdminOrApiKey.
+[functions.support-kb-search]
+verify_jwt = false
+
+# AI support first-responder (AOS-CS-002). Cron + on-demand; drafts grounded
+# answers, auto-sends on high confidence, escalates otherwise. Auth via requireAdminOrApiKey.
+[functions.agent-support-responder]
+verify_jwt = false
+
+# Billing self-service (AOS-CS-004). Agent/console-invoked; plan info, receipt,
+# cancellation, policy-gated refunds. Auth via requireAdminOrApiKey.
+[functions.agent-billing-selfservice]
+verify_jwt = false
+
+# Ticket classifier (AOS-CS-005). Cron; sets sentiment/urgency/priority/SLA and
+# pre-escalates before breach. Auth via requireAdminOrApiKey.
+[functions.agent-ticket-classifier]
+verify_jwt = false
+
+# Ticket reclassify (AOS-CS-005). Admin console list + human correction/feedback.
+# Auth via requireAdminOrApiKey.
+[functions.support-ticket-reclassify]
+verify_jwt = false
+
+# In-app support chat (AOS-CS-006). Public; reuses discover-chat pattern (CORS +
+# rate limit + optional bearer auth). In-function auth; core support for all tiers.
+[functions.support-chat]
+verify_jwt = false
+
+# CSAT prompt sender (AOS-CS-007). Cron; posts CSAT prompts to resolved tickets.
+# Auth via requireAdminOrApiKey.
+[functions.agent-csat]
+verify_jwt = false
+
+# CSAT submission (AOS-CS-007). Public one-click rating link; rate-limited.
+# Records score + re-escalates low CSAT.
+[functions.support-csat-submit]
+verify_jwt = false
+
+# Human ticket console (AOS-CS-008). Admin tier-2/3 workspace backend.
+# Auth via requireAdminOrApiKey.
+[functions.support-console]
+verify_jwt = false
+
+# Lifecycle classifier (AOS-NURTURE-001). Cron; computes lifecycle_stage from
+# activity signals. Auth via requireAdminOrApiKey.
+[functions.agent-lifecycle]
+verify_jwt = false
+
+# Onboarding drip (AOS-NURTURE-002). Cron; staged onboarding emails gated on
+# lifecycle + behavior. Auth via requireAdminOrApiKey.
+[functions.agent-onboarding-drip]
+verify_jwt = false
+
+# Churn & win-back (AOS-NURTURE-003). Cron; scores churn, runs win-back plays
+# (offers approval-gated above threshold). Auth via requireAdminOrApiKey.
+[functions.agent-churn-winback]
+verify_jwt = false
+
+# Personalized weekly digest (AOS-NURTURE-004). Cron; per-user digest, tier-aware.
+# Auth via requireAdminOrApiKey.
+[functions.agent-weekly-digest]
+verify_jwt = false
+
+# Dormant re-engagement (AOS-NURTURE-005). Cron; coordinated nudges for dormant
+# users with age-out. Auth via requireAdminOrApiKey.
+[functions.agent-reengagement]
+verify_jwt = false
+
+# Milestone recognition (AOS-NURTURE-006). Cron; detects loyalty milestones,
+# in-app + optional email. Auth via requireAdminOrApiKey.
+[functions.agent-milestones]
+verify_jwt = false
+
+# Subscription nurture (AOS-NURTURE-007). Cron; trial/dunning/upgrade touchpoints.
+# Auth via requireAdminOrApiKey.
+[functions.agent-subscription-nurture]
+verify_jwt = false
+
+# Lead sourcing (AOS-PROSPECT-001). Cron; discovers advertiser leads from existing
+# content (no external fetch). Auth via requireAdminOrApiKey.
+[functions.agent-lead-sourcing]
+verify_jwt = false
+
+# CRM console (AOS-PROSPECT-002). Admin/sales pipeline CRUD. Auth via requireAdminOrApiKey.
+[functions.crm-console]
+verify_jwt = false
+
+# Lead enrichment (AOS-PROSPECT-003). Cron; enriches + fit-scores CRM leads,
+# auto-qualifies high-fit. Auth via requireAdminOrApiKey.
+[functions.agent-lead-enrichment]
+verify_jwt = false
+
+# Outreach sequencer (AOS-PROSPECT-004). Cron; guardrailed multi-step outreach.
+# Auth via requireAdminOrApiKey.
+[functions.agent-outreach]
+verify_jwt = false
+
+# Outreach reply/opt-out handler (AOS-PROSPECT-004). Inbound webhook; halts
+# sequence + escalates to a human closer. Auth via requireAdminOrApiKey.
+[functions.outreach-reply]
+verify_jwt = false
+
+# Proposal generator (AOS-PROSPECT-005). Admin/sales-invoked; builds a proposal
+# draft from real stats + the price list. Auth via requireAdminOrApiKey.
+[functions.generate-proposal]
+verify_jwt = false

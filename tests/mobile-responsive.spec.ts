@@ -124,36 +124,53 @@ test.describe('Mobile Layout - Content Fits Viewport', () => {
 
       await page.goto(path, { waitUntil: 'networkidle' });
 
-      // Check for elements that extend beyond viewport
-      const overflowingElements = await page.$$eval('*', (elements) => {
-        return elements
-          .map((el) => {
-            const rect = el.getBoundingClientRect();
-            const isOverflowing = rect.right > window.innerWidth || rect.left < 0;
-            return {
-              tag: el.tagName,
-              class: el.className,
-              text: el.textContent?.substring(0, 30),
-              isOverflowing,
-              right: rect.right,
-              width: rect.width,
-              viewportWidth: window.innerWidth,
-            };
+      // What "content fits the viewport" actually means to a user is: the page
+      // does not scroll sideways. Assert that directly.
+      //
+      // The previous version counted every element whose right edge passed the
+      // viewport, which flags the CONTENTS OF EVERY HORIZONTAL CAROUSEL — a
+      // scroll rail is supposed to extend past the fold. Measured on the
+      // production build: / reported 24 "overflowing" elements, /events 64,
+      // /restaurants 67 — and ALL of them sat inside an `overflow-x: auto`
+      // ancestor or were decorative absolutely-positioned blobs. Meanwhile
+      // documentElement.scrollWidth was exactly the viewport width on all
+      // three: no sideways scroll at all. The test failed on correct layout.
+      //
+      // Tolerance of 2px absorbs sub-pixel rounding; /attractions at 320px
+      // overflows by exactly 1px, which is not a user-visible defect.
+      const overflow = await page.evaluate(() => {
+        const de = document.documentElement;
+
+        const isInsideScroller = (el: Element) => {
+          let p: Element | null = el.parentElement;
+          while (p) {
+            const ox = getComputedStyle(p).overflowX;
+            if (ox === 'auto' || ox === 'scroll') return true;
+            p = p.parentElement;
+          }
+          return false;
+        };
+
+        // Diagnostics only — which elements push the document wider, excluding
+        // legitimate scroll-rail children.
+        const culprits = [...document.querySelectorAll('*')]
+          .filter((el) => {
+            const r = el.getBoundingClientRect();
+            return r.width > 0 && r.right - window.innerWidth > 20 && !isInsideScroller(el);
           })
-          .filter((el) => el.isOverflowing && el.width > 0);
+          .slice(0, 5)
+          .map((el) => `${el.tagName}.${String((el as HTMLElement).className).slice(0, 60)}`);
+
+        return { scrollWidth: de.scrollWidth, clientWidth: de.clientWidth, culprits };
       });
 
-      if (overflowingElements.length > 0) {
-        console.log('Overflowing elements found:', overflowingElements.slice(0, 5));
-      }
-
-      // Allow for some minor overflow (like scrollbars)
-      const significantOverflow = overflowingElements.filter((el) => el.right - el.viewportWidth > 20);
+      const excess = overflow.scrollWidth - overflow.clientWidth;
 
       expect(
-        significantOverflow.length,
-        `Found ${significantOverflow.length} elements significantly overflowing viewport`
-      ).toBe(0);
+        excess,
+        `Page scrolls horizontally by ${excess}px at ${overflow.clientWidth}px wide.` +
+          (overflow.culprits.length ? ` Candidates: ${overflow.culprits.join(', ')}` : '')
+      ).toBeLessThanOrEqual(2);
     });
   }
 });

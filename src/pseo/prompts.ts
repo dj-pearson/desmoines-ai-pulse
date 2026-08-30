@@ -345,7 +345,7 @@ export function buildSeoOnlyPrompt(ctx: PromptContext): GenerationPrompt {
   const dimList = dims.map((d) => `${d!.dimension}: ${d!.name}`).join(', ');
 
   return {
-    system: `You are an SEO specialist for Des Moines AI Pulse, a local discovery platform for Des Moines, Iowa. Generate optimized metadata.`,
+    system: `You are an SEO specialist for Des Moines Insider, a local discovery platform for Des Moines, Iowa. Generate optimized metadata.`,
     user: `Generate SEO metadata for a page about: ${dimList}
 
 Search behavior context:

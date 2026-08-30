@@ -1,10 +1,9 @@
-import { Toaster } from "@/components/ui/toaster";
-import { Toaster as Sonner } from "@/components/ui/sonner";
-import { TooltipProvider } from "@/components/ui/tooltip";
+import { LucideSprite } from "@/components/ui/icon-sprite.generated";
 import { ErrorBoundary } from "@/components/ui/error-boundary";
 import { RouteErrorBoundary } from "@/components/ui/route-error-boundary";
 import { BrowserRouter, Routes, Route } from "react-router-dom";
-import { lazy, Suspense, useState, useEffect, ComponentType } from "react";
+import { lazy, Suspense, useState, useEffect, useRef, ComponentType } from "react";
+import { sessionStore } from "@/lib/safeStorage";
 import { useKeyboardShortcuts } from "@/hooks/use-keyboard-shortcuts";
 import { useKeyboardAware } from "@/hooks/useKeyboardAware";
 import { usePageTransition } from "@/hooks/usePageTransition";
@@ -14,12 +13,16 @@ import { useSwipeBack } from "@/hooks/useSwipeBack";
 import { useStatusBarStyle } from "@/hooks/useStatusBarStyle";
 import { useFocusOnRouteChange } from "@/hooks/useFocusOnRouteChange";
 import { usePageTracking } from "@/hooks/usePageTracking";
-import { useLocation } from "react-router-dom";
-import { KeyboardShortcutsModal } from "@/components/KeyboardShortcutsModal";
-import { WelcomeModal } from "@/components/WelcomeModal";
+import { useLocation, useNavigationType } from "react-router-dom";
+const KeyboardShortcutsModal = lazyWithRetry(() =>
+  import("@/components/KeyboardShortcutsModal").then((m) => ({ default: m.KeyboardShortcutsModal })),
+);
 import { ProtectedRoute } from "@/components/ProtectedRoute";
 import BottomNav from "@/components/BottomNav";
 import { AuthProvider } from "@/contexts/AuthContext";
+import { GuestFavoriteMigrator } from "@/components/GuestFavoriteMigrator";
+import { PrerenderSignal } from "@/components/PrerenderSignal";
+import { GlobalUpgradeModal } from "@/components/GlobalUpgradeModal";
 import { AccessibilityProvider } from "@/contexts/AccessibilityContext";
 import { AccessibilityWidget } from "@/components/AccessibilityWidget";
 import { SessionManager } from "@/components/auth/SessionManager";
@@ -35,19 +38,26 @@ function lazyWithRetry(
 ) {
   return lazy(() =>
     importFn().catch((error) => {
-      const hasReloaded = sessionStorage.getItem("chunk_reload");
+      const hasReloaded = sessionStore.getString("chunk_reload");
       if (!hasReloaded) {
-        sessionStorage.setItem("chunk_reload", "1");
+        sessionStore.setString("chunk_reload", "1");
         window.location.reload();
         return new Promise(() => {}); // never resolves; reload will take over
       }
-      sessionStorage.removeItem("chunk_reload");
+      sessionStore.remove("chunk_reload");
       throw error; // let the error boundary handle it
     })
   );
 }
 
 // Lazy load pages for better mobile performance
+const Toaster = lazyWithRetry(() =>
+  import("@/components/ui/toaster").then((m) => ({ default: m.Toaster })),
+);
+const Sonner = lazyWithRetry(() =>
+  import("@/components/ui/sonner").then((m) => ({ default: m.Toaster })),
+);
+
 const Index = lazyWithRetry(() => import("./pages/Index"));
 const Auth = lazyWithRetry(() => import("./pages/Auth"));
 const AuthCallback = lazyWithRetry(() => import("./pages/AuthCallback"));
@@ -98,12 +108,14 @@ const GuidesPage = lazyWithRetry(() => import("./pages/GuidesPage"));
 const MonthlyEventsPage = lazyWithRetry(() => import("./pages/MonthlyEventsPage"));
 const EventsSegmentHandler = lazyWithRetry(() => import("./components/EventsSegmentHandler"));
 const AdvancedSearchPage = lazyWithRetry(() => import("./components/AdvancedSearchPage"));
+const SearchResults = lazyWithRetry(() => import("./pages/SearchResults"));
 const RealTimePage = lazyWithRetry(() => import("./components/RealTimePage"));
 
 // SEO-focused time-sensitive pages
 const EventsToday = lazyWithRetry(() => import("./pages/EventsToday"));
 const EventsThisWeekend = lazyWithRetry(() => import("./pages/EventsThisWeekend"));
 const EventsByLocation = lazyWithRetry(() => import("./pages/EventsByLocation"));
+const EventsNearMe = lazyWithRetry(() => import("./pages/EventsNearMe"));
 
 // SEO hub pages - new category pages
 const FreeEvents = lazyWithRetry(() => import("./pages/FreeEvents"));
@@ -155,20 +167,35 @@ const ThingsToDoHub = lazyWithRetry(() => import("./pages/ThingsToDoHub"));
 // Event submission
 const SubmitEvent = lazyWithRetry(() => import("./pages/SubmitEvent"));
 
-// Legal pages — direct imports (small static content, must always be reachable)
-import PrivacyPolicy from "./pages/PrivacyPolicy";
-import Terms from "./pages/Terms";
-import AccessibilityStatement from "./pages/AccessibilityStatement";
-import CookiePolicy from "./pages/CookiePolicy";
-import DMCAPolicy from "./pages/DMCAPolicy";
-import AcceptableUsePolicy from "./pages/AcceptableUsePolicy";
-import DataProcessingAgreement from "./pages/DataProcessingAgreement";
+// Legal pages (WEB-PERF-020 AC3). These were direct imports, on the reasoning
+// that they are "small static content, must always be reachable". They are not
+// small - 2,554 lines across the seven - and they are the least-visited routes
+// on the site, so every first paint of the homepage was paying for the DMCA
+// policy.
+//
+// "Must always be reachable" is what lazyWithRetry is for: a failed chunk load
+// reloads once and then surfaces to the error boundary, which is the same
+// treatment every other route already gets.
+//
+// Checked rather than assumed: /privacy-policy and /terms are in
+// SITEMAP_ONLY_ROUTES, so they are sitemapped and NOT prerendered. The eager
+// import was therefore buying nothing for crawlers either - those routes have
+// always been client-rendered. It only cost every other page its first paint.
+const PrivacyPolicy = lazyWithRetry(() => import("./pages/PrivacyPolicy"));
+const Terms = lazyWithRetry(() => import("./pages/Terms"));
+const AccessibilityStatement = lazyWithRetry(() => import("./pages/AccessibilityStatement"));
+const CookiePolicy = lazyWithRetry(() => import("./pages/CookiePolicy"));
+const DMCAPolicy = lazyWithRetry(() => import("./pages/DMCAPolicy"));
+const AcceptableUsePolicy = lazyWithRetry(() => import("./pages/AcceptableUsePolicy"));
+const DataProcessingAgreement = lazyWithRetry(() => import("./pages/DataProcessingAgreement"));
 
 // Cookie consent (GDPR/CCPA opt-in banner) — lightweight, mount globally
 import { CookieConsentBanner } from "@/components/CookieConsentBanner";
 
 // Contact page
 const Contact = lazyWithRetry(() => import("./pages/Contact"));
+const Support = lazyWithRetry(() => import("./pages/Support"));
+const Csat = lazyWithRetry(() => import("./pages/Csat"));
 
 // Public CAN-SPAM one-click unsubscribe
 const Unsubscribe = lazyWithRetry(() => import("./pages/Unsubscribe"));
@@ -180,8 +207,21 @@ const AdminAI = lazyWithRetry(() => import("./pages/AdminAI"));
 const AdminTools = lazyWithRetry(() => import("./pages/AdminTools"));
 const AdminAnalyticsPage = lazyWithRetry(() => import("./pages/AdminAnalyticsPage"));
 const AdminGscCallback = lazyWithRetry(() => import("./pages/AdminGscCallback"));
+// The Search Console OAuth callback above has been routed since March; the page
+// that shows what the connection produced never was. See WEB-SEO-014.
+const SEODashboard = lazyWithRetry(() => import("./pages/SEODashboard"));
 const AdminSecurity = lazyWithRetry(() => import("./pages/AdminSecurity"));
 const AdminSystem = lazyWithRetry(() => import("./pages/AdminSystem"));
+const AdminAutonomy = lazyWithRetry(() => import("./pages/AdminAutonomy"));
+const AdminInbox = lazyWithRetry(() => import("./pages/AdminInbox"));
+const AdminApprovals = lazyWithRetry(() => import("./pages/AdminApprovals"));
+const AdminAgents = lazyWithRetry(() => import("./pages/AdminAgents"));
+const AdminAuditLog = lazyWithRetry(() => import("./pages/AdminAuditLog"));
+const AdminSupportKb = lazyWithRetry(() => import("./pages/AdminSupportKb"));
+const AdminSupportTickets = lazyWithRetry(() => import("./pages/AdminSupportTickets"));
+const AdminSupport = lazyWithRetry(() => import("./pages/AdminSupport"));
+const AdminLifecycle = lazyWithRetry(() => import("./pages/AdminLifecycle"));
+const AdminCrm = lazyWithRetry(() => import("./pages/AdminCrm"));
 const AdminMedia = lazyWithRetry(() => import("./pages/AdminMedia"));
 // Admin Backend Overhaul (PRD: feat/admin-backend-overhaul) — stubs until each
 // story fleshes the dedicated page out. See AdminPlaceholder for the shell.
@@ -217,13 +257,83 @@ const PageLoader = () => (
   </div>
 );
 
-// Scroll to top on route changes – essential for Capacitor where
+// Maximum number of remembered scroll positions (bounds the map over a long
+// session; anything older than the last 50 pages isn't worth restoring).
+const MAX_REMEMBERED_SCROLL_POSITIONS = 50;
+
+// Scroll management on route changes – essential for Capacitor where
 // the browser's default scroll restoration doesn't kick in.
-function ScrollToTopOnNavigate() {
+//
+// Forward navigation starts at the top of the new page. Going *back* restores
+// where you were, so returning to a long list doesn't dump you at the top of it
+// and make you scroll all the way down again.
+//
+// Keyed on pathname only: state that lives in the query string (the selected
+// tab, filters) must never cause a scroll jump.
+function ScrollRestoration() {
   const { pathname } = useLocation();
+  const navigationType = useNavigationType();
+  const positionsRef = useRef<Map<string, number>>(new Map());
+  const currentPathRef = useRef(pathname);
+
+  // Continuously remember where the user is on the current page.
   useEffect(() => {
-    window.scrollTo({ top: 0, behavior: 'instant' as ScrollBehavior });
-  }, [pathname]);
+    const handleScroll = () => {
+      const positions = positionsRef.current;
+      if (
+        positions.size >= MAX_REMEMBERED_SCROLL_POSITIONS &&
+        !positions.has(currentPathRef.current)
+      ) {
+        const oldest = positions.keys().next().value;
+        if (oldest !== undefined) positions.delete(oldest);
+      }
+      positions.set(currentPathRef.current, window.scrollY);
+    };
+    window.addEventListener('scroll', handleScroll, { passive: true });
+    return () => window.removeEventListener('scroll', handleScroll);
+  }, []);
+
+  useEffect(() => {
+    currentPathRef.current = pathname;
+    const saved =
+      navigationType === 'POP' ? positionsRef.current.get(pathname) : undefined;
+
+    if (saved === undefined) {
+      window.scrollTo({ top: 0, behavior: 'instant' as ScrollBehavior });
+      return;
+    }
+
+    // The page we're returning to may still be fetching, so the document can be
+    // too short to reach `saved` on the first frame. Re-apply a few times, and
+    // bail out the moment the user takes over so we never fight their input.
+    let cancelled = false;
+    const cancel = () => {
+      cancelled = true;
+    };
+    const interactionEvents = ['wheel', 'touchstart', 'keydown', 'mousedown'];
+    interactionEvents.forEach((event) =>
+      window.addEventListener(event, cancel, { once: true, passive: true })
+    );
+
+    const restore = () => {
+      if (cancelled) return;
+      window.scrollTo({ top: saved, behavior: 'instant' as ScrollBehavior });
+    };
+
+    restore();
+    const frame = requestAnimationFrame(restore);
+    const timers = [setTimeout(restore, 120), setTimeout(restore, 400)];
+
+    return () => {
+      cancelled = true;
+      cancelAnimationFrame(frame);
+      timers.forEach(clearTimeout);
+      interactionEvents.forEach((event) =>
+        window.removeEventListener(event, cancel)
+      );
+    };
+  }, [pathname, navigationType]);
+
   return null;
 }
 
@@ -262,30 +372,73 @@ const KeyboardShortcutsProvider = ({ children }: { children: React.ReactNode }) 
   return (
     <div ref={pageTransitionRef}>
       {children}
-      <KeyboardShortcutsModal
-        open={showShortcutsModal}
-        onOpenChange={setShowShortcutsModal}
-      />
-      <WelcomeModal />
+      {/* WEB-PERF-020 AC3: mounted only while open, so its chunk is fetched the
+          first time someone presses "?" rather than by every visitor. */}
+      {showShortcutsModal && (
+        <Suspense fallback={null}>
+          <KeyboardShortcutsModal open onOpenChange={setShowShortcutsModal} />
+        </Suspense>
+      )}
     </div>
   );
 };
 
 const App = () => (
   <AccessibilityProvider>
-  <TooltipProvider>
+  {/* Defines the <symbol> set every <SpriteIcon /> references. Rendered
+      once, before anything that uses it (WEB-PERF-023). */}
+  <LucideSprite />
+    {/* No app-root TooltipProvider. Every consumer of ui/tooltip already
+        wraps itself in one - AIDisclosureBadge, PremiumBadge,
+        RecommendationBadge, MenuUrlManager and sidebar (which needs its own
+        anyway, for delayDuration={0}) - so this one was redundant, and it
+        was the only thing pulling the Radix tooltip and its floating-ui
+        popper into the render-blocking entry chunk. WEB-PERF-020. */}
     <BrowserRouter>
-      <ScrollToTopOnNavigate />
+      <ScrollRestoration />
       <AuthProvider>
         <SessionManager />
+        <GuestFavoriteMigrator />
+        {/* Publishes data-queries-settled on <html> for scripts/prerender.mjs.
+            Renders nothing and does no work in a browser beyond one attribute. */}
+        <PrerenderSignal />
+        <GlobalUpgradeModal />
         <OfflineBanner />
         <ErrorBoundary>
           <KeyboardShortcutsProvider>
-            <Toaster />
-            <Sonner />
+            {/* Both toasters are lazy. Neither draws anything until a toast
+                fires, and between them they were 58 KB of the entry chunk -
+                sonner 32.7 KB and @radix-ui/react-toast 25.4 KB, measured
+                (WEB-PERF-020).
+
+                SAFE FOR THE SHADCN ONE BY CONSTRUCTION: use-toast keeps its
+                state in a module-level `memoryState` and useToast() seeds from
+                it on mount, so a toast dispatched before this mounts is still
+                rendered when it does.
+
+                SONNER IS SAFE ONLY WHILE NOTHING ON THE CRITICAL PATH IMPORTS
+                IT, and that had already stopped being true. This comment used to
+                assert it flatly; the build disagreed - sonner was back in the
+                entry chunk, put there by one static import in
+                useGuestFavoriteMigration, which GuestFavoriteMigrator mounts at
+                the root a few lines above. Making a component lazy does not keep
+                its library out of the entry if anything eager still imports the
+                library. That import is now dynamic, worth 9.2 KB gz.
+                  The check is `grep -l sonner dist/assets/index-*.js` after a
+                  build, not reading this comment. A root-mounted headless
+                  component is the easy way to reintroduce it.
+                Its toast() otherwise lives in the sonner module, so any page that
+                raises one has already loaded sonner; and handleError does not
+                toast at all today (see showErrorToUser). Suspense fallback is
+                null: a toaster that has not arrived should render nothing, not a
+                placeholder. */}
+            <Suspense fallback={null}>
+              <Toaster />
+              <Sonner />
+            </Suspense>
             <AccessibilityWidget />
             <RouteErrorBoundary>
-            <main id="main-content" tabIndex={-1}>
+            <main id="main-content" tabIndex={-1} className="pb-bottom-nav">
             <Suspense fallback={<PageLoader />}>
             <Routes>
             <Route path="/" element={<Index />} />
@@ -301,8 +454,19 @@ const App = () => (
             <Route path="/admin/tools" element={<ProtectedRoute requireAdmin><AdminTools /></ProtectedRoute>} />
             <Route path="/admin/analytics-dashboard" element={<ProtectedRoute requireAdmin><AdminAnalyticsPage /></ProtectedRoute>} />
             <Route path="/admin/oauth/callback" element={<ProtectedRoute requireAdmin><AdminGscCallback /></ProtectedRoute>} />
+            <Route path="/admin/seo" element={<ProtectedRoute requireAdmin><SEODashboard /></ProtectedRoute>} />
             <Route path="/admin/security" element={<ProtectedRoute requireAdmin><AdminSecurity /></ProtectedRoute>} />
             <Route path="/admin/system" element={<ProtectedRoute requireAdmin><AdminSystem /></ProtectedRoute>} />
+            <Route path="/admin/autonomy" element={<ProtectedRoute requireAdmin><AdminAutonomy /></ProtectedRoute>} />
+            <Route path="/admin/inbox" element={<ProtectedRoute requireAdmin><AdminInbox /></ProtectedRoute>} />
+            <Route path="/admin/approvals" element={<ProtectedRoute requireAdmin><AdminApprovals /></ProtectedRoute>} />
+            <Route path="/admin/agents" element={<ProtectedRoute requireAdmin><AdminAgents /></ProtectedRoute>} />
+            <Route path="/admin/agent-audit" element={<ProtectedRoute requireAdmin><AdminAuditLog /></ProtectedRoute>} />
+            <Route path="/admin/support-kb" element={<ProtectedRoute requireAdmin><AdminSupportKb /></ProtectedRoute>} />
+            <Route path="/admin/support-tickets" element={<ProtectedRoute requireAdmin><AdminSupportTickets /></ProtectedRoute>} />
+            <Route path="/admin/support" element={<ProtectedRoute requireAdmin><AdminSupport /></ProtectedRoute>} />
+            <Route path="/admin/lifecycle" element={<ProtectedRoute requireAdmin><AdminLifecycle /></ProtectedRoute>} />
+            <Route path="/admin/crm" element={<ProtectedRoute requireAdmin><AdminCrm /></ProtectedRoute>} />
             <Route path="/admin/media" element={<ProtectedRoute requireAdmin><AdminMedia /></ProtectedRoute>} />
             <Route path="/admin/menus" element={<ProtectedRoute requireAdmin><AdminMenus /></ProtectedRoute>} />
             {/* Admin Backend Overhaul routes — stubs until each story replaces the page */}
@@ -329,6 +493,8 @@ const App = () => (
               path="/events/this-weekend"
               element={<EventsThisWeekend />}
             />
+            {/* Location-based discovery */}
+            <Route path="/events/near-me" element={<EventsNearMe />} />
             {/* Category SEO hub pages */}
             <Route path="/events/free" element={<FreeEvents />} />
             <Route path="/events/kids" element={<KidsEvents />} />
@@ -397,7 +563,8 @@ const App = () => (
               element={<BusinessPartnership />}
             />
             <Route path="/business" element={<BusinessHub />} />
-            <Route path="/search" element={<AdvancedSearchPage />} />
+            <Route path="/search" element={<SearchResults />} />
+            <Route path="/search/advanced" element={<AdvancedSearchPage />} />
             <Route path="/guides" element={<GuidesPage />} />
             <Route path="/real-time" element={<RealTimePage />} />
             {/* Lead magnet tools */}
@@ -427,6 +594,8 @@ const App = () => (
             <Route path="/unsubscribe" element={<Unsubscribe />} />
             {/* Contact page */}
             <Route path="/contact" element={<Contact />} />
+            <Route path="/support" element={<Support />} />
+            <Route path="/csat" element={<Csat />} />
             {/* Community voting */}
             <Route path="/best-of" element={<BestOf />} />
             <Route path="/best-of/:category" element={<BestOfCategory />} />
@@ -470,7 +639,6 @@ const App = () => (
       </ErrorBoundary>
       </AuthProvider>
     </BrowserRouter>
-  </TooltipProvider>
   </AccessibilityProvider>
 );
 

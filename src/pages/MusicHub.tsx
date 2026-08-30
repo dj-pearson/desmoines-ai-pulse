@@ -8,8 +8,10 @@ import { supabase } from '@/integrations/supabase/client';
 import { Card, CardContent } from '@/components/ui/card';
 import { Badge } from '@/components/ui/badge';
 import { Skeleton } from '@/components/ui/skeleton';
-import { Music, MapPin, Users, Calendar, Clock, ExternalLink } from 'lucide-react';
+import { Music } from "lucide-react";
 import { Button } from '@/components/ui/button';
+import { EVENT_LIST_COLUMNS } from '@/lib/listColumns';
+import { SpriteIcon } from "@/components/ui/SpriteIcon";
 
 const GENRE_FILTERS = ['All', 'Rock', 'Country', 'Jazz', 'Hip-Hop', 'Electronic', 'Classical', 'Blues', 'Folk'];
 
@@ -30,7 +32,7 @@ function useMusicEvents(timeframe: 'tonight' | 'weekend' | 'upcoming') {
     queryFn: async () => {
       let query = supabase
         .from('events')
-        .select('*')
+        .select(EVENT_LIST_COLUMNS)
         .or('category.ilike.%Music%,category.ilike.%Concert%,category.ilike.%Live Music%')
         .order('date', { ascending: true })
         .limit(20);
@@ -92,7 +94,7 @@ export default function MusicHub() {
           {/* Tonight's Shows */}
           <section className="mb-12">
             <div className="flex items-center gap-2 mb-4">
-              <Clock className="h-5 w-5 text-primary" />
+              <SpriteIcon name="clock" className="h-5 w-5 text-primary" />
               <h2 className="text-2xl font-bold">Tonight&apos;s Shows</h2>
               <Badge variant="secondary">{tonightShows?.length || 0}</Badge>
             </div>
@@ -105,7 +107,7 @@ export default function MusicHub() {
                         <h3 className="font-semibold mb-1 line-clamp-2">{event.title}</h3>
                         {event.venue && (
                           <p className="text-sm text-muted-foreground flex items-center gap-1">
-                            <MapPin className="h-3 w-3" /> {event.venue}
+                            <SpriteIcon name="map-pin" className="h-3 w-3" /> {event.venue}
                           </p>
                         )}
                         {event.date && (
@@ -127,7 +129,7 @@ export default function MusicHub() {
           {/* This Weekend */}
           <section className="mb-12">
             <div className="flex items-center gap-2 mb-4">
-              <Calendar className="h-5 w-5 text-primary" />
+              <SpriteIcon name="calendar" className="h-5 w-5 text-primary" />
               <h2 className="text-2xl font-bold">This Weekend</h2>
               <Badge variant="secondary">{weekendShows?.length || 0}</Badge>
             </div>
@@ -140,7 +142,7 @@ export default function MusicHub() {
                         <h3 className="font-semibold mb-1 line-clamp-2">{event.title}</h3>
                         {event.venue && (
                           <p className="text-sm text-muted-foreground flex items-center gap-1">
-                            <MapPin className="h-3 w-3" /> {event.venue}
+                            <SpriteIcon name="map-pin" className="h-3 w-3" /> {event.venue}
                           </p>
                         )}
                         {event.date && (
@@ -200,7 +202,7 @@ export default function MusicHub() {
           {/* Venue Guide */}
           <section className="mb-12">
             <div className="flex items-center gap-2 mb-4">
-              <MapPin className="h-5 w-5 text-primary" />
+              <SpriteIcon name="map-pin" className="h-5 w-5 text-primary" />
               <h2 className="text-2xl font-bold">Venue Guide</h2>
             </div>
             {venuesLoading ? (
@@ -230,7 +232,7 @@ export default function MusicHub() {
                           )}
                           {venue.capacity && (
                             <Badge variant="outline">
-                              <Users className="h-3 w-3 mr-1" />
+                              <SpriteIcon name="users" className="h-3 w-3 mr-1" />
                               {venue.capacity.toLocaleString()}
                             </Badge>
                           )}

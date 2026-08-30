@@ -1,7 +1,9 @@
 import "https://deno.land/x/xhr@0.1.0/mod.ts";
+import { fetchWithTimeout } from "../_shared/fetchWithTimeout.ts";
 import { serve } from "https://deno.land/std@0.168.0/http/server.ts";
 import { createClient } from "https://esm.sh/@supabase/supabase-js@2";
 import { scrapeUrl, getScraperConfig } from "../_shared/scraper.ts";
+import { requireAdminOrApiKey } from "../_shared/apiKeyAuth.ts";
 
 const AFFILIATE_BASE =
   "https://ticketmaster.evyy.net/c/6430290/264167/4272?u=";
@@ -183,7 +185,7 @@ async function extractShowsWithBrowserlessFunction(): Promise<ScrapedShow[]> {
 
   console.log("🚀 Using Browserless /function for direct DOM extraction...");
 
-  const response = await fetch(browserlessUrl, {
+  const response = await fetchWithTimeout(browserlessUrl, {
     method: "POST",
     headers: { "Content-Type": "application/json" },
     body: JSON.stringify({ code }),
@@ -484,6 +486,17 @@ serve(async (req) => {
   if (req.method === "OPTIONS") {
     return new Response(null, { headers: corsHeaders });
   }
+
+  // Runs as service_role and had no caller check. verify_jwt defaults to
+  // true, which only means "a valid Supabase JWT" - the publishable anon
+  // key is one and ships in every client bundle.
+  //
+  // Callers, enumerated before guarding:
+  //   NO caller anywhere in src/, migrations, edge functions, workflows or mobile
+  // requireAdminOrApiKey accepts EDGE_FUNCTION_API_KEY, the service-role
+  // key and an admin JWT, so a manual or server-to-server call still works.
+  const authFailure = await requireAdminOrApiKey(req, corsHeaders);
+  if (authFailure) return authFailure;
 
   try {
     console.log("🎵 Starting Vibrant Music Hall Ticketmaster scraper...");

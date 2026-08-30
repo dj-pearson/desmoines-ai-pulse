@@ -7,15 +7,23 @@ import SwiftUI
 ///
 /// IOS-DISCOVER-2026-001.
 struct AskPulseView: View {
+    /// Optional query to prefill and auto-submit on appear — used by the Siri
+    /// "Ask Pulse" intent so it reaches the chat, not keyword search (FEAT-028).
+    var initialQuery: String? = nil
+
     @Environment(\.dismiss) private var dismiss
     @State private var service = AskPulseService.shared
     @State private var input: String = ""
     @State private var conversation: [AskPulseService.ChatMessage] = []
     @State private var picks: [AskPulseService.Pick] = []
     @State private var followUps: [String] = []
+    /// At most one labeled sponsored pick (IOS-ADS-015), server-eligible + free-tier only.
+    @State private var sponsoredPick: SponsoredPickService.SponsoredPick?
     @State private var isLoading = false
     @State private var errorMessage: String?
     @FocusState private var inputFocused: Bool
+
+    private let bottomAnchorID = "askPulseBottom"
 
     private let suggestions: [String] = [
         "date night, walkable, under $60",
@@ -27,31 +35,42 @@ struct AskPulseView: View {
     var body: some View {
         NavigationStack {
             VStack(spacing: 0) {
-                ScrollView {
-                    VStack(alignment: .leading, spacing: 16) {
-                        if conversation.isEmpty {
-                            welcomeState
-                        } else {
-                            conversationView
-                            if !picks.isEmpty {
-                                picksSection
+                ScrollViewReader { proxy in
+                    ScrollView {
+                        VStack(alignment: .leading, spacing: 16) {
+                            if conversation.isEmpty {
+                                welcomeState
+                            } else {
+                                conversationView
+                                if !picks.isEmpty {
+                                    picksSection
+                                }
+                                if !followUps.isEmpty {
+                                    followUpChips
+                                }
                             }
-                            if !followUps.isEmpty {
-                                followUpChips
+                            if let errorMessage {
+                                errorBanner(errorMessage)
                             }
+                            // Scroll anchor so the newest message / "Thinking…" /
+                            // picks scroll into view after a send (IOS-AUDIT-UX-022).
+                            Color.clear.frame(height: 1).id(bottomAnchorID)
                         }
-                        if let errorMessage {
-                            errorBanner(errorMessage)
-                        }
+                        .padding()
                     }
-                    .padding()
+                    .background(Color(.systemGroupedBackground))
+                    .onChange(of: conversation.count) { _, _ in scrollToBottom(proxy) }
+                    .onChange(of: picks.count) { _, _ in scrollToBottom(proxy) }
+                    .onChange(of: isLoading) { _, _ in scrollToBottom(proxy) }
                 }
-                .background(Color(.systemGroupedBackground))
 
                 inputBar
             }
             .navigationTitle("Ask Pulse")
             .navigationBarTitleDisplayMode(.inline)
+            .navigationDestination(for: AskPulseService.Pick.self) { pick in
+                AskPulsePickDetailView(pick: pick)
+            }
             .toolbar {
                 ToolbarItem(placement: .topBarLeading) {
                     Button("Close") { dismiss() }
@@ -66,6 +85,16 @@ struct AskPulseView: View {
                 }
             }
             .onAppear { inputFocused = true }
+            .task {
+                // Auto-run a Siri/Shortcuts-provided query once (FEAT-028).
+                if let initialQuery, conversation.isEmpty {
+                    let q = initialQuery.trimmingCharacters(in: .whitespacesAndNewlines)
+                    if !q.isEmpty {
+                        input = q
+                        await send()
+                    }
+                }
+            }
         }
     }
 
@@ -155,6 +184,10 @@ struct AskPulseView: View {
             ForEach(picks) { pick in
                 AskPulsePickCard(pick: pick)
             }
+            // One clearly-labeled sponsored pick among the picks (IOS-ADS-015).
+            if let sponsoredPick {
+                SponsoredPickCard(pick: sponsoredPick, surface: .askPulse)
+            }
         }
         .accessibilityElement(children: .contain)
         .accessibilityValue("\(picks.count) picks")
@@ -184,7 +217,31 @@ struct AskPulseView: View {
         }
     }
 
+    /// Messages remaining today.
+    ///
+    /// AskPulseService has recorded `lastUsage` on every response since it was
+    /// written and nothing displayed it, so the first a user learned about the
+    /// limit was hitting it - the quotaExceeded error below was the entire UI
+    /// for this (IOS-AUDIT-UX-060).
+    @ViewBuilder
+    private var quotaLabel: some View {
+        if let usage = service.lastUsage {
+            Text(usage.remaining.displayString)
+                .font(.caption2)
+                .foregroundStyle(.secondary)
+                .frame(maxWidth: .infinity, alignment: .trailing)
+                .accessibilityLabel("Pulse messages: \(usage.remaining.displayString)")
+        }
+    }
+
     private var inputBar: some View {
+        VStack(spacing: 4) {
+            quotaLabel
+            composer
+        }
+    }
+
+    private var composer: some View {
         HStack(spacing: 8) {
             TextField("date night near downtown…", text: $input, axis: .vertical)
                 .lineLimit(1...3)
@@ -225,10 +282,17 @@ struct AskPulseView: View {
 
     // MARK: - Actions
 
+    private func scrollToBottom(_ proxy: ScrollViewProxy) {
+        withAnimation(.easeOut(duration: 0.25)) {
+            proxy.scrollTo(bottomAnchorID, anchor: .bottom)
+        }
+    }
+
     private func resetConversation() {
         conversation = []
         picks = []
         followUps = []
+        sponsoredPick = nil
         errorMessage = nil
         input = ""
         inputFocused = true
@@ -242,6 +306,7 @@ struct AskPulseView: View {
         input = ""
         isLoading = true
         errorMessage = nil
+        sponsoredPick = nil
 
         do {
             let response = try await AskPulseService.shared.ask(
@@ -250,6 +315,11 @@ struct AskPulseView: View {
             )
             picks = response.picks
             followUps = response.followUpSuggestions
+            // Ask the server for one eligible sponsored pick for this intent
+            // (free-tier only; nil when nothing matches). IOS-ADS-015.
+            if !response.picks.isEmpty {
+                sponsoredPick = await SponsoredPickService.shared.pick(for: .askPulse, query: trimmed)
+            }
             // Add a synthetic assistant turn that summarises the picks. Picks
             // themselves are rendered as cards below the conversation, so the
             // chat bubble just provides screen-reader-friendly framing.
@@ -287,6 +357,7 @@ private struct AskPulsePickCard: View {
                 NavigationLink(value: pick) {
                     Image(systemName: "chevron.right")
                         .foregroundStyle(.secondary)
+                        .minHitTarget()
                         .accessibilityLabel("Open details")
                 }
             }
@@ -307,6 +378,68 @@ private struct AskPulsePickCard: View {
         case .event: return "calendar"
         case .restaurant: return "fork.knife"
         case .attraction: return "mountain.2.fill"
+        }
+    }
+}
+
+// MARK: - Pick Detail Resolver
+
+/// Resolves an Ask Pulse pick (which carries only an item type + id) to its
+/// full model and shows the matching detail screen, mirroring the deep-link
+/// resolver's loading/failed phases so the card's chevron never dead-ends
+/// (IOS-AUDIT-FEAT-018).
+private struct AskPulsePickDetailView: View {
+    let pick: AskPulseService.Pick
+
+    @State private var phase: Phase = .loading
+
+    private enum Phase {
+        case loading
+        case failed
+        case event(Event)
+        case restaurant(Restaurant)
+        case attraction(Attraction)
+    }
+
+    var body: some View {
+        Group {
+            switch phase {
+            case .loading:
+                ProgressView("Loading…")
+                    .frame(maxWidth: .infinity, maxHeight: .infinity)
+            case .failed:
+                EmptyStateView(
+                    icon: "exclamationmark.triangle",
+                    title: "Couldn't Load",
+                    message: "This pick couldn't be opened. It may have been removed or you're offline.",
+                    actionTitle: "Try Again",
+                    action: { Task { await resolve() } }
+                )
+            case .event(let event):
+                EventDetailView(event: event)
+            case .restaurant(let restaurant):
+                RestaurantDetailView(restaurant: restaurant)
+            case .attraction(let attraction):
+                AttractionDetailView(attraction: attraction)
+            }
+        }
+        .navigationBarTitleDisplayMode(.inline)
+        .task { await resolve() }
+    }
+
+    private func resolve() async {
+        phase = .loading
+        do {
+            switch pick.itemType {
+            case .event:
+                phase = .event(try await EventsService.shared.fetchEvent(id: pick.itemId))
+            case .restaurant:
+                phase = .restaurant(try await RestaurantsService.shared.fetchRestaurant(id: pick.itemId))
+            case .attraction:
+                phase = .attraction(try await AttractionsService.shared.fetchAttraction(id: pick.itemId))
+            }
+        } catch {
+            phase = .failed
         }
     }
 }

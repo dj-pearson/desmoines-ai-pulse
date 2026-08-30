@@ -1,9 +1,10 @@
 import React from "react";
-import { Star, Award, TrendingUp } from "lucide-react";
+import { Star, Award } from "lucide-react";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
 import { Progress } from "@/components/ui/progress";
 import { useUserReputation } from "@/hooks/useRatings";
+import { SpriteIcon } from "@/components/ui/SpriteIcon";
 
 interface UserReputationDisplayProps {
   userId: string;
@@ -111,7 +112,7 @@ export const UserReputationDisplay: React.FC<UserReputationDisplayProps> = ({
           
           <div className="text-center space-y-1">
             <div className="flex items-center justify-center gap-1">
-              <TrendingUp className="h-4 w-4 text-green-500" />
+              <SpriteIcon name="trending-up" className="h-4 w-4 text-green-500" />
               <span className="text-2xl font-bold">{reputation.helpful_votes}</span>
             </div>
             <p className="text-sm text-muted-foreground">Helpful Votes</p>
@@ -141,7 +142,7 @@ export const UserReputationDisplay: React.FC<UserReputationDisplayProps> = ({
         {levelInfo.nextThreshold && (
           <div className="bg-muted/50 rounded-lg p-4 space-y-2">
             <h4 className="font-medium text-sm flex items-center gap-2">
-              <TrendingUp className="h-4 w-4" />
+              <SpriteIcon name="trending-up" className="h-4 w-4" />
               Keep Going!
             </h4>
             <p className="text-sm text-muted-foreground">

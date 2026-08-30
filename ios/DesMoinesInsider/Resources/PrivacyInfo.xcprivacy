@@ -22,10 +22,16 @@
 	<!-- NSPrivacyCollectedDataTypes: What data the app collects -->
 	<key>NSPrivacyCollectedDataTypes</key>
 	<array>
-		<!-- Location data — used for nearby events/restaurants on the map -->
+		<!-- Location data — used for nearby events/restaurants on the map.
+		     Declared Coarse: LocationService requests when-in-use authorization
+		     with kCLLocationAccuracyHundredMeters and never requests full/best
+		     accuracy, so Precise would overstate collection (IOS-AUDIT-REL-002).
+		     Speech dictation prefers on-device recognition (requiresOnDeviceRecognition
+		     when supported), so recorded audio is not collected/transmitted by us;
+		     no Audio Data type is declared (IOS-AUDIT-SEC-009). -->
 		<dict>
 			<key>NSPrivacyCollectedDataType</key>
-			<string>NSPrivacyCollectedDataTypePreciseLocation</string>
+			<string>NSPrivacyCollectedDataTypeCoarseLocation</string>
 			<key>NSPrivacyCollectedDataTypeLinked</key>
 			<false/>
 			<key>NSPrivacyCollectedDataTypeTracking</key>
@@ -48,7 +54,11 @@
 				<string>NSPrivacyCollectedDataTypePurposeAppFunctionality</string>
 			</array>
 		</dict>
-		<!-- User ID — used for authentication (Supabase Auth) -->
+		<!-- User ID — used for authentication (Supabase Auth). Declared Linked
+		     because AdTrackingService writes the raw user_id (uuid) to the
+		     first-party ad_impressions table, linked to the account. (The
+		     AnalyticsService pipeline hashes the id, but the ad-telemetry link is
+		     what makes UserID Linked accurate here — IOS-AUDIT-REL-011.) -->
 		<dict>
 			<key>NSPrivacyCollectedDataType</key>
 			<string>NSPrivacyCollectedDataTypeUserID</string>
@@ -74,6 +84,22 @@
 				<string>NSPrivacyCollectedDataTypePurposeAppFunctionality</string>
 			</array>
 		</dict>
+		<!-- Product Interaction — ad impression/click telemetry (IOS-AUDIT-SEC-008),
+		     written to our own first-party Supabase tables, linked to the user id,
+		     consent-gated, never used to track across apps/sites. -->
+		<dict>
+			<key>NSPrivacyCollectedDataType</key>
+			<string>NSPrivacyCollectedDataTypeProductInteraction</string>
+			<key>NSPrivacyCollectedDataTypeLinked</key>
+			<true/>
+			<key>NSPrivacyCollectedDataTypeTracking</key>
+			<false/>
+			<key>NSPrivacyCollectedDataTypePurposes</key>
+			<array>
+				<string>NSPrivacyCollectedDataTypePurposeAnalytics</string>
+				<string>NSPrivacyCollectedDataTypePurposeAppFunctionality</string>
+			</array>
+		</dict>
 	</array>
 
 	<!-- NSPrivacyAccessedAPITypes: Required-reason APIs used by the app -->
@@ -88,24 +114,29 @@
 				<string>CA92.1</string>
 			</array>
 		</dict>
-		<!-- File timestamp APIs — used by QueryCache for disk cache TTL expiration -->
+		<!-- File timestamp APIs. QueryCache reads modification dates to expire
+		     cached responses, and CachedAsyncImage reads them to evict the oldest
+		     images. Both are inside the app container.
+		     Reason 3B52.1, not C617.1: C617.1 is "display file timestamps to the
+		     person using the device", which this app never does. 3B52.1 covers
+		     timestamps of files inside the app container, which is the actual use.
+		     (IOS-AUDIT-REL-014) -->
 		<dict>
 			<key>NSPrivacyAccessedAPIType</key>
 			<string>NSPrivacyAccessedAPICategoryFileTimestamp</string>
 			<key>NSPrivacyAccessedAPITypeReasons</key>
 			<array>
-				<string>C617.1</string>
+				<string>3B52.1</string>
 			</array>
 		</dict>
-		<!-- Disk space APIs — used to check available storage before caching -->
-		<dict>
-			<key>NSPrivacyAccessedAPIType</key>
-			<string>NSPrivacyAccessedAPICategoryDiskSpace</string>
-			<key>NSPrivacyAccessedAPITypeReasons</key>
-			<array>
-				<string>E174.1</string>
-			</array>
-		</dict>
+		<!-- DiskSpace was declared here and is used NOWHERE: no
+		     volumeAvailableCapacity, no attributesOfFileSystem, no statfs, in this
+		     app or in supabase-swift. The comment claimed "used to check available
+		     storage before caching"; the caches evict by age and count instead.
+		     Removed rather than left as a harmless extra - a manifest exists to be
+		     true, and scripts/check-privacy-manifest.mjs now fails the build if a
+		     disk-space API is added without restoring this entry.
+		     (IOS-AUDIT-REL-014) -->
 	</array>
 </dict>
 </plist>

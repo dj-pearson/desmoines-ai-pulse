@@ -54,12 +54,12 @@ import androidx.compose.ui.unit.dp
 import com.desmoines.aipulse.data.model.DateFilterPreset
 import com.desmoines.aipulse.data.model.EventCategory
 import com.desmoines.aipulse.data.model.SubscriptionTier
-import com.desmoines.aipulse.ui.components.PremiumGate
 import com.desmoines.aipulse.ui.components.icon
 import com.desmoines.aipulse.ui.theme.BrandOrange
 import com.desmoines.aipulse.ui.theme.DesMoinesInsiderTheme
 import com.desmoines.aipulse.ui.theme.Dimens
 import kotlin.math.roundToInt
+import java.util.Locale
 
 /**
  * Event filter bottom sheet matching iOS FilterSheet.swift.
@@ -223,12 +223,13 @@ fun FilterSheet(
             }
             Spacer(modifier = Modifier.height(Dimens.SpacingSm))
 
-            PremiumGate(
-                requiredTier = SubscriptionTier.INSIDER,
-                feature = "Distance radius, free events filter, and minimum rating",
-                currentTier = currentTier,
-                onUpgradeClick = onUpgradeClick,
-            ) {
+            val hasInsiderAccess =
+                currentTier == SubscriptionTier.INSIDER || currentTier == SubscriptionTier.VIP
+            if (!hasInsiderAccess) {
+                // Free users see the premium filters laid out but locked, so they know
+                // what's behind the gate; any tap opens the contextual paywall (ANDP-074).
+                LockedPremiumFilters(onUpgradeClick = onUpgradeClick)
+            } else {
                 Column {
                     // Free Events Only
                     Row(
@@ -360,14 +361,14 @@ fun FilterSheet(
                         }
                     } else {
                         Text(
-                            text = "${String.format("%.1f", localMinRating)} stars",
+                            text = "${String.format(Locale.US, "%.1f", localMinRating)} stars",
                             style = MaterialTheme.typography.titleMedium,
                             fontWeight = FontWeight.SemiBold,
                             color = BrandOrange,
                             modifier = Modifier
                                 .fillMaxWidth()
                                 .semantics {
-                                    contentDescription = "${String.format("%.1f", localMinRating)} stars minimum rating"
+                                    contentDescription = "${String.format(Locale.US, "%.1f", localMinRating)} stars minimum rating"
                                 }
                         )
                         Slider(
@@ -535,6 +536,81 @@ private fun DatePresetGrid(
                 }
             }
         }
+    }
+}
+
+/**
+ * Free-tier rendering of the premium (Insider) filters: the options are shown so
+ * the user knows what's gated, each tagged with a lock, and the whole block opens
+ * the contextual paywall on tap (ANDP-074).
+ */
+@Composable
+private fun LockedPremiumFilters(onUpgradeClick: () -> Unit) {
+    Surface(
+        onClick = onUpgradeClick,
+        shape = RoundedCornerShape(14.dp),
+        color = MaterialTheme.colorScheme.surfaceVariant.copy(alpha = 0.5f),
+        modifier = Modifier
+            .fillMaxWidth()
+            .semantics {
+                contentDescription =
+                    "Insider filters: Free Events Only, Max Distance, and Min Rating. Tap to upgrade."
+            },
+    ) {
+        Column(modifier = Modifier.padding(Dimens.SpacingMd)) {
+            LockedFilterRow(Icons.Filled.ConfirmationNumber, "Free Events Only", MaterialTheme.colorScheme.primary)
+            Spacer(modifier = Modifier.height(Dimens.SpacingMd))
+            LockedFilterRow(Icons.Filled.Map, "Max Distance", MaterialTheme.colorScheme.primary)
+            Spacer(modifier = Modifier.height(Dimens.SpacingMd))
+            LockedFilterRow(Icons.Filled.Star, "Min Rating", BrandOrange)
+
+            Spacer(modifier = Modifier.height(Dimens.SpacingLg))
+            Button(
+                onClick = onUpgradeClick,
+                modifier = Modifier.fillMaxWidth(),
+                shape = RoundedCornerShape(10.dp),
+            ) {
+                Text(
+                    text = "Unlock with Insider",
+                    style = MaterialTheme.typography.labelMedium,
+                    fontWeight = FontWeight.SemiBold,
+                )
+            }
+        }
+    }
+}
+
+@Composable
+private fun LockedFilterRow(
+    icon: androidx.compose.ui.graphics.vector.ImageVector,
+    label: String,
+    tint: androidx.compose.ui.graphics.Color,
+) {
+    Row(
+        modifier = Modifier.fillMaxWidth(),
+        verticalAlignment = Alignment.CenterVertically,
+        horizontalArrangement = Arrangement.SpaceBetween,
+    ) {
+        Row(verticalAlignment = Alignment.CenterVertically) {
+            Icon(
+                imageVector = icon,
+                contentDescription = null,
+                tint = tint.copy(alpha = 0.6f),
+                modifier = Modifier.size(20.dp),
+            )
+            Spacer(modifier = Modifier.width(Dimens.SpacingSm))
+            Text(
+                text = label,
+                style = MaterialTheme.typography.bodyLarge,
+                color = MaterialTheme.colorScheme.onSurfaceVariant,
+            )
+        }
+        Icon(
+            imageVector = Icons.Filled.Lock,
+            contentDescription = null,
+            tint = MaterialTheme.colorScheme.onSurfaceVariant,
+            modifier = Modifier.size(16.dp),
+        )
     }
 }
 

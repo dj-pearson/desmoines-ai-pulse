@@ -29,6 +29,10 @@ struct Event: Identifiable, Codable, Hashable {
     var seoKeywords: [String]?
     var createdAt: String?
     var updatedAt: String?
+    /// First-party sponsored-listing flag (IOS-ADS-011). Set by the backend
+    /// while a paid sponsorship is active; `sponsored_until` is informational.
+    var isSponsored: Bool?
+    var sponsoredUntil: String?
 
     enum CodingKeys: String, CodingKey {
         case id, title, date, location, venue, city, category, price
@@ -49,6 +53,8 @@ struct Event: Identifiable, Codable, Hashable {
         case seoKeywords = "seo_keywords"
         case createdAt = "created_at"
         case updatedAt = "updated_at"
+        case isSponsored = "is_sponsored"
+        case sponsoredUntil = "sponsored_until"
     }
 
     // MARK: - Computed Properties
@@ -57,13 +63,19 @@ struct Event: Identifiable, Codable, Hashable {
         EventCategory(from: category)
     }
 
+    /// Whether this listing currently carries an active paid sponsorship
+    /// (IOS-ADS-011). Mirrors the web, which keys off the `is_sponsored` flag
+    /// the backend maintains; `sponsored_until` is exposed for display/debugging.
+    var isActivelySponsored: Bool { isSponsored == true }
+
     var parsedDate: Date? {
         DateParser.parse(date)
     }
 
     var coordinate: CLLocationCoordinate2D? {
-        guard let lat = latitude, let lng = longitude,
-              lat != 0, lng != 0 else { return nil }
+        // A missing coordinate is null in the DB (Double? == nil); a literal 0.0
+        // is a valid location and must not be masked (IOS-AUDIT-BUG-016).
+        guard let lat = latitude, let lng = longitude else { return nil }
         return CLLocationCoordinate2D(latitude: lat, longitude: lng)
     }
 

@@ -122,6 +122,18 @@
     <string name="webview_timeout_title">Page Took Too Long</string>
     <string name="webview_timeout_message">The page didn\'t load within 30 seconds. Check your connection and try again.</string>
 
+    <!-- App Shortcuts (launcher long-press / Assistant) -->
+    <string name="shortcut_ask_pulse_short">Ask Pulse</string>
+    <string name="shortcut_ask_pulse_long">Ask Pulse what to do</string>
+    <string name="shortcut_ask_pulse_disabled">Open the app to ask Pulse</string>
+    <string name="shortcut_find_restaurants_short">Find Restaurants</string>
+    <string name="shortcut_find_restaurants_long">Find Des Moines restaurants</string>
+    <string name="shortcut_find_restaurants_disabled">Open the app to find restaurants</string>
+    <string name="shortcut_find_events_short">Find Events</string>
+    <string name="shortcut_find_events_long">Find Des Moines events</string>
+    <string name="shortcut_find_events_disabled">Open the app to find events</string>
+    <string name="shortcut_ask_pulse_default_query">What\'s good in Des Moines tonight?</string>
+
     <!-- Accessibility -->
     <string name="a11y_tab_format">%1$s, tab %2$d of %3$d</string>
     <string name="a11y_tab_selected">, selected</string>

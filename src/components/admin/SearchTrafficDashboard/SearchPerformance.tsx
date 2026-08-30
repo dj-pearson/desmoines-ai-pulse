@@ -55,7 +55,7 @@ export function SearchPerformance({ dateRange, propertyId, connectedProviders }:
 
       // Build base query against gsc_page_performance
       let query = supabase
-        .from("gsc_page_performance" as any)
+        .from("gsc_page_performance")
         .select("page_url, date, impressions, clicks, ctr, position")
         .gte("date", format(dateRange.from, "yyyy-MM-dd"))
         .lte("date", format(dateRange.to, "yyyy-MM-dd"))
