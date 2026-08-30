@@ -7,7 +7,17 @@
  * safety at the boundary - the point is that tsc can then check everything
  * INSIDE our own modules, which nothing checks today.
  *
- * Add a name here when a new remote import needs one. Keep them `any`: a
+ * Add a name here when a new remote import needs one - tsconfig.edge.json maps
+ * https://*, jsr:* and npm:* here, so a missing name fails type-check:edge on
+ * EVERY branch, not just the one that added the import. That is how parseISO,
+ * fromZonedTime, assertFalse and assertThrows broke CI repo-wide.
+ *
+ * A wildcard shorthand (`declare module "https://*";`) looks like it would end
+ * the maintenance, and does not: shorthand ambient modules resolve to a
+ * namespace, so type-position imports like SupabaseClient stop being usable as
+ * types and the error count goes from 5 to 30. The allowlist stays.
+ *
+ * Keep them `any`: a
  * hand-written approximation of the supabase-js types would be wrong in ways
  * nobody would notice, which is worse than declaring the boundary untyped.
  */
@@ -19,8 +29,13 @@ export const serve: any;
 export const DOMParser: any;
 export const Resvg: any;
 export const initWasm: any;
+// date-fns / date-fns-tz
+export const parseISO: any;
+export const fromZonedTime: any;
 export const Webhook: any;
 export const assert: any;
+export const assertFalse: any;
+export const assertThrows: any;
 export const assertEquals: any;
 export const assertStringIncludes: any;
 export const init: any;

@@ -11,7 +11,11 @@
     "strictNullChecks": false,
     "noImplicitAny": false,
     "types": [],
-    "paths": { "https://*": ["./supabase/functions/_typecheck/remote.d.ts"] }
+    "paths": {
+      "https://*": ["./supabase/functions/_typecheck/remote.d.ts"],
+      "jsr:*": ["./supabase/functions/_typecheck/remote.d.ts"],
+      "npm:*": ["./supabase/functions/_typecheck/remote.d.ts"]
+    }
   },
   "include": [
     "supabase/functions/_typecheck/*.d.ts",
