@@ -8,29 +8,7 @@ import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
 import { Alert, AlertDescription } from "@/components/ui/alert";
 import { Progress } from "@/components/ui/progress";
-import {
-  Calendar,
-  Plus,
-  User,
-  Settings,
-  Eye,
-  Edit,
-  Trash2,
-  Clock,
-  CheckCircle,
-  XCircle,
-  AlertTriangle,
-  ArrowLeft,
-  Megaphone,
-  Crown,
-  Sparkles,
-  Heart,
-  Bell,
-  Zap,
-  Upload,
-  BarChart3,
-  DollarSign
-} from "lucide-react";
+import { Plus, User, Settings, Eye, Edit, Trash2, CheckCircle, XCircle, AlertTriangle, ArrowLeft, Megaphone, Crown, Heart, Bell, Zap, Upload, BarChart3, DollarSign } from "lucide-react";
 import { useAuth } from "@/hooks/useAuth";
 import { useUserSubmittedEvents, useDeleteEvent } from "@/hooks/useUserSubmittedEvents";
 import { useSubscription } from "@/hooks/useSubscription";
@@ -45,6 +23,7 @@ import { EmailPreferencesCard } from "@/components/EmailPreferencesCard";
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogTrigger } from "@/components/ui/dialog";
 import { format } from "date-fns";
 import { toast } from "sonner";
+import { SpriteIcon } from "@/components/ui/SpriteIcon";
 
 const DASHBOARD_TABS = [
   "overview",
@@ -80,7 +59,7 @@ export default function UserDashboard() {
       case "needs_revision":
         return <AlertTriangle className="h-4 w-4 text-yellow-500" />;
       default:
-        return <Clock className="h-4 w-4 text-blue-500" />;
+        return <SpriteIcon name="clock" className="h-4 w-4 text-blue-500" />;
     }
   };
 
@@ -162,7 +141,7 @@ export default function UserDashboard() {
                 Submit Event
               </TabsTrigger>
               <TabsTrigger value="events" className="flex items-center gap-2">
-                <Calendar className="h-4 w-4" />
+                <SpriteIcon name="calendar" className="h-4 w-4" />
                 My Events
               </TabsTrigger>
               <TabsTrigger value="saved-searches" className="flex items-center gap-2">
@@ -189,7 +168,7 @@ export default function UserDashboard() {
                   <div className="flex items-center gap-4">
                     <div className={`p-3 rounded-full ${isPremium ? 'bg-amber-100 dark:bg-amber-900' : 'bg-slate-200 dark:bg-slate-700'}`}>
                       {isPremium ? (
-                        tier === 'vip' ? <Crown className="h-6 w-6 text-purple-500" /> : <Sparkles className="h-6 w-6 text-amber-500" />
+                        tier === 'vip' ? <Crown className="h-6 w-6 text-purple-500" /> : <SpriteIcon name="sparkles" className="h-6 w-6 text-amber-500" />
                       ) : (
                         <User className="h-6 w-6 text-slate-500" />
                       )}
@@ -252,7 +231,7 @@ export default function UserDashboard() {
               <Card>
                 <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
                   <CardTitle className="text-sm font-medium">Submitted Events</CardTitle>
-                  <Calendar className="h-4 w-4 text-muted-foreground" />
+                  <SpriteIcon name="calendar" className="h-4 w-4 text-muted-foreground" />
                 </CardHeader>
                 <CardContent>
                   <div className="text-2xl font-bold">{events?.length || 0}</div>
@@ -280,7 +259,7 @@ export default function UserDashboard() {
               <Card>
                 <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
                   <CardTitle className="text-sm font-medium">Pending Review</CardTitle>
-                  <Clock className="h-4 w-4 text-blue-500" />
+                  <SpriteIcon name="clock" className="h-4 w-4 text-blue-500" />
                 </CardHeader>
                 <CardContent>
                   <div className="text-2xl font-bold">
@@ -452,7 +431,7 @@ export default function UserDashboard() {
                   </div>
                 ) : (
                   <div className="text-center py-8">
-                    <Calendar className="h-12 w-12 text-muted-foreground mx-auto mb-4" />
+                    <SpriteIcon name="calendar" className="h-12 w-12 text-muted-foreground mx-auto mb-4" />
                     <h3 className="text-lg font-semibold mb-2">No events submitted yet</h3>
                     <p className="text-muted-foreground mb-4">
                       Start by submitting your first event to the community!
@@ -535,7 +514,7 @@ export default function UserDashboard() {
                               <div className="flex flex-wrap gap-3 text-sm text-muted-foreground">
                                 {campaign.start_date && campaign.end_date && (
                                   <span className="flex items-center gap-1">
-                                    <Calendar className="h-3 w-3" />
+                                    <SpriteIcon name="calendar" className="h-3 w-3" />
                                     {format(new Date(campaign.start_date), "MMM d")} - {format(new Date(campaign.end_date), "MMM d")}
                                   </span>
                                 )}

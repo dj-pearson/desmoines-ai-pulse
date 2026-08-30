@@ -31,14 +31,7 @@ import {
   createEventSlugWithCentralTime,
   formatEventDateShort,
 } from "@/lib/timezone";
-import {
-  Calendar,
-  MapPin,
-  DollarSign,
-  ExternalLink,
-  Sparkles,
-  ImageOff,
-} from "lucide-react";
+import { DollarSign, ImageOff } from "lucide-react";
 import { Link } from "react-router-dom";
 import { useState, useEffect, memo, useCallback, useRef } from "react";
 import { OptimizedImage } from "@/components/OptimizedImage";
@@ -46,6 +39,7 @@ import { SponsoredBadge } from "@/components/SponsoredBadge";
 import { isSponsoredActive, logSponsoredClick } from "@/lib/sponsored";
 import { useSponsoredImpression } from "@/hooks/useSponsoredImpression";
 import { getEventCategoryBadgeClass } from "@/lib/categoryStyles";
+import { SpriteIcon } from "@/components/ui/SpriteIcon";
 
 const createSlug = (name: string): string => {
   return name
@@ -147,7 +141,7 @@ function EventCardComponent({ event, onViewDetails }: EventCardProps) {
           {/* Distance Badge (only shown in Near Me mode) */}
           {(event as any).distance_meters && (
             <Badge variant="secondary" className="text-xs bg-primary text-primary-foreground shadow-lg">
-              <MapPin className="h-3 w-3 mr-1" />
+              <SpriteIcon name="map-pin" className="h-3 w-3 mr-1" />
               {((event as any).distance_meters * 0.000621371).toFixed(1)} mi
             </Badge>
           )}
@@ -178,12 +172,12 @@ function EventCardComponent({ event, onViewDetails }: EventCardProps) {
 
         <div className="space-y-2 text-sm text-neutral-600 dark:text-neutral-400">
           <div className="flex items-center">
-            <Calendar className="h-4 w-4 mr-2" aria-hidden="true" />
+            <SpriteIcon name="calendar" className="h-4 w-4 mr-2" aria-hidden="true" />
             <span>{formatEventDateShort(event)}</span>
           </div>
 
           <div className="flex items-center">
-            <MapPin className="h-4 w-4 mr-2" aria-hidden="true" />
+            <SpriteIcon name="map-pin" className="h-4 w-4 mr-2" aria-hidden="true" />
             <span>{event.venue || event.location}</span>
           </div>
 
@@ -216,7 +210,7 @@ function EventCardComponent({ event, onViewDetails }: EventCardProps) {
               )}`}
             >
               <Button variant="outline" size="sm" aria-label={`View full page for ${event.title}`}>
-                <ExternalLink className="h-4 w-4 mr-1" aria-hidden="true" />
+                <SpriteIcon name="external-link" className="h-4 w-4 mr-1" aria-hidden="true" />
                 Full Page
               </Button>
             </Link>

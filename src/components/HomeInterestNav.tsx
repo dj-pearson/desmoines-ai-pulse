@@ -1,12 +1,13 @@
 import { useMemo, useEffect } from "react";
 import { Link } from "react-router-dom";
-import { Calendar, UtensilsCrossed, Landmark, ArrowRight } from "lucide-react";
+import { Calendar, UtensilsCrossed, Landmark } from "lucide-react";
 import { readRecentlyViewed, engagementByType, type RecentlyViewedType } from "@/lib/recentlyViewed";
 import { computeHomeSectionOrder, type HomeSectionKey } from "@/lib/homeSectionOrder";
 import { storage } from "@/lib/safeStorage";
 import { supabase } from "@/integrations/supabase/client";
 import { getSessionId } from "@/lib/adAnalytics";
 import { createLogger } from "@/lib/logger";
+import { SpriteIcon } from "@/components/ui/SpriteIcon";
 
 const log = createLogger("HomeInterestNav");
 
@@ -81,7 +82,7 @@ export function HomeInterestNav() {
                   <span className="block font-semibold">{d.label}</span>
                   <span className="block text-xs text-muted-foreground truncate">{d.blurb}</span>
                 </span>
-                <ArrowRight className="h-4 w-4 text-muted-foreground transition-transform group-hover:translate-x-0.5" aria-hidden="true" />
+                <SpriteIcon name="arrow-right" className="h-4 w-4 text-muted-foreground transition-transform group-hover:translate-x-0.5" aria-hidden="true" />
               </Link>
             );
           })}

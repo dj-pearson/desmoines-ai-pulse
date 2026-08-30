@@ -1,9 +1,10 @@
 import { Link } from "react-router-dom";
-import { Clock, X, Calendar, UtensilsCrossed, Landmark } from "lucide-react";
+import { X, Calendar, UtensilsCrossed, Landmark } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { useRecentlyViewedFeed } from "@/hooks/useRecentlyViewedFeed";
 import type { RecentlyViewedType } from "@/lib/recentlyViewed";
+import { SpriteIcon } from "@/components/ui/SpriteIcon";
 
 const TYPE_ICON: Record<RecentlyViewedType, typeof Calendar> = {
   event: Calendar,
@@ -23,7 +24,7 @@ export function RecentlyViewedList() {
     <Card>
       <CardHeader className="flex flex-row items-center justify-between space-y-0">
         <CardTitle className="flex items-center gap-2 text-base">
-          <Clock className="h-4 w-4 text-muted-foreground" aria-hidden="true" />
+          <SpriteIcon name="clock" className="h-4 w-4 text-muted-foreground" aria-hidden="true" />
           Recently viewed
         </CardTitle>
         {entries.length > 0 && (

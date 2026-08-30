@@ -1,6 +1,6 @@
 package com.desmoines.aipulse.data.repository
 
-import android.util.Log
+import com.desmoines.aipulse.util.AppLogger
 import com.desmoines.aipulse.data.local.CacheManager
 import com.desmoines.aipulse.data.model.Event
 import com.desmoines.aipulse.data.remote.EventsQuery
@@ -8,9 +8,6 @@ import com.desmoines.aipulse.data.remote.EventsRemoteDataSource
 import com.desmoines.aipulse.data.remote.EventsResponse
 import javax.inject.Inject
 import javax.inject.Singleton
-
-private const val TAG = "EventsRepository"
-
 /**
  * Repository implementation wrapping [EventsRemoteDataSource] with cache-first strategy.
  * Returns cached data immediately if fresh, fetches from remote otherwise.
@@ -41,7 +38,7 @@ class EventsRepositoryImpl @Inject constructor(
                 cacheManager.cacheEvents(cacheKey, response.events)
             }
         }.recoverCatching { error ->
-            Log.e(TAG, "fetchEvents failed, trying stale cache: ${error.message}", error)
+            AppLogger.network.error("fetchEvents failed, trying stale cache: ${error.message}", error)
             val stale = cacheManager.getCachedEvents(cacheKey, allowStale = true)
                 ?: throw error
             EventsResponse(events = stale, totalCount = stale.size, hasMore = false)
@@ -58,7 +55,7 @@ class EventsRepositoryImpl @Inject constructor(
             remoteDataSource.fetchEvent(id).also { event ->
                 cacheManager.cacheEvents(CacheManager.eventsKey("single", id), listOf(event))
             }
-        }.onFailure { Log.e(TAG, "fetchEvent($id) failed: ${it.message}", it) }
+        }.onFailure { AppLogger.network.error("fetchEvent($id) failed: ${it.message}", it) }
     }
 
     override suspend fun fetchFeaturedEvents(limit: Int): Result<List<Event>> {
@@ -73,7 +70,7 @@ class EventsRepositoryImpl @Inject constructor(
                 cacheManager.cacheEvents(cacheKey, events)
             }
         }.recoverCatching { error ->
-            Log.e(TAG, "fetchFeaturedEvents failed, trying stale cache: ${error.message}", error)
+            AppLogger.network.error("fetchFeaturedEvents failed, trying stale cache: ${error.message}", error)
             cacheManager.getCachedEvents(cacheKey, allowStale = true) ?: throw error
         }
     }
@@ -94,7 +91,7 @@ class EventsRepositoryImpl @Inject constructor(
                 cacheManager.cacheEvents(cacheKey, events)
             }
         }.recoverCatching { error ->
-            Log.e(TAG, "fetchRelatedEvents failed, trying stale cache: ${error.message}", error)
+            AppLogger.network.error("fetchRelatedEvents failed, trying stale cache: ${error.message}", error)
             cacheManager.getCachedEvents(cacheKey, allowStale = true) ?: throw error
         }
     }
@@ -111,7 +108,7 @@ class EventsRepositoryImpl @Inject constructor(
                 cacheManager.cacheEvents(cacheKey, events)
             }
         }.recoverCatching { error ->
-            Log.e(TAG, "fuzzySearchEvents failed, trying stale cache: ${error.message}", error)
+            AppLogger.network.error("fuzzySearchEvents failed, trying stale cache: ${error.message}", error)
             cacheManager.getCachedEvents(cacheKey, allowStale = true) ?: throw error
         }
     }
@@ -133,7 +130,7 @@ class EventsRepositoryImpl @Inject constructor(
                 cacheManager.cacheEvents(cacheKey, events)
             }
         }.recoverCatching { error ->
-            Log.e(TAG, "fetchNearbyEvents failed, trying stale cache: ${error.message}", error)
+            AppLogger.network.error("fetchNearbyEvents failed, trying stale cache: ${error.message}", error)
             cacheManager.getCachedEvents(cacheKey, allowStale = true) ?: throw error
         }
     }

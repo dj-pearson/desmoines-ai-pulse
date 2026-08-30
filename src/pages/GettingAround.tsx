@@ -5,7 +5,8 @@ import { Helmet } from 'react-helmet-async';
 import { Card, CardContent } from '@/components/ui/card';
 import { Badge } from '@/components/ui/badge';
 import { Button } from '@/components/ui/button';
-import { Car, Building, Bike, Plane, Bus, MapPin, Navigation, Footprints, ExternalLink } from 'lucide-react';
+import { Car, Building, Bike, Plane, Bus, Navigation, Footprints } from "lucide-react";
+import { SpriteIcon } from "@/components/ui/SpriteIcon";
 
 const PARKING_GARAGES = [
   { name: 'Capital Square Garage', address: '400 Locust St', rate: '$1/hr, $10 max', hours: '24/7', lat: 41.5867, lng: -93.6250 },
@@ -72,7 +73,7 @@ export default function GettingAround() {
                   <CardContent className="p-4">
                     <h3 className="font-semibold">{garage.name}</h3>
                     <p className="text-sm text-muted-foreground flex items-center gap-1 mt-1">
-                      <MapPin className="h-3 w-3" /> {garage.address}
+                      <SpriteIcon name="map-pin" className="h-3 w-3" /> {garage.address}
                     </p>
                     <div className="flex gap-2 mt-2 flex-wrap">
                       <Badge variant="outline">{garage.rate}</Badge>
@@ -128,7 +129,7 @@ export default function GettingAround() {
                 </ul>
                 <a href="https://desmoines.bcycle.com" target="_blank" rel="noopener noreferrer">
                   <Button variant="outline" size="sm">
-                    <ExternalLink className="h-4 w-4 mr-1" /> BCycle Website
+                    <SpriteIcon name="external-link" className="h-4 w-4 mr-1" /> BCycle Website
                   </Button>
                 </a>
               </CardContent>
@@ -207,7 +208,7 @@ export default function GettingAround() {
                 </ul>
                 <a href="https://www.ridedart.com" target="_blank" rel="noopener noreferrer">
                   <Button variant="outline" size="sm">
-                    <ExternalLink className="h-4 w-4 mr-1" /> DART Website
+                    <SpriteIcon name="external-link" className="h-4 w-4 mr-1" /> DART Website
                   </Button>
                 </a>
               </CardContent>

@@ -1,5 +1,6 @@
 package com.desmoines.aipulse.data.model
 
+import com.desmoines.aipulse.util.UiFormatLocale
 import androidx.compose.runtime.Immutable
 import kotlinx.serialization.SerialName
 import kotlinx.serialization.Serializable
@@ -68,7 +69,7 @@ data class Review(
 
     companion object {
         private val HIDDEN_STATUSES = setOf("pending", "flagged", "rejected")
-        private val DATE_FORMAT = DateTimeFormatter.ofPattern("MMM d, yyyy", Locale.US)
+        private val DATE_FORMAT = DateTimeFormatter.ofPattern("MMM d, yyyy", UiFormatLocale)
     }
 }
 

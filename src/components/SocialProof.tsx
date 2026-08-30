@@ -1,6 +1,7 @@
-import { Calendar, MapPin, Sparkles, Users } from "lucide-react";
+import { Calendar, MapPin, Sparkles } from "lucide-react";
 import { Badge } from "@/components/ui/badge";
 import { useHomepageStats } from "@/hooks/useHomepageStats";
+import { SpriteIcon } from "@/components/ui/SpriteIcon";
 
 /**
  * WEB-SEO-016: this section used to be built almost entirely from invented
@@ -64,7 +65,7 @@ export function SocialProof() {
 
         <div className="text-center">
           <Badge variant="secondary" className="mb-3">
-            <Users className="h-3 w-3 mr-1" aria-hidden="true" />
+            <SpriteIcon name="users" className="h-3 w-3 mr-1" aria-hidden="true" />
             Metro Coverage
           </Badge>
           <h2 className="text-3xl font-bold mb-3">Covering the Des Moines Metro</h2>

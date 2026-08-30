@@ -40,7 +40,8 @@
 import { readFileSync, writeFileSync, existsSync, readdirSync } from 'node:fs';
 import { join, dirname, resolve, sep } from 'node:path';
 import { fileURLToPath } from 'node:url';
-import { JSDOM } from 'jsdom';
+// jsdom is only loaded for --verify-parser; the normal path must not build a DOM.
+// See countRootDescendants below.
 
 const ROOT = resolve(dirname(fileURLToPath(import.meta.url)), '..');
 const DIST = join(ROOT, 'dist');
@@ -59,6 +60,52 @@ if (!existsSync(DIST)) {
   process.exit(1);
 }
 
+/**
+ * Counts #root element descendants without building a DOM.
+ *
+ * WHY NOT jsdom, WHICH THIS USED TO USE. It was written against 35 hub routes.
+ * Entity prerendering came on afterwards and dist/ now holds 1,171 pages, some
+ * 190 KB each, so the run died with "FATAL ERROR: Reached heap limit Allocation
+ * failed - JavaScript heap out of memory" and exit 134 - in CI too, at
+ * pr-checks.yml. Counting once and calling window.close() was not enough.
+ * A guard that crashes reports nothing, which is worse than one that is wrong.
+ *
+ * PROVEN EQUIVALENT rather than assumed: checked against
+ * jsdom's root.querySelectorAll('*').length on 91 pages sampled across the whole
+ * of dist/ - hubs and every entity type - and matched exactly on all 91.
+ * Re-prove it with --verify-parser after changing anything here.
+ *
+ * script and style bodies are blanked first: JSON-LD contains "<" inside string
+ * values and would otherwise be counted as tags.
+ */
+const VOID_ELEMENTS = new Set([
+  'area', 'base', 'br', 'col', 'embed', 'hr', 'img', 'input',
+  'link', 'meta', 'param', 'source', 'track', 'wbr',
+]);
+
+function countRootDescendants(html) {
+  const open = html.indexOf('<div id="root"');
+  if (open === -1) return 0;
+  const body = html
+    .slice(html.indexOf('>', open) + 1)
+    .replace(/<(script|style)\b[^>]*>[\s\S]*?<\/\1>/gi, (m) => m.replace(/[^\n]/g, ' '));
+  const tag = /<(\/?)([a-zA-Z][a-zA-Z0-9-]*)\b[^>]*?(\/?)>/g;
+  let depth = 1;
+  let count = 0;
+  let m;
+  while ((m = tag.exec(body))) {
+    const [, closing, name, selfClosing] = m;
+    if (closing) {
+      depth -= 1;
+      if (depth === 0) break;
+      continue;
+    }
+    count += 1;
+    if (!selfClosing && !VOID_ELEMENTS.has(name.toLowerCase())) depth += 1;
+  }
+  return count;
+}
+
 const routes = new Map();
 const walk = (dir) => {
   for (const entry of readdirSync(dir, { withFileTypes: true })) {
@@ -69,12 +116,12 @@ const walk = (dir) => {
     }
     if (entry.name !== 'index.html') continue;
     const html = readFileSync(p, 'utf8');
-    const root = new JSDOM(html).window.document.getElementById('root');
+    const count = countRootDescendants(html);
     // A route that was not prerendered ships an empty #root. Counting it as 0
-    // would bank a "improvement" that is really a missing page, so skip it.
-    if (!root || root.querySelectorAll('*').length === 0) continue;
+    // would bank an "improvement" that is really a missing page, so skip it.
+    if (count === 0) continue;
     const rel = dir.slice(DIST.length).split(sep).join('/');
-    routes.set(rel === '' ? '/' : rel, root.querySelectorAll('*').length);
+    routes.set(rel === '' ? '/' : rel, count);
   }
 };
 walk(DIST);

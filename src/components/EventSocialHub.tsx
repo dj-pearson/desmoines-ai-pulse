@@ -8,22 +8,12 @@ import { Avatar, AvatarFallback, AvatarImage } from '@/components/ui/avatar';
 import { Separator } from '@/components/ui/separator';
 import { useEventSocial } from '@/hooks/useEventSocial';
 import { useAuth } from '@/hooks/useAuth';
-import {
-  Users,
-  MessageCircle,
-  Heart,
-  MapPin,
-  Clock,
-  Camera,
-  Send,
-  UserCheck,
-  TrendingUp,
-  Calendar,
-} from 'lucide-react';
+import { MessageCircle, Heart, Camera, Send, UserCheck } from "lucide-react";
 import { formatDistanceToNow } from 'date-fns';
 import { EventPhotoUpload } from './EventPhotoUpload';
 import { EventPhotoGallery } from './EventPhotoGallery';
 import { EventFriendFinder } from './EventFriendFinder';
+import { SpriteIcon } from "@/components/ui/SpriteIcon";
 
 interface EventSocialHubProps {
   eventId: string;
@@ -103,7 +93,7 @@ export function EventSocialHub({ eventId, eventTitle, eventDate, eventLatitude, 
           <div className="grid grid-cols-2 md:grid-cols-4 gap-4 text-center">
             <div className="space-y-2">
               <div className="flex items-center justify-center">
-                <Users className="h-5 w-5 text-primary mr-2" />
+                <SpriteIcon name="users" className="h-5 w-5 text-primary mr-2" />
                 <span className="text-2xl font-bold text-primary">
                   {liveStats?.current_attendees || 0}
                 </span>
@@ -130,7 +120,7 @@ export function EventSocialHub({ eventId, eventTitle, eventDate, eventLatitude, 
             </div>
             <div className="space-y-2">
               <div className="flex items-center justify-center">
-                <TrendingUp className="h-5 w-5 text-orange-600 mr-2" />
+                <SpriteIcon name="trending-up" className="h-5 w-5 text-orange-600 mr-2" />
                 <span className="text-2xl font-bold text-orange-600">
                   {Math.round(Math.random() * 100)}%
                 </span>
@@ -165,7 +155,7 @@ export function EventSocialHub({ eventId, eventTitle, eventDate, eventLatitude, 
               <div className="flex items-end">
                 {!isCheckedIn ? (
                   <Button onClick={checkInToEvent} className="bg-green-600 hover:bg-green-700">
-                    <MapPin className="h-4 w-4 mr-2" />
+                    <SpriteIcon name="map-pin" className="h-4 w-4 mr-2" />
                     Check In
                   </Button>
                 ) : (
@@ -202,7 +192,7 @@ export function EventSocialHub({ eventId, eventTitle, eventDate, eventLatitude, 
           <Card>
             <CardHeader>
               <CardTitle className="flex items-center">
-                <TrendingUp className="h-5 w-5 mr-2" />
+                <SpriteIcon name="trending-up" className="h-5 w-5 mr-2" />
                 Live Event Feed
               </CardTitle>
             </CardHeader>
@@ -268,7 +258,7 @@ export function EventSocialHub({ eventId, eventTitle, eventDate, eventLatitude, 
           <Card>
             <CardHeader>
               <CardTitle className="flex items-center">
-                <Users className="h-5 w-5 mr-2" />
+                <SpriteIcon name="users" className="h-5 w-5 mr-2" />
                 Who's Going
               </CardTitle>
             </CardHeader>
@@ -295,7 +285,7 @@ export function EventSocialHub({ eventId, eventTitle, eventDate, eventLatitude, 
                 
                 {attendees.length === 0 && (
                   <div className="text-center py-8 text-muted-foreground">
-                    <Users className="h-12 w-12 mx-auto mb-4 opacity-50" />
+                    <SpriteIcon name="users" className="h-12 w-12 mx-auto mb-4 opacity-50" />
                     <p>No one has RSVP'd yet. Be the first!</p>
                   </div>
                 )}

@@ -1,6 +1,6 @@
 package com.desmoines.aipulse.ui.screens.home
 
-import android.util.Log
+import com.desmoines.aipulse.util.AppLogger
 import androidx.lifecycle.ViewModel
 import androidx.lifecycle.viewModelScope
 import com.desmoines.aipulse.data.model.DateFilterPreset
@@ -36,9 +36,6 @@ import kotlinx.coroutines.flow.update
 import kotlinx.coroutines.launch
 import java.time.format.DateTimeFormatter
 import javax.inject.Inject
-
-private const val TAG = "EventsViewModel"
-
 /**
  * ViewModel for the Home screen / events feed.
  * Mirrors iOS EventsViewModel.swift — handles fetching, filtering, pagination, caching.
@@ -361,7 +358,7 @@ class EventsViewModel @Inject constructor(
                 val existingIds: Set<String> = if (reset) emptySet() else seenEventIds
                 val check = PaginationGuard.validatePage(response.events, pageSize, existingIds) { it.id }
                 if (check is PaginationGuard.Result.Invalid) {
-                    Log.w(TAG, "events pagination guard tripped: ${check.reason}")
+                    AppLogger.ui.warning("events pagination guard tripped: ${check.reason}")
                     _hasMore.value = false
                     _errorMessage.value = "Something went wrong loading events. Pull to refresh."
                     return@onSuccess
@@ -383,7 +380,7 @@ class EventsViewModel @Inject constructor(
             }
             .onFailure { error ->
                 if (!eventsFetch.isCurrent(token)) return@onFailure
-                Log.e(TAG, "fetchEvents failed: ${error.message}", error)
+                AppLogger.ui.error("fetchEvents failed: ${error.message}", error)
                 // If offline and we have cached data, don't overwrite with an error
                 if (_events.value.isEmpty()) {
                     _errorMessage.value = error.message ?: "Failed to load events"
@@ -407,7 +404,7 @@ class EventsViewModel @Inject constructor(
                 _featuredEvents.value = featured
             }
             .onFailure { error ->
-                Log.e(TAG, "fetchFeaturedEvents failed: ${error.message}", error)
+                AppLogger.ui.error("fetchFeaturedEvents failed: ${error.message}", error)
                 // Keep existing cached featured events on failure
             }
     }
@@ -426,7 +423,7 @@ class EventsViewModel @Inject constructor(
         ).onSuccess { response ->
             _restaurants.value = response.restaurants
         }.onFailure { error ->
-            Log.e(TAG, "fetchPopularRestaurants failed: ${error.message}", error)
+            AppLogger.ui.error("fetchPopularRestaurants failed: ${error.message}", error)
         }
     }
 

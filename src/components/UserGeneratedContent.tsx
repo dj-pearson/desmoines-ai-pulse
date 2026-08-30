@@ -1,11 +1,12 @@
 import React, { useState, useEffect } from 'react';
-import { MessageSquare, ThumbsUp, Star, MapPin, Clock, User, Send } from 'lucide-react';
+import { MessageSquare, ThumbsUp, Star, User, Send } from "lucide-react";
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { Badge } from '@/components/ui/badge';
 import { Button } from '@/components/ui/button';
 import { Textarea } from '@/components/ui/textarea';
 import { Input } from '@/components/ui/input';
 import { createLogger } from '@/lib/logger';
+import { SpriteIcon } from "@/components/ui/SpriteIcon";
 
 const log = createLogger('UserGeneratedContent');
 
@@ -218,7 +219,7 @@ export default function UserGeneratedContent() {
       <Card className="bg-gradient-to-r from-green-50 to-blue-50 border-green-200">
         <CardHeader>
           <CardTitle className="flex items-center gap-2">
-            <Clock className="h-5 w-5 text-green-600" />
+            <SpriteIcon name="clock" className="h-5 w-5 text-green-600" />
             Latest Community Updates
           </CardTitle>
         </CardHeader>
@@ -321,7 +322,7 @@ export default function UserGeneratedContent() {
                   Reply
                 </Button>
                 <Button variant="ghost" size="sm" className="h-8 px-2">
-                  <MapPin className="h-4 w-4 mr-1" />
+                  <SpriteIcon name="map-pin" className="h-4 w-4 mr-1" />
                   View Business
                 </Button>
               </div>

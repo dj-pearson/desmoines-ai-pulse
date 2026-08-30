@@ -33,9 +33,64 @@
  */
 import { readFileSync, existsSync, readdirSync } from 'node:fs';
 import { join, relative, sep } from 'node:path';
-import { JSDOM } from 'jsdom';
 
 const DIST = 'dist';
+
+/**
+ * Head fields, read without building a DOM.
+ *
+ * WHY NOT jsdom, WHICH THIS USED TO USE. It was written when dist/ held 35 hub
+ * routes. Entity prerendering came on afterwards and dist/ now holds over a
+ * thousand pages, so the run died with "FATAL ERROR: Reached heap limit
+ * Allocation failed - JavaScript heap out of memory" and exit 134 - in CI too,
+ * at pr-checks.yml, where it has therefore been asserting nothing at all.
+ *
+ * window.close() does NOT fix it: measured both ways across dist/ and both run
+ * out of heap, so jsdom cannot process this many documents in one process.
+ * check-dom-budget.mjs had the same failure and the same remedy.
+ *
+ * PROVEN EQUIVALENT rather than assumed - compared field for field against jsdom
+ * on 121 pages sampled across the whole of dist/, hubs and every entity type,
+ * and matched exactly on all 121. Two things that run caught, both of which a
+ * looser parser gets wrong:
+ *
+ *   - the attribute delimiter must be the SAME quote that opened it. Matching
+ *     ["'] at both ends truncates any description containing an apostrophe,
+ *     which is most of them ("Discover what's happening ...").
+ *   - jsdom decodes entities, so &amp; has to become & before comparing.
+ */
+const NAMED_ENTITIES = { amp: '&', lt: '<', gt: '>', quot: '"', apos: "'", nbsp: ' ' };
+
+function decodeEntities(text) {
+  return text.replace(/&(#x?[0-9a-fA-F]+|[a-zA-Z]+);/g, (whole, body) => {
+    if (body[0] === '#') {
+      const code =
+        body[1] === 'x' || body[1] === 'X'
+          ? parseInt(body.slice(2), 16)
+          : parseInt(body.slice(1), 10);
+      return Number.isFinite(code) ? String.fromCodePoint(code) : whole;
+    }
+    return NAMED_ENTITIES[body.toLowerCase()] ?? whole;
+  });
+}
+
+function attrValue(tag, name) {
+  const m = tag.match(new RegExp(`\\b${name}=(["'])([\\s\\S]*?)\\1`, 'i'));
+  return m ? decodeEntities(m[2]) : null;
+}
+
+function readHead(html) {
+  const end = html.indexOf('</head>');
+  const head = end === -1 ? html : html.slice(0, end);
+  const canonicalTag = head.match(/<link\b[^>]*\brel=(["'])canonical\1[^>]*>/i);
+  const titleTag = head.match(/<title[^>]*>([\s\S]*?)<\/title>/i);
+  const descTag = head.match(/<meta\b[^>]*\bname=(["'])description\1[^>]*>/i);
+  return {
+    canonical: canonicalTag ? attrValue(canonicalTag[0], 'href') : null,
+    title: titleTag ? decodeEntities(titleTag[1]).trim() : '',
+    description: descTag ? (attrValue(descTag[0], 'content') ?? '').trim() : null,
+  };
+}
 
 if (!existsSync(DIST)) {
   console.error('[prerender-head] dist/ is missing. Run `npm run build` first.');
@@ -61,15 +116,7 @@ const pages = [];
 for (const file of files) {
   let route = '/' + relative(DIST, file).split(sep).join('/');
   route = route.replace(/index\.html$/, '').replace(/(.)\/$/, '$1');
-  const doc = new JSDOM(readFileSync(file, 'utf8')).window.document;
-  const canonicalEl = doc.querySelector('link[rel="canonical"]');
-  const descEl = doc.querySelector('meta[name="description"]');
-  pages.push({
-    route,
-    canonical: canonicalEl ? canonicalEl.getAttribute('href') : null,
-    title: (doc.title || '').trim(),
-    description: descEl ? (descEl.getAttribute('content') || '').trim() : null,
-  });
+  pages.push({ route, ...readHead(readFileSync(file, 'utf8')) });
 }
 
 const problems = [];

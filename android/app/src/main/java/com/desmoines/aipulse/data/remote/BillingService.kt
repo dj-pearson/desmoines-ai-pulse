@@ -1,8 +1,8 @@
 package com.desmoines.aipulse.data.remote
 
+import com.desmoines.aipulse.util.AppLogger
 import android.app.Activity
 import android.content.Context
-import android.util.Log
 import com.android.billingclient.api.BillingClient
 import com.android.billingclient.api.BillingClientStateListener
 import com.android.billingclient.api.BillingFlowParams
@@ -46,9 +46,6 @@ import kotlinx.serialization.json.put
 import javax.inject.Inject
 import javax.inject.Singleton
 import kotlin.coroutines.resume
-
-private const val TAG = "BillingService"
-
 /**
  * Manages Google Play Billing for subscription purchases.
  * Mirrors iOS StoreKitService.swift — same tier structure, retry logic, and grace period approach.
@@ -145,18 +142,18 @@ class BillingService internal constructor(
             override fun onBillingSetupFinished(result: BillingResult) {
                 if (result.responseCode == BillingClient.BillingResponseCode.OK) {
                     isConnected = true
-                    Log.i(TAG, "Billing client connected")
+                    AppLogger.billing.info("Billing client connected")
                     scope.launch { loadProducts() }
                     scope.launch { updatePurchasedProducts() }
                 } else {
                     isConnected = false
-                    Log.w(TAG, "Billing setup failed: ${result.debugMessage}")
+                    AppLogger.billing.warning("Billing setup failed: ${result.debugMessage}")
                 }
             }
 
             override fun onBillingServiceDisconnected() {
                 isConnected = false
-                Log.w(TAG, "Billing service disconnected, will reconnect on next operation")
+                AppLogger.billing.warning("Billing service disconnected, will reconnect on next operation")
             }
         })
     }
@@ -216,11 +213,11 @@ class BillingService internal constructor(
             }
             if (details.isEmpty()) {
                 _errorMessage.value = BillingError.PRODUCT_LOAD_FAILED.message
-                Log.w(TAG, "No products found for IDs: ${Config.SUBSCRIPTION_PRODUCT_IDS}")
+                AppLogger.billing.warning("No products found for IDs: ${Config.SUBSCRIPTION_PRODUCT_IDS}")
             }
         } else {
             _errorMessage.value = BillingError.PRODUCT_LOAD_FAILED.message
-            Log.w(TAG, "Product query failed: ${result.billingResult.debugMessage}")
+            AppLogger.billing.warning("Product query failed: ${result.billingResult.debugMessage}")
         }
 
         _isLoading.value = false
@@ -283,7 +280,7 @@ class BillingService internal constructor(
         purchaseWatchdog = scope.launch {
             delay(PURCHASE_FLOW_TIMEOUT_MS)
             if (_isLoading.value) {
-                Log.w(TAG, "No purchase result after ${PURCHASE_FLOW_TIMEOUT_MS}ms; clearing loading state")
+                AppLogger.billing.warning("No purchase result after ${PURCHASE_FLOW_TIMEOUT_MS}ms; clearing loading state")
                 _isLoading.value = false
             }
         }
@@ -308,7 +305,7 @@ class BillingService internal constructor(
             else -> {
                 _errorMessage.value = BillingError.PURCHASE_FAILED.message
                 _isLoading.value = false
-                Log.w(TAG, "Purchase failed: ${result.debugMessage}")
+                AppLogger.billing.warning("Purchase failed: ${result.debugMessage}")
             }
         }
     }
@@ -389,7 +386,7 @@ class BillingService internal constructor(
             }
             _purchasedProductIDs.value = purchased
             recomputeCurrentTier()
-            Log.i(TAG, "Updated purchases: $purchased, tier: ${_currentTier.value}")
+            AppLogger.billing.info("Updated purchases: $purchased, tier: ${_currentTier.value}")
         }
     }
 
@@ -406,7 +403,7 @@ class BillingService internal constructor(
             .build()
         val result = billingClient.acknowledgePurchase(params)
         if (result.responseCode != BillingClient.BillingResponseCode.OK) {
-            Log.w(TAG, "Acknowledge failed: ${result.debugMessage}")
+            AppLogger.billing.warning("Acknowledge failed: ${result.debugMessage}")
         }
     }
 
@@ -504,11 +501,11 @@ class BillingService internal constructor(
 
         val userId: String = try {
             client.auth.currentSessionOrNull()?.user?.id ?: run {
-                Log.w(TAG, "Cannot sync entitlement — no authenticated session")
+                AppLogger.billing.warning("Cannot sync entitlement — no authenticated session")
                 return
             }
         } catch (e: Exception) {
-            Log.w(TAG, "Cannot sync entitlement — auth error: ${e.message}")
+            AppLogger.billing.warning("Cannot sync entitlement — auth error: ${e.message}")
             return
         }
 
@@ -552,9 +549,7 @@ class BillingService internal constructor(
             // Deliberately not "after $MAX_RETRIES attempts": a non-retryable
             // failure gives up on the first one, and a log that overstates what
             // was tried is how you end up chasing the wrong thing.
-            Log.w(
-                TAG,
-                "Server validation produced no verdict (grace period): " +
+            AppLogger.billing.warning("Server validation produced no verdict (grace period): " +
                     "${e::class.java.simpleName}: ${e.message}, product=$productId, user=$userId"
             )
             return
@@ -565,16 +560,14 @@ class BillingService internal constructor(
         // known 2xx here; passing it keeps the rule in one place rather than
         // half here and half there.
         if (validationOutcome(true, decoded.valid) == ValidationOutcome.GRANT) {
-            Log.i(TAG, "Server validation succeeded for product=$productId")
+            AppLogger.billing.info("Server validation succeeded for product=$productId")
             // Clear any prior revocation: e.g. the user re-subscribed after a refund.
             _serverRevokedProductIDs.value -= productId
             recomputeCurrentTier()
         } else {
             // Server definitively rejected the receipt. Revoke rather than
             // granting an indefinite grace period (XPLAT-002).
-            Log.w(
-                TAG,
-                "Server validation returned invalid; revoking local entitlement for " +
+            AppLogger.billing.warning("Server validation returned invalid; revoking local entitlement for " +
                     "product=$productId, user=$userId, reason=${decoded.reason ?: "unknown"}"
             )
             _serverRevokedProductIDs.value += productId
@@ -627,7 +620,7 @@ class BillingService internal constructor(
                 return
             }
         } catch (e: Exception) {
-            Log.d(TAG, "Cannot refresh backend tier — auth error: ${e.message}")
+            AppLogger.billing.debug("Cannot refresh backend tier — auth error: ${e.message}")
             return
         }
 
@@ -673,7 +666,7 @@ class BillingService internal constructor(
             recomputeCurrentTier()
         } catch (e: Exception) {
             // Keep prior backendTier on transient failure (don't downgrade UX).
-            Log.w(TAG, "Failed to refresh backend tier: ${e.message}")
+            AppLogger.billing.warning("Failed to refresh backend tier: ${e.message}")
         }
     }
 

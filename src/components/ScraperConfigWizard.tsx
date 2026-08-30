@@ -23,25 +23,9 @@ import {
   DialogTitle,
   DialogTrigger,
 } from "@/components/ui/dialog";
-import {
-  Globe,
-  Clock,
-  Code,
-  Sparkles,
-  Target,
-  AlertCircle,
-  CheckCircle,
-  Copy,
-  Play,
-  Settings,
-  BookOpen,
-  Zap,
-  Calendar,
-  MapPin,
-  DollarSign,
-  Hash,
-} from "lucide-react";
+import { Globe, Code, Target, AlertCircle, CheckCircle, Copy, Play, Settings, BookOpen, Zap, DollarSign, Hash } from "lucide-react";
 import { useToast } from "@/hooks/use-toast";
+import { SpriteIcon } from "@/components/ui/SpriteIcon";
 
 interface ScraperTemplate {
   id: string;
@@ -465,7 +449,7 @@ export default function ScraperConfigWizard({
       <DialogContent className="max-w-4xl max-h-[90vh] overflow-y-auto">
         <DialogHeader>
           <DialogTitle className="flex items-center gap-2">
-            <Sparkles className="h-5 w-5 text-purple-600" />
+            <SpriteIcon name="sparkles" className="h-5 w-5 text-purple-600" />
             Smart Scraper Configuration Wizard
           </DialogTitle>
           <DialogDescription>
@@ -526,7 +510,7 @@ export default function ScraperConfigWizard({
                         </>
                       ) : (
                         <>
-                          <Sparkles className="h-4 w-4 mr-2" />
+                          <SpriteIcon name="sparkles" className="h-4 w-4 mr-2" />
                           Analyze
                         </>
                       )}
@@ -568,10 +552,10 @@ export default function ScraperConfigWizard({
                                   <Hash className="h-3 w-3" />
                                 )}
                                 {field === "date" && (
-                                  <Calendar className="h-3 w-3" />
+                                  <SpriteIcon name="calendar" className="h-3 w-3" />
                                 )}
                                 {field === "location" && (
-                                  <MapPin className="h-3 w-3" />
+                                  <SpriteIcon name="map-pin" className="h-3 w-3" />
                                 )}
                                 {field === "price" && (
                                   <DollarSign className="h-3 w-3" />
@@ -710,7 +694,7 @@ export default function ScraperConfigWizard({
 
                     <div className="space-y-2">
                       <div className="flex items-center gap-2 text-xs">
-                        <Clock className="h-3 w-3" />
+                        <SpriteIcon name="clock" className="h-3 w-3" />
                         <span>Schedule: {template.schedule}</span>
                       </div>
                       <div className="flex items-center gap-2 text-xs">

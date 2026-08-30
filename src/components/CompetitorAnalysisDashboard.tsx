@@ -4,11 +4,12 @@ import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { Progress } from "@/components/ui/progress";
-import { AlertCircle, TrendingUp, Target, Lightbulb, ExternalLink, RefreshCw } from "lucide-react";
+import { AlertCircle, Target, Lightbulb, RefreshCw } from "lucide-react";
 import { Alert, AlertDescription } from "@/components/ui/alert";
 import { useToast } from "@/components/ui/use-toast";
 import { supabase } from "@/integrations/supabase/client";
 import { createLogger } from '@/lib/logger';
+import { SpriteIcon } from "@/components/ui/SpriteIcon";
 
 const log = createLogger('CompetitorAnalysisDashboard');
 
@@ -156,7 +157,7 @@ export function CompetitorAnalysisDashboard() {
             onClick={() => runAnalysis('analyze')}
             disabled={analyzing}
           >
-            <TrendingUp className="w-4 h-4 mr-2" />
+            <SpriteIcon name="trending-up" className="w-4 h-4 mr-2" />
             Run Analysis
           </Button>
         </div>
@@ -172,7 +173,7 @@ export function CompetitorAnalysisDashboard() {
                 <Badge variant="outline">{competitor.primary_focus}</Badge>
               </CardTitle>
               <CardDescription className="flex items-center gap-2">
-                <ExternalLink className="w-4 h-4" />
+                <SpriteIcon name="external-link" className="w-4 h-4" />
                 <a 
                   href={competitor.website_url} 
                   target="_blank" 
@@ -264,7 +265,7 @@ export function CompetitorAnalysisDashboard() {
                             rel="noopener noreferrer"
                             className="hover:underline flex items-center gap-1"
                           >
-                            View <ExternalLink className="w-3 h-3" />
+                            View <SpriteIcon name="external-link" className="w-3 h-3" />
                           </a>
                         )}
                       </div>
@@ -352,7 +353,7 @@ export function CompetitorAnalysisDashboard() {
           <Card>
             <CardHeader>
               <CardTitle className="flex items-center gap-2">
-                <TrendingUp className="w-5 h-5" />
+                <SpriteIcon name="trending-up" className="w-5 h-5" />
                 Analysis Reports
               </CardTitle>
               <CardDescription>

@@ -25,6 +25,7 @@ import {
 import { useSubscription } from "@/hooks/useSubscription";
 import { logPaywallEvent } from "@/lib/paywallAnalytics";
 import { cn } from "@/lib/utils";
+import { SpriteIcon } from "@/components/ui/SpriteIcon";
 
 interface UpgradeModalProps {
   open: boolean;
@@ -190,7 +191,7 @@ export function UpgradeModal({
       <DialogContent className="sm:max-w-xl">
         <DialogHeader>
           <DialogTitle className="flex items-center gap-2 text-xl">
-            <Sparkles className="h-5 w-5 text-amber-500" />
+            <SpriteIcon name="sparkles" className="h-5 w-5 text-amber-500" />
             Unlock Premium Features
           </DialogTitle>
           <DialogDescription>
@@ -259,7 +260,7 @@ export function UpgradeModal({
                 </div>
               )}
               <div className="flex items-center gap-2 mb-2">
-                <Sparkles className="h-4 w-4 text-amber-500" />
+                <SpriteIcon name="sparkles" className="h-4 w-4 text-amber-500" />
                 <span className="font-semibold">Insider</span>
               </div>
               <div className="text-2xl font-bold">
@@ -317,7 +318,7 @@ export function UpgradeModal({
             <h4 className="font-medium mb-3 flex items-center gap-2">
               {selectedPlan === "insider" ? (
                 <>
-                  <Sparkles className="h-4 w-4 text-amber-500" />
+                  <SpriteIcon name="sparkles" className="h-4 w-4 text-amber-500" />
                   Insider Features
                 </>
               ) : (

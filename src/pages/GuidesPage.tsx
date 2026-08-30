@@ -7,23 +7,11 @@ import { FAQSection } from "@/components/FAQSection";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
 import { useSeasonalGuides, getSeasonLabel, getSeasonColor } from "@/hooks/useSeasonalGuides";
-import { 
-  MapPin, 
-  Calendar, 
-  Clock, 
-  Users, 
-  Heart,
-  Coffee,
-  Utensils,
-  Camera,
-  Star,
-  Umbrella,
-  Sun,
-  Snowflake
-} from "lucide-react";
+import { Users, Heart, Coffee, Utensils, Camera, Star, Umbrella, Sun, Snowflake } from "lucide-react";
 import OptimizedImage from "@/components/OptimizedImage";
 import { getCanonicalUrl } from "@/lib/brandConfig";
 import { useDocumentTitle } from "@/hooks/useDocumentTitle";
+import { SpriteIcon } from "@/components/ui/SpriteIcon";
 
 const guides = [
   {
@@ -294,7 +282,7 @@ export default function GuidesPage() {
                 to="/events/today" 
                 className="flex items-center gap-3 p-4 rounded-lg border hover:bg-muted/50 transition-colors"
               >
-                <Clock className="h-6 w-6 text-primary" />
+                <SpriteIcon name="clock" className="h-6 w-6 text-primary" />
                 <div>
                   <h3 className="font-semibold">Today's Events</h3>
                   <p className="text-sm text-muted-foreground">See what's happening right now</p>
@@ -305,7 +293,7 @@ export default function GuidesPage() {
                 to="/events/this-weekend" 
                 className="flex items-center gap-3 p-4 rounded-lg border hover:bg-muted/50 transition-colors"
               >
-                <Calendar className="h-6 w-6 text-primary" />
+                <SpriteIcon name="calendar" className="h-6 w-6 text-primary" />
                 <div>
                   <h3 className="font-semibold">This Weekend</h3>
                   <p className="text-sm text-muted-foreground">Weekend activities and events</p>

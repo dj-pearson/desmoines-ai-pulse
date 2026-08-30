@@ -275,8 +275,39 @@ export async function onRequest(context: EventContext) {
   // trailing slash on the site that is not a duplicate. Query strings and
   // fragments are preserved, or a 301 would silently drop a filter or a UTM tag
   // and the redirect would lose the very traffic it is meant to consolidate.
-  const slashRedirect = trailingSlashRedirect(url);
-  if (slashRedirect) return Response.redirect(slashRedirect, 301);
+  // DISABLED - this 301 took the whole site down. Do not re-enable it on its
+  // own; it cannot work while prerender writes directory-style output.
+  //
+  // scripts/prerender.mjs:744 writes dist/<route>/index.html, so Cloudflare
+  // Pages treats /events as a directory and issues its OWN 308 to /events/
+  // before any of our code runs. This line then 301s the slash back off. The
+  // two redirects point at each other:
+  //
+  //   GET /events   -> 308 Location: /events/                        (Pages)
+  //   GET /events/  -> 301 Location: https://.../events              (here)
+  //
+  // Measured in production 2026-08-29: 50 redirects and ERR_TOO_MANY_REDIRECTS
+  // on /events, /restaurants, /attractions, /events/today, /playgrounds,
+  // /articles, /guides and entity pages, for Googlebot and for mobile Safari.
+  // Only "/" survived, because trailingSlashRedirect returns null for it - the
+  // same guard that made this look safe.
+  //
+  // The unit test could not catch it. It tests a pure function against URLs we
+  // hand it, and Pages' normalization is not in the code at all; it is implied
+  // by the SHAPE OF THE BUILD OUTPUT. Any future attempt needs an assertion
+  // against a deployed URL, not another case in that file.
+  //
+  // The duplication SEO-004 measured is real and still unfixed: /restaurants
+  // and /restaurants/ were both indexed, 20,789 impressions at position 24.4
+  // against 5,401 at 25.1. The fix is to stop Pages emitting the 308 in the
+  // first place - have prerender write dist/<route>.html instead of
+  // dist/<route>/index.html, so /events is served directly and /events/ never
+  // becomes a second live URL. Then this redirect is unnecessary rather than
+  // merely disabled.
+  //
+  // trailingSlashRedirect stays exported so its tests keep documenting the
+  // intended mapping for whoever does that.
+  void trailingSlashRedirect;
 
   // --- WEB-FEAT-008: per-entity OG meta for social crawlers on detail routes ---
   try {

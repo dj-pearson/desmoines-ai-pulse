@@ -8,20 +8,8 @@ import { ScrollArea } from "@/components/ui/scroll-area";
 import { Skeleton } from "@/components/ui/skeleton";
 import { useNLPSearch, NLP_SEARCH_EXAMPLES } from "@/hooks/useNLPSearch";
 import { Link } from "react-router-dom";
-import {
-  Search,
-  Sparkles,
-  Calendar,
-  Utensils,
-  MapPin,
-  Loader2,
-  X,
-  ArrowRight,
-  Clock,
-  DollarSign,
-  Star,
-  Lightbulb,
-} from "lucide-react";
+import { Search, Utensils, Loader2, X, DollarSign, Star, Lightbulb } from "lucide-react";
+import { SpriteIcon } from "@/components/ui/SpriteIcon";
 
 interface NLPSearchBarProps {
   placeholder?: string;
@@ -116,7 +104,7 @@ export function NLPSearchBar({
           {isSearching ? (
             <Loader2 className="h-5 w-5 text-primary animate-spin" />
           ) : (
-            <Sparkles className="h-5 w-5 text-primary" />
+            <SpriteIcon name="sparkles" className="h-5 w-5 text-primary" />
           )}
         </div>
         <Input
@@ -205,7 +193,7 @@ export function NLPSearchBar({
                 {/* Intent Summary */}
                 {intentSummary && (
                   <div className="flex items-center gap-2 text-sm">
-                    <Sparkles className="h-4 w-4 text-primary" />
+                    <SpriteIcon name="sparkles" className="h-4 w-4 text-primary" />
                     <span className="text-muted-foreground">Understood:</span>
                     <span className="font-medium">{intentSummary}</span>
                   </div>
@@ -218,7 +206,7 @@ export function NLPSearchBar({
                       All ({totalResults})
                     </TabsTrigger>
                     <TabsTrigger value="events" disabled={results.events.length === 0}>
-                      <Calendar className="h-3 w-3 mr-1" />
+                      <SpriteIcon name="calendar" className="h-3 w-3 mr-1" />
                       Events ({results.events.length})
                     </TabsTrigger>
                     <TabsTrigger value="restaurants" disabled={results.restaurants.length === 0}>
@@ -226,7 +214,7 @@ export function NLPSearchBar({
                       Food ({results.restaurants.length})
                     </TabsTrigger>
                     <TabsTrigger value="attractions" disabled={results.attractions.length === 0}>
-                      <MapPin className="h-3 w-3 mr-1" />
+                      <SpriteIcon name="map-pin" className="h-3 w-3 mr-1" />
                       Places ({results.attractions.length})
                     </TabsTrigger>
                   </TabsList>
@@ -239,7 +227,7 @@ export function NLPSearchBar({
                           key={`event-${event.id}`}
                           item={event}
                           type="events"
-                          icon={<Calendar className="h-4 w-4" />}
+                          icon={<SpriteIcon name="calendar" className="h-4 w-4" />}
                           onClick={onResultClick}
                         />
                       ))}
@@ -259,7 +247,7 @@ export function NLPSearchBar({
                           key={`attraction-${attraction.id}`}
                           item={attraction}
                           type="attractions"
-                          icon={<MapPin className="h-4 w-4" />}
+                          icon={<SpriteIcon name="map-pin" className="h-4 w-4" />}
                           onClick={onResultClick}
                         />
                       ))}
@@ -271,7 +259,7 @@ export function NLPSearchBar({
                           key={`event-${event.id}`}
                           item={event}
                           type="events"
-                          icon={<Calendar className="h-4 w-4" />}
+                          icon={<SpriteIcon name="calendar" className="h-4 w-4" />}
                           onClick={onResultClick}
                         />
                       ))}
@@ -295,7 +283,7 @@ export function NLPSearchBar({
                           key={`attraction-${attraction.id}`}
                           item={attraction}
                           type="attractions"
-                          icon={<MapPin className="h-4 w-4" />}
+                          icon={<SpriteIcon name="map-pin" className="h-4 w-4" />}
                           onClick={onResultClick}
                         />
                       ))}
@@ -313,7 +301,7 @@ export function NLPSearchBar({
                     className="flex items-center gap-1 text-primary hover:underline"
                   >
                     View all results
-                    <ArrowRight className="h-3 w-3" />
+                    <SpriteIcon name="arrow-right" className="h-3 w-3" />
                   </Link>
                 </div>
               </div>
@@ -331,7 +319,7 @@ export function NLPSearchBar({
                 >
                   <Search className="h-4 w-4" />
                   Search "{query}" by keyword
-                  <ArrowRight className="h-3 w-3" />
+                  <SpriteIcon name="arrow-right" className="h-3 w-3" />
                 </Link>
               </div>
             )}
@@ -413,13 +401,13 @@ function ResultItem({
         <div className="flex items-center gap-3 mt-1 text-xs text-muted-foreground">
           {item.location && (
             <span className="flex items-center gap-1">
-              <MapPin className="h-3 w-3" />
+              <SpriteIcon name="map-pin" className="h-3 w-3" />
               {item.location}
             </span>
           )}
           {item.date && (
             <span className="flex items-center gap-1">
-              <Clock className="h-3 w-3" />
+              <SpriteIcon name="clock" className="h-3 w-3" />
               {new Date(item.date).toLocaleDateString()}
             </span>
           )}
@@ -428,7 +416,7 @@ function ResultItem({
           )}
         </div>
       </div>
-      <ArrowRight className="h-4 w-4 text-muted-foreground shrink-0 mt-1" />
+      <SpriteIcon name="arrow-right" className="h-4 w-4 text-muted-foreground shrink-0 mt-1" />
     </Link>
   );
 }

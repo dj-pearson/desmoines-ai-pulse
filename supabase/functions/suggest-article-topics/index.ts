@@ -3,6 +3,7 @@ import { fetchWithTimeout } from "../_shared/fetchWithTimeout.ts";
 import { serve } from "https://deno.land/std@0.168.0/http/server.ts";
 import { createClient } from 'https://esm.sh/@supabase/supabase-js@2.53.0';
 import { getAIConfig, buildClaudeRequest, getClaudeHeaders, getAnthropicApiKey, extractClaudeText } from "../_shared/aiConfig.ts";
+import { requireAdminOrApiKey } from "../_shared/apiKeyAuth.ts";
 
 const corsHeaders = {
   'Access-Control-Allow-Origin': '*',
@@ -50,21 +51,24 @@ serve(async (req) => {
     
     console.log('Request params:', { category, focusArea, suggestionCount });
 
-    // Get user info
-    const authHeader = req.headers.get('Authorization');
-    const token = authHeader?.replace('Bearer ', '');
-    
-    console.log('Checking auth...');
-    const { data: { user }, error: authError } = await supabaseClient.auth.getUser(token);
-    if (authError) {
-      console.error('Auth error:', authError);
-      throw new Error('Authentication required: ' + authError.message);
-    }
-    if (!user) {
-      console.error('No user found');
-      throw new Error('Authentication required');
-    }
-    console.log('User authenticated:', user.id);
+    // THIS GATE REJECTED THE ONLY AUTOMATED CALLER IT HAS.
+    //
+    // It used to be a bare `supabaseClient.auth.getUser(token)`, which resolves a
+    // USER access token. ai-article-pipeline calls this endpoint server-to-server
+    // with `Authorization: Bearer <service_role_key>` (index.ts:142-144), and the
+    // service-role key is not a user token - so getUser returned no user, the
+    // handler threw "Authentication required", and the caller saw
+    // "suggest-article-topics failed: 500". Every run: 3 of 3 in the ledger,
+    // status=failed, and the pipeline never got past step 1.
+    //
+    // requireAdminOrApiKey is the house gate for exactly this shape: it accepts
+    // the service-role bearer for automation, X-API-Key, or a user JWT belonging
+    // to an ADMIN. That fixes the agent path and tightens the browser path at the
+    // same time - the only web caller is AIArticleGenerator, which renders on
+    // AdminAI and CMSDashboard, so requiring admin is what this endpoint always
+    // meant. It spends AI tokens; any-authenticated-user was too loose.
+    const authFailure = await requireAdminOrApiKey(req, corsHeaders);
+    if (authFailure) return authFailure;
 
     console.log('Generating article topic suggestions');
 

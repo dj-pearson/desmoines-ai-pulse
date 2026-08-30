@@ -13,24 +13,8 @@ import { useAuth } from "@/hooks/useAuth";
 import { useSubscription } from "@/hooks/useSubscription";
 import { useToast } from "@/hooks/use-toast";
 import { useConversionFunnel } from "@/hooks/useConversionFunnel";
-import {
-  Check,
-  Star,
-  Crown,
-  Sparkles,
-  Calendar,
-  Bell,
-  Heart,
-  Search,
-  Zap,
-  Shield,
-  MessageCircle,
-  Smartphone,
-  Gift,
-  Users,
-  ArrowRight,
-  Loader2,
-} from "lucide-react";
+import { Check, Star, Crown, Bell, Heart, Search, Zap, Shield, MessageCircle, Smartphone, Gift, Loader2 } from "lucide-react";
+import { SpriteIcon } from "@/components/ui/SpriteIcon";
 
 interface PlanFeature {
   text: string;
@@ -79,7 +63,7 @@ const plans: PricingPlan[] = [
     description: "For the passionate Des Moines explorer",
     priceMonthly: 4.99,
     priceYearly: 49.99,
-    icon: <Sparkles className="h-6 w-6" />,
+    icon: <SpriteIcon name="sparkles" className="h-6 w-6" />,
     cta: "Become an Insider",
     popular: true,
     badge: "Most Popular",
@@ -477,7 +461,7 @@ export default function Pricing() {
                         ) : (
                           <>
                             {plan.cta}
-                            <ArrowRight className="h-4 w-4 ml-2" />
+                            <SpriteIcon name="arrow-right" className="h-4 w-4 ml-2" />
                           </>
                         )}
                       </Button>
@@ -500,7 +484,7 @@ export default function Pricing() {
 
               <div className="grid md:grid-cols-4 gap-6 max-w-5xl mx-auto">
                 <div className="p-6 bg-card rounded-lg border text-center">
-                  <Calendar className="h-8 w-8 mx-auto mb-3 text-primary" />
+                  <SpriteIcon name="calendar" className="h-8 w-8 mx-auto mb-3 text-primary" />
                   <h3 className="font-semibold mb-2">Event Discovery</h3>
                   <p className="text-sm text-muted-foreground">
                     Browse thousands of local events updated daily
@@ -585,7 +569,7 @@ export default function Pricing() {
               <div className="flex flex-col sm:flex-row gap-4 justify-center">
                 <Button size="lg" onClick={() => navigate("/auth")}>
                   Get Started Free
-                  <ArrowRight className="h-4 w-4 ml-2" />
+                  <SpriteIcon name="arrow-right" className="h-4 w-4 ml-2" />
                 </Button>
                 <Button
                   size="lg"

@@ -24,12 +24,31 @@ class OnboardingPreferences @Inject constructor(
 ) {
     private val hasCompletedKey = booleanPreferencesKey("has_completed_onboarding")
 
+    /**
+     * Whether the notification priming card has been answered, either way.
+     *
+     * Needed because the system POST_NOTIFICATIONS dialog can only be shown a
+     * couple of times before Android stops presenting it - so a priming card
+     * that reappeared on every launch would burn the real prompt as well as
+     * being irritating. Declining is a durable answer, not a "not now".
+     */
+    private val notificationPrimingKey = booleanPreferencesKey("notification_priming_answered")
+
     val hasCompletedOnboarding: Flow<Boolean> = context.dataStore.data
         .map { preferences -> preferences[hasCompletedKey] ?: false }
 
     suspend fun setOnboardingCompleted() {
         context.dataStore.edit { preferences ->
             preferences[hasCompletedKey] = true
+        }
+    }
+
+    val hasAnsweredNotificationPriming: Flow<Boolean> = context.dataStore.data
+        .map { preferences -> preferences[notificationPrimingKey] ?: false }
+
+    suspend fun setNotificationPrimingAnswered() {
+        context.dataStore.edit { preferences ->
+            preferences[notificationPrimingKey] = true
         }
     }
 

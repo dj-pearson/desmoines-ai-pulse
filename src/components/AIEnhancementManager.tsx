@@ -4,24 +4,13 @@ import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
 import { Alert, AlertDescription } from "@/components/ui/alert";
 import { Progress } from "@/components/ui/progress";
-import { 
-  Sparkles, 
-  Clock, 
-  CheckCircle, 
-  XCircle, 
-  RefreshCw, 
-  Play, 
-  Calendar,
-  FileText,
-  TrendingUp,
-  AlertTriangle,
-  Bot
-} from "lucide-react";
+import { CheckCircle, XCircle, RefreshCw, Play, FileText, AlertTriangle, Bot } from "lucide-react";
 import { supabase } from "@/integrations/supabase/client";
 import { getErrorMessage } from "@/lib/errorHandler";
 import { toast } from "sonner";
 import { formatDistanceToNow } from "date-fns";
 import { createLogger } from '@/lib/logger';
+import { SpriteIcon } from "@/components/ui/SpriteIcon";
 
 const log = createLogger('AIEnhancementManager');
 
@@ -238,7 +227,7 @@ export default function AIEnhancementManager() {
       <Card>
         <CardHeader>
           <CardTitle className="flex items-center gap-2">
-            <Sparkles className="h-5 w-5" />
+            <SpriteIcon name="sparkles" className="h-5 w-5" />
             AI Enhancement Manager
           </CardTitle>
         </CardHeader>
@@ -259,7 +248,7 @@ export default function AIEnhancementManager() {
         <Card>
           <CardContent className="p-4">
             <div className="flex items-center gap-2">
-              <Calendar className="h-4 w-4 text-blue-500" />
+              <SpriteIcon name="calendar" className="h-4 w-4 text-blue-500" />
               <span className="text-sm font-medium">Total Events</span>
             </div>
             <p className="text-2xl font-bold mt-1">{stats.totalEvents}</p>
@@ -281,7 +270,7 @@ export default function AIEnhancementManager() {
         <Card>
           <CardContent className="p-4">
             <div className="flex items-center gap-2">
-              <Clock className="h-4 w-4 text-orange-500" />
+              <SpriteIcon name="clock" className="h-4 w-4 text-orange-500" />
               <span className="text-sm font-medium">Pending</span>
             </div>
             <p className="text-2xl font-bold mt-1">{stats.pendingEvents}</p>
@@ -292,7 +281,7 @@ export default function AIEnhancementManager() {
         <Card>
           <CardContent className="p-4">
             <div className="flex items-center gap-2">
-              <TrendingUp className="h-4 w-4 text-purple-500" />
+              <SpriteIcon name="trending-up" className="h-4 w-4 text-purple-500" />
               <span className="text-sm font-medium">Coverage</span>
             </div>
             <p className="text-2xl font-bold mt-1">{stats.enhancementRate.toFixed(1)}%</p>
@@ -315,7 +304,7 @@ export default function AIEnhancementManager() {
         </CardHeader>
         <CardContent className="space-y-4">
           <Alert>
-            <Sparkles className="h-4 w-4" />
+            <SpriteIcon name="sparkles" className="h-4 w-4" />
             <AlertDescription>
               <strong>No Duplicates:</strong> Only events without existing AI writeups will be processed. 
               Events with existing writeups are automatically skipped.

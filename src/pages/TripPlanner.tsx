@@ -3,6 +3,7 @@ import { useQuery } from '@tanstack/react-query';
 import { supabase } from '@/integrations/supabase/client';
 import { STALE_TIME } from '@/lib/queryConfig';
 import type { MapEntity } from '@/components/map/DiscoverMapCanvas';
+import { SpriteIcon } from "@/components/ui/SpriteIcon";
 
 const DiscoverMapCanvas = lazy(() => import('@/components/map/DiscoverMapCanvas'));
 import { createLogger } from '@/lib/logger';
@@ -36,38 +37,7 @@ import { buildTripICS, downloadICS, googleCalendarUrl } from "@/lib/tripCalendar
 import { UpgradeModal } from "@/components/UpgradeModal";
 import { PremiumGate } from "@/components/PremiumGate";
 import { AIDisclosureNotice } from "@/components/AIDisclosureBadge";
-import {
-  Calendar,
-  MapPin,
-  Clock,
-  DollarSign,
-  Users,
-  Sparkles,
-  ArrowRight,
-  ChevronDown,
-  ChevronRight,
-  Trash2,
-  Edit2,
-  Share2,
-  Copy,
-  Check,
-  Plus,
-  Lightbulb,
-  Utensils,
-  Music,
-  TreePine,
-  Palette,
-  Baby,
-  Car,
-  Coffee,
-  Loader2,
-  ExternalLink,
-  AlertCircle,
-  Download,
-  ArrowUp,
-  ArrowDown,
-  CalendarPlus,
-} from "lucide-react";
+import { DollarSign, ChevronDown, ChevronRight, Trash2, Edit2, Copy, Check, Plus, Lightbulb, Utensils, Music, TreePine, Palette, Baby, Car, Coffee, Loader2, AlertCircle, Download, ArrowUp, ArrowDown, CalendarPlus } from "lucide-react";
 
 export default function TripPlanner() {
   const { user } = useAuth();
@@ -258,10 +228,10 @@ export default function TripPlanner() {
     switch (itemType) {
       case 'event': return <Music className="h-4 w-4" />;
       case 'restaurant': return <Utensils className="h-4 w-4" />;
-      case 'attraction': return <MapPin className="h-4 w-4" />;
+      case 'attraction': return <SpriteIcon name="map-pin" className="h-4 w-4" />;
       case 'transport': return <Car className="h-4 w-4" />;
       case 'break': return <Coffee className="h-4 w-4" />;
-      default: return <Calendar className="h-4 w-4" />;
+      default: return <SpriteIcon name="calendar" className="h-4 w-4" />;
     }
   };
 
@@ -307,7 +277,7 @@ export default function TripPlanner() {
           {/* Page Header */}
           <div className="text-center space-y-4 mb-8">
             <div className="flex items-center justify-center gap-2">
-              <Sparkles className="h-8 w-8 text-primary" />
+              <SpriteIcon name="sparkles" className="h-8 w-8 text-primary" />
               <h1 className="text-3xl md:text-4xl font-bold">AI Trip Planner</h1>
             </div>
             <p className="text-muted-foreground max-w-2xl mx-auto">
@@ -353,7 +323,7 @@ export default function TripPlanner() {
                 <Card>
                   <CardHeader>
                     <CardTitle className="flex items-center gap-2">
-                      <Calendar className="h-5 w-5" />
+                      <SpriteIcon name="calendar" className="h-5 w-5" />
                       Trip Dates
                     </CardTitle>
                     <CardDescription>When are you visiting Des Moines?</CardDescription>
@@ -393,7 +363,7 @@ export default function TripPlanner() {
                 <Card>
                   <CardHeader>
                     <CardTitle className="flex items-center gap-2">
-                      <Users className="h-5 w-5" />
+                      <SpriteIcon name="users" className="h-5 w-5" />
                       Who's Going?
                     </CardTitle>
                     <CardDescription>Tell us about your group</CardDescription>
@@ -457,7 +427,7 @@ export default function TripPlanner() {
                           onClick={() => toggleInterest(interest.value)}
                           className="gap-2"
                         >
-                          {interestIcons[interest.value] || <Sparkles className="h-4 w-4" />}
+                          {interestIcons[interest.value] || <SpriteIcon name="sparkles" className="h-4 w-4" />}
                           {interest.label}
                         </Button>
                       ))}
@@ -499,7 +469,7 @@ export default function TripPlanner() {
                 <Card>
                   <CardHeader>
                     <CardTitle className="flex items-center gap-2">
-                      <Clock className="h-5 w-5" />
+                      <SpriteIcon name="clock" className="h-5 w-5" />
                       Trip Pace
                     </CardTitle>
                     <CardDescription>How packed do you want your days?</CardDescription>
@@ -559,7 +529,7 @@ export default function TripPlanner() {
                         </>
                       ) : (
                         <>
-                          <Sparkles className="h-5 w-5" />
+                          <SpriteIcon name="sparkles" className="h-5 w-5" />
                           Generate Itinerary
                         </>
                       )}
@@ -595,7 +565,7 @@ export default function TripPlanner() {
                           </CardDescription>
                           <div className="flex flex-wrap gap-2 mt-4">
                             <Badge variant="outline">
-                              <Calendar className="h-3 w-3 mr-1" />
+                              <SpriteIcon name="calendar" className="h-3 w-3 mr-1" />
                               {format(new Date(selectedTrip.start_date), 'MMM d')} -{' '}
                               {format(new Date(selectedTrip.end_date), 'MMM d, yyyy')}
                             </Badge>
@@ -607,7 +577,7 @@ export default function TripPlanner() {
                             )}
                             {selectedTrip.ai_generated && (
                               <Badge className="bg-gradient-to-r from-purple-500 to-pink-500">
-                                <Sparkles className="h-3 w-3 mr-1" />
+                                <SpriteIcon name="sparkles" className="h-3 w-3 mr-1" />
                                 AI Generated
                               </Badge>
                             )}
@@ -615,7 +585,7 @@ export default function TripPlanner() {
                         </div>
                         <div className="flex gap-2 flex-wrap">
                           <Button variant="outline" size="sm" onClick={() => handleShareTrip(selectedTrip)}>
-                            <Share2 className="h-4 w-4 mr-1" />
+                            <SpriteIcon name="share-2" className="h-4 w-4 mr-1" />
                             Share
                           </Button>
                           <Button
@@ -722,7 +692,7 @@ export default function TripPlanner() {
                                               <h4 className="font-medium">{item.title}</h4>
                                               {item.start_time && (
                                                 <p className="text-sm text-muted-foreground flex items-center gap-1">
-                                                  <Clock className="h-3 w-3" />
+                                                  <SpriteIcon name="clock" className="h-3 w-3" />
                                                   {item.start_time}
                                                   {item.end_time && ` - ${item.end_time}`}
                                                   {item.duration_minutes && (
@@ -741,7 +711,7 @@ export default function TripPlanner() {
                                           </div>
                                           {item.location && (
                                             <p className="text-sm text-muted-foreground flex items-center gap-1">
-                                              <MapPin className="h-3 w-3" />
+                                              <SpriteIcon name="map-pin" className="h-3 w-3" />
                                               {item.location}
                                             </p>
                                           )}
@@ -765,7 +735,7 @@ export default function TripPlanner() {
                                               className="inline-flex items-center gap-1 text-sm text-primary hover:underline"
                                             >
                                               View details
-                                              <ExternalLink className="h-3 w-3" />
+                                              <SpriteIcon name="external-link" className="h-3 w-3" />
                                             </Link>
                                           )}
                                         </div>
@@ -869,7 +839,7 @@ export default function TripPlanner() {
               ) : (
                 <Card className="text-center py-12">
                   <CardContent>
-                    <Sparkles className="h-12 w-12 mx-auto text-muted-foreground mb-4" />
+                    <SpriteIcon name="sparkles" className="h-12 w-12 mx-auto text-muted-foreground mb-4" />
                     <h3 className="text-lg font-medium mb-2">No itinerary selected</h3>
                     <p className="text-muted-foreground mb-4">
                       Generate a new itinerary or select one from your saved trips.
@@ -887,7 +857,7 @@ export default function TripPlanner() {
               {!user ? (
                 <Card className="text-center py-12">
                   <CardContent>
-                    <Users className="h-12 w-12 mx-auto text-muted-foreground mb-4" />
+                    <SpriteIcon name="users" className="h-12 w-12 mx-auto text-muted-foreground mb-4" />
                     <h3 className="text-lg font-medium mb-2">Sign in to see your trips</h3>
                     <p className="text-muted-foreground mb-4">
                       Create an account to save and manage your itineraries.
@@ -912,7 +882,7 @@ export default function TripPlanner() {
               ) : tripPlans.length === 0 ? (
                 <Card className="text-center py-12">
                   <CardContent>
-                    <Calendar className="h-12 w-12 mx-auto text-muted-foreground mb-4" />
+                    <SpriteIcon name="calendar" className="h-12 w-12 mx-auto text-muted-foreground mb-4" />
                     <h3 className="text-lg font-medium mb-2">No trips yet</h3>
                     <p className="text-muted-foreground mb-4">
                       Start planning your first Des Moines adventure!
@@ -935,7 +905,7 @@ export default function TripPlanner() {
                           <CardTitle className="text-lg line-clamp-1">{trip.title}</CardTitle>
                           {trip.ai_generated && (
                             <Badge className="bg-gradient-to-r from-purple-500 to-pink-500 shrink-0">
-                              <Sparkles className="h-3 w-3" />
+                              <SpriteIcon name="sparkles" className="h-3 w-3" />
                             </Badge>
                           )}
                         </div>
@@ -946,7 +916,7 @@ export default function TripPlanner() {
                       <CardContent>
                         <div className="flex flex-wrap gap-2 text-sm text-muted-foreground">
                           <span className="flex items-center gap-1">
-                            <Calendar className="h-3 w-3" />
+                            <SpriteIcon name="calendar" className="h-3 w-3" />
                             {format(new Date(trip.start_date), 'MMM d')} -{' '}
                             {format(new Date(trip.end_date), 'MMM d')}
                           </span>
@@ -961,7 +931,7 @@ export default function TripPlanner() {
                       <CardFooter className="flex justify-between">
                         <Badge variant="secondary">{trip.status}</Badge>
                         <Button size="sm" variant="ghost">
-                          View <ArrowRight className="h-4 w-4 ml-1" />
+                          View <SpriteIcon name="arrow-right" className="h-4 w-4 ml-1" />
                         </Button>
                       </CardFooter>
                     </Card>

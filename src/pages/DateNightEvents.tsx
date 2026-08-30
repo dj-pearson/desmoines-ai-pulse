@@ -2,6 +2,7 @@ import React, { useState, useEffect } from "react";
 import { Link } from "react-router-dom";
 import { createLogger } from '@/lib/logger';
 import { supabase } from "@/integrations/supabase/client";
+import { SpriteIcon } from "@/components/ui/SpriteIcon";
 
 const log = createLogger('DateNightEvents');
 import Header from "@/components/Header";
@@ -13,7 +14,7 @@ import { EventListJsonLd } from "@/components/schema/EventListJsonLd";
 import RelatedContent from "@/components/RelatedContent";
 import { Card, CardContent } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
-import { Heart, MapPin, Calendar, Clock, Sparkles } from "lucide-react";
+import { Heart } from "lucide-react";
 import { getCanonicalUrl } from "@/lib/brandConfig";
 import { useDocumentTitle } from "@/hooks/useDocumentTitle";
 import { Breadcrumbs } from "@/components/ui/breadcrumbs";
@@ -183,11 +184,11 @@ export default function DateNightEvents() {
 
           <div className="flex items-center gap-4 text-muted-foreground mb-4">
             <div className="flex items-center gap-1">
-              <Sparkles className="h-4 w-4" />
+              <SpriteIcon name="sparkles" className="h-4 w-4" />
               <span>Romantic Couples Activities</span>
             </div>
             <div className="flex items-center gap-1">
-              <MapPin className="h-4 w-4" />
+              <SpriteIcon name="map-pin" className="h-4 w-4" />
               <span>Des Moines Metro Area</span>
             </div>
           </div>
@@ -279,7 +280,7 @@ export default function DateNightEvents() {
             size="sm"
             onClick={() => setEveningOnly(true)}
           >
-            <Clock className="h-4 w-4 mr-1" />
+            <SpriteIcon name="clock" className="h-4 w-4 mr-1" />
             Evening Only (5 PM+)
           </Button>
           <Button
@@ -329,7 +330,7 @@ export default function DateNightEvents() {
         ) : (
           <Card>
             <CardContent className="pt-6 text-center">
-              <Calendar className="h-12 w-12 mx-auto mb-4 text-muted-foreground" />
+              <SpriteIcon name="calendar" className="h-12 w-12 mx-auto mb-4 text-muted-foreground" />
               <h3 className="text-lg font-semibold mb-2">No Date Night Events Found</h3>
               <p className="text-muted-foreground mb-4">
                 Check back soon! We add new romantic events daily.

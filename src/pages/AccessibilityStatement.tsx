@@ -7,29 +7,8 @@ import { Breadcrumbs } from "@/components/ui/breadcrumbs";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { useDocumentTitle } from "@/hooks/useDocumentTitle";
-import {
-  Accessibility,
-  Keyboard,
-  Eye,
-  EyeOff,
-  Volume2,
-  Smartphone,
-  Mail,
-  ExternalLink,
-  CheckCircle,
-  AlertCircle,
-  Moon,
-  Type,
-  Palette,
-  MonitorSmartphone,
-  Mic,
-  Subtitles,
-  AudioLines,
-  Pause,
-  Shield,
-  Settings,
-  Scale,
-} from "lucide-react";
+import { Accessibility, Keyboard, Eye, EyeOff, Volume2, Smartphone, Mail, CheckCircle, AlertCircle, Moon, Type, Palette, MonitorSmartphone, Mic, Subtitles, AudioLines, Pause, Shield, Settings, Scale } from "lucide-react";
+import { SpriteIcon } from "@/components/ui/SpriteIcon";
 
 export default function AccessibilityStatement() {
   useDocumentTitle("Accessibility Statement");
@@ -321,7 +300,7 @@ export default function AccessibilityStatement() {
                 className="text-primary underline inline-flex items-center gap-1"
               >
                 Web Content Accessibility Guidelines (WCAG)
-                <ExternalLink className="h-3 w-3" aria-hidden="true" />
+                <SpriteIcon name="external-link" className="h-3 w-3" aria-hidden="true" />
                 <span className="sr-only">(opens in new tab)</span>
               </a>{" "}
               defines requirements for designers and developers to improve accessibility
@@ -350,7 +329,7 @@ export default function AccessibilityStatement() {
                 className="text-primary underline inline-flex items-center gap-1"
               >
                 Apple's Accessibility Nutrition Labels
-                <ExternalLink className="h-3 w-3" aria-hidden="true" />
+                <SpriteIcon name="external-link" className="h-3 w-3" aria-hidden="true" />
                 <span className="sr-only">(opens in new tab)</span>
               </a>
               . Users can complete all common tasks — including onboarding, navigation,
@@ -827,7 +806,7 @@ export default function AccessibilityStatement() {
                 className="text-primary underline inline-flex items-center gap-1"
               >
                 W3C Web Accessibility Initiative (WAI)
-                <ExternalLink className="h-3 w-3" aria-hidden="true" />
+                <SpriteIcon name="external-link" className="h-3 w-3" aria-hidden="true" />
                 <span className="sr-only">(opens in new tab)</span>
               </a>
             </p>
@@ -840,7 +819,7 @@ export default function AccessibilityStatement() {
                 className="text-primary underline inline-flex items-center gap-1"
               >
                 Apple Accessibility
-                <ExternalLink className="h-3 w-3" aria-hidden="true" />
+                <SpriteIcon name="external-link" className="h-3 w-3" aria-hidden="true" />
                 <span className="sr-only">(opens in new tab)</span>
               </a>
             </p>

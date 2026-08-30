@@ -2,7 +2,8 @@ import React from 'react';
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
-import { Settings, UserPlus, Users } from "lucide-react";
+import { Settings, UserPlus } from "lucide-react";
+import { SpriteIcon } from "@/components/ui/SpriteIcon";
 
 interface GroupMember {
   id: string;
@@ -46,7 +47,7 @@ export function GroupInviteManager({ group, onClose }: GroupInviteManagerProps) 
 
         <CardContent className="p-6">
           <div className="text-center py-8 text-muted-foreground">
-            <Users className="h-12 w-12 mx-auto mb-4 opacity-50" />
+            <SpriteIcon name="users" className="h-12 w-12 mx-auto mb-4 opacity-50" />
             <p>Group management coming soon</p>
             <p className="text-sm">Full member management features will be available once the database is set up</p>
           </div>

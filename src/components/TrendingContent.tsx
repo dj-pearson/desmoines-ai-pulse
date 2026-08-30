@@ -5,7 +5,8 @@ import { useSimplePersonalization } from '@/hooks/useSimplePersonalization';
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card';
 import { Badge } from '@/components/ui/badge';
 import { Button } from '@/components/ui/button';
-import { TrendingUp, Clock, Star, MapPin } from 'lucide-react';
+import { Star } from "lucide-react";
+import { SpriteIcon } from "@/components/ui/SpriteIcon";
 
 interface TrendingContentProps {
   contentType?: 'event' | 'restaurant' | 'attraction' | 'playground';
@@ -41,7 +42,7 @@ export default function TrendingContent({
     return (
       <div className={`space-y-4 ${className}`}>
         <div className="flex items-center gap-2">
-          <TrendingUp className="h-5 w-5" />
+          <SpriteIcon name="trending-up" className="h-5 w-5" />
           <h3 className="text-lg font-semibold">Loading trending content...</h3>
         </div>
         <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
@@ -132,12 +133,12 @@ export default function TrendingContent({
     <div className={`space-y-6 ${className}`}>
       <div className="flex items-center justify-between">
         <div className="flex items-center gap-2">
-          <TrendingUp className="h-5 w-5 text-blue-600" />
+          <SpriteIcon name="trending-up" className="h-5 w-5 text-blue-600" />
           <h3 className="text-lg font-semibold">
             {contentType ? `Trending ${getContentTypeLabel(contentType)}` : 'Trending Now'}
           </h3>
           <Badge variant="outline" className="flex items-center gap-1">
-            <Clock className="h-3 w-3" />
+            <SpriteIcon name="clock" className="h-3 w-3" />
             {getTimeWindowLabel(timeWindow)}
           </Badge>
         </div>
@@ -171,7 +172,7 @@ export default function TrendingContent({
                       </>
                     ) : (
                       <>
-                        <TrendingUp className="h-3 w-3" />
+                        <SpriteIcon name="trending-up" className="h-3 w-3" />
                         {item.reason}
                       </>
                     )}
@@ -185,7 +186,7 @@ export default function TrendingContent({
                 {item.content?.name || item.content?.title || 'Untitled'}
               </CardTitle>
               <CardDescription className="flex items-center gap-1">
-                <MapPin className="h-3 w-3" />
+                <SpriteIcon name="map-pin" className="h-3 w-3" />
                 {item.content?.location || item.content?.city || 'Des Moines'}
               </CardDescription>
             </CardHeader>
@@ -200,7 +201,7 @@ export default function TrendingContent({
                   {getContentTypeLabel(item.contentType)}
                 </Badge>
                 <div className="flex items-center gap-1 text-xs text-gray-500">
-                  <TrendingUp className="h-3 w-3" />
+                  <SpriteIcon name="trending-up" className="h-3 w-3" />
                   Score: {Math.round(item.trendingScore)}
                 </div>
               </div>

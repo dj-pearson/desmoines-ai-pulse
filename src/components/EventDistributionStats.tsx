@@ -1,7 +1,8 @@
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
 import { Badge } from '@/components/ui/badge';
-import { Globe, Rss, Calendar, ExternalLink, CheckCircle } from 'lucide-react';
+import { Globe, Rss, CheckCircle } from "lucide-react";
+import { SpriteIcon } from "@/components/ui/SpriteIcon";
 
 interface EventDistributionStatsProps {
   className?: string;
@@ -35,35 +36,35 @@ export default function EventDistributionStats({ className }: EventDistributionS
       status: "configurable",
       method: "Webhook integration",
       reach: "Des Moines area media",
-      icon: <Calendar className="h-4 w-4" />
+      icon: <SpriteIcon name="calendar" className="h-4 w-4" />
     },
     {
       name: "Eventbrite",
       status: "configurable",
       method: "API integration",
       reach: "Event marketplace",
-      icon: <ExternalLink className="h-4 w-4" />
+      icon: <SpriteIcon name="external-link" className="h-4 w-4" />
     },
     {
       name: "Facebook Events",
       status: "configurable", 
       method: "Graph API",
       reach: "Social media platform",
-      icon: <ExternalLink className="h-4 w-4" />
+      icon: <SpriteIcon name="external-link" className="h-4 w-4" />
     },
     {
       name: "Meetup",
       status: "configurable",
       method: "API integration", 
       reach: "Community events",
-      icon: <ExternalLink className="h-4 w-4" />
+      icon: <SpriteIcon name="external-link" className="h-4 w-4" />
     },
     {
       name: "AllEvents.in",
       status: "configurable",
       method: "Webhook submission",
       reach: "Global event directory",
-      icon: <ExternalLink className="h-4 w-4" />
+      icon: <SpriteIcon name="external-link" className="h-4 w-4" />
     }
   ];
 

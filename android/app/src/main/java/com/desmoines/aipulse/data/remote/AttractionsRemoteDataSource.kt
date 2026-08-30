@@ -1,6 +1,6 @@
 package com.desmoines.aipulse.data.remote
 
-import android.util.Log
+import com.desmoines.aipulse.util.AppLogger
 import com.desmoines.aipulse.data.model.Attraction
 import com.desmoines.aipulse.util.Config
 import io.github.jan.supabase.SupabaseClient
@@ -9,9 +9,6 @@ import io.github.jan.supabase.postgrest.query.Count
 import io.github.jan.supabase.postgrest.query.Order
 import javax.inject.Inject
 import javax.inject.Singleton
-
-private const val TAG = "AttractionsRemoteDS"
-
 /**
  * Query parameters for fetching attractions.
  * Mirrors iOS AttractionsService.AttractionsQuery.
@@ -94,7 +91,7 @@ class AttractionsRemoteDataSource @Inject constructor(
         val attractions = result.decodeList<Attraction>()
         val total = result.countOrNull()?.toInt() ?: attractions.count()
 
-        Log.d(TAG, "fetchAttractions: ${attractions.size} attractions, total=$total, offset=${query.offset}")
+        AppLogger.network.debug("fetchAttractions: ${attractions.size} attractions, total=$total, offset=${query.offset}")
 
         return AttractionsResponse(
             attractions = attractions,

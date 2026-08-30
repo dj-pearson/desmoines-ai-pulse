@@ -1,5 +1,6 @@
 package com.desmoines.aipulse.ui.screens
 
+import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.fillMaxHeight
@@ -23,7 +24,6 @@ import androidx.compose.material3.TextButton
 import androidx.compose.material3.windowsizeclass.WindowWidthSizeClass
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.LaunchedEffect
-import androidx.compose.runtime.collectAsState
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
@@ -81,8 +81,8 @@ fun MainScreen(
     // onActivityResumed callback only fires on returning to the app and would
     // never see someone who is actively using it.
     val sessionTimeoutViewModel: SessionTimeoutViewModel = hiltViewModel()
-    val sessionMinutesRemaining by sessionTimeoutViewModel.minutesRemaining.collectAsState()
-    val sessionExpired by sessionTimeoutViewModel.expiredNotice.collectAsState()
+    val sessionMinutesRemaining by sessionTimeoutViewModel.minutesRemaining.collectAsStateWithLifecycle()
+    val sessionExpired by sessionTimeoutViewModel.expiredNotice.collectAsStateWithLifecycle()
     LaunchedEffect(navBackStackEntry) {
         sessionTimeoutViewModel.recordActivity()
     }
@@ -115,7 +115,7 @@ fun MainScreen(
     var scrollToTopTrigger by remember { mutableStateOf(0) }
 
     // Observe pending deep link destinations
-    val pendingDestination by deepLinkHandler.pendingDestination.collectAsState()
+    val pendingDestination by deepLinkHandler.pendingDestination.collectAsStateWithLifecycle()
 
     // Consume and navigate to pending deep link destination
     LaunchedEffect(pendingDestination) {
@@ -165,7 +165,7 @@ fun MainScreen(
     // App Shortcut / Assistant deep links (ANDP-015): route to the host screen.
     // The destination's ViewModel consumes the payload and applies the params,
     // so we only navigate here (no consume) — once consumed, pending goes null.
-    val pendingShortcut by shortcutDispatcher.pending.collectAsState()
+    val pendingShortcut by shortcutDispatcher.pending.collectAsStateWithLifecycle()
     LaunchedEffect(pendingShortcut) {
         when (pendingShortcut) {
             is ShortcutDispatcher.Pending.AskPulse -> {
@@ -196,7 +196,7 @@ fun MainScreen(
     // Full-screen interstitial (ANDP-044): counts the session on creation and is
     // offered only at a tab switch — a stable boundary, never mid-read/mid-flow.
     val interstitialViewModel: InterstitialAdViewModel = hiltViewModel()
-    val pendingInterstitial by interstitialViewModel.pending.collectAsState()
+    val pendingInterstitial by interstitialViewModel.pending.collectAsStateWithLifecycle()
 
     // Shared tab click handler
     val onTabClick: (BottomNavTab, Boolean) -> Unit = { tab, isSelected ->
@@ -219,7 +219,7 @@ fun MainScreen(
     // App-wide Best Of winner badges (ANDP-039): provided once so cards anywhere
     // can show "Best {Category}" without per-screen plumbing.
     val bestOfWinnersViewModel: BestOfWinnersViewModel = hiltViewModel()
-    val bestOfAwards by bestOfWinnersViewModel.winners.collectAsState()
+    val bestOfAwards by bestOfWinnersViewModel.winners.collectAsStateWithLifecycle()
 
     CompositionLocalProvider(
         LocalBackdropBlurState provides backdropBlur,

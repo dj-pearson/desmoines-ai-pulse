@@ -2,11 +2,12 @@ import React from 'react';
 import { Card, CardContent, CardHeader, CardTitle, CardDescription } from '@/components/ui/card';
 import { Checkbox } from '@/components/ui/checkbox';
 import { Label } from '@/components/ui/label';
-import { Bell, BellOff, Clock, Calendar } from 'lucide-react';
+import { Bell, BellOff } from "lucide-react";
 import { useEventReminders, type ReminderType } from '@/hooks/useEventReminders';
 import { Skeleton } from '@/components/ui/skeleton';
 import { scheduleEventReminder } from '@/hooks/usePushNotifications';
 import { isCapacitor } from '@/lib/capacitorUtils';
+import { SpriteIcon } from "@/components/ui/SpriteIcon";
 
 interface EventReminderSettingsProps {
   eventId: string;
@@ -62,17 +63,17 @@ export function EventReminderSettings({ eventId, eventTitle, eventDate, classNam
     {
       type: '1_day',
       label: '1 day before',
-      icon: <Calendar className="h-4 w-4" />,
+      icon: <SpriteIcon name="calendar" className="h-4 w-4" />,
     },
     {
       type: '3_hours',
       label: '3 hours before',
-      icon: <Clock className="h-4 w-4" />,
+      icon: <SpriteIcon name="clock" className="h-4 w-4" />,
     },
     {
       type: '1_hour',
       label: '1 hour before',
-      icon: <Clock className="h-4 w-4" />,
+      icon: <SpriteIcon name="clock" className="h-4 w-4" />,
     },
   ];
 

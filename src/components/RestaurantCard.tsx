@@ -1,6 +1,6 @@
 import { Link } from "react-router-dom";
 import { Badge } from "@/components/ui/badge";
-import { ChefHat, Star, Flame, Sparkles, Leaf, Wheat } from "lucide-react";
+import { Star, Flame, Leaf, Wheat } from "lucide-react";
 // map-pin renders once per card and this card renders on nine pages. It is a
 // two-shape lucide icon, so inline costs 3 nodes and the sprite costs 2.
 //
@@ -9,7 +9,6 @@ import { ChefHat, Star, Flame, Sparkles, Leaf, Wheat } from "lucide-react";
 // single-path icon like star saves nothing - and star is the highest-count icon
 // on /restaurants/dietary at 197. ChefHat would save one node per card and
 // every sprite symbol ships on every page whether used or not.
-import { SpriteIcon } from "@/components/ui/SpriteIcon";
 import { memo, useState, useMemo, useCallback, useRef } from "react";
 import { OptimizedImage } from "@/components/OptimizedImage";
 import { SocialProofBadge } from "@/components/SocialProofBadge";
@@ -20,6 +19,7 @@ import { getCuisineGradient, STATUS_BADGE } from "@/lib/categoryStyles";
 import { FavoriteButton } from "@/components/FavoriteButton";
 import { isSponsoredActive, logSponsoredClick } from "@/lib/sponsored";
 import { useSponsoredImpression } from "@/hooks/useSponsoredImpression";
+import { SpriteIcon } from "@/components/ui/SpriteIcon";
 
 // WEB-UX-030: each entry carries its own dark pair. The render used to append
 // `dark:bg-opacity-20 dark:text-opacity-90`, which are no-ops — an opacity
@@ -173,7 +173,7 @@ function RestaurantCardComponent({ restaurant, variant = "default" }: Restaurant
             {sponsoredActive && <SponsoredBadge />}
             {!sponsoredActive && isFeatured && (
               <Badge className={`${STATUS_BADGE.featured} border-0 shadow-md text-xs font-semibold px-2.5 py-0.5`}>
-                <Sparkles className="h-3 w-3 mr-1" />
+                <SpriteIcon name="sparkles" className="h-3 w-3 mr-1" />
                 Featured
               </Badge>
             )}
@@ -207,7 +207,7 @@ function RestaurantCardComponent({ restaurant, variant = "default" }: Restaurant
             </h3>
             {restaurant.cuisine && (
               <div className="flex items-center gap-1.5 mt-1">
-                <ChefHat className="h-3.5 w-3.5 text-white/80" />
+                <SpriteIcon name="chef-hat" className="h-3.5 w-3.5 text-white/80" />
                 <span className="text-white/90 text-sm font-medium">
                   {restaurant.cuisine}
                 </span>

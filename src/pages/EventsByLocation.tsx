@@ -3,6 +3,7 @@ import { useParams, useLocation as useRouterLocation } from "react-router-dom";
 import { useQuery } from "@tanstack/react-query";
 import { createLogger } from '@/lib/logger';
 import { supabase } from "@/integrations/supabase/client";
+import { SpriteIcon } from "@/components/ui/SpriteIcon";
 
 const log = createLogger('EventsByLocation');
 import Header from "@/components/Header";
@@ -13,7 +14,7 @@ import EnhancedLocalSEO from "@/components/EnhancedLocalSEO";
 import { EventListJsonLd } from "@/components/schema/EventListJsonLd";
 import { useDocumentTitle } from "@/hooks/useDocumentTitle";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
-import { MapPin, Calendar, Users, Star } from "lucide-react";
+import { Star } from "lucide-react";
 import { format, parseISO, isAfter } from "date-fns";
 import { BRAND } from "@/lib/brandConfig";
 import { Breadcrumbs } from "@/components/ui/breadcrumbs";
@@ -315,7 +316,7 @@ export default function EventsByLocation() {
         {/* Hero Section */}
         <div className="mb-8">
           <div className="flex items-center gap-2 mb-4">
-            <MapPin className="h-6 w-6 text-primary" />
+            <SpriteIcon name="map-pin" className="h-6 w-6 text-primary" />
             <h1 className="text-3xl font-bold">Events in {suburbInfo.name}</h1>
           </div>
 
@@ -376,7 +377,7 @@ export default function EventsByLocation() {
         ) : upcomingEvents.length > 0 ? (
           <div className="mb-8">
             <h2 className="text-2xl font-bold mb-6 flex items-center gap-2">
-              <Calendar className="h-6 w-6" />
+              <SpriteIcon name="calendar" className="h-6 w-6" />
               Upcoming Events
             </h2>
             <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
@@ -397,7 +398,7 @@ export default function EventsByLocation() {
         ) : (
           <Card className="mb-8">
             <CardContent className="pt-6 text-center">
-              <Calendar className="h-12 w-12 text-muted-foreground mx-auto mb-4" />
+              <SpriteIcon name="calendar" className="h-12 w-12 text-muted-foreground mx-auto mb-4" />
               <h2 className="text-xl font-semibold mb-2">No Upcoming Events</h2>
               <p className="text-muted-foreground mb-4">
                 No events are currently scheduled for {suburbInfo.name}. Check
@@ -422,7 +423,7 @@ export default function EventsByLocation() {
         {restaurants && restaurants.length > 0 && (
           <div className="mb-8">
             <h2 className="text-2xl font-bold mb-6 flex items-center gap-2">
-              <Users className="h-6 w-6" />
+              <SpriteIcon name="users" className="h-6 w-6" />
               Local Dining in {suburbInfo.name}
             </h2>
             <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">

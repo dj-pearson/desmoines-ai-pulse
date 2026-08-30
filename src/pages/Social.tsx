@@ -15,19 +15,9 @@ import { GroupEventPlanner } from "@/components/GroupEventPlannerSimple";
 import { CommunityForums } from "@/components/CommunityForums";
 import { EnhancedGroupPlanner } from "@/components/EnhancedGroupPlanner";
 import TrendingContent from "@/components/TrendingContent";
-import {
-  Users,
-  UserPlus,
-  Calendar,
-  MapPin,
-  Star,
-  TrendingUp,
-  Heart,
-  MessageSquare,
-  Camera,
-  Plus,
-} from "lucide-react";
+import { UserPlus, Star, Heart, MessageSquare, Camera, Plus } from "lucide-react";
 import { useToast } from "@/hooks/use-toast";
+import { SpriteIcon } from "@/components/ui/SpriteIcon";
 
 export default function Social() {
   const { isAuthenticated } = useAuth();
@@ -144,7 +134,7 @@ export default function Social() {
             <Card>
               <CardHeader>
                 <CardTitle className="flex items-center gap-2">
-                  <Users className="h-5 w-5" />
+                  <SpriteIcon name="users" className="h-5 w-5" />
                   Your Friends ({friends?.length || 0})
                 </CardTitle>
               </CardHeader>
@@ -241,7 +231,7 @@ export default function Social() {
             <Card>
               <CardHeader>
                 <CardTitle className="flex items-center gap-2">
-                  <TrendingUp className="h-5 w-5 text-blue-600" />
+                  <SpriteIcon name="trending-up" className="h-5 w-5 text-blue-600" />
                   Trending Events
                 </CardTitle>
               </CardHeader>
@@ -336,7 +326,7 @@ export default function Social() {
                   </div>
                 ) : (
                   <div className="text-center py-8">
-                    <Users className="h-12 w-12 text-muted-foreground mx-auto mb-3" />
+                    <SpriteIcon name="users" className="h-12 w-12 text-muted-foreground mx-auto mb-3" />
                     <p className="text-muted-foreground">
                       Add friends to see their activity and interests
                     </p>
@@ -360,7 +350,7 @@ export default function Social() {
             <Card>
               <CardHeader>
                 <CardTitle className="flex items-center gap-2">
-                  <MapPin className="h-5 w-5 text-green-600" />
+                  <SpriteIcon name="map-pin" className="h-5 w-5 text-green-600" />
                   Events Near You
                 </CardTitle>
               </CardHeader>
@@ -383,7 +373,7 @@ export default function Social() {
             <Card>
               <CardHeader>
                 <CardTitle className="flex items-center gap-2">
-                  <Calendar className="h-5 w-5 text-blue-600" />
+                  <SpriteIcon name="calendar" className="h-5 w-5 text-blue-600" />
                   Popular in Des Moines
                 </CardTitle>
               </CardHeader>
@@ -391,7 +381,7 @@ export default function Social() {
                 <div className="grid gap-4 md:grid-cols-2">
                   <div className="p-4 border rounded-lg bg-gradient-to-br from-blue-50 to-indigo-50">
                     <div className="flex items-center gap-2 mb-2">
-                      <Calendar className="h-5 w-5 text-blue-600" />
+                      <SpriteIcon name="calendar" className="h-5 w-5 text-blue-600" />
                       <h4 className="font-semibold">This Weekend</h4>
                     </div>
                     <p className="text-sm text-muted-foreground mb-3">
@@ -406,7 +396,7 @@ export default function Social() {
 
                   <div className="p-4 border rounded-lg bg-gradient-to-br from-green-50 to-emerald-50">
                     <div className="flex items-center gap-2 mb-2">
-                      <MapPin className="h-5 w-5 text-green-600" />
+                      <SpriteIcon name="map-pin" className="h-5 w-5 text-green-600" />
                       <h4 className="font-semibold">Nearby Attractions</h4>
                     </div>
                     <p className="text-sm text-muted-foreground mb-3">

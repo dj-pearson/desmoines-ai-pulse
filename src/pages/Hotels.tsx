@@ -21,13 +21,7 @@ import {
 } from "@/components/ui/sheet";
 import { Checkbox } from "@/components/ui/checkbox";
 import { Label } from "@/components/ui/label";
-import {
-  Search,
-  SlidersHorizontal,
-  X,
-  Building2,
-  MapPin,
-} from "lucide-react";
+import { Search, SlidersHorizontal, X, Building2 } from "lucide-react";
 import { Skeleton } from "@/components/ui/skeleton";
 import { EmptyState } from "@/components/ui/empty-state";
 import { ErrorState } from "@/components/ui/error-state";
@@ -36,6 +30,7 @@ import { getCanonicalUrl } from "@/lib/brandConfig";
 import AffiliateDisclosureBanner from "@/components/AffiliateDisclosureBanner";
 import Header from "@/components/Header";
 import Footer from "@/components/Footer";
+import { SpriteIcon } from "@/components/ui/SpriteIcon";
 
 const AREAS = [
   "Downtown",
@@ -291,7 +286,7 @@ export default function Hotels() {
           <div className="container mx-auto px-4">
             <div className="max-w-3xl mx-auto text-center">
               <div className="flex items-center justify-center gap-2 mb-4">
-                <Building2 className="h-8 w-8" />
+                <SpriteIcon name="building-2" className="h-8 w-8" />
                 <h1 className="text-3xl md:text-5xl font-bold">
                   Stay in Des Moines
                 </h1>
@@ -364,7 +359,7 @@ export default function Hotels() {
                   className="cursor-pointer"
                   onClick={() => toggleArrayFilter(selectedAreas, setSelectedAreas, area)}
                 >
-                  <MapPin className="h-3 w-3 mr-1" />
+                  <SpriteIcon name="map-pin" className="h-3 w-3 mr-1" />
                   {area}
                 </Badge>
               ))}

@@ -1,5 +1,6 @@
 package com.desmoines.aipulse.ui.components
 
+import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import androidx.compose.animation.AnimatedVisibility
 import androidx.compose.animation.expandVertically
 import androidx.compose.animation.fadeIn
@@ -16,7 +17,6 @@ import androidx.compose.material.icons.filled.CloudDone
 import androidx.compose.material3.Icon
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
-import androidx.compose.runtime.collectAsState
 import androidx.compose.runtime.getValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
@@ -41,8 +41,8 @@ import com.desmoines.aipulse.util.NetworkMonitor
  */
 @Composable
 fun OfflineBanner(networkMonitor: NetworkMonitor) {
-    val isConnected by networkMonitor.isConnected.collectAsState()
-    val showReconnected by networkMonitor.showReconnected.collectAsState()
+    val isConnected by networkMonitor.isConnected.collectAsStateWithLifecycle()
+    val showReconnected by networkMonitor.showReconnected.collectAsStateWithLifecycle()
 
     val showOffline = !isConnected
     val showOnline = showReconnected

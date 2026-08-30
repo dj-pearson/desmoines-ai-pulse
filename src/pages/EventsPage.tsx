@@ -2,24 +2,7 @@ import React, { useState, useEffect, useCallback, lazy, Suspense, useRef, useMem
 import { Link, useNavigate } from "react-router-dom";
 import { useQuery } from "@tanstack/react-query";
 import { supabase } from "@/integrations/supabase/client";
-import {
-  Calendar,
-  Search,
-  List,
-  Map,
-  X,
-  SearchX,
-  Sparkles,
-  Navigation,
-  AlertCircle,
-  RefreshCw,
-  Clock,
-  Users,
-  Ticket,
-  ChevronDown,
-  Star,
-  Shuffle,
-} from "lucide-react";
+import { Calendar, Search, List, Map, X, SearchX, Sparkles, Navigation, AlertCircle, RefreshCw, Clock, ChevronDown, Star, Shuffle } from "lucide-react";
 import { useIsMobile } from "@/hooks/use-mobile";
 import { usePullToRefresh } from "@/hooks/use-pull-to-refresh";
 import { SortDropdown, EVENT_SORT_OPTIONS } from "@/components/SortDropdown";
@@ -57,6 +40,7 @@ import { BRAND, getCanonicalUrl } from "@/lib/brandConfig";
 import { SearchAutocomplete, addRecentSearch } from "@/components/SearchAutocomplete";
 import { formatCount } from "@/lib/pluralize";
 import { buildEventJsonLd } from "@/lib/eventSchema";
+import { SpriteIcon } from "@/components/ui/SpriteIcon";
 
 // Lazy load heavy map component (includes Leaflet library ~150KB)
 const EventsMap = lazy(() => import("@/components/EventsMap"));
@@ -1011,7 +995,7 @@ export default function EventsPage() {
               <h3 className="text-lg font-semibold mb-4">Browse Events By</h3>
               <div className="grid grid-cols-2 md:grid-cols-4 gap-3">
                 <Link to="/events/today" className="flex items-center gap-2 p-3 rounded-lg bg-card border hover:border-primary/50 hover:shadow-sm transition-all text-sm font-medium">
-                  <Clock className="h-4 w-4 text-primary" />
+                  <SpriteIcon name="clock" className="h-4 w-4 text-primary" />
                   Events Today
                 </Link>
                 <Link to="/events/this-weekend" className="flex items-center gap-2 p-3 rounded-lg bg-card border hover:border-primary/50 hover:shadow-sm transition-all text-sm font-medium">
@@ -1019,11 +1003,11 @@ export default function EventsPage() {
                   This Weekend
                 </Link>
                 <Link to="/events/free" className="flex items-center gap-2 p-3 rounded-lg bg-card border hover:border-primary/50 hover:shadow-sm transition-all text-sm font-medium">
-                  <Ticket className="h-4 w-4 text-primary" />
+                  <SpriteIcon name="ticket" className="h-4 w-4 text-primary" />
                   Free Events
                 </Link>
                 <Link to="/events/kids" className="flex items-center gap-2 p-3 rounded-lg bg-card border hover:border-primary/50 hover:shadow-sm transition-all text-sm font-medium">
-                  <Users className="h-4 w-4 text-primary" />
+                  <SpriteIcon name="users" className="h-4 w-4 text-primary" />
                   Kids & Family
                 </Link>
               </div>

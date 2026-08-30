@@ -27,23 +27,11 @@ import {
   DialogHeader,
   DialogTitle,
 } from "@/components/ui/dialog";
-import {
-  MapPin,
-  Search,
-  Loader2,
-  Plus,
-  Ban,
-  Trash2,
-  Eye,
-  EyeOff,
-  Info,
-  Star,
-  Building2,
-  ExternalLink,
-} from "lucide-react";
+import { Search, Loader2, Plus, Ban, Trash2, Eye, EyeOff, Info, Star } from "lucide-react";
 import { useToast } from "@/hooks/use-toast";
 import { supabase } from "@/integrations/supabase/client";
 import { createLogger } from '@/lib/logger';
+import { SpriteIcon } from "@/components/ui/SpriteIcon";
 
 const log = createLogger('GooglePlacesHotelTools');
 
@@ -470,7 +458,7 @@ export default function GooglePlacesHotelTools() {
                           )}
                         </div>
                         <p className="text-sm text-muted-foreground flex items-center gap-1">
-                          <MapPin className="h-3 w-3" />
+                          <SpriteIcon name="map-pin" className="h-3 w-3" />
                           {hotel.formatted_address}
                         </p>
                         <div className="flex items-center gap-3 mt-1">
@@ -503,7 +491,7 @@ export default function GooglePlacesHotelTools() {
                             rel="noopener noreferrer"
                             className="text-xs text-primary hover:underline flex items-center gap-1 mt-1"
                           >
-                            <ExternalLink className="h-3 w-3" />
+                            <SpriteIcon name="external-link" className="h-3 w-3" />
                             Website
                           </a>
                         )}
@@ -603,7 +591,7 @@ export default function GooglePlacesHotelTools() {
                         <h5 className="font-medium">{entry.hotel_name}</h5>
                         {entry.formatted_address && (
                           <p className="text-sm text-muted-foreground flex items-center gap-1">
-                            <MapPin className="h-3 w-3" />
+                            <SpriteIcon name="map-pin" className="h-3 w-3" />
                             {entry.formatted_address}
                           </p>
                         )}

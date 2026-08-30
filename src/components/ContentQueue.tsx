@@ -32,22 +32,11 @@ import {
   TableHeader,
   TableRow,
 } from './ui/table';
-import {
-  CheckCircle,
-  XCircle,
-  AlertCircle,
-  Clock,
-  User,
-  Calendar,
-  ThumbsUp,
-  ThumbsDown,
-  Eye,
-  Zap,
-  AlertTriangle
-} from 'lucide-react';
+import { CheckCircle, XCircle, AlertCircle, Clock, User, ThumbsUp, ThumbsDown, Eye, Zap, AlertTriangle } from "lucide-react";
 import { useContentQueue, QueueItem } from '@/hooks/useContentQueue';
 import { format } from 'date-fns';
 import { useAdminAuth } from '@/hooks/useAdminAuth';
+import { SpriteIcon } from "@/components/ui/SpriteIcon";
 
 export function ContentQueue() {
   const { user } = useAdminAuth();
@@ -316,7 +305,7 @@ export function ContentQueue() {
                     <TableRow key={item.id}>
                       <TableCell className="whitespace-nowrap">
                         <div className="flex items-center gap-2 text-sm">
-                          <Calendar className="h-4 w-4 text-muted-foreground" />
+                          <SpriteIcon name="calendar" className="h-4 w-4 text-muted-foreground" />
                           {format(new Date(item.submitted_at), 'MMM dd, HH:mm')}
                         </div>
                       </TableCell>

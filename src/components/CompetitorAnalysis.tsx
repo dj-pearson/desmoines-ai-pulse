@@ -6,12 +6,13 @@ import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs';
 import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
 import { Dialog, DialogContent, DialogDescription, DialogHeader, DialogTitle, DialogTrigger } from '@/components/ui/dialog';
-import { AlertTriangle, Globe, Loader2, RotateCcw, Target, TrendingUp, Plus, ExternalLink, BarChart3, FileText } from 'lucide-react';
+import { AlertTriangle, Globe, Loader2, RotateCcw, Target, Plus, BarChart3, FileText } from "lucide-react";
 import { toast } from 'sonner';
 import { supabase } from '@/integrations/supabase/client';
 import { useArticles } from '@/hooks/useArticles';
 import GenerateArticleButton from '@/components/GenerateArticleButton';
 import { createLogger } from '@/lib/logger';
+import { SpriteIcon } from "@/components/ui/SpriteIcon";
 
 const log = createLogger('CompetitorAnalysis');
 
@@ -433,7 +434,7 @@ const CompetitorAnalysis = () => {
                           <Badge variant="outline">{content.category || 'General'}</Badge>
                           {content.url && (
                             <a href={content.url} target="_blank" rel="noopener noreferrer">
-                              <ExternalLink className="h-4 w-4 text-muted-foreground hover:text-primary" />
+                              <SpriteIcon name="external-link" className="h-4 w-4 text-muted-foreground hover:text-primary" />
                             </a>
                           )}
                         </div>
@@ -447,7 +448,7 @@ const CompetitorAnalysis = () => {
                         <span>Scraped: {new Date(content.scraped_at).toLocaleDateString()}</span>
                         {content.content_score && (
                           <span className="flex items-center gap-1">
-                            <TrendingUp className="h-3 w-3" />
+                            <SpriteIcon name="trending-up" className="h-3 w-3" />
                             Score: {content.content_score.toFixed(1)}
                           </span>
                         )}
@@ -471,7 +472,7 @@ const CompetitorAnalysis = () => {
             <CardContent>
               {suggestions.length === 0 ? (
                 <div className="text-center py-8 text-muted-foreground">
-                  <TrendingUp className="h-12 w-12 mx-auto mb-4 opacity-50" />
+                  <SpriteIcon name="trending-up" className="h-12 w-12 mx-auto mb-4 opacity-50" />
                   <p>AI suggestions will appear here after running analysis</p>
                 </div>
               ) : (

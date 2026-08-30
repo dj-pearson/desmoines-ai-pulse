@@ -1,10 +1,10 @@
 import { useEffect, useMemo, useRef, useState } from "react";
 import { Card } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
-import { Sparkles } from "lucide-react";
 import { UpgradeModal } from "@/components/UpgradeModal";
 import { createViewabilityObserver } from "@/lib/tracking";
 import { logAdImpression, logAdClick } from "@/lib/adAnalytics";
+import { SpriteIcon } from "@/components/ui/SpriteIcon";
 
 /**
  * House ad — fills an ad slot when no paid campaign or affiliate creative is
@@ -79,7 +79,7 @@ export function HouseAd({ placement, className = "" }: HouseAdProps) {
         <div className="relative z-10 flex items-center justify-between w-full h-full p-3 md:p-4">
           <div className="flex-1 min-w-0 mr-3">
             <h3 className="font-semibold text-sm md:text-base line-clamp-1 flex items-center gap-1.5">
-              <Sparkles className="h-4 w-4 text-amber-500 flex-shrink-0" />
+              <SpriteIcon name="sparkles" className="h-4 w-4 text-amber-500 flex-shrink-0" />
               {message.title}
             </h3>
             <p className="text-xs md:text-sm text-muted-foreground line-clamp-2">

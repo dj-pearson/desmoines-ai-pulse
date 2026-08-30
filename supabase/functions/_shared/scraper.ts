@@ -13,6 +13,14 @@ export interface ScraperConfig {
   waitTime?: number;
   timeout?: number;
   userAgent?: string;
+  /**
+   * True when SCRAPER_USER_AGENT was set deliberately, rather than the
+   * built-in desktop-Chrome default. Backends that can forward a
+   * User-Agent to the crawled site only do so when this is true, so
+   * leaving the variable unset keeps every backend behaving exactly as
+   * it did before. See WEB-SEC-024.
+   */
+  userAgentDeclared?: boolean;
   firecrawlApiKey?: string;
   browserlessApiKey?: string;
   browserlessUrl?: string;
@@ -43,6 +51,7 @@ export function getScraperConfig(): ScraperConfig {
     timeout: parseInt(Deno.env.get('SCRAPER_TIMEOUT') || '30000'),
     userAgent: Deno.env.get('SCRAPER_USER_AGENT') || 
       'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36',
+    userAgentDeclared: !!Deno.env.get('SCRAPER_USER_AGENT'),
     firecrawlApiKey: Deno.env.get('FIRECRAWL_API_KEY'),
     browserlessApiKey: browserlessKey,
     browserlessUrl: Deno.env.get('BROWSERLESS_URL') || 'https://production-sfo.browserless.io',
@@ -429,6 +438,15 @@ async function scrapeWithFirecrawl(
         formats: ['markdown', 'html'],
         waitFor: config.waitTime,
         timeout: config.timeout,
+        // WEB-SEC-024: this is the ONLY backend besides plain fetch that can
+        // carry our identity to the crawled site. Firecrawl's /v1/scrape takes
+        // a `headers` object and applies it to the target request; without it
+        // the site sees Firecrawl's own agent and SCRAPER_USER_AGENT reaches
+        // nobody. Sent only when the variable was set deliberately, so the
+        // default path is byte-identical to before.
+        ...(config.userAgentDeclared && config.userAgent
+          ? { headers: { 'User-Agent': config.userAgent } }
+          : {}),
       }),
     });
     

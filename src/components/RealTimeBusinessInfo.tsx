@@ -1,11 +1,12 @@
 import React, { useState, useEffect } from 'react';
-import { Clock, Phone, Globe, AlertCircle, CheckCircle } from 'lucide-react';
+import { Phone, Globe, AlertCircle, CheckCircle } from "lucide-react";
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { Badge } from '@/components/ui/badge';
 import { supabase } from '@/integrations/supabase/client';
 import { getRestaurantOpenStatus } from '@/lib/restaurantHours';
 import { RESTAURANT_LIST_COLUMNS } from '@/lib/listColumns';
 import { handleError } from '@/lib/errorHandler';
+import { SpriteIcon } from "@/components/ui/SpriteIcon";
 
 /**
  * WEB-LEGAL-010: every field here now has a column behind it.
@@ -120,7 +121,7 @@ export default function RealTimeBusinessInfo() {
     switch (status) {
       case 'open': return <CheckCircle className="h-4 w-4" />;
       case 'closed': return <AlertCircle className="h-4 w-4" />;
-      case 'closing-soon': return <Clock className="h-4 w-4" />;
+      case 'closing-soon': return <SpriteIcon name="clock" className="h-4 w-4" />;
       default: return <AlertCircle className="h-4 w-4" />;
     }
   };
@@ -209,7 +210,7 @@ export default function RealTimeBusinessInfo() {
                   data does not support (WEB-LEGAL-010). */}
               {business.openingText && (
                 <div className="flex items-start gap-2 text-sm">
-                  <Clock className="h-4 w-4 mt-0.5 text-muted-foreground shrink-0" />
+                  <SpriteIcon name="clock" className="h-4 w-4 mt-0.5 text-muted-foreground shrink-0" />
                   <span className="text-muted-foreground">{business.openingText}</span>
                 </div>
               )}

@@ -7,7 +7,8 @@ import { Badge } from "@/components/ui/badge";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { useBusinessPartnership } from "@/hooks/useBusinessPartnership";
 import { useAuth } from "@/hooks/useAuth";
-import { Building2, Send, CheckCircle, Clock, XCircle } from "lucide-react";
+import { Send, CheckCircle, XCircle } from "lucide-react";
+import { SpriteIcon } from "@/components/ui/SpriteIcon";
 
 export function BusinessPartnershipApplication() {
   const { user } = useAuth();
@@ -43,8 +44,8 @@ export function BusinessPartnershipApplication() {
     switch (status) {
       case 'approved': return <CheckCircle className="w-4 h-4 text-green-500" />;
       case 'rejected': return <XCircle className="w-4 h-4 text-red-500" />;
-      case 'under_review': return <Clock className="w-4 h-4 text-blue-500" />;
-      default: return <Clock className="w-4 h-4 text-yellow-500" />;
+      case 'under_review': return <SpriteIcon name="clock" className="w-4 h-4 text-blue-500" />;
+      default: return <SpriteIcon name="clock" className="w-4 h-4 text-yellow-500" />;
     }
   };
 
@@ -65,7 +66,7 @@ export function BusinessPartnershipApplication() {
     return (
       <Card>
         <CardContent className="p-6 text-center">
-          <Building2 className="w-8 h-8 mx-auto mb-2 text-muted-foreground" />
+          <SpriteIcon name="building-2" className="w-8 h-8 mx-auto mb-2 text-muted-foreground" />
           <p className="text-muted-foreground">Sign in to apply for business partnership</p>
         </CardContent>
       </Card>
@@ -111,7 +112,7 @@ export function BusinessPartnershipApplication() {
       <Card>
         <CardHeader>
           <CardTitle className="flex items-center gap-2">
-            <Building2 className="w-5 h-5" />
+            <SpriteIcon name="building-2" className="w-5 h-5" />
             Partnership Application
           </CardTitle>
         </CardHeader>

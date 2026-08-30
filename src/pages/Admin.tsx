@@ -1,6 +1,7 @@
 import { useAdminAuth } from "@/hooks/useAdminAuth";
 import { useDocumentTitle } from "@/hooks/useDocumentTitle";
 import { createLogger } from '@/lib/logger';
+import { SpriteIcon } from "@/components/ui/SpriteIcon";
 
 const log = createLogger('Admin');
 import {
@@ -18,17 +19,7 @@ import ContentEditDialog from "@/components/ContentEditDialog";
 import { AdminKpiStrip } from "@/components/admin/AdminKpiStrip";
 import { AdminActivityFeed } from "@/components/admin/AdminActivityFeed";
 import { useState } from "react";
-import {
-  Shield,
-  Users,
-  Settings,
-  Crown,
-  FileText,
-  Bot,
-  Wrench,
-  TrendingUp,
-  Server,
-} from "lucide-react";
+import { Shield, Settings, Crown, FileText, Bot, Wrench, TrendingUp, Server } from "lucide-react";
 import { useEvents } from "@/hooks/useEvents";
 import { useAdminHomeStats } from "@/hooks/useAdminHomeStats";
 import { ContentItem, ContentType } from "@/lib/types";
@@ -59,7 +50,7 @@ export default function Admin() {
   const getRoleIcon = () => {
     if (isRootAdmin) return <Crown className="h-5 w-5" />;
     if (userRole === "admin") return <Shield className="h-5 w-5" />;
-    return <Users className="h-5 w-5" />;
+    return <SpriteIcon name="users" className="h-5 w-5" />;
   };
 
   const canManageContent = () =>

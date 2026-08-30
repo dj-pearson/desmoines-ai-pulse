@@ -36,24 +36,7 @@ import {
   TableHeader,
   TableRow,
 } from "@/components/ui/table";
-import {
-  Plus,
-  Edit,
-  Trash2,
-  MapPin,
-  Phone,
-  Globe,
-  Search,
-  Building2,
-  Users,
-  CheckCircle2,
-  XCircle,
-  Navigation,
-  RefreshCw,
-  Calendar,
-  ArrowRight,
-  Loader2,
-} from "lucide-react";
+import { Plus, Edit, Trash2, MapPin, Phone, Globe, Search, Building2, Users, CheckCircle2, XCircle, Navigation, RefreshCw, ArrowRight, Loader2 } from "lucide-react";
 import { supabase } from "@/integrations/supabase/client";
 import { toast } from "sonner";
 import {

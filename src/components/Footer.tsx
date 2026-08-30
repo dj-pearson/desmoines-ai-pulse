@@ -1,5 +1,5 @@
 import { useState } from "react";
-import { Heart, Mail, Calendar, Utensils, MapPin, Map, Building2, Crown, ArrowRight, Facebook, Twitter, Instagram, PlusCircle, Users, Sparkles, DollarSign } from "lucide-react";
+import { Heart, Mail, Utensils, Map, Crown, Facebook, Twitter, Instagram, PlusCircle, DollarSign } from "lucide-react";
 import { Link } from "react-router-dom";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
@@ -9,6 +9,7 @@ import { OptimizedLogo } from "@/components/OptimizedLogo";
 import { logConsent } from "@/lib/consentLog";
 import { reopenConsentBanner } from "@/components/CookieConsentBanner";
 import { SiteDirectory } from "@/components/seo/SiteDirectory";
+import { SpriteIcon } from "@/components/ui/SpriteIcon";
 
 export default function Footer() {
   const [email, setEmail] = useState("");
@@ -83,7 +84,7 @@ export default function Footer() {
               <Button size="lg" variant="secondary" className="font-semibold">
                 <Crown className="h-4 w-4 mr-2" />
                 View Plans
-                <ArrowRight className="h-4 w-4 ml-2" />
+                <SpriteIcon name="arrow-right" className="h-4 w-4 ml-2" />
               </Button>
             </Link>
           </div>
@@ -112,7 +113,7 @@ export default function Footer() {
 
               {/* Newsletter Benefit Line */}
               <p className="text-neutral-300 text-sm mb-2 flex items-center gap-1.5">
-                <Sparkles className="h-3.5 w-3.5 text-amber-400 flex-shrink-0" aria-hidden="true" />
+                <SpriteIcon name="sparkles" className="h-3.5 w-3.5 text-amber-400 flex-shrink-0" aria-hidden="true" />
                 Weekly digest of trending events + AI-powered recommendations
               </p>
 
@@ -138,7 +139,7 @@ export default function Footer() {
               {/* Social Proof + CAN-SPAM disclosure. Submitting the form is an
                   affirmative opt-in; we log it to consent_records. */}
               <p className="text-neutral-400 text-xs mb-1 flex items-center gap-1">
-                <Users className="h-3 w-3" aria-hidden="true" />
+                <SpriteIcon name="users" className="h-3 w-3" aria-hidden="true" />
                 Free forever, unsubscribe anytime.
               </p>
               <p className="text-neutral-400 text-[11px] mb-4 leading-snug">
@@ -191,7 +192,7 @@ export default function Footer() {
               <ul className="space-y-2">
                 <li>
                   <Link to="/events" className="text-neutral-400 hover:text-white transition-colors text-sm flex items-center gap-2">
-                    <Calendar className="h-3.5 w-3.5" /> Events
+                    <SpriteIcon name="calendar" className="h-3.5 w-3.5" /> Events
                   </Link>
                 </li>
                 <li>
@@ -216,7 +217,7 @@ export default function Footer() {
                 </li>
                 <li>
                   <Link to="/attractions" className="text-neutral-400 hover:text-white transition-colors text-sm flex items-center gap-2">
-                    <MapPin className="h-3.5 w-3.5" /> Attractions
+                    <SpriteIcon name="map-pin" className="h-3.5 w-3.5" /> Attractions
                   </Link>
                 </li>
                 <li>
@@ -231,7 +232,7 @@ export default function Footer() {
                 </li>
                 <li>
                   <Link to="/stay" className="text-neutral-400 hover:text-white transition-colors text-sm flex items-center gap-2">
-                    <Building2 className="h-3.5 w-3.5" /> Hotels & Stay
+                    <SpriteIcon name="building-2" className="h-3.5 w-3.5" /> Hotels & Stay
                   </Link>
                 </li>
                 <li>

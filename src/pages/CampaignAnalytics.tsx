@@ -7,9 +7,10 @@ import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/com
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { Skeleton } from "@/components/ui/skeleton";
 import { Badge } from "@/components/ui/badge";
-import { ArrowLeft, Download, TrendingUp, MousePointerClick, Eye, DollarSign, Users } from "lucide-react";
+import { ArrowLeft, Download, MousePointerClick, Eye, DollarSign } from "lucide-react";
 import { LineChart, Line, BarChart, Bar, XAxis, YAxis, CartesianGrid, Tooltip, Legend, ResponsiveContainer } from "recharts";
 import { useDocumentTitle } from "@/hooks/useDocumentTitle";
+import { SpriteIcon } from "@/components/ui/SpriteIcon";
 
 export default function CampaignAnalytics() {
   const { campaignId } = useParams<{ campaignId: string }>();
@@ -113,7 +114,7 @@ export default function CampaignAnalytics() {
           <CardContent className="pt-6">
             <div className="flex items-center justify-between mb-2">
               <Eye className="h-5 w-5 text-muted-foreground" />
-              <TrendingUp className="h-4 w-4 text-green-500" />
+              <SpriteIcon name="trending-up" className="h-4 w-4 text-green-500" />
             </div>
             <p className="text-2xl font-bold">{formatNumber(summary?.totalImpressions || 0)}</p>
             <p className="text-xs text-muted-foreground">Total Impressions</p>
@@ -124,7 +125,7 @@ export default function CampaignAnalytics() {
           <CardContent className="pt-6">
             <div className="flex items-center justify-between mb-2">
               <MousePointerClick className="h-5 w-5 text-muted-foreground" />
-              <TrendingUp className="h-4 w-4 text-green-500" />
+              <SpriteIcon name="trending-up" className="h-4 w-4 text-green-500" />
             </div>
             <p className="text-2xl font-bold">{formatNumber(summary?.totalClicks || 0)}</p>
             <p className="text-xs text-muted-foreground">Total Clicks</p>
@@ -134,7 +135,7 @@ export default function CampaignAnalytics() {
         <Card>
           <CardContent className="pt-6">
             <div className="flex items-center justify-between mb-2">
-              <TrendingUp className="h-5 w-5 text-muted-foreground" />
+              <SpriteIcon name="trending-up" className="h-5 w-5 text-muted-foreground" />
             </div>
             <p className="text-2xl font-bold">{summary?.avgCtr.toFixed(2) || 0}%</p>
             <p className="text-xs text-muted-foreground">Average CTR</p>
@@ -144,7 +145,7 @@ export default function CampaignAnalytics() {
         <Card>
           <CardContent className="pt-6">
             <div className="flex items-center justify-between mb-2">
-              <Users className="h-5 w-5 text-muted-foreground" />
+              <SpriteIcon name="users" className="h-5 w-5 text-muted-foreground" />
             </div>
             <p className="text-2xl font-bold">{formatNumber(summary?.uniqueViewers || 0)}</p>
             <p className="text-xs text-muted-foreground">Unique Viewers</p>

@@ -9,22 +9,11 @@ import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogTrigger } from "@/components/ui/dialog";
 import { useCommunityFeatures } from "@/hooks/useCommunityFeatures";
 import { useEvents } from "@/hooks/useEvents";
-import { 
-  Users, 
-  Calendar, 
-  MapPin,
-  CheckCircle,
-  XCircle,
-  Clock,
-  PlusCircle,
-  MessageCircle,
-  Camera,
-  Share2,
-  Star
-} from "lucide-react";
+import { CheckCircle, XCircle, PlusCircle, MessageCircle, Camera, Star } from "lucide-react";
 import { useAuth } from "@/hooks/useAuth";
 import { toast } from "sonner";
 import { formatCount } from "@/lib/pluralize";
+import { SpriteIcon } from "@/components/ui/SpriteIcon";
 
 interface EnhancedGroupPlannerProps {
   groupId: string;
@@ -151,7 +140,7 @@ export function EnhancedGroupPlanner({ groupId, groupName, onClose }: EnhancedGr
           <div className="flex items-center justify-between">
             <div className="flex items-center gap-4">
               <CardTitle className="flex items-center gap-2">
-                <Users className="w-5 h-5" />
+                <SpriteIcon name="users" className="w-5 h-5" />
                 {groupName} - Enhanced Event Planning
               </CardTitle>
               <Badge variant="secondary">
@@ -167,7 +156,7 @@ export function EnhancedGroupPlanner({ groupId, groupName, onClose }: EnhancedGr
                 className="gap-2"
                 disabled={selectedEvents.length === 0}
               >
-                <Share2 className="w-4 h-4" />
+                <SpriteIcon name="share-2" className="w-4 h-4" />
                 Share Plan
               </Button>
               <Dialog open={isInviteOpen} onOpenChange={setIsInviteOpen}>
@@ -250,12 +239,12 @@ export function EnhancedGroupPlanner({ groupId, groupName, onClose }: EnhancedGr
                             <h3 className="font-medium mb-2">{event.title}</h3>
                             <div className="flex items-center gap-4 text-sm text-muted-foreground mb-2">
                               <span className="flex items-center gap-1">
-                                <Calendar className="w-4 h-4" />
+                                <SpriteIcon name="calendar" className="w-4 h-4" />
                                 {formatDate(event.date)}
                               </span>
                               {event.venue && (
                                 <span className="flex items-center gap-1">
-                                  <MapPin className="w-4 h-4" />
+                                  <SpriteIcon name="map-pin" className="w-4 h-4" />
                                   {event.venue}
                                 </span>
                               )}
@@ -301,12 +290,12 @@ export function EnhancedGroupPlanner({ groupId, groupName, onClose }: EnhancedGr
                                 <h3 className="font-medium mb-2">{event.title}</h3>
                                 <div className="flex items-center gap-4 text-sm text-muted-foreground mb-2">
                                   <span className="flex items-center gap-1">
-                                    <Calendar className="w-4 h-4" />
+                                    <SpriteIcon name="calendar" className="w-4 h-4" />
                                     {formatDate(event.date)}
                                   </span>
                                   {event.venue && (
                                     <span className="flex items-center gap-1">
-                                      <MapPin className="w-4 h-4" />
+                                      <SpriteIcon name="map-pin" className="w-4 h-4" />
                                       {event.venue}
                                     </span>
                                   )}
@@ -348,7 +337,7 @@ export function EnhancedGroupPlanner({ groupId, groupName, onClose }: EnhancedGr
                                   onClick={() => voteOnEvent(event.id, 'maybe')}
                                   className="gap-2"
                                 >
-                                  <Clock className="w-4 h-4" />
+                                  <SpriteIcon name="clock" className="w-4 h-4" />
                                   Maybe ({voteCounts.maybe})
                                 </Button>
                                 <Button
@@ -387,7 +376,7 @@ export function EnhancedGroupPlanner({ groupId, groupName, onClose }: EnhancedGr
                   })
                 ) : (
                   <div className="text-center py-12">
-                    <Calendar className="w-12 h-12 mx-auto mb-4 text-muted-foreground" />
+                    <SpriteIcon name="calendar" className="w-12 h-12 mx-auto mb-4 text-muted-foreground" />
                     <p className="text-muted-foreground">No events selected yet</p>
                     <p className="text-sm text-muted-foreground">Go to "Find Events" to add some to your planning session</p>
                   </div>

@@ -9,7 +9,7 @@ import { Checkbox } from "@/components/ui/checkbox";
 import { Badge } from "@/components/ui/badge";
 import { Calendar } from "@/components/ui/calendar";
 import { Popover, PopoverContent, PopoverTrigger } from "@/components/ui/popover";
-import { CalendarIcon, Star, Eye, Target, Megaphone, Zap, TrendingUp, PanelRight } from "lucide-react";
+import { CalendarIcon, Star, Eye, Target, Megaphone, Zap, PanelRight } from "lucide-react";
 import { format, addDays, differenceInDays } from "date-fns";
 import { cn } from "@/lib/utils";
 import { useCampaigns, fetchRateCard } from "@/hooks/useCampaigns";
@@ -24,6 +24,7 @@ import { supabase } from "@/integrations/supabase/client";
 import { ListingPicker } from "@/components/advertising/ListingPicker";
 import type { LinkedListing } from "@/components/advertising/ListingPicker";
 import { PlatformMetrics } from "@/components/advertising/PlatformMetrics";
+import { SpriteIcon } from "@/components/ui/SpriteIcon";
 
 /** Minimum number of days from today before a campaign can start.
  *  Gives time for creative upload + admin review. */
@@ -485,7 +486,7 @@ export default function Advertise() {
                                   </div>
                                 ) : (
                                   <div className="rounded-md border border-border bg-muted/30 p-3 text-xs flex items-center gap-1.5 text-muted-foreground">
-                                    <TrendingUp className="h-3.5 w-3.5 shrink-0" />
+                                    <SpriteIcon name="trending-up" className="h-3.5 w-3.5 shrink-0" />
                                     <span>
                                       <span className="font-medium text-foreground">Flat Rate</span>
                                       {" "}— Standard visibility. Upgrade to a higher-tier placement for CPM-based impression estimates.

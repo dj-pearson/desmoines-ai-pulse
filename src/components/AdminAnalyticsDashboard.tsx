@@ -20,18 +20,8 @@ import {
   Pie,
   Cell,
 } from "recharts";
-import {
-  TrendingUp,
-  Users,
-  Eye,
-  MousePointer,
-  Clock,
-  Globe,
-  Smartphone,
-  Monitor,
-  RefreshCw,
-  Download,
-} from "lucide-react";
+import { Eye, MousePointer, Globe, Smartphone, Monitor, RefreshCw, Download } from "lucide-react";
+import { SpriteIcon } from "@/components/ui/SpriteIcon";
 
 interface AnalyticsData {
   pageViews: { name: string; value: number }[];
@@ -310,7 +300,7 @@ export default function AdminAnalyticsDashboard() {
       <div className="flex items-center justify-between">
         <div>
           <h2 className="text-2xl font-bold flex items-center gap-2">
-            <TrendingUp className="h-6 w-6 text-blue-500" />
+            <SpriteIcon name="trending-up" className="h-6 w-6 text-blue-500" />
             Advanced Analytics
           </h2>
           <p className="text-muted-foreground">
@@ -338,7 +328,7 @@ export default function AdminAnalyticsDashboard() {
         <Card>
           <CardHeader className="pb-3">
             <CardTitle className="text-sm font-medium flex items-center gap-2">
-              <Users className="h-4 w-4" />
+              <SpriteIcon name="users" className="h-4 w-4" />
               Active Users
             </CardTitle>
           </CardHeader>
@@ -388,7 +378,7 @@ export default function AdminAnalyticsDashboard() {
         <Card>
           <CardHeader className="pb-3">
             <CardTitle className="text-sm font-medium flex items-center gap-2">
-              <Clock className="h-4 w-4" />
+              <SpriteIcon name="clock" className="h-4 w-4" />
               Avg Session
             </CardTitle>
           </CardHeader>

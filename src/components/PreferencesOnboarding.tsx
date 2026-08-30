@@ -3,18 +3,7 @@ import { Dialog, DialogContent } from '@/components/ui/dialog';
 import { Button } from '@/components/ui/button';
 import { Badge } from '@/components/ui/badge';
 import { Card } from '@/components/ui/card';
-import {
-  ChevronLeft,
-  ChevronRight,
-  Check,
-  Sparkles,
-  Heart,
-  MapPin,
-  Bell,
-  Calendar,
-  DollarSign,
-  ExternalLink,
-} from 'lucide-react';
+import { ChevronLeft, ChevronRight, Check, Heart, Bell, DollarSign } from "lucide-react";
 import { useUserPreferences } from '@/hooks/useUserPreferences';
 import {
   interestCategories,
@@ -23,6 +12,7 @@ import {
   DietaryRestriction,
 } from '@/types/preferences';
 import { cn } from '@/lib/utils';
+import { SpriteIcon } from "@/components/ui/SpriteIcon";
 
 interface PreferencesOnboardingProps {
   open: boolean;
@@ -120,7 +110,7 @@ export function PreferencesOnboarding({
           <div className="text-center space-y-4 py-6">
             <div className="flex justify-center">
               <div className="rounded-full bg-gradient-to-br from-purple-500 to-pink-500 p-6">
-                <Sparkles className="h-16 w-16 text-white" />
+                <SpriteIcon name="sparkles" className="h-16 w-16 text-white" />
               </div>
             </div>
             <div className="space-y-2">
@@ -303,7 +293,7 @@ export function PreferencesOnboarding({
         return (
           <div className="space-y-4">
             <div className="text-center space-y-2">
-              <MapPin className="h-10 w-10 text-primary mx-auto" />
+              <SpriteIcon name="map-pin" className="h-10 w-10 text-primary mx-auto" />
               <h2 className="text-2xl font-bold">{currentStepData.title}</h2>
               <p className="text-muted-foreground">{currentStepData.description}</p>
             </div>
@@ -318,7 +308,7 @@ export function PreferencesOnboarding({
                     className="justify-start"
                     onClick={() => toggleNeighborhood(neighborhood)}
                   >
-                    <MapPin className="h-4 w-4 mr-2" />
+                    <SpriteIcon name="map-pin" className="h-4 w-4 mr-2" />
                     {neighborhood}
                     {isSelected && <Check className="h-4 w-4 ml-auto" />}
                   </Button>
@@ -334,7 +324,7 @@ export function PreferencesOnboarding({
             <div className="text-center space-y-2">
               <div className="flex justify-center">
                 <div className="rounded-full bg-primary/10 p-4">
-                  <Calendar className="h-12 w-12 text-primary" />
+                  <SpriteIcon name="calendar" className="h-12 w-12 text-primary" />
                 </div>
               </div>
               <h2 className="text-2xl font-bold">{currentStepData.title}</h2>
@@ -347,7 +337,7 @@ export function PreferencesOnboarding({
               <Card className="p-4 bg-gradient-to-br from-primary/5 to-accent/5 border-2 border-primary/20">
                 <div className="space-y-4">
                   <div className="flex items-start gap-3">
-                    <Sparkles className="h-5 w-5 text-primary mt-0.5" />
+                    <SpriteIcon name="sparkles" className="h-5 w-5 text-primary mt-0.5" />
                     <div className="flex-1">
                       <h3 className="font-semibold text-sm mb-1">Smart Suggestions</h3>
                       <p className="text-xs text-muted-foreground">
@@ -393,7 +383,7 @@ export function PreferencesOnboarding({
                     {calendarConnected ? (
                       <Check className="h-5 w-5" />
                     ) : (
-                      <ExternalLink className="h-4 w-4" />
+                      <SpriteIcon name="external-link" className="h-4 w-4" />
                     )}
                   </div>
                 </Button>
@@ -530,7 +520,7 @@ export function PreferencesOnboarding({
                 </div>
               )}
               <div className="flex items-center gap-3 p-3 bg-gradient-to-r from-primary/10 to-accent/10 rounded-lg border-2 border-primary/20">
-                <Sparkles className="h-5 w-5 text-primary flex-shrink-0" />
+                <SpriteIcon name="sparkles" className="h-5 w-5 text-primary flex-shrink-0" />
                 <span className="text-sm font-semibold text-left">Ready to explore!</span>
               </div>
             </div>
@@ -587,7 +577,7 @@ export function PreferencesOnboarding({
               <Button onClick={handleNext} size="sm" className="min-w-[100px]">
                 {isLastStep ? (
                   <>
-                    <Sparkles className="h-4 w-4 mr-2" />
+                    <SpriteIcon name="sparkles" className="h-4 w-4 mr-2" />
                     Start Exploring
                   </>
                 ) : (

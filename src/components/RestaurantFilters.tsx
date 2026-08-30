@@ -14,19 +14,8 @@ import { Slider } from "@/components/ui/slider";
 import { Switch } from "@/components/ui/switch";
 import { Label } from "@/components/ui/label";
 import { Separator } from "@/components/ui/separator";
-import {
-  Search,
-  Filter,
-  X,
-  MapPin,
-  Star,
-  DollarSign,
-  ChefHat,
-  Clock,
-  TrendingUp,
-  Sparkles,
-  SlidersHorizontal,
-} from "lucide-react";
+import { Search, Filter, X, Star, DollarSign, Clock, TrendingUp, SlidersHorizontal } from "lucide-react";
+import { SpriteIcon } from "@/components/ui/SpriteIcon";
 
 export interface RestaurantFilterOptions {
   search: string;
@@ -263,13 +252,13 @@ export function RestaurantFilters({
             <div className="flex gap-1 flex-wrap">
               {filters.featuredOnly && (
                 <Badge variant="secondary" className="text-xs">
-                  <Sparkles className="h-3 w-3 mr-1" />
+                  <SpriteIcon name="sparkles" className="h-3 w-3 mr-1" />
                   Featured
                 </Badge>
               )}
               {filters.openNow && (
                 <Badge variant="secondary" className="text-xs">
-                  <Clock className="h-3 w-3 mr-1" />
+                  <SpriteIcon name="clock" className="h-3 w-3 mr-1" />
                   Open Now
                 </Badge>
               )}
@@ -301,7 +290,7 @@ export function RestaurantFilters({
               {/* Cuisine Types */}
               <div className="space-y-3">
                 <Label className="flex items-center gap-2 text-sm font-medium">
-                  <ChefHat className="h-4 w-4" />
+                  <SpriteIcon name="chef-hat" className="h-4 w-4" />
                   Cuisine Type
                 </Label>
                 <div className="flex flex-wrap gap-2 max-h-32 overflow-y-auto">
@@ -361,7 +350,7 @@ export function RestaurantFilters({
               {/* City Areas */}
               <div className="space-y-3">
                 <Label className="flex items-center gap-2 text-sm font-medium">
-                  <MapPin className="h-4 w-4" />
+                  <SpriteIcon name="map-pin" className="h-4 w-4" />
                   City
                 </Label>
                 <div className="flex flex-wrap gap-2 max-h-32 overflow-y-auto">
@@ -414,7 +403,7 @@ export function RestaurantFilters({
             <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
               <div className="flex items-center justify-between p-3 rounded-md border">
                 <div className="flex items-center gap-2">
-                  <Sparkles className="h-4 w-4 text-yellow-500" />
+                  <SpriteIcon name="sparkles" className="h-4 w-4 text-yellow-500" />
                   <div>
                     <Label htmlFor="featured" className="font-medium">
                       Featured Only
@@ -435,7 +424,7 @@ export function RestaurantFilters({
 
               <div className="flex items-center justify-between p-3 rounded-md border">
                 <div className="flex items-center gap-2">
-                  <Clock className="h-4 w-4 text-green-500" />
+                  <SpriteIcon name="clock" className="h-4 w-4 text-green-500" />
                   <div>
                     <Label htmlFor="openNow" className="font-medium">
                       Open Now

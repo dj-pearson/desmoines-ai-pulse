@@ -9,16 +9,14 @@ import { Card, CardContent } from '@/components/ui/card';
 import { Badge } from '@/components/ui/badge';
 import { Button } from '@/components/ui/button';
 import { Skeleton } from '@/components/ui/skeleton';
-import {
-  MapPin, Clock, Printer, ArrowLeft, Lightbulb,
-  UtensilsCrossed, Landmark, CalendarPlus,
-} from 'lucide-react';
+import { Printer, ArrowLeft, Lightbulb, UtensilsCrossed, Landmark, CalendarPlus } from "lucide-react";
+import { SpriteIcon } from "@/components/ui/SpriteIcon";
 
 function stopIcon(entityType: string) {
   switch (entityType) {
     case 'restaurant': return <UtensilsCrossed className="h-4 w-4" />;
     case 'attraction': return <Landmark className="h-4 w-4" />;
-    default: return <MapPin className="h-4 w-4" />;
+    default: return <SpriteIcon name="map-pin" className="h-4 w-4" />;
   }
 }
 
@@ -162,7 +160,7 @@ export default function ItineraryDetail() {
             )}
             <div className="flex items-center gap-3 flex-wrap mb-6">
               <Badge variant="secondary">
-                <Clock className="h-3 w-3 mr-1" />
+                <SpriteIcon name="clock" className="h-3 w-3 mr-1" />
                 {getDurationLabel(itinerary.duration)}
               </Badge>
               <Badge variant="outline">{getThemeLabel(itinerary.theme)}</Badge>
@@ -205,7 +203,7 @@ export default function ItineraryDetail() {
 
                         {stop.time_suggestion && (
                           <p className="text-sm text-muted-foreground mb-2">
-                            <Clock className="h-3 w-3 inline mr-1" />
+                            <SpriteIcon name="clock" className="h-3 w-3 inline mr-1" />
                             {stop.time_suggestion}
                           </p>
                         )}

@@ -157,17 +157,27 @@ function SectionRenderer({
 function buildSchemaOrgData(page: PseoPageContent) {
   const schemas: object[] = [];
 
-  // BreadcrumbList
-  schemas.push({
-    '@context': 'https://schema.org',
-    '@type': 'BreadcrumbList',
-    itemListElement: page.structuredData.breadcrumb.map((item, i) => ({
-      '@type': 'ListItem',
-      position: i + 1,
-      name: item.name,
-      item: getCanonicalUrl(item.url),
-    })),
-  });
+  // NO BreadcrumbList HERE, DELIBERATELY (WEB-SEO-008).
+  //
+  // SEOHead already emits one from the `breadcrumbs` prop this component passes
+  // it, built from the same page.structuredData.breadcrumb and with the same
+  // URLs - getCanonicalUrl is `${BRAND.baseUrl}${path}`, which is exactly what
+  // SEOHead does inline. Building it again here put TWO BreadcrumbList blocks in
+  // the rendered DOM of every pSEO page.
+  //
+  // It did not show up in the prerendered HTML, which is why it survived: the
+  // prerenderer's dedupeJsonLd keeps the last block of each @type and dropped
+  // SEOHead's. Measured - a full build reported exactly 16 dropped BreadcrumbList
+  // blocks against exactly 16 pSEO URLs. Googlebot renders the SPA, so it saw
+  // both.
+  //
+  // AND THE DEDUP MADE IT DANGEROUS RATHER THAN MERELY UNTIDY. dedupeJsonLd types
+  // a block by its FIRST "@type", and this array is emitted as one <script>. With
+  // BreadcrumbList first, the whole array was typed BreadcrumbList - so the only
+  // thing that stopped the dedup discarding this page's FAQPage, ItemList and
+  // everything else was that SEOHead happens to render its scripts BEFORE the
+  // structuredData one. A reordering inside SEOHead would have silently deleted
+  // the page's entire schema payload.
 
   // FAQPage
   const faqSection = page.sections.find((s) => s.type === 'faq');

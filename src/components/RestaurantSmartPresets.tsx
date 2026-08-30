@@ -1,17 +1,8 @@
 import { useState } from "react";
 import { Badge } from "@/components/ui/badge";
-import {
-  Heart,
-  Moon,
-  Users,
-  Zap,
-  Coffee,
-  Wine,
-  Baby,
-  Leaf,
-  Sparkles,
-} from "lucide-react";
+import { Heart, Moon, Users, Zap, Coffee, Wine, Baby, Leaf } from "lucide-react";
 import type { RestaurantFilterOptions } from "@/components/RestaurantFilters";
+import { SpriteIcon } from "@/components/ui/SpriteIcon";
 
 interface SmartPreset {
   id: string;
@@ -147,7 +138,7 @@ export function RestaurantSmartPresets({
   return (
     <div className="space-y-2">
       <div className="flex items-center gap-2 text-sm font-medium text-muted-foreground px-1">
-        <Sparkles className="h-3.5 w-3.5" />
+        <SpriteIcon name="sparkles" className="h-3.5 w-3.5" />
         <span>Quick picks</span>
       </div>
       <div className="flex gap-2 overflow-x-auto pb-2 -mx-4 px-4 scrollbar-hide snap-x snap-mandatory">

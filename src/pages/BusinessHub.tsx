@@ -14,21 +14,8 @@ import { BusinessDashboard } from "@/components/BusinessDashboard";
 import { BusinessPartnershipApplication } from "@/components/BusinessPartnershipApplication";
 import { useAuth } from "@/hooks/useAuth";
 import { useBusinessPartnership } from "@/hooks/useBusinessPartnership";
-import {
-  Building2,
-  BarChart3,
-  Megaphone,
-  Calendar,
-  Star,
-  Users,
-  TrendingUp,
-  Rocket,
-  CheckCircle,
-  ArrowRight,
-  Shield,
-  Award,
-  Target
-} from "lucide-react";
+import { BarChart3, Megaphone, Star, Rocket, CheckCircle, Shield, Award, Target } from "lucide-react";
+import { SpriteIcon } from "@/components/ui/SpriteIcon";
 
 export default function BusinessHub() {
   const { user, isLoading: authLoading } = useAuth();
@@ -106,7 +93,7 @@ export default function BusinessHub() {
       description: "Promote your business effectively"
     },
     {
-      icon: <Calendar className="h-5 w-5" />,
+      icon: <SpriteIcon name="calendar" className="h-5 w-5" />,
       title: "Event Submissions",
       description: "Share your events with the community"
     }
@@ -135,7 +122,7 @@ export default function BusinessHub() {
           {/* Hero Section */}
           <div className="text-center space-y-4 mb-8">
             <div className="flex items-center justify-center gap-2">
-              <Building2 className="h-10 w-10 text-primary" />
+              <SpriteIcon name="building-2" className="h-10 w-10 text-primary" />
               <h1 className="text-2xl sm:text-3xl md:text-4xl font-bold">Business Hub</h1>
             </div>
             <p className="text-xl text-muted-foreground max-w-2xl mx-auto">
@@ -182,7 +169,7 @@ export default function BusinessHub() {
                 <span className="hidden sm:inline text-xs sm:text-sm">Ads</span>
               </TabsTrigger>
               <TabsTrigger value="events" className="flex items-center gap-1 sm:gap-2 px-2 sm:px-3 py-2">
-                <Calendar className="h-4 w-4 flex-shrink-0" />
+                <SpriteIcon name="calendar" className="h-4 w-4 flex-shrink-0" />
                 <span className="hidden sm:inline text-xs sm:text-sm">Events</span>
               </TabsTrigger>
             </TabsList>
@@ -207,7 +194,7 @@ export default function BusinessHub() {
                       </AlertDescription>
                     </Alert>
                     <Button onClick={() => setActiveTab("partnership")}>
-                      <Building2 className="h-4 w-4 mr-2" />
+                      <SpriteIcon name="building-2" className="h-4 w-4 mr-2" />
                       Complete Business Profile
                     </Button>
                   </CardContent>
@@ -256,7 +243,7 @@ export default function BusinessHub() {
                         </p>
                       </div>
                       <div className="border rounded-lg p-4">
-                        <TrendingUp className="h-8 w-8 text-green-500 mb-3" />
+                        <SpriteIcon name="trending-up" className="h-8 w-8 text-green-500 mb-3" />
                         <h3 className="font-semibold mb-2">Performance Tracking</h3>
                         <p className="text-sm text-muted-foreground mb-4">
                           Monitor clicks, impressions, and conversions in real-time
@@ -297,7 +284,7 @@ export default function BusinessHub() {
               <Card>
                 <CardHeader>
                   <CardTitle className="flex items-center gap-2">
-                    <Calendar className="h-5 w-5 text-primary" />
+                    <SpriteIcon name="calendar" className="h-5 w-5 text-primary" />
                     Event Management
                   </CardTitle>
                   <CardDescription>
@@ -308,25 +295,25 @@ export default function BusinessHub() {
                   <div className="space-y-6">
                     <div className="grid md:grid-cols-2 gap-6">
                       <div className="border-2 border-dashed rounded-lg p-6 text-center">
-                        <Calendar className="h-12 w-12 text-muted-foreground mx-auto mb-3" />
+                        <SpriteIcon name="calendar" className="h-12 w-12 text-muted-foreground mx-auto mb-3" />
                         <h3 className="font-semibold mb-2">Submit New Event</h3>
                         <p className="text-sm text-muted-foreground mb-4">
                           Share your upcoming events with the Des Moines community
                         </p>
                         <Button onClick={() => navigate("/dashboard?tab=submit-event")}>
-                          <Calendar className="h-4 w-4 mr-2" />
+                          <SpriteIcon name="calendar" className="h-4 w-4 mr-2" />
                           Submit Event
                         </Button>
                       </div>
 
                       <div className="border-2 border-dashed rounded-lg p-6 text-center">
-                        <Users className="h-12 w-12 text-muted-foreground mx-auto mb-3" />
+                        <SpriteIcon name="users" className="h-12 w-12 text-muted-foreground mx-auto mb-3" />
                         <h3 className="font-semibold mb-2">Track Submissions</h3>
                         <p className="text-sm text-muted-foreground mb-4">
                           View status and analytics for your submitted events
                         </p>
                         <Button onClick={() => navigate("/profile?tab=events")} variant="outline">
-                          <ArrowRight className="h-4 w-4 mr-2" />
+                          <SpriteIcon name="arrow-right" className="h-4 w-4 mr-2" />
                           View My Events
                         </Button>
                       </div>

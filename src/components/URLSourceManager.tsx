@@ -28,22 +28,11 @@ import {
   TableHeader,
   TableRow,
 } from "@/components/ui/table";
-import {
-  Plus,
-  Edit,
-  Trash2,
-  Globe,
-  Calendar,
-  MapPin,
-  Utensils,
-  Play,
-  Camera,
-  Building,
-  Clock,
-} from "lucide-react";
+import { Plus, Edit, Trash2, Globe, Calendar, Utensils, Play, Camera, Building } from "lucide-react";
 import { supabase } from "@/integrations/supabase/client";
 import { useToast } from "@/components/ui/use-toast";
 import { createLogger } from '@/lib/logger';
+import { SpriteIcon } from "@/components/ui/SpriteIcon";
 
 const log = createLogger('URLSourceManager');
 
@@ -408,7 +397,7 @@ const URLSourceManager: React.FC<URLSourceManagerProps> = ({
                           <TableCell>
                             {source.last_crawled ? (
                               <div className="flex items-center gap-1 text-xs text-muted-foreground">
-                                <Clock className="h-3 w-3" />
+                                <SpriteIcon name="clock" className="h-3 w-3" />
                                 {new Date(source.last_crawled).toLocaleDateString()}
                               </div>
                             ) : (

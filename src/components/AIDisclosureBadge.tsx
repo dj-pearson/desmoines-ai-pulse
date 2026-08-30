@@ -20,9 +20,10 @@
  * on the output.
  */
 
-import { Sparkles, Info } from "lucide-react";
+import { Info } from "lucide-react";
 import { Tooltip, TooltipContent, TooltipProvider, TooltipTrigger } from "@/components/ui/tooltip";
 import { cn } from "@/lib/utils";
+import { SpriteIcon } from "@/components/ui/SpriteIcon";
 
 interface AIDisclosureBadgeProps {
   /** Short tooltip text. Keep it plain-English. */
@@ -53,7 +54,7 @@ export function AIDisclosureBadge({
               className
             )}
           >
-            <Sparkles className="h-3 w-3" aria-hidden="true" />
+            <SpriteIcon name="sparkles" className="h-3 w-3" aria-hidden="true" />
             {label}
           </span>
         </TooltipTrigger>

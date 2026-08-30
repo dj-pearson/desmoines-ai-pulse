@@ -28,16 +28,7 @@ import {
   DropdownMenuTrigger,
 } from '@/components/ui/dropdown-menu';
 import { Skeleton } from '@/components/ui/skeleton';
-import {
-  Plus,
-  CheckSquare,
-  MoreHorizontal,
-  Edit,
-  Trash2,
-  Calendar,
-  AlertCircle,
-  Clock,
-} from 'lucide-react';
+import { Plus, CheckSquare, MoreHorizontal, Edit, Trash2, Calendar, AlertCircle } from "lucide-react";
 import {
   useCrmTasks,
   useCrmMyTasks,
