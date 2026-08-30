@@ -25,32 +25,7 @@ import {
 } from "./ui/card";
 import { Badge } from "./ui/badge";
 import { Alert, AlertDescription } from "./ui/alert";
-import {
-  Edit,
-  Trash2,
-  Search,
-  Filter,
-  Star,
-  Plus,
-  Sparkles,
-  AlertTriangle,
-  Calendar,
-  Brain,
-  FileText,
-  ChevronDown,
-  ChevronRight,
-  ArrowUpDown,
-  ArrowUp,
-  ArrowDown,
-  Download,
-  LayoutGrid,
-  List,
-  CheckCircle2,
-  AlertCircle,
-  XCircle,
-  Globe,
-  Image as ImageIcon,
-} from "lucide-react";
+import { Edit, Trash2, Search, Filter, Star, Plus, AlertTriangle, Brain, FileText, ChevronDown, ChevronRight, ArrowUpDown, ArrowUp, ArrowDown, Download, LayoutGrid, List, CheckCircle2, AlertCircle, XCircle, Globe, Image as ImageIcon } from "lucide-react";
 import { supabase } from "@/integrations/supabase/client";
 import { toast } from "sonner";
 import { useDomainHighlights } from "@/hooks/useDomainHighlights";
@@ -59,6 +34,7 @@ import { useWriteupGenerator } from "@/hooks/useWriteupGenerator";
 import { useContentExport } from "@/hooks/useDataExport";
 import { createLogger } from '@/lib/logger';
 import ImagePickerDialog from "./admin/ImagePickerDialog";
+import { SpriteIcon } from "@/components/ui/SpriteIcon";
 
 const log = createLogger('ContentTable');
 
@@ -842,7 +818,7 @@ export default function ContentTable({
                   }
                 }}
               >
-                <Calendar className="h-4 w-4 mr-1" />
+                <SpriteIcon name="calendar" className="h-4 w-4 mr-1" />
                 Fix First
               </Button>
             </div>
@@ -1105,7 +1081,7 @@ export default function ContentTable({
                           <>
                             {item.date ? (
                               <Badge variant="secondary" className="text-xs">
-                                <Calendar className="h-3 w-3 mr-1" />
+                                <SpriteIcon name="calendar" className="h-3 w-3 mr-1" />
                                 {new Date(item.date).toLocaleDateString()}
                               </Badge>
                             ) : (
@@ -1152,7 +1128,7 @@ export default function ContentTable({
                         )}
                         {item.is_enhanced && (
                           <Badge className="bg-blue-100 text-blue-800 text-xs">
-                            <Sparkles className="h-3 w-3 mr-1" />
+                            <SpriteIcon name="sparkles" className="h-3 w-3 mr-1" />
                             Enhanced
                           </Badge>
                         )}
@@ -1183,7 +1159,7 @@ export default function ContentTable({
                           onClick={() => handleEnhanceContent(item)}
                           disabled={enhancingId === item.id}
                         >
-                          <Sparkles className="h-3 w-3" />
+                          <SpriteIcon name="sparkles" className="h-3 w-3" />
                         </Button>
                         {(type === "event" || type === "restaurant") && (
                           <Button
@@ -1409,7 +1385,7 @@ export default function ContentTable({
                                   onClick={() => handleEnhanceContent(item)}
                                   disabled={enhancingId === item.id}
                                 >
-                                  <Sparkles className="h-4 w-4" />
+                                  <SpriteIcon name="sparkles" className="h-4 w-4" />
                                 </Button>
                                 {(type === "event" || type === "restaurant") && (
                                   <Button

@@ -1,6 +1,6 @@
 package com.desmoines.aipulse.ui.screens.profile
 
-import android.util.Log
+import com.desmoines.aipulse.util.AppLogger
 import androidx.lifecycle.ViewModel
 import androidx.lifecycle.viewModelScope
 import com.desmoines.aipulse.data.model.UserProfile
@@ -26,9 +26,6 @@ import kotlinx.serialization.json.jsonObject
 import kotlinx.serialization.json.jsonPrimitive
 import kotlinx.serialization.json.put
 import javax.inject.Inject
-
-private const val TAG = "ProfileViewModel"
-
 /**
  * ViewModel for Profile screen. Mirrors iOS ProfileViewModel.swift.
  * Manages profile editing, saving, deletion, and sign out.
@@ -45,12 +42,74 @@ class ProfileViewModel @Inject constructor(
     // Exposes the live consent state and the opt-out handlers the Settings screen drives.
 
     val locationConsent: StateFlow<Boolean> = consentService.locationConsent
-    val emailConsent: StateFlow<Boolean> = consentService.emailConsent
     val analyticsConsent: StateFlow<Boolean> = consentService.analyticsConsent
+
+    /**
+     * The email opt-in, held here rather than read straight off ConsentService
+     * (WEB-LEGAL-012 AC4).
+     *
+     * The toggle used to be backed only by SecureStorage, which stopped nothing:
+     * every sender gates on profiles.communication_preferences, and no Android
+     * build has ever written it. It also DEFAULTED TO OFF, because
+     * loadBoolean returns false for a key that was never set, while the server
+     * treats a missing key as consent. So the screen told a signed-in user they
+     * had opted out while the mail kept arriving - the worst state a consent
+     * control can be in, and not a state the user can escape by toggling.
+     *
+     * Starts true for the same reason absence means opted in on the server. The
+     * real value replaces it as soon as the profile loads.
+     */
+    private val _emailConsent = MutableStateFlow(true)
+    val emailConsent: StateFlow<Boolean> = _emailConsent.asStateFlow()
+
+    /** Set when the opt-out could not be persisted, so the UI can say so. */
+    private val _emailConsentError = MutableStateFlow<String?>(null)
+    val emailConsentError: StateFlow<String?> = _emailConsentError.asStateFlow()
 
     fun setLocationConsent(enabled: Boolean) = consentService.setLocationConsent(enabled)
 
-    fun setEmailConsent(enabled: Boolean) = consentService.setEmailConsent(enabled)
+    /**
+     * Write the email preference through to the server, and roll the toggle back
+     * if that fails.
+     *
+     * Rolling back matters more here than it would for a UI preference. A
+     * consent control that shows the state the user asked for while the server
+     * still holds the old one is indistinguishable from one that worked, and the
+     * only evidence is mail the user has already told us to stop.
+     *
+     * Signed out, this stays local: there is no profile row to write, and no
+     * sender has an address to reach.
+     */
+    fun setEmailConsent(enabled: Boolean) {
+        val previous = _emailConsent.value
+        _emailConsent.value = enabled
+        consentService.setEmailConsent(enabled)
+        _emailConsentError.value = null
+
+        val userId = authRepository.currentUserId ?: return
+        viewModelScope.launch {
+            authRepository.setEmailMarketingAllowed(userId, enabled).onFailure {
+                _emailConsent.value = previous
+                consentService.setEmailConsent(previous)
+                _emailConsentError.value = "Could not save your email preference. Check your connection and try again."
+            }
+        }
+    }
+
+    /**
+     * Seed the toggle from the server. Called on profile load, because the
+     * stored value is the only one that governs whether mail is sent.
+     */
+    private fun refreshEmailConsent(userId: String) {
+        viewModelScope.launch {
+            authRepository.isEmailMarketingAllowed(userId).onSuccess { allowed ->
+                _emailConsent.value = allowed
+                consentService.setEmailConsent(allowed)
+            }
+        }
+    }
+
+    fun clearEmailConsentError() { _emailConsentError.value = null }
 
     /**
      * Toggle analytics/telemetry consent. Revoking immediately disables Firebase
@@ -139,6 +198,8 @@ class ProfileViewModel @Inject constructor(
 
     fun loadProfile() {
         val userId = authRepository.currentUserId ?: return
+
+        refreshEmailConsent(userId)
 
         viewModelScope.launch {
             authRepository.fetchProfile(userId).onSuccess { profile ->
@@ -261,7 +322,7 @@ class ProfileViewModel @Inject constructor(
 
                 authRepository.signOut()
             } catch (e: Exception) {
-                Log.e(TAG, "Failed to delete account", e)
+                AppLogger.ui.error("Failed to delete account", e)
                 _errorMessage.value = e.message ?: "Failed to delete account."
             }
 

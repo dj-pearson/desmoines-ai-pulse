@@ -11,7 +11,7 @@ import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
 import { Textarea } from '@/components/ui/textarea';
-import { Users, Building2, Briefcase, MapPin, Star, Plane, Utensils, TreePine, Send } from 'lucide-react';
+import { Briefcase, Star, Plane, Utensils, TreePine, Send } from "lucide-react";
 import { toast } from 'sonner';
 import {
   Select,
@@ -20,6 +20,7 @@ import {
   SelectTrigger,
   SelectValue,
 } from '@/components/ui/select';
+import { SpriteIcon } from "@/components/ui/SpriteIcon";
 
 const VENUE_TYPES = [
   { value: 'all', label: 'All Venues' },
@@ -109,7 +110,7 @@ export default function GroupTravel() {
           {/* Venue Search */}
           <section className="mb-12" id="venues">
             <div className="flex items-center gap-2 mb-4">
-              <Building2 className="h-5 w-5 text-primary" />
+              <SpriteIcon name="building-2" className="h-5 w-5 text-primary" />
               <h2 className="text-2xl font-bold">Meeting Venues</h2>
             </div>
             <div className="flex flex-wrap gap-3 mb-6">
@@ -159,7 +160,7 @@ export default function GroupTravel() {
                         )}
                         {venue.max_capacity && (
                           <Badge variant="outline">
-                            <Users className="h-3 w-3 mr-1" /> Up to {venue.max_capacity.toLocaleString()}
+                            <SpriteIcon name="users" className="h-3 w-3 mr-1" /> Up to {venue.max_capacity.toLocaleString()}
                           </Badge>
                         )}
                         {venue.sq_footage && (
@@ -182,7 +183,7 @@ export default function GroupTravel() {
           {/* Group Itineraries */}
           <section className="mb-12">
             <div className="flex items-center gap-2 mb-4">
-              <MapPin className="h-5 w-5 text-primary" />
+              <SpriteIcon name="map-pin" className="h-5 w-5 text-primary" />
               <h2 className="text-2xl font-bold">Group Itineraries</h2>
             </div>
             <p className="text-muted-foreground mb-4">

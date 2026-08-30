@@ -6,7 +6,8 @@ import { Badge } from "@/components/ui/badge";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { Skeleton } from "@/components/ui/skeleton";
 import { useToast } from "@/hooks/use-toast";
-import { Users, Shield, Crown, UserCheck, AlertTriangle } from "lucide-react";
+import { Shield, Crown, UserCheck, AlertTriangle } from "lucide-react";
+import { SpriteIcon } from "@/components/ui/SpriteIcon";
 
 interface UserProfile {
   user_id: string;
@@ -76,7 +77,7 @@ export default function UserRoleManager() {
       case 'moderator':
         return <UserCheck className="h-4 w-4" />;
       default:
-        return <Users className="h-4 w-4" />;
+        return <SpriteIcon name="users" className="h-4 w-4" />;
     }
   };
 
@@ -129,7 +130,7 @@ export default function UserRoleManager() {
       <Card>
         <CardHeader>
           <CardTitle className="flex items-center gap-2">
-            <Users className="h-5 w-5" />
+            <SpriteIcon name="users" className="h-5 w-5" />
             User Role Management
           </CardTitle>
           <CardDescription>Loading users...</CardDescription>
@@ -158,7 +159,7 @@ export default function UserRoleManager() {
     <Card>
       <CardHeader>
         <CardTitle className="flex items-center gap-2">
-          <Users className="h-5 w-5" />
+          <SpriteIcon name="users" className="h-5 w-5" />
           User Role Management
         </CardTitle>
         <CardDescription>
@@ -216,7 +217,7 @@ export default function UserRoleManager() {
 
           {users.length === 0 && (
             <div className="text-center py-8">
-              <Users className="h-12 w-12 text-neutral-400 mx-auto mb-4" />
+              <SpriteIcon name="users" className="h-12 w-12 text-neutral-400 mx-auto mb-4" />
               <p className="text-neutral-500">No users found</p>
               <Button variant="outline" onClick={fetchUsers} className="mt-4">
                 Refresh

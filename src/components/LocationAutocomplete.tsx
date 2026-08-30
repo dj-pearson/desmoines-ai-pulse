@@ -1,10 +1,11 @@
 import { useState, useEffect, useCallback, useRef } from 'react';
 import { Input } from '@/components/ui/input';
 import { Button } from '@/components/ui/button';
-import { MapPin, Loader2, X } from 'lucide-react';
+import { Loader2, X } from "lucide-react";
 import { cn } from '@/lib/utils';
 import { supabase } from '@/integrations/supabase/client';
 import { createLogger } from '@/lib/logger';
+import { SpriteIcon } from "@/components/ui/SpriteIcon";
 
 const log = createLogger('LocationAutocomplete');
 
@@ -215,7 +216,7 @@ export function LocationAutocomplete({
     <div className={cn('relative', className)}>
       <div className="relative flex gap-2">
         <div className="relative flex-1">
-          <MapPin className="absolute left-3 top-1/2 transform -translate-y-1/2 h-4 w-4 text-muted-foreground pointer-events-none" />
+          <SpriteIcon name="map-pin" className="absolute left-3 top-1/2 transform -translate-y-1/2 h-4 w-4 text-muted-foreground pointer-events-none" />
           <Input
             ref={inputRef}
             type="text"
@@ -251,7 +252,7 @@ export function LocationAutocomplete({
             {isGettingLocation ? (
               <Loader2 className="h-4 w-4 animate-spin" />
             ) : (
-              <MapPin className="h-4 w-4" />
+              <SpriteIcon name="map-pin" className="h-4 w-4" />
             )}
             <span className="ml-2 hidden sm:inline">Current Location</span>
           </Button>
@@ -272,7 +273,7 @@ export function LocationAutocomplete({
               className="w-full text-left px-4 py-3 hover:bg-gray-100 dark:hover:bg-gray-700 transition-colors focus:outline-none focus:bg-gray-100 dark:focus:bg-gray-700 border-b border-gray-100 dark:border-gray-700 last:border-b-0"
             >
               <div className="flex items-start gap-3">
-                <MapPin className="h-4 w-4 text-muted-foreground mt-0.5 shrink-0" />
+                <SpriteIcon name="map-pin" className="h-4 w-4 text-muted-foreground mt-0.5 shrink-0" />
                 <div className="flex-1 min-w-0">
                   <p className="text-sm font-medium truncate">
                     {suggestion.address?.road || suggestion.display_name.split(',')[0]}

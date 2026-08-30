@@ -1,7 +1,8 @@
 import { Link } from "react-router-dom";
-import { RefreshCw, Sparkles } from "lucide-react";
+import { RefreshCw } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { useForYouRail } from "@/hooks/useForYouRail";
+import { SpriteIcon } from "@/components/ui/SpriteIcon";
 
 /**
  * Web parity for the iOS HomeView For You rail (IOS-DISCOVER-2026-002).
@@ -28,7 +29,7 @@ export function ForYouRail() {
             id="for-you-rail-heading"
             className="text-xl font-semibold flex items-center gap-2"
           >
-            <Sparkles className="h-5 w-5 text-primary" aria-hidden="true" />
+            <SpriteIcon name="sparkles" className="h-5 w-5 text-primary" aria-hidden="true" />
             {headerTitle}
           </h2>
           <Button
@@ -67,7 +68,7 @@ export function ForYouRail() {
                   />
                 ) : (
                   <div className="h-full w-full flex items-center justify-center text-muted-foreground">
-                    <Sparkles className="h-8 w-8" aria-hidden="true" />
+                    <SpriteIcon name="sparkles" className="h-8 w-8" aria-hidden="true" />
                   </div>
                 )}
               </div>

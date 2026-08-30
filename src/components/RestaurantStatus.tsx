@@ -1,9 +1,10 @@
 import { useState, useEffect } from 'react';
-import { Clock, CheckCircle, XCircle, AlertCircle, Phone, Globe } from 'lucide-react';
+import { CheckCircle, XCircle, AlertCircle, Phone, Globe } from "lucide-react";
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { Badge } from '@/components/ui/badge';
 import { Button } from '@/components/ui/button';
 import { getRestaurantOpenStatus, type OpenStatus } from '@/lib/restaurantHours';
+import { SpriteIcon } from "@/components/ui/SpriteIcon";
 
 interface RestaurantStatusProps {
   restaurant: {
@@ -44,7 +45,7 @@ export default function RestaurantStatus({ restaurant }: RestaurantStatusProps) 
       case 'closed':
         return <XCircle className="h-5 w-5 text-red-500" />;
       default:
-        return <Clock className="h-5 w-5 text-gray-500" />;
+        return <SpriteIcon name="clock" className="h-5 w-5 text-gray-500" />;
     }
   };
 
@@ -79,7 +80,7 @@ export default function RestaurantStatus({ restaurant }: RestaurantStatusProps) 
       <CardHeader className="pb-3">
         <div className="flex items-center justify-between">
           <CardTitle className="text-lg flex items-center gap-2">
-            <Clock className="h-5 w-5 text-primary" />
+            <SpriteIcon name="clock" className="h-5 w-5 text-primary" />
             Hours & Status
           </CardTitle>
           <Badge
@@ -100,7 +101,7 @@ export default function RestaurantStatus({ restaurant }: RestaurantStatusProps) 
         {restaurant.hours && (
           <div className="flex items-center justify-between p-3 bg-white/50 rounded-lg">
             <div className="flex items-center gap-2">
-              <Clock className="h-4 w-4 text-muted-foreground" />
+              <SpriteIcon name="clock" className="h-4 w-4 text-muted-foreground" />
               <span className="font-medium">Hours:</span>
             </div>
             <span className="font-semibold text-primary text-sm text-right max-w-[60%]">
@@ -126,7 +127,7 @@ export default function RestaurantStatus({ restaurant }: RestaurantStatusProps) 
         {currentStatus === 'closed' && restaurant.hours && (
           <div className="p-3 bg-blue-50 border border-blue-200 rounded-lg">
             <div className="flex items-start gap-2">
-              <Clock className="h-4 w-4 text-blue-600 mt-0.5" />
+              <SpriteIcon name="clock" className="h-4 w-4 text-blue-600 mt-0.5" />
               <div>
                 <p className="font-medium text-blue-900">Currently Closed</p>
                 <p className="text-sm text-blue-700">

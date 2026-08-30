@@ -3,11 +3,12 @@ import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/com
 import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
 import { Progress } from "@/components/ui/progress";
-import { AlertCircle, MapPin, RefreshCw, CheckCircle2 } from "lucide-react";
+import { AlertCircle, RefreshCw, CheckCircle2 } from "lucide-react";
 import { Alert, AlertDescription } from "@/components/ui/alert";
 import { supabase } from "@/integrations/supabase/client";
 import { toast } from "sonner";
 import { createLogger } from '@/lib/logger';
+import { SpriteIcon } from "@/components/ui/SpriteIcon";
 
 const log = createLogger('CoordinateManager');
 
@@ -84,7 +85,7 @@ const CoordinateManager = () => {
       <Card>
         <CardHeader>
           <CardTitle className="flex items-center gap-2">
-            <MapPin className="h-5 w-5" />
+            <SpriteIcon name="map-pin" className="h-5 w-5" />
             Coordinate Management
           </CardTitle>
           <CardDescription>
@@ -108,7 +109,7 @@ const CoordinateManager = () => {
               disabled={isRunning}
               className="flex items-center gap-2"
             >
-              <MapPin className="h-4 w-4" />
+              <SpriteIcon name="map-pin" className="h-4 w-4" />
               Test Geocoding Function
             </Button>
 

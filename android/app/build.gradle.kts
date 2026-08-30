@@ -81,7 +81,7 @@ if (buildsShippableArtifact) {
 
 android {
     namespace = "com.desmoines.aipulse"
-    compileSdk = 36
+    compileSdk = 37
 
     defaultConfig {
         applicationId = "com.desmoines.aipulse"
@@ -141,7 +141,38 @@ android {
                 )
             }
         }
+
+        // AND-AUDIT-018 AC6: "Verify each narrowing on a real minified build.
+        // R8 breakage is a runtime failure, not a compile error." That has been
+        // the blocker on this whole story - assembleRelease proves a keep rule
+        // COMPILES, and nothing proved the minified app RUNS.
+        //
+        // This build type is release's R8 configuration signed with the debug
+        // key, so the instrumentation suite can be installed on the managed
+        // device from AND-AUDIT-014 and run against shrunk, obfuscated code. The
+        // release variant stays unsigned without a keystore and cannot be
+        // installed, which is why this exists rather than testing release
+        // directly.
+        //
+        // Not shippable and not meant to be: debug-signed, and Play would refuse
+        // it.
+        create("minified") {
+            initWith(getByName("release"))
+            signingConfig = signingConfigs.getByName("debug")
+            matchingFallbacks += listOf("release")
+            isDebuggable = false
+            // AGP runs R8 over the TEST apk too when testBuildType points here.
+            // See proguard-test-rules.pro: the app stays fully minified, the
+            // test apk is left alone so it cannot add its own failure mode.
+            testProguardFiles("proguard-test-rules.pro")
+        }
     }
+
+    // Instrumentation tests run against debug by default because that is the
+    // fast path. -PminifiedTests points them at the R8 output instead:
+    //
+    //     ./gradlew :app:pixel6api34MinifiedAndroidTest -PminifiedTests
+    testBuildType = if (project.hasProperty("minifiedTests")) "minified" else "debug"
 
     bundle {
         language { enableSplit = true }
@@ -165,17 +196,156 @@ android {
 
     @Suppress("UnstableApiUsage")
     testOptions {
+        // AND-AUDIT-014. Audited 2026-08-29 by turning this off and running the
+        // suite: 12 failures across 6 classes, and exactly one cause -
+        // "Method w in android.util.Log not mocked" and the same for e. Nothing
+        // else in 346 tests depends on a defaulted framework return.
+        //
+        // Kept, because the alternative is worse than it looks: stubbing Log
+        // globally needs a JUnit 5 extension registered through
+        // META-INF/services, and AGP is not putting src/test/resources on the
+        // unit-test runtime classpath - the compiled extension class arrives,
+        // the services file and junit-platform.properties do not. Applied
+        // per-class with @ExtendWith it works. See the AND-AUDIT-014 notes.
+        //
+        // The real risk this flag carries is that a test can assert on a
+        // silently-defaulted value, so verifyUnitTestExecution below covers the
+        // failure mode that actually bit: a suite that runs nothing and passes.
         unitTests.isReturnDefaultValues = true
+
+        // AND-AUDIT-014 AC3. ArticleMarkdownTest has existed since the
+        // ClickableText -> LinkAnnotation migration and has never run anywhere:
+        // no workflow invokes connectedCheck, and nothing in this file described
+        // a device to run it on. Six tests covering composition, semantics and
+        // link hit-testing - the three things a JVM unit test cannot reach.
+        //
+        // aosp-atd is the Automated Test Device image: no Play services, no
+        // system UI, boots headless in a fraction of the time a full image
+        // takes, and is the image Google ships for exactly this. API 34 rather
+        // than compileSdk 37 because an ATD image is published for 34 and the
+        // test exercises Compose, not platform APIs.
+        //
+        // Run it with:  ./gradlew :app:pixel6api34DebugAndroidTest
+        managedDevices {
+            localDevices {
+                create("pixel6api34") {
+                    device = "Pixel 6"
+                    apiLevel = 34
+                    systemImageSource = "aosp-atd"
+                }
+            }
+        }
     }
 
     lint {
-        checkReleaseBuilds = false
-        abortOnError = false
+        // AND-AUDIT-013. Both of these were false, so `./gradlew lint` in
+        // android-ci.yml always passed and every finding landed in an HTML
+        // report nobody opened. Fifteen locale bugs, a missing
+        // POST_NOTIFICATIONS declaration and unguarded startActivity calls
+        // all shipped while lint knew about them.
+        //
+        // The release variant is the one that ships, so it is the one that
+        // most needs checking.
+        checkReleaseBuilds = true
+        abortOnError = true
+
+        // The 202 findings that existed when the gate went up. This exists
+        // so NEW findings fail the build; it is not a verdict that any of
+        // them is acceptable. See the AND-AUDIT-013 notes in prd.json for
+        // the per-category triage, and burn it down rather than growing it.
+        baseline = file("lint-baseline.xml")
     }
 }
 
 tasks.withType<Test> {
     useJUnitPlatform()
+
+    // Three parity suites (DeepLinkManifestParityTest, ShortcutManifestParityTest,
+    // RouteRegistrationTest) read project files as TEXT rather than exercising
+    // compiled code, and Gradle cannot see that.
+    //
+    // ONLY THE NON-COMPILED ONES NEED DECLARING, which was worth measuring
+    // rather than listing everything the tests read. A .kt file under
+    // src/main/java is already an input by way of the classes it compiles to:
+    // renaming a host in DeepLinkHandler.kt fails the parity tests with no
+    // declaration at all. The manifest, res/xml and an androidTest source are
+    // on no unit-test classpath, so without these lines the task stays
+    // UP-TO-DATE when they change.
+    //
+    // Measured, because the failure is silent: deleting a host from the manifest
+    // left testDebugUnitTest UP-TO-DATE and the build GREEN, while the same edit
+    // under --rerun-tasks failed correctly. CI never sees it - it checks out
+    // fresh - so the only person the stale guard misleads is whoever is editing.
+    inputs.files(
+        layout.projectDirectory.file("src/main/AndroidManifest.xml"),
+        layout.projectDirectory.file("src/main/res/xml/shortcuts.xml"),
+        layout.projectDirectory.file("src/androidTest/java/com/desmoines/aipulse/util/ShortcutDispatcherUriTest.kt"),
+    )
+        .withPropertyName("sourceParityInputs")
+        .withPathSensitivity(PathSensitivity.RELATIVE)
+}
+
+// AND-AUDIT-014: make a suite that ran nothing fail.
+//
+// EventsRemoteDataSourceTest's seven tests were discovered as ZERO for an
+// unknown length of time and every build stayed green, because a Gradle test
+// task that executes no tests succeeds. BUILD SUCCESSFUL is not a test result,
+// and until this task existed nothing in either workflow could tell the
+// difference between 346 passing tests and none.
+//
+// A floor rather than an exact count: adding tests must not need a build edit,
+// and deleting a class deliberately is a one-line ratchet. Set just below the
+// current total so the exact regression above - losing one class of seven -
+// fails here.
+val unitTestFloor = 340
+
+val verifyUnitTestExecution = tasks.register("verifyUnitTestExecution") {
+    description = "Fails if the unit test suite reported implausibly few tests, or skipped any."
+    group = "verification"
+    val resultsDir = layout.buildDirectory.dir("test-results/testDebugUnitTest")
+    val floor = unitTestFloor
+    doLast {
+        val dir = resultsDir.get().asFile
+        val reports = dir.listFiles { f: java.io.File ->
+            f.name.startsWith("TEST-") && f.name.endsWith(".xml")
+        }?.toList().orEmpty()
+
+        check(reports.isNotEmpty()) {
+            "No JUnit XML under $dir. The test task reported success without producing " +
+                "a single report, which is the exact shape of a suite that ran nothing."
+        }
+
+        val counts = Regex("""tests="(\d+)" skipped="(\d+)" failures="(\d+)" errors="(\d+)"""")
+        var tests = 0; var skipped = 0; var failures = 0; var errors = 0
+        reports.forEach { report ->
+            counts.find(report.readText())?.let {
+                tests += it.groupValues[1].toInt()
+                skipped += it.groupValues[2].toInt()
+                failures += it.groupValues[3].toInt()
+                errors += it.groupValues[4].toInt()
+            }
+        }
+
+        check(tests >= floor) {
+            "Only $tests unit tests executed; expected at least $floor. Either tests were " +
+                "lost to a discovery failure, or the floor in app/build.gradle.kts needs " +
+                "lowering deliberately."
+        }
+        check(skipped == 0) {
+            "$skipped unit test(s) were skipped. A skipped test is not a passing test."
+        }
+
+        logger.lifecycle(
+            "verifyUnitTestExecution: $tests tests, $skipped skipped, $failures failures, " +
+                "$errors errors (floor $floor)",
+        )
+    }
+}
+
+// finalizedBy, not dependsOn: this must also report when the suite itself fails,
+// and it must be impossible to run the tests without it.
+tasks.matching { it.name == "testDebugUnitTest" }.configureEach {
+    finalizedBy(verifyUnitTestExecution)
 }
 
 dependencies {
@@ -273,6 +443,19 @@ dependencies {
     androidTestImplementation(platform(libs.compose.bom))
     androidTestImplementation(libs.compose.ui.test.junit4)
     androidTestImplementation(libs.hilt.android.testing)
+
+    // AND-AUDIT-018 AC6. Under -PminifiedTests the app apk is R8'd, which inlines
+    // androidx.tracing.Trace away entirely - release/mapping.txt shows its
+    // methods folded into their callers and the class absent. androidx.test's
+    // runner references it by name from the (unminified) test apk, so the
+    // process died at handleBindApplication with ClassNotFoundException before a
+    // single test was discovered: "Starting 0 tests", which a less careful read
+    // could have taken for a pass.
+    //
+    // Giving the TEST apk its own copy rather than adding a keep to the app: a
+    // keep would make the minified variant diverge from the release config it
+    // exists to reproduce, which is the one thing this must not do.
+    androidTestImplementation("androidx.tracing:tracing:1.2.0")
     kspAndroidTest(libs.hilt.compiler)
     debugImplementation(libs.compose.ui.tooling)
     debugImplementation(libs.compose.ui.test.manifest)

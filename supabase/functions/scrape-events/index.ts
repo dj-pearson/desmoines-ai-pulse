@@ -2109,11 +2109,34 @@ serve(async (req) => {
       `Processed ${jobsToProcess.length} jobs, found ${totalEventsFound} total events`
     );
 
-    // Return comprehensive results
+    // EVERY JOB FAILING IS NOT A SUCCESSFUL SCRAPE.
+    //
+    // This returned `success: true` with HTTP 200 unconditionally, so a run where
+    // all ten sources failed was byte-indistinguishable from a run where all ten
+    // worked and the calendar was simply quiet. It has been returning exactly
+    // that for days:
+    //
+    //   {"success":true,"message":"Scraping completed: 0 events found across 10
+    //    jobs","total_events_found":0,"total_errors":10, ...}
+    //   every job_results entry: "Edge Function returned a non-2xx status code"
+    //
+    // pg_cron recorded "succeeded", cron_health saw a healthy job, and SeatGeek -
+    // 375 events, the largest single source in the corpus - stopped ingesting on
+    // 2026-08-21 with nothing anywhere reporting a problem. This is WEB-OPS-007
+    // AC4's rule ("re-verify by outcome, not by absence of error") applied to the
+    // scraper itself.
+    //
+    // Total failure is reported as failure. A partial run stays 200 with
+    // success: true and its error count, because losing one source of ten is a
+    // normal Tuesday and should not page anyone.
+    const everyJobFailed = jobsToProcess.length > 0 && totalErrors >= jobsToProcess.length;
+
     return new Response(
       JSON.stringify({
-        success: true,
-        message: `Scraping completed: ${totalEventsFound} events found across ${jobsToProcess.length} jobs`,
+        success: !everyJobFailed,
+        message: everyJobFailed
+          ? `Scraping FAILED: all ${jobsToProcess.length} jobs errored, 0 events found`
+          : `Scraping completed: ${totalEventsFound} events found across ${jobsToProcess.length} jobs`,
         jobs_processed: jobsToProcess.length,
         jobs_skipped: skippedJobs.length,
         total_events_found: totalEventsFound,
@@ -2123,7 +2146,7 @@ serve(async (req) => {
       }),
       {
         headers: { ...corsHeaders, "Content-Type": "application/json" },
-        status: 200,
+        status: everyJobFailed ? 500 : 200,
       }
     );
 

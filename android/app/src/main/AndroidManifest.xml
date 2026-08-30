@@ -17,6 +17,17 @@
     <uses-permission android:name="android.permission.RECEIVE_BOOT_COMPLETED" />
 
     <!--
+        HapticHelper calls Vibrator.vibrate() with no try/catch and no
+        permission check, which is a SecurityException the moment anything
+        calls it. It has no callers today (AND-AUDIT-017), so this is a
+        landmine rather than a live crash - declared now so wiring up the
+        first caller does not ship one. VIBRATE is install-time, so
+        declaring it grants it; there is no runtime prompt and no Play
+        policy review. Found by lint (AND-AUDIT-013).
+    -->
+    <uses-permission android:name="android.permission.VIBRATE" />
+
+    <!--
         Package visibility (API 30+). Without these queries, resolveActivity()
         returns null for Google Maps / dialer / browser targets even when the
         app is installed, so "Directions", "Call" and "Website" silently

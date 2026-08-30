@@ -281,10 +281,31 @@ serve(async (req) => {
     } = body;
 
     // Find events with aggregator URLs that are happening in the future
+    // NARROW TO AGGREGATORS IN THE QUERY, NOT AFTER IT.
+    //
+    // This used to take `limit` arbitrary future events and THEN filter to
+    // aggregator URLs, which is the wrong order: 26 of 416 future events carry
+    // one, so a batch of 50 yielded about 1 candidate. Across 22 recorded runs
+    // it checked FIVE distinct events, and every run reported checked: 1.
+    //
+    // The or(ilike) below is a deliberate SUPERSET of isAggregatorUrl - it
+    // matches the domain anywhere in the URL rather than in the hostname - so
+    // the in-code predicate still decides and the semantics do not change.
+    // It only stops the batch being spent on events that were never candidates.
+    //
+    // Ordering by source_url_checked_at with nulls first is the other half:
+    // the query had no order at all, so each run re-drew from the same pool and
+    // could re-check an event it had already flagged instead of advancing.
+    // Unchecked events now go first, then the least recently checked.
+    const aggregatorFilter = AGGREGATOR_DOMAINS
+      .map((d) => `source_url.ilike.*${d}*`)
+      .join(',');
     const { data: eventsToFix, error: fetchError } = await supabase
       .from('events')
       .select('id, title, date, source_url, venue')
       .gte('date', new Date().toISOString())
+      .or(aggregatorFilter)
+      .order('source_url_checked_at', { ascending: true, nullsFirst: true })
       .limit(limit);
 
     if (fetchError) {
@@ -413,7 +434,23 @@ serve(async (req) => {
     // Record the run via the WEB-AUTO-001 jobRunner (recovery rate + counts).
     await runJob('validate-source-urls', async (ctx) => {
       ctx.processed(updatedCount);
-      ctx.failed(flaggedCount + errors.length);
+      // FLAGGING A DEAD LINK IS THIS JOB SUCCEEDING, NOT FAILING.
+      //
+      // This was `ctx.failed(flaggedCount + errors.length)`, which counted every
+      // event we correctly identified as having an unrecoverable source URL as a
+      // failed item. Finding and flagging those is WEB-AUTO-004's entire purpose,
+      // so the job reported status=partial on any run that did its job.
+      //
+      // It has done exactly that on all 22 runs in the ledger: every one records
+      // errors: 0 and flaggedBroken: 1, so items_failed was 100% flagged links
+      // and 0% errors, and the job has never once reported success. jobRunner
+      // treats partial as ok=true, so nothing alerted - it just sat permanently
+      // amber to anything reading run status, including WEB-AUTO-001's job
+      // observability and AOS-MANAGE-007's review.
+      //
+      // flaggedBroken is already carried in ctx.meta below, so nothing is lost by
+      // counting only real errors here.
+      ctx.failed(errors.length);
       ctx.meta({
         checked: aggregatorEvents.length,
         recovered: updatedCount,

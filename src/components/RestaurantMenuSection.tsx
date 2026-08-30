@@ -3,22 +3,11 @@ import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { Badge } from '@/components/ui/badge';
 import { Button } from '@/components/ui/button';
 import { Separator } from '@/components/ui/separator';
-import {
-  Utensils,
-  Clock,
-  ChevronDown,
-  ChevronUp,
-  Flame,
-  Leaf,
-  WheatOff,
-  Star,
-  History,
-  ExternalLink,
-  Search,
-} from 'lucide-react';
+import { Utensils, ChevronDown, ChevronUp, Flame, Leaf, WheatOff, Star, History, Search } from "lucide-react";
 import { useRestaurantMenu, MenuSection } from '@/hooks/useRestaurantMenu';
 import { CollapsibleSection } from '@/components/CollapsibleSection';
 import { MenuSchema } from '@/components/schema/MenuSchema';
+import { SpriteIcon } from "@/components/ui/SpriteIcon";
 
 interface RestaurantMenuSectionProps {
   restaurantId: string;
@@ -237,7 +226,7 @@ export function RestaurantMenuSection({
                   className="text-xs text-muted-foreground hover:text-foreground transition-colors"
                   aria-label="View original menu source"
                 >
-                  <ExternalLink className="w-3.5 h-3.5" />
+                  <SpriteIcon name="external-link" className="w-3.5 h-3.5" />
                 </a>
               )}
             </div>
@@ -252,7 +241,7 @@ export function RestaurantMenuSection({
           </p>
 
           <div className="flex items-center gap-2 text-xs text-muted-foreground">
-            <Clock className="w-3 h-3" />
+            <SpriteIcon name="clock" className="w-3 h-3" />
             <span>
               Menu from {formatCapturedDate(data.menu.captured_at)}
               {' — '}may have changed since then

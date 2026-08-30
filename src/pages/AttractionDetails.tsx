@@ -22,30 +22,14 @@ import { BackToTop } from "@/components/BackToTop";
 import EnhancedAttractionSEO from "@/components/EnhancedAttractionSEO";
 import SEOHead from "@/components/SEOHead";
 import { BRAND, getCanonicalUrl } from "@/lib/brandConfig";
-import {
-  MapPin,
-  Star,
-  ExternalLink,
-  ArrowLeft,
-  Navigation,
-  Share2,
-  Heart,
-  Sparkles,
-  Globe,
-  Info,
-  Camera,
-  Landmark,
-  ChevronRight,
-  Clock,
-  Ticket,
-  TreePine,
-} from "lucide-react";
+import { Star, ArrowLeft, Navigation, Heart, Globe, Info, Camera, Landmark, ChevronRight, TreePine } from "lucide-react";
 import { useState } from "react";
 import { useDocumentTitle } from "@/hooks/useDocumentTitle";
 import { useContentTracking } from "@/hooks/useContentTracking";
 import { StickyMobileCTA } from "@/components/StickyMobileCTA";
 import { LastUpdatedBadge } from "@/components/LastUpdatedBadge";
 import { NearbyContent } from "@/components/NearbyContent";
+import { SpriteIcon } from "@/components/ui/SpriteIcon";
 
 // Estimated visit duration by attraction type (in minutes)
 const VISIT_DURATION_BY_TYPE: Record<string, { min: number; max: number }> = {
@@ -312,7 +296,7 @@ export default function AttractionDetails() {
                 onShare={trackShare}
                 trigger={
                   <Button variant="outline" size="sm" className="rounded-xl">
-                    <Share2 className="h-4 w-4 mr-1.5" />
+                    <SpriteIcon name="share-2" className="h-4 w-4 mr-1.5" />
                     Share
                   </Button>
                 }
@@ -358,7 +342,7 @@ export default function AttractionDetails() {
               <div className="absolute top-4 left-4 flex gap-2 z-10">
                 {attraction.is_featured && (
                   <Badge className={`${STATUS_BADGE.featured} border-0 shadow-lg text-sm font-semibold px-3 py-1`}>
-                    <Sparkles className="h-3.5 w-3.5 mr-1.5" />
+                    <SpriteIcon name="sparkles" className="h-3.5 w-3.5 mr-1.5" />
                     Featured
                   </Badge>
                 )}
@@ -387,7 +371,7 @@ export default function AttractionDetails() {
                     )}
                     {attraction.location && (
                       <div className="flex items-center gap-1.5 bg-white/20 backdrop-blur-sm rounded-full px-3 py-1">
-                        <MapPin className="h-4 w-4" />
+                        <SpriteIcon name="map-pin" className="h-4 w-4" />
                         <span className="text-sm">{attraction.location}</span>
                       </div>
                     )}
@@ -449,14 +433,14 @@ export default function AttractionDetails() {
                   <div className="text-sm text-gray-600">Category</div>
                 </div>
                 <div className="text-center p-4 bg-blue-50 rounded-2xl border border-blue-100">
-                  <MapPin className="h-6 w-6 text-blue-500 mx-auto mb-2" />
+                  <SpriteIcon name="map-pin" className="h-6 w-6 text-blue-500 mx-auto mb-2" />
                   <div className="text-lg font-bold text-gray-900 line-clamp-1">
                     {BRAND.city}
                   </div>
                   <div className="text-sm text-gray-600">Location</div>
                 </div>
                 <div className="text-center p-4 bg-emerald-50 rounded-2xl border border-emerald-100">
-                  <Clock className="h-6 w-6 text-emerald-500 mx-auto mb-2" />
+                  <SpriteIcon name="clock" className="h-6 w-6 text-emerald-500 mx-auto mb-2" />
                   <div className="text-lg font-bold text-gray-900">
                     {getEstimatedDuration(attraction.type)}
                   </div>
@@ -471,13 +455,13 @@ export default function AttractionDetails() {
                 {/* Location & Access */}
                 <div>
                   <h2 className="text-xl font-bold text-gray-900 mb-4 flex items-center gap-2">
-                    <MapPin className="h-5 w-5 text-[#2D1B69]" />
+                    <SpriteIcon name="map-pin" className="h-5 w-5 text-[#2D1B69]" />
                     Location & Access
                   </h2>
                   <div className="space-y-3">
                     {attraction.location && (
                       <div className="flex items-start gap-3 p-4 bg-gray-50 rounded-xl">
-                        <MapPin className="h-5 w-5 text-gray-500 mt-0.5 shrink-0" />
+                        <SpriteIcon name="map-pin" className="h-5 w-5 text-gray-500 mt-0.5 shrink-0" />
                         <div>
                           <p className="text-gray-900 font-medium">{attraction.location}</p>
                           <p className="text-sm text-gray-500">{BRAND.city}, {BRAND.state}</p>
@@ -511,7 +495,7 @@ export default function AttractionDetails() {
                         rel="noopener noreferrer"
                         className="flex items-center gap-3 p-4 bg-gray-50 rounded-xl hover:bg-gray-100 transition-colors"
                       >
-                        <ExternalLink className="h-5 w-5 text-gray-500 shrink-0" />
+                        <SpriteIcon name="external-link" className="h-5 w-5 text-gray-500 shrink-0" />
                         <span className="text-[#2D1B69] hover:underline">Visit Website</span>
                       </a>
                     )}
@@ -547,7 +531,7 @@ export default function AttractionDetails() {
                     {attraction.is_featured && (
                       <div className="p-4 bg-gradient-to-r from-amber-50 to-orange-50 rounded-xl border border-amber-200">
                         <div className="flex items-center text-amber-700">
-                          <Sparkles className="h-5 w-5 mr-2" />
+                          <SpriteIcon name="sparkles" className="h-5 w-5 mr-2" />
                           <span className="font-medium">Editor's Pick - Featured Attraction</span>
                         </div>
                         <p className="text-sm text-amber-600 mt-1">
@@ -625,7 +609,7 @@ export default function AttractionDetails() {
                           className="text-sm text-[#2D1B69] hover:underline inline-flex items-center gap-1"
                         >
                           Official Website
-                          <ExternalLink className="h-3 w-3" />
+                          <SpriteIcon name="external-link" className="h-3 w-3" />
                         </a>
                       </div>
                     )}

@@ -51,19 +51,7 @@ import {
 } from "@/components/ui/alert-dialog";
 import { Skeleton } from "@/components/ui/skeleton";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
-import {
-  ArrowLeft,
-  RefreshCw,
-  DollarSign,
-  AlertCircle,
-  CheckCircle,
-  Clock,
-  Search,
-  Filter,
-  Plus,
-  Eye,
-  RotateCcw,
-} from "lucide-react";
+import { ArrowLeft, RefreshCw, DollarSign, AlertCircle, CheckCircle, Search, Filter, Plus, Eye, RotateCcw } from "lucide-react";
 import { supabase } from "@/integrations/supabase/client";
 import { format } from "date-fns";
 import { toast } from "sonner";
@@ -76,6 +64,7 @@ import {
   Tooltip,
 } from "recharts";
 import { Download } from "lucide-react";
+import { SpriteIcon } from "@/components/ui/SpriteIcon";
 
 // ADMIN-REFUND-001: structured taxonomy for finance reporting.
 const REFUND_REASON_OPTIONS = [
@@ -288,7 +277,7 @@ export default function AdminRefunds() {
     > = {
       pending: {
         variant: "secondary",
-        icon: <Clock className="h-3 w-3 mr-1" />,
+        icon: <SpriteIcon name="clock" className="h-3 w-3 mr-1" />,
       },
       approved: {
         variant: "default",
@@ -486,7 +475,7 @@ export default function AdminRefunds() {
                   <p className="text-sm text-muted-foreground">Pending</p>
                   <p className="text-2xl font-bold">{stats.pending}</p>
                 </div>
-                <Clock className="h-8 w-8 text-yellow-500" />
+                <SpriteIcon name="clock" className="h-8 w-8 text-yellow-500" />
               </div>
             </CardContent>
           </Card>

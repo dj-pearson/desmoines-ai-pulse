@@ -6,13 +6,14 @@ import { Input } from "@/components/ui/input";
 import { Badge } from "@/components/ui/badge";
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table";
 import { AlertDialog, AlertDialogAction, AlertDialogCancel, AlertDialogContent, AlertDialogDescription, AlertDialogFooter, AlertDialogHeader, AlertDialogTitle, AlertDialogTrigger } from "@/components/ui/alert-dialog";
-import { FileText, Plus, Edit, Trash2, Eye, Calendar, User, Search, Send, LayoutDashboard } from "lucide-react";
+import { FileText, Plus, Edit, Trash2, Eye, User, Search, Send, LayoutDashboard } from "lucide-react";
 import { toast } from "sonner";
 import { Link } from "react-router-dom";
 import { ArticleWebhookConfig } from "./ArticleWebhookConfig";
 import { supabase } from "@/integrations/supabase/client";
 import { useMutation, useQuery } from "@tanstack/react-query";
 import { createLogger } from '@/lib/logger';
+import { SpriteIcon } from "@/components/ui/SpriteIcon";
 
 const log = createLogger('ArticlesManager');
 
@@ -275,7 +276,7 @@ export default function ArticlesManager() {
                     </TableCell>
                     <TableCell>
                       <div className="flex items-center gap-1 text-sm text-muted-foreground">
-                        <Calendar className="h-3 w-3" />
+                        <SpriteIcon name="calendar" className="h-3 w-3" />
                         {formatDate(article.created_at)}
                       </div>
                     </TableCell>

@@ -21,9 +21,10 @@ import { Badge } from "./ui/badge";
 import { Switch } from "./ui/switch";
 import { Calendar } from "./ui/calendar";
 import { Popover, PopoverContent, PopoverTrigger } from "./ui/popover";
-import { CalendarIcon, X, ExternalLink } from "lucide-react";
+import { CalendarIcon, X } from "lucide-react";
 import { format } from "date-fns";
 import { useScrollPreservation } from "@/hooks/useScrollPreservation";
+import { SpriteIcon } from "@/components/ui/SpriteIcon";
 
 interface EventEditorProps {
   event: any;
@@ -156,7 +157,7 @@ export default function EventEditor({
               className="flex items-center gap-1 text-blue-600 hover:underline"
             >
               {new URL(formData.source_url).hostname}
-              <ExternalLink className="h-3 w-3" />
+              <SpriteIcon name="external-link" className="h-3 w-3" />
             </a>
           </div>
 

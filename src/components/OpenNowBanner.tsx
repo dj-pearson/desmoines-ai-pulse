@@ -1,9 +1,10 @@
 import { Button } from "@/components/ui/button";
 import { Card } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
-import { Clock, CheckCircle2, Utensils, ArrowRight } from "lucide-react";
+import { CheckCircle2, Utensils } from "lucide-react";
 import { cn } from "@/lib/utils";
 import { useState, useEffect } from "react";
+import { SpriteIcon } from "@/components/ui/SpriteIcon";
 
 interface OpenNowBannerProps {
   isActive: boolean;
@@ -62,7 +63,7 @@ export function OpenNowBanner({
           <div className="space-y-2">
             <div className="flex items-center gap-2">
               <div className="relative">
-                <Clock
+                <SpriteIcon name="clock"
                   className={cn(
                     "h-6 w-6",
                     isActive ? "text-green-600" : "text-primary"
@@ -98,7 +99,7 @@ export function OpenNowBanner({
               </Badge>
 
               <div className="flex items-center gap-2 text-sm text-muted-foreground">
-                <Clock className="h-4 w-4" />
+                <SpriteIcon name="clock" className="h-4 w-4" />
                 <span>Current time: {formatTime(currentTime)}</span>
               </div>
             </div>
@@ -139,9 +140,9 @@ export function OpenNowBanner({
                 </>
               ) : (
                 <>
-                  <Clock className="h-5 w-5 mr-2" />
+                  <SpriteIcon name="clock" className="h-5 w-5 mr-2" />
                   Show Open Now
-                  <ArrowRight className="h-4 w-4 ml-2" />
+                  <SpriteIcon name="arrow-right" className="h-4 w-4 ml-2" />
                 </>
               )}
             </Button>
@@ -200,7 +201,7 @@ export function OpenNowButton({
           "bg-green-600 hover:bg-green-700 text-white shadow-lg animate-pulse"
       )}
     >
-      <Clock className="h-5 w-5 mr-2" />
+      <SpriteIcon name="clock" className="h-5 w-5 mr-2" />
       {isActive ? (
         <>
           <CheckCircle2 className="h-4 w-4 mr-2" />

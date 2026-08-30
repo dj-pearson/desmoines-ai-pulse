@@ -239,6 +239,36 @@ jobs:
       - name: No prerendered page ships a skeleton
         run: node scripts/check-prerender-content.mjs
 
+      # WEB-SEO-006 AC5. The strict gate refuses to WRITE a page that did not
+      # render as itself, and the skeleton check asserts properties of the pages
+      # that do get written - neither can see a URL that was never attempted.
+      # The entity pass is a wall-clock race against a 420s budget and the build
+      # exits 0 when it loses: two local builds of one tree differed by 268 URLs,
+      # each of which then ships an SPA shell to GPTBot and friends. Loose floor
+      # on purpose, so it catches the cliff and not the weather.
+      - name: Sitemapped entity URLs still ship prerendered HTML
+        run: node scripts/check-entity-coverage.mjs
+
+      # WEB-SEO-013 AC7. public/_redirects is hand-edited and the entity sitemaps
+      # are generated from the database, so the two have never been compared.
+      # Submitting a URL that 301s is a Search Console error; a 301 whose target
+      # no sitemap lists means the page that WON a duplication is the one nothing
+      # points at, which is what /visitors-guide was.
+      - name: Sitemaps and redirects agree
+        run: node scripts/check-sitemap-redirects.mjs
+
+      # WEB-LEGAL-011 AC8 / WEB-QA-020. check-bucket-posture.ts asks the same
+      # question but needs the service-role key, which is an ENVIRONMENT secret
+      # scoped to "Scrape" - so it only runs in the daily audit and a PR that
+      # reopens a bucket is not caught until the next morning. The public object
+      # endpoint answers it on the anon key: a public bucket resolves and fails
+      # on the missing key, a private one does not resolve at all.
+      - name: No closed storage bucket is publicly readable
+        env:
+          VITE_SUPABASE_URL: ${{ secrets.VITE_SUPABASE_URL }}
+          VITE_SUPABASE_ANON_KEY: ${{ secrets.VITE_SUPABASE_ANON_KEY }}
+        run: npx tsx scripts/check-bucket-public-anon.ts
+
       # WEB-SEO-002 was "12 routes render no SEOHead" - pages shipping with the
       # shell's title, no canonical and the site-wide description. All 35 are
       # clean today and nothing was guarding it, so the property got fixed and

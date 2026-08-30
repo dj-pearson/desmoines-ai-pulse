@@ -8,12 +8,13 @@ import {
   SelectTrigger,
   SelectValue,
 } from "@/components/ui/select";
-import { Search, MapPin, DollarSign } from "lucide-react";
+import { Search, DollarSign } from "lucide-react";
 import InteractiveDateSelector from "@/components/InteractiveDateSelector";
 import { useAnalytics } from "@/hooks/useAnalytics";
 import { useQuery } from "@tanstack/react-query";
 import { supabase } from "@/integrations/supabase/client";
 import { fetchRestaurantFilterFacets } from "@/hooks/useRestaurants";
+import { SpriteIcon } from "@/components/ui/SpriteIcon";
 
 interface SearchSectionProps {
   onSearch: (
@@ -219,7 +220,7 @@ export default function SearchSection({ onSearch }: SearchSectionProps) {
 
             <div className="space-y-2">
               <div className="flex items-center gap-2 text-primary-foreground/70 text-mobile-caption">
-                <MapPin className="h-4 w-4" />
+                <SpriteIcon name="map-pin" className="h-4 w-4" />
                 <span>Location</span>
               </div>
               <Select value={location} onValueChange={handleLocationChange}>

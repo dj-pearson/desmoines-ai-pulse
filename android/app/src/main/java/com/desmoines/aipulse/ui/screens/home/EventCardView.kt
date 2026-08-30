@@ -1,5 +1,6 @@
 package com.desmoines.aipulse.ui.screens.home
 
+import com.desmoines.aipulse.util.UiFormatLocale
 import androidx.compose.foundation.background
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
@@ -81,7 +82,7 @@ fun EventCardView(
         append(event.title)
         event.parsedDate?.let {
             append(". ")
-            append(it.format(DateTimeFormatter.ofPattern("EEEE, MMMM d, h:mm a", Locale.US)))
+            append(it.format(DateTimeFormatter.ofPattern("EEEE, MMMM d, h:mm a", UiFormatLocale)))
         }
         append(". ${event.displayLocation}")
         if (event.isFree) append(". Free event")
@@ -227,7 +228,7 @@ fun EventCardView(
                         )
                         Spacer(modifier = Modifier.width(4.dp))
                         Text(
-                            text = date.format(DateTimeFormatter.ofPattern("EEE, MMM d · h:mm a", Locale.US)),
+                            text = date.format(DateTimeFormatter.ofPattern("EEE, MMM d · h:mm a", UiFormatLocale)),
                             style = MaterialTheme.typography.bodySmall,
                             color = MaterialTheme.colorScheme.onSurfaceVariant,
                             maxLines = 1,
@@ -388,7 +389,7 @@ fun DateBadge(
         horizontalAlignment = Alignment.CenterHorizontally
     ) {
         Text(
-            text = date.format(DateTimeFormatter.ofPattern("EEE", Locale.US)).uppercase(),
+            text = date.format(DateTimeFormatter.ofPattern("EEE", UiFormatLocale)).uppercase(),
             fontSize = 9.sp,
             fontWeight = FontWeight.Bold,
             color = MaterialTheme.colorScheme.primary
@@ -400,7 +401,7 @@ fun DateBadge(
             color = MaterialTheme.colorScheme.onSurface
         )
         Text(
-            text = date.format(DateTimeFormatter.ofPattern("MMM", Locale.US)).uppercase(),
+            text = date.format(DateTimeFormatter.ofPattern("MMM", UiFormatLocale)).uppercase(),
             fontSize = 9.sp,
             fontWeight = FontWeight.Medium,
             color = MaterialTheme.colorScheme.onSurfaceVariant

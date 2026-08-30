@@ -9,7 +9,7 @@ import { SocialEventCard } from "@/components/SocialEventCard";
 import EnhancedLocalSEO from "@/components/EnhancedLocalSEO";
 import { EventListJsonLd } from "@/components/schema/EventListJsonLd";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
-import { Calendar, MapPin, Clock, Filter } from "lucide-react";
+import { Filter } from "lucide-react";
 import {
   format,
   isWeekend,
@@ -27,6 +27,25 @@ import { useDocumentTitle } from "@/hooks/useDocumentTitle";
 import { Breadcrumbs } from "@/components/ui/breadcrumbs";
 import { EVENT_LIST_COLUMNS } from "@/lib/listColumns";
 import { formatCount } from "@/lib/pluralize";
+import { SpriteIcon } from "@/components/ui/SpriteIcon";
+
+/**
+ * WEB-PERF-023. The grid rendered every event in the weekend window and this
+ * page measured 4,374 DOM elements inside #root - the worst route on the site
+ * once the four month pages were capped, against a 1,139 median and a ~1,500
+ * Lighthouse flag. 85 events are in the window today.
+ *
+ * 36 is twelve full rows of the lg:grid-cols-3 grid, the same cap as
+ * MonthlyEventsPage and DietaryRestaurants. The cap applies AFTER the category
+ * and location filters, so a filtered view still shows its first 36 matches
+ * rather than 36 of the unfiltered set.
+ *
+ * Same trade-off as the month pages and it is the owner's: this is a landing
+ * page and it now lists 36 of 85. Every event stays reachable through /events
+ * and its own detail page. If the whole window must render, the fix is a
+ * cheaper card rather than a bigger cap.
+ */
+const VISIBLE_EVENTS = 36;
 
 export default function EventsThisWeekend() {
   const [selectedCategory, setSelectedCategory] = useState<string>("all");
@@ -156,8 +175,12 @@ export default function EventsThisWeekend() {
         faqData={faqData}
         isTimeSensitive={true}
       />
+      {/* The schema must describe what the page SHOWS: the grid is capped at
+          VISIBLE_EVENTS and EventListJsonLd defaults maxItems to 50, so the
+          full list here would advertise events a reader cannot see. */}
       <EventListJsonLd
-        events={filteredEvents}
+        events={filteredEvents.slice(0, VISIBLE_EVENTS)}
+        maxItems={VISIBLE_EVENTS}
         listName="Des Moines Weekend Events"
         listDescription={pageDescription}
         listUrl={getCanonicalUrl('/events/this-weekend')}
@@ -177,7 +200,7 @@ export default function EventsThisWeekend() {
         {/* Hero Section */}
         <div className="mb-8">
           <div className="flex items-center gap-2 mb-4">
-            <Calendar className="h-6 w-6 text-primary" />
+            <SpriteIcon name="calendar" className="h-6 w-6 text-primary" />
             <h1 className="text-3xl font-bold">This Weekend in Des Moines</h1>
           </div>
 
@@ -198,11 +221,11 @@ export default function EventsThisWeekend() {
 
           <div className="flex items-center gap-4 text-muted-foreground mb-4">
             <div className="flex items-center gap-1">
-              <Clock className="h-4 w-4" />
+              <SpriteIcon name="clock" className="h-4 w-4" />
               <span>Weekend of {format(new Date(), "MMMM d, yyyy")}</span>
             </div>
             <div className="flex items-center gap-1">
-              <MapPin className="h-4 w-4" />
+              <SpriteIcon name="map-pin" className="h-4 w-4" />
               <span>Des Moines Metro Area</span>
             </div>
           </div>
@@ -362,10 +385,21 @@ export default function EventsThisWeekend() {
         ) : filteredEvents.length > 0 ? (
           <>
             <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6 mb-8">
-              {filteredEvents.map((event) => (
+              {filteredEvents.slice(0, VISIBLE_EVENTS).map((event) => (
                 <SocialEventCard key={event.id} event={event} onViewDetails={() => {}} />
               ))}
             </div>
+
+            {filteredEvents.length > VISIBLE_EVENTS && (
+              <div className="mb-8 text-center">
+                <p className="text-muted-foreground mb-3">
+                  Showing {VISIBLE_EVENTS} of {formatCount(filteredEvents.length, 'event')} this weekend.
+                </p>
+                <Button asChild variant="outline">
+                  <Link to="/events">Browse all events</Link>
+                </Button>
+              </div>
+            )}
 
             {/* Related Links */}
             <Card className="mb-8">
@@ -419,7 +453,7 @@ export default function EventsThisWeekend() {
         ) : (
           <Card>
             <CardContent className="pt-6 text-center">
-              <Calendar className="h-12 w-12 text-muted-foreground mx-auto mb-4" />
+              <SpriteIcon name="calendar" className="h-12 w-12 text-muted-foreground mx-auto mb-4" />
               <h2 className="text-xl font-semibold mb-2">
                 No Weekend Events Found
               </h2>

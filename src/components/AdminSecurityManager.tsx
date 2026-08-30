@@ -9,23 +9,11 @@ import { Label } from "@/components/ui/label";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { useToast } from "@/hooks/use-toast";
 import { supabase } from "@/integrations/supabase/client";
-import {
-  Shield,
-  AlertTriangle,
-  Ban,
-  Eye,
-  Lock,
-  Users,
-  Activity,
-  Globe,
-  Settings,
-  Clock,
-  UserX,
-  Mail,
-} from "lucide-react";
+import { Shield, AlertTriangle, Ban, Eye, Lock, Activity, Globe, Settings, UserX, Mail } from "lucide-react";
 import { createLogger } from '@/lib/logger';
 import { storage } from '@/lib/safeStorage';
 import BlockedEmailDomainsManager from '@/components/admin/BlockedEmailDomainsManager';
+import { SpriteIcon } from "@/components/ui/SpriteIcon";
 
 const log = createLogger('AdminSecurityManager');
 
@@ -584,7 +572,7 @@ export default function AdminSecurityManager() {
                           {getSeverityBadge(log.severity)}
                         </div>
                         <div className="flex items-center gap-2 text-sm text-muted-foreground">
-                          <Clock className="h-4 w-4" />
+                          <SpriteIcon name="clock" className="h-4 w-4" />
                           {new Date(log.created_at).toLocaleString()}
                         </div>
                       </div>

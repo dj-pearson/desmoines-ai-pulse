@@ -24,22 +24,7 @@ import {
   formatInCentralTime,
   hasSpecificTime,
 } from "@/lib/timezone";
-import {
-  Calendar,
-  MapPin,
-  ExternalLink,
-  ArrowLeft,
-  Sparkles,
-  DollarSign,
-  CalendarPlus,
-  Clock,
-  Tag,
-  Info,
-  ChevronRight,
-  Navigation,
-  Ticket,
-  Users,
-} from "lucide-react";
+import { ArrowLeft, DollarSign, CalendarPlus, Tag, Info, ChevronRight, Navigation } from "lucide-react";
 import { downloadICS, getGoogleCalendarUrl } from "@/lib/calendar";
 import { FavoriteButton } from "@/components/FavoriteButton";
 import { BRAND, getCanonicalUrl } from "@/lib/brandConfig";
@@ -51,6 +36,7 @@ import { LastUpdatedBadge } from "@/components/LastUpdatedBadge";
 import { NearbyContent } from "@/components/NearbyContent";
 import { LazyLocationMap } from "@/components/LazyLocationMap";
 import { eventPriceContent } from "@/lib/eventOffers";
+import { SpriteIcon } from "@/components/ui/SpriteIcon";
 
 /** Upcoming events fetched to populate the related/nearby rails (3 shown each). */
 const RELATED_POOL_SIZE = 50;
@@ -150,7 +136,7 @@ export default function EventDetails() {
           <div className="container mx-auto px-4 py-16">
             <div className="text-center space-y-4 max-w-md mx-auto">
               <div className="w-16 h-16 bg-muted rounded-full flex items-center justify-center mx-auto">
-                <Calendar className="h-8 w-8 text-muted-foreground" />
+                <SpriteIcon name="calendar" className="h-8 w-8 text-muted-foreground" />
               </div>
               <h1 className="text-2xl font-bold">Event Not Found</h1>
               <p className="text-muted-foreground">
@@ -266,7 +252,7 @@ export default function EventDetails() {
                       <Badge variant="outline">{event.category}</Badge>
                       {event.is_featured && (
                         <Badge className="bg-amber-500 text-white border-0">
-                          <Sparkles className="h-3 w-3 mr-1" />
+                          <SpriteIcon name="sparkles" className="h-3 w-3 mr-1" />
                           Featured
                         </Badge>
                       )}
@@ -284,7 +270,7 @@ export default function EventDetails() {
                     <div className="grid grid-cols-1 sm:grid-cols-2 gap-3 mb-6">
                       <div className="flex items-start gap-3 p-3 rounded-xl bg-muted/50">
                         <div className="p-2 rounded-lg bg-primary/10">
-                          <Calendar className="h-5 w-5 text-primary" />
+                          <SpriteIcon name="calendar" className="h-5 w-5 text-primary" />
                         </div>
                         <div>
                           <p className="font-semibold text-foreground text-sm">{dayOfWeek}</p>
@@ -299,7 +285,7 @@ export default function EventDetails() {
 
                       <div className="flex items-start gap-3 p-3 rounded-xl bg-muted/50">
                         <div className="p-2 rounded-lg bg-primary/10">
-                          <MapPin className="h-5 w-5 text-primary" />
+                          <SpriteIcon name="map-pin" className="h-5 w-5 text-primary" />
                         </div>
                         <div itemProp="location" itemScope itemType="https://schema.org/Place">
                           {event.venue && (
@@ -315,7 +301,7 @@ export default function EventDetails() {
                       {event.price && (
                         <div className="flex items-start gap-3 p-3 rounded-xl bg-muted/50">
                           <div className="p-2 rounded-lg bg-primary/10">
-                            <Ticket className="h-5 w-5 text-primary" />
+                            <SpriteIcon name="ticket" className="h-5 w-5 text-primary" />
                           </div>
                           <div>
                             <p className="font-semibold text-foreground text-sm">Admission</p>
@@ -357,7 +343,7 @@ export default function EventDetails() {
                       {event.source_url && !(event as { source_url_broken?: boolean }).source_url_broken && (
                         <Button asChild size="sm">
                           <a href={event.source_url} target="_blank" rel="noopener noreferrer">
-                            <ExternalLink className="h-4 w-4 mr-2" />
+                            <SpriteIcon name="external-link" className="h-4 w-4 mr-2" />
                             Official Page
                           </a>
                         </Button>
@@ -445,7 +431,7 @@ export default function EventDetails() {
                             className="text-sm text-primary hover:underline inline-flex items-center gap-1"
                           >
                             Official Event Page
-                            <ExternalLink className="h-3 w-3" />
+                            <SpriteIcon name="external-link" className="h-3 w-3" />
                           </a>
                         </div>
                       )}
@@ -503,7 +489,7 @@ export default function EventDetails() {
                       className="flex items-center justify-between p-2 rounded-lg hover:bg-muted/50 transition-colors text-sm"
                     >
                       <span className="flex items-center gap-2">
-                        <Clock className="h-4 w-4 text-muted-foreground" />
+                        <SpriteIcon name="clock" className="h-4 w-4 text-muted-foreground" />
                         Events Today
                       </span>
                       <ChevronRight className="h-4 w-4 text-muted-foreground" />
@@ -513,7 +499,7 @@ export default function EventDetails() {
                       className="flex items-center justify-between p-2 rounded-lg hover:bg-muted/50 transition-colors text-sm"
                     >
                       <span className="flex items-center gap-2">
-                        <Calendar className="h-4 w-4 text-muted-foreground" />
+                        <SpriteIcon name="calendar" className="h-4 w-4 text-muted-foreground" />
                         This Weekend
                       </span>
                       <ChevronRight className="h-4 w-4 text-muted-foreground" />
@@ -523,7 +509,7 @@ export default function EventDetails() {
                       className="flex items-center justify-between p-2 rounded-lg hover:bg-muted/50 transition-colors text-sm"
                     >
                       <span className="flex items-center gap-2">
-                        <Ticket className="h-4 w-4 text-muted-foreground" />
+                        <SpriteIcon name="ticket" className="h-4 w-4 text-muted-foreground" />
                         Free Events
                       </span>
                       <ChevronRight className="h-4 w-4 text-muted-foreground" />

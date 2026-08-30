@@ -4,9 +4,10 @@ import { Badge } from "@/components/ui/badge";
 import { useToast } from "@/hooks/use-toast";
 import { useFeedback } from "@/hooks/useFeedback";
 import { useAuth } from "@/hooks/useAuth";
-import { ThumbsUp, ThumbsDown, Heart, HeartOff, TrendingUp } from "lucide-react";
+import { ThumbsUp, ThumbsDown, Heart, HeartOff } from "lucide-react";
 import { cn } from "@/lib/utils";
 import { createLogger } from '@/lib/logger';
+import { SpriteIcon } from "@/components/ui/SpriteIcon";
 
 const log = createLogger('EventFeedback');
 
@@ -206,7 +207,7 @@ export default function EventFeedback({ eventId, className, showStats = false }:
       {/* Learning indicator */}
       {currentFeedback && (
         <Badge variant="outline" className="text-xs ml-2">
-          <TrendingUp className="h-3 w-3 mr-1" />
+          <SpriteIcon name="trending-up" className="h-3 w-3 mr-1" />
           Learning
         </Badge>
       )}

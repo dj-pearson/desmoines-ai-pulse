@@ -7,18 +7,11 @@ import {
 } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
 import { Skeleton } from "@/components/ui/skeleton";
-import {
-  Utensils,
-  MapPin,
-  Baby,
-  Star,
-  TrendingUp,
-  Search,
-  Clock,
-} from "lucide-react";
+import { Utensils, Baby, Star, Search } from "lucide-react";
 import { useTrending } from "@/hooks/useTrending";
 import { useSearchInsights } from "@/hooks/useSearchInsights";
 import { useAnalytics } from "@/hooks/useAnalytics";
+import { SpriteIcon } from "@/components/ui/SpriteIcon";
 
 export default function MostSearched() {
   const {
@@ -75,7 +68,7 @@ export default function MostSearched() {
       <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8">
         <div className="text-center mb-12">
           <div className="flex items-center justify-center gap-2 mb-4">
-            <TrendingUp className="h-6 w-6 text-[#DC143C]" />
+            <SpriteIcon name="trending-up" className="h-6 w-6 text-[#DC143C]" />
             <h3 className="text-3xl font-bold text-foreground">
               {hasRealTrendingData || hasRealSearchData
                 ? "Trending Now"
@@ -127,7 +120,7 @@ export default function MostSearched() {
                           </span>
                         )}
                         {search.trending && (
-                          <TrendingUp className="h-3 w-3 text-green-500" />
+                          <SpriteIcon name="trending-up" className="h-3 w-3 text-green-500" />
                         )}
                       </div>
                     </div>
@@ -197,12 +190,12 @@ export default function MostSearched() {
                       {restaurant.location && (
                         <CardContent className="pt-0">
                           <div className="flex items-center text-sm text-muted-foreground">
-                            <MapPin className="h-4 w-4 mr-1" />
+                            <SpriteIcon name="map-pin" className="h-4 w-4 mr-1" />
                             <span>{restaurant.location}</span>
                           </div>
                           {hasRealTrendingData && (
                             <div className="flex items-center text-xs text-muted-foreground mt-2">
-                              <TrendingUp className="h-3 w-3 mr-1" />
+                              <SpriteIcon name="trending-up" className="h-3 w-3 mr-1" />
                               <span>{item.views24h} views today</span>
                             </div>
                           )}
@@ -217,7 +210,7 @@ export default function MostSearched() {
           {/* Top Attractions */}
           <div>
             <div className="flex items-center mb-6">
-              <MapPin className="h-6 w-6 text-[#DC143C] mr-2" />
+              <SpriteIcon name="map-pin" className="h-6 w-6 text-[#DC143C] mr-2" />
               <h4 className="text-xl font-semibold">
                 {hasRealTrendingData
                   ? "Trending Attractions"
@@ -265,12 +258,12 @@ export default function MostSearched() {
                       {attraction.location && (
                         <CardContent className="pt-0">
                           <div className="flex items-center text-sm text-muted-foreground">
-                            <MapPin className="h-4 w-4 mr-1" />
+                            <SpriteIcon name="map-pin" className="h-4 w-4 mr-1" />
                             <span>{attraction.location}</span>
                           </div>
                           {hasRealTrendingData && (
                             <div className="flex items-center text-xs text-muted-foreground mt-2">
-                              <TrendingUp className="h-3 w-3 mr-1" />
+                              <SpriteIcon name="trending-up" className="h-3 w-3 mr-1" />
                               <span>{item.views24h} views today</span>
                             </div>
                           )}
@@ -335,12 +328,12 @@ export default function MostSearched() {
                       {playground.location && (
                         <CardContent className="pt-0">
                           <div className="flex items-center text-sm text-muted-foreground">
-                            <MapPin className="h-4 w-4 mr-1" />
+                            <SpriteIcon name="map-pin" className="h-4 w-4 mr-1" />
                             <span>{playground.location}</span>
                           </div>
                           {hasRealTrendingData && (
                             <div className="flex items-center text-xs text-muted-foreground mt-2">
-                              <TrendingUp className="h-3 w-3 mr-1" />
+                              <SpriteIcon name="trending-up" className="h-3 w-3 mr-1" />
                               <span>{item.views24h} views today</span>
                             </div>
                           )}

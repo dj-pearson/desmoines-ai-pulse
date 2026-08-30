@@ -22,20 +22,8 @@ import {
 } from "@/components/ui/select";
 import { Separator } from "@/components/ui/separator";
 import { useToast } from "@/hooks/use-toast";
-import {
-  Coffee,
-  Music,
-  Gamepad2,
-  Palette,
-  Heart,
-  Camera,
-  User,
-  Calendar,
-  MapPin,
-  Settings,
-  Save,
-  TrendingUp,
-} from "lucide-react";
+import { Coffee, Music, Gamepad2, Palette, Heart, Camera, User, Calendar, Settings, Save } from "lucide-react";
+import { SpriteIcon } from "@/components/ui/SpriteIcon";
 
 const INTERESTS = [
   {
@@ -223,7 +211,7 @@ export default function PreferencesManager() {
       <Card>
         <CardHeader>
           <CardTitle className="flex items-center gap-2">
-            <TrendingUp className="h-5 w-5" />
+            <SpriteIcon name="trending-up" className="h-5 w-5" />
             Your Interests
           </CardTitle>
           <CardDescription>
@@ -273,7 +261,7 @@ export default function PreferencesManager() {
       <Card>
         <CardHeader>
           <CardTitle className="flex items-center gap-2">
-            <MapPin className="h-5 w-5" />
+            <SpriteIcon name="map-pin" className="h-5 w-5" />
             Location Preferences
           </CardTitle>
           <CardDescription>

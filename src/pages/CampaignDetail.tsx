@@ -6,11 +6,12 @@ import { Badge } from "@/components/ui/badge";
 import { useCampaigns } from "@/hooks/useCampaigns";
 import { useAuth } from "@/hooks/useAuth";
 import { format } from "date-fns";
-import { Calendar, DollarSign, Eye, Upload, BarChart3, ArrowLeft, AlertCircle } from "lucide-react";
+import { DollarSign, Eye, Upload, BarChart3, ArrowLeft, AlertCircle } from "lucide-react";
 import { Breadcrumbs } from "@/components/ui/breadcrumbs";
 import { useDocumentTitle } from "@/hooks/useDocumentTitle";
 import { PLACEMENT_SPECS } from "@/lib/placementSpecs";
 import type { PlacementType } from "@/lib/placementSpecs";
+import { SpriteIcon } from "@/components/ui/SpriteIcon";
 
 const STATUS_COLORS = {
   draft: "secondary",
@@ -142,7 +143,7 @@ export default function CampaignDetail() {
         </Card>
         <Card>
           <CardContent className="pt-4 pb-4 text-center">
-            <Calendar className="h-5 w-5 mx-auto text-muted-foreground mb-1" />
+            <SpriteIcon name="calendar" className="h-5 w-5 mx-auto text-muted-foreground mb-1" />
             <p className="text-2xl font-bold">
               {campaign.start_date && campaign.end_date
                 ? Math.ceil((new Date(campaign.end_date).getTime() - new Date(campaign.start_date).getTime()) / (1000 * 60 * 60 * 24))
@@ -199,7 +200,7 @@ export default function CampaignDetail() {
         <Card className="mb-8">
           <CardHeader>
             <CardTitle className="flex items-center gap-2">
-              <Calendar className="h-5 w-5" />
+              <SpriteIcon name="calendar" className="h-5 w-5" />
               Schedule
             </CardTitle>
           </CardHeader>

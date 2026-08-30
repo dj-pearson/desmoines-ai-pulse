@@ -23,28 +23,7 @@ import { BreadcrumbListSchema } from "@/components/schema/BreadcrumbListSchema";
 import SpeakableSchema from "@/components/schema/SpeakableSchema";
 import { getCanonicalUrl } from "@/lib/brandConfig";
 import { qualifyTitleWithCity } from "@/lib/seoTitleLocation";
-import {
-  MapPin,
-  Phone,
-  ExternalLink,
-  Star,
-  Clock,
-  DollarSign,
-  ArrowLeft,
-  Navigation,
-  Share2,
-  Heart,
-  MessageCircle,
-  Award,
-  Utensils,
-  ChefHat,
-  Sparkles,
-  Globe,
-  Check,
-  BookOpen,
-  Info,
-  Map,
-} from "lucide-react";
+import { Phone, Star, DollarSign, ArrowLeft, Navigation, Heart, MessageCircle, Award, Utensils, Globe, Check, BookOpen, Info, Map } from "lucide-react";
 import { useState, useMemo } from "react";
 import { useContentTracking } from "@/hooks/useContentTracking";
 import { getRestaurantOpenStatus, getOpeningHoursSpecification } from "@/lib/restaurantHours";
@@ -56,6 +35,7 @@ import { NearbyContent } from "@/components/NearbyContent";
 import { RestaurantMenuSection } from "@/components/RestaurantMenuSection";
 import { RatingSystem } from "@/components/RatingSystem";
 import { CollapsibleSection } from "@/components/CollapsibleSection";
+import { SpriteIcon } from "@/components/ui/SpriteIcon";
 
 export default function RestaurantDetails() {
   const { slug } = useParams();
@@ -428,7 +408,7 @@ export default function RestaurantDetails() {
                 onShare={trackShare}
                 trigger={
                   <Button variant="outline" size="sm" className="rounded-xl">
-                    <Share2 className="h-4 w-4 mr-1.5" />
+                    <SpriteIcon name="share-2" className="h-4 w-4 mr-1.5" />
                     Share
                   </Button>
                 }
@@ -474,7 +454,7 @@ export default function RestaurantDetails() {
               <div className="absolute top-4 left-4 flex gap-2 z-10">
                 {restaurant.is_featured && (
                   <Badge className="bg-amber-500 text-white border-0 shadow-lg text-sm font-semibold px-3 py-1">
-                    <Sparkles className="h-3.5 w-3.5 mr-1.5" />
+                    <SpriteIcon name="sparkles" className="h-3.5 w-3.5 mr-1.5" />
                     Featured
                   </Badge>
                 )}
@@ -494,7 +474,7 @@ export default function RestaurantDetails() {
                 <div className="max-w-3xl">
                   {restaurant.cuisine && (
                     <div className="flex items-center gap-2 mb-2">
-                      <ChefHat className="h-4 w-4 text-white/70" />
+                      <SpriteIcon name="chef-hat" className="h-4 w-4 text-white/70" />
                       <span className="text-white/80 text-sm font-medium uppercase tracking-wider">
                         {restaurant.cuisine} Cuisine
                       </span>
@@ -518,7 +498,7 @@ export default function RestaurantDetails() {
                     )}
                     {restaurant.location && (
                       <div className="flex items-center gap-1.5 bg-white/20 backdrop-blur-sm rounded-full px-3 py-1">
-                        <MapPin className="h-4 w-4" />
+                        <SpriteIcon name="map-pin" className="h-4 w-4" />
                         <span className="text-sm">{neighborhoodText}</span>
                       </div>
                     )}
@@ -613,7 +593,7 @@ export default function RestaurantDetails() {
                   </div>
                 </div>
                 <div className="text-center p-4 bg-blue-50 rounded-2xl border border-blue-100">
-                  <ChefHat className="h-6 w-6 text-blue-500 mx-auto mb-2" />
+                  <SpriteIcon name="chef-hat" className="h-6 w-6 text-blue-500 mx-auto mb-2" />
                   <div className="text-lg font-bold text-gray-900 line-clamp-1">
                     {restaurant.cuisine || "Various"}
                   </div>
@@ -653,13 +633,13 @@ export default function RestaurantDetails() {
                 {/* Contact & Location */}
                 <div>
                   <h2 className="text-xl font-bold text-gray-900 mb-4 flex items-center gap-2">
-                    <MapPin className="h-5 w-5 text-[#2D1B69]" />
+                    <SpriteIcon name="map-pin" className="h-5 w-5 text-[#2D1B69]" />
                     Location & Contact
                   </h2>
                   <div className="space-y-3">
                     {restaurant.location && (
                       <div className="flex items-start gap-3 p-4 bg-gray-50 rounded-xl">
-                        <MapPin className="h-5 w-5 text-gray-500 mt-0.5 shrink-0" />
+                        <SpriteIcon name="map-pin" className="h-5 w-5 text-gray-500 mt-0.5 shrink-0" />
                         <div>
                           <p className="text-gray-900 font-medium">{restaurant.location}</p>
                           <p className="text-sm text-gray-500">{cityName}, Iowa</p>
@@ -702,7 +682,7 @@ export default function RestaurantDetails() {
                         rel="noopener noreferrer"
                         className="flex items-center gap-3 p-4 bg-gray-50 rounded-xl hover:bg-gray-100 transition-colors"
                       >
-                        <ExternalLink className="h-5 w-5 text-gray-500 shrink-0" />
+                        <SpriteIcon name="external-link" className="h-5 w-5 text-gray-500 shrink-0" />
                         <span className="text-[#2D1B69] hover:underline">Visit Website</span>
                       </a>
                     )}
@@ -736,7 +716,7 @@ export default function RestaurantDetails() {
                     {restaurant.opening && (
                       <div className="flex items-start justify-between p-4 bg-gray-50 rounded-xl">
                         <span className="text-gray-600 flex items-center gap-1.5">
-                          <Clock className="h-4 w-4" />
+                          <SpriteIcon name="clock" className="h-4 w-4" />
                           Hours
                         </span>
                         <span className="text-gray-900 text-right text-sm">
