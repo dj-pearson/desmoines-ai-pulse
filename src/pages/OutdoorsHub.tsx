@@ -2,7 +2,9 @@ import { useState } from 'react';
 import { Link } from 'react-router-dom';
 import Header from '@/components/Header';
 import Footer from '@/components/Footer';
-import { Helmet } from 'react-helmet-async';
+import SEOHead from '@/components/SEOHead';
+import ItemListSchema from '@/components/schema/ItemListSchema';
+import { getCanonicalUrl } from '@/lib/brandConfig';
 import { useTrails, useFeaturedTrails, getDifficultyLabel, getSurfaceLabel } from '@/hooks/useTrails';
 import { Card, CardContent } from '@/components/ui/card';
 import { Badge } from '@/components/ui/badge';
@@ -23,6 +25,13 @@ const ACTIVITY_ICONS: Record<string, typeof Bike> = {
   running: Route,
 };
 
+/**
+ * Cap on ItemList elements. The page renders every trail it has (8 today), so
+ * this is only a ceiling against the list growing past what belongs in one
+ * node — it is never allowed to exceed what the page actually links to.
+ */
+const SCHEMA_LIMIT = 50;
+
 const DIFFICULTY_FILTERS = ['All', 'Easy', 'Moderate', 'Difficult'];
 const ACTIVITY_FILTERS = ['All', 'Biking', 'Hiking', 'Running', 'Walking'];
 
@@ -38,12 +47,61 @@ export default function OutdoorsHub() {
     return true;
   });
 
+  const canonicalUrl = getCanonicalUrl('/outdoors');
+
+  // SEO-022. Built from allTrails, not filteredTrails: the schema has to
+  // describe the page a crawler is actually served, and that is always the
+  // unfiltered default — the filters are client state and never survive a
+  // prerender.
+  const schemaItems = (allTrails ?? []).slice(0, SCHEMA_LIMIT).map((trail) => ({
+    name: trail.name,
+    url: getCanonicalUrl(`/outdoors/${trail.slug}`),
+    ...(trail.image_url && { image: trail.image_url }),
+    ...(trail.description && { description: trail.description }),
+    itemProps: {
+      ...(trail.trailhead_address && {
+        address: {
+          '@type': 'PostalAddress',
+          streetAddress: trail.trailhead_address,
+          addressRegion: 'IA',
+          addressCountry: 'US',
+        },
+      }),
+      ...(trail.latitude != null &&
+        trail.longitude != null && {
+          geo: {
+            '@type': 'GeoCoordinates',
+            latitude: trail.latitude,
+            longitude: trail.longitude,
+          },
+        }),
+    },
+  }));
+
   return (
     <>
-      <Helmet>
-        <title>Trails & Outdoor Recreation in Des Moines | Des Moines Insider</title>
-        <meta name="description" content="Explore 800+ miles of trails in the Des Moines metro area. Trail maps, difficulty ratings, and seasonal guides for hiking, biking, and running." />
-      </Helmet>
+      <SEOHead
+        title="Trails & Outdoor Recreation in Des Moines"
+        description="Explore 800+ miles of trails in the Des Moines metro area. Trail maps, difficulty ratings, and seasonal guides for hiking, biking, and running."
+        url={canonicalUrl}
+        canonicalUrl={canonicalUrl}
+        keywords={[
+          'Des Moines trails',
+          'hiking near Des Moines',
+          'bike trails Des Moines',
+          'Des Moines parks',
+        ]}
+        breadcrumbs={[
+          { name: 'Home', url: '/' },
+          { name: 'Outdoors', url: '/outdoors' },
+        ]}
+      />
+      <ItemListSchema
+        name="Trails and outdoor recreation in the Des Moines metro"
+        description="Paved and natural-surface trails, state parks and outdoor recreation areas around Des Moines, Iowa."
+        items={schemaItems}
+        itemType="Place"
+      />
       <div className="min-h-screen bg-background">
         <Header />
         <div className="container mx-auto px-4 py-8">

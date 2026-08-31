@@ -21,10 +21,17 @@ function inHead() {
     .filter((n) => n["@type"] === "ItemList");
 }
 
-function renderList(items: { name: string; url: string }[]) {
+function renderList(
+  items: {
+    name: string;
+    url: string;
+    itemProps?: Record<string, unknown>;
+  }[],
+  itemType?: string,
+) {
   render(
     <HelmetProvider>
-      <ItemListSchema name="Test list" items={items} />
+      <ItemListSchema name="Test list" items={items} itemType={itemType} />
     </HelmetProvider>,
   );
 }
@@ -69,5 +76,45 @@ describe("ItemListSchema", () => {
     // not an empty list agreeing with an empty count.
     expect(list.itemListElement[0].url).toBe("https://example.com/a");
     expect(list.itemListElement[2].position).toBe(3);
+  });
+
+  // SEO-022. /outdoors and /breweries need the list to say what kind of thing
+  // it lists; the four pages already using this component must not change.
+  it("leaves the element shape alone when no itemType is given", async () => {
+    renderList(THREE);
+    const [list] = await waitForList();
+    expect(list.itemListElement[0]).toEqual({
+      "@type": "ListItem",
+      position: 1,
+      name: "A",
+      url: "https://example.com/a",
+    });
+  });
+
+  it("nests a typed node under item when itemType is given", async () => {
+    renderList(
+      [
+        {
+          name: "Gray's Lake Park",
+          url: "https://example.com/outdoors/grays-lake",
+          itemProps: { geo: { "@type": "GeoCoordinates", latitude: 41.57 } },
+        },
+      ],
+      "Place",
+    );
+    const [list] = await waitForList();
+    const [first] = list.itemListElement;
+    expect(first["@type"]).toBe("ListItem");
+    expect(first.position).toBe(1);
+    expect(first.item).toEqual({
+      "@type": "Place",
+      name: "Gray's Lake Park",
+      url: "https://example.com/outdoors/grays-lake",
+      geo: { "@type": "GeoCoordinates", latitude: 41.57 },
+    });
+    // The typed node owns name and url; leaving copies on the ListItem too
+    // would be two claims about one thing that can drift apart.
+    expect(first.name).toBeUndefined();
+    expect(first.url).toBeUndefined();
   });
 });

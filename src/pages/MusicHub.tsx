@@ -1,7 +1,11 @@
 import { Link } from 'react-router-dom';
 import Header from '@/components/Header';
 import Footer from '@/components/Footer';
-import { Helmet } from 'react-helmet-async';
+import SEOHead from '@/components/SEOHead';
+import ItemListSchema from '@/components/schema/ItemListSchema';
+import { EventListJsonLd } from '@/components/schema/EventListJsonLd';
+import { getCanonicalUrl } from '@/lib/brandConfig';
+import type { Event } from '@/lib/types';
 import { useVenues } from '@/hooks/useVenues';
 import { useQuery } from '@tanstack/react-query';
 import { supabase } from '@/integrations/supabase/client';
@@ -68,12 +72,85 @@ export default function MusicHub() {
   const { data: weekendShows } = useMusicEvents('weekend');
   const { data: upcomingShows } = useMusicEvents('upcoming');
 
+  const canonicalUrl = getCanonicalUrl('/music');
+  const pageDescription =
+    "Discover live music, concerts, and venue guides in Des Moines. Tonight's shows, this weekend's concerts, and the top music venues in the metro.";
+
+  // SEO-022. Exactly the shows the page renders below, deduped: the three
+  // sections overlap (tonight's show is also a weekend show), and an ItemList
+  // that claims the same Event twice is a claim the page contradicts.
+  const schemaShows = Object.values(
+    Object.fromEntries(
+      [
+        ...(tonightShows ?? []),
+        ...(weekendShows ?? []).slice(0, 6),
+        ...(upcomingShows ?? []).slice(0, 10),
+      ].map((event) => [event.id, event]),
+    ),
+  ) as unknown as Event[];
+
+  // The fallback when the calendar is empty, which happens: /music is a venue
+  // guide as much as a listings page, and the venue cluster is what the page
+  // ranks on out of season. A Place list is a true claim about that section.
+  const venueItems = (venues ?? []).map((venue) => ({
+    name: venue.name,
+    url: getCanonicalUrl(`/music/venues/${venue.slug}`),
+    ...(venue.image_url && { image: venue.image_url }),
+    ...(venue.description && { description: venue.description }),
+    itemProps: {
+      ...(venue.address && {
+        address: {
+          '@type': 'PostalAddress',
+          streetAddress: venue.address,
+          addressRegion: 'IA',
+          addressCountry: 'US',
+        },
+      }),
+      ...(venue.latitude != null &&
+        venue.longitude != null && {
+          geo: {
+            '@type': 'GeoCoordinates',
+            latitude: venue.latitude,
+            longitude: venue.longitude,
+          },
+        }),
+      ...(venue.capacity != null && { maximumAttendeeCapacity: venue.capacity }),
+    },
+  }));
+
   return (
     <>
-      <Helmet>
-        <title>Live Music & Concerts in Des Moines | Des Moines Insider</title>
-        <meta name="description" content="Discover live music, concerts, and venue guides in Des Moines. Tonight's shows, this weekend's concerts, and the top music venues in the metro." />
-      </Helmet>
+      <SEOHead
+        title="Live Music & Concerts in Des Moines"
+        description={pageDescription}
+        url={canonicalUrl}
+        canonicalUrl={canonicalUrl}
+        keywords={[
+          'Des Moines concerts',
+          'live music Des Moines',
+          'Des Moines music venues',
+          'concerts tonight Des Moines',
+        ]}
+        breadcrumbs={[
+          { name: 'Home', url: '/' },
+          { name: 'Music', url: '/music' },
+        ]}
+      />
+      {schemaShows.length > 0 ? (
+        <EventListJsonLd
+          events={schemaShows}
+          listName="Live music and concerts in Des Moines, Iowa"
+          listDescription={pageDescription}
+          listUrl={canonicalUrl}
+        />
+      ) : (
+        <ItemListSchema
+          name="Live music venues in Des Moines, Iowa"
+          description="Arenas, theaters, clubs and bars hosting live music in the Des Moines metro."
+          items={venueItems}
+          itemType="Place"
+        />
+      )}
       <div className="min-h-screen bg-background">
         <Header />
         <div className="container mx-auto px-4 py-8">

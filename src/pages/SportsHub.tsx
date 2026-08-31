@@ -1,7 +1,11 @@
 import { Link } from 'react-router-dom';
 import Header from '@/components/Header';
 import Footer from '@/components/Footer';
-import { Helmet } from 'react-helmet-async';
+import SEOHead from '@/components/SEOHead';
+import ItemListSchema from '@/components/schema/ItemListSchema';
+import { EventListJsonLd } from '@/components/schema/EventListJsonLd';
+import { getCanonicalUrl } from '@/lib/brandConfig';
+import type { Event } from '@/lib/types';
 import { useTeams } from '@/hooks/useTeams';
 import { useQuery } from '@tanstack/react-query';
 import { supabase } from '@/integrations/supabase/client';
@@ -56,12 +60,65 @@ export default function SportsHub() {
   const { data: todayGames } = useSportsEvents('today');
   const { data: weekGames } = useSportsEvents('week');
 
+  const canonicalUrl = getCanonicalUrl('/sports');
+  const pageDescription =
+    'Des Moines sports hub — Iowa Cubs, Iowa Wild, Iowa Wolves, Iowa Barnstormers, and more. Game schedules, venue guides, and tailgating tips.';
+
+  // SEO-022. Today's games are a subset of this week's, and the page renders
+  // both sections in full, so dedupe by id rather than claiming a game twice.
+  const schemaGames = Object.values(
+    Object.fromEntries(
+      [...(todayGames ?? []), ...(weekGames ?? [])].map((event) => [event.id, event]),
+    ),
+  ) as unknown as Event[];
+
+  // Out of season there are no games, and the page is then a directory of the
+  // seven metro teams. A SportsTeam list is what it is at that point.
+  const teamItems = (teams ?? []).map((team) => ({
+    name: team.name,
+    url: getCanonicalUrl(`/sports/${team.slug}`),
+    ...(team.logo_url && { image: team.logo_url }),
+    ...(team.description && { description: team.description }),
+    itemProps: {
+      ...(team.sport && { sport: team.sport }),
+      ...(team.league && { memberOf: { '@type': 'SportsOrganization', name: team.league } }),
+      ...(team.venue_name && { location: { '@type': 'Place', name: team.venue_name } }),
+    },
+  }));
+
   return (
     <>
-      <Helmet>
-        <title>Sports in Des Moines — Teams, Schedules & Gameday Guides | Des Moines Insider</title>
-        <meta name="description" content="Des Moines sports hub — Iowa Cubs, Iowa Wild, Iowa Wolves, Iowa Barnstormers, and more. Game schedules, venue guides, and tailgating tips." />
-      </Helmet>
+      <SEOHead
+        title="Sports in Des Moines — Teams, Schedules & Gameday Guides"
+        description={pageDescription}
+        url={canonicalUrl}
+        canonicalUrl={canonicalUrl}
+        keywords={[
+          'Iowa Cubs schedule',
+          'Des Moines sports',
+          'Iowa Wild tickets',
+          'Principal Park',
+        ]}
+        breadcrumbs={[
+          { name: 'Home', url: '/' },
+          { name: 'Sports', url: '/sports' },
+        ]}
+      />
+      {schemaGames.length > 0 ? (
+        <EventListJsonLd
+          events={schemaGames}
+          listName="Des Moines sports schedule"
+          listDescription={pageDescription}
+          listUrl={canonicalUrl}
+        />
+      ) : (
+        <ItemListSchema
+          name="Pro and minor league teams in Des Moines, Iowa"
+          description="Iowa Cubs, Iowa Wild, Iowa Wolves, Iowa Barnstormers and the rest of the Des Moines metro's teams."
+          items={teamItems}
+          itemType="SportsTeam"
+        />
+      )}
       <div className="min-h-screen bg-background">
         <Header />
         <div className="container mx-auto px-4 py-8">

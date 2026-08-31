@@ -788,8 +788,22 @@ const duplicateJsonLdRoutes = [];
   const startedAt = Date.now();
 
   // Hub routes first and without a deadline: they are the highest-value pages
-  // and there are only ~35 of them.
-  await renderPool(ROUTES, CONCURRENCY, null);
+  // and there are only ~41 of them.
+  //
+  // SEO-022 turned the strict gate ON for this pass. It was written for the
+  // entity pass, where a rejection is survivable — the URL keeps its SPA shell
+  // and Googlebot still renders it. On a hub it is not survivable and it is not
+  // supposed to be: every route in ROUTES is in sitemap-static.xml, and the
+  // missing-on-disk assertion below turns a rejection into a build failure
+  // rather than a warning. That is the asymmetry the two passes want. A hub
+  // that renders as the homepage shell is precisely the defect this story
+  // exists to fix, so publishing one quietly is the outcome to prevent.
+  //
+  // Verified safe before flipping it: every one of the 40 already-prerendered
+  // routes in dist/ carried at least one JSON-LD block and its own canonical,
+  // which are the two things strict adds over what check-prerender-head.mjs
+  // already asserts post-build.
+  await renderPool(ROUTES, CONCURRENCY, null, true);
   const hubSeconds = Math.round((Date.now() - startedAt) / 1000);
   console.log(
     `[prerender] hubs: ${ok} prerendered, ${failed} skipped, of ${ROUTES.length} routes in ${hubSeconds}s (concurrency ${CONCURRENCY})`,
@@ -805,12 +819,22 @@ const duplicateJsonLdRoutes = [];
   const missingOnDisk = ROUTES.filter((route) => !fs.existsSync(prerenderOutputPath(DIST, route)));
   if (ok < ROUTES.length || missingOnDisk.length > 0) {
     await shutdown();
+    // Name the strict-gate reasons inline rather than leaving them to be found
+    // in the scrollback. "did not render as itself, no JSON-LD" and "Chromium
+    // timed out" call for completely different fixes and both arrive here as
+    // "missing from dist/".
+    const hubRejections = strictRejections.length
+      ? ` Strict gate refused ${strictRejections.length}: ${strictRejections.join(' | ')}.`
+      : '';
     throw new PrerenderFailure(
       `hub prerender incomplete: ${ok}/${ROUTES.length} routes rendered (${failed} failed), ` +
-        `${missingOnDisk.length} missing from dist/${missingOnDisk.length ? `: ${missingOnDisk.join(', ')}` : ''}. ` +
-        'Per-route reasons are in the [prerender] warnings above.',
+        `${missingOnDisk.length} missing from dist/${missingOnDisk.length ? `: ${missingOnDisk.join(', ')}` : ''}.` +
+        `${hubRejections} Per-route reasons are in the [prerender] warnings above.`,
     );
   }
+  // Reset so the entity pass reports only its own rejections. A hub rejection
+  // cannot reach this line — it threw above — so nothing is being discarded.
+  strictRejections.length = 0;
   console.log(`[prerender] hub coverage verified on disk: ${ROUTES.length}/${ROUTES.length}`);
 
   // WEB-SEO-006: entity detail pages.
