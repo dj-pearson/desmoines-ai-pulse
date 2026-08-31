@@ -1,6 +1,6 @@
 {
   "project": "Des Moines Insider - organic recovery and the volume we measured",
-  "branchName": "claude/seo-023-gsc-sync",
+  "branchName": "claude/seo-027-entity-coverage",
   "description": "Continues prd-seo.json (SEO-001 through SEO-020). Two inputs. First, a live audit of desmoinesinsider.com run as GPTBot on 2026-08-31, two days after the SEO-001..016 batch shipped: entity prerendering renders correctly but covers only a quarter of what it should, and three things are broken that were not broken before. Second, a Keyword Planner pull of the 377-term seed list in docs/seo/keyword-research/, joined back to route status in keyword-opportunities.csv. The joined data is what orders phase 2: it says the largest soft volume is on routes that already exist and serve the homepage. Phase 1 is defects on live URLs. Phase 2 is content against measured demand. Phase 2 does not pay off until phase 1 lands, for the same reason it did not last time.",
   "baselines": {
     "measuredOn": "2026-08-31",
@@ -136,9 +136,10 @@
         "Prefer incremental prerendering - render only entities whose updated_at changed since the last successful build - if a full pass cannot fit in the timeout. A full pass every build is not required; complete coverage is.",
         "Whatever the mechanism, events must not be last in ENTITY_SITEMAPS priority while coverage is partial. A category that is always fully unrendered is worse than every category being evenly partial.",
         "Verify with curl -A GPTBot against production after deploy, sampling the END of each sitemap rather than the start: a late-alphabet restaurant, and two events. Each must return its own title and at least one application/ld+json block. Sampling the front of the render order is what produced the wrong conclusion in the first place.",
-        "Add a CI assertion on entity coverage so partial coverage fails the build loudly rather than printing a warning that a passing build buries. scripts/check-entity-coverage.mjs already exists - make it enforce, or record why it cannot."
+        "Add a CI assertion on entity coverage so partial coverage fails the build loudly rather than printing a warning that a passing build buries. scripts/check-entity-coverage.mjs already exists - make it enforce, or record why it cannot.",
+        "Render order should follow measured impressions, now that SEO-023 has real data. The trailing-28-day page report says the top pages by impressions are almost entirely restaurant ENTITY pages ranking 5.8 to 16.5 - the same set that is 335/477 unrendered. Query gsc_page_performance and let it decide the order rather than keeping the current hand-written ENTITY_SITEMAPS sequence."
       ],
-      "notes": "Raised 2026-08-31 from the build log while verifying SEO-021, not from the original audit, which got this wrong. Sequenced ahead of the phase 2 content stories: publishing more pages that crawlers cannot read repeats the mistake at greater volume."
+      "notes": "Raised 2026-08-31 from the build log while verifying SEO-021, not from the original audit, which got this wrong. Sequenced ahead of the phase 2 content stories: publishing more pages that crawlers cannot read repeats the mistake at greater volume. UPDATED 2026-08-31 after SEO-023 landed: the site earns 146 clicks and 22,324 impressions over the trailing 28 days at 0.65% CTR and position 17.5, and the pages carrying most of that are restaurant entity pages that JS-less crawlers cannot read. This is no longer a hypothetical coverage gap - it is the highest-impression surface on the site being invisible to AI search."
     }
   ]
 }

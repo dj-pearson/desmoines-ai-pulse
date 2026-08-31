@@ -6,7 +6,7 @@ You are an autonomous coding agent working on the **Des Moines Insider** project
 
 1. Read the PRD at `prd-seo-organic.json` (project root, NOT `scripts/ralph/prd.json`)
 2. Read the progress log at `scripts/ralph/progress.txt` (check Codebase Patterns section first)
-3. You must be on branch `claude/seo-023-gsc-sync`, cut from `main`. If you are not on it, check it out. Never commit to `main` or `develop`. Never force-push any protected branch.
+3. You must be on branch `claude/seo-027-entity-coverage`, cut from `main`. If you are not on it, check it out. Never commit to `main` or `develop`. Never force-push any protected branch.
 4. Pick the story with the lowest `priority` number where `passes: false`. Break ties by `id` order.
 5. Implement that single user story
 6. Run quality checks: `npm run type-check && npm run lint`
