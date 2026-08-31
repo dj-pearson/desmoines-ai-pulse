@@ -32,7 +32,6 @@
  *   node scripts/check-prerender-head.mjs
  */
 import { readFileSync, existsSync } from 'node:fs';
-import { join } from 'node:path';
 import { walkPrerenderedPages } from './prerender-output.mjs';
 
 const DIST = 'dist';

@@ -69,7 +69,6 @@
  *   node scripts/check-prerender-content.mjs
  */
 import { readFileSync, existsSync } from 'node:fs';
-import { join } from 'node:path';
 import { JSDOM } from 'jsdom';
 import { walkPrerenderedPages, prerenderRouteFromPath } from './prerender-output.mjs';
 

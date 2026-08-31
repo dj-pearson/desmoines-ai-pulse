@@ -90,10 +90,37 @@ if (!Array.isArray(rows) || rows.length === 0) {
   process.exit(1);
 }
 
+// Validate before this reaches the filesystem. The rows are our own database
+// read over an authenticated channel, so this is not expected to reject
+// anything - but the output is a committed artifact that prerender-order.mjs
+// trusts, and an unchecked key here would be written verbatim. Anything that is
+// not a rooted path with a finite non-negative count is dropped and counted.
 const impressions = {};
+let rejected = 0;
 for (const row of rows) {
-  const path = row.p === '' ? '/' : row.p;
-  impressions[path] = row.imp;
+  const path = row?.p === '' ? '/' : row?.p;
+  const imp = row?.imp;
+  if (typeof path !== 'string' || !path.startsWith('/') || path.includes('\n')) {
+    rejected += 1;
+    continue;
+  }
+  if (typeof imp !== 'number' || !Number.isFinite(imp) || imp < 0) {
+    rejected += 1;
+    continue;
+  }
+  impressions[path] = imp;
+}
+
+if (rejected > 0) {
+  console.warn(`[prerender-priority] dropped ${rejected} row(s) that were not a rooted path with a finite count.`);
+}
+
+if (Object.keys(impressions).length === 0) {
+  console.error(
+    '[prerender-priority] every row was rejected by validation. Refusing to overwrite ' +
+      'the committed ranking with an empty one.',
+  );
+  process.exit(1);
 }
 
 writeFileSync(
