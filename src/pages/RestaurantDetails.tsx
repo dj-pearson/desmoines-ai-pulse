@@ -10,6 +10,7 @@ import { FavoriteButton } from "@/components/FavoriteButton";
 import { Separator } from "@/components/ui/separator";
 import { Breadcrumbs } from "@/components/ui/breadcrumbs";
 import SEOHead from "@/components/SEOHead";
+import { RouteCanonical } from "@/components/RouteCanonical";
 import { ogImageUrl } from "@/lib/ogImage";
 import Header from "@/components/Header";
 import Footer from "@/components/Footer";
@@ -135,6 +136,8 @@ export default function RestaurantDetails() {
   if (isLoading) {
     return (
       <>
+        {/* SEO-028: the canonical cannot wait for the fetch. See RouteCanonical. */}
+        <RouteCanonical path={`/restaurants/${slug}`} />
         <Header />
         <div className="min-h-screen bg-gray-50" role="status" aria-live="polite" aria-busy="true">
           <div className="container mx-auto px-4 py-8 max-w-6xl">

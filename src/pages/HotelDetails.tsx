@@ -1,4 +1,5 @@
 import { useParams, Link } from "react-router-dom";
+import { RouteCanonical } from "@/components/RouteCanonical";
 import { Helmet } from "react-helmet-async";
 import { useHotel } from "@/hooks/useHotels";
 import HotelSchema from "@/components/schema/HotelSchema";
@@ -57,6 +58,8 @@ export default function HotelDetails() {
   if (isLoading) {
     return (
       <div className="min-h-screen bg-background pb-24">
+        {/* SEO-028: the canonical cannot wait for the fetch. See RouteCanonical. */}
+        <RouteCanonical path={`/stay/${slug}`} />
         <Header />
         <div className="container mx-auto px-4 py-8">
           <Skeleton className="h-8 w-48 mb-4" />

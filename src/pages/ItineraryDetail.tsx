@@ -1,4 +1,5 @@
 import { useParams, Link } from 'react-router-dom';
+import { RouteCanonical } from "@/components/RouteCanonical";
 import Header from '@/components/Header';
 import Footer from '@/components/Footer';
 import { Helmet } from 'react-helmet-async';
@@ -78,6 +79,8 @@ export default function ItineraryDetail() {
   if (isLoading) {
     return (
       <div className="min-h-screen bg-background">
+        {/* SEO-028: the canonical cannot wait for the fetch. See RouteCanonical. */}
+        <RouteCanonical path={`/itineraries/${slug}`} />
         <Header />
         <div className="container mx-auto px-4 py-8 space-y-4">
           <Skeleton className="h-10 w-64" />
