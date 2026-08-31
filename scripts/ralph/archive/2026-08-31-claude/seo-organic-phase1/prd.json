@@ -11,7 +11,7 @@
     "sitemapUrlsTotal": 1158,
     "pseoSlugsDefined": 244,
     "pseoSlugsPublished": 16,
-    "gscRowsVisibleToAnon": "CORRECTED 2026-08-31: 0 is what RLS returns, not what the tables hold. All four gsc_* tables carry `FOR ALL USING (is_admin())`, so anon sees [] whether or not rows exist. A service-role probe found 1,630 keyword rows and 2,060 page rows, every one dated 2026-02-28 to 2026-03-28 - the single manual sync of 2026-03-31. Not empty. Stale by five months and invisible to the probe that was used to measure it. See SEO-023.",
+    "gscRowsVisibleToAnon": 0,
     "gscSyncCronScheduled": false,
     "keywordSeedsWithMeasuredVolume": "281 of 377",
     "outdoorsClusterMonthlyVolume": 118400,
@@ -60,17 +60,16 @@
       "title": "Search Console sync has never been scheduled, so nothing above is measurable",
       "priority": 1,
       "phase": 1,
-      "passes": true,
+      "passes": false,
       "description": "As the person deciding what to build next, I have no ongoing organic data. supabase/functions/gsc-sync-data/index.ts writes gsc_keyword_performance, gsc_page_performance and gsc_properties. All three tables exist and all three return [] to the anon key, and no cron schedules the function anywhere in supabase/migrations/, supabase-cron-setup.sql or supabase/config.toml. The [] could be RLS hiding rows from anon rather than empty tables, so that part is unproven, but the absent schedule is not: the sync only runs when somebody triggers it by hand. Every number in docs/seo-plan-2026-08-28.md is a one-off manual export, and src/components/admin/SearchTrafficDashboard sits on top of it.",
       "acceptanceCriteria": [
         "Schedule gsc-sync-data on a daily cron following the pattern already used by the other scheduled functions in supabase-cron-setup.sql. Match the existing CRON_SECRET convention rather than inventing a new auth path.",
         "Establish whether the gsc_* tables are actually empty or merely RLS-hidden from anon, and say which in the progress log. The remedy differs.",
         "After the first successful run, record the real current numbers in the progress log: clicks, impressions, CTR and average position for the trailing 28 days, plus per-hub rows for the five pages in SEO-021.",
         "Backfill as much history as the Search Console API will return in one pass, so there is a before-and-after around the 2026-08-29 ship date rather than only an after.",
-        "The dashboard must render real rows after the sync. If it does not, that is a bug in this story, not a follow-up.",
-        "CORRECTION 2026-08-31: 'Match the existing CRON_SECRET convention' names a path that is not the one live jobs use. CRON_SECRET appears in two functions; every scheduled job currently returning HTTP 200 authenticates with the service-role key read from Vault via public.app_secret(). That is what this story used."
+        "The dashboard must render real rows after the sync. If it does not, that is a bug in this story, not a follow-up."
       ],
-      "notes": "Sequenced into phase 1 because it is the instrument, not the experiment. Without it, SEO-021 and SEO-022 can only be verified by hand with curl, and phase 2 has no feedback at all. DONE 2026-08-31. supabase/migrations/20260831000001_gsc_sync_cron.sql schedules gsc-sync-daily at 15 10 * * *, looping every sync_enabled property. Credentials come from public.app_secret() (Vault), NOT the CRON_SECRET path the acceptance criteria assumed and NOT current_setting('app.settings.*'): both GUCs were probed on 2026-08-31 and still read NULL, and the platform refuses to let anyone set them, which is why 48 jobs have failed on every run since creation. gsc-sync-data already accepts the service-role bearer, so no new auth path was invented. Verified by running the exact command against production through net.http_post before committing it: HTTP 200, keywordsSynced 1000, pagesSynced 2488 over 2026-07-31..2026-08-28. Backfill: six passes took page coverage from 2,060 rows over 29 days to 15,239 rows over 361 days (2025-09-02..2026-08-28), and keywords from 1,630 to 3,928. Trailing 28 days now measured at 146 clicks, 22,324 impressions, 0.65% CTR, average position 17.5 across 262 pages. EVERY ONE of the six passes returned keywordsSynced of exactly 1000, which is the rowLimit, not the data - raised to the API maximum of 25000 in the function. New gate scripts/check-cron-credentials.mjs blocks the dead-GUC pattern in any migration written since the Vault switch; it found a real unapplied defect on its first run (20260829000002_executive_digest_cron.sql would have raised daily forever) and was proved by control. NOT scheduled in production yet: the migration is committed, parse-tested against production inside a rolled-back transaction, and takes effect when a human applies it."
+      "notes": "Sequenced into phase 1 because it is the instrument, not the experiment. Without it, SEO-021 and SEO-022 can only be verified by hand with curl, and phase 2 has no feedback at all."
     },
     {
       "id": "SEO-024",

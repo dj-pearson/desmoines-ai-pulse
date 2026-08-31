@@ -173,6 +173,17 @@ serve(async (req) => {
 
     // Use ["query", "date"] only — adding "page" creates an explosion of rows
     // (same keyword × many pages × many dates) that causes timeouts.
+    //
+    // rowLimit was 1000 with a comment calling that "sufficient for analytics".
+    // It is not, and the number said so: on 2026-08-31 six passes were run
+    // against production over windows of 28, 56, 90, 180, 365 and 480 days, and
+    // every single one returned keywordsSynced exactly 1000. A result that lands
+    // precisely on the limit six times is the limit, not the data. Google
+    // returns rows ordered by clicks descending, so the truncation was silently
+    // discarding the long tail — which is the half of the report that SEO work
+    // is chosen from. 25000 is the API's own maximum; the page query has always
+    // used it, and its widest pass returned 15,239 rows, so the whole property
+    // fits inside one request with room left.
     const keywordResponse = await fetchWithTimeout(
       `https://www.googleapis.com/webmasters/v3/sites/${encodeURIComponent(
         property.property_url
@@ -187,7 +198,7 @@ serve(async (req) => {
           startDate: startDateStr,
           endDate: endDateStr,
           dimensions: ["query", "date"],
-          rowLimit: 1000, // Top 1000 queries per day range is sufficient for analytics
+          rowLimit: 25000,
         }),
       }
     );
