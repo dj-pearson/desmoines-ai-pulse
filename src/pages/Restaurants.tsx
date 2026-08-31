@@ -353,10 +353,27 @@ export default function Restaurants() {
           <div className="relative container mx-auto px-4 pt-16 pb-20 md:pt-20 md:pb-28">
             {/* Title */}
             <div className="text-center mb-10">
+              {/*
+                SEO-026. Two things were wrong here and both were only visible
+                from outside the component.
+
+                The rendered text was "Des MoinesRestaurant Guide" - a block
+                span directly after a text node, so the accessible name and
+                every crawler read it with no space. It looked correct in the
+                browser because the span is display:block.
+
+                And it did not contain the term the page is titled for. The
+                <title> says "Best Restaurants in Des Moines, Iowa" while the
+                H1 said "Restaurant Guide", so the page's two strongest signals
+                disagreed on what it is about. "des moines restaurants" and
+                "best restaurants in des moines" are both 50,000-bucket at
+                competition index 11, against 87 for the things-to-do terms -
+                this is the head term worth agreeing on.
+              */}
               <h1 className="text-4xl md:text-5xl lg:text-6xl font-extrabold text-white mb-4 tracking-tight">
-                Des Moines
+                Best Restaurants in{' '}
                 <span className="block bg-gradient-to-r from-amber-300 to-orange-400 bg-clip-text text-transparent">
-                  Restaurant Guide
+                  Des Moines
                 </span>
               </h1>
               <p className="text-lg md:text-xl text-white/80 max-w-2xl mx-auto">
