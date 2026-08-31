@@ -1,6 +1,6 @@
 {
   "project": "Des Moines Insider - organic recovery and the volume we measured",
-  "branchName": "claude/seo-organic-phase1",
+  "branchName": "claude/seo-023-gsc-sync",
   "description": "Continues prd-seo.json (SEO-001 through SEO-020). Two inputs. First, a live audit of desmoinesinsider.com run as GPTBot on 2026-08-31, two days after the SEO-001..016 batch shipped: entity prerendering renders correctly but covers only a quarter of what it should, and three things are broken that were not broken before. Second, a Keyword Planner pull of the 377-term seed list in docs/seo/keyword-research/, joined back to route status in keyword-opportunities.csv. The joined data is what orders phase 2: it says the largest soft volume is on routes that already exist and serve the homepage. Phase 1 is defects on live URLs. Phase 2 is content against measured demand. Phase 2 does not pay off until phase 1 lands, for the same reason it did not last time.",
   "baselines": {
     "measuredOn": "2026-08-31",
