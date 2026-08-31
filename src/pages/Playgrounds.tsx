@@ -716,6 +716,20 @@ export default function Playgrounds() {
               playgrounds nearest to you. Each playground page includes detailed amenity lists,
               directions, age recommendations, and family tips.
             </p>
+            {/* SEO-024. The other half of the /outdoors cross-link. The two
+                modules share an audience - a family looking for a playground is
+                the same family looking for a flat trail and a park with
+                restrooms - and until now the link ran one way only. */}
+            <p>
+              Several of these playgrounds sit inside the metro's larger parks and along its
+              trail network, including the natural playscape at Jester Park and the playground
+              at Big Creek State Park.{' '}
+              <Link to="/outdoors" className="text-[#2D1B69] underline underline-offset-4">
+                Our Des Moines outdoors guide
+              </Link>{' '}
+              covers those parks in full, with parking, trailheads, dog rules and what stays
+              open through winter.
+            </p>
           </div>
         </div>
       </section>
