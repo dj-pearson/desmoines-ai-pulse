@@ -166,20 +166,10 @@ export default function Playgrounds() {
     { name: "Playgrounds", url: "/playgrounds" },
   ];
 
-  const faqData = [
-    {
-      question: "What are the best playgrounds in Des Moines?",
-      answer: `Des Moines features ${allPlaygrounds.length}+ mapped playgrounds with varying amenities including climbing structures, splash pads, and accessible equipment.`,
-    },
-    {
-      question: "Are Des Moines playgrounds free?",
-      answer: "Yes! All Des Moines public playgrounds are free and open to all visitors, typically dawn to dusk.",
-    },
-    {
-      question: "Which playgrounds have splash pads?",
-      answer: "Several Des Moines playgrounds feature splash pads and water play areas. Use the amenities filter above to find splash pad locations.",
-    },
-  ];
+  // No faqData here on purpose. The FAQSection below is passed a fuller set of
+  // questions inline; a second array in this file fed nothing, and wiring it in
+  // would both replace better answers with worse and risk a second FAQPage on
+  // the page, which is the defect SEO-003 removed.
 
   // Collect unique amenities across all playgrounds for "Browse by Amenity"
   const uniqueAmenities = useMemo(() => {

@@ -32,18 +32,13 @@ const PLAYGROUND_RADIUS_MILES = 6;
 /** Playgrounds linked per destination. Enough to be useful, short of a dump. */
 const PLAYGROUNDS_PER_DESTINATION = 6;
 
-/**
- * How far from a trailhead a restaurant still counts as "after the ride".
- *
- * Six miles, and the number is a measurement rather than a preference. At four
- * miles two of the eight destinations get nothing and Ledges gets nothing; at
- * eight, the Great Western's nearest options are seven miles away in a
- * different town, which is not "at the trailhead" by any reading. Six covers
- * six of the eight honestly and leaves the two rural trailheads - Woodward and
- * Martensdale - showing nothing, which is the true answer for both.
- */
-const RESTAURANT_RADIUS_MILES = 6;
-const RESTAURANTS_PER_DESTINATION = 6;
+// A restaurants-near-trailhead section was scaffolded here and is not built.
+// Nothing consumes it and SEO-024 does not ask for it, so the constants are
+// gone rather than left as dead code. The measurement they encoded is worth
+// keeping if anyone picks it up: at a 6-mile radius, six of the eight guide
+// destinations have honest options and the two rural trailheads (Woodward,
+// Martensdale) have none, which is the true answer for both. Four miles empties
+// Ledges; eight reaches into different towns.
 
 /** Attraction `type` values that belong on an outdoors page. */
 const OUTDOOR_ATTRACTION_TYPES = new Set([

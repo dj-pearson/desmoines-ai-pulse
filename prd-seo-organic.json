@@ -77,7 +77,7 @@
       "title": "/outdoors is the largest soft-competition cluster we measured and it has no page",
       "priority": 2,
       "phase": 2,
-      "passes": false,
+      "passes": true,
       "description": "As somebody searching for trails and parks around Des Moines, I get the CVB or a state-parks site, because our /outdoors route serves the homepage. The Keyword Planner join in docs/seo/keyword-research/keyword-opportunities.csv puts 118,400 monthly searches across 19 outdoors terms with a 19 of 19 hit rate, nearly all Low competition: grays lake park des moines at the 50,000 bucket with competition index 3, ledges state park at 50,000 index 1, raccoon river valley trail at 5,000, best bike trails des moines, best hiking near des moines, dog parks des moines and high trestle trail parking at 500 each. This cluster does not appear anywhere in docs/seo-plan-2026-08-28.md. It was found by the volume pull.",
       "acceptanceCriteria": [
         "Depends on SEO-022. Do not start until /outdoors prerenders as itself.",
@@ -87,7 +87,7 @@
         "Cross-link both directions with /playgrounds, which is already the best-positioned module on the site and shares the same audience.",
         "Read the cluster rows in docs/seo/keyword-research/keyword-opportunities.csv before writing, and target the terms that are actually there rather than assumed ones."
       ],
-      "notes": "Volume figures are Keyword Planner buckets (50 / 500 / 5,000 / 50,000) from an account with no active ad spend, so they are order-of-magnitude only and no traffic forecast should be derived from them. The competition index is paid competition, which is a proxy for commercial contest and not for organic difficulty."
+      "notes": "Volume figures are Keyword Planner buckets (50 / 500 / 5,000 / 50,000) from an account with no active ad spend, so they are order-of-magnitude only and no traffic forecast should be derived from them. The competition index is paid competition, which is a proxy for commercial contest and not for organic difficulty. DONE 2026-08-31. The ralph iteration that wrote the content was killed before committing; finished by hand. All eight destinations the volume pull named ship a section, an anchor and a typed Place node, and the FAQPage carries 10 questions (scripts/check-outdoors-guide.mjs, exit 0). The /outdoors <-> /playgrounds cross-link is live in both directions: OutdoorsHub renders per-destination nearby playgrounds, Playgrounds.tsx:727 links back. Two pieces of dead scaffolding the killed run left behind were removed rather than wired: a restaurants-near-trailhead constant pair nothing consumed and SEO-024 never asked for, and a second faqData array in Playgrounds.tsx that fed nothing - FAQSection there already receives a fuller set inline, so wiring it would have replaced better answers with worse and risked the duplicate FAQPage SEO-003 removed."
     },
     {
       "id": "SEO-025",
