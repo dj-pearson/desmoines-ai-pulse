@@ -19,19 +19,20 @@ import { BRAND, getCanonicalUrl } from "@/lib/brandConfig";
 import { useDocumentTitle } from "@/hooks/useDocumentTitle";
 import { Breadcrumbs } from "@/components/ui/breadcrumbs";
 import { formatCount } from "@/lib/pluralize";
+import { Event } from "@/lib/types";
 
 interface EventItem {
   id: string;
   title: string;
   date: string;
   location: string;
-  venue: string;
-  price: string;
+  venue: string | null;
+  price: string | null;
   category: string;
-  enhanced_description: string;
-  original_description: string;
-  image_url: string;
-  event_start_utc: string;
+  enhanced_description: string | null;
+  original_description: string | null;
+  image_url: string | null;
+  event_start_utc: string | null;
   /**
    * Read by ListFreshness, which is what renders the visible "updated" date.
    * It has to be selected below as well: PostgREST returns exactly the
@@ -85,6 +86,21 @@ export default function EventsToday() {
 
   const todaysEvents = events || [];
 
+  // The row shape and the shared Event type disagree about absence: PostgREST
+  // returns null for an unset column, while Event marks the same fields
+  // optional, which is `undefined`. Passing one as the other is the whole of
+  // the strict-mode failure here, so narrow it once rather than at each use.
+  const eventsAsCards: Event[] = todaysEvents.map((e) => ({
+    ...e,
+    venue: e.venue ?? undefined,
+    price: e.price ?? undefined,
+    enhanced_description: e.enhanced_description ?? undefined,
+    original_description: e.original_description ?? undefined,
+    image_url: e.image_url ?? undefined,
+    event_start_utc: e.event_start_utc ?? undefined,
+    updated_at: e.updated_at ?? undefined,
+  }));
+
   const pageTitle = `Events Today in Des Moines - ${format(new Date(), "MMMM d, yyyy")} | ${BRAND.name}`;
   const pageDescription = `Find events happening today, ${format(new Date(), "MMMM d, yyyy")}, in Des Moines and suburbs. See times, locations, and details for today's activities and entertainment.`;
 
@@ -130,7 +146,7 @@ export default function EventsToday() {
         isTimeSensitive={true}
       />
       <EventListJsonLd
-        events={todaysEvents}
+        events={eventsAsCards}
         listName={`Events Today in Des Moines - ${format(new Date(), "MMMM d, yyyy")}`}
         listDescription={pageDescription}
         listUrl={getCanonicalUrl('/events/today')}
@@ -225,7 +241,7 @@ export default function EventsToday() {
           </div>
         ) : todaysEvents.length > 0 ? (
           <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6 mb-8">
-            {todaysEvents.map((event) => (
+            {eventsAsCards.map((event) => (
               <SocialEventCard key={event.id} event={event} onViewDetails={() => {}} />
             ))}
           </div>
