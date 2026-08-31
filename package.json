@@ -120,7 +120,8 @@
     "check-dom-budget": "node scripts/check-dom-budget.mjs",
     "check-dom-budget:update": "node scripts/check-dom-budget.mjs --update",
     "check-canonical-shape": "node scripts/check-canonical-url-shape.mjs",
-    "check-outdoors-guide": "node scripts/check-outdoors-guide.mjs"
+    "check-outdoors-guide": "node scripts/check-outdoors-guide.mjs",
+    "check-pseo-demand": "node scripts/check-pseo-demand.mjs"
   },
   "dependencies": {
     "@dnd-kit/core": "^6.3.1",

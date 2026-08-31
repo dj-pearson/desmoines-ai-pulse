@@ -299,6 +299,16 @@ jobs:
       - name: The /outdoors guide ships complete
         run: node scripts/check-outdoors-guide.mjs
 
+      # SEO-025. pSEO generation is capped at 30 pages/hour and every page is a
+      # Claude call, so the ORDER locations are generated in decides what a
+      # capped run buys. That order lives in src/pseo/measuredDemand.ts and is
+      # measured, not estimated. This fails when a taxonomy location has no
+      # rank (it would sort as undefined), when a rank names a location the
+      # taxonomy dropped, or when a location deprioritised on a measured zero
+      # gets published anyway - which is the specific waste the story is about.
+      - name: pSEO generation order matches measured demand
+        run: node scripts/check-pseo-demand.mjs
+
       # WEB-SEO-006. /og-image.png was never in public/, and Cloudflare answers a
       # missing static file with the SPA shell - 200 text/html where an image
       # belongs. Six pages advertised it as their og:image and nothing errored.
