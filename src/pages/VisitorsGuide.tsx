@@ -2,6 +2,7 @@ import { useState } from 'react';
 import Header from '@/components/Header';
 import Footer from '@/components/Footer';
 import { Helmet } from 'react-helmet-async';
+import { getCanonicalUrl } from '@/lib/brandConfig';
 import { supabase } from '@/integrations/supabase/client';
 import { Card, CardContent } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
@@ -76,13 +77,16 @@ export default function VisitorsGuide() {
       <Helmet>
         <title>Free Des Moines Visitor Guide — Download or Request | Des Moines Insider</title>
         <meta name="description" content="Get your free Des Moines visitor guide! Download the digital edition instantly or request a free printed copy mailed to your door." />
+        <link rel="canonical" href={getCanonicalUrl('/visitors-guide')} />
         <script type="application/ld+json">
           {JSON.stringify({
             '@context': 'https://schema.org',
             '@type': 'TouristInformationCenter',
             name: 'Des Moines Insider Visitor Guide',
             description: 'Comprehensive visitor guide to Des Moines, Iowa — top events, restaurants, attractions, neighborhoods, and insider tips.',
-            url: typeof window !== 'undefined' ? window.location.href : '',
+            // Prerendering has no window, and the old ternary emitted url:"" into
+            // the static HTML every crawler reads. Same source as the canonical.
+            url: getCanonicalUrl('/visitors-guide'),
             address: {
               '@type': 'PostalAddress',
               addressLocality: 'Des Moines',

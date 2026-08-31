@@ -16,6 +16,7 @@ import fs from 'node:fs';
 import path from 'node:path';
 import process from 'node:process';
 import { PRERENDER_ROUTES } from './prerender-routes.mjs';
+import { prerenderOutputPath } from './prerender-output.mjs';
 
 const DIST = path.resolve('dist');
 const JSON_OUT = process.argv.includes('--json');
@@ -40,7 +41,7 @@ const decode = (s) =>
 const normPath = (p) => (p && p.length > 1 ? p.replace(/\/+$/, '') : p);
 
 function auditRoute(route) {
-  const file = route === '/' ? path.join(DIST, 'index.html') : path.join(DIST, route, 'index.html');
+  const file = prerenderOutputPath(DIST, route);
   if (!fs.existsSync(file)) return { route, missing: true };
 
   const html = fs.readFileSync(file, 'utf8');

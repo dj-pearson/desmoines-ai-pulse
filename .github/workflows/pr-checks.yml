@@ -280,6 +280,16 @@ jobs:
       - name: Prerendered DOM size
         run: node scripts/check-dom-budget.mjs
 
+      # SEO-021. The build output shape decides the URL Cloudflare Pages serves,
+      # and until 2026-08-31 it disagreed with every canonical tag on the site:
+      # /restaurants 308'd to /restaurants/, whose canonical then pointed back at
+      # /restaurants. The 23 passing unit tests over trailingSlashRedirect() could
+      # not see it, because Pages' normalization is not in that function. This
+      # step compares the three artifacts that actually decide - dist filenames,
+      # canonical tags, sitemap <loc> - and fails when they disagree.
+      - name: Build output, canonicals and sitemap name the same URL
+        run: node scripts/check-canonical-url-shape.mjs
+
       # WEB-SEO-006. /og-image.png was never in public/, and Cloudflare answers a
       # missing static file with the SPA shell - 200 text/html where an image
       # belongs. Six pages advertised it as their og:image and nothing errored.

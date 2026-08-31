@@ -4,7 +4,7 @@
  * The app is a client-rendered SPA, so crawlers historically received an empty
  * shell — the root cause behind the soft-404 / "discovered, not indexed" issues.
  * This step renders the high-value PUBLIC landing/hub routes with headless
- * Chromium after `vite build` and writes real HTML to dist/<route>/index.html.
+ * Chromium after `vite build` and writes real HTML to dist/<route>.html.
  * Cloudflare Pages serves those static files to crawlers, while the SPA bundle
  * (still present in the captured HTML) boots and takes over for real users.
  *
@@ -65,6 +65,7 @@ import {
   strictGateFailures,
 } from './lazy-preload-patterns.mjs';
 import { PRERENDER_ROUTES } from './prerender-routes.mjs';
+import { prerenderOutputPath } from './prerender-output.mjs';
 import process from 'node:process';
 
 const DIST = path.resolve('dist');
@@ -452,7 +453,7 @@ const duplicateJsonLdRoutes = [];
   const strictRejections = [];
 
   /**
-   * Render one route and write dist/<route>/index.html. Throws on failure.
+   * Render one route and write dist/<route>.html. Throws on failure.
    *
    * `strict` (entity pass) additionally requires positive proof the page
    * rendered as ITSELF rather than as the SPA shell.
@@ -739,9 +740,13 @@ const duplicateJsonLdRoutes = [];
         }
       }
 
-      const outDir = route === '/' ? DIST : path.join(DIST, route);
-      fs.mkdirSync(outDir, { recursive: true });
-      fs.writeFileSync(path.join(outDir, 'index.html'), html);
+      // SEO-021: flat <route>.html, NOT <route>/index.html. Directory-style
+      // output makes Cloudflare Pages 308 /events -> /events/, which is the
+      // opposite of what every canonical tag and every sitemap <loc> on this
+      // site declares. See scripts/prerender-output.mjs for the measurement.
+      const outFile = prerenderOutputPath(DIST, route);
+      fs.mkdirSync(path.dirname(outFile), { recursive: true });
+      fs.writeFileSync(outFile, html);
     } finally {
       await page.close().catch(() => {});
     }
@@ -795,11 +800,9 @@ const duplicateJsonLdRoutes = [];
   // that), so a missing one is a URL we told search engines to crawl and then
   // served an empty shell.
   // Assert against the artifact on disk, not against `ok`. A counter can be
-  // incremented by a render that wrote somewhere unexpected; dist/<route>/
-  // index.html is what Cloudflare actually serves.
-  const missingOnDisk = ROUTES.filter(
-    (route) => !fs.existsSync(path.join(route === '/' ? DIST : path.join(DIST, route), 'index.html')),
-  );
+  // incremented by a render that wrote somewhere unexpected; dist/<route>.html
+  // is what Cloudflare actually serves.
+  const missingOnDisk = ROUTES.filter((route) => !fs.existsSync(prerenderOutputPath(DIST, route)));
   if (ok < ROUTES.length || missingOnDisk.length > 0) {
     await shutdown();
     throw new PrerenderFailure(

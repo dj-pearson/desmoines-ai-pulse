@@ -40,8 +40,9 @@
  *   node scripts/check-asset-content-types.mjs --live    # + fetch each one
  *   node scripts/check-asset-content-types.mjs --live --base https://staging...
  */
-import { readFileSync, existsSync, readdirSync } from 'node:fs';
-import { join, sep } from 'node:path';
+import { readFileSync, existsSync } from 'node:fs';
+import { join } from 'node:path';
+import { walkPrerenderedPages } from './prerender-output.mjs';
 
 const DIST = 'dist';
 const LIVE = process.argv.includes('--live');
@@ -53,18 +54,9 @@ if (!existsSync(DIST)) {
   process.exit(1);
 }
 
-function walk(dir, out = []) {
-  for (const entry of readdirSync(dir, { withFileTypes: true })) {
-    const path = join(dir, entry.name);
-    if (entry.isDirectory()) walk(path, out);
-    else if (entry.name === 'index.html') out.push(path);
-  }
-  return out;
-}
-
-const pages = walk(DIST).filter((f) => !f.includes(`${sep}assets${sep}`));
+const pages = walkPrerenderedPages(DIST);
 if (pages.length === 0) {
-  console.error('[asset-types] no index.html under dist/ - refusing to pass.');
+  console.error('[asset-types] no prerendered HTML under dist/ - refusing to pass.');
   process.exit(1);
 }
 
@@ -83,10 +75,8 @@ const PATTERNS = [
   /(?:href|src|content)="(\/[^"?#]+\.[a-z0-9]{2,5})"/gi,
   /(?:href|src|content)="(https:\/\/[^"?#]+\.[a-z0-9]{2,5})"/gi,
 ];
-for (const file of pages) {
+for (const { file, route } of pages) {
   const html = readFileSync(file, 'utf8');
-  let route = '/' + file.slice(DIST.length + 1).split(sep).join('/');
-  route = route.replace(/index\.html$/, '').replace(/(.)\/$/, '$1');
   for (const pattern of PATTERNS) {
     for (const m of html.matchAll(pattern)) {
       // Bundler chunks are content-hashed; if one were missing the page would
