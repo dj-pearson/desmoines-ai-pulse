@@ -63,6 +63,22 @@ export const PRERENDER_ROUTES = [
   '/guides',
   '/iowa-state-fair',
 
+  // SEO-022. These six routes exist in App.tsx and were in neither this list
+  // nor sitemap-static.xml, so they returned the homepage title, the homepage
+  // body and zero JSON-LD to every JS-less crawler — measured with
+  // `curl -A GPTBot` against production on 2026-08-31, all six identical. This
+  // is the same defect SEO-001 fixed for entity pages, left live on six hubs.
+  //
+  // /outdoors is the one that costs the most: the Keyword Planner join in
+  // docs/seo/keyword-research/keyword-opportunities.csv returns volume on 19 of
+  // 19 outdoors terms at competition index 1-3.
+  '/outdoors',
+  '/music',
+  '/sports',
+  '/breweries',
+  '/best-of',
+  '/getting-around',
+
   // Neighborhood guides
   '/neighborhoods',
   '/neighborhoods/downtown',

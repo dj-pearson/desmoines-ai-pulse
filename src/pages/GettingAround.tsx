@@ -1,7 +1,8 @@
 import Header from '@/components/Header';
 import Footer from '@/components/Footer';
 import { FAQSection } from "@/components/FAQSection";
-import { Helmet } from 'react-helmet-async';
+import SEOHead from '@/components/SEOHead';
+import { getCanonicalUrl } from '@/lib/brandConfig';
 import { Card, CardContent } from '@/components/ui/card';
 import { Badge } from '@/components/ui/badge';
 import { Button } from '@/components/ui/button';
@@ -37,10 +38,26 @@ const FAQ_ITEMS = [
 export default function GettingAround() {
   return (
     <>
-      <Helmet>
-        <title>Getting Around Des Moines — Parking, Skywalk, Transit Guide | Des Moines Insider</title>
-        <meta name="description" content="How to get around Des Moines: downtown parking map, skywalk system guide, BCycle bike share, DART transit, airport info, and rideshare tips." />
-      </Helmet>
+      {/* SEO-022. The page's own schema is the FAQPage that FAQSection emits
+          from FAQ_ITEMS below — the queries this page wins are questions, and
+          FAQPage is the type that matches. SEOHead is here for the canonical,
+          which the bare Helmet never supplied. */}
+      <SEOHead
+        title="Getting Around Des Moines — Parking, Skywalk, Transit Guide"
+        description="How to get around Des Moines: downtown parking map, skywalk system guide, BCycle bike share, DART transit, airport info, and rideshare tips."
+        url={getCanonicalUrl('/getting-around')}
+        canonicalUrl={getCanonicalUrl('/getting-around')}
+        keywords={[
+          'Des Moines parking',
+          'Des Moines skywalk',
+          'DART bus Des Moines',
+          'Des Moines airport to downtown',
+        ]}
+        breadcrumbs={[
+          { name: 'Home', url: '/' },
+          { name: 'Getting Around', url: '/getting-around' },
+        ]}
+      />
       <div className="min-h-screen bg-background">
         <Header />
         <div className="container mx-auto px-4 py-8">

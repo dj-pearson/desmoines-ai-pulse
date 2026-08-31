@@ -2,7 +2,9 @@ import { useState } from 'react';
 import { Link } from 'react-router-dom';
 import Header from '@/components/Header';
 import Footer from '@/components/Footer';
-import { Helmet } from 'react-helmet-async';
+import SEOHead from '@/components/SEOHead';
+import ItemListSchema from '@/components/schema/ItemListSchema';
+import { getCanonicalUrl } from '@/lib/brandConfig';
 import { useBreweries, useBreweryCheckins, useCheckinMutation } from '@/hooks/useBreweryTrail';
 import { useAuth } from '@/contexts/AuthContext';
 import { Card, CardContent } from '@/components/ui/card';
@@ -52,12 +54,63 @@ export default function BreweryTrail() {
     }
   };
 
+  const canonicalUrl = getCanonicalUrl('/breweries');
+
+  // SEO-022. Every brewery card on the page, with the same href the card uses,
+  // so the schema URL and the link cannot drift apart.
+  const schemaItems = (breweries ?? []).map((brewery) => ({
+    name: brewery.name,
+    url: getCanonicalUrl(`/restaurants/${brewery.slug || brewery.id}`),
+    ...(brewery.image_url && { image: brewery.image_url }),
+    ...(brewery.description && { description: brewery.description }),
+    itemProps: {
+      // `location` is the street address column on restaurants; there is no
+      // `address` column, and addressLocality is omitted rather than defaulted
+      // to Des Moines for the same reason eventSchema.ts omits it.
+      ...((brewery.location || brewery.city) && {
+        address: {
+          '@type': 'PostalAddress',
+          ...(brewery.location && { streetAddress: brewery.location }),
+          ...(brewery.city && { addressLocality: brewery.city }),
+          addressRegion: 'IA',
+          addressCountry: 'US',
+        },
+      }),
+      ...(brewery.latitude != null &&
+        brewery.longitude != null && {
+          geo: {
+            '@type': 'GeoCoordinates',
+            latitude: brewery.latitude,
+            longitude: brewery.longitude,
+          },
+        }),
+    },
+  }));
+
   return (
     <>
-      <Helmet>
-        <title>Des Moines Brewery Trail — Craft Beer Passport | Des Moines Insider</title>
-        <meta name="description" content="Explore the Des Moines craft beer scene with our Brewery Trail. Visit local breweries, check in, earn rewards, and complete the trail." />
-      </Helmet>
+      <SEOHead
+        title="Des Moines Brewery Trail — Craft Beer Passport"
+        description="Explore the Des Moines craft beer scene with our Brewery Trail. Visit local breweries, check in, earn rewards, and complete the trail."
+        url={canonicalUrl}
+        canonicalUrl={canonicalUrl}
+        keywords={[
+          'Des Moines breweries',
+          'craft beer Des Moines',
+          'brewery tour Des Moines',
+          'Iowa craft beer',
+        ]}
+        breadcrumbs={[
+          { name: 'Home', url: '/' },
+          { name: 'Breweries', url: '/breweries' },
+        ]}
+      />
+      <ItemListSchema
+        name="Breweries on the Des Moines Brewery Trail"
+        description="Craft breweries and taprooms across the Des Moines metro."
+        items={schemaItems}
+        itemType="Place"
+      />
       <div className="min-h-screen bg-background">
         <Header />
         <div className="container mx-auto px-4 py-8">

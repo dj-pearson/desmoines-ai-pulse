@@ -17,6 +17,14 @@ import { Helmet } from "react-helmet-async";
  * numberOfItems always counts the elements actually supplied. A structured-data
  * claim that contradicts the page is worse than no claim, because it is one of
  * the few a crawler can verify without judgement.
+ *
+ * ON `itemType` (SEO-022). Without it every element is a bare ListItem, which
+ * says a page lists *things* and nothing about what kind. /outdoors lists parks
+ * and trails and /breweries lists breweries, and a crawler that can read that
+ * off the markup does not have to infer it from the copy. Passing it nests a
+ * typed node under `item`, which is schema.org's documented shape for a summary
+ * page whose entries link elsewhere. Omitting it keeps the original output
+ * byte for byte, so the pages already using this component are untouched.
  */
 
 interface ItemListItem {
@@ -25,6 +33,12 @@ interface ItemListItem {
   position?: number;
   image?: string;
   description?: string;
+  /**
+   * Extra properties merged into the nested typed node — address, geo, and
+   * the like. Ignored unless `itemType` is set, because there is no node to
+   * merge them into otherwise.
+   */
+  itemProps?: Record<string, unknown>;
 }
 
 interface ItemListSchemaProps {
@@ -32,6 +46,8 @@ interface ItemListSchemaProps {
   description?: string;
   items: ItemListItem[];
   itemListOrder?: "Ascending" | "Descending" | "Unordered";
+  /** schema.org type of the things listed, e.g. "Place" or "Event". */
+  itemType?: string;
 }
 
 export default function ItemListSchema({
@@ -39,6 +55,7 @@ export default function ItemListSchema({
   description,
   items,
   itemListOrder = "Ascending",
+  itemType,
 }: ItemListSchemaProps) {
   // Nothing to list is not the same as a list of nothing.
   if (items.length === 0) return null;
@@ -50,14 +67,29 @@ export default function ItemListSchema({
     ...(description && { description }),
     itemListOrder: `https://schema.org/ItemListOrder${itemListOrder}`,
     numberOfItems: items.length,
-    itemListElement: items.map((item, index) => ({
-      "@type": "ListItem",
-      position: item.position || index + 1,
-      name: item.name,
-      url: item.url,
-      ...(item.image && { image: item.image }),
-      ...(item.description && { description: item.description }),
-    })),
+    itemListElement: items.map((item, index) =>
+      itemType
+        ? {
+            "@type": "ListItem",
+            position: item.position || index + 1,
+            item: {
+              "@type": itemType,
+              name: item.name,
+              url: item.url,
+              ...(item.image && { image: item.image }),
+              ...(item.description && { description: item.description }),
+              ...(item.itemProps ?? {}),
+            },
+          }
+        : {
+            "@type": "ListItem",
+            position: item.position || index + 1,
+            name: item.name,
+            url: item.url,
+            ...(item.image && { image: item.image }),
+            ...(item.description && { description: item.description }),
+          },
+    ),
   };
 
   return (
