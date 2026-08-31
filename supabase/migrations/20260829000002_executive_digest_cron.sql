@@ -7,10 +7,17 @@
 -- jobs in this project have never succeeded, for two causes that this migration
 -- deliberately avoids repeating:
 --
---   1. 48 die on `unrecognized configuration parameter "app.settings.supabase_url"`,
---      because current_setting() without the missing_ok flag THROWS rather than
---      returning NULL. Both reads here pass `true` and the job RAISEs a message
---      naming what is missing instead of aborting on a bare parameter error.
+--   1. 48 die on `unrecognized configuration parameter "app.settings.supabase_url"`.
+--      CORRECTED 2026-08-31 (SEO-023): passing missing_ok to current_setting was
+--      not enough, because there is nothing to read. Supabase removed those GUCs
+--      and refuses ALTER DATABASE/ROLE SET on them, so `true` only converts the
+--      error into a silent NULL - and 'Bearer ' || NULL drops the Authorization
+--      header entirely. Both reads now go through public.app_secret(), the Vault
+--      reader 20260826000002 introduced and the mechanism every job currently
+--      returning HTTP 200 uses. This migration had not been applied when the
+--      correction was made (executive-digest-daily was absent from cron.job),
+--      so nothing had to be re-run. scripts/check-cron-credentials.mjs is what
+--      found it, and is what stops the next one.
 --
 --   2. 8 call net.http_post(url := ..., headers := ..., body := <text>), which
 --      matches no installed signature - pg_net takes
@@ -43,8 +50,8 @@ BEGIN
     $cron$
     DO $inner$
     DECLARE
-      v_url  text := current_setting('app.settings.supabase_url', true);
-      v_key  text := current_setting('app.settings.service_role_key', true);
+      v_url  text := public.app_secret('supabase_url');
+      v_key  text := public.app_secret('service_role_key');
     BEGIN
       -- Fail loudly and by name. Posting without the bearer would look like a
       -- success here and a 401 there, which is the failure WEB-OPS-007 AC3

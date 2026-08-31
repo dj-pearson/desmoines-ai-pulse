@@ -454,6 +454,15 @@ jobs:
       - name: Ledgered migrations produced what they define
         run: node scripts/check-migration-drift.mjs
 
+      # SEO-023: a job scheduled since the Vault switch must read its credentials
+      # through public.app_secret(). current_setting('app.settings.*') cannot hold
+      # a value on this platform any more - with missing_ok it returns NULL, the
+      # Authorization header silently disappears, and pg_cron still records
+      # SUCCESS because enqueueing worked. That is how 48 jobs ran as no-ops for
+      # months. Offline, and only looks at migrations at or after 20260826000002.
+      - name: Scheduled jobs read credentials from Vault
+        run: node scripts/check-cron-credentials.mjs
+
       # WEB-DB-008: block destructive single-release migration changes. Attach the
       # `migration-override` label to the PR to bypass when the change is genuinely safe.
       - name: Check new migrations for destructive changes
