@@ -297,16 +297,17 @@ export async function onRequest(context: EventContext) {
   // by the SHAPE OF THE BUILD OUTPUT. Any future attempt needs an assertion
   // against a deployed URL, not another case in that file.
   //
-  // The duplication SEO-004 measured is real and still unfixed: /restaurants
-  // and /restaurants/ were both indexed, 20,789 impressions at position 24.4
-  // against 5,401 at 25.1. The fix is to stop Pages emitting the 308 in the
-  // first place - have prerender write dist/<route>.html instead of
-  // dist/<route>/index.html, so /events is served directly and /events/ never
-  // becomes a second live URL. Then this redirect is unnecessary rather than
-  // merely disabled.
+  // SEO-021 did that: scripts/prerender.mjs now writes dist/<route>.html, so
+  // Pages serves /events directly and 308s /events/ -> /events by itself. This
+  // redirect is now REDUNDANT rather than merely disabled, and re-enabling it
+  // would put our 301 in front of a Pages 308 that already points the same way.
+  // Leave it off.
   //
-  // trailingSlashRedirect stays exported so its tests keep documenting the
-  // intended mapping for whoever does that.
+  // trailingSlashRedirect stays exported because it still documents the mapping
+  // the site follows, and functions/__tests__/middleware-trailing-slash.test.mjs
+  // still asserts it. What that test CANNOT assert is the thing that decides:
+  // Pages normalizes from the shape of the build output, which is not in this
+  // file. scripts/check-canonical-url-shape.mjs is the check that can.
   void trailingSlashRedirect;
 
   // --- WEB-FEAT-008: per-entity OG meta for social crawlers on detail routes ---

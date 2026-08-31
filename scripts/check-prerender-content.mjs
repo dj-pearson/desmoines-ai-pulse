@@ -68,9 +68,10 @@
  *
  *   node scripts/check-prerender-content.mjs
  */
-import { readFileSync, existsSync, readdirSync } from 'node:fs';
-import { join, relative, sep } from 'node:path';
+import { readFileSync, existsSync } from 'node:fs';
+import { join } from 'node:path';
 import { JSDOM } from 'jsdom';
+import { walkPrerenderedPages, prerenderRouteFromPath } from './prerender-output.mjs';
 
 const DIST = 'dist';
 
@@ -79,16 +80,7 @@ if (!existsSync(DIST)) {
   process.exit(1);
 }
 
-function walk(dir, out = []) {
-  for (const entry of readdirSync(dir, { withFileTypes: true })) {
-    const full = join(dir, entry.name);
-    if (entry.isDirectory()) walk(full, out);
-    else if (entry.name === 'index.html') out.push(full);
-  }
-  return out;
-}
-
-const allFiles = walk(DIST).filter((f) => !f.includes(`${sep}assets${sep}`));
+const allFiles = walkPrerenderedPages(DIST).map((p) => p.file);
 
 /**
  * Shard the work across child processes, because jsdom cannot survive dist/.
@@ -172,8 +164,7 @@ const failures = [];
 const allowed = [];
 for (const file of files) {
   const html = readFileSync(file, 'utf8');
-  let route = '/' + relative(DIST, file).split(sep).join('/');
-  route = route.replace(/index\.html$/, '').replace(/(.)\/$/, '$1');
+  const route = prerenderRouteFromPath(DIST, file);
 
   if (BUSY.test(html)) {
     const occurrences = (html.match(new RegExp(BUSY.source, 'gi')) || []).length;

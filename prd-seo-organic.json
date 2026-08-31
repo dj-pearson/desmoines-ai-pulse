@@ -1,13 +1,13 @@
 {
   "project": "Des Moines Insider - organic recovery and the volume we measured",
   "branchName": "claude/seo-organic-2026-08-31",
-  "description": "Continues prd-seo.json (SEO-001 through SEO-020). Two inputs. First, a live audit of desmoinesinsider.com run as GPTBot on 2026-08-31, two days after the SEO-001..016 batch shipped: entity prerendering landed and works, and three things are broken that were not broken before. Second, a Keyword Planner pull of the 377-term seed list in docs/seo/keyword-research/, joined back to route status in keyword-opportunities.csv. The joined data is what orders phase 2: it says the largest soft volume is on routes that already exist and serve the homepage. Phase 1 is defects on live URLs. Phase 2 is content against measured demand. Phase 2 does not pay off until phase 1 lands, for the same reason it did not last time.",
+  "description": "Continues prd-seo.json (SEO-001 through SEO-020). Two inputs. First, a live audit of desmoinesinsider.com run as GPTBot on 2026-08-31, two days after the SEO-001..016 batch shipped: entity prerendering renders correctly but covers only a quarter of what it should, and three things are broken that were not broken before. Second, a Keyword Planner pull of the 377-term seed list in docs/seo/keyword-research/, joined back to route status in keyword-opportunities.csv. The joined data is what orders phase 2: it says the largest soft volume is on routes that already exist and serve the homepage. Phase 1 is defects on live URLs. Phase 2 is content against measured demand. Phase 2 does not pay off until phase 1 lands, for the same reason it did not last time.",
   "baselines": {
     "measuredOn": "2026-08-31",
     "method": "curl as GPTBot and Googlebot against production; PostgREST probe of the gsc_* tables; Keyword Planner export joined to the seed classification",
     "hubsRedirectingAwayFromTheirOwnCanonical": 5,
     "hubsServingHomepageShellToJsLessCrawlers": 6,
-    "entityPagesServingOwnTitleAndJsonLd": "verified on 3 of 3 sampled, was 0 of 1070 on 2026-08-28",
+    "entityPagesServingOwnTitleAndJsonLd": "CORRECTED 2026-08-31: 267 of 1127 prerendered per the build log. The original '3 of 3 sampled' was a biased sample - all three sat near the front of the render order. Events 525/525 and restaurants 335/477 ship as an SPA shell. See SEO-027.",
     "sitemapUrlsTotal": 1158,
     "pseoSlugsDefined": 244,
     "pseoSlugsPublished": 16,
@@ -17,7 +17,9 @@
     "outdoorsClusterMonthlyVolume": 118400,
     "suburbsClusterMonthlyVolume": 157450,
     "restaurantsHeadTermCompetitionIndex": 11,
-    "thingsToDoHeadTermCompetitionIndex": 87
+    "thingsToDoHeadTermCompetitionIndex": 87,
+    "entityPrerenderBudgetSeconds": 420,
+    "entityPrerenderRatePerSecond": 0.64
   },
   "userStories": [
     {
@@ -25,7 +27,7 @@
       "title": "Every hub 308s away from the URL its own canonical declares",
       "priority": 1,
       "phase": 1,
-      "passes": false,
+      "passes": true,
       "description": "As Googlebot consolidating duplicate URLs, I am told the canonical is /restaurants and then handed a 308 when I fetch it. Measured on production 2026-08-31: /restaurants returns 308 to /restaurants/, /restaurants/ returns 200, and the 200 page's canonical tag reads https://desmoinesinsider.com/restaurants. Same for /events, /things-to-do, /attractions and /playgrounds. The declared canonical is a URL that redirects, on the five pages that carry most of the site's impressions. SEO-004 shipped a trailing-slash 301 in functions/_middleware.ts with 23 checks and it is inert in production: the asset bypass near functions/_middleware.ts:246 calls context.next() before the trailing-slash branch at :253 is reached, and Cloudflare Pages then adds the slash itself because the prerender pass writes directory-style output. The redirect behaviour is measured. The cause is inferred from Pages' documented directory handling plus that ordering, and local dist/ was stale at audit time, so CONFIRM THE EMITTED FILENAME before choosing a fix.",
       "acceptanceCriteria": [
         "Confirm first, from a real build, whether scripts/prerender.mjs writes dist/restaurants/index.html or dist/restaurants.html. The fix depends on the answer and the audit could not verify it.",
@@ -35,7 +37,7 @@
         "Add a test that asserts the direction end to end rather than in isolation. The existing functions/__tests__/middleware-trailing-slash.test.mjs passes today while production does the opposite, so a unit test over trailingSlashRedirect() is not sufficient evidence and must not be the only check.",
         "Correct the stale flag in prd-seo.json: SEO-004 is marked passes:true and is not working in production. Set it back to false or record why it should stay closed."
       ],
-      "notes": "Highest priority in the file. It is a signal-level defect on the highest-impression pages, the fix is config-level, and it was introduced by the SEO-001 prerender change rather than being long-standing. Verified 2026-08-31 with curl -A Googlebot against production."
+      "notes": "Highest priority in the file. It is a signal-level defect on the highest-impression pages, the fix is config-level, and it was introduced by the SEO-001 prerender change rather than being long-standing. Verified 2026-08-31 with curl -A Googlebot against production. DONE 2026-08-31. Confirmed from a real build that prerender emitted dist/<route>/index.html, and changed it to flat dist/<route>.html via the new scripts/prerender-output.mjs - the direction that leaves every existing canonical and sitemap entry correct, against the alternative of rewriting them all and moving already-indexed URLs. The middleware redirect stays disabled and is now redundant rather than merely off. Verified: build emits restaurants.html / events.html / things-to-do.html / attractions.html / playgrounds.html flat, and check-canonical-url-shape.mjs exits 0 across 36 routes. That gate failed on its first run against a REAL pre-existing defect it was not written for - /visitors-guide shipped with no canonical tag at all, on production too - which is the argument for comparing artifacts rather than unit-testing a function. Fixed in src/pages/VisitorsGuide.tsx, along with a JSON-LD url field that emitted an empty string into the prerendered HTML."
     },
     {
       "id": "SEO-022",
@@ -119,6 +121,23 @@
         "Do not chase 'things to do in des moines' or 'des moines attractions' as part of this story. Index 87 is where the CVB actually is, and the plan's judgement on those two stands."
       ],
       "notes": "This story is the one correction the volume data forces on the 2026-08-28 plan. Everything else in that document survives the new data unchanged."
+    },
+    {
+      "id": "SEO-027",
+      "title": "Every event page and 70% of restaurant pages still ship as an SPA shell",
+      "priority": 1,
+      "phase": 1,
+      "passes": false,
+      "description": "As an AI search crawler, every one of the 525 event URLs in our sitemap serves me the homepage. SEO-001 is recorded as done and the 2026-08-31 audit in this PRD repeated that claim from a three-URL sample - an attraction, a playground, and a restaurant early in the alphabet - all of which happen to sit near the front of the render order. The build log states the real outcome: entity order is pseo(14) -> attractions(22) -> playgrounds(67) -> articles(18) -> guides(4) -> restaurants(477) -> events(525), budget 420s, and 267 prerendered against 860 left unrendered, being events 525/525 (ALL) and restaurants 335/477. Confirmed on production: /events/blue-october-foiled-20th-anniversary-world-tour-2027-03-12 and /restaurants/zombie-burger-drink-lab both return the homepage title with zero JSON-LD. The strict gate recorded 0 rejections, so nothing FAILED - the pass simply ran out of time, and the priority order makes events the guaranteed casualty. Events is the module docs/seo-plan-2026-08-28.md calls the highest-value one on the site.",
+      "acceptanceCriteria": [
+        "This is a budget and ordering problem, not a rendering failure. The strict gate reported 0 rejections. Do not weaken or remove that gate while fixing this - it is the thing standing between us and 1,127 pages of boilerplate.",
+        "Do the arithmetic against the host limit before choosing a fix. Observed rate was 267 entities in 420s, about 0.64/sec. All 1,127 at that rate is roughly 1,770s for entities alone, near 31 minutes with the rest of the build, against a Cloudflare Pages build timeout of 20 minutes. Raising PRERENDER_ENTITY_BUDGET_SECONDS ALONE CANNOT FIT. Raising PRERENDER_CONCURRENCY, or rendering incrementally, is the lever.",
+        "Prefer incremental prerendering - render only entities whose updated_at changed since the last successful build - if a full pass cannot fit in the timeout. A full pass every build is not required; complete coverage is.",
+        "Whatever the mechanism, events must not be last in ENTITY_SITEMAPS priority while coverage is partial. A category that is always fully unrendered is worse than every category being evenly partial.",
+        "Verify with curl -A GPTBot against production after deploy, sampling the END of each sitemap rather than the start: a late-alphabet restaurant, and two events. Each must return its own title and at least one application/ld+json block. Sampling the front of the render order is what produced the wrong conclusion in the first place.",
+        "Add a CI assertion on entity coverage so partial coverage fails the build loudly rather than printing a warning that a passing build buries. scripts/check-entity-coverage.mjs already exists - make it enforce, or record why it cannot."
+      ],
+      "notes": "Raised 2026-08-31 from the build log while verifying SEO-021, not from the original audit, which got this wrong. Sequenced ahead of the phase 2 content stories: publishing more pages that crawlers cannot read repeats the mistake at greater volume."
     }
   ]
 }

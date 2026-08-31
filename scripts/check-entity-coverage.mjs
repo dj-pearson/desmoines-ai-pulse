@@ -45,6 +45,7 @@
 import { readFileSync, writeFileSync, existsSync, readdirSync } from 'node:fs';
 import { join, dirname, resolve } from 'node:path';
 import { fileURLToPath } from 'node:url';
+import { prerenderOutputPath } from './prerender-output.mjs';
 
 const ROOT = resolve(dirname(fileURLToPath(import.meta.url)), '..');
 const DIST = join(ROOT, 'dist');
@@ -87,7 +88,7 @@ for (const file of sitemaps) {
   const missing = [];
   for (const url of urls) {
     const path = new URL(url).pathname.replace(/\/+$/, '');
-    const file2 = join(DIST, path, 'index.html');
+    const file2 = prerenderOutputPath(DIST, path);
     if (!existsSync(file2)) {
       missing.push(path);
       continue;
