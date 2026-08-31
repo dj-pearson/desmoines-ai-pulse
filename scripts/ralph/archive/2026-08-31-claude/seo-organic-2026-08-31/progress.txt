@@ -1,0 +1,78 @@
+# Ralph Progress Log
+Started: 2026-08-31T14:41:06.197Z
+---
+
+## 2026-08-31 - SEO-021 (hub canonical / build output shape)
+
+Iteration 6 of the ralph run did the implementation; iterations 1-5 died on
+ENOTFOUND before reaching the API, and iteration 6 was killed before it could
+type-check, commit, or flip the flag. Finished and verified by hand.
+
+What was implemented:
+- scripts/prerender-output.mjs (new) - one module owning where a prerendered
+  route is written. Flat dist/<route>.html, replacing dist/<route>/index.html.
+- scripts/check-canonical-url-shape.mjs (new) - compares build output filenames,
+  canonical tags and sitemap <loc>, fails when they disagree. --live mode fetches
+  each canonical and requires 200 with no redirect hop.
+- functions/_middleware.ts - redirect stays disabled; comment corrected to say it
+  is now redundant rather than merely off.
+- scripts/prerender.mjs + six check scripts read the shape from the new module.
+- .github/workflows/pr-checks.yml, package.json - gate wired into CI.
+- src/pages/VisitorsGuide.tsx - added the missing canonical, and replaced a
+  JSON-LD url that emitted "" during prerender.
+
+How it was VERIFIED (actual commands, actual output):
+- npm run build, then: dist/restaurants.html dist/events.html
+  dist/things-to-do.html dist/attractions.html dist/playgrounds.html all flat,
+  no <route>/index.html.
+- node scripts/check-canonical-url-shape.mjs -> exit 0, "build output, canonical
+  tags and sitemap agree on the unslashed form (36 routes, static)".
+- First run of that gate exited 1 on /visitors-guide having no canonical - a real
+  pre-existing defect, absent on production too, that the gate was not written to
+  find. That is the argument for the gate over another unit test.
+- npm run type-check clean. npx eslint on changed files: 0 errors (7 pre-existing
+  no-explicit-any warnings in _middleware.ts, all outside the diff).
+
+What could NOT be verified from here:
+- The deployed behaviour. The gate's --live mode needs a deploy of this branch;
+  everything above is static-mode plus a local build.
+
+**Learnings for future iterations:**
+- `cmd | tail -n; echo $?` reports TAIL's exit code, not the command's. A gate
+  that printed "1 disagreement(s)" read as exit 0 until it was re-run unpiped.
+  Redirect to a file and echo $? separately when the exit code is the evidence.
+- The 08-29 batch is where the 308 inversion came from: turning on hub
+  prerendering changed the output shape, and Cloudflare Pages normalizes URLs
+  from that shape. An SEO unit test that does not see the build output cannot
+  see this class of bug.
+- ralph's --max counts ATTEMPTS, not completions. Five API failures consumed five
+  of six iterations and the run ended with one story done.
+
+---
+
+## 2026-08-31 - SEO-027 raised (entity prerender coverage)
+
+Found while verifying SEO-021, not by the audit, which got it wrong.
+
+The 2026-08-31 audit in prd-seo-organic.json claimed entity prerendering "landed
+and works" from a 3-URL sample. All three sat near the front of the render order.
+The build log is explicit: order is pseo(14) -> attractions(22) -> playgrounds(67)
+-> articles(18) -> guides(4) -> restaurants(477) -> events(525), budget 420s, and
+267 prerendered against 860 over budget - events 525/525 (ALL), restaurants
+335/477. Strict gate: 0 rejections, so nothing failed, it ran out of time.
+
+Confirmed on production with curl -A GPTBot: /events/blue-october-... and
+/restaurants/zombie-burger-drink-lab both return the homepage title, ld+json 0.
+
+Arithmetic that constrains the fix: 267 entities in 420s is ~0.64/sec, so all
+1,127 is ~1,770s for entities alone, ~31 min with the rest of the build, against
+a 20-minute Cloudflare Pages build timeout. Raising the budget alone cannot fit.
+Concurrency or incremental rendering is the lever.
+
+**Learnings for future iterations:**
+- Sample the END of a sitemap, not the start. Render order and alphabetical order
+  conspire to make a front-of-list sample always look healthy.
+- A warning line in a build that exits 0 is invisible. Coverage regressions need
+  an assertion, not a printed warning.
+
+---

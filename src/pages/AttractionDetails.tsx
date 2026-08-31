@@ -21,6 +21,7 @@ import { RatingSystem } from "@/components/RatingSystem";
 import { BackToTop } from "@/components/BackToTop";
 import EnhancedAttractionSEO from "@/components/EnhancedAttractionSEO";
 import SEOHead from "@/components/SEOHead";
+import { RouteCanonical } from "@/components/RouteCanonical";
 import { BRAND, getCanonicalUrl } from "@/lib/brandConfig";
 import { Star, ArrowLeft, Navigation, Heart, Globe, Info, Camera, Landmark, ChevronRight, TreePine } from "lucide-react";
 import { useState } from "react";
@@ -144,6 +145,8 @@ export default function AttractionDetails() {
   if (isLoading) {
     return (
       <>
+        {/* SEO-028: the canonical cannot wait for the fetch. See RouteCanonical. */}
+        <RouteCanonical path={`/attractions/${slug}`} />
         <Header />
         <div className="min-h-screen bg-gray-50">
           <div className="container mx-auto px-4 py-8 max-w-6xl">

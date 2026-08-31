@@ -1,4 +1,5 @@
 import { useParams, Link } from "react-router-dom";
+import { RouteCanonical } from "@/components/RouteCanonical";
 import { createSlug } from "@/lib/slug";
 import { useQuery } from "@tanstack/react-query";
 import { supabase } from "@/integrations/supabase/client";
@@ -90,6 +91,8 @@ export default function PlaygroundDetails() {
   if (isLoading) {
     return (
       <>
+        {/* SEO-028: the canonical cannot wait for the fetch. See RouteCanonical. */}
+        <RouteCanonical path={`/playgrounds/${slug}`} />
         <Header />
         <div className="min-h-screen bg-gray-50">
           <div className="container mx-auto px-4 py-8 max-w-6xl">

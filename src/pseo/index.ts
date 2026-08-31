@@ -153,3 +153,13 @@ export {
   COST_PROJECTIONS,
   DELIVERABLES_CHECKLIST,
 } from './roadmap';
+
+// SEO-025: measured demand per location, which orders generation and says
+// which locations to leave alone for now.
+export {
+  type LocationDemand,
+  LOCATION_DEMAND,
+  EXCLUDED_LOCATIONS,
+  isDeprioritised,
+  locationGenerationOrder,
+} from './measuredDemand';

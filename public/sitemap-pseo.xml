@@ -43,18 +43,6 @@
     <priority>0.6</priority>
   </url>
   <url>
-    <loc>https://desmoinesinsider.com/live-music/fall</loc>
-    <lastmod>2026-03-17</lastmod>
-    <changefreq>weekly</changefreq>
-    <priority>0.6</priority>
-  </url>
-  <url>
-    <loc>https://desmoinesinsider.com/live-music/this-weekend</loc>
-    <lastmod>2026-03-17</lastmod>
-    <changefreq>weekly</changefreq>
-    <priority>0.6</priority>
-  </url>
-  <url>
     <loc>https://desmoinesinsider.com/live-music/west-des-moines</loc>
     <lastmod>2026-03-15</lastmod>
     <changefreq>weekly</changefreq>
@@ -79,14 +67,14 @@
     <priority>0.6</priority>
   </url>
   <url>
-    <loc>https://desmoinesinsider.com/things-to-do/fall</loc>
-    <lastmod>2026-03-14</lastmod>
+    <loc>https://desmoinesinsider.com/things-to-do/live-music</loc>
+    <lastmod>2026-03-12</lastmod>
     <changefreq>weekly</changefreq>
     <priority>0.6</priority>
   </url>
   <url>
-    <loc>https://desmoinesinsider.com/things-to-do/live-music</loc>
-    <lastmod>2026-03-12</lastmod>
+    <loc>https://desmoinesinsider.com/things-to-do/this-weekend</loc>
+    <lastmod>2026-03-14</lastmod>
     <changefreq>weekly</changefreq>
     <priority>0.6</priority>
   </url>

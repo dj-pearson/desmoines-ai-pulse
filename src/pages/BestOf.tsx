@@ -1,7 +1,9 @@
 import { Link } from 'react-router-dom';
 import Header from '@/components/Header';
 import Footer from '@/components/Footer';
-import { Helmet } from 'react-helmet-async';
+import SEOHead from '@/components/SEOHead';
+import ItemListSchema from '@/components/schema/ItemListSchema';
+import { getCanonicalUrl } from '@/lib/brandConfig';
 import { useVotingCategories } from '@/hooks/useVoting';
 import { Card, CardContent } from '@/components/ui/card';
 import { Badge } from '@/components/ui/badge';
@@ -11,12 +13,40 @@ import { Trophy, Vote } from 'lucide-react';
 export default function BestOf() {
   const { data: categories, isLoading } = useVotingCategories();
 
+  const canonicalUrl = getCanonicalUrl('/best-of');
+
+  // SEO-022. Each element is a category page, so the list is of the pages
+  // themselves rather than of places — the winners live one level down on
+  // /best-of/:slug and this page never names them.
+  const schemaItems = (categories ?? []).map((cat) => ({
+    name: cat.name,
+    url: getCanonicalUrl(`/best-of/${cat.slug}`),
+    ...(cat.description && { description: cat.description }),
+  }));
+
   return (
     <>
-      <Helmet>
-        <title>Des Best - Vote for the Best of Des Moines | Des Moines Insider</title>
-        <meta name="description" content="Vote for the best pizza, coffee, brunch, date night spots, and more in Des Moines. Community-powered Best Of voting." />
-      </Helmet>
+      <SEOHead
+        title="Des Best - Vote for the Best of Des Moines"
+        description="Vote for the best pizza, coffee, brunch, date night spots, and more in Des Moines. Community-powered Best Of voting."
+        url={canonicalUrl}
+        canonicalUrl={canonicalUrl}
+        keywords={[
+          'best of Des Moines',
+          'best pizza Des Moines',
+          'best coffee Des Moines',
+          'Des Moines readers choice',
+        ]}
+        breadcrumbs={[
+          { name: 'Home', url: '/' },
+          { name: 'Des Best', url: '/best-of' },
+        ]}
+      />
+      <ItemListSchema
+        name="Best of Des Moines voting categories"
+        description="Community-voted categories for the best food, drink and nightlife in the Des Moines metro."
+        items={schemaItems}
+      />
       <div className="min-h-screen bg-background">
         <Header />
         <div className="container mx-auto px-4 py-8">

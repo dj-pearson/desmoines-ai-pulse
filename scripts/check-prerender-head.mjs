@@ -31,8 +31,8 @@
  *
  *   node scripts/check-prerender-head.mjs
  */
-import { readFileSync, existsSync, readdirSync } from 'node:fs';
-import { join, relative, sep } from 'node:path';
+import { readFileSync, existsSync } from 'node:fs';
+import { walkPrerenderedPages } from './prerender-output.mjs';
 
 const DIST = 'dist';
 
@@ -97,25 +97,14 @@ if (!existsSync(DIST)) {
   process.exit(1);
 }
 
-function walk(dir, out = []) {
-  for (const entry of readdirSync(dir, { withFileTypes: true })) {
-    const full = join(dir, entry.name);
-    if (entry.isDirectory()) walk(full, out);
-    else if (entry.name === 'index.html') out.push(full);
-  }
-  return out;
-}
-
-const files = walk(DIST).filter((f) => !f.includes(`${sep}assets${sep}`));
-if (files.length === 0) {
-  console.error('[prerender-head] no index.html found under dist/ - refusing to pass.');
+const pageFiles = walkPrerenderedPages(DIST);
+if (pageFiles.length === 0) {
+  console.error('[prerender-head] no prerendered HTML found under dist/ - refusing to pass.');
   process.exit(1);
 }
 
 const pages = [];
-for (const file of files) {
-  let route = '/' + relative(DIST, file).split(sep).join('/');
-  route = route.replace(/index\.html$/, '').replace(/(.)\/$/, '$1');
+for (const { file, route } of pageFiles) {
   pages.push({ route, ...readHead(readFileSync(file, 'utf8')) });
 }
 

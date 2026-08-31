@@ -4,7 +4,7 @@
  * The app is a client-rendered SPA, so crawlers historically received an empty
  * shell — the root cause behind the soft-404 / "discovered, not indexed" issues.
  * This step renders the high-value PUBLIC landing/hub routes with headless
- * Chromium after `vite build` and writes real HTML to dist/<route>/index.html.
+ * Chromium after `vite build` and writes real HTML to dist/<route>.html.
  * Cloudflare Pages serves those static files to crawlers, while the SPA bundle
  * (still present in the captured HTML) boots and takes over for real users.
  *
@@ -65,6 +65,8 @@ import {
   strictGateFailures,
 } from './lazy-preload-patterns.mjs';
 import { PRERENDER_ROUTES } from './prerender-routes.mjs';
+import { prerenderOutputPath } from './prerender-output.mjs';
+import { orderEntityRoutes } from './prerender-order.mjs';
 import process from 'node:process';
 
 const DIST = path.resolve('dist');
@@ -110,10 +112,82 @@ const CONCURRENCY = Math.max(
 // than the budget assumes.
 const PRERENDER_ENTITIES = process.env.PRERENDER_ENTITIES !== 'false';
 
-// Hard ceiling on the entity pass. Cloudflare Pages kills a build at 20 minutes,
-// and this step runs AFTER vite build (~70s), so the budget has to leave room.
-// Going over budget is not an error; it is reported as incomplete coverage.
-const ENTITY_BUDGET_SECONDS = Number(process.env.PRERENDER_ENTITY_BUDGET_SECONDS) || 420;
+// Ceiling on the entity pass. Going over budget is not an error; it is reported
+// as incomplete coverage.
+//
+// SEO-027 MADE THIS ADAPTIVE, because a fixed 420 was standing in for a question
+// it could not ask: how long is left before the host kills the build? Cloudflare
+// Pages allows 20 minutes for the whole thing - clone, install, sitemaps, vite,
+// hubs, entities - and 420 is only the right answer for one particular speed of
+// runner. On a fast one it leaves minutes unspent while 860 URLs ship a shell;
+// on a slow one it is what pushes the build past 20 minutes, and a build that
+// overruns does not deploy at all.
+//
+// scripts/build-clock.mjs stamps .build-start at the head of `npm run build`, so
+// the budget below is computed from time ACTUALLY elapsed. That makes it
+// strictly safer than the fixed number in both directions: it can only shrink
+// when the build is already running late, and only grow when there is measured
+// headroom.
+//
+// An explicit PRERENDER_ENTITY_BUDGET_SECONDS still wins outright, and a missing
+// or stale stamp falls back to the old fixed default, so `npm run prerender` on
+// its own behaves exactly as before.
+const ENTITY_BUDGET_DEFAULT_SECONDS = 420;
+const ENTITY_BUDGET_MAX_SECONDS = Number(process.env.PRERENDER_ENTITY_BUDGET_MAX_SECONDS) || 900;
+const ENTITY_BUDGET_MIN_SECONDS = 60;
+const HOST_TIMEOUT_SECONDS = Number(process.env.PRERENDER_HOST_TIMEOUT_SECONDS) || 1200;
+// What to leave unspent for everything after the entity pass.
+//
+// SIZED FROM A MEASURED OVERRUN, not from a guess. renderPool checks the
+// deadline BETWEEN routes, so a route that starts one millisecond before it can
+// still run to its own timeouts - 30s navigation plus the content, Helmet,
+// queries-settled, skeleton and element-settle waits, about 82s worst case - and
+// then six Chromium processes have to close. A full local build on 2026-08-31
+// took a 742s budget and finished the pass 128s past the deadline.
+//
+// 180 would have left 52 seconds of the host's 20 minutes unspent, which is not
+// a margin, it is a coin toss on whether the deploy happens at all. 300 covers
+// the observed overrun with room and still leaves the budget far above the
+// fixed 420s it replaced.
+const HOST_TIMEOUT_MARGIN_SECONDS = Number(process.env.PRERENDER_HOST_TIMEOUT_MARGIN_SECONDS) || 300;
+
+/**
+ * Seconds the entity pass may run for, decided at the moment it starts so that
+ * install, vite and the hub pass are already counted against the host's limit.
+ *
+ * @returns {{ seconds: number, why: string }}
+ */
+function entityBudgetSeconds() {
+  const explicit = Number(process.env.PRERENDER_ENTITY_BUDGET_SECONDS);
+  if (explicit > 0) return { seconds: explicit, why: 'PRERENDER_ENTITY_BUDGET_SECONDS' };
+
+  let startedAt = null;
+  try {
+    const raw = Number(fs.readFileSync(path.resolve('.build-start'), 'utf8').trim());
+    // A stamp left behind by an earlier build would compute a nonsense elapsed
+    // and starve the pass. Older than an hour is not this build.
+    if (Number.isFinite(raw) && Date.now() - raw < 3600000 && Date.now() >= raw) startedAt = raw;
+  } catch {
+    /* no clock; fall through */
+  }
+  if (startedAt === null) {
+    return {
+      seconds: ENTITY_BUDGET_DEFAULT_SECONDS,
+      why: 'no .build-start stamp, using the fixed default',
+    };
+  }
+
+  const elapsed = Math.round((Date.now() - startedAt) / 1000);
+  const remaining = HOST_TIMEOUT_SECONDS - HOST_TIMEOUT_MARGIN_SECONDS - elapsed;
+  const seconds = Math.min(ENTITY_BUDGET_MAX_SECONDS, Math.max(ENTITY_BUDGET_MIN_SECONDS, remaining));
+  return {
+    seconds,
+    why:
+      `${elapsed}s of the host's ${HOST_TIMEOUT_SECONDS}s already spent, ` +
+      `${HOST_TIMEOUT_MARGIN_SECONDS}s held back as margin, so ${remaining}s remain` +
+      (seconds !== remaining ? ` (clamped to ${seconds}s)` : ''),
+  };
+}
 
 // Entity sitemaps, in priority order. If the budget runs out, later files lose
 // out, so this order is a product decision, not an alphabetical accident. The
@@ -176,28 +250,57 @@ const ENTITY_SITEMAPS = [
  */
 const entitySource = new Map();
 
-// WEB-SEO-006. A strict priority order does not spread the shortfall, it hands
-// the whole of it to the tail: the last full-budget pass rendered restaurants
-// 478/478 and events 391/397 while attractions, playgrounds, articles and pSEO
-// each came out at exactly ZERO. Those four hold 125 URLs between them, 13% of
-// the list, and a category with no prerendered pages at all is not thinly
-// covered - it is invisible to every crawler that does not run JS, which is the
-// entire reason this pass exists.
+// SEO-027 REPLACED THE SMALL-SITEMAPS-FIRST RULE. It was a proxy for value -
+// "render the cheap categories so none of them is at zero" - and the proxy is no
+// longer needed now that the real thing is measurable. scripts/prerender-order.mjs
+// orders by MEASURED impressions and interleaves a round-robin across sitemaps,
+// which delivers what small-sitemaps-first was reaching for (no category at zero)
+// without spending the front of the budget on 126 URLs regardless of whether
+// anyone has ever searched for them.
 //
-// So sitemaps small enough to be a rounding error render first. The priority
-// order above still decides who loses when the budget binds; this only stops the
-// cheapest categories from being the ones who lose everything. At the measured
-// ~2 URLs/sec the 130 tail URLs cost about a minute of a 420-second budget.
+// The measurement that settled it, on the 2026-08-31 sitemaps joined to
+// gsc_page_performance over the trailing 365 days, at the 267-URL coverage
+// production actually achieves:
 //
-// THE TRADE, said plainly rather than buried: events loses roughly the same 130.
-// That is the right side of it on the evidence recorded above - event URLs drew
-// far fewer impressions than restaurants and converted zero clicks - and events
-// is the half of the list that goes stale, so a prerendered event page has the
-// shortest useful life of anything here.
+//   alphabetical-within-sitemap   44,965 of 93,272 impressions   48%, events 0
+//   prerender-order.mjs           91,257 of 93,272 impressions   98%, events 16
 //
-// Self-limiting: a sitemap that grows past this stops being cheap and drops back
-// to its own place in the priority order.
-const SMALL_SITEMAP_MAX = 100;
+// ENTITY_SITEMAPS above is still the priority order, but it now only breaks ties
+// and drives the fairness round-robin rather than deciding coverage outright.
+const FAIRNESS_EVERY = Number(process.env.PRERENDER_FAIRNESS_EVERY ?? 4);
+
+/**
+ * Measured impressions per path, written by generate-prerender-priority.mjs.
+ *
+ * Missing or unreadable is survivable and loud: the order degrades to the
+ * fairness round-robin, which is still better than alphabetical, and the reason
+ * is printed. It is NOT read from the database here - the build host has the
+ * anon key, gsc_page_performance is admin-only, and a silent [] would restore the
+ * exact defect this story fixed while the log said nothing.
+ */
+function loadPriorityRanking() {
+  const file = path.resolve('scripts/prerender-priority.json');
+  try {
+    const parsed = JSON.parse(fs.readFileSync(file, 'utf8'));
+    const impressions = parsed?.impressions ?? {};
+    const count = Object.keys(impressions).length;
+    if (count === 0) throw new Error('no impressions in the file');
+    console.log(
+      `[prerender] render order: ${count} paths ranked by measured impressions ` +
+        `(${parsed.source}, ${parsed.windowDays}d window, generated ${parsed.generatedAt})`,
+    );
+    return impressions;
+  } catch (e) {
+    warn(
+      `scripts/prerender-priority.json unusable (${e.message}) - falling back to a round-robin ` +
+        'across sitemaps. Coverage will not be ordered by value. Regenerate with ' +
+        '`node scripts/generate-prerender-priority.mjs`.',
+    );
+    return {};
+  }
+}
+
+const IMPRESSION_PRIORITY = loadPriorityRanking();
 
 function collectEntityRoutes() {
   const seen = new Set();
@@ -233,18 +336,31 @@ function collectEntityRoutes() {
     }
   }
 
-  const size = (f) => (buckets.get(f) || []).length;
-  const present = ENTITY_SITEMAPS.filter((f) => size(f) > 0);
-  const ordered = [
-    ...present.filter((f) => size(f) <= SMALL_SITEMAP_MAX),
-    ...present.filter((f) => size(f) > SMALL_SITEMAP_MAX),
-  ];
-  // Print the order the budget will be spent in. When a pass comes back short,
-  // this line is what says which categories were ever going to be reached.
+  const present = ENTITY_SITEMAPS.filter((f) => (buckets.get(f) || []).length > 0);
+  const bySitemap = present.map((f) => [f.replace(/^sitemap-|\.xml$/g, ''), buckets.get(f)]);
+  const ordered = orderEntityRoutes(bySitemap, IMPRESSION_PRIORITY, FAIRNESS_EVERY);
+
+  // Print the shape of the order the budget will be spent in. When a pass comes
+  // back short, this line is what says which categories were ever going to be
+  // reached - and, now, how much measured value the front of the list carries.
+  const impressionsIn = (routes) => routes.reduce((n, r) => n + (IMPRESSION_PRIORITY[r] ?? 0), 0);
+  const total = impressionsIn(ordered);
+  const head = ordered.slice(0, 267); // the coverage production achieved on 2026-08-31
+  const headCategories = new Map();
+  for (const r of head) {
+    const src = entitySource.get(r) ?? 'unknown';
+    headCategories.set(src, (headCategories.get(src) ?? 0) + 1);
+  }
   console.log(
-    `[prerender] entity order: ${ordered.map((f) => `${f.replace(/^sitemap-|\.xml$/g, '')}(${size(f)})`).join(' -> ')}`,
+    `[prerender] entity order: ${bySitemap.map(([n, r]) => `${n}(${r.length})`).join(' + ')} ` +
+      `interleaved, fairness every ${FAIRNESS_EVERY}`,
   );
-  return ordered.flatMap((f) => buckets.get(f));
+  console.log(
+    `[prerender] first 267 of ${ordered.length} carry ${impressionsIn(head)}/${total} measured impressions` +
+      `${total > 0 ? ` (${Math.round((100 * impressionsIn(head)) / total)}%)` : ''}; ` +
+      `categories: ${[...headCategories].map(([k, v]) => `${k} ${v}`).join(', ')}`,
+  );
+  return ordered;
 }
 
 const MIME = {
@@ -452,7 +568,7 @@ const duplicateJsonLdRoutes = [];
   const strictRejections = [];
 
   /**
-   * Render one route and write dist/<route>/index.html. Throws on failure.
+   * Render one route and write dist/<route>.html. Throws on failure.
    *
    * `strict` (entity pass) additionally requires positive proof the page
    * rendered as ITSELF rather than as the SPA shell.
@@ -739,9 +855,13 @@ const duplicateJsonLdRoutes = [];
         }
       }
 
-      const outDir = route === '/' ? DIST : path.join(DIST, route);
-      fs.mkdirSync(outDir, { recursive: true });
-      fs.writeFileSync(path.join(outDir, 'index.html'), html);
+      // SEO-021: flat <route>.html, NOT <route>/index.html. Directory-style
+      // output makes Cloudflare Pages 308 /events -> /events/, which is the
+      // opposite of what every canonical tag and every sitemap <loc> on this
+      // site declares. See scripts/prerender-output.mjs for the measurement.
+      const outFile = prerenderOutputPath(DIST, route);
+      fs.mkdirSync(path.dirname(outFile), { recursive: true });
+      fs.writeFileSync(outFile, html);
     } finally {
       await page.close().catch(() => {});
     }
@@ -783,8 +903,22 @@ const duplicateJsonLdRoutes = [];
   const startedAt = Date.now();
 
   // Hub routes first and without a deadline: they are the highest-value pages
-  // and there are only ~35 of them.
-  await renderPool(ROUTES, CONCURRENCY, null);
+  // and there are only ~41 of them.
+  //
+  // SEO-022 turned the strict gate ON for this pass. It was written for the
+  // entity pass, where a rejection is survivable — the URL keeps its SPA shell
+  // and Googlebot still renders it. On a hub it is not survivable and it is not
+  // supposed to be: every route in ROUTES is in sitemap-static.xml, and the
+  // missing-on-disk assertion below turns a rejection into a build failure
+  // rather than a warning. That is the asymmetry the two passes want. A hub
+  // that renders as the homepage shell is precisely the defect this story
+  // exists to fix, so publishing one quietly is the outcome to prevent.
+  //
+  // Verified safe before flipping it: every one of the 40 already-prerendered
+  // routes in dist/ carried at least one JSON-LD block and its own canonical,
+  // which are the two things strict adds over what check-prerender-head.mjs
+  // already asserts post-build.
+  await renderPool(ROUTES, CONCURRENCY, null, true);
   const hubSeconds = Math.round((Date.now() - startedAt) / 1000);
   console.log(
     `[prerender] hubs: ${ok} prerendered, ${failed} skipped, of ${ROUTES.length} routes in ${hubSeconds}s (concurrency ${CONCURRENCY})`,
@@ -795,33 +929,44 @@ const duplicateJsonLdRoutes = [];
   // that), so a missing one is a URL we told search engines to crawl and then
   // served an empty shell.
   // Assert against the artifact on disk, not against `ok`. A counter can be
-  // incremented by a render that wrote somewhere unexpected; dist/<route>/
-  // index.html is what Cloudflare actually serves.
-  const missingOnDisk = ROUTES.filter(
-    (route) => !fs.existsSync(path.join(route === '/' ? DIST : path.join(DIST, route), 'index.html')),
-  );
+  // incremented by a render that wrote somewhere unexpected; dist/<route>.html
+  // is what Cloudflare actually serves.
+  const missingOnDisk = ROUTES.filter((route) => !fs.existsSync(prerenderOutputPath(DIST, route)));
   if (ok < ROUTES.length || missingOnDisk.length > 0) {
     await shutdown();
+    // Name the strict-gate reasons inline rather than leaving them to be found
+    // in the scrollback. "did not render as itself, no JSON-LD" and "Chromium
+    // timed out" call for completely different fixes and both arrive here as
+    // "missing from dist/".
+    const hubRejections = strictRejections.length
+      ? ` Strict gate refused ${strictRejections.length}: ${strictRejections.join(' | ')}.`
+      : '';
     throw new PrerenderFailure(
       `hub prerender incomplete: ${ok}/${ROUTES.length} routes rendered (${failed} failed), ` +
-        `${missingOnDisk.length} missing from dist/${missingOnDisk.length ? `: ${missingOnDisk.join(', ')}` : ''}. ` +
-        'Per-route reasons are in the [prerender] warnings above.',
+        `${missingOnDisk.length} missing from dist/${missingOnDisk.length ? `: ${missingOnDisk.join(', ')}` : ''}.` +
+        `${hubRejections} Per-route reasons are in the [prerender] warnings above.`,
     );
   }
+  // Reset so the entity pass reports only its own rejections. A hub rejection
+  // cannot reach this line — it threw above — so nothing is being discarded.
+  strictRejections.length = 0;
   console.log(`[prerender] hub coverage verified on disk: ${ROUTES.length}/${ROUTES.length}`);
 
   // WEB-SEO-006: entity detail pages.
   let entityUnrendered = [];
   let entityTotal = 0;
+  let entityBudgetUsed = ENTITY_BUDGET_DEFAULT_SECONDS;
   if (PRERENDER_ENTITIES) {
     const entityRoutes = collectEntityRoutes();
     entityTotal = entityRoutes.length;
     if (entityTotal === 0) {
       warn('entity prerender enabled but no entity URLs found in the sitemaps — skipping');
     } else {
-      const budgetMs = ENTITY_BUDGET_SECONDS * 1000;
+      const budget = entityBudgetSeconds();
+      entityBudgetUsed = budget.seconds;
+      const budgetMs = budget.seconds * 1000;
       console.log(
-        `[prerender] entities: ${entityTotal} URLs from sitemaps, budget ${ENTITY_BUDGET_SECONDS}s`,
+        `[prerender] entities: ${entityTotal} URLs from sitemaps, budget ${budget.seconds}s (${budget.why})`,
       );
       const before = ok;
       entityUnrendered = await renderPool(entityRoutes, CONCURRENCY, Date.now() + budgetMs, true);
@@ -870,12 +1015,14 @@ const duplicateJsonLdRoutes = [];
           .join(', ');
         warn(
           `ENTITY COVERAGE INCOMPLETE: ${entityUnrendered.length}/${entityTotal} entity URLs were not prerendered ` +
-            `within the ${ENTITY_BUDGET_SECONDS}s budget. Unrendered by sitemap: ${breakdown}. ` +
+            `within the ${entityBudgetUsed}s budget. Unrendered by sitemap: ${breakdown}. ` +
             `Those URLs are in the sitemap but ship as an SPA shell, ` +
             `so JS-less crawlers (GPTBot, PerplexityBot, ClaudeBot, OAI-SearchBot) see nothing on them. ` +
             `A category marked (ALL) is entirely unreadable, which the priority order in ENTITY_SITEMAPS ` +
             `makes the normal outcome rather than an accident. ` +
-            `Raise PRERENDER_ENTITY_BUDGET_SECONDS or PRERENDER_CONCURRENCY, minding the host's build timeout.`,
+            `The budget already adapts to the host's timeout (see entityBudgetSeconds), so the lever ` +
+            `here is the ORDER these are rendered in - scripts/prerender-order.mjs - not more ` +
+            `seconds. Measured 2026-08-31: raising PRERENDER_CONCURRENCY above 6 does not raise throughput.`,
         );
       }
     }
@@ -905,7 +1052,7 @@ const duplicateJsonLdRoutes = [];
   // on the run's front page.
   if (process.env.GITHUB_STEP_SUMMARY) {
     const entityLine = PRERENDER_ENTITIES
-      ? `\n- Entity routes: ${entityTotal - entityUnrendered.length}/${entityTotal} (${entityUnrendered.length} over the ${ENTITY_BUDGET_SECONDS}s budget)`
+      ? `\n- Entity routes: ${entityTotal - entityUnrendered.length}/${entityTotal} (${entityUnrendered.length} over the ${entityBudgetUsed}s budget)`
       : '\n- Entity routes: not run (PRERENDER_ENTITIES unset)';
     fs.appendFileSync(
       process.env.GITHUB_STEP_SUMMARY,

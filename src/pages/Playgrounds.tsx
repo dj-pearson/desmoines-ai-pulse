@@ -166,20 +166,10 @@ export default function Playgrounds() {
     { name: "Playgrounds", url: "/playgrounds" },
   ];
 
-  const faqData = [
-    {
-      question: "What are the best playgrounds in Des Moines?",
-      answer: `Des Moines features ${allPlaygrounds.length}+ mapped playgrounds with varying amenities including climbing structures, splash pads, and accessible equipment.`,
-    },
-    {
-      question: "Are Des Moines playgrounds free?",
-      answer: "Yes! All Des Moines public playgrounds are free and open to all visitors, typically dawn to dusk.",
-    },
-    {
-      question: "Which playgrounds have splash pads?",
-      answer: "Several Des Moines playgrounds feature splash pads and water play areas. Use the amenities filter above to find splash pad locations.",
-    },
-  ];
+  // No faqData here on purpose. The FAQSection below is passed a fuller set of
+  // questions inline; a second array in this file fed nothing, and wiring it in
+  // would both replace better answers with worse and risk a second FAQPage on
+  // the page, which is the defect SEO-003 removed.
 
   // Collect unique amenities across all playgrounds for "Browse by Amenity"
   const uniqueAmenities = useMemo(() => {
@@ -715,6 +705,20 @@ export default function Playgrounds() {
               amenities like splash pads, swings, or climbing walls. Switch to map view to discover
               playgrounds nearest to you. Each playground page includes detailed amenity lists,
               directions, age recommendations, and family tips.
+            </p>
+            {/* SEO-024. The other half of the /outdoors cross-link. The two
+                modules share an audience - a family looking for a playground is
+                the same family looking for a flat trail and a park with
+                restrooms - and until now the link ran one way only. */}
+            <p>
+              Several of these playgrounds sit inside the metro's larger parks and along its
+              trail network, including the natural playscape at Jester Park and the playground
+              at Big Creek State Park.{' '}
+              <Link to="/outdoors" className="text-[#2D1B69] underline underline-offset-4">
+                Our Des Moines outdoors guide
+              </Link>{' '}
+              covers those parks in full, with parking, trailheads, dog rules and what stays
+              open through winter.
             </p>
           </div>
         </div>

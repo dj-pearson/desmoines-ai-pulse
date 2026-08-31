@@ -8,11 +8,15 @@ import { supabase } from "@/integrations/supabase/client";
  * Two things about this data are easy to get wrong and are handled here rather
  * than at the call site:
  *
- * 1. FRESHNESS IS PART OF THE ANSWER. The sync has run exactly once (2026-03-31)
- *    and is on no schedule, so every number below can be months old. A panel that
- *    renders 1,630 keywords without saying when they were measured is how this
- *    went unnoticed for five months. windowEnd and daysStale are returned
- *    alongside the metrics, not as a footnote.
+ * 1. FRESHNESS IS PART OF THE ANSWER. Until SEO-023 the sync had run exactly
+ *    once, on 2026-03-31, and was on no schedule - so every number here was five
+ *    months old while looking current. A panel that renders 1,630 keywords
+ *    without saying when they were measured is how that went unnoticed.
+ *    20260831000001_gsc_sync_cron.sql now runs it daily, but the reason to keep
+ *    reporting freshness is that a schedule can stop too: pg_cron records a job
+ *    as SUCCEEDED when net.http_post enqueues, not when the sync lands. windowEnd
+ *    and daysStale are the only signals here that come from the data itself, so
+ *    they are returned alongside the metrics rather than as a footnote.
  * 2. POSTGREST RETURNS BIGINT AS A JSON STRING. impressions is BIGINT, so
  *    a.impressions + b.impressions concatenates instead of adding and the result
  *    still looks like a plausible number. Everything numeric goes through toNum().
@@ -23,7 +27,18 @@ const REFRESH_TOKEN_IDLE_LIMIT_DAYS = 180;
 
 /** Supabase caps a single response at 1000 rows; both perf tables are larger. */
 const PAGE_SIZE = 1000;
-const MAX_ROWS = 20000;
+
+/**
+ * Raised from 20,000 by SEO-023, which is the story that made it matter.
+ * Backfilling 16 months took gsc_page_performance from 2,060 rows to 15,239 in
+ * one afternoon, and the daily sync adds roughly 90 more - so the old ceiling
+ * was about seven weeks away. Hitting it is the bad kind of failure: the loop
+ * stops, reports no error, and the panel shows a smaller total that still looks
+ * like a number. The read is ordered by date descending, so what would vanish
+ * is the oldest history, which is exactly the before-and-after this data was
+ * backfilled to provide.
+ */
+const MAX_ROWS = 60000;
 
 const DAY_MS = 24 * 60 * 60 * 1000;
 

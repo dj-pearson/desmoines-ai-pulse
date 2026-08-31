@@ -45,6 +45,7 @@
 import { readFileSync, writeFileSync, existsSync, readdirSync } from 'node:fs';
 import { join, dirname, resolve } from 'node:path';
 import { fileURLToPath } from 'node:url';
+import { prerenderOutputPath } from './prerender-output.mjs';
 
 const ROOT = resolve(dirname(fileURLToPath(import.meta.url)), '..');
 const DIST = join(ROOT, 'dist');
@@ -74,6 +75,8 @@ if (sitemaps.length === 0) {
 }
 
 const groups = new Map();
+/** pathname -> did it ship real prerendered HTML. Filled by the scoring loop below. */
+const renderedByPath = new Map();
 for (const file of sitemaps) {
   const xml = readFileSync(join(PUBLIC, file), 'utf8');
   const urls = [...xml.matchAll(/<loc>([^<]+)<\/loc>/g)].map((m) => m[1]);
@@ -87,20 +90,98 @@ for (const file of sitemaps) {
   const missing = [];
   for (const url of urls) {
     const path = new URL(url).pathname.replace(/\/+$/, '');
-    const file2 = join(DIST, path, 'index.html');
+    const file2 = prerenderOutputPath(DIST, path);
     if (!existsSync(file2)) {
       missing.push(path);
+      renderedByPath.set(path, false);
       continue;
     }
     const html = readFileSync(file2, 'utf8');
     const title = (html.match(/<title>([^<]*)<\/title>/) || [])[1] ?? '';
     if (title.trim() === SHELL_TITLE) {
       missing.push(path);
+      renderedByPath.set(path, false);
       continue;
     }
+    renderedByPath.set(path, true);
     rendered += 1;
   }
   groups.set(file.replace(/^sitemap-|\.xml$/g, ''), { total: urls.length, rendered, missing });
+}
+
+/**
+ * SEO-027 AC6: THE HEAD OF THE RANKING MUST BE RENDERED, AND THIS ONE IS NOT A
+ * RATCHET.
+ *
+ * The ratchet below is deliberately loose because the TOTAL is a wall-clock race,
+ * and policing variance produces a flaky gate that somebody eventually switches
+ * off - this repo has WEB-CI-020 and WEB-CI-021 as evidence. That reasoning does
+ * not apply here. scripts/prerender-order.mjs renders in measured-impression
+ * order, so the top of that ranking is rendered FIRST, by construction, on every
+ * build. Its absence is not a slow runner. It means the ranking file is missing,
+ * the ordering is broken, the strict gate is rejecting the head, or the entity
+ * pass did not run.
+ *
+ * So this asserts an absolute property, the way check-prerender-content does:
+ * the pages that actually earn impressions are readable by a crawler that runs
+ * no JavaScript. Those are the pages the whole story is about - measured
+ * 2026-08-31, restaurant entity URLs drew 87,371 of 93,272 impressions while 335
+ * of 477 of them shipped an SPA shell, because coverage was decided
+ * alphabetically and /restaurants/the-pizza-bar is 421st of 477.
+ *
+ * Sized to be true with room to spare rather than to be tight: the top 100 by
+ * impressions land inside the first ~133 slots at fairness-every-4, and a local
+ * build reached 216 while production reaches 267. A build that cannot render 133
+ * entity URLs is broken, not slow.
+ */
+const HEAD_SIZE = Number(process.env.ENTITY_COVERAGE_HEAD || 100);
+/**
+ * How much of the head may be missing before this fails, as a percentage.
+ *
+ * NOT the loose ratchet's reasoning, and not zero either. There are two ways a
+ * head page goes missing and they deserve different answers:
+ *
+ *   systemic   the ranking file is gone, the order broke, the entity pass did not
+ *              run. These take out the WHOLE head - 100 of 100 - so any threshold
+ *              below 100% catches them decisively.
+ *   a race     the page was attempted and the strict gate refused it. Measured on
+ *              a local build 2026-08-31 that ran alongside lint and the test suite:
+ *              7 of the top 100 were refused for `no canonical`, all of them
+ *              restaurant detail pages that also reported no queries-settled
+ *              signal. On an idle run of the same tree, 100 of 100 rendered.
+ *
+ * A zero-tolerance gate would therefore fail on a busy runner, and this repo has
+ * WEB-CI-020 and WEB-CI-021 as evidence of what happens to a flaky gate: it gets
+ * switched off and then catches nothing. So one lost page WARNS, with the page
+ * named, and a collapse FAILS.
+ *
+ * The race is a real defect and the warning is how it stays visible -
+ * /restaurants/bonchon is the site's highest-impression page and it is one of the
+ * seven. Fixing it belongs at the source, not by loosening this number.
+ */
+const HEAD_TOLERANCE_PCT = Number(process.env.ENTITY_COVERAGE_HEAD_TOLERANCE || 10);
+const PRIORITY_FILE = join(ROOT, 'scripts', 'prerender-priority.json');
+let headFailures = [];
+let headChecked = 0;
+if (!existsSync(PRIORITY_FILE)) {
+  console.warn(
+    '[entity-coverage] scripts/prerender-priority.json is missing, so the impression head ' +
+      'cannot be checked. Regenerate it with `npm run generate-prerender-priority` (SEO-027).',
+  );
+} else {
+  const impressions = JSON.parse(readFileSync(PRIORITY_FILE, 'utf8')).impressions ?? {};
+  const head = [...renderedByPath.keys()]
+    .filter((p) => (impressions[p] ?? 0) > 0)
+    .sort((a, b) => (impressions[b] ?? 0) - (impressions[a] ?? 0) || (a < b ? -1 : 1))
+    .slice(0, HEAD_SIZE);
+  headChecked = head.length;
+  headFailures = head.filter((p) => renderedByPath.get(p) === false);
+  if (headChecked === 0) {
+    console.warn(
+      '[entity-coverage] no sitemapped entity URL has any measured impressions. The ranking ' +
+        'is stale or the sitemaps changed shape; the impression head was not checked.',
+    );
+  }
 }
 
 const totals = [...groups.values()].reduce(
@@ -144,6 +225,44 @@ if (UPDATE) {
   );
   console.log(`[entity-coverage] baseline written: ${totals.rendered} rendered.`);
   process.exit(0);
+}
+
+const headAllowed = Math.floor((HEAD_TOLERANCE_PCT / 100) * headChecked);
+if (headFailures.length > 0 && headFailures.length <= headAllowed) {
+  console.warn('');
+  console.warn(
+    `[entity-coverage] ${headFailures.length} of the top ${headChecked} pages by measured ` +
+      `impressions ship an SPA shell (tolerated: up to ${headAllowed}).`,
+  );
+  for (const p of headFailures) console.warn(`      shell: ${p}`);
+  console.warn(
+    '    Usually the strict gate refusing a page that lost its render race - check the\n' +
+      '    [prerender] rejected lines. Not failed, but these are the pages that earn the\n' +
+      '    impressions, so they are worth fixing at the source.',
+  );
+}
+if (headFailures.length > headAllowed) {
+  console.error('');
+  console.error('The highest-impression entity URLs did NOT ship prerendered HTML (SEO-027)');
+  console.error('');
+  console.error(
+    `  ${headFailures.length} of the top ${headChecked} pages by measured Search Console impressions`,
+  );
+  console.error(`  (more than the ${headAllowed} this check tolerates for the render race)`);
+  console.error('  serve the SPA shell, so GPTBot, PerplexityBot, ClaudeBot and OAI-SearchBot see');
+  console.error('  the homepage on them. These render FIRST by construction');
+  console.error('  (scripts/prerender-order.mjs), so this is NOT the budget running out:');
+  console.error('');
+  for (const p of headFailures.slice(0, 15)) console.error(`      missing: ${p}`);
+  if (headFailures.length > 15) console.error(`      ... and ${headFailures.length - 15} more`);
+  console.error('');
+  console.error('  Check that scripts/prerender-priority.json is populated, that the entity pass');
+  console.error('  ran at all, and that the strict gate is not rejecting the head.');
+  console.error('');
+  process.exit(1);
+}
+if (headChecked > 0 && headFailures.length === 0) {
+  console.log(`OK All ${headChecked} highest-impression entity URLs ship prerendered HTML.`);
 }
 
 if (!existsSync(BASELINE)) {

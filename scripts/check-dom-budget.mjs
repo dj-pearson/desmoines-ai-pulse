@@ -37,9 +37,10 @@
  *
  * Requires a build first: it reads dist/.
  */
-import { readFileSync, writeFileSync, existsSync, readdirSync } from 'node:fs';
-import { join, dirname, resolve, sep } from 'node:path';
+import { readFileSync, writeFileSync, existsSync } from 'node:fs';
+import { join, dirname, resolve } from 'node:path';
 import { fileURLToPath } from 'node:url';
+import { walkPrerenderedPages } from './prerender-output.mjs';
 // jsdom is only loaded for --verify-parser; the normal path must not build a DOM.
 // See countRootDescendants below.
 
@@ -107,24 +108,13 @@ function countRootDescendants(html) {
 }
 
 const routes = new Map();
-const walk = (dir) => {
-  for (const entry of readdirSync(dir, { withFileTypes: true })) {
-    const p = join(dir, entry.name);
-    if (entry.isDirectory()) {
-      if (entry.name !== 'assets') walk(p);
-      continue;
-    }
-    if (entry.name !== 'index.html') continue;
-    const html = readFileSync(p, 'utf8');
-    const count = countRootDescendants(html);
-    // A route that was not prerendered ships an empty #root. Counting it as 0
-    // would bank an "improvement" that is really a missing page, so skip it.
-    if (count === 0) continue;
-    const rel = dir.slice(DIST.length).split(sep).join('/');
-    routes.set(rel === '' ? '/' : rel, count);
-  }
-};
-walk(DIST);
+for (const { file, route } of walkPrerenderedPages(DIST, join(ROOT, 'public'))) {
+  const count = countRootDescendants(readFileSync(file, 'utf8'));
+  // A route that was not prerendered ships an empty #root. Counting it as 0
+  // would bank an "improvement" that is really a missing page, so skip it.
+  if (count === 0) continue;
+  routes.set(route, count);
+}
 
 if (routes.size === 0) {
   console.error('[dom-budget] no prerendered routes found in dist/. Did prerender run?');

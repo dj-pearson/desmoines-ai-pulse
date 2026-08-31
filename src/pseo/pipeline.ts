@@ -50,7 +50,7 @@ export const GENERATION_SEQUENCE: PipelineStep[] = [
     order: 1,
     name: 'Queue Combination',
     state: 'queued',
-    description: 'Select the next dimension combination based on tier priority. Tier 1 combinations are generated first, then Tier 2, then Tier 3. Within a tier, prioritize by estimated search volume (content-location > triple combos).',
+    description: 'Select the next dimension combination based on tier priority. Tier 1 combinations are generated first, then Tier 2, then Tier 3. Within a tier, prioritize by estimated search volume (content-location > triple combos). SEO-025: within a page type, order LOCATIONS by locationGenerationOrder() from ./measuredDemand and skip isDeprioritised() slugs - that ordering is measured rather than estimated, and without it a capped run spends the same budget on a location with 60,550 monthly searches as on one with none.',
     estimatedDuration: 0,
     trigger: 'Scheduled batch job or manual admin trigger',
     failureConditions: ['Combination already exists and forceRegenerate is false', 'Combination is in an invalid state'],

@@ -1,0 +1,170 @@
+# Ralph Progress Log
+Started: 2026-08-31T17:28:11.258Z
+---
+
+## Codebase Patterns
+
+- **pg_cron credentials come from Vault, never from `app.settings.*`.** Supabase removed
+  `app.settings.supabase_url` / `app.settings.service_role_key` and refuses
+  `ALTER DATABASE|ROLE ... SET` on both, so `current_setting()` over them cannot be made to
+  return a value. Re-probed 2026-08-31: both still NULL. Use
+  `public.app_secret('supabase_url')` / `public.app_secret('service_role_key')`
+  (supabase/migrations/20260826000002_cron_secrets_via_vault.sql). Gated by
+  `node scripts/check-cron-credentials.mjs` for anything at or after that migration.
+- **A pg_cron job "succeeds" when `net.http_post` ENQUEUES, not when the call lands.**
+  `cron.job_run_details.status = 'succeeded'` is not evidence the work happened. The status
+  code lives in `net._http_response` keyed by the returned `request_id`. Always check there.
+- **You can query production from this environment without a service-role key.**
+  `.env` holds `SUPABASE_ACCESS_TOKEN`; POST SQL to
+  `https://api.supabase.com/v1/projects/wtkhfqpmcegzcbngroui/database/query` with it as a
+  bearer. This runs as `postgres`, so it bypasses RLS - which is the only way to tell an
+  empty table from an RLS-hidden one.
+- **Anon returning `[]` is not evidence a table is empty.** Any table with an
+  `is_admin()`-only policy answers `[]` to the anon key whether it holds 0 rows or 15,000.
+  Probe as postgres before writing "the table is empty" into a plan.
+- **Parse-test a migration against production without applying it:** wrap the file in
+  `BEGIN; ... ROLLBACK;` and send it through the Management API, then confirm the object is
+  absent afterwards. This catches nested dollar-quoting errors, wrong `net.http_post`
+  overloads and bad column names for real, and leaves nothing behind.
+- **The migration ledger is 28 files behind the repo** (newest applied version
+  `20260824000001` as of 2026-08-31, while `supabase/migrations/` runs to `20260831`).
+  Several later migrations were applied by hand without a ledger row. Never assume a
+  committed migration is live - check `supabase_migrations.schema_migrations` and the object
+  itself.
+- **Bash `/tmp` and Python's `/tmp` are different directories on this machine.** Writing a
+  payload file from a Python heredoc and reading it back with `curl --data-binary @/tmp/x`
+  silently gets an empty file. Use a repo-relative path.
+
+---
+
+## 2026-08-31 - SEO-023 - Search Console sync has never been scheduled
+
+### What was implemented
+- `supabase/migrations/20260831000001_gsc_sync_cron.sql` - schedules `gsc-sync-daily` at
+  `15 10 * * *`, looping every `sync_enabled` property and posting
+  `{propertyId, dateRange}` to `gsc-sync-data`. Reads credentials from Vault. Raises by name
+  if a secret is missing rather than posting a header-less request that would 401 silently.
+  Skips a property only if `is_syncing` was set within the last hour, so a crashed run
+  self-heals instead of blocking the property forever; deliberately does NOT filter on
+  `status <> 'error'`, which would make one bad run permanent.
+- `scripts/check-cron-credentials.mjs` + `npm run check-cron-credentials` + a step in
+  `pr-checks.yml` - fails the build when a migration written since the Vault switch reads
+  credentials from the dead GUCs.
+- `supabase/migrations/20260829000002_executive_digest_cron.sql` - fixed. It used
+  `current_setting('app.settings.*', true)` and was unapplied.
+- `supabase/functions/gsc-sync-data/index.ts` - keyword `rowLimit` 1000 -> 25000.
+- `src/hooks/useGscPerformance.ts` - `MAX_ROWS` 20000 -> 60000, and the stale header comment
+  claiming the sync "has run exactly once and is on no schedule" corrected.
+
+### How it was VERIFIED
+
+Empty or RLS-hidden (AC2). **RLS-hidden, and stale - not empty.** Probed as `postgres`:
+
+    select (select count(*) from gsc_properties) as properties, ... ;
+    -> [{"properties":1,"credentials":5,"keyword_rows":1630,"page_rows":2060}]
+    select min(date), max(date), count(distinct date) from gsc_keyword_performance;
+    -> 2026-02-28 .. 2026-03-28, 29 days
+
+  All four `gsc_*` tables carry `FOR ALL USING (is_admin())`, so the anon `[]` in the PRD
+  baseline says nothing about row counts. The tables held five-month-old data from the single
+  manual sync of 2026-03-31.
+
+Credential mechanism. `current_setting('app.settings.supabase_url', true) is not null` and
+  the same for `service_role_key` both returned **false** on 2026-08-31. The
+  executive-digest pattern would therefore have raised on every run. `public.app_secret()`
+  returns both, and `net._http_response` shows 101 HTTP 200s in the last two days from jobs
+  using it.
+
+The cron command, run against production before being committed (AC1):
+
+    select net.http_post(
+      url := public.app_secret('supabase_url') || '/functions/v1/gsc-sync-data',
+      body := jsonb_build_object('propertyId', ..., 'dateRange', 28),
+      headers := jsonb_build_object('Authorization', 'Bearer ' || public.app_secret('service_role_key'), ...));
+    -> request_id 2440
+    select status_code, content from net._http_response where id = 2440;
+    -> 200 {"success":true,"summary":{"keywordsSynced":1000,"pagesSynced":2488,
+           "dateRange":{"start":"2026-07-31","end":"2026-08-28","days":28},"executionTime":2759}}
+
+Backfill (AC4). Six passes at dateRange 28/56/90/180/365/480, all HTTP 200:
+
+    coverage before   keywords 1,630 rows /  29 days   pages  2,060 rows /  29 days
+    coverage after    keywords 3,928 rows / 259 days   pages 15,239 rows / 361 days
+                      2025-09-02 .. 2026-08-28
+
+  480 days asked for 2025-05-05; Google returned nothing before 2025-09-02, so 361 days is
+  the full extent of the property's history, not a truncation.
+
+Current numbers, trailing 28 days 2026-08-01..2026-08-28 (AC3):
+
+    clicks 146   impressions 22,324   CTR 0.65%   avg position 17.5   262 pages
+
+  Per-hub, the five pages in SEO-021:
+
+    /restaurants/     4 clicks   1,125 impr   0.36%   pos 31.4
+    /attractions      0 clicks     442 impr   0.00%   pos 35.9
+    /events/          1 click      435 impr   0.23%   pos 33.4
+    /playgrounds/     0 clicks     333 impr   0.00%   pos 35.3
+    /attractions/     0 clicks      25 impr   0.00%   pos 36.6
+    /things-to-do     no rows in any form
+
+Migration parse test, against production, rolled back:
+
+    BEGIN; <migration>; SELECT ... FROM cron.job WHERE jobname='gsc-sync-daily'; ROLLBACK;
+    -> [{"jobname":"gsc-sync-daily","schedule":"15 10 * * *","active":true}]
+    select count(*) from cron.job where jobname='gsc-sync-daily';  -> 0
+
+  Same for the edited executive-digest migration: schedules inside the transaction, absent
+  after. Production cron state is unchanged by this work.
+
+New gate, proved by control rather than by reading it. Swapped one `app_secret` call in the
+  new migration for the dead GUC: the check exits 1 naming
+  `20260831000001_gsc_sync_cron.sql:47`. Restored: exits 0. On its first honest run it failed
+  against a real pre-existing defect it was not written for - the unapplied executive-digest
+  migration - which is the second time on this PRD that comparing artifacts found something
+  no unit test would have.
+
+Quality: `npm run type-check` clean; `npm run lint` 0 errors (3,670 pre-existing warnings);
+  `npx vitest run src/hooks/__tests__/useGscPerformance.test.ts` 9 passed; `check-edge-types`
+  "No file gained a type error"; invisible-character scan clean on all six changed files.
+
+### What could NOT be verified from this environment
+- **The schedule is not live.** The migration is committed and parse-tested, but production
+  `cron.job` still has no `gsc-sync-daily` row - deliberately, since applying migrations is
+  the human's step. `gscSyncCronScheduled` stays false until it is applied.
+- **The rowLimit fix is not deployed.** Edge function deploys are outside this loop, so the
+  keyword long tail stays truncated at 1,000 rows per window until `gsc-sync-data` ships.
+  After it deploys, one manual pass at a wide `dateRange` will fill in the keyword history
+  this backfill could not reach.
+- **The admin dashboard was not rendered** (AC5). No admin session available here. What was
+  verified instead is the data path it reads: `useGscPerformance` selects the property, then
+  paginates both perf tables by `property_id`; the property row exists, `last_sync_at` is now
+  2026-08-31, and both tables return rows to a privileged reader. The one thing that would
+  have broken it - `MAX_ROWS` at 20,000 against 15,239 page rows and roughly 90/day of growth
+  - was found by doing that arithmetic, and fixed.
+
+### Learnings for future iterations
+- The AC's "match the existing CRON_SECRET convention" pointed at a path that is not the live
+  one. `CRON_SECRET` appears in two edge functions; every scheduled job actually returning
+  200 uses the Vault service-role bearer. Reading `cron.job.command` for a job that currently
+  succeeds is a faster way to find the real convention than grepping for a constant.
+- `keywordsSynced` came back as exactly 1000 on six windows spanning 28 to 480 days. A number
+  that lands precisely on a configured limit is the limit. Google orders rows by clicks
+  descending, so the truncation was quietly discarding the long tail - the part SEO work is
+  chosen from.
+- Relevant to SEO-021 and worth carrying forward: Google has indexed `/attractions` in **both**
+  forms at once (442 impressions unslashed, 25 slashed) while `/restaurants/`, `/events/` and
+  `/playgrounds/` are indexed only slashed. The duplicate split SEO-021 describes is
+  measurable, not theoretical, and the flat-file direction SEO-021 chose will move the four
+  slashed URLs. `/things-to-do` has no impressions in any form.
+- Relevant to SEO-027: the top 10 pages by impressions are almost entirely restaurant
+  **entity** pages at positions 5.8 to 16.5 - `/restaurants/jungle-tea` 1,980 impressions,
+  `/restaurants/yard-house` 1,497 at position 8.4. That is the module SEO-027 says ships as
+  an SPA shell for 335 of 477 URLs. The traffic is already there; the pages are not readable.
+- Relevant to SEO-025: `beaverdale park` returns 48 impressions at position 7.2. The story
+  says not to publish Beaverdale, and that is still right - the demand is a park query, not a
+  dining-neighbourhood query, so it belongs to the SEO-024 outdoors cluster instead.
+- `/restaurants/` measures position 31.4 over the trailing 28 days, not the 24.4 the PRD
+  quotes for SEO-026. Different window and source; re-measure before using either number.
+
+---

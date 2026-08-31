@@ -280,6 +280,47 @@ jobs:
       - name: Prerendered DOM size
         run: node scripts/check-dom-budget.mjs
 
+      # SEO-021. The build output shape decides the URL Cloudflare Pages serves,
+      # and until 2026-08-31 it disagreed with every canonical tag on the site:
+      # /restaurants 308'd to /restaurants/, whose canonical then pointed back at
+      # /restaurants. The 23 passing unit tests over trailingSlashRedirect() could
+      # not see it, because Pages' normalization is not in that function. This
+      # step compares the three artifacts that actually decide - dist filenames,
+      # canonical tags, sitemap <loc> - and fails when they disagree.
+      - name: Build output, canonicals and sitemap name the same URL
+        run: node scripts/check-canonical-url-shape.mjs
+
+      # SEO-024. The /outdoors guide's eight destinations must ship as sections
+      # AND as typed Place nodes. The first build emitted two ItemLists and the
+      # prerenderer's dedupeJsonLd kept only the last block of that @type, so the
+      # destinations list - the whole structured-data deliverable - was dropped
+      # from the shipped HTML while type-check, lint and the browser all looked
+      # fine. This reads dist/outdoors.html against src/data/outdoorsGuide.ts.
+      - name: The /outdoors guide ships complete
+        run: node scripts/check-outdoors-guide.mjs
+
+      # SEO-025. pSEO generation is capped at 30 pages/hour and every page is a
+      # Claude call, so the ORDER locations are generated in decides what a
+      # capped run buys. That order lives in src/pseo/measuredDemand.ts and is
+      # measured, not estimated. This fails when a taxonomy location has no
+      # rank (it would sort as undefined), when a rank names a location the
+      # taxonomy dropped, or when a location deprioritised on a measured zero
+      # gets published anyway - which is the specific waste the story is about.
+      - name: pSEO generation order matches measured demand
+        run: node scripts/check-pseo-demand.mjs
+
+      # SEO-028. A detail page's canonical used to live only inside SEOHead,
+      # which renders after the entity resolves - so a prerender capture that
+      # landed mid-fetch produced a page with no canonical, the strict gate
+      # correctly refused it, and it shipped as an SPA shell. SEO-027 measured a
+      # clean build dropping 7 of the top 100 entity pages that way, including
+      # /restaurants/bonchon at 10,473 impressions. The pages lost are whichever
+      # were in flight when the machine was busiest, so a slow CI box loses more.
+      # This asserts every detail page declares its canonical from the route
+      # param, before any fetch.
+      - name: Detail pages declare a canonical before their data arrives
+        run: node scripts/check-loading-canonical.mjs
+
       # WEB-SEO-006. /og-image.png was never in public/, and Cloudflare answers a
       # missing static file with the SPA shell - 200 text/html where an image
       # belongs. Six pages advertised it as their og:image and nothing errored.
@@ -443,6 +484,15 @@ jobs:
       # own decision (WEB-QA-018).
       - name: Ledgered migrations produced what they define
         run: node scripts/check-migration-drift.mjs
+
+      # SEO-023: a job scheduled since the Vault switch must read its credentials
+      # through public.app_secret(). current_setting('app.settings.*') cannot hold
+      # a value on this platform any more - with missing_ok it returns NULL, the
+      # Authorization header silently disappears, and pg_cron still records
+      # SUCCESS because enqueueing worked. That is how 48 jobs ran as no-ops for
+      # months. Offline, and only looks at migrations at or after 20260826000002.
+      - name: Scheduled jobs read credentials from Vault
+        run: node scripts/check-cron-credentials.mjs
 
       # WEB-DB-008: block destructive single-release migration changes. Attach the
       # `migration-override` label to the PR to bypass when the change is genuinely safe.
