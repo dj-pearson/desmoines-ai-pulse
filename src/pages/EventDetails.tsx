@@ -11,6 +11,7 @@ import { Badge } from "@/components/ui/badge";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Breadcrumbs } from "@/components/ui/breadcrumbs";
 import SEOHead from "@/components/SEOHead";
+import { RouteCanonical } from "@/components/RouteCanonical";
 import EnhancedEventSEO from "@/components/EnhancedEventSEO";
 import AIWriteup from "@/components/AIWriteup";
 import { EventPhotoUpload } from "@/components/EventPhotoUpload";
@@ -93,6 +94,8 @@ export default function EventDetails() {
   if (isLoading) {
     return (
       <div className="min-h-screen bg-background">
+        {/* SEO-028: the canonical cannot wait for the fetch. See RouteCanonical. */}
+        <RouteCanonical path={`/events/${slug}`} />
         <Header />
         <div className="container mx-auto px-4 py-8">
           <div className="animate-pulse space-y-6">

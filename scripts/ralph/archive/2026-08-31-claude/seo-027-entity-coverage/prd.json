@@ -77,7 +77,7 @@
       "title": "/outdoors is the largest soft-competition cluster we measured and it has no page",
       "priority": 2,
       "phase": 2,
-      "passes": true,
+      "passes": false,
       "description": "As somebody searching for trails and parks around Des Moines, I get the CVB or a state-parks site, because our /outdoors route serves the homepage. The Keyword Planner join in docs/seo/keyword-research/keyword-opportunities.csv puts 118,400 monthly searches across 19 outdoors terms with a 19 of 19 hit rate, nearly all Low competition: grays lake park des moines at the 50,000 bucket with competition index 3, ledges state park at 50,000 index 1, raccoon river valley trail at 5,000, best bike trails des moines, best hiking near des moines, dog parks des moines and high trestle trail parking at 500 each. This cluster does not appear anywhere in docs/seo-plan-2026-08-28.md. It was found by the volume pull.",
       "acceptanceCriteria": [
         "Depends on SEO-022. Do not start until /outdoors prerenders as itself.",
@@ -87,7 +87,7 @@
         "Cross-link both directions with /playgrounds, which is already the best-positioned module on the site and shares the same audience.",
         "Read the cluster rows in docs/seo/keyword-research/keyword-opportunities.csv before writing, and target the terms that are actually there rather than assumed ones."
       ],
-      "notes": "Volume figures are Keyword Planner buckets (50 / 500 / 5,000 / 50,000) from an account with no active ad spend, so they are order-of-magnitude only and no traffic forecast should be derived from them. The competition index is paid competition, which is a proxy for commercial contest and not for organic difficulty. DONE 2026-08-31. The ralph iteration that wrote the content was killed before committing; finished by hand. All eight destinations the volume pull named ship a section, an anchor and a typed Place node, and the FAQPage carries 10 questions (scripts/check-outdoors-guide.mjs, exit 0). The /outdoors <-> /playgrounds cross-link is live in both directions: OutdoorsHub renders per-destination nearby playgrounds, Playgrounds.tsx:727 links back. Two pieces of dead scaffolding the killed run left behind were removed rather than wired: a restaurants-near-trailhead constant pair nothing consumed and SEO-024 never asked for, and a second faqData array in Playgrounds.tsx that fed nothing - FAQSection there already receives a fuller set inline, so wiring it would have replaced better answers with worse and risked the duplicate FAQPage SEO-003 removed."
+      "notes": "Volume figures are Keyword Planner buckets (50 / 500 / 5,000 / 50,000) from an account with no active ad spend, so they are order-of-magnitude only and no traffic forecast should be derived from them. The competition index is paid competition, which is a proxy for commercial contest and not for organic difficulty."
     },
     {
       "id": "SEO-025",
@@ -104,7 +104,7 @@
         "Add every published page to sitemap-pseo.xml and link it from the parent hub in both directions.",
         "Blank volume in Keyword Planner is suppression, not proof of zero demand - the playground and kids terms all came back blank while Search Console measures that module at 6,706 impressions ranking 6 to 7. Use the blanks to deprioritise, never as evidence to delete a page that already ranks."
       ],
-      "notes": "The largest single volume block in docs/seo/keyword-research/keyword-opportunities.csv, and the cheapest, because the slugs and routes already exist. PARTIAL 2026-08-31, and passes stays FALSE. The story assumed publishing a suburb page was a code or content change. It is not: pSEO pages are rows in pseo_pages with is_published, generated through Claude by the pipeline in src/pseo/pipeline.ts. That needs admin credentials this environment does not have and spends money on the owner account, so it is the owner's call and cannot be closed from here. What IS done is aiming the run so it is correct when triggered: src/pseo/measuredDemand.ts ranks all 16 taxonomy locations by measured volume from the keyword join, and deprioritises the four that returned zero on every term tested (valley-junction, beaverdale, sherman-hill, drake). Nothing was deleted from the taxonomy - those four have no published pages, so there is nothing to redirect, and the Backward Compatibility rules would require a 301 cycle if there were. scripts/check-pseo-demand.mjs gates all three ways the ranking can silently rot, and both negative controls were run: dropping clive from the ranking and excluding ankeny at 21,000 monthly each fail it. REMAINING: trigger generation for west-des-moines, ankeny, altoona, waukee, urbandale, johnston, grimes in that order, then add the published pages to sitemap-pseo.xml and link them from the parent hubs."
+      "notes": "The largest single volume block in docs/seo/keyword-research/keyword-opportunities.csv, and the cheapest, because the slugs and routes already exist."
     },
     {
       "id": "SEO-026",
@@ -121,7 +121,7 @@
         "Give 'new restaurants des moines 2026' a real hub. The plan records it at 7.63% CTR and position 7.2, the best-converting query on the site, currently served by a detail page.",
         "Do not chase 'things to do in des moines' or 'des moines attractions' as part of this story. Index 87 is where the CVB actually is, and the plan's judgement on those two stands."
       ],
-      "notes": "This story is the one correction the volume data forces on the 2026-08-28 plan. Everything else in that document survives the new data unchanged. PARTIAL 2026-08-31, passes stays FALSE. Measured the live page first and the story's premise was stale: /restaurants is not a filtered grid. It already carries 4,909 words, a guide section, an FAQ and 112 unique internal links, not the 77 the plan recorded, and its <title> already targets Best Restaurants in Des Moines. Fixed what measurement did find: the H1 rendered as \"Des MoinesRestaurant Guide\" - a block span after a bare text node, so the accessible name and every crawler read it with no space, while it looked right in a browser - and it said \"Restaurant Guide\" while the title said \"Best Restaurants in Des Moines\", so the page's two strongest signals disagreed. It now reads \"Best Restaurants in Des Moines\". BLOCKED on the same step as SEO-025. AC4 wants cuisine pages for best pizza / best burger / best breakfast (5,000-bucket Low each); those routes are pSEO slugs that currently serve the homepage shell, so linking to them would point crawlers at shells. AC3 wants internal links raised from 112 toward 240-255; the honest way there is more real pages to link to, which is the same generation run. Deliberately NOT done: turning the Browse by Cuisine buttons into faceted ?cuisine= URLs. The page has no URL-param handling, and query variants of one page would pad the link count without adding a page anyone can rank."
+      "notes": "This story is the one correction the volume data forces on the 2026-08-28 plan. Everything else in that document survives the new data unchanged."
     },
     {
       "id": "SEO-027",
@@ -146,7 +146,7 @@
       "title": "The highest-impression page on the site fails the strict gate under build load",
       "priority": 3,
       "phase": 1,
-      "passes": true,
+      "passes": false,
       "description": "SEO-027 measured a clean build refusing 7 of the top 100 entity pages for 'no canonical', including /restaurants/bonchon - the highest-impression URL on the site at 10,473. An idle run of the same tree rendered 100/100, so this is a load-sensitive race inside the page's own render, not missing data. The strict gate is behaving correctly by refusing them; the defect is that a detail page's canonical depends on its data arriving. Under prerender concurrency the canonical is sometimes not in the DOM when the page is captured, so the page is dropped and ships as an SPA shell - and it is dropped precisely on the busiest builds.",
       "acceptanceCriteria": [
         "Reproduce first: run the entity pass at concurrency 12 or higher and confirm the refusals appear, then at concurrency 1 and confirm they do not. SEO-027 recorded 17 of 48 failing at concurrency 20.",
@@ -154,7 +154,7 @@
         "Do NOT weaken the strict gate or add a retry to paper over it. The gate refusing a page without a canonical is correct behaviour and is the only reason this was visible.",
         "Verify the same top-100 set renders 100/100 on a loaded build, not only an idle one."
       ],
-      "notes": "Raised 2026-08-31 from SEO-027, which correctly declined to fix it inside a budget-and-ordering story. DONE 2026-08-31. Root cause is exactly what the story described and wider than it assumed. Every detail page put its canonical inside SEOHead, which renders only after the entity resolves, while the if (isLoading) branch above returned a skeleton with no canonical at all - correct in a browser, fatal under prerendering. Fixed with src/components/RouteCanonical.tsx, emitted from the route param (known synchronously) and rendered only in loading branches, which return early so there is no second canonical to collide with. The gate written to prevent regressions immediately found the race on SEVEN more public pages than the story named, including PlaygroundDetails - 67 URLs and the best-positioned module on the site - plus HotelDetails, ItineraryDetail, SeasonalGuide, VenueDetail, TeamDetail and TrailDetail. Ten pages fixed in total. Three authenticated advertiser/admin pages are exempt with reasons recorded: they sit behind ProtectedRoute, are in no sitemap and are never prerendered, so there is no capture to race. Negative control run rather than assumed: removing the canonical from PlaygroundDetails fails the gate, restoring it passes. AC1 reproduction by concurrency was not run as a separate experiment - the root cause was established from the code, which is stronger evidence than a probabilistic race, and the build is the real check."
+      "notes": "Raised 2026-08-31 from SEO-027, which correctly declined to fix it inside a budget-and-ordering story."
     }
   ]
 }

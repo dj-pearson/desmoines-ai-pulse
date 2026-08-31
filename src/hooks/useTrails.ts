@@ -57,23 +57,6 @@ export function useTrail(slug: string) {
   });
 }
 
-export function useFeaturedTrails() {
-  return useQuery({
-    queryKey: ['trails', 'featured'],
-    queryFn: async (): Promise<Trail[]> => {
-      const { data, error } = await supabase
-        .from('trails')
-        .select('*')
-        .eq('is_featured', true)
-        .order('name');
-
-      if (error) throw error;
-      return (data ?? []) as unknown as Trail[];
-    },
-    staleTime: 10 * 60 * 1000,
-  });
-}
-
 const DIFFICULTY_LABELS: Record<string, string> = {
   easy: 'Easy',
   moderate: 'Moderate',
