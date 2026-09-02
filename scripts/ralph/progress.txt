@@ -29,3 +29,25 @@ Started: 2026-08-31T19:18:09.615Z
   - No Supabase credentials in this container: migrations cannot be applied or
     probed. Record expected outcomes and leave the owner a one-line action.
 ---
+## 2026-09-02 - WEB-ADS-004 (pending_review enum, lifecycle schedule, atomic approval)
+- 20260902000002: ALTER TYPE campaign_status ADD VALUE pending_review, suspended
+  (own file: a new enum value cannot be used in the transaction that adds it).
+- 20260902000003: approve_campaign_creative(uuid, text) admin-only SECURITY
+  DEFINER that approves + activates (via activate_campaign) or parks in
+  pending_review in one transaction; process_campaign_lifecycle sets
+  renewal_eligible on completion behind an information_schema guard; cron job
+  campaign-lifecycle-daily at 06:10 UTC with a pure SQL body (no http, no key).
+- useAdminCampaigns.approveCreative: one RPC call replaces three client writes.
+- types.ts: enum labels in both places + Functions.approve_campaign_creative.
+- Deno test _tests/campaign-lifecycle-contract.test.ts (6/6) wired into CI.
+- **Learnings for future iterations:**
+  - A cron job whose work is a SQL function should call it directly
+    (`SELECT fn();`) rather than net.http_post to an edge function; it sidesteps
+    the app_secret/service-role problem entirely.
+  - campaigns, campaign_placements and their columns (renewal_eligible,
+    auto_renew) exist in types.ts but in no migration. Guard column writes with
+    information_schema.columns + EXECUTE, or the function errors at runtime.
+  - supabase.rpc() returns Json; cast via `as unknown as <Interface>`.
+  - Regexes in the invariant tests must tolerate prettier line breaks after
+    `supabase.rpc(`.
+---

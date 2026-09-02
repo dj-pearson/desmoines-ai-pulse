@@ -142,6 +142,11 @@ jobs:
       # writer, and fails if the lifecycle job or any client starts flagging
       # listings on its own.
       - run: deno test --allow-read supabase/functions/_tests/sponsored-listing-activation.test.ts
+      # WEB-ADS-004. pending_review was written by the client and absent from the
+      # enum; the lifecycle job was on no schedule; approval was three writes with
+      # no transaction. Pins the enum labels, the pure-SQL cron job and the
+      # admin-only approval RPC.
+      - run: deno test --allow-read supabase/functions/_tests/campaign-lifecycle-contract.test.ts
       # The trial-conversion notice must state amount, date and cancel path,
       # and must not be gated on marketing consent or an LLM score
       # (WEB-LEGAL-006).
