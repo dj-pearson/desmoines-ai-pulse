@@ -155,6 +155,13 @@ jobs:
       # only accepted 'idle'. Holds the migration and the edge function to one
       # status contract.
       - run: deno test --allow-read supabase/functions/_tests/scraping-dispatch-status.test.ts
+      # WEB-BE-036. The events table permitted one row per title per venue
+      # FOREVER, so a weekly residency or a Sat/Sun performance pair could not be
+      # stored. Holds the migration, the shared dedup and the Python crawler to
+      # one title + Central calendar date + venue key.
+      - run: deno test --allow-read supabase/functions/_tests/event-unique-key.test.ts
+      # eventDedup has had its own suite since DMI-010 and no lane ever ran it.
+      - run: deno test supabase/functions/_shared/eventDedup.test.ts
       # The trial-conversion notice must state amount, date and cancel path,
       # and must not be gated on marketing consent or an LLM score
       # (WEB-LEGAL-006).

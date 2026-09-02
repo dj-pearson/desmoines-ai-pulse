@@ -85,3 +85,29 @@ Started: 2026-08-31T19:18:09.615Z
     edited in place, copy the patched shape (app_secret, ::text url) into the
     restated body or the restatement silently undoes the patch.
 ---
+## 2026-09-02 - WEB-BE-036 (events could not hold a recurring event)
+- 20260902000006 records events_title_venue_unique in the ledger, adds
+  event_local_date (STORED generated, Central calendar date), creates
+  events_title_venue_date_unique on (title, venue, event_local_date), drops the
+  old index. Loosening, so safe in one release.
+- eventDedup.ts tier 3: 24-hour window -> centralCalendarDate() equality; reason
+  string same_title_venue_within_24h -> same_title_venue_same_day; header
+  rewritten. RECURRING_WINDOW_HOURS retired.
+- ingest-events onConflict -> "title,venue,event_local_date".
+- New _tests/event-unique-key.test.ts (7/7); eventDedup.test.ts (12/12) wired
+  into CI for the first time.
+- **Learnings for future iterations:**
+  - events.date is TIMESTAMPTZ. `date::date` is STABLE, not IMMUTABLE, so it
+    cannot go in an index or a generated column. Use
+    (date AT TIME ZONE 'America/Chicago')::date.
+  - PostgREST onConflict can only name real columns: an expression index cannot
+    be an ON CONFLICT inference target. If a computed key needs upsert support,
+    it needs a stored generated column.
+  - CREATE INDEX CONCURRENTLY cannot run in a migration file (one transaction).
+    Say so rather than writing it and hoping.
+  - generate_recurring_event_instances titles instances "<title> - Mon DD" to
+    dodge the old unique index. That workaround is now unnecessary but changing
+    it rewrites public titles.
+  - Several _shared/*.test.ts suites exist that no CI lane runs. Check
+    subscription-sync-tests.yml before assuming a test file is enforced.
+---
