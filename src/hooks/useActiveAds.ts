@@ -1,6 +1,7 @@
 import { useQuery } from "@tanstack/react-query";
 import { supabase } from "@/integrations/supabase/client";
 import { createLogger } from '@/lib/logger';
+import { getOrCreateSessionId } from "@/lib/tracking";
 
 const log = createLogger('useActiveAds');
 
@@ -91,10 +92,17 @@ export function useActiveAds(placementType: AdPlacement) {
       // JSON-stringifies the args and an undefined key is DROPPED - which
       // sends the one-argument body again and reinstates the PGRST203
       // ambiguity described above. Both parameters accept NULL in SQL.
+      // WEB-ADS-002: these were both null, which switched OFF the frequency
+      // caps inside get_active_ads -- the ones that stop a visitor seeing the
+      // same campaign more than three times in five minutes, or an account
+      // seeing it more than ten times a day. Passing the real session and user
+      // is what turns them on. Still NULL rather than undefined when unknown,
+      // for the PGRST203 reason described above.
+      const { data: authData } = await supabase.auth.getUser();
       const args = {
         p_placement_type: placementType as ServablePlacement,
-        p_session_id: null,
-        p_user_id: null,
+        p_session_id: getOrCreateSessionId(),
+        p_user_id: authData?.user?.id ?? null,
       } as unknown as Parameters<typeof supabase.rpc<'get_active_ads'>>[1];
       const { data, error } = await supabase.rpc('get_active_ads', args);
       if (error) {

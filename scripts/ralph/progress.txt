@@ -226,3 +226,33 @@ Started: 2026-08-31T19:18:09.615Z
     suspicious edge-function type error against a clean worktree before
     believing you caused it. Added as an AC on WEB-CI-030.
 ---
+## 2026-09-02 - WEB-ADS-002 (ad impressions and clicks were never recorded)
+- New edge function track-ad-event writes on the service role: validates the
+  creative belongs to an approved, active campaign; drops automated UAs (a
+  MISSING UA counts as automated); idempotent on client_event_id; every refusal
+  answers 200 so a caller cannot probe the rules.
+- Bot filter extracted to _shared/adEventFilters.ts so it is testable without
+  importing a module that calls Deno.serve at the top level.
+- tracking.ts invokes the function; direct inserts gone; shouldShowAd deleted.
+- useActiveAds passes the real session and user ids, which is what turns the
+  get_active_ads frequency caps ON. They were null, so no cap ran anywhere.
+- 20260902000009 adds owner/admin SELECT policies so the dashboard can read the
+  rows. Permissive only; RLS deliberately NOT enabled.
+- _tests/ad-event-tracking.test.ts (8) + a route-smoke case asserting the
+  browser POSTs nothing to /rest/v1/ad_impressions.
+- **Learnings for future iterations:**
+  - ad_impressions and ad_clicks have NO policy of any kind in the ledger.
+    Client inserts were refused for the life of the feature. Check for a policy
+    before assuming a client-side write works.
+  - A client-side check that reads a table RLS hides ALWAYS passes and looks
+    like a control. shouldShowAd and the WEB-SEC-028 rate limiter were both
+    this shape. Treat "returns allow on error" plus "reads a protected table"
+    as a dead control.
+  - get_active_ads has real frequency caps that only run when p_session_id and
+    p_user_id are passed. Passing null silently disables them.
+  - For the THIRD time this session: a strict "this must not come back"
+    assertion will match the explanatory comment you just wrote. Reword the
+    prose, keep the assertion strict.
+  - Do not import an edge function's index.ts from a test: its top-level
+    Deno.serve binds a port. Extract the pure parts to _shared/.
+---

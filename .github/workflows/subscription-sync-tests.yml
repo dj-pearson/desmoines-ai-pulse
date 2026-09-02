@@ -176,6 +176,11 @@ jobs:
       # cent. Pins the trigger, the server-side recompute and the displayed total
       # to one rate card.
       - run: deno test --allow-read supabase/functions/_tests/campaign-pricing-authority.test.ts
+      # WEB-ADS-002. Impressions and clicks were inserted from the browser into
+      # tables with no INSERT policy, so RLS refused every write and every
+      # advertiser dashboard read zero. Pins the server-side write path, the bot
+      # filter, idempotency, and the frequency cap being switched on.
+      - run: deno test --allow-read supabase/functions/_tests/ad-event-tracking.test.ts
       # The trial-conversion notice must state amount, date and cancel path,
       # and must not be gated on marketing consent or an LLM score
       # (WEB-LEGAL-006).

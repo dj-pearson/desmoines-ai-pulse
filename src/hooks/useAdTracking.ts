@@ -4,7 +4,6 @@ import {
   logClick,
   getOrCreateSessionId,
   createViewabilityObserver,
-  shouldShowAd,
 } from '@/lib/tracking';
 import { useAuth } from './useAuth';
 import { createLogger } from '@/lib/logger';
@@ -52,15 +51,10 @@ export function useAdTracking(options: AdTrackingOptions): AdTrackingReturn {
     if (impressionLogged) return;
 
     try {
-      // Check frequency cap before logging
-      const sessionId = getOrCreateSessionId();
-      const canShow = await shouldShowAd(campaignId, sessionId, user?.id);
-
-      if (!canShow) {
-        log.debug('trackImpression', 'Ad frequency cap reached for campaign', { campaignId });
-        return;
-      }
-
+      // WEB-ADS-002: the client-side frequency check is gone. It counted rows
+      // RLS never let it see, so it returned "show it" every time while looking
+      // like a control. The cap that works is inside get_active_ads, which only
+      // ever runs when useActiveAds passes a session id -- and it now does.
       // Log the impression
       const result = await logImpression(campaignId, creativeId, placementType);
 

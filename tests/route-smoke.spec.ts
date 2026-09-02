@@ -347,3 +347,28 @@ test.describe('Password reset leads to a form that changes the password (WEB-AUT
     await expect(page).toHaveURL(/\/auth\/reset-password/, { timeout: 30_000 });
   });
 });
+
+test.describe('Ad impressions are recorded server-side (WEB-ADS-002)', () => {
+  // The browser used to INSERT into ad_impressions directly. That table has no
+  // INSERT policy in any migration, so RLS refused every write and every
+  // advertiser dashboard read zero. The write now goes through an edge
+  // function. This asserts the browser takes that route and never the old one.
+  test('the homepage writes no ad rows directly from the browser', async ({ page }) => {
+    const directAdWrites: string[] = [];
+    page.on('request', (req) => {
+      const url = req.url();
+      if (req.method() === 'POST' && /\/rest\/v1\/(ad_impressions|ad_clicks)/.test(url)) {
+        directAdWrites.push(url);
+      }
+    });
+
+    await page.goto('/');
+    await page.waitForLoadState('networkidle');
+    await expectNoErrorBoundary(page);
+
+    expect(
+      directAdWrites,
+      `the browser must not insert ad rows directly: ${directAdWrites.join('\n')}`
+    ).toHaveLength(0);
+  });
+});
