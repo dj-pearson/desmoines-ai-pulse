@@ -433,3 +433,32 @@ test.describe('Email confirmation failures are explained, not celebrated (WEB-AU
     expect(new URL(page.url()).pathname).toBe('/auth/verified');
   });
 });
+
+test.describe('Sign-in details can be changed from /profile (WEB-AUTH-012)', () => {
+  // /profile edited first name, last name and phone. updateUser({ email })
+  // appeared nowhere in src and nothing called AuthContext.updatePassword, so a
+  // user whose password had leaked could only sign out and use "forgot
+  // password", and a user whose email had changed had no route at all.
+  //
+  // /profile is behind ProtectedRoute, so an anonymous visit lands on /auth.
+  // That is what these assert without a session: the route is guarded, and the
+  // panel is not reachable to an anonymous visitor.
+
+  test('/profile requires a session', async ({ page }) => {
+    await page.goto('/profile');
+    await expectNoErrorBoundary(page);
+    await page.waitForURL(/\/auth|\/profile/);
+    // Either the guard redirected, or the page rendered a sign-in prompt.
+    const onAuth = new URL(page.url()).pathname.startsWith('/auth');
+    if (!onAuth) {
+      await expect(page.getByText(/sign in|log in/i).first()).toBeVisible();
+    }
+  });
+
+  test('the credentials panel is not reachable without signing in', async ({ page }) => {
+    await page.goto('/profile');
+    await expectNoErrorBoundary(page);
+    await expect(page.locator('#current-password')).toHaveCount(0);
+    await expect(page.locator('#new-email')).toHaveCount(0);
+  });
+});

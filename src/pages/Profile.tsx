@@ -11,6 +11,7 @@ import { useToast } from "@/hooks/use-toast";
 import { PreferencesSettings } from "@/components/PreferencesSettings";
 import PreferencesManager from "@/components/PreferencesManager";
 import { FavoritesView } from "@/components/FavoritesView";
+import { AccountCredentials } from "@/components/auth/AccountCredentials";
 import { MFAManagement } from "@/components/auth/MFAManagement";
 import { SessionManagementDashboard } from "@/components/auth/SessionManagementDashboard";
 import { PrivacyControls } from "@/components/PrivacyControls";
@@ -472,6 +473,14 @@ export default function Profile() {
 
           {/* Settings Tab */}
           <TabsContent value="settings" className="mt-6 space-y-6">
+            {/*
+              WEB-AUTH-012. There was no way to change a password or an email
+              address anywhere in the app. MFA and session management were
+              mounted here; the two things every account needs were not.
+              First, because a compromised password is the reason someone opens
+              this tab.
+            */}
+            <AccountCredentials />
             <MFAManagement />
             <SessionManagementDashboard />
             {/*

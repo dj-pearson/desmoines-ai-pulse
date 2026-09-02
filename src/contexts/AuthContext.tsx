@@ -1,6 +1,7 @@
 import { createContext, useContext, useState, useEffect, useRef, useCallback, useMemo, ReactNode } from "react";
 import { useQueryClient } from "@tanstack/react-query";
 import { interpretSignUpResult } from "@/lib/signUpResult";
+import { sessionStartedAt } from "@/lib/sessionAge";
 import { supabase } from "@/integrations/supabase/client";
 import { User, Session, AuthChangeEvent } from "@supabase/supabase-js";
 // Only the redirect validator is needed here, and it lives in a file with no
@@ -35,15 +36,25 @@ interface AuthActions {
   login: (email: string, password: string) => Promise<{ success: boolean; error?: string; requiresMFA?: boolean; factorId?: string }>;
   /** `alreadyRegistered` is true when the address already had an account (WEB-AUTH-004). */
   signup: (email: string, password: string, metadata?: Record<string, unknown>) => Promise<{ success: boolean; error?: string; needsVerification?: boolean; alreadyRegistered?: boolean }>;
-  logout: () => Promise<void>;
+  /**
+   * `scope` defaults to 'global', which is right for a deliberate sign-out.
+   * A TIMEOUT must pass 'local' (WEB-AUTH-007): an idle desktop tab signing
+   * someone out of their phone is not a security measure, it is a bug that
+   * looks like one.
+   */
+  logout: (options?: { scope?: 'local' | 'global' }) => Promise<void>;
   requireAdmin: () => void;
   refreshSession: () => Promise<boolean>;
   signInWithGoogle: (redirectTo?: string) => Promise<{ success: boolean; error?: string }>;
   signInWithApple: (redirectTo?: string) => Promise<{ success: boolean; error?: string }>;
   resetPassword: (email: string) => Promise<{ success: boolean; error?: string }>;
   updatePassword: (newPassword: string) => Promise<{ success: boolean; error?: string }>;
+  /** Starts a double-confirmation email change and alerts the current address (WEB-AUTH-012). */
+  updateEmail: (newEmail: string) => Promise<{ success: boolean; error?: string }>;
   resendVerification: (email: string) => Promise<{ success: boolean; error?: string }>;
   getSessionExpiresAt: () => number | null;
+  /** Epoch ms this session began, or null when it cannot be determined (WEB-AUTH-007). */
+  getSessionStartedAt: () => number | null;
 }
 
 type AuthContextType = AuthState & AuthActions;
@@ -668,7 +679,7 @@ export function AuthProvider({ children }: { children: ReactNode }) {
   }, []);
 
   // Logout - robust implementation with race condition prevention
-  const logout = useCallback(async () => {
+  const logout = useCallback(async (options?: { scope?: 'local' | 'global' }) => {
     // Prevent race conditions - set flag before any async operations
     if (isLoggingOutRef.current) {
       log.debug('logout', 'Logout already in progress, skipping');
@@ -707,7 +718,11 @@ export function AuthProvider({ children }: { children: ReactNode }) {
       );
 
       await Promise.race([
-        supabase.auth.signOut({ scope: 'global' }),
+        // WEB-AUTH-007. 'global' revokes every refresh token the account holds,
+        // on every device. Correct when a person presses Log Out; wrong when a
+        // desktop tab has simply been idle, which used to sign them out of
+        // their phone too.
+        supabase.auth.signOut({ scope: options?.scope ?? 'global' }),
         timeoutPromise
       ]);
       log.info('logout', 'signOut completed successfully');
@@ -904,6 +919,46 @@ export function AuthProvider({ children }: { children: ReactNode }) {
     }
   }, []);
 
+  /**
+   * Change the sign-in email (WEB-AUTH-012).
+   *
+   * Supabase's default is DOUBLE CONFIRMATION: a link goes to the current
+   * address and to the new one, and the change lands only when both are
+   * clicked. That is what makes this safe against a hijacked session -- an
+   * attacker cannot move the account to an address they control without the
+   * real owner clicking a link in their own inbox.
+   *
+   * The alert goes to the CURRENT address, through the same path updatePassword
+   * uses, so the owner hears about an attempt even if they never click.
+   */
+  const updateEmail = useCallback(async (newEmail: string): Promise<{ success: boolean; error?: string }> => {
+    try {
+      const { error } = await supabase.auth.updateUser({ email: newEmail });
+
+      if (error) {
+        log.error('updateEmail', 'Email update error', { message: error.message });
+        return { success: false, error: error.message };
+      }
+
+      void supabase.functions
+        .invoke('send-security-notification', {
+          body: {
+            event_type: 'email_change_requested',
+            context: {
+              user_agent: typeof navigator !== 'undefined' ? navigator.userAgent : undefined,
+            },
+          },
+        })
+        .catch((err) => log.warn('updateEmail', 'security alert failed', { error: String(err) }));
+
+      return { success: true };
+    } catch (error: unknown) {
+      log.error('updateEmail', 'Email update exception', { error });
+      const message = error instanceof Error ? error.message : "Failed to update email";
+      return { success: false, error: message };
+    }
+  }, []);
+
   // Resend verification email
   const resendVerification = useCallback(async (email: string): Promise<{ success: boolean; error?: string }> => {
     try {
@@ -930,6 +985,17 @@ export function AuthProvider({ children }: { children: ReactNode }) {
     return authState.session?.expires_at || null;
   }, [authState.session]);
 
+  /**
+   * When this session actually began, in epoch milliseconds (WEB-AUTH-007).
+   *
+   * Null when it cannot be told, and callers must handle that rather than
+   * substituting now(): doing so silently restores the page-load-relative
+   * measurement this replaces.
+   */
+  const getSessionStartedAt = useCallback((): number | null => {
+    return sessionStartedAt(authState.session);
+  }, [authState.session]);
+
   const requireAdmin = useCallback(() => {
     if (!authState.isAdmin) {
       throw new Error("Admin access required");
@@ -946,9 +1012,11 @@ export function AuthProvider({ children }: { children: ReactNode }) {
     signInWithApple,
     resetPassword,
     updatePassword,
+    updateEmail,
     resendVerification,
     getSessionExpiresAt,
-  }), [login, signup, logout, requireAdmin, refreshSession, signInWithGoogle, signInWithApple, resetPassword, updatePassword, resendVerification, getSessionExpiresAt]);
+    getSessionStartedAt,
+  }), [login, signup, logout, requireAdmin, refreshSession, signInWithGoogle, signInWithApple, resetPassword, updatePassword, updateEmail, resendVerification, getSessionExpiresAt, getSessionStartedAt]);
 
   // Memoized boolean slice — identity only changes when a flag actually flips,
   // not when session/user are swapped on a token refresh.

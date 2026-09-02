@@ -691,3 +691,67 @@ vacuously, so it is recorded here rather than added. Every other suite under
 - **A store subscription cannot be cancelled server-side, so the UI must say
   so.** Apple and Google own it. Silence lets the user believe deleting the
   account stopped the charge — the same defect one platform over.
+
+## 2026-09-02 — WEB-AUTH-007 and WEB-AUTH-012 (session policy, credential changes)
+
+### Learnings for future iterations
+
+- **`signOut({ scope: 'global' })` on a timeout signs the user out of every
+  device.** A stale desktop tab ejecting someone from their phone is a bug that
+  looks like a policy. A deliberate Log Out should stay global; a timeout should
+  be `local`.
+- **`Date.now()` at mount is page-load age, not session age**, and it is wrong
+  in both directions: a reload restarts the cap, and a long-open tab with a
+  fresh session hits it. Measure from `user.last_sign_in_at`.
+- **Not `iat`.** It is reissued on every refresh, Supabase refreshes hourly, so
+  an 8-hour cap read from `iat` is unreachable. Keep it only as a fallback where
+  it can only make the cap more generous.
+- **Return null when a measurement is unknown.** Falling back to `now()` silently
+  restores the behaviour being replaced, and does it invisibly.
+- **`enabled: isAdmin` alone is wrong while the admin check is in flight.**
+  `isAdmin` is false until it resolves, so the clock would start at an arbitrary
+  point after load. Gate on `isAdmin && !isAdminLoading`.
+- **`updateUser({ password })` accepts any live session.** Without
+  re-authenticating first, an unlocked laptop or a stolen token takes the
+  account over permanently. Re-auth, then change, then revoke other sessions —
+  and `scope: 'others'`, not `'global'`, so the user is not ejected from the
+  screen they just used.
+- **Revoking other sessions is the point of a password change.** Changing it
+  because it may be compromised achieves nothing while old sessions stay valid.
+- **Supabase email change is double-confirmation by default, and the UI has to
+  say so.** A user who confirms one inbox and stops will otherwise believe the
+  change failed.
+- **Two files importing only each other are dead.** Grep for external importers
+  before deleting, then pin the deletion with a test so they cannot creep back.
+
+## 2026-09-02 — WEB-SEC-032 (embedded service_role key)
+
+### Learnings for future iterations
+
+- **A key committed inside a `CREATE OR REPLACE FUNCTION` body is in the
+  DATABASE, not just in git.** Eleven migrations did that and no later migration
+  replaced the functions, so the value was readable through
+  `pg_get_functiondef` by anyone who could connect. Fixing only the tree would
+  have looked complete and changed nothing.
+- **Rewrite what is installed, not what the migrations say.** Reading
+  `pg_get_functiondef`, regex-replacing the literal and `EXECUTE`ing the result
+  beats reproducing five long legacy bodies by hand, catches definitions that
+  have drifted, and cannot leak a value because it contains none.
+- **Match on the SHAPE of a credential, never the value.** A generic
+  `eyJ[A-Za-z0-9_.-]{30,}\.` pattern keeps the fixing file itself clean for
+  scanners and catches the next key someone embeds.
+- **Verify after rewriting and warn loudly if anything is left.** An
+  unrecognised shape must not pass silently.
+- **An allowlist that grows is a scanner reporting less every quarter.**
+  Fifteen entries here covered exactly the files that had the problem. Removing
+  them is part of the fix, not a follow-up.
+- **Check what a blanket allowlist entry is actually covering.**
+  `'''.*\.md'''` was described as "prefixes and placeholders, not live secrets";
+  two markdown files carried a live key under it.
+- **Sweep wider than the story lists.** It named six files; the repo-wide grep
+  found three more, including an Android setup guide.
+- **A script reading a key from env must refuse to run without it.** "Bearer
+  undefined" is a worse failure than a clear one, because it looks like a server
+  auth problem.
+- **Editing applied history needs a header saying why.** Otherwise the next
+  reader assumes it was a mistake.
