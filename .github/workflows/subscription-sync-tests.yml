@@ -171,6 +171,11 @@ jobs:
       # input from the caller: ten anonymous POSTs locked any address out, and
       # one more cleared the attacker's own counter. Pins both closed.
       - run: deno test --allow-read supabase/functions/_tests/login-throttle-contract.test.ts
+      # WEB-ADS-003. The browser wrote total_cost into a table with no RLS policy
+      # and Stripe was asked for that number, so a campaign could be bought for a
+      # cent. Pins the trigger, the server-side recompute and the displayed total
+      # to one rate card.
+      - run: deno test --allow-read supabase/functions/_tests/campaign-pricing-authority.test.ts
       # The trial-conversion notice must state amount, date and cancel path,
       # and must not be gated on marketing consent or an LLM score
       # (WEB-LEGAL-006).

@@ -74,6 +74,28 @@ export interface RateCardEntry {
   discount_30_day: number;
 }
 
+/**
+ * The price of N days of a placement, mirroring calculate_campaign_pricing().
+ *
+ * WEB-ADS-003. The /advertise summary used to total a hardcoded daily rate with
+ * no volume discount while the stored campaign came from the RPC with one, so
+ * the page said $70 and the row said $66.50. Two formulas for one price is a
+ * bug generator, so this one follows the SQL exactly, including the fact that
+ * the SQL rounds the TOTAL once rather than multiplying a rounded daily rate.
+ *
+ * This is for display. Nothing here decides what is charged: the trigger on
+ * campaign_placements and create-campaign-checkout do that, from the same rate
+ * card, on the server.
+ */
+export function placementTotalPrice(rate: RateCardEntry, days: number): number {
+  const discount =
+    days >= 30 ? (rate.discount_30_day ?? 15)
+    : days >= 14 ? (rate.discount_14_day ?? 10)
+    : days >= 7 ? (rate.discount_7_day ?? 5)
+    : 0;
+  return Math.round(rate.base_daily_rate * (1 - discount / 100) * days * 100) / 100;
+}
+
 /** Fetch the ad rate card (including CPM rates) — callable without authentication. */
 export async function fetchRateCard(): Promise<RateCardEntry[]> {
   const { data, error } = await supabase
@@ -129,17 +151,8 @@ export function useCampaigns() {
       sponsored_listing: 15,
     };
 
-    // sponsored_listing pricing is flat-rate (no DB rate card entry yet)
-    if (placementType === 'sponsored_listing') {
-      const dailyPrice = defaultPrices.sponsored_listing;
-      return {
-        daily_price: dailyPrice,
-        total_price: dailyPrice * daysCount,
-        base_price: dailyPrice,
-        traffic_multiplier: 1.0,
-        demand_multiplier: 1.0,
-      };
-    }
+    // sponsored_listing is priced from the rate card like everything else
+    // since WEB-ADS-003 seeded its row; it no longer needs a special case.
 
     try {
       const { data, error } = await supabase.rpc("calculate_campaign_pricing", {
@@ -215,6 +228,12 @@ export function useCampaigns() {
 
       if (campaignError) throw campaignError;
 
+      // WEB-ADS-003: these three columns are advisory. A BEFORE trigger on
+      // campaign_placements recomputes daily_cost, total_cost and days_count
+      // from the rate card and the campaign's dates for any client write, and
+      // create-campaign-checkout prices the Stripe session the same way. They
+      // are still sent so the row is never briefly null, and so an older
+      // database without the trigger stores something sensible.
       const placementInserts = placementPricing.map(({ placement, pricing }) => ({
         campaign_id: campaign.id,
         placement_type: placement.placement_type,

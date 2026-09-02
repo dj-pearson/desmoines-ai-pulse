@@ -188,24 +188,108 @@ serve(async (req) => {
       top_banner: "Top Banner Ad",
       featured_spot: "Featured Spot Ad",
       below_fold: "Below the Fold Ad",
+      sponsored_listing: "Sponsored Listing",
     };
 
-    const lineItems = campaign.campaign_placements.map((placement: {
-      placement_type: string;
-      days_count: number;
-      total_cost: number;
-    }) => ({
+    // WEB-ADS-003 — WHAT STRIPE IS ASKED FOR IS COMPUTED HERE, NOT READ.
+    //
+    // The amount used to be read straight off the stored placement row, which
+    // the browser had written into a table with no RLS policy in any migration.
+    // PATCHing that column to 0.01 before opening checkout was all it took to
+    // buy a campaign for a cent.
+    //
+    // Every amount below now comes from calculate_campaign_pricing() against
+    // the live rate card, for the days the campaign actually runs. days_count
+    // is derived from the campaign's own dates rather than trusted: they were
+    // independent numbers, and get_active_ads serves on the DATES, so a 30-day
+    // campaign could be paid for as seven.
+    const startDate = campaign.start_date ? new Date(campaign.start_date) : null;
+    const endDate = campaign.end_date ? new Date(campaign.end_date) : null;
+    let authoritativeDays: number | null = null;
+    if (startDate && endDate) {
+      const spanMs = endDate.getTime() - startDate.getTime();
+      authoritativeDays = Math.round(spanMs / 86_400_000) + 1;
+      if (!Number.isFinite(authoritativeDays) || authoritativeDays < 1) {
+        return new Response(
+          JSON.stringify({ error: "Campaign end date is before its start date." }),
+          { status: 400, headers: { ...corsHeaders, "Content-Type": "application/json" } },
+        );
+      }
+    }
+
+    const priced: Array<{ placement_type: string; days: number; total: number }> = [];
+    for (const placement of campaign.campaign_placements) {
+      const days = authoritativeDays ?? placement.days_count ?? 1;
+      const { data: pricing, error: pricingError } = await supabase.rpc(
+        "calculate_campaign_pricing",
+        { p_placement_type: placement.placement_type, p_days_count: days },
+      );
+
+      if (pricingError || !pricing || pricing.length === 0) {
+        console.error("[create-campaign-checkout] pricing lookup failed", pricingError);
+        return new Response(
+          JSON.stringify({ error: "Could not price this campaign. Please try again." }),
+          { status: 503, headers: { ...corsHeaders, "Content-Type": "application/json" } },
+        );
+      }
+
+      priced.push({
+        placement_type: placement.placement_type,
+        days,
+        total: Number(pricing[0].total_price),
+      });
+    }
+
+    const authoritativeTotal = priced.reduce((sum, p) => sum + p.total, 0);
+    const storedTotal = campaign.campaign_placements.reduce(
+      (sum: number, p: { total_cost: number | null }) => sum + Number(p.total_cost ?? 0),
+      0,
+    );
+
+    // A disagreement is either tampering or a rate-card change since the
+    // campaign was drafted. Both mean the buyer should see the price again
+    // before paying, so neither is charged silently. One cent of tolerance
+    // absorbs float noise, nothing more.
+    if (Math.abs(authoritativeTotal - storedTotal) > 0.01) {
+      console.warn("[create-campaign-checkout] stored total rejected", {
+        campaignId,
+        storedTotal,
+        authoritativeTotal,
+      });
+      return new Response(
+        JSON.stringify({
+          error: "PRICE_CHANGED",
+          message:
+            "The price of this campaign has changed since it was created. Please review the updated total and try again.",
+          storedTotal,
+          currentTotal: authoritativeTotal,
+        }),
+        { status: 409, headers: { ...corsHeaders, "Content-Type": "application/json" } },
+      );
+    }
+
+    // Persist what we are about to charge, so the row, the invoice and the
+    // Stripe session cannot drift apart afterwards.
+    for (const p of priced) {
+      await supabase
+        .from("campaign_placements")
+        .update({ days_count: p.days, total_cost: p.total })
+        .eq("campaign_id", campaignId)
+        .eq("placement_type", p.placement_type);
+    }
+
+    const lineItems = priced.map((p) => ({
       price_data: {
         currency: "usd",
         product_data: {
-          name: placementLabels[placement.placement_type] || "Ad Placement",
-          description: `${placement.days_count} days of advertising on Des Moines Insider`,
+          name: placementLabels[p.placement_type] || "Ad Placement",
+          description: `${p.days} days of advertising on Des Moines Insider`,
           metadata: {
-            placement_type: placement.placement_type,
-            days_count: placement.days_count.toString(),
+            placement_type: p.placement_type,
+            days_count: p.days.toString(),
           },
         },
-        unit_amount: Math.round(placement.total_cost * 100), // Convert to cents
+        unit_amount: Math.round(p.total * 100), // Convert to cents
       },
       quantity: 1,
     }));

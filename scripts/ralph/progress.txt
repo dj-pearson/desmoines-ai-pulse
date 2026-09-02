@@ -197,3 +197,32 @@ Started: 2026-08-31T19:18:09.615Z
     and can be used to lock out victims. Treat it as UX, and name the real
     control (GoTrue's own /token limits, bot protection).
 ---
+## 2026-09-02 - WEB-ADS-003 (the browser set the price Stripe charged)
+- 20260902000008: enforce_campaign_placement_pricing() BEFORE trigger rewrites
+  daily_cost/total_cost/days_count on client writes from calculate_campaign_
+  pricing + the campaign dates; sync_campaign_total_cost() keeps campaigns
+  .total_cost equal to its placements; sponsored_listing rate-card row seeded.
+- create-campaign-checkout recomputes every amount, 409 PRICE_CHANGED on a
+  mismatch > 1 cent before building the session, writes the amount back.
+- placementSpecs.dailyCost deleted; /advertise reads ad_rate_card everywhere;
+  new shared placementTotalPrice() mirrors the SQL, rounding once at the end.
+- _tests/campaign-pricing-authority.test.ts (8) wired into CI.
+- **Learnings for future iterations:**
+  - Postgres has NO column-level RLS. "non-admins may not write column X" is a
+    BEFORE trigger. Prefer recomputing over rejecting: the client then cannot
+    be wrong, only ignored.
+  - Do not write RLS policies for a table whose current policies you cannot
+    read. If RLS is disabled, adding policies plus ENABLE denies live access.
+    campaign_placements is such a table (created outside the ledger).
+  - calculate_campaign_pricing rounds the TOTAL once: ROUND(base*(1-d/100)*days,
+    2). Multiplying a rounded daily rate by days differs by pennies. Any client
+    mirror must round the same way or the display and the charge drift.
+  - A comment that quotes the buggy line verbatim will trip a strict "this must
+    not come back" assertion. Reword the comment; keep the assertion strict.
+  - _shared/securityLayers.ts imports supabase-js at an UNPINNED '@2' while
+    callers pin '@2.45.0'. When those resolve to different minors,
+    `deno check` on a caller fails with TS2345 on the SupabaseClient generics.
+    The same file can pass or fail depending on module-cache state, so verify a
+    suspicious edge-function type error against a clean worktree before
+    believing you caused it. Added as an AC on WEB-CI-030.
+---
