@@ -186,6 +186,10 @@ jobs:
       # already paying twice, and a cross-tier upgrade opened a SECOND Stripe
       # subscription. Pins the platform-scoped guard and the in-place upgrade.
       - run: deno test --allow-read supabase/functions/_tests/subscription-upgrade-contract.test.ts
+      # WEB-FEAT-016. VIP listed eight benefits at $12.99/month and delivered
+      # none. Fails if the pricing page or the stored plan row promises a feature
+      # no component gates on.
+      - run: deno test --allow-read supabase/functions/_tests/plan-features-truthful.test.ts
       # The trial-conversion notice must state amount, date and cancel path,
       # and must not be gated on marketing consent or an LLM score
       # (WEB-LEGAL-006).

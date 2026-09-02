@@ -67,17 +67,25 @@ const plans: PricingPlan[] = [
     cta: "Become an Insider",
     popular: true,
     badge: "Most Popular",
+    // WEB-FEAT-016. Every line here is one a paying account actually gets,
+    // verified against a gate that reads it. Four were removed:
+    //   "Write reviews & ratings"      kept - RatingSystem gates on write_reviews
+    //   "Early access to hot events"   removed - early_access has no consumer
+    //   "Daily personalized digest"    removed - only a WEEKLY digest exists and
+    //                                  send-weekly-digest applies no tier check,
+    //                                  so free accounts receive it too
+    //   "2x XP earning rate"           removed - no XP multiplier exists in
+    //                                  useGamification or in any migration
+    // The trip planner's "5 trips/month" went too: no quota is enforced
+    // anywhere, so the number was not true in either direction.
     features: [
       { text: "Everything in Free, plus:", included: true },
-      { text: "AI Trip Planner (5 trips/month)", included: true, highlight: true },
+      { text: "AI Trip Planner", included: true, highlight: true },
       { text: "Unlimited favorites", included: true, highlight: true },
       { text: "Advanced search filters", included: true, highlight: true },
       { text: "Write reviews & ratings", included: true },
       { text: "Saved searches & event alerts", included: true },
-      { text: "Early access to hot events", included: true },
       { text: "Ad-free experience", included: true },
-      { text: "Daily personalized digest", included: true },
-      { text: "2x XP earning rate", included: true },
     ],
   },
   {
@@ -89,16 +97,23 @@ const plans: PricingPlan[] = [
     icon: <Crown className="h-6 w-6" />,
     cta: "Go VIP",
     badge: "Best Value",
+    // WEB-FEAT-016 — READ THIS BEFORE ADDING A LINE BACK.
+    //
+    // VIP listed eight benefits and delivered none of them. vip_events,
+    // reservation_assistance, sms_alerts, concierge and local_perks exist only
+    // as keys in entitlements.ts and copy in UpgradeModal; no component reads
+    // any of them. No XP multiplier exists anywhere. The VIP badge has no
+    // consumer. "Unlimited AI Trip Planner" was not a VIP benefit either: the
+    // planner is a boolean gate at insider, with no quota, so Insider already
+    // had it unlimited.
+    //
+    // What is left is the truth: at $12.99 VIP currently grants nothing an
+    // Insider does not already have. That is a pricing decision for the owner
+    // (build a VIP benefit, or withdraw the tier), NOT something to paper over
+    // by restoring a line here. Any line added below needs a gate that reads it
+    // and a component that honours it, in the same change.
     features: [
-      { text: "Everything in Insider, plus:", included: true },
-      { text: "Unlimited AI Trip Planner", included: true, highlight: true },
-      { text: "Exclusive VIP-only events", included: true, highlight: true },
-      { text: "Restaurant reservation help", included: true, highlight: true },
-      { text: "SMS alerts for your interests", included: true },
-      { text: "Monthly local business perks", included: true },
-      { text: "Concierge support", included: true },
-      { text: "3x XP earning rate", included: true },
-      { text: "Exclusive VIP badge", included: true },
+      { text: "Everything in Insider", included: true },
     ],
   },
 ];

@@ -281,3 +281,26 @@ Started: 2026-08-31T19:18:09.615Z
     (items:[{id, price}]). Omitting the item id appends a second item instead
     of replacing the first.
 ---
+## 2026-09-02 - WEB-FEAT-016 (VIP sold eight benefits and delivered none)
+- Verified every claimed benefit against a gate that reads it, one key at a
+  time. Delivered: unlimited_favorites, advanced_filters, ad_free,
+  trip_planner, write_reviews, save_searches. Not delivered: vip_events,
+  reservation_assistance, sms_alerts, concierge, local_perks, early_access,
+  daily_digest, priority_support. Non-existent: any XP multiplier.
+- Pricing.tsx and UpgradeModal.tsx stripped; 20260902000010 trims
+  subscription_plans.features for insider and vip.
+- _tests/plan-features-truthful.test.ts (7) wired into CI, asserting BOTH that
+  claimed features have consumers and that removed ones have not regained one.
+- **Learnings for future iterations:**
+  - VIP now grants NOTHING over Insider. trip_planner is a boolean gate at
+    insider with no quota, so "5 trips/month" and "Unlimited" were both false.
+    Do not restore a VIP line without shipping its gate in the same change.
+  - The story assumed write_reviews was dead. It is not - RatingSystem gates on
+    it. Check each key individually; the audit's list was 1 of 6 wrong.
+  - Feature keys in _shared/entitlements.ts are an API surface for mobile.
+    Withdraw the marketing copy, keep the keys, or a shipped binary loses a
+    feature it can ask about.
+  - A source-level assertion beats a Playwright check for "the copy matches the
+    code": it compares the claim against the gate that makes it true, and the
+    smoke lane cannot run without real Supabase anyway.
+---

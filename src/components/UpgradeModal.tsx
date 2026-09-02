@@ -38,14 +38,14 @@ const featureDescriptions: Record<
   string,
   { title: string; description: string; tier: "insider" | "vip" }
 > = {
+  // WEB-FEAT-016: early_access, vip_events, reservation_assistance,
+  // sms_alerts and concierge were removed. Each was copy for a feature no
+  // component delivers, so the modal was selling upgrades to nothing. The keys
+  // stay in _shared/entitlements.ts and useSubscription so no shipped mobile
+  // build loses a feature it can ask about; what is gone is the promise.
   unlimited_favorites: {
     title: "Unlimited Favorites",
     description: "Save as many events and restaurants as you want — free accounts are limited to 3",
-    tier: "insider",
-  },
-  early_access: {
-    title: "Early Access",
-    description: "Be the first to know about new events before they sell out",
     tier: "insider",
   },
   advanced_filters: {
@@ -87,26 +87,6 @@ const featureDescriptions: Record<
     title: "Insider & Dining Tips",
     description: "Unlock curated local dining tips and insider picks for the best of Des Moines",
     tier: "insider",
-  },
-  vip_events: {
-    title: "VIP Events Access",
-    description: "Exclusive access to VIP-only events and experiences",
-    tier: "vip",
-  },
-  reservation_assistance: {
-    title: "Reservation Assistance",
-    description: "Let us help book hard-to-get restaurant reservations",
-    tier: "vip",
-  },
-  sms_alerts: {
-    title: "SMS Alerts",
-    description: "Instant text notifications for events you care about",
-    tier: "vip",
-  },
-  concierge: {
-    title: "Concierge Support",
-    description: "Personalized recommendations from our local experts",
-    tier: "vip",
   },
 };
 
