@@ -204,6 +204,8 @@ jobs:
       - run: deno test --allow-read supabase/functions/_tests/oauth-role-sync-self-only.test.ts
       - run: deno test --allow-read supabase/functions/_tests/deal-redemption-ledger.test.ts
       - run: deno test --allow-read supabase/functions/_tests/event-visibility-both-switches.test.ts
+      - run: deno test --allow-read supabase/functions/_tests/consent-record-user-binding.test.ts
+      - run: deno test --allow-read supabase/functions/_tests/billing-teardown-before-erasure.test.ts
       # The trial-conversion notice must state amount, date and cancel path,
       # and must not be gated on marketing consent or an LLM score
       # (WEB-LEGAL-006).

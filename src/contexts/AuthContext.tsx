@@ -630,7 +630,16 @@ export function AuthProvider({ children }: { children: ReactNode }) {
         email,
         password,
         options: {
-          emailRedirectTo: `${window.location.origin}/auth/verified`,
+          // WEB-AUTH-005. Was /auth/verified directly, which is a page with no
+          // machinery: it could not exchange a code, could not wait for a
+          // session, and read no error parameter -- so every failed
+          // confirmation landed on a celebration screen.
+          //
+          // /auth/callback already polls for the session and renders failures;
+          // it forwards here only once one exists. The confirmed user still ends
+          // up on the same welcome page, and a broken link now stops one screen
+          // earlier, where it can be explained.
+          emailRedirectTo: `${window.location.origin}/auth/callback?redirect=${encodeURIComponent("/auth/verified")}`,
           data: metadata
         }
       });

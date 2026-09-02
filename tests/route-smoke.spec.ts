@@ -395,3 +395,41 @@ test.describe('Landing pages do not open a websocket per card (WEB-PERF-030)', (
     ).toBeLessThanOrEqual(3);
   });
 });
+
+test.describe('Email confirmation failures are explained, not celebrated (WEB-AUTH-005)', () => {
+  // /auth/verified rendered "Email Verified! 🎉" no matter what brought the
+  // reader there. It read no error parameter, so an expired link, a reused link
+  // and a cross-device confirmation all produced a celebration and a
+  // ten-second countdown to the homepage, with the reader still logged out.
+
+  test('an expired link shows the reason, not the celebration', async ({ page }) => {
+    await page.goto('/auth/verified?error_code=otp_expired');
+    await expectNoErrorBoundary(page);
+
+    await expect(page.getByText(/could not confirm your email/i)).toBeVisible();
+    await expect(page.getByText(/expired/i).first()).toBeVisible();
+    await expect(page.getByText(/Email Verified/i)).toHaveCount(0);
+  });
+
+  test('the error branch offers a new link and a way to sign in', async ({ page }) => {
+    await page.goto('/auth/verified?error_code=otp_expired');
+    await expect(page.getByRole('button', { name: /send a new confirmation link/i })).toBeVisible();
+    await expect(page.getByRole('link', { name: /sign in/i })).toBeVisible();
+  });
+
+  test('a fragment error is read too, which is where email links put it', async ({ page }) => {
+    // The half the old page could not have seen even if it had looked: a
+    // fragment never reaches a server and useSearchParams does not expose it.
+    await page.goto('/auth/verified#error=access_denied&error_code=otp_expired');
+    await expectNoErrorBoundary(page);
+    await expect(page.getByText(/could not confirm your email/i)).toBeVisible();
+  });
+
+  test('the error branch does not bounce the reader to the homepage', async ({ page }) => {
+    // The countdown would take away the one screen explaining what happened.
+    await page.goto('/auth/verified?error_code=otp_expired');
+    await expect(page.getByText(/Redirecting automatically/i)).toHaveCount(0);
+    await page.waitForTimeout(2000);
+    expect(new URL(page.url()).pathname).toBe('/auth/verified');
+  });
+});

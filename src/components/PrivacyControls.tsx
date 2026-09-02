@@ -219,16 +219,45 @@ export function PrivacyControls() {
     if (!confirmationToken) return;
     setDeleteStep("deleting");
     try {
-      const { error } = await supabase.functions.invoke("delete-user-account", {
+      const { data, error } = await supabase.functions.invoke("delete-user-account", {
         body: { action: "confirm", confirmation_token: confirmationToken },
       });
       if (error) throw error;
 
-      toast({
-        title: "Account deleted",
-        description:
-          "Your account and associated personal data have been permanently deleted.",
-      });
+      // WEB-AUTH-006 AC3. An App Store or Play subscription cannot be cancelled
+      // from a server -- Apple and Google own it -- so the account can be gone
+      // while the charge continues. Saying nothing here would let someone
+      // believe deleting the account stopped it, which is the same failure this
+      // story is about, one platform over.
+      const stillActive =
+        (data as { store_subscriptions_still_active?: { platform: string; manageUrl: string }[] })
+          ?.store_subscriptions_still_active ?? [];
+
+      if (stillActive.length > 0) {
+        const where = stillActive
+          .map((s) => (s.platform === "ios" ? "the App Store" : "Google Play"))
+          .join(" and ");
+        toast({
+          title: "Account deleted — your subscription is still active",
+          description:
+            `Your account is gone, but your subscription was bought through ${where} ` +
+            `and only ${where} can cancel it. Open your subscriptions there to stop the charge: ` +
+            stillActive.map((s) => s.manageUrl).join(" "),
+          // No auto-dismiss: this is the one message the reader has to act on,
+          // and the redirect below takes the page away.
+          duration: 60000,
+          variant: "destructive",
+        });
+        // Give them time to read it and follow the link before the redirect.
+        await new Promise((resolve) => setTimeout(resolve, 8000));
+      } else {
+        toast({
+          title: "Account deleted",
+          description:
+            "Your account and associated personal data have been permanently deleted.",
+        });
+      }
+
       // Sign out locally; the server-side auth record is already gone.
       await logout();
       window.location.href = "/";

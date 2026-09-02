@@ -528,9 +528,24 @@ export default function Auth() {
         variant: "destructive",
       });
     } else {
-      // Persist the consent record to the append-only audit log so we can
-      // prove affirmative opt-in under CAN-SPAM, TCPA, GDPR Art. 7, CCPA.
-      // Fire and forget — never block signup on logging.
+      // FALLBACK ONLY, AND SCHEDULED FOR REMOVAL (WEB-AUTH-003).
+      //
+      // These rows are now written by the handle_new_user trigger out of
+      // raw_user_meta_data.consent, which Auth.tsx has always sent. The trigger
+      // is the authoritative writer because it runs where a user id exists:
+      // signUp with email confirmation on returns a user and NO session, so
+      // logConsent's auth.getUser() resolves to null here and every row it
+      // writes carries user_id = NULL. That made the one record whose purpose
+      // is to prove consent invisible to export-user-data, which keys on
+      // user_id.
+      //
+      // Kept for one release so a trigger that has not been deployed yet does
+      // not mean no consent record at all. For that release a signup may
+      // produce two rows per consent; metadata.writer says which side wrote
+      // each, and an orphan is adopted on email confirmation. A duplicate in an
+      // append-only consent log proves the same fact twice, which is the safe
+      // direction to be wrong in. REMOVE THIS BLOCK once the migration is
+      // applied and verified.
       void logConsent({
         type: "terms",
         granted: true,

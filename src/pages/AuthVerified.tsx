@@ -1,22 +1,52 @@
-import { useEffect, useState } from "react";
-import { useNavigate } from "react-router-dom";
+import { useEffect, useMemo, useState } from "react";
+import { useNavigate, useLocation, Link } from "react-router-dom";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
-import { CheckCircle, Heart } from "lucide-react";
+import { CheckCircle, Heart, XCircle } from "lucide-react";
 import { useAuth } from "@/hooks/useAuth";
 import { useDocumentTitle } from "@/hooks/useDocumentTitle";
+import { supabase } from "@/integrations/supabase/client";
+import { useToast } from "@/hooks/use-toast";
+import { readAuthCallbackError, looksConfirmed } from "@/lib/authCallbackError";
 import Header from "@/components/Header";
 import Footer from "@/components/Footer";
 import { SpriteIcon } from "@/components/ui/SpriteIcon";
 
 export default function AuthVerified() {
   const navigate = useNavigate();
+  const location = useLocation();
+  const { toast } = useToast();
   const { user, isAuthenticated } = useAuth();
   const [countdown, setCountdown] = useState(10);
-  useDocumentTitle("Email Verified");
+  const [resending, setResending] = useState(false);
+  const [resendEmail, setResendEmail] = useState("");
+
+  // WEB-AUTH-005. This page used to render "Email Verified! 🎉" no matter what
+  // brought the reader here. It read no error parameter, so an expired link, a
+  // reused link and a cross-device confirmation all produced a celebration and
+  // a ten-second countdown to the homepage -- while the reader was still logged
+  // out and told nothing.
+  //
+  // Both halves of the URL are read. Supabase puts PKCE and OAuth failures in
+  // the query string and implicit-flow and email-link failures in the FRAGMENT,
+  // which never reaches a server and which useSearchParams does not expose.
+  const authError = useMemo(
+    () => readAuthCallbackError(location.search, location.hash),
+    [location.search, location.hash],
+  );
+  const confirmed = useMemo(
+    () => looksConfirmed(location.search, location.hash, isAuthenticated),
+    [location.search, location.hash, isAuthenticated],
+  );
+
+  useDocumentTitle(authError ? "Verification Problem" : "Email Verified");
 
   useEffect(() => {
-    // Auto-redirect after 10 seconds
+    // No countdown on the error branch. Bouncing someone to the homepage after
+    // telling them something went wrong takes away the one screen that explains
+    // it, and the action they need is on this page.
+    if (authError || !confirmed) return;
+
     const timer = setInterval(() => {
       setCountdown((prev) => {
         if (prev <= 1) {
@@ -28,11 +58,102 @@ export default function AuthVerified() {
     }, 1000);
 
     return () => clearInterval(timer);
-  }, [navigate]);
+  }, [navigate, authError, confirmed]);
 
   const handleExploreNow = () => {
     navigate("/");
   };
+
+  const handleResend = async () => {
+    const email = (resendEmail || user?.email || "").trim();
+    if (!email) {
+      toast({
+        title: "Enter your email",
+        description: "We need the address you signed up with to send a new link.",
+        variant: "destructive",
+      });
+      return;
+    }
+
+    setResending(true);
+    const { error } = await supabase.auth.resend({ type: "signup", email });
+    setResending(false);
+
+    // NEUTRAL EITHER WAY. resend errors for an address that is already
+    // confirmed, and reporting that would turn this page into an account
+    // checker for anyone who can type an address (the same enumeration
+    // WEB-AUTH-004 is about). The message says what was attempted, not what
+    // was found.
+    toast({
+      title: "Check your email",
+      description:
+        "If that address needs confirming, a new link is on its way. It is good for 24 hours.",
+    });
+    if (error) {
+      // Kept out of the user-facing message on purpose; useful in a dev console.
+      if (import.meta.env.DEV) console.warn("resend failed", error.message);
+    }
+  };
+
+  if (authError) {
+    return (
+      <div className="min-h-screen bg-gradient-to-br from-primary/10 to-accent/10 flex flex-col">
+        <Header />
+
+        <div className="flex-1 flex items-center justify-center p-4">
+          <Card className="w-full max-w-xl">
+            <CardHeader className="text-center space-y-4 pb-6">
+              <div className="flex justify-center">
+                <div className="rounded-full bg-red-100 p-4">
+                  <XCircle className="h-16 w-16 text-red-600" />
+                </div>
+              </div>
+              <CardTitle className="text-3xl font-bold">
+                We couldn't confirm your email
+              </CardTitle>
+              <CardDescription className="text-lg">{authError.message}</CardDescription>
+            </CardHeader>
+
+            <CardContent className="space-y-6">
+              {authError.canResend && (
+                <div className="space-y-3">
+                  <label htmlFor="resend-email" className="text-sm font-medium">
+                    Email address
+                  </label>
+                  <input
+                    id="resend-email"
+                    type="email"
+                    autoComplete="email"
+                    className="w-full h-11 rounded-md border bg-background px-3 text-base"
+                    placeholder={user?.email || "you@example.com"}
+                    value={resendEmail}
+                    onChange={(e) => setResendEmail(e.target.value)}
+                  />
+                  <Button onClick={handleResend} disabled={resending} className="w-full h-12">
+                    {resending ? "Sending..." : "Send a new confirmation link"}
+                  </Button>
+                </div>
+              )}
+
+              <div className="text-center text-sm text-muted-foreground space-y-2">
+                <p>
+                  Already confirmed?{" "}
+                  <Link to="/auth" className="underline font-medium">
+                    Sign in
+                  </Link>
+                </p>
+                {/* The code is here for a support conversation, not for the
+                    reader to interpret. */}
+                <p className="text-xs">Reference: {authError.code}</p>
+              </div>
+            </CardContent>
+          </Card>
+        </div>
+
+        <Footer />
+      </div>
+    );
+  }
 
   return (
     <div className="min-h-screen bg-gradient-to-br from-primary/10 to-accent/10 flex flex-col">
@@ -143,9 +264,11 @@ export default function AuthVerified() {
                 <SpriteIcon name="arrow-right" className="ml-2 h-5 w-5" />
               </Button>
 
-              <p className="text-center text-sm text-muted-foreground">
-                Redirecting automatically in {countdown} second{countdown !== 1 ? 's' : ''}...
-              </p>
+              {confirmed && (
+                <p className="text-center text-sm text-muted-foreground">
+                  Redirecting automatically in {countdown} second{countdown !== 1 ? 's' : ''}...
+                </p>
+              )}
             </div>
           </CardContent>
         </Card>

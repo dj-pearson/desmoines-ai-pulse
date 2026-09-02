@@ -627,3 +627,67 @@ vacuously, so it is recorded here rather than added. Every other suite under
 - **Prove a guard fires.** Duplicating one `<url>` block made it exit 1 naming
   the URL and the counts. A check nobody has seen fail is a check nobody knows
   works.
+
+## 2026-09-02 — WEB-AUTH-003 and WEB-AUTH-005 (consent binding, verification landing)
+
+### Learnings for future iterations
+
+- **`signUp` with confirmation on returns a user and no session.** Anything the
+  client does immediately after it runs with `auth.getUser()` === null. That is
+  why the consent rows were written with `user_id = NULL`, and why the record
+  meant to prove consent was invisible to the export that keys on `user_id`.
+- **The data was already in the right place; only the writer was wrong.**
+  Auth.tsx has always sent the consent block in signup metadata, so moving the
+  write into `handle_new_user` needed no client change at all. Check what the
+  metadata already carries before adding a parameter.
+- **Never match a client-supplied hash against a client-supplied id.** The
+  adoption function recomputes the email hash from `auth.users.email`. Same
+  class of bug as WEB-SEC-030.
+- **Only a confirmed address may claim rows.** Adopting on an unconfirmed one
+  lets anyone who can type an address inherit consent recorded against it.
+- **An append-only log must never trade a row for a unique index.** Two rows for
+  one consent prove the same fact twice; a dropped row proves nothing. Mark the
+  writer in metadata instead.
+- **Supabase puts auth errors in TWO places.** PKCE and OAuth failures go in the
+  query string; implicit-flow and email-link failures go in the URL FRAGMENT,
+  which never reaches a server and which `useSearchParams` does not expose.
+  Reading only one is how a fix stays half-broken.
+- **Do not show Supabase's error description to a user.** "Email link is invalid
+  or has expired" is written for a developer. Write the message, and pin with a
+  test that the raw one never reaches the reader.
+- **A resend response must be neutral.** `auth.resend` errors for an
+  already-confirmed address, so reporting the outcome turns the page into an
+  account checker.
+- **"No error" is not "confirmed".** Someone opening the page from history has
+  neither, and celebrating for them is the same defect more quietly. Three
+  states, not two.
+- **No countdown on an error screen.** Redirecting away removes the one page
+  that explains what happened and holds the action needed.
+
+## 2026-09-02 — WEB-AUTH-006 (billing stops before erasure)
+
+### Learnings for future iterations
+
+- **Erasure order is a correctness property, not a style choice.**
+  `user_subscriptions` is in PURGE_TABLES and is the only mapping to the Stripe
+  customer, so a cancellation attempted after the purge has nothing to cancel
+  and no way to find the customer (the email is gone too).
+- **`grep -ci stripe` on the deletion function returned 0.** A one-word grep
+  found a story's whole premise. Worth running against any function whose job
+  is to undo something.
+- **Take the client as a parameter, not an import.** Passing a `BillingClient`
+  into `_shared/cancelBillingBeforeErasure.ts` is what lets seven of the eleven
+  tests actually RUN the teardown against a fake — ordering, refusal, partial
+  failure — instead of asserting about source text.
+- **Refuse, don't continue, when billing teardown fails.** Continuing erases the
+  mapping and leaves an active charge nothing can trace back. 409 with a code
+  the client can branch on.
+- **Deleting the Stripe customer matters as much as cancelling.** A customer
+  left behind keeps the payment method and billing address — data the erasure
+  was meant to remove.
+- **An unknown subscription status should read as live.** A status this code has
+  not seen is more likely a new active state than a new terminal one, and the
+  safe error is a redundant cancel.
+- **A store subscription cannot be cancelled server-side, so the UI must say
+  so.** Apple and Google own it. Silence lets the user believe deleting the
+  account stopped the charge — the same defect one platform over.
