@@ -1,4 +1,5 @@
 import { Link } from 'react-router-dom';
+import { createEventSlugWithCentralTime } from "@/lib/timezone";
 import Header from '@/components/Header';
 import Footer from '@/components/Footer';
 import SEOHead from '@/components/SEOHead';
@@ -146,7 +147,7 @@ export default function SportsHub() {
             {todayGames && todayGames.length > 0 ? (
               <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-4">
                 {todayGames.map((event) => (
-                  <Link key={event.id} to={`/events/${event.id}`}>
+                  <Link key={event.id} to={`/events/${createEventSlugWithCentralTime(event.title, event)}`}>
                     <Card className="hover:border-primary transition-colors h-full">
                       <CardContent className="p-4">
                         <h3 className="font-semibold mb-1 line-clamp-2">{event.title}</h3>
@@ -180,7 +181,7 @@ export default function SportsHub() {
             {weekGames && weekGames.length > 0 ? (
               <div className="space-y-3">
                 {weekGames.map((event) => (
-                  <Link key={event.id} to={`/events/${event.id}`}>
+                  <Link key={event.id} to={`/events/${createEventSlugWithCentralTime(event.title, event)}`}>
                     <Card className="hover:border-primary transition-colors">
                       <CardContent className="p-4 flex items-center gap-4">
                         <div className="text-center min-w-[60px]">

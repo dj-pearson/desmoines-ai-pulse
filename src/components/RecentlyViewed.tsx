@@ -1,4 +1,5 @@
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
+import { createEventSlugWithCentralTime } from "@/lib/timezone";
 import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
 import { useRecentlyViewed } from "@/hooks/useRecentlyViewed";
@@ -62,7 +63,7 @@ export function RecentlyViewed({
           {displayItems.map((item) => (
             <Link
               key={item.id}
-              to={`/events/${item.id}`}
+              to={`/events/${createEventSlugWithCentralTime(item.title, item)}`}
               className="block group"
             >
               <div className="flex items-center gap-3 p-3 rounded-lg hover:bg-muted/50 transition-colors">
@@ -147,7 +148,7 @@ export function RecentlyViewed({
           {displayItems.map((item) => (
             <Link
               key={item.id}
-              to={`/events/${item.id}`}
+              to={`/events/${createEventSlugWithCentralTime(item.title, item)}`}
               className="block group"
             >
               <div className="flex gap-4 p-3 rounded-lg hover:bg-muted/50 transition-all duration-300 hover:shadow-md">

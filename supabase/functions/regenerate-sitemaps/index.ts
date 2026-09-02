@@ -206,14 +206,57 @@ async function buildSitemaps(supabase: Supa) {
   }
   urlIndex.set("article", artIndex);
 
-  // Index referencing the regenerated children + the committed static sitemap.
+  // Hotels (WEB-SEO-034). /stay/:slug had no generator on either side, so not
+  // one hotel page was ever submitted. Resolved by the `slug` COLUMN, which is
+  // what useHotel matches on -- a derived slug would submit URLs the app
+  // answers with Hotel Not Found.
+  {
+    const { data, error } = await supabase
+      .from("hotels")
+      .select("id, slug, updated_at")
+      .eq("is_active", true)
+      .not("slug", "is", null)
+      .order("updated_at", { ascending: false });
+    if (error) throw new Error(`hotels read failed: ${error.message}`);
+    const urls: SitemapUrl[] = [
+      { loc: `${BASE_URL}/stay`, lastmod: now, changefreq: "weekly", priority: "0.8" },
+      // The cast matches every other block here. supabase-js infers `never` for
+      // this query's row type under the version skew documented in WEB-CI-030.
+      ...((data ?? []) as any[])
+        .filter((h: any) => !!h.slug)
+        .map((h: any) => ({
+          loc: `${BASE_URL}/stay/${h.slug}`,
+          lastmod: (h.updated_at || now).split("T")[0],
+          changefreq: "weekly",
+          priority: "0.6",
+        })),
+    ];
+    sitemaps["sitemap-hotels.xml"] = buildXml(urls);
+  }
+
+  // THE INDEX MUST LIST EVERY SITEMAP THAT EXISTS, not only the ones this
+  // function regenerates (WEB-SEO-034).
+  //
+  // It listed five. The build produces nine. So every run of this function
+  // SHRANK the index, dropping playgrounds, guides and pSEO out of discovery
+  // until the next deploy put them back -- a regeneration that removed pages
+  // from the crawl, which is the opposite of what it is for.
+  //
+  // The three it does not build are still written by `npm run generate-sitemaps`
+  // and served from public/, so naming them here is correct: the index says
+  // where a sitemap is, not who wrote it. Keep this list in step with
+  // scripts/generate-dynamic-sitemaps.ts.
   sitemaps["sitemap.xml"] = `<?xml version="1.0" encoding="UTF-8"?>
 <sitemapindex xmlns="http://www.sitemaps.org/schemas/sitemap/0.9">
   <sitemap><loc>${BASE_URL}/sitemap-static.xml</loc><lastmod>${now}</lastmod></sitemap>
   <sitemap><loc>${BASE_URL}/sitemap-events.xml</loc><lastmod>${now}</lastmod></sitemap>
   <sitemap><loc>${BASE_URL}/sitemap-restaurants.xml</loc><lastmod>${now}</lastmod></sitemap>
   <sitemap><loc>${BASE_URL}/sitemap-attractions.xml</loc><lastmod>${now}</lastmod></sitemap>
+  <sitemap><loc>${BASE_URL}/sitemap-playgrounds.xml</loc><lastmod>${now}</lastmod></sitemap>
   <sitemap><loc>${BASE_URL}/sitemap-articles.xml</loc><lastmod>${now}</lastmod></sitemap>
+  <sitemap><loc>${BASE_URL}/sitemap-hotels.xml</loc><lastmod>${now}</lastmod></sitemap>
+  <sitemap><loc>${BASE_URL}/sitemap-guides.xml</loc><lastmod>${now}</lastmod></sitemap>
+  <sitemap><loc>${BASE_URL}/sitemap-pseo.xml</loc><lastmod>${now}</lastmod></sitemap>
 </sitemapindex>`;
 
   return { sitemaps, urlIndex };

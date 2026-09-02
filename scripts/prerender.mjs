@@ -215,6 +215,13 @@ const ENTITY_SITEMAPS = [
   'sitemap-attractions.xml',
   'sitemap-playgrounds.xml',
   'sitemap-articles.xml',
+  // WEB-SEO-034. LAST ON PURPOSE. This list is a strict priority order and the
+  // budget shortfall falls entirely on the tail, so adding hotels ahead of an
+  // existing family would take that family's whole allocation rather than
+  // sharing the cost. /stay is roughly 70 rows and had no sitemap at all until
+  // now, so being in one is the change that matters; being prerendered is the
+  // improvement after it.
+  'sitemap-hotels.xml',
   'sitemap-guides.xml',
 ];
 

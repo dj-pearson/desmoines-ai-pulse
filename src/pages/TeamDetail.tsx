@@ -1,4 +1,5 @@
 import { useParams, Link } from 'react-router-dom';
+import { createEventSlugWithCentralTime } from "@/lib/timezone";
 import { RouteCanonical } from "@/components/RouteCanonical";
 import Header from '@/components/Header';
 import Footer from '@/components/Footer';
@@ -50,6 +51,14 @@ export default function TeamDetail() {
 
   return (
     <>
+      {/* WEB-SEO-033. RouteCanonical was only in the LOADING branch, so the
+          canonical existed for the few hundred milliseconds before the fetch
+          resolved and then vanished. A crawler that executes JS sees the
+          settled DOM, which had none -- and SEO-028 put it in the loading
+          branch precisely because the canonical must not wait for data, not
+          because it should stop existing once data arrives. It belongs in
+          both. */}
+      <RouteCanonical path={`/sports/${slug}`} />
       <Helmet>
         <title>{team.name} — {team.sport} in Des Moines | Des Moines Insider</title>
         <meta name="description" content={team.description || `${team.name} — ${team.league} ${team.sport} in Des Moines, Iowa.`} />
@@ -116,7 +125,7 @@ export default function TeamDetail() {
             {games && games.length > 0 ? (
               <div className="space-y-3">
                 {games.map((event) => (
-                  <Link key={event.id} to={`/events/${event.id}`}>
+                  <Link key={event.id} to={`/events/${createEventSlugWithCentralTime(event.title, event)}`}>
                     <Card className="hover:border-primary transition-colors">
                       <CardContent className="p-4 flex items-center gap-4">
                         <div className="text-center min-w-[60px]">

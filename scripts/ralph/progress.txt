@@ -788,3 +788,37 @@ vacuously, so it is recorded here rather than added. Every other suite under
   quoted the highway names I was asserting absent, and `brandConfig`'s note
   quotes the typo'd handle to explain it. Strip comments, or don't quote the
   thing you assert against.
+
+## 2026-09-02 — WEB-SEO-033 and WEB-SEO-034 (event links, hotel SEO)
+
+### Learnings for future iterations
+
+- **A link that 404s looks exactly like a link.** Nine surfaces built
+  `/events/<uuid>` hrefs while `useEventBySlug` matches only date-suffixed
+  slugs. The story named one; the grep found nine. Always run the grep the AC
+  suggests.
+- **A prop nothing sets is a silently disabled feature.** `SmartEventCard`
+  gated its link AND its share on `event.slug`; `public.events` has no slug
+  column, so every card rendered unlinked and every share errored. Neither
+  looks like a failure.
+- **Widening a call site can put a nullable value into a non-null parameter.**
+  `createEventSlugWithCentralTime(title: string)` called `.toLowerCase()`
+  directly, and one converted site already guarded its title as possibly null.
+- **A canonical in the loading branch only is a canonical that vanishes.** It
+  exists until the fetch resolves, and a JS-executing crawler sees the settled
+  DOM. It belongs in both branches — the reason it is in the loading branch is
+  that it must not wait for data, not that it should stop existing.
+- **Google drops a whole BreadcrumbList when its items 404.** Hotel breadcrumbs
+  named `/hotels` while the routes are `/stay`. Not a partial win — the page
+  lost the display it was emitting for.
+- **A relative `og:image` gives a social crawler no image at all.**
+- **Generate a sitemap from the column the router resolves against.**
+  `/stay/:slug` is matched on `hotels.slug`, so a derived slug would submit URLs
+  the app 404s — worse than submitting nothing.
+- **A regeneration that lists fewer sitemaps than exist removes pages from the
+  crawl.** The edge function's index named five children while the build
+  produces nine, so every run dropped playgrounds, guides and pSEO until the
+  next deploy.
+- **Add a new family to the END of a strict priority list.** The prerender
+  budget shortfall falls entirely on the tail, so inserting ahead of an existing
+  family takes its whole allocation rather than sharing the cost.

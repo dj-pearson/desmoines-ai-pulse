@@ -1,4 +1,5 @@
 import { Link, useLocation, useNavigate } from "react-router-dom";
+import { createEventSlugWithCentralTime } from "@/lib/timezone";
 import { Helmet } from "react-helmet-async";
 import Header from "@/components/Header";
 import Footer from "@/components/Footer";
@@ -189,7 +190,7 @@ export default function Enhanced404() {
                     </div>
                   </div>
                   <Link 
-                    to={`/events/${event.id}`}
+                    to={`/events/${createEventSlugWithCentralTime(event.title, event)}`}
                     className="text-primary hover:text-primary/80 ml-2"
                   >
                     <SpriteIcon name="arrow-right" className="h-4 w-4" />

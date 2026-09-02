@@ -49,10 +49,17 @@ export function nowInCentralTime(): Date {
  * Prefers new timezone fields over legacy date field
  */
 export function createEventSlugWithCentralTime(
-  title: string,
+  title: string | null | undefined,
   event?: any
 ): string {
-  const titleSlug = title
+  // WEB-SEO-033. The parameter was typed `string` and called `.toLowerCase()`
+  // on it directly. Every existing caller passed a non-null title, but the nine
+  // link sites this story converted include one that already guards its title
+  // as possibly null (ForYouRail's `rec.title ?? "Event"`), so a crash on a
+  // link render is one nullable row away. Accepting null and producing an
+  // empty title slug keeps the date suffix, which is the half that makes the
+  // slug resolvable at all.
+  const titleSlug = (title ?? "")
     .toLowerCase()
     .replace(/[^a-z0-9]+/g, "-")
     .replace(/(^-|-$)/g, "");
