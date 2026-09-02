@@ -401,7 +401,7 @@ Only include actual events, not navigation items, headers, or generic text. If n
                 category: (event.category || "General").substring(0, 50),
                 price: (event.price || "See website").substring(0, 50),
                 source_url: job.config.url,
-                is_featured: Math.random() > 0.8, // 20% chance of being featured
+                is_featured: false, // WEB-BE-040: featured is an admin or campaign decision
               };
 
               console.log(
@@ -1263,7 +1263,7 @@ async function scrapeWebsite(
       category: eventData.category.substring(0, 50),
       price: eventData.price.substring(0, 50),
       source_url: eventData.source_url || job.config.url,
-      is_featured: Math.random() > 0.7,
+      is_featured: false, // WEB-BE-040: featured is an admin or campaign decision
     };
 
     // Generate fingerprint for duplicate detection

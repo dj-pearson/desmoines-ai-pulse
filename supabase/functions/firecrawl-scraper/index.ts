@@ -744,7 +744,7 @@ serve(async (req) => {
                   description: item.description?.substring(0, 500) || "",
                   phone: item.phone?.substring(0, 20) || null,
                   website: item.website?.substring(0, 200) || null,
-                  is_featured: Math.random() > 0.8,
+                  is_featured: false, // WEB-BE-040: never decided at ingest
                   created_at: new Date().toISOString(),
                   updated_at: new Date().toISOString(),
                 };
@@ -758,7 +758,7 @@ serve(async (req) => {
                   age_range: item.age_range?.substring(0, 50) || "All ages",
                   amenities: Array.isArray(item.amenities) ? item.amenities.slice(0, 10) : [],
                   rating: item.rating || null,
-                  is_featured: Math.random() > 0.8,
+                  is_featured: false, // WEB-BE-040: never decided at ingest
                   created_at: new Date().toISOString(),
                   updated_at: new Date().toISOString(),
                 };
@@ -772,7 +772,7 @@ serve(async (req) => {
                   description: item.description?.substring(0, 500) || "",
                   rating: item.rating || null,
                   website: item.website?.substring(0, 200) || null,
-                  is_featured: Math.random() > 0.8,
+                  is_featured: false, // WEB-BE-040: never decided at ingest
                   created_at: new Date().toISOString(),
                   updated_at: new Date().toISOString(),
                 };
@@ -941,7 +941,7 @@ serve(async (req) => {
             } else {
               // Insert new item
               if (category === 'events') {
-                transformedData.is_featured = Math.random() > 0.8;
+                transformedData.is_featured = false; // WEB-BE-040: never decided at ingest
                 transformedData.created_at = new Date().toISOString();
               }
 

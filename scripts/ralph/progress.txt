@@ -51,3 +51,20 @@ Started: 2026-08-31T19:18:09.615Z
   - Regexes in the invariant tests must tolerate prettier line breaks after
     `supabase.rpc(`.
 ---
+## 2026-09-02 - WEB-BE-040 (Math.random featured flags at ingest)
+- Seven ingest sites (ai-crawler, firecrawl-scraper x4, scrape-events x2) now
+  write is_featured: false. Deno walk test fails on any Math.random featured.
+- useFeaturedEvents pass 3: deterministic fallback (popularity_score desc,
+  date asc, excluding chosen ids) so the rail never empties.
+- 20260902000004 clears the random flags on events/playgrounds/restaurants with
+  dry-run NOTICE first; attractions counted only. scripts/audit-random-featured.mjs
+  is the anon-key dry run.
+- **Learnings for future iterations:**
+  - admin_action_logs is read by ActivityLogViewer and written by nothing. Any
+    AC that says "unless an admin audit entry exists" has no data to evaluate.
+  - restaurants and attractions carry no origin marker; only events (source,
+    source_url) and playgrounds (source, manually_curated) can tell scraped
+    rows from entered ones.
+  - PostgREST count without rows: Prefer: count=exact + Range: 0-0, read
+    content-range's denominator.
+---

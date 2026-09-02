@@ -147,6 +147,10 @@ jobs:
       # no transaction. Pins the enum labels, the pure-SQL cron job and the
       # admin-only approval RPC.
       - run: deno test --allow-read supabase/functions/_tests/campaign-lifecycle-contract.test.ts
+      # WEB-BE-040. Seven ingest sites set is_featured with Math.random() for a
+      # year. Fails on any edge function that decides the flag by chance, and
+      # pins the cleanup migration plus the homepage rail fallback.
+      - run: deno test --allow-read supabase/functions/_tests/featured-flag-invariant.test.ts
       # The trial-conversion notice must state amount, date and cancel path,
       # and must not be gated on marketing consent or an LLM score
       # (WEB-LEGAL-006).

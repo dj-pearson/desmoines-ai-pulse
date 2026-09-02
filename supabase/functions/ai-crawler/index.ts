@@ -1450,7 +1450,8 @@ async function insertData(
             id: item._assignedId,
             created_at: new Date().toISOString(),
             updated_at: new Date().toISOString(),
-            is_featured: Math.random() > 0.8, // 20% chance of being featured
+            // WEB-BE-040: featured is set by an admin or a campaign, never at ingest.
+            is_featured: false,
           };
 
           switch (category) {

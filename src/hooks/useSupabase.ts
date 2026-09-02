@@ -67,7 +67,39 @@ export function useFeaturedEvents() {
         .slice(0, remainingSlots)
         .map(transformEvent);
 
-      return [...sponsored, ...rotated];
+      const chosen = [...sponsored, ...rotated];
+      const fallbackSlots = MAX_DISPLAY - chosen.length;
+      if (fallbackSlots <= 0) return chosen;
+
+      // Pass 3 (WEB-BE-040): featured used to be a coin toss at ingest, so the
+      // rail was never short of rows. Now that only admins and campaigns set
+      // it, a quiet week can leave fewer than six. Fill the rest with a
+      // deterministic ranking (most popular, then soonest) rather than an
+      // empty rail, and never repeat a row already chosen above.
+      const chosenIds = chosen.map((e) => e.id);
+      let fallbackQuery = supabase
+        .from('events')
+        .select(EVENT_LIST_COLUMNS)
+        .gte('date', today)
+        .neq('is_merged', true)
+        .neq('is_hidden', true)
+        .order('popularity_score', { ascending: false, nullsFirst: false })
+        .order('date', { ascending: true })
+        .limit(fallbackSlots);
+      if (chosenIds.length > 0) {
+        fallbackQuery = fallbackQuery.not('id', 'in', `(${chosenIds.join(',')})`);
+      }
+
+      const { data: fallbackData, error: fallbackError } = await fallbackQuery;
+
+      if (fallbackError) {
+        // The rail already has what it has; a failed fallback is not worth an
+        // error state on the homepage.
+        logger.warn('useFeaturedEvents', 'Fallback ranking failed', { error: fallbackError });
+        return chosen;
+      }
+
+      return [...chosen, ...(fallbackData || []).map(transformEvent)];
     },
     staleTime: 60000, // 1 minute
     gcTime: 300000, // 5 minutes
