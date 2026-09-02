@@ -151,6 +151,10 @@ jobs:
       # year. Fails on any edge function that decides the flag by chance, and
       # pins the cleanup migration plus the homepage rail fallback.
       - run: deno test --allow-read supabase/functions/_tests/featured-flag-invariant.test.ts
+      # WEB-BE-035. The dispatcher parked jobs at 'running' and scrape-events
+      # only accepted 'idle'. Holds the migration and the edge function to one
+      # status contract.
+      - run: deno test --allow-read supabase/functions/_tests/scraping-dispatch-status.test.ts
       # The trial-conversion notice must state amount, date and cancel path,
       # and must not be gated on marketing consent or an LLM score
       # (WEB-LEGAL-006).

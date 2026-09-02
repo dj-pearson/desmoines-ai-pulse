@@ -68,3 +68,20 @@ Started: 2026-08-31T19:18:09.615Z
   - PostgREST count without rows: Prefer: count=exact + Range: 0-0, read
     content-range's denominator.
 ---
+## 2026-09-02 - WEB-BE-035 (dispatcher marks running, scrape-events accepts idle)
+- 20260902000005 restates run_scraping_jobs as the sole dispatcher (no status,
+  no last_run writes; app_secret credentials preserved; RAISE without key),
+  unschedules auto-trigger-scraping-jobs, repairs running -> idle.
+- scrape-events: .in('status', acceptedJobStatuses(jobId)) via new
+  _shared/scrapingJobStatus.ts; completion write sets status idle.
+- Deno test _tests/scraping-dispatch-status.test.ts (5/5) wired into CI.
+- **Learnings for future iterations:**
+  - Two scraping dispatchers were live (10 min + 30 min). Check cron.job
+    names in migrations before assuming one dispatcher: grep
+    "cron.schedule(" and the SELECT it runs.
+  - A dispatcher that writes last_run at dispatch defeats scrape-events'
+    recency skip. last_run means "finished", never "dispatched".
+  - When restating a function that a regexp-patch migration (20260830000002)
+    edited in place, copy the patched shape (app_secret, ::text url) into the
+    restated body or the restatement silently undoes the patch.
+---
