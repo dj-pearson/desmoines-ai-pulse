@@ -195,6 +195,11 @@ jobs:
       # profile columns were NULL for every account. Pins the trigger, its
       # never-block-signup guarantee, and the non-racing client fallback.
       - run: deno test --allow-read supabase/functions/_tests/new-user-profile-contract.test.ts
+      # WEB-PERF-030. SocialEventCard fell back to a per-event hook that opened
+      # three realtime channels and ran three queries PER CARD, on pages that
+      # render up to 100. Pins the opt-in realtime default and the batch wiring
+      # on every landing page.
+      - run: deno test --allow-read supabase/functions/_tests/event-social-fanout.test.ts
       # The trial-conversion notice must state amount, date and cancel path,
       # and must not be gated on marketing consent or an LLM score
       # (WEB-LEGAL-006).

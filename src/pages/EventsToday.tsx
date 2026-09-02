@@ -1,4 +1,4 @@
-import React, { useState, useEffect } from "react";
+import React, { useState, useEffect, useMemo } from "react";
 import { createLogger } from '@/lib/logger';
 import { supabase } from "@/integrations/supabase/client";
 import { SpriteIcon } from "@/components/ui/SpriteIcon";
@@ -9,6 +9,7 @@ import Footer from "@/components/Footer";
 import { ListFreshness } from "@/components/ListFreshness";
 import { FAQSection } from "@/components/FAQSection";
 import { SocialEventCard } from "@/components/SocialEventCard";
+import { useBatchEventSocial } from "@/hooks/useBatchEventSocial";
 import EnhancedLocalSEO from "@/components/EnhancedLocalSEO";
 import { EventListJsonLd } from "@/components/schema/EventListJsonLd";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
@@ -111,6 +112,16 @@ export default function EventsToday() {
       answer: "Each event card includes location information. Click through to get detailed directions and parking information.",
     },
   ];
+
+  // WEB-PERF-030. SocialEventCard falls back to useEventSocial(event.id)
+  // when no batch data is passed, and that fallback ran three queries and
+  // opened three realtime channels PER CARD. This page renders up to
+  // todaysEvents.length of them, so one anonymous visit could issue hundreds of
+  // requests and sockets for a preview nobody can interact with. One batch
+  // query per table replaces all of it.
+  const batchSocialIds = useMemo(() => (todaysEvents ?? []).map((e) => e.id), [todaysEvents]);
+  const { data: batchSocialData, isPending: batchSocialPending } =
+    useBatchEventSocial(batchSocialIds);
 
   return (
     <div className="min-h-screen bg-background">
@@ -226,7 +237,13 @@ export default function EventsToday() {
         ) : todaysEvents.length > 0 ? (
           <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6 mb-8">
             {todaysEvents.map((event) => (
-              <SocialEventCard key={event.id} event={event} onViewDetails={() => {}} />
+              <SocialEventCard
+                  key={event.id}
+                  event={event}
+                  socialData={batchSocialData?.[event.id]}
+                  socialDataPending={batchSocialPending}
+                  onViewDetails={() => {}}
+                />
             ))}
           </div>
         ) : (

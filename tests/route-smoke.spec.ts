@@ -372,3 +372,26 @@ test.describe('Ad impressions are recorded server-side (WEB-ADS-002)', () => {
     ).toHaveLength(0);
   });
 });
+
+test.describe('Landing pages do not open a websocket per card (WEB-PERF-030)', () => {
+  // SocialEventCard fell back to useEventSocial(event.id) when a page passed no
+  // batch data, and that fallback opened three postgres_changes channels per
+  // card. FreeEvents fetches up to 100 events, so one anonymous visit could
+  // open three hundred subscriptions for a preview nobody signed out can use.
+  test('/events/free opens at most a handful of websockets', async ({ page }) => {
+    const sockets: string[] = [];
+    page.on('websocket', (ws) => sockets.push(ws.url()));
+
+    await page.goto('/events/free');
+    await page.waitForLoadState('networkidle');
+    await expectNoErrorBoundary(page);
+
+    // Supabase multiplexes channels over one realtime connection, so the count
+    // here is connections rather than channels. Anonymous visitors should need
+    // none; the ceiling leaves room for one shared connection plus noise.
+    expect(
+      sockets.length,
+      `too many websocket connections on /events/free: ${sockets.join('\n')}`
+    ).toBeLessThanOrEqual(3);
+  });
+});

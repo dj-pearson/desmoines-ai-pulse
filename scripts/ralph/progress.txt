@@ -357,3 +357,24 @@ Started: 2026-08-31T19:18:09.615Z
     trade (WEB-PERF-029 is about that page's payload). Emitting nothing is a
     legitimate answer to "only emit real data".
 ---
+## 2026-09-02 - WEB-PERF-030 (a websocket per event card)
+- Root cause fixed in the hook, not just the pages: useEventSocial takes
+  { realtime?: boolean }, defaults FALSE, and requires a signed-in user too.
+  EventSocialHub (the expanded surface) is the only opt-in.
+- All six landing pages now use useBatchEventSocial and pass BOTH socialData
+  and socialDataPending; the batch is keyed on the exact array each maps over.
+- EventsByLocation: the derivation and hooks had to move above an early return
+  (rules-of-hooks). It depends only on the events query, not the suburb.
+- _tests/event-social-fanout.test.ts (6) in CI + a route-smoke websocket cap.
+- **Learnings for future iterations:**
+  - When a shared component has a per-item fallback, fix the FALLBACK's default,
+    not only today's callers. Otherwise the next page reintroduces it.
+  - socialDataPending is as important as socialData: without it every card
+    fetches individually while the batch is in flight.
+  - supabase-js MULTIPLEXES channels over one websocket connection, so
+    page.on('websocket') counts connections, not channels. Do not read a
+    "3 subscriptions" budget as 3 sockets.
+  - Inserting a hook before `return (` can land it after an early return.
+    Check for `if (...) { return` above the insertion point; eslint
+    rules-of-hooks catches it, so run lint on every touched page.
+---

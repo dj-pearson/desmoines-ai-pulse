@@ -52,7 +52,26 @@ export interface EventCheckin {
   location_verified: boolean;
 }
 
-export function useEventSocial(eventId: string) {
+/**
+ * Social data for one event.
+ *
+ * WEB-PERF-030 — REALTIME IS OFF UNLESS ASKED FOR, AND THAT DEFAULT IS THE FIX.
+ *
+ * This hook opened three postgres_changes channels per event id. SocialEventCard
+ * falls back to it whenever a page does not hand it batch data, and six landing
+ * pages did not, with FreeEvents and KidsEvents fetching up to 100 events each.
+ * One anonymous visitor could therefore open three hundred websocket
+ * subscriptions and issue three hundred queries, for a preview they cannot
+ * interact with: posting requires an account.
+ *
+ * So `realtime` defaults to false. A caller that genuinely renders a live,
+ * interactive surface opts in, and even then the channels only open for a
+ * signed-in user, because nobody else can produce the events they carry.
+ */
+export function useEventSocial(
+  eventId: string,
+  options: { realtime?: boolean } = {},
+) {
   const { user } = useAuth();
   const { toast } = useToast();
   
@@ -177,9 +196,13 @@ export function useEventSocial(eventId: string) {
     }
   }, [eventId, user]);
 
-  // Set up real-time subscriptions
+  // Set up real-time subscriptions. Opt-in, and signed-in only: see the note on
+  // the hook. An anonymous visitor cannot post an attendance or a comment, so a
+  // socket that streams them changes nothing they can see.
+  const realtimeEnabled = options.realtime === true && !!user;
+
   useEffect(() => {
-    if (!eventId) return;
+    if (!eventId || !realtimeEnabled) return;
 
     // Typed explicitly: an empty array literal infers never[]/any[] here, which
     // strict mode reports as an implicit-any escape (TS7034/TS7005).
@@ -265,7 +288,7 @@ export function useEventSocial(eventId: string) {
         supabase.removeChannel(channel);
       });
     };
-  }, [eventId]);
+  }, [eventId, realtimeEnabled]);
 
   // Initial data fetch
   useEffect(() => {
