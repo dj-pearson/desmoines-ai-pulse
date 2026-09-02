@@ -29,7 +29,7 @@ import { OpenNowBanner } from "@/components/OpenNowBanner";
 import { Breadcrumbs } from "@/components/ui/breadcrumbs";
 import { useIsMobile } from "@/hooks/use-mobile";
 import RestaurantCard from "@/components/RestaurantCard";
-import { arrangeSponsored } from "@/lib/sponsored";
+import { SPONSORED_CAP, arrangeSponsored } from "@/lib/sponsored";
 import { useUrlFilters } from "@/hooks/useUrlFilters";
 import { ActiveFilterChips } from "@/components/filters/ActiveFilterChips";
 import { SearchAutocomplete, addRecentSearch } from "@/components/SearchAutocomplete";
@@ -154,7 +154,41 @@ export default function Restaurants() {
   const setPage = (v: number | ((prev: number) => number)) =>
     setParam("page", typeof v === "function" ? v(page) : v, { def: 1 });
 
-  const { restaurants, isLoading, error, totalCount, refetch } = useRestaurants(filters);
+  // WEB-PERF-029. THE PAGE ASKS FOR THE PAGE NOW.
+  //
+  // This passed no limit, so useRestaurants defaulted to 1000 and the browser
+  // sliced 30 out of it -- a visitor who looked at the first page paid for every
+  // restaurant in the database. The migration in the same change also stopped
+  // the RPC returning to_jsonb(r), so each of those rows was carrying four SEO
+  // fields, three GEO fields, the AI prompt audit trail, a tsvector and a
+  // PostGIS blob.
+  //
+  // Mobile is a load-more list, so it asks for everything up to the current
+  // page and keeps growing one request at a time. Desktop asks for one page.
+  const restaurantQuery = useMemo(
+    () =>
+      isMobile
+        ? { ...filters, limit: page * ITEMS_PER_PAGE, offset: 0 }
+        : { ...filters, limit: ITEMS_PER_PAGE, offset: (page - 1) * ITEMS_PER_PAGE },
+    [filters, page, isMobile]
+  );
+
+  const { restaurants, isLoading, error, totalCount, refetch } = useRestaurants(restaurantQuery);
+
+  // PAID PLACEMENT CANNOT COME FROM A PAGE OF THIRTY.
+  //
+  // arrangeSponsored boosts up to two sponsored rows to the top of whatever
+  // array it is handed, and that only worked because the array used to be every
+  // restaurant -- a sponsored listing ranked 400th by rotation was still pulled
+  // onto page 1. Bounding the fetch without this would have quietly ended that,
+  // which is a contract question and not a performance decision. Two rows,
+  // fetched on their own, and only on the first page.
+  const { restaurants: sponsoredRestaurants } = useRestaurants(
+    useMemo(
+      () => ({ sponsoredOnly: true, limit: SPONSORED_CAP, offset: 0 }),
+      []
+    )
+  );
   const filterOptions = useRestaurantFilterOptions();
   const { cuisineCounts } = useCuisineCounts();
   const { announce, announcement, regionProps } = useAnnounce();
@@ -167,25 +201,23 @@ export default function Restaurants() {
 
   // Boost up to 2 active sponsored listings to the top (WEB-FEAT-005), organic
   // order otherwise.
-  const arrangedRestaurants = useMemo(
-    () => arrangeSponsored(restaurants),
-    [restaurants]
-  );
+  const arrangedRestaurants = useMemo(() => {
+    if (page !== 1 || sponsoredRestaurants.length === 0) return restaurants;
+    // De-duplicate: a sponsored restaurant that is also in this page's rotation
+    // must appear once, at the top, not twice.
+    const boosted = sponsoredRestaurants.slice(0, SPONSORED_CAP);
+    const boostedIds = new Set(boosted.map((r) => r.id));
+    return arrangeSponsored([...boosted, ...restaurants.filter((r) => !boostedIds.has(r.id))]);
+  }, [restaurants, sponsoredRestaurants, page]);
 
-  // Paginate restaurants
-  const totalPages = Math.ceil((arrangedRestaurants?.length || 0) / ITEMS_PER_PAGE);
-  const paginatedRestaurants = useMemo(() => {
-    if (isMobile) {
-      // Mobile: show all up to current page (load more pattern)
-      return arrangedRestaurants.slice(0, page * ITEMS_PER_PAGE);
-    }
-    // Desktop: show current page only
-    const start = (page - 1) * ITEMS_PER_PAGE;
-    return arrangedRestaurants.slice(start, start + ITEMS_PER_PAGE);
-  }, [arrangedRestaurants, page, isMobile]);
+  // The slicing is gone: the query returned this page. totalCount is the
+  // unpaginated match count the RPC computes with a window function, so the
+  // result counter and the page controls read the same numbers as before.
+  const totalPages = Math.ceil((totalCount || 0) / ITEMS_PER_PAGE);
+  const paginatedRestaurants = arrangedRestaurants;
 
   const hasMorePages = isMobile
-    ? page * ITEMS_PER_PAGE < restaurants.length
+    ? page * ITEMS_PER_PAGE < (totalCount || 0)
     : page < totalPages;
 
   // Page reset on filter change is handled by setMany/setParam (resetsPage).
@@ -209,11 +241,14 @@ export default function Restaurants() {
   // Announce result count to screen readers
   useEffect(() => {
     if (!isLoading && restaurants) {
-      const count = restaurants.length;
+      // WEB-PERF-029: totalCount, not restaurants.length. The query returns one
+      // page now, so counting the array would announce "Found 30 restaurants"
+      // to a screen-reader user while the visible counter said 480.
+      const count = totalCount || 0;
       const context = filters.search ? ` matching "${filters.search}"` : '';
       announce(`Found ${count} restaurant${count !== 1 ? 's' : ''}${context}`);
     }
-  }, [restaurants?.length, isLoading, filters.search, announce]);
+  }, [totalCount, isLoading, filters.search, announce, restaurants]);
 
   const handleClearFilters = useCallback(() => {
     clearParams(["q", "cuisine", "price", "rmin", "rmax", "location", "sort", "featured", "open", "tags"]);
@@ -597,7 +632,7 @@ export default function Restaurants() {
                           PostgREST can return a null count, so fall back to the
                           number of rows actually on screen. */}
                       <strong className="text-foreground">
-                        {totalCount ?? restaurants.length}
+                        {totalCount ?? 0}
                       </strong>{" "}
                       found
                     </span>
@@ -615,7 +650,10 @@ export default function Restaurants() {
               onToggle={() =>
                 setFilters((prev) => ({ ...prev, openNow: !prev.openNow }))
               }
-              openCount={filters.openNow ? restaurants.length : undefined}
+              /* openCount is the TOTAL, not this page's length: the filter is
+                 applied by the query, so the array would cap it at 30
+                 (WEB-PERF-029). */
+              openCount={filters.openNow ? totalCount || 0 : undefined}
               totalCount={totalCount}
             />
 
@@ -724,10 +762,14 @@ export default function Restaurants() {
                     </div>
                   )}
                   {/* Results count */}
+                  {/* WEB-PERF-029: the "of N" is totalCount, not the length of
+                      the fetched array. The query returns one page now, so
+                      reading the array would say "Showing 1-30 of 30" on a set
+                      of 480. */}
                   <p className="text-sm text-muted-foreground mb-4" aria-live="polite">
                     {isMobile
-                      ? `Showing ${Math.min(paginatedRestaurants.length, restaurants.length)} of ${restaurants.length} restaurants`
-                      : `Showing ${Math.min((page - 1) * ITEMS_PER_PAGE + 1, restaurants.length)}-${Math.min(page * ITEMS_PER_PAGE, restaurants.length)} of ${restaurants.length} restaurants`}
+                      ? `Showing ${paginatedRestaurants.length} of ${totalCount || 0} restaurants`
+                      : `Showing ${Math.min((page - 1) * ITEMS_PER_PAGE + 1, totalCount || 0)}-${Math.min(page * ITEMS_PER_PAGE, totalCount || 0)} of ${totalCount || 0} restaurants`}
                   </p>
 
                   <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-6">

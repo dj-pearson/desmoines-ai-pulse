@@ -876,3 +876,28 @@ vacuously, so it is recorded here rather than added. Every other suite under
 - **Strip comments before any assertion about ORDER.** The ordering check failed
   on correct code because the comment explaining the fix named the sentinel
   above the flag check. Fourth variant of this trap today.
+
+## 2026-09-02 — WEB-PERF-029 (restaurants hub payload)
+
+### Learnings for future iterations
+
+- **A projection applied to the fallback path is a projection nobody gets.**
+  RESTAURANT_LIST_COLUMNS was live only on the non-default sort; the default
+  went through an RPC returning `to_jsonb(r)`.
+- **Deny-list, not allow-list, when mobile clients read the same payload.** An
+  allow-list drops a newly added column silently on the day it is added, and
+  iOS/Android decode from models this repo does not release. Subtracting known
+  keys keeps every future column flowing.
+- **Check the mobile models before narrowing anything.** Android names
+  `business_hours` and `dietary_options`, which are not columns on the table at
+  all — worth knowing before assuming a narrowing is unsafe, and worth knowing
+  that those fields decode as absent today.
+- **Bounding a fetch can silently end paid placement.** `arrangeSponsored`
+  boosted two rows to the top of the whole set, so a sponsored listing ranked
+  400th reached page 1. That is a contract question, not a performance
+  decision — fetch the sponsored rows separately and de-duplicate.
+- **Every count on the page has to move to the server total.** With one page
+  fetched, `array.length` says "Showing 1-30 of 30", caps a filter badge, and
+  announces the wrong number to a screen reader.
+- **A JSX comment cannot go between attributes.** `{/* … */}` inside an element's
+  attribute list is a parse error; use a block comment or put it above.

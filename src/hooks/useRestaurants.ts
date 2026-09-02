@@ -28,6 +28,17 @@ interface RestaurantFilters {
     | "price_low"
     | "price_high";
   featuredOnly?: boolean;
+  /**
+   * Only currently-active sponsored listings (WEB-PERF-029).
+   *
+   * Exists so paid placement survives server-side pagination. arrangeSponsored
+   * boosts up to two sponsored rows to the top of whatever array it is given,
+   * which worked only because the page fetched EVERY restaurant -- a sponsored
+   * listing ranked 400th by rotation was still pulled onto page 1. Bounding the
+   * fetch would have silently ended that, which is a contract question and not
+   * a performance decision, so the page now fetches those rows on their own.
+   */
+  sponsoredOnly?: boolean;
   openNow?: boolean;
   tags?: string[];
   dietary?: string[];
@@ -110,13 +121,18 @@ export function useRestaurants(filters: RestaurantFilters = {}) {
     queryFn: async () => {
     try {
       // Default popularity sort goes through the rotation RPC so the top of
-      // the list isn't the same every visit. Other sorts (rating, newest, A-Z,
+      // the list isn't the same every visit.
+      //
+      // sponsoredOnly forces the legacy path: get_rotated_restaurants has no
+      // sponsorship parameter, and adding one would change a signature three
+      // shipped clients call. Other sorts (rating, newest, A-Z,
       // price) stay deterministic — users picked them explicitly.
       // Dietary filtering still runs via the regular query path because the
       // RPC doesn't model the description/cuisine ILIKE fan-out.
       const sortBy = filters.sortBy || "popularity";
       const useRotationRpc =
         sortBy === "popularity" &&
+        !filters.sponsoredOnly &&
         (!filters.dietary || filters.dietary.length === 0);
 
       if (useRotationRpc) {
@@ -232,6 +248,17 @@ export function useRestaurants(filters: RestaurantFilters = {}) {
       // Apply featured filter
       if (filters.featuredOnly) {
         query = query.eq("is_featured", true);
+      }
+
+      // WEB-PERF-029. Active sponsorships only: is_sponsored with either no
+      // expiry or one in the future, which is the same rule isSponsoredActive
+      // applies in the browser. Expressing it here rather than filtering after
+      // the fetch is the whole point -- the page asks for two rows instead of
+      // reading four hundred to find them.
+      if (filters.sponsoredOnly) {
+        query = query
+          .eq("is_sponsored", true)
+          .or(`sponsored_until.is.null,sponsored_until.gt.${new Date().toISOString()}`);
       }
 
       // Apply dietary keyword filter (searches description and cuisine fields)
