@@ -167,6 +167,10 @@ jobs:
       # refusal: an admin endpoint must reject a caller who has a verified
       # factor and did not complete it.
       - run: deno test --allow-read supabase/functions/_tests/mfa-assurance.test.ts
+      # WEB-SEC-027 / WEB-SEC-028. Two of the three sign-in throttles took their
+      # input from the caller: ten anonymous POSTs locked any address out, and
+      # one more cleared the attacker's own counter. Pins both closed.
+      - run: deno test --allow-read supabase/functions/_tests/login-throttle-contract.test.ts
       # The trial-conversion notice must state amount, date and cancel path,
       # and must not be gated on marketing consent or an LLM score
       # (WEB-LEGAL-006).

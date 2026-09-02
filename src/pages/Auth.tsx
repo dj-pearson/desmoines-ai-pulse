@@ -109,7 +109,6 @@ export default function Auth() {
   // Security hooks for rate limiting and validation
   const {
     isBlocked,
-    remainingAttempts,
     timeUntilReset,
     checkRateLimit,
     checkDisposableEmail,
@@ -730,16 +729,6 @@ export default function Auth() {
                       <AlertCircle className="h-4 w-4" />
                       <AlertDescription>
                         Too many failed attempts. Please try again in {Math.ceil(timeUntilReset / 60)} minute{Math.ceil(timeUntilReset / 60) !== 1 ? 's' : ''}.
-                      </AlertDescription>
-                    </Alert>
-                  )}
-
-                  {/* Remaining attempts warning */}
-                  {!isBlocked && remainingAttempts < 3 && remainingAttempts > 0 && (
-                    <Alert>
-                      <AlertCircle className="h-4 w-4" />
-                      <AlertDescription>
-                        {remainingAttempts} attempt{remainingAttempts !== 1 ? 's' : ''} remaining before temporary lockout.
                       </AlertDescription>
                     </Alert>
                   )}

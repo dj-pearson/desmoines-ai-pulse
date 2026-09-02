@@ -140,10 +140,14 @@ interface ServerLockoutResult {
 async function checkServerLockout(
   email: string,
   action: 'check' | 'record_failure' | 'record_success',
+  // WEB-SEC-027: clearing a lockout requires proof that the sign-in actually
+  // succeeded. The server verifies this token against GoTrue and checks the
+  // address on it; a call without one is accepted and changes nothing.
+  accessToken?: string,
 ): Promise<ServerLockoutResult | null> {
   try {
     const { data, error } = await supabase.functions.invoke('check-login-attempt', {
-      body: { email, action },
+      body: accessToken ? { email, action, accessToken } : { email, action },
     });
     if (error) return null;
     return data as ServerLockoutResult;
@@ -568,7 +572,10 @@ export function AuthProvider({ children }: { children: ReactNode }) {
       }
 
       resetLoginAttempts(email);
-      void checkServerLockout(email, 'record_success');
+      // WEB-SEC-027: the server clears a lockout only against a session that
+      // a correct password produced, so the token goes with the call. Without
+      // it the request is still accepted and simply does nothing.
+      void checkServerLockout(email, 'record_success', data.session?.access_token);
       log.info('login', 'Login successful');
       return { success: !!data.session };
     } catch (error: unknown) {

@@ -168,3 +168,32 @@ Started: 2026-08-31T19:18:09.615Z
     guard sees its own prose and skips the import. deno check caught it.
   - securityLayers.ts has imports at line 11 AND line 569; both are real.
 ---
+## 2026-09-02 - WEB-SEC-027 + WEB-SEC-028 (two attacker-driven login throttles)
+- Done together: 028's AC names 027's chosen writer, and fixing one leaves the
+  other lockout live.
+- check-login-attempt: email-keyed lock REMOVED (it was the victim-lockout
+  primitive, and scoping it to (email,IP) would have been dead code because the
+  IP threshold of 5 is below the email threshold of 10). record_success now
+  requires an accessToken verified via auth.getUser AND matching the address.
+  All three actions still 200 with the same shape.
+- 20260902000007: drops the WITH CHECK (true) insert policy on
+  failed_auth_attempts, adds a service_role-only one, keeps the table and RPC.
+- useAuthSecurity: no longer calls check_auth_rate_limit or writes the table;
+  logFailedAttempt is inert; the "N attempts remaining" banner is removed
+  because its source of truth is gone and it would have frozen at 5.
+- _tests/login-throttle-contract.test.ts (6) wired into CI.
+- **Learnings for future iterations:**
+  - The docstring in check-login-attempt claims iOS/Android call it. They do
+    not: grep found no callers in ios/ or android/. Only AuthContext does, from
+    three sites. Verify such claims before treating them as compat constraints.
+  - failed_auth_attempts and login_attempts are DIFFERENT tables backing
+    DIFFERENT throttles. Do not conflate them.
+  - The IP half of check_auth_rate_limit never worked: the client passed the
+    literal string 'client' as p_ip_address and inserted ip_address ''.
+  - When you delete the source of a displayed number, delete the display too.
+    An unfed counter that keeps rendering its initial value is a lie that
+    type-checks.
+  - A throttle fed by clients self-reporting failures cannot bound an attacker
+    and can be used to lock out victims. Treat it as UX, and name the real
+    control (GoTrue's own /token limits, bot protection).
+---
