@@ -350,6 +350,30 @@ export function AuthProvider({ children }: { children: ReactNode }) {
       return;
     }
 
+    // WEB-SEC-026. signInWithPassword stores an aal1 session before the TOTP
+    // dialog can open, so SIGNED_IN fires, isAuthenticated went true, and
+    // Auth.tsx navigated away before the second factor was ever asked for.
+    // Anyone holding the password of an MFA-enrolled admin got a working admin
+    // session out of it.
+    //
+    // getAuthenticatorAssuranceLevel() decodes the stored session locally, so
+    // this costs no round trip. The rule is narrow on purpose: only a session
+    // that is positively aal1 with a positively pending aal2 is held back, so a
+    // user with no second factor can never be locked out by it.
+    //
+    // This is the UX half of the fix. The half that actually stops an attacker
+    // is in supabase/functions/_shared/mfaAssurance.ts: the aal1 token works
+    // against the API whether or not our app agrees to render a dashboard.
+    let mfaPending = false;
+    if (session) {
+      try {
+        const { data: aal } = await supabase.auth.mfa.getAuthenticatorAssuranceLevel();
+        mfaPending = aal?.currentLevel === 'aal1' && aal?.nextLevel === 'aal2';
+      } catch (err) {
+        log.warn('handleAuthChange', 'assurance-level read failed', { error: String(err) });
+      }
+    }
+
     // A fresh admin answer already in cache resolves synchronously — no loading
     // state, so a returning user never sees the page blink.
     const cachedAdmin = nextUser ? readCachedAdmin(nextUser.id) : null;
@@ -363,7 +387,9 @@ export function AuthProvider({ children }: { children: ReactNode }) {
       user: nextUser,
       session,
       isLoading: false,
-      isAuthenticated: !!session,
+      // WEB-SEC-026: a session that still owes a second factor is not signed in.
+      isAuthenticated: !!session && !mfaPending,
+      requiresMFA: mfaPending,
       isAdmin: cachedAdmin ?? prev.isAdmin, // Keep previous admin status while checking
       isAdminLoading: needsAdminCheck ? true : prev.isAdminLoading, // Mark as loading if checking
     }));

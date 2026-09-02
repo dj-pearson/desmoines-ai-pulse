@@ -162,6 +162,11 @@ jobs:
       - run: deno test --allow-read supabase/functions/_tests/event-unique-key.test.ts
       # eventDedup has had its own suite since DMI-010 and no lane ever ran it.
       - run: deno test supabase/functions/_shared/eventDedup.test.ts
+      # WEB-SEC-026. An aal1 token is a valid GoTrue credential, so the browser
+      # refusing to render a dashboard stops nobody. This pins the server-side
+      # refusal: an admin endpoint must reject a caller who has a verified
+      # factor and did not complete it.
+      - run: deno test --allow-read supabase/functions/_tests/mfa-assurance.test.ts
       # The trial-conversion notice must state amount, date and cancel path,
       # and must not be gated on marketing consent or an LLM score
       # (WEB-LEGAL-006).

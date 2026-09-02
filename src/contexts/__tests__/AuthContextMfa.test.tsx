@@ -63,14 +63,22 @@ vi.mock('@/lib/safeStorage', () => ({
   storage: { get: () => null, set: () => undefined, remove: () => undefined },
 }));
 
+import { supabase as supabaseMock } from '@/integrations/supabase/client';
 import { AuthProvider, useAuth } from '../AuthContext';
 
 type LoginResult = { success: boolean; requiresMFA?: boolean; error?: string };
 let doLogin: (email: string, password: string) => Promise<LoginResult>;
 
+let flags: { isAuthenticated: boolean; requiresMFA: boolean };
+
 function Probe() {
-  const auth = useAuth() as unknown as { login: typeof doLogin };
+  const auth = useAuth() as unknown as {
+    login: typeof doLogin;
+    isAuthenticated: boolean;
+    requiresMFA: boolean;
+  };
   doLogin = auth.login;
+  flags = { isAuthenticated: auth.isAuthenticated, requiresMFA: auth.requiresMFA };
   return null;
 }
 
@@ -136,5 +144,92 @@ describe('MFA gate fails closed (WEB-BE-032)', () => {
 
     expect(res.success).toBe(true);
     expect(res.requiresMFA).toBeFalsy();
+  });
+});
+
+/**
+ * WEB-SEC-026 — the aal1 session must not read as signed in.
+ *
+ * `signInWithPassword` stores a real session before any second factor is asked
+ * for, so SIGNED_IN fires and every listener sees an ordinary sign-in. Auth.tsx
+ * navigates on `isAuthenticated`, so the page unmounted before
+ * MFAVerificationDialog could open and the admin dashboard was reachable on a
+ * password alone.
+ *
+ * These drive the auth-state callback directly, because the defect is in
+ * handleAuthChange rather than in login().
+ */
+describe('an aal1 session with a pending factor is not authenticated (WEB-SEC-026)', () => {
+  const session = makeSession();
+
+  /** Fire an auth event through the callback AuthProvider registered. */
+  async function emit(event: string) {
+    const onChange = supabaseMock.auth.onAuthStateChange as unknown as {
+      mock: { calls: Array<[(e: string, s: unknown) => void]> };
+    };
+    const cb = onChange.mock.calls[onChange.mock.calls.length - 1][0];
+    await act(async () => {
+      await cb(event, session);
+    });
+  }
+
+  beforeEach(() => {
+    vi.clearAllMocks();
+    signOut.mockResolvedValue({ error: null });
+  });
+
+  it('holds back a session that still owes a second factor', async () => {
+    mfa.getAuthenticatorAssuranceLevel.mockResolvedValue({
+      data: { currentLevel: 'aal1', nextLevel: 'aal2' },
+      error: null,
+    });
+
+    await mount();
+    await emit('SIGNED_IN');
+
+    // Pre-fix this was true, which is what let Auth.tsx redirect to /admin.
+    expect(flags.isAuthenticated).toBe(false);
+    expect(flags.requiresMFA).toBe(true);
+  });
+
+  it('admits the same session once it reaches aal2', async () => {
+    mfa.getAuthenticatorAssuranceLevel.mockResolvedValue({
+      data: { currentLevel: 'aal2', nextLevel: 'aal2' },
+      error: null,
+    });
+
+    await mount();
+    await emit('SIGNED_IN');
+
+    expect(flags.isAuthenticated).toBe(true);
+    expect(flags.requiresMFA).toBe(false);
+  });
+
+  it('does not hold back a user who has no second factor', async () => {
+    // The lockout guard. For an account with nothing enrolled GoTrue reports
+    // both levels as aal1, and that user must sign in exactly as before.
+    mfa.getAuthenticatorAssuranceLevel.mockResolvedValue({
+      data: { currentLevel: 'aal1', nextLevel: 'aal1' },
+      error: null,
+    });
+
+    await mount();
+    await emit('SIGNED_IN');
+
+    expect(flags.isAuthenticated).toBe(true);
+    expect(flags.requiresMFA).toBe(false);
+  });
+
+  it('does not lock anyone out when the assurance level cannot be read', async () => {
+    // handleAuthChange runs on every auth event, including token refreshes, so
+    // failing closed here would sign people out on a transient error. The
+    // fail-closed decision lives in login() and in the edge-function gate,
+    // where refusing costs one action rather than every session.
+    mfa.getAuthenticatorAssuranceLevel.mockRejectedValue(new Error('offline'));
+
+    await mount();
+    await emit('SIGNED_IN');
+
+    expect(flags.isAuthenticated).toBe(true);
   });
 });

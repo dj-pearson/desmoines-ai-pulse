@@ -141,3 +141,30 @@ Started: 2026-08-31T19:18:09.615Z
     full-object setAuthState in the INITIAL_SESSION path will clobber a flag set
     by the recovery branch. Use the updater form.
 ---
+## 2026-09-02 - WEB-SEC-026 (MFA bypassed on web)
+- The story's proposed fix was client-side and would not have closed the hole:
+  an aal1 token from signInWithPassword is a valid GoTrue credential and works
+  against PostgREST and every edge function without our app.
+- Server-side control added at the real chokepoint: _shared/mfaAssurance.ts
+  (readAalClaim / hasVerifiedFactor / mfaAssuranceSatisfied) + SecurityContext
+  .mfaSatisfied + a Layer 1b refusal (MFA_REQUIRED) in securityMiddleware,
+  ahead of the role checks and scoped to elevated calls.
+- Client: handleAuthChange derives isAuthenticated from the assurance level;
+  Auth.tsx gates its redirect; handleMFACancel now awaits logout().
+- Tests: _tests/mfa-assurance.test.ts (7, in CI) + 4 new vitest cases.
+- **Learnings for future iterations:**
+  - user_roles client writes are ALREADY denied outright by 20260612000000
+    (WITH CHECK false). Any story proposing new RLS on user_roles writes is
+    proposing dead code; role changes go through the assign-role edge function.
+  - A RESTRICTIVE policy is table-wide and cannot distinguish an admin path from
+    an owner writing their own row. On a table like campaigns that means
+    blocking paying users, not admins.
+  - requireAdmin -> securityMiddleware in _shared/securityLayers.ts is the one
+    door every admin edge function goes through. Put caller-identity rules there.
+  - getAuthenticatorAssuranceLevel() is a LOCAL decode of the stored session in
+    supabase-js v2, not a network call, so it is safe to call on every auth event.
+  - Watch out for guard conditions like `if (!text.includes('mfaAssurance.ts'))`
+    when the edit you just made added a COMMENT mentioning that filename: the
+    guard sees its own prose and skips the import. deno check caught it.
+  - securityLayers.ts has imports at line 11 AND line 569; both are real.
+---

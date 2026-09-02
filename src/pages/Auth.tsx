@@ -96,6 +96,8 @@ export default function Auth() {
   const {
     isAuthenticated,
     isPasswordRecovery,
+    requiresMFA,
+    logout,
     login,
     signup,
     signInWithGoogle,
@@ -131,12 +133,16 @@ export default function Auth() {
       return;
     }
 
-    if (isAuthenticated) {
+    // WEB-SEC-026: never navigate away from the sign-in page while a second
+    // factor is still owed. This effect firing on the aal1 session that
+    // signInWithPassword stores is what unmounted the page before
+    // MFAVerificationDialog could open.
+    if (isAuthenticated && !requiresMFA) {
       // Get the redirect parameter from URL, validate to prevent open redirect attacks
       const redirectTo = SecurityUtils.getSafeRedirectUrl(searchParams.get("redirect"), "/");
       navigate(redirectTo, { replace: true });
     }
-  }, [isAuthenticated, isPasswordRecovery, navigate, searchParams]);
+  }, [isAuthenticated, isPasswordRecovery, requiresMFA, navigate, searchParams]);
 
   const handleInputChange = (field: string, value: any) => {
     setFormData(prev => ({ ...prev, [field]: value }));
@@ -235,9 +241,16 @@ export default function Auth() {
     navigate(redirectTo, { replace: true });
   };
 
-  const handleMFACancel = () => {
+  const handleMFACancel = async () => {
     setShowMFAVerification(false);
     setMfaFactorId(null);
+
+    // WEB-SEC-026. signInWithPassword has already stored an aal1 session by
+    // this point. Closing the dialog used to leave that token in local storage,
+    // where it stays valid against the API for its full lifetime even though
+    // the second factor was never given. Cancelling a sign-in has to end it.
+    await logout();
+
     toast({
       title: "Login Cancelled",
       description: "MFA verification was cancelled. Please try again.",
