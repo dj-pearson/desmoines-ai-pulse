@@ -403,3 +403,21 @@ Started: 2026-08-31T19:18:09.615Z
   - Run `npm run type-check:functions`, not bare tsc: the middleware needs
     @cloudflare/workers-types and standalone tsc reports phantom errors.
 ---
+## 2026-09-02 - WEB-PERF-028 (PARTIAL: 1 of 6 hooks)
+- queryKeys gained playgrounds/hotels/articles namespaces (they did not exist,
+  which is part of why these hooks were never migrated).
+- useAttractions converted to useQuery. Returned surface preserved exactly, so
+  no caller changed. refetch is now an invalidate of the list key.
+- STORY LEFT OPEN. Five hooks remain plus AC3/AC4/AC5.
+- **Learnings for future iterations:**
+  - THE PROJECTION TRAP: these hooks select *_LIST_COLUMNS, so an inferred
+    queryFn return type is NARROWER than the table Row. The old explicit
+    XState interface laundered that. Let TanStack infer and you get ~34 errors
+    in the CALLERS for a change that alters no runtime value. Always give
+    useQuery an explicit generic naming the Row type.
+  - The five hooks look identical and are not (different catch shapes, some
+    have no createLogger). A generic converter fails on file two. Do them by
+    hand, one at a time, type-checking after each.
+  - Compare tsc error COUNT and per-file distribution against a baseline run.
+    That is how the caller breakage showed up; the hook itself was clean.
+---
