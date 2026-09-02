@@ -230,6 +230,8 @@ export function useAdvancedSearch() {
       .select(EVENT_LIST_COLUMNS)
       .gte('date', new Date().toISOString())
       .neq('is_hidden', true) // Exclude soft-hidden stale events (WEB-AUTO-006)
+      // WEB-BE-034: archived_at is the other unpublish switch.
+      .is('archived_at', null)
       .limit(50);
 
     // Apply text search

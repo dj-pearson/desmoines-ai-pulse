@@ -83,6 +83,8 @@ export function useFeaturedEvents() {
         .gte('date', today)
         .neq('is_merged', true)
         .neq('is_hidden', true)
+        // WEB-BE-034: archived_at is the other unpublish switch.
+        .is('archived_at', null)
         .order('popularity_score', { ascending: false, nullsFirst: false })
         .order('date', { ascending: true })
         .limit(fallbackSlots);

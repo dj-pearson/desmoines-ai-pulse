@@ -2,6 +2,7 @@ import { useQuery } from "@tanstack/react-query";
 import { supabase } from "@/integrations/supabase/client";
 import { createLogger } from '@/lib/logger';
 import { getOrCreateSessionId } from "@/lib/tracking";
+import { useAuthState } from "@/contexts/AuthContext";
 
 const log = createLogger('useActiveAds');
 
@@ -71,8 +72,16 @@ export function useActiveAds(placementType: AdPlacement) {
   // house ad instead of erroring on every render (WEB-QA-003).
   const servable = isServable(placementType);
 
+  // WEB-SEC-031. The RPC below is passed p_user_id and applies PER-ACCOUNT
+  // frequency caps with it (WEB-ADS-002), so its answer is user-specific -- but
+  // the key was not, so after a logout the next person on the browser was
+  // served the previous account's capped selection until staleTime expired.
+  // useAuthState, not useAuth: ads render on every page, and the full context
+  // re-renders its consumers whenever an action reference changes (WEB-PERF-005).
+  const { user } = useAuthState();
+
   const { data, isLoading, refetch } = useQuery({
-    queryKey: ['active-ads', placementType],
+    queryKey: ['active-ads', placementType, user?.id ?? 'anonymous'],
     enabled: servable,
     queryFn: async (): Promise<ActiveAd | null> => {
       // Send all three parameters, even though the last two are DEFAULT NULL.

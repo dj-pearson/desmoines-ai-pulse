@@ -1,4 +1,5 @@
 import { describe, it, expect, vi, beforeEach, afterEach } from "vitest";
+import { QueryClient, QueryClientProvider } from '@tanstack/react-query';
 import { render, act } from "@testing-library/react";
 
 /**
@@ -89,10 +90,12 @@ describe("AuthContext split (WEB-PERF-005)", () => {
   it("status consumers skip token-refresh re-renders; state consumers re-render", async () => {
     await act(async () => {
       render(
+        <QueryClientProvider client={new QueryClient()}>
         <AuthProvider>
           <StatusConsumer />
           <StateConsumer />
-        </AuthProvider>,
+        </AuthProvider>
+        </QueryClientProvider>,
       );
     });
     await flush();
@@ -142,9 +145,11 @@ describe("AuthContext tab-focus re-emitted SIGNED_IN (WEB-UX-008)", () => {
     }
     await act(async () => {
       render(
+        <QueryClientProvider client={new QueryClient()}>
         <AuthProvider>
           <AdminLoadingProbe />
-        </AuthProvider>,
+        </AuthProvider>
+        </QueryClientProvider>,
       );
     });
     await flush();
@@ -177,9 +182,11 @@ describe("AuthContext tab-focus re-emitted SIGNED_IN (WEB-UX-008)", () => {
     }
     await act(async () => {
       render(
+        <QueryClientProvider client={new QueryClient()}>
         <AuthProvider>
           <CountingConsumer />
-        </AuthProvider>,
+        </AuthProvider>
+        </QueryClientProvider>,
       );
     });
     await flush();

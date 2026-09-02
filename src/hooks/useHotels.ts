@@ -1,5 +1,9 @@
-import { useState, useEffect, useCallback } from "react";
+import { useCallback } from "react";
+import { useQuery, useQueryClient } from "@tanstack/react-query";
 import { supabase } from "@/integrations/supabase/client";
+import { queryKeys } from "@/lib/queryKeys";
+import { HOTEL_LIST_COLUMNS } from "@/lib/listColumns";
+import { STALE_TIME, GC_TIME } from "@/lib/queryConfig";
 import { createLogger } from "@/lib/logger";
 import { Database } from "@/integrations/supabase/types";
 
@@ -8,13 +12,6 @@ const logger = createLogger("useHotels");
 type Hotel = Database["public"]["Tables"]["hotels"]["Row"];
 type HotelInsert = Database["public"]["Tables"]["hotels"]["Insert"];
 type HotelUpdate = Database["public"]["Tables"]["hotels"]["Update"];
-
-interface HotelsState {
-  hotels: Hotel[];
-  isLoading: boolean;
-  error: string | null;
-  totalCount: number;
-}
 
 interface HotelFilters {
   search?: string;
@@ -40,18 +37,33 @@ interface HotelFilters {
 }
 
 export function useHotels(filters: HotelFilters = {}) {
-  const [state, setState] = useState<HotelsState>({
-    hotels: [],
-    isLoading: true,
-    error: null,
-    totalCount: 0,
-  });
+  const queryClient = useQueryClient();
 
-  const fetchHotels = useCallback(async () => {
+  // WEB-PERF-028. This was useState + useEffect: nothing cached across
+  // navigation, a refetch on every mount, and -- because PrerenderSignal
+  // publishes data-queries-settled from useIsFetching(), a count of TanStack
+  // queries only -- a route that reported settled while its request was still
+  // in flight. That is how prerender.mjs captured a skeleton on 2 of 4 builds.
+  //
+  // The generic is explicit: inferred from the return, `hotels` would narrow to
+  // the queryFn's own shape rather than the table Row, and callers reading a
+  // column would stop compiling.
+  const { data, isLoading, error } = useQuery<{
+    hotels: Hotel[];
+    totalCount: number;
+  }>({
+    queryKey: queryKeys.hotels.list(filters as Record<string, unknown>),
+    staleTime: STALE_TIME.CONTENT_LIST,
+    gcTime: GC_TIME,
+    queryFn: async () => {
     try {
-      setState((prev) => ({ ...prev, isLoading: true, error: null }));
 
-      let query = supabase.from("hotels").select("*", { count: "exact" });
+      // WEB-PERF-028 AC3. Was select("*"), which pulled four SEO fields, three
+      // GEO fields and the gallery array into every card payload for a list
+      // that renders none of them.
+      let query = supabase
+        .from("hotels")
+        .select(HOTEL_LIST_COLUMNS, { count: "exact" });
 
       // Default to active only
       if (filters.activeOnly !== false) {
@@ -158,37 +170,25 @@ export function useHotels(filters: HotelFilters = {}) {
         throw error;
       }
 
-      setState({
-        hotels: data || [],
-        isLoading: false,
-        error: null,
+      return {
+        hotels: (data || []) as unknown as Hotel[],
         totalCount: count || 0,
-      });
+      };
     } catch (error) {
       logger.error('fetchHotels', 'Error fetching hotels', { error });
-      setState((prev) => ({
-        ...prev,
-        isLoading: false,
-        error:
-          error instanceof Error
-            ? error.message
-            : "Failed to fetch hotels",
-      }));
+      // Rethrown rather than swallowed: TanStack owns `error` now, and a query
+      // that resolves with an empty list would otherwise be indistinguishable
+      // from one that failed.
+      throw error;
     }
-  }, [
-    filters.search,
-    filters.area,
-    filters.priceRange,
-    filters.hotelType,
-    filters.amenities,
-    filters.starRating,
-    filters.sortBy,
-    filters.featuredOnly,
-    filters.activeOnly,
-    filters.hasAffiliate,
-    filters.limit,
-    filters.offset,
-  ]);
+    },
+  });
+
+  /** Re-run this list. The mutations below call it so a write shows immediately. */
+  const fetchHotels = useCallback(async () => {
+    await queryClient.invalidateQueries({ queryKey: queryKeys.hotels.lists() });
+  }, [queryClient]);
+
 
   const createHotel = async (hotel: HotelInsert) => {
     try {
@@ -243,12 +243,17 @@ export function useHotels(filters: HotelFilters = {}) {
     }
   };
 
-  useEffect(() => {
-    fetchHotels();
-  }, [fetchHotels]);
-
+  // The shape callers already read, rebuilt from the query and preserved
+  // exactly, so this lands without touching a page.
   return {
-    ...state,
+    hotels: data?.hotels ?? [],
+    totalCount: data?.totalCount ?? 0,
+    isLoading,
+    error: error
+      ? error instanceof Error
+        ? error.message
+        : "Failed to fetch hotels"
+      : null,
     refetch: fetchHotels,
     createHotel,
     updateHotel,
@@ -258,136 +263,110 @@ export function useHotels(filters: HotelFilters = {}) {
 
 // Hook to fetch a single hotel by slug
 export function useHotel(slug: string | undefined) {
-  const [hotel, setHotel] = useState<Hotel | null>(null);
-  const [isLoading, setIsLoading] = useState(true);
-  const [error, setError] = useState<string | null>(null);
+  // `enabled` replaces the `if (!slug) { setIsLoading(false); return; }` guard:
+  // with no slug there is nothing to fetch, and the query never runs.
+  const { data, isLoading, error } = useQuery<Hotel | null>({
+    queryKey: queryKeys.hotels.detail(slug ?? ""),
+    enabled: !!slug,
+    staleTime: STALE_TIME.CONTENT_LIST,
+    gcTime: GC_TIME,
+    queryFn: async () => {
+      const { data, error: fetchError } = await supabase
+        .from("hotels")
+        .select("*")
+        .eq("slug", slug)
+        .eq("is_active", true)
+        .maybeSingle();
 
-  useEffect(() => {
-    if (!slug) {
-      setIsLoading(false);
-      return;
-    }
-
-    const fetchHotel = async () => {
-      try {
-        setIsLoading(true);
-        setError(null);
-
-        const { data, error: fetchError } = await supabase
-          .from("hotels")
-          .select("*")
-          .eq("slug", slug)
-          .eq("is_active", true)
-          .maybeSingle();
-
-        if (fetchError) throw fetchError;
-
-        setHotel(data);
-      } catch (err) {
-        logger.error('useHotel', 'Error fetching hotel', { error: err });
-        setError(
-          err instanceof Error ? err.message : "Failed to fetch hotel"
-        );
-      } finally {
-        setIsLoading(false);
+      if (fetchError) {
+        logger.error('useHotel', 'Error fetching hotel', { error: fetchError });
+        throw fetchError;
       }
-    };
 
-    fetchHotel();
-  }, [slug]);
+      return (data ?? null) as Hotel | null;
+    },
+  });
 
-  return { hotel, isLoading, error };
+  return {
+    hotel: data ?? null,
+    // Without a slug there is no request, so `isLoading` must read false rather
+    // than the query's pending state -- callers render a spinner off it.
+    isLoading: slug ? isLoading : false,
+    error: error
+      ? error instanceof Error
+        ? error.message
+        : "Failed to fetch hotel"
+      : null,
+  };
 }
 
 // Hook to fetch hotels linked to a specific event
 export function useEventHotels(eventId: string | undefined) {
-  const [hotels, setHotels] = useState<(Hotel & { distance_miles?: number; notes?: string })[]>([]);
-  const [isLoading, setIsLoading] = useState(true);
+  type LinkedHotel = Hotel & { distance_miles?: number; notes?: string };
 
-  useEffect(() => {
-    if (!eventId) {
-      setIsLoading(false);
-      return;
-    }
+  const { data, isLoading } = useQuery<LinkedHotel[]>({
+    queryKey: [...queryKeys.hotels.all, 'for-event', eventId ?? ""] as const,
+    enabled: !!eventId,
+    staleTime: STALE_TIME.CONTENT_LIST,
+    gcTime: GC_TIME,
+    queryFn: async () => {
+      const { data, error } = await supabase
+        .from("event_hotels")
+        .select("*, hotels(*)")
+        .eq("event_id", eventId)
+        .order("sort_order", { ascending: true });
 
-    const fetchEventHotels = async () => {
-      try {
-        setIsLoading(true);
-
-        const { data, error } = await supabase
-          .from("event_hotels")
-          .select("*, hotels(*)")
-          .eq("event_id", eventId)
-          .order("sort_order", { ascending: true });
-
-        if (error) throw error;
-
-        const linked = (data || [])
-          .filter((eh: any) => eh.hotels && eh.hotels.is_active)
-          .map((eh: any) => ({
-            ...eh.hotels,
-            distance_miles: eh.distance_miles,
-            notes: eh.notes,
-          }));
-
-        setHotels(linked);
-      } catch (err) {
-        logger.error('useEventHotels', 'Error fetching event hotels', { error: err });
-      } finally {
-        setIsLoading(false);
+      if (error) {
+        logger.error('useEventHotels', 'Error fetching event hotels', { error });
+        throw error;
       }
-    };
 
-    fetchEventHotels();
-  }, [eventId]);
+      return (data || [])
+        .filter((eh: any) => eh.hotels && eh.hotels.is_active)
+        .map((eh: any) => ({
+          ...eh.hotels,
+          distance_miles: eh.distance_miles,
+          notes: eh.notes,
+        })) as LinkedHotel[];
+    },
+  });
 
-  return { hotels, isLoading };
+  return { hotels: data ?? [], isLoading: eventId ? isLoading : false };
 }
 
 // Hook to get filter options
 export function useHotelFilterOptions() {
-  const [options, setOptions] = useState({
-    areas: [] as string[],
-    hotelTypes: [] as string[],
-    isLoading: true,
+  // WEB-PERF-028 AC3. This ran TWO scans of the hotels table, one for `area`
+  // and one for `hotel_type`, to build two dropdowns. They read the same rows
+  // under the same predicate, so one projection of both columns answers both.
+  const { data, isLoading } = useQuery<{ areas: string[]; hotelTypes: string[] }>({
+    queryKey: [...queryKeys.hotels.all, 'filter-options'] as const,
+    // Reference data: the set of areas and hotel types changes when a hotel is
+    // added, not while someone is browsing.
+    staleTime: STALE_TIME.REFERENCE,
+    gcTime: GC_TIME,
+    queryFn: async () => {
+      const { data, error } = await supabase
+        .from("hotels")
+        .select("area,hotel_type")
+        .eq("is_active", true);
+
+      if (error) {
+        logger.error('useHotelFilterOptions', 'Error fetching hotel filter options', { error });
+        throw error;
+      }
+
+      const rows = (data || []) as { area: string | null; hotel_type: string | null }[];
+      return {
+        areas: [...new Set(rows.map((h) => h.area).filter(Boolean))].sort() as string[],
+        hotelTypes: [...new Set(rows.map((h) => h.hotel_type).filter(Boolean))].sort() as string[],
+      };
+    },
   });
 
-  useEffect(() => {
-    const fetchOptions = async () => {
-      try {
-        const { data: areaData } = await supabase
-          .from("hotels")
-          .select("area")
-          .eq("is_active", true)
-          .not("area", "is", null);
-
-        const { data: typeData } = await supabase
-          .from("hotels")
-          .select("hotel_type")
-          .eq("is_active", true)
-          .not("hotel_type", "is", null);
-
-        const uniqueAreas = [
-          ...new Set(areaData?.map((h) => h.area).filter(Boolean)),
-        ] as string[];
-
-        const uniqueTypes = [
-          ...new Set(typeData?.map((h) => h.hotel_type).filter(Boolean)),
-        ] as string[];
-
-        setOptions({
-          areas: uniqueAreas.sort(),
-          hotelTypes: uniqueTypes.sort(),
-          isLoading: false,
-        });
-      } catch (error) {
-        logger.error('useHotelFilterOptions', 'Error fetching hotel filter options', { error });
-        setOptions((prev) => ({ ...prev, isLoading: false }));
-      }
-    };
-
-    fetchOptions();
-  }, []);
-
-  return options;
+  return {
+    areas: data?.areas ?? [],
+    hotelTypes: data?.hotelTypes ?? [],
+    isLoading,
+  };
 }

@@ -6,7 +6,7 @@ import EnhancedLocalSEO from "@/components/EnhancedLocalSEO";
 import ItemListSchema from "@/components/schema/ItemListSchema";
 import { Breadcrumbs } from "@/components/ui/breadcrumbs";
 import { FAQSection } from "@/components/FAQSection";
-import { useAttractions } from "@/hooks/useAttractions";
+import { useAttractionTypeCounts, useAttractions } from "@/hooks/useAttractions";
 import { useUrlFilters } from "@/hooks/useUrlFilters";
 import { ActiveFilterChips } from "@/components/filters/ActiveFilterChips";
 import { getCanonicalUrl } from "@/lib/brandConfig";
@@ -127,71 +127,41 @@ export default function Attractions() {
   const setPage = (v: number | ((prev: number) => number)) =>
     setParam("page", typeof v === "function" ? v(page) : v, { def: 1 });
 
-  // Get all attractions first
-  const { attractions: allAttractions, isLoading, error, refetch } = useAttractions({});
+  // WEB-PERF-028 AC4. The hook used to be called with no filters at all --
+  // every active attraction, every column in the list projection, on every
+  // visit -- with the search, type, rating, featured and sort controls all
+  // applied in the two useMemos below. The filters now go to Postgres, so a
+  // visitor who has picked a type downloads that type instead of the whole
+  // table and then discards most of it.
+  //
+  // `urlQ` rather than `searchQuery`: the input keeps its own immediate state
+  // and writes to the URL on a 300ms debounce (see above). Passing the raw
+  // input would fire a request per keystroke.
+  const { attractions: allAttractions, isLoading, error, refetch } = useAttractions({
+    search: urlQ || undefined,
+    type: selectedType !== "all" ? selectedType : undefined,
+    minRating: minRating !== "any-rating" ? parseFloat(minRating) : undefined,
+    featuredOnly: featuredOnly === "featured" || undefined,
+    sortBy: sortBy === "name_asc" ? "alphabetical" : sortBy === "newest" ? "newest" : "rating",
+  });
   const { announce, announcement, regionProps } = useAnnounce();
 
-  // Get unique types for filter options
-  const attractionTypes = useMemo(() => {
-    const uniqueTypes = new Set(
-      allAttractions.map((attraction) => attraction.type).filter(Boolean)
-    );
-    return Array.from(uniqueTypes).sort();
-  }, [allAttractions]);
+  // The type list and the "Browse By Type" counts describe the WHOLE catalogue,
+  // not the current view, so they cannot be derived from a filtered list any
+  // more. One narrow single-column query answers both.
+  const { types: attractionTypes, counts: attractionTypeCounts } = useAttractionTypeCounts();
 
-  // Apply filters
-  const filteredAttractions = useMemo(() => {
-    return allAttractions.filter((attraction) => {
-      // Search filter
-      if (searchQuery) {
-        const searchLower = searchQuery.toLowerCase();
-        const matchesSearch =
-          attraction.name.toLowerCase().includes(searchLower) ||
-          attraction.description?.toLowerCase().includes(searchLower) ||
-          attraction.location?.toLowerCase().includes(searchLower) ||
-          attraction.type?.toLowerCase().includes(searchLower);
-        if (!matchesSearch) return false;
-      }
-
-      // Type filter
-      if (selectedType !== "all" && attraction.type !== selectedType) {
-        return false;
-      }
-
-      // Rating filter
-      if (minRating !== "any-rating") {
-        const ratingThreshold = parseFloat(minRating);
-        if (!attraction.rating || attraction.rating < ratingThreshold) {
-          return false;
-        }
-      }
-
-      // Featured filter
-      if (featuredOnly === "featured" && !attraction.is_featured) {
-        return false;
-      }
-
-      return true;
-    });
-  }, [allAttractions, searchQuery, selectedType, minRating, featuredOnly]);
-
-  const sortedAttractions = useMemo(() => {
-    const sorted = [...filteredAttractions];
-    switch (sortBy) {
-      case "newest":
-        sorted.sort((a, b) => new Date(b.created_at || 0).getTime() - new Date(a.created_at || 0).getTime());
-        break;
-      case "name_asc":
-        sorted.sort((a, b) => a.name.localeCompare(b.name));
-        break;
-      case "rating":
-      default:
-        sorted.sort((a, b) => (b.rating || 0) - (a.rating || 0));
-        break;
-    }
-    // Boost up to 2 active sponsored listings to the top (WEB-FEAT-005).
-    return arrangeSponsored(sorted);
-  }, [filteredAttractions, sortBy]);
+  // Postgres has already applied every filter and the sort. Both names are kept
+  // because the JSX below reads each of them in a dozen places, and the
+  // distinction between "filtered" and "sorted" no longer exists client-side.
+  const filteredAttractions = allAttractions;
+  // arrangeSponsored still runs client-side: boosting up to two active
+  // sponsored listings to the top (WEB-FEAT-005) is not something the ORDER BY
+  // expresses, and it must be applied AFTER the sort, exactly as before.
+  const sortedAttractions = useMemo(
+    () => arrangeSponsored([...allAttractions]),
+    [allAttractions]
+  );
 
   const handleSurpriseMe = () => {
     if (!filteredAttractions || filteredAttractions.length === 0) return;
@@ -865,7 +835,7 @@ export default function Attractions() {
             </p>
             <div className="grid grid-cols-2 sm:grid-cols-3 md:grid-cols-4 lg:grid-cols-6 gap-3">
               {attractionTypes.map((type) => {
-                const count = allAttractions.filter((a) => a.type === type).length;
+                const count = attractionTypeCounts[type] ?? 0;
                 return (
                   <button
                     key={type}

@@ -200,6 +200,10 @@ jobs:
       # render up to 100. Pins the opt-in realtime default and the batch wiring
       # on every landing page.
       - run: deno test --allow-read supabase/functions/_tests/event-social-fanout.test.ts
+      - run: deno test --allow-read supabase/functions/_tests/list-hooks-query-cache.test.ts
+      - run: deno test --allow-read supabase/functions/_tests/oauth-role-sync-self-only.test.ts
+      - run: deno test --allow-read supabase/functions/_tests/deal-redemption-ledger.test.ts
+      - run: deno test --allow-read supabase/functions/_tests/event-visibility-both-switches.test.ts
       # The trial-conversion notice must state amount, date and cancel path,
       # and must not be gated on marketing consent or an LLM score
       # (WEB-LEGAL-006).

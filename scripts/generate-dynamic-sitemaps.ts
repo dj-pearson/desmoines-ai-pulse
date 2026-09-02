@@ -206,6 +206,8 @@ async function generateEventsSitemap(): Promise<number | null> {
       // WEB-AUTO-006 hides stale past-dated rows.
       .neq('is_merged', true)
       .neq('is_hidden', true)
+      // WEB-BE-034: archived_at is the other unpublish switch.
+      .is('archived_at', null)
       .order('date', { ascending: false })
       .order('id')
       .range(from, from + PAGE - 1);

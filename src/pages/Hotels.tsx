@@ -1,6 +1,6 @@
-import { useState, useMemo, useRef, useEffect } from "react";
+import { useState, useRef, useEffect } from "react";
 import { Helmet } from "react-helmet-async";
-import { useHotels, useHotelFilterOptions } from "@/hooks/useHotels";
+import { useHotels } from "@/hooks/useHotels";
 import HotelCard from "@/components/HotelCard";
 import { Input } from "@/components/ui/input";
 import { Button } from "@/components/ui/button";
@@ -112,7 +112,13 @@ export default function Hotels() {
     };
   }, []);
 
+  // Two full rows of the xl:grid-cols-3 grid below. /stay prerendered
+  // 3,773 elements inside #root against a median of 496 across all 35 routes,
+  // and Lighthouse flags above ~1,500 (WEB-PERF-023).
+  const VISIBLE_HOTELS = 24;
+
   const { hotels, isLoading, totalCount, error: hotelsError, refetch } = useHotels({
+    limit: VISIBLE_HOTELS,
     search: debouncedSearch,
     area: selectedAreas.length > 0 ? selectedAreas : undefined,
     priceRange: selectedPriceRanges.length > 0 ? selectedPriceRanges : undefined,
@@ -121,21 +127,26 @@ export default function Hotels() {
     sortBy,
   });
 
-  const featuredHotels = useMemo(
-    () => hotels.filter((h) => h.is_featured),
-    [hotels]
-  );
+  // WEB-PERF-028 AC3. This used to filter the full result array, which only
+  // worked because the array WAS every matching hotel. Now that the list query
+  // is capped at what the grid renders, the strip needs its own query -- three
+  // rows, straight from Postgres -- rather than whatever happens to be featured
+  // inside the first page of some other sort.
+  const { hotels: featuredHotels } = useHotels({
+    featuredOnly: true,
+    sortBy: "featured",
+    limit: 3,
+  });
 
-  // Two full rows of the xl:grid-cols-3 grid below. /stay prerendered
-  // 3,773 elements inside #root against a median of 496 across all 35
-  // routes, and Lighthouse flags above ~1,500 - paid in HTML parse, DOM
-  // memory and hydration, all main-thread (WEB-PERF-023).
-  //
-  // ONLY THE RENDERED LIST IS CAPPED. totalCount comes from the query and is
-  // what the result counter reads, so no number on the page changes.
-  const VISIBLE_HOTELS = 24;
-  const visibleHotels = hotels.slice(0, VISIBLE_HOTELS);
-  const hiddenHotelCount = hotels.length - visibleHotels.length;
+  // NO NUMBER ON THE PAGE CHANGES. The cap used to be a .slice() over an array
+  // holding every matching hotel, which still paid for every one of them over
+  // the wire and in memory. WEB-PERF-028 AC3 moved it into the query above, so
+  // the other rows are never sent -- and because `count: "exact"` reports the
+  // full match count in the Content-Range header regardless of the limit,
+  // totalCount is unchanged. The result counter and the "+N more" line below
+  // read exactly what they read before.
+  const visibleHotels = hotels;
+  const hiddenHotelCount = Math.max(0, totalCount - hotels.length);
 
   const activeFilterCount =
     selectedAreas.length +

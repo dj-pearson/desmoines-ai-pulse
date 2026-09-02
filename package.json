@@ -122,7 +122,8 @@
     "check-canonical-shape": "node scripts/check-canonical-url-shape.mjs",
     "check-outdoors-guide": "node scripts/check-outdoors-guide.mjs",
     "check-pseo-demand": "node scripts/check-pseo-demand.mjs",
-    "check-loading-canonical": "node scripts/check-loading-canonical.mjs"
+    "check-loading-canonical": "node scripts/check-loading-canonical.mjs",
+    "check-sitemap-duplicates": "node scripts/check-sitemap-duplicates.mjs"
   },
   "dependencies": {
     "@dnd-kit/core": "^6.3.1",

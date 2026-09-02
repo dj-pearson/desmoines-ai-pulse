@@ -3,9 +3,12 @@ import { describe, it, expect, vi, beforeEach } from 'vitest';
 /**
  * WEB-QA-024. Two guarantees, both of which the hook previously broke:
  *
- *   1. The events counts carry the SAME visibility predicate as useEvents
- *      (.neq is_merged / .neq is_hidden), so the homepage tile and the /events
- *      page it links to cannot disagree.
+ *   1. The events counts carry the SAME visibility predicate as useEvents, so
+ *      the homepage tile and the /events page it links to cannot disagree.
+ *      That predicate grew a third clause under WEB-BE-034: events has TWO
+ *      unpublish switches, is_hidden and archived_at, and this hook read only
+ *      the first -- so an event the expired sweep had retired was still
+ *      counted here while /events no longer showed it.
  *   2. A failed count THROWS rather than resolving to 0. The old code read
  *      `count ?? 0` and dropped the error, so an outage rendered a confident
  *      "0 Events Today" — a wrong number a visitor believes.
@@ -18,7 +21,7 @@ function makeQuery(result: { count: number | null; error: unknown }) {
     calls,
     then: (resolve: (v: unknown) => unknown) => Promise.resolve(result).then(resolve),
   };
-  for (const method of ['select', 'gte', 'lte', 'neq', 'eq', 'order', 'limit']) {
+  for (const method of ['select', 'gte', 'lte', 'neq', 'is', 'eq', 'order', 'limit']) {
     builder[method] = (...args: unknown[]) => {
       calls.push([method, args]);
       return builder;
@@ -66,6 +69,13 @@ describe('fetchHomepageCounts', () => {
         ['is_merged', true],
         ['is_hidden', true],
       ]);
+
+      // WEB-BE-034: the other unpublish switch. Without this the tile counts
+      // events that agent-link-monitor has retired and /events does not show.
+      const nullChecks = queries[index].calls
+        .filter(([method]) => method === 'is')
+        .map(([, args]) => args);
+      expect(nullChecks).toEqual([['archived_at', null]]);
     }
   });
 

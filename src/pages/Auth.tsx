@@ -65,6 +65,11 @@ export default function Auth() {
   const [showForgotPassword, setShowForgotPassword] = useState(false);
   const [forgotPasswordEmail, setForgotPasswordEmail] = useState("");
   const [signupEmail, setSignupEmail] = useState("");
+  // WEB-AUTH-004. The confirmation screen stays neutral either way -- saying
+  // "that address is taken" outright is the account enumeration Supabase's
+  // response shape exists to prevent -- but a Resend button that cannot work
+  // is worse than no button, so this decides which actions it offers.
+  const [addressAlreadyRegistered, setAddressAlreadyRegistered] = useState(false);
   const [accountType, setAccountType] = useState<"personal" | "business">("personal");
   const [showMFAVerification, setShowMFAVerification] = useState(false);
   const [mfaFactorId, setMfaFactorId] = useState<string | null>(null);
@@ -563,6 +568,7 @@ export default function Auth() {
       if (result.needsVerification) {
         // Show email confirmation screen
         setSignupEmail(formData.email);
+        setAddressAlreadyRegistered(!!result.alreadyRegistered);
         setShowEmailConfirmation(true);
       } else {
         // Signup successful and no verification needed (rare case)
@@ -648,20 +654,60 @@ export default function Auth() {
               </div>
 
               <div className="pt-4 space-y-3">
-                <p className="text-sm text-muted-foreground">
-                  Didn't receive the email?
-                </p>
-                <Button
-                  onClick={handleResendVerification}
-                  variant="outline"
-                  disabled={isLoading}
-                  className="w-full"
-                >
-                  {isLoading ? "Sending..." : "Resend Verification Email"}
-                </Button>
+                {addressAlreadyRegistered ? (
+                  <>
+                    {/* No Resend here, and that is the fix. auth.resend({ type:
+                        'signup' }) errors for an address that is already
+                        confirmed, so this button used to fail on press for
+                        exactly the person who needed it least. The wording
+                        names no account and confirms nothing about this
+                        address; it reads as ordinary help for anyone. */}
+                    <p className="text-sm text-muted-foreground">
+                      Already have an account?
+                    </p>
+                    <Button
+                      onClick={() => {
+                        setShowEmailConfirmation(false);
+                        setAddressAlreadyRegistered(false);
+                        setIsLogin(true);
+                      }}
+                      variant="outline"
+                      className="w-full"
+                    >
+                      Sign in instead
+                    </Button>
+                    <Button
+                      onClick={() => {
+                        setShowEmailConfirmation(false);
+                        setAddressAlreadyRegistered(false);
+                        setIsLogin(true);
+                        setShowForgotPassword(true);
+                      }}
+                      variant="ghost"
+                      className="w-full"
+                    >
+                      Reset your password
+                    </Button>
+                  </>
+                ) : (
+                  <>
+                    <p className="text-sm text-muted-foreground">
+                      Didn't receive the email?
+                    </p>
+                    <Button
+                      onClick={handleResendVerification}
+                      variant="outline"
+                      disabled={isLoading}
+                      className="w-full"
+                    >
+                      {isLoading ? "Sending..." : "Resend Verification Email"}
+                    </Button>
+                  </>
+                )}
                 <Button
                   onClick={() => {
                     setShowEmailConfirmation(false);
+                    setAddressAlreadyRegistered(false);
                     setIsLogin(true);
                   }}
                   variant="ghost"

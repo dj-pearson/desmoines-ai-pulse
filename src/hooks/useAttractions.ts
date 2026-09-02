@@ -13,13 +13,6 @@ type Attraction = Database["public"]["Tables"]["attractions"]["Row"];
 type AttractionInsert = Database["public"]["Tables"]["attractions"]["Insert"];
 type AttractionUpdate = Database["public"]["Tables"]["attractions"]["Update"];
 
-interface AttractionsState {
-  attractions: Attraction[];
-  isLoading: boolean;
-  error: string | null;
-  totalCount: number;
-}
-
 interface AttractionFilters {
   search?: string;
   type?: string;
@@ -66,8 +59,11 @@ export function useAttractions(filters: AttractionFilters = {}) {
       }
 
       if (filters.search) {
+        // `description` is in this list because Attractions.tsx matched it
+        // client-side (WEB-PERF-028 AC4). Moving the filter to the server
+        // without it would have silently narrowed every search on that page.
         query = query.or(
-          `name.ilike.%${filters.search}%,type.ilike.%${filters.search}%,location.ilike.%${filters.search}%`
+          `name.ilike.%${filters.search}%,type.ilike.%${filters.search}%,location.ilike.%${filters.search}%,description.ilike.%${filters.search}%`
         );
       }
 
@@ -205,4 +201,45 @@ export function useAttractions(filters: AttractionFilters = {}) {
     updateAttraction,
     deleteAttraction,
   };
+}
+
+/**
+ * Every attraction type and how many active attractions carry it
+ * (WEB-PERF-028 AC4).
+ *
+ * Attractions.tsx used to derive both from the full unfiltered list it already
+ * held, which is exactly why its filters could not move to the server: the
+ * moment the list is filtered, the type dropdown loses the types that were
+ * filtered out and the "Browse By Type" counts collapse to the current view.
+ *
+ * One narrow scan of a single column answers both, and it is reference data --
+ * the set of types changes when an attraction is added, not while someone is
+ * adjusting a filter.
+ */
+export function useAttractionTypeCounts() {
+  const { data, isLoading } = useQuery<{ types: string[]; counts: Record<string, number> }>({
+    queryKey: [...queryKeys.attractions.all, "type-counts"] as const,
+    staleTime: STALE_TIME.REFERENCE,
+    gcTime: GC_TIME,
+    queryFn: async () => {
+      const { data, error } = await supabase
+        .from("attractions")
+        .select("type")
+        .eq("is_active", true);
+
+      if (error) {
+        log.error("useAttractionTypeCounts", "Error fetching attraction types", { error });
+        throw error;
+      }
+
+      const counts: Record<string, number> = {};
+      for (const row of (data || []) as { type: string | null }[]) {
+        if (!row.type) continue;
+        counts[row.type] = (counts[row.type] || 0) + 1;
+      }
+      return { types: Object.keys(counts).sort(), counts };
+    },
+  });
+
+  return { types: data?.types ?? [], counts: data?.counts ?? {}, isLoading };
 }

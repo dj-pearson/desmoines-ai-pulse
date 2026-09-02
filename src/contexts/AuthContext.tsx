@@ -1,4 +1,6 @@
 import { createContext, useContext, useState, useEffect, useRef, useCallback, useMemo, ReactNode } from "react";
+import { useQueryClient } from "@tanstack/react-query";
+import { interpretSignUpResult } from "@/lib/signUpResult";
 import { supabase } from "@/integrations/supabase/client";
 import { User, Session, AuthChangeEvent } from "@supabase/supabase-js";
 // Only the redirect validator is needed here, and it lives in a file with no
@@ -31,7 +33,8 @@ interface AuthState {
 
 interface AuthActions {
   login: (email: string, password: string) => Promise<{ success: boolean; error?: string; requiresMFA?: boolean; factorId?: string }>;
-  signup: (email: string, password: string, metadata?: Record<string, unknown>) => Promise<{ success: boolean; error?: string; needsVerification?: boolean }>;
+  /** `alreadyRegistered` is true when the address already had an account (WEB-AUTH-004). */
+  signup: (email: string, password: string, metadata?: Record<string, unknown>) => Promise<{ success: boolean; error?: string; needsVerification?: boolean; alreadyRegistered?: boolean }>;
   logout: () => Promise<void>;
   requireAdmin: () => void;
   refreshSession: () => Promise<boolean>;
@@ -157,6 +160,9 @@ async function checkServerLockout(
 }
 
 export function AuthProvider({ children }: { children: ReactNode }) {
+  // WEB-SEC-031. AuthProvider is mounted INSIDE QueryClientProvider
+  // (main.tsx wraps App), so this resolves.
+  const queryClient = useQueryClient();
   const [authState, setAuthState] = useState<AuthState>({
     user: null,
     session: null,
@@ -247,6 +253,36 @@ export function AuthProvider({ children }: { children: ReactNode }) {
     });
   }, [checkIsAdmin]);
 
+  /**
+   * Drop every cached query when a session ends (WEB-SEC-031).
+   *
+   * Logout removed the sb-* storage keys and nothing else, so the previous
+   * user's profile, favorites, subscription, trip plans and -- if they were an
+   * admin -- the whole admin surface stayed in the TanStack cache until
+   * staleTime expired. On a shared device the next person's first paint could
+   * come off that cache.
+   *
+   * clear(), not removeQueries on a list of user-scoped prefixes. A prefix list
+   * is a second inventory that has to be maintained in step with 100-odd hooks,
+   * and the failure mode when it drifts is silent and invisible. The cost of
+   * clearing everything is that public lists refetch after a logout, which is
+   * one request on a screen the user is leaving anyway.
+   *
+   * Called from BOTH places a session can end, and that is deliberate:
+   * handleAuthChange returns early while isLoggingOutRef is set, so the
+   * SIGNED_OUT event raised by the logout button never reaches its handler.
+   * Putting this only in the event handler would cover expiry and
+   * sign-out-elsewhere and miss the button, which is the common case.
+   */
+  const clearQueryCache = useCallback(() => {
+    try {
+      queryClient.clear();
+    } catch (error) {
+      // Never let cache teardown block a sign-out.
+      log.warn('clearQueryCache', 'Failed to clear query cache', { error });
+    }
+  }, [queryClient]);
+
   // Handle auth state changes
   const handleAuthChange = useCallback(async (event: AuthChangeEvent, session: Session | null, isMounted: boolean) => {
     // Skip processing if we're logging out
@@ -262,6 +298,7 @@ export function AuthProvider({ children }: { children: ReactNode }) {
     // Handle specific events
     if (event === 'SIGNED_OUT') {
       log.info('handleAuthChange', 'User signed out via event');
+      clearQueryCache();
       adminStatusCache.clear();
       resolvedAdminForUserRef.current = null;
       setAuthState({
@@ -411,7 +448,7 @@ export function AuthProvider({ children }: { children: ReactNode }) {
         setAuthState(prev => ({ ...prev, isAdmin, isAdminLoading: false }));
       }
     }
-  }, [checkIsAdmin, revalidateAdminSilently]);
+  }, [checkIsAdmin, revalidateAdminSilently, clearQueryCache]);
 
   useEffect(() => {
     log.info('init', 'Initializing auth context');
@@ -586,7 +623,7 @@ export function AuthProvider({ children }: { children: ReactNode }) {
   }, []);
 
   // Signup with email/password
-  const signup = useCallback(async (email: string, password: string, metadata?: Record<string, unknown>): Promise<{ success: boolean; error?: string; needsVerification?: boolean }> => {
+  const signup = useCallback(async (email: string, password: string, metadata?: Record<string, unknown>): Promise<{ success: boolean; error?: string; needsVerification?: boolean; alreadyRegistered?: boolean }> => {
     try {
       log.info('signup', 'Attempting signup', { email });
       const { data, error } = await supabase.auth.signUp({
@@ -603,11 +640,17 @@ export function AuthProvider({ children }: { children: ReactNode }) {
         return { success: false, error: error.message };
       }
 
-      // Check if email confirmation is required
-      const needsVerification = !!data.user && !data.session;
-      log.info('signup', 'Signup successful', { needsVerification });
+      // WEB-AUTH-004. This was `!!data.user && !data.session`, which cannot tell
+      // a new account from an address that already had one -- Supabase answers
+      // both with a user and no session, on purpose, so the response cannot be
+      // used to enumerate accounts. The tell is an empty `identities` array.
+      const { needsVerification, alreadyRegistered } = interpretSignUpResult(data);
+      // The email is NOT logged on this branch. "already registered" plus an
+      // address is exactly the pairing the neutral response exists to withhold,
+      // and a log line is a place it leaks.
+      log.info('signup', 'Signup successful', { needsVerification, alreadyRegistered });
 
-      return { success: true, needsVerification };
+      return { success: true, needsVerification, alreadyRegistered };
     } catch (error: unknown) {
       log.error('signup', 'Signup exception', { error });
       const message = error instanceof Error ? error.message : "An unexpected error occurred";
@@ -625,6 +668,10 @@ export function AuthProvider({ children }: { children: ReactNode }) {
 
     log.info('logout', 'Starting logout');
     isLoggingOutRef.current = true;
+
+    // Before the await below, not after: signOut can time out (there is a 3s
+    // race here) and the cached rows must be gone either way.
+    clearQueryCache();
 
     // Clear admin cache first
     adminStatusCache.clear();
@@ -702,7 +749,7 @@ export function AuthProvider({ children }: { children: ReactNode }) {
     setTimeout(() => {
       isLoggingOutRef.current = false;
     }, 500);
-  }, []);
+  }, [clearQueryCache]);
 
   // Refresh session manually - returns true if successful
   const refreshSession = useCallback(async (): Promise<boolean> => {

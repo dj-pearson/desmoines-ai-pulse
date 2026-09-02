@@ -129,6 +129,8 @@ export function useTrending(config: FallbackConfig = { useRealData: true, minIte
               .select(EVENT_LIST_COLUMNS)
               .in('id', idsByType.event)
               .neq('is_hidden', true) // Exclude soft-hidden stale events (WEB-AUTO-006)
+              // WEB-BE-034: archived_at is the other unpublish switch.
+              .is('archived_at', null)
           : null,
         idsByType.restaurant.length
           ? supabase.from('restaurants').select(RESTAURANT_LIST_COLUMNS).in('id', idsByType.restaurant)
@@ -204,6 +206,8 @@ export function useTrending(config: FallbackConfig = { useRealData: true, minIte
         .select(EVENT_LIST_COLUMNS)
         .eq('is_featured', true)
         .neq('is_hidden', true) // Exclude soft-hidden stale events (WEB-AUTO-006)
+        // WEB-BE-034: archived_at is the other unpublish switch.
+        .is('archived_at', null)
         .order('created_at', { ascending: false })
         .limit(6);
 

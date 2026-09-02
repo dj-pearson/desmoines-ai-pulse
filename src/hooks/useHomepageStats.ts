@@ -57,15 +57,18 @@ export async function fetchHomepageCounts(): Promise<HomepageCounts> {
   const weekAgoUtc = weekAgo.toISOString();
 
   const [eventsRes, restaurantsRes, newEventsRes] = await Promise.all([
-    // Events happening today. The two .neq calls are the whole point of AC1 —
-    // they must stay in step with useEvents.ts.
+    // Events happening today. The visibility predicate is the whole point of
+    // AC1 -- it must stay in step with useEvents.ts, which now also filters
+    // archived_at (WEB-BE-034).
     supabase
       .from('events')
       .select('*', { count: 'exact', head: true })
       .gte('date', todayStartUtc)
       .lte('date', todayEndUtc)
       .neq('is_merged', true)
-      .neq('is_hidden', true),
+      .neq('is_hidden', true)
+      // WEB-BE-034: archived_at is the other unpublish switch.
+      .is('archived_at', null),
 
     // All restaurants. NOTE: this tile links to /restaurants/open-now, which
     // shows a subset — the number and the destination have never matched. Left
@@ -84,7 +87,9 @@ export async function fetchHomepageCounts(): Promise<HomepageCounts> {
       .gte('created_at', weekAgoUtc)
       .gte('date', todayStartUtc)
       .neq('is_merged', true)
-      .neq('is_hidden', true),
+      .neq('is_hidden', true)
+      // WEB-BE-034: archived_at is the other unpublish switch.
+      .is('archived_at', null),
   ]);
 
   // Surface the first failure rather than substituting a zero for it.

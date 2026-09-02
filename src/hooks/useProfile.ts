@@ -1,12 +1,13 @@
-import { useState, useEffect } from "react";
+import { useCallback } from "react";
+import { useQuery, useQueryClient } from "@tanstack/react-query";
 import { supabase } from "@/integrations/supabase/client";
 import { useAuth } from "./useAuth";
 import { createLogger } from "@/lib/logger";
 import { Database } from "@/integrations/supabase/types";
+import { queryKeys } from "@/lib/queryKeys";
+import { STALE_TIME, GC_TIME } from "@/lib/queryConfig";
 
 const logger = createLogger("useProfile");
-
-type Profile = Database["public"]["Tables"]["profiles"]["Row"];
 
 /**
  * Derived from the generated schema rather than hand-maintained (WEB-CI-007).
@@ -22,22 +23,21 @@ type Profile = Database["public"]["Tables"]["profiles"]["Row"];
 export type UserProfile = Database["public"]["Tables"]["profiles"]["Row"];
 
 export function useProfile() {
-  const [profile, setProfile] = useState<UserProfile | null>(null);
-  const [isLoading, setIsLoading] = useState(true);
-  const [error, setError] = useState<string | null>(null);
+  const queryClient = useQueryClient();
   const { user } = useAuth();
 
-  const fetchProfile = async () => {
-    if (!user) {
-      setProfile(null);
-      setIsLoading(false);
-      return;
-    }
-
-    try {
-      setIsLoading(true);
-      setError(null);
-
+  // WEB-PERF-028. This fetched in useEffect with useState, so the profile was
+  // refetched on every mount and was invisible to PrerenderSignal, which counts
+  // TanStack queries only.
+  //
+  // `enabled` replaces the `if (!user) return` guard: with no user there is no
+  // profile to fetch, and the query simply does not run.
+  const { data: profile, isLoading, error } = useQuery<UserProfile | null>({
+    queryKey: queryKeys.user.profile(user?.id ?? "anonymous"),
+    enabled: !!user,
+    staleTime: STALE_TIME.CONTENT_LIST,
+    gcTime: GC_TIME,
+    queryFn: async () => {
       const { data, error } = await supabase
         .from("profiles")
         .select("*")
@@ -46,8 +46,7 @@ export function useProfile() {
 
       if (error) {
         logger.error('fetchProfile', 'Error fetching profile', { error });
-        setError(error.message);
-        return;
+        throw error;
       }
 
       if (!data) {
@@ -80,23 +79,24 @@ export function useProfile() {
           .eq("user_id", user.id)
           .maybeSingle();
 
-        if (createError) {
+        // An insert error that still leaves a row behind is not a failure --
+        // that is exactly the losing side of the race described above. Only
+        // report it when the read-back also came back empty.
+        if (createError && !newProfile) {
           logger.error('fetchProfile', 'Error creating profile', { error: createError });
-          setError(createError.message);
-          return;
+          throw createError;
         }
 
-        setProfile(newProfile);
-      } else {
-        setProfile(data);
+        return (newProfile ?? null) as UserProfile | null;
       }
-    } catch (error) {
-      logger.error('fetchProfile', 'Error fetching profile', { error });
-      setError(error instanceof Error ? error.message : "Failed to fetch profile");
-    } finally {
-      setIsLoading(false);
-    }
-  };
+      return data as UserProfile;
+    },
+  });
+
+  /** Re-read the profile. Kept as `refetch` for the callers that already use it. */
+  const fetchProfile = useCallback(async () => {
+    await queryClient.invalidateQueries({ queryKey: queryKeys.user.all });
+  }, [queryClient]);
 
   const updateProfile = async (updates: Partial<Omit<UserProfile, "id" | "user_id" | "created_at" | "updated_at">>) => {
     if (!user) {
@@ -115,7 +115,7 @@ export function useProfile() {
         throw error;
       }
 
-      setProfile(data);
+      queryClient.setQueryData(queryKeys.user.profile(user.id), data);
       return data;
     } catch (error) {
       logger.error('updateProfile', 'Error updating profile', { error });
@@ -123,14 +123,12 @@ export function useProfile() {
     }
   };
 
-  useEffect(() => {
-    fetchProfile();
-  }, [user]);
 
+  // The exact surface callers already read.
   return {
-    profile,
+    profile: profile ?? null,
     isLoading,
-    error,
+    error: error ? (error instanceof Error ? error.message : "Failed to fetch profile") : null,
     updateProfile,
     refetch: fetchProfile,
   };

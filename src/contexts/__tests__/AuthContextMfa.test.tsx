@@ -1,4 +1,5 @@
 import { describe, it, expect, vi, beforeEach } from 'vitest';
+import { QueryClient, QueryClientProvider } from '@tanstack/react-query';
 import { render, act } from '@testing-library/react';
 
 /**
@@ -85,9 +86,11 @@ function Probe() {
 async function mount() {
   await act(async () => {
     render(
-      <AuthProvider>
+      <QueryClientProvider client={new QueryClient()}>
+        <AuthProvider>
         <Probe />
-      </AuthProvider>,
+      </AuthProvider>
+        </QueryClientProvider>,
     );
   });
 }

@@ -437,3 +437,193 @@ Started: 2026-08-31T19:18:09.615Z
   - Remaining: useHotels (the big one, 8 useState/5 useEffect), useRestaurants
     (partly migrated already), useProfile.
 ---
+
+## 2026-09-02 — WEB-PERF-028 (list hooks onto TanStack Query)
+
+Closed the story that had been left open across two ticks. Six hooks converted
+(attractions, playgrounds, articles, profile, restaurants, hotels), plus the
+three smaller hooks living in useHotels.ts. Hotel list projection added, both
+remaining client-side-filtering pages moved onto server-side filters.
+
+### Learnings for future iterations
+
+- **PrerenderSignal only counts TanStack queries.** `useIsFetching()` is the
+  source of `data-queries-settled`. Any hook that fetches outside TanStack is
+  invisible to it, so the route claims settled mid-flight and the prerenderer
+  captures a skeleton. This is the reason the conversion mattered; the caching
+  was the smaller half.
+- **Always give useQuery an explicit generic naming the Row type.** These hooks
+  select a column projection, so an inferred return type is narrower than the
+  Row callers are typed against. One conversion produced 34 errors in two files
+  for a change that altered no runtime value.
+- **Do not write a generic hook-converter script.** It worked on the first hook
+  and then ate a `try {` opener on the second, because each hook's catch block
+  is shaped slightly differently. Hand-convert; it is faster than debugging the
+  script.
+- **Client-side filtering is usually held in place by the filter dropdowns.**
+  Both pages derived their facet lists and "Browse By" counts from the same
+  unfiltered array they were filtering. You cannot move the filters to the
+  server until the facets have their own query. Look for that dependency first.
+- **Collapsing a sort memo can drop behaviour hiding at the end of it.** The
+  Attractions sort memo ended in `arrangeSponsored(sorted)`. Deleting the memo
+  deleted the sponsored boost. `git show HEAD:<file>` on any memo before
+  replacing it.
+- **A column projection is a contract with every function that reads the row.**
+  ATTRACTION_LIST_COLUMNS omitted is_sponsored and sponsored_until, so the
+  sponsored boost on /attractions had never once fired. It type-checked,
+  because the projection's absence is not a type error. When adding a
+  projection, grep for every helper the list is passed to.
+- **The comment-vs-assertion trap, twice more.** `assertFalse(/useAttractions\(\{\}\)/)`
+  matched my own comment saying "this used to be useAttractions({})". Reword
+  the prose. Never weaken the assertion.
+- **PostgREST cannot substring-match inside a text[].** `cs` wants a whole
+  element and `ilike` does not apply to arrays. The /playgrounds search matches
+  inside amenity strings, so that one filter has to stay client-side; moving it
+  would have silently dropped every amenity hit.
+
+## 2026-09-02 — WEB-SEC-031 (logout cache teardown) and WEB-SEC-030 (role sync)
+
+### Learnings for future iterations
+
+- **A logout handler that returns early never sees its own event.** AuthContext's
+  `handleAuthChange` opens with `if (isLoggingOutRef.current) return;`, and the
+  flag is set before `signOut()`. So the SIGNED_OUT raised by the logout button
+  is dropped before its handler runs. Anything that must happen on sign-out
+  belongs in both the event branch and `logout()`. Check for that early return
+  before deciding one hook is enough.
+- **`queryClient.clear()` beats a prefix list.** A list of user-scoped key
+  prefixes is a second inventory to keep in step with a hundred hooks, and its
+  failure mode is silent. Clearing everything costs one refetch on a screen the
+  user is leaving.
+- **Most user-scoped keys were already correct.** The audit found two wrong out
+  of a dozen. The real residue was admin- and role-scoped keys, which should NOT
+  carry a user id; `clear()` is the only thing that reaches those.
+- **A key can be user-scoped without looking it.** `useActiveAds` takes no user
+  argument and reads the id inside its queryFn via `supabase.auth.getUser()`,
+  passing it to an RPC that frequency-caps per account. Grep queryFn bodies for
+  `auth.getUser` and `p_user_id`, not just hook signatures.
+- **Prefer `useAuthState()` over `useAuth()` in hot hooks.** The context split
+  exists so an ads hook on every page does not re-render when an action
+  reference changes.
+- **`/TO public/` matches `INSERT INTO public.x`.** A migration assertion about
+  grants has to anchor on GRANT. This is the same class as the
+  comment-vs-assertion trap: the regex is right about the words and wrong about
+  the meaning.
+- **Tighten an RPC only after counting its callers.** `sync_oauth_user_role` had
+  exactly one, already passing `auth.uid()`, and neither mobile app called it.
+  That is what made narrowing its validation legal under CLAUDE.md's
+  backward-compatibility rules rather than a breaking change for shipped
+  binaries.
+- **Confirm both ends of an email match.** Requiring `email_confirmed_at` on the
+  target is the obvious half; requiring it on the row the role is copied FROM is
+  the half that stops someone seeding a role at an admin's address with an
+  unconfirmed row and then inheriting it.
+
+## 2026-09-02 — WEB-SEC-033 (deals ownership and redemption ledger)
+
+### Learnings for future iterations
+
+- **A policy's NAME is not its predicate.** "Business owners and admins can
+  insert deals" had `WITH CHECK (auth.role() = 'authenticated')`. The name is
+  why nobody looked. Read predicates, not policy names.
+- **PERMISSIVE policies OR together.** Adding a stricter policy beside a
+  permissive one changes nothing. The permissive one has to be DROPped.
+- **PostgREST resolves RPC arguments by name, so parameter names are contract.**
+  Renaming `deal_id` would break iOS (`let deal_id: String`) and Android
+  (`@SerialName("deal_id")`) even though the type and arity are unchanged. Keep
+  the name and qualify the shadowed column as `function_name.param`.
+- **Do not add an optional parameter beside an existing arity.** A
+  two-parameter version with a DEFAULT lives alongside the one-parameter
+  function, and a one-argument call is then ambiguous — the PGRST203 failure
+  that broke `get_active_ads` on every homepage load.
+- **Derive a counter, don't increment it.** A ledger plus `count(*)` makes
+  retries, double-submits and replays converge. An increment accumulates, and
+  once it has, nothing can tell an inflated count from a real one.
+- **An unsalted hash of an IP is not anonymisation.** IPv4 is 32 bits; brute
+  force reverses it in seconds. Salt it, and keep the salt in a table with RLS
+  on and no policies.
+- **CLAUDE.md's tightening rule has one exception: a write no shipped client
+  performs.** That is a claim to verify with grep and then pin with a test, not
+  to assert in a comment.
+
+## 2026-09-02 — WEB-AUTH-004 (signup with an existing address)
+
+### Learnings for future iterations
+
+- **Supabase signUp does not error for an existing address.** It returns a user
+  and no session, identical to a fresh signup, so the response cannot enumerate
+  accounts. The only difference is `identities: []`. Anything reading
+  `user && !session` conflates the two.
+- **The consequence was a button that fails on press.**
+  `auth.resend({ type: 'signup' })` errors for a confirmed address, so the
+  Resend button was broken for exactly the user who saw it.
+- **Keep the screen neutral, change the actions.** Naming the account is the
+  enumeration the response shape protects against. Swapping Resend for
+  "Sign in instead" and "Reset your password" reads the same to anyone.
+- **Treat a missing `identities` as a normal signup.** If the field ever
+  disappears from supabase-js, the neutral screen with a working Resend is the
+  safer wrong answer; the alternative hides Resend from every real new user.
+- **Extract the decision as a pure function.** "Test both branches" is only
+  cheap once the branch is a function over a response shape rather than a line
+  inside a useCallback.
+
+## 2026-09-02 — WEB-BE-034 AC3 (two unpublish switches on events)
+
+### Learnings for future iterations
+
+- **`events` has TWO independent hide mechanisms and they had split by
+  audience.** `is_hidden`/`hidden_at` is read by 19 web surfaces and nothing
+  else; `archived_at` is read by 5 agent surfaces and nothing else. So the
+  expired-event sweep could run perfectly and change nothing a visitor or a
+  crawler saw. When a job "does nothing", check whether the readers agree with
+  the writer before blaming the schedule.
+- **Check the column exists before a sweeping `.is()` edit.** A filter on a
+  missing column is 42703, and PostgREST fails the whole select — the WEB-QA-003
+  failure that blanked the homepage. All 19 sites here read `events`, which
+  carries both columns.
+- **A mechanical edit across N chains cannot assume how each terminates.** Two
+  of the 19 sat inside a `Promise.all` array and ended in a comma, not a
+  semicolon; appending a chained call after them was a syntax error. eslint
+  caught it. Run lint immediately after any scripted multi-file edit.
+- **The comment-vs-assertion trap, third variant: it can fail on CORRECT code.**
+  The test counted `.neq("is_hidden", true)` per file and useHomepageStats'
+  docstring QUOTES that call to explain what the hook must match. Strip block
+  and line comments before counting anything in source.
+- **Count paired filters, don't just check presence.** Asserting both filters
+  appear somewhere in a file passes even when one query has both and another has
+  neither. Asserting the counts are EQUAL is what catches the drift.
+- **Don't merge the two mechanisms.** "A moderator hid this" and "the sweep
+  retired this" are different facts, and `archived_at` is a timestamp because
+  the documented undo is "set it back to null" — a boolean would lose when it
+  happened.
+
+### Finding, not acted on: an unwired test suite
+
+`supabase/functions/_tests/agent-performance-review.test.ts` appears in no
+workflow. Run by hand it dies with `NotCapable: Requires net access to
+"0.0.0.0:8000"` — it wants to bind a server, so it needs `--allow-net` and
+probably a running function. Wiring it blind would either fail CI or pass
+vacuously, so it is recorded here rather than added. Every other suite under
+`_tests/` is wired into `subscription-sync-tests.yml`.
+
+## 2026-09-02 — WEB-SEO-017 AC3 guard (sitemap duplicate check)
+
+### Learnings for future iterations
+
+- **A dedupe inside one writer is not a guarantee about the artifact.** Three
+  things write `public/sitemap-*.xml`: `generate-dynamic-sitemaps.ts`,
+  `generate-sitemap.js`, and the `regenerate-sitemaps` edge function. Check the
+  file, not the function.
+- **Check across files as well as within one.** The within-file check (what the
+  AC asked for) passed everywhere. The cross-file check found `/guides` claimed
+  by both `sitemap-guides.xml` and `sitemap-static.xml`.
+- **That overlap is deliberate on both sides, so allowlist it with the reason
+  rather than dropping the check.** `sitemap-static.xml` must list `/guides`
+  because `prerender-routes.mjs` states the invariant that every prerendered
+  route appears there. `sitemap-guides.xml` must list it because WEB-SEO-003
+  found the hub was dropped the moment one published guide existed, and the hub
+  is the only URL in that file serving its own document. A one-entry allowlist
+  keeps a NEW overlap failing.
+- **Prove a guard fires.** Duplicating one `<url>` block made it exit 1 naming
+  the URL and the counts. A check nobody has seen fail is a check nobody knows
+  works.
