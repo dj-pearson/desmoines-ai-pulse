@@ -95,6 +95,7 @@ export default function Auth() {
   const [searchParams] = useSearchParams();
   const {
     isAuthenticated,
+    isPasswordRecovery,
     login,
     signup,
     signInWithGoogle,
@@ -117,12 +118,25 @@ export default function Auth() {
   useDocumentTitle("Sign In");
 
   useEffect(() => {
+    // WEB-AUTH-001. A password-recovery link creates a real session, so this
+    // effect used to fire and bounce the user to the homepage with their old
+    // password intact. Two ways to land here mid-recovery:
+    //   - isPasswordRecovery, set from the PASSWORD_RECOVERY event;
+    //   - ?reset=true, the old redirect target, still live in any email sent
+    //     within the last hour.
+    // Both go to the page that can actually change a password.
+    const isRecovery = isPasswordRecovery || searchParams.get("reset") === "true";
+    if (isRecovery) {
+      navigate("/auth/reset-password", { replace: true });
+      return;
+    }
+
     if (isAuthenticated) {
       // Get the redirect parameter from URL, validate to prevent open redirect attacks
       const redirectTo = SecurityUtils.getSafeRedirectUrl(searchParams.get("redirect"), "/");
       navigate(redirectTo, { replace: true });
     }
-  }, [isAuthenticated, navigate, searchParams]);
+  }, [isAuthenticated, isPasswordRecovery, navigate, searchParams]);
 
   const handleInputChange = (field: string, value: any) => {
     setFormData(prev => ({ ...prev, [field]: value }));

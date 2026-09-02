@@ -111,3 +111,33 @@ Started: 2026-08-31T19:18:09.615Z
   - Several _shared/*.test.ts suites exist that no CI lane runs. Check
     subscription-sync-tests.yml before assuming a test file is enforced.
 ---
+## 2026-09-02 - WEB-AUTH-001 (password reset led nowhere)
+- New /auth/reset-password page (RHF + zod, rules mirrored from
+  SecurityUtils.validatePassword, PasswordStrengthMeter, show/hide toggle).
+- resetPasswordForEmail redirectTo -> /auth/reset-password.
+- AuthContext: isPasswordRecovery on AuthState + AuthFlags; PASSWORD_RECOVERY
+  and USER_UPDATED branches; INITIAL_SESSION reset switched to the updater form
+  so it cannot clobber the flag.
+- Auth.tsx routes recovery (flag OR ?reset=true, kept for in-flight emails) to
+  the reset page before the isAuthenticated redirect.
+- Expired links read from BOTH the query string (PKCE) and the hash (implicit).
+- After update: signOut({ scope: 'others' }).
+- 3 Playwright cases appended to route-smoke.spec.ts.
+- **Learnings for future iterations:**
+  - `npm run type-check` IS A NO-OP. tsconfig.json is "files": [] plus project
+    references, and `tsc --noEmit` without --build checks zero files. It exits 0
+    on a page that references an undeclared variable. CI's validate job runs
+    exactly this, so src/ is not type-checked anywhere in CI.
+    Use `npx tsc -p tsconfig.app.json --noEmit` to actually check src/. It takes
+    ~10 minutes and currently reports 371 pre-existing errors (171 of them in
+    the dead CRM hooks). Filed as WEB-CI-030.
+  - `npm run type-check:strict:ratchet` ALREADY FAILS on 6e58535, the base of
+    this branch: src/pages/EventsToday.tsx 1 -> 3. Verified in a clean worktree
+    at that commit, so do not attribute it to your own change. Also in
+    WEB-CI-030.
+  - Supabase reports a dead auth link in the query string under PKCE and in the
+    URL hash under the implicit flow. Read both or the error page never renders.
+  - PASSWORD_RECOVERY and INITIAL_SESSION can arrive in either order, so any
+    full-object setAuthState in the INITIAL_SESSION path will clobber a flag set
+    by the recovery branch. Use the updater form.
+---

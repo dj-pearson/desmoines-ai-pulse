@@ -18,6 +18,15 @@ interface AuthState {
   isAdminLoading: boolean; // True while admin check is in progress
   requiresMFA: boolean;
   mfaFactorId: string | null;
+  /**
+   * True between a PASSWORD_RECOVERY event and the password actually changing.
+   *
+   * WEB-AUTH-001: a recovery link creates an ordinary aal1 session, so every
+   * listener sees a normal sign-in and Auth.tsx used to redirect the user to
+   * the homepage before they could set a password. This flag is what tells the
+   * two apart.
+   */
+  isPasswordRecovery: boolean;
 }
 
 interface AuthActions {
@@ -48,6 +57,7 @@ export interface AuthFlags {
   isAdmin: boolean;
   isAdminLoading: boolean;
   requiresMFA: boolean;
+  isPasswordRecovery: boolean;
 }
 
 const AuthContext = createContext<AuthContextType | undefined>(undefined);
@@ -152,6 +162,7 @@ export function AuthProvider({ children }: { children: ReactNode }) {
     isAdminLoading: false,
     requiresMFA: false,
     mfaFactorId: null,
+    isPasswordRecovery: false,
   });
 
   // Track if we're in the middle of a logout to prevent race conditions
@@ -258,7 +269,38 @@ export function AuthProvider({ children }: { children: ReactNode }) {
         isAdminLoading: false,
         requiresMFA: false,
         mfaFactorId: null,
+        isPasswordRecovery: false,
       });
+      return;
+    }
+
+    // WEB-AUTH-001. Supabase signs the user in on a recovery link and then
+    // fires this. Keep the session -- the password change needs it -- but mark
+    // it so Auth.tsx sends them to /auth/reset-password instead of the
+    // homepage, and so nothing else mistakes it for a deliberate sign-in.
+    if (event === 'PASSWORD_RECOVERY') {
+      log.debug('handleAuthChange', 'Password recovery session');
+      setAuthState(prev => ({
+        ...prev,
+        user: session?.user ?? prev.user,
+        session: session ?? prev.session,
+        isLoading: false,
+        isAuthenticated: !!session,
+        isPasswordRecovery: true,
+      }));
+      return;
+    }
+
+    // The password (or email) has been changed, so the recovery is over. Without
+    // this the flag would survive and keep redirecting the user back to the
+    // reset page they just finished with.
+    if (event === 'USER_UPDATED') {
+      setAuthState(prev => ({
+        ...prev,
+        user: session?.user ?? prev.user,
+        session: session ?? prev.session,
+        isPasswordRecovery: false,
+      }));
       return;
     }
 
@@ -363,7 +405,7 @@ export function AuthProvider({ children }: { children: ReactNode }) {
 
         const cachedAdmin = session?.user ? readCachedAdmin(session.user.id) : null;
 
-        setAuthState({
+        setAuthState(prev => ({
           user: session?.user || null,
           session,
           isLoading: false,
@@ -372,7 +414,10 @@ export function AuthProvider({ children }: { children: ReactNode }) {
           isAdminLoading: !!session?.user && cachedAdmin === null, // Set to true if we have a user to check
           requiresMFA: false,
           mfaFactorId: null,
-        });
+          // PASSWORD_RECOVERY and INITIAL_SESSION can arrive in either order on
+          // a recovery link, so this must not clobber the flag.
+          isPasswordRecovery: prev.isPasswordRecovery,
+        }));
 
         if (session?.user) {
           if (cachedAdmin !== null) {
@@ -563,6 +608,7 @@ export function AuthProvider({ children }: { children: ReactNode }) {
       isAdminLoading: false,
       requiresMFA: false,
       mfaFactorId: null,
+      isPasswordRecovery: false,
     });
 
     // Call signOut with global scope and timeout
@@ -714,7 +760,14 @@ export function AuthProvider({ children }: { children: ReactNode }) {
   const resetPassword = useCallback(async (email: string): Promise<{ success: boolean; error?: string }> => {
     try {
       const { error } = await supabase.auth.resetPasswordForEmail(email, {
-        redirectTo: `${window.location.origin}/auth?reset=true`,
+        // WEB-AUTH-001: this pointed at /auth?reset=true, a parameter nothing
+        // read, on a page that redirects any authenticated visitor away. The
+        // link signed the user in and left the old password in place.
+        //
+        // OWNER: this URL must also be on the Supabase redirect allowlist
+        // (Dashboard -> Authentication -> URL Configuration), or GoTrue falls
+        // back to the site URL and the reset page never sees the token.
+        redirectTo: `${window.location.origin}/auth/reset-password`,
       });
 
       if (error) {
@@ -816,12 +869,14 @@ export function AuthProvider({ children }: { children: ReactNode }) {
     isAdmin: authState.isAdmin,
     isAdminLoading: authState.isAdminLoading,
     requiresMFA: authState.requiresMFA,
+    isPasswordRecovery: authState.isPasswordRecovery,
   }), [
     authState.isLoading,
     authState.isAuthenticated,
     authState.isAdmin,
     authState.isAdminLoading,
     authState.requiresMFA,
+    authState.isPasswordRecovery,
   ]);
 
   const combined = useMemo<AuthContextType>(() => ({

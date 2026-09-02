@@ -303,3 +303,47 @@ test.describe('Sponsored listings render on the restaurants hub (WEB-ADS-001)', 
     await expect(card.getByLabel('Sponsored content')).toBeVisible();
   });
 });
+
+test.describe('Password reset leads to a form that changes the password (WEB-AUTH-001)', () => {
+  // Before this route existed the reset email pointed at /auth?reset=true,
+  // nothing read that parameter, and the link signed the user in and dropped
+  // them on the homepage with the old password intact. These assertions are
+  // about the shape of the recovery flow, not about a real Supabase session,
+  // so the auth calls are route-mocked.
+
+  test('/auth/reset-password offers a resend when there is no recovery session', async ({ page }) => {
+    const consoleErrors = captureConsoleErrors(page);
+
+    const response = await page.goto('/auth/reset-password');
+    expect(response?.status()).toBeLessThan(400);
+    await page.waitForLoadState('networkidle');
+    await expectNoErrorBoundary(page);
+
+    // An anonymous visitor has no recovery session, so the page must offer a
+    // new link rather than an unusable form or a blank screen.
+    await expect(page.getByRole('button', { name: /send again/i })).toBeVisible({ timeout: 30_000 });
+    await expect(page.getByLabel(/email address/i)).toBeVisible();
+
+    const invariantErrors = consoleErrors.filter((e) => /Minified React error #130|Element type is invalid/i.test(e));
+    expect(invariantErrors, `React #130 on /auth/reset-password: ${invariantErrors.join('\n')}`).toHaveLength(0);
+  });
+
+  test('an expired link is reported as expired, not celebrated', async ({ page }) => {
+    await page.goto('/auth/reset-password?error=access_denied&error_code=otp_expired&error_description=Email+link+is+invalid+or+has+expired');
+    await page.waitForLoadState('networkidle');
+    await expectNoErrorBoundary(page);
+
+    await expect(page.getByText(/this link has expired/i)).toBeVisible({ timeout: 30_000 });
+    await expect(page.getByRole('button', { name: /send again/i })).toBeVisible();
+  });
+
+  test('the old ?reset=true link still reaches the reset page', async ({ page }) => {
+    // Emails sent before this shipped point at /auth?reset=true and stay valid
+    // for an hour, so that parameter has to keep working.
+    await page.goto('/auth?reset=true');
+    await page.waitForLoadState('networkidle');
+    await expectNoErrorBoundary(page);
+
+    await expect(page).toHaveURL(/\/auth\/reset-password/, { timeout: 30_000 });
+  });
+});
