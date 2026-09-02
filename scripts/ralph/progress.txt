@@ -304,3 +304,30 @@ Started: 2026-08-31T19:18:09.615Z
     code": it compares the claim against the gate that makes it true, and the
     smoke lane cannot run without real Supabase anyway.
 ---
+## 2026-09-02 - WEB-AUTH-002 (signup metadata never reached profiles)
+- 20260902000011: handle_new_user() SECURITY DEFINER + trigger on auth.users,
+  copying first/last/phone/location/interests/communication_preferences out of
+  raw_user_meta_data. Wrapped so it can NEVER raise. ON CONFLICT keeps the
+  existing value on every column. Duplicate-user_id check BEFORE creating
+  profiles_user_id_key. Two-part non-destructive backfill with counts.
+- useProfile: plain insert -> upsert(onConflict user_id, ignoreDuplicates) plus
+  a read-back, because ignoreDuplicates returns nothing to the loser.
+- Profile settings tab now mounts PreferencesManager.
+- _tests/new-user-profile-contract.test.ts (8) wired into CI.
+- **Learnings for future iterations:**
+  - 20251125000001's "no trigger on auth.users, it causes schema context
+    issues" is about sync_oauth_user_role resolving the user_role ENUM. It does
+    not apply to a trigger that touches no enum and pins search_path.
+  - Any trigger on auth.users MUST swallow its own errors. Raising there stops
+    registration for the entire site.
+  - profiles.user_id has NO unique index in any migration. Anything upserting
+    on it must create one, and must check for duplicates first so the operator
+    gets a sentence instead of a constraint violation mid-deploy.
+  - PreferencesSettings and PreferencesManager are different components and only
+    the latter touches communication_preferences. The settings tab had the
+    wrong one, so a preferences screen existed while the promise was unmet.
+  - supabase-js upsert with ignoreDuplicates returns NOTHING to the caller that
+    lost the race. Always read the row back.
+  - profiles has no account_type column, so signup's account_type cannot be
+    copied anywhere. It stays in raw_user_meta_data.
+---

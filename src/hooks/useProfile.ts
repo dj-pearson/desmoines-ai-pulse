@@ -51,17 +51,34 @@ export function useProfile() {
       }
 
       if (!data) {
-        // Profile doesn't exist, create it
-        const { data: newProfile, error: createError } = await supabase
+        // WEB-AUTH-002. The profile is normally created by the handle_new_user
+        // trigger the moment the auth user is inserted, so reaching here means
+        // an account that predates the trigger, or a race with it.
+        //
+        // This was a plain .insert(), and two components mounting on first
+        // login both saw no row and both inserted: one won, the other got a
+        // duplicate-key error and left the hook in its error state with no
+        // profile. An upsert that ignores duplicates makes the loser a no-op,
+        // and the re-read below picks up whichever row exists.
+        const { error: createError } = await supabase
           .from("profiles")
-          .insert({
-            user_id: user.id,
-            email: user.email,
-            first_name: user.user_metadata?.first_name || null,
-            last_name: user.user_metadata?.last_name || null,
-          })
-          .select()
-          .single();
+          .upsert(
+            {
+              user_id: user.id,
+              email: user.email,
+              first_name: user.user_metadata?.first_name || null,
+              last_name: user.user_metadata?.last_name || null,
+            },
+            { onConflict: "user_id", ignoreDuplicates: true }
+          );
+
+        // ignoreDuplicates means the winner's row is not returned to the
+        // loser, so read it back rather than trusting what the write returned.
+        const { data: newProfile } = await supabase
+          .from("profiles")
+          .select("*")
+          .eq("user_id", user.id)
+          .maybeSingle();
 
         if (createError) {
           logger.error('fetchProfile', 'Error creating profile', { error: createError });

@@ -190,6 +190,11 @@ jobs:
       # none. Fails if the pricing page or the stored plan row promises a feature
       # no component gates on.
       - run: deno test --allow-read supabase/functions/_tests/plan-features-truthful.test.ts
+      # WEB-AUTH-002. Signup collects phone, location, interests and marketing
+      # preferences into raw_user_meta_data and nothing ever moved them, so those
+      # profile columns were NULL for every account. Pins the trigger, its
+      # never-block-signup guarantee, and the non-racing client fallback.
+      - run: deno test --allow-read supabase/functions/_tests/new-user-profile-contract.test.ts
       # The trial-conversion notice must state amount, date and cancel path,
       # and must not be gated on marketing consent or an LLM score
       # (WEB-LEGAL-006).

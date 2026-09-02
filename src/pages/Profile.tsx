@@ -9,6 +9,7 @@ import { Separator } from "@/components/ui/separator";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { useToast } from "@/hooks/use-toast";
 import { PreferencesSettings } from "@/components/PreferencesSettings";
+import PreferencesManager from "@/components/PreferencesManager";
 import { FavoritesView } from "@/components/FavoritesView";
 import { MFAManagement } from "@/components/auth/MFAManagement";
 import { SessionManagementDashboard } from "@/components/auth/SessionManagementDashboard";
@@ -473,6 +474,14 @@ export default function Profile() {
           <TabsContent value="settings" className="mt-6 space-y-6">
             <MFAManagement />
             <SessionManagementDashboard />
+            {/*
+              WEB-AUTH-002. Signup promises "you can change these any time in
+              your profile settings", and until now there was nowhere to. This
+              tab mounted PreferencesSettings, which does not touch
+              communication_preferences at all; PreferencesManager is the panel
+              that reads and writes it.
+            */}
+            <PreferencesManager />
             <PreferencesSettings />
             <PrivacyControls />
           </TabsContent>
