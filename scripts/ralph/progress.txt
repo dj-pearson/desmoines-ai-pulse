@@ -378,3 +378,28 @@ Started: 2026-08-31T19:18:09.615Z
     Check for `if (...) { return` above the insertion point; eslint
     rules-of-hooks catches it, so run lint on every touched page.
 ---
+## 2026-09-02 - WEB-SEO-020 + WEB-SEO-030 (middleware fed crawlers the homepage)
+- Done together: 030's "resolved but not prerendered" case IS 020's fallback
+  path. The detail branch now runs AFTER context.next() and returns any
+  non-shell response untouched.
+- The crawler USER-AGENT LIST IS DELETED, not trimmed. Once the response is
+  right for everyone there is nothing for it to decide, and one answer for
+  every requester removes the cloaking question instead of narrowing it.
+- Unresolved slug -> 404 + noindex; event slug >30 days past -> 410; resolved
+  but un-prerendered -> 200 with its own title/description/og/JSON-LD injected.
+- Slug lookups behind the edge Cache API, 5 min, misses cached too.
+- functions/__tests__/middleware-detail-status.test.mjs (13). CI already runs
+  every *.test.mjs there.
+- **Learnings for future iterations:**
+  - Adding a segment to OG_TYPE_BY_SEGMENT now also puts it behind the 404
+    gate. A segment without a resolveEntity branch would 404 every URL under
+    it. playgrounds resolves by slugified name; /stay uses hotels.slug.
+  - The 410 date comes from the EVENT SLUG, not the row: if the row resolved,
+    it would not be a 404 candidate at all.
+  - Keep 410 for events well past. Inside ~30 days a missing row is more often
+    an ingest problem, and crawlers treat 410 as final.
+  - FOURTH time: a strict "this string must not appear" assertion matched my own
+    explanatory comment naming the removed user agents. Reword the prose.
+  - Run `npm run type-check:functions`, not bare tsc: the middleware needs
+    @cloudflare/workers-types and standalone tsc reports phantom errors.
+---

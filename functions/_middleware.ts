@@ -17,23 +17,38 @@ import { EventContext } from "@cloudflare/workers-types";
  * Worst case is "same as before" — the generic preview card.
  */
 
-const OG_TYPE_BY_SEGMENT: Record<string, "event" | "restaurant" | "attraction" | "article"> = {
+// WEB-SEO-020 AC5: playgrounds and /stay were handled by nothing at all, so
+// their detail pages fell through with homepage meta and no entity JSON-LD.
+const OG_TYPE_BY_SEGMENT: Record<
+  string,
+  "event" | "restaurant" | "attraction" | "article" | "playground" | "hotel"
+> = {
   events: "event",
   restaurants: "restaurant",
   attractions: "attraction",
   articles: "article",
+  playgrounds: "playground",
+  stay: "hotel",
 };
 
 // Month-year segments under /events resolve to a listing page, not a detail page.
 const MONTH_YEAR = /^(january|february|march|april|may|june|july|august|september|october|november|december)-\d{4}$/i;
 
-// User-agents of crawlers that scrape OG/Twitter meta for link previews.
-const CRAWLER_UA =
-  /facebookexternalhit|facebookcatalog|Facebot|Twitterbot|LinkedInBot|Slackbot|Discordbot|WhatsApp|TelegramBot|Pinterest|redditbot|Embedly|Iframely|vkShare|W3C_Validator|Google-InspectionTool|GoogleOther|Applebot|SkypeUriPreview|Bitrix/i;
-
-function isCrawler(ua: string): boolean {
-  return !!ua && CRAWLER_UA.test(ua);
-}
+// WEB-SEO-020: THERE IS NO CRAWLER USER-AGENT LIST ANY MORE, and its absence is
+// the fix rather than a simplification.
+//
+// A user-agent regex used to select who got the rewritten shell. Alongside the
+// link-preview bots it listed Google's own inspection tool and its secondary
+// crawler, so URL Inspection was shown something no user ever saw -- which is
+// what "cloaking" means, whatever the intent. It also could not win: the branch it guarded
+// fetched "/" and stripped every ld+json block, so the better a page had been
+// prerendered, the more that branch destroyed.
+//
+// Everyone now receives the same response, and it is the right one: a
+// prerendered page passes through untouched, and a page that missed the
+// prerender budget gets its own title, description, og:type and Event or
+// Restaurant JSON-LD injected into the shell. Serving one answer to every
+// requester removes the risk entirely and is less code.
 
 function slugify(s: string): string {
   return (s || "")
@@ -73,6 +88,7 @@ interface Resolved {
   id: string;
   title: string;
   description: string;
+  startDate?: string | null;
 }
 
 async function sbGet(base: string, anon: string, pathAndQuery: string): Promise<any[]> {
@@ -124,9 +140,63 @@ async function resolveEntity(
       rows = [...a, ...b].filter((e) => (seen.has(e.id) ? false : (seen.add(e.id), true)));
     }
     const r = rows.find((e: any) => eventSlug(e.title, e.event_start_utc || e.date) === slug);
-    return r ? { id: r.id, title: r.title, description: truncate(r.seo_description || r.geo_summary) } : null;
+    return r
+      ? {
+          id: r.id,
+          title: r.title,
+          description: truncate(r.seo_description || r.geo_summary),
+          startDate: r.event_start_utc || r.date || null,
+        }
+      : null;
+  }
+  if (type === "playground") {
+    // Like attractions: no slug column, the app routes by createSlug(name).
+    const rows = await sbGet(base, anon, `playgrounds?select=id,name,description&limit=1000`);
+    const r = rows.find((a: any) => slugify(a.name) === slug);
+    return r ? { id: r.id, title: r.name, description: truncate(r.description) } : null;
+  }
+  if (type === "hotel") {
+    const rows = await sbGet(base, anon, `hotels?slug=eq.${encodeURIComponent(slug)}&select=id,name,description&limit=1`);
+    const r = rows[0];
+    return r ? { id: r.id, title: r.name, description: truncate(r.description) } : null;
   }
   return null;
+}
+
+/**
+ * How to answer a detail URL whose asset turned out to be the SPA shell
+ * (WEB-SEO-030).
+ *
+ * Every un-prerendered entity URL used to answer 200 with a self-canonical, so
+ * a dead slug and a real page that missed the build budget were byte-identical
+ * to a crawler: roughly 860 indexable duplicates of the homepage under
+ * public/_routes.json's include ["/*"].
+ *
+ * Pure and exported so functions/__tests__ can assert the three cases without a
+ * network or a Pages runtime.
+ */
+export function detailShellStatus(
+  type: string,
+  slug: string,
+  resolved: boolean,
+  now: Date = new Date(),
+): { status: number; noindex: boolean; reason: string } {
+  if (resolved) return { status: 200, noindex: false, reason: "resolved" };
+
+  // An event slug carries its own date, which is the only date available when
+  // the row itself cannot be found. A show that happened last year is GONE, not
+  // merely missing, and 410 tells a crawler to stop asking.
+  if (type === "event") {
+    const m = slug.match(/-(\d{4})-(\d{2})-(\d{2})$/);
+    if (m) {
+      const when = Date.parse(`${m[1]}-${m[2]}-${m[3]}T00:00:00Z`);
+      if (Number.isFinite(when) && now.getTime() - when > 30 * 24 * 60 * 60 * 1000) {
+        return { status: 410, noindex: true, reason: "event-long-past" };
+      }
+    }
+  }
+
+  return { status: 404, noindex: true, reason: "unresolved" };
 }
 
 class AttrSetter {
@@ -194,6 +264,149 @@ function escapeHtml(s: string): string {
  * rather than on the status keeps this correct under Pages' SPA mode, which
  * answers 200, and makes it inert for genuinely prerendered pages.
  */
+/**
+ * resolveEntity, behind the edge cache (WEB-SEO-030 AC4).
+ *
+ * Every one of these is a PostgREST round trip, and the attraction and
+ * playground branches pull up to 1,000 rows to match a slugified name. A
+ * crawler working through a sitemap of ~860 un-prerendered URLs would otherwise
+ * turn one crawl into ~860 of those. Five minutes is short enough that a newly
+ * published page appears promptly and long enough to flatten a burst.
+ *
+ * Cache failures are swallowed: this is an optimisation, and a cache that is
+ * unavailable must not turn into a 500 on a page request.
+ */
+async function resolveEntityCached(
+  context: EventContext,
+  base: string,
+  anon: string,
+  type: string,
+  slug: string,
+): Promise<Resolved | null> {
+  const key = new Request(
+    `https://slug-resolve.internal/${encodeURIComponent(type)}/${encodeURIComponent(slug)}`,
+  );
+  // deno-lint-ignore no-explicit-any
+  const cache: any = (globalThis as any).caches?.default;
+
+  try {
+    const hit = await cache?.match(key);
+    if (hit) {
+      const body = await hit.json();
+      return body && body.id ? (body as Resolved) : null;
+    }
+  } catch {
+    /* fall through to a live lookup */
+  }
+
+  const entity = await resolveEntity(base, anon, type, slug);
+
+  try {
+    // A miss is cached too, and for the same reason: a crawler hammering dead
+    // slugs is exactly the traffic worth absorbing.
+    const payload = new Response(JSON.stringify(entity ?? {}), {
+      headers: { "Content-Type": "application/json", "Cache-Control": "public, max-age=300" },
+    });
+    context.waitUntil?.(cache?.put(key, payload));
+  } catch {
+    /* the lookup already succeeded; caching it is best effort */
+  }
+
+  return entity;
+}
+
+/**
+ * The shell, wearing the entity's identity (WEB-SEO-020 AC4, WEB-SEO-030 AC3).
+ *
+ * This is what a URL gets when it resolves but missed the prerender budget. The
+ * branch this replaces set og:type to "website" for everything except articles
+ * and removed every ld+json block, so an event page announced itself as a
+ * generic website with no structured data. Here the og:type follows the segment
+ * and a real Event or Restaurant node is injected.
+ */
+function entityShell(
+  shell: Response,
+  opts: { pageUrl: string; sbBase: string; type: string; entity: Resolved },
+): Response {
+  const { pageUrl, sbBase, type, entity } = opts;
+  const ogImage = `${sbBase}/functions/v1/og-image/${type}/${entity.id}`;
+  const title = escapeHtml(entity.title);
+  const desc = escapeHtml(entity.description);
+
+  const SCHEMA_TYPE: Record<string, string> = {
+    event: "Event",
+    restaurant: "Restaurant",
+    attraction: "TouristAttraction",
+    article: "Article",
+    playground: "Place",
+    hotel: "Hotel",
+  };
+  const OG_TYPE: Record<string, string> = { event: "article", article: "article" };
+
+  const node: Record<string, unknown> = {
+    "@context": "https://schema.org",
+    "@type": SCHEMA_TYPE[type] || "Thing",
+    "@id": pageUrl,
+    name: entity.title,
+    url: pageUrl,
+  };
+  if (entity.description) node.description = entity.description;
+  // Only what the row actually carries. An Event with a fabricated startDate is
+  // worse than an Event without one.
+  if (type === "event" && entity.startDate) node.startDate = entity.startDate;
+
+  let rewriter = new HTMLRewriter()
+    .on('link[rel="canonical"]', new AttrSetter("href", pageUrl))
+    .on('meta[property="og:url"]', new AttrSetter("content", pageUrl))
+    .on('meta[property="og:type"]', new AttrSetter("content", OG_TYPE[type] || "website"))
+    .on('meta[property="og:image"]', new AttrSetter("content", ogImage))
+    .on('meta[property="og:image:secure_url"]', new AttrSetter("content", ogImage))
+    .on('meta[name="twitter:image"]', new AttrSetter("content", ogImage))
+    // The entity's own node goes in the head. Nothing is REMOVED here: the
+    // shell's blocks describe the site, and a page may carry both.
+    .on("head", new JsonLdInjector(node));
+
+  if (title) {
+    rewriter = rewriter
+      .on("title", new TextReplacer(title))
+      .on('meta[property="og:title"]', new AttrSetter("content", title))
+      .on('meta[name="twitter:title"]', new AttrSetter("content", title));
+  }
+  if (desc) {
+    rewriter = rewriter
+      .on('meta[name="description"]', new AttrSetter("content", desc))
+      .on('meta[property="og:description"]', new AttrSetter("content", desc))
+      .on('meta[name="twitter:description"]', new AttrSetter("content", desc));
+  }
+
+  return new Response(rewriter.transform(shell).body, {
+    status: 200,
+    headers: {
+      "Content-Type": "text/html; charset=utf-8",
+      "Cache-Control": "public, max-age=600",
+    },
+  });
+}
+
+class JsonLdInjector {
+  constructor(private node: Record<string, unknown>) {}
+  element(el: any) {
+    el.append(
+      `<script type="application/ld+json">${JSON.stringify(this.node).replace(/</g, "\\u003c")}</script>`,
+      { html: true },
+    );
+  }
+}
+
+class TextReplacer {
+  private done = false;
+  constructor(private value: string) {}
+  text(chunk: any) {
+    chunk.replace(this.done ? "" : this.value);
+    this.done = true;
+  }
+}
+
 export function isHomepageShell(html: string, origin: string): boolean {
   const canonical = html.match(/<link[^>]+rel=["']canonical["'][^>]*>/i)?.[0];
   if (!canonical) return false;
@@ -310,70 +523,6 @@ export async function onRequest(context: EventContext) {
   // file. scripts/check-canonical-url-shape.mjs is the check that can.
   void trailingSlashRedirect;
 
-  // --- WEB-FEAT-008: per-entity OG meta for social crawlers on detail routes ---
-  try {
-    const ua = context.request.headers.get("user-agent") || "";
-    const segments = pathname.split("/").filter(Boolean);
-    const type = segments.length === 2 ? OG_TYPE_BY_SEGMENT[segments[0]] : undefined;
-    const slug = segments[1];
-    const isDetail = !!type && !!slug && !(type === "event" && MONTH_YEAR.test(slug));
-
-    if (isDetail && isCrawler(ua)) {
-      const env = context.env as Record<string, string | undefined>;
-      const sbBase = env.VITE_SUPABASE_URL || env.SUPABASE_URL;
-      const sbAnon = env.VITE_SUPABASE_ANON_KEY || env.SUPABASE_ANON_KEY;
-      if (sbBase && sbAnon) {
-        const entity = await resolveEntity(sbBase, sbAnon, type!, slug);
-        if (entity) {
-          const ogImage = `${sbBase}/functions/v1/og-image/${type}/${entity.id}`;
-          const pageUrl = `${url.origin}${pathname}`;
-          const title = escapeHtml(entity.title);
-          const desc = escapeHtml(entity.description);
-
-          // Fetch the SPA shell and rewrite its social meta in place.
-          const shell = await context.env.ASSETS.fetch(new URL("/", context.request.url));
-          let rewriter = new HTMLRewriter()
-            .on('meta[property="og:image"]', new AttrSetter("content", ogImage))
-            .on('meta[property="og:image:secure_url"]', new AttrSetter("content", ogImage))
-            .on('meta[name="twitter:image"]', new AttrSetter("content", ogImage))
-            .on('meta[property="og:url"]', new AttrSetter("content", pageUrl))
-            .on('meta[property="og:type"]', new AttrSetter("content", type === "article" ? "article" : "website"))
-            // Same two corrections withSelfCanonical makes on the plain
-            // fallback. This path already rewrote og:url and left the canonical
-            // pointing at "/" beside it, so the card said one thing and the
-            // canonical said another (WEB-SEO-006).
-            .on('link[rel="canonical"]', new AttrSetter("href", pageUrl))
-            .on('script[type="application/ld+json"]', new Remover());
-
-          if (title) {
-            rewriter = rewriter
-              .on('meta[property="og:title"]', new AttrSetter("content", title))
-              .on('meta[name="twitter:title"]', new AttrSetter("content", title))
-              .on("title", new TextSetter(title));
-          }
-          if (desc) {
-            rewriter = rewriter
-              .on('meta[property="og:description"]', new AttrSetter("content", desc))
-              .on('meta[name="twitter:description"]', new AttrSetter("content", desc))
-              .on('meta[name="description"]', new AttrSetter("content", desc));
-          }
-
-          const rewritten = rewriter.transform(shell);
-          return new Response(rewritten.body, {
-            status: 200,
-            headers: {
-              "Content-Type": "text/html; charset=utf-8",
-              // Crawlers re-scrape periodically; a short cache keeps cards fresh.
-              "Cache-Control": "public, max-age=600",
-            },
-          });
-        }
-      }
-    }
-  } catch {
-    /* fall through to normal SPA handling — never worse than the generic card */
-  }
-
   // For all other routes, return index.html (SPA routing).
   const response = await context.next();
 
@@ -395,11 +544,59 @@ export async function onRequest(context: EventContext) {
   if (contentType.includes("text/html") && pathname !== "/" && !pathname.includes(".")) {
     try {
       const html = await response.text();
-      const passthrough = new Response(html, { status: response.status, headers: response.headers });
-      if (isHomepageShell(html, url.origin)) {
-        return withSelfCanonical(passthrough, `${url.origin}${pathname}`);
+      const pageUrl = `${url.origin}${pathname}`;
+      const passthrough = () =>
+        new Response(html, { status: response.status, headers: response.headers });
+
+      // WEB-SEO-020 AC2. A page that is not the homepage shell is a real
+      // prerendered page: it already carries its own canonical, og:* and
+      // JSON-LD. Return it untouched. The branch this replaces fetched "/" and
+      // removed every ld+json block, so it destroyed exactly the markup the
+      // prerender pass had just produced.
+      if (!isHomepageShell(html, url.origin)) return passthrough();
+
+      // From here the asset IS the homepage shell served at another path.
+      const segments = pathname.split("/").filter(Boolean);
+      const type = segments.length === 2 ? OG_TYPE_BY_SEGMENT[segments[0]] : undefined;
+      const slug = segments[1];
+      const isDetail = !!type && !!slug && !(type === "event" && MONTH_YEAR.test(slug));
+
+      if (isDetail) {
+        const env = context.env as Record<string, string | undefined>;
+        const sbBase = env.VITE_SUPABASE_URL || env.SUPABASE_URL;
+        const sbAnon = env.VITE_SUPABASE_ANON_KEY || env.SUPABASE_ANON_KEY;
+
+        if (sbBase && sbAnon) {
+          const entity = await resolveEntityCached(context, sbBase, sbAnon, type!, slug);
+          const verdict = detailShellStatus(type!, slug, !!entity);
+
+          // WEB-SEO-030: a dead slug is a 404 and a long-finished event is a
+          // 410. Both used to answer 200 with a self-canonical, which under
+          // include ["/*"] made every one of them an indexable duplicate of the
+          // homepage.
+          if (!entity) {
+            const rewritten = new HTMLRewriter()
+              .on('link[rel="canonical"]', new AttrSetter("href", pageUrl))
+              .on('meta[name="robots"]', new AttrSetter("content", "noindex, follow"))
+              .transform(passthrough());
+            return new Response(rewritten.body, {
+              status: verdict.status,
+              headers: {
+                "Content-Type": "text/html; charset=utf-8",
+                "X-Robots-Tag": "noindex",
+                "Cache-Control": "public, max-age=300",
+              },
+            });
+          }
+
+          // Resolved, but it missed the prerender budget. Keep the 200 and give
+          // it its own identity instead of the homepage's (WEB-SEO-030 AC3).
+          return entityShell(passthrough(), { pageUrl, sbBase, type: type!, entity });
+        }
       }
-      return passthrough;
+
+      // Any other shell-at-a-non-root-path: unchanged behaviour.
+      return withSelfCanonical(passthrough(), pageUrl);
     } catch {
       // Never fail the page for a meta rewrite. Worst case is the previous
       // behaviour, which is what shipped for months.
