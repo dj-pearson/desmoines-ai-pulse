@@ -256,3 +256,28 @@ Started: 2026-08-31T19:18:09.615Z
   - Do not import an edge function's index.ts from a test: its top-level
     Deno.serve binds a port. Extract the pure parts to _shared/.
 ---
+## 2026-09-02 - WEB-FEAT-013 (cross-tier upgrade double-charged)
+- The guard query was .single() with no platform filter. user_subscriptions
+  holds one row PER PLATFORM, so a web+iOS subscriber matched two rows,
+  .single() returned data null, and every double-charge guard passed. Now
+  .eq("platform","web").maybeSingle().
+- A different active web plan now goes through stripe.subscriptions.update with
+  create_prorations and RETURNS, instead of opening a second subscription.
+- Store subscription at same-or-higher tier (by subscription_plans.sort_order)
+  => 409 naming the store.
+- Response keeps `url` so no shipped client breaks; adds upgraded +
+  prorationAmount from an upcoming-invoice preview.
+- _tests/subscription-upgrade-contract.test.ts (8, incl. a fake Stripe) in CI.
+- **Learnings for future iterations:**
+  - .single() on user_subscriptions IS A BUG. That table is one row per
+    platform by design. Always filter platform, and prefer maybeSingle.
+  - A PostgREST .single() that matches 2 rows returns { data: null, error },
+    and code that only destructures `data` then treats the user as having
+    nothing. Guards written that way fail OPEN for the users who have the most.
+  - useSubscription.createCheckoutSession throws when data.url is missing, so
+    any new response shape from that function must still carry `url` or every
+    shipped build reads it as a failure.
+  - Stripe: change a plan with subscriptions.update on the EXISTING item id
+    (items:[{id, price}]). Omitting the item id appends a second item instead
+    of replacing the first.
+---

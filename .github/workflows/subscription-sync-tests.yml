@@ -181,6 +181,11 @@ jobs:
       # advertiser dashboard read zero. Pins the server-side write path, the bot
       # filter, idempotency, and the frequency cap being switched on.
       - run: deno test --allow-read supabase/functions/_tests/ad-event-tracking.test.ts
+      # WEB-FEAT-013. The double-charge guards used .single() on a query that
+      # matches one row PER PLATFORM, so they nulled out for exactly the users
+      # already paying twice, and a cross-tier upgrade opened a SECOND Stripe
+      # subscription. Pins the platform-scoped guard and the in-place upgrade.
+      - run: deno test --allow-read supabase/functions/_tests/subscription-upgrade-contract.test.ts
       # The trial-conversion notice must state amount, date and cancel path,
       # and must not be gated on marketing consent or an LLM score
       # (WEB-LEGAL-006).
