@@ -331,3 +331,29 @@ Started: 2026-08-31T19:18:09.615Z
   - profiles has no account_type column, so signup's account_type cannot be
     copied anywhere. It stays in raw_user_meta_data.
 ---
+## 2026-09-02 - WEB-SEO-021 + WEB-SEO-025 (duplicated and fabricated schema)
+- SEO-021: EnhancedEventSEO built its OWN Event node with
+  addressLocality: event.city || BRAND.city, so a Waukee event published as
+  Des Moines on ~525 detail pages while list pages (shared builder) were right.
+  Replaced with buildEventJsonLd(event, {withContext:true}); inLanguage and
+  mainEntityOfPage added at the CALL SITE because the same builder also feeds
+  ItemList entries, where mainEntityOfPage would point at the wrong page.
+- SEO-025: deleted aggregateRating with ratingCount computed from
+  popularity_score on the restaurants hub. Nothing replaces it: the rule is
+  "real counts only", and both pages now emit none.
+- scripts/check-duplicate-schema.mjs gained checkRatingCountSources(), which
+  fails on any computed ratingCount/reviewCount not read from total_ratings.
+  Already part of npm run validate.
+- **Learnings for future iterations:**
+  - PROVE A NEW LINT FIRES. Reinsert the exact bug, confirm exit 1 and the
+    right file:line, then restore. A guard never seen to fail is not a guard.
+  - Before swapping a hand-built schema node for a shared builder, check the
+    URL helpers produce identical strings and both files use the same Event
+    type. Here eventPageUrl() and the local eventUrl were byte-identical.
+  - When deleting a block, keep its comments as pointers. That Event node
+    carried the reasoning for SEO-009, SEO-010 and SEO-018; the reasoning now
+    lives in the builder and the call site says so.
+  - Adding a query to the restaurants hub to publish a rating snippet is a bad
+    trade (WEB-PERF-029 is about that page's payload). Emitting nothing is a
+    legitimate answer to "only emit real data".
+---

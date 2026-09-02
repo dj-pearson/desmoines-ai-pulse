@@ -4,6 +4,7 @@ import { createEventSlugWithCentralTime, hasSpecificTime, formatEventDate, forma
 import { BRAND } from "@/lib/brandConfig";
 import { ogImageUrl } from "@/lib/ogImage";
 import { buildEventOffers, isEventAccessibleForFree } from "@/lib/eventOffers";
+import { buildEventJsonLd } from "@/lib/eventSchema";
 
 interface EnhancedEventSEOProps {
   event: Event;
@@ -142,76 +143,31 @@ export default function EnhancedEventSEO({
     ? "noindex, follow"
     : "index, follow, max-snippet:-1, max-image-preview:large, max-video-preview:-1";
 
+  // WEB-SEO-021. This built its OWN Event node, a second one, and it had
+  // drifted: addressLocality was `event.city || BRAND.city`, so a Waukee
+  // trivia night published as taking place in Des Moines on its detail page
+  // while the list pages had it right. That is the SEO-007 locality bug,
+  // reintroduced on roughly 525 URLs by a copy nobody remembered was a copy.
+  //
+  // src/lib/eventSchema.ts documents itself as "the single Event JSON-LD
+  // builder" (SEO-002/007). It is now the only one. Everything the old block
+  // explained in comments lives there and applies to every surface at once:
+  //   SEO-009  a concluded event is EventScheduled with a past endDate, never
+  //            EventPostponed
+  //   SEO-010  organizer and performer are omitted rather than fabricated -- we
+  //            are an aggregator and the table has no such column
+  //   SEO-018  a price range becomes an AggregateOffer, and an unreadable price
+  //            drops the property instead of asserting zero
+  //
+  // inLanguage and mainEntityOfPage are added here rather than in the builder
+  // because they describe THIS PAGE, and the builder is also used to produce
+  // nodes nested inside an ItemList, where a mainEntityOfPage pointing at the
+  // list would be wrong.
+  const eventJsonLd = buildEventJsonLd(event, { withContext: true });
   const eventSchema = {
-    "@context": "https://schema.org",
-    "@type": "Event",
-    "@id": eventUrl,
-    "name": event.title,
-    "description": schemaDescription,
-    "startDate": startDateISO,
-    "endDate": endDateISO,
-    // WEB-SEO-009: this used to emit EventPostponed for anything not upcoming.
-    // EventPostponed means "moved to a date not yet announced" — a concluded
-    // event is not postponed, it happened. schema.org expresses "this is over"
-    // as EventScheduled with a past endDate, which is what we now do. Asserting
-    // a false status on every past event (hundreds of URLs, all left
-    // index,follow) undermines trust in all of our Event markup.
-    // Real postponements/cancellations should come from event data, not from
-    // whether the date has passed; there is no such field today, so we do not
-    // guess.
-    "eventStatus": "https://schema.org/EventScheduled",
-    "eventAttendanceMode": "https://schema.org/OfflineEventAttendanceMode",
-    "location": {
-      "@type": "Place",
-      "name": event.venue || event.location || `${BRAND.city} Area`,
-      "address": {
-        "@type": "PostalAddress",
-        "streetAddress": event.location || "",
-        "addressLocality": event.city || BRAND.city,
-        "addressRegion": BRAND.state,
-        "addressCountry": BRAND.country,
-      },
-      ...(event.latitude && event.longitude && {
-        "geo": {
-          "@type": "GeoCoordinates",
-          "latitude": event.latitude,
-          "longitude": event.longitude
-        }
-      }),
-    },
-    // WEB-SEO-010: organizer and performer are deliberately omitted.
-    //
-    // This block used to hardcode Des Moines Insider as the organizer of every
-    // event and, when a venue was known, name the VENUE as the performer —
-    // so a touring Broadway show was published as organized by us and
-    // performed by the building it played in. Both are false. We are an
-    // aggregator: the `events` table has no organizer, performer, artist or
-    // promoter column, so there is no truthful value to emit here.
-    //
-    // Neither field is required by Google's Event structured data guidance,
-    // and omitting a field is strictly better than fabricating one — an
-    // aggregator inserting itself as organizer is a recognisable
-    // scraped-content spam signal. The venue is already correctly expressed as
-    // the Place in `location` above.
-    //
-    // If organizer/performer are ever captured during ingestion, add them back
-    // conditionally — never with a fallback.
-    "image": event.image_url
-      ? [event.image_url]
-      : [`${BRAND.baseUrl}${BRAND.ogImage}`],
-    "url": eventUrl,
-    // WEB-SEO-018: a range becomes an AggregateOffer, and an unreadable price
-    // ("Varies") drops both properties rather than asserting a price of 0.
-    ...(offers && {
-      "offers": {
-        ...offers,
-        "url": event.source_url || eventUrl,
-        "validFrom": event.created_at || new Date().toISOString(),
-      },
-    }),
-    ...(accessibleForFree !== undefined && { "isAccessibleForFree": accessibleForFree }),
-    "inLanguage": "en-US",
-    "mainEntityOfPage": { "@type": "WebPage", "@id": eventUrl },
+    ...eventJsonLd,
+    inLanguage: "en-US",
+    mainEntityOfPage: { "@type": "WebPage", "@id": eventJsonLd.url },
   };
 
   // FAQ Schema for Voice Search & AI Chatbots

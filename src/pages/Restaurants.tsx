@@ -301,17 +301,22 @@ export default function Restaurants() {
           addressCountry: "US",
         },
         ...(restaurant.image_url && { image: restaurant.image_url }),
-        aggregateRating: restaurant.rating
-          ? {
-              "@type": "AggregateRating",
-              ratingValue: restaurant.rating,
-              bestRating: "5",
-              worstRating: "1",
-              ratingCount: Math.round(
-                (restaurant.popularity_score || 50) * 2
-              ),
-            }
-          : undefined,
+        // WEB-SEO-025: no aggregateRating is emitted here.
+        //
+        // This block asserted a review count of Math.round(popularity_score * 2)
+        // for the first 20 restaurants on the site's highest-impression page.
+        // Google requires ratingCount to reflect real reviews; deriving one from
+        // a popularity score is a review-snippet policy breach. WEB-SEO-016
+        // removed the same invention from the detail page and left the reason in
+        // RestaurantDetails.tsx; the hub kept doing it.
+        //
+        // aggregateRating may only come from content_rating_aggregates, and only
+        // when total_ratings > 0. That table is not read here because the hub
+        // renders 20 cards and would need a second query on the heaviest page in
+        // the app (WEB-PERF-029) to publish a rating snippet nobody asked for.
+        // Emitting nothing is correct until real counts are worth that cost;
+        // emitting an invented one never was. scripts/check-duplicate-schema.mjs
+        // fails the build if a computed ratingCount comes back.
         ...(restaurant.phone && { telephone: restaurant.phone }),
         ...(restaurant.website && { url: restaurant.website }),
         geo: restaurant.latitude
