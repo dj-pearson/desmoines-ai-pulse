@@ -1,4 +1,5 @@
 import { Helmet } from 'react-helmet-async';
+import { getCanonicalUrl } from '@/lib/brandConfig';
 import { MenuSection } from '@/hooks/useRestaurantMenu';
 
 interface MenuSchemaProps {
@@ -25,8 +26,13 @@ export function MenuSchema({
   sections,
   capturedAt,
 }: MenuSchemaProps) {
-  const menuUrl = `https://desmoinespulse.com/restaurants/${restaurantSlug}#menu`;
-  const restaurantUrl = `https://desmoinespulse.com/restaurants/${restaurantSlug}`;
+  // WEB-SEO-023. These were hard-coded to the OLD brand domain, so the Menu's
+  // @id, its url and its mainEntityOfPage all identified a host this site does
+  // not serve -- on every restaurant page that has a menu. @id is how a crawler
+  // reconciles one entity across pages; pointing it at another origin is not a
+  // broken link, it is a different entity.
+  const restaurantUrl = getCanonicalUrl(`/restaurants/${restaurantSlug}`);
+  const menuUrl = `${restaurantUrl}#menu`;
 
   // Build Menu schema with sections and items
   const menuSchema = {

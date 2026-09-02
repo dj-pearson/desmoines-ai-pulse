@@ -4,6 +4,7 @@ import { Link } from "react-router-dom";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { useToast } from "@/hooks/use-toast";
+import { BRAND } from "@/lib/brandConfig";
 import { supabase } from "@/integrations/supabase/client";
 import { OptimizedLogo } from "@/components/OptimizedLogo";
 import { logConsent } from "@/lib/consentLog";
@@ -150,24 +151,40 @@ export default function Footer() {
                 . Every email includes a one-click unsubscribe link.
               </p>
 
-              {/* Social Links */}
-              <div className="flex gap-3" role="group" aria-label="Social media links">
-                <a href="https://facebook.com" target="_blank" rel="noopener noreferrer"
-                   aria-label="Follow us on Facebook (opens in new tab)"
-                   className="tap-area-44 w-9 h-9 rounded-full bg-neutral-800 hover:bg-neutral-700 flex items-center justify-center transition-colors focus:outline-none focus:ring-2 focus:ring-primary focus:ring-offset-2 focus:ring-offset-neutral-900">
-                  <Facebook className="h-4 w-4" aria-hidden="true" />
-                </a>
-                <a href="https://twitter.com" target="_blank" rel="noopener noreferrer"
-                   aria-label="Follow us on Twitter (opens in new tab)"
-                   className="tap-area-44 w-9 h-9 rounded-full bg-neutral-800 hover:bg-neutral-700 flex items-center justify-center transition-colors focus:outline-none focus:ring-2 focus:ring-primary focus:ring-offset-2 focus:ring-offset-neutral-900">
-                  <Twitter className="h-4 w-4" aria-hidden="true" />
-                </a>
-                <a href="https://instagram.com" target="_blank" rel="noopener noreferrer"
-                   aria-label="Follow us on Instagram (opens in new tab)"
-                   className="tap-area-44 w-9 h-9 rounded-full bg-neutral-800 hover:bg-neutral-700 flex items-center justify-center transition-colors focus:outline-none focus:ring-2 focus:ring-primary focus:ring-offset-2 focus:ring-offset-neutral-900">
-                  <Instagram className="h-4 w-4" aria-hidden="true" />
-                </a>
-              </div>
+              {/* Social Links.
+
+                  WEB-SEO-023: these linked to bare facebook.com, twitter.com
+                  and instagram.com -- the SITES, not profiles. A "Follow us on
+                  Facebook" button that opens Facebook's homepage is a dead
+                  control that looks alive, and it disagreed with the sameAs
+                  array the JSON-LD was emitting at the same time.
+
+                  Both now read BRAND.social, which is empty until the owner
+                  supplies real profile URLs. An absent row of icons is honest;
+                  three icons that go nowhere are not. */}
+              {BRAND.social.length > 0 && (
+                <div className="flex gap-3" role="group" aria-label="Social media links">
+                  {BRAND.social.map((href) => {
+                    const network = href.includes('facebook')
+                      ? { label: 'Facebook', Icon: Facebook }
+                      : href.includes('instagram')
+                        ? { label: 'Instagram', Icon: Instagram }
+                        : { label: 'X', Icon: Twitter };
+                    return (
+                      <a
+                        key={href}
+                        href={href}
+                        target="_blank"
+                        rel="noopener noreferrer"
+                        aria-label={`Follow us on ${network.label} (opens in new tab)`}
+                        className="tap-area-44 w-9 h-9 rounded-full bg-neutral-800 hover:bg-neutral-700 flex items-center justify-center transition-colors focus:outline-none focus:ring-2 focus:ring-primary focus:ring-offset-2 focus:ring-offset-neutral-900"
+                      >
+                        <network.Icon className="h-4 w-4" aria-hidden="true" />
+                      </a>
+                    );
+                  })}
+                </div>
+              )}
 
               {/* App Store Badge */}
               <a

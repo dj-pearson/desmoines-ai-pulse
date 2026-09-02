@@ -755,3 +755,36 @@ vacuously, so it is recorded here rather than added. Every other suite under
   auth problem.
 - **Editing applied history needs a header saying why.** Otherwise the next
   reader assumes it was a mistake.
+
+## 2026-09-02 — WEB-SEO-022 and WEB-SEO-023 (fabricated FAQ, retired brand domain)
+
+### Learnings for future iterations
+
+- **A wrong `@id` is not a broken link, it is a different entity.** ~480
+  restaurant pages carried `@id` on the retired domain. Crawlers reconcile
+  entities by `@id`, so this is a worse failure than a 404 and produces no error
+  anywhere.
+- **`sameAs` is an identity claim about accounts.** Asserting profiles the brand
+  does not own is worse than asserting none — and an EMPTY `sameAs` array is
+  itself a claim ("no profiles"), so omit the property instead.
+- **The footer and the JSON-LD must read one source.** They disagreed: markup
+  claimed three profiles while the footer linked to the three networks'
+  homepages. A "Follow us" button that opens a network's front page is a dead
+  control that looks alive.
+- **Sweep, don't spot-fix.** The story listed the SEO sites; the same grep found
+  a Stripe return_url fallback, the billing address on every invoice, and the
+  default brand an admin sees before saving anything.
+- **Narrow a guard to the form that is wrong, not the word.** Matching the bare
+  brand word failed on `SUPABASE_SERVICE_ROLE_KEY_DESMOINESPULSE`, an upstream
+  hub's credential name. A check that fails on something you cannot fix gets
+  deleted.
+- **Google requires FAQ content to be visible on the page emitting it.** The
+  event FAQPage lived only in the head, and its answers gave every venue in the
+  metro the same interstates, parking and bus route.
+- **Deleting an emitter means updating the emitter model in the same commit.**
+  `check-duplicate-schema.mjs` fails when a modelled emitter stops emitting —
+  the guard doing its job, not a separate chore.
+- **The comment-vs-assertion trap, twice more.** My own explanatory comment
+  quoted the highway names I was asserting absent, and `brandConfig`'s note
+  quotes the typo'd handle to explain it. Strip comments, or don't quote the
+  thing you assert against.

@@ -4,7 +4,7 @@ import { isCapacitor } from '@/lib/capacitorUtils';
 
 /**
  * Hook that listens for incoming deep link URLs via the Capacitor App plugin.
- * When the app is opened via a Universal Link (e.g. desmoinespulse.com/events/xyz),
+ * When the app is opened via a Universal Link (e.g. desmoinesinsider.com/events/xyz),
  * this navigates to the corresponding route.
  *
  * No-op on web.

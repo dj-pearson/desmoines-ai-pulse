@@ -260,11 +260,11 @@ export default function Index() {
         "description": "Alexa and Google Assistant integration for hands-free discovery"
       }
     ],
-    "sameAs": [
-      "https://www.facebook.com/desmoinespulse",
-      "https://www.twitter.com/desmoinespulse",
-      "https://www.instagram.com/desmoinespulse"
-    ]
+    // WEB-SEO-023: this asserted Facebook, X and Instagram profiles on the
+    // OLD brand's handle, under the new brand's name. sameAs is a
+    // machine-readable identity claim, so the property is OMITTED rather
+    // than emitted empty until BRAND.social has real URLs in it.
+    ...(BRAND.social.length > 0 ? { sameAs: [...BRAND.social] } : {}),
   };
 
   // LocalBusiness Schema - CRITICAL for Local SEO
@@ -305,11 +305,11 @@ export default function Index() {
       "opens": "00:00",
       "closes": "23:59"
     },
-    "sameAs": [
-      "https://www.facebook.com/desmoinespulse",
-      "https://www.twitter.com/desmoinespulse",
-      "https://www.instagram.com/desmoinespulse"
-    ],
+    // WEB-SEO-023: this asserted Facebook, X and Instagram profiles on the
+    // OLD brand's handle, under the new brand's name. sameAs is a
+    // machine-readable identity claim, so the property is OMITTED rather
+    // than emitted empty until BRAND.social has real URLs in it.
+    ...(BRAND.social.length > 0 ? { sameAs: [...BRAND.social] } : {}),
     "areaServed": {
       "@type": "GeoCircle",
       "geoMidpoint": {

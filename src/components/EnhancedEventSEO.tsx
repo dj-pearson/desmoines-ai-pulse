@@ -170,57 +170,27 @@ export default function EnhancedEventSEO({
     mainEntityOfPage: { "@type": "WebPage", "@id": eventJsonLd.url },
   };
 
-  // FAQ Schema for Voice Search & AI Chatbots
-  const faqSchema = {
-    "@context": "https://schema.org",
-    "@type": "FAQPage",
-    "mainEntity": [
-      {
-        "@type": "Question",
-        "name": `When is ${event.title}?`,
-        "acceptedAnswer": {
-          "@type": "Answer",
-          "text": `${event.title} takes place ${formatEventDate(event)} at ${event.venue || event.location || BRAND.city} in ${BRAND.city}, ${BRAND.state}.`
-        }
-      },
-      {
-        "@type": "Question",
-        "name": `Where is ${event.title} located?`,
-        "acceptedAnswer": {
-          "@type": "Answer",
-          "text": `${event.title} is held at ${event.venue || event.location || BRAND.city}, ${event.city || BRAND.city}, ${BRAND.state}.${event.latitude && event.longitude ? ` The venue is located at coordinates ${event.latitude}, ${event.longitude}. You can get directions via Google Maps.` : ''}`
-        }
-      },
-      {
-        "@type": "Question",
-        "name": `How much does ${event.title} cost?`,
-        "acceptedAnswer": {
-          "@type": "Answer",
-          "text": accessibleForFree === true
-            ? `${event.title} is a free event in ${BRAND.city}, ${BRAND.state}. No ticket purchase is required.`
-            : accessibleForFree === undefined
-              ? `Ticket pricing for ${event.title} is set by the organiser. Visit the official event page for current prices and availability.`
-              : `Tickets for ${event.title} are ${event.price}. Visit the official event page for ticket information and availability.`
-        }
-      },
-      {
-        "@type": "Question",
-        "name": `What type of event is ${event.title}?`,
-        "acceptedAnswer": {
-          "@type": "Answer",
-          "text": `${event.title} is a ${event.category.toLowerCase()} event in ${BRAND.city}, ${BRAND.state}. It's part of the vibrant ${event.category.toLowerCase()} scene in the ${BRAND.region}.`
-        }
-      },
-      {
-        "@type": "Question",
-        "name": `How do I get to ${event.title}?`,
-        "acceptedAnswer": {
-          "@type": "Answer",
-          "text": `${event.title} is located at ${event.venue || event.location || BRAND.city} in ${event.city || BRAND.city}, ${BRAND.state}. ${BRAND.city} is easily accessible by car via I-235 and I-80. Downtown parking is available in public garages and street parking. Public transit via DART bus routes also serves the area.`
-        }
-      }
-    ]
-  };
+  // WEB-SEO-022. A FIVE-QUESTION FAQPage USED TO BE BUILT HERE AND IT IS GONE.
+  //
+  // Nothing on the page ever showed it. EventDetails renders no FAQSection, so
+  // the markup existed only in the head -- and Google's structured-data policy
+  // requires FAQ content to be visible on the page it is emitted from.
+  // EnhancedLocalSEO.tsx:277-305 already records why this pattern was removed
+  // from every other surface; event pages were the copy that survived.
+  //
+  // The answers were also not true of the events they described. Every one of
+  // roughly 525 event pages asserted the same directions -- two named
+  // interstates, downtown parking, a bus route -- for a barn dance in Waukee as
+  // readily as for a show downtown, and one question quoted raw latitude and
+  // longitude at the reader. That is fabricated content in a format search
+  // engines read as a factual claim by the site.
+  //
+  // NOT REPLACED WITH A VISIBLE SECTION, though AC2 allows it. The only fields
+  // that could honestly answer these questions -- date, venue, price -- are
+  // already on the page, already in the Event JSON-LD, and already in the meta
+  // description. A visible FAQ restating them would exist to carry the markup
+  // rather than to answer anything, which is the same defect with a <details>
+  // element around it.
 
   // Speakable Schema for Voice Assistants (Google Assistant, Alexa, Siri)
   const speakableSchema = {
@@ -292,7 +262,6 @@ export default function EnhancedEventSEO({
 
       {/* Structured Data - Event Schema (primary for Google Events indexing) */}
       <script type="application/ld+json">{JSON.stringify(eventSchema)}</script>
-      <script type="application/ld+json">{JSON.stringify(faqSchema)}</script>
       <script type="application/ld+json">{JSON.stringify(speakableSchema)}</script>
     </Helmet>
   );

@@ -262,7 +262,10 @@ export default function RestaurantDetails() {
   const restaurantSchema = {
     "@context": "https://schema.org",
     "@type": "Restaurant",
-    "@id": `https://desmoinespulse.com/restaurants/${restaurant.slug || restaurant.id}`,
+    // WEB-SEO-023. Was hard-coded to the OLD brand domain on ~480 pages. @id is
+    // how a crawler reconciles one entity across pages, so pointing it at
+    // another origin does not make a broken link -- it makes a different entity.
+    "@id": getCanonicalUrl(`/restaurants/${restaurant.slug || restaurant.id}`),
     name: restaurant.name,
     description: restaurant.description || seoDescription,
     servesCuisine: restaurant.cuisine,
@@ -289,12 +292,12 @@ export default function RestaurantDetails() {
       : {}),
     paymentAccepted: "Cash, Credit Card, Debit Card",
     currenciesAccepted: "USD",
-    hasMenu: {
-      "@type": "Menu",
-      "@id": `https://desmoinespulse.com/restaurants/${restaurant.slug || restaurant.id}#menu`,
-      name: `${restaurant.name} Menu`,
-      url: `https://desmoinespulse.com/restaurants/${restaurant.slug || restaurant.id}#menu`,
-    },
+    // hasMenu IS GONE FROM HERE (WEB-SEO-023 AC2). It was unconditional, so every
+    // restaurant claimed a menu at #menu whether one existed or not, and where
+    // one did exist the claim was a second Menu node competing with the real
+    // one. RestaurantMenuSection renders MenuSchema only when a menu with
+    // sections has actually been captured, and that node carries
+    // mainEntityOfPage back to this restaurant. One owner, and only when true.
     areaServed: {
       "@type": "City",
       name: "Des Moines",

@@ -91,7 +91,7 @@
     "check-migration-drift": "node scripts/check-migration-drift.mjs",
     "check-migration-drift:all": "node scripts/check-migration-drift.mjs --all",
     "test:smoke": "playwright test --config=playwright.smoke.config.ts",
-    "validate": "npm run type-check && npm run check-imports && npm run check-schema && npm run check-error-handling && npm run check-seo-routes && npm run check-sitemap-redirects && npm run check-schema-dupes && npm run check-icon-sprite && npm run lint && npm run type-check:scripts && npm run type-check:functions",
+    "validate": "npm run type-check && npm run check-imports && npm run check-schema && npm run check-error-handling && npm run check-seo-routes && npm run check-sitemap-redirects && npm run check-schema-dupes && npm run check-icon-sprite && npm run lint && npm run type-check:scripts && npm run type-check:functions && npm run check-brand-leak",
     "validate:strict": "npm run type-check:strict && npm run lint",
     "setup:stripe": "node scripts/setup-stripe-products.js",
     "setup:stripe:dry-run": "node scripts/setup-stripe-products.js --dry-run",
@@ -123,7 +123,8 @@
     "check-outdoors-guide": "node scripts/check-outdoors-guide.mjs",
     "check-pseo-demand": "node scripts/check-pseo-demand.mjs",
     "check-loading-canonical": "node scripts/check-loading-canonical.mjs",
-    "check-sitemap-duplicates": "node scripts/check-sitemap-duplicates.mjs"
+    "check-sitemap-duplicates": "node scripts/check-sitemap-duplicates.mjs",
+    "check-brand-leak": "node scripts/check-brand-leak.mjs"
   },
   "dependencies": {
     "@dnd-kit/core": "^6.3.1",

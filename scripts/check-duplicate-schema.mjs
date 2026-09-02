@@ -41,7 +41,12 @@ const SRC = path.resolve('src');
  */
 const EMITTERS = [
   { component: 'FAQSection', mode: 'default-on', disabledBy: 'showSchema' },
-  { component: 'EnhancedEventSEO', mode: 'always' },
+  // WEB-SEO-022: EnhancedEventSEO WAS here. It built a five-question FAQPage
+  // into the head of every event page while EventDetails rendered no FAQ at
+  // all, which Google's policy forbids -- and the answers asserted the same
+  // driving directions and bus route for every venue in the metro. The block
+  // is deleted, so leaving it modelled here would make assertModelMatchesSource
+  // fail, which is exactly the drift guard doing its job.
   // EnhancedLocalSEO is NOT here. SEO-003 removed its FAQPage block and left
   // faqData as a hint that the page has an FAQ; the prop still exists and
   // feeds nothing. Modelling it as an opt-in emitter made five pages look like

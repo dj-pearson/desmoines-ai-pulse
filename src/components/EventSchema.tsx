@@ -60,11 +60,11 @@ export default function EventSchema({ event, isUpcoming = true }: EventSchemaPro
         "@type": "ImageObject",
         url: `${BRAND.baseUrl}${BRAND.logo}`
       },
-      sameAs: [
-        "https://facebook.com/desmoinespulse",
-        "https://twitter.com/desmoinespulse",
-        "https://instagram.com/desmoinespulse"
-      ]
+      // WEB-SEO-023: this asserted Facebook, X and Instagram profiles on the
+      // OLD brand's handle, under the new brand's name. sameAs is a
+      // machine-readable identity claim, so the property is OMITTED rather
+      // than emitted empty until BRAND.social has real URLs in it.
+      ...(BRAND.social.length > 0 ? { sameAs: [...BRAND.social] } : {}),
     },
     publisher: {
       "@type": "Organization",
