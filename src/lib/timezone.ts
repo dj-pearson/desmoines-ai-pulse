@@ -114,6 +114,18 @@ export function isEventInFuture(eventDate: string | Date): boolean {
  */
 export function hasSpecificTime(event: any): boolean {
   try {
+    // WEB-BE-038. An explicit flag beats a sentinel, and this is where the two
+    // meet: NO_TIME_MARKER below is a TIME VALUE standing in for "no time",
+    // which only works when the ingestion path happened to write that exact
+    // value. SeatGeek writes 03:30:00 instead, which is indistinguishable from
+    // a real showtime by inspection -- so the source's own time_tbd flag is now
+    // carried onto the row and read first.
+    //
+    // Checking it here rather than at each call site means every display
+    // surface honours it at once: EnhancedEventSEO, SocialEventCard and
+    // EventDetails already branch on this function.
+    if (event?.time_tbd) return false;
+
     // Check event_start_local first (new timezone field)
     if (event.event_start_local) {
       const time = event.event_start_local.split('T')[1]?.substring(0, 8);

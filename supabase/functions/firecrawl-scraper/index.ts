@@ -721,6 +721,11 @@ serve(async (req) => {
                   event_start_local: parsedEventDateTime.event_start_local,
                   event_timezone: parsedEventDateTime.event_timezone,
                   event_start_utc: parsedEventDateTime.event_start_utc,
+                  // WEB-BE-038. The adapter knows whether the source announced
+                  // a start time; the row is where that has to be recorded,
+                  // because by the time anything renders it there is only a
+                  // timestamp and no way to tell a placeholder from a showtime.
+                  time_tbd: item.time_tbd === true,
                   location: eventLocation,
                   venue: eventVenue,
                   category: item.category?.substring(0, 50) || "General",

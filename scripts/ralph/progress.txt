@@ -822,3 +822,57 @@ vacuously, so it is recorded here rather than added. Every other suite under
 - **Add a new family to the END of a strict priority list.** The prerender
   budget shortfall falls entirely on the tail, so inserting ahead of an existing
   family takes its whole allocation rather than sharing the cost.
+
+## 2026-09-02 — WEB-SEO-024 (placeholder geography in structured data)
+
+### Learnings for future iterations
+
+- **Check the columns before assuming a value is stale.** `attractions` and
+  `playgrounds` have no `city` and no `postal_code` column at all, so
+  `addressLocality: Des Moines` and `postalCode: 50309` could never have come
+  from data. Same locality defect SEO-007 fixed for events, two tables over.
+- **A wrong pin is worse than no pin.** Coordinates fell back to downtown, so a
+  row without a location got a pin on a street corner it is not on — and a user
+  navigates to it. For playgrounds that is the sharpest version on the site.
+- **A claim true of everything says nothing and is false as soon as it isn't.**
+  `touristType: [Family, Couples, Solo travelers, Groups]` on every row.
+- **Hard-coding a value whose column exists is the worse case.**
+  `isAccessibleForFree: true` on attractions, which DO have `is_free` and many
+  of which charge.
+- **Two keeps are worth defending explicitly**: `currenciesAccepted: USD` is a
+  safe default, and `isAccessibleForFree` on playgrounds is true by definition —
+  which is exactly why it was removed from attractions.
+- **Scope a schema lint to the ENTITY node.** The same files carry a publisher
+  node that legitimately holds the city's coordinates, so scanning whole files
+  fails on correct code. Name where the node starts and ends, and strip comments
+  because the file now explains the removed values in prose.
+
+## 2026-09-02 — WEB-BE-038 (SeatGeek time-TBD events)
+
+### Learnings for future iterations
+
+- **A field absent from an interface can never be read, even by accident.**
+  SeatGeek's `time_tbd` and `date_tbd` were not in the adapter's interface, so
+  its 03:30 placeholder was ingested as a showtime from the largest source in
+  the pipeline.
+- **An implausible wrong value is worse than a plausible one.** "3:30 AM" does
+  not read as "not announced yet", it reads as a broken listing.
+- **A sentinel VALUE is a weak marker.** `NO_TIME_MARKER = "19:31:58"` only
+  works when the ingestion path writes that exact time; SeatGeek writes 03:30,
+  indistinguishable from a real showtime. An explicit boolean column, read first
+  in the shared `hasSpecificTime`, covers every source.
+- **Fix it in the one function every surface already calls.** Three display
+  components branch on `hasSpecificTime`, so reading the flag there means all
+  three honour it untouched.
+- **Skip, don't guess, when the DATE is unknown.** An event with an invented
+  date drops off the site on the day it never happens.
+- **Check the neighbouring estimate when a value becomes date-only.**
+  `eventEndIso` falls back to start + 3h; with a midnight start that publishes a
+  3 AM end, moving the implausible hour to the other field instead of removing
+  it.
+- **Scope a backfill by source AND by exact value, and report what you did not
+  touch.** 03:30 is a real time; rows at it from other sources are counted and
+  left alone with a NOTICE.
+- **Strip comments before any assertion about ORDER.** The ordering check failed
+  on correct code because the comment explaining the fix named the sentinel
+  above the flag check. Fourth variant of this trap today.

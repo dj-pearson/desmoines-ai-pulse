@@ -54,10 +54,23 @@ export function eventPageUrl(event: Event): string {
 }
 
 export function eventStartIso(event: Event): string {
-  return (
+  const iso =
     event.event_start_utc ||
-    (typeof event.date === 'string' ? event.date : event.date.toISOString())
-  );
+    (typeof event.date === 'string' ? event.date : event.date.toISOString());
+
+  // WEB-BE-038. DATE ONLY when the source announced no start time.
+  //
+  // schema.org/Event accepts a bare date for startDate, and that is exactly
+  // what "the date is known, the time is not" means. The alternative was
+  // publishing SeatGeek's 03:30:00 placeholder as a showtime -- which Google
+  // then renders in a rich result, so a visitor sees "3:30 AM" and concludes
+  // the listing is broken rather than that the time is unannounced.
+  if (event.time_tbd) {
+    const datePart = iso.slice(0, 10);
+    if (/^\d{4}-\d{2}-\d{2}$/.test(datePart)) return datePart;
+  }
+
+  return iso;
 }
 
 /**
@@ -71,8 +84,16 @@ export function eventStartIso(event: Event): string {
  * cannot mislead a reader (nothing renders it), and it is never applied over a
  * real end_date.
  */
-export function eventEndIso(event: Event): string {
+export function eventEndIso(event: Event): string | null {
   if (event.end_date) return event.end_date;
+
+  // WEB-BE-038. NO ESTIMATE WHEN THERE IS NO START TIME. The three-hour
+  // fallback above is defensible because it is anchored to a real start; with
+  // a date-only start there is nothing to anchor it to, and adding three hours
+  // to midnight would publish a 3 AM end time -- reintroducing, on the endDate,
+  // exactly the implausible-hour problem this story removes from startDate.
+  if (event.time_tbd) return null;
+
   const startMs = new Date(eventStartIso(event)).getTime();
   if (!Number.isFinite(startMs)) return eventStartIso(event);
   return new Date(startMs + DEFAULT_EVENT_HOURS * 60 * 60 * 1000).toISOString();
@@ -124,7 +145,9 @@ export function buildEventJsonLd(event: Event, opts: { withContext?: boolean } =
       event.original_description ||
       `${event.title} in ${city || BRAND.city}, ${BRAND.state}`,
     startDate: eventStartIso(event),
-    endDate: eventEndIso(event),
+    // Omitted rather than estimated when there is no announced start time
+    // (WEB-BE-038); see eventEndIso.
+    ...(eventEndIso(event) ? { endDate: eventEndIso(event) as string } : {}),
     eventStatus: 'https://schema.org/EventScheduled',
     eventAttendanceMode: 'https://schema.org/OfflineEventAttendanceMode',
     location: buildEventLocation(event),

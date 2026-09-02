@@ -20,6 +20,12 @@ export interface Event {
   updated_at?: string;
   // New timezone fields
   event_start_utc?: string;
+  /**
+   * True when the source published a date but no start time (WEB-BE-038). The
+   * time component of `date` is then a placeholder -- SeatGeek's is 03:30:00 --
+   * and must not be displayed or emitted in JSON-LD.
+   */
+  time_tbd?: boolean | null;
   event_start_local?: string;
   event_timezone?: string;
   end_date?: string | null;
