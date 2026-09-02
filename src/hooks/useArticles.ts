@@ -1,7 +1,10 @@
-import { useState, useEffect } from 'react';
+import { useCallback, useEffect, useState } from 'react';
+import { useQuery, useQueryClient } from '@tanstack/react-query';
 import { supabase } from '@/integrations/supabase/client';
 import { useToast } from '@/hooks/use-toast';
 import { createLogger } from '@/lib/logger';
+import { queryKeys } from '@/lib/queryKeys';
+import { STALE_TIME, GC_TIME } from '@/lib/queryConfig';
 
 const log = createLogger('useArticles');
 
@@ -47,42 +50,79 @@ export interface UpdateArticleData extends Partial<CreateArticleData> {
 }
 
 export const useArticles = (options?: { autoLoad?: boolean }) => {
-  const [articles, setArticles] = useState<Article[]>([]);
-  const [loading, setLoading] = useState(true);
-  const [error, setError] = useState<string | null>(null);
+  // WEB-PERF-028. The LIST is a query now; these two remain for the mutations
+  // below, which report their own progress and failures through the same
+  // `loading` and `error` fields callers already read.
+  const [mutating, setMutating] = useState(false);
+  const [mutationError, setMutationError] = useState<string | null>(null);
+  const [statusFilter, setStatusFilter] = useState<string | undefined>(undefined);
+  const queryClient = useQueryClient();
   const { toast } = useToast();
 
-  const loadArticles = async (status?: string) => {
-    try {
-      setLoading(true);
+  // WEB-PERF-028. This fetched in useEffect with useState, so /articles cached
+  // nothing across navigation AND was invisible to PrerenderSignal, which
+  // counts TanStack queries only. prerender.mjs captured a skeleton on 2 of 4
+  // builds because of exactly that.
+  //
+  // The explicit generic matters here for the same reason as the other hooks:
+  // callers are typed against Article[], and an inferred row type is not it.
+  const {
+    data: articleData,
+    isLoading,
+    error: queryError,
+  } = useQuery<Article[]>({
+    queryKey: queryKeys.articles.list({ status: statusFilter ?? 'all' }),
+    queryFn: async () => {
       let query = supabase
         .from('articles')
         .select('*')
         .order('updated_at', { ascending: false });
 
-      if (status && status !== 'all') {
-        query = query.eq('status', status);
+      if (statusFilter && statusFilter !== 'all') {
+        query = query.eq('status', statusFilter);
       }
-      // If status is 'all' or undefined, load all articles without filtering
+      // No status, or 'all', loads every article without filtering.
 
       const { data, error } = await query;
-
       if (error) throw error;
+      return (data || []) as unknown as Article[];
+    },
+    // Preserves the old `autoLoad: false` contract: that option meant "do not
+    // fetch on mount", and callers still call loadArticles() themselves.
+    enabled: options?.autoLoad !== false,
+    staleTime: STALE_TIME.CONTENT_LIST,
+    gcTime: GC_TIME,
+  });
 
-      setArticles(data || []);
-      setError(null);
-    } catch (err: any) {
-      log.error('loadArticles', 'Error loading articles', { error: err });
-      setError(err.message);
-      toast({
-        title: 'Error loading articles',
-        description: err.message,
-        variant: 'destructive',
-      });
-    } finally {
-      setLoading(false);
-    }
-  };
+  const articles = articleData ?? [];
+
+  /**
+   * Reload the list, optionally narrowing to a status.
+   *
+   * Same signature the mutations and callers already use. Passing a status now
+   * changes the query key rather than re-running an imperative fetch, so two
+   * views asking for different statuses no longer overwrite each other.
+   */
+  const loadArticles = useCallback(
+    async (status?: string) => {
+      if (status !== undefined) setStatusFilter(status);
+      await queryClient.invalidateQueries({ queryKey: queryKeys.articles.lists() });
+    },
+    [queryClient],
+  );
+
+  // The old loader toasted on failure. useQuery reports the error instead of
+  // throwing at a call site, so the toast moves here to keep the behaviour.
+  useEffect(() => {
+    if (!queryError) return;
+    const message = queryError instanceof Error ? queryError.message : 'Failed to load articles';
+    log.error('loadArticles', 'Error loading articles', { error: queryError });
+    toast({
+      title: 'Error loading articles',
+      description: message,
+      variant: 'destructive',
+    });
+  }, [queryError, toast]);
 
   const getArticleBySlug = async (slug: string): Promise<Article | null> => {
     try {
@@ -105,7 +145,7 @@ export const useArticles = (options?: { autoLoad?: boolean }) => {
       return data;
     } catch (err: any) {
       log.error('getArticleBySlug', 'Error getting article by slug', { error: err });
-      setError(err.message);
+      setMutationError(err.message);
       return null;
     }
   };
@@ -147,7 +187,7 @@ export const useArticles = (options?: { autoLoad?: boolean }) => {
       return data;
     } catch (err: any) {
       log.error('createArticle', 'Error creating article', { error: err });
-      setError(err.message);
+      setMutationError(err.message);
       toast({
         title: 'Error creating article',
         description: err.message,
@@ -181,7 +221,7 @@ export const useArticles = (options?: { autoLoad?: boolean }) => {
       return data;
     } catch (err: any) {
       log.error('updateArticle', 'Error updating article', { error: err });
-      setError(err.message);
+      setMutationError(err.message);
       toast({
         title: 'Error updating article',
         description: err.message,
@@ -211,7 +251,7 @@ export const useArticles = (options?: { autoLoad?: boolean }) => {
       return true;
     } catch (err: any) {
       log.error('deleteArticle', 'Error deleting article', { error: err });
-      setError(err.message);
+      setMutationError(err.message);
       toast({
         title: 'Error deleting article',
         description: err.message,
@@ -242,7 +282,7 @@ export const useArticles = (options?: { autoLoad?: boolean }) => {
       return true;
     } catch (err: any) {
       log.error('publishArticle', 'Error publishing article', { error: err });
-      setError(err.message);
+      setMutationError(err.message);
       toast({
         title: 'Error publishing article',
         description: err.message,
@@ -254,7 +294,7 @@ export const useArticles = (options?: { autoLoad?: boolean }) => {
 
   const generateArticleFromSuggestion = async (suggestionId: string, customPrompt?: string): Promise<Article | null> => {
     try {
-      setLoading(true);
+      setMutating(true);
       
       const { data, error } = await supabase.functions.invoke('generate-article', {
         body: { suggestionId, customPrompt }
@@ -275,7 +315,7 @@ export const useArticles = (options?: { autoLoad?: boolean }) => {
       }
     } catch (err: any) {
       log.error('generateArticle', 'Error generating article', { error: err });
-      setError(err.message);
+      setMutationError(err.message);
       toast({
         title: 'Error generating article',
         description: err.message,
@@ -283,21 +323,21 @@ export const useArticles = (options?: { autoLoad?: boolean }) => {
       });
       return null;
     } finally {
-      setLoading(false);
+      setMutating(false);
     }
   };
 
-  useEffect(() => {
-    if (options?.autoLoad !== false) {
-      loadArticles();
-    }
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, []);
+  // The mount fetch is the query's `enabled` flag now, so no effect is needed.
 
+  // The exact surface callers already read. `loading` and `error` merge the
+  // query with the mutations, which is what the single pair of state variables
+  // used to do implicitly.
   return {
     articles,
-    loading,
-    error,
+    loading: isLoading || mutating,
+    error:
+      mutationError ??
+      (queryError ? (queryError instanceof Error ? queryError.message : 'Failed to load articles') : null),
     loadArticles,
     getArticleBySlug,
     createArticle,

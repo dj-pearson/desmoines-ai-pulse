@@ -1,6 +1,9 @@
-import { useState, useEffect } from "react";
+import { useCallback } from "react";
+import { useQuery, useQueryClient } from "@tanstack/react-query";
 import { supabase } from "@/integrations/supabase/client";
 import { Database } from "@/integrations/supabase/types";
+import { queryKeys } from "@/lib/queryKeys";
+import { STALE_TIME, GC_TIME } from "@/lib/queryConfig";
 
 type Playground = Database["public"]["Tables"]["playgrounds"]["Row"];
 type PlaygroundInsert = Database["public"]["Tables"]["playgrounds"]["Insert"];
@@ -26,17 +29,17 @@ interface PlaygroundFilters {
 }
 
 export function usePlaygrounds(filters: PlaygroundFilters = {}) {
-  const [state, setState] = useState<PlaygroundsState>({
-    playgrounds: [],
-    isLoading: true,
-    error: null,
-    totalCount: 0,
-  });
+  const queryClient = useQueryClient();
 
-  const fetchPlaygrounds = async () => {
-    try {
-      setState((prev) => ({ ...prev, isLoading: true, error: null }));
-
+  // WEB-PERF-028. See useAttractions for the full note. The explicit generic is
+  // required: the old PlaygroundsState declared Playground[], and letting the
+  // queryFn's return type be inferred narrows it for every caller.
+  const { data, isLoading, error } = useQuery<{
+    playgrounds: Playground[];
+    totalCount: number;
+  }>({
+    queryKey: queryKeys.playgrounds.list(filters as Record<string, unknown>),
+    queryFn: async () => {
       let query = supabase.from("playgrounds").select("*", { count: "exact" });
 
       switch (filters.sortBy ?? "newest") {
@@ -88,22 +91,20 @@ export function usePlaygrounds(filters: PlaygroundFilters = {}) {
         throw error;
       }
 
-      setState({
-        playgrounds: data || [],
-        isLoading: false,
-        error: null,
+      return {
+        playgrounds: (data || []) as unknown as Playground[],
         totalCount: count || 0,
-      });
-    } catch (error) {
-      console.error("Error fetching playgrounds:", error);
-      setState((prev) => ({
-        ...prev,
-        isLoading: false,
-        error:
-          error instanceof Error ? error.message : "Failed to fetch playgrounds",
-      }));
-    }
-  };
+      };
+    },
+    staleTime: STALE_TIME.CONTENT_LIST,
+    gcTime: GC_TIME,
+  });
+
+  // Mutations below called fetchPlaygrounds() to refresh. Invalidating the list
+  // key does that and refreshes any other mounted view of it too.
+  const fetchPlaygrounds = useCallback(async () => {
+    await queryClient.invalidateQueries({ queryKey: queryKeys.playgrounds.lists() });
+  }, [queryClient]);
 
   const createPlayground = async (playground: PlaygroundInsert) => {
     try {
@@ -155,21 +156,13 @@ export function usePlaygrounds(filters: PlaygroundFilters = {}) {
     }
   };
 
-  useEffect(() => {
-    fetchPlaygrounds();
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [
-    filters.search,
-    filters.age_range,
-    filters.source,
-    filters.manuallyCuratedOnly,
-    filters.sortBy,
-    filters.limit,
-    filters.offset,
-  ]);
 
+  // The exact surface callers already read, rebuilt from the query.
   return {
-    ...state,
+    playgrounds: data?.playgrounds ?? [],
+    totalCount: data?.totalCount ?? 0,
+    isLoading,
+    error: error ? (error instanceof Error ? error.message : "Failed to fetch playgrounds") : null,
     refetch: fetchPlaygrounds,
     createPlayground,
     updatePlayground,

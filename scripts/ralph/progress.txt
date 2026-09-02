@@ -421,3 +421,19 @@ Started: 2026-08-31T19:18:09.615Z
   - Compare tsc error COUNT and per-file distribution against a baseline run.
     That is how the caller breakage showed up; the hook itself was clean.
 ---
+## 2026-09-02 - WEB-PERF-028 (PARTIAL: now 3 of 6 hooks)
+- usePlaygrounds and useArticles converted alongside useAttractions.
+- useArticles was the intricate one: no combined state object, an autoLoad
+  option, and mutations sharing `loading`/`error` with the list. The list moved
+  to useQuery; mutations kept their own flags; the returned loading/error merge
+  the two. autoLoad:false maps onto `enabled`. The loader's failure toast moved
+  into an effect on the query error.
+- **Learnings for future iterations:**
+  - Confirmed on all three: ALWAYS give useQuery an explicit generic naming the
+    Row type. These hooks select projections, so inference narrows the type and
+    the errors land in the CALLERS, not the hook.
+  - Compare tsc error count AND per-file distribution to a baseline after each
+    hook. The hook itself type-checks clean while callers break.
+  - Remaining: useHotels (the big one, 8 useState/5 useEffect), useRestaurants
+    (partly migrated already), useProfile.
+---
