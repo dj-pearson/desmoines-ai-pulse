@@ -206,5 +206,6 @@ Sitemap: https://desmoinesinsider.com/sitemap-restaurants.xml
 Sitemap: https://desmoinesinsider.com/sitemap-attractions.xml
 Sitemap: https://desmoinesinsider.com/sitemap-playgrounds.xml
 Sitemap: https://desmoinesinsider.com/sitemap-articles.xml
+Sitemap: https://desmoinesinsider.com/sitemap-hotels.xml
 Sitemap: https://desmoinesinsider.com/sitemap-guides.xml
 Sitemap: https://desmoinesinsider.com/sitemap-pseo.xml

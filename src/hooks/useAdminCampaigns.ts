@@ -6,6 +6,18 @@ import { createLogger } from '@/lib/logger';
 import { notifyAdvertiser } from "./useCampaignNotifications";
 import { publishCreative, discardReviewCopy } from "@/lib/adCreativeStorage";
 
+/** Shape returned by the approve_campaign_creative RPC (WEB-ADS-004). */
+interface ApproveCreativeResult {
+  creative_id?: string;
+  campaign_id?: string;
+  user_id?: string;
+  name?: string;
+  all_approved?: boolean;
+  activated?: boolean;
+  status?: string;
+}
+
+
 const log = createLogger('useAdminCampaigns');
 
 export interface AdminCampaignFilters {
@@ -167,10 +179,10 @@ export function useAdminCampaigns() {
     campaignId: string
   ): Promise<boolean> => {
     try {
-      // reviewed_by / admin_user_id below is the audit trail for an admin
-      // action on someone's paid campaign. A discarded getUser() failure wrote
-      // NULL there and the action still succeeded, so the record said the
-      // approval happened and not who made it.
+      // reviewed_by below is the audit trail for an admin action on someone's
+      // paid campaign. The RPC refuses a caller who is not a signed-in admin,
+      // so the record can never say an approval happened without saying who
+      // made it.
       const { data: { user }, error: authError } = await supabase.auth.getUser();
       if (authError) throw authError;
       if (!user) throw new Error("Not signed in - an admin action must be attributable");
@@ -179,7 +191,7 @@ export function useAdminCampaigns() {
       // bucket until this moment, with image_url null. Approving it publishes
       // the object into the public bucket and sets image_url.
       //
-      // Publish BEFORE the update, and let a failure abort the whole approval.
+      // Publish BEFORE the approval, and let a failure abort the whole thing.
       // An approved row with a null image_url renders as a blank ad slot for
       // the entire campaign, and get_active_ads would happily serve it --
       // strictly worse than a failed approval the admin can retry.
@@ -196,18 +208,26 @@ export function useAdminCampaigns() {
         publishedUrl = await publishCreative(creative.review_path);
       }
 
-      const { error } = await supabase
-        .from("campaign_creatives")
-        .update({
-          is_approved: true,
-          reviewed_by: user.id,
-          reviewed_at: new Date().toISOString(),
-          rejection_reason: null,
-          image_url: publishedUrl,
-        })
-        .eq("id", creativeId);
+      // WEB-ADS-004: approving the creative and moving the campaign are ONE
+      // server transaction (approve_campaign_creative). This used to be three
+      // client writes: is_approved = true, then read the campaign, then write
+      // its status. The status write threw 22P02 (pending_review was not an
+      // enum label) after the first write had committed, so the campaign sat
+      // with every creative approved and a stale status. Now either all of it
+      // lands or none of it does.
+      //
+      // When the start date has been reached the RPC activates through
+      // activate_campaign (WEB-ADS-001), which also flags sponsored listings;
+      // when it is ahead, the campaign parks in pending_review and the daily
+      // lifecycle job activates it on the day.
+      const { data: rpcResult, error: approveError } = await supabase.rpc(
+        "approve_campaign_creative",
+        { p_creative_id: creativeId, p_image_url: publishedUrl ?? undefined }
+      );
 
-      if (error) throw error;
+      if (approveError) throw approveError;
+
+      const outcome = (rpcResult ?? {}) as unknown as ApproveCreativeResult;
 
       // Only now that the row points at the public copy. Best effort: a leftover
       // private duplicate is untidy, not a leak, and must not fail an approval
@@ -216,79 +236,20 @@ export function useAdminCampaigns() {
         await discardReviewCopy(creative.review_path);
       }
 
-      // Fetch the campaign to get owner info and dates. THROWS rather than
-      // skipping: everything below - the advertiser notification and the
-      // activation itself - is gated on `campaign`, so a discarded failure here
-      // meant the creative was approved, the campaign never went live, and the
-      // toast said it had.
-      const { data: campaign, error: campaignError } = await supabase
-        .from("campaigns")
-        .select("user_id, name, start_date, status")
-        .eq("id", campaignId)
-        .single();
-
-      if (campaignError) throw campaignError;
-
-      // Notify the advertiser their creative was approved
-      if (campaign) {
-        notifyAdvertiser(campaignId, campaign.name, campaign.user_id, 'creative_approved');
-      }
-
-      // Check if all creatives for this campaign are approved.
-      //
-      // THE EMPTY CASE IS THE DANGEROUS ONE. [].every() is true, so a query
-      // that succeeded and matched nothing - an RLS change, a wrong id - read
-      // as "every creative is approved" and activated the campaign with no
-      // approved creative in it. The length check is the guard; the error check
-      // is separate, because a failed read returns null and would have silently
-      // taken the other branch instead.
-      const { data: allCreatives, error: creativesError } = await supabase
-        .from("campaign_creatives")
-        .select("is_approved")
-        .eq("campaign_id", campaignId);
-
-      if (creativesError) throw creativesError;
-
-      const allApproved = (allCreatives?.length ?? 0) > 0 && allCreatives.every((c) => c.is_approved);
-
-      // If all creatives are approved, determine the next status
-      if (allApproved && campaign) {
-        const startDate = campaign.start_date ? new Date(campaign.start_date) : null;
-        const today = new Date();
-        today.setHours(0, 0, 0, 0);
-
-        // Both updates throw. This is the transition that puts a paid
-        // campaign on the site; discarding its result meant a failure showed
-        // the advertiser-facing success toast and left the campaign stuck in
-        // pending_creative with every creative approved.
-        if (startDate && startDate <= today) {
-          // Start date is today or in the past → activate immediately
-          const { error: activateError } = await supabase
-            .from("campaigns")
-            .update({ status: "active" })
-            .eq("id", campaignId)
-            .in("status", ["pending_creative", "pending_review"]);
-
-          if (activateError) throw activateError;
-
-          notifyAdvertiser(campaignId, campaign.name, campaign.user_id, 'campaign_activated');
-        } else {
-          // Start date is in the future → mark as pending_review (approved, waiting for start date)
-          const { error: scheduleError } = await supabase
-            .from("campaigns")
-            .update({ status: "pending_review" })
-            .eq("id", campaignId)
-            .in("status", ["pending_creative", "pending_review"]);
-
-          if (scheduleError) throw scheduleError;
+      if (outcome.user_id && outcome.name) {
+        notifyAdvertiser(campaignId, outcome.name, outcome.user_id, 'creative_approved');
+        if (outcome.activated) {
+          notifyAdvertiser(campaignId, outcome.name, outcome.user_id, 'campaign_activated');
         }
       }
 
       toast({
         title: "Creative approved",
-        description: allApproved
-          ? "All creatives approved. Campaign will go live on the scheduled start date."
-          : "Creative approved. Remaining creatives still need review.",
+        description: !outcome.all_approved
+          ? "Creative approved. Remaining creatives still need review."
+          : outcome.activated
+            ? "All creatives approved. Campaign is live."
+            : "All creatives approved. Campaign will go live on the scheduled start date.",
       });
 
       await fetchCampaigns();

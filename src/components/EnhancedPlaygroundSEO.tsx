@@ -83,23 +83,37 @@ export default function EnhancedPlaygroundSEO({
     name: playground.name,
     description: getGEODescription(),
     ...(playground.image_url && { image: [playground.image_url] }),
+    // WEB-SEO-024, same defect as EnhancedAttractionSEO. public.playgrounds has
+    // location, latitude and longitude and NO city or postal_code, so every
+    // playground in the metro was published as Des Moines 50309.
     address: {
       "@type": "PostalAddress",
-      streetAddress: playground.location || "",
-      addressLocality: BRAND.city,
+      ...(playground.location && { streetAddress: playground.location }),
       addressRegion: BRAND.state,
-      postalCode: "50309",
       addressCountry: BRAND.country,
     },
-    geo: {
-      "@type": "GeoCoordinates",
-      latitude: playground.latitude || 41.5868,
-      longitude: playground.longitude || -93.625,
-    },
+    // The fallback pin was downtown Des Moines. A playground is somewhere a
+    // parent drives to, so a wrong coordinate is worse here than almost
+    // anywhere else on the site.
+    ...(playground.latitude != null && playground.longitude != null
+      ? {
+          geo: {
+            "@type": "GeoCoordinates",
+            latitude: playground.latitude,
+            longitude: playground.longitude,
+          },
+        }
+      : {}),
     // WEB-SEO-016: aggregateRating removed. The ratingValue was real but
     // ratingCount was invented from it (playground.rating >= 4.5 ? ... ), and
     // Google requires the count to reflect actual reviews. No reviews table
     // exists, so there is no honest count to emit.
+    // WEB-SEO-024. KEPT, and this is the one place the hard-coded value is
+    // defensible. public.playgrounds has no is_free column, but a public
+    // playground is free by definition -- that is what makes it a playground
+    // rather than an attraction, and the whole set is municipal park equipment.
+    // The attraction version of this was removed because attractions DO have an
+    // is_free column and many of them charge.
     isAccessibleForFree: true,
     publicAccess: true,
     amenityFeature: (playground.amenities || []).map((amenity) => ({

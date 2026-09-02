@@ -139,10 +139,14 @@ serve(async (req) => {
           );
         }
 
+        // WEB-SEO-023: the fallback was the OLD brand domain, so a missing
+        // SITE_URL sent a Stripe customer-portal return_url to a host this site
+        // does not serve -- a paying user bounced off the internet after
+        // managing their subscription.
         const siteUrl =
           Deno.env.get("SITE_URL") ||
           Deno.env.get("VITE_SITE_URL") ||
-          "https://desmoinespulse.com";
+          "https://desmoinesinsider.com";
 
         const portalSession = await stripe.billingPortal.sessions.create({
           customer: subscription.stripe_customer_id,

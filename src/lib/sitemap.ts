@@ -60,6 +60,8 @@ export class SitemapGenerator {
         .from("events")
         .select("id, title, date, updated_at, created_at")
         .neq("is_hidden", true) // Exclude soft-hidden stale events (WEB-AUTO-006)
+        // WEB-BE-034: archived_at is the other unpublish switch.
+        .is("archived_at", null)
         .order("created_at", { ascending: false });
 
       if (!eventsError && events) {

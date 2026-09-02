@@ -206,6 +206,8 @@ async function generateEventsSitemap(): Promise<number | null> {
       // WEB-AUTO-006 hides stale past-dated rows.
       .neq('is_merged', true)
       .neq('is_hidden', true)
+      // WEB-BE-034: archived_at is the other unpublish switch.
+      .is('archived_at', null)
       .order('date', { ascending: false })
       .order('id')
       .range(from, from + PAGE - 1);
@@ -430,6 +432,54 @@ async function generatePlaygroundsSitemap(): Promise<number | null> {
   return written;
 }
 
+/**
+ * Hotels (WEB-SEO-034).
+ *
+ * /stay/:slug had no generator at all, so not one hotel page was ever
+ * submitted -- the module shipped with a route, a detail page and schema and no
+ * way for a crawler to find any of it except by following an internal link.
+ *
+ * Uses the `slug` COLUMN, not createSlug(name). /stay/:slug is resolved by
+ * useHotel against that column, so a generated slug that disagreed with it
+ * would submit URLs the app answers with Hotel Not Found -- which is worse than
+ * submitting nothing.
+ */
+async function generateHotelsSitemap(): Promise<number | null> {
+  console.log('🏨 Generating hotels sitemap...');
+
+  const { data: hotels, error } = await supabase
+    .from('hotels')
+    .select('id, slug, updated_at')
+    // Only rows the detail page will actually render. useHotel filters on
+    // is_active too, so an inactive hotel resolves to nothing.
+    .eq('is_active', true)
+    .not('slug', 'is', null)
+    .order('updated_at', { ascending: false })
+    .order('id');
+
+  if (error) {
+    console.error('❌ Error fetching hotels:', error);
+    return null;
+  }
+
+  const urls = (hotels ?? [])
+    .filter((hotel) => !!hotel.slug)
+    .map((hotel) => ({
+      loc: `${baseUrl}/stay/${hotel.slug}`,
+      lastmod: hotel.updated_at ? hotel.updated_at.split('T')[0] : currentDate,
+      changefreq: 'weekly',
+      priority: '0.6',
+    }));
+
+  // The hub, always, and alone if there is nothing else. An empty urlset is
+  // valid XML and a Search Console warning; the hub is a real page either way.
+  urls.unshift({ loc: `${baseUrl}/stay`, lastmod: currentDate, changefreq: 'weekly', priority: '0.8' });
+
+  const written = writeSitemap('sitemap-hotels.xml', urls, 'hotels');
+  console.log(`✅ Hotels sitemap generated: ${written} URLs`);
+  return written;
+}
+
 async function generateArticlesSitemap(): Promise<number | null> {
   console.log('📰 Generating articles sitemap...');
 
@@ -642,6 +692,7 @@ async function main(): Promise<void> {
       generateAttractionsSitemap(),
       generatePlaygroundsSitemap(),
       generateArticlesSitemap(),
+      generateHotelsSitemap(),
       generateGuidesSitemap(),
       generatePseoSitemap()
     ]);
@@ -674,6 +725,10 @@ async function main(): Promise<void> {
   </sitemap>
   <sitemap>
     <loc>${baseUrl}/sitemap-articles.xml</loc>
+    <lastmod>${currentDate}</lastmod>
+  </sitemap>
+  <sitemap>
+    <loc>${baseUrl}/sitemap-hotels.xml</loc>
     <lastmod>${currentDate}</lastmod>
   </sitemap>
   <sitemap>

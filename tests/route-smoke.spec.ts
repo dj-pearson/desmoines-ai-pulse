@@ -255,3 +255,210 @@ test.describe('Listed events resolve to a detail page (WEB-QA-002)', () => {
     }
   });
 });
+
+test.describe('Sponsored listings render on the restaurants hub (WEB-ADS-001)', () => {
+  // The purchase path writes sponsored_listing_links and activation (the
+  // activate_campaign RPC via the campaigns status trigger) flags the listing
+  // row. This is the render end of that contract: a restaurant row carrying
+  // is_sponsored = true with a future sponsored_until must show the
+  // FTC "Sponsored" label on /restaurants. The rotation RPC is mocked so the
+  // assertion does not depend on a paid campaign existing in the database.
+  test('an active sponsored restaurant carries the Sponsored label', async ({ page }) => {
+    const sponsoredUntil = new Date(Date.now() + 7 * 24 * 60 * 60 * 1000).toISOString();
+    const restaurant = {
+      id: '11111111-1111-4111-8111-111111111111',
+      name: 'Smoke Test Sponsored Bistro',
+      slug: 'smoke-test-sponsored-bistro',
+      cuisine: 'American',
+      city: 'Des Moines',
+      address: '100 Locust St',
+      price_range: '$$',
+      rating: 4.6,
+      review_count: 12,
+      popularity_score: 90,
+      image_url: null,
+      description: 'Fixture row for the sponsored-label smoke test.',
+      is_featured: false,
+      is_sponsored: true,
+      sponsored_until: sponsoredUntil,
+      status: 'open',
+      created_at: '2026-01-01T00:00:00Z',
+    };
+
+    await page.route('**/rest/v1/rpc/get_rotated_restaurants*', (route) =>
+      route.fulfill({
+        status: 200,
+        contentType: 'application/json',
+        body: JSON.stringify([{ restaurant_data: restaurant, total_count: 1 }]),
+      })
+    );
+
+    await page.goto('/restaurants');
+    await expectNoErrorBoundary(page);
+
+    // RestaurantCard prefixes the accessible name with "Sponsored: " and
+    // renders SponsoredBadge (aria-label "Sponsored content") inside the card.
+    const card = page.getByRole('link', { name: /^Sponsored: View Smoke Test Sponsored Bistro/ }).first();
+    await expect(card).toBeVisible({ timeout: 30_000 });
+    await expect(card.getByLabel('Sponsored content')).toBeVisible();
+  });
+});
+
+test.describe('Password reset leads to a form that changes the password (WEB-AUTH-001)', () => {
+  // Before this route existed the reset email pointed at /auth?reset=true,
+  // nothing read that parameter, and the link signed the user in and dropped
+  // them on the homepage with the old password intact. These assertions are
+  // about the shape of the recovery flow, not about a real Supabase session,
+  // so the auth calls are route-mocked.
+
+  test('/auth/reset-password offers a resend when there is no recovery session', async ({ page }) => {
+    const consoleErrors = captureConsoleErrors(page);
+
+    const response = await page.goto('/auth/reset-password');
+    expect(response?.status()).toBeLessThan(400);
+    await page.waitForLoadState('networkidle');
+    await expectNoErrorBoundary(page);
+
+    // An anonymous visitor has no recovery session, so the page must offer a
+    // new link rather than an unusable form or a blank screen.
+    await expect(page.getByRole('button', { name: /send again/i })).toBeVisible({ timeout: 30_000 });
+    await expect(page.getByLabel(/email address/i)).toBeVisible();
+
+    const invariantErrors = consoleErrors.filter((e) => /Minified React error #130|Element type is invalid/i.test(e));
+    expect(invariantErrors, `React #130 on /auth/reset-password: ${invariantErrors.join('\n')}`).toHaveLength(0);
+  });
+
+  test('an expired link is reported as expired, not celebrated', async ({ page }) => {
+    await page.goto('/auth/reset-password?error=access_denied&error_code=otp_expired&error_description=Email+link+is+invalid+or+has+expired');
+    await page.waitForLoadState('networkidle');
+    await expectNoErrorBoundary(page);
+
+    await expect(page.getByText(/this link has expired/i)).toBeVisible({ timeout: 30_000 });
+    await expect(page.getByRole('button', { name: /send again/i })).toBeVisible();
+  });
+
+  test('the old ?reset=true link still reaches the reset page', async ({ page }) => {
+    // Emails sent before this shipped point at /auth?reset=true and stay valid
+    // for an hour, so that parameter has to keep working.
+    await page.goto('/auth?reset=true');
+    await page.waitForLoadState('networkidle');
+    await expectNoErrorBoundary(page);
+
+    await expect(page).toHaveURL(/\/auth\/reset-password/, { timeout: 30_000 });
+  });
+});
+
+test.describe('Ad impressions are recorded server-side (WEB-ADS-002)', () => {
+  // The browser used to INSERT into ad_impressions directly. That table has no
+  // INSERT policy in any migration, so RLS refused every write and every
+  // advertiser dashboard read zero. The write now goes through an edge
+  // function. This asserts the browser takes that route and never the old one.
+  test('the homepage writes no ad rows directly from the browser', async ({ page }) => {
+    const directAdWrites: string[] = [];
+    page.on('request', (req) => {
+      const url = req.url();
+      if (req.method() === 'POST' && /\/rest\/v1\/(ad_impressions|ad_clicks)/.test(url)) {
+        directAdWrites.push(url);
+      }
+    });
+
+    await page.goto('/');
+    await page.waitForLoadState('networkidle');
+    await expectNoErrorBoundary(page);
+
+    expect(
+      directAdWrites,
+      `the browser must not insert ad rows directly: ${directAdWrites.join('\n')}`
+    ).toHaveLength(0);
+  });
+});
+
+test.describe('Landing pages do not open a websocket per card (WEB-PERF-030)', () => {
+  // SocialEventCard fell back to useEventSocial(event.id) when a page passed no
+  // batch data, and that fallback opened three postgres_changes channels per
+  // card. FreeEvents fetches up to 100 events, so one anonymous visit could
+  // open three hundred subscriptions for a preview nobody signed out can use.
+  test('/events/free opens at most a handful of websockets', async ({ page }) => {
+    const sockets: string[] = [];
+    page.on('websocket', (ws) => sockets.push(ws.url()));
+
+    await page.goto('/events/free');
+    await page.waitForLoadState('networkidle');
+    await expectNoErrorBoundary(page);
+
+    // Supabase multiplexes channels over one realtime connection, so the count
+    // here is connections rather than channels. Anonymous visitors should need
+    // none; the ceiling leaves room for one shared connection plus noise.
+    expect(
+      sockets.length,
+      `too many websocket connections on /events/free: ${sockets.join('\n')}`
+    ).toBeLessThanOrEqual(3);
+  });
+});
+
+test.describe('Email confirmation failures are explained, not celebrated (WEB-AUTH-005)', () => {
+  // /auth/verified rendered "Email Verified! 🎉" no matter what brought the
+  // reader there. It read no error parameter, so an expired link, a reused link
+  // and a cross-device confirmation all produced a celebration and a
+  // ten-second countdown to the homepage, with the reader still logged out.
+
+  test('an expired link shows the reason, not the celebration', async ({ page }) => {
+    await page.goto('/auth/verified?error_code=otp_expired');
+    await expectNoErrorBoundary(page);
+
+    await expect(page.getByText(/could not confirm your email/i)).toBeVisible();
+    await expect(page.getByText(/expired/i).first()).toBeVisible();
+    await expect(page.getByText(/Email Verified/i)).toHaveCount(0);
+  });
+
+  test('the error branch offers a new link and a way to sign in', async ({ page }) => {
+    await page.goto('/auth/verified?error_code=otp_expired');
+    await expect(page.getByRole('button', { name: /send a new confirmation link/i })).toBeVisible();
+    await expect(page.getByRole('link', { name: /sign in/i })).toBeVisible();
+  });
+
+  test('a fragment error is read too, which is where email links put it', async ({ page }) => {
+    // The half the old page could not have seen even if it had looked: a
+    // fragment never reaches a server and useSearchParams does not expose it.
+    await page.goto('/auth/verified#error=access_denied&error_code=otp_expired');
+    await expectNoErrorBoundary(page);
+    await expect(page.getByText(/could not confirm your email/i)).toBeVisible();
+  });
+
+  test('the error branch does not bounce the reader to the homepage', async ({ page }) => {
+    // The countdown would take away the one screen explaining what happened.
+    await page.goto('/auth/verified?error_code=otp_expired');
+    await expect(page.getByText(/Redirecting automatically/i)).toHaveCount(0);
+    await page.waitForTimeout(2000);
+    expect(new URL(page.url()).pathname).toBe('/auth/verified');
+  });
+});
+
+test.describe('Sign-in details can be changed from /profile (WEB-AUTH-012)', () => {
+  // /profile edited first name, last name and phone. updateUser({ email })
+  // appeared nowhere in src and nothing called AuthContext.updatePassword, so a
+  // user whose password had leaked could only sign out and use "forgot
+  // password", and a user whose email had changed had no route at all.
+  //
+  // /profile is behind ProtectedRoute, so an anonymous visit lands on /auth.
+  // That is what these assert without a session: the route is guarded, and the
+  // panel is not reachable to an anonymous visitor.
+
+  test('/profile requires a session', async ({ page }) => {
+    await page.goto('/profile');
+    await expectNoErrorBoundary(page);
+    await page.waitForURL(/\/auth|\/profile/);
+    // Either the guard redirected, or the page rendered a sign-in prompt.
+    const onAuth = new URL(page.url()).pathname.startsWith('/auth');
+    if (!onAuth) {
+      await expect(page.getByText(/sign in|log in/i).first()).toBeVisible();
+    }
+  });
+
+  test('the credentials panel is not reachable without signing in', async ({ page }) => {
+    await page.goto('/profile');
+    await expectNoErrorBoundary(page);
+    await expect(page.locator('#current-password')).toHaveCount(0);
+    await expect(page.locator('#new-email')).toHaveCount(0);
+  });
+});

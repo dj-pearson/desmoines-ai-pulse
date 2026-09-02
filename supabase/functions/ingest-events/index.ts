@@ -136,27 +136,34 @@ Deno.serve(async (req: Request) => {
       created_at: new Date().toISOString(),
       updated_at: new Date().toISOString(),
     }));
-    // THE DATABASE HAS A STRICTER RULE THAN THE SHARED DEDUP, AND IT WINS.
+    // THE DATABASE AND THE SHARED DEDUP NOW AGREE (WEB-BE-036).
     //
-    // `events_title_venue_unique` is a UNIQUE INDEX on (title, venue) with no
-    // date in it: this table permits exactly one row per title per venue,
-    // forever. `_shared/eventDedup.ts` is looser — its third tier treats the
-    // same title and venue more than 24 hours apart as a genuinely different
-    // event, which is right for a weekly residency and wrong for this schema.
+    // They did not used to. `events_title_venue_unique` was a UNIQUE INDEX on
+    // (title, venue) with no date in it — one row per title per venue, forever
+    // — while `_shared/eventDedup.ts` tier 3 allowed the same title and venue
+    // on a different day. The first live run found it the expensive way: 88
+    // events extracted, the shared dedup passed 60, and Postgres rejected the
+    // whole statement with "duplicate key value violates unique constraint".
+    // A batch insert is ONE statement, so a single collision lost every row
+    // beside it.
     //
-    // The first live run found this the expensive way: 88 events extracted, the
-    // shared dedup passed 60 of them, and Postgres rejected the whole statement
-    // with "duplicate key value violates unique constraint". A batch insert is
-    // ONE statement, so a single collision loses every row beside it.
+    // Migration 20260902000006 replaced that index with
+    // `events_title_venue_date_unique` on (title, venue, event_local_date) —
+    // the Central-time calendar date, held in a generated column so PostgREST
+    // can name it here. `event_local_date` is never sent in the payload;
+    // Postgres derives it, and this clause only names it to pick the index.
     //
-    // So the constraint does that tier of the deduplication, and the two counts
-    // are reported SEPARATELY rather than summed: `duplicates` is what the
-    // shared module caught before the write, `constraintDuplicates` is what the
-    // database caught during it. Summing them would hide the disagreement, and
-    // the disagreement is the finding — see the note in eventDedup.ts.
+    // The two counts are still reported SEPARATELY rather than summed:
+    // `duplicates` is what the shared module caught before the write,
+    // `constraintDuplicates` is what the database caught during it. They should
+    // now agree, and they are kept apart so that a future divergence is visible
+    // instead of hidden — see the note in eventDedup.ts.
     const { data, error } = await supabase
       .from("events")
-      .upsert(stamped, { onConflict: "title,venue", ignoreDuplicates: true })
+      .upsert(stamped, {
+        onConflict: "title,venue,event_local_date",
+        ignoreDuplicates: true,
+      })
       .select("id");
     if (error) {
       writeErrors.push(error.message);

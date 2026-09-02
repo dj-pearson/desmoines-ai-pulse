@@ -51,7 +51,9 @@ async function fetchEventBySlug(slug: string): Promise<Event | null> {
     .select("*")
     // Must mirror EventsPage / useEvents, or a listed event won't resolve here.
     .neq("is_merged", true)
-    .neq("is_hidden", true);
+    .neq("is_hidden", true)
+    // WEB-BE-034: archived_at is the other unpublish switch.
+    .is("archived_at", null);
 
   if (slugDate) {
     // `date` is a timestamptz, not a DATE. Comparing `lte '2026-07-18'` resolves to

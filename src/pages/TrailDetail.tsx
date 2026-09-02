@@ -62,6 +62,14 @@ export default function TrailDetail() {
 
   return (
     <>
+      {/* WEB-SEO-033. RouteCanonical was only in the LOADING branch, so the
+          canonical existed for the few hundred milliseconds before the fetch
+          resolved and then vanished. A crawler that executes JS sees the
+          settled DOM, which had none -- and SEO-028 put it in the loading
+          branch precisely because the canonical must not wait for data, not
+          because it should stop existing once data arrives. It belongs in
+          both. */}
+      <RouteCanonical path={`/outdoors/${slug}`} />
       <Helmet>
         <title>{trail.name} — Trail Guide | Des Moines Insider</title>
         <meta name="description" content={trail.description || `${trail.name} — trail in the Des Moines, Iowa metro area.`} />

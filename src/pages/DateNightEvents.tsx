@@ -1,4 +1,4 @@
-import React, { useState, useEffect } from "react";
+import React, { useState, useEffect, useMemo } from "react";
 import { Link } from "react-router-dom";
 import { createLogger } from '@/lib/logger';
 import { supabase } from "@/integrations/supabase/client";
@@ -9,6 +9,7 @@ import Header from "@/components/Header";
 import Footer from "@/components/Footer";
 import { FAQSection } from "@/components/FAQSection";
 import { SocialEventCard } from "@/components/SocialEventCard";
+import { useBatchEventSocial } from "@/hooks/useBatchEventSocial";
 import EnhancedLocalSEO from "@/components/EnhancedLocalSEO";
 import { EventListJsonLd } from "@/components/schema/EventListJsonLd";
 import RelatedContent from "@/components/RelatedContent";
@@ -130,6 +131,16 @@ export default function DateNightEvents() {
       answer: "Most evening events start between 5-8 PM. Happy hours run 4-6 PM. Live music typically starts 7-9 PM. Comedy shows often have 7 PM and 9:30 PM sets. Dinner theaters begin around 6:30 PM. Check specific event times for planning.",
     },
   ];
+
+  // WEB-PERF-030. SocialEventCard falls back to useEventSocial(event.id)
+  // when no batch data is passed, and that fallback ran three queries and
+  // opened three realtime channels PER CARD. This page renders up to
+  // dateEvents.length of them, so one anonymous visit could issue hundreds of
+  // requests and sockets for a preview nobody can interact with. One batch
+  // query per table replaces all of it.
+  const batchSocialIds = useMemo(() => (dateEvents ?? []).map((e) => e.id), [dateEvents]);
+  const { data: batchSocialData, isPending: batchSocialPending } =
+    useBatchEventSocial(batchSocialIds);
 
   return (
     <div className="min-h-screen bg-background">
@@ -310,7 +321,13 @@ export default function DateNightEvents() {
             </h2>
             <div className="grid gap-6 md:grid-cols-2 lg:grid-cols-3">
               {dateEvents.map((event) => (
-                <SocialEventCard key={event.id} event={event} onViewDetails={() => {}} />
+                <SocialEventCard
+                  key={event.id}
+                  event={event}
+                  socialData={batchSocialData?.[event.id]}
+                  socialDataPending={batchSocialPending}
+                  onViewDetails={() => {}}
+                />
               ))}
             </div>
             {hiddenEventCount > 0 && (

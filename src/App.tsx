@@ -62,6 +62,7 @@ const Index = lazyWithRetry(() => import("./pages/Index"));
 const Auth = lazyWithRetry(() => import("./pages/Auth"));
 const AuthCallback = lazyWithRetry(() => import("./pages/AuthCallback"));
 const AuthVerified = lazyWithRetry(() => import("./pages/AuthVerified"));
+const ResetPassword = lazyWithRetry(() => import("./pages/ResetPassword"));
 const Profile = lazyWithRetry(() => import("./pages/Profile"));
 const ProfilePage = lazyWithRetry(() => import("./pages/ProfilePage"));
 const UserDashboard = lazyWithRetry(() => import("./pages/UserDashboard"));
@@ -445,6 +446,7 @@ const App = () => (
             <Route path="/auth" element={<Auth />} />
             <Route path="/auth/callback" element={<AuthCallback />} />
             <Route path="/auth/verified" element={<AuthVerified />} />
+            <Route path="/auth/reset-password" element={<ResetPassword />} />
             <Route path="/profile" element={<ProtectedRoute><Profile /></ProtectedRoute>} />
             <Route path="/my-events" element={<ProfilePage />} />
             <Route path="/dashboard" element={<ProtectedRoute><UserDashboard /></ProtectedRoute>} />

@@ -12926,6 +12926,14 @@ export type Database = {
       }
     }
     Functions: {
+      activate_campaign: {
+        Args: { p_campaign_id: string }
+        Returns: Json
+      }
+      approve_campaign_creative: {
+        Args: { p_creative_id: string; p_image_url?: string }
+        Returns: Json
+      }
       _postgis_deprecate: {
         Args: { newname: string; oldname: string; version: string }
         Returns: undefined
@@ -15101,11 +15109,13 @@ export type Database = {
         | "draft"
         | "pending_payment"
         | "pending_creative"
+        | "pending_review"
         | "active"
         | "completed"
         | "cancelled"
         | "rejected"
         | "refunded"
+        | "suspended"
       content_type: "event" | "attraction" | "restaurant" | "playground"
       crm_opp_stage:
         | "new"
@@ -15314,11 +15324,13 @@ export const Constants = {
         "draft",
         "pending_payment",
         "pending_creative",
+        "pending_review",
         "active",
         "completed",
         "cancelled",
         "rejected",
         "refunded",
+        "suspended",
       ],
       content_type: ["event", "attraction", "restaurant", "playground"],
       crm_opp_stage: [

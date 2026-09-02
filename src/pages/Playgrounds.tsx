@@ -5,7 +5,7 @@ import EnhancedLocalSEO from "@/components/EnhancedLocalSEO";
 import ItemListSchema from "@/components/schema/ItemListSchema";
 import { Breadcrumbs } from "@/components/ui/breadcrumbs";
 import { FAQSection } from "@/components/FAQSection";
-import { usePlaygrounds } from "@/hooks/usePlaygrounds";
+import { usePlaygroundFacets, usePlaygrounds } from "@/hooks/usePlaygrounds";
 import { useToast } from "@/hooks/use-toast";
 import { useDocumentTitle } from "@/hooks/useDocumentTitle";
 import { BackToTop } from "@/components/BackToTop";
@@ -64,72 +64,48 @@ export default function Playgrounds() {
   const [featuredOnly, setFeaturedOnly] = useState("all");
   const [viewMode, setViewMode] = useState('list');
 
-  // Get all playgrounds first
-  const { playgrounds: allPlaygrounds, isLoading, error } = usePlaygrounds();
+  // WEB-PERF-028 AC4. The hook used to be called with no arguments at all --
+  // every playground, every column -- and four filters applied client-side.
+  // Age range, suburb and featured now go to Postgres.
+  //
+  // SEARCH DELIBERATELY STAYS CLIENT-SIDE, and the reason is the amenities
+  // column. The box matches a substring inside any element of that text[], and
+  // PostgREST cannot express that: `cs` wants a whole element and `ilike` does
+  // not apply to arrays. Pushing search to the server would quietly drop every
+  // amenity hit. It is also the only control here with no debounce, so a
+  // request per keystroke would be the wrong trade even if it were expressible.
+  const { playgrounds: allPlaygrounds, isLoading, error } = usePlaygrounds({
+    age_range: selectedAgeRange !== "all" ? selectedAgeRange : undefined,
+    location: location !== "any-location" ? location : undefined,
+    featuredOnly: featuredOnly === "featured" || undefined,
+  });
 
-  // Get unique age ranges and locations for filter options
-  const ageRanges = useMemo(() => {
-    const uniqueRanges = new Set(
-      allPlaygrounds
-        .map((playground) => playground.age_range)
-        // Type predicate, not .filter(Boolean): the latter does not narrow away
-        // `null` in TypeScript, so consumers below still saw `string | null`.
-        .filter((r): r is string => Boolean(r))
-    );
-    return Array.from(uniqueRanges).sort();
-  }, [allPlaygrounds]);
+  // The filter controls and the two "Browse By" grids describe the whole
+  // catalogue, so they cannot come from a list that is now filtered. One
+  // three-column query covers age ranges, suburbs, amenities and both counts.
+  const {
+    ageRanges,
+    locations,
+    amenities: uniqueAmenities,
+    ageRangeCounts,
+    amenityCounts,
+  } = usePlaygroundFacets();
 
-  const locations = useMemo(() => {
-    const uniqueLocations = new Set(
-      allPlaygrounds
-        .map((playground) => playground.location)
-        .filter((l): l is string => Boolean(l))
-        .map((loc) => {
-          const parts = loc.split(",");
-          return parts[parts.length - 2]?.trim() || parts[0]?.trim() || loc;
-        })
-    );
-    return Array.from(uniqueLocations).sort();
-  }, [allPlaygrounds]);
-
-  // Apply filters
+  // Age range, suburb and featured are gone from here -- Postgres applied them.
+  // What is left is the amenity-aware search described above.
   const filteredPlaygrounds = useMemo(() => {
-    return allPlaygrounds.filter((playground) => {
-      if (searchQuery) {
-        const searchLower = searchQuery.toLowerCase();
-        const matchesSearch =
-          playground.name.toLowerCase().includes(searchLower) ||
-          playground.description?.toLowerCase().includes(searchLower) ||
-          playground.location?.toLowerCase().includes(searchLower) ||
-          playground.amenities?.some((amenity) =>
-            amenity.toLowerCase().includes(searchLower)
-          );
-        if (!matchesSearch) return false;
-      }
-
-      if (
-        selectedAgeRange !== "all" &&
-        playground.age_range !== selectedAgeRange
-      ) {
-        return false;
-      }
-
-      if (location !== "any-location") {
-        const playgroundLocation = playground.location || "";
-        if (
-          !playgroundLocation.toLowerCase().includes(location.toLowerCase())
-        ) {
-          return false;
-        }
-      }
-
-      if (featuredOnly === "featured" && !playground.is_featured) {
-        return false;
-      }
-
-      return true;
-    });
-  }, [allPlaygrounds, searchQuery, selectedAgeRange, location, featuredOnly]);
+    if (!searchQuery) return allPlaygrounds;
+    const searchLower = searchQuery.toLowerCase();
+    return allPlaygrounds.filter(
+      (playground) =>
+        playground.name.toLowerCase().includes(searchLower) ||
+        playground.description?.toLowerCase().includes(searchLower) ||
+        playground.location?.toLowerCase().includes(searchLower) ||
+        playground.amenities?.some((amenity) =>
+          amenity.toLowerCase().includes(searchLower)
+        )
+    );
+  }, [allPlaygrounds, searchQuery]);
 
   const getActiveFiltersCount = () => {
     let count = 0;
@@ -170,15 +146,6 @@ export default function Playgrounds() {
   // questions inline; a second array in this file fed nothing, and wiring it in
   // would both replace better answers with worse and risk a second FAQPage on
   // the page, which is the defect SEO-003 removed.
-
-  // Collect unique amenities across all playgrounds for "Browse by Amenity"
-  const uniqueAmenities = useMemo(() => {
-    const amenitySet = new Set<string>();
-    allPlaygrounds.forEach((p) => {
-      p.amenities?.forEach((a) => amenitySet.add(a));
-    });
-    return Array.from(amenitySet).sort();
-  }, [allPlaygrounds]);
 
   // The rendered set, capped, so every URL here is a link the crawler can
   // also see on the page. createSlug above is the same function the cards
@@ -613,7 +580,7 @@ export default function Playgrounds() {
             </p>
             <div className="grid grid-cols-2 sm:grid-cols-3 md:grid-cols-4 gap-3">
               {ageRanges.map((range) => {
-                const count = allPlaygrounds.filter((p) => p.age_range === range).length;
+                const count = ageRangeCounts[range] ?? 0;
                 return (
                   <button
                     key={range}
@@ -650,9 +617,7 @@ export default function Playgrounds() {
             </p>
             <div className="flex flex-wrap gap-2">
               {uniqueAmenities.map((amenity) => {
-                const count = allPlaygrounds.filter(
-                  (p) => p.amenities?.includes(amenity)
-                ).length;
+                const count = amenityCounts[amenity] ?? 0;
                 return (
                   <button
                     key={amenity}

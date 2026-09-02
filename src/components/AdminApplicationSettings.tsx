@@ -1,4 +1,5 @@
 import React, { useState, useEffect } from 'react';
+import { BRAND } from '@/lib/brandConfig';
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card';
 import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs';
 import { Switch } from '@/components/ui/switch';
@@ -74,10 +75,13 @@ export default function AdminApplicationSettings() {
   const { toast } = useToast();
   const [loading, setLoading] = useState(false);
   const [settings, setSettings] = useState<ApplicationSettings>({
-    // Site-wide settings
-    siteName: 'Des Moines Pulse',
-    siteDescription: 'Your guide to events, restaurants, and happenings in Des Moines',
-    siteUrl: 'https://desmoinespulse.com',
+    // WEB-SEO-023: these defaults carried the OLD brand name and domain, so an
+    // admin opening this screen before any setting was saved saw the previous
+    // brand presented as the current configuration -- and could save it.
+    // Sourced from BRAND now, which is the one place the brand is defined.
+    siteName: BRAND.name,
+    siteDescription: BRAND.description,
+    siteUrl: BRAND.baseUrl,
     defaultTimeZone: 'America/Chicago',
     maintenanceMode: false,
     
@@ -87,8 +91,8 @@ export default function AdminApplicationSettings() {
     smtpPort: '587',
     smtpUsername: '',
     smtpPassword: '',
-    fromEmail: 'noreply@desmoinespulse.com',
-    fromName: 'Des Moines Pulse',
+    fromEmail: `noreply@${BRAND.baseUrl.replace(/^https?:\/\//, '')}`,
+    fromName: BRAND.name,
     
     // Notification settings
     emailNotifications: true,

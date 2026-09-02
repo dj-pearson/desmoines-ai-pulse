@@ -1,4 +1,5 @@
 import React, { useState } from 'react';
+import { createEventSlugWithCentralTime } from '@/lib/timezone';
 import { Card, CardContent } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
 import { Badge } from '@/components/ui/badge';
@@ -90,12 +91,22 @@ export function SmartEventCard({ event, className = '' }: SmartEventCardProps) {
     return 'Schedule Free';
   };
 
+  // WEB-SEO-033. `event.slug` is a prop this component declares and NOTHING
+  // sets, because public.events has no slug column -- so it was always
+  // undefined. The card therefore rendered its unlinked branch on every event
+  // and refused every share with "Unable to share this event". Neither failed
+  // visibly: a card that is not a link just looks like a card.
+  //
+  // Derived the same way every other event link on the site is derived. The
+  // prop is kept as an override for a caller that has a real slug.
+  const eventSlug = event.slug || createEventSlugWithCentralTime(event.title, event);
+
   const handleShare = async () => {
-    if (event.slug) {
+    if (eventSlug) {
       await share(createEventShareData({
         title: event.title,
         description: event.description || `${event.category} event at ${event.venue || event.location}`,
-        slug: event.slug,
+        slug: eventSlug,
       }));
     } else {
       toast.error('Unable to share this event');
@@ -113,9 +124,9 @@ export function SmartEventCard({ event, className = '' }: SmartEventCardProps) {
   return (
     <Card className={`group card-mobile-interactive border-l-4 border-l-blue-500 ${className}`}>
       <CardContent className="p-4 md:p-6">
-        {event.slug ? (
+        {eventSlug ? (
           <Link
-            to={`/events/${event.slug}`}
+            to={`/events/${eventSlug}`}
             className="flex flex-col md:flex-row md:items-start gap-4"
           >
           {event.image_url && (

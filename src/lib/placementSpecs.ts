@@ -11,11 +11,18 @@ export interface PlacementDimension {
   label: string;
 }
 
+/**
+ * WEB-ADS-003: `dailyCost` was removed from this file. A price that lives in
+ * the bundle disagrees with the rate card the moment an admin edits a rate, and
+ * it did: the /advertise summary totalled these static numbers while the stored
+ * campaign came from calculate_campaign_pricing() with its volume discount, so
+ * the page said $70 and the row said $66.50. Prices come from ad_rate_card via
+ * fetchRateCard(), and the amount charged is computed server-side.
+ */
 export interface PlacementSpec {
   type: PlacementType;
   name: string;
   description: string;
-  dailyCost: number;
   dimensions: PlacementDimension[];
   maxSize: number; // bytes
   maxSizeLabel: string;
@@ -33,7 +40,6 @@ export const PLACEMENT_SPECS: Record<PlacementType, PlacementSpec> = {
     type: 'top_banner',
     name: 'Top Banner',
     description: 'Premium placement at the top of every page',
-    dailyCost: 10,
     dimensions: [
       { width: 970, height: 90, label: '970x90 (Desktop Leaderboard)' },
       { width: 728, height: 90, label: '728x90 (Standard Leaderboard)' },
@@ -56,7 +62,6 @@ export const PLACEMENT_SPECS: Record<PlacementType, PlacementSpec> = {
     type: 'featured_spot',
     name: 'Featured Spot',
     description: 'Highlighted placement in search results and event listings',
-    dailyCost: 5,
     dimensions: [
       { width: 300, height: 250, label: '300x250 (Medium Rectangle)' },
       { width: 336, height: 280, label: '336x280 (Large Rectangle)' },
@@ -78,7 +83,6 @@ export const PLACEMENT_SPECS: Record<PlacementType, PlacementSpec> = {
     type: 'below_fold',
     name: 'Below the Fold',
     description: 'Cost-effective placement integrated within content areas',
-    dailyCost: 5,
     dimensions: [
       { width: 728, height: 90, label: '728x90 (Leaderboard)' },
       { width: 320, height: 50, label: '320x50 (Mobile Banner)' },
@@ -100,7 +104,6 @@ export const PLACEMENT_SPECS: Record<PlacementType, PlacementSpec> = {
     type: 'sidebar',
     name: 'Sidebar Skyscraper',
     description: 'Vertical placement alongside content listings on desktop',
-    dailyCost: 5,
     dimensions: [
       { width: 160, height: 600, label: '160x600 (Wide Skyscraper)' },
     ],
@@ -121,7 +124,6 @@ export const PLACEMENT_SPECS: Record<PlacementType, PlacementSpec> = {
     type: 'sponsored_listing',
     name: 'Sponsored Listing',
     description: 'Promote your event or restaurant as a sponsored featured item — appears first in the featured section with a "Sponsored" badge. Uses your existing listing details, no image upload needed.',
-    dailyCost: 15,
     dimensions: [],
     maxSize: 0,
     maxSizeLabel: 'N/A',

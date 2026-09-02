@@ -1,4 +1,4 @@
-import React, { useState, useEffect } from "react";
+import React, { useState, useEffect, useMemo } from "react";
 import { useParams, useLocation as useRouterLocation } from "react-router-dom";
 import { useQuery } from "@tanstack/react-query";
 import { createLogger } from '@/lib/logger';
@@ -10,6 +10,7 @@ import Header from "@/components/Header";
 import Footer from "@/components/Footer";
 import { FAQSection } from "@/components/FAQSection";
 import { SocialEventCard } from "@/components/SocialEventCard";
+import { useBatchEventSocial } from "@/hooks/useBatchEventSocial";
 import EnhancedLocalSEO from "@/components/EnhancedLocalSEO";
 import { EventListJsonLd } from "@/components/schema/EventListJsonLd";
 import { useDocumentTitle } from "@/hooks/useDocumentTitle";
@@ -190,6 +191,40 @@ export default function EventsByLocation() {
     enabled: !!suburbInfo,
   });
 
+  // Moved above the early return below (WEB-PERF-030): it depends only on
+  // the events query, and the hooks that follow it must run on every render.
+  // Two full rows of the lg:grid-cols-3 grid below. This route prerendered
+  // 4,077 elements inside #root against a median of 496 across all 35 routes,
+  // and Lighthouse flags above ~1,500 - a cost paid in HTML parse, DOM memory
+  // and hydration, all main-thread (WEB-PERF-023).
+  //
+  // ONLY THE RENDERED LIST IS CAPPED. Every count on this page - the FAQ answer,
+  // the stat block, the this-week filter - still reads upcomingEvents.length, so
+  // no number a user sees changes.
+  const VISIBLE_EVENTS = 24;
+
+  const upcomingEvents =
+    events?.filter((event) => {
+      try {
+        return isAfter(parseISO(event.date), new Date());
+      } catch {
+        return false;
+      }
+    }) || [];
+
+  const visibleEvents = upcomingEvents.slice(0, VISIBLE_EVENTS);
+  const hiddenEventCount = upcomingEvents.length - visibleEvents.length;
+
+  // WEB-PERF-030. SocialEventCard falls back to useEventSocial(event.id)
+  // when no batch data is passed, and that fallback ran three queries and
+  // opened three realtime channels PER CARD. This page renders up to
+  // visibleEvents.length of them, so one anonymous visit could issue hundreds of
+  // requests and sockets for a preview nobody can interact with. One batch
+  // query per table replaces all of it.
+  const batchSocialIds = useMemo(() => (visibleEvents ?? []).map((e) => e.id), [visibleEvents]);
+  const { data: batchSocialData, isPending: batchSocialPending } =
+    useBatchEventSocial(batchSocialIds);
+
   if (!suburbInfo) {
     return (
       <div className="min-h-screen bg-background">
@@ -212,27 +247,6 @@ export default function EventsByLocation() {
     );
   }
 
-  // Two full rows of the lg:grid-cols-3 grid below. This route prerendered
-  // 4,077 elements inside #root against a median of 496 across all 35 routes,
-  // and Lighthouse flags above ~1,500 - a cost paid in HTML parse, DOM memory
-  // and hydration, all main-thread (WEB-PERF-023).
-  //
-  // ONLY THE RENDERED LIST IS CAPPED. Every count on this page - the FAQ answer,
-  // the stat block, the this-week filter - still reads upcomingEvents.length, so
-  // no number a user sees changes.
-  const VISIBLE_EVENTS = 24;
-
-  const upcomingEvents =
-    events?.filter((event) => {
-      try {
-        return isAfter(parseISO(event.date), new Date());
-      } catch {
-        return false;
-      }
-    }) || [];
-
-  const visibleEvents = upcomingEvents.slice(0, VISIBLE_EVENTS);
-  const hiddenEventCount = upcomingEvents.length - visibleEvents.length;
 
   const pageTitle = `${suburbInfo.name} Events - Things To Do | ${BRAND.name}`;
   const pageDescription = `Find events in ${suburbInfo.name}, Iowa. ${suburbInfo.description} See dates, times, locations, and get directions.`;
@@ -382,7 +396,13 @@ export default function EventsByLocation() {
             </h2>
             <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
               {visibleEvents.map((event) => (
-                <SocialEventCard key={event.id} event={event} onViewDetails={() => {}} />
+                <SocialEventCard
+                  key={event.id}
+                  event={event}
+                  socialData={batchSocialData?.[event.id]}
+                  socialDataPending={batchSocialPending}
+                  onViewDetails={() => {}}
+                />
               ))}
             </div>
             {hiddenEventCount > 0 && (

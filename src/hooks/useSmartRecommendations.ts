@@ -184,7 +184,9 @@ export function useSmartRecommendations() {
         .from('events')
         .select('*')
         .gte('date', new Date().toISOString()) // Future events only
-        .neq('is_hidden', true); // Exclude soft-hidden stale events (WEB-AUTO-006)
+        .neq('is_hidden', true) // Exclude soft-hidden stale events (WEB-AUTO-006)
+        // WEB-BE-034: archived_at is the other unpublish switch.
+        .is('archived_at', null);
 
       // Apply interest-based filtering
       if (preferences.interests.length > 0) {
@@ -248,6 +250,8 @@ export function useSmartRecommendations() {
           .select('*')
           .eq('id', trendingScore.content_id)
           .neq('is_hidden', true) // Exclude soft-hidden stale events (WEB-AUTO-006)
+          // WEB-BE-034: archived_at is the other unpublish switch.
+          .is('archived_at', null)
           .maybeSingle();
         // A strategy that FAILED contributes nothing, exactly like a strategy
         // with no matches - and the user just sees fewer recommendations. One

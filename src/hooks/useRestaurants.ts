@@ -1,10 +1,11 @@
-import { useState, useEffect, useCallback } from "react";
-import { useQuery } from "@tanstack/react-query";
+import { useCallback } from "react";
+import { useQuery, useQueryClient } from "@tanstack/react-query";
 import { supabase } from "@/integrations/supabase/client";
 import { Database } from "@/integrations/supabase/types";
 import { getRestaurantRotationSeed } from "@/lib/restaurantRotation";
 import { RESTAURANT_LIST_COLUMNS } from "@/lib/listColumns";
-import { STALE_TIME } from "@/lib/queryConfig";
+import { STALE_TIME, GC_TIME } from "@/lib/queryConfig";
+import { queryKeys } from "@/lib/queryKeys";
 import { createLogger } from "@/lib/logger";
 
 const logger = createLogger("useRestaurants");
@@ -12,13 +13,6 @@ const logger = createLogger("useRestaurants");
 type Restaurant = Database["public"]["Tables"]["restaurants"]["Row"];
 type RestaurantInsert = Database["public"]["Tables"]["restaurants"]["Insert"];
 type RestaurantUpdate = Database["public"]["Tables"]["restaurants"]["Update"];
-
-interface RestaurantsState {
-  restaurants: Restaurant[];
-  isLoading: boolean;
-  error: string | null;
-  totalCount: number;
-}
 
 interface RestaurantFilters {
   search?: string;
@@ -34,6 +28,17 @@ interface RestaurantFilters {
     | "price_low"
     | "price_high";
   featuredOnly?: boolean;
+  /**
+   * Only currently-active sponsored listings (WEB-PERF-029).
+   *
+   * Exists so paid placement survives server-side pagination. arrangeSponsored
+   * boosts up to two sponsored rows to the top of whatever array it is given,
+   * which worked only because the page fetched EVERY restaurant -- a sponsored
+   * listing ranked 400th by rotation was still pulled onto page 1. Bounding the
+   * fetch would have silently ended that, which is a contract question and not
+   * a performance decision, so the page now fetches those rows on their own.
+   */
+  sponsoredOnly?: boolean;
   openNow?: boolean;
   tags?: string[];
   dietary?: string[];
@@ -92,25 +97,42 @@ function deprioritizeUnvisitable(list: Restaurant[]): Restaurant[] {
 }
 
 export function useRestaurants(filters: RestaurantFilters = {}) {
-  const [state, setState] = useState<RestaurantsState>({
-    restaurants: [],
-    isLoading: true,
-    error: null,
-    totalCount: 0,
-  });
+  const queryClient = useQueryClient();
 
-  const fetchRestaurants = useCallback(async () => {
+  // WEB-PERF-028. This was useState + useEffect, so nothing was cached across
+  // navigation and every mount refetched -- including the rotation RPC, which
+  // is the more expensive of the two paths below. It also made the route
+  // invisible to PrerenderSignal, which publishes data-queries-settled from
+  // useIsFetching(): a count of TanStack queries only. A hook outside that
+  // count reports settled while its request is still in flight, which is how
+  // prerender.mjs captured a skeleton on 2 of 4 builds.
+  //
+  // The generic is explicit on purpose. Inferring it from the return would
+  // narrow `restaurants` to whatever the last branch produced rather than the
+  // table Row, and every caller that reads a column the projection omits would
+  // stop compiling.
+  const { data, isLoading, error } = useQuery<{
+    restaurants: Restaurant[];
+    totalCount: number;
+  }>({
+    queryKey: queryKeys.restaurants.list(filters as Record<string, unknown>),
+    staleTime: STALE_TIME.CONTENT_LIST,
+    gcTime: GC_TIME,
+    queryFn: async () => {
     try {
-      setState((prev) => ({ ...prev, isLoading: true, error: null }));
-
       // Default popularity sort goes through the rotation RPC so the top of
-      // the list isn't the same every visit. Other sorts (rating, newest, A-Z,
+      // the list isn't the same every visit.
+      //
+      // sponsoredOnly forces the legacy path: get_rotated_restaurants has no
+      // sponsorship parameter, and adding one would change a signature three
+      // shipped clients call. Other sorts (rating, newest, A-Z,
       // price) stay deterministic — users picked them explicitly.
       // Dietary filtering still runs via the regular query path because the
       // RPC doesn't model the description/cuisine ILIKE fan-out.
       const sortBy = filters.sortBy || "popularity";
       const useRotationRpc =
         sortBy === "popularity" &&
+        !filters.sponsoredOnly &&
         (!filters.dietary || filters.dietary.length === 0);
 
       if (useRotationRpc) {
@@ -154,16 +176,13 @@ export function useRestaurants(filters: RestaurantFilters = {}) {
         });
 
         if (!rpcError && rpcData) {
-          setState({
+          return {
             restaurants: deprioritizeUnvisitable(
-              rpcData.map((r) => r.restaurant_data)
+              rpcData.map((r) => r.restaurant_data) as unknown as Restaurant[]
             ),
-            isLoading: false,
-            error: null,
             totalCount:
               rpcData.length > 0 ? Number(rpcData[0].total_count) : 0,
-          });
-          return;
+          };
         }
         // Fall through to the legacy query path on RPC error so the page
         // still renders if the migration hasn't been applied yet.
@@ -229,6 +248,17 @@ export function useRestaurants(filters: RestaurantFilters = {}) {
       // Apply featured filter
       if (filters.featuredOnly) {
         query = query.eq("is_featured", true);
+      }
+
+      // WEB-PERF-029. Active sponsorships only: is_sponsored with either no
+      // expiry or one in the future, which is the same rule isSponsoredActive
+      // applies in the browser. Expressing it here rather than filtering after
+      // the fetch is the whole point -- the page asks for two rows instead of
+      // reading four hundred to find them.
+      if (filters.sponsoredOnly) {
+        query = query
+          .eq("is_sponsored", true)
+          .or(`sponsored_until.is.null,sponsored_until.gt.${new Date().toISOString()}`);
       }
 
       // Apply dietary keyword filter (searches description and cuisine fields)
@@ -325,35 +355,25 @@ export function useRestaurants(filters: RestaurantFilters = {}) {
         }
       }
 
-      setState({
-        restaurants: data || [],
-        isLoading: false,
-        error: null,
+      return {
+        restaurants: (data || []) as unknown as Restaurant[],
         totalCount: count || 0,
-      });
+      };
     } catch (error) {
       logger.error('fetchRestaurants', 'Error fetching restaurants', { error });
-      setState((prev) => ({
-        ...prev,
-        isLoading: false,
-        error:
-          error instanceof Error
-            ? error.message
-            : "Failed to fetch restaurants",
-      }));
+      // Rethrown rather than swallowed into local state: TanStack owns `error`
+      // now, and a query that resolves with an empty list is otherwise
+      // indistinguishable from one that failed.
+      throw error;
     }
-  }, [
-    filters.search,
-    filters.cuisine,
-    filters.priceRange,
-    filters.rating,
-    filters.location,
-    filters.sortBy,
-    filters.featuredOnly,
-    filters.dietary,
-    filters.limit,
-    filters.offset,
-  ]);
+    },
+  });
+
+  /** Re-run this list. The mutations below call it so a write shows immediately. */
+  const fetchRestaurants = useCallback(async () => {
+    await queryClient.invalidateQueries({ queryKey: queryKeys.restaurants.lists() });
+  }, [queryClient]);
+
 
   const createRestaurant = async (restaurant: RestaurantInsert) => {
     try {
@@ -408,12 +428,17 @@ export function useRestaurants(filters: RestaurantFilters = {}) {
     }
   };
 
-  useEffect(() => {
-    fetchRestaurants();
-  }, [fetchRestaurants]);
-
+  // The shape callers already read, rebuilt from the query. Preserved exactly
+  // so this lands without touching a single page.
   return {
-    ...state,
+    restaurants: data?.restaurants ?? [],
+    totalCount: data?.totalCount ?? 0,
+    isLoading,
+    error: error
+      ? error instanceof Error
+        ? error.message
+        : "Failed to fetch restaurants"
+      : null,
     refetch: fetchRestaurants,
     createRestaurant,
     updateRestaurant,

@@ -17,6 +17,14 @@
  * two-step flow. See the branch at the bottom of the handler for the removal
  * condition (XPLAT-001).
  *
+ * Cancels web billing BEFORE erasing anything (WEB-AUTH-006). user_subscriptions
+ * is the only mapping to the Stripe customer, and it is in PURGE_TABLES, so a
+ * cancellation attempted after the purge has nothing to cancel. A Stripe
+ * failure REFUSES the deletion with 409 rather than leaving a live charge
+ * behind an account that no longer exists. Store subscriptions (ios/android)
+ * cannot be ended server-side and are returned in
+ * store_subscriptions_still_active so the client can say so.
+ *
  * Permanently deletes every table listed in _shared/userDataTables.ts
  * (PURGE_TABLES), plus newsletter_subscribers (by email) and auth.users.
  * Tables kept on purpose, each with its stated basis, are RETAINED_TABLES in
@@ -40,6 +48,11 @@ import { handleCors, getCorsHeaders, isOriginAllowed } from "../_shared/cors.ts"
 import { writeAuditLog, auditIp } from "../_shared/auditLog.ts";
 import { purgeUserStorage, type BucketPurgeResult } from "../_shared/purgeUserStorage.ts";
 import { PURGE_TABLES } from "../_shared/userDataTables.ts";
+import Stripe from "https://esm.sh/stripe@14.21.0";
+import {
+  cancelBillingBeforeErasure,
+  type BillingClient,
+} from "../_shared/cancelBillingBeforeErasure.ts";
 
 const TOKEN_EXPIRY_MS = 15 * 60 * 1000; // 15 minutes
 
@@ -65,6 +78,47 @@ async function performDeletion(
   corsHeaders: Record<string, string>,
 ): Promise<Response> {
   const userId = user.id;
+
+  // WEB-AUTH-006. STOP THE BILLING FIRST.
+  //
+  // user_subscriptions is in PURGE_TABLES, and that row is the ONLY mapping
+  // from this user to their Stripe customer and subscription. This function
+  // used to delete it without ever calling Stripe -- `grep -ci stripe` returned
+  // 0 -- so the charge kept recurring and the webhook that would react to a
+  // cancellation could no longer find a user to react for. The account was
+  // gone; the money was not.
+  //
+  // This has to run BEFORE the purge loop, and not merely "early": after the
+  // loop there is nothing left to read the subscription id from, and the only
+  // remaining way to find the customer is a search by email, which the erasure
+  // has also just removed.
+  const { data: subscriptionRows } = await supabase
+    .from("user_subscriptions")
+    .select("platform, status, stripe_subscription_id, stripe_customer_id")
+    .eq("user_id", userId);
+
+  const stripeKey = Deno.env.get("STRIPE_SECRET_KEY");
+  const stripe: BillingClient | null = stripeKey
+    ? (new Stripe(stripeKey, { apiVersion: "2023-10-16" }) as unknown as BillingClient)
+    : null;
+
+  const billing = await cancelBillingBeforeErasure(stripe, subscriptionRows ?? []);
+
+  if (billing.error) {
+    // REFUSE, do not continue. Erasing the account here would leave an active
+    // charge with nothing behind it and no way to trace it back.
+    console.error("Billing teardown failed, refusing deletion:", billing.error);
+    return new Response(
+      JSON.stringify({
+        error: billing.error,
+        code: "BILLING_TEARDOWN_FAILED",
+        // The user's own subscription is still live, so tell them where it is
+        // rather than leaving them to find out from a statement.
+        manage_subscription_url: "/profile?tab=subscription",
+      }),
+      { status: 409, headers: { ...corsHeaders, "Content-Type": "application/json" } },
+    );
+  }
 
   // Delete user data in dependency order. The list, and the tables deliberately
   // kept with their basis, live in _shared/userDataTables.ts, which is covered
@@ -160,6 +214,9 @@ async function performDeletion(
       storage_buckets: storageResults,
       tables_attempted: PURGE_TABLES.length,
       table_failures: tableFailures,
+      stripe_subscriptions_cancelled: billing.cancelled,
+      stripe_customers_deleted: billing.customersDeleted,
+      store_subscriptions_left_active: billing.storeSubscriptions,
     },
   });
 
@@ -172,6 +229,13 @@ async function performDeletion(
       success: true,
       complete: tableFailures.length === 0 && storageFailures.length === 0,
       storage_files_removed: storageRemoved,
+      // Additive fields; older clients ignore what they do not read.
+      subscriptions_cancelled: billing.cancelled.length,
+      // AC3. An App Store or Play subscription CANNOT be cancelled from a
+      // server -- Apple and Google own it. Saying nothing would let the user
+      // believe deleting the account stopped the charge, which is the same
+      // failure this story is about, one platform over.
+      store_subscriptions_still_active: billing.storeSubscriptions,
       ...(storageFailures.length > 0
         ? { storage_incomplete: storageFailures.map((f) => f.bucket) }
         : {}),

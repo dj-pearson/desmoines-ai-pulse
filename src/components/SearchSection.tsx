@@ -59,7 +59,9 @@ export default function SearchSection({ onSearch }: SearchSectionProps) {
           .from("events")
           .select("category")
           .gte("date", new Date().toISOString().split("T")[0])
-          .neq("is_hidden", true); // Exclude soft-hidden stale events (WEB-AUTO-006)
+          .neq("is_hidden", true) // Exclude soft-hidden stale events (WEB-AUTO-006)
+          // WEB-BE-034: archived_at is the other unpublish switch.
+          .is("archived_at", null);
 
         if (error) throw error;
         const uniqueCategories = [

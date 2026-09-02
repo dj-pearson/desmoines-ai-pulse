@@ -16,6 +16,7 @@ import { serve } from "https://deno.land/std@0.168.0/http/server.ts";
 import { createClient } from "https://esm.sh/@supabase/supabase-js@2";
 import { getAIConfig, buildClaudeRequest, getClaudeHeaders, getAnthropicApiKey } from "../_shared/aiConfig.ts";
 import { requireAdminOrApiKey } from "../_shared/apiKeyAuth.ts";
+import { acceptedJobStatuses, JOB_STATUS_IDLE } from "../_shared/scrapingJobStatus.ts";
 
 const corsHeaders = {
   "Access-Control-Allow-Origin": "*",
@@ -401,7 +402,7 @@ Only include actual events, not navigation items, headers, or generic text. If n
                 category: (event.category || "General").substring(0, 50),
                 price: (event.price || "See website").substring(0, 50),
                 source_url: job.config.url,
-                is_featured: Math.random() > 0.8, // 20% chance of being featured
+                is_featured: false, // WEB-BE-040: featured is an admin or campaign decision
               };
 
               console.log(
@@ -1263,7 +1264,7 @@ async function scrapeWebsite(
       category: eventData.category.substring(0, 50),
       price: eventData.price.substring(0, 50),
       source_url: eventData.source_url || job.config.url,
-      is_featured: Math.random() > 0.7,
+      is_featured: false, // WEB-BE-040: featured is an admin or campaign decision
     };
 
     // Generate fingerprint for duplicate detection
@@ -1965,10 +1966,14 @@ serve(async (req) => {
     // Fetch active scraping jobs from database
     console.log("Fetching scraping jobs from database...");
 
+    // WEB-BE-035: the pg_cron dispatcher used to park rows at 'running'
+    // before its asynchronous POST, and this lookup only accepted 'idle', so
+    // a dispatched job was never found. A caller that names a job has decided
+    // it should run; both labels are accepted for that path.
     let jobsQuery = supabase
       .from("scraping_jobs")
       .select("*")
-      .eq("status", "idle");
+      .in("status", acceptedJobStatuses(jobId));
 
     // If specific jobId is requested, filter for that job only
     if (jobId) {
@@ -2091,10 +2096,14 @@ serve(async (req) => {
         errors: scrapeResult.errors,
       });
 
-      // Update job status
+      // Update job status. This is the ONLY writer of scraping_jobs.status
+      // left in the system (WEB-BE-035): the dispatcher advances next_run and
+      // nothing else, so a row that reached this line is idle again whatever
+      // it carried when it was picked up.
       await supabase
         .from("scraping_jobs")
         .update({
+          status: JOB_STATUS_IDLE,
           last_run: new Date().toISOString(),
           events_found: scrapeResult.eventsFound,
         })

@@ -137,6 +137,83 @@ jobs:
       # directions and asserts every surface short-circuits before the model
       # call, which is the whole design (WEB-LEGAL-005).
       - run: deno test --allow-read supabase/functions/_tests/crisis-support.test.ts
+      # WEB-ADS-001. A sponsored listing is delivered by a flag nothing set for six
+      # months. Pins activate_campaign + the campaigns status trigger as the only
+      # writer, and fails if the lifecycle job or any client starts flagging
+      # listings on its own.
+      - run: deno test --allow-read supabase/functions/_tests/sponsored-listing-activation.test.ts
+      # WEB-ADS-004. pending_review was written by the client and absent from the
+      # enum; the lifecycle job was on no schedule; approval was three writes with
+      # no transaction. Pins the enum labels, the pure-SQL cron job and the
+      # admin-only approval RPC.
+      - run: deno test --allow-read supabase/functions/_tests/campaign-lifecycle-contract.test.ts
+      # WEB-BE-040. Seven ingest sites set is_featured with Math.random() for a
+      # year. Fails on any edge function that decides the flag by chance, and
+      # pins the cleanup migration plus the homepage rail fallback.
+      - run: deno test --allow-read supabase/functions/_tests/featured-flag-invariant.test.ts
+      # WEB-BE-035. The dispatcher parked jobs at 'running' and scrape-events
+      # only accepted 'idle'. Holds the migration and the edge function to one
+      # status contract.
+      - run: deno test --allow-read supabase/functions/_tests/scraping-dispatch-status.test.ts
+      # WEB-BE-036. The events table permitted one row per title per venue
+      # FOREVER, so a weekly residency or a Sat/Sun performance pair could not be
+      # stored. Holds the migration, the shared dedup and the Python crawler to
+      # one title + Central calendar date + venue key.
+      - run: deno test --allow-read supabase/functions/_tests/event-unique-key.test.ts
+      # eventDedup has had its own suite since DMI-010 and no lane ever ran it.
+      - run: deno test supabase/functions/_shared/eventDedup.test.ts
+      # WEB-SEC-026. An aal1 token is a valid GoTrue credential, so the browser
+      # refusing to render a dashboard stops nobody. This pins the server-side
+      # refusal: an admin endpoint must reject a caller who has a verified
+      # factor and did not complete it.
+      - run: deno test --allow-read supabase/functions/_tests/mfa-assurance.test.ts
+      # WEB-SEC-027 / WEB-SEC-028. Two of the three sign-in throttles took their
+      # input from the caller: ten anonymous POSTs locked any address out, and
+      # one more cleared the attacker's own counter. Pins both closed.
+      - run: deno test --allow-read supabase/functions/_tests/login-throttle-contract.test.ts
+      # WEB-ADS-003. The browser wrote total_cost into a table with no RLS policy
+      # and Stripe was asked for that number, so a campaign could be bought for a
+      # cent. Pins the trigger, the server-side recompute and the displayed total
+      # to one rate card.
+      - run: deno test --allow-read supabase/functions/_tests/campaign-pricing-authority.test.ts
+      # WEB-ADS-002. Impressions and clicks were inserted from the browser into
+      # tables with no INSERT policy, so RLS refused every write and every
+      # advertiser dashboard read zero. Pins the server-side write path, the bot
+      # filter, idempotency, and the frequency cap being switched on.
+      - run: deno test --allow-read supabase/functions/_tests/ad-event-tracking.test.ts
+      # WEB-FEAT-013. The double-charge guards used .single() on a query that
+      # matches one row PER PLATFORM, so they nulled out for exactly the users
+      # already paying twice, and a cross-tier upgrade opened a SECOND Stripe
+      # subscription. Pins the platform-scoped guard and the in-place upgrade.
+      - run: deno test --allow-read supabase/functions/_tests/subscription-upgrade-contract.test.ts
+      # WEB-FEAT-016. VIP listed eight benefits at $12.99/month and delivered
+      # none. Fails if the pricing page or the stored plan row promises a feature
+      # no component gates on.
+      - run: deno test --allow-read supabase/functions/_tests/plan-features-truthful.test.ts
+      # WEB-AUTH-002. Signup collects phone, location, interests and marketing
+      # preferences into raw_user_meta_data and nothing ever moved them, so those
+      # profile columns were NULL for every account. Pins the trigger, its
+      # never-block-signup guarantee, and the non-racing client fallback.
+      - run: deno test --allow-read supabase/functions/_tests/new-user-profile-contract.test.ts
+      # WEB-PERF-030. SocialEventCard fell back to a per-event hook that opened
+      # three realtime channels and ran three queries PER CARD, on pages that
+      # render up to 100. Pins the opt-in realtime default and the batch wiring
+      # on every landing page.
+      - run: deno test --allow-read supabase/functions/_tests/event-social-fanout.test.ts
+      - run: deno test --allow-read supabase/functions/_tests/list-hooks-query-cache.test.ts
+      - run: deno test --allow-read supabase/functions/_tests/oauth-role-sync-self-only.test.ts
+      - run: deno test --allow-read supabase/functions/_tests/deal-redemption-ledger.test.ts
+      - run: deno test --allow-read supabase/functions/_tests/event-visibility-both-switches.test.ts
+      - run: deno test --allow-read supabase/functions/_tests/consent-record-user-binding.test.ts
+      - run: deno test --allow-read supabase/functions/_tests/billing-teardown-before-erasure.test.ts
+      - run: deno test --allow-read supabase/functions/_tests/session-timeout-policy.test.ts
+      - run: deno test --allow-read supabase/functions/_tests/account-credentials-panel.test.ts
+      - run: deno test --allow-read supabase/functions/_tests/no-embedded-credentials.test.ts
+      - run: deno test --allow-read supabase/functions/_tests/brand-identity-consistency.test.ts
+      - run: deno test --allow-read supabase/functions/_tests/event-links-and-hotel-seo.test.ts
+      - run: deno test --allow-read supabase/functions/_tests/schema-states-only-columns.test.ts
+      - run: deno test --allow-read supabase/functions/_tests/seatgeek-time-tbd.test.ts
+      - run: deno test --allow-read supabase/functions/_tests/restaurants-hub-payload.test.ts
       # The trial-conversion notice must state amount, date and cancel path,
       # and must not be gated on marketing consent or an LLM score
       # (WEB-LEGAL-006).

@@ -1,4 +1,7 @@
 import { createContext, useContext, useState, useEffect, useRef, useCallback, useMemo, ReactNode } from "react";
+import { useQueryClient } from "@tanstack/react-query";
+import { interpretSignUpResult } from "@/lib/signUpResult";
+import { sessionStartedAt } from "@/lib/sessionAge";
 import { supabase } from "@/integrations/supabase/client";
 import { User, Session, AuthChangeEvent } from "@supabase/supabase-js";
 // Only the redirect validator is needed here, and it lives in a file with no
@@ -18,20 +21,40 @@ interface AuthState {
   isAdminLoading: boolean; // True while admin check is in progress
   requiresMFA: boolean;
   mfaFactorId: string | null;
+  /**
+   * True between a PASSWORD_RECOVERY event and the password actually changing.
+   *
+   * WEB-AUTH-001: a recovery link creates an ordinary aal1 session, so every
+   * listener sees a normal sign-in and Auth.tsx used to redirect the user to
+   * the homepage before they could set a password. This flag is what tells the
+   * two apart.
+   */
+  isPasswordRecovery: boolean;
 }
 
 interface AuthActions {
   login: (email: string, password: string) => Promise<{ success: boolean; error?: string; requiresMFA?: boolean; factorId?: string }>;
-  signup: (email: string, password: string, metadata?: Record<string, unknown>) => Promise<{ success: boolean; error?: string; needsVerification?: boolean }>;
-  logout: () => Promise<void>;
+  /** `alreadyRegistered` is true when the address already had an account (WEB-AUTH-004). */
+  signup: (email: string, password: string, metadata?: Record<string, unknown>) => Promise<{ success: boolean; error?: string; needsVerification?: boolean; alreadyRegistered?: boolean }>;
+  /**
+   * `scope` defaults to 'global', which is right for a deliberate sign-out.
+   * A TIMEOUT must pass 'local' (WEB-AUTH-007): an idle desktop tab signing
+   * someone out of their phone is not a security measure, it is a bug that
+   * looks like one.
+   */
+  logout: (options?: { scope?: 'local' | 'global' }) => Promise<void>;
   requireAdmin: () => void;
   refreshSession: () => Promise<boolean>;
   signInWithGoogle: (redirectTo?: string) => Promise<{ success: boolean; error?: string }>;
   signInWithApple: (redirectTo?: string) => Promise<{ success: boolean; error?: string }>;
   resetPassword: (email: string) => Promise<{ success: boolean; error?: string }>;
   updatePassword: (newPassword: string) => Promise<{ success: boolean; error?: string }>;
+  /** Starts a double-confirmation email change and alerts the current address (WEB-AUTH-012). */
+  updateEmail: (newEmail: string) => Promise<{ success: boolean; error?: string }>;
   resendVerification: (email: string) => Promise<{ success: boolean; error?: string }>;
   getSessionExpiresAt: () => number | null;
+  /** Epoch ms this session began, or null when it cannot be determined (WEB-AUTH-007). */
+  getSessionStartedAt: () => number | null;
 }
 
 type AuthContextType = AuthState & AuthActions;
@@ -48,6 +71,7 @@ export interface AuthFlags {
   isAdmin: boolean;
   isAdminLoading: boolean;
   requiresMFA: boolean;
+  isPasswordRecovery: boolean;
 }
 
 const AuthContext = createContext<AuthContextType | undefined>(undefined);
@@ -130,10 +154,14 @@ interface ServerLockoutResult {
 async function checkServerLockout(
   email: string,
   action: 'check' | 'record_failure' | 'record_success',
+  // WEB-SEC-027: clearing a lockout requires proof that the sign-in actually
+  // succeeded. The server verifies this token against GoTrue and checks the
+  // address on it; a call without one is accepted and changes nothing.
+  accessToken?: string,
 ): Promise<ServerLockoutResult | null> {
   try {
     const { data, error } = await supabase.functions.invoke('check-login-attempt', {
-      body: { email, action },
+      body: accessToken ? { email, action, accessToken } : { email, action },
     });
     if (error) return null;
     return data as ServerLockoutResult;
@@ -143,6 +171,9 @@ async function checkServerLockout(
 }
 
 export function AuthProvider({ children }: { children: ReactNode }) {
+  // WEB-SEC-031. AuthProvider is mounted INSIDE QueryClientProvider
+  // (main.tsx wraps App), so this resolves.
+  const queryClient = useQueryClient();
   const [authState, setAuthState] = useState<AuthState>({
     user: null,
     session: null,
@@ -152,6 +183,7 @@ export function AuthProvider({ children }: { children: ReactNode }) {
     isAdminLoading: false,
     requiresMFA: false,
     mfaFactorId: null,
+    isPasswordRecovery: false,
   });
 
   // Track if we're in the middle of a logout to prevent race conditions
@@ -232,6 +264,36 @@ export function AuthProvider({ children }: { children: ReactNode }) {
     });
   }, [checkIsAdmin]);
 
+  /**
+   * Drop every cached query when a session ends (WEB-SEC-031).
+   *
+   * Logout removed the sb-* storage keys and nothing else, so the previous
+   * user's profile, favorites, subscription, trip plans and -- if they were an
+   * admin -- the whole admin surface stayed in the TanStack cache until
+   * staleTime expired. On a shared device the next person's first paint could
+   * come off that cache.
+   *
+   * clear(), not removeQueries on a list of user-scoped prefixes. A prefix list
+   * is a second inventory that has to be maintained in step with 100-odd hooks,
+   * and the failure mode when it drifts is silent and invisible. The cost of
+   * clearing everything is that public lists refetch after a logout, which is
+   * one request on a screen the user is leaving anyway.
+   *
+   * Called from BOTH places a session can end, and that is deliberate:
+   * handleAuthChange returns early while isLoggingOutRef is set, so the
+   * SIGNED_OUT event raised by the logout button never reaches its handler.
+   * Putting this only in the event handler would cover expiry and
+   * sign-out-elsewhere and miss the button, which is the common case.
+   */
+  const clearQueryCache = useCallback(() => {
+    try {
+      queryClient.clear();
+    } catch (error) {
+      // Never let cache teardown block a sign-out.
+      log.warn('clearQueryCache', 'Failed to clear query cache', { error });
+    }
+  }, [queryClient]);
+
   // Handle auth state changes
   const handleAuthChange = useCallback(async (event: AuthChangeEvent, session: Session | null, isMounted: boolean) => {
     // Skip processing if we're logging out
@@ -247,6 +309,7 @@ export function AuthProvider({ children }: { children: ReactNode }) {
     // Handle specific events
     if (event === 'SIGNED_OUT') {
       log.info('handleAuthChange', 'User signed out via event');
+      clearQueryCache();
       adminStatusCache.clear();
       resolvedAdminForUserRef.current = null;
       setAuthState({
@@ -258,7 +321,38 @@ export function AuthProvider({ children }: { children: ReactNode }) {
         isAdminLoading: false,
         requiresMFA: false,
         mfaFactorId: null,
+        isPasswordRecovery: false,
       });
+      return;
+    }
+
+    // WEB-AUTH-001. Supabase signs the user in on a recovery link and then
+    // fires this. Keep the session -- the password change needs it -- but mark
+    // it so Auth.tsx sends them to /auth/reset-password instead of the
+    // homepage, and so nothing else mistakes it for a deliberate sign-in.
+    if (event === 'PASSWORD_RECOVERY') {
+      log.debug('handleAuthChange', 'Password recovery session');
+      setAuthState(prev => ({
+        ...prev,
+        user: session?.user ?? prev.user,
+        session: session ?? prev.session,
+        isLoading: false,
+        isAuthenticated: !!session,
+        isPasswordRecovery: true,
+      }));
+      return;
+    }
+
+    // The password (or email) has been changed, so the recovery is over. Without
+    // this the flag would survive and keep redirecting the user back to the
+    // reset page they just finished with.
+    if (event === 'USER_UPDATED') {
+      setAuthState(prev => ({
+        ...prev,
+        user: session?.user ?? prev.user,
+        session: session ?? prev.session,
+        isPasswordRecovery: false,
+      }));
       return;
     }
 
@@ -308,6 +402,30 @@ export function AuthProvider({ children }: { children: ReactNode }) {
       return;
     }
 
+    // WEB-SEC-026. signInWithPassword stores an aal1 session before the TOTP
+    // dialog can open, so SIGNED_IN fires, isAuthenticated went true, and
+    // Auth.tsx navigated away before the second factor was ever asked for.
+    // Anyone holding the password of an MFA-enrolled admin got a working admin
+    // session out of it.
+    //
+    // getAuthenticatorAssuranceLevel() decodes the stored session locally, so
+    // this costs no round trip. The rule is narrow on purpose: only a session
+    // that is positively aal1 with a positively pending aal2 is held back, so a
+    // user with no second factor can never be locked out by it.
+    //
+    // This is the UX half of the fix. The half that actually stops an attacker
+    // is in supabase/functions/_shared/mfaAssurance.ts: the aal1 token works
+    // against the API whether or not our app agrees to render a dashboard.
+    let mfaPending = false;
+    if (session) {
+      try {
+        const { data: aal } = await supabase.auth.mfa.getAuthenticatorAssuranceLevel();
+        mfaPending = aal?.currentLevel === 'aal1' && aal?.nextLevel === 'aal2';
+      } catch (err) {
+        log.warn('handleAuthChange', 'assurance-level read failed', { error: String(err) });
+      }
+    }
+
     // A fresh admin answer already in cache resolves synchronously — no loading
     // state, so a returning user never sees the page blink.
     const cachedAdmin = nextUser ? readCachedAdmin(nextUser.id) : null;
@@ -321,7 +439,9 @@ export function AuthProvider({ children }: { children: ReactNode }) {
       user: nextUser,
       session,
       isLoading: false,
-      isAuthenticated: !!session,
+      // WEB-SEC-026: a session that still owes a second factor is not signed in.
+      isAuthenticated: !!session && !mfaPending,
+      requiresMFA: mfaPending,
       isAdmin: cachedAdmin ?? prev.isAdmin, // Keep previous admin status while checking
       isAdminLoading: needsAdminCheck ? true : prev.isAdminLoading, // Mark as loading if checking
     }));
@@ -339,7 +459,7 @@ export function AuthProvider({ children }: { children: ReactNode }) {
         setAuthState(prev => ({ ...prev, isAdmin, isAdminLoading: false }));
       }
     }
-  }, [checkIsAdmin, revalidateAdminSilently]);
+  }, [checkIsAdmin, revalidateAdminSilently, clearQueryCache]);
 
   useEffect(() => {
     log.info('init', 'Initializing auth context');
@@ -363,7 +483,7 @@ export function AuthProvider({ children }: { children: ReactNode }) {
 
         const cachedAdmin = session?.user ? readCachedAdmin(session.user.id) : null;
 
-        setAuthState({
+        setAuthState(prev => ({
           user: session?.user || null,
           session,
           isLoading: false,
@@ -372,7 +492,10 @@ export function AuthProvider({ children }: { children: ReactNode }) {
           isAdminLoading: !!session?.user && cachedAdmin === null, // Set to true if we have a user to check
           requiresMFA: false,
           mfaFactorId: null,
-        });
+          // PASSWORD_RECOVERY and INITIAL_SESSION can arrive in either order on
+          // a recovery link, so this must not clobber the flag.
+          isPasswordRecovery: prev.isPasswordRecovery,
+        }));
 
         if (session?.user) {
           if (cachedAdmin !== null) {
@@ -497,7 +620,10 @@ export function AuthProvider({ children }: { children: ReactNode }) {
       }
 
       resetLoginAttempts(email);
-      void checkServerLockout(email, 'record_success');
+      // WEB-SEC-027: the server clears a lockout only against a session that
+      // a correct password produced, so the token goes with the call. Without
+      // it the request is still accepted and simply does nothing.
+      void checkServerLockout(email, 'record_success', data.session?.access_token);
       log.info('login', 'Login successful');
       return { success: !!data.session };
     } catch (error: unknown) {
@@ -508,14 +634,23 @@ export function AuthProvider({ children }: { children: ReactNode }) {
   }, []);
 
   // Signup with email/password
-  const signup = useCallback(async (email: string, password: string, metadata?: Record<string, unknown>): Promise<{ success: boolean; error?: string; needsVerification?: boolean }> => {
+  const signup = useCallback(async (email: string, password: string, metadata?: Record<string, unknown>): Promise<{ success: boolean; error?: string; needsVerification?: boolean; alreadyRegistered?: boolean }> => {
     try {
       log.info('signup', 'Attempting signup', { email });
       const { data, error } = await supabase.auth.signUp({
         email,
         password,
         options: {
-          emailRedirectTo: `${window.location.origin}/auth/verified`,
+          // WEB-AUTH-005. Was /auth/verified directly, which is a page with no
+          // machinery: it could not exchange a code, could not wait for a
+          // session, and read no error parameter -- so every failed
+          // confirmation landed on a celebration screen.
+          //
+          // /auth/callback already polls for the session and renders failures;
+          // it forwards here only once one exists. The confirmed user still ends
+          // up on the same welcome page, and a broken link now stops one screen
+          // earlier, where it can be explained.
+          emailRedirectTo: `${window.location.origin}/auth/callback?redirect=${encodeURIComponent("/auth/verified")}`,
           data: metadata
         }
       });
@@ -525,11 +660,17 @@ export function AuthProvider({ children }: { children: ReactNode }) {
         return { success: false, error: error.message };
       }
 
-      // Check if email confirmation is required
-      const needsVerification = !!data.user && !data.session;
-      log.info('signup', 'Signup successful', { needsVerification });
+      // WEB-AUTH-004. This was `!!data.user && !data.session`, which cannot tell
+      // a new account from an address that already had one -- Supabase answers
+      // both with a user and no session, on purpose, so the response cannot be
+      // used to enumerate accounts. The tell is an empty `identities` array.
+      const { needsVerification, alreadyRegistered } = interpretSignUpResult(data);
+      // The email is NOT logged on this branch. "already registered" plus an
+      // address is exactly the pairing the neutral response exists to withhold,
+      // and a log line is a place it leaks.
+      log.info('signup', 'Signup successful', { needsVerification, alreadyRegistered });
 
-      return { success: true, needsVerification };
+      return { success: true, needsVerification, alreadyRegistered };
     } catch (error: unknown) {
       log.error('signup', 'Signup exception', { error });
       const message = error instanceof Error ? error.message : "An unexpected error occurred";
@@ -538,7 +679,7 @@ export function AuthProvider({ children }: { children: ReactNode }) {
   }, []);
 
   // Logout - robust implementation with race condition prevention
-  const logout = useCallback(async () => {
+  const logout = useCallback(async (options?: { scope?: 'local' | 'global' }) => {
     // Prevent race conditions - set flag before any async operations
     if (isLoggingOutRef.current) {
       log.debug('logout', 'Logout already in progress, skipping');
@@ -547,6 +688,10 @@ export function AuthProvider({ children }: { children: ReactNode }) {
 
     log.info('logout', 'Starting logout');
     isLoggingOutRef.current = true;
+
+    // Before the await below, not after: signOut can time out (there is a 3s
+    // race here) and the cached rows must be gone either way.
+    clearQueryCache();
 
     // Clear admin cache first
     adminStatusCache.clear();
@@ -563,6 +708,7 @@ export function AuthProvider({ children }: { children: ReactNode }) {
       isAdminLoading: false,
       requiresMFA: false,
       mfaFactorId: null,
+      isPasswordRecovery: false,
     });
 
     // Call signOut with global scope and timeout
@@ -572,7 +718,11 @@ export function AuthProvider({ children }: { children: ReactNode }) {
       );
 
       await Promise.race([
-        supabase.auth.signOut({ scope: 'global' }),
+        // WEB-AUTH-007. 'global' revokes every refresh token the account holds,
+        // on every device. Correct when a person presses Log Out; wrong when a
+        // desktop tab has simply been idle, which used to sign them out of
+        // their phone too.
+        supabase.auth.signOut({ scope: options?.scope ?? 'global' }),
         timeoutPromise
       ]);
       log.info('logout', 'signOut completed successfully');
@@ -623,7 +773,7 @@ export function AuthProvider({ children }: { children: ReactNode }) {
     setTimeout(() => {
       isLoggingOutRef.current = false;
     }, 500);
-  }, []);
+  }, [clearQueryCache]);
 
   // Refresh session manually - returns true if successful
   const refreshSession = useCallback(async (): Promise<boolean> => {
@@ -714,7 +864,14 @@ export function AuthProvider({ children }: { children: ReactNode }) {
   const resetPassword = useCallback(async (email: string): Promise<{ success: boolean; error?: string }> => {
     try {
       const { error } = await supabase.auth.resetPasswordForEmail(email, {
-        redirectTo: `${window.location.origin}/auth?reset=true`,
+        // WEB-AUTH-001: this pointed at /auth?reset=true, a parameter nothing
+        // read, on a page that redirects any authenticated visitor away. The
+        // link signed the user in and left the old password in place.
+        //
+        // OWNER: this URL must also be on the Supabase redirect allowlist
+        // (Dashboard -> Authentication -> URL Configuration), or GoTrue falls
+        // back to the site URL and the reset page never sees the token.
+        redirectTo: `${window.location.origin}/auth/reset-password`,
       });
 
       if (error) {
@@ -762,6 +919,46 @@ export function AuthProvider({ children }: { children: ReactNode }) {
     }
   }, []);
 
+  /**
+   * Change the sign-in email (WEB-AUTH-012).
+   *
+   * Supabase's default is DOUBLE CONFIRMATION: a link goes to the current
+   * address and to the new one, and the change lands only when both are
+   * clicked. That is what makes this safe against a hijacked session -- an
+   * attacker cannot move the account to an address they control without the
+   * real owner clicking a link in their own inbox.
+   *
+   * The alert goes to the CURRENT address, through the same path updatePassword
+   * uses, so the owner hears about an attempt even if they never click.
+   */
+  const updateEmail = useCallback(async (newEmail: string): Promise<{ success: boolean; error?: string }> => {
+    try {
+      const { error } = await supabase.auth.updateUser({ email: newEmail });
+
+      if (error) {
+        log.error('updateEmail', 'Email update error', { message: error.message });
+        return { success: false, error: error.message };
+      }
+
+      void supabase.functions
+        .invoke('send-security-notification', {
+          body: {
+            event_type: 'email_change_requested',
+            context: {
+              user_agent: typeof navigator !== 'undefined' ? navigator.userAgent : undefined,
+            },
+          },
+        })
+        .catch((err) => log.warn('updateEmail', 'security alert failed', { error: String(err) }));
+
+      return { success: true };
+    } catch (error: unknown) {
+      log.error('updateEmail', 'Email update exception', { error });
+      const message = error instanceof Error ? error.message : "Failed to update email";
+      return { success: false, error: message };
+    }
+  }, []);
+
   // Resend verification email
   const resendVerification = useCallback(async (email: string): Promise<{ success: boolean; error?: string }> => {
     try {
@@ -788,6 +985,17 @@ export function AuthProvider({ children }: { children: ReactNode }) {
     return authState.session?.expires_at || null;
   }, [authState.session]);
 
+  /**
+   * When this session actually began, in epoch milliseconds (WEB-AUTH-007).
+   *
+   * Null when it cannot be told, and callers must handle that rather than
+   * substituting now(): doing so silently restores the page-load-relative
+   * measurement this replaces.
+   */
+  const getSessionStartedAt = useCallback((): number | null => {
+    return sessionStartedAt(authState.session);
+  }, [authState.session]);
+
   const requireAdmin = useCallback(() => {
     if (!authState.isAdmin) {
       throw new Error("Admin access required");
@@ -804,9 +1012,11 @@ export function AuthProvider({ children }: { children: ReactNode }) {
     signInWithApple,
     resetPassword,
     updatePassword,
+    updateEmail,
     resendVerification,
     getSessionExpiresAt,
-  }), [login, signup, logout, requireAdmin, refreshSession, signInWithGoogle, signInWithApple, resetPassword, updatePassword, resendVerification, getSessionExpiresAt]);
+    getSessionStartedAt,
+  }), [login, signup, logout, requireAdmin, refreshSession, signInWithGoogle, signInWithApple, resetPassword, updatePassword, updateEmail, resendVerification, getSessionExpiresAt, getSessionStartedAt]);
 
   // Memoized boolean slice — identity only changes when a flag actually flips,
   // not when session/user are swapped on a token refresh.
@@ -816,12 +1026,14 @@ export function AuthProvider({ children }: { children: ReactNode }) {
     isAdmin: authState.isAdmin,
     isAdminLoading: authState.isAdminLoading,
     requiresMFA: authState.requiresMFA,
+    isPasswordRecovery: authState.isPasswordRecovery,
   }), [
     authState.isLoading,
     authState.isAuthenticated,
     authState.isAdmin,
     authState.isAdminLoading,
     authState.requiresMFA,
+    authState.isPasswordRecovery,
   ]);
 
   const combined = useMemo<AuthContextType>(() => ({

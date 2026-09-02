@@ -18,7 +18,7 @@ import { FavoriteButton } from "@/components/FavoriteButton";
 import { OpenStatusChip } from "@/components/OpenStatusChip";
 import { StickyMobileCTA } from "@/components/StickyMobileCTA";
 import { BreadcrumbListSchema } from "@/components/schema/BreadcrumbListSchema";
-import { getCanonicalUrl } from "@/lib/brandConfig";
+import { BRAND, getCanonicalUrl } from "@/lib/brandConfig";
 import { SpriteIcon } from "@/components/ui/SpriteIcon";
 
 function StarRating({ rating }: { rating: number }) {
@@ -119,14 +119,17 @@ export default function HotelDetails() {
         <meta property="og:type" content="website" />
         <meta property="og:title" content={`${hotel.name} - Hotels in ${hotel.city}, ${hotel.state}`} />
         <meta property="og:description" content={hotel.short_description || `${hotel.name} in ${hotel.area || hotel.city}. Book your stay in Des Moines.`} />
-        <meta property="og:image" content={hotel.image_url || '/DMI-Logo.png'} />
+        {/* WEB-SEO-034: was a RELATIVE path when a hotel has no image. Every
+            social crawler resolves og:image against nothing and shows no
+            preview image; the spec requires an absolute URL. */}
+        <meta property="og:image" content={getCanonicalUrl(hotel.image_url || BRAND.ogImage)} />
         <meta property="og:image:width" content="1200" />
         <meta property="og:image:height" content="630" />
         <meta property="og:image:alt" content={`${hotel.name} - Hotel in ${hotel.city}, ${hotel.state}`} />
         <meta property="og:url" content={getCanonicalUrl(`/stay/${hotel.slug}`)} />
         <meta name="twitter:card" content="summary_large_image" />
         <meta name="twitter:title" content={`${hotel.name} - Hotels in ${hotel.city}`} />
-        <meta name="twitter:image" content={hotel.image_url || '/DMI-Logo.png'} />
+        <meta name="twitter:image" content={getCanonicalUrl(hotel.image_url || BRAND.ogImage)} />
       </Helmet>
 
       <HotelSchema
@@ -146,11 +149,16 @@ export default function HotelDetails() {
         checkInTime={hotel.check_in_time || undefined}
         checkOutTime={hotel.check_out_time || undefined}
       />
+      {/* WEB-SEO-034. These pointed at /hotels and /hotels/<slug>. The routes are
+          /stay and /stay/:slug and there is no redirect, so every breadcrumb on
+          every hotel page named a URL that does not exist. A BreadcrumbList
+          whose items 404 is not a partial win -- Google drops the whole trail,
+          so the page loses the breadcrumb display it was emitting for. */}
       <BreadcrumbListSchema
         items={[
           { name: "Home", url: getCanonicalUrl("/") },
-          { name: "Hotels", url: getCanonicalUrl("/hotels") },
-          { name: hotel.name, url: getCanonicalUrl(`/hotels/${slug}`) },
+          { name: "Hotels", url: getCanonicalUrl("/stay") },
+          { name: hotel.name, url: getCanonicalUrl(`/stay/${hotel.slug}`) },
         ]}
       />
 

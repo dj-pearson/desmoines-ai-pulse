@@ -1,4 +1,5 @@
 import { Link } from "react-router-dom";
+import { createEventSlugWithCentralTime } from "@/lib/timezone";
 import { RefreshCw } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { useForYouRail } from "@/hooks/useForYouRail";
@@ -55,7 +56,7 @@ export function ForYouRail() {
             : recommendations.map((rec) => (
             <Link
               key={rec.id}
-              to={`/events/${rec.id}`}
+              to={`/events/${createEventSlugWithCentralTime(rec.title, rec)}`}
               className="snap-start shrink-0 w-56 group"
             >
               <div className="aspect-video w-56 overflow-hidden rounded-lg bg-muted">

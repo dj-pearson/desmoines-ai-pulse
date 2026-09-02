@@ -14,6 +14,15 @@ interface AttractionData {
   latitude?: number | null;
   longitude?: number | null;
   is_featured?: boolean | null;
+  /**
+   * WEB-SEO-024. A real column on public.attractions, and the only honest
+   * source for isAccessibleForFree -- which this component used to hard-code
+   * true, claiming free admission for every attraction including the ones that
+   * charge. Optional because the prop type is a hand-written subset and not
+   * every caller passes the whole row; the schema omits the property when it is
+   * absent rather than guessing.
+   */
+  is_free?: boolean | null;
 }
 
 interface EnhancedAttractionSEOProps {
@@ -79,26 +88,47 @@ export default function EnhancedAttractionSEO({
     description: getGEODescription(),
     ...(attraction.image_url && { image: [attraction.image_url] }),
     ...(attraction.website && { url: attraction.website }),
+    // WEB-SEO-024. THE ADDRESS ASSERTED A CITY AND A POSTCODE NO COLUMN HOLDS.
+    //
+    // public.attractions has address, location, latitude and longitude and no
+    // city or postal_code at all. So every attraction in the set -- Ames, Ankeny,
+    // Waukee, Altoona -- was published as being in Des Moines 50309. That is the
+    // same locality bug SEO-007 fixed for events, on a different table.
+    //
+    // addressRegion and addressCountry stay: this is a Greater Des Moines site
+    // and Iowa/US is true of the whole set. A locality is not, and a postcode
+    // is a specific claim about a specific building.
     address: {
       "@type": "PostalAddress",
-      streetAddress: attraction.location || "",
-      addressLocality: BRAND.city,
+      ...(attraction.location && { streetAddress: attraction.location }),
       addressRegion: BRAND.state,
-      postalCode: "50309",
       addressCountry: BRAND.country,
     },
-    geo: {
-      "@type": "GeoCoordinates",
-      latitude: attraction.latitude || 41.5868,
-      longitude: attraction.longitude || -93.625,
-    },
+    // Coordinates fell back to 41.5868,-93.625 -- the middle of downtown Des
+    // Moines -- for any row without them. A wrong pin is worse than no pin: it
+    // puts the attraction somewhere it is not, on a map a user may drive to.
+    ...(attraction.latitude != null && attraction.longitude != null
+      ? {
+          geo: {
+            "@type": "GeoCoordinates",
+            latitude: attraction.latitude,
+            longitude: attraction.longitude,
+          },
+        }
+      : {}),
     // WEB-SEO-016: aggregateRating removed. The ratingValue was real but
     // ratingCount was invented from it (attraction.rating >= 4.5 ? ... ), and
     // Google requires the count to reflect actual reviews. No reviews table
     // exists, so there is no honest count to emit.
-    isAccessibleForFree: true,
-    publicAccess: true,
-    touristType: ["Family", "Couples", "Solo travelers", "Groups"],
+    // is_free is a real column, so this can be stated -- but only when it is
+    // set. It was hard-coded true, which claimed free admission for every
+    // attraction including the ones that charge.
+    ...(attraction.is_free != null && { isAccessibleForFree: attraction.is_free }),
+    // publicAccess and touristType are GONE. Nothing backs either. touristType
+    // in particular listed "Family", "Couples", "Solo travelers", "Groups" for
+    // every row, which is a claim that says nothing and is false the moment one
+    // attraction is not suitable for one of them.
+
     areaServed: {
       "@type": "City",
       name: BRAND.city,

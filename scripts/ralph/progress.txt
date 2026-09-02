@@ -1,3 +1,903 @@
 # Ralph Progress Log
 Started: 2026-08-31T19:18:09.615Z
 ---
+## 2026-09-02 - WEB-ADS-001 (sponsored listing never went live)
+- Added migration 20260902000001_activate_campaign_sponsored_listings.sql:
+  activate_campaign(uuid) SECURITY DEFINER (admin or no-JWT only, anon revoked),
+  sync_campaign_sponsorship(uuid) + trigger trg_campaign_status_sponsorship on
+  campaigns.status (active flags linked events/restaurants, completed/cancelled/
+  refunded clears them unless another active campaign holds the listing),
+  process_campaign_lifecycle rewritten to call activate_campaign with all status
+  comparisons cast to ::text, and a backfill DO block that RAISEs its count.
+- useAdminCampaigns.approveCreative immediate-start branch now calls the RPC.
+- types.ts: hand-added Functions.activate_campaign (types are not regenerated here).
+- Deno invariant test _tests/sponsored-listing-activation.test.ts (8/8) wired
+  into subscription-sync-tests.yml; smoke test appended to route-smoke.spec.ts.
+- prd.json: WEB-ADS-001 passes=true, XPLAT-005 notes refined.
+- **Learnings for future iterations:**
+  - campaign_status has no pending_review label (WEB-ADS-004). Any plpgsql that
+    compares status against that literal raises 22P02 at runtime, even though
+    CREATE FUNCTION succeeds. Compare status::text until the enum is extended.
+  - ALTER TYPE ... ADD VALUE and a statement that USES the new value cannot share
+    a transaction, and each migration file is one transaction. Put the enum
+    change in its own file ahead of anything that selects on it.
+  - Deno invariant tests need --allow-read; CI lists each test file explicitly
+    in subscription-sync-tests.yml, so a new test must be added there or it
+    never runs. `npm i -g deno@2.9.6` works in this container.
+  - Smoke lane (playwright.smoke.config.ts) only runs files matching
+    route-smoke|cookie-consent, so new smoke tests go into route-smoke.spec.ts.
+  - No Supabase credentials in this container: migrations cannot be applied or
+    probed. Record expected outcomes and leave the owner a one-line action.
+---
+## 2026-09-02 - WEB-ADS-004 (pending_review enum, lifecycle schedule, atomic approval)
+- 20260902000002: ALTER TYPE campaign_status ADD VALUE pending_review, suspended
+  (own file: a new enum value cannot be used in the transaction that adds it).
+- 20260902000003: approve_campaign_creative(uuid, text) admin-only SECURITY
+  DEFINER that approves + activates (via activate_campaign) or parks in
+  pending_review in one transaction; process_campaign_lifecycle sets
+  renewal_eligible on completion behind an information_schema guard; cron job
+  campaign-lifecycle-daily at 06:10 UTC with a pure SQL body (no http, no key).
+- useAdminCampaigns.approveCreative: one RPC call replaces three client writes.
+- types.ts: enum labels in both places + Functions.approve_campaign_creative.
+- Deno test _tests/campaign-lifecycle-contract.test.ts (6/6) wired into CI.
+- **Learnings for future iterations:**
+  - A cron job whose work is a SQL function should call it directly
+    (`SELECT fn();`) rather than net.http_post to an edge function; it sidesteps
+    the app_secret/service-role problem entirely.
+  - campaigns, campaign_placements and their columns (renewal_eligible,
+    auto_renew) exist in types.ts but in no migration. Guard column writes with
+    information_schema.columns + EXECUTE, or the function errors at runtime.
+  - supabase.rpc() returns Json; cast via `as unknown as <Interface>`.
+  - Regexes in the invariant tests must tolerate prettier line breaks after
+    `supabase.rpc(`.
+---
+## 2026-09-02 - WEB-BE-040 (Math.random featured flags at ingest)
+- Seven ingest sites (ai-crawler, firecrawl-scraper x4, scrape-events x2) now
+  write is_featured: false. Deno walk test fails on any Math.random featured.
+- useFeaturedEvents pass 3: deterministic fallback (popularity_score desc,
+  date asc, excluding chosen ids) so the rail never empties.
+- 20260902000004 clears the random flags on events/playgrounds/restaurants with
+  dry-run NOTICE first; attractions counted only. scripts/audit-random-featured.mjs
+  is the anon-key dry run.
+- **Learnings for future iterations:**
+  - admin_action_logs is read by ActivityLogViewer and written by nothing. Any
+    AC that says "unless an admin audit entry exists" has no data to evaluate.
+  - restaurants and attractions carry no origin marker; only events (source,
+    source_url) and playgrounds (source, manually_curated) can tell scraped
+    rows from entered ones.
+  - PostgREST count without rows: Prefer: count=exact + Range: 0-0, read
+    content-range's denominator.
+---
+## 2026-09-02 - WEB-BE-035 (dispatcher marks running, scrape-events accepts idle)
+- 20260902000005 restates run_scraping_jobs as the sole dispatcher (no status,
+  no last_run writes; app_secret credentials preserved; RAISE without key),
+  unschedules auto-trigger-scraping-jobs, repairs running -> idle.
+- scrape-events: .in('status', acceptedJobStatuses(jobId)) via new
+  _shared/scrapingJobStatus.ts; completion write sets status idle.
+- Deno test _tests/scraping-dispatch-status.test.ts (5/5) wired into CI.
+- **Learnings for future iterations:**
+  - Two scraping dispatchers were live (10 min + 30 min). Check cron.job
+    names in migrations before assuming one dispatcher: grep
+    "cron.schedule(" and the SELECT it runs.
+  - A dispatcher that writes last_run at dispatch defeats scrape-events'
+    recency skip. last_run means "finished", never "dispatched".
+  - When restating a function that a regexp-patch migration (20260830000002)
+    edited in place, copy the patched shape (app_secret, ::text url) into the
+    restated body or the restatement silently undoes the patch.
+---
+## 2026-09-02 - WEB-BE-036 (events could not hold a recurring event)
+- 20260902000006 records events_title_venue_unique in the ledger, adds
+  event_local_date (STORED generated, Central calendar date), creates
+  events_title_venue_date_unique on (title, venue, event_local_date), drops the
+  old index. Loosening, so safe in one release.
+- eventDedup.ts tier 3: 24-hour window -> centralCalendarDate() equality; reason
+  string same_title_venue_within_24h -> same_title_venue_same_day; header
+  rewritten. RECURRING_WINDOW_HOURS retired.
+- ingest-events onConflict -> "title,venue,event_local_date".
+- New _tests/event-unique-key.test.ts (7/7); eventDedup.test.ts (12/12) wired
+  into CI for the first time.
+- **Learnings for future iterations:**
+  - events.date is TIMESTAMPTZ. `date::date` is STABLE, not IMMUTABLE, so it
+    cannot go in an index or a generated column. Use
+    (date AT TIME ZONE 'America/Chicago')::date.
+  - PostgREST onConflict can only name real columns: an expression index cannot
+    be an ON CONFLICT inference target. If a computed key needs upsert support,
+    it needs a stored generated column.
+  - CREATE INDEX CONCURRENTLY cannot run in a migration file (one transaction).
+    Say so rather than writing it and hoping.
+  - generate_recurring_event_instances titles instances "<title> - Mon DD" to
+    dodge the old unique index. That workaround is now unnecessary but changing
+    it rewrites public titles.
+  - Several _shared/*.test.ts suites exist that no CI lane runs. Check
+    subscription-sync-tests.yml before assuming a test file is enforced.
+---
+## 2026-09-02 - WEB-AUTH-001 (password reset led nowhere)
+- New /auth/reset-password page (RHF + zod, rules mirrored from
+  SecurityUtils.validatePassword, PasswordStrengthMeter, show/hide toggle).
+- resetPasswordForEmail redirectTo -> /auth/reset-password.
+- AuthContext: isPasswordRecovery on AuthState + AuthFlags; PASSWORD_RECOVERY
+  and USER_UPDATED branches; INITIAL_SESSION reset switched to the updater form
+  so it cannot clobber the flag.
+- Auth.tsx routes recovery (flag OR ?reset=true, kept for in-flight emails) to
+  the reset page before the isAuthenticated redirect.
+- Expired links read from BOTH the query string (PKCE) and the hash (implicit).
+- After update: signOut({ scope: 'others' }).
+- 3 Playwright cases appended to route-smoke.spec.ts.
+- **Learnings for future iterations:**
+  - `npm run type-check` IS A NO-OP. tsconfig.json is "files": [] plus project
+    references, and `tsc --noEmit` without --build checks zero files. It exits 0
+    on a page that references an undeclared variable. CI's validate job runs
+    exactly this, so src/ is not type-checked anywhere in CI.
+    Use `npx tsc -p tsconfig.app.json --noEmit` to actually check src/. It takes
+    ~10 minutes and currently reports 371 pre-existing errors (171 of them in
+    the dead CRM hooks). Filed as WEB-CI-030.
+  - `npm run type-check:strict:ratchet` ALREADY FAILS on 6e58535, the base of
+    this branch: src/pages/EventsToday.tsx 1 -> 3. Verified in a clean worktree
+    at that commit, so do not attribute it to your own change. Also in
+    WEB-CI-030.
+  - Supabase reports a dead auth link in the query string under PKCE and in the
+    URL hash under the implicit flow. Read both or the error page never renders.
+  - PASSWORD_RECOVERY and INITIAL_SESSION can arrive in either order, so any
+    full-object setAuthState in the INITIAL_SESSION path will clobber a flag set
+    by the recovery branch. Use the updater form.
+---
+## 2026-09-02 - WEB-SEC-026 (MFA bypassed on web)
+- The story's proposed fix was client-side and would not have closed the hole:
+  an aal1 token from signInWithPassword is a valid GoTrue credential and works
+  against PostgREST and every edge function without our app.
+- Server-side control added at the real chokepoint: _shared/mfaAssurance.ts
+  (readAalClaim / hasVerifiedFactor / mfaAssuranceSatisfied) + SecurityContext
+  .mfaSatisfied + a Layer 1b refusal (MFA_REQUIRED) in securityMiddleware,
+  ahead of the role checks and scoped to elevated calls.
+- Client: handleAuthChange derives isAuthenticated from the assurance level;
+  Auth.tsx gates its redirect; handleMFACancel now awaits logout().
+- Tests: _tests/mfa-assurance.test.ts (7, in CI) + 4 new vitest cases.
+- **Learnings for future iterations:**
+  - user_roles client writes are ALREADY denied outright by 20260612000000
+    (WITH CHECK false). Any story proposing new RLS on user_roles writes is
+    proposing dead code; role changes go through the assign-role edge function.
+  - A RESTRICTIVE policy is table-wide and cannot distinguish an admin path from
+    an owner writing their own row. On a table like campaigns that means
+    blocking paying users, not admins.
+  - requireAdmin -> securityMiddleware in _shared/securityLayers.ts is the one
+    door every admin edge function goes through. Put caller-identity rules there.
+  - getAuthenticatorAssuranceLevel() is a LOCAL decode of the stored session in
+    supabase-js v2, not a network call, so it is safe to call on every auth event.
+  - Watch out for guard conditions like `if (!text.includes('mfaAssurance.ts'))`
+    when the edit you just made added a COMMENT mentioning that filename: the
+    guard sees its own prose and skips the import. deno check caught it.
+  - securityLayers.ts has imports at line 11 AND line 569; both are real.
+---
+## 2026-09-02 - WEB-SEC-027 + WEB-SEC-028 (two attacker-driven login throttles)
+- Done together: 028's AC names 027's chosen writer, and fixing one leaves the
+  other lockout live.
+- check-login-attempt: email-keyed lock REMOVED (it was the victim-lockout
+  primitive, and scoping it to (email,IP) would have been dead code because the
+  IP threshold of 5 is below the email threshold of 10). record_success now
+  requires an accessToken verified via auth.getUser AND matching the address.
+  All three actions still 200 with the same shape.
+- 20260902000007: drops the WITH CHECK (true) insert policy on
+  failed_auth_attempts, adds a service_role-only one, keeps the table and RPC.
+- useAuthSecurity: no longer calls check_auth_rate_limit or writes the table;
+  logFailedAttempt is inert; the "N attempts remaining" banner is removed
+  because its source of truth is gone and it would have frozen at 5.
+- _tests/login-throttle-contract.test.ts (6) wired into CI.
+- **Learnings for future iterations:**
+  - The docstring in check-login-attempt claims iOS/Android call it. They do
+    not: grep found no callers in ios/ or android/. Only AuthContext does, from
+    three sites. Verify such claims before treating them as compat constraints.
+  - failed_auth_attempts and login_attempts are DIFFERENT tables backing
+    DIFFERENT throttles. Do not conflate them.
+  - The IP half of check_auth_rate_limit never worked: the client passed the
+    literal string 'client' as p_ip_address and inserted ip_address ''.
+  - When you delete the source of a displayed number, delete the display too.
+    An unfed counter that keeps rendering its initial value is a lie that
+    type-checks.
+  - A throttle fed by clients self-reporting failures cannot bound an attacker
+    and can be used to lock out victims. Treat it as UX, and name the real
+    control (GoTrue's own /token limits, bot protection).
+---
+## 2026-09-02 - WEB-ADS-003 (the browser set the price Stripe charged)
+- 20260902000008: enforce_campaign_placement_pricing() BEFORE trigger rewrites
+  daily_cost/total_cost/days_count on client writes from calculate_campaign_
+  pricing + the campaign dates; sync_campaign_total_cost() keeps campaigns
+  .total_cost equal to its placements; sponsored_listing rate-card row seeded.
+- create-campaign-checkout recomputes every amount, 409 PRICE_CHANGED on a
+  mismatch > 1 cent before building the session, writes the amount back.
+- placementSpecs.dailyCost deleted; /advertise reads ad_rate_card everywhere;
+  new shared placementTotalPrice() mirrors the SQL, rounding once at the end.
+- _tests/campaign-pricing-authority.test.ts (8) wired into CI.
+- **Learnings for future iterations:**
+  - Postgres has NO column-level RLS. "non-admins may not write column X" is a
+    BEFORE trigger. Prefer recomputing over rejecting: the client then cannot
+    be wrong, only ignored.
+  - Do not write RLS policies for a table whose current policies you cannot
+    read. If RLS is disabled, adding policies plus ENABLE denies live access.
+    campaign_placements is such a table (created outside the ledger).
+  - calculate_campaign_pricing rounds the TOTAL once: ROUND(base*(1-d/100)*days,
+    2). Multiplying a rounded daily rate by days differs by pennies. Any client
+    mirror must round the same way or the display and the charge drift.
+  - A comment that quotes the buggy line verbatim will trip a strict "this must
+    not come back" assertion. Reword the comment; keep the assertion strict.
+  - _shared/securityLayers.ts imports supabase-js at an UNPINNED '@2' while
+    callers pin '@2.45.0'. When those resolve to different minors,
+    `deno check` on a caller fails with TS2345 on the SupabaseClient generics.
+    The same file can pass or fail depending on module-cache state, so verify a
+    suspicious edge-function type error against a clean worktree before
+    believing you caused it. Added as an AC on WEB-CI-030.
+---
+## 2026-09-02 - WEB-ADS-002 (ad impressions and clicks were never recorded)
+- New edge function track-ad-event writes on the service role: validates the
+  creative belongs to an approved, active campaign; drops automated UAs (a
+  MISSING UA counts as automated); idempotent on client_event_id; every refusal
+  answers 200 so a caller cannot probe the rules.
+- Bot filter extracted to _shared/adEventFilters.ts so it is testable without
+  importing a module that calls Deno.serve at the top level.
+- tracking.ts invokes the function; direct inserts gone; shouldShowAd deleted.
+- useActiveAds passes the real session and user ids, which is what turns the
+  get_active_ads frequency caps ON. They were null, so no cap ran anywhere.
+- 20260902000009 adds owner/admin SELECT policies so the dashboard can read the
+  rows. Permissive only; RLS deliberately NOT enabled.
+- _tests/ad-event-tracking.test.ts (8) + a route-smoke case asserting the
+  browser POSTs nothing to /rest/v1/ad_impressions.
+- **Learnings for future iterations:**
+  - ad_impressions and ad_clicks have NO policy of any kind in the ledger.
+    Client inserts were refused for the life of the feature. Check for a policy
+    before assuming a client-side write works.
+  - A client-side check that reads a table RLS hides ALWAYS passes and looks
+    like a control. shouldShowAd and the WEB-SEC-028 rate limiter were both
+    this shape. Treat "returns allow on error" plus "reads a protected table"
+    as a dead control.
+  - get_active_ads has real frequency caps that only run when p_session_id and
+    p_user_id are passed. Passing null silently disables them.
+  - For the THIRD time this session: a strict "this must not come back"
+    assertion will match the explanatory comment you just wrote. Reword the
+    prose, keep the assertion strict.
+  - Do not import an edge function's index.ts from a test: its top-level
+    Deno.serve binds a port. Extract the pure parts to _shared/.
+---
+## 2026-09-02 - WEB-FEAT-013 (cross-tier upgrade double-charged)
+- The guard query was .single() with no platform filter. user_subscriptions
+  holds one row PER PLATFORM, so a web+iOS subscriber matched two rows,
+  .single() returned data null, and every double-charge guard passed. Now
+  .eq("platform","web").maybeSingle().
+- A different active web plan now goes through stripe.subscriptions.update with
+  create_prorations and RETURNS, instead of opening a second subscription.
+- Store subscription at same-or-higher tier (by subscription_plans.sort_order)
+  => 409 naming the store.
+- Response keeps `url` so no shipped client breaks; adds upgraded +
+  prorationAmount from an upcoming-invoice preview.
+- _tests/subscription-upgrade-contract.test.ts (8, incl. a fake Stripe) in CI.
+- **Learnings for future iterations:**
+  - .single() on user_subscriptions IS A BUG. That table is one row per
+    platform by design. Always filter platform, and prefer maybeSingle.
+  - A PostgREST .single() that matches 2 rows returns { data: null, error },
+    and code that only destructures `data` then treats the user as having
+    nothing. Guards written that way fail OPEN for the users who have the most.
+  - useSubscription.createCheckoutSession throws when data.url is missing, so
+    any new response shape from that function must still carry `url` or every
+    shipped build reads it as a failure.
+  - Stripe: change a plan with subscriptions.update on the EXISTING item id
+    (items:[{id, price}]). Omitting the item id appends a second item instead
+    of replacing the first.
+---
+## 2026-09-02 - WEB-FEAT-016 (VIP sold eight benefits and delivered none)
+- Verified every claimed benefit against a gate that reads it, one key at a
+  time. Delivered: unlimited_favorites, advanced_filters, ad_free,
+  trip_planner, write_reviews, save_searches. Not delivered: vip_events,
+  reservation_assistance, sms_alerts, concierge, local_perks, early_access,
+  daily_digest, priority_support. Non-existent: any XP multiplier.
+- Pricing.tsx and UpgradeModal.tsx stripped; 20260902000010 trims
+  subscription_plans.features for insider and vip.
+- _tests/plan-features-truthful.test.ts (7) wired into CI, asserting BOTH that
+  claimed features have consumers and that removed ones have not regained one.
+- **Learnings for future iterations:**
+  - VIP now grants NOTHING over Insider. trip_planner is a boolean gate at
+    insider with no quota, so "5 trips/month" and "Unlimited" were both false.
+    Do not restore a VIP line without shipping its gate in the same change.
+  - The story assumed write_reviews was dead. It is not - RatingSystem gates on
+    it. Check each key individually; the audit's list was 1 of 6 wrong.
+  - Feature keys in _shared/entitlements.ts are an API surface for mobile.
+    Withdraw the marketing copy, keep the keys, or a shipped binary loses a
+    feature it can ask about.
+  - A source-level assertion beats a Playwright check for "the copy matches the
+    code": it compares the claim against the gate that makes it true, and the
+    smoke lane cannot run without real Supabase anyway.
+---
+## 2026-09-02 - WEB-AUTH-002 (signup metadata never reached profiles)
+- 20260902000011: handle_new_user() SECURITY DEFINER + trigger on auth.users,
+  copying first/last/phone/location/interests/communication_preferences out of
+  raw_user_meta_data. Wrapped so it can NEVER raise. ON CONFLICT keeps the
+  existing value on every column. Duplicate-user_id check BEFORE creating
+  profiles_user_id_key. Two-part non-destructive backfill with counts.
+- useProfile: plain insert -> upsert(onConflict user_id, ignoreDuplicates) plus
+  a read-back, because ignoreDuplicates returns nothing to the loser.
+- Profile settings tab now mounts PreferencesManager.
+- _tests/new-user-profile-contract.test.ts (8) wired into CI.
+- **Learnings for future iterations:**
+  - 20251125000001's "no trigger on auth.users, it causes schema context
+    issues" is about sync_oauth_user_role resolving the user_role ENUM. It does
+    not apply to a trigger that touches no enum and pins search_path.
+  - Any trigger on auth.users MUST swallow its own errors. Raising there stops
+    registration for the entire site.
+  - profiles.user_id has NO unique index in any migration. Anything upserting
+    on it must create one, and must check for duplicates first so the operator
+    gets a sentence instead of a constraint violation mid-deploy.
+  - PreferencesSettings and PreferencesManager are different components and only
+    the latter touches communication_preferences. The settings tab had the
+    wrong one, so a preferences screen existed while the promise was unmet.
+  - supabase-js upsert with ignoreDuplicates returns NOTHING to the caller that
+    lost the race. Always read the row back.
+  - profiles has no account_type column, so signup's account_type cannot be
+    copied anywhere. It stays in raw_user_meta_data.
+---
+## 2026-09-02 - WEB-SEO-021 + WEB-SEO-025 (duplicated and fabricated schema)
+- SEO-021: EnhancedEventSEO built its OWN Event node with
+  addressLocality: event.city || BRAND.city, so a Waukee event published as
+  Des Moines on ~525 detail pages while list pages (shared builder) were right.
+  Replaced with buildEventJsonLd(event, {withContext:true}); inLanguage and
+  mainEntityOfPage added at the CALL SITE because the same builder also feeds
+  ItemList entries, where mainEntityOfPage would point at the wrong page.
+- SEO-025: deleted aggregateRating with ratingCount computed from
+  popularity_score on the restaurants hub. Nothing replaces it: the rule is
+  "real counts only", and both pages now emit none.
+- scripts/check-duplicate-schema.mjs gained checkRatingCountSources(), which
+  fails on any computed ratingCount/reviewCount not read from total_ratings.
+  Already part of npm run validate.
+- **Learnings for future iterations:**
+  - PROVE A NEW LINT FIRES. Reinsert the exact bug, confirm exit 1 and the
+    right file:line, then restore. A guard never seen to fail is not a guard.
+  - Before swapping a hand-built schema node for a shared builder, check the
+    URL helpers produce identical strings and both files use the same Event
+    type. Here eventPageUrl() and the local eventUrl were byte-identical.
+  - When deleting a block, keep its comments as pointers. That Event node
+    carried the reasoning for SEO-009, SEO-010 and SEO-018; the reasoning now
+    lives in the builder and the call site says so.
+  - Adding a query to the restaurants hub to publish a rating snippet is a bad
+    trade (WEB-PERF-029 is about that page's payload). Emitting nothing is a
+    legitimate answer to "only emit real data".
+---
+## 2026-09-02 - WEB-PERF-030 (a websocket per event card)
+- Root cause fixed in the hook, not just the pages: useEventSocial takes
+  { realtime?: boolean }, defaults FALSE, and requires a signed-in user too.
+  EventSocialHub (the expanded surface) is the only opt-in.
+- All six landing pages now use useBatchEventSocial and pass BOTH socialData
+  and socialDataPending; the batch is keyed on the exact array each maps over.
+- EventsByLocation: the derivation and hooks had to move above an early return
+  (rules-of-hooks). It depends only on the events query, not the suburb.
+- _tests/event-social-fanout.test.ts (6) in CI + a route-smoke websocket cap.
+- **Learnings for future iterations:**
+  - When a shared component has a per-item fallback, fix the FALLBACK's default,
+    not only today's callers. Otherwise the next page reintroduces it.
+  - socialDataPending is as important as socialData: without it every card
+    fetches individually while the batch is in flight.
+  - supabase-js MULTIPLEXES channels over one websocket connection, so
+    page.on('websocket') counts connections, not channels. Do not read a
+    "3 subscriptions" budget as 3 sockets.
+  - Inserting a hook before `return (` can land it after an early return.
+    Check for `if (...) { return` above the insertion point; eslint
+    rules-of-hooks catches it, so run lint on every touched page.
+---
+## 2026-09-02 - WEB-SEO-020 + WEB-SEO-030 (middleware fed crawlers the homepage)
+- Done together: 030's "resolved but not prerendered" case IS 020's fallback
+  path. The detail branch now runs AFTER context.next() and returns any
+  non-shell response untouched.
+- The crawler USER-AGENT LIST IS DELETED, not trimmed. Once the response is
+  right for everyone there is nothing for it to decide, and one answer for
+  every requester removes the cloaking question instead of narrowing it.
+- Unresolved slug -> 404 + noindex; event slug >30 days past -> 410; resolved
+  but un-prerendered -> 200 with its own title/description/og/JSON-LD injected.
+- Slug lookups behind the edge Cache API, 5 min, misses cached too.
+- functions/__tests__/middleware-detail-status.test.mjs (13). CI already runs
+  every *.test.mjs there.
+- **Learnings for future iterations:**
+  - Adding a segment to OG_TYPE_BY_SEGMENT now also puts it behind the 404
+    gate. A segment without a resolveEntity branch would 404 every URL under
+    it. playgrounds resolves by slugified name; /stay uses hotels.slug.
+  - The 410 date comes from the EVENT SLUG, not the row: if the row resolved,
+    it would not be a 404 candidate at all.
+  - Keep 410 for events well past. Inside ~30 days a missing row is more often
+    an ingest problem, and crawlers treat 410 as final.
+  - FOURTH time: a strict "this string must not appear" assertion matched my own
+    explanatory comment naming the removed user agents. Reword the prose.
+  - Run `npm run type-check:functions`, not bare tsc: the middleware needs
+    @cloudflare/workers-types and standalone tsc reports phantom errors.
+---
+## 2026-09-02 - WEB-PERF-028 (PARTIAL: 1 of 6 hooks)
+- queryKeys gained playgrounds/hotels/articles namespaces (they did not exist,
+  which is part of why these hooks were never migrated).
+- useAttractions converted to useQuery. Returned surface preserved exactly, so
+  no caller changed. refetch is now an invalidate of the list key.
+- STORY LEFT OPEN. Five hooks remain plus AC3/AC4/AC5.
+- **Learnings for future iterations:**
+  - THE PROJECTION TRAP: these hooks select *_LIST_COLUMNS, so an inferred
+    queryFn return type is NARROWER than the table Row. The old explicit
+    XState interface laundered that. Let TanStack infer and you get ~34 errors
+    in the CALLERS for a change that alters no runtime value. Always give
+    useQuery an explicit generic naming the Row type.
+  - The five hooks look identical and are not (different catch shapes, some
+    have no createLogger). A generic converter fails on file two. Do them by
+    hand, one at a time, type-checking after each.
+  - Compare tsc error COUNT and per-file distribution against a baseline run.
+    That is how the caller breakage showed up; the hook itself was clean.
+---
+## 2026-09-02 - WEB-PERF-028 (PARTIAL: now 3 of 6 hooks)
+- usePlaygrounds and useArticles converted alongside useAttractions.
+- useArticles was the intricate one: no combined state object, an autoLoad
+  option, and mutations sharing `loading`/`error` with the list. The list moved
+  to useQuery; mutations kept their own flags; the returned loading/error merge
+  the two. autoLoad:false maps onto `enabled`. The loader's failure toast moved
+  into an effect on the query error.
+- **Learnings for future iterations:**
+  - Confirmed on all three: ALWAYS give useQuery an explicit generic naming the
+    Row type. These hooks select projections, so inference narrows the type and
+    the errors land in the CALLERS, not the hook.
+  - Compare tsc error count AND per-file distribution to a baseline after each
+    hook. The hook itself type-checks clean while callers break.
+  - Remaining: useHotels (the big one, 8 useState/5 useEffect), useRestaurants
+    (partly migrated already), useProfile.
+---
+
+## 2026-09-02 — WEB-PERF-028 (list hooks onto TanStack Query)
+
+Closed the story that had been left open across two ticks. Six hooks converted
+(attractions, playgrounds, articles, profile, restaurants, hotels), plus the
+three smaller hooks living in useHotels.ts. Hotel list projection added, both
+remaining client-side-filtering pages moved onto server-side filters.
+
+### Learnings for future iterations
+
+- **PrerenderSignal only counts TanStack queries.** `useIsFetching()` is the
+  source of `data-queries-settled`. Any hook that fetches outside TanStack is
+  invisible to it, so the route claims settled mid-flight and the prerenderer
+  captures a skeleton. This is the reason the conversion mattered; the caching
+  was the smaller half.
+- **Always give useQuery an explicit generic naming the Row type.** These hooks
+  select a column projection, so an inferred return type is narrower than the
+  Row callers are typed against. One conversion produced 34 errors in two files
+  for a change that altered no runtime value.
+- **Do not write a generic hook-converter script.** It worked on the first hook
+  and then ate a `try {` opener on the second, because each hook's catch block
+  is shaped slightly differently. Hand-convert; it is faster than debugging the
+  script.
+- **Client-side filtering is usually held in place by the filter dropdowns.**
+  Both pages derived their facet lists and "Browse By" counts from the same
+  unfiltered array they were filtering. You cannot move the filters to the
+  server until the facets have their own query. Look for that dependency first.
+- **Collapsing a sort memo can drop behaviour hiding at the end of it.** The
+  Attractions sort memo ended in `arrangeSponsored(sorted)`. Deleting the memo
+  deleted the sponsored boost. `git show HEAD:<file>` on any memo before
+  replacing it.
+- **A column projection is a contract with every function that reads the row.**
+  ATTRACTION_LIST_COLUMNS omitted is_sponsored and sponsored_until, so the
+  sponsored boost on /attractions had never once fired. It type-checked,
+  because the projection's absence is not a type error. When adding a
+  projection, grep for every helper the list is passed to.
+- **The comment-vs-assertion trap, twice more.** `assertFalse(/useAttractions\(\{\}\)/)`
+  matched my own comment saying "this used to be useAttractions({})". Reword
+  the prose. Never weaken the assertion.
+- **PostgREST cannot substring-match inside a text[].** `cs` wants a whole
+  element and `ilike` does not apply to arrays. The /playgrounds search matches
+  inside amenity strings, so that one filter has to stay client-side; moving it
+  would have silently dropped every amenity hit.
+
+## 2026-09-02 — WEB-SEC-031 (logout cache teardown) and WEB-SEC-030 (role sync)
+
+### Learnings for future iterations
+
+- **A logout handler that returns early never sees its own event.** AuthContext's
+  `handleAuthChange` opens with `if (isLoggingOutRef.current) return;`, and the
+  flag is set before `signOut()`. So the SIGNED_OUT raised by the logout button
+  is dropped before its handler runs. Anything that must happen on sign-out
+  belongs in both the event branch and `logout()`. Check for that early return
+  before deciding one hook is enough.
+- **`queryClient.clear()` beats a prefix list.** A list of user-scoped key
+  prefixes is a second inventory to keep in step with a hundred hooks, and its
+  failure mode is silent. Clearing everything costs one refetch on a screen the
+  user is leaving.
+- **Most user-scoped keys were already correct.** The audit found two wrong out
+  of a dozen. The real residue was admin- and role-scoped keys, which should NOT
+  carry a user id; `clear()` is the only thing that reaches those.
+- **A key can be user-scoped without looking it.** `useActiveAds` takes no user
+  argument and reads the id inside its queryFn via `supabase.auth.getUser()`,
+  passing it to an RPC that frequency-caps per account. Grep queryFn bodies for
+  `auth.getUser` and `p_user_id`, not just hook signatures.
+- **Prefer `useAuthState()` over `useAuth()` in hot hooks.** The context split
+  exists so an ads hook on every page does not re-render when an action
+  reference changes.
+- **`/TO public/` matches `INSERT INTO public.x`.** A migration assertion about
+  grants has to anchor on GRANT. This is the same class as the
+  comment-vs-assertion trap: the regex is right about the words and wrong about
+  the meaning.
+- **Tighten an RPC only after counting its callers.** `sync_oauth_user_role` had
+  exactly one, already passing `auth.uid()`, and neither mobile app called it.
+  That is what made narrowing its validation legal under CLAUDE.md's
+  backward-compatibility rules rather than a breaking change for shipped
+  binaries.
+- **Confirm both ends of an email match.** Requiring `email_confirmed_at` on the
+  target is the obvious half; requiring it on the row the role is copied FROM is
+  the half that stops someone seeding a role at an admin's address with an
+  unconfirmed row and then inheriting it.
+
+## 2026-09-02 — WEB-SEC-033 (deals ownership and redemption ledger)
+
+### Learnings for future iterations
+
+- **A policy's NAME is not its predicate.** "Business owners and admins can
+  insert deals" had `WITH CHECK (auth.role() = 'authenticated')`. The name is
+  why nobody looked. Read predicates, not policy names.
+- **PERMISSIVE policies OR together.** Adding a stricter policy beside a
+  permissive one changes nothing. The permissive one has to be DROPped.
+- **PostgREST resolves RPC arguments by name, so parameter names are contract.**
+  Renaming `deal_id` would break iOS (`let deal_id: String`) and Android
+  (`@SerialName("deal_id")`) even though the type and arity are unchanged. Keep
+  the name and qualify the shadowed column as `function_name.param`.
+- **Do not add an optional parameter beside an existing arity.** A
+  two-parameter version with a DEFAULT lives alongside the one-parameter
+  function, and a one-argument call is then ambiguous — the PGRST203 failure
+  that broke `get_active_ads` on every homepage load.
+- **Derive a counter, don't increment it.** A ledger plus `count(*)` makes
+  retries, double-submits and replays converge. An increment accumulates, and
+  once it has, nothing can tell an inflated count from a real one.
+- **An unsalted hash of an IP is not anonymisation.** IPv4 is 32 bits; brute
+  force reverses it in seconds. Salt it, and keep the salt in a table with RLS
+  on and no policies.
+- **CLAUDE.md's tightening rule has one exception: a write no shipped client
+  performs.** That is a claim to verify with grep and then pin with a test, not
+  to assert in a comment.
+
+## 2026-09-02 — WEB-AUTH-004 (signup with an existing address)
+
+### Learnings for future iterations
+
+- **Supabase signUp does not error for an existing address.** It returns a user
+  and no session, identical to a fresh signup, so the response cannot enumerate
+  accounts. The only difference is `identities: []`. Anything reading
+  `user && !session` conflates the two.
+- **The consequence was a button that fails on press.**
+  `auth.resend({ type: 'signup' })` errors for a confirmed address, so the
+  Resend button was broken for exactly the user who saw it.
+- **Keep the screen neutral, change the actions.** Naming the account is the
+  enumeration the response shape protects against. Swapping Resend for
+  "Sign in instead" and "Reset your password" reads the same to anyone.
+- **Treat a missing `identities` as a normal signup.** If the field ever
+  disappears from supabase-js, the neutral screen with a working Resend is the
+  safer wrong answer; the alternative hides Resend from every real new user.
+- **Extract the decision as a pure function.** "Test both branches" is only
+  cheap once the branch is a function over a response shape rather than a line
+  inside a useCallback.
+
+## 2026-09-02 — WEB-BE-034 AC3 (two unpublish switches on events)
+
+### Learnings for future iterations
+
+- **`events` has TWO independent hide mechanisms and they had split by
+  audience.** `is_hidden`/`hidden_at` is read by 19 web surfaces and nothing
+  else; `archived_at` is read by 5 agent surfaces and nothing else. So the
+  expired-event sweep could run perfectly and change nothing a visitor or a
+  crawler saw. When a job "does nothing", check whether the readers agree with
+  the writer before blaming the schedule.
+- **Check the column exists before a sweeping `.is()` edit.** A filter on a
+  missing column is 42703, and PostgREST fails the whole select — the WEB-QA-003
+  failure that blanked the homepage. All 19 sites here read `events`, which
+  carries both columns.
+- **A mechanical edit across N chains cannot assume how each terminates.** Two
+  of the 19 sat inside a `Promise.all` array and ended in a comma, not a
+  semicolon; appending a chained call after them was a syntax error. eslint
+  caught it. Run lint immediately after any scripted multi-file edit.
+- **The comment-vs-assertion trap, third variant: it can fail on CORRECT code.**
+  The test counted `.neq("is_hidden", true)` per file and useHomepageStats'
+  docstring QUOTES that call to explain what the hook must match. Strip block
+  and line comments before counting anything in source.
+- **Count paired filters, don't just check presence.** Asserting both filters
+  appear somewhere in a file passes even when one query has both and another has
+  neither. Asserting the counts are EQUAL is what catches the drift.
+- **Don't merge the two mechanisms.** "A moderator hid this" and "the sweep
+  retired this" are different facts, and `archived_at` is a timestamp because
+  the documented undo is "set it back to null" — a boolean would lose when it
+  happened.
+
+### Finding, not acted on: an unwired test suite
+
+`supabase/functions/_tests/agent-performance-review.test.ts` appears in no
+workflow. Run by hand it dies with `NotCapable: Requires net access to
+"0.0.0.0:8000"` — it wants to bind a server, so it needs `--allow-net` and
+probably a running function. Wiring it blind would either fail CI or pass
+vacuously, so it is recorded here rather than added. Every other suite under
+`_tests/` is wired into `subscription-sync-tests.yml`.
+
+## 2026-09-02 — WEB-SEO-017 AC3 guard (sitemap duplicate check)
+
+### Learnings for future iterations
+
+- **A dedupe inside one writer is not a guarantee about the artifact.** Three
+  things write `public/sitemap-*.xml`: `generate-dynamic-sitemaps.ts`,
+  `generate-sitemap.js`, and the `regenerate-sitemaps` edge function. Check the
+  file, not the function.
+- **Check across files as well as within one.** The within-file check (what the
+  AC asked for) passed everywhere. The cross-file check found `/guides` claimed
+  by both `sitemap-guides.xml` and `sitemap-static.xml`.
+- **That overlap is deliberate on both sides, so allowlist it with the reason
+  rather than dropping the check.** `sitemap-static.xml` must list `/guides`
+  because `prerender-routes.mjs` states the invariant that every prerendered
+  route appears there. `sitemap-guides.xml` must list it because WEB-SEO-003
+  found the hub was dropped the moment one published guide existed, and the hub
+  is the only URL in that file serving its own document. A one-entry allowlist
+  keeps a NEW overlap failing.
+- **Prove a guard fires.** Duplicating one `<url>` block made it exit 1 naming
+  the URL and the counts. A check nobody has seen fail is a check nobody knows
+  works.
+
+## 2026-09-02 — WEB-AUTH-003 and WEB-AUTH-005 (consent binding, verification landing)
+
+### Learnings for future iterations
+
+- **`signUp` with confirmation on returns a user and no session.** Anything the
+  client does immediately after it runs with `auth.getUser()` === null. That is
+  why the consent rows were written with `user_id = NULL`, and why the record
+  meant to prove consent was invisible to the export that keys on `user_id`.
+- **The data was already in the right place; only the writer was wrong.**
+  Auth.tsx has always sent the consent block in signup metadata, so moving the
+  write into `handle_new_user` needed no client change at all. Check what the
+  metadata already carries before adding a parameter.
+- **Never match a client-supplied hash against a client-supplied id.** The
+  adoption function recomputes the email hash from `auth.users.email`. Same
+  class of bug as WEB-SEC-030.
+- **Only a confirmed address may claim rows.** Adopting on an unconfirmed one
+  lets anyone who can type an address inherit consent recorded against it.
+- **An append-only log must never trade a row for a unique index.** Two rows for
+  one consent prove the same fact twice; a dropped row proves nothing. Mark the
+  writer in metadata instead.
+- **Supabase puts auth errors in TWO places.** PKCE and OAuth failures go in the
+  query string; implicit-flow and email-link failures go in the URL FRAGMENT,
+  which never reaches a server and which `useSearchParams` does not expose.
+  Reading only one is how a fix stays half-broken.
+- **Do not show Supabase's error description to a user.** "Email link is invalid
+  or has expired" is written for a developer. Write the message, and pin with a
+  test that the raw one never reaches the reader.
+- **A resend response must be neutral.** `auth.resend` errors for an
+  already-confirmed address, so reporting the outcome turns the page into an
+  account checker.
+- **"No error" is not "confirmed".** Someone opening the page from history has
+  neither, and celebrating for them is the same defect more quietly. Three
+  states, not two.
+- **No countdown on an error screen.** Redirecting away removes the one page
+  that explains what happened and holds the action needed.
+
+## 2026-09-02 — WEB-AUTH-006 (billing stops before erasure)
+
+### Learnings for future iterations
+
+- **Erasure order is a correctness property, not a style choice.**
+  `user_subscriptions` is in PURGE_TABLES and is the only mapping to the Stripe
+  customer, so a cancellation attempted after the purge has nothing to cancel
+  and no way to find the customer (the email is gone too).
+- **`grep -ci stripe` on the deletion function returned 0.** A one-word grep
+  found a story's whole premise. Worth running against any function whose job
+  is to undo something.
+- **Take the client as a parameter, not an import.** Passing a `BillingClient`
+  into `_shared/cancelBillingBeforeErasure.ts` is what lets seven of the eleven
+  tests actually RUN the teardown against a fake — ordering, refusal, partial
+  failure — instead of asserting about source text.
+- **Refuse, don't continue, when billing teardown fails.** Continuing erases the
+  mapping and leaves an active charge nothing can trace back. 409 with a code
+  the client can branch on.
+- **Deleting the Stripe customer matters as much as cancelling.** A customer
+  left behind keeps the payment method and billing address — data the erasure
+  was meant to remove.
+- **An unknown subscription status should read as live.** A status this code has
+  not seen is more likely a new active state than a new terminal one, and the
+  safe error is a redundant cancel.
+- **A store subscription cannot be cancelled server-side, so the UI must say
+  so.** Apple and Google own it. Silence lets the user believe deleting the
+  account stopped the charge — the same defect one platform over.
+
+## 2026-09-02 — WEB-AUTH-007 and WEB-AUTH-012 (session policy, credential changes)
+
+### Learnings for future iterations
+
+- **`signOut({ scope: 'global' })` on a timeout signs the user out of every
+  device.** A stale desktop tab ejecting someone from their phone is a bug that
+  looks like a policy. A deliberate Log Out should stay global; a timeout should
+  be `local`.
+- **`Date.now()` at mount is page-load age, not session age**, and it is wrong
+  in both directions: a reload restarts the cap, and a long-open tab with a
+  fresh session hits it. Measure from `user.last_sign_in_at`.
+- **Not `iat`.** It is reissued on every refresh, Supabase refreshes hourly, so
+  an 8-hour cap read from `iat` is unreachable. Keep it only as a fallback where
+  it can only make the cap more generous.
+- **Return null when a measurement is unknown.** Falling back to `now()` silently
+  restores the behaviour being replaced, and does it invisibly.
+- **`enabled: isAdmin` alone is wrong while the admin check is in flight.**
+  `isAdmin` is false until it resolves, so the clock would start at an arbitrary
+  point after load. Gate on `isAdmin && !isAdminLoading`.
+- **`updateUser({ password })` accepts any live session.** Without
+  re-authenticating first, an unlocked laptop or a stolen token takes the
+  account over permanently. Re-auth, then change, then revoke other sessions —
+  and `scope: 'others'`, not `'global'`, so the user is not ejected from the
+  screen they just used.
+- **Revoking other sessions is the point of a password change.** Changing it
+  because it may be compromised achieves nothing while old sessions stay valid.
+- **Supabase email change is double-confirmation by default, and the UI has to
+  say so.** A user who confirms one inbox and stops will otherwise believe the
+  change failed.
+- **Two files importing only each other are dead.** Grep for external importers
+  before deleting, then pin the deletion with a test so they cannot creep back.
+
+## 2026-09-02 — WEB-SEC-032 (embedded service_role key)
+
+### Learnings for future iterations
+
+- **A key committed inside a `CREATE OR REPLACE FUNCTION` body is in the
+  DATABASE, not just in git.** Eleven migrations did that and no later migration
+  replaced the functions, so the value was readable through
+  `pg_get_functiondef` by anyone who could connect. Fixing only the tree would
+  have looked complete and changed nothing.
+- **Rewrite what is installed, not what the migrations say.** Reading
+  `pg_get_functiondef`, regex-replacing the literal and `EXECUTE`ing the result
+  beats reproducing five long legacy bodies by hand, catches definitions that
+  have drifted, and cannot leak a value because it contains none.
+- **Match on the SHAPE of a credential, never the value.** A generic
+  `eyJ[A-Za-z0-9_.-]{30,}\.` pattern keeps the fixing file itself clean for
+  scanners and catches the next key someone embeds.
+- **Verify after rewriting and warn loudly if anything is left.** An
+  unrecognised shape must not pass silently.
+- **An allowlist that grows is a scanner reporting less every quarter.**
+  Fifteen entries here covered exactly the files that had the problem. Removing
+  them is part of the fix, not a follow-up.
+- **Check what a blanket allowlist entry is actually covering.**
+  `'''.*\.md'''` was described as "prefixes and placeholders, not live secrets";
+  two markdown files carried a live key under it.
+- **Sweep wider than the story lists.** It named six files; the repo-wide grep
+  found three more, including an Android setup guide.
+- **A script reading a key from env must refuse to run without it.** "Bearer
+  undefined" is a worse failure than a clear one, because it looks like a server
+  auth problem.
+- **Editing applied history needs a header saying why.** Otherwise the next
+  reader assumes it was a mistake.
+
+## 2026-09-02 — WEB-SEO-022 and WEB-SEO-023 (fabricated FAQ, retired brand domain)
+
+### Learnings for future iterations
+
+- **A wrong `@id` is not a broken link, it is a different entity.** ~480
+  restaurant pages carried `@id` on the retired domain. Crawlers reconcile
+  entities by `@id`, so this is a worse failure than a 404 and produces no error
+  anywhere.
+- **`sameAs` is an identity claim about accounts.** Asserting profiles the brand
+  does not own is worse than asserting none — and an EMPTY `sameAs` array is
+  itself a claim ("no profiles"), so omit the property instead.
+- **The footer and the JSON-LD must read one source.** They disagreed: markup
+  claimed three profiles while the footer linked to the three networks'
+  homepages. A "Follow us" button that opens a network's front page is a dead
+  control that looks alive.
+- **Sweep, don't spot-fix.** The story listed the SEO sites; the same grep found
+  a Stripe return_url fallback, the billing address on every invoice, and the
+  default brand an admin sees before saving anything.
+- **Narrow a guard to the form that is wrong, not the word.** Matching the bare
+  brand word failed on `SUPABASE_SERVICE_ROLE_KEY_DESMOINESPULSE`, an upstream
+  hub's credential name. A check that fails on something you cannot fix gets
+  deleted.
+- **Google requires FAQ content to be visible on the page emitting it.** The
+  event FAQPage lived only in the head, and its answers gave every venue in the
+  metro the same interstates, parking and bus route.
+- **Deleting an emitter means updating the emitter model in the same commit.**
+  `check-duplicate-schema.mjs` fails when a modelled emitter stops emitting —
+  the guard doing its job, not a separate chore.
+- **The comment-vs-assertion trap, twice more.** My own explanatory comment
+  quoted the highway names I was asserting absent, and `brandConfig`'s note
+  quotes the typo'd handle to explain it. Strip comments, or don't quote the
+  thing you assert against.
+
+## 2026-09-02 — WEB-SEO-033 and WEB-SEO-034 (event links, hotel SEO)
+
+### Learnings for future iterations
+
+- **A link that 404s looks exactly like a link.** Nine surfaces built
+  `/events/<uuid>` hrefs while `useEventBySlug` matches only date-suffixed
+  slugs. The story named one; the grep found nine. Always run the grep the AC
+  suggests.
+- **A prop nothing sets is a silently disabled feature.** `SmartEventCard`
+  gated its link AND its share on `event.slug`; `public.events` has no slug
+  column, so every card rendered unlinked and every share errored. Neither
+  looks like a failure.
+- **Widening a call site can put a nullable value into a non-null parameter.**
+  `createEventSlugWithCentralTime(title: string)` called `.toLowerCase()`
+  directly, and one converted site already guarded its title as possibly null.
+- **A canonical in the loading branch only is a canonical that vanishes.** It
+  exists until the fetch resolves, and a JS-executing crawler sees the settled
+  DOM. It belongs in both branches — the reason it is in the loading branch is
+  that it must not wait for data, not that it should stop existing.
+- **Google drops a whole BreadcrumbList when its items 404.** Hotel breadcrumbs
+  named `/hotels` while the routes are `/stay`. Not a partial win — the page
+  lost the display it was emitting for.
+- **A relative `og:image` gives a social crawler no image at all.**
+- **Generate a sitemap from the column the router resolves against.**
+  `/stay/:slug` is matched on `hotels.slug`, so a derived slug would submit URLs
+  the app 404s — worse than submitting nothing.
+- **A regeneration that lists fewer sitemaps than exist removes pages from the
+  crawl.** The edge function's index named five children while the build
+  produces nine, so every run dropped playgrounds, guides and pSEO until the
+  next deploy.
+- **Add a new family to the END of a strict priority list.** The prerender
+  budget shortfall falls entirely on the tail, so inserting ahead of an existing
+  family takes its whole allocation rather than sharing the cost.
+
+## 2026-09-02 — WEB-SEO-024 (placeholder geography in structured data)
+
+### Learnings for future iterations
+
+- **Check the columns before assuming a value is stale.** `attractions` and
+  `playgrounds` have no `city` and no `postal_code` column at all, so
+  `addressLocality: Des Moines` and `postalCode: 50309` could never have come
+  from data. Same locality defect SEO-007 fixed for events, two tables over.
+- **A wrong pin is worse than no pin.** Coordinates fell back to downtown, so a
+  row without a location got a pin on a street corner it is not on — and a user
+  navigates to it. For playgrounds that is the sharpest version on the site.
+- **A claim true of everything says nothing and is false as soon as it isn't.**
+  `touristType: [Family, Couples, Solo travelers, Groups]` on every row.
+- **Hard-coding a value whose column exists is the worse case.**
+  `isAccessibleForFree: true` on attractions, which DO have `is_free` and many
+  of which charge.
+- **Two keeps are worth defending explicitly**: `currenciesAccepted: USD` is a
+  safe default, and `isAccessibleForFree` on playgrounds is true by definition —
+  which is exactly why it was removed from attractions.
+- **Scope a schema lint to the ENTITY node.** The same files carry a publisher
+  node that legitimately holds the city's coordinates, so scanning whole files
+  fails on correct code. Name where the node starts and ends, and strip comments
+  because the file now explains the removed values in prose.
+
+## 2026-09-02 — WEB-BE-038 (SeatGeek time-TBD events)
+
+### Learnings for future iterations
+
+- **A field absent from an interface can never be read, even by accident.**
+  SeatGeek's `time_tbd` and `date_tbd` were not in the adapter's interface, so
+  its 03:30 placeholder was ingested as a showtime from the largest source in
+  the pipeline.
+- **An implausible wrong value is worse than a plausible one.** "3:30 AM" does
+  not read as "not announced yet", it reads as a broken listing.
+- **A sentinel VALUE is a weak marker.** `NO_TIME_MARKER = "19:31:58"` only
+  works when the ingestion path writes that exact time; SeatGeek writes 03:30,
+  indistinguishable from a real showtime. An explicit boolean column, read first
+  in the shared `hasSpecificTime`, covers every source.
+- **Fix it in the one function every surface already calls.** Three display
+  components branch on `hasSpecificTime`, so reading the flag there means all
+  three honour it untouched.
+- **Skip, don't guess, when the DATE is unknown.** An event with an invented
+  date drops off the site on the day it never happens.
+- **Check the neighbouring estimate when a value becomes date-only.**
+  `eventEndIso` falls back to start + 3h; with a midnight start that publishes a
+  3 AM end, moving the implausible hour to the other field instead of removing
+  it.
+- **Scope a backfill by source AND by exact value, and report what you did not
+  touch.** 03:30 is a real time; rows at it from other sources are counted and
+  left alone with a NOTICE.
+- **Strip comments before any assertion about ORDER.** The ordering check failed
+  on correct code because the comment explaining the fix named the sentinel
+  above the flag check. Fourth variant of this trap today.
+
+## 2026-09-02 — WEB-PERF-029 (restaurants hub payload)
+
+### Learnings for future iterations
+
+- **A projection applied to the fallback path is a projection nobody gets.**
+  RESTAURANT_LIST_COLUMNS was live only on the non-default sort; the default
+  went through an RPC returning `to_jsonb(r)`.
+- **Deny-list, not allow-list, when mobile clients read the same payload.** An
+  allow-list drops a newly added column silently on the day it is added, and
+  iOS/Android decode from models this repo does not release. Subtracting known
+  keys keeps every future column flowing.
+- **Check the mobile models before narrowing anything.** Android names
+  `business_hours` and `dietary_options`, which are not columns on the table at
+  all — worth knowing before assuming a narrowing is unsafe, and worth knowing
+  that those fields decode as absent today.
+- **Bounding a fetch can silently end paid placement.** `arrangeSponsored`
+  boosted two rows to the top of the whole set, so a sponsored listing ranked
+  400th reached page 1. That is a contract question, not a performance
+  decision — fetch the sponsored rows separately and de-duplicate.
+- **Every count on the page has to move to the server total.** With one page
+  fetched, `array.length` says "Showing 1-30 of 30", caps a filter badge, and
+  announces the wrong number to a screen reader.
+- **A JSX comment cannot go between attributes.** `{/* … */}` inside an element's
+  attribute list is a parse error; use a block comment or put it above.

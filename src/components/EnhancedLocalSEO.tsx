@@ -143,11 +143,11 @@ export default function EnhancedLocalSEO({
         name: BRAND.state,
       },
     },
-    sameAs: [
-      "https://www.instagram.com/desmoinespulse",
-      "https://www.facebook.com/desmoinespulse",
-      "https://www.twitter.com/desmoinespulse",
-    ],
+    // WEB-SEO-023: this asserted Facebook, X and Instagram profiles on the
+    // OLD brand's handle, under the new brand's name. sameAs is a
+    // machine-readable identity claim, so the property is OMITTED rather
+    // than emitted empty until BRAND.social has real URLs in it.
+    ...(BRAND.social.length > 0 ? { sameAs: [...BRAND.social] } : {}),
   };
 
   // WebSite Schema with SearchAction

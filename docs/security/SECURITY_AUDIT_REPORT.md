@@ -31,7 +31,7 @@ This comprehensive security audit identified **18 security issues** across the a
 **Issue:**
 ```typescript
 const SUPABASE_URL = "https://wtkhfqpmcegzcbngroui.supabase.co";
-const SUPABASE_PUBLISHABLE_KEY = "eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9...";
+const SUPABASE_PUBLISHABLE_KEY = "<redacted — the committed key this report is about (WEB-SEC-032)>";
 ```
 
 Supabase URL and anonymous key are hardcoded in source code and committed to repository. While the anon key is designed to be public, hardcoding violates security best practices and makes key rotation difficult.

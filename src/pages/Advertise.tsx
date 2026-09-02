@@ -12,7 +12,7 @@ import { Popover, PopoverContent, PopoverTrigger } from "@/components/ui/popover
 import { CalendarIcon, Star, Eye, Target, Megaphone, Zap, PanelRight } from "lucide-react";
 import { format, addDays, differenceInDays } from "date-fns";
 import { cn } from "@/lib/utils";
-import { useCampaigns, fetchRateCard } from "@/hooks/useCampaigns";
+import { useCampaigns, fetchRateCard, placementTotalPrice } from "@/hooks/useCampaigns";
 import type { RateCardEntry } from "@/hooks/useCampaigns";
 import { useToast } from "@/hooks/use-toast";
 import { useAuth } from "@/hooks/useAuth";
@@ -42,7 +42,6 @@ const PLACEMENT_OPTIONS = (Object.values(PLACEMENT_SPECS) as typeof PLACEMENT_SP
   type: spec.type,
   name: spec.name,
   description: spec.description,
-  dailyCost: spec.dailyCost,
   // Fallback keeps a future unmapped placement from rendering `undefined` as a
   // component, which throws React #130 and takes down the whole page (WEB-QA-001).
   icon: ICON_MAP[spec.type] ?? Star,
@@ -111,10 +110,17 @@ export default function Advertise() {
     );
   };
 
+  // WEB-ADS-003. This totalled a hardcoded daily rate and ignored the volume
+  // discount, so the summary said $70 where the stored campaign said $66.50.
+  // It now mirrors calculate_campaign_pricing() exactly: the discount tier for
+  // the length, applied to the rate-card rate, rounded once at the end the way
+  // the SQL rounds it. The number the buyer sees and the number the server
+  // charges come from the same rate card.
   const calculateTotalCost = () => {
     return selectedPlacements.reduce((total, placement) => {
-      const option = PLACEMENT_OPTIONS.find(opt => opt.type === placement.type);
-      return total + (option?.dailyCost || 0) * placement.days;
+      const rate = rateCard.find(r => r.placement_type === placement.type);
+      if (!rate) return total;
+      return total + placementTotalPrice(rate, placement.days);
     }, 0);
   };
 
@@ -380,7 +386,9 @@ export default function Advertise() {
                               {option.name}
                             </h3>
                             <span className="text-sm text-muted-foreground">
-                              ${option.dailyCost}/day
+                              {rateCard.find(r => r.placement_type === option.type)
+                                ? `$${rateCard.find(r => r.placement_type === option.type)!.base_daily_rate}/day`
+                                : "\u2014"}
                             </span>
                           </div>
                           <p className="text-sm text-muted-foreground mb-2">
@@ -437,9 +445,14 @@ export default function Advertise() {
                             const days = selectedPlacement?.days || 7;
                             const rateEntry = rateCard.find(r => r.placement_type === option.type);
                             const cpmRate = rateEntry?.cpm_rate ?? 10;
-                            const isCpmTier = option.dailyCost > 5;
+                            // WEB-ADS-003: every number below comes from the
+                            // rate card now. It used to come from a constant in
+                            // the bundle, which stopped matching the moment an
+                            // admin edited a rate in AdRateManager.
+                            const dailyRate = rateEntry?.base_daily_rate ?? 0;
+                            const isCpmTier = dailyRate > 5;
                             const estDailyImpressions = isCpmTier
-                              ? Math.round((option.dailyCost / cpmRate) * 1000)
+                              ? Math.round((dailyRate / cpmRate) * 1000)
                               : null;
                             const estTotalImpressions = estDailyImpressions
                               ? estDailyImpressions * days
@@ -463,7 +476,7 @@ export default function Advertise() {
                                     className="w-20"
                                   />
                                   <span className="text-sm font-semibold">
-                                    = ${days * option.dailyCost}
+                                    = ${rateEntry ? placementTotalPrice(rateEntry, days) : 0}
                                   </span>
                                 </div>
 
@@ -568,7 +581,8 @@ export default function Advertise() {
                         const option = PLACEMENT_OPTIONS.find(opt => opt.type === placement.type);
                         const rateEntry = rateCard.find(r => r.placement_type === placement.type);
                         const cpmRate = rateEntry?.cpm_rate ?? 10;
-                        const dailyCost = option?.dailyCost || 0;
+                        // WEB-ADS-003: the rate card, not a constant in the bundle.
+                        const dailyCost = rateEntry?.base_daily_rate ?? 0;
                         const isCpmTier = dailyCost > 5;
                         const estDailyImpressions = isCpmTier
                           ? Math.round((dailyCost / cpmRate) * 1000)
@@ -577,7 +591,9 @@ export default function Advertise() {
                           <div key={placement.type} className="space-y-0.5">
                             <div className="flex justify-between text-sm">
                               <span>{option?.name} ({placement.days} days)</span>
-                              <span className="font-semibold">${dailyCost * placement.days}</span>
+                              <span className="font-semibold">
+                                ${rateEntry ? placementTotalPrice(rateEntry, placement.days) : 0}
+                              </span>
                             </div>
                             {isCpmTier && estDailyImpressions && (
                               <p className="text-xs text-muted-foreground flex items-center gap-1">

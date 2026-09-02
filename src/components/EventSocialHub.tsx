@@ -36,7 +36,9 @@ export function EventSocialHub({ eventId, eventTitle, eventDate, eventLatitude, 
     checkInToEvent,
     addDiscussion,
     likeDiscussion,
-  } = useEventSocial(eventId);
+    // WEB-PERF-030: this is the expanded, interactive surface, so it is the
+    // one place that wants live updates. The card preview does not.
+  } = useEventSocial(eventId, { realtime: true });
 
   const [newComment, setNewComment] = useState('');
   const [isSubmitting, setIsSubmitting] = useState(false);

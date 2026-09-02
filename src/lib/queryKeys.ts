@@ -56,6 +56,30 @@ export const queryKeys = {
     detail: (id: string) => [...queryKeys.attractions.details(), id] as const,
   },
 
+  playgrounds: {
+    all: ['playgrounds'] as const,
+    lists: () => [...queryKeys.playgrounds.all, 'list'] as const,
+    list: (filters?: Record<string, unknown>) => [...queryKeys.playgrounds.lists(), filters] as const,
+    details: () => [...queryKeys.playgrounds.all, 'detail'] as const,
+    detail: (id: string) => [...queryKeys.playgrounds.details(), id] as const,
+  },
+
+  hotels: {
+    all: ['hotels'] as const,
+    lists: () => [...queryKeys.hotels.all, 'list'] as const,
+    list: (filters?: Record<string, unknown>) => [...queryKeys.hotels.lists(), filters] as const,
+    details: () => [...queryKeys.hotels.all, 'detail'] as const,
+    detail: (slug: string) => [...queryKeys.hotels.details(), slug] as const,
+  },
+
+  articles: {
+    all: ['articles'] as const,
+    lists: () => [...queryKeys.articles.all, 'list'] as const,
+    list: (filters?: Record<string, unknown>) => [...queryKeys.articles.lists(), filters] as const,
+    details: () => [...queryKeys.articles.all, 'detail'] as const,
+    detail: (slug: string) => [...queryKeys.articles.details(), slug] as const,
+  },
+
   favorites: {
     all: ['favorites'] as const,
     list: (userId?: string) => [...queryKeys.favorites.all, userId] as const,

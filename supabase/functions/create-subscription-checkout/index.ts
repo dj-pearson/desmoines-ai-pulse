@@ -142,20 +142,69 @@ serve(async (req) => {
       );
     }
 
-    // Check if user already has an active/trialing subscription
-    const { data: existingSubscription } = await supabase
+    // Initialize Stripe
+    const stripe = new Stripe(Deno.env.get("STRIPE_SECRET_KEY") || "", {
+      apiVersion: "2023-10-16",
+    });
+
+    const siteUrl = Deno.env.get("VITE_SITE_URL") || req.headers.get("origin") || "";
+
+    // WEB-FEAT-013 — THE GUARDS USED TO EVAPORATE FOR THE USERS WHO MOST NEEDED
+    // THEM.
+    //
+    // This lookup was .in("status", [...]).single(), with no platform filter. A
+    // user may legitimately hold one row PER PLATFORM -- useSubscription and
+    // SubscriptionPortal are built around exactly that -- so a subscriber with a
+    // web row and an iOS row matched two rows, .single() returned an error with
+    // data null, and BOTH double-charge guards below silently passed. The people
+    // most likely to be double-charged were the ones already paying twice.
+    //
+    // Filtering to the web platform is what makes .maybeSingle() honest: Stripe
+    // is the only thing this function can act on, and a store subscription is
+    // not ours to modify.
+    const { data: webSubscription } = await supabase
       .from("user_subscriptions")
       .select("id, stripe_subscription_id, status, cancel_at_period_end, plan_id")
       .eq("user_id", user.id)
+      .eq("platform", "web")
       .in("status", ["active", "trialing"])
-      .single();
+      .maybeSingle();
 
-    // PROD-SUB-005: prevent double-charging. If the user has a subscription
-    // that is set to cancel at period end, they should RESUME it from the
-    // billing portal rather than buy a second one. If they already hold the
-    // exact plan they're trying to buy, block that too. (Genuine cross-tier
-    // upgrades — a different active plan — are left to proceed for now.)
-    if (existingSubscription?.cancel_at_period_end) {
+    // A store subscription cannot be changed from here -- Apple and Google own
+    // that billing relationship -- so selling a web plan on top of one at the
+    // same or a higher tier is selling a second charge for entitlements the
+    // user already has.
+    const { data: storeSubscriptions } = await supabase
+      .from("user_subscriptions")
+      .select("platform, plan_id, subscription_plans!inner(sort_order, display_name)")
+      .eq("user_id", user.id)
+      .in("platform", ["ios", "android"])
+      .in("status", ["active", "trialing"]);
+
+    const requestedRank = Number(plan.sort_order ?? 0);
+    const blockingStoreSub = (storeSubscriptions ?? []).find((row) => {
+      const rank = Number(
+        (row as { subscription_plans?: { sort_order?: number } }).subscription_plans?.sort_order ?? 0,
+      );
+      return rank >= requestedRank;
+    });
+
+    if (blockingStoreSub) {
+      const where = blockingStoreSub.platform === "ios" ? "the App Store" : "Google Play";
+      return new Response(
+        JSON.stringify({
+          error:
+            `You already subscribe through ${where}. Manage or change that subscription there -- buying here would charge you twice.`,
+          code: "store_subscription_active",
+          platform: blockingStoreSub.platform,
+        }),
+        { status: 409, headers: { ...corsHeaders, "Content-Type": "application/json" } }
+      );
+    }
+
+    // PROD-SUB-005: a subscription set to cancel at period end should be
+    // RESUMED from the billing portal, not replaced by a second one.
+    if (webSubscription?.cancel_at_period_end) {
       return new Response(
         JSON.stringify({
           error:
@@ -165,7 +214,7 @@ serve(async (req) => {
         { status: 409, headers: { ...corsHeaders, "Content-Type": "application/json" } }
       );
     }
-    if (existingSubscription && existingSubscription.plan_id === planId) {
+    if (webSubscription && webSubscription.plan_id === planId) {
       return new Response(
         JSON.stringify({
           error: "You already have an active subscription to this plan.",
@@ -175,10 +224,80 @@ serve(async (req) => {
       );
     }
 
-    // Initialize Stripe
-    const stripe = new Stripe(Deno.env.get("STRIPE_SECRET_KEY") || "", {
-      apiVersion: "2023-10-16",
-    });
+    // A DIFFERENT ACTIVE WEB PLAN IS AN UPGRADE, NOT A SECOND PURCHASE.
+    //
+    // The comment this replaces said cross-tier upgrades were "left to proceed
+    // for now", and proceeding meant a second Checkout session and a second
+    // Stripe subscription: two live subscriptions, two invoices, every month.
+    // Changing the price on the existing subscription is the operation Stripe
+    // provides for this, and create_prorations credits the unused part of the
+    // old tier against the new one.
+    if (webSubscription?.stripe_subscription_id) {
+      try {
+        const current = await stripe.subscriptions.retrieve(
+          webSubscription.stripe_subscription_id
+        );
+        const itemId = current.items?.data?.[0]?.id;
+        if (!itemId) throw new Error("subscription has no items to update");
+
+        // Priced before it is charged, so the answer can be shown to the user
+        // rather than discovered on their statement.
+        let prorationAmount: number | null = null;
+        try {
+          const preview = await stripe.invoices.retrieveUpcoming({
+            customer: typeof current.customer === "string" ? current.customer : current.customer?.id,
+            subscription: webSubscription.stripe_subscription_id,
+            subscription_items: [{ id: itemId, price: stripePriceId }],
+            subscription_proration_behavior: "create_prorations",
+          });
+          prorationAmount = typeof preview.amount_due === "number" ? preview.amount_due : null;
+        } catch (previewError) {
+          // A preview that fails must not block the upgrade itself; the user
+          // simply does not get the figure up front.
+          console.warn("[create-subscription-checkout] proration preview failed", previewError);
+        }
+
+        const updated = await stripe.subscriptions.update(
+          webSubscription.stripe_subscription_id,
+          {
+            items: [{ id: itemId, price: stripePriceId }],
+            proration_behavior: "create_prorations",
+            metadata: {
+              userId: user.id,
+              planId: planId,
+              planName: plan.name,
+              changedFromPlanId: webSubscription.plan_id ?? "",
+            },
+          }
+        );
+
+        // The stripe-webhook's customer.subscription.updated handler is what
+        // moves the row to the new plan; returning here without waiting keeps
+        // one writer for that table.
+        return new Response(
+          JSON.stringify({
+            // Same key the client already redirects on, so no shipped build
+            // needs to change to stop double-subscribing.
+            url: `${siteUrl}/subscription/success?upgraded=true&plan=${encodeURIComponent(plan.name)}`,
+            upgraded: true,
+            subscriptionId: updated.id,
+            prorationAmount,
+            code: "plan_changed",
+          }),
+          { status: 200, headers: { ...corsHeaders, "Content-Type": "application/json" } }
+        );
+      } catch (upgradeError) {
+        console.error("[create-subscription-checkout] plan change failed", upgradeError);
+        return new Response(
+          JSON.stringify({
+            error:
+              "We could not change your plan. Please try again, or manage your subscription from the billing portal.",
+            code: "plan_change_failed",
+          }),
+          { status: 502, headers: { ...corsHeaders, "Content-Type": "application/json" } }
+        );
+      }
+    }
 
     // Check for existing Stripe customer
     const customers = await stripe.customers.list({
@@ -191,8 +310,7 @@ serve(async (req) => {
       customerId = customers.data[0].id;
     }
 
-    // Build success and cancel URLs
-    const siteUrl = Deno.env.get("VITE_SITE_URL") || req.headers.get("origin") || "";
+    // Build success and cancel URLs (siteUrl is declared above)
     const successUrl = `${siteUrl}/subscription/success?session_id={CHECKOUT_SESSION_ID}`;
     const cancelUrl = `${siteUrl}/pricing?canceled=true`;
 
@@ -222,7 +340,7 @@ serve(async (req) => {
           planName: plan.name,
         },
         // Add 7-day trial for new subscribers
-        trial_period_days: existingSubscription ? undefined : 7,
+        trial_period_days: webSubscription ? undefined : 7,
       },
       // Allow promotion codes
       allow_promotion_codes: true,
@@ -234,12 +352,11 @@ serve(async (req) => {
       },
     };
 
-    // If user already has a subscription, use subscription update mode
-    if (existingSubscription?.stripe_subscription_id) {
-      // For plan changes, cancel old subscription and create new one
-      // Or use Stripe's subscription update flow
-      console.log("User has existing subscription, creating new checkout for upgrade/downgrade");
-    }
+    // The "user already has a subscription" branch that used to sit here only
+    // logged a line and fell through to creating a SECOND subscription anyway.
+    // WEB-FEAT-013 moved that case above, where it now changes the price on the
+    // existing subscription and returns, so anything reaching this point has no
+    // active web subscription to update.
 
     const session = await stripe.checkout.sessions.create(sessionOptions);
 

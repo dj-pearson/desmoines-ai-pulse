@@ -41,7 +41,12 @@ const SRC = path.resolve('src');
  */
 const EMITTERS = [
   { component: 'FAQSection', mode: 'default-on', disabledBy: 'showSchema' },
-  { component: 'EnhancedEventSEO', mode: 'always' },
+  // WEB-SEO-022: EnhancedEventSEO WAS here. It built a five-question FAQPage
+  // into the head of every event page while EventDetails rendered no FAQ at
+  // all, which Google's policy forbids -- and the answers asserted the same
+  // driving directions and bus route for every venue in the metro. The block
+  // is deleted, so leaving it modelled here would make assertModelMatchesSource
+  // fail, which is exactly the drift guard doing its job.
   // EnhancedLocalSEO is NOT here. SEO-003 removed its FAQPage block and left
   // faqData as a hint that the page has an FAQ; the prop still exists and
   // feeds nothing. Modelling it as an opt-in emitter made five pages look like
@@ -146,6 +151,12 @@ function emitterState(source, emitter) {
 
 function main() {
   const files = walk(SRC);
+
+  // WEB-SEO-025. Runs first: a fabricated review count is a policy breach that
+  // can cost rich results across the whole domain, which is worse than a
+  // duplicate FAQPage on one page.
+  checkRatingCountSources(files);
+
   const stale = assertModelMatchesSource(files);
   if (stale.length) {
     console.error('\n❌ The FAQPage emitter model has drifted from the source (WEB-SEO-008 AC5)\n');
@@ -202,6 +213,52 @@ function main() {
   console.log(
     `✅ FAQPage schema: ${scanned} components scanned, ${withFaq} emit FAQPage, 0 duplicates.`,
   );
+}
+
+
+/**
+ * WEB-SEO-025: a ratingCount must come from stored review data, never from a
+ * calculation.
+ *
+ * Restaurants.tsx published aggregateRating with
+ * `ratingCount: Math.round((popularity_score || 50) * 2)` for the first 20
+ * restaurants on the highest-impression page in the app, and RestaurantDetails
+ * had done the same thing on ~480 pages until WEB-SEO-016. Both were invented.
+ * Google's review-snippet policy requires the count to reflect real reviews, so
+ * a derived one is a policy breach that risks every rich result on the domain,
+ * not just the restaurant ones.
+ *
+ * The only sanctioned source is content_rating_aggregates.total_ratings, and
+ * only when it is greater than zero. This fails on anything else.
+ */
+function checkRatingCountSources(files) {
+  const offenders = [];
+  // A count that is computed, rather than read from a field, is the tell.
+  const COMPUTED = /(ratingCount|reviewCount)\s*:\s*(Math\.|[^,\n]*[*+/-][^,\n]*|\d)/;
+
+  for (const file of files) {
+    const src = fs.readFileSync(file, 'utf8');
+    src.split('\n').forEach((line, i) => {
+      const code = line.replace(/\/\/.*$/, '');
+      if (!/ratingCount|reviewCount/.test(code)) return;
+      if (!COMPUTED.test(code)) return;
+      // total_ratings straight off the aggregate row is the one allowed shape.
+      if (/total_ratings|totalRatings/.test(code)) return;
+      offenders.push({ file: path.relative(process.cwd(), file), line: i + 1, code: code.trim() });
+    });
+  }
+
+  if (offenders.length) {
+    console.error('\n❌ Fabricated review count detected (WEB-SEO-025)\n');
+    for (const o of offenders) console.error(`  ${o.file}:${o.line}  ${o.code}`);
+    console.error(
+      '\nratingCount/reviewCount must come from content_rating_aggregates.total_ratings',
+    );
+    console.error('and only when it is > 0. Inventing one breaches Google review-snippet policy.\n');
+    process.exit(1);
+  }
+
+  console.log(`✅ Review counts: ${files.length} files scanned, 0 fabricated ratingCount values.`);
 }
 
 main();

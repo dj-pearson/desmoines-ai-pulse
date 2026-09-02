@@ -495,7 +495,7 @@ sdk.dir=C\:\\Users\\dpearson\\AppData\\Local\\Android\\Sdk
 
 # Supabase credentials
 SUPABASE_URL=https://your-project-ref.supabase.co
-SUPABASE_ANON_KEY=eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9...
+SUPABASE_ANON_KEY=<your Supabase anon key; copy it from the dashboard, do not commit it (WEB-SEC-032)>
 
 # Google OAuth Web Client ID (from Cloud Console)
 GOOGLE_WEB_CLIENT_ID=XXXXXXXXXXXX-XXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXX.apps.googleusercontent.com

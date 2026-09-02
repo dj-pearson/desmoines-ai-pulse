@@ -25,30 +25,40 @@
  *      fingerprint is not a match, it is unknown.
  *   2. SAME SOURCE URL + SAME DATE + 80% TITLE SIMILARITY. Catches a listing
  *      whose title was reworded between runs.
- *   3. SAME TITLE + SAME VENUE, WITHIN 24 HOURS. Catches a recurring show
- *      re-listed with a slightly different start time.
+ *   3. SAME TITLE + SAME VENUE + SAME CENTRAL CALENDAR DATE. Catches a
+ *      recurring show re-listed with a slightly different start time.
  *
  * They are tried in that order and the FIRST match wins, so the reported reason
  * is the strongest one that applied rather than the last one checked.
  *
- * ── THE DATABASE IS STRICTER THAN THIS MODULE, AND IT WINS ──────────────────
+ * ── THE DATABASE AND THIS MODULE NOW AGREE (WEB-BE-036) ─────────────────────
  *
- * `public.events` carries a UNIQUE INDEX `events_title_venue_unique` on
- * (title, venue) with NO DATE IN IT: one row per title per venue, forever.
- * Tier 3 above is looser — it treats the same title and venue more than 24
- * hours apart as a different event, which is right for a weekly residency and
- * is not what this schema permits.
+ * They did not used to. `public.events` carried a UNIQUE INDEX
+ * `events_title_venue_unique` on (title, venue) with NO DATE IN IT — one row
+ * per title per venue, forever — which existed in production and in no
+ * migration. Measured 2026-08-29 on the first live hub ingest: of 88 extracted
+ * events this module passed 60, and Postgres refused 16 of those on the
+ * constraint. A batch insert is ONE statement, so the first collision lost
+ * every row beside it.
  *
- * Measured 2026-08-29 on the first live hub ingest: of 88 extracted events this
- * module passed 60, and Postgres refused 16 of those on the constraint. A batch
- * insert is ONE statement, so the first collision lost every row beside it.
+ * Migration 20260902000006 replaced it with `events_title_venue_date_unique`
+ * on (title, venue, event_local_date), where `event_local_date` is a stored
+ * generated column holding the Central-time calendar date of `date`. Tier 3
+ * below keys on exactly that, so the module and the index now accept and
+ * reject the same rows.
  *
- * `ingest-events` therefore inserts with ON CONFLICT DO NOTHING and reports the
- * two counts SEPARATELY — `duplicates` from here, `constraintDuplicates` from
- * the index. The disagreement is REPORTED, not resolved: loosening the
- * constraint changes what the live site shows, and tightening this module to
- * match would merge a real weekly series into one row. Which is correct is an
- * operator decision, and neither is made silently.
+ * WHAT CHANGED IN TIER 3, and why it is not a tidy-up: the old window was 24
+ * HOURS, so the Symphony's Saturday-evening and Sunday-matinee performances —
+ * 18 hours apart, and both required by eventSourceProfiles — collapsed into one
+ * row. A calendar-date key keeps both. The reason string moved with the
+ * behaviour, from `same_title_venue_within_24h` to
+ * `same_title_venue_same_day`, because a log line that describes a rule the
+ * code no longer applies is worse than one nobody greps for.
+ *
+ * `ingest-events` still inserts with ON CONFLICT DO NOTHING and still reports
+ * `duplicates` (caught here) separately from `constraintDuplicates` (caught by
+ * the index). The two counts should now agree; they are kept apart so that if
+ * they ever diverge again, the divergence is visible rather than summed away.
  *
  * ── THE SIMILARITY FUNCTION IS POSITIONAL, AND THAT IS A KNOWN WEAKNESS ─────
  *
@@ -60,6 +70,8 @@
  * measures the effect. Recorded here so the next reader knows it is a decision
  * and not an oversight.
  */
+
+import { centralWallClockFromUtc } from "./centralTime.ts";
 
 export interface DedupEvent {
   title: string;
@@ -88,8 +100,19 @@ export interface DuplicateVerdict {
  *  writers cannot disagree about it by a decimal point. */
 export const TITLE_SIMILARITY_THRESHOLD = 0.8;
 
-/** How close two same-title, same-venue events must be to be one event. */
-export const RECURRING_WINDOW_HOURS = 24;
+/**
+ * The Central-time calendar date of an instant, as YYYY-MM-DD.
+ *
+ * Every event in this system is a Des Moines event, so "the same day" means the
+ * same day in Des Moines. Deriving it through `centralWallClockFromUtc` rather
+ * than `toISOString()` matters for evening shows: 8pm CDT is already tomorrow
+ * in UTC, and a UTC-keyed comparison would split a single evening's listings
+ * across two days. This is the same value the `event_local_date` generated
+ * column holds, so this module and the unique index agree by construction.
+ */
+export function centralCalendarDate(instant: Date | string): string {
+  return centralWallClockFromUtc(instant).slice(0, 10);
+}
 
 /**
  * A stable identity for an event: normalized title, ISO date, normalized venue,
@@ -185,19 +208,17 @@ export function isDuplicateEvent(
       }
     }
 
-    // 3. Same title, same venue, date within 24 hours (for recurring events).
+    // 3. Same title, same venue, same Central calendar date — the key the
+    //    database enforces (events_title_venue_date_unique) and the one
+    //    crawlers/catchdesmoines_crawler.py has always used.
     const titleMatch = newEvent.title.toLowerCase().trim() === existing.title.toLowerCase().trim();
     const venueMatch = newEvent.venue.toLowerCase().trim() === existing.venue.toLowerCase().trim();
 
     if (titleMatch && venueMatch) {
-      const existingDate = new Date(existing.date);
-      const timeDiff = Math.abs(newEvent.date.getTime() - existingDate.getTime());
-      const hoursDiff = timeDiff / (1000 * 60 * 60);
-
-      if (hoursDiff < RECURRING_WINDOW_HOURS) {
+      if (centralCalendarDate(newEvent.date) === centralCalendarDate(existing.date)) {
         return {
           isDuplicate: true,
-          reason: "same_title_venue_within_24h",
+          reason: "same_title_venue_same_day",
           existingEvent: existing,
         };
       }

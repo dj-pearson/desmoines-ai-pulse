@@ -190,6 +190,8 @@ async function fetchListings(
       .select('id, title, enhanced_description, original_description, location, date, price, category, image_url')
       .gte('date', new Date().toISOString())
       .neq('is_hidden', true) // Exclude soft-hidden stale events (WEB-AUTO-006)
+      // WEB-BE-034: archived_at is the other unpublish switch.
+      .is('archived_at', null)
       .order('date', { ascending: true })
       .limit(12);
 

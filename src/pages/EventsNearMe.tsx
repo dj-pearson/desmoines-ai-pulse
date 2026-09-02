@@ -1,4 +1,5 @@
 import { useState, useEffect, lazy, Suspense } from 'react';
+import { createEventSlugWithCentralTime } from "@/lib/timezone";
 import Header from '@/components/Header';
 import Footer from '@/components/Footer';
 import SEOHead from '@/components/SEOHead';
@@ -234,7 +235,7 @@ export default function EventsNearMe() {
             <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
               {events.map(event => (
                 <Card key={event.id} className="hover:shadow-lg transition-shadow">
-                  <Link to={`/events/${event.id}`}>
+                  <Link to={`/events/${createEventSlugWithCentralTime(event.title, event)}`}>
                     {event.image_url && (
                       <div className="overflow-hidden rounded-t-lg">
                         <img

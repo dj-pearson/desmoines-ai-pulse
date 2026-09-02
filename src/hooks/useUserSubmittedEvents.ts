@@ -169,8 +169,14 @@ export function useDeleteEvent() {
 
 // For admin use - get all submitted events
 export function useAllSubmittedEvents() {
+  // WEB-SEC-031. Every other submission query here is keyed by user; this one
+  // returns EVERY submission, with the submitter's name and email joined in,
+  // and was keyed by nothing. On a shared browser the cached admin result
+  // outlived the admin's session.
+  const { user } = useAuth();
+
   return useQuery({
-    queryKey: ['all-submitted-events'],
+    queryKey: ['all-submitted-events', user?.id ?? 'anonymous'],
     queryFn: async (): Promise<UserSubmittedEvent[]> => {
       const { data, error } = await (supabase as any)
         .from('user_submitted_events')

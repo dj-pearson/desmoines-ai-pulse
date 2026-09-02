@@ -78,6 +78,8 @@ export function SearchAutocomplete({
           .ilike('title', searchTerm)
           .gte('date', new Date().toISOString())
           .neq('is_hidden', true) // Exclude soft-hidden stale events (WEB-AUTO-006)
+          // WEB-BE-034: archived_at is the other unpublish switch.
+          .is('archived_at', null)
           .limit(5);
         // A search that FAILED and a search with no matches both render as
         // "no suggestions", so a user typing a restaurant that exists is told it

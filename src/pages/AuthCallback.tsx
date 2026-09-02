@@ -5,6 +5,7 @@ import { supabase } from "@/integrations/supabase/client";
 import { Loader2, CheckCircle, XCircle } from "lucide-react";
 import { SecurityUtils } from "@/lib/securityUtils";
 import { createLogger } from '@/lib/logger';
+import { readAuthCallbackError } from "@/lib/authCallbackError";
 
 const log = createLogger('AuthCallback');
 
@@ -30,14 +31,23 @@ export default function AuthCallback() {
   useEffect(() => {
     const handleAuthCallback = async () => {
       try {
-        // Check for error in URL params (OAuth errors)
-        const error = searchParams.get("error");
-        const errorDescription = searchParams.get("error_description");
+        // WEB-AUTH-005. This read the QUERY STRING only. Supabase puts
+        // implicit-flow and email-link failures in the URL FRAGMENT, which
+        // never reaches a server and which useSearchParams does not expose --
+        // so an expired confirmation link produced no error here either, and
+        // the page fell through to polling for a session that would never
+        // arrive, ending in the generic "taking longer than expected".
+        const authError = readAuthCallbackError(window.location.search, window.location.hash);
 
-        if (error) {
-          log.error('handleAuthCallback', 'OAuth error', { error, errorDescription });
+        if (authError) {
+          log.error('handleAuthCallback', 'Auth callback error', {
+            code: authError.code,
+            description: searchParams.get("error_description"),
+          });
           setStatus("error");
-          setErrorMessage(errorDescription || error || "Authentication failed");
+          // Our wording, not Supabase's: "Email link is invalid or has expired"
+          // is written for a developer and tells a person nothing to do next.
+          setErrorMessage(authError.message);
           return;
         }
 

@@ -24,6 +24,13 @@ export interface SecurityContext {
   roleLevel: number;
   ipAddress: string | null;
   userAgent: string | null;
+  /**
+   * WEB-SEC-026. Whether this request may take an action that requires the
+   * caller's full authentication assurance. False only when the caller has a
+   * verified second factor and presented a token that is not aal2 -- which is
+   * exactly what an attacker holding the password has.
+   */
+  mfaSatisfied: boolean;
 }
 
 export interface SecurityCheckResult {
@@ -66,6 +73,7 @@ export async function buildSecurityContext(
       roleLevel: 0,
       ipAddress,
       userAgent,
+      mfaSatisfied: true,
     };
   }
 
@@ -82,6 +90,7 @@ export async function buildSecurityContext(
         roleLevel: 0,
         ipAddress,
         userAgent,
+        mfaSatisfied: true,
       };
     }
 
@@ -96,6 +105,9 @@ export async function buildSecurityContext(
       roleLevel: ROLE_LEVELS[role],
       ipAddress,
       userAgent,
+      // getUser() returned a verified token, so reading its aal claim without
+      // re-verifying the signature is safe here (see mfaAssurance.ts).
+      mfaSatisfied: mfaAssuranceSatisfied(token, user),
     };
   } catch (error) {
     console.error('Error building security context:', error);
@@ -107,6 +119,7 @@ export async function buildSecurityContext(
       roleLevel: 0,
       ipAddress,
       userAgent,
+      mfaSatisfied: true,
     };
   }
 }
@@ -280,6 +293,42 @@ export async function securityMiddleware(
         allowed: false,
         errorCode: 'UNAUTHENTICATED',
         reason: 'Authentication required',
+        deniedByLayer: 'authentication',
+      },
+    };
+  }
+
+  // Layer 1b: Assurance (WEB-SEC-026)
+  //
+  // An admin who enrolled TOTP and is presenting an aal1 token has not finished
+  // signing in. AuthContext will not let that happen in our own UI, but the
+  // token is issued by GoTrue and works against every endpoint without it, so
+  // this is where the refusal has to live.
+  //
+  // Scoped to calls that ask for an elevated role: an ordinary user's own
+  // requests are not gated on a second factor, and a caller with no verified
+  // factor is never affected.
+  const wantsElevatedRole =
+    (options.minRole !== undefined && options.minRole !== 'user') ||
+    (options.minRoleLevel !== undefined && options.minRoleLevel > ROLE_LEVELS.user);
+
+  if (wantsElevatedRole && context.isAuthenticated && !context.mfaSatisfied) {
+    await logSecurityEvent(supabaseClient, {
+      eventType: 'permission_denied',
+      userId: context.userId,
+      ipAddress: context.ipAddress,
+      userAgent: context.userAgent,
+      securityLayer: 'authentication',
+      errorCode: 'MFA_REQUIRED',
+      metadata: { requiredRole: options.minRole, requiredLevel: options.minRoleLevel },
+    });
+
+    return {
+      context,
+      result: {
+        allowed: false,
+        errorCode: 'MFA_REQUIRED',
+        reason: 'Two-factor authentication must be completed for this action',
         deniedByLayer: 'authentication',
       },
     };
@@ -518,6 +567,7 @@ export async function logSecurityEvent(
 // create-campaign-checkout is one of them. Found by deno check while working
 // on WEB-BE-032.
 import { getCorsHeaders, handleCors } from './cors.ts';
+import { mfaAssuranceSatisfied } from './mfaAssurance.ts';
 
 /**
  * Create an error response for security violations

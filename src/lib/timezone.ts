@@ -49,10 +49,17 @@ export function nowInCentralTime(): Date {
  * Prefers new timezone fields over legacy date field
  */
 export function createEventSlugWithCentralTime(
-  title: string,
+  title: string | null | undefined,
   event?: any
 ): string {
-  const titleSlug = title
+  // WEB-SEO-033. The parameter was typed `string` and called `.toLowerCase()`
+  // on it directly. Every existing caller passed a non-null title, but the nine
+  // link sites this story converted include one that already guards its title
+  // as possibly null (ForYouRail's `rec.title ?? "Event"`), so a crash on a
+  // link render is one nullable row away. Accepting null and producing an
+  // empty title slug keeps the date suffix, which is the half that makes the
+  // slug resolvable at all.
+  const titleSlug = (title ?? "")
     .toLowerCase()
     .replace(/[^a-z0-9]+/g, "-")
     .replace(/(^-|-$)/g, "");
@@ -107,6 +114,18 @@ export function isEventInFuture(eventDate: string | Date): boolean {
  */
 export function hasSpecificTime(event: any): boolean {
   try {
+    // WEB-BE-038. An explicit flag beats a sentinel, and this is where the two
+    // meet: NO_TIME_MARKER below is a TIME VALUE standing in for "no time",
+    // which only works when the ingestion path happened to write that exact
+    // value. SeatGeek writes 03:30:00 instead, which is indistinguishable from
+    // a real showtime by inspection -- so the source's own time_tbd flag is now
+    // carried onto the row and read first.
+    //
+    // Checking it here rather than at each call site means every display
+    // surface honours it at once: EnhancedEventSEO, SocialEventCard and
+    // EventDetails already branch on this function.
+    if (event?.time_tbd) return false;
+
     // Check event_start_local first (new timezone field)
     if (event.event_start_local) {
       const time = event.event_start_local.split('T')[1]?.substring(0, 8);

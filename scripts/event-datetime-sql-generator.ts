@@ -5,8 +5,12 @@ import * as fs from "fs";
 
 // Supabase client setup
 const SUPABASE_URL = "https://wtkhfqpmcegzcbngroui.supabase.co";
-const SUPABASE_PUBLISHABLE_KEY =
-  "eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6Ind0a2hmcXBtY2VnemNibmdyb3VpIiwicm9sZSI6ImFub24iLCJpYXQiOjE3NTM1Mzc5NzcsImV4cCI6MjA2OTExMzk3N30.a-qKhaxy7l72IyT0eLq7kYuxm-wypuMxgycDy95r1aE";
+// WEB-SEC-032: was a committed anon key. An anon key is not a password, but a
+// key in the repository is a key an attacker does not have to find.
+const SUPABASE_PUBLISHABLE_KEY = process.env.VITE_SUPABASE_ANON_KEY;
+if (!SUPABASE_PUBLISHABLE_KEY) {
+  throw new Error("VITE_SUPABASE_ANON_KEY is not set");
+}
 
 const supabase = createClient(SUPABASE_URL, SUPABASE_PUBLISHABLE_KEY);
 

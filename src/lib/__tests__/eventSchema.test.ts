@@ -1,5 +1,5 @@
 import { describe, it, expect } from 'vitest';
-import { buildEventJsonLd, buildEventItemList, eventEndIso } from '@/lib/eventSchema';
+import { buildEventJsonLd, buildEventItemList, eventEndIso, eventStartIso } from '@/lib/eventSchema';
 import type { Event } from '@/lib/types';
 
 /**
@@ -129,5 +129,45 @@ describe('buildEventItemList', () => {
     expect(list.itemListElement.every((e) => 'endDate' in e.item)).toBe(true);
     // Not vacuous: the list is genuinely non-empty.
     expect(list.itemListElement.length).toBeGreaterThan(0);
+  });
+});
+
+describe('an event with no announced start time (WEB-BE-038)', () => {
+  // SeatGeek marks an unannounced showtime with time_tbd and fills
+  // datetime_local with 03:30:00. Ingested as a fact, that renders in a rich
+  // result as "3:30 AM" -- and a visitor reading that does not think "the time
+  // is not announced yet", they think the listing is broken.
+
+  it('publishes a date-only startDate', () => {
+    // schema.org/Event accepts a bare date, which is exactly what "the date is
+    // known, the time is not" means.
+    const start = '2026-09-04T03:30:00.000Z';
+    expect(eventStartIso(ev({ date: start, time_tbd: true }))).toBe('2026-09-04');
+  });
+
+  it('leaves a normal event timestamp alone', () => {
+    const start = '2026-09-04T00:00:00.000Z';
+    expect(eventStartIso(ev({ date: start }))).toBe(start);
+    expect(eventStartIso(ev({ date: start, time_tbd: false }))).toBe(start);
+  });
+
+  it('omits endDate rather than estimating one', () => {
+    // The three-hour fallback is anchored to a real start. With a date-only
+    // start there is nothing to anchor it to, and adding three hours to
+    // midnight would publish a 3 AM end -- the same implausible hour, moved to
+    // the other field.
+    expect(eventEndIso(ev({ date: '2026-09-04T03:30:00.000Z', time_tbd: true }))).toBeNull();
+  });
+
+  it('still uses a real end_date when the source gave one', () => {
+    const e = ev({ date: '2026-09-04T03:30:00.000Z', time_tbd: true });
+    e.end_date = '2026-09-04T23:00:00.000Z';
+    expect(eventEndIso(e)).toBe('2026-09-04T23:00:00.000Z');
+  });
+
+  it('the built node carries the date-only start and no endDate', () => {
+    const node = buildEventJsonLd(ev({ date: '2026-09-04T03:30:00.000Z', time_tbd: true }));
+    expect(node.startDate).toBe('2026-09-04');
+    expect('endDate' in node).toBe(false);
   });
 });

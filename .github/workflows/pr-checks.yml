@@ -257,6 +257,15 @@ jobs:
       - name: Sitemaps and redirects agree
         run: node scripts/check-sitemap-redirects.mjs
 
+      # WEB-SEO-017 AC3. sitemap-events carried 413 <loc> entries for 397
+      # distinct URLs and sitemap-playgrounds 69 for 67 (measured 2026-08-27).
+      # generate-dynamic-sitemaps now collapses repeats, but it is not the only
+      # writer of these files -- generate-sitemap.js and the regenerate-sitemaps
+      # edge function also produce them -- so a dedupe in one writer is not a
+      # guarantee about the artifact. This checks the artifact.
+      - name: No sitemap advertises the same URL twice
+        run: npm run check-sitemap-duplicates
+
       # WEB-LEGAL-011 AC8 / WEB-QA-020. check-bucket-posture.ts asks the same
       # question but needs the service-role key, which is an ENVIRONMENT secret
       # scoped to "Scrape" - so it only runs in the daily audit and a PR that

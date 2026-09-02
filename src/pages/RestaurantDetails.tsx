@@ -262,7 +262,10 @@ export default function RestaurantDetails() {
   const restaurantSchema = {
     "@context": "https://schema.org",
     "@type": "Restaurant",
-    "@id": `https://desmoinespulse.com/restaurants/${restaurant.slug || restaurant.id}`,
+    // WEB-SEO-023. Was hard-coded to the OLD brand domain on ~480 pages. @id is
+    // how a crawler reconciles one entity across pages, so pointing it at
+    // another origin does not make a broken link -- it makes a different entity.
+    "@id": getCanonicalUrl(`/restaurants/${restaurant.slug || restaurant.id}`),
     name: restaurant.name,
     description: restaurant.description || seoDescription,
     servesCuisine: restaurant.cuisine,
@@ -277,24 +280,36 @@ export default function RestaurantDetails() {
     ...(restaurant.website && { url: restaurant.website }),
     priceRange: restaurant.price_range,
     ...(restaurant.image_url && { image: [restaurant.image_url] }),
-    geo: {
-      "@type": "GeoCoordinates",
-      latitude: restaurant.latitude || 41.5868,
-      longitude: restaurant.longitude || -93.6250,
-    },
+    // WEB-SEO-024. The fallback was 41.5868,-93.6250 -- the middle of downtown
+    // Des Moines -- so a restaurant without coordinates was published as being
+    // at a street corner it is not on. A wrong pin is worse than no pin,
+    // because a user navigates to it.
+    ...(restaurant.latitude != null && restaurant.longitude != null
+      ? {
+          geo: {
+            "@type": "GeoCoordinates",
+            latitude: restaurant.latitude,
+            longitude: restaurant.longitude,
+          },
+        }
+      : {}),
     // Derived from the same parser as the visible open/closed badge; omitted
     // entirely when the free-form hours can't be parsed (no fabricated hours).
     ...(getOpeningHoursSpecification(restaurant.opening)
       ? { openingHoursSpecification: getOpeningHoursSpecification(restaurant.opening) }
       : {}),
-    paymentAccepted: "Cash, Credit Card, Debit Card",
+    // paymentAccepted IS GONE (WEB-SEO-024). No column backs it, and it claimed
+    // card acceptance for every restaurant in the set including the cash-only
+    // ones -- which is exactly the claim a diner would act on.
+    // currenciesAccepted stays: every restaurant in Des Moines takes dollars,
+    // which is the difference between a safe default and an invented fact.
     currenciesAccepted: "USD",
-    hasMenu: {
-      "@type": "Menu",
-      "@id": `https://desmoinespulse.com/restaurants/${restaurant.slug || restaurant.id}#menu`,
-      name: `${restaurant.name} Menu`,
-      url: `https://desmoinespulse.com/restaurants/${restaurant.slug || restaurant.id}#menu`,
-    },
+    // hasMenu IS GONE FROM HERE (WEB-SEO-023 AC2). It was unconditional, so every
+    // restaurant claimed a menu at #menu whether one existed or not, and where
+    // one did exist the claim was a second Menu node competing with the real
+    // one. RestaurantMenuSection renders MenuSchema only when a menu with
+    // sections has actually been captured, and that node carries
+    // mainEntityOfPage back to this restaurant. One owner, and only when true.
     areaServed: {
       "@type": "City",
       name: "Des Moines",

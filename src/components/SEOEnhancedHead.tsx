@@ -119,11 +119,11 @@ export const SEOEnhancedHead = ({
             "addressRegion": BRAND.stateAbbr,
             "addressCountry": BRAND.country
           },
-          "sameAs": [
-            "https://www.facebook.com/desmoinespulse",
-            "https://www.twitter.com/desmoinespulse",
-            "https://www.instagram.com/desmoinespulse"
-          ],
+          // WEB-SEO-023: this asserted Facebook, X and Instagram profiles on the
+          // OLD brand's handle, under the new brand's name. sameAs is a
+          // machine-readable identity claim, so the property is OMITTED rather
+          // than emitted empty until BRAND.social has real URLs in it.
+          ...(BRAND.social.length > 0 ? { sameAs: [...BRAND.social] } : {}),
           "contactPoint": {
             "@type": "ContactPoint",
             "contactType": "Customer Service",

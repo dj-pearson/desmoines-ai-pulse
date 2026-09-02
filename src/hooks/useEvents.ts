@@ -58,7 +58,29 @@ async function fetchEvents(filters: EventFilters): Promise<EventsResult> {
     .select(EVENT_LIST_COLUMNS, { count: "exact" })
     .gte("date", today) // Only today and future events
     .neq("is_merged", true) // Hide rows merged into a duplicate (WEB-AUTO-005)
-    .neq("is_hidden", true); // Hide soft-hidden stale events (WEB-AUTO-006)
+    .neq("is_hidden", true) // Hide soft-hidden stale events (WEB-AUTO-006)
+    // WEB-BE-034. THERE ARE TWO UNPUBLISH SWITCHES ON `events` AND THIS SURFACE
+    // read only one of them.
+    //
+    // is_hidden/hidden_at is written by hide_stale_events (WEB-AUTO-006).
+    // archived_at is written by agent-link-monitor, which sweeps past events
+    // and sets it -- reversibly, by design: "set archived_at back to null to
+    // restore" is the documented undo, which is why a timestamp was chosen over
+    // a boolean.
+    //
+    // The agent surfaces (link monitor, re-engagement, weekly digest,
+    // lead sourcing, generate-proposal) filter `archived_at IS NULL` and never
+    // touch is_hidden. Every web read filtered is_hidden and never touched
+    // archived_at. So the unpublish job could run correctly and change nothing
+    // a visitor or a crawler saw: the event stayed on /events, in the hubs and
+    // in sitemap-events.xml.
+    //
+    // Both are filtered everywhere now, on all 19 event reads including the two
+    // sitemap generators. They are NOT merged into one column: the two
+    // mechanisms mean different things (a moderator hid this / the sweep
+    // retired this) and collapsing them would lose the distinction and the
+    // timestamp.
+    .is("archived_at", null);
   if (sortBy === "featured") {
     query = query
       .order("is_featured", { ascending: false })

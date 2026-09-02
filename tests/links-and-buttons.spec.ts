@@ -256,3 +256,43 @@ test.describe('Button Click Feedback', () => {
     }
   });
 });
+
+test.describe('Event links resolve to real event pages (WEB-SEO-033)', () => {
+  // useEventBySlug matches only date-suffixed slugs, so a /events/<uuid> link
+  // lands on Event Not Found. Nine surfaces built links that way, and none
+  // failed visibly: a link that 404s looks like a link until it is clicked.
+
+  const SURFACES = ['/music', '/sports', '/events/near-me'];
+
+  for (const route of SURFACES) {
+    test(`every event link on ${route} points at a slug, not a uuid`, async ({ page }) => {
+      await page.goto(route);
+      await page.waitForLoadState('networkidle');
+
+      const hrefs = await page
+        .locator('a[href^="/events/"]')
+        .evaluateAll((els) => els.map((e) => (e as HTMLAnchorElement).getAttribute('href') || ''));
+
+      const uuid = /^\/events\/[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
+      const bad = hrefs.filter((h) => uuid.test(h) || h === '/events/undefined');
+      expect(bad, `id-based or undefined event links on ${route}: ${bad.join(', ')}`).toEqual([]);
+    });
+  }
+
+  test('the first event link on a venue page opens an event, not Event Not Found', async ({ page }) => {
+    await page.goto('/music');
+    await page.waitForLoadState('networkidle');
+
+    const venue = page.locator('a[href^="/music/venues/"]').first();
+    if ((await venue.count()) === 0) test.skip(true, 'no venues rendered');
+    await venue.click();
+    await page.waitForLoadState('networkidle');
+
+    const eventLink = page.locator('a[href^="/events/"]').first();
+    if ((await eventLink.count()) === 0) test.skip(true, 'this venue has no upcoming events');
+    await eventLink.click();
+    await page.waitForLoadState('networkidle');
+
+    await expect(page.getByText(/Event Not Found/i)).toHaveCount(0);
+  });
+});

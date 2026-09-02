@@ -1,21 +1,17 @@
-import { useState, useEffect } from "react";
+import { useCallback } from "react";
+import { useQuery, useQueryClient } from "@tanstack/react-query";
 import { supabase } from "@/integrations/supabase/client";
 import { ATTRACTION_LIST_COLUMNS } from "@/lib/listColumns";
 import { Database } from "@/integrations/supabase/types";
 import { createLogger } from '@/lib/logger';
+import { queryKeys } from "@/lib/queryKeys";
+import { STALE_TIME, GC_TIME } from "@/lib/queryConfig";
 
 const log = createLogger('useAttractions');
 
 type Attraction = Database["public"]["Tables"]["attractions"]["Row"];
 type AttractionInsert = Database["public"]["Tables"]["attractions"]["Insert"];
 type AttractionUpdate = Database["public"]["Tables"]["attractions"]["Update"];
-
-interface AttractionsState {
-  attractions: Attraction[];
-  isLoading: boolean;
-  error: string | null;
-  totalCount: number;
-}
 
 interface AttractionFilters {
   search?: string;
@@ -36,17 +32,25 @@ interface AttractionFilters {
 }
 
 export function useAttractions(filters: AttractionFilters = {}) {
-  const [state, setState] = useState<AttractionsState>({
-    attractions: [],
-    isLoading: true,
-    error: null,
-    totalCount: 0,
-  });
+  const queryClient = useQueryClient();
 
-  const fetchAttractions = async () => {
-    try {
-      setState((prev) => ({ ...prev, isLoading: true, error: null }));
-
+  // WEB-PERF-028. This was useState + useEffect, so nothing was cached across
+  // navigation and every mount refetched. It also made the route invisible to
+  // PrerenderSignal, which publishes data-queries-settled from useIsFetching()
+  // -- a count of TanStack queries only. A hook outside that count reports
+  // settled while its request is still in flight, which is how prerender.mjs
+  // captured a skeleton on 2 of 4 builds.
+  // The generic is explicit on purpose. ATTRACTION_LIST_COLUMNS is a projection,
+  // so an inferred queryFn return type is NARROWER than Attraction -- and the
+  // old AttractionsState declared Attraction[], which is what every caller is
+  // typed against. Without this, 34 errors appear in Attractions.tsx and
+  // AttractionManager.tsx for a change that alters no runtime value.
+  const { data, isLoading, error } = useQuery<{
+    attractions: Attraction[];
+    totalCount: number;
+  }>({
+    queryKey: queryKeys.attractions.list(filters as Record<string, unknown>),
+    queryFn: async () => {
       let query = supabase.from("attractions").select(ATTRACTION_LIST_COLUMNS, { count: "exact" });
 
       // Default to active rows only; admin callers can pass false to see all.
@@ -55,8 +59,11 @@ export function useAttractions(filters: AttractionFilters = {}) {
       }
 
       if (filters.search) {
+        // `description` is in this list because Attractions.tsx matched it
+        // client-side (WEB-PERF-028 AC4). Moving the filter to the server
+        // without it would have silently narrowed every search on that page.
         query = query.or(
-          `name.ilike.%${filters.search}%,type.ilike.%${filters.search}%,location.ilike.%${filters.search}%`
+          `name.ilike.%${filters.search}%,type.ilike.%${filters.search}%,location.ilike.%${filters.search}%,description.ilike.%${filters.search}%`
         );
       }
 
@@ -119,22 +126,17 @@ export function useAttractions(filters: AttractionFilters = {}) {
         throw error;
       }
 
-      setState({
-        attractions: data || [],
-        isLoading: false,
-        error: null,
-        totalCount: count || 0,
-      });
-    } catch (error) {
-      log.error('fetchAttractions', 'Error fetching attractions', { error });
-      setState((prev) => ({
-        ...prev,
-        isLoading: false,
-        error:
-          error instanceof Error ? error.message : "Failed to fetch attractions",
-      }));
-    }
-  };
+      return { attractions: (data || []) as unknown as Attraction[], totalCount: count || 0 };
+    },
+    staleTime: STALE_TIME.CONTENT_LIST,
+    gcTime: GC_TIME,
+  });
+
+  // Mutations below called fetchAttractions() to refresh. Invalidating the list
+  // key does the same job and also refreshes any other mounted view of it.
+  const fetchAttractions = useCallback(async () => {
+    await queryClient.invalidateQueries({ queryKey: queryKeys.attractions.lists() });
+  }, [queryClient]);
 
   const createAttraction = async (attraction: AttractionInsert) => {
     try {
@@ -186,28 +188,58 @@ export function useAttractions(filters: AttractionFilters = {}) {
     }
   };
 
-  useEffect(() => {
-    fetchAttractions();
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [
-    filters.search,
-    filters.type,
-    filters.minRating,
-    filters.featuredOnly,
-    filters.indoorOnly,
-    filters.kidFriendlyOnly,
-    filters.freeOnly,
-    filters.activeOnly,
-    filters.sortBy,
-    filters.limit,
-    filters.offset,
-  ]);
 
+  // The exact surface callers already read, rebuilt from the query, so this
+  // lands without touching a single page.
   return {
-    ...state,
+    attractions: data?.attractions ?? [],
+    totalCount: data?.totalCount ?? 0,
+    isLoading,
+    error: error ? (error instanceof Error ? error.message : "Failed to fetch attractions") : null,
     refetch: fetchAttractions,
     createAttraction,
     updateAttraction,
     deleteAttraction,
   };
+}
+
+/**
+ * Every attraction type and how many active attractions carry it
+ * (WEB-PERF-028 AC4).
+ *
+ * Attractions.tsx used to derive both from the full unfiltered list it already
+ * held, which is exactly why its filters could not move to the server: the
+ * moment the list is filtered, the type dropdown loses the types that were
+ * filtered out and the "Browse By Type" counts collapse to the current view.
+ *
+ * One narrow scan of a single column answers both, and it is reference data --
+ * the set of types changes when an attraction is added, not while someone is
+ * adjusting a filter.
+ */
+export function useAttractionTypeCounts() {
+  const { data, isLoading } = useQuery<{ types: string[]; counts: Record<string, number> }>({
+    queryKey: [...queryKeys.attractions.all, "type-counts"] as const,
+    staleTime: STALE_TIME.REFERENCE,
+    gcTime: GC_TIME,
+    queryFn: async () => {
+      const { data, error } = await supabase
+        .from("attractions")
+        .select("type")
+        .eq("is_active", true);
+
+      if (error) {
+        log.error("useAttractionTypeCounts", "Error fetching attraction types", { error });
+        throw error;
+      }
+
+      const counts: Record<string, number> = {};
+      for (const row of (data || []) as { type: string | null }[]) {
+        if (!row.type) continue;
+        counts[row.type] = (counts[row.type] || 0) + 1;
+      }
+      return { types: Object.keys(counts).sort(), counts };
+    },
+  });
+
+  return { types: data?.types ?? [], counts: data?.counts ?? {}, isLoading };
 }

@@ -65,6 +65,11 @@ export default function Auth() {
   const [showForgotPassword, setShowForgotPassword] = useState(false);
   const [forgotPasswordEmail, setForgotPasswordEmail] = useState("");
   const [signupEmail, setSignupEmail] = useState("");
+  // WEB-AUTH-004. The confirmation screen stays neutral either way -- saying
+  // "that address is taken" outright is the account enumeration Supabase's
+  // response shape exists to prevent -- but a Resend button that cannot work
+  // is worse than no button, so this decides which actions it offers.
+  const [addressAlreadyRegistered, setAddressAlreadyRegistered] = useState(false);
   const [accountType, setAccountType] = useState<"personal" | "business">("personal");
   const [showMFAVerification, setShowMFAVerification] = useState(false);
   const [mfaFactorId, setMfaFactorId] = useState<string | null>(null);
@@ -95,6 +100,9 @@ export default function Auth() {
   const [searchParams] = useSearchParams();
   const {
     isAuthenticated,
+    isPasswordRecovery,
+    requiresMFA,
+    logout,
     login,
     signup,
     signInWithGoogle,
@@ -106,7 +114,6 @@ export default function Auth() {
   // Security hooks for rate limiting and validation
   const {
     isBlocked,
-    remainingAttempts,
     timeUntilReset,
     checkRateLimit,
     checkDisposableEmail,
@@ -117,12 +124,29 @@ export default function Auth() {
   useDocumentTitle("Sign In");
 
   useEffect(() => {
-    if (isAuthenticated) {
+    // WEB-AUTH-001. A password-recovery link creates a real session, so this
+    // effect used to fire and bounce the user to the homepage with their old
+    // password intact. Two ways to land here mid-recovery:
+    //   - isPasswordRecovery, set from the PASSWORD_RECOVERY event;
+    //   - ?reset=true, the old redirect target, still live in any email sent
+    //     within the last hour.
+    // Both go to the page that can actually change a password.
+    const isRecovery = isPasswordRecovery || searchParams.get("reset") === "true";
+    if (isRecovery) {
+      navigate("/auth/reset-password", { replace: true });
+      return;
+    }
+
+    // WEB-SEC-026: never navigate away from the sign-in page while a second
+    // factor is still owed. This effect firing on the aal1 session that
+    // signInWithPassword stores is what unmounted the page before
+    // MFAVerificationDialog could open.
+    if (isAuthenticated && !requiresMFA) {
       // Get the redirect parameter from URL, validate to prevent open redirect attacks
       const redirectTo = SecurityUtils.getSafeRedirectUrl(searchParams.get("redirect"), "/");
       navigate(redirectTo, { replace: true });
     }
-  }, [isAuthenticated, navigate, searchParams]);
+  }, [isAuthenticated, isPasswordRecovery, requiresMFA, navigate, searchParams]);
 
   const handleInputChange = (field: string, value: any) => {
     setFormData(prev => ({ ...prev, [field]: value }));
@@ -221,9 +245,16 @@ export default function Auth() {
     navigate(redirectTo, { replace: true });
   };
 
-  const handleMFACancel = () => {
+  const handleMFACancel = async () => {
     setShowMFAVerification(false);
     setMfaFactorId(null);
+
+    // WEB-SEC-026. signInWithPassword has already stored an aal1 session by
+    // this point. Closing the dialog used to leave that token in local storage,
+    // where it stays valid against the API for its full lifetime even though
+    // the second factor was never given. Cancelling a sign-in has to end it.
+    await logout();
+
     toast({
       title: "Login Cancelled",
       description: "MFA verification was cancelled. Please try again.",
@@ -497,9 +528,24 @@ export default function Auth() {
         variant: "destructive",
       });
     } else {
-      // Persist the consent record to the append-only audit log so we can
-      // prove affirmative opt-in under CAN-SPAM, TCPA, GDPR Art. 7, CCPA.
-      // Fire and forget — never block signup on logging.
+      // FALLBACK ONLY, AND SCHEDULED FOR REMOVAL (WEB-AUTH-003).
+      //
+      // These rows are now written by the handle_new_user trigger out of
+      // raw_user_meta_data.consent, which Auth.tsx has always sent. The trigger
+      // is the authoritative writer because it runs where a user id exists:
+      // signUp with email confirmation on returns a user and NO session, so
+      // logConsent's auth.getUser() resolves to null here and every row it
+      // writes carries user_id = NULL. That made the one record whose purpose
+      // is to prove consent invisible to export-user-data, which keys on
+      // user_id.
+      //
+      // Kept for one release so a trigger that has not been deployed yet does
+      // not mean no consent record at all. For that release a signup may
+      // produce two rows per consent; metadata.writer says which side wrote
+      // each, and an orphan is adopted on email confirmation. A duplicate in an
+      // append-only consent log proves the same fact twice, which is the safe
+      // direction to be wrong in. REMOVE THIS BLOCK once the migration is
+      // applied and verified.
       void logConsent({
         type: "terms",
         granted: true,
@@ -537,6 +583,7 @@ export default function Auth() {
       if (result.needsVerification) {
         // Show email confirmation screen
         setSignupEmail(formData.email);
+        setAddressAlreadyRegistered(!!result.alreadyRegistered);
         setShowEmailConfirmation(true);
       } else {
         // Signup successful and no verification needed (rare case)
@@ -622,20 +669,60 @@ export default function Auth() {
               </div>
 
               <div className="pt-4 space-y-3">
-                <p className="text-sm text-muted-foreground">
-                  Didn't receive the email?
-                </p>
-                <Button
-                  onClick={handleResendVerification}
-                  variant="outline"
-                  disabled={isLoading}
-                  className="w-full"
-                >
-                  {isLoading ? "Sending..." : "Resend Verification Email"}
-                </Button>
+                {addressAlreadyRegistered ? (
+                  <>
+                    {/* No Resend here, and that is the fix. auth.resend({ type:
+                        'signup' }) errors for an address that is already
+                        confirmed, so this button used to fail on press for
+                        exactly the person who needed it least. The wording
+                        names no account and confirms nothing about this
+                        address; it reads as ordinary help for anyone. */}
+                    <p className="text-sm text-muted-foreground">
+                      Already have an account?
+                    </p>
+                    <Button
+                      onClick={() => {
+                        setShowEmailConfirmation(false);
+                        setAddressAlreadyRegistered(false);
+                        setIsLogin(true);
+                      }}
+                      variant="outline"
+                      className="w-full"
+                    >
+                      Sign in instead
+                    </Button>
+                    <Button
+                      onClick={() => {
+                        setShowEmailConfirmation(false);
+                        setAddressAlreadyRegistered(false);
+                        setIsLogin(true);
+                        setShowForgotPassword(true);
+                      }}
+                      variant="ghost"
+                      className="w-full"
+                    >
+                      Reset your password
+                    </Button>
+                  </>
+                ) : (
+                  <>
+                    <p className="text-sm text-muted-foreground">
+                      Didn't receive the email?
+                    </p>
+                    <Button
+                      onClick={handleResendVerification}
+                      variant="outline"
+                      disabled={isLoading}
+                      className="w-full"
+                    >
+                      {isLoading ? "Sending..." : "Resend Verification Email"}
+                    </Button>
+                  </>
+                )}
                 <Button
                   onClick={() => {
                     setShowEmailConfirmation(false);
+                    setAddressAlreadyRegistered(false);
                     setIsLogin(true);
                   }}
                   variant="ghost"
@@ -703,16 +790,6 @@ export default function Auth() {
                       <AlertCircle className="h-4 w-4" />
                       <AlertDescription>
                         Too many failed attempts. Please try again in {Math.ceil(timeUntilReset / 60)} minute{Math.ceil(timeUntilReset / 60) !== 1 ? 's' : ''}.
-                      </AlertDescription>
-                    </Alert>
-                  )}
-
-                  {/* Remaining attempts warning */}
-                  {!isBlocked && remainingAttempts < 3 && remainingAttempts > 0 && (
-                    <Alert>
-                      <AlertCircle className="h-4 w-4" />
-                      <AlertDescription>
-                        {remainingAttempts} attempt{remainingAttempts !== 1 ? 's' : ''} remaining before temporary lockout.
                       </AlertDescription>
                     </Alert>
                   )}

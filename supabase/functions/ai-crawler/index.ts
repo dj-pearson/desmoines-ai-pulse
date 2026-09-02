@@ -1450,7 +1450,8 @@ async function insertData(
             id: item._assignedId,
             created_at: new Date().toISOString(),
             updated_at: new Date().toISOString(),
-            is_featured: Math.random() > 0.8, // 20% chance of being featured
+            // WEB-BE-040: featured is set by an admin or a campaign, never at ingest.
+            is_featured: false,
           };
 
           switch (category) {
@@ -1476,6 +1477,11 @@ async function insertData(
                 event_start_local: parsedEventDateTime.event_start_local,
                 event_timezone: parsedEventDateTime.event_timezone,
                 event_start_utc: parsedEventDateTime.event_start_utc,
+                // WEB-BE-038: carried from the adapter, same as firecrawl-scraper.
+                // Both write events and both go through tryDomainAdapter, so a
+                // flag set in one path and dropped in the other would make the
+                // ingesting function decide whether a time is trustworthy.
+                time_tbd: (item as { time_tbd?: boolean }).time_tbd === true,
                 location: item.location?.substring(0, 100) || "Des Moines, IA",
                 venue:
                   item.venue?.substring(0, 100) ||
