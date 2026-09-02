@@ -255,3 +255,51 @@ test.describe('Listed events resolve to a detail page (WEB-QA-002)', () => {
     }
   });
 });
+
+test.describe('Sponsored listings render on the restaurants hub (WEB-ADS-001)', () => {
+  // The purchase path writes sponsored_listing_links and activation (the
+  // activate_campaign RPC via the campaigns status trigger) flags the listing
+  // row. This is the render end of that contract: a restaurant row carrying
+  // is_sponsored = true with a future sponsored_until must show the
+  // FTC "Sponsored" label on /restaurants. The rotation RPC is mocked so the
+  // assertion does not depend on a paid campaign existing in the database.
+  test('an active sponsored restaurant carries the Sponsored label', async ({ page }) => {
+    const sponsoredUntil = new Date(Date.now() + 7 * 24 * 60 * 60 * 1000).toISOString();
+    const restaurant = {
+      id: '11111111-1111-4111-8111-111111111111',
+      name: 'Smoke Test Sponsored Bistro',
+      slug: 'smoke-test-sponsored-bistro',
+      cuisine: 'American',
+      city: 'Des Moines',
+      address: '100 Locust St',
+      price_range: '$$',
+      rating: 4.6,
+      review_count: 12,
+      popularity_score: 90,
+      image_url: null,
+      description: 'Fixture row for the sponsored-label smoke test.',
+      is_featured: false,
+      is_sponsored: true,
+      sponsored_until: sponsoredUntil,
+      status: 'open',
+      created_at: '2026-01-01T00:00:00Z',
+    };
+
+    await page.route('**/rest/v1/rpc/get_rotated_restaurants*', (route) =>
+      route.fulfill({
+        status: 200,
+        contentType: 'application/json',
+        body: JSON.stringify([{ restaurant_data: restaurant, total_count: 1 }]),
+      })
+    );
+
+    await page.goto('/restaurants');
+    await expectNoErrorBoundary(page);
+
+    // RestaurantCard prefixes the accessible name with "Sponsored: " and
+    // renders SponsoredBadge (aria-label "Sponsored content") inside the card.
+    const card = page.getByRole('link', { name: /^Sponsored: View Smoke Test Sponsored Bistro/ }).first();
+    await expect(card).toBeVisible({ timeout: 30_000 });
+    await expect(card.getByLabel('Sponsored content')).toBeVisible();
+  });
+});

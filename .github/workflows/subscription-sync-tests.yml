@@ -137,6 +137,11 @@ jobs:
       # directions and asserts every surface short-circuits before the model
       # call, which is the whole design (WEB-LEGAL-005).
       - run: deno test --allow-read supabase/functions/_tests/crisis-support.test.ts
+      # WEB-ADS-001. A sponsored listing is delivered by a flag nothing set for six
+      # months. Pins activate_campaign + the campaigns status trigger as the only
+      # writer, and fails if the lifecycle job or any client starts flagging
+      # listings on its own.
+      - run: deno test --allow-read supabase/functions/_tests/sponsored-listing-activation.test.ts
       # The trial-conversion notice must state amount, date and cancel path,
       # and must not be gated on marketing consent or an LLM score
       # (WEB-LEGAL-006).

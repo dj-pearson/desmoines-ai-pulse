@@ -262,12 +262,17 @@ export function useAdminCampaigns() {
         // the advertiser-facing success toast and left the campaign stuck in
         // pending_creative with every creative approved.
         if (startDate && startDate <= today) {
-          // Start date is today or in the past → activate immediately
-          const { error: activateError } = await supabase
-            .from("campaigns")
-            .update({ status: "active" })
-            .eq("id", campaignId)
-            .in("status", ["pending_creative", "pending_review"]);
+          // Start date is today or in the past -> activate now.
+          //
+          // WEB-ADS-001: activation is one server function, shared with the
+          // lifecycle job. It flips the status AND flags the linked listings
+          // (events/restaurants.is_sponsored + sponsored_until) through the
+          // campaigns status trigger. A direct status update here used to
+          // leave a paid sponsored listing unflagged forever, because nothing
+          // else ever wrote the flag.
+          const { error: activateError } = await supabase.rpc("activate_campaign", {
+            p_campaign_id: campaignId,
+          });
 
           if (activateError) throw activateError;
 

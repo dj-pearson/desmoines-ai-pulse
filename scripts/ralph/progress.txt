@@ -1,3 +1,31 @@
 # Ralph Progress Log
 Started: 2026-08-31T19:18:09.615Z
 ---
+## 2026-09-02 - WEB-ADS-001 (sponsored listing never went live)
+- Added migration 20260902000001_activate_campaign_sponsored_listings.sql:
+  activate_campaign(uuid) SECURITY DEFINER (admin or no-JWT only, anon revoked),
+  sync_campaign_sponsorship(uuid) + trigger trg_campaign_status_sponsorship on
+  campaigns.status (active flags linked events/restaurants, completed/cancelled/
+  refunded clears them unless another active campaign holds the listing),
+  process_campaign_lifecycle rewritten to call activate_campaign with all status
+  comparisons cast to ::text, and a backfill DO block that RAISEs its count.
+- useAdminCampaigns.approveCreative immediate-start branch now calls the RPC.
+- types.ts: hand-added Functions.activate_campaign (types are not regenerated here).
+- Deno invariant test _tests/sponsored-listing-activation.test.ts (8/8) wired
+  into subscription-sync-tests.yml; smoke test appended to route-smoke.spec.ts.
+- prd.json: WEB-ADS-001 passes=true, XPLAT-005 notes refined.
+- **Learnings for future iterations:**
+  - campaign_status has no pending_review label (WEB-ADS-004). Any plpgsql that
+    compares status against that literal raises 22P02 at runtime, even though
+    CREATE FUNCTION succeeds. Compare status::text until the enum is extended.
+  - ALTER TYPE ... ADD VALUE and a statement that USES the new value cannot share
+    a transaction, and each migration file is one transaction. Put the enum
+    change in its own file ahead of anything that selects on it.
+  - Deno invariant tests need --allow-read; CI lists each test file explicitly
+    in subscription-sync-tests.yml, so a new test must be added there or it
+    never runs. `npm i -g deno@2.9.6` works in this container.
+  - Smoke lane (playwright.smoke.config.ts) only runs files matching
+    route-smoke|cookie-consent, so new smoke tests go into route-smoke.spec.ts.
+  - No Supabase credentials in this container: migrations cannot be applied or
+    probed. Record expected outcomes and leave the owner a one-line action.
+---

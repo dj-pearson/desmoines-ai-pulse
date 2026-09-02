@@ -12926,6 +12926,10 @@ export type Database = {
       }
     }
     Functions: {
+      activate_campaign: {
+        Args: { p_campaign_id: string }
+        Returns: Json
+      }
       _postgis_deprecate: {
         Args: { newname: string; oldname: string; version: string }
         Returns: undefined
