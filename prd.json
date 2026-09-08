@@ -9053,6 +9053,21 @@
       "priority": 3,
       "passes": false,
       "notes": "Filed 2026-09-08 from the visitor-value audit on claude/des-moines-improvements-qse218. Evidence is from the working tree; production was not probed (no Supabase credentials in the container). These are visitor-facing capability gaps, distinct from the ingestion/scheduler stories (WEB-OPS-007, WEB-BE-045/051/054/055) that block the data behind them."
+    },
+    {
+      "id": "WEB-FEAT-030",
+      "title": "Friend requests could never be sent, and half of all friendships were invisible to the people in them",
+      "description": "As a signed-in user, I need adding a friend to work, because useCommunityFeatures.sendFriendRequest failed on every call for two independent reasons and fetchFriends then hid half the friendships that did exist. (1) The insert named `requested_by`, which is not a column: migration 20250816041658 declared it, but as CREATE TABLE IF NOT EXISTS against a table 20250802043023 had already created, so the migration was a no-op and the column never existed - the classic WEB-QA-017 ledger drift. Confirmed absent in scripts/db-snapshot.json and in types.ts; reproduced as 42703. (2) It inserted a reciprocal PAIR whose second row set user_id to the other person, which the INSERT policy forbids (WITH CHECK auth.uid() = user_id), so fixing the column alone still failed with 'new row violates row-level security policy'. (3) fetchFriends filtered on user_id alone, but a friendship is one row owned by whoever sent the request, so anyone who ACCEPTED a request never saw that friend; EnhancedGroupPlanner reads this list and told them 'No friends to invite. Add some friends first!'",
+      "acceptanceCriteria": [
+        "sendFriendRequest writes ONE row, owned by the requester, with no requested_by",
+        "fetchFriends reads both directions and still restricts to accepted",
+        "The Friend type stops declaring requested_by, and narrows status to the values the table's CHECK constraint allows",
+        "The duplicate check uses maybeSingle, since zero rows is the normal case and single raises PGRST116",
+        "Regression tests assert the payload SHAPE, since under a mock the outcome is always success"
+      ],
+      "priority": 1,
+      "passes": true,
+      "notes": "Filed and fixed 2026-09-08 on claude/des-moines-improvements-qse218, found while wiring WEB-FEAT-028. Each defect was reproduced against a scratch Postgres 16 carrying the real table and the real policies from migration 20250802043023, not reasoned about.\n\nDONE. Verified on the scratch database: the requested_by insert raises 42703; the reciprocal pair raises 'new row violates row-level security policy' even with the column removed; and the corrected single-row flow inserts, is visible to the recipient, and is acceptable by them - because the SELECT and UPDATE policies both match on friend_id as well. The same run showed the one-direction read returning 0 rows for the recipient of an accepted request where a both-direction read returns 1.\n\n7 regression tests, mutation-tested: reintroducing the original defects fails exactly the four tests that target them and leaves the other three passing. 503 tests pass overall.\n\nRLS was checked and is healthy - SELECT, INSERT, UPDATE and DELETE policies all exist from 20250802043023 - so no migration was needed. The one skipped policy in 20250816041658 (guarded by EXCEPTION WHEN undefined_column) was the duplicate INSERT policy referencing requested_by, and nothing is lost by its absence."
     }
   ]
 }
