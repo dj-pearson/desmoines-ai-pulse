@@ -6,6 +6,11 @@ project_id = "wtkhfqpmcegzcbngroui"
 [functions.version-check]
 verify_jwt = false
 
+# WEB-FEAT-022: public read-only NWS proxy for the fixed Des Moines coordinate.
+# No user input reaches the upstream URL and no secrets are read.
+[functions.weather]
+verify_jwt = false
+
 # Sponsored picks for AI discovery flows (IOS-ADS-015). Public sponsored content,
 # so JWT is optional — tier is resolved opportunistically from the bearer token
 # when present (premium users get no ads); anonymous/free callers are eligible.
