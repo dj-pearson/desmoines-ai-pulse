@@ -10,7 +10,8 @@
  * produce a banner apologising for itself at the top of the page.
  */
 import { CloudRain, Snowflake, Sun, Thermometer } from 'lucide-react';
-import type { WeatherSnapshot } from '@/hooks/useWeather';
+import { Link } from 'react-router-dom';
+import { useWeather, type WeatherSnapshot } from '@/hooks/useWeather';
 
 interface WeatherNoticeProps {
   weather: WeatherSnapshot;
@@ -57,3 +58,36 @@ export function WeatherNotice({ weather, hasVerdict, className }: WeatherNoticeP
 }
 
 export default WeatherNotice;
+
+/**
+ * The homepage variant.
+ *
+ * It states conditions and links to the ranked lists. It deliberately does NOT
+ * use `reason`, because `reason` says picks were reordered and the homepage
+ * does not reorder anything - it renders personalized rails, and re-sorting
+ * those by weather would fight the personalization that built them.
+ */
+export function HomeWeatherNotice() {
+  const { weather, hasVerdict } = useWeather();
+  if (!hasVerdict) return null;
+
+  const Icon = noticeIcon(weather);
+
+  return (
+    <div className="flex flex-wrap items-center gap-x-3 gap-y-1 rounded-xl bg-muted px-4 py-3">
+      <Icon className="h-5 w-5 shrink-0 text-muted-foreground" aria-hidden="true" />
+      <p className="text-sm text-muted-foreground">
+        <span className="font-medium text-foreground">{weather.conditions}</span> in Des Moines
+        right now.
+      </p>
+      {/* One destination either way: /events/today is already ranked for the
+          current conditions, so the link text changes and the target does not. */}
+      <Link
+        to="/events/today"
+        className="text-sm font-medium text-foreground underline underline-offset-4"
+      >
+        {weather.outdoorFriendly ? 'See what is on outside today' : 'See indoor picks for today'}
+      </Link>
+    </div>
+  );
+}

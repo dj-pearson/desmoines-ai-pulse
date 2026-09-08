@@ -29,6 +29,9 @@ import { Breadcrumbs } from "@/components/ui/breadcrumbs";
 import { EVENT_LIST_COLUMNS } from "@/lib/listColumns";
 import { formatCount } from "@/lib/pluralize";
 import { SpriteIcon } from "@/components/ui/SpriteIcon";
+import { useWeather, reorderForWeather } from "@/hooks/useWeather";
+import { useEventIndoorFlags } from "@/hooks/useEventIndoorFlags";
+import { WeatherNotice } from "@/components/WeatherNotice";
 
 /**
  * WEB-PERF-023. The grid rendered every event in the weekend window and this
@@ -86,8 +89,9 @@ export default function EventsThisWeekend() {
 
   const weekendEvents = events || [];
 
-  // Filter events based on selected filters
-  const filteredEvents = weekendEvents.filter((event) => {
+  // Filter events based on selected filters. Memoized because orderedEvents
+  // below derives from it and feeds a memo of its own.
+  const filteredEvents = useMemo(() => weekendEvents.filter((event) => {
     const categoryMatch =
       selectedCategory === "all" ||
       event.category?.toLowerCase().includes(selectedCategory.toLowerCase()) ||
@@ -99,7 +103,29 @@ export default function EventsThisWeekend() {
       event.venue?.toLowerCase().includes(selectedLocation.toLowerCase());
 
     return categoryMatch && locationMatch;
-  });
+  }), [events, selectedCategory, selectedLocation]);  // `events`, not weekendEvents: `events || []` reallocates when nullish
+
+  const { weather, hasVerdict } = useWeather();
+  // Separate request on purpose - see the header of useEventIndoorFlags.
+  const indoorFlags = useEventIndoorFlags(
+    filteredEvents.map((event) => event.id),
+    hasVerdict,
+  );
+
+  /**
+   * Weather-aware ordering, applied BEFORE the VISIBLE_EVENTS cap so that on a
+   * wet weekend the indoor options are the ones inside the visible 36 rather
+   * than ranked below the cut. Nothing is filtered: the ordering changes which
+   * events surface first, and every event stays reachable through /events and
+   * its own detail page, exactly as the cap comment above describes.
+   */
+  // Memoized: orderedEvents feeds the batchSocialIds memo below, and a fresh
+  // array every render would invalidate it on every render - which is the
+  // per-card query storm WEB-PERF-030 removed.
+  const orderedEvents = useMemo(
+    () => reorderForWeather(filteredEvents, (event) => indoorFlags[event.id], weather),
+    [filteredEvents, indoorFlags, weather],
+  );
 
   // Get unique categories and locations for filters
   const categories = [
@@ -158,7 +184,11 @@ export default function EventsThisWeekend() {
   // filteredEvents.length of them, so one anonymous visit could issue hundreds of
   // requests and sockets for a preview nobody can interact with. One batch
   // query per table replaces all of it.
-  const batchSocialIds = useMemo(() => (filteredEvents.slice(0, VISIBLE_EVENTS) ?? []).map((e) => e.id), [filteredEvents]);
+  // Keyed on orderedEvents, not filteredEvents: the weather reorder changes
+  // WHICH events land inside the visible cap, and batching the wrong ids would
+  // put every rendered card back on the per-card fallback this exists to kill.
+  // The cost is one extra batch query on the load where the forecast resolves.
+  const batchSocialIds = useMemo(() => (orderedEvents.slice(0, VISIBLE_EVENTS) ?? []).map((e) => e.id), [orderedEvents]);
   const { data: batchSocialData, isPending: batchSocialPending } =
     useBatchEventSocial(batchSocialIds);
 
@@ -190,7 +220,7 @@ export default function EventsThisWeekend() {
           VISIBLE_EVENTS and EventListJsonLd defaults maxItems to 50, so the
           full list here would advertise events a reader cannot see. */}
       <EventListJsonLd
-        events={filteredEvents.slice(0, VISIBLE_EVENTS)}
+        events={orderedEvents.slice(0, VISIBLE_EVENTS)}
         maxItems={VISIBLE_EVENTS}
         listName="Des Moines Weekend Events"
         listDescription={pageDescription}
@@ -393,10 +423,11 @@ export default function EventsThisWeekend() {
               </Card>
             ))}
           </div>
-        ) : filteredEvents.length > 0 ? (
+        ) : orderedEvents.length > 0 ? (
           <>
+            <WeatherNotice weather={weather} hasVerdict={hasVerdict} className="mb-6" />
             <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6 mb-8">
-              {filteredEvents.slice(0, VISIBLE_EVENTS).map((event) => (
+              {orderedEvents.slice(0, VISIBLE_EVENTS).map((event) => (
                 <SocialEventCard
                   key={event.id}
                   event={event}
@@ -407,10 +438,10 @@ export default function EventsThisWeekend() {
               ))}
             </div>
 
-            {filteredEvents.length > VISIBLE_EVENTS && (
+            {orderedEvents.length > VISIBLE_EVENTS && (
               <div className="mb-8 text-center">
                 <p className="text-muted-foreground mb-3">
-                  Showing {VISIBLE_EVENTS} of {formatCount(filteredEvents.length, 'event')} this weekend.
+                  Showing {VISIBLE_EVENTS} of {formatCount(orderedEvents.length, 'event')} this weekend.
                 </p>
                 <Button asChild variant="outline">
                   <Link to="/events">Browse all events</Link>

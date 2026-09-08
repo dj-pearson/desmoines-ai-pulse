@@ -52,6 +52,17 @@ export interface WeatherReading {
 export interface OutdoorAssessment {
   outdoorFriendly: boolean | null;
   /**
+   * A short phrase describing conditions, with NO claim about ranking -
+   * "72F and sunny", "80% chance of rain showers likely".
+   *
+   * `reason` asserts that a list was reordered, which is false on any surface
+   * that only displays the weather (the homepage renders personalized rails and
+   * deliberately does not reorder them). A surface that does not rank needs the
+   * facts without the consequence clause, and deriving it by string-trimming
+   * `reason` on each client would be worse than publishing it.
+   */
+  conditions: string;
+  /**
    * One short sentence, shown to the user. The acceptance criteria require the
    * adjustment to be visible and explained rather than a silent reshuffle, so
    * this string is part of the contract, not a debug field.
@@ -161,9 +172,16 @@ export function effectiveTemperature(reading: WeatherReading): number | null {
 }
 
 function describeTemperature(tempF: number): string {
-  if (tempF < MIN_COMFORTABLE_F) return `It feels like ${Math.round(tempF)}F out there`;
-  return `It feels like ${Math.round(tempF)}F out there`;
+  return `it feels like ${Math.round(tempF)}F out there`;
 }
+
+/** Sentence-case a conditions phrase for use at the start of a sentence. */
+function capitalize(text: string): string {
+  return text.length === 0 ? text : text[0].toUpperCase() + text.slice(1);
+}
+
+const INDOOR_CLAUSE = "so indoor picks are first";
+const OUTDOOR_CLAUSE = "so outdoor picks are first";
 
 /**
  * Decide whether to favour indoor picks.
@@ -176,54 +194,50 @@ export function assessOutdoorConditions(reading: WeatherReading): OutdoorAssessm
   const tempF = effectiveTemperature(reading);
   const precip = reading.precipitationProbabilityPct;
   const hasPrecip = typeof precip === "number" && Number.isFinite(precip);
+  const forecast = reading.shortForecast?.trim();
 
   // Nothing usable. Unknown, not unfavourable - the caller must fall through to
   // the normal list.
   if (!hasPrecip && tempF === null) {
     return {
       outdoorFriendly: null,
+      conditions: "Weather is unavailable right now",
       reason: "Weather is unavailable right now.",
       effectiveTemperatureF: null,
     };
   }
 
+  // `reason` is always `conditions` plus the consequence clause, built in one
+  // place so the two can never describe different weather.
+  const verdict = (
+    outdoorFriendly: boolean,
+    conditions: string,
+  ): OutdoorAssessment => ({
+    outdoorFriendly,
+    conditions: capitalize(conditions),
+    reason: `${capitalize(conditions)}, ${outdoorFriendly ? OUTDOOR_CLAUSE : INDOOR_CLAUSE}.`,
+    effectiveTemperatureF: tempF,
+  });
+
   if (hasPrecip && (precip as number) >= WET_PROBABILITY_PCT) {
-    const forecast = reading.shortForecast?.trim();
-    const detail = forecast ? `${forecast.toLowerCase()}` : "wet weather";
-    return {
-      outdoorFriendly: false,
-      reason: `There is a ${Math.round(precip as number)}% chance of precipitation (${detail}), so indoor picks are first.`,
-      effectiveTemperatureF: tempF,
-    };
+    const detail = forecast ? forecast.toLowerCase() : "wet weather";
+    return verdict(
+      false,
+      `there is a ${Math.round(precip as number)}% chance of precipitation (${detail})`,
+    );
   }
 
-  if (tempF !== null && tempF < MIN_COMFORTABLE_F) {
-    return {
-      outdoorFriendly: false,
-      reason: `${describeTemperature(tempF)}, so indoor picks are first.`,
-      effectiveTemperatureF: tempF,
-    };
-  }
-
-  if (tempF !== null && tempF > MAX_COMFORTABLE_F) {
-    return {
-      outdoorFriendly: false,
-      reason: `${describeTemperature(tempF)}, so indoor picks are first.`,
-      effectiveTemperatureF: tempF,
-    };
+  if (tempF !== null && (tempF < MIN_COMFORTABLE_F || tempF > MAX_COMFORTABLE_F)) {
+    return verdict(false, describeTemperature(tempF));
   }
 
   // Comfortable on every axis we can measure. If temperature is missing but
   // precipitation is low, that is still enough to favour outdoors.
-  const forecast = reading.shortForecast?.trim();
   const label = forecast ? forecast.toLowerCase() : "clear conditions";
-  return {
-    outdoorFriendly: true,
-    reason: tempF === null
-      ? `Low chance of rain (${label}), so outdoor picks are first.`
-      : `${Math.round(tempF)}F and ${label}, so outdoor picks are first.`,
-    effectiveTemperatureF: tempF,
-  };
+  return verdict(
+    true,
+    tempF === null ? `low chance of rain (${label})` : `${Math.round(tempF)}F and ${label}`,
+  );
 }
 
 /**

@@ -228,3 +228,54 @@ Deno.test("preferring indoor inverts the ranking", () => {
   const out = reorderByOutdoorPreference(items, (i) => i.outdoor, false).map((i) => i.id);
   assert(out[0] === "indoor", `expected indoor first, got ${out.join(",")}`);
 });
+
+Deno.test("conditions never claims a list was reordered", () => {
+  const readings = [
+    {},
+    { precipitationProbabilityPct: 90, shortForecast: "Rain Showers Likely" },
+    { feelsLikeF: -5, precipitationProbabilityPct: 0 },
+    { feelsLikeF: 101, precipitationProbabilityPct: 0 },
+    { feelsLikeF: 70, precipitationProbabilityPct: 0, shortForecast: "Sunny" },
+    { precipitationProbabilityPct: 5 },
+  ];
+  for (const reading of readings) {
+    const { conditions } = assessOutdoorConditions(reading);
+    assert(conditions.trim().length > 0, `empty conditions for ${JSON.stringify(reading)}`);
+    assert(
+      !/picks are first/.test(conditions),
+      `conditions leaked the ranking clause: ${conditions}`,
+    );
+  }
+});
+
+Deno.test("reason is conditions plus the consequence clause", () => {
+  const wet = assessOutdoorConditions({
+    precipitationProbabilityPct: 80,
+    shortForecast: "Rain Showers Likely",
+  });
+  assert(
+    wet.reason.startsWith(wet.conditions),
+    `reason should extend conditions: ${wet.conditions} / ${wet.reason}`,
+  );
+  assert(wet.reason.endsWith("so indoor picks are first."), wet.reason);
+
+  const fine = assessOutdoorConditions({
+    temperatureF: 72,
+    precipitationProbabilityPct: 0,
+    shortForecast: "Sunny",
+  });
+  assert(fine.reason.startsWith(fine.conditions), fine.reason);
+  assert(fine.reason.endsWith("so outdoor picks are first."), fine.reason);
+});
+
+Deno.test("conditions reads as a sentence opener", () => {
+  const fine = assessOutdoorConditions({
+    temperatureF: 72,
+    precipitationProbabilityPct: 0,
+    shortForecast: "Sunny",
+  });
+  assert(fine.conditions === "72F and sunny", fine.conditions);
+
+  const cold = assessOutdoorConditions({ feelsLikeF: 5, precipitationProbabilityPct: 0 });
+  assert(cold.conditions === "It feels like 5F out there", cold.conditions);
+});

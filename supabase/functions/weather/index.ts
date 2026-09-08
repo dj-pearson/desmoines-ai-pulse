@@ -39,6 +39,7 @@
  *     shortForecast: string | null,
  *     isDaytime: boolean | null,
  *     outdoorFriendly: boolean | null, // null = unknown, NOT false
+ *     conditions: string,              // facts only, no ranking claim
  *     reason: string,                  // one sentence, shown to the user
  *     effectiveTemperatureF: number | null,
  *   }
@@ -97,6 +98,8 @@ interface WeatherPayload extends WeatherReading {
   available: boolean;
   observedAt: string | null;
   outdoorFriendly: boolean | null;
+  /** Facts only, no ranking claim - for surfaces that display but do not sort. */
+  conditions: string;
   reason: string;
   effectiveTemperatureF: number | null;
 }
@@ -110,6 +113,7 @@ const UNAVAILABLE: WeatherPayload = {
   shortForecast: null,
   isDaytime: null,
   outdoorFriendly: null,
+  conditions: "Weather is unavailable right now",
   reason: "Weather is unavailable right now.",
   effectiveTemperatureF: null,
 };
@@ -223,6 +227,7 @@ async function loadWeather(): Promise<WeatherPayload> {
     observedAt: typeof current.startTime === "string" ? current.startTime : null,
     ...reading,
     outdoorFriendly: assessment.outdoorFriendly,
+    conditions: assessment.conditions,
     reason: assessment.reason,
     effectiveTemperatureF: assessment.effectiveTemperatureF,
   };

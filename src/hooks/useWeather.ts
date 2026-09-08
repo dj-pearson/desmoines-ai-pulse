@@ -29,6 +29,11 @@ export interface WeatherSnapshot {
    * reorder" rather than as false.
    */
   outdoorFriendly: boolean | null;
+  /**
+   * Conditions with NO claim that anything was reordered. Use this on a surface
+   * that only displays the weather; `reason` asserts a ranking happened.
+   */
+  conditions: string;
   /** One sentence, written for the user. Safe to render directly. */
   reason: string;
   effectiveTemperatureF: number | null;
@@ -43,6 +48,7 @@ export const WEATHER_UNAVAILABLE: WeatherSnapshot = {
   shortForecast: null,
   isDaytime: null,
   outdoorFriendly: null,
+  conditions: 'Weather is unavailable right now',
   reason: 'Weather is unavailable right now.',
   effectiveTemperatureF: null,
 };
@@ -75,6 +81,7 @@ async function fetchWeather(): Promise<WeatherSnapshot> {
     ...snapshot,
     available: true,
     reason: snapshot.reason ?? WEATHER_UNAVAILABLE.reason,
+    conditions: snapshot.conditions ?? WEATHER_UNAVAILABLE.conditions,
   };
 }
 

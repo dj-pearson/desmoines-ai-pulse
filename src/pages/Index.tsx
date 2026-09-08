@@ -27,6 +27,7 @@ import SearchSection from "@/components/SearchSection";
 import { NLPSearchBar } from "@/components/NLPSearchBar";
 import { EnhancedHero } from "@/components/EnhancedHero";
 import { ForYouRail } from "@/components/ForYouRail";
+import { HomeWeatherNotice } from "@/components/WeatherNotice";
 import { useUserPreferences } from "@/hooks/useUserPreferences";
 import { useHomepageStats } from "@/hooks/useHomepageStats";
 import { BackToTop } from "@/components/BackToTop";
@@ -484,6 +485,15 @@ export default function Index() {
           Prefer to filter by category, date, and price?
         </div>
         <SearchSection onSearch={handleSearch} />
+
+        {/* Current conditions (WEB-FEAT-022). Informational only here: the
+            homepage renders personalized rails rather than one flat list, and
+            reordering a personalized rail by weather would fight the
+            personalization that produced it. The ranking lives on
+            /events/today and /events/this-weekend, which this links to. */}
+        <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8">
+          <HomeWeatherNotice />
+        </div>
 
         {/* For You / Trending rail — IOS-DISCOVER-2026-002 web parity */}
         <ForYouRail />
