@@ -1,22 +1,45 @@
-import { useState, useEffect } from "react";
-import { useAuth } from "./useAuth";
+/**
+ * Friends, backed by the `user_friends` table (WEB-FEAT-028).
+ *
+ * WHAT THIS USED TO BE. Every function returned fabricated success behind the
+ * comment "Mock functions since tables don't exist yet". `sendFriendRequest`
+ * returned true without writing anything; `submitEventReview`, `submitEventTip`
+ * and `submitEventPhoto` each returned an object with `id: '1'`, so a caller
+ * would have rendered a saved-looking review that existed nowhere. Meanwhile
+ * `user_friends` has existed in production the whole time, and
+ * `useCommunityFeatures` was already reading and writing it - two friend
+ * implementations, one real and one fake, and the fake one owned /social.
+ *
+ * WHAT IT IS NOW. Only what is actually consumed, and only what a table can
+ * back. Social.tsx uses `friends`, `friendGroups` and `sendFriendRequest`;
+ * Profile.tsx uses `friends` and `friendGroups`. Everything else in the old
+ * file had zero call sites and has been deleted rather than left returning
+ * plausible lies.
+ *
+ * FRIEND GROUPS ARE STILL NOT BACKED. There is no user_groups or equivalent in
+ * production (checked against scripts/db-snapshot.json). `friendGroups` is
+ * therefore always empty and `groupsAvailable` is false, so the UI can say so
+ * instead of rendering an empty list that looks like "you have no groups".
+ * Building that table is a product decision (WEB-QA-018), not a guess to make
+ * here.
+ */
+import { useState, useEffect, useCallback } from 'react';
+import { supabase } from '@/integrations/supabase/client';
+import { useAuth } from './useAuth';
 import { createLogger } from '@/lib/logger';
 
 const logger = createLogger('useSocialFeatures');
 
-interface Friend {
+export interface Friend {
   id: string;
+  user_id: string;
   friend_id: string;
   status: string;
   created_at: string;
-  friend_profile?: {
-    first_name?: string;
-    last_name?: string;
-    email?: string;
-  };
+  accepted_at?: string | null;
 }
 
-interface FriendGroup {
+export interface FriendGroup {
   id: string;
   name: string;
   description?: string;
@@ -26,243 +49,165 @@ interface FriendGroup {
   member_count?: number;
 }
 
-interface EventAttendance {
-  id: string;
-  event_id: string;
-  user_id: string;
-  status: 'interested' | 'going' | 'maybe' | 'not_going';
-  created_at: string;
-}
-
-interface UserGeneratedContent {
-  tips: Array<{
-    id: string;
-    tip_text: string;
-    tip_category: string;
-    helpful_votes: number;
-    created_at: string;
-    user_profile?: { first_name?: string; last_name?: string; };
-  }>;
-  reviews: Array<{
-    id: string;
-    review_text: string;
-    rating: number;
-    attended: boolean;
-    helpful_votes: number;
-    created_at: string;
-    user_profile?: { first_name?: string; last_name?: string; };
-  }>;
-  photos: Array<{
-    id: string;
-    photo_url: string;
-    caption?: string;
-    helpful_votes: number;
-    created_at: string;
-    user_profile?: { first_name?: string; last_name?: string; };
-  }>;
-}
+export type FriendRequestOutcome =
+  | 'sent'
+  | 'already_connected'
+  | 'not_found'
+  | 'self'
+  | 'error';
 
 export function useSocialFeatures() {
   const { user } = useAuth();
   const [friends, setFriends] = useState<Friend[]>([]);
-  const [friendGroups, setFriendGroups] = useState<FriendGroup[]>([]);
-  // No `loading` state: every operation below is synchronous mock work (the
-  // backing tables do not exist — WEB-QA-018), so the flag was never set to
-  // anything but false. It used to be `const [_loading, setLoading]`, renamed
-  // by an unused-var autofix, while the return object below still referenced a
-  // bare `loading` — a ReferenceError that took /social down entirely. Restore
-  // real state here when the queries become real.
-  const loading = false;
+  const [pendingRequests, setPendingRequests] = useState<Friend[]>([]);
+  const [loading, setLoading] = useState(false);
 
-  // Mock functions since tables don't exist yet
-  const fetchFriends = async () => {
-    if (!user) return;
-    setFriends([]);
-  };
-
-  const fetchFriendGroups = async () => {
-    if (!user) return;
-    setFriendGroups([]);
-  };
-
-  const sendFriendRequest = async (friendId: string) => {
-    if (!user) return false;
-    logger.debug('sendFriendRequest', 'Friend request would be sent', { friendId });
-    await fetchFriends();
-    return true;
-  };
-
-  const respondToFriendRequest = async (requestId: string, response: 'accept' | 'decline') => {
-    logger.debug('respondToFriendRequest', 'Friend request response', { requestId, response });
-    await fetchFriends();
-    return true;
-  };
-
-  const createFriendGroup = async (groupData: { name: string; description?: string; is_public: boolean }) => {
-    if (!user) return null;
-    logger.debug('createFriendGroup', 'Friend group would be created', { groupData });
-    await fetchFriendGroups();
-    return { id: '1', ...groupData, created_by: user.id, created_at: new Date().toISOString() };
-  };
-
-  const joinFriendGroup = async (groupId: string) => {
-    if (!user) return false;
-    logger.debug('joinFriendGroup', 'Joining friend group', { groupId });
-    return true;
-  };
-
-  const leaveFriendGroup = async (groupId: string) => {
-    if (!user) return false;
-    logger.debug('leaveFriendGroup', 'Leaving friend group', { groupId });
-    return true;
-  };
-
-  const getEventAttendance = async (eventId: string) => {
-    logger.debug('getEventAttendance', 'Getting attendance for event', { eventId });
-    return {
-      going: 0,
-      interested: 0,
-      maybe: 0,
-      total: 0
-    };
-  };
-
-  const updateEventAttendance = async (eventId: string, status: 'interested' | 'going' | 'maybe' | 'not_going') => {
-    if (!user) return false;
-    logger.debug('updateEventAttendance', 'Updating attendance', { eventId, status });
-    return true;
-  };
-
-  const getEventUGC = async (eventId: string): Promise<UserGeneratedContent> => {
-    logger.debug('getEventUGC', 'Getting UGC for event', { eventId });
-    return {
-      tips: [],
-      reviews: [],
-      photos: []
-    };
-  };
-
-  const submitEventReview = async (eventId: string, reviewData: {
-    review_text: string;
-    rating: number;
-    attended: boolean;
-  }) => {
-    if (!user) return null;
-    logger.debug('submitEventReview', 'Submitting review', { eventId, reviewData });
-    return { id: '1', ...reviewData, event_id: eventId, user_id: user.id, created_at: new Date().toISOString() };
-  };
-
-  const submitEventTip = async (eventId: string, tipData: {
-    tip_text: string;
-    tip_category: string;
-  }) => {
-    if (!user) return null;
-    logger.debug('submitEventTip', 'Submitting tip', { eventId, tipData });
-    return { id: '1', ...tipData, event_id: eventId, user_id: user.id, created_at: new Date().toISOString() };
-  };
-
-  const submitEventPhoto = async (eventId: string, photoData: {
-    photo_url: string;
-    caption?: string;
-  }) => {
-    if (!user) return null;
-    logger.debug('submitEventPhoto', 'Submitting photo', { eventId, photoData });
-    return { id: '1', ...photoData, event_id: eventId, user_id: user.id, created_at: new Date().toISOString() };
-  };
-
-  const voteOnContent = async (contentType: 'review' | 'tip' | 'photo', contentId: string, isHelpful: boolean) => {
-    if (!user) return false;
-    logger.debug('voteOnContent', 'Voting on content', { contentType, contentId, isHelpful });
-    return true;
-  };
-
-  const getFriendsNearEvent = async (latitude: number, longitude: number, radiusKm: number = 25) => {
-    logger.debug('getFriendsNearEvent', 'Getting friends near event', { latitude, longitude, radiusKm });
-    return [];
-  };
-
-  const searchUsers = async (query: string) => {
-    logger.debug('searchUsers', 'Searching users', { query });
-    return [];
-  };
-
-  const getUserSocialStats = async (userId: string) => {
-    logger.debug('getUserSocialStats', 'Getting social stats for user', { userId });
-    return {
-      friendsCount: 0,
-      groupsCount: 0,
-      eventsAttended: 0,
-      reviewsCount: 0,
-      tipsCount: 0,
-      photosCount: 0
-    };
-  };
-
-  const blockUser = async (userId: string) => {
-    if (!user) return false;
-    logger.debug('blockUser', 'Blocking user', { userId });
-    return true;
-  };
-
-  const unblockUser = async (userId: string) => {
-    if (!user) return false;
-    logger.debug('unblockUser', 'Unblocking user', { userId });
-    return true;
-  };
-
-  const reportContent = async (contentType: 'review' | 'tip' | 'photo', contentId: string, reason: string) => {
-    if (!user) return false;
-    logger.debug('reportContent', 'Reporting content', { contentType, contentId, reason });
-    return true;
-  };
-
-  useEffect(() => {
-    if (user) {
-      fetchFriends();
-      fetchFriendGroups();
+  const fetchFriends = useCallback(async () => {
+    if (!user) {
+      setFriends([]);
+      setPendingRequests([]);
+      return;
     }
-    // eslint-disable-next-line react-hooks/exhaustive-deps
+
+    setLoading(true);
+    try {
+      // Both directions: a row is written once, by whoever asked, so the other
+      // party's connection is the row where they are the friend_id.
+      const { data, error } = await supabase
+        .from('user_friends')
+        .select('*')
+        .or(`user_id.eq.${user.id},friend_id.eq.${user.id}`);
+
+      if (error) {
+        logger.error('fetchFriends', 'Failed to fetch friends', { error });
+        setFriends([]);
+        setPendingRequests([]);
+        return;
+      }
+
+      const rows = (data ?? []) as Friend[];
+      setFriends(rows.filter((row) => row.status === 'accepted'));
+      // Only requests addressed TO this user are actionable by them.
+      setPendingRequests(
+        rows.filter((row) => row.status === 'pending' && row.friend_id === user.id),
+      );
+    } catch (error) {
+      logger.error('fetchFriends', 'Failed to fetch friends', { error });
+      setFriends([]);
+      setPendingRequests([]);
+    } finally {
+      setLoading(false);
+    }
   }, [user]);
 
+  /**
+   * Send a friend request by email address.
+   *
+   * Returns a discriminated outcome rather than a boolean, because the caller
+   * needs to tell "no such user" from "already connected" from "failed" - the
+   * old version returned true for all three.
+   */
+  const sendFriendRequest = useCallback(
+    async (friendEmail: string): Promise<FriendRequestOutcome> => {
+      if (!user) return 'error';
+
+      try {
+        const { data: profile, error: profileError } = await supabase
+          .from('profiles')
+          .select('user_id')
+          .eq('email', friendEmail.trim().toLowerCase())
+          .maybeSingle();
+
+        if (profileError) {
+          logger.error('sendFriendRequest', 'Profile lookup failed', { error: profileError });
+          return 'error';
+        }
+        if (!profile?.user_id) return 'not_found';
+        if (profile.user_id === user.id) return 'self';
+
+        const { data: existing, error: existingError } = await supabase
+          .from('user_friends')
+          .select('id')
+          .or(
+            `and(user_id.eq.${user.id},friend_id.eq.${profile.user_id}),` +
+              `and(user_id.eq.${profile.user_id},friend_id.eq.${user.id})`,
+          )
+          .maybeSingle();
+
+        if (existingError) {
+          logger.error('sendFriendRequest', 'Duplicate check failed', { error: existingError });
+          return 'error';
+        }
+        if (existing) return 'already_connected';
+
+        // Only the columns user_friends actually has. It has no `requested_by`;
+        // the requester is `user_id`, since the row is written by whoever asks.
+        const { error } = await supabase.from('user_friends').insert([
+          {
+            user_id: user.id,
+            friend_id: profile.user_id,
+            status: 'pending',
+          },
+        ]);
+
+        if (error) {
+          logger.error('sendFriendRequest', 'Insert failed', { error });
+          return 'error';
+        }
+
+        await fetchFriends();
+        return 'sent';
+      } catch (error) {
+        logger.error('sendFriendRequest', 'Unexpected failure', { error });
+        return 'error';
+      }
+    },
+    [user, fetchFriends],
+  );
+
+  const acceptFriendRequest = useCallback(
+    async (requestId: string): Promise<boolean> => {
+      if (!user) return false;
+      try {
+        const { error } = await supabase
+          .from('user_friends')
+          .update({ status: 'accepted', accepted_at: new Date().toISOString() })
+          .eq('id', requestId)
+          // Only the addressee may accept. RLS should enforce this too; this is
+          // the client-side half of the same rule.
+          .eq('friend_id', user.id);
+
+        if (error) {
+          logger.error('acceptFriendRequest', 'Update failed', { error });
+          return false;
+        }
+        await fetchFriends();
+        return true;
+      } catch (error) {
+        logger.error('acceptFriendRequest', 'Unexpected failure', { error });
+        return false;
+      }
+    },
+    [user, fetchFriends],
+  );
+
+  useEffect(() => {
+    fetchFriends();
+  }, [fetchFriends]);
+
   return {
-    // State
     friends,
-    friendGroups,
+    pendingRequests,
+    /**
+     * Always empty: no groups table exists in production. Paired with
+     * `groupsAvailable` so a caller can say "not available yet" rather than
+     * rendering an empty list that reads as "you have no groups".
+     */
+    friendGroups: [] as FriendGroup[],
+    groupsAvailable: false,
     loading,
-    
-    // Friend Management
+    fetchFriends,
     sendFriendRequest,
-    respondToFriendRequest,
-    acceptFriendRequest: respondToFriendRequest,
-    blockUser,
-    unblockUser,
-    searchUsers,
-    
-    // Group Management
-    createFriendGroup,
-    joinFriendGroup,
-    leaveFriendGroup,
-    
-    // Event Social Features
-    getEventAttendance,
-    updateEventAttendance,
-    getEventUGC,
-    getFriendsNearEvent,
-    
-    // Content Submission
-    submitEventReview,
-    submitEventTip,
-    submitEventPhoto,
-    voteOnContent,
-    reportContent,
-    
-    // Utility
-    getUserSocialStats,
-    
-    // Refresh
-    refresh: () => {
-      fetchFriends();
-      fetchFriendGroups();
-    }
+    acceptFriendRequest,
   };
 }
