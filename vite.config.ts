@@ -301,11 +301,6 @@ export default defineConfig(({ command, mode }) => {
             return "vendor-editor";
           }
 
-          // Calendar functionality
-          if (id.includes("fullcalendar") || id.includes("@fullcalendar/")) {
-            return "vendor-calendar";
-          }
-
           // Date utilities
           if (id.includes("date-fns")) {
             return "vendor-dates";
