@@ -8908,6 +8908,151 @@
       "priority": 3,
       "passes": false,
       "notes": "Filed 2026-09-02 from the codebase audit on claude/codebase-audit-prd-k01kxz. Evidence is from the working tree; production was not probed (no Supabase credentials in the container)."
+    },
+    {
+      "id": "WEB-FEAT-022",
+      "title": "No weather data anywhere, so 'what to do today' cannot adapt to the single biggest factor in an Iowa outing",
+      "description": "As a local or visitor deciding what to do today, I need the site to know it is raining or 8 degrees, because Des Moines swings from -20F to 95F and the indoor/outdoor decision precedes every other filter. Today the string 'weather' appears in this codebase only inside LLM-generated SEO prose (supabase/functions/generate-pseo-page, supabase/functions/generate-article) and static page copy; there is no weather integration, no indoor/outdoor classification on events or attractions, and no key slot in .env.example (5 vars, none weather). The homepage and /events/today therefore recommend an outdoor festival in a thunderstorm.",
+      "acceptanceCriteria": [
+        "Add a `weather` edge function reading api.weather.gov (NWS: no API key, no quota, US-only, requires a User-Agent contact header) for the Des Moines grid point, cached >=30 min server-side",
+        "Add `is_outdoor boolean` to events and attractions with a backfill that classifies from category/venue/description, defaulting NULL (unknown) rather than false",
+        "Homepage and /events/today reorder or badge picks when precipitation probability >50% or feels-like is outside 20-95F; the adjustment is visible to the user as a short reason line, never a silent reshuffle",
+        "Fail open: a weather fetch error or an unclassified item renders the normal unweighted list, never an empty state or an error toast",
+        "Playwright coverage asserts both branches (weather present and weather unavailable) render a populated list"
+      ],
+      "priority": 2,
+      "passes": false,
+      "notes": "Filed 2026-09-08 from the visitor-value audit on claude/des-moines-improvements-qse218. Evidence is from the working tree; production was not probed (no Supabase credentials in the container). These are visitor-facing capability gaps, distinct from the ingestion/scheduler stories (WEB-OPS-007, WEB-BE-045/051/054/055) that block the data behind them."
+    },
+    {
+      "id": "WEB-FEAT-023",
+      "title": "Getting-around data is a hardcoded array, so transit, parking and drive times are unverifiable and drift silently",
+      "description": "As a visitor without a car, I need to know how to reach a specific venue, because our only answer today is a static page. src/pages/GettingAround.tsx hardcodes PARKING_GARAGES (line 12), DISTANCE_TABLE (line 20) and FAQ_ITEMS (line 30), states the DART fare as $1.75 in prose (line 221), and links out to ridedart.com. There is no GTFS feed, no transit API, no parking source, and nothing connects a venue to a bus route. Event and restaurant detail pages offer directions via a Google Maps deep link (src/lib/directions.ts) and nothing else.",
+      "acceptanceCriteria": [
+        "Ingest the DART GTFS static feed (stops + routes) into Postgres on a monthly schedule; GTFS static is a published zip, so this needs no vendor API key",
+        "Given a venue lat/lng, event and attraction detail pages show the nearest stop, its walking distance, and the routes serving it",
+        "The fare, the D-Line free-route claim, and every drive-time in DISTANCE_TABLE either move to a table with a `verified_at` column or carry a visible 'check ridedart.com' caveat; no unsourced fare stays in prose",
+        "Event-day parking guidance for Wells Fargo Arena, Principal Park and the Fairgrounds is data, not copy, and is surfaced on events at those venues",
+        "Feature degrades to today's static content when the GTFS import is stale beyond 60 days"
+      ],
+      "priority": 3,
+      "passes": false,
+      "notes": "Filed 2026-09-08 from the visitor-value audit on claude/des-moines-improvements-qse218. Evidence is from the working tree; production was not probed (no Supabase credentials in the container). These are visitor-facing capability gaps, distinct from the ingestion/scheduler stories (WEB-OPS-007, WEB-BE-045/051/054/055) that block the data behind them."
+    },
+    {
+      "id": "WEB-FEAT-024",
+      "title": "Restaurant pages can only tell a visitor to phone ahead; there is no reservation path at all",
+      "description": "As a visitor planning dinner, I need to book a table, because the only booking affordance on a restaurant page is a tel: link. src/pages/RestaurantDetails.tsx:942 renders 'Call to Reserve' -> tel:, and no OpenTable, Resy, Yelp or Tock link exists anywhere in src/. This also underwrites the VIP 'Restaurant reservation help' benefit that WEB-FEAT-016 is stripping for being undeliverable; a real deep link is the honest version of that promise, and it is the highest-intent action on the page.",
+      "acceptanceCriteria": [
+        "Add nullable `reservation_url` and `reservation_provider` columns to restaurants (ADD COLUMN NULL only, per the backward-compatibility rules in CLAUDE.md)",
+        "Populate from the Google Places `reservable` field and provider URLs during the existing enrichment pass rather than a new scraper",
+        "RestaurantDetails renders a primary 'Reserve a table' action when reservation_url is present and falls back to today's tel: link when it is not; no fabricated availability, no 'book now' on a null",
+        "The link carries rel=nofollow sponsored where the provider pays affiliate, and is disclosed per /affiliate-disclosure",
+        "Cross-reference WEB-FEAT-016: if VIP re-lists reservation help, it points at this feature and not at a concierge that does not exist"
+      ],
+      "priority": 2,
+      "passes": false,
+      "notes": "Filed 2026-09-08 from the visitor-value audit on claude/des-moines-improvements-qse218. Evidence is from the working tree; production was not probed (no Supabase credentials in the container). These are visitor-facing capability gaps, distinct from the ingestion/scheduler stories (WEB-OPS-007, WEB-BE-045/051/054/055) that block the data behind them."
+    },
+    {
+      "id": "WEB-FEAT-025",
+      "title": "Happy hour is a filter chip backed by a text search and FAQ prose asserting schedules we do not hold",
+      "description": "As a local looking for a happy hour right now, I need real day-and-time windows, because the 'happy-hour' preset in src/components/RestaurantSmartPresets.tsx:77 is a keyword match against name/description/tags, and src/pages/Restaurants.tsx FAQ copy asserts specific happy-hour facts the product cannot filter on. A keyword match returns restaurants that merely mention the phrase and misses every one that does not, at the exact moment the query is most time-sensitive.",
+      "acceptanceCriteria": [
+        "Add a `restaurant_specials` table (restaurant_id, kind, days_of_week, start_time, end_time, description, source_url, verified_at) rather than more free text on restaurants",
+        "The happy-hour preset queries that table and evaluates against America/Chicago now, reusing supabase/functions/_shared/centralTime.ts rather than a second timezone implementation",
+        "An admin CRUD surface exists; this is editorial data and there is no scraper for it",
+        "Restaurants.tsx FAQ prose stops asserting specific happy-hour schedules the database cannot back",
+        "Empty state says no verified specials rather than returning a keyword-matched list"
+      ],
+      "priority": 3,
+      "passes": false,
+      "notes": "Filed 2026-09-08 from the visitor-value audit on claude/des-moines-improvements-qse218. Evidence is from the working tree; production was not probed (no Supabase credentials in the container). These are visitor-facing capability gaps, distinct from the ingestion/scheduler stories (WEB-OPS-007, WEB-BE-045/051/054/055) that block the data behind them."
+    },
+    {
+      "id": "WEB-FEAT-026",
+      "title": "Add-to-calendar exists only on detail pages and its reusable button component has zero call sites",
+      "description": "As a user scanning a list of events, I need to save one to my calendar without opening it, because saving is the whole point of a listing page. src/lib/calendar.ts is wired into EventDetails.tsx:355,633 and Index.tsx:911, and itinerary/trip ICS exist (src/lib/tripCalendar.ts, src/pages/ItineraryDetail.tsx:24), but src/components/AddToCalendarButton.tsx and src/hooks/use-calendar-export.ts have no call sites outside each other. Two calendar implementations exist and the more reusable one is dead code, which is also the WEB-UX-023 orphan-component failure mode repeating.",
+      "acceptanceCriteria": [
+        "Either wire AddToCalendarButton into event cards on /events, /events/today and /events/this-weekend, or delete it and its hook and keep src/lib/calendar.ts as the single implementation",
+        "Whichever survives is the only ICS/Google path in src/; the decision is recorded so the next audit does not re-file this",
+        "The card action does not navigate, and is keyboard reachable with an accessible name naming the event",
+        "ICS output validates for an all-day event, a timed event and an event with no end time"
+      ],
+      "priority": 3,
+      "passes": false,
+      "notes": "Filed 2026-09-08 from the visitor-value audit on claude/des-moines-improvements-qse218. Evidence is from the working tree; production was not probed (no Supabase credentials in the container). These are visitor-facing capability gaps, distinct from the ingestion/scheduler stories (WEB-OPS-007, WEB-BE-045/051/054/055) that block the data behind them."
+    },
+    {
+      "id": "WEB-FEAT-027",
+      "title": "/calendar ships a mock: useSmartCalendar returns empty state by design and FullCalendar is an unused dependency",
+      "description": "As a user following the /calendar route, I get a permanently empty calendar. src/hooks/useSmartCalendar.ts:70 is commented 'Mock functions since tables don't exist yet' and every fetch sets empty state; the route is registered in src/App.tsx:557 -> SmartCalendarIntegration. Separately, @fullcalendar packages are installed and imported nowhere in src/, so the bundle carries a calendar library for a calendar that does not work.",
+      "acceptanceCriteria": [
+        "Decide per WEB-QA-018: build the backing tables or remove the route and the component",
+        "If removed, /calendar 301s to /events rather than 404ing, since the route may be linked or indexed",
+        "If the FullCalendar dependency has no consumer after the decision, drop it and record the bundle delta against the <500KB gzipped budget",
+        "No route in App.tsx renders a hook whose documented behaviour is to return empty state"
+      ],
+      "priority": 2,
+      "passes": false,
+      "notes": "Filed 2026-09-08 from the visitor-value audit on claude/des-moines-improvements-qse218. Evidence is from the working tree; production was not probed (no Supabase credentials in the container). These are visitor-facing capability gaps, distinct from the ingestion/scheduler stories (WEB-OPS-007, WEB-BE-045/051/054/055) that block the data behind them."
+    },
+    {
+      "id": "WEB-FEAT-028",
+      "title": "/gamification and /social are public routes rendering permanently empty shells from stubbed hooks",
+      "description": "As a signed-in local, I see badge, challenge, leaderboard and friend surfaces that can never populate. src/hooks/useGamification.ts sets mockBadges = [] (117), mockChallenges = [] (137), mockActivities = [] (149) and mockLeaderboard = [] (159); src/hooks/useSocialFeatures.ts:69-78 is commented 'Mock functions since tables don't exist yet (WEB-QA-018)'. useFavorites calls awardPoints() into that stub, so every favourite silently awards nothing. Meanwhile src/hooks/useCommunityFeatures.ts is real (event_attendance, discussion_forums, user_friends), so two competing implementations ship side by side and the fake one owns the public routes.",
+      "acceptanceCriteria": [
+        "Route /gamification and /social to the working useCommunityFeatures implementation, or unroute both until the backing tables exist",
+        "Delete useSocialFeatures or make it a thin adapter over useCommunityFeatures; two friend implementations do not both survive",
+        "awardPoints either persists or is removed from useFavorites; a no-op call that looks like a write does not stay",
+        "Any route that remains public renders real data or an honest 'not yet available' state, never an empty grid implying zero results"
+      ],
+      "priority": 2,
+      "passes": false,
+      "notes": "Filed 2026-09-08 from the visitor-value audit on claude/des-moines-improvements-qse218. Evidence is from the working tree; production was not probed (no Supabase credentials in the container). These are visitor-facing capability gaps, distinct from the ingestion/scheduler stories (WEB-OPS-007, WEB-BE-045/051/054/055) that block the data behind them."
+    },
+    {
+      "id": "WEB-FEAT-029",
+      "title": "Iowa State Fair dates are a hardcoded constant that has already shipped two years stale once",
+      "description": "As a visitor searching the single largest event in Iowa, I need correct dates, because src/pages/IowaStateFairPage.tsx:21 holds FAIR = { year: 2026, startISO, endISO, rangeLabel } as a hardcoded const feeding both the visible copy and the Event JSON-LD. The file's own header comment records that it previously shipped stale. Nothing alerts when the date passes, and the same pattern will recur for every annual event we add.",
+      "acceptanceCriteria": [
+        "Move the fair dates into the events/venues data with an annual `verified_at`, or add a CI check that fails once FAIR.endISO is in the past",
+        "The JSON-LD and the visible copy read from one source, so they cannot disagree",
+        "A past-dated annual event renders next year's placeholder or an honest 'dates not yet announced', never last year's dates as if current",
+        "The check generalizes to other annual pages rather than special-casing the fair"
+      ],
+      "priority": 2,
+      "passes": false,
+      "notes": "Filed 2026-09-08 from the visitor-value audit on claude/des-moines-improvements-qse218. Evidence is from the working tree; production was not probed (no Supabase credentials in the container). These are visitor-facing capability gaps, distinct from the ingestion/scheduler stories (WEB-OPS-007, WEB-BE-045/051/054/055) that block the data behind them."
+    },
+    {
+      "id": "WEB-SEO-041",
+      "title": "Month event landing pages are routed and unbuilt, which is how a calendar is actually searched",
+      "description": "As a visitor planning a trip for a specific month, I search 'des moines events september 2026'. The MonthlyEventsPage route exists but the twelve month pages have no content worth ranking, while the SEO plan of 2026-08-28 records every core discovery term ranking between position 30 and 57 with zero clicks. This depends on WEB-BE-051: the crawler only holds the next ~50-60 events, so a month page three months out would render empty even if built. File it so the ordering is explicit rather than rediscovered.",
+      "acceptanceCriteria": [
+        "Blocked on WEB-BE-051; do not build month pages against a 60-event horizon",
+        "Once the horizon extends, generate the twelve month pages with real listings, a visible freshness date and Event ItemList schema",
+        "A month with too few events renders a linked fallback to the next populated month rather than a thin page",
+        "Month pages do not collide with the pSEO slug space; check pseo-collision-baseline.json before routing"
+      ],
+      "priority": 3,
+      "passes": false,
+      "notes": "Filed 2026-09-08 from the visitor-value audit on claude/des-moines-improvements-qse218. Evidence is from the working tree; production was not probed (no Supabase credentials in the container). These are visitor-facing capability gaps, distinct from the ingestion/scheduler stories (WEB-OPS-007, WEB-BE-045/051/054/055) that block the data behind them."
+    },
+    {
+      "id": "XPLAT-014",
+      "title": "Neither mobile app has a home-screen widget, the one surface a daily local would actually keep",
+      "description": "As a local with the app installed, I want today's events at a glance without opening anything. There is no WidgetKit target in ios/ (ios/project.yml declares app, App Clip, unit and UI test targets only) and no Glance or AppWidget provider in android/. Both apps already hold the data locally (ios Services/QueryCache.swift, android data/local/AppDatabase.kt), so the widget is a presentation layer over caches that already exist. This is the retention surface for the audience that does not arrive via search, which matters because Search Console shows zero brand queries in the measured window.",
+      "acceptanceCriteria": [
+        "iOS WidgetKit extension: small and medium 'today in Des Moines' widgets reading the existing QueryCache, with a timeline refresh no more aggressive than hourly",
+        "Android Glance AppWidget with equivalent content reading Room",
+        "Both deep-link into the existing handlers (ios Services/DeepLinkHandler.swift, android ShortcutDispatcher.kt) rather than adding a second routing path",
+        "Widget renders last-cached content offline and never an error state",
+        "Blocked for Android link-outs on AND-AUDIT-004: public/.well-known/assetlinks.json still carries SHA256_FINGERPRINT_HERE"
+      ],
+      "priority": 3,
+      "passes": false,
+      "notes": "Filed 2026-09-08 from the visitor-value audit on claude/des-moines-improvements-qse218. Evidence is from the working tree; production was not probed (no Supabase credentials in the container). These are visitor-facing capability gaps, distinct from the ingestion/scheduler stories (WEB-OPS-007, WEB-BE-045/051/054/055) that block the data behind them."
     }
   ]
 }
