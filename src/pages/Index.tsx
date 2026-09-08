@@ -9,7 +9,7 @@ import {
 } from "@/components/ui/dialog";
 import { Button } from "@/components/ui/button";
 import { CalendarPlus, Brain, Zap } from "lucide-react";
-import { downloadICS } from "@/lib/calendar";
+import { AddToCalendarButton } from "@/components/AddToCalendarButton";
 import { createEventSlugWithCentralTime } from "@/lib/timezone";
 import { FavoriteButton } from "@/components/FavoriteButton";
 import { useToast } from "@/hooks/use-toast";
@@ -915,14 +915,13 @@ export default function Index() {
                     </Button>
                   </div>
 
-                  <Button
+                  {/* WEB-FEAT-026: was a lone .ics download with timestamps
+                      five hours early. Now Google, Outlook or Apple. */}
+                  <AddToCalendarButton
+                    event={selectedEvent}
                     variant="outline"
-                    className="w-full"
-                    onClick={() => downloadICS(selectedEvent)}
-                  >
-                    <CalendarPlus className="h-4 w-4 mr-2" />
-                    Add to Calendar
-                  </Button>
+                    fullWidth
+                  />
 
                   {selectedEvent.source_url && (
                     <Button

@@ -26,7 +26,9 @@ import {
   hasSpecificTime,
 } from "@/lib/timezone";
 import { ArrowLeft, DollarSign, CalendarPlus, Tag, Info, ChevronRight, Navigation } from "lucide-react";
-import { downloadICS, getGoogleCalendarUrl } from "@/lib/calendar";
+import { AddToCalendarButton } from "@/components/AddToCalendarButton";
+import { useCalendarExport } from "@/hooks/use-calendar-export";
+import { toIcsEvent } from "@/lib/icsEvent";
 import { FavoriteButton } from "@/components/FavoriteButton";
 import { BRAND, getCanonicalUrl } from "@/lib/brandConfig";
 import { BreadcrumbListSchema } from "@/components/schema/BreadcrumbListSchema";
@@ -48,6 +50,9 @@ export default function EventDetails() {
   // Targeted, date-windowed lookup — see useEventBySlug for why the old
   // fetch-everything-then-Array.find approach 404'd listed events (WEB-QA-002).
   const { event, isLoading } = useEventBySlug(slug);
+  // Used by the sticky action bar below; the inline control uses
+  // AddToCalendarButton, which owns its own export handlers.
+  const { downloadIcsFile } = useCalendarExport();
 
   // Only feeds the "related"/"nearby" rails below — bounded on purpose, since
   // those render at most 3 items each and never need the full upcoming set.
@@ -352,10 +357,10 @@ export default function EventDetails() {
                         </Button>
                       )}
                       {isUpcoming && (
-                        <Button variant="outline" size="sm" onClick={() => downloadICS(event)}>
-                          <CalendarPlus className="h-4 w-4 mr-2" />
-                          Add to Calendar
-                        </Button>
+                        // WEB-FEAT-026: was a single download of a .ics whose
+                        // timestamps were five hours early. Now offers Google,
+                        // Outlook and Apple, with correct UTC.
+                        <AddToCalendarButton event={event} variant="outline" size="sm" />
                       )}
                       <FavoriteButton eventId={event.id} size="sm" variant="outline" />
                       <ShareDialog
@@ -630,7 +635,7 @@ export default function EventDetails() {
             : isUpcoming
             ? {
                 label: "Add to Calendar",
-                onClick: () => downloadICS(event),
+                onClick: () => downloadIcsFile(toIcsEvent(event)),
                 icon: "calendar",
               }
             : undefined
@@ -639,7 +644,7 @@ export default function EventDetails() {
           ticketUrl && isUpcoming
             ? {
                 label: "Add to Calendar",
-                onClick: () => downloadICS(event),
+                onClick: () => downloadIcsFile(toIcsEvent(event)),
                 icon: "calendar",
               }
             : undefined

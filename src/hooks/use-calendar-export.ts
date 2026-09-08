@@ -1,83 +1,54 @@
+/**
+ * Calendar export for a single event: download an .ics, or hand off to Google,
+ * Outlook or Apple (WEB-FEAT-026).
+ *
+ * This hook is now the thin side of the feature. All the format logic - the
+ * UTC timestamps, the RFC 5545 escaping, the fallback duration - lives in
+ * `@/lib/icsEvent`, so it can be tested without mounting a component and so
+ * there is exactly one implementation. The hook adds what genuinely needs
+ * React: toasts, the DOM download dance, and error reporting.
+ *
+ * It replaced `src/lib/calendar.ts`, which was the wired implementation and
+ * had two live bugs (local time labelled as UTC; no ICS escaping). See the
+ * header of `@/lib/icsEvent` for the measurements.
+ */
 import { useCallback } from 'react';
 import { useToast } from '@/hooks/use-toast';
 import { createLogger } from '@/lib/logger';
+import {
+  buildEventIcs,
+  googleCalendarUrl,
+  outlookCalendarUrl,
+  type IcsEventInput,
+} from '@/lib/icsEvent';
 
 const log = createLogger('useCalendarExport');
 
-interface EventData {
-  id: string;
-  title: string;
-  description?: string;
-  date: string;
-  location?: string;
-  venue?: string;
-  slug?: string;
-  event_start_utc?: string;
-  event_end_utc?: string;
-}
-
-// Format date for iCalendar format (YYYYMMDDTHHmmssZ)
-const formatIcsDate = (date: Date): string => {
-  return date.toISOString().replace(/[-:]/g, '').split('.')[0] + 'Z';
-};
-
-// Escape special characters for iCalendar format
-const escapeIcsText = (text: string): string => {
-  return text
-    .replace(/\\/g, '\\\\')
-    .replace(/;/g, '\\;')
-    .replace(/,/g, '\\,')
-    .replace(/\n/g, '\\n');
-};
+export type EventData = IcsEventInput;
 
 export function useCalendarExport() {
   const { toast } = useToast();
 
-  const generateIcsFile = useCallback((event: EventData): string => {
-    const startDate = new Date(event.event_start_utc || event.date);
-    const endDate = event.event_end_utc
-      ? new Date(event.event_end_utc)
-      : new Date(startDate.getTime() + 2 * 60 * 60 * 1000); // Default 2 hours
-
-    const icsContent = [
-      'BEGIN:VCALENDAR',
-      'VERSION:2.0',
-      'PRODID:-//Des Moines Insider//Event Calendar//EN',
-      'CALSCALE:GREGORIAN',
-      'METHOD:PUBLISH',
-      'X-WR-CALNAME:Des Moines Events',
-      'X-WR-TIMEZONE:America/Chicago',
-      'BEGIN:VEVENT',
-      `UID:${event.id}@desmoinesinsider.com`,
-      `DTSTAMP:${formatIcsDate(new Date())}`,
-      `DTSTART:${formatIcsDate(startDate)}`,
-      `DTEND:${formatIcsDate(endDate)}`,
-      `SUMMARY:${escapeIcsText(event.title)}`,
-      event.description ? `DESCRIPTION:${escapeIcsText(event.description)}` : '',
-      event.venue || event.location
-        ? `LOCATION:${escapeIcsText(event.venue || event.location || '')}`
-        : '',
-      `URL:https://desmoinesinsider.com/events/${event.slug || event.id}`,
-      'STATUS:CONFIRMED',
-      'SEQUENCE:0',
-      'BEGIN:VALARM',
-      'TRIGGER:-PT1H',
-      'ACTION:DISPLAY',
-      'DESCRIPTION:Event reminder',
-      'END:VALARM',
-      'END:VEVENT',
-      'END:VCALENDAR',
-    ]
-      .filter(Boolean)
-      .join('\r\n');
-
-    return icsContent;
-  }, []);
+  const generateIcsFile = useCallback(
+    (event: EventData): string | null => buildEventIcs(event),
+    [],
+  );
 
   const downloadIcsFile = useCallback(
     (event: EventData) => {
       try {
-        const icsContent = generateIcsFile(event);
+        const icsContent = buildEventIcs(event);
+        if (!icsContent) {
+          // An unparseable date produces no file rather than one full of
+          // "Invalid Date", which a calendar client rejects with no explanation.
+          toast({
+            title: 'No Date Available',
+            description: 'This event has no usable start time yet',
+            variant: 'destructive',
+          });
+          return;
+        }
+
         const blob = new Blob([icsContent], { type: 'text/calendar;charset=utf-8' });
         const url = URL.createObjectURL(blob);
         const link = document.createElement('a');
@@ -101,93 +72,54 @@ export function useCalendarExport() {
         });
       }
     },
-    [generateIcsFile, toast]
+    [toast],
+  );
+
+  /** Shared open-in-a-new-tab path for the hosted calendar providers. */
+  const openExternalCalendar = useCallback(
+    (url: string | null, provider: string, action: string) => {
+      if (!url) {
+        toast({
+          title: 'No Date Available',
+          description: 'This event has no usable start time yet',
+          variant: 'destructive',
+        });
+        return;
+      }
+      try {
+        window.open(url, '_blank', 'noopener,noreferrer');
+        toast({
+          title: `Opening ${provider}`,
+          description: 'Complete the process in the new tab',
+        });
+      } catch (error) {
+        log.error(action, `Failed to open ${provider}`, { error });
+        toast({
+          title: 'Failed to Open',
+          description: `Unable to open ${provider}`,
+          variant: 'destructive',
+        });
+      }
+    },
+    [toast],
   );
 
   const addToGoogleCalendar = useCallback(
-    (event: EventData) => {
-      try {
-        const startDate = new Date(event.event_start_utc || event.date);
-        const endDate = event.event_end_utc
-          ? new Date(event.event_end_utc)
-          : new Date(startDate.getTime() + 2 * 60 * 60 * 1000);
-
-        const formatGoogleDate = (date: Date): string => {
-          return date.toISOString().replace(/[-:]/g, '').split('.')[0] + 'Z';
-        };
-
-        const params = new URLSearchParams({
-          action: 'TEMPLATE',
-          text: event.title,
-          dates: `${formatGoogleDate(startDate)}/${formatGoogleDate(endDate)}`,
-          details: event.description || '',
-          location: event.venue || event.location || '',
-          sf: 'true',
-          output: 'xml',
-        });
-
-        const url = `https://calendar.google.com/calendar/render?${params.toString()}`;
-        window.open(url, '_blank', 'noopener,noreferrer');
-
-        toast({
-          title: 'Opening Google Calendar',
-          description: 'Complete the process in the new tab',
-        });
-      } catch (error) {
-        log.error('addToGoogleCalendar', 'Failed to open Google Calendar', { error });
-        toast({
-          title: 'Failed to Open',
-          description: 'Unable to open Google Calendar',
-          variant: 'destructive',
-        });
-      }
-    },
-    [toast]
+    (event: EventData) =>
+      openExternalCalendar(googleCalendarUrl(event), 'Google Calendar', 'addToGoogleCalendar'),
+    [openExternalCalendar],
   );
 
   const addToOutlookCalendar = useCallback(
-    (event: EventData) => {
-      try {
-        const startDate = new Date(event.event_start_utc || event.date);
-        const endDate = event.event_end_utc
-          ? new Date(event.event_end_utc)
-          : new Date(startDate.getTime() + 2 * 60 * 60 * 1000);
-
-        const params = new URLSearchParams({
-          path: '/calendar/action/compose',
-          rru: 'addevent',
-          subject: event.title,
-          startdt: startDate.toISOString(),
-          enddt: endDate.toISOString(),
-          body: event.description || '',
-          location: event.venue || event.location || '',
-        });
-
-        const url = `https://outlook.live.com/calendar/0/deeplink/compose?${params.toString()}`;
-        window.open(url, '_blank', 'noopener,noreferrer');
-
-        toast({
-          title: 'Opening Outlook Calendar',
-          description: 'Complete the process in the new tab',
-        });
-      } catch (error) {
-        log.error('addToOutlookCalendar', 'Failed to open Outlook Calendar', { error });
-        toast({
-          title: 'Failed to Open',
-          description: 'Unable to open Outlook Calendar',
-          variant: 'destructive',
-        });
-      }
-    },
-    [toast]
+    (event: EventData) =>
+      openExternalCalendar(outlookCalendarUrl(event), 'Outlook Calendar', 'addToOutlookCalendar'),
+    [openExternalCalendar],
   );
 
   const addToAppleCalendar = useCallback(
-    (event: EventData) => {
-      // Apple Calendar uses .ics files
-      downloadIcsFile(event);
-    },
-    [downloadIcsFile]
+    // Apple Calendar has no web hand-off; it opens a downloaded .ics.
+    (event: EventData) => downloadIcsFile(event),
+    [downloadIcsFile],
   );
 
   return {
