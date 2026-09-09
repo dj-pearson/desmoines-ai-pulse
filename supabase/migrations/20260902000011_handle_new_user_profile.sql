@@ -127,10 +127,56 @@ CREATE TRIGGER on_auth_user_created
   FOR EACH ROW
   EXECUTE FUNCTION public.handle_new_user();
 
+-- `validate_profile_user_id` was created in WEB-DB-002 with an optional
+-- legacy `profiles.role` check. PostgreSQL permits that function definition
+-- even when the column is absent, then rejects every profile write at runtime.
+-- Keep the user_id and canonical user_role guards in databases without the
+-- legacy column before the backfill below inserts any profiles.
+DO $$
+BEGIN
+  IF NOT EXISTS (
+    SELECT 1
+      FROM information_schema.columns
+     WHERE table_schema = 'public'
+       AND table_name = 'profiles'
+       AND column_name = 'role'
+  ) THEN
+    CREATE OR REPLACE FUNCTION public.validate_profile_user_id()
+    RETURNS TRIGGER
+    LANGUAGE plpgsql
+    SECURITY DEFINER
+    SET search_path = public, pg_temp
+    AS $func$
+    BEGIN
+      -- handle_new_user is an auth.users trigger that writes public.profiles.
+      -- Its nested profile trigger must not be treated as a client write.
+      IF pg_trigger_depth() > 1 THEN
+        RETURN NEW;
+      END IF;
+
+      IF NEW.user_id != auth.uid()
+         AND NOT user_has_role_or_higher(auth.uid(), 'admin'::user_role) THEN
+        RAISE EXCEPTION 'Users can only create profiles for themselves';
+      END IF;
+
+      IF NEW.user_role IS NOT NULL AND NEW.user_role != 'user' THEN
+        IF NOT user_has_role_or_higher(auth.uid(), 'admin'::user_role) THEN
+          RAISE EXCEPTION 'Only administrators can assign non-user roles';
+        END IF;
+      END IF;
+
+      RETURN NEW;
+    END;
+    $func$;
+  END IF;
+END $$;
+
 -- ---------------------------------------------------------------------------
 -- 3. Backfill everyone who signed up before the trigger existed. Same
 --    non-destructive rule: only fills columns that are NULL today.
 -- ---------------------------------------------------------------------------
+ALTER TABLE public.profiles DISABLE TRIGGER validate_profile_user_id;
+
 DO $$
 DECLARE
   n_updated integer;
@@ -199,3 +245,5 @@ BEGIN
 
   RAISE NOTICE 'WEB-AUTH-002 backfill: % profile(s) filled in, % profile(s) created', n_updated, n_created;
 END $$;
+
+ALTER TABLE public.profiles ENABLE TRIGGER validate_profile_user_id;

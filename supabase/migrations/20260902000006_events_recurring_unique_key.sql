@@ -83,7 +83,8 @@ COMMENT ON INDEX public.events_title_venue_date_unique IS
 -- ---------------------------------------------------------------------------
 -- 4. Retire the old one, and report what the change unlocks.
 -- ---------------------------------------------------------------------------
-DROP INDEX IF EXISTS public.events_title_venue_unique;
+ALTER TABLE public.events
+  DROP CONSTRAINT IF EXISTS events_title_venue_unique;
 
 DO $$
 DECLARE
