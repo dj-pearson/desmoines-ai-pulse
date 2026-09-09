@@ -16,6 +16,7 @@ import { PasswordStrengthMeter } from "@/components/PasswordStrengthMeter";
 import { MFAVerificationDialog } from "@/components/auth/MFAVerificationDialog";
 import { Alert, AlertDescription } from "@/components/ui/alert";
 import { SecurityUtils } from "@/lib/securityUtils";
+import { authErrorCopy } from '@/lib/authErrorMessages';
 import { logConsent } from "@/lib/consentLog";
 import { SpriteIcon } from "@/components/ui/SpriteIcon";
 
@@ -65,6 +66,10 @@ export default function Auth() {
   const [showForgotPassword, setShowForgotPassword] = useState(false);
   const [forgotPasswordEmail, setForgotPasswordEmail] = useState("");
   const [signupEmail, setSignupEmail] = useState("");
+  // WEB-AUTH-008: set when a sign-in fails only because the address was never
+  // confirmed. Holds the address so the inline resend below has something to
+  // send to, and doubles as the flag for rendering it.
+  const [unconfirmedEmail, setUnconfirmedEmail] = useState<string | null>(null);
   // WEB-AUTH-004. The confirmation screen stays neutral either way -- saying
   // "that address is taken" outright is the account enumeration Supabase's
   // response shape exists to prevent -- but a Resend button that cannot work
@@ -204,13 +209,24 @@ export default function Auth() {
         // Log failed attempt for security monitoring
         await logFailedAttempt(formData.email, 'login', result.error || 'Invalid credentials');
 
+        // WEB-AUTH-008: Supabase's own message used to go straight into the
+        // toast. authErrorCopy turns it into something actionable, and tells us
+        // when the only problem is an unclicked confirmation link - the one
+        // case where we can fix it for them from this screen.
+        const copy = authErrorCopy(result.errorCode, result.error);
+        setUnconfirmedEmail(
+          copy.action === 'resend_confirmation' ? formData.email : null,
+        );
+
         toast({
-          title: "Login Failed",
-          description: result.error || "Invalid email or password",
+          title: copy.title,
+          description: copy.description,
           variant: "destructive",
         });
         return;
       }
+
+      setUnconfirmedEmail(null);
 
       toast({
         title: "Welcome back!",
@@ -224,9 +240,10 @@ export default function Auth() {
       // Log failed attempt for security monitoring
       await logFailedAttempt(formData.email, 'login', error.message || 'Unknown error');
 
+      const copy = authErrorCopy(undefined, error?.message);
       toast({
-        title: "Login Error",
-        description: error.message || "An unexpected error occurred. Please try again.",
+        title: copy.title,
+        description: copy.description,
         variant: "destructive",
       });
     } finally {
@@ -262,9 +279,12 @@ export default function Auth() {
     });
   };
 
-  const handleResendVerification = async () => {
+  // WEB-AUTH-008: takes the address rather than reading signupEmail, because
+  // there are now two callers - the post-signup screen and the login form,
+  // where the address is whatever the person just typed.
+  const handleResendVerification = async (email: string = signupEmail) => {
     setIsLoading(true);
-    const result = await resendVerificationContext(signupEmail);
+    const result = await resendVerificationContext(email);
 
     if (!result.success) {
       toast({
@@ -832,6 +852,33 @@ export default function Auth() {
                   <Button type="submit" className="w-full" disabled={isLoading || isBlocked}>
                     {isLoading ? "Signing in..." : isBlocked ? "Please wait..." : "Sign In"}
                   </Button>
+
+                  {/* WEB-AUTH-008. A sign-in that fails ONLY because the address
+                      was never confirmed is the one auth failure this screen can
+                      fix for the person, and the resend used to exist only on
+                      the post-signup screen they had already left. Rendered
+                      inline rather than in the toast so it survives the toast
+                      timing out. */}
+                  {unconfirmedEmail && (
+                    <div
+                      className="rounded-lg border border-amber-300 bg-amber-50 p-3 text-sm text-amber-900"
+                      role="status"
+                    >
+                      <p className="mb-2">
+                        This address has not been confirmed yet. Check your inbox and
+                        spam folder for the link, or send a new one.
+                      </p>
+                      <Button
+                        type="button"
+                        variant="outline"
+                        size="sm"
+                        disabled={isLoading}
+                        onClick={() => handleResendVerification(unconfirmedEmail)}
+                      >
+                        {isLoading ? "Sending..." : "Resend confirmation email"}
+                      </Button>
+                    </div>
+                  )}
 
                   <div className="relative my-6">
                     <div className="absolute inset-0 flex items-center">

@@ -5213,3 +5213,45 @@ FILES
   M src/components/PremiumGate.tsx
   M supabase/functions/_shared/entitlements.ts
   M prd.json  (WEB-FEAT-018 passes=true)
+
+================================================================================
+## 2026-09-09 — WEB-AUTH-008 (auth errors you can act on): PARTIALLY DONE
+================================================================================
+The two error-copy criteria are closed. The two a11y ones are not, and the
+story stays OPEN for them - see the note in prd.json.
+
+FIXED
+- src/lib/authErrorMessages.ts: a Supabase auth failure -> copy + an action.
+  Matches on `code` first (the stable identifier) and message text only as a
+  fallback, because supabase-js only added codes in 2.4x and older responses
+  carry the message alone. An unrecognised failure gets neutral copy, not the
+  raw string: "AuthApiError: invalid claim: missing sub claim" was reaching a
+  reader who wanted to look at restaurants.
+- AuthContext.login returns errorCode alongside error. Matching Supabase's
+  wording at the call site would be a second place for that wording to break.
+  `error` is unchanged for existing callers.
+- Auth.tsx renders the mapped copy, and on email_not_confirmed shows an INLINE
+  "Resend confirmation email". That resend already existed - on the post-signup
+  screen the user had already navigated away from. Inline rather than in the
+  toast so it outlives the toast.
+
+DELIBERATE NON-CHANGE
+"Invalid login credentials" stays non-committal. Splitting it into "no such
+account" and "wrong password" would be friendlier and would turn the form into
+an account-existence oracle. A test asserts the copy does neither.
+
+STILL OPEN (next pass on this story)
+Password show/hide toggle + un-skip tests/forms.spec.ts:377-418; interest tiles
+as <label> wrapping the Checkbox with onCheckedChange; typing
+handleInputChange; the required Select in the zod schema. That is a11y work
+verified by npm run test:a11y, a different pass from error copy.
+
+VERIFIED: 8 new unit tests (558 total pass), validate exit 0, test:offline
+19/19, check-edge-types exit 0, touched files type-check clean as a file slice.
+
+FILES
+  A src/lib/authErrorMessages.ts
+  A src/lib/__tests__/authErrorMessages.test.ts
+  M src/contexts/AuthContext.tsx
+  M src/pages/Auth.tsx
+  M prd.json  (WEB-AUTH-008 still open, scoped down)

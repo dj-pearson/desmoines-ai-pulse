@@ -33,7 +33,7 @@ interface AuthState {
 }
 
 interface AuthActions {
-  login: (email: string, password: string) => Promise<{ success: boolean; error?: string; requiresMFA?: boolean; factorId?: string }>;
+  login: (email: string, password: string) => Promise<{ success: boolean; error?: string; errorCode?: string; requiresMFA?: boolean; factorId?: string }>;
   /** `alreadyRegistered` is true when the address already had an account (WEB-AUTH-004). */
   signup: (email: string, password: string, metadata?: Record<string, unknown>) => Promise<{ success: boolean; error?: string; needsVerification?: boolean; alreadyRegistered?: boolean }>;
   /**
@@ -567,7 +567,7 @@ export function AuthProvider({ children }: { children: ReactNode }) {
   }, [checkIsAdmin, handleAuthChange]);
 
   // Login with email/password (with attempt throttling)
-  const login = useCallback(async (email: string, password: string): Promise<{ success: boolean; error?: string; requiresMFA?: boolean; factorId?: string }> => {
+  const login = useCallback(async (email: string, password: string): Promise<{ success: boolean; error?: string; errorCode?: string; requiresMFA?: boolean; factorId?: string }> => {
     try {
       // Fast local throttle (defense in depth; bypassable so not authoritative).
       const throttle = checkLoginThrottle(email);
@@ -591,8 +591,15 @@ export function AuthProvider({ children }: { children: ReactNode }) {
       if (error) {
         recordFailedLogin(email);
         void checkServerLockout(email, 'record_failure');
-        log.error('login', 'Login error', { message: error.message });
-        return { success: false, error: error.message };
+        log.error('login', 'Login error', { message: error.message, code: error.code });
+        // WEB-AUTH-008: the CODE travels with the message now. The form used to
+        // render error.message straight into a toast, so a user whose only
+        // problem was an unclicked confirmation link read "Email not confirmed"
+        // and was offered nothing. Matching that on message text at the call
+        // site would be a second place for Supabase's wording to break; the
+        // code is the stable identifier. `error` is unchanged for the callers
+        // that already read it.
+        return { success: false, error: error.message, errorCode: error.code };
       }
 
       // Check if MFA is required (AAL1 but user has MFA factors).

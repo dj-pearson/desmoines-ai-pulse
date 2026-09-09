@@ -7534,7 +7534,7 @@
     },
     {
       "id": "WEB-AUTH-008",
-      "title": "Login and signup form gaps: raw Supabase errors, no resend on Email not confirmed, no password toggle, interest tiles not keyboard operable",
+      "title": "Login form gaps: raw Supabase errors and no resend on Email not confirmed (DONE); password toggle and interest tiles still open",
       "description": "As a user on the /auth form, I need errors I can act on and controls I can operate from the keyboard, because the form shows Supabase's raw error.message, offers no resend when the message is 'Email not confirmed', has no password visibility toggle (tests/forms.spec.ts:377-418 skips for that reason), and the interest tiles are a div onClick around a Radix Checkbox wired to onChange instead of onCheckedChange.",
       "acceptanceCriteria": [
         "Evidence: src/pages/Auth.tsx:183-187 renders error.message from AuthContext.tsx:440; resend exists only on the post-signup screen (:628-635); interest tiles at :1019-1031; handleInputChange(field, value: any) at :127; Radix Select required at :994 is not browser-enforced",
@@ -7546,7 +7546,7 @@
       ],
       "priority": 3,
       "passes": false,
-      "notes": "Filed 2026-09-02 from the codebase audit on claude/codebase-audit-prd-k01kxz. Evidence is from the working tree; production was not probed (no Supabase credentials in the container)."
+      "notes": "Filed 2026-09-02 from the codebase audit on claude/codebase-audit-prd-k01kxz. Evidence is from the working tree; production was not probed (no Supabase credentials in the container).\n\nPARTIALLY DONE 2026-09-09 on claude/web-platform-improvements-loop-0px3u1 - the two error-copy criteria are closed, the two a11y ones are NOT, so this story stays open.\n\nDONE: src/lib/authErrorMessages.ts maps a Supabase auth failure to copy plus an action. AuthContext.login now returns errorCode alongside error (the code is the stable identifier; matching Supabase's wording at the call site would be a second place for it to break), and Auth.tsx renders the mapped copy instead of error.message. On email_not_confirmed the form shows an inline 'Resend confirmation email' - the resend existed only on the post-signup screen the user had already left, and it is inline rather than in the toast so it survives the toast timing out. handleResendVerification takes an address now, since there are two callers. 'Invalid login credentials' stays deliberately non-committal: splitting it into 'no such account' and 'wrong password' would be friendlier and would turn the form into an account-existence oracle - there is a test asserting the copy does neither. 8 unit tests.\n\nSTILL OPEN for a later pass: the show/hide password toggle (and un-skipping tests/forms.spec.ts:377-418), the interest tiles as <label> wrapping the Checkbox with onCheckedChange, typing handleInputChange (no any), and validating the required Select in the zod schema. Those are a11y and form-plumbing work, verifiable by npm run test:a11y, which is a different pass from error copy."
     },
     {
       "id": "WEB-AUTH-009",
