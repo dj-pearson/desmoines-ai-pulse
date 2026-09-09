@@ -59,11 +59,23 @@ export default function CookiePolicy() {
               <h3 className="text-base font-semibold text-foreground mt-4 mb-2">
                 Essential (always active)
               </h3>
+              {/* WEB-SEC-0xx: this paragraph used to name "security (CSRF
+                  tokens)" and "Supabase auth session cookies". Neither exists.
+                  src/lib/csrf.tsx was written and never imported by anything,
+                  and it wrote to sessionStorage rather than to a cookie; it has
+                  been deleted. The Supabase session lives in localStorage via
+                  the client's auth.storage adapter and travels as an
+                  Authorization bearer header, so it is not a cookie either.
+                  A cookie policy has to describe what the site actually
+                  stores. */}
               <p>
-                Required for authentication, session management, security (CSRF
-                tokens), load balancing, and fraud prevention. These cannot be
-                disabled because the site cannot function without them. Examples:
-                Supabase auth session cookies, Cloudflare load-balancer cookies.
+                Required to sign you in and keep you signed in, and for the
+                protections that sit in front of the site. Your sign-in session
+                is held in your browser&apos;s local storage rather than in a
+                cookie, so it is never sent to another site. Cloudflare, which
+                serves this site, sets its own bot-management cookie. These
+                cannot be turned off because sign-in and delivery depend on
+                them.
               </p>
 
               <h3 className="text-base font-semibold text-foreground mt-4 mb-2">

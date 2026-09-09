@@ -8,7 +8,6 @@
     "src/hooks/useResourceOwnership.ts",
     "src/hooks/useVirtualList.ts",
     "src/lib/conversionTracking.ts",
-    "src/lib/csrf.tsx",
     "src/lib/deferredLoader.ts",
     "src/lib/email-integration.ts",
     "src/lib/errorTracking.ts",

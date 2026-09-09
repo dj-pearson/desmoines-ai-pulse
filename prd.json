@@ -9250,12 +9250,56 @@
         "Baseline at filing: 48 findings. Breakdown by rule - side-tab (border-l-4 / border-left: 4px) is the largest group and the detector calls it the single most recognizable tell; then ai-color-palette (purple/violet/indigo gradients and headings), border-accent-on-rounded, gradient-text, bounce-easing, and one overused-font (Inter, loaded in src/lib/performanceConfig.ts).",
         "NOT every finding is a defect. src/lib/categoryColors.ts and src/lib/categoryStyles.ts use violet, indigo and purple as CATEGORY-DISTINGUISHING hues with measured contrast ratios recorded in the file header. Those are deliberate and stay. Several border-b-2 hits are hand-rolled `animate-spin rounded-full border-b-2` spinners - the fix there is a shared spinner component, not a colour change.",
         "Work public surfaces before admin ones: src/pages/Index.tsx (21 off-brand colour tokens, the highest-traffic page on the site), then ThingsToDoHub, TripPlanner, Restaurants, EventsPage, ArticleDetails, the pseo sections.",
-        "src/lib/styleUtils.ts line 16/17/63 carries `from-blue-600 via-purple-500 to-pink-500` as a shared hero gradient, so one edit there moves every page that reads it. Do that one first.",
-        "Land an npm script (check-ui-craft) that runs the detector against a committed baseline count and fails when the count rises, in the shape of the existing check-dom-budget / check-error-handling ratchets, and add it to pr-checks.yml."
+        "Land an npm script (check-ui-craft) that runs the detector against a committed baseline count and fails when the count rises, in the shape of the existing check-dom-budget / check-error-handling ratchets, and add it to pr-checks.yml.",
+        "CORRECTION to this story as filed: src/lib/styleUtils.ts is NOT a shared gradient every page reads - it is imported by nothing at all (see WEB-QUAL-013). Deleting it is the fix there, not recolouring it. Start instead with src/pages/Index.tsx, which has 21 off-brand colour tokens and is the highest-traffic page on the site."
       ],
       "priority": 2,
       "passes": false,
-      "notes": "FILED FROM THE LOOP, iteration 1. Too large for one iteration: ~230 off-brand colour tokens across 72 files. HIT THIS NEXT ITERATION starting with src/lib/styleUtils.ts and src/pages/Index.tsx."
+      "notes": "FILED FROM THE LOOP, iteration 1. Too large for one iteration: ~230 off-brand colour tokens across 72 files. Start with src/pages/Index.tsx."
+    },
+    {
+      "id": "WEB-SEC-034",
+      "title": "The cookie policy and consent banner told visitors that essential cookies include CSRF tokens; the CSRF module was never imported and there is no auth cookie",
+      "description": "As a visitor, I need the cookie disclosure to describe what the site actually stores. Two user-facing surfaces named a protection that does not run and a cookie that is not a cookie.",
+      "acceptanceCriteria": [
+        "src/pages/CookiePolicy.tsx said essential cookies cover 'security (CSRF tokens)' with the examples 'Supabase auth session cookies, Cloudflare load-balancer cookies'. src/components/CookieConsentBanner.tsx said 'Authentication, security, session state, CSRF protection.' Under GDPR/ePrivacy the disclosure has to match what is set, and neither claim did.",
+        "src/lib/csrf.tsx was imported by nothing - it sat in .github/dead-lib-baseline.json as unimported - and the three 'Required Action' items under the tick in docs/security/SECURITY_FIXES_IMPLEMENTATION.md (wire it into edge functions, forms, API calls) were never done. DELETED, not wired up.",
+        "Not wired up because classic CSRF needs the browser to attach credentials to a cross-site request by itself, which means a cookie. src/integrations/supabase/client.ts stores the session in localStorage through the auth.storage adapter, and supabase-js sends it as an Authorization bearer header. The deleted module also stored its token in sessionStorage, so both halves of its 'double submit' came from the same JavaScript-readable store - not a check.",
+        "The only first-party cookie this app writes is the shadcn sidebar state in src/components/ui/sidebar.tsx, an admin layout preference. Both surfaces now describe localStorage and Cloudflare's bot-management cookie instead.",
+        "Docs corrected rather than left standing: SECURITY_FIXES_IMPLEMENTATION.md section 3 rewritten from a tick to a withdrawal with the reasoning, docs/SECURITY.md line 90, LIVING_TECHNICAL_SPECIFICATION.md lines 1332 and 1366 ('CSRF protection with JWT' - JWT bearer auth is why CSRF does not apply, not how it was mitigated)."
+      ],
+      "priority": 1,
+      "passes": true,
+      "notes": "Found while working WEB-UX-034: src/lib/styleUtils.ts turned out to be dead, which led to .github/dead-lib-baseline.json and its 21 entries."
+    },
+    {
+      "id": "WEB-CI-035",
+      "title": "check-dead-lib-modules was red on the default branch, so every PR inherited it",
+      "description": "As a contributor, I need the PR checks to be green on an unmodified branch. src/hooks/use-native-share.tsx was unimported and not baselined, so `node scripts/check-dead-lib-modules.mjs` exited 1 on a pristine checkout of the branch head.",
+      "acceptanceCriteria": [
+        "Confirmed by stashing all local work and running the script on the clean tree: exit 1. Same failure mode as WEB-CI-033.",
+        "use-native-share.tsx was a dead twin. Native sharing has two live implementations already - ShareDialog.tsx's own handleNativeShare (navigator.share with a cancel-tolerant catch) and nativeShare() in src/lib/capacitorUtils.ts for the packaged apps. Deleted, per the baseline file's own instruction not to add entries to make CI pass.",
+        "VERIFIED: script exits 0; npm run check-imports finds no unresolved named imports; 577 vitest tests pass."
+      ],
+      "priority": 1,
+      "passes": true,
+      "notes": ""
+    },
+    {
+      "id": "WEB-QUAL-013",
+      "title": "20 modules in src/lib and src/hooks are imported by nothing, ~2,800 lines, several of them dead twins of a live feature",
+      "description": "As a maintainer, I need the dead-lib baseline to shrink rather than hold. Its own header says 'Do not add entries to make CI pass; delete the module or wire it up', and it has 20 entries plus 3 testOnly.",
+      "acceptanceCriteria": [
+        "Baseline after WEB-SEC-034 and WEB-CI-035: 20 unimported, 3 testOnly. Line counts: sitemapGenerator 331, email-integration 269, errorTracking 253, eventSubmissionService 229, sitemapEnhanced 227, useResourceOwnership 202, styleUtils 199, deferredLoader 195, sitemap 181, useVirtualList 120, queryKeys 112, use-touch-ripple 91, use-long-press 85, webVitalsRum 84, useGoogleIndexing 80, lazyLoad 50, guestFavoriteMigration 47, conversionTracking 42, useReducedMotion 36, sponsoredTracking 28.",
+        "THREE dead sitemap generators (sitemap.ts, sitemapEnhanced.ts, sitemapGenerator.ts, 739 lines) while the live one is scripts/generate-dynamic-sitemaps.ts, wired into `npm run build`. Read them before deleting - if any covers a route type the live generator misses, that is a separate SEO story.",
+        "useReducedMotion.ts is safely deletable: prefers-reduced-motion is already handled in src/index.css (TWO identical @media blocks, lines 833 and 1299 - collapse them) and in useAccessibility.ts.",
+        "styleUtils.ts is safely deletable and should go: it carries `from-blue-600 via-purple-500 to-pink-500` and hardcoded bg-white / text-gray-600 that would break dark mode if anything ever imported it. It is also a second definition of the skip link.",
+        "guestFavoriteMigration.ts is the one to check for USER-VISIBLE loss, not just weight: if a signed-out visitor can favourite and then sign up, this is the code that would carry those over and it does not run. Confirm against WEB-QA-017 first - CLAUDE.md records that the `favorites` table returned 42P01 in production.",
+        "errorTracking.ts (253) vs the live src/lib/errorHandler.ts, and webVitalsRum.ts (84) vs the live useWebVitals.ts, are the classic dead-twin shape: the better-written copy is the one that does not run."
+      ],
+      "priority": 2,
+      "passes": false,
+      "notes": "FILED FROM THE LOOP, iteration 2. Too large for one iteration. HIT THIS ON A LATER ITERATION, starting with the three sitemap generators (739 lines, one read) and guestFavoriteMigration (user-visible, small)."
     }
   ]
 }
