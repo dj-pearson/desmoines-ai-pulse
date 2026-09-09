@@ -68,9 +68,22 @@ export function isSubscriptionRowEntitled(
   }
 }
 
-/** Does an entitled tier satisfy a premium feature's minimum tier? */
+/**
+ * Does an entitled tier satisfy a premium feature's minimum tier?
+ *
+ * WEB-FEAT-018: this used to be `PREMIUM_FEATURES[feature] ?? 'free'`, so a
+ * name that is not in the map - a typo at the call site, or a feature renamed
+ * on one side only - resolved to the FREE tier and granted access to everyone.
+ * A gate that fails open is worse than no gate, because it looks like one. An
+ * unknown feature is now denied and logged; there is no request this can
+ * wrongly refuse that was not already a bug.
+ */
 export function hasFeatureAccess(tier: Tier, feature: string): boolean {
-  const required = PREMIUM_FEATURES[feature] ?? 'free';
+  const required = PREMIUM_FEATURES[feature];
+  if (!required) {
+    console.error(`[entitlements] unknown feature "${feature}" - denying access`);
+    return false;
+  }
   return TIER_RANK[tier] >= TIER_RANK[required];
 }
 

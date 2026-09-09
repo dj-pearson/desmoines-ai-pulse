@@ -5159,3 +5159,57 @@ FILES
   M src/pages/Attractions.tsx, Playgrounds.tsx, AdminContent.tsx
   M src/components/admin/AttractionManager.tsx, PlaygroundManager.tsx, HotelManager.tsx
   M prd.json  (WEB-PERF-033 passes=true)
+
+================================================================================
+## 2026-09-09 — WEB-FEAT-018 (a typo was an unlock; a subscriber saw the wall): DONE
+================================================================================
+Two defects in the paywall, opposite directions.
+
+1. UNKNOWN FEATURE NAME GRANTED ACCESS
+hasFeature was a switch whose `default` returned true, commented "Free
+features". So `feature="trip_plannner"` was not a broken gate, it was an OPEN
+one - the component works, the tests pass, the paywall is simply absent, and
+nothing reports it. supabase/functions/_shared/entitlements.ts had the same
+default (`PREMIUM_FEATURES[feature] ?? 'free'`), so the server agreed with the
+typo. Both now deny an unknown name and say so in development.
+- src/lib/premiumFeatures.ts is the vocabulary: a map, a PremiumFeature union,
+  requiredTierFor() returning null for "not a premium feature", and
+  tierHasFeature(). The 15 entries are exactly the old switch's cases; no
+  feature changed tier.
+- A unit test parses the edge function's map and compares it entry-for-entry
+  with the client's. The two drifting is how a feature ends up sold on the web
+  and refused by the API. Mutation-tested by moving trip_planner to vip on the
+  server side alone.
+
+2. THE PAYWALL FLASHED AT PEOPLE WHO HAD PAID
+useSubscription reports tier "free" until the user-subscriptions query lands,
+and the gates never read the loading flag. A VIP opening /trip-planner got
+"Upgrade to Unlock" first and the feature they pay for second, every load.
+PremiumGate now renders a skeleton, PremiumSection renders nothing, and
+PremiumButton is disabled with no upgrade tag, until the answer is known.
+subscriptionLoading and NOT isLoading: isLoading also covers the
+subscription_plans query, which runs for signed-out visitors and would put a
+skeleton in front of the paywall they are meant to see. A disabled query is not
+loading, so anonymous visitors reach the gate exactly as before.
+
+NOT DONE, DELIBERATELY
+- No safeStorage tier cache for first paint (the story asks for one). The
+  skeleton removes the wrong answer, which was the harm. A cached tier is a
+  second source of truth for an entitlement, and getting its invalidation wrong
+  on downgrade or expiry shows paid content to someone who no longer pays.
+- No Playwright smoke: WEB-CI-028 records that four specs already run nowhere.
+- AdBanner is listed in the story as affected and is NOT: it already returns
+  null while subscriptionLoading. Left alone.
+
+VERIFIED: 10 new tests (550 total pass), both mutation-tested. validate exit 0,
+check-edge-types exit 0, test:offline 19/19, touched files type-check clean as
+a file slice.
+
+FILES
+  A src/lib/premiumFeatures.ts
+  A src/lib/__tests__/premiumFeatures.test.ts
+  A src/components/__tests__/premiumGateLoading.test.tsx
+  M src/hooks/useSubscription.ts
+  M src/components/PremiumGate.tsx
+  M supabase/functions/_shared/entitlements.ts
+  M prd.json  (WEB-FEAT-018 passes=true)

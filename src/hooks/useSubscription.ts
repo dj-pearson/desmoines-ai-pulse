@@ -1,5 +1,6 @@
 import { useQuery, useQueryClient } from "@tanstack/react-query";
 import { supabase } from "@/integrations/supabase/client";
+import { tierHasFeature } from '@/lib/premiumFeatures';
 import { useAuth } from "./useAuth";
 import { useState } from "react";
 
@@ -217,33 +218,12 @@ export function useSubscription() {
 
   const limits = getLimits();
 
-  // Feature access checks
-  const hasFeature = (feature: string): boolean => {
-    const isInsiderOrHigher = tier === "insider" || tier === "vip";
-    switch (feature) {
-      // Insider+ features
-      case "unlimited_favorites":
-      case "early_access":
-      case "advanced_filters":
-      case "ad_free":
-      case "daily_digest":
-      case "priority_support":
-      case "trip_planner":
-      case "write_reviews":
-      case "save_searches":
-      case "create_alerts":
-        return isInsiderOrHigher;
-      // VIP-only features
-      case "vip_events":
-      case "reservation_assistance":
-      case "sms_alerts":
-      case "concierge":
-      case "local_perks":
-        return tier === "vip";
-      default:
-        return true; // Free features
-    }
-  };
+  // Feature access checks. The vocabulary and each feature's tier live in
+  // src/lib/premiumFeatures.ts (WEB-FEAT-018); this used to be a switch whose
+  // `default` returned true, so any name not listed - a typo in a `feature=`
+  // prop included - was an unlock rather than a broken gate. Unknown names are
+  // now denied, and reported in development.
+  const hasFeature = (feature: string): boolean => tierHasFeature(tier, feature);
 
   // Check if user can perform action within limits
   const canPerformAction = (
