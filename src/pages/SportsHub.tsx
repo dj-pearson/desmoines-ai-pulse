@@ -1,5 +1,5 @@
 import { Link } from 'react-router-dom';
-import { createEventSlugWithCentralTime } from "@/lib/timezone";
+import { createEventSlugWithCentralTime, formatEventPart, formatEventTimeOnly, centralDayStartUtcISO } from "@/lib/timezone";
 import Header from '@/components/Header';
 import Footer from '@/components/Footer';
 import SEOHead from '@/components/SEOHead';
@@ -18,10 +18,11 @@ import { EVENT_LIST_COLUMNS } from '@/lib/listColumns';
 import { SpriteIcon } from "@/components/ui/SpriteIcon";
 
 function useSportsEvents(timeframe: 'today' | 'week') {
-  const now = new Date();
-  const todayStart = new Date(now.getFullYear(), now.getMonth(), now.getDate()).toISOString();
-  const todayEnd = new Date(now.getFullYear(), now.getMonth(), now.getDate() + 1).toISOString();
-  const weekEnd = new Date(now.getFullYear(), now.getMonth(), now.getDate() + 7).toISOString();
+  // WEB-QA-029: these were midnight in the READER's timezone, so "Today"
+  // asked for the wrong window for anyone outside Central.
+  const todayStart = centralDayStartUtcISO(0);
+  const todayEnd = centralDayStartUtcISO(1);
+  const weekEnd = centralDayStartUtcISO(7);
 
   return useQuery({
     queryKey: ['sports-events', timeframe],
@@ -158,7 +159,7 @@ export default function SportsHub() {
                         )}
                         {event.date && (
                           <p className="text-sm text-muted-foreground mt-1">
-                            {new Date(event.date).toLocaleTimeString([], { hour: 'numeric', minute: '2-digit' })}
+                            {formatEventTimeOnly(event) ?? 'Time TBA'}
                           </p>
                         )}
                         {event.price && <Badge variant="outline" className="mt-2"><SpriteIcon name="ticket" className="h-3 w-3 mr-1" />{event.price}</Badge>}
@@ -186,10 +187,10 @@ export default function SportsHub() {
                       <CardContent className="p-4 flex items-center gap-4">
                         <div className="text-center min-w-[60px]">
                           <p className="text-xs text-muted-foreground uppercase">
-                            {new Date(event.date).toLocaleDateString([], { weekday: 'short' })}
+                            {formatEventPart(event, 'EEE')}
                           </p>
                           <p className="text-2xl font-bold">
-                            {new Date(event.date).getDate()}
+                            {formatEventPart(event, 'd')}
                           </p>
                         </div>
                         <div className="flex-1">

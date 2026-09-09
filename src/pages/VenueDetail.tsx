@@ -1,5 +1,5 @@
 import { useParams, Link } from 'react-router-dom';
-import { createEventSlugWithCentralTime } from "@/lib/timezone";
+import { createEventSlugWithCentralTime, formatEventPart, formatEventTimeOnly } from "@/lib/timezone";
 import { RouteCanonical } from "@/components/RouteCanonical";
 import Header from '@/components/Header';
 import Footer from '@/components/Footer';
@@ -151,18 +151,18 @@ export default function VenueDetail() {
                       <CardContent className="p-4 flex items-center gap-4">
                         <div className="text-center min-w-[60px]">
                           <p className="text-xs text-muted-foreground uppercase">
-                            {new Date(event.date).toLocaleDateString([], { month: 'short' })}
+                            {formatEventPart(event, 'MMM')}
                           </p>
                           <p className="text-2xl font-bold">
-                            {new Date(event.date).getDate()}
+                            {formatEventPart(event, 'd')}
                           </p>
                         </div>
                         <div className="flex-1">
                           <h3 className="font-semibold">{event.title}</h3>
                           <p className="text-sm text-muted-foreground">
-                            {new Date(event.date).toLocaleDateString([], { weekday: 'long' })}
+                            {formatEventPart(event, 'EEEE')}
                             {' · '}
-                            {new Date(event.date).toLocaleTimeString([], { hour: 'numeric', minute: '2-digit' })}
+                            {formatEventTimeOnly(event) ?? 'Time TBA'}
                           </p>
                         </div>
                         {event.price && <Badge variant="outline">{event.price}</Badge>}

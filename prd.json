@@ -9300,6 +9300,23 @@
       "priority": 2,
       "passes": false,
       "notes": "FILED FROM THE LOOP, iteration 2. Too large for one iteration. HIT THIS ON A LATER ITERATION, starting with the three sitemap generators (739 lines, one read) and guestFavoriteMigration (user-visible, small)."
+    },
+    {
+      "id": "WEB-QA-029",
+      "title": "/music, /sports and the venue and team pages rendered every event date in the READER's timezone, and printed the no-time sentinel as a real showtime",
+      "description": "As a visitor - and especially as the tourist this site is built for, reading it from somewhere else - I need the date and time of a Des Moines event to be the Des Moines date and time. Four routed pages formatted event instants with new Date(event.date).toLocaleDateString() and .getDate(), which format in whatever timezone the browser is set to.",
+      "acceptanceCriteria": [
+        "events.date, event_start_utc and event_start_local are instants (`timestamp with time zone`). A 10pm Central Friday show is 03:00Z Saturday, so an Eastern reader was shown the wrong weekday and the wrong day number on the date tile, and every reader at or east of UTC was shown the wrong date for anything after 6pm Central. 12 renders across /music, /sports, /music/venues/:slug and /sports/:slug, plus NLPSearchBar on the home page, PseoLiveListings, NeighborhoodGuide and both group planners on /community.",
+        "The same call sites printed a time UNCONDITIONALLY, so an event with no known start rendered NO_TIME_MARKER (19:31:58) as a confident '7:31 PM'. hasSpecificTime already knew the answer - it reads the source's own time_tbd flag first and the sentinel second - and nothing was asking it. formatEventTimeOnly now returns null and the pages show 'Time TBA'.",
+        "THE QUERY WINDOWS HAD THE SAME DEFECT, which is worse than the display: useMusicEvents and useSportsEvents built 'tonight', 'this weekend' and 'this week' from `new Date(now.getFullYear(), now.getMonth(), now.getDate())` - midnight where the READER is - and MusicHub took the weekend offset from `now.getDay()`. A reader in London opening /music at 2am was asking for a window that started at 6pm Central the previous day, so 'Tonight' showed last night's shows. Now centralDayStartUtcISO() and centralDayOfWeek().",
+        "useUserSubmittedEvents formatted the event date into the ADMIN NOTIFICATION EMAIL in the submitter's browser timezone, so the date the Des Moines admin read depended on where the submitter was sitting.",
+        "New helpers in src/lib/timezone.ts, matching the source order the existing formatEventDate/formatEventDateShort already use: formatEventPart(event, fmt), formatEventTimeOnly(event), centralDayStartUtcISO(offsetDays), centralDayOfWeek(). centralDayStartUtcISO converts each day start on its own rather than adding 24h, so DST boundaries fall where Des Moines has them.",
+        "VERIFIED: 8 new assertions in src/lib/__tests__/eventCentralTime.test.ts, including the fall-back boundary (Central midnight is 05:00Z before 2026-11-01 and 06:00Z after) and the 23:30-Central-is-tomorrow-in-UTC case. Whole suite re-run under TZ=Europe/London: 585 tests in 61 files pass. eslint 0 errors.",
+        "GUARDED: scripts/check-event-time-tz.mjs, zero-tolerance on reader-facing surfaces, excluding admin/CMS/CRM screens where browser-local is the right answer for a record timestamp. Wired into `npm run validate` and pr-checks.yml."
+      ],
+      "priority": 1,
+      "passes": true,
+      "notes": "Found by asking which public pages format an event date without going through src/lib/timezone.ts. EventDetails was already correct, which is why this survived - the surface everyone checks was the one that worked."
     }
   ]
 }

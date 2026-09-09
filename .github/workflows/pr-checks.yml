@@ -151,6 +151,16 @@ jobs:
       - name: Internal links resolve to a route
         run: npm run check-internal-links
 
+      # WEB-QA-029. events.date is an instant, so `new Date(x).toLocaleDateString()`
+      # renders it in the READER's timezone. A 10pm Central show is 03:00Z the next
+      # day, which is how /music, /sports and the venue and team pages showed an
+      # Eastern reader the wrong weekday and the wrong day number. The same call
+      # sites printed a time unconditionally, turning the 19:31:58 no-time sentinel
+      # into a confident "7:31 PM". Zero-tolerance on reader-facing surfaces; admin
+      # and CMS screens are excluded, where browser-local is the right answer.
+      - name: Event dates render in Central Time
+        run: npm run check-event-time-tz
+
       # The old domain and the old brand name must not reappear in shipped copy.
       - name: Check for brand leaks
         run: npm run check-brand-leak

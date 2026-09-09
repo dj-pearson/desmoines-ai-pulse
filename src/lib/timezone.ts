@@ -1,4 +1,4 @@
-import { parseISO } from "date-fns";
+import { addDays, parseISO } from "date-fns";
 import { toZonedTime, fromZonedTime, formatInTimeZone } from "date-fns-tz";
 import { createLogger } from '@/lib/logger';
 
@@ -206,4 +206,83 @@ export function formatEventDateShort(event: any): string {
     logger.error("formatEventDateShort", "Error formatting short event date", { error: String(error) });
     return "Date TBA";
   }
+}
+
+/**
+ * Source order for an event's start instant, matching formatEventDate and
+ * formatEventDateShort: the UTC column is the source of truth, the local
+ * column is the fallback the crawlers populate, `date` is the legacy column.
+ */
+function eventStartSource(event: any): string | null {
+  return event?.event_start_utc || event?.event_start_local || event?.date || null;
+}
+
+/**
+ * Format one part of an event's start - a weekday, a month abbreviation, a
+ * day number - in Central Time.
+ *
+ * WEB-QA-029. This exists because /music, /sports, /music/venues/:slug and
+ * /sports/:slug each rendered their date tiles with
+ * `new Date(event.date).toLocaleDateString(...)`, which formats in the
+ * READER'S timezone. events.date is `timestamp with time zone`, so a 10pm
+ * Central show is 03:00Z the next day and an Eastern reader is shown the wrong
+ * weekday and the wrong day number. The whole premise of these pages is what
+ * is on in Des Moines, so the answer must not depend on where the reader is
+ * sitting.
+ *
+ * Returns null when the event carries no usable start, so a caller can drop
+ * the element rather than print "Invalid Date".
+ */
+export function formatEventPart(event: any, formatStr: string): string | null {
+  const source = eventStartSource(event);
+  if (!source) return null;
+  try {
+    return formatInCentralTime(source, formatStr);
+  } catch (error) {
+    logger.error("formatEventPart", "Error formatting event part", { error: String(error) });
+    return null;
+  }
+}
+
+/**
+ * The event's start time in Central, or null when no specific time is known.
+ *
+ * WEB-QA-029. The four hub pages printed a time unconditionally, so an event
+ * with no known start rendered NO_TIME_MARKER (19:31:58) as a confident
+ * "7:31 PM". hasSpecificTime already knows the answer - it reads the source's
+ * own time_tbd flag first and the sentinel second - and nothing was asking it
+ * here.
+ */
+export function formatEventTimeOnly(event: any): string | null {
+  if (!hasSpecificTime(event)) return null;
+  return formatEventPart(event, "h:mm a");
+}
+
+/**
+ * The UTC instant at which a Central calendar day begins, as an ISO string.
+ * `offsetDays` counts Central calendar days from today, so 1 is tomorrow.
+ *
+ * WEB-QA-029. /music and /sports built their "tonight" and "this week"
+ * windows from `new Date(now.getFullYear(), now.getMonth(), now.getDate())` -
+ * midnight in the READER'S timezone. A reader in London opening /music at
+ * 2am is asking for a window that started at 6pm Central the previous day,
+ * so "Tonight" shows last night. Going through the Central calendar date
+ * also makes the DST boundaries fall where Des Moines has them, because each
+ * day start is converted on its own rather than by adding 24h.
+ */
+export function centralDayStartUtcISO(offsetDays = 0): string {
+  const todayCentral = formatInTimeZone(new Date(), CENTRAL_TIMEZONE, "yyyy-MM-dd");
+  const target = offsetDays === 0
+    ? todayCentral
+    : formatInTimeZone(
+        addDays(parseISO(`${todayCentral}T12:00:00Z`), offsetDays),
+        "UTC",
+        "yyyy-MM-dd"
+      );
+  return fromZonedTime(`${target}T00:00:00`, CENTRAL_TIMEZONE).toISOString();
+}
+
+/** Today's day of week in Central Time, 0 = Sunday through 6 = Saturday. */
+export function centralDayOfWeek(): number {
+  return Number(formatInTimeZone(new Date(), CENTRAL_TIMEZONE, "i")) % 7;
 }

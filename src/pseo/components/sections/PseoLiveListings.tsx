@@ -14,6 +14,7 @@ import { Link } from 'react-router-dom';
 import { Calendar, MapPin, DollarSign } from 'lucide-react';
 import type { PseoDimensionRef } from '../../schemas';
 import { CATEGORY_FILTERS, temporalRange } from '../../listingFilters';
+import { formatEventPart } from "@/lib/timezone";
 
 interface PseoLiveListingsProps {
   dimensions: PseoDimensionRef[];
@@ -122,7 +123,7 @@ function ListingCard({ item, entityType }: { item: ListingItem; entityType: stri
             {item.date && (
               <span className="flex items-center gap-1">
                 <Calendar className="h-3 w-3" />
-                {new Date(item.date).toLocaleDateString()}
+                {formatEventPart(item, 'MMM d, yyyy')}
               </span>
             )}
             {item.price && (
