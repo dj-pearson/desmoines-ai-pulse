@@ -142,6 +142,15 @@ jobs:
       - name: Discarded Supabase errors
         run: npm run check-error-handling
 
+      # WEB-ADS-014. The footer directory has had a route guard for a while;
+      # every other internal href in src/ had none, and two were dead - the
+      # advertising-policies link on the creative upload page, and the scraper
+      # docs link in admin. The SPA answers 200 for any path, so a dead
+      # internal link renders the 404 component instead of failing, and a
+      # crawler sees a soft 404.
+      - name: Internal links resolve to a route
+        run: npm run check-internal-links
+
       # The old domain and the old brand name must not reappear in shipped copy.
       - name: Check for brand leaks
         run: npm run check-brand-leak

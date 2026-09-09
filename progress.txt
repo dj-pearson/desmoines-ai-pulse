@@ -5406,3 +5406,54 @@ FILES
   M src/hooks/useNewsletterSubscription.ts
   A src/hooks/__tests__/useNewsletterSubscription.test.ts
   M prd.json  (WEB-FEAT-019 scoped down, still open)
+
+================================================================================
+## 2026-09-09 — WEB-ADS-014 (advertising policies): THE /advertising-policies HALF
+================================================================================
+Found by auditing every static internal href in src/ against App.tsx's route
+table - the footer directory has had a guard for a while, everything else had
+none. 57 distinct hrefs, 2 dead.
+
+/advertising-policies
+Three advertiser surfaces - UploadCreatives, CreativeUploadForm and
+AdvertiseSuccess - tell an advertiser their creative is reviewed against "our
+advertising policies" and link here. It was not a route. The policies were
+neither published nor written: an advertiser was asked to comply with a
+document that did not exist, against rules the platform could not fairly
+enforce because it had never stated them.
+
+The page is now real, and EVERY RULE ON IT IS ONE THE PLATFORM ACTUALLY
+APPLIES, read off campaign-creative-review/index.ts:
+  - MIN_DIMS per placement: 728x90 top_banner and below_fold, 300x250
+    featured_spot and sponsored_listing, 160x600 sidebar
+  - target URL: https, resolves, no private/localhost host, and no redirect
+    landing on non-https (the function follows and judges where it lands)
+  - copy screened against a family-friendly brand-safety standard
+  - creatives are not reviewed for a rejected, cancelled or suspended campaign
+Nothing invented, nothing promising a review this platform does not perform.
+The page says it is updated with the checks, so it has to be.
+
+/docs/scraping/README-SCRAPER-SETUP.md
+Admin scraper settings linked here. The file is real, docs/ is not copied into
+public/, so the SPA fallback served the app shell and the admin got the site
+instead of the document. Points at the file on GitHub now.
+
+GUARDED
+scripts/check-internal-links.mjs, wired into npm run validate and into
+pr-checks.yml. A dead internal link never fails loudly in this app: the SPA
+answers 200 for any path, so it renders the 404 component rather than erroring,
+and a crawler sees a soft 404. Resolves against literal routes, redirect
+sources in public/_redirects, and dynamic route parents. Mutation-tested with a
+fabricated href.
+
+VERIFIED: page renders at /advertising-policies in a real browser (h1
+"Advertising Policies", 7 sections, correct title, not the 404 component).
+validate exit 0 with the new check in it, 573 tests pass, test:offline 19/19,
+check-edge-types exit 0, SEO route parity still consistent.
+
+FILES
+  A src/pages/AdvertisingPolicies.tsx
+  A scripts/check-internal-links.mjs
+  M src/App.tsx, src/components/admin/ScraperSettings.tsx
+  M package.json, .github/workflows/pr-checks.yml
+  M prd.json  (WEB-ADS-014 scoped down, still open)
