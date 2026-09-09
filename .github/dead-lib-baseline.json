@@ -23,7 +23,6 @@
     "src/lib/webVitalsRum.ts"
   ],
   "testOnly": [
-    "src/hooks/useUrlFilterState.ts",
     "src/lib/fetchWithRetry.ts",
     "src/lib/geo.ts"
   ]

@@ -1,4 +1,4 @@
-import React, { useState, useMemo, lazy } from "react";
+import React, { useEffect, useState, useMemo, lazy } from "react";
 import Header from "@/components/Header";
 import Footer from "@/components/Footer";
 import EnhancedLocalSEO from "@/components/EnhancedLocalSEO";
@@ -39,6 +39,7 @@ import { Star, Filter, List, Map, TreePine, SlidersHorizontal, ChevronRight } fr
 // 2,388 elements (WEB-PERF-023).
 import { SpriteIcon } from "@/components/ui/SpriteIcon";
 import { Link } from "react-router-dom";
+import { useUrlFilters } from "@/hooks/useUrlFilters";
 
 // Lazy load map to prevent react-leaflet bundling issues
 const PlaygroundsMap = lazy(() => import("@/components/PlaygroundsMap"));
@@ -55,14 +56,45 @@ export default function Playgrounds() {
   const isMobile = useIsMobile();
   useDocumentTitle("Playgrounds");
 
-  // Filter states
-  const [searchQuery, setSearchQuery] = useState("");
-  const [selectedAgeRange, setSelectedAgeRange] = useState("all");
-  const [location, setLocation] = useState("any-location");
+  // URL-synced filters (WEB-UX-035). These lived in local React state, so a
+  // filtered view could not be shared or bookmarked and - the everyday cost -
+  // tapping into a playground and pressing Back came back to an unfiltered
+  // list. useUrlFilters is the same hook /events and /attractions already use.
+  //
+  // showFilters, showMobileFilters and viewMode stay local on purpose: they
+  // are chrome, not a description of what is being shown, so they do not
+  // belong in a link someone shares.
+  const { getStr, setParam, clearParams } = useUrlFilters();
+
+  const urlSearch = getStr("q", "");
+  const selectedAgeRange = getStr("age", "all");
+  const location = getStr("location", "any-location");
+  const featuredOnly = getStr("featured", "all");
+
+  const setSelectedAgeRange = (v: string) => setParam("age", v, { def: "all" });
+  const setLocation = (v: string) => setParam("location", v, { def: "any-location" });
+  const setFeaturedOnly = (v: string) => setParam("featured", v, { def: "all" });
+
+  // Local immediate search input; mirrored to the URL debounced with replace,
+  // so typing does not stack a history entry per keystroke.
+  const [searchQuery, setSearchQuery] = useState(() => urlSearch);
   const [showFilters, setShowFilters] = useState(true);
   const [showMobileFilters, setShowMobileFilters] = useState(false);
-  const [featuredOnly, setFeaturedOnly] = useState("all");
   const [viewMode, setViewMode] = useState('list');
+
+  useEffect(() => {
+    if (searchQuery === urlSearch) return;
+    const timer = setTimeout(
+      () => setParam("q", searchQuery, { def: "", replace: true }),
+      300,
+    );
+    return () => clearTimeout(timer);
+  }, [searchQuery, urlSearch, setParam]);
+
+  // Back/forward and shared links: pull the URL value back into the input.
+  useEffect(() => {
+    setSearchQuery(urlSearch);
+  }, [urlSearch]);
 
   // WEB-PERF-028 AC4. The hook used to be called with no arguments at all --
   // every playground, every column -- and four filters applied client-side.
@@ -122,9 +154,7 @@ export default function Playgrounds() {
 
   const handleClearFilters = () => {
     setSearchQuery("");
-    setSelectedAgeRange("all");
-    setLocation("any-location");
-    setFeaturedOnly("all");
+    clearParams(["q", "age", "location", "featured"]);
     toast({
       title: "Filters Cleared",
       description: "All filters have been reset",

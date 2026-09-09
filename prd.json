@@ -9299,7 +9299,7 @@
       ],
       "priority": 2,
       "passes": false,
-      "notes": "FILED FROM THE LOOP, iteration 2. Too large for one iteration. HIT THIS ON A LATER ITERATION, starting with the three sitemap generators (739 lines, one read) and guestFavoriteMigration (user-visible, small)."
+      "notes": "FILED FROM THE LOOP, iteration 2. Too large for one iteration. HIT THIS ON A LATER ITERATION, starting with the three sitemap generators (739 lines, one read) and guestFavoriteMigration (user-visible, small). UPDATE (iteration 6): useUrlFilterState.ts deleted with WEB-UX-035; testOnly is down to fetchWithRetry.ts and geo.ts."
     },
     {
       "id": "WEB-QA-029",
@@ -9379,6 +9379,23 @@
       "priority": 2,
       "passes": false,
       "notes": "FILED FROM THE LOOP, iteration 5. Too large for one iteration: 79 call sites. HIT THIS ON A LATER ITERATION, starting with the images that have no width/height inside a container that does not reserve height."
+    },
+    {
+      "id": "WEB-UX-035",
+      "title": "/playgrounds, /articles and /deals held their filters in local React state, so Back from a detail page came back to an unfiltered list",
+      "description": "As a visitor browsing a filtered list, I need my filters to survive tapping into an item and pressing Back, and I need to be able to share the filtered view. Three list pages kept every filter in useState, so neither worked.",
+      "acceptanceCriteria": [
+        "The everyday cost is the back button, not the shareable link: a parent filters /playgrounds to ages 2-5 in Ankeny, taps a playground, presses Back, and gets the full unfiltered list. Same on /articles and /deals.",
+        "useUrlFilters already existed and is what /events and /attractions use. All three pages now go through it: /playgrounds gets q, age, location, featured; /articles gets q, category, sort; /deals gets category.",
+        "/deals is the sharpest case - the canonical comment in that file already reasons about 'any ?category= permutation', so the SEO handling anticipated a URL param the page never read or wrote.",
+        "viewMode, showFilters and showMobileFilters stay local on purpose. They are chrome, not a description of what is being shown, so they do not belong in a link someone shares.",
+        "Search keeps a local immediate input mirrored to the URL on a 300ms debounce with replace:true, matching what EventsPage already does, so typing does not stack one history entry per keystroke. A second effect pulls the URL value back into the input for back/forward and shared links.",
+        "DELETED src/hooks/useUrlFilterState.ts and its test. It was a dead twin of useUrlFilters, listed as testOnly in the dead-lib baseline - and its test docblock claimed to cover 'the Events/Restaurants/Attractions pages', which use the OTHER hook. That is the trap the baseline's own header names: a green suite over code nothing runs.",
+        "VERIFIED: 8 new assertions in src/hooks/__tests__/useUrlFilters.test.tsx for the live hook, which had none - covering default-value omission, page reset, Clear-all leaving non-filter params alone, and the NaN fallback on getNum. 588 tests in 61 files pass, eslint 0 errors, dead-lib baseline down to 2 testOnly entries."
+      ],
+      "priority": 2,
+      "passes": true,
+      "notes": "Found by asking which list pages sync filters to the URL. Two did, and the tested hook turned out to be the dead one."
     }
   ]
 }
