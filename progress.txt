@@ -5360,3 +5360,49 @@ FILES
   M src/hooks/useNLPSearch.ts
   A src/hooks/__tests__/useNLPSearch.rejection.test.ts
   M prd.json  (WEB-QA-027 filed+passed, WEB-QA-028 and WEB-QUAL-012 filed)
+
+================================================================================
+## 2026-09-09 — WEB-FEAT-019 (the newsletter's unkeepable promises): CLIENT HALF
+================================================================================
+ITERATION 11 SPENT MOST OF ITS TIME RULING THINGS OUT, which is worth recording
+because all of it was verified rather than assumed:
+- Mobile sweep at 375px over 7 routes: ZERO axe violations, ZERO horizontal
+  overflow. The responsive work is holding.
+- The skip link measures 1x1 in the DOM and looked broken. It is not: focused
+  it is 221x50 at top-left, and activating it moves focus to
+  <main id="main-content" tabindex="-1">. Correct sr-only/focus:not-sr-only.
+- /hotels 404s, and that is right - the route is /stay, and every link,
+  breadcrumb and canonical uses it. My URL guess, not a bug.
+- Hub pages "showing nothing" when the backend is unreachable turned out to be
+  a measurement error: at 3 seconds they are still retrying. At 12 seconds all
+  five render real error copy ("Unable to Load Events", "Try Again"). No defect.
+
+THE ACTUAL FINDING
+- The success toast said "Check your email for a confirmation." NOTHING SENDS
+  ONE. No token, no double opt-in, no sender in any of the 73 edge functions.
+  Readers were left waiting for mail that does not exist; the ones who decided
+  the signup had failed were closer to right than the ones who trusted it.
+- The duplicate-address branch said "You're already subscribed! Check your
+  inbox for our latest updates." For the person most likely to see it - someone
+  who unsubscribed and wants back - BOTH halves are false. The hook cannot tell
+  active from unsubscribed (SELECT is admin-only), so it now says only what is
+  certainly true.
+- unsubscribe() and updatePreferences() are DELETED rather than fixed.
+  newsletter_subscribers has INSERT-for-anyone and SELECT-for-admins and NO
+  UPDATE POLICY, so unsubscribe()'s UPDATE matched zero rows, PostgREST returns
+  no error for a zero-row update, and the hook announced "You've been
+  unsubscribed. We're sorry to see you go!" - a false success on the one action
+  a person has a legal right to. Neither had a caller. A comment in their place
+  says why, so nobody re-adds a browser-side version.
+
+VERIFIED: 4 new tests (573 total pass) asserting the COPY, which is deliberate:
+the control flow was never wrong. validate exit 0, test:offline 19/19, touched
+files type-check clean as a file slice.
+
+STILL OPEN on WEB-FEAT-019: the edge function, the confirm token, resubscribe,
+digest filtering on status='active', the consent record. All need a migration.
+
+FILES
+  M src/hooks/useNewsletterSubscription.ts
+  A src/hooks/__tests__/useNewsletterSubscription.test.ts
+  M prd.json  (WEB-FEAT-019 scoped down, still open)
