@@ -9158,7 +9158,7 @@
     },
     {
       "id": "WEB-CI-034",
-      "title": "The 'Offline helper suites' PR step is red too: the runner spawns node, not tsx",
+      "title": "The 'Offline helper suites' PR step is red: the footer links every page at a retired /calendar",
       "description": "As a developer, I need the second red step in pr-checks.yml fixed. `npm run test:offline` reports 18/19 and exits 1, on this branch's base as well as with changes - scripts/__tests__/site-directory-routes.test.mjs dies with ERR_UNKNOWN_FILE_EXTENSION '.tsx' for src/components/seo/SiteDirectory.tsx. The suite imports that .tsx module deliberately, to read DIRECTORY_SECTIONS and DIRECTORY_HREFS rather than re-describe them.",
       "acceptanceCriteria": [
         "Root cause: scripts/run-offline-suites.mjs:66 spawns `process.execPath` (plain node) with `process.execArgv`, directly under a comment that says 'tsx, not node: several suites import a .ts module'. The package script runs the PARENT under tsx; whatever registers tsx for the parent is not reaching the child through execArgv, so the child is a bare node with no loader.",
@@ -9167,8 +9167,8 @@
         "One suite out of nineteen has been dead this whole time while the step reported a tidy 18/19: check whether the runner should fail LOUDER on a suite that cannot start, as opposed to one that runs and fails an assertion."
       ],
       "priority": 2,
-      "passes": false,
-      "notes": "Filed 2026-09-09 on claude/web-platform-improvements-loop-0px3u1 while closing WEB-CI-033. Next iteration's candidate. With this and WEB-CI-033 done, the PR job should be green on the base for the first time in this loop."
+      "passes": true,
+      "notes": "Filed 2026-09-09 on claude/web-platform-improvements-loop-0px3u1 while closing WEB-CI-033. Next iteration's candidate. With this and WEB-CI-033 done, the PR job should be green on the base for the first time in this loop.\n\nDONE 2026-09-09, and THE FILED DIAGNOSIS WAS WRONG - recorded here rather than quietly corrected. The runner is fine: scripts/run-offline-suites.mjs spawns process.execPath with process.execArgv, and under `tsx` that argv carries --require preflight.cjs and --import loader.mjs, so the child does load .tsx. The ERR_UNKNOWN_FILE_EXTENSION in the story was from running the suite directly under plain `node` while diagnosing, not from the runner. Under the runner the suite RUNS and reports a real failing check: 'no href points at a route that does not exist -> /calendar'.\n\nThe actual defect: SiteDirectory renders in the footer of every page and carried an 'Event calendar' link to /calendar. WEB-FEAT-027 removed that route (its hook was mock data, so the page could never show anything) and kept a 301 to /events in public/_redirects for already-indexed links. So the footer of ~1,100 pages sent every visitor through a redirect, to a page the same section already links directly, under a title promising a calendar that no longer exists. Link removed.\n\nThe test now separates the two cases: an href that resolves nowhere (a soft 404 on every page) and one that resolves only through a redirect. /calendar failed as the first, which sends the reader hunting for a missing route instead of a stale link. Mutation-tested both branches. test:offline is 19/19."
     }
   ]
 }

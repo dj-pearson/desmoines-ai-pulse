@@ -5085,3 +5085,36 @@ FILES
   M supabase/functions/_typecheck/deno.d.ts
   M .github/edge-type-baseline.json
   M prd.json  (WEB-CI-033 passes=true, WEB-CI-034 filed)
+
+================================================================================
+## 2026-09-09 — WEB-CI-034 (the footer linked every page at a dead /calendar): DONE
+================================================================================
+THE FILED DIAGNOSIS WAS WRONG, and it is worth saying so. The story blamed
+scripts/run-offline-suites.mjs for spawning plain node. It does not: it spawns
+process.execPath with process.execArgv, and under tsx that argv carries
+--require preflight.cjs and --import loader.mjs, so the child loads .tsx fine.
+The ERR_UNKNOWN_FILE_EXTENSION came from running the suite directly under node
+while diagnosing. Under the runner the suite RUNS and fails a real check.
+
+THE ACTUAL DEFECT
+SiteDirectory renders in the footer of EVERY page and carried an "Event
+calendar" link to /calendar. WEB-FEAT-027 removed that route - its hook was
+mock data, so the page could never show anything - and kept a 301 to /events
+in public/_redirects for links already indexed. So the footer of ~1,100 pages
+pushed every visitor through a redirect, landing on a page the same section
+already links directly, under a title promising a calendar that no longer
+exists. Link removed.
+
+THE CHECK NOW DISTINGUISHES TWO THINGS
+An href that resolves NOWHERE is a soft 404 on every page. An href that
+resolves only through a 301 is a wasted hop and a stale promise. /calendar was
+reported as the first, which sends the reader looking for a missing route
+rather than a stale link. Split into two checks, both mutation-tested.
+
+VERIFIED: test:offline 19/19 (was 18/19 and exit 1 on the base). validate exit
+0, check-edge-types exit 0, 536 unit tests pass.
+
+FILES
+  M src/components/seo/SiteDirectory.tsx
+  M scripts/__tests__/site-directory-routes.test.mjs
+  M prd.json  (WEB-CI-034 passes=true, title and diagnosis corrected)

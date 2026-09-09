@@ -65,7 +65,13 @@ export const DIRECTORY_SECTIONS: DirectorySection[] = [
       { title: "Kids and family events", href: "/events/kids" },
       { title: "Date night", href: "/events/date-night" },
       { title: "Events near me", href: "/events/near-me" },
-      { title: "Event calendar", href: "/calendar" },
+      // WEB-CI-034: no "Event calendar" entry. /calendar was removed in
+      // WEB-FEAT-027 (its hook was mock data, so the page could never show
+      // anything) and survives only as a 301 to /events in public/_redirects,
+      // kept for links already indexed. Advertising it in the footer of ~1,100
+      // pages sent every visitor through a redirect to a page this section
+      // already links directly, under a title promising a calendar that no
+      // longer exists.
       { title: "Concerts and live music", href: "/music" },
       { title: "Sports", href: "/sports" },
       { title: "Iowa State Fair", href: "/iowa-state-fair" },
