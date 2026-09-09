@@ -7764,8 +7764,8 @@
         "Verify with the Rich Results test on /"
       ],
       "priority": 3,
-      "passes": false,
-      "notes": "Filed 2026-09-02 from the codebase audit on claude/codebase-audit-prd-k01kxz. Evidence is from the working tree; production was not probed (no Supabase credentials in the container)."
+      "passes": true,
+      "notes": "Filed 2026-09-02 from the codebase audit on claude/codebase-audit-prd-k01kxz. Evidence is from the working tree; production was not probed (no Supabase credentials in the container).\n\nDONE 2026-09-09 on claude/web-platform-improvements-loop-0px3u1. Index.tsx keeps the only WebSite node and now targets /search?q=, which SearchResults.tsx reads. Removed the duplicate node from SEOHead.tsx (30 pages) and EnhancedLocalSEO.tsx (the event landing pages). EventsPage additionally reads 'search' as an alias for 'q', because a URL shape that has been in structured data for as long as this one cannot just stop working - anything already indexed keeps filtering. Guarded by a new checkWebsiteNodes() in scripts/check-duplicate-schema.mjs (runs in npm run validate): one allowed owner, no /events?search= target, and the two unmounted emitters (WebSiteSchema.tsx, SEOOptimizedHead.tsx) fail the check the moment anything imports them. It only counts TOP-LEVEL nodes - isPartOf: { '@type': 'WebSite' } in SpeakableSchema and PseoPage is a valid reference, and the first version of the guard flagged both. Mutation-tested both branches. The Rich Results check on / is still open, since it needs the deployed page."
     },
     {
       "id": "WEB-SEO-030",
@@ -9127,6 +9127,20 @@
       "priority": 2,
       "passes": false,
       "notes": "Filed 2026-09-09 on claude/web-platform-improvements-loop-0px3u1 while closing WEB-FEAT-033. Splits the measurement/perf half off WEB-CI-030, which stays open for the wiring. The same 21-minute run found two live regressions that had reached main unchallenged (WEB-FEAT-033, and the stale-types TS2352 in useEventIndoorFlags), which is the argument for paying to make it fast."
+    },
+    {
+      "id": "WEB-CI-032",
+      "title": "npm run validate is red on main, and no workflow runs it",
+      "description": "As a developer, I need the repo's own validate gate to be green and enforced. `npm run check-error-handling` reports 146 discarded Supabase errors against a baseline of 144, with six regressed or new files - src/contexts/AuthContext.tsx (2 -> 3), src/hooks/useActiveAds.ts (NEW), src/hooks/useProfile.ts (NEW), and the create-subscription-checkout, delete-user-account and track-ad-event edge functions. Verified 2026-09-09 in a clean stash on this branch's base, so it is not from any in-flight change. It survives because pr-checks.yml runs its checks a la carte and never runs `npm run validate`; the only workflow that does is dependency-update.yml, which fires on a schedule against a dependency bump.",
+      "acceptanceCriteria": [
+        "Fix the six regressions rather than re-baselining. supabase-js resolves with an { error } object instead of throwing, and esbuild.drop strips console.* in production, so a discarded error is genuinely silent - the auth and checkout paths are the worst places for that.",
+        "AuthContext going 2 -> 3 is the one to read first: a discarded error in the session path is how a signed-in user ends up in an unexplained signed-out state.",
+        "Then decide the enforcement question: either add the missing checks to pr-checks.yml individually, or add one `npm run validate` step and drop the duplicates. Today's a-la-carte list omits check-error-handling, check-brand-leak, check-schema-placeholders and check-annual-dates.",
+        "Whatever lands must be green on the default branch on the day it lands, or it teaches everyone to ignore it - the trap scripts/strict-ratchet.mjs already documents twice."
+      ],
+      "priority": 2,
+      "passes": false,
+      "notes": "Filed 2026-09-09 on claude/web-platform-improvements-loop-0px3u1, found while running validate for WEB-SEO-029. Next iteration's candidate: the six error-handling regressions are small and independent, the CI wiring question is the larger half."
     }
   ]
 }

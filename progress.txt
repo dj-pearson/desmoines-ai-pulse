@@ -4940,3 +4940,53 @@ FILES
   M src/hooks/useEventIndoorFlags.ts
   M app-type-baseline.json
   M prd.json  (WEB-FEAT-033 passes=true, WEB-CI-031 filed)
+
+================================================================================
+## 2026-09-09 — WEB-SEO-029 (one WebSite node, working SearchAction): DONE
+================================================================================
+The sitelinks search box, if Google ever granted it, sent people to
+/events?search={term} - a parameter EventsPage has never read. It reads `q`.
+So the one search entry point Google can offer for this domain landed the
+visitor on an unfiltered event list.
+
+FIXED
+- Index.tsx: SearchAction now targets /search?q={search_term_string}, the page
+  actually built for a free-text query (SearchResults.tsx:163 reads ?q=).
+- SEOHead.tsx: dropped the WebSite node. It was emitted on all 30 pages that
+  mount SEOHead, each one a site-level claim competing with Index's, and each
+  carrying the same dead target.
+- EnhancedLocalSEO.tsx: same node removed from the event landing pages
+  (/events/free, /events/date-night, /events/kids, /events/location/*).
+- EventsPage.tsx: reads 'search' as an alias for 'q'. The dead parameter has
+  been in structured data long enough to be indexed, and CLAUDE.md's rule on
+  public URL shapes says you do not simply stop honouring one. 'q' wins.
+
+GUARDED
+- checkWebsiteNodes() in scripts/check-duplicate-schema.mjs, in npm run
+  validate: one allowed owner, no /events?search= target anywhere, and the two
+  unmounted emitters (WebSiteSchema.tsx, SEOOptimizedHead.tsx) fail the moment
+  anything imports them. Counts TOP-LEVEL nodes only - the first version
+  flagged SpeakableSchema and PseoPage, whose isPartOf: { '@type': 'WebSite' }
+  is a valid reference to the site, not a competing node.
+
+VERIFIED: mutation-tested both branches of the guard (restoring the old target
+fails it; adding a WebSite node back to SEOHead fails it). 536 unit tests pass.
+lint, check-imports, check-schema, check-seo-routes, check-sitemap-redirects,
+check-icon-sprite, check-brand-leak, check-schema-placeholders,
+check-annual-dates all green.
+
+NOT VERIFIED: the Rich Results test on /, which needs the deployed page.
+
+FILED
+- WEB-CI-032: `npm run validate` is RED on this branch's base, independently of
+  anything here - check-error-handling reports 146 vs a baseline of 144, six
+  files regressed, including AuthContext 2 -> 3. Confirmed in a clean stash. It
+  survives because pr-checks.yml runs checks a la carte and never runs validate.
+
+FILES
+  M src/pages/Index.tsx
+  M src/components/SEOHead.tsx
+  M src/components/EnhancedLocalSEO.tsx
+  M src/pages/EventsPage.tsx
+  M scripts/check-duplicate-schema.mjs
+  M prd.json  (WEB-SEO-029 passes=true, WEB-CI-032 filed)

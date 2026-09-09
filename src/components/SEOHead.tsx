@@ -234,21 +234,15 @@ export default function SEOHead({
         })}
       </script>
 
-      {/* Default WebSite Structured Data with SearchAction */}
-      <script type="application/ld+json">
-        {JSON.stringify({
-          "@context": "https://schema.org",
-          "@type": "WebSite",
-          "url": baseUrl,
-          "name": BRAND.name,
-          "description": BRAND.description,
-          "potentialAction": {
-            "@type": "SearchAction",
-            "target": `${baseUrl}/events?search={search_term_string}`,
-            "query-input": "required name=search_term_string"
-          }
-        })}
-      </script>
+      {/* WEB-SEO-029: the WebSite node used to be emitted HERE, on all 30 pages
+          that mount SEOHead, with a SearchAction target of
+          /events?search={search_term_string} - a parameter EventsPage does not
+          read (it reads 'q'). Two problems in one node: a sitelinks search box
+          would have landed on an unfiltered list, and a WebSite node repeated
+          on every page contradicts the one Index.tsx publishes. WebSite
+          describes the SITE, so it belongs on the home page once. It now lives
+          only in Index.tsx, pointing at /search?q=, which SearchResults.tsx
+          honours. Do not re-add it here. */}
 
       {/* Additional Meta for Search Engines */}
       <meta name="theme-color" content={BRAND.themeColor} />

@@ -240,7 +240,11 @@ export default function Index() {
         "@type": "SearchAction",
         "target": {
           "@type": "EntryPoint",
-          "urlTemplate": `${BRAND.baseUrl}/events?search={search_term_string}`,
+          // WEB-SEO-029: was /events?search=, which nothing reads. EventsPage
+          // takes 'q' and /search is the page built for a free-text query
+          // (SearchResults.tsx reads ?q=), so a granted sitelinks search box
+          // used to drop the visitor on an unfiltered events list.
+          "urlTemplate": `${BRAND.baseUrl}/search?q={search_term_string}`,
           "actionPlatform": [
             "http://schema.org/DesktopWebPlatform",
             "http://schema.org/MobileWebPlatform",

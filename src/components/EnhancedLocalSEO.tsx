@@ -150,18 +150,11 @@ export default function EnhancedLocalSEO({
     ...(BRAND.social.length > 0 ? { sameAs: [...BRAND.social] } : {}),
   };
 
-  // WebSite Schema with SearchAction
-  const websiteSchema = {
-    "@context": "https://schema.org",
-    "@type": "WebSite",
-    name: BRAND.name,
-    url: BRAND.baseUrl,
-    potentialAction: {
-      "@type": "SearchAction",
-      target: `${BRAND.baseUrl}/search?q={query}`,
-      "query-input": "required name=query",
-    },
-  };
+  // WEB-SEO-029: no WebSite node here. This component mounts on the event
+  // landing pages (/events/free, /events/date-night, /events/kids,
+  // /events/location/*), and a WebSite node on each of them is a site-level
+  // claim repeated per page, competing with the one Index.tsx publishes. The
+  // canonical node, with the SearchAction, lives on / only.
 
   // Breadcrumb Schema
   const breadcrumbSchema =
@@ -355,10 +348,6 @@ export default function EnhancedLocalSEO({
       {/* Schema.org Structured Data */}
       <script type="application/ld+json">
         {JSON.stringify(organizationSchema)}
-      </script>
-
-      <script type="application/ld+json">
-        {JSON.stringify(websiteSchema)}
       </script>
 
       {breadcrumbSchema && (

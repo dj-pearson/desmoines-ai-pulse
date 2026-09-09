@@ -126,7 +126,14 @@ export default function EventsPage() {
   // URL-synced filters (WEB-UX-001): shareable + survive back/forward. The
   // debounced search value lives in the URL ('q'); date presets in 'preset'.
   const { getStr, getNum, setParam, clearParams } = useUrlFilters();
-  const debouncedSearchQuery = getStr("q", "");
+  // 'search' is read as an alias for 'q'. The site's WebSite SearchAction
+  // advertised /events?search={term} for as long as it has been indexed, and
+  // this page has only ever read 'q', so every such link arrived as an
+  // unfiltered list (WEB-SEO-029). The schema now points at /search?q=, but a
+  // public URL shape that has been in structured data cannot just stop working
+  // - anything already indexed or bookmarked keeps filtering. 'q' wins when
+  // both are present, since that is the one this page writes.
+  const debouncedSearchQuery = getStr("q", "") || getStr("search", "");
   const selectedCategory = getStr("category", "all");
   const location = getStr("location", "any-location");
   const priceRange = getStr("price", "any-price");
