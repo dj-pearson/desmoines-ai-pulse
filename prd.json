@@ -9139,8 +9139,22 @@
         "Whatever lands must be green on the default branch on the day it lands, or it teaches everyone to ignore it - the trap scripts/strict-ratchet.mjs already documents twice."
       ],
       "priority": 2,
+      "passes": true,
+      "notes": "Filed 2026-09-09 on claude/web-platform-improvements-loop-0px3u1, found while running validate for WEB-SEO-029. Next iteration's candidate: the six error-handling regressions are small and independent, the CI wiring question is the larger half.\n\nDONE 2026-09-09. All six fixed, nothing re-baselined away: check-error-handling now reports 137 sites across 95 files, down from 146/101, and the baseline was re-cut at the lower number. The three that mattered were money or access: create-subscription-checkout discarded the error on BOTH double-charge guards (a failed read reads as 'no subscription' and the sale goes through), delete-user-account discarded it on the subscription lookup that feeds the Stripe teardown (a failed read erases the only mapping to the customer while the charge keeps recurring), and AuthContext cached isAdmin:false for five minutes on a failed role read. All three now refuse rather than guess. track-ad-event and useActiveAds still fall back to anonymous, which is correct - an ad must render - but they log it. useProfile throws on a failed read-back instead of returning null, so TanStack retries rather than the app concluding the user has no profile.\n\nCI half: pr-checks.yml ran nine of validate's fourteen checks. Added the four green ones (check-error-handling, check-brand-leak, check-schema-placeholders, check-annual-dates). NOT added as a single `npm run validate` step, because validate's first entry is the no-op type-check (WEB-CI-030) and folding it in would hide that. See WEB-CI-033 for the fifth: check-edge-types is already a step here and is RED on the base."
+    },
+    {
+      "id": "WEB-CI-033",
+      "title": "PR checks are red on the default branch: check-edge-types fails on 10 errors in six edge test files",
+      "description": "As a developer, I need the PR gate to be green when a PR opens. `npm run check-edge-types` exits 1 on this branch's base - verified 2026-09-09 in a clean stash, 168 errors across 37 files against a baseline that allows fewer, with six _tests/ files having gone 0 -> non-zero. It is step 'Edge functions gained no type errors' in pr-checks.yml, so every PR inherits a red check it did not cause. That is the precise failure mode scripts/strict-ratchet.mjs warns about twice: a gate that always fails teaches everyone to ignore it.",
+      "acceptanceCriteria": [
+        "The 10 errors: campaign-lifecycle-contract.test.ts (4: TS18047 'enumBlock' possibly null, TS2488 on a RegExpMatchArray), campaign-pricing-authority.test.ts (2: 'fn' possibly null), new-user-profile-contract.test.ts (1), scraping-dispatch-status.test.ts (1), sponsored-listing-activation.test.ts (1), no-embedded-credentials.test.ts (1: TS2694 Namespace 'Deno' has no exported member 'DirEntry').",
+        "Nine of the ten are null-narrowing on a regex or lookup result in a test helper. Fix them in the test, do not re-baseline: a test that reads a null match is a test that can pass vacuously, which is its own defect.",
+        "The Deno.DirEntry one is a shim gap, not a test defect - supabase/functions/_typecheck/ is where that gets declared.",
+        "Confirm the step is green on the base commit before closing, not just on the branch."
+      ],
+      "priority": 2,
       "passes": false,
-      "notes": "Filed 2026-09-09 on claude/web-platform-improvements-loop-0px3u1, found while running validate for WEB-SEO-029. Next iteration's candidate: the six error-handling regressions are small and independent, the CI wiring question is the larger half."
+      "notes": "Filed 2026-09-09 on claude/web-platform-improvements-loop-0px3u1 while closing WEB-CI-032. Next iteration's candidate: it is 10 small fixes and it turns the PR gate from permanently red to meaningful."
     }
   ]
 }

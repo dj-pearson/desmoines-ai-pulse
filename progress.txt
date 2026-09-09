@@ -4990,3 +4990,61 @@ FILES
   M src/pages/EventsPage.tsx
   M scripts/check-duplicate-schema.mjs
   M prd.json  (WEB-SEO-029 passes=true, WEB-CI-032 filed)
+
+================================================================================
+## 2026-09-09 — WEB-CI-032 (six discarded Supabase errors, and the CI gap): DONE
+================================================================================
+`npm run validate` was RED on the base and no workflow ran it. Six files had
+gained discarded Supabase errors. Three of them were money or access.
+
+FIXED — the three that could not be logged and left alone
+- create-subscription-checkout: BOTH double-charge guards discarded `error`.
+  supabase-js resolves with { error } rather than throwing, so a failed read
+  arrives as data: null - which reads as "this user has no subscription" and
+  lets the sale through. The people most exposed are the ones who already pay,
+  which is the same evaporating-guard failure WEB-FEAT-013 fixed from the other
+  direction. Both now return 503 subscription_lookup_failed. Declining a
+  checkout is recoverable; charging twice is not.
+- delete-user-account: the subscription lookup feeding the Stripe teardown
+  discarded its error and fell through on `?? []`. A failed read looked exactly
+  like a user with no subscription, so nothing was cancelled, no error was
+  reported, and the purge then erased the ONLY mapping to the Stripe customer
+  while the charge kept recurring - the outcome that block exists to prevent.
+  Now refuses, same as a billing failure does.
+- AuthContext.checkIsAdmin: both role reads discarded `error`, then cached
+  isAdmin:false for CACHE_TTL. One dropped request cost a real admin /admin/*
+  for five minutes, silently (esbuild.drop strips console.* in production). A
+  failure is not an answer, so it is no longer cached.
+
+FIXED — the three where the fallback was right and the silence was not
+- useActiveAds / track-ad-event: a failed getUser() is not anonymous traffic,
+  but was recorded as if it were, dropping the per-account frequency cap and
+  the attribution. Anonymous stays the fallback; it is now logged.
+- useProfile: a failed read-back returned null, so the app concluded the user
+  has no profile. Now throws, so TanStack retries.
+
+CI
+- pr-checks.yml ran nine of validate's fourteen checks. Added the four green
+  ones: check-error-handling, check-brand-leak, check-schema-placeholders,
+  check-annual-dates. NOT folded into a single `npm run validate` step, because
+  validate's first entry is the no-op type-check (WEB-CI-030) and that would
+  hide it.
+
+VERIFIED: check-error-handling 146/101 -> 137/95, baseline re-cut at the lower
+number. Full `npm run validate` green. 536 unit tests pass. YAML parses.
+
+FILED
+- WEB-CI-033: check-edge-types is ALREADY a step in pr-checks.yml and exits 1
+  on the base - 10 errors across six _tests/ files, nine of them null-narrowing
+  in a test helper. Every PR inherits a red check it did not cause.
+
+FILES
+  M src/contexts/AuthContext.tsx
+  M src/hooks/useActiveAds.ts
+  M src/hooks/useProfile.ts
+  M supabase/functions/create-subscription-checkout/index.ts
+  M supabase/functions/delete-user-account/index.ts
+  M supabase/functions/track-ad-event/index.ts
+  M error-handling-baseline.json
+  M .github/workflows/pr-checks.yml
+  M prd.json  (WEB-CI-032 passes=true, WEB-CI-033 filed)

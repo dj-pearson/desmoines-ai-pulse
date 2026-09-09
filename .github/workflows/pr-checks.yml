@@ -125,6 +125,36 @@ jobs:
       - name: Check Supabase schema usage
         run: npm run check-schema
 
+      # WEB-CI-032. `npm run validate` runs fourteen checks; this workflow ran
+      # nine of them a la carte and nobody noticed the gap, because the only
+      # workflow that runs validate itself is dependency-update.yml, on a
+      # schedule, against a dependency bump. check-error-handling was one of
+      # the missing five, and it was RED on the default branch when this was
+      # added: six files had gained discarded Supabase errors, including the
+      # admin-role read in AuthContext and both double-charge guards in
+      # create-subscription-checkout. A check the PR path does not run is a
+      # check that does not exist.
+      #
+      # Discarded Supabase errors (WEB-BE-032). supabase-js resolves with an
+      # { error } object instead of throwing, and esbuild.drop strips console.*
+      # from production, so an omitted `error` is silent everywhere. Per-file
+      # ratchet against error-handling-baseline.json.
+      - name: Discarded Supabase errors
+        run: npm run check-error-handling
+
+      # The old domain and the old brand name must not reappear in shipped copy.
+      - name: Check for brand leaks
+        run: npm run check-brand-leak
+
+      # Placeholder values in structured data are a rich-results policy problem,
+      # not a typo.
+      - name: Check schema placeholders
+        run: npm run check-schema-placeholders
+
+      # An annual event page still advertising a date that has passed.
+      - name: Check annual event dates
+        run: npm run check-annual-dates
+
       # strictNullChecks migration ratchet (WEB-CI-007). The strict project
       # cannot pass yet (~88 real errors), so this does not gate on zero — it
       # fails only if a file gets WORSE or a new file starts erroring. Baseline

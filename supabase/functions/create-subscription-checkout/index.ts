@@ -162,7 +162,14 @@ serve(async (req) => {
     // Filtering to the web platform is what makes .maybeSingle() honest: Stripe
     // is the only thing this function can act on, and a store subscription is
     // not ours to modify.
-    const { data: webSubscription } = await supabase
+    // WEB-CI-032: `error` was discarded on BOTH guard reads below, and a
+    // discarded error here is a double charge. supabase-js resolves with an
+    // { error } object, so a failed read arrived as data: null - which reads
+    // as "this user has no subscription" and lets the sale through. That is
+    // the same evaporating-guard failure the comment above describes, reached
+    // by a different route. Both now REFUSE rather than sell: declining a
+    // checkout is recoverable, charging someone twice is not.
+    const { data: webSubscription, error: webSubscriptionError } = await supabase
       .from("user_subscriptions")
       .select("id, stripe_subscription_id, status, cancel_at_period_end, plan_id")
       .eq("user_id", user.id)
@@ -170,16 +177,38 @@ serve(async (req) => {
       .in("status", ["active", "trialing"])
       .maybeSingle();
 
+    if (webSubscriptionError) {
+      console.error("Existing-subscription lookup failed, refusing checkout:", webSubscriptionError);
+      return new Response(
+        JSON.stringify({
+          error: "We could not confirm your current subscription, so we have not started a checkout. Please try again in a moment.",
+          code: "subscription_lookup_failed",
+        }),
+        { status: 503, headers: { ...corsHeaders, "Content-Type": "application/json" } }
+      );
+    }
+
     // A store subscription cannot be changed from here -- Apple and Google own
     // that billing relationship -- so selling a web plan on top of one at the
     // same or a higher tier is selling a second charge for entitlements the
     // user already has.
-    const { data: storeSubscriptions } = await supabase
+    const { data: storeSubscriptions, error: storeSubscriptionsError } = await supabase
       .from("user_subscriptions")
       .select("platform, plan_id, subscription_plans!inner(sort_order, display_name)")
       .eq("user_id", user.id)
       .in("platform", ["ios", "android"])
       .in("status", ["active", "trialing"]);
+
+    if (storeSubscriptionsError) {
+      console.error("Store-subscription lookup failed, refusing checkout:", storeSubscriptionsError);
+      return new Response(
+        JSON.stringify({
+          error: "We could not confirm your current subscription, so we have not started a checkout. Please try again in a moment.",
+          code: "subscription_lookup_failed",
+        }),
+        { status: 503, headers: { ...corsHeaders, "Content-Type": "application/json" } }
+      );
+    }
 
     const requestedRank = Number(plan.sort_order ?? 0);
     const blockingStoreSub = (storeSubscriptions ?? []).find((row) => {

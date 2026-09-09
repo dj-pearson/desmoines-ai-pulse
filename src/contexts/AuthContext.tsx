@@ -207,11 +207,28 @@ export function AuthProvider({ children }: { children: ReactNode }) {
 
     const checkPromise = (async () => {
       try {
-        const { data: rolesData } = await supabase
+        // WEB-CI-032: both reads used to discard `error`. supabase-js RESOLVES
+        // with an { error } object rather than throwing, so a failed read
+        // arrived here as data: null - indistinguishable from "this user holds
+        // no admin row". The function then fell through to
+        // `adminStatusCache.set(..., { isAdmin: false })` and pinned that
+        // answer for CACHE_TTL, five minutes. One dropped request and a real
+        // admin lost /admin/* for five minutes with nothing logged anywhere,
+        // because esbuild.drop strips console.* from production.
+        //
+        // A failure is not an answer, so it is not cached. `false` is still
+        // returned - denying admin on an unknown is the safe direction - but
+        // the next call retries instead of reading back a guess.
+        const { data: rolesData, error: rolesError } = await supabase
           .from("user_roles")
           .select("role")
           .eq("user_id", user.id)
           .maybeSingle();
+
+        if (rolesError) {
+          log.error('checkIsAdmin', 'Role read failed; not caching', { error: rolesError });
+          return false;
+        }
 
         if (rolesData?.role) {
           const isAdmin = rolesData.role === 'admin' || rolesData.role === 'root_admin';
@@ -219,11 +236,16 @@ export function AuthProvider({ children }: { children: ReactNode }) {
           return isAdmin;
         }
 
-        const { data: profileData } = await supabase
+        const { data: profileData, error: profileError } = await supabase
           .from("profiles")
           .select("user_role")
           .eq("user_id", user.id)
           .maybeSingle();
+
+        if (profileError) {
+          log.error('checkIsAdmin', 'Profile role read failed; not caching', { error: profileError });
+          return false;
+        }
 
         if (profileData?.user_role) {
           const isAdmin = profileData.user_role === 'admin' || profileData.user_role === 'root_admin';
@@ -231,6 +253,8 @@ export function AuthProvider({ children }: { children: ReactNode }) {
           return isAdmin;
         }
 
+        // Both reads succeeded and neither carries a role: a real answer, so
+        // it is safe to cache.
         adminStatusCache.set(user.id, { isAdmin: false, timestamp: Date.now() });
         return false;
       } catch (error) {
@@ -419,7 +443,15 @@ export function AuthProvider({ children }: { children: ReactNode }) {
     let mfaPending = false;
     if (session) {
       try {
-        const { data: aal } = await supabase.auth.mfa.getAuthenticatorAssuranceLevel();
+        // The catch below only fires on a thrown error, and this call resolves
+        // with { error } instead, so the failure branch was unreachable. It
+        // still fails OPEN deliberately - a user with no second factor must
+        // never be locked out by an assurance-level read - but a failure now
+        // says so rather than looking like a clean aal2 session.
+        const { data: aal, error: aalError } = await supabase.auth.mfa.getAuthenticatorAssuranceLevel();
+        if (aalError) {
+          log.warn('handleAuthChange', 'assurance-level read failed', { error: aalError });
+        }
         mfaPending = aal?.currentLevel === 'aal1' && aal?.nextLevel === 'aal2';
       } catch (err) {
         log.warn('handleAuthChange', 'assurance-level read failed', { error: String(err) });
