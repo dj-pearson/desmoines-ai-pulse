@@ -9317,6 +9317,38 @@
       "priority": 1,
       "passes": true,
       "notes": "Found by asking which public pages format an event date without going through src/lib/timezone.ts. EventDetails was already correct, which is why this survived - the surface everyone checks was the one that worked."
+    },
+    {
+      "id": "WEB-QA-030",
+      "title": "Seven SEO landing pages turned a failed query into 'No Events Scheduled for Today', with no retry short of a page reload",
+      "description": "As a visitor arriving from search, I need to be told when the site could not load something, rather than told there is nothing on. /events/today, /events/free, /events/kids, /events/date-night, /events/in/:location, /restaurants/open-now and /restaurants/dietary/:diet all logged the failure and then set their list to [].",
+      "acceptanceCriteria": [
+        "Both failure paths on each page - the supabase `if (error)` branch and the surrounding catch - ended in setEvents([]) / setRestaurants([]), which renders the empty state. The visitor read 'No Events Scheduled for Today. Check back tomorrow', which is a confident answer to a question the page could not answer. On a site whose whole promise is what is on in Des Moines today, that is the worst available wrong answer.",
+        "These pages fetch in a useEffect, NOT through TanStack Query, so they also got no retries. CLAUDE.md records an earlier finding that hub pages 'show real error copy once TanStack retries settle at ~12s' - that applies to the hubs, not to these. Here the false empty state stood until the visitor reloaded the page.",
+        "A shared ErrorState already existed at src/components/ui/error-state.tsx - it distinguishes offline from server failure and offers a Retry - and only five pages used it (Articles, Attractions, Deals, Hotels, Restaurants). All seven now do.",
+        "New hook src/hooks/useReloadableFetch.ts carries { error, setError, reloadKey, retry } for pages that fetch in an effect: retry clears the error and bumps reloadKey, which is in the effect's dependency array, so Retry re-runs the fetch in place.",
+        "The success paths clear the error too, so a dep-driven refetch after a failure (EventsByLocation on suburb, DietaryRestaurants on diet) does not stay stuck on the old failure.",
+        "NOT every empty list is a failure: DietaryRestaurants' unrecognised-diet branch is a genuine empty result and was left alone. The scripted first pass had wrongly marked it an error, using an `error` binding that was not even in scope there.",
+        "VERIFIED: guard proved against the pre-fix code by reverting FreeEvents.tsx and confirming it reports both failure paths and exits 1, then restoring. 585 vitest tests pass, eslint 0 errors over all of src/.",
+        "GUARDED: scripts/check-false-empty-state.mjs flags a reader-facing page that clears a list inside a catch or an `if (error)` block without recording the failure. In `npm run validate` and pr-checks.yml."
+      ],
+      "priority": 1,
+      "passes": true,
+      "notes": "Found by asking which public pages read isError at all. The answer was five out of roughly thirty."
+    },
+    {
+      "id": "WEB-QA-031",
+      "title": "About twenty more reader-facing pages render an empty state without ever reading isError",
+      "description": "As a visitor, I need a failure to look like a failure everywhere, not only on the seven pages WEB-QA-030 fixed. The remaining pages use TanStack Query - so they do at least retry - but they still fall through to an empty state when the retries are exhausted.",
+      "acceptanceCriteria": [
+        "Pages that render an empty-state message and never mention isError or ErrorState, at the time of filing: MusicHub, SportsHub, VenueDetail, TeamDetail, BreweryTrail, EventsThisWeekend, EventsPage, EventsNearMe, MonthlyEventsPage, Playgrounds, Social, WhatsNew, Gamification, TeamManagement, TripPlanner, UserDashboard, Profile, SubscriptionPortal, Advertise, Pricing.",
+        "The four /music and /sports pages are the sharpest case and should go first: 'No games scheduled for today.' and 'No upcoming events listed for this venue.' are both stated as fact.",
+        "Reuse the same pieces: <ErrorState error={error} onRetry={refetch} /> from @/components/ui/error-state, ahead of the empty branch. These pages already have TanStack's error and refetch to hand, so they do not need useReloadableFetch.",
+        "Then widen scripts/check-false-empty-state.mjs to cover the TanStack shape - a page rendering an empty-state string with no isError in scope - which the current script deliberately does not attempt, since it only understands the useEffect pattern."
+      ],
+      "priority": 2,
+      "passes": false,
+      "notes": "FILED FROM THE LOOP, iteration 4. Too large for one iteration: about twenty pages. HIT THIS ON A LATER ITERATION, starting with MusicHub, SportsHub, VenueDetail and TeamDetail."
     }
   ]
 }

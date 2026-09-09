@@ -20,6 +20,8 @@ import { format, parseISO, isAfter } from "date-fns";
 import { BRAND } from "@/lib/brandConfig";
 import { Breadcrumbs } from "@/components/ui/breadcrumbs";
 import { RESTAURANT_LIST_COLUMNS } from "@/lib/listColumns";
+import { useReloadableFetch } from "@/hooks/useReloadableFetch";
+import { ErrorState } from "@/components/ui/error-state";
 
 // Suburb mapping for SEO-friendly URLs and proper names
 const SUBURBS = {
@@ -116,6 +118,7 @@ export default function EventsByLocation() {
 
   const [events, setEvents] = useState<EventItem[]>([]);
   const [isLoading, setIsLoading] = useState(true);
+  const { error: loadError, setError: setLoadError, reloadKey, retry } = useReloadableFetch();
 
   useEffect(() => {
     const fetchEvents = async () => {
@@ -135,6 +138,7 @@ export default function EventsByLocation() {
         
         if (error) {
           log.error('fetchEvents', 'Error fetching events', { error });
+          setLoadError(error);
           setEvents([]);
         } else {
           // Filter events that match the suburb
@@ -148,10 +152,12 @@ export default function EventsByLocation() {
               eventLocation.includes(term.toLowerCase())
             );
           });
+          setLoadError(null);
           setEvents(filteredData);
         }
       } catch (error) {
         log.error('fetchEvents', 'Unexpected error in fetchEvents', { error });
+        setLoadError(error);
         setEvents([]);
       } finally {
         setIsLoading(false);
@@ -161,7 +167,7 @@ export default function EventsByLocation() {
     if (suburbInfo) {
       fetchEvents();
     }
-  }, [suburbInfo]);
+  }, [suburbInfo, reloadKey]);
 
   const { data: restaurants } = useQuery({
     queryKey: ["restaurants-by-location", slug],
@@ -376,7 +382,9 @@ export default function EventsByLocation() {
         </div>
 
         {/* Events List */}
-        {isLoading ? (
+        {!isLoading && loadError ? (
+          <ErrorState error={loadError} onRetry={retry} />
+        ) : isLoading ? (
           <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6 mb-8">
             {[...Array(6)].map((_, i) => (
               <Card key={i} className="animate-pulse">

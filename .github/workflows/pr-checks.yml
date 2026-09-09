@@ -161,6 +161,14 @@ jobs:
       - name: Event dates render in Central Time
         run: npm run check-event-time-tz
 
+      # WEB-QA-030. Seven SEO landing pages logged a failed Supabase query and
+      # then set their list to [], so the visitor was shown "No Events Scheduled
+      # for Today" - a confident answer to a question the page could not answer.
+      # These pages fetch in a useEffect, so unlike the TanStack hubs they got no
+      # retries either: the false empty state stood until a page reload.
+      - name: A failed fetch is not an empty state
+        run: npm run check-false-empty-state
+
       # The old domain and the old brand name must not reappear in shipped copy.
       - name: Check for brand leaks
         run: npm run check-brand-leak
