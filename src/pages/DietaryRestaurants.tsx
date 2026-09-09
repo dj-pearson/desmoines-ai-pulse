@@ -392,9 +392,9 @@ export default function DietaryRestaurants() {
                 heading above and every count in the copy still read
                 restaurants.length, so no displayed number changes. */}
             <div className="grid gap-6 md:grid-cols-2 lg:grid-cols-3">
-              {restaurants.slice(0, VISIBLE_RESTAURANTS).map((restaurant) => (
+              {restaurants.slice(0, VISIBLE_RESTAURANTS).map((restaurant, index) => (
                 <div key={restaurant.id} className="content-auto">
-                  <RestaurantCard restaurant={restaurant} />
+                  <RestaurantCard restaurant={restaurant} priority={index < 3} />
                 </div>
               ))}
             </div>

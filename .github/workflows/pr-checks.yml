@@ -169,6 +169,15 @@ jobs:
       - name: A failed fetch is not an empty state
         run: npm run check-false-empty-state
 
+      # WEB-PERF-040. OptimizedImage has supported `priority` since it was
+      # written and no caller passed it, and SocialEventCard - which renders
+      # every event listing on the site - was hardcoded loading="lazy" with no
+      # way to opt out. The LCP element on the hubs and every SEO landing page
+      # was therefore lazily loaded. This guards the three detail-page heroes,
+      # where the LCP element is unambiguous.
+      - name: LCP hero images are eager and high priority
+        run: npm run check-lcp-priority
+
       # The old domain and the old brand name must not reappear in shipped copy.
       - name: Check for brand leaks
         run: npm run check-brand-leak

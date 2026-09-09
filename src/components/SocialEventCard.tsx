@@ -1,4 +1,5 @@
 import React from 'react';
+import { fetchPriorityAttr } from '@/lib/fetchPriority';
 import { Card, CardContent } from '@/components/ui/card';
 import { Badge } from '@/components/ui/badge';
 import { Button } from '@/components/ui/button';
@@ -37,6 +38,20 @@ interface SocialEventCardProps {
    * wired up correctly (WEB-PERF-024).
    */
   socialDataPending?: boolean;
+  /**
+   * True for the cards above the fold on first paint. The image then loads
+   * eagerly at high fetch priority instead of lazily.
+   *
+   * WEB-PERF-040. This card renders every event listing on the site - /events,
+   * /events/today, /events/free, /events/kids, /events/date-night,
+   * /events/this-weekend, /events/in/:location - and its image was
+   * unconditionally loading="lazy" with no way to opt out. The LCP element on
+   * every one of those pages was therefore lazily loaded, which is the one
+   * thing Chrome's own guidance says not to do: the browser will not start the
+   * fetch until layout has run, so the largest paint waits on work that has
+   * already finished for every other element.
+   */
+  priority?: boolean;
   featured?: boolean;
 }
 
@@ -48,6 +63,7 @@ function SocialEventCardComponent({
   socialData,
   socialDataPending = false,
   featured = false,
+  priority = false,
 }: SocialEventCardProps) {
   // Passing '' disables the hook (it early-returns on a falsy id). Skip the
   // individual fetch both when batch data has arrived AND while it is pending.
@@ -129,8 +145,9 @@ function SocialEventCardComponent({
                 src={event.image_url}
                 alt={`${event.title} - ${event.category} event in ${event.city || 'Des Moines'}, Iowa`}
                 className="w-full h-full object-cover transition-transform duration-500 group-hover:scale-110"
-                loading="lazy"
+                loading={priority ? "eager" : "lazy"}
                 decoding="async"
+                {...fetchPriorityAttr(priority ? "high" : undefined)}
                 onError={() => setImageFailed(true)}
               />
             ) : null}

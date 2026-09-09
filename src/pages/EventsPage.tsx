@@ -891,8 +891,9 @@ export default function EventsPage() {
                 </Link>
               </div>
               <div className={`grid gap-5 ${isMobile ? 'grid-cols-1' : 'sm:grid-cols-2 lg:grid-cols-3'}`}>
-                {featuredEvents.map((event: any) => (
+                {featuredEvents.map((event: any, index: number) => (
                   <SocialEventCard
+                    priority={index < 3}
                     key={`featured-${event.id}`}
                     event={event}
                     socialData={batchSocialData?.[event.id]}
@@ -916,6 +917,7 @@ export default function EventsPage() {
             <div className={`grid gap-5 ${isMobile ? 'grid-cols-1' : 'sm:grid-cols-2 lg:grid-cols-3'}`}>
               {events?.map((event, index) => (
                 <SocialEventCard
+                  priority={index < 3}
                   key={event.id}
                   event={event}
                   socialData={batchSocialData?.[event.id]}

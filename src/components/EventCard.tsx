@@ -51,9 +51,18 @@ const createSlug = (name: string): string => {
 interface EventCardProps {
   event: Event;
   onViewDetails: (event: Event) => void;
+  /**
+   * True for the cards above the fold on first paint, which loads the image
+   * eagerly at high fetch priority instead of lazily.
+   *
+   * WEB-PERF-040. OptimizedImage has always supported this and NO caller in
+   * the app passed it, so every image on the site - the LCP element on the
+   * hubs included - was loading="lazy" with no priority hint.
+   */
+  priority?: boolean;
 }
 
-function EventCardComponent({ event, onViewDetails }: EventCardProps) {
+function EventCardComponent({ event, onViewDetails, priority = false }: EventCardProps) {
   const { isAuthenticated } = useAuth();
   const { trackInteraction } = useFeedback();
   const { addToRecentlyViewed } = useRecentlyViewed();
@@ -121,6 +130,7 @@ function EventCardComponent({ event, onViewDetails }: EventCardProps) {
             containerClassName="w-full h-48"
             aspectRatio="640/192"
             sizes="(max-width: 640px) 100vw, (max-width: 1024px) 50vw, 33vw"
+            priority={priority}
             onError={() => setImageError(true)}
           />
         ) : (

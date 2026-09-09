@@ -9349,6 +9349,36 @@
       "priority": 2,
       "passes": false,
       "notes": "FILED FROM THE LOOP, iteration 4. Too large for one iteration: about twenty pages. HIT THIS ON A LATER ITERATION, starting with MusicHub, SportsHub, VenueDetail and TeamDetail."
+    },
+    {
+      "id": "WEB-PERF-040",
+      "title": "Every LCP image on the site was loading=\"lazy\" - OptimizedImage's priority prop existed and no caller in the app ever passed it",
+      "description": "As a visitor, I need the biggest image on the page to start downloading immediately. It did not: the largest element on /events, /restaurants and every SEO landing page was lazily loaded, and the three detail-page heroes had no priority hint.",
+      "acceptanceCriteria": [
+        "SocialEventCard renders EVERY event listing on the site - /events, /events/today, /events/free, /events/kids, /events/date-night, /events/this-weekend, /events/in/:location - and its image was hardcoded loading=\"lazy\" with no prop to opt out. Chrome's own guidance is explicit that lazy-loading the LCP image delays it: the browser will not start the fetch until layout has run, so the largest paint waits on work every other element has already finished.",
+        "OptimizedImage has supported `priority` (loading=\"eager\" + fetchpriority=\"high\") since it was written. Grepped the whole of src/: not one caller passed it. EventCard and RestaurantCard both render through OptimizedImage and neither had the prop at all, so there was no way to pass it even if a page had wanted to.",
+        "All three cards now take `priority`, and the ten listing call sites pass priority={index < 3} - one row on a lg:grid-cols-3 grid, which is what is above the fold on desktop and more than covers mobile.",
+        "The three detail-page heroes (EventDetails, RestaurantDetails, AttractionDetails) were already loading=\"eager\", which only removes the lazy delay. They now also carry fetchpriority=\"high\" via fetchPriorityAttr, which is what promotes the request past the scripts and styles the browser found earlier in the document. These are the unambiguous LCP element on their pages.",
+        "VERIFIED: guard proved by stripping the hint from EventDetails.tsx and confirming it names that exact file and reason, then restoring. 585 vitest tests pass, eslint 0 errors over src/, all seven check scripts green.",
+        "GUARDED: scripts/check-lcp-priority.mjs asserts the first <img> in each detail page is eager and high priority. Deliberately does NOT check the listing grids - which card is above the fold depends on viewport, so a hard rule there would be guesswork. In `npm run validate` and pr-checks.yml."
+      ],
+      "priority": 1,
+      "passes": true,
+      "notes": "Found by counting image attributes across src: 79 raw <img> tags, 45 with a loading attribute, 6 with width/height. The priority prop being dead was the surprise - the capability was built and never connected, the same shape as the CSRF module in WEB-SEC-034 and ErrorState in WEB-QA-030."
+    },
+    {
+      "id": "WEB-PERF-041",
+      "title": "79 raw <img> tags bypass OptimizedImage, and only 6 of them set width and height",
+      "description": "As a visitor on a slow connection, I need images to be right-sized and to reserve their space before they load. Most of the site's images do neither.",
+      "acceptanceCriteria": [
+        "Counted at filing: 79 raw <img> in src/, of which 45 set a loading attribute, 15 set decoding, and 6 set width and height. Only 9 files use OptimizedImage, which is the component that emits a transform-based srcset so Supabase Storage serves a right-sized rendition.",
+        "The missing width/height is a CLS problem (target: <0.1). Cards whose container has a fixed height class are fine; the unsized ones inside prose and galleries are not. Audit which of the 73 unsized images sit in a container that does not already reserve height.",
+        "Route the remaining reader-facing <img> through OptimizedImage rather than adding attributes one at a time - it already handles srcset, sizes, the WebP/AVIF probe, the blur placeholder and the error fallback.",
+        "Do NOT route the three detail-page heroes through it blindly without re-checking WEB-PERF-040's guard, which reads the raw <img> tag; the guard needs updating in the same change if the tag stops being a raw <img>."
+      ],
+      "priority": 2,
+      "passes": false,
+      "notes": "FILED FROM THE LOOP, iteration 5. Too large for one iteration: 79 call sites. HIT THIS ON A LATER ITERATION, starting with the images that have no width/height inside a container that does not reserve height."
     }
   ]
 }

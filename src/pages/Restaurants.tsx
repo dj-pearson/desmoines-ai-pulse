@@ -679,8 +679,9 @@ export default function Restaurants() {
                   </Button>
                 </div>
                 <div className="grid grid-cols-1 md:grid-cols-3 gap-6">
-                  {featuredRestaurants.map((restaurant) => (
+                  {featuredRestaurants.map((restaurant, index) => (
                     <RestaurantCard
+                      priority={index < 3}
                       key={restaurant.id}
                       restaurant={restaurant}
                       variant="featured"
@@ -773,8 +774,9 @@ export default function Restaurants() {
                   </p>
 
                   <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-6">
-                    {paginatedRestaurants.map((restaurant) => (
+                    {paginatedRestaurants.map((restaurant, index) => (
                       <RestaurantCard
+                        priority={index < 3}
                         key={restaurant.id}
                         restaurant={restaurant}
                       />

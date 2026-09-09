@@ -325,9 +325,9 @@ export default function OpenNowRestaurants() {
               Restaurants Open Now ({openRestaurants.length})
             </h2>
             <div className="grid gap-6 md:grid-cols-2 lg:grid-cols-3">
-              {openRestaurants.map((restaurant) => (
+              {openRestaurants.map((restaurant, index) => (
                 <div key={restaurant.id} className="content-auto">
-                  <RestaurantCard restaurant={restaurant} />
+                  <RestaurantCard restaurant={restaurant} priority={index < 3} />
                 </div>
               ))}
             </div>
