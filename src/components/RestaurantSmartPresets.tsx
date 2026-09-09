@@ -1,6 +1,6 @@
 import { useState } from "react";
 import { Badge } from "@/components/ui/badge";
-import { Heart, Moon, Users, Zap, Coffee, Wine, Baby, Leaf } from "lucide-react";
+import { Heart, Moon, Users, Zap, Coffee, Baby, Leaf } from "lucide-react";
 import type { RestaurantFilterOptions } from "@/components/RestaurantFilters";
 import { SpriteIcon } from "@/components/ui/SpriteIcon";
 
@@ -72,18 +72,6 @@ const SMART_PRESETS: SmartPreset[] = [
       sortBy: "rating",
     },
     gradient: "from-yellow-500 to-amber-500",
-  },
-  {
-    id: "happy-hour",
-    label: "Happy Hour",
-    icon: Wine,
-    description: "Drinks & deals",
-    filters: {
-      tags: ["Happy Hour"],
-      openNow: true,
-      sortBy: "popularity",
-    },
-    gradient: "from-violet-500 to-purple-500",
   },
   {
     id: "healthy",

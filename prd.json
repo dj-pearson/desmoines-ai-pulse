@@ -8967,7 +8967,7 @@
       ],
       "priority": 3,
       "passes": false,
-      "notes": "Filed 2026-09-08 from the visitor-value audit on claude/des-moines-improvements-qse218. Evidence is from the working tree; production was not probed (no Supabase credentials in the container). These are visitor-facing capability gaps, distinct from the ingestion/scheduler stories (WEB-OPS-007, WEB-BE-045/051/054/055) that block the data behind them."
+      "notes": "Filed 2026-09-08 from the visitor-value audit on claude/des-moines-improvements-qse218. Evidence is from the working tree; production was not probed (no Supabase credentials in the container). These are visitor-facing capability gaps, distinct from the ingestion/scheduler stories (WEB-OPS-007, WEB-BE-045/051/054/055) that block the data behind them.\n\nPARTIALLY ADDRESSED 2026-09-09; STILL OPEN. The false claims are gone; the data is not built.\n\nSHIPPED: the FAQ and body copy no longer assert 'happy hour deals (3-6 PM)' or 'half-price appetizers' as fact, and the Happy Hour smart preset is removed. That preset filtered on tags:['Happy Hour'], and `filters.tags` is never applied to any restaurant query - so the chip promised drinks and deals and returned an unfiltered list.\n\nNOT SHIPPED, and deliberately: restaurant_specials plus an admin CRUD surface. Unlike WEB-FEAT-024, where Google Places supplies `reservable` automatically, there is NO source for happy-hour schedules - checked against the Places API (New) field reference, it publishes servesBeer/servesWine/servesCocktails but nothing about happy-hour times. So the table would be empty on the day it shipped and stay empty until someone builds an editor and types the data in. That is a product commitment to ongoing curation, not a schema task, and it should be decided before the table exists."
     },
     {
       "id": "WEB-FEAT-026",
@@ -9083,6 +9083,21 @@
       "priority": 2,
       "passes": true,
       "notes": "Filed and fixed 2026-09-09 on claude/des-moines-improvements-qse218, split out of WEB-FEAT-023 because the accuracy work was completable while the GTFS ingestion is blocked (see that story's notes).\n\nDONE. src/lib/transitFacts.ts holds DART fares confirmed against https://www.ridedart.com/fares on 2026-09-09: one trip $1.75, half fare $0.75, day pass $4, weekly $16, monthly $48. Two of those were already on the page and correct; the point is that they were correct without anything checking, and there is now a source, a date and a visible 'Checked against DART on ...' line.\n\nONE NEAR-MISS WORTH RECORDING: the fares page also shows $3.50, which sits next to the bus fares and reads like a day pass. It is DART On Demand, a different service. There is a test asserting we do not publish it.\n\nVerified: 11 unit tests; mutation-tested by backdating verifiedAt, which fails the staleness control as intended; 3 Playwright tests against the PRODUCTION BUILD confirming the fares and the verification line render and that no 'D-Line', 'downtown circulator', '3-8 minutes' or '$12-18' survives anywhere on the page. 529 unit tests pass overall, all gates green."
+    },
+    {
+      "id": "WEB-FEAT-032",
+      "title": "The dietary filter on /restaurants never filtered anything",
+      "description": "As a vegan, coeliac or halal diner, I need the dietary filter to work, because it did nothing at all. RestaurantInlineFilters writes its selections into `filters.tags` (the URL parameter is `tags`), while useRestaurants only ever read `filters.dietary`, which no caller populates. Two consequences, and the second is why nobody caught it: the ILIKE fan-out across name, description and cuisine never ran, AND `useRotationRpc` gates on the same empty key, so the query also stayed on get_rotated_restaurants - which its own comment says cannot express dietary filtering. Selecting Vegan changed the URL, incremented the active-filter count, and returned the identical unfiltered list. The keyword table in the hook maps exactly the five values the UI offers (vegan, vegetarian, gluten-free, keto, halal), which is what proves this was a wiring slip and not a missing feature.",
+      "acceptanceCriteria": [
+        "A dietary selection reaches PostgREST as the keyword fan-out",
+        "A dietary selection takes the table query path rather than the rotation RPC, which cannot express it",
+        "No dietary selection still uses the rotation RPC, so the default browse experience is unchanged",
+        "Values are restricted to the known dietary vocabulary, so a stray `tags` value cannot become an ILIKE across three columns",
+        "Fixed without renaming the `tags` URL parameter, which shared links already carry"
+      ],
+      "priority": 2,
+      "passes": true,
+      "notes": "Filed and fixed 2026-09-09 on claude/des-moines-improvements-qse218, found while removing the dead Happy Hour preset in WEB-FEAT-025.\n\nDONE. resolveDietarySelections in useRestaurants reads both keys and filters to the known vocabulary, so the fix lands in one place and covers both the routing decision and the filter application. The URL parameter is untouched.\n\nVerified: 7 unit tests, including that 'Happy Hour' and 'Takeout' are dropped rather than becoming keyword searches; 3 Playwright tests against the PRODUCTION BUILD that assert against the OUTGOING REQUEST rather than the rendered list, because with stubbed data any list looks plausible - the question is whether the constraint reached PostgREST. Mutation-tested: restoring the original single-key read fails both dietary tests and leaves the control passing. 536 unit tests pass, all gates green."
     }
   ]
 }

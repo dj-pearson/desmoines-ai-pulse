@@ -997,8 +997,9 @@ export default function Restaurants() {
                       <h4 className="font-semibold text-gray-900 mb-1">Best Value Dining</h4>
                       <p className="text-gray-600 text-sm">
                         Des Moines offers exceptional dining value compared to larger metros. Many top-rated
-                        restaurants fall in the $15-30 per person range. Happy hour deals (typically 3-6 PM)
-                        at downtown establishments offer half-price appetizers and drink specials.
+                        restaurants fall in the $15-30 per person range. Plenty of downtown bars and
+                        restaurants run happy hours, though times and offers vary by venue - check with the
+                        restaurant before you go.
                       </p>
                     </div>
                   </div>
@@ -1067,7 +1068,7 @@ export default function Restaurants() {
                 },
                 {
                   question: "What are the best cheap eats in Des Moines?",
-                  answer: "Des Moines offers excellent budget-friendly dining. Filter by '$' price range to find meals under $15 per person. Popular affordable options include food trucks downtown during lunch, family-style restaurants in Ankeny, taco shops on the east side, and weekday lunch specials at downtown establishments. Happy hour deals (3-6 PM) at many restaurants offer half-price appetizers."
+                  answer: "Des Moines offers excellent budget-friendly dining. Filter by '$' price range to find meals under $15 per person. Popular affordable options include food trucks downtown during lunch, family-style restaurants in Ankeny, taco shops on the east side, and weekday lunch specials at downtown establishments. Many downtown restaurants and bars run happy hours, though the times and the offers vary by venue, so check with the restaurant directly."
                 },
                 {
                   question: "Are there vegan and vegetarian restaurants in Des Moines?",
