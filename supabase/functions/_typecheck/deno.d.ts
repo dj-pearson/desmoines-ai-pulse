@@ -3,6 +3,19 @@ declare namespace Deno {
   type NetAddr = any;
   type Addr = any;
   type HttpServer = any;
+  /**
+   * WEB-CI-033: no-embedded-credentials.test.ts annotates its accumulator as
+   * `Deno.DirEntry[]`, which is the real API's name for what readDir yields.
+   * The namespace declared the value-side globals and not this type, so the
+   * test reported TS2694 and check-edge-types - a pr-checks.yml step - stayed
+   * red. Declared as the same shape readDir returns below, so the two cannot
+   * drift into disagreeing.
+   */
+  interface DirEntry {
+    name: string;
+    isFile: boolean;
+    isDirectory: boolean;
+  }
 }
 declare const Deno: {
   env: {
@@ -18,7 +31,7 @@ declare const Deno: {
   test(opts: any, fn?: (t?: any) => unknown | Promise<unknown>): void;
   readTextFile(path: string | URL): Promise<string>;
   readTextFileSync(path: string | URL): string;
-  readDir(path: string | URL): AsyncIterable<{ name: string; isFile: boolean; isDirectory: boolean }>;
+  readDir(path: string | URL): AsyncIterable<Deno.DirEntry>;
   resolveDns(q: string, t: string, opts?: any): Promise<any>;
   exit(code?: number): never;
   [k: string]: any;

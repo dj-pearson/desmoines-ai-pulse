@@ -5048,3 +5048,40 @@ FILES
   M error-handling-baseline.json
   M .github/workflows/pr-checks.yml
   M prd.json  (WEB-CI-032 passes=true, WEB-CI-033 filed)
+
+================================================================================
+## 2026-09-09 — WEB-CI-033 (the PR gate was red before any PR): DONE
+================================================================================
+`npm run check-edge-types` is a step in pr-checks.yml and exited 1 on the
+default branch, so every PR inherited a red check it did not cause - the trap
+scripts/strict-ratchet.mjs already documents twice.
+
+FIXED
+- Nine of the ten errors were ONE defect. remote.d.ts declared
+  `export const assert: any`, and an any-typed value cannot be an assertion
+  function, so every `assert(m, '...')` followed by `m[0]` lost its narrowing
+  and reported TS18047 on the next line - across six _tests/ files. Declared as
+  `(expr: unknown, msg?: string) => asserts expr`, which is what std/assert
+  actually is. The shim got less wrong, not more permissive; every other name
+  in it stays `any` for the reason its header gives.
+- The tenth: deno.d.ts declared the Deno value-side globals but not the
+  DirEntry TYPE, which no-embedded-credentials.test.ts annotates its
+  accumulator with. Added, and readDir now returns Deno.DirEntry so the shape
+  and the name cannot drift apart.
+
+VERIFIED: check-edge-types 168/37 -> 148/29, exit 0, baseline re-cut.
+type-check:edge clean. npm run validate exit 0. No test SOURCE changed, so
+nothing about what these suites assert has moved.
+
+FILED
+- WEB-CI-034: the other red step. `npm run test:offline` is 18/19 and exits 1
+  on the base - site-directory-routes.test.mjs dies with
+  ERR_UNKNOWN_FILE_EXTENSION '.tsx'. run-offline-suites.mjs spawns plain node
+  with process.execArgv, directly under a comment saying it uses tsx. One
+  suite in nineteen has never run while the step printed a tidy 18/19.
+
+FILES
+  M supabase/functions/_typecheck/remote.d.ts
+  M supabase/functions/_typecheck/deno.d.ts
+  M .github/edge-type-baseline.json
+  M prd.json  (WEB-CI-033 passes=true, WEB-CI-034 filed)

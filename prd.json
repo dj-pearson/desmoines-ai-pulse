@@ -9153,8 +9153,22 @@
         "Confirm the step is green on the base commit before closing, not just on the branch."
       ],
       "priority": 2,
+      "passes": true,
+      "notes": "Filed 2026-09-09 on claude/web-platform-improvements-loop-0px3u1 while closing WEB-CI-032. Next iteration's candidate: it is 10 small fixes and it turns the PR gate from permanently red to meaningful.\n\nDONE 2026-09-09. Nine of the ten were ONE defect, not nine: supabase/functions/_typecheck/remote.d.ts declared `export const assert: any`, and an any-typed value cannot be an assertion function, so every `assert(m, '...'); ... m[0]` lost its narrowing and reported TS18047 on the following line. Declared as `(expr: unknown, msg?: string) => asserts expr`, which is what std/assert actually is - the shim got less wrong, not more permissive. The tenth was Deno.DirEntry: the namespace shim declared the value-side globals but not the type, so readDir's inline return shape now IS Deno.DirEntry and the two cannot drift. check-edge-types goes 168/37 -> 148/29 and exits 0; baseline re-cut. No test source changed, so nothing about what these tests assert has moved."
+    },
+    {
+      "id": "WEB-CI-034",
+      "title": "The 'Offline helper suites' PR step is red too: the runner spawns node, not tsx",
+      "description": "As a developer, I need the second red step in pr-checks.yml fixed. `npm run test:offline` reports 18/19 and exits 1, on this branch's base as well as with changes - scripts/__tests__/site-directory-routes.test.mjs dies with ERR_UNKNOWN_FILE_EXTENSION '.tsx' for src/components/seo/SiteDirectory.tsx. The suite imports that .tsx module deliberately, to read DIRECTORY_SECTIONS and DIRECTORY_HREFS rather than re-describe them.",
+      "acceptanceCriteria": [
+        "Root cause: scripts/run-offline-suites.mjs:66 spawns `process.execPath` (plain node) with `process.execArgv`, directly under a comment that says 'tsx, not node: several suites import a .ts module'. The package script runs the PARENT under tsx; whatever registers tsx for the parent is not reaching the child through execArgv, so the child is a bare node with no loader.",
+        "Fix the spawn so the child runs under the same loader as the parent - spawn the tsx binary, or pass the loader explicitly - rather than deleting the suite or downgrading its import to a regex over the file.",
+        "Confirm 19/19 and exit 0, and confirm it on the base commit, since the whole point is that this step is red for reasons no PR caused.",
+        "One suite out of nineteen has been dead this whole time while the step reported a tidy 18/19: check whether the runner should fail LOUDER on a suite that cannot start, as opposed to one that runs and fails an assertion."
+      ],
+      "priority": 2,
       "passes": false,
-      "notes": "Filed 2026-09-09 on claude/web-platform-improvements-loop-0px3u1 while closing WEB-CI-032. Next iteration's candidate: it is 10 small fixes and it turns the PR gate from permanently red to meaningful."
+      "notes": "Filed 2026-09-09 on claude/web-platform-improvements-loop-0px3u1 while closing WEB-CI-033. Next iteration's candidate. With this and WEB-CI-033 done, the PR job should be green on the base for the first time in this loop."
     }
   ]
 }
