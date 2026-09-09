@@ -9037,7 +9037,7 @@
       ],
       "priority": 3,
       "passes": false,
-      "notes": "Filed 2026-09-08 from the visitor-value audit on claude/des-moines-improvements-qse218. Evidence is from the working tree; production was not probed (no Supabase credentials in the container). These are visitor-facing capability gaps, distinct from the ingestion/scheduler stories (WEB-OPS-007, WEB-BE-045/051/054/055) that block the data behind them."
+      "notes": "Filed 2026-09-08 from the visitor-value audit on claude/des-moines-improvements-qse218. Evidence is from the working tree; production was not probed (no Supabase credentials in the container). These are visitor-facing capability gaps, distinct from the ingestion/scheduler stories (WEB-OPS-007, WEB-BE-045/051/054/055) that block the data behind them.\n\nRE-CONFIRMED BLOCKED 2026-09-09. Unchanged: the first acceptance criterion is 'blocked on WEB-BE-051', and WEB-BE-051 is still open - Catch Des Moines coverage stops at the next ~50-60 events, so a month page three months out would render empty however well it were built. Building it now would ship twelve thin pages into the pSEO slug space. Left open deliberately rather than half-built."
     },
     {
       "id": "XPLAT-014",
@@ -9052,7 +9052,7 @@
       ],
       "priority": 3,
       "passes": false,
-      "notes": "Filed 2026-09-08 from the visitor-value audit on claude/des-moines-improvements-qse218. Evidence is from the working tree; production was not probed (no Supabase credentials in the container). These are visitor-facing capability gaps, distinct from the ingestion/scheduler stories (WEB-OPS-007, WEB-BE-045/051/054/055) that block the data behind them."
+      "notes": "Filed 2026-09-08 from the visitor-value audit on claude/des-moines-improvements-qse218. Evidence is from the working tree; production was not probed (no Supabase credentials in the container). These are visitor-facing capability gaps, distinct from the ingestion/scheduler stories (WEB-OPS-007, WEB-BE-045/051/054/055) that block the data behind them.\n\nASSESSED 2026-09-09, NOT STARTED - blocked on toolchains, not on design.\n\nThis container has no Swift toolchain (no swift, swiftc or xcodebuild) and no Android SDK (no ANDROID_HOME; gradle and gradlew exist but cannot resolve an SDK). A WidgetKit extension and a Glance AppWidget are several hundred lines of native UI each, and neither could be compiled or even syntax-checked here. Writing them blind is the same mistake as writing a GTFS parser against a feed I cannot fetch (see WEB-FEAT-023), at larger scale.\n\nThe design work stands and is cheap to pick up: both apps already cache their data locally (ios Services/QueryCache.swift, android data/local/AppDatabase.kt), so a widget is a presentation layer over caches that exist, and both already have deep-link handlers to route taps into (ios Services/DeepLinkHandler.swift, android util/ShortcutDispatcher.kt).\n\nOne dependency re-confirmed today: public/.well-known/assetlinks.json still carries the literal string SHA256_FINGERPRINT_HERE, so Android App Links are unverified and a shared desmoinesinsider.com link opens the disambiguation dialog rather than the app. That is AND-AUDIT-004 and it is NOT fixable here either - it needs the real signing-key fingerprint, which is a secret this environment does not hold and which must not be guessed."
     },
     {
       "id": "WEB-FEAT-030",
