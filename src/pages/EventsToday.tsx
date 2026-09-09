@@ -20,6 +20,9 @@ import { BRAND, getCanonicalUrl } from "@/lib/brandConfig";
 import { useDocumentTitle } from "@/hooks/useDocumentTitle";
 import { Breadcrumbs } from "@/components/ui/breadcrumbs";
 import { formatCount } from "@/lib/pluralize";
+import { useWeather, reorderForWeather } from "@/hooks/useWeather";
+import { useEventIndoorFlags } from "@/hooks/useEventIndoorFlags";
+import { WeatherNotice } from "@/components/WeatherNotice";
 
 interface EventItem {
   id: string;
@@ -84,7 +87,22 @@ export default function EventsToday() {
     fetchEvents();
   }, []);
 
-  const todaysEvents = events || [];
+  const { weather, hasVerdict } = useWeather();
+
+  // Fetched separately so a not-yet-deployed column can never fail the events
+  // query itself - see the header of useEventIndoorFlags.
+  const loadedIds = useMemo(() => (events || []).map((event) => event.id), [events]);
+  const indoorFlags = useEventIndoorFlags(loadedIds, hasVerdict);
+
+  /**
+   * Weather-aware ordering. This REORDERS and never filters, so a change in the
+   * forecast can move a card but can never make the list shorter. With no
+   * verdict, or no flags, the array passes through in its original date order.
+   */
+  const todaysEvents = useMemo(
+    () => reorderForWeather(events || [], (event) => indoorFlags[event.id], weather),
+    [events, indoorFlags, weather],
+  );
 
   const pageTitle = `Events Today in Des Moines - ${format(new Date(), "MMMM d, yyyy")} | ${BRAND.name}`;
   const pageDescription = `Find events happening today, ${format(new Date(), "MMMM d, yyyy")}, in Des Moines and suburbs. See times, locations, and details for today's activities and entertainment.`;
@@ -220,6 +238,9 @@ export default function EventsToday() {
             </div>
           </CardContent>
         </Card>
+
+        {/* Why the order changed (WEB-FEAT-022). Renders nothing without a verdict. */}
+        <WeatherNotice weather={weather} hasVerdict={hasVerdict} className="mb-6" />
 
         {/* Events List */}
         {isLoading ? (

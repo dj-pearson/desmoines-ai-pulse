@@ -7,26 +7,37 @@ import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
 import { Star, Utensils, Car, Bed } from "lucide-react";
 import { SpriteIcon } from "@/components/ui/SpriteIcon";
+import {
+  getAnnualEvent,
+  annualEventStatus,
+  staleAnnualEventCopy,
+} from "@/lib/annualEvents";
 
 /**
- * Iowa State Fair dates. Confirmed by the site owner: 13-23 August.
+ * Iowa State Fair dates now come from src/lib/annualEvents.ts (WEB-FEAT-029).
  *
  * WEB-SEO-002/015: title, description, h1, body copy, keywords, the FAQ answer
  * and the Event schema each hardcoded "2024" and "August 8-18" independently,
  * so in 2026 the page advertised a fair two years gone and shipped a
- * startDate of 2024-08-08 in its Event markup. They are derived from one
- * object now, so next year is a single edit and the schema cannot drift out of
- * step with the copy.
+ * startDate of 2024-08-08 in its Event markup. Deriving them from one object
+ * fixed that disagreement.
+ *
+ * It did not fix the decay. The object still needed a hand edit every year and
+ * nothing noticed when it did not get one - on 2026-09-08 this page was
+ * advertising an event that had ended on 2026-08-23. The registry moves the
+ * dates somewhere `scripts/check-annual-dates.mjs` can see them, so the build
+ * goes red when they expire, and this page renders an honest "ended, next
+ * year not announced" state in the meantime instead of stale dates.
  */
-const FAIR = {
-  year: 2026,
-  startISO: "2026-08-13",
-  endISO: "2026-08-23",
-  rangeLabel: "August 13-23, 2026",
-} as const;
+const FAIR = getAnnualEvent("iowa-state-fair")!;
 
 export default function IowaStateFairPage() {
-  
+  // Recomputed per render rather than memoized: it is two string comparisons,
+  // and a memo keyed on nothing would freeze the status for the life of the tab.
+  const fairStatus = annualEventStatus(FAIR);
+  const hasEnded = fairStatus === "ended";
+  const staleCopy = staleAnnualEventCopy(FAIR);
+
   const stateFairSchema = {
     "@context": "https://schema.org",
     "@type": "Event",
@@ -149,10 +160,23 @@ export default function IowaStateFairPage() {
             Complete business guide to Iowa's premier event - restaurants, parking, hotels, and local services
           </p>
           
+          {/* WEB-FEAT-029: once the published dates are in the past, say so.
+              Advertising a finished fair is worse than admitting we do not yet
+              have next year's dates. */}
+          {hasEnded && (
+            <div
+              className="mx-auto mb-8 max-w-2xl rounded-xl bg-black/30 px-4 py-3 text-white"
+              role="status"
+            >
+              <p className="font-semibold">{staleCopy.headline}</p>
+              <p className="text-sm text-white/90">{staleCopy.detail}</p>
+            </div>
+          )}
+
           <div className="grid grid-cols-1 md:grid-cols-3 gap-4 max-w-2xl mx-auto text-white">
             <div className="flex items-center gap-2 justify-center">
               <SpriteIcon name="calendar" className="h-5 w-5" />
-              <span>{FAIR.rangeLabel}</span>
+              <span>{hasEnded ? `${FAIR.year} dates to be announced` : FAIR.rangeLabel}</span>
             </div>
             <div className="flex items-center gap-2 justify-center">
               <SpriteIcon name="map-pin" className="h-5 w-5" />

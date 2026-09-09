@@ -130,10 +130,11 @@ export function useRestaurants(filters: RestaurantFilters = {}) {
       // Dietary filtering still runs via the regular query path because the
       // RPC doesn't model the description/cuisine ILIKE fan-out.
       const sortBy = filters.sortBy || "popularity";
+      const dietarySelections = resolveDietarySelections(filters);
       const useRotationRpc =
         sortBy === "popularity" &&
         !filters.sponsoredOnly &&
-        (!filters.dietary || filters.dietary.length === 0);
+        dietarySelections.length === 0;
 
       if (useRotationRpc) {
         const limit = filters.limit ?? 1000;
@@ -262,16 +263,9 @@ export function useRestaurants(filters: RestaurantFilters = {}) {
       }
 
       // Apply dietary keyword filter (searches description and cuisine fields)
-      if (filters.dietary && filters.dietary.length > 0) {
-        const dietaryKeywords: Record<string, string[]> = {
-          vegan: ["vegan"],
-          vegetarian: ["vegetarian", "veggie"],
-          "gluten-free": ["gluten free", "gluten-free", "celiac"],
-          keto: ["keto", "low carb"],
-          halal: ["halal"],
-        };
-        const orClauses = filters.dietary.flatMap((diet) => {
-          const keywords = dietaryKeywords[diet] || [diet];
+      if (dietarySelections.length > 0) {
+        const orClauses = dietarySelections.flatMap((diet) => {
+          const keywords = DIETARY_KEYWORDS[diet] || [diet];
           return keywords.flatMap((kw) => [
             `description.ilike.%${kw}%`,
             `cuisine.ilike.%${kw}%`,
@@ -451,6 +445,41 @@ export function useRestaurants(filters: RestaurantFilters = {}) {
 // (get_restaurant_filter_options) instead of fetching whole columns to dedupe
 // in JS. Cached client-side for an hour (REFERENCE). Falls back to the legacy
 // client-side scan if the RPC isn't deployed yet.
+
+/**
+ * Dietary selections map to keywords searched across name, description and
+ * cuisine. There is no dietary column, so this is a text fan-out - which is
+ * also why a dietary filter forces the non-RPC query path.
+ */
+export const DIETARY_KEYWORDS: Record<string, string[]> = {
+  vegan: ["vegan"],
+  vegetarian: ["vegetarian", "veggie"],
+  "gluten-free": ["gluten free", "gluten-free", "celiac"],
+  keto: ["keto", "low carb"],
+  halal: ["halal"],
+};
+
+/**
+ * WEB-FEAT-032: the dietary filter was wired to a key nothing set.
+ *
+ * RestaurantInlineFilters writes its dietary choices into `filters.tags`,
+ * because the URL parameter is `tags`. This hook only ever read
+ * `filters.dietary`, which no caller populates. So selecting Vegan showed an
+ * active filter, changed the URL, incremented the filter count - and returned
+ * the identical unfiltered list, because the selection also failed to knock the
+ * query off the rotation RPC path that cannot express it.
+ *
+ * Reading both keys fixes it without renaming a URL parameter that shared links
+ * already carry. Values are restricted to the known dietary vocabulary so that
+ * a non-dietary tag can never turn into a bogus ILIKE across three columns.
+ */
+export function resolveDietarySelections(filters: {
+  dietary?: string[];
+  tags?: string[];
+}): string[] {
+  const candidates = [...(filters.dietary ?? []), ...(filters.tags ?? [])];
+  return [...new Set(candidates.filter((value) => value in DIETARY_KEYWORDS))];
+}
 
 const RESTAURANT_TAGS = [
   "Takeout",

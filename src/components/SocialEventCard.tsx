@@ -3,6 +3,7 @@ import { Card, CardContent } from '@/components/ui/card';
 import { Badge } from '@/components/ui/badge';
 import { Button } from '@/components/ui/button';
 import { FavoriteButton } from '@/components/FavoriteButton';
+import { AddToCalendarButton } from '@/components/AddToCalendarButton';
 import ShareDialog from '@/components/ShareDialog';
 import { useEventSocial } from '@/hooks/useEventSocial';
 import { BatchEventSocialData } from '@/hooks/useBatchEventSocial';
@@ -288,6 +289,10 @@ function SocialEventCardComponent({
               </span>
               <div className="flex items-center gap-1" onClick={(e) => e.preventDefault()}>
                 <FavoriteButton eventId={event.id} itemName={event.title} variant="ghost" size="icon" />
+                {/* WEB-FEAT-026: saving an event was previously possible only
+                    after opening it. The wrapper above already preventDefaults
+                    the card's Link, so this does not navigate. */}
+                <AddToCalendarButton event={event} variant="ghost" iconOnly />
                 <ShareDialog
                   title={event.title}
                   description={

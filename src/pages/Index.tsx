@@ -9,7 +9,7 @@ import {
 } from "@/components/ui/dialog";
 import { Button } from "@/components/ui/button";
 import { CalendarPlus, Brain, Zap } from "lucide-react";
-import { downloadICS } from "@/lib/calendar";
+import { AddToCalendarButton } from "@/components/AddToCalendarButton";
 import { createEventSlugWithCentralTime } from "@/lib/timezone";
 import { FavoriteButton } from "@/components/FavoriteButton";
 import { useToast } from "@/hooks/use-toast";
@@ -27,6 +27,7 @@ import SearchSection from "@/components/SearchSection";
 import { NLPSearchBar } from "@/components/NLPSearchBar";
 import { EnhancedHero } from "@/components/EnhancedHero";
 import { ForYouRail } from "@/components/ForYouRail";
+import { HomeWeatherNotice } from "@/components/WeatherNotice";
 import { useUserPreferences } from "@/hooks/useUserPreferences";
 import { useHomepageStats } from "@/hooks/useHomepageStats";
 import { BackToTop } from "@/components/BackToTop";
@@ -485,6 +486,15 @@ export default function Index() {
         </div>
         <SearchSection onSearch={handleSearch} />
 
+        {/* Current conditions (WEB-FEAT-022). Informational only here: the
+            homepage renders personalized rails rather than one flat list, and
+            reordering a personalized rail by weather would fight the
+            personalization that produced it. The ranking lives on
+            /events/today and /events/this-weekend, which this links to. */}
+        <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8">
+          <HomeWeatherNotice />
+        </div>
+
         {/* For You / Trending rail — IOS-DISCOVER-2026-002 web parity */}
         <ForYouRail />
 
@@ -905,14 +915,13 @@ export default function Index() {
                     </Button>
                   </div>
 
-                  <Button
+                  {/* WEB-FEAT-026: was a lone .ics download with timestamps
+                      five hours early. Now Google, Outlook or Apple. */}
+                  <AddToCalendarButton
+                    event={selectedEvent}
                     variant="outline"
-                    className="w-full"
-                    onClick={() => downloadICS(selectedEvent)}
-                  >
-                    <CalendarPlus className="h-4 w-4 mr-2" />
-                    Add to Calendar
-                  </Button>
+                    fullWidth
+                  />
 
                   {selectedEvent.source_url && (
                     <Button

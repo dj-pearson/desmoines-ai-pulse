@@ -87,7 +87,6 @@ export const PRERENDER_ROUTES = [
   '/neighborhoods/highland-park',
 
   // Discovery / planning surfaces
-  '/calendar',
   '/deals',
   '/map',
   '/trip-planner',

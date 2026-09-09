@@ -10,24 +10,26 @@ import {
 import { Button } from '@/components/ui/button';
 import { Download, ChevronDown } from "lucide-react";
 import { useCalendarExport } from '@/hooks/use-calendar-export';
+import { hasUsableDate, toIcsEvent } from '@/lib/icsEvent';
 import { SpriteIcon } from "@/components/ui/SpriteIcon";
 
 interface AddToCalendarButtonProps {
-  event: {
-    id: string;
-    title: string;
-    description?: string;
-    date: string;
-    location?: string;
-    venue?: string;
-    slug?: string;
-    event_start_utc?: string;
-    event_end_utc?: string;
-  };
+  /**
+   * A database event row. Adapted by `toIcsEvent`, which maps the description
+   * fallback chain and turns `time_tbd` into an all-day export so a placeholder
+   * start time never reaches someone's calendar (WEB-FEAT-026).
+   */
+  event: Parameters<typeof toIcsEvent>[0];
   variant?: 'default' | 'outline' | 'ghost';
   size?: 'default' | 'sm' | 'lg' | 'icon';
   className?: string;
   fullWidth?: boolean;
+  /**
+   * Render just the calendar icon, for dense action rows on list cards where a
+   * labelled button would dominate. The accessible name still names the event,
+   * so a screen reader hears which event it would be adding.
+   */
+  iconOnly?: boolean;
 }
 
 export function AddToCalendarButton({
@@ -36,6 +38,7 @@ export function AddToCalendarButton({
   size = 'default',
   className = '',
   fullWidth = false,
+  iconOnly = false,
 }: AddToCalendarButtonProps) {
   const {
     downloadIcsFile,
@@ -44,17 +47,28 @@ export function AddToCalendarButton({
     addToAppleCalendar,
   } = useCalendarExport();
 
+  const icsEvent = toIcsEvent(event);
+
+  // An event with no parseable start has nothing to export. Rendering nothing
+  // is better than a control whose every option opens an error toast.
+  if (!hasUsableDate(icsEvent)) return null;
+
   return (
     <DropdownMenu>
       <DropdownMenuTrigger asChild>
         <Button
           variant={variant}
-          size={size}
+          size={iconOnly ? 'icon' : size}
           className={`${fullWidth ? 'w-full' : ''} ${className}`}
+          aria-label={iconOnly ? `Add ${event.title} to calendar` : undefined}
         >
-          <SpriteIcon name="calendar" className="w-4 h-4 mr-2" />
-          Add to Calendar
-          <ChevronDown className="w-3 h-3 ml-2 opacity-50" />
+          <SpriteIcon name="calendar" className={iconOnly ? 'w-4 h-4' : 'w-4 h-4 mr-2'} />
+          {!iconOnly && (
+            <>
+              Add to Calendar
+              <ChevronDown className="w-3 h-3 ml-2 opacity-50" />
+            </>
+          )}
         </Button>
       </DropdownMenuTrigger>
       <DropdownMenuContent align="end" className="w-56">
@@ -62,7 +76,7 @@ export function AddToCalendarButton({
           Choose your calendar
         </DropdownMenuLabel>
         <DropdownMenuSeparator />
-        <DropdownMenuItem onClick={() => addToGoogleCalendar(event)}>
+        <DropdownMenuItem onClick={() => addToGoogleCalendar(icsEvent)}>
           <svg
             className="w-4 h-4 mr-2"
             viewBox="0 0 24 24"
@@ -72,7 +86,7 @@ export function AddToCalendarButton({
           </svg>
           Google Calendar
         </DropdownMenuItem>
-        <DropdownMenuItem onClick={() => addToOutlookCalendar(event)}>
+        <DropdownMenuItem onClick={() => addToOutlookCalendar(icsEvent)}>
           <svg
             className="w-4 h-4 mr-2"
             viewBox="0 0 24 24"
@@ -82,7 +96,7 @@ export function AddToCalendarButton({
           </svg>
           Outlook Calendar
         </DropdownMenuItem>
-        <DropdownMenuItem onClick={() => addToAppleCalendar(event)}>
+        <DropdownMenuItem onClick={() => addToAppleCalendar(icsEvent)}>
           <svg
             className="w-4 h-4 mr-2"
             viewBox="0 0 24 24"
@@ -93,7 +107,7 @@ export function AddToCalendarButton({
           Apple Calendar
         </DropdownMenuItem>
         <DropdownMenuSeparator />
-        <DropdownMenuItem onClick={() => downloadIcsFile(event)}>
+        <DropdownMenuItem onClick={() => downloadIcsFile(icsEvent)}>
           <Download className="w-4 h-4 mr-2" />
           Download .ics file
         </DropdownMenuItem>

@@ -95,9 +95,6 @@ const AdminCampaignDetail = lazyWithRetry(() => import("./pages/AdminCampaignDet
 const CampaignAnalytics = lazyWithRetry(() => import("./pages/CampaignAnalytics"));
 const TeamManagement = lazyWithRetry(() => import("./pages/TeamManagement"));
 const Social = lazyWithRetry(() => import("./pages/Social"));
-const SmartCalendarIntegration = lazyWithRetry(
-  () => import("./components/SmartCalendarIntegration")
-);
 const Gamification = lazyWithRetry(() => import("./pages/Gamification"));
 const Pricing = lazyWithRetry(() => import("./pages/Pricing"));
 const SubscriptionSuccess = lazyWithRetry(() => import("./pages/SubscriptionSuccess"));
@@ -554,7 +551,6 @@ const App = () => (
             />
             <Route path="/iowa-state-fair" element={<IowaStateFairPage />} />
             <Route path="/social" element={<Social />} />
-            <Route path="/calendar" element={<SmartCalendarIntegration />} />
             <Route path="/gamification" element={<Gamification />} />
             <Route path="/pricing" element={<Pricing />} />
             <Route path="/subscription/success" element={<SubscriptionSuccess />} />

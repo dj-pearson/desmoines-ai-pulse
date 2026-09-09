@@ -142,7 +142,6 @@ export function UserMenu({
                   <Sparkles className="ml-auto h-3 w-3" aria-hidden="true" />
                 </Link>
               </DropdownMenuItem>
-              <MenuLink href="/calendar" icon={Calendar} label="Smart Calendar" />
               <MenuLink href="/business" icon={Building2} label="Business Portal" />
               {isAdmin && <MenuLink href="/admin" icon={Shield} label="Admin" />}
               <DropdownMenuSeparator />

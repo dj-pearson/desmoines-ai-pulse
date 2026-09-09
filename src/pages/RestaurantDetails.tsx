@@ -24,12 +24,13 @@ import { BreadcrumbListSchema } from "@/components/schema/BreadcrumbListSchema";
 import SpeakableSchema from "@/components/schema/SpeakableSchema";
 import { getCanonicalUrl } from "@/lib/brandConfig";
 import { qualifyTitleWithCity } from "@/lib/seoTitleLocation";
-import { Phone, Star, DollarSign, ArrowLeft, Navigation, Heart, MessageCircle, Award, Utensils, Globe, Check, BookOpen, Info, Map } from "lucide-react";
+import { Phone, Star, DollarSign, ArrowLeft, Navigation, Heart, MessageCircle, Award, Utensils, Globe, Check, BookOpen, Info, Map, CalendarCheck } from "lucide-react";
 import { useState, useMemo } from "react";
 import { useContentTracking } from "@/hooks/useContentTracking";
 import { getRestaurantOpenStatus, getOpeningHoursSpecification } from "@/lib/restaurantHours";
 import { LazyLocationMap } from "@/components/LazyLocationMap";
 import { getDirectionsUrl } from "@/lib/directions";
+import { resolveReservation } from "@/lib/reservations";
 import { StickyMobileCTA } from "@/components/StickyMobileCTA";
 import { LastUpdatedBadge } from "@/components/LastUpdatedBadge";
 import { NearbyContent } from "@/components/NearbyContent";
@@ -362,6 +363,11 @@ export default function RestaurantDetails() {
     }] : []),
   ];
 
+  // WEB-FEAT-024. Resolved once and used by both the in-page action bar and the
+  // sticky mobile CTA, so the two can never disagree about whether this place
+  // takes reservations.
+  const reservation = resolveReservation(restaurant);
+
   return (
     <>
       <Header />
@@ -527,6 +533,23 @@ export default function RestaurantDetails() {
 
             {/* Quick Actions Bar */}
             <div className="flex flex-wrap gap-3 p-4 md:p-6 bg-gray-50 border-b">
+              {/* WEB-FEAT-024: booking is the highest-intent action on this
+                  page and previously had no path at all. Only rendered when
+                  there is real evidence the place takes reservations. */}
+              {(reservation.kind === "booking" ||
+                reservation.kind === "call_to_reserve") && (
+                <a
+                  href={reservation.href}
+                  {...(reservation.external
+                    ? { target: "_blank", rel: "noopener noreferrer" }
+                    : {})}
+                >
+                  <Button className="bg-[#2D1B69] hover:bg-[#2D1B69]/90 text-white rounded-xl">
+                    <CalendarCheck className="h-4 w-4 mr-2" />
+                    {reservation.label}
+                  </Button>
+                </a>
+              )}
               {restaurant.phone && (
                 <a href={`tel:${restaurant.phone}`}>
                   <Button className="bg-[#2D1B69] hover:bg-[#2D1B69]/90 text-white rounded-xl">
@@ -937,11 +960,15 @@ export default function RestaurantDetails() {
       <StickyMobileCTA
         variant="restaurant"
         primaryAction={
-          restaurant.phone
+          // WEB-FEAT-024: this said "Call to Reserve" for every restaurant with
+          // a phone number, asserting that a counter-service taco shop takes
+          // bookings. resolveReservation only makes that claim on evidence.
+          reservation.href && reservation.kind !== "website"
             ? {
-                label: "Call to Reserve",
-                href: `tel:${restaurant.phone}`,
-                icon: "phone",
+                label: reservation.label,
+                href: reservation.href,
+                icon: reservation.kind === "booking" ? "website" : "phone",
+                isExternal: reservation.external,
               }
             : restaurant.website
             ? {

@@ -55,3 +55,11 @@
 /restaurants/el-fogn                       /restaurants/el-fogon  301
 /restaurants/ritual-caf                    /restaurants/ritual-cafe  301
 /restaurants/trellis-caf                   /restaurants/trellis-cafe  301
+
+# WEB-FEAT-027: /calendar rendered a permanently empty calendar. Its hook,
+# useSmartCalendar, was commented "Mock functions since tables don't exist yet"
+# and every fetch set empty state, so the route was prerendered, sitemapped and
+# linked from the user menu while being incapable of showing anything. The
+# route and its components are removed; this keeps the URL alive per the
+# Backward Compatibility rules in CLAUDE.md, since it was public and indexed.
+/calendar  /events  301

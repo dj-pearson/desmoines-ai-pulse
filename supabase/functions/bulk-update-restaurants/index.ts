@@ -5,6 +5,7 @@ import { requireApiKey } from "../_shared/apiKeyAuth.ts";
 import { checkRateLimit } from "../_shared/rateLimit.ts";
 import { writeAuditLog, auditIp } from "../_shared/auditLog.ts";
 import { fetchWithTimeout } from '../_shared/fetchWithTimeout.ts';
+import { isUnknownColumnError } from '../_shared/postgrestErrors.ts'
 
 interface GooglePlaceDetails {
   id: string;
@@ -25,6 +26,9 @@ interface GooglePlaceDetails {
   }>;
   types: string[];
   businessStatus: string;
+  /** WEB-FEAT-024: real Place fields, per the Places API (New) reference. */
+  reservable?: boolean;
+  googleMapsUri?: string;
 }
 
 interface RestaurantUpdate {
@@ -38,6 +42,10 @@ interface RestaurantUpdate {
   website?: string;
   image_url?: string;
   google_place_id?: string;
+  /** WEB-FEAT-024. Added by migration 20260909000001; the write guards against
+   *  that migration not being applied yet. */
+  reservable?: boolean;
+  google_maps_uri?: string;
   enhanced: string;
   updated_at: string;
 }
@@ -215,7 +223,7 @@ serve(async (req) => {
             method: 'GET',
             headers: {
               'X-Goog-Api-Key': googleApiKey,
-              'X-Goog-FieldMask': 'id,displayName,formattedAddress,rating,editorialSummary,nationalPhoneNumber,websiteUri,photos,types,businessStatus'
+              'X-Goog-FieldMask': 'id,displayName,formattedAddress,rating,editorialSummary,nationalPhoneNumber,websiteUri,photos,types,businessStatus,reservable,googleMapsUri'
             }
           })
 
@@ -339,6 +347,18 @@ serve(async (req) => {
             update.google_place_id = placeId
           }
 
+          // WEB-FEAT-024. Both are real Place fields, checked against the
+          // Places API (New) reference. There is NO booking-provider URL in
+          // that API, so reservation_url stays curated; googleMapsUri is the
+          // automatic fallback, since a Google listing for a reservable place
+          // carries its own reserve button.
+          if (typeof placeDetails.reservable === 'boolean') {
+            update.reservable = placeDetails.reservable
+          }
+          if (placeDetails.googleMapsUri) {
+            update.google_maps_uri = placeDetails.googleMapsUri
+          }
+
           // Get the main photo URL (proxy through server to avoid leaking API key)
           if (placeDetails.photos && placeDetails.photos.length > 0) {
             const photo = placeDetails.photos[0]
@@ -375,11 +395,31 @@ serve(async (req) => {
       for (const update of updates) {
         console.log(`Updating restaurant ${update.name} (ID: ${update.id}) with data:`, JSON.stringify(update, null, 2))
         
-        const { error: updateError } = await supabase
+        let { error: updateError } = await supabase
           .from('restaurants')
           .update(update)
           .eq('id', update.id)
           .select()
+
+        // MIGRATION-ORDER GUARD (WEB-FEAT-024). Edge functions deploy
+        // separately from migrations, and this runs on a daily cron. If
+        // 20260909000001 has not been applied yet, PostgREST rejects the whole
+        // UPDATE for one unknown column - which would stop enrichment writing
+        // ANY field, not just the new ones. Retry once without them so the
+        // window between a function deploy and `supabase db push` costs the two
+        // new columns and nothing else.
+        if (updateError && isUnknownColumnError(updateError)) {
+          console.warn(
+            `Reservation columns not present yet; retrying ${update.name} without them`
+          )
+          const { reservable, google_maps_uri, ...legacyUpdate } = update
+          const retry = await supabase
+            .from('restaurants')
+            .update(legacyUpdate)
+            .eq('id', update.id)
+            .select()
+          updateError = retry.error
+        }
 
         if (updateError) {
           console.error(`Failed to update restaurant ${update.name}:`, updateError)

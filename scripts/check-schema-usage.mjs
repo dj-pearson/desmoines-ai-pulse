@@ -100,6 +100,13 @@ const PENDING_MIGRATIONS = [
   // two sites were parked in schema-baseline.json instead; that was the wrong
   // file, since the baseline is for references with no fix in flight.
   { table: 'known_venues', column: 'image_url', migration: '20260827000001' },
+  // Tristate indoor/outdoor classification for weather-aware ranking
+  // (WEB-FEAT-022), mirroring the attractions.is_indoor that already ships.
+  // useEventIndoorFlags reads it in a SEPARATE request from the events list
+  // precisely so this pending window cannot break a page: PostgREST fails the
+  // whole query on 42703, so a not-yet-applied column in the list SELECT would
+  // blank /events/today rather than just skip the reorder.
+  { table: 'events', column: 'is_indoor', migration: '20260908000001' },
 ];
 
 const isPending = (table, column) =>

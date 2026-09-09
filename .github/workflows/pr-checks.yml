@@ -453,6 +453,14 @@ jobs:
       - name: Generated types claim nothing production lacks
         run: node scripts/check-types-drift.mjs
 
+      # WEB-FEAT-029: annual landing pages hold their dates in code, and code
+      # does not notice a year passing. IowaStateFairPage shipped a fair two
+      # years gone once, and on 2026-09-08 was advertising one that ended on
+      # 2026-08-23. This reads src/lib/annualEvents.ts and fails once an entry
+      # is more than 14 days past its end date. Offline, no credentials.
+      - name: Annual event dates are not stale
+        run: node scripts/check-annual-dates.mjs
+
       # IOS-AUDIT-REL-007: universal links, Sign in with Apple webcredentials and
       # App Clip invocation all fail SILENTLY when the AASA disagrees with the
       # app - no build error, no test, the link just opens Safari and you find
