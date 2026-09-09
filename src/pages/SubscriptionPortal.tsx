@@ -221,15 +221,17 @@ export default function SubscriptionPortal() {
                   <div className="flex items-center gap-3">
                     <div
                       className={`p-3 rounded-full ${
-                        isPremium
-                          ? "bg-amber-100 dark:bg-amber-900"
-                          : "bg-muted"
+                        tier === "vip"
+                          ? "bg-secondary/10"
+                          : tier === "insider"
+                            ? "bg-amber-100 dark:bg-amber-900"
+                            : "bg-muted"
                       }`}
                     >
                       {tier === "vip" ? (
-                        <Crown className="h-6 w-6 text-purple-500" />
+                        <Crown className="h-6 w-6 text-secondary" />
                       ) : tier === "insider" ? (
-                        <SpriteIcon name="sparkles" className="h-6 w-6 text-amber-500" />
+                        <SpriteIcon name="sparkles" className="h-6 w-6 text-amber-800 dark:text-amber-300" />
                       ) : (
                         <CreditCard className="h-6 w-6 text-muted-foreground" />
                       )}

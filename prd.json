@@ -9226,6 +9226,36 @@
       "priority": 1,
       "passes": true,
       "notes": "Found and fixed 2026-09-09 on claude/web-platform-improvements-loop-0px3u1, by auditing user-facing copy for claims the platform does not keep - a theme this loop hit three times before (the newsletter's phantom confirmation email, the 'now live' approval email, and advertising policies that were linked but never written). Verified in a real browser: none of Sarah Martinez, James Chen, 95%, Cityview, Perplexity, '40% increase', '450+' or '500+ restaurants' appears in the rendered home page, and the section still renders. Priority 1 because the testimonials are a legal exposure, not a quality issue, and because this component is built to be quoted by AI assistants."
+    },
+    {
+      "id": "WEB-UX-033",
+      "title": "Subscription tier badges were white text on amber-400 (1.7:1), and VIP was a purple-to-pink gradient that belongs to no part of this brand",
+      "description": "As a member, I need to be able to read which plan I am on, and to see the same colour for that plan on every screen that names it. PremiumBadge, PremiumGate, UpgradeModal, SubscriptionPortal and SubscriptionSuccess each had their own idea of what Insider and VIP look like.",
+      "acceptanceCriteria": [
+        "WHITE TEXT ON from-amber-400 to-orange-500 measures 1.7:1 at the light end. That is the Insider badge, and FeatureTag renders it at text-[10px], so WCAG 1.4.3 wants 4.5:1. Free (from-slate-400) was 3.0:1. Both failed; neither had ever been measured. Tier surfaces are now flat and measured against white: slate-600 7.58, amber-700 5.02, brand --secondary 6.08 light / 5.23 dark.",
+        "VIP was from-purple-500 to-pink-500 in five places - the badge, both PremiumGate CTAs, the UpgradeModal BEST VALUE pill and its CTA, and two Crown icons. Purple is in neither brand colour (#071e62 blue, #c30e31 red). VIP is now the brand red, so the paid tier reads as this platform rather than as a template.",
+        "SubscriptionSuccess had a THIRD scheme - Insider blue, VIP amber - so the tier a member had just paid for changed colour between the upgrade modal and the receipt. Aligned to Insider amber / VIP red.",
+        "Amber icons and selection borders in UpgradeModal were amber-500 on white: 2.15:1, under the 3:1 WCAG 1.4.11 minimum for a non-text selection indicator. Now amber-700 in light, amber-500 in dark.",
+        "VERIFIED: npx impeccable detect src goes 56 -> 48 anti-patterns and reports nothing in any of the five files; 577 vitest tests pass; eslint clean (0 errors) on all five."
+      ],
+      "priority": 2,
+      "passes": true,
+      "notes": "Found by running the impeccable detector CLAUDE.md mandates but that nothing in CI runs. The contrast failures were not what I went looking for - they fell out of computing the replacement colours and discovering the originals had never been checked."
+    },
+    {
+      "id": "WEB-UX-034",
+      "title": "48 UI anti-patterns remain across src, and nothing in CI runs the detector CLAUDE.md mandates",
+      "description": "As the platform owner, I need the craft floor in CLAUDE.md to be enforced rather than aspirational. `npx impeccable detect src` reports 48 remaining findings after WEB-UX-033; no npm script, pre-commit hook or CI job runs it, so the count only moves when someone remembers.",
+      "acceptanceCriteria": [
+        "Baseline at filing: 48 findings. Breakdown by rule - side-tab (border-l-4 / border-left: 4px) is the largest group and the detector calls it the single most recognizable tell; then ai-color-palette (purple/violet/indigo gradients and headings), border-accent-on-rounded, gradient-text, bounce-easing, and one overused-font (Inter, loaded in src/lib/performanceConfig.ts).",
+        "NOT every finding is a defect. src/lib/categoryColors.ts and src/lib/categoryStyles.ts use violet, indigo and purple as CATEGORY-DISTINGUISHING hues with measured contrast ratios recorded in the file header. Those are deliberate and stay. Several border-b-2 hits are hand-rolled `animate-spin rounded-full border-b-2` spinners - the fix there is a shared spinner component, not a colour change.",
+        "Work public surfaces before admin ones: src/pages/Index.tsx (21 off-brand colour tokens, the highest-traffic page on the site), then ThingsToDoHub, TripPlanner, Restaurants, EventsPage, ArticleDetails, the pseo sections.",
+        "src/lib/styleUtils.ts line 16/17/63 carries `from-blue-600 via-purple-500 to-pink-500` as a shared hero gradient, so one edit there moves every page that reads it. Do that one first.",
+        "Land an npm script (check-ui-craft) that runs the detector against a committed baseline count and fails when the count rises, in the shape of the existing check-dom-budget / check-error-handling ratchets, and add it to pr-checks.yml."
+      ],
+      "priority": 2,
+      "passes": false,
+      "notes": "FILED FROM THE LOOP, iteration 1. Too large for one iteration: ~230 off-brand colour tokens across 72 files. HIT THIS NEXT ITERATION starting with src/lib/styleUtils.ts and src/pages/Index.tsx."
     }
   ]
 }
