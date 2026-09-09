@@ -9098,6 +9098,35 @@
       "priority": 2,
       "passes": true,
       "notes": "Filed and fixed 2026-09-09 on claude/des-moines-improvements-qse218, found while removing the dead Happy Hour preset in WEB-FEAT-025.\n\nDONE. resolveDietarySelections in useRestaurants reads both keys and filters to the known vocabulary, so the fix lands in one place and covers both the routing decision and the filter application. The URL parameter is untouched.\n\nVerified: 7 unit tests, including that 'Happy Hour' and 'Takeout' are dropped rather than becoming keyword searches; 3 Playwright tests against the PRODUCTION BUILD that assert against the OUTGOING REQUEST rather than the rendered list, because with stubbed data any list looks plausible - the question is whether the constraint reached PostgREST. Mutation-tested: restoring the original single-key read fails both dietary tests and leaves the control passing. 536 unit tests pass, all gates green."
+    },
+    {
+      "id": "WEB-FEAT-033",
+      "title": "Every friend on /community rendered as a blank name, a blank email and a \"U\" avatar",
+      "description": "As a signed-in user with connections, I need to see who my friends are. Social.tsx reads friend.friend_profile?.first_name, .last_name and .email in seven places (both the accepted-friends list and the pending-request list), and useSocialFeatures never set that field: it selected * from user_friends and returned the rows as-is. Every optional chain resolved to undefined, so a real connection rendered as an empty card with the fallback initial 'U'. It was invisible to CI because the whole app project is unchecked (WEB-CI-030) - tsc -p tsconfig.app.json reports all seven as TS2339 'Property friend_profile does not exist on type Friend'.",
+      "acceptanceCriteria": [
+        "Friend rows carry the OTHER party's profile, whichever column that user sits in (user_friends rows are written once, by whoever asked, so self can be user_id or friend_id).",
+        "One batched profiles request keyed by user_id for the whole list, not one per row.",
+        "A profiles failure (RLS hiding other users' rows is a legitimate policy) degrades to today's behaviour rather than emptying the list.",
+        "The Friend interface declares friend_profile, so the seven TS2339s in Social.tsx disappear from the app-project baseline."
+      ],
+      "priority": 2,
+      "passes": true,
+      "notes": "Filed and fixed 2026-09-09 on claude/web-platform-improvements-loop-0px3u1. Found by running the app-project type ratchet, which is in no workflow. attachProfiles() in src/hooks/useSocialFeatures.ts hydrates friend_profile; FriendProfile is exported alongside Friend."
+    },
+    {
+      "id": "WEB-CI-031",
+      "title": "The app-project type check takes 21 minutes, which is why WEB-CI-030 has never landed",
+      "description": "As a developer, I need src/ to be type-checked in CI, and the blocker is not the 374-error baseline (a ratchet already handles that) - it is wall-clock. Measured 2026-09-09 on this Linux container: `npm run type-check:app:ratchet` took 21m12s real, 20m14s user, peaking near 5.2GB RSS, for 882 files. A GitHub-hosted runner is slower and has 16GB, so this would roughly double the PR-checks job and risk an OOM. That cost is what has kept `npm run type-check` a no-op (`tsc --noEmit` against a \"files\": [] root) through two P1 crashes.",
+      "acceptanceCriteria": [
+        "Find the actual cost centre before optimising. The prime suspect is src/integrations/supabase/types.ts (476KB generated) driving deep PostgREST generic instantiation across every hook; `tsc --diagnostics --extendedDiagnostics` and `--generateTrace` will say. Instantiation count, not file count, is the number to watch.",
+        "Try the cheap levers first and measure each: incremental/tsBuildInfo cached in CI, `--skipLibCheck` (already on), splitting the run, or narrowing the generated Database type the client is instantiated with.",
+        "Only once a run fits a CI budget (target under 5 minutes warm), add the app ratchet as a step in .github/workflows/pr-checks.yml and change `npm run type-check` from the no-op to something that reads src/. Until then, do NOT put a 21-minute step in the PR path.",
+        "Interim, zero-cost option worth taking on its own: run the app ratchet on a schedule (nightly) rather than per-PR, so regressions are caught within a day instead of never.",
+        "Re-baseline app-type-baseline.json on Linux only - see the header of scripts/strict-ratchet.mjs for why a Windows baseline turned this check permanently red once already."
+      ],
+      "priority": 2,
+      "passes": false,
+      "notes": "Filed 2026-09-09 on claude/web-platform-improvements-loop-0px3u1 while closing WEB-FEAT-033. Splits the measurement/perf half off WEB-CI-030, which stays open for the wiring. The same 21-minute run found two live regressions that had reached main unchallenged (WEB-FEAT-033, and the stale-types TS2352 in useEventIndoorFlags), which is the argument for paying to make it fast."
     }
   ]
 }

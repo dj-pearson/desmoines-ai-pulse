@@ -30,6 +30,18 @@ import { createLogger } from '@/lib/logger';
 
 const logger = createLogger('useSocialFeatures');
 
+/**
+ * The other party's public-facing profile, hydrated onto each row by
+ * `fetchFriends`. Optional because `profiles` is a separate request that RLS
+ * may refuse: when it does, the row still renders, just without a name.
+ */
+export interface FriendProfile {
+  user_id: string;
+  first_name: string | null;
+  last_name: string | null;
+  email: string | null;
+}
+
 export interface Friend {
   id: string;
   user_id: string;
@@ -37,6 +49,8 @@ export interface Friend {
   status: string;
   created_at: string;
   accepted_at?: string | null;
+  /** The person on the OTHER end of this row, whichever column they sit in. */
+  friend_profile?: FriendProfile;
 }
 
 export interface FriendGroup {
@@ -55,6 +69,47 @@ export type FriendRequestOutcome =
   | 'not_found'
   | 'self'
   | 'error';
+
+/** The other party on a `user_friends` row, from the current user's side. */
+function otherPartyId(row: Friend, selfId: string): string {
+  return row.user_id === selfId ? row.friend_id : row.user_id;
+}
+
+/**
+ * Hydrate `friend_profile` on each row.
+ *
+ * Social.tsx has always rendered `friend.friend_profile?.first_name` and
+ * `.email`, and nothing ever populated them, so every connection on /community
+ * showed a "U" avatar with a blank name and a blank email (WEB-FEAT-033). One
+ * batched request by user_id, not one per row.
+ *
+ * Failure is not an error path: `profiles` is behind RLS, and a policy that
+ * hides other users' rows is a legitimate configuration. The rows come back
+ * un-hydrated and the UI falls back to the initial, exactly as it does today.
+ */
+async function attachProfiles(rows: Friend[], selfId: string): Promise<Friend[]> {
+  const ids = [...new Set(rows.map((row) => otherPartyId(row, selfId)))];
+  if (ids.length === 0) return rows;
+
+  const { data, error } = await supabase
+    .from('profiles')
+    .select('user_id, first_name, last_name, email')
+    .in('user_id', ids);
+
+  if (error) {
+    logger.warn('attachProfiles', 'Profile hydration unavailable', { error });
+    return rows;
+  }
+
+  const byUserId = new Map<string, FriendProfile>(
+    (data ?? []).map((profile) => [profile.user_id, profile as FriendProfile]),
+  );
+
+  return rows.map((row) => {
+    const profile = byUserId.get(otherPartyId(row, selfId));
+    return profile ? { ...row, friend_profile: profile } : row;
+  });
+}
 
 export function useSocialFeatures() {
   const { user } = useAuth();
@@ -86,10 +141,11 @@ export function useSocialFeatures() {
       }
 
       const rows = (data ?? []) as Friend[];
-      setFriends(rows.filter((row) => row.status === 'accepted'));
+      const hydrated = await attachProfiles(rows, user.id);
+      setFriends(hydrated.filter((row) => row.status === 'accepted'));
       // Only requests addressed TO this user are actionable by them.
       setPendingRequests(
-        rows.filter((row) => row.status === 'pending' && row.friend_id === user.id),
+        hydrated.filter((row) => row.status === 'pending' && row.friend_id === user.id),
       );
     } catch (error) {
       logger.error('fetchFriends', 'Failed to fetch friends', { error });

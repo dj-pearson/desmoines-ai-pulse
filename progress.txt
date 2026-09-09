@@ -4899,3 +4899,44 @@ SESSION TALLY (2026-06-25): closed WEB-FEAT-008, WEB-FEAT-010, and all 4 newly
 filed audit stories (WEB-SEC-009, WEB-SEC-010, WEB-PERF-008, WEB-UX-024). Every
 WEB-* story now passes (186 total true / 11 false). Remaining 11 are all
 IOS-AUDIT-* (no Xcode here; most blocked on external inputs).
+
+================================================================================
+## 2026-09-09 — WEB-FEAT-033 (/community showed blank friends): DONE
+================================================================================
+Found by running the app-project type ratchet, which is in NO workflow. It takes
+21 minutes, which is exactly why nobody runs it, and in that one run it turned up
+two live regressions sitting on main.
+
+FIXED
+- useSocialFeatures.ts: Social.tsx reads friend.friend_profile?.first_name /
+  .last_name / .email in seven places, across both the accepted-friends list and
+  the pending-request list, and the hook never set that field. Every optional
+  chain resolved to undefined, so a real connection rendered as an empty card
+  with the fallback initial "U". attachProfiles() now hydrates the OTHER party
+  (user_friends rows are written once by whoever asked, so self can be either
+  column) in one batched profiles request keyed by user_id. A profiles failure
+  is not treated as an error: RLS hiding other users' rows is a legitimate
+  policy, and the list degrades to today's behaviour instead of emptying.
+  FriendProfile is exported alongside Friend.
+- useEventIndoorFlags.ts: the `is_indoor` row assertion was a TS2352 because
+  types.ts is generated from the DEPLOYED schema and migration 20260908000001
+  is not applied, so PostgREST types the select as SelectQueryError. Cast
+  through unknown with the reason written down. No behaviour change - the
+  runtime contract is the graceful degradation the file header describes.
+
+FILED
+- WEB-CI-031: the 21-minute app type check. Measured here: 21m12s real, 20m14s
+  user, ~5.2GB peak RSS over 882 files. That cost, not the 374-error baseline,
+  is what has kept WEB-CI-030 unlanded. Story asks for --generateTrace before
+  optimising (prime suspect: the 476KB generated Database type instantiating
+  deep PostgREST generics in every hook), and for a nightly run as the
+  zero-cost interim so regressions are caught within a day instead of never.
+
+VERIFIED: app ratchet 374 -> 365 errors across 67 files, no regressions;
+baseline re-cut to match. eslint clean on the changed files.
+
+FILES
+  M src/hooks/useSocialFeatures.ts
+  M src/hooks/useEventIndoorFlags.ts
+  M app-type-baseline.json
+  M prd.json  (WEB-FEAT-033 passes=true, WEB-CI-031 filed)
