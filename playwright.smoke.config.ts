@@ -28,11 +28,17 @@ export default defineConfig({
   // check that cannot fail a PR is decorative, and WEB-LEGAL-001 is the exact
   // defect that shipped while a document said it was fixed.
   //
+  // backend-down.spec.ts is here for the same reason: it aborts every Supabase
+  // request and asserts no reader-facing route answers "No items available in
+  // this category right now". That is a runtime property - the TanStack pages
+  // reach their empty state only after retries are exhausted - so no
+  // source-text check can establish it. WEB-QA-032.
+  //
   // It belongs here specifically because it asserts REAL BROWSER BEHAVIOUR -
   // network requests and cookies - which no source-text check can establish.
   // scripts/check-consent-gate.mjs covers the source side; this covers what
   // actually happens.
-  testMatch: /(route-smoke|cookie-consent)\.spec\.ts/,
+  testMatch: /(route-smoke|cookie-consent|backend-down)\.spec\.ts/,
   fullyParallel: true,
   forbidOnly: !!process.env.CI,
   retries: process.env.CI ? 2 : 0,

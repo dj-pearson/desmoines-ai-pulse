@@ -16,6 +16,7 @@ import { Skeleton } from '@/components/ui/skeleton';
 import { Trophy } from "lucide-react";
 import { EVENT_LIST_COLUMNS } from '@/lib/listColumns';
 import { SpriteIcon } from "@/components/ui/SpriteIcon";
+import { ErrorState } from '@/components/ui/error-state';
 
 function useSportsEvents(timeframe: 'today' | 'week') {
   // WEB-QA-029: these were midnight in the READER's timezone, so "Today"
@@ -59,8 +60,20 @@ const SPORT_ICONS: Record<string, string> = {
 
 export default function SportsHub() {
   const { data: teams, isLoading: teamsLoading } = useTeams();
-  const { data: todayGames } = useSportsEvents('today');
-  const { data: weekGames } = useSportsEvents('week');
+  const { data: todayGames, error: todayError, refetch: refetchToday } = useSportsEvents('today');
+  const { data: weekGames, error: weekError, refetch: refetchWeek } = useSportsEvents('week');
+
+  /**
+   * WEB-QA-032. These queries always exposed isError and refetch and the page
+   * read neither, so with the backend unreachable /sports said "No games scheduled for today" -
+   * stated as fact. Confirmed in a real browser against a production build.
+   * The sections share one backend, so one error banner beats three.
+   */
+  const gamesError = todayError ?? weekError ?? null;
+  const retryGames = () => {
+    refetchToday();
+    refetchWeek();
+  };
 
   const canonicalUrl = getCanonicalUrl('/sports');
   const pageDescription =
@@ -169,7 +182,11 @@ export default function SportsHub() {
                 ))}
               </div>
             ) : (
-              <p className="text-muted-foreground">No games scheduled for today.</p>
+              gamesError ? (
+                <ErrorState error={gamesError} compact onRetry={retryGames} />
+              ) : (
+                <p className="text-muted-foreground">No games scheduled for today.</p>
+              )
             )}
           </section>
 
@@ -204,7 +221,11 @@ export default function SportsHub() {
                 ))}
               </div>
             ) : (
-              <p className="text-muted-foreground">No games scheduled this week.</p>
+              gamesError ? (
+                <ErrorState error={gamesError} compact onRetry={retryGames} />
+              ) : (
+                <p className="text-muted-foreground">No games scheduled this week.</p>
+              )
             )}
           </section>
 

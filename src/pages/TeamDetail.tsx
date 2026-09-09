@@ -11,11 +11,12 @@ import { Skeleton } from '@/components/ui/skeleton';
 import { Button } from '@/components/ui/button';
 import { Trophy } from "lucide-react";
 import { SpriteIcon } from "@/components/ui/SpriteIcon";
+import { ErrorState } from '@/components/ui/error-state';
 
 export default function TeamDetail() {
   const { slug } = useParams<{ slug: string }>();
-  const { data: team, isLoading } = useTeam(slug || '');
-  const { data: games } = useTeamGames(team?.name || '');
+  const { data: team, isLoading, error: teamError, refetch: refetchTeam } = useTeam(slug || '');
+  const { data: games, error: gamesError, refetch: refetchGames } = useTeamGames(team?.name || '');
 
   if (isLoading) {
     return (
@@ -26,6 +27,27 @@ export default function TeamDetail() {
         <div className="container mx-auto px-4 py-8">
           <Skeleton className="h-8 w-64 mb-4" />
           <Skeleton className="h-32 w-full" />
+        </div>
+        <Footer />
+      </div>
+    );
+  }
+
+  /**
+   * WEB-QA-032. A failed load used to fall straight through to the not-found
+   * branch below, which renders "team not found" AND a noindex. On a real
+   * team whose page merely failed to load that is a deindexing risk, not
+   * just bad copy - Googlebot hitting the site during a backend blip would be
+   * told the page should not be indexed. A failure and a missing row are
+   * different answers and get different pages.
+   */
+  if (teamError) {
+    return (
+      <div className="min-h-screen bg-background">
+        <RouteCanonical path={`/sports/${slug}`} />
+        <Header />
+        <div className="container mx-auto px-4 py-16">
+          <ErrorState error={teamError} onRetry={() => refetchTeam()} />
         </div>
         <Footer />
       </div>
@@ -152,7 +174,11 @@ export default function TeamDetail() {
                 ))}
               </div>
             ) : (
-              <p className="text-muted-foreground">No upcoming games listed for {team.name}.</p>
+              gamesError ? (
+                <ErrorState error={gamesError} compact onRetry={refetchGames} />
+              ) : (
+                <p className="text-muted-foreground">No upcoming games listed for {team.name}.</p>
+              )
             )}
           </section>
         </div>

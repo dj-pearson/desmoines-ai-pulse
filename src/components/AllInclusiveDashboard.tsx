@@ -38,6 +38,7 @@ import { useAnalytics } from "@/hooks/useAnalytics";
 import { FavoriteButton } from "@/components/FavoriteButton";
 import { openExternalUrl } from "@/lib/capacitorUtils";
 import { SpriteIcon } from "@/components/ui/SpriteIcon";
+import { ErrorState } from "@/components/ui/error-state";
 
 // Type definitions for dashboard items
 type DashboardItem = {
@@ -139,14 +140,42 @@ export default function AllInclusiveDashboard({
   );
 
   // Load events first (critical for homepage)
-  const { events: allEvents, isLoading: eventsLoading } = useEvents({
-    limit: 100,
-  });
+  const {
+    events: allEvents,
+    isLoading: eventsLoading,
+    error: eventsError,
+    refetch: refetchEvents,
+  } = useEvents({ limit: 100 });
 
   // Load other data sources - React Query will handle caching
   const { data: allRestaurantOpenings = [] } = useRestaurantOpenings();
-  const { attractions: allAttractions } = useAttractions({ limit: 100 });
-  const { playgrounds: allPlaygrounds } = usePlaygrounds({ limit: 100 });
+  const {
+    attractions: allAttractions,
+    error: attractionsError,
+    refetch: refetchAttractions,
+  } = useAttractions({ limit: 100 });
+  const {
+    playgrounds: allPlaygrounds,
+    error: playgroundsError,
+    refetch: refetchPlaygrounds,
+  } = usePlaygrounds({ limit: 100 });
+
+  /**
+   * WEB-QA-032. Every one of these hooks has always returned `error` and
+   * `refetch`, and this component read neither. With the backend unreachable
+   * the home page told visitors "No results found - No items available in this
+   * category right now", stated as fact. Confirmed in a real browser against a
+   * production build: it is the first thing a first-time visitor reads.
+   *
+   * Any one source failing is enough to make the merged list wrong, so the
+   * error state wins over the empty state whichever failed.
+   */
+  const loadError = eventsError ?? attractionsError ?? playgroundsError ?? null;
+  const retryAll = () => {
+    refetchEvents();
+    refetchAttractions();
+    refetchPlaygrounds();
+  };
 
   // Comprehensive filtering function
   const applyFilters = (
@@ -611,6 +640,11 @@ export default function AllInclusiveDashboard({
   // Render empty state when no results
   const renderEmptyState = () => {
     if (currentTabItems.length > 0) return null;
+
+    // A failed load is not an empty category.
+    if (loadError) {
+      return <ErrorState error={loadError} onRetry={retryAll} />;
+    }
 
     return (
       <div className="text-center py-12 px-4">

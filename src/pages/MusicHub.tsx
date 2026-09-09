@@ -17,6 +17,7 @@ import { Music } from "lucide-react";
 import { Button } from '@/components/ui/button';
 import { EVENT_LIST_COLUMNS } from '@/lib/listColumns';
 import { SpriteIcon } from "@/components/ui/SpriteIcon";
+import { ErrorState } from '@/components/ui/error-state';
 
 const GENRE_FILTERS = ['All', 'Rock', 'Country', 'Jazz', 'Hip-Hop', 'Electronic', 'Classical', 'Blues', 'Folk'];
 
@@ -68,9 +69,22 @@ const VENUE_TYPE_LABELS: Record<string, string> = {
 
 export default function MusicHub() {
   const { data: venues, isLoading: venuesLoading } = useVenues();
-  const { data: tonightShows } = useMusicEvents('tonight');
-  const { data: weekendShows } = useMusicEvents('weekend');
-  const { data: upcomingShows } = useMusicEvents('upcoming');
+  const { data: tonightShows, error: tonightError, refetch: refetchTonight } = useMusicEvents('tonight');
+  const { data: weekendShows, error: weekendError, refetch: refetchWeekend } = useMusicEvents('weekend');
+  const { data: upcomingShows, error: upcomingError, refetch: refetchUpcoming } = useMusicEvents('upcoming');
+
+  /**
+   * WEB-QA-032. These queries always exposed isError and refetch and the page
+   * read neither, so with the backend unreachable /music said "No shows scheduled for tonight" -
+   * stated as fact. Confirmed in a real browser against a production build.
+   * The sections share one backend, so one error banner beats three.
+   */
+  const showsError = tonightError ?? weekendError ?? upcomingError ?? null;
+  const retryShows = () => {
+    refetchTonight();
+    refetchWeekend();
+    refetchUpcoming();
+  };
 
   const canonicalUrl = getCanonicalUrl('/music');
   const pageDescription =
@@ -199,7 +213,11 @@ export default function MusicHub() {
                 ))}
               </div>
             ) : (
-              <p className="text-muted-foreground">No shows scheduled for tonight. Check back for updates!</p>
+              showsError ? (
+                <ErrorState error={showsError} compact onRetry={retryShows} />
+              ) : (
+                <p className="text-muted-foreground">No shows scheduled for tonight. Check back for updates!</p>
+              )
             )}
           </section>
 
@@ -235,7 +253,11 @@ export default function MusicHub() {
                 ))}
               </div>
             ) : (
-              <p className="text-muted-foreground">No weekend shows listed yet. Check upcoming concerts below!</p>
+              showsError ? (
+                <ErrorState error={showsError} compact onRetry={retryShows} />
+              ) : (
+                <p className="text-muted-foreground">No weekend shows listed yet. Check upcoming concerts below!</p>
+              )
             )}
           </section>
 
@@ -272,7 +294,11 @@ export default function MusicHub() {
                 ))}
               </div>
             ) : (
-              <p className="text-muted-foreground">No upcoming concerts found.</p>
+              showsError ? (
+                <ErrorState error={showsError} compact onRetry={retryShows} />
+              ) : (
+                <p className="text-muted-foreground">No upcoming concerts found.</p>
+              )
             )}
           </section>
 
