@@ -5310,3 +5310,53 @@ FILES
   M src/pages/Auth.tsx
   M tests/forms.spec.ts
   M prd.json  (WEB-AUTH-008 passes=true)
+
+================================================================================
+## 2026-09-09 — WEB-QA-027 (a failed search painted over the mobile apps): DONE
+================================================================================
+Found by RUNNING the app, not by reading it: an axe sweep over seven public
+routes in a real browser (vite on 127.0.0.1:8080 with an unreachable Supabase,
+Playwright's chromium launched by executablePath). Six routes came back with
+ZERO violations under wcag2a/2aa/21a/21aa - worth recording on its own, the
+a11y work in this repo is holding. /search had one, and the violating node was
+#__error_overlay__: the page had CRASHED.
+
+THE DEFECT
+useNLPSearch.search() returned searchMutation.mutateAsync(...), which rejects
+on failure, and all three callers - the URL-query effect in SearchResults:181
+and both entry points in NLPSearchBar:63,139 - call it with no await and no
+catch. Every failed search was an unhandled promise rejection, on a page that
+was otherwise coping correctly: it renders KeywordFallbackResults off isError.
+
+WHY THAT IS NOT COSMETIC
+main.tsx installs an unhandledrejection handler that calls showErrorOverlay,
+and showErrorOverlay returns early only when `!isCapacitor && PROD`. So inside
+the shipped iOS and Android apps, a failed search covers the screen with a
+black "Runtime Error" panel - and the overlay APPENDS, so one search stacked
+five of them. Verified: overlay count 5 before, 0 after, with the failure now
+appearing once as a handled console.error from onError.
+
+FIXED
+search() resolves with null on failure instead of rejecting. isError and error
+stay on the returned object, so the page's fallback still fires - swallowing
+the rejection must not swallow the signal, and there is a test for that.
+Mutation-tested: restoring the bare mutateAsync fails two of the four tests.
+
+FILED
+- WEB-QA-028: the overlay itself ships enabled in production on Capacitor. The
+  `!isCapacitor` carve-out is explicit and commented, so it is a product
+  decision rather than an oversight to correct unilaterally - but App Store and
+  Play builds carrying a stack-trace panel deserves a deliberate answer, and it
+  should replace rather than append either way.
+- WEB-QUAL-012: React 18 warns about the fetchPriority prop on every render.
+  MEASURED before filing: the attribute DOES reach the DOM (2 of 3 images on /
+  carry lowercase fetchpriority, values high and low), so this is console
+  noise, not a broken LCP hint. Filed at priority 4 for that reason.
+
+VERIFIED: 4 new tests (569 total pass), validate exit 0, test:offline 19/19,
+check-edge-types exit 0, and the browser re-probe above.
+
+FILES
+  M src/hooks/useNLPSearch.ts
+  A src/hooks/__tests__/useNLPSearch.rejection.test.ts
+  M prd.json  (WEB-QA-027 filed+passed, WEB-QA-028 and WEB-QUAL-012 filed)

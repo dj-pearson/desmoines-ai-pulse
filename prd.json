@@ -9169,6 +9169,46 @@
       "priority": 2,
       "passes": true,
       "notes": "Filed 2026-09-09 on claude/web-platform-improvements-loop-0px3u1 while closing WEB-CI-033. Next iteration's candidate. With this and WEB-CI-033 done, the PR job should be green on the base for the first time in this loop.\n\nDONE 2026-09-09, and THE FILED DIAGNOSIS WAS WRONG - recorded here rather than quietly corrected. The runner is fine: scripts/run-offline-suites.mjs spawns process.execPath with process.execArgv, and under `tsx` that argv carries --require preflight.cjs and --import loader.mjs, so the child does load .tsx. The ERR_UNKNOWN_FILE_EXTENSION in the story was from running the suite directly under plain `node` while diagnosing, not from the runner. Under the runner the suite RUNS and reports a real failing check: 'no href points at a route that does not exist -> /calendar'.\n\nThe actual defect: SiteDirectory renders in the footer of every page and carried an 'Event calendar' link to /calendar. WEB-FEAT-027 removed that route (its hook was mock data, so the page could never show anything) and kept a 301 to /events in public/_redirects for already-indexed links. So the footer of ~1,100 pages sent every visitor through a redirect, to a page the same section already links directly, under a title promising a calendar that no longer exists. Link removed.\n\nThe test now separates the two cases: an href that resolves nowhere (a soft 404 on every page) and one that resolves only through a redirect. /calendar failed as the first, which sends the reader hunting for a missing route instead of a stale link. Mutation-tested both branches. test:offline is 19/19."
+    },
+    {
+      "id": "WEB-QA-027",
+      "title": "A failed search threw an unhandled rejection, which paints a full-screen error overlay inside the shipped mobile apps",
+      "description": "As someone searching on the iOS or Android app when nlp-search is unreachable, I need the page's own fallback, not a black 'Runtime Error' panel over the whole screen. useNLPSearch.search() returned searchMutation.mutateAsync(...), which REJECTS on failure, and all three callers - the effect on the URL query in SearchResults.tsx:181 and both entry points in NLPSearchBar.tsx:63,139 - call it without awaiting or catching. Every failed search was therefore an unhandled promise rejection, on a page that was otherwise coping correctly (it renders KeywordFallbackResults off isError).",
+      "acceptanceCriteria": [
+        "search() resolves with null on failure instead of rejecting; isError and error stay on the returned object so the page can still render its fallback.",
+        "Reproduced 2026-09-09 in a real browser (vite on 127.0.0.1:8080 with an unreachable Supabase, Playwright chromium): /search?q=pizza stacked FIVE 'Runtime Error - FunctionsFetchError' panels from #__error_overlay__. After the fix the overlay count is 0 and the failure appears once, as a handled console.error from the mutation's onError.",
+        "Mutation-tested: restoring the bare mutateAsync fails two of the four new tests."
+      ],
+      "priority": 2,
+      "passes": true,
+      "notes": "Found and fixed 2026-09-09 on claude/web-platform-improvements-loop-0px3u1, by running an axe sweep over seven public routes in a real browser rather than by reading code - /search was the only route with a violation, and the violating node was the error overlay itself. The other six routes came back with ZERO axe violations under wcag2a/2aa/21a/21aa, which is worth recording: the accessibility work in this repo is holding."
+    },
+    {
+      "id": "WEB-QA-028",
+      "title": "The debug error overlay ships enabled in production on iOS and Android",
+      "description": "As the platform owner, I need to decide whether a full-screen black 'Runtime Error' panel belongs in a shipped app. src/main.tsx:114 showErrorOverlay begins `if (!isCapacitor && import.meta.env.PROD) return;` - so it is suppressed in the production WEB build and ACTIVE in production Capacitor builds. Any unhandled rejection or window.onerror therefore covers the shipped iOS/Android UI with a stack trace, and the overlay appends rather than replaces, so repeated failures stack.",
+      "acceptanceCriteria": [
+        "Decide deliberately: this reads as a debugging aid for release builds that was never turned off, but it may be intentional for TestFlight/internal tracks. If it is wanted there, gate it on a build flag or a debug menu rather than on isCapacitor, so App Store and Play builds do not carry it.",
+        "Whatever is decided, the overlay should REPLACE rather than append: WEB-QA-027 produced five stacked panels from one search.",
+        "The overlay is also an a11y violation while it is up: axe reports scrollable-region-focusable (serious) on #__error_overlay__.",
+        "If it stays, errors should still reach Sentry - the overlay is not a substitute for reporting."
+      ],
+      "priority": 2,
+      "passes": false,
+      "notes": "Filed 2026-09-09 while fixing WEB-QA-027, which is the bug that revealed it. Not changed here: the `!isCapacitor` carve-out is explicit and commented ('Always show on Capacitor'), so it is a product decision, not an oversight to correct unilaterally. Next iteration's candidate if the answer is 'gate it'."
+    },
+    {
+      "id": "WEB-QUAL-012",
+      "title": "React 18 warns about the fetchPriority prop on every page render",
+      "description": "As a developer reading the console, I need it not to carry a warning on every page. OptimizedImage, OptimizedLogo, AffiliateAdBanner and Footer pass fetchPriority (camelCase) to a DOM <img>; React 18.3 does not recognise it - React 19 does - and warns 'React does not recognize the fetchPriority prop on a DOM element ... spell it as lowercase fetchpriority instead'.",
+      "acceptanceCriteria": [
+        "MEASURED, so the fix is cosmetic rather than a performance fix: the attribute DOES reach the DOM. Probed on / in a real browser 2026-09-09 - 2 of 3 images carry a lowercase fetchpriority attribute with values high and low. React passes the unknown prop through lowercased and warns. The priority hint works today.",
+        "Rename the JSX prop to lowercase fetchpriority at the four call sites, or drop the warning another way, and keep the public prop name on the components' own interfaces (that part is React-idiomatic and fine).",
+        "Console warnings are load-bearing here: this one appears on every route, which is exactly the noise that hides a real warning."
+      ],
+      "priority": 4,
+      "passes": false,
+      "notes": "Filed 2026-09-09 from a browser sweep on claude/web-platform-improvements-loop-0px3u1. Low priority precisely because the measurement showed the attribute lands; if it had not, this would be an LCP defect."
     }
   ]
 }
