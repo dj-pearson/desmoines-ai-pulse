@@ -8,6 +8,7 @@ import { Badge } from '@/components/ui/badge';
 import { Button } from '@/components/ui/button';
 import { Car, Building, Bike, Plane, Bus, Navigation, Footprints } from "lucide-react";
 import { SpriteIcon } from "@/components/ui/SpriteIcon";
+import { DART_FARES, verificationLine } from "@/lib/transitFacts";
 
 const PARKING_GARAGES = [
   { name: 'Capital Square Garage', address: '400 Locust St', rate: '$1/hr, $10 max', hours: '24/7', lat: 41.5867, lng: -93.6250 },
@@ -28,10 +29,10 @@ const DISTANCE_TABLE = [
 ];
 
 const FAQ_ITEMS = [
-  { question: 'Is there Uber in Des Moines?', answer: 'Yes! Both Uber and Lyft operate throughout the Des Moines metro area. Average wait times are 3-8 minutes downtown, slightly longer in suburbs.' },
-  { question: 'Where should I park downtown?', answer: 'Downtown Des Moines has multiple parking garages averaging $1/hour. The ParkDSM app lets you pay from your phone. Street parking is free after 9pm and on weekends.' },
-  { question: 'Does Des Moines have a subway?', answer: 'No, Des Moines does not have a subway or light rail system. The city is served by DART (Des Moines Area Regional Transit) buses and the free DART D-Line downtown circulator.' },
-  { question: 'How do I get from the airport to downtown?', answer: 'The Des Moines International Airport (DSM) is only 5 miles from downtown — about 10 minutes by car. Options: Uber/Lyft ($12-18), taxi, DART Route 8, or hotel shuttles.' },
+  { question: 'Is there Uber in Des Moines?', answer: 'Yes. Both Uber and Lyft operate throughout the Des Moines metro area. Waits are usually shortest downtown and longer in the suburbs; check the app for a live estimate.' },
+  { question: 'Where should I park downtown?', answer: 'Downtown Des Moines has multiple parking garages, and the ParkDSM app lets you pay from your phone. Rates and street-parking hours change, so confirm posted signage or the app before you leave the car.' },
+  { question: 'Does Des Moines have a subway?', answer: 'No, Des Moines does not have a subway or light rail system. The city is served by DART (Des Moines Area Regional Transit) buses. Check ridedart.com for current routes and schedules.' },
+  { question: 'How do I get from the airport to downtown?', answer: 'Des Moines International Airport (DSM) is about 5 miles from downtown, roughly 10 minutes by car. Options include Uber and Lyft, taxis, hotel shuttles, and DART bus service - check ridedart.com for the route that currently serves the airport.' },
   { question: 'What is the Des Moines Skywalk?', answer: 'The Des Moines Skywalk is a 4+ mile system of enclosed, climate-controlled walkways connecting buildings throughout downtown. It is free to use and open during business hours — essential during Iowa winters!' },
 ];
 
@@ -81,8 +82,15 @@ export default function GettingAround() {
               <Car className="h-5 w-5 text-primary" />
               <h2 className="text-2xl font-bold">Parking &amp; ParkDSM</h2>
             </div>
+            {/* WEB-FEAT-023: the rates below are a hardcoded array with no
+                source and no verification date, unlike the DART fares further
+                down. Labelled as indicative rather than quietly presented as
+                current, until there is a parking data source to check them
+                against. */}
             <p className="text-muted-foreground mb-4">
-              Downtown parking averages $1/hour. Download the <strong>ParkDSM</strong> app to pay from your phone. Street parking is <strong>free after 9pm and on weekends</strong>.
+              Download the <strong>ParkDSM</strong> app to pay from your phone. Garage
+              rates and street-parking hours change, so treat the figures below as a
+              rough guide and confirm posted signage or the app.
             </p>
             <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-4 mb-4">
               {PARKING_GARAGES.map((garage) => (
@@ -162,7 +170,7 @@ export default function GettingAround() {
             <Card>
               <CardContent className="p-6">
                 <p className="text-muted-foreground">
-                  Both <strong>Uber</strong> and <strong>Lyft</strong> operate throughout the Des Moines metro. Average wait times are 3-8 minutes downtown. Typical fares: Airport to downtown ~$12-18, downtown to Valley Junction ~$10-15, downtown to Jordan Creek ~$15-22.
+                  Both <strong>Uber</strong> and <strong>Lyft</strong> operate throughout the Des Moines metro. Waits are usually shortest downtown and longer in the suburbs. Fares move with demand, so check the app for a live quote rather than a printed range.
                 </p>
               </CardContent>
             </Card>
@@ -194,7 +202,7 @@ export default function GettingAround() {
                   <div>
                     <h3 className="font-semibold mb-2">Ground Transportation</h3>
                     <ul className="text-sm text-muted-foreground space-y-1">
-                      <li><strong>Uber/Lyft:</strong> Pick up at arrivals curb ($12-18 to downtown)</li>
+                      <li><strong>Uber/Lyft:</strong> Pick up at the arrivals curb; check the app for a fare quote</li>
                       <li><strong>Taxi:</strong> Available at taxi stand ($18-22 to downtown)</li>
                       <li><strong>DART Route 8:</strong> Bus to downtown ($1.75, ~20 min)</li>
                       <li><strong>Hotel Shuttles:</strong> Many downtown hotels offer complimentary airport shuttle</li>
@@ -214,15 +222,27 @@ export default function GettingAround() {
             </div>
             <Card>
               <CardContent className="p-6">
+                {/* WEB-FEAT-023. The D-Line claim that used to lead this
+                    section is gone. Checked 2026-09-09: its route page 404s,
+                    the DART fares page does not mention it, and DART's current
+                    bus-routes page (modified 2026-08-31) contains no "D-Line",
+                    "circulator" or "free" at all. We are not sending visitors
+                    to a bus we cannot show still runs. */}
                 <p className="text-muted-foreground mb-4">
-                  DART (Des Moines Area Regional Transit) operates bus routes throughout the metro. The <strong>D-Line</strong> is a free downtown circulator running every 10-15 minutes.
+                  DART (Des Moines Area Regional Transit) operates bus routes across the
+                  metro, with real-time tracking and mobile fare payment in the MyDART app.
                 </p>
-                <ul className="text-sm text-muted-foreground space-y-1 mb-4">
-                  <li><strong>Base Fare:</strong> $1.75 (exact change or DART Card)</li>
-                  <li><strong>Day Pass:</strong> $4.00</li>
-                  <li><strong>D-Line (Downtown):</strong> FREE — runs every 10-15 min on weekdays</li>
-                  <li><strong>DART App:</strong> Real-time bus tracking and mobile fare payment</li>
+                <ul className="text-sm text-muted-foreground space-y-1 mb-2">
+                  {DART_FARES.facts.map((fact) => (
+                    <li key={fact.label}>
+                      <strong>{fact.label}:</strong> {fact.value}
+                      {fact.note ? ` (${fact.note})` : ""}
+                    </li>
+                  ))}
                 </ul>
+                <p className="text-xs text-muted-foreground mb-4">
+                  {verificationLine(DART_FARES)}
+                </p>
                 <a href="https://www.ridedart.com" target="_blank" rel="noopener noreferrer">
                   <Button variant="outline" size="sm">
                     <SpriteIcon name="external-link" className="h-4 w-4 mr-1" /> DART Website
@@ -238,6 +258,9 @@ export default function GettingAround() {
               <Footprints className="h-5 w-5 text-primary" />
               <h2 className="text-2xl font-bold">Distances From Downtown</h2>
             </div>
+            <p className="text-muted-foreground mb-4">
+              Approximate, from the edge of downtown in normal traffic.
+            </p>
             <Card>
               <CardContent className="p-0">
                 <div className="overflow-x-auto">
