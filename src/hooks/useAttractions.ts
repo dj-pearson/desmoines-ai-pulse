@@ -1,6 +1,7 @@
 import { useCallback } from "react";
 import { useQuery, useQueryClient } from "@tanstack/react-query";
 import { supabase } from "@/integrations/supabase/client";
+import { countOption, type CountMode } from '@/lib/listCount';
 import { ATTRACTION_LIST_COLUMNS } from "@/lib/listColumns";
 import { Database } from "@/integrations/supabase/types";
 import { createLogger } from '@/lib/logger';
@@ -29,7 +30,10 @@ interface AttractionFilters {
   sortBy?: "newest" | "updated" | "alphabetical" | "rating";
   limit?: number;
   offset?: number;
+  /** How hard to work for `totalCount`; see src/lib/listCount.ts (WEB-PERF-033). */
+  countMode?: CountMode;
 }
+
 
 export function useAttractions(filters: AttractionFilters = {}) {
   const queryClient = useQueryClient();
@@ -51,7 +55,7 @@ export function useAttractions(filters: AttractionFilters = {}) {
   }>({
     queryKey: queryKeys.attractions.list(filters as Record<string, unknown>),
     queryFn: async () => {
-      let query = supabase.from("attractions").select(ATTRACTION_LIST_COLUMNS, { count: "exact" });
+      let query = supabase.from("attractions").select(ATTRACTION_LIST_COLUMNS, countOption(filters.countMode));
 
       // Default to active rows only; admin callers can pass false to see all.
       if (filters.activeOnly !== false) {

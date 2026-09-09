@@ -8014,8 +8014,8 @@
         "npm run validate passes"
       ],
       "priority": 3,
-      "passes": false,
-      "notes": "Filed 2026-09-02 from the codebase audit on claude/codebase-audit-prd-k01kxz. Evidence is from the working tree; production was not probed (no Supabase credentials in the container)."
+      "passes": true,
+      "notes": "Filed 2026-09-02 from the codebase audit on claude/codebase-audit-prd-k01kxz. Evidence is from the working tree; production was not probed (no Supabase credentials in the container).\n\nDONE 2026-09-09 on claude/web-platform-improvements-loop-0px3u1, for the three hooks whose public callers ignore the number: useAttractions, usePlaygrounds, useHotels. countOption() in src/lib/listCount.ts turns a countMode into the select options object, defaulting to 'estimated' - the mode useRestaurants already settled on. /attractions and /playgrounds pass 'none', which OMITS the option rather than setting it falsy; that distinction is the one the unit test pins, because { count: undefined } would read as correct and still issue the count. The admin surfaces that paginate on the number (AttractionManager, PlaygroundManager, HotelManager, AdminContent) pass 'exact' explicitly.\n\nuseEvents and EventsPage:285 KEPT count: 'exact', deliberately, against the story's AC. EventsPage paginates on totalCount, events is the largest of these tables, and 'estimated' switches to a planner estimate above PostgREST's threshold - which would give a wrong page count on the busiest page on the site. Trading correct pagination for one count is not the same trade as dropping a number nobody renders. If it is worth doing, it needs a real row count first, which this container cannot get.\n\nVerified: 4 new unit tests, 540 total pass; validate exit 0; the touched files type-check clean under tsconfig.app.json (checked as a file slice - the full app project takes 21 minutes, see WEB-CI-031)."
     },
     {
       "id": "WEB-PERF-034",

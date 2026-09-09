@@ -167,12 +167,15 @@ export default function AdminContent() {
   // Data hooks with search filters
   const events = useEvents({ search: searchTerms.events });
   const restaurants = useRestaurants({ search: searchTerms.restaurants });
-  const attractions = useAttractions({ search: searchTerms.attractions });
-  const playgrounds = usePlaygrounds({ search: searchTerms.playgrounds });
+  // countMode: "exact" - these three feed ContentTable's "N total" and its
+  // page maths, which is the one place the number is load-bearing
+  // (WEB-PERF-033).
+  const attractions = useAttractions({ search: searchTerms.attractions, countMode: "exact" });
+  const playgrounds = usePlaygrounds({ search: searchTerms.playgrounds, countMode: "exact" });
   const restaurantOpenings = useRestaurantOpenings({
     search: searchTerms.restaurantOpenings,
   });
-  const hotels = useHotels({ search: searchTerms.hotels, activeOnly: false });
+  const hotels = useHotels({ search: searchTerms.hotels, activeOnly: false, countMode: "exact" });
 
   const canManageContent = () =>
     ["moderator", "admin", "root_admin"].includes(userRole);

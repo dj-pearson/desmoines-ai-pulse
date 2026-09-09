@@ -5118,3 +5118,44 @@ FILES
   M src/components/seo/SiteDirectory.tsx
   M scripts/__tests__/site-directory-routes.test.mjs
   M prd.json  (WEB-CI-034 passes=true, title and diagnosis corrected)
+
+================================================================================
+## 2026-09-09 — WEB-PERF-033 (a COUNT(*) per request for nobody): DONE
+================================================================================
+/attractions and /playgrounds render no total and do not even destructure
+totalCount, and both hooks asked PostgREST for count: "exact" - a second full
+COUNT(*) over the filtered set on every request, including every keystroke in
+the search box.
+
+FIXED
+- src/lib/listCount.ts: countOption(mode) turns a CountMode into the select
+  options object. Default "estimated", the mode useRestaurants already settled
+  on (its own note records why "planned" is wrong: NULL whenever the planner
+  has no statistic, which rendered a blank number before the word "found").
+- useAttractions, usePlaygrounds, useHotels take countMode.
+- /attractions and /playgrounds pass "none", which OMITS the option rather than
+  setting it to a falsy value. PostgREST decides from the key's presence, so
+  `{ count: undefined }` would look right and still count. That is the
+  assertion the unit test exists for.
+- AttractionManager, PlaygroundManager, HotelManager and AdminContent pass
+  "exact": they paginate on the number or show it as a figure of record.
+
+NOT DONE, DELIBERATELY, against the story's own acceptance criteria
+- useEvents and EventsPage:285 keep count: "exact". EventsPage paginates on
+  totalCount, events is the largest of these tables, and "estimated" becomes a
+  planner estimate above PostgREST's threshold - a wrong page count on the
+  busiest page on the site. Dropping a number nobody renders is not the same
+  trade as trading away correct pagination. Doing it properly needs a real row
+  count, which this container cannot get.
+
+VERIFIED: 4 new unit tests (540 total pass), validate exit 0, test:offline
+19/19, and the touched files type-check clean under tsconfig.app.json as a
+file slice - the full app project is the 21-minute run in WEB-CI-031.
+
+FILES
+  A src/lib/listCount.ts
+  A src/lib/__tests__/listCount.test.ts
+  M src/hooks/useAttractions.ts, usePlaygrounds.ts, useHotels.ts
+  M src/pages/Attractions.tsx, Playgrounds.tsx, AdminContent.tsx
+  M src/components/admin/AttractionManager.tsx, PlaygroundManager.tsx, HotelManager.tsx
+  M prd.json  (WEB-PERF-033 passes=true)
