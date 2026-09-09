@@ -1,4 +1,5 @@
 import { useState, useRef, useEffect, useMemo, useCallback } from "react";
+import { fetchPriorityAttr } from '@/lib/fetchPriority';
 import { cn } from "@/lib/utils";
 import { ImageOff } from "lucide-react";
 
@@ -374,7 +375,7 @@ export default function OptimizedImage({
             height={height}
             loading={priority ? "eager" : "lazy"}
             decoding="async"
-            fetchPriority={priority ? "high" : fetchPriority}
+            {...fetchPriorityAttr(priority ? "high" : fetchPriority)}
             onLoad={handleLoad}
             onError={handleError}
             srcSet={computedSrcSet}

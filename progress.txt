@@ -5563,3 +5563,94 @@ FILES
   M src/components/GEOContent.tsx
   A scripts/__tests__/geo-content-claims.test.mjs
   M prd.json  (WEB-SEO-042 filed and closed, priority 1)
+
+================================================================================
+## 2026-09-09 — WEB-QUAL-012 (a React warning on every render): DONE
+================================================================================
+React 19 knows fetchPriority as a DOM prop. React 18.3, which this app is on,
+does not: it lowercases the unknown prop, passes it through, and warns once per
+render on every route. src/lib/fetchPriority.ts emits `fetchpriority` at the
+three points a value actually reaches an <img> - OptimizedImage, OptimizedLogo,
+AffiliateAdBanner. Footer's fetchPriority="low" stays camelCase and is correct:
+it is a prop on OptimizedLogo, not a DOM attribute.
+
+MEASURED BEFORE AND AFTER, in a real browser across /, /events and
+/restaurants: warnings 1-per-render -> 0, and the attribute still lands (2 of 3
+images on the home page carry fetchpriority, values high and low). So the LCP
+hint is unchanged and the console is quiet. Filed at priority 4 in iteration 10
+precisely because the measurement showed the attribute was landing; had it not
+been, this would have been an LCP defect rather than a tidy-up.
+
+================================================================================
+SESSION TALLY — 2026-09-09, claude/web-platform-improvements-loop-0px3u1
+15 self-paced iterations, one improvement each
+================================================================================
+ 1  WEB-FEAT-033  /community rendered every friend as a blank name and a "U"
+                  avatar. Social.tsx reads friend_profile in seven places and
+                  the hook never set it. Found by running the app-project type
+                  ratchet, which is in no workflow because it takes 21 minutes.
+ 2  WEB-SEO-029   The sitelinks SearchAction pointed at /events?search=, a
+                  parameter EventsPage has never read. One WebSite node now,
+                  targeting /search?q=, plus a guard.
+ 3  WEB-CI-032    Six discarded Supabase errors, three of them on money or
+                  access: both double-charge guards in checkout, the Stripe
+                  teardown lookup in account deletion, and a cached
+                  isAdmin:false. Added 4 missing checks to pr-checks.yml.
+ 4  WEB-CI-033    check-edge-types was RED on the default branch, so every PR
+                  inherited it. Nine of ten errors were one defect: an
+                  any-typed `assert` cannot narrow.
+ 5  WEB-CI-034    The footer of ~1,100 pages linked "Event calendar" at a route
+                  retired six months ago, surviving only as a 301.
+ 6  WEB-PERF-033  count:"exact" - a second full COUNT(*) per request - on two
+                  pages that render no total. Kept exact for events, where
+                  pagination depends on it, against the story's own AC.
+ 7  WEB-FEAT-018  A typo in a feature= prop was an UNLOCK, on both client and
+                  server. And the paywall flashed at people who had paid.
+ 8  WEB-AUTH-008  Raw supabase-js error strings in the sign-in toast, and no
+                  resend for the one failure this screen can fix.
+ 9  WEB-AUTH-008  Password toggle, and the interest checkboxes had no
+                  accessible name. The filed diagnosis was wrong and my own
+                  test caught it.
+10  WEB-QA-027    A failed search threw an unhandled rejection, which paints a
+                  full-screen error panel inside the shipped mobile apps. Found
+                  by an axe sweep in a real browser; the other six routes were
+                  clean.
+11  WEB-FEAT-019  The newsletter promised a confirmation email nothing sends,
+                  and reported false success on an unsubscribe that RLS blocks.
+12  WEB-ADS-014   /advertising-policies was linked from three advertiser
+                  surfaces and was not a route. Wrote it from the checks the
+                  platform actually runs, and added a link guard.
+13  WEB-ADS-008   Organizers reviewed by a human heard nothing back. Fixing it
+                  meant first removing the approval email's "now live" claim -
+                  nothing publishes.
+14  WEB-SEO-042   Two fabricated testimonials attributed to named people, plus
+                  a 95% accuracy claim and a denial of selling visibility, on
+                  the component built for AI assistants to ingest.
+15  WEB-QUAL-012  A React warning on every render, cleared without touching the
+                  LCP hint it carries.
+
+FILED FOR LATER, not fixed: WEB-CI-031 (the 21-minute app type-check, with the
+measurement behind it), WEB-QA-028 (the debug error overlay ships enabled in
+production on Capacitor - deliberate carve-out, so a product decision).
+STILL OPEN AND SCOPED DOWN: WEB-FEAT-019 (edge function + confirm token),
+WEB-ADS-008 (publish_submission - approval still publishes nothing),
+WEB-ADS-014 (the remaining advertiser hygiene items).
+
+FOUR THINGS I INVESTIGATED AND FOUND WERE NOT BROKEN, recorded so nobody
+re-spends the time: the 375px mobile sweep (0 axe violations, 0 overflow across
+7 routes), the skip link (1x1 is correct sr-only; 221x50 focused, moves focus
+to main), /hotels 404 (the route is /stay and every link uses it), and hub
+pages "showing nothing" with the backend down (they show real error copy once
+TanStack retries settle at ~12s - a 3-second probe only catches the loading
+state).
+
+TWO PLACES I CORRECTED MYSELF IN WRITING rather than quietly: the offline-suite
+runner was not broken (WEB-CI-034 - I had run the suite under plain node), and
+the interest tiles were keyboard-operable all along (the defect was the missing
+accessible name).
+
+GATES AT THE END: 577 vitest tests in 60 files, 21/21 offline suites,
+npm run validate exit 0, npm run check-edge-types exit 0. Two new checks now
+run in CI that did not before: check-internal-links and check-error-handling
+(plus check-brand-leak, check-schema-placeholders, check-annual-dates).
+PRD: 627 stories, 146 open.

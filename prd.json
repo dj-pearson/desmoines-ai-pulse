@@ -9207,8 +9207,8 @@
         "Console warnings are load-bearing here: this one appears on every route, which is exactly the noise that hides a real warning."
       ],
       "priority": 4,
-      "passes": false,
-      "notes": "Filed 2026-09-09 from a browser sweep on claude/web-platform-improvements-loop-0px3u1. Low priority precisely because the measurement showed the attribute lands; if it had not, this would be an LCP defect."
+      "passes": true,
+      "notes": "Filed 2026-09-09 from a browser sweep on claude/web-platform-improvements-loop-0px3u1. Low priority precisely because the measurement showed the attribute lands; if it had not, this would be an LCP defect.\n\nDONE 2026-09-09. src/lib/fetchPriority.ts emits the lowercase `fetchpriority` attribute at the three points a value actually reaches an <img> (OptimizedImage, OptimizedLogo, AffiliateAdBanner). Footer's fetchPriority=\"low\" is left camelCase and is correct: it is a prop on OptimizedLogo, not a DOM attribute, and camelCase is the React-idiomatic spelling for a component API. Components keep their own prop names; only the DOM edge changes.\n\nVERIFIED IN A REAL BROWSER across /, /events and /restaurants: 0 fetchPriority warnings (was one per render on every route), and the attribute still lands - 2 of 3 images on the home page carry fetchpriority with values high and low, exactly as before. So the LCP hint is unchanged and the console is quiet."
     },
     {
       "id": "WEB-SEO-042",
