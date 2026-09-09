@@ -5255,3 +5255,58 @@ FILES
   M src/contexts/AuthContext.tsx
   M src/pages/Auth.tsx
   M prd.json  (WEB-AUTH-008 still open, scoped down)
+
+================================================================================
+## 2026-09-09 — WEB-AUTH-008 second pass (the a11y half): CLOSED
+================================================================================
+PASSWORD TOGGLE
+src/components/ui/PasswordInput.tsx, used by the login and signup fields.
+type="button" deliberately: a button with no type inside a form SUBMITS it, so
+revealing your password would fire a sign-in attempt. aria-pressed tracks the
+state. tabIndex -1 keeps Tab going from the password field to Sign In, which is
+what a keyboard user filling a form wants - WCAG 2.4.3 is about tab ORDER, not
+about putting every control in it.
+tests/forms.spec.ts now locates the field by #id rather than
+input[type="password"]. A working toggle changes the type, so the old locator
+stopped matching exactly when the feature worked, and the assertion it was
+guarding would have timed out on the first page that passed.
+
+INTEREST TILES — THE FILED DIAGNOSIS WAS WRONG
+The story says the tiles were not keyboard operable. They were: Space on the
+focused Radix checkbox fires a click, which bubbled to the wrapping div's
+onClick, so the tile toggled. The first version of my test asserted the story's
+claim and FAILED, which is how this was caught. The real defect is one level
+up: the tile text was a sibling <span> associated with nothing, so the checkbox
+had NO ACCESSIBLE NAME - eight tiles that all announce as "checkbox, not
+checked", with no way to tell food from nightlife. A <label> wrapping the
+control names it and keeps the whole tile clickable with no onClick at all. The
+dead onChange (Radix exposes onCheckedChange and ignores onChange) is gone too.
+
+TYPES
+handleInputChange is keyed to a declared SignUpFormData instead of
+(field: string, value: any), so a misspelt field name is a compile error rather
+than a new key on the state object that nothing reads.
+
+THE SELECT CRITERION NEEDED NO CHANGE
+businessType IS validated (Auth.tsx:500) and so is location. The `required`
+attribute on a Radix Select is not browser-enforced, which is precisely why
+those JS checks exist. Recorded rather than silently skipped.
+
+VERIFIED IN A REAL BROWSER, not only jsdom: vite on 127.0.0.1:8080 and
+Playwright's chromium launched with executablePath (the container ships build
+1194, this Playwright wants 1200). Toggle flips type password -> text,
+aria-pressed false -> true; getByRole('checkbox', { name: /food & dining/i })
+resolves on the signup tab. NOTE for the Playwright suite: the cookie-consent
+dialog is fixed to the bottom and INTERCEPTS POINTER EVENTS - the click only
+worked after dismissing it.
+
+VERIFIED: 7 new vitest tests (565 total pass), validate exit 0, test:offline
+19/19, touched files type-check clean as a file slice.
+
+FILES
+  A src/components/ui/PasswordInput.tsx
+  A src/components/__tests__/passwordInput.test.tsx
+  A src/components/__tests__/interestTiles.test.tsx
+  M src/pages/Auth.tsx
+  M tests/forms.spec.ts
+  M prd.json  (WEB-AUTH-008 passes=true)
