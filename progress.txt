@@ -5457,3 +5457,52 @@ FILES
   M src/App.tsx, src/components/admin/ScraperSettings.tsx
   M package.json, .github/workflows/pr-checks.yml
   M prd.json  (WEB-ADS-014 scoped down, still open)
+
+================================================================================
+## 2026-09-09 — WEB-ADS-008 (tell the organizer, and stop lying to them): PARTIAL
+================================================================================
+EventSubmissionForm:205 promises every organizer "We'll email you when your
+event is approved or if we need more information." The AI path keeps it:
+triage-event-submission invokes notify-event-submission on any non-pending
+decision. The HUMAN path did not - setStatus updated the row, wrote an audit
+log, and sent nothing. An organizer reviewed by a person heard nothing back and
+could not tell an approval from silence.
+
+FIXED
+- setStatus notifies, mapping approved/rejected/needs_revision to the three
+  submitter templates the function implements and pending to no mail. Only
+  eventId and the type are passed: notify-event-submission looks the recipient
+  and title up from the row itself, deliberately, because it is callable with
+  the anon key. Nothing in the call can redirect the mail.
+- The send is best-effort and NOT silent. The status change has already
+  committed, so a mail failure is not a failed action - but the toast says how
+  many could not be sent, because an admin who thinks the organizer was told,
+  when they were not, will not chase it.
+
+WHAT THIS ALMOST SHIPPED, AND WHY THE STORY GOT BIGGER
+Before wiring it up I read the template. event_approved said "Great news! Your
+event has been approved and is NOW LIVE on Des Moines Insider." NOTHING
+PUBLISHES. Approval sets user_submitted_events.status; the admin queue has no
+publish path at all, and the AI path maps only a subset of fields when it does
+copy. So the one email an organizer gets has been sending them to look at a
+listing that is not there - and wiring the human path in would have spread that
+at volume. A fix that makes things worse.
+The copy now says the event has been approved FOR LISTING and promises nothing
+about when it appears: true today, still true once publish_submission lands.
+Guarded by scripts/__tests__/submission-email-claims.test.mjs - an offline
+suite rather than a Deno test, so it runs in CI and in this container, which
+has no Deno. Mutation-tested by restoring the old sentence.
+
+STILL OPEN, and now more urgent: publish_submission, the full field mapping,
+and the events row link. Approval still does not publish anything.
+
+VERIFIED: 4 new vitest tests pin the status -> template mapping (577 pass), the
+new offline suite makes 20/20, validate exit 0, check-edge-types exit 0, the
+touched component type-checks clean as a file slice.
+
+FILES
+  M src/components/admin/EventSubmissionsManager.tsx
+  M supabase/functions/notify-event-submission/index.ts
+  A src/components/__tests__/eventSubmissionNotify.test.ts
+  A scripts/__tests__/submission-email-claims.test.mjs
+  M prd.json  (WEB-ADS-008 still open, notes expanded)
