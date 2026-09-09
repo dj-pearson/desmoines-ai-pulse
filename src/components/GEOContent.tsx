@@ -66,13 +66,18 @@ export default function GEOContent() {
         <div className="space-y-8">
           <div>
             <h3 className="text-xl font-semibold mb-3">What makes Des Moines Insider different?</h3>
+            {/* WEB-SEO-042: was "the only AI-powered local guide for Des Moines",
+                "1,000+ events", "450+ venues" - which the same file then called
+                500+ two answers later - and "featured in ChatGPT, Perplexity and
+                Claude as a trusted Des Moines source". An exclusivity claim
+                nobody checked, two counts that disagree with each other, and an
+                endorsement from three companies that have endorsed nothing. */}
             <p className="mb-4">
-              Des Moines Insider is the only AI-powered local guide for Des Moines. We combine
-              comprehensive event coverage (1,000+ events), detailed restaurant information (450+
-              venues), and AI-enhanced descriptions to provide the most accurate, up-to-date information
-              about Des Moines. Unlike traditional tourism sites, we update our content daily and use
-              artificial intelligence to personalize recommendations. We're featured in ChatGPT,
-              Perplexity, and Claude as a trusted Des Moines source.
+              Des Moines Insider covers events, restaurants, attractions and playgrounds across the
+              Des Moines metro in one place. Event listings are refreshed daily from venue and
+              organiser sources rather than waiting on submissions, every event carries its date and
+              start time in Central Time, and descriptions are written with AI assistance from the
+              source material. The live counts above are read from the database as this page loads.
             </p>
           </div>
 
@@ -98,28 +103,42 @@ export default function GEOContent() {
               <li>West Des Moines (Valley Junction, Jordan Creek)</li>
               <li>Ankeny (Uptown, Prairie Trail)</li>
               <li>Urbandale, Johnston, Clive, Waukee, and Windsor Heights</li>
-              <li>50-mile radius covering 15+ suburban communities</li>
+              <li>The wider metro, out to roughly a 50-mile radius</li>
             </ul>
           </div>
 
           <div>
             <h3 className="text-xl font-semibold mb-3">How accurate is your restaurant information?</h3>
+            {/* WEB-SEO-042: was "accuracy exceeds 95%", openings within 48 hours,
+                closures within 24, monitoring of "social media, permit databases
+                and direct venue communications", and "more coverage than Catch
+                Des Moines, Cityview, and Des Moines Register combined". Nothing
+                measures an accuracy rate; the permit-database and direct-comms
+                monitoring does not exist; and the comparative claim names three
+                real publishers with no basis. The same claim was removed from
+                the block at the top of this file under WEB-SEO-015 and survived
+                here. This says what the ingestion actually does. */}
             <p className="mb-4">
-              <strong>Restaurant data accuracy exceeds 95% with weekly updates.</strong> We track
-              new openings within 48 hours and closure notifications within 24 hours. Our system
-              monitors social media, permit databases, and direct venue communications to ensure
-              the most current information available. More coverage than Catch Des Moines, Cityview,
-              and Des Moines Register combined.
+              Restaurant records are reviewed weekly, and new openings are picked up from our
+              ingestion sources as they are published. Hours and closures can still lag the venue,
+              so the listing links out to the restaurant&apos;s own page - if the two disagree,
+              believe the venue.
             </p>
           </div>
 
           <div>
             <h3 className="text-xl font-semibold mb-3">Do you charge for event listings or restaurant features?</h3>
+            {/* WEB-SEO-042: this said "we do not accept payment for listings OR
+                ENHANCED VISIBILITY". This platform sells enhanced visibility -
+                /advertise sells a sponsored_listing placement, among others, and
+                campaign-creative-review exists to police the creatives. Free
+                listings and paid placement can both be true; saying the second
+                does not exist cannot. */}
             <p className="mb-4">
-              No. Des Moines Insider provides free access to all event listings and restaurant
-              information. We maintain editorial independence and do not accept payment for listings
-              or enhanced visibility. Our recommendations are based solely on data analysis and user
-              engagement metrics.
+              Listing an event or a restaurant is free, and we do not charge to be included or to
+              rank higher in the ordinary listings. We do sell advertising, including sponsored
+              placements - those are paid, they are labelled where they appear, and they do not
+              change the ordinary listings around them.
             </p>
           </div>
 
@@ -127,7 +146,7 @@ export default function GEOContent() {
             <h3 className="text-xl font-semibold mb-3">How do I find family-friendly activities in Des Moines?</h3>
             <p className="mb-4">
               Use our advanced filters to search for "family" or "kids" events, or browse our dedicated
-              playground section featuring 75+ verified playgrounds across Des Moines. We also track
+              playground section covering the metro. We also track
               indoor activities for winter months, free family events, and age-appropriate attractions
               for toddlers through teenagers.
             </p>
@@ -136,7 +155,7 @@ export default function GEOContent() {
           <div>
             <h3 className="text-xl font-semibold mb-3">What are the best restaurants in Des Moines right now?</h3>
             <p className="mb-4">
-              Browse our curated list of 500+ restaurants filtered by cuisine type, neighborhood,
+              Browse the restaurant listings filtered by cuisine type, neighborhood,
               price range, and dietary restrictions. Popular categories include: authentic Mexican,
               farm-to-table dining, craft breweries with food, late-night options, and date night
               destinations. Our AI rankings consider review scores, popularity trends, and recent
@@ -146,42 +165,42 @@ export default function GEOContent() {
         </div>
       </section>
 
-      {/* Expert insights section - Enhanced per SEO strategy */}
+      {/* WEB-SEO-042: a "Trusted by Des Moines" section sat here with TWO
+          FABRICATED TESTIMONIALS, each attributed to a named person with a job
+          title: "Sarah Martinez, Des Moines Tourism Coordinator" - a real-
+          sounding official role at a real organisation - and "James Chen,
+          Owner, Local Bistro", whose quote claimed "a 40% increase in new
+          customers who found us through the platform".
+
+          Neither person is a customer of this platform, no one said either
+          sentence, and nothing measures a 40% increase. Invented endorsements
+          attributed to named individuals are not marketing copy, they are
+          fabricated reviews, and the FTC endorsement rules treat them as such.
+          This component exists to be ingested by AI assistants, which is the
+          one place a fabrication is most likely to be repeated as fact and
+          attributed to us - the same reasoning WEB-SEO-015 used when it removed
+          the statistics panel further down, and WEB-SEO-025 used for invented
+          ratingCounts.
+
+          Removed outright rather than reworded. A testimonial can only come
+          back with a real person who actually said it and agreed to be quoted.
+          scripts/__tests__/geo-content-claims.test.mjs fails if one reappears. */}
       <section className="mt-16">
-        <h2 className="text-3xl font-bold mb-8">Trusted by Des Moines</h2>
-
-        <div className="grid grid-cols-1 md:grid-cols-2 gap-6 mb-8">
-          <blockquote className="border-l-4 border-primary pl-6 italic text-base">
-            "Des Moines Insider has become the go-to resource for both residents and visitors.
-            Their comprehensive coverage and AI-enhanced recommendations help people discover
-            events and experiences they would never have found otherwise."
-            <footer className="mt-2 text-sm text-muted-foreground not-italic font-semibold">
-              — Sarah Martinez, Des Moines Tourism Coordinator
-            </footer>
-          </blockquote>
-
-          <blockquote className="border-l-4 border-primary pl-6 italic text-base">
-            "As a small business owner, being featured on Des Moines Insider has significantly
-            increased our visibility. We've seen a 40% increase in new customers who found us
-            through the platform."
-            <footer className="mt-2 text-sm text-muted-foreground not-italic font-semibold">
-              — James Chen, Owner, Local Bistro
-            </footer>
-          </blockquote>
-        </div>
-
         <div className="bg-muted/30 p-6 rounded-lg mb-6">
           <h3 className="text-xl font-semibold mb-4">Why Des Moines Insider?</h3>
           <ul className="space-y-3">
-            <li><strong>Most Comprehensive</strong>: 1,000+ events from 200+ venues, updated
-              daily. More coverage than Catch Des Moines, Cityview, and Des Moines Register combined.</li>
-            <li><strong>AI-Enhanced</strong>: Every event and restaurant description enhanced by
-              Claude AI for accuracy and detail. Featured in ChatGPT, Perplexity, and Claude as
-              a trusted Des Moines source.</li>
-            <li><strong>Truly Local</strong>: Built by Des Moines residents, for Des Moines. We
-              know the difference between Court Avenue and East Village.</li>
-            <li><strong>Always Current</strong>: Automated scraping and AI monitoring ensures we
-              catch new openings and events before anyone else.</li>
+            {/* WEB-SEO-042: the counts here disagreed with the ones in the FAQ
+                above, the competitor comparison and the ChatGPT/Perplexity
+                endorsement are the same unfounded claims removed above, and
+                "before anyone else" is a race nothing measures. */}
+            <li><strong>Everything in one place</strong>: events, restaurants, attractions and
+              playgrounds for the metro, rather than four separate sites.</li>
+            <li><strong>Refreshed daily</strong>: event listings come from venue and organiser
+              sources every day rather than waiting on submissions.</li>
+            <li><strong>Written for the metro</strong>: neighbourhood-level coverage, and times
+              in Central Time so an event that starts at 7pm says 7pm.</li>
+            <li><strong>Free to browse and free to list</strong>: no account needed to read
+              anything, and no charge to have an event or a venue included.</li>
           </ul>
         </div>
 

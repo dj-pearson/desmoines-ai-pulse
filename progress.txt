@@ -5506,3 +5506,60 @@ FILES
   A src/components/__tests__/eventSubmissionNotify.test.ts
   A scripts/__tests__/submission-email-claims.test.mjs
   M prd.json  (WEB-ADS-008 still open, notes expanded)
+
+================================================================================
+## 2026-09-09 — WEB-SEO-042 (fabricated testimonials on the home page): DONE
+================================================================================
+Followed the theme this loop kept hitting - copy asserting things the platform
+does not do - into GEOContent, the component that renders on the home page and
+exists to be ingested by AI assistants. It had been cleaned TWICE before
+(WEB-SEO-015), and both times the same class of claim survived further down the
+same file.
+
+THE WORST OF IT: TWO FABRICATED TESTIMONIALS
+Under a heading "Trusted by Des Moines", each attributed to a named person with
+a job title: "Sarah Martinez, Des Moines Tourism Coordinator" - a real-sounding
+official role at a real organisation - and "James Chen, Owner, Local Bistro",
+whose quote claimed "a 40% increase in new customers who found us through the
+platform". Nobody said either sentence and nothing measures a 40% increase.
+Invented endorsements attributed to named individuals are not marketing copy,
+they are fabricated reviews, and the FTC endorsement rules treat them as such.
+On a component built to be quoted back by AI assistants, it is the worst place
+in the codebase for one. Removed outright rather than reworded.
+
+THE REST
+- "Restaurant data accuracy exceeds 95%", openings tracked "within 48 hours",
+  closures "within 24", and monitoring of "permit databases and direct venue
+  communications". No accuracy rate is measured and that monitoring does not
+  exist.
+- "More coverage than Catch Des Moines, Cityview, and Des Moines Register
+  combined", twice, naming three real publishers. WEB-SEO-015's own comment
+  says it removed this claim; it survived in two other places in the same file.
+- "We do not accept payment for listings OR ENHANCED VISIBILITY" - on a
+  platform that sells a sponsored_listing placement and runs
+  campaign-creative-review to police the creatives. Free listings and paid
+  placement can both be true; denying the second cannot.
+- "the only AI-powered local guide", "featured in ChatGPT, Perplexity and
+  Claude as a trusted source", "before anyone else".
+- Counts that contradicted EACH OTHER: 450+ restaurants in one answer, 500+ two
+  answers later, plus 1,000+ events, 200+ venues, 75+ playgrounds. The tiles
+  above already read real numbers from useHomepageStats; the prose now points
+  at those instead of carrying its own.
+
+GUARDED
+scripts/__tests__/geo-content-claims.test.mjs, in npm run test:offline (21/21
+now): no attributed testimonial, no accuracy-rate claim, no comparison naming a
+competitor, no AI-vendor endorsement, no denial of selling visibility, no
+hardcoded catalogue count. Comments are stripped before matching, since they
+necessarily quote what was removed. Mutation-tested with a fake quote, a 95%
+claim and a 1,000+ count.
+
+VERIFIED IN A REAL BROWSER: none of Sarah Martinez, James Chen, 95%, Cityview,
+Perplexity, "40% increase", "450+" or "500+ restaurants" appears in the
+rendered home page, and the section still renders. 577 vitest pass, validate
+exit 0, check-edge-types exit 0.
+
+FILES
+  M src/components/GEOContent.tsx
+  A scripts/__tests__/geo-content-claims.test.mjs
+  M prd.json  (WEB-SEO-042 filed and closed, priority 1)

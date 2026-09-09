@@ -9209,6 +9209,23 @@
       "priority": 4,
       "passes": false,
       "notes": "Filed 2026-09-09 from a browser sweep on claude/web-platform-improvements-loop-0px3u1. Low priority precisely because the measurement showed the attribute lands; if it had not, this would be an LCP defect."
+    },
+    {
+      "id": "WEB-SEO-042",
+      "title": "GEOContent carried two fabricated testimonials, a 95% accuracy claim, and a denial that the site sells visibility",
+      "description": "As the platform owner, I need the component written for AI assistants to ingest to contain nothing we cannot stand behind. GEOContent renders on the home page and had been cleaned twice (WEB-SEO-015 removed a statistics panel and a set of hardcoded tiles) - both times the same class of claim survived further down the same file.",
+      "acceptanceCriteria": [
+        "TWO FABRICATED TESTIMONIALS, each attributed to a named person with a job title, under a heading 'Trusted by Des Moines': 'Sarah Martinez, Des Moines Tourism Coordinator' - a real-sounding official role at a real organisation - and 'James Chen, Owner, Local Bistro', whose quote claimed 'a 40% increase in new customers who found us through the platform'. Nobody said either sentence and nothing measures a 40% increase. Invented endorsements attributed to named individuals are fabricated reviews, and the FTC endorsement rules treat them as such. REMOVED, not reworded: a testimonial can only come back with a real person who said it and agreed to be quoted.",
+        "'Restaurant data accuracy exceeds 95% with weekly updates', plus openings tracked 'within 48 hours', closures 'within 24', and monitoring of 'social media, permit databases, and direct venue communications'. Nothing measures an accuracy rate and the permit-database and direct-communication monitoring does not exist. Replaced with what the ingestion actually does.",
+        "'More coverage than Catch Des Moines, Cityview, and Des Moines Register combined' - twice, naming three real publishers. This is the exact claim WEB-SEO-015's own comment says it removed; it survived in two other places in the same file.",
+        "'We maintain editorial independence and do not accept payment for listings OR ENHANCED VISIBILITY' - on a platform that sells a sponsored_listing placement and runs campaign-creative-review to police the creatives. Free listings and paid placement can both be true; denying the second cannot. Now states both.",
+        "'the only AI-powered local guide for Des Moines', 'featured in ChatGPT, Perplexity, and Claude as a trusted Des Moines source', and 'before anyone else' - an exclusivity claim, an endorsement from three companies that endorsed nothing, and a race nothing measures.",
+        "Hardcoded counts that CONTRADICTED EACH OTHER: 450+ restaurants in one answer and 500+ two answers later, plus 1,000+ events, 200+ venues, 75+ playgrounds, 15+ suburban communities. The component already reads real counts via useHomepageStats for its tiles; the prose now points at those instead of carrying its own.",
+        "Guarded by scripts/__tests__/geo-content-claims.test.mjs (offline suite, runs in CI): no attributed testimonial, no accuracy-rate claim, no comparison naming a competitor, no AI-vendor endorsement, no denial of selling visibility, no hardcoded catalogue count. Mutation-tested - a fake quote, a 95% claim and a 1,000+ count each fail it."
+      ],
+      "priority": 1,
+      "passes": true,
+      "notes": "Found and fixed 2026-09-09 on claude/web-platform-improvements-loop-0px3u1, by auditing user-facing copy for claims the platform does not keep - a theme this loop hit three times before (the newsletter's phantom confirmation email, the 'now live' approval email, and advertising policies that were linked but never written). Verified in a real browser: none of Sarah Martinez, James Chen, 95%, Cityview, Perplexity, '40% increase', '450+' or '500+ restaurants' appears in the rendered home page, and the section still renders. Priority 1 because the testimonials are a legal exposure, not a quality issue, and because this component is built to be quoted by AI assistants."
     }
   ]
 }
