@@ -3,7 +3,8 @@
  *
  * Sends email notifications for event submission lifecycle events:
  * - event_submitted → admin (new submission needs review)
- * - event_approved  → submitter (event is live)
+ * - event_approved  → submitter (accepted for listing; NOT a liveness claim,
+ *                     see the case below and WEB-ADS-008)
  * - event_rejected  → submitter (with admin notes)
  * - event_needs_revision → submitter (with admin notes)
  */
@@ -152,11 +153,25 @@ serve(async (req) => {
 
       case "event_approved": {
         recipientEmail = submitterAddress ?? "";
-        emailSubject = `Your event "${escapeHtml(verifiedTitle)}" has been approved!`;
+        emailSubject = `Your event "${escapeHtml(verifiedTitle)}" has been approved`;
+        // WEB-ADS-008: this used to say "approved and is NOW LIVE on Des Moines
+        // Insider". It is not live. Approval sets user_submitted_events.status
+        // and nothing copies the row into `events` - not the admin queue, which
+        // has no publish path at all, and not the AI path, which only maps a
+        // subset of fields when it does copy. So the one email an organizer
+        // gets told them to go and look at a listing that is not there, and
+        // the ones who went looking had every reason to think the site was
+        // broken.
+        //
+        // The wording now says what is certainly true - the event has been
+        // accepted - and promises nothing about when it appears. Restore a
+        // liveness claim only once publish_submission exists and the approve
+        // path calls it; the same story tracks that.
         emailHtml = buildSubmitterEmail({
           eventTitle: verifiedTitle,
           status: "approved",
-          message: "Great news! Your event has been approved and is now live on Des Moines Insider.",
+          message:
+            "Good news - your event has been approved for listing on Des Moines Insider. We'll be in touch if anything else is needed.",
           siteUrl,
           adminNotes,
         });

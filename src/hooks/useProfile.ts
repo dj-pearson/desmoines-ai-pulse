@@ -73,11 +73,22 @@ export function useProfile() {
 
         // ignoreDuplicates means the winner's row is not returned to the
         // loser, so read it back rather than trusting what the write returned.
-        const { data: newProfile } = await supabase
+        const { data: newProfile, error: readBackError } = await supabase
           .from("profiles")
           .select("*")
           .eq("user_id", user.id)
           .maybeSingle();
+
+        // WEB-CI-032: this read-back used to discard its error, so a failed
+        // read was indistinguishable from "the row genuinely is not there".
+        // With no createError to raise, the hook returned null and the app
+        // concluded the user has no profile - the empty-state-instead-of-error
+        // shape this repo keeps finding. A failed read is an error; the query
+        // is retried by TanStack rather than answered with null.
+        if (readBackError) {
+          logger.error('fetchProfile', 'Profile read-back failed', { error: readBackError });
+          throw readBackError;
+        }
 
         // An insert error that still leaves a row behind is not a failure --
         // that is exactly the losing side of the race described above. Only

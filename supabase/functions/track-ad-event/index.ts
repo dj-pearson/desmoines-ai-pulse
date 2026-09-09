@@ -116,7 +116,16 @@ Deno.serve(async (req) => {
     const authHeader = req.headers.get('authorization');
     const token = authHeader?.startsWith('Bearer ') ? authHeader.slice(7) : null;
     if (token && token !== Deno.env.get('SUPABASE_ANON_KEY')) {
-      const { data } = await supabase.auth.getUser(token);
+      // WEB-CI-032: `error` was discarded. A failed token read is not the
+      // same thing as anonymous traffic, but it was recorded as if it were -
+      // the impression lands with user_id null, so the per-account frequency
+      // cap and the attribution for a signed-in viewer are both quietly lost.
+      // Anonymous is still the right fallback (an impression must be recorded
+      // either way); it is no longer silent.
+      const { data, error: userError } = await supabase.auth.getUser(token);
+      if (userError) {
+        console.warn("track-ad-event: token read failed, recording as anonymous:", userError.message);
+      }
       userId = data?.user?.id ?? null;
     }
 

@@ -217,6 +217,9 @@ export default function AttractionManager() {
   const [busy, setBusy] = useState(false);
 
   const state = useAttractions({
+    // Admin paginates on this number and shows it as a figure of record, so it
+    // is the one caller that pays for an exact count (WEB-PERF-033).
+    countMode: "exact",
     search: search || undefined,
     type: type === "all" ? undefined : type,
     indoorOnly:

@@ -1,6 +1,7 @@
 import { useCallback } from "react";
 import { useQuery, useQueryClient } from "@tanstack/react-query";
 import { supabase } from "@/integrations/supabase/client";
+import { countOption, type CountMode } from '@/lib/listCount';
 import { Database } from "@/integrations/supabase/types";
 import { queryKeys } from "@/lib/queryKeys";
 import { STALE_TIME, GC_TIME } from "@/lib/queryConfig";
@@ -29,7 +30,10 @@ interface PlaygroundFilters {
   sortBy?: "newest" | "updated" | "alphabetical" | "name";
   limit?: number;
   offset?: number;
+  /** How hard to work for `totalCount`; see src/lib/listCount.ts (WEB-PERF-033). */
+  countMode?: CountMode;
 }
+
 
 export function usePlaygrounds(filters: PlaygroundFilters = {}) {
   const queryClient = useQueryClient();
@@ -43,7 +47,7 @@ export function usePlaygrounds(filters: PlaygroundFilters = {}) {
   }>({
     queryKey: queryKeys.playgrounds.list(filters as Record<string, unknown>),
     queryFn: async () => {
-      let query = supabase.from("playgrounds").select("*", { count: "exact" });
+      let query = supabase.from("playgrounds").select("*", countOption(filters.countMode));
 
       switch (filters.sortBy ?? "newest") {
         case "updated":

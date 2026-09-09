@@ -33,8 +33,34 @@ export function PremiumGate({
   description,
   className,
 }: PremiumGateProps) {
-  const { hasFeature, tier, isPremium } = useSubscription();
+  const { hasFeature, tier, isPremium, subscriptionLoading } = useSubscription();
   const [showModal, setShowModal] = useState(false);
+
+  // WEB-FEAT-018: do not answer before the answer is known.
+  //
+  // useSubscription reports tier "free" until the user-subscriptions query
+  // resolves, so a paying subscriber was shown "Upgrade to Unlock" on every
+  // load of /trip-planner and every gated section, for as long as that request
+  // took. Charging someone and then telling them to upgrade is the worst
+  // version of this component's job.
+  //
+  // subscriptionLoading, not isLoading: isLoading also covers the
+  // subscription_plans query, which runs for signed-out visitors too and would
+  // put a skeleton in front of the paywall they are meant to see. A disabled
+  // query (no user) is not loading, so anonymous visitors reach the gate
+  // immediately, as before.
+  if (subscriptionLoading) {
+    // Hide mode renders nothing either way, so there is nothing to hold back.
+    if (mode === "hide") return null;
+    return (
+      <div
+        className={cn("animate-pulse rounded-lg bg-muted/60 min-h-24", className)}
+        aria-busy="true"
+        aria-live="polite"
+        aria-label="Checking your subscription"
+      />
+    );
+  }
 
   // Check if user has access
   const hasAccess = hasFeature(feature);
@@ -187,7 +213,14 @@ export function PremiumSection({
   requiredTier = "insider",
   fallback,
 }: PremiumSectionProps) {
-  const { hasFeature } = useSubscription();
+  const { hasFeature, subscriptionLoading } = useSubscription();
+
+  // WEB-FEAT-018. Rendering the fallback first and the real section a moment
+  // later is the same flash PremiumGate had; this section has no skeleton to
+  // show, so it waits.
+  if (subscriptionLoading) {
+    return null;
+  }
 
   if (hasFeature(feature)) {
     return <>{children}</>;
@@ -222,10 +255,14 @@ export function PremiumButton({
   size = "default",
   disabled,
 }: PremiumButtonProps) {
-  const { hasFeature } = useSubscription();
+  const { hasFeature, subscriptionLoading } = useSubscription();
   const [showModal, setShowModal] = useState(false);
 
   const handleClick = () => {
+    // WEB-FEAT-018: a click that lands before the subscription resolves must
+    // not be answered with the upgrade modal. The button is disabled below for
+    // exactly that window, so this is the belt to that braces.
+    if (subscriptionLoading) return;
     if (hasFeature(feature)) {
       onClick?.();
     } else {
@@ -234,6 +271,9 @@ export function PremiumButton({
   };
 
   const hasAccess = hasFeature(feature);
+  // While the subscription is resolving the answer is unknown, so the button
+  // carries no upgrade tag - a subscriber saw one appear and then vanish.
+  const showUpgradeTag = !subscriptionLoading && !hasAccess;
 
   return (
     <>
@@ -241,14 +281,14 @@ export function PremiumButton({
         variant={variant}
         size={size}
         onClick={handleClick}
-        disabled={disabled}
+        disabled={disabled || subscriptionLoading}
         className={cn(
-          !hasAccess && "relative",
+          showUpgradeTag && "relative",
           className
         )}
       >
         {children}
-        {!hasAccess && (
+        {showUpgradeTag && (
           <FeatureTag
             requiredTier={requiredTier}
             size="sm"

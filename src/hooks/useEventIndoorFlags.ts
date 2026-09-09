@@ -69,7 +69,14 @@ export function useEventIndoorFlags(eventIds: string[], enabled: boolean) {
 
       const map: Record<string, boolean | null> = {};
       for (const row of data ?? []) {
-        const typed = row as { id: string; is_indoor: boolean | null };
+        // Through `unknown` deliberately. src/integrations/supabase/types.ts is
+        // generated from the deployed schema, so until migration
+        // 20260908000001 is applied and the types are regenerated, PostgREST's
+        // typings resolve this select to SelectQueryError<"column 'is_indoor'
+        // does not exist"> and a direct assertion is a TS2352. The runtime
+        // contract is the one the header describes: the column is there or the
+        // request failed above.
+        const typed = row as unknown as { id: string; is_indoor: boolean | null };
         map[typed.id] = typed.is_indoor ?? null;
       }
       return map;

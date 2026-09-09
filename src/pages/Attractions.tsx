@@ -138,6 +138,8 @@ export default function Attractions() {
   // and writes to the URL on a 300ms debounce (see above). Passing the raw
   // input would fire a request per keystroke.
   const { attractions: allAttractions, isLoading, error, refetch } = useAttractions({
+    // This page renders no total, so it does not pay for one (WEB-PERF-033).
+    countMode: "none",
     search: urlQ || undefined,
     type: selectedType !== "all" ? selectedType : undefined,
     minRating: minRating !== "any-rating" ? parseFloat(minRating) : undefined,

@@ -132,17 +132,40 @@ export function useNLPSearch() {
   });
 
   /**
-   * Perform an NLP-powered search
+   * Perform an NLP-powered search.
+   *
+   * Resolves with the response, or with null when the search failed. It does
+   * NOT reject, and that is the point (WEB-QA-027).
+   *
+   * mutateAsync rejects on failure, and all three callers - SearchResults'
+   * effect on the URL query, and both entry points in NLPSearchBar - call this
+   * without awaiting or catching. So an unreachable nlp-search function
+   * produced an UNHANDLED PROMISE REJECTION on every attempt, while the page
+   * itself handled the failure correctly and rendered its keyword fallback.
+   *
+   * That is not cosmetic on mobile. main.tsx installs an unhandledrejection
+   * handler that calls showErrorOverlay, and showErrorOverlay returns early
+   * only when `!isCapacitor && import.meta.env.PROD` - so inside the shipped
+   * iOS and Android apps a failed search covers the screen with a full-page
+   * black "Runtime Error" overlay, on top of a page that was coping fine.
+   * Reproduced 2026-09-09 against a dev server with an unreachable Supabase:
+   * five stacked overlays for one search.
+   *
+   * onError below already clears state, so there is nothing left for a caller
+   * to do with the rejection; `isError` and `error` remain on the returned
+   * object for the ones that want to render it.
    */
   const search = useCallback(
     async (
       query: string,
       contentTypes?: ('events' | 'restaurants' | 'attractions')[]
-    ) => {
+    ): Promise<NLPSearchResponse | null> => {
       if (!query || query.trim().length < 3) {
-        return;
+        return null;
       }
-      return searchMutation.mutateAsync({ query: query.trim(), contentTypes });
+      return searchMutation
+        .mutateAsync({ query: query.trim(), contentTypes })
+        .catch(() => null);
     },
     [searchMutation]
   );

@@ -1,4 +1,5 @@
 import { useEffect, useRef } from 'react';
+import { fetchPriorityAttr } from '@/lib/fetchPriority';
 import { useAffiliateAd } from '@/hooks/useAffiliateAd';
 import { isCapacitor, openExternalUrl } from '@/lib/capacitorUtils';
 import type { AffiliatePlacement } from '@/lib/affiliateAds';
@@ -92,7 +93,7 @@ export function AffiliateAdBanner({ placement, className = '' }: AffiliateAdBann
           alt={`${partner.name} - Book hotels in Des Moines`}
           className="w-full h-auto rounded-lg shadow-sm group-hover:shadow-md transition-shadow"
           loading={isAboveFold ? 'eager' : 'lazy'}
-          fetchPriority={isAboveFold ? 'high' : undefined}
+          {...fetchPriorityAttr(isAboveFold ? 'high' : undefined)}
         />
       </a>
     </div>

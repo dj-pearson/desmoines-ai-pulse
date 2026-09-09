@@ -125,6 +125,49 @@ const INFO_TEMPLATES = [
   "Can you provide a website or registration link?",
 ];
 
+/**
+ * Email the submitters of `ids` about a decision (WEB-ADS-008).
+ *
+ * Best-effort per submission and never throws: the status change has already
+ * committed by the time this runs, and an email failure must not make the
+ * admin think the decision did not land. The caller reports the count.
+ *
+ * `pending` sends nothing - it is not a decision.
+ */
+export const NOTIFICATION_TYPE: Record<string, string | null> = {
+  approved: "event_approved",
+  rejected: "event_rejected",
+  needs_revision: "event_needs_revision",
+  pending: null,
+};
+
+async function notifySubmitters(
+  ids: string[],
+  next: Submission["status"],
+  notes?: string,
+): Promise<{ sent: number; failed: number }> {
+  const notificationType = NOTIFICATION_TYPE[next];
+  if (!notificationType) return { sent: 0, failed: 0 };
+
+  const outcomes = await Promise.all(
+    ids.map(async (id) => {
+      try {
+        const { error } = await supabase.functions.invoke("notify-event-submission", {
+          body: { notificationType, eventId: id, adminNotes: notes },
+        });
+        return !error;
+      } catch {
+        return false;
+      }
+    }),
+  );
+
+  return {
+    sent: outcomes.filter(Boolean).length,
+    failed: outcomes.filter((ok) => !ok).length,
+  };
+}
+
 function StatusBadge({ status }: { status: Submission["status"] }) {
   const map: Record<
     Submission["status"],
@@ -298,9 +341,35 @@ export default function EventSubmissionsManager() {
           })),
         );
 
-      toast.success(
-        `${ids.length} submission${ids.length === 1 ? "" : "s"} → ${next}`,
-      );
+      // WEB-ADS-008: TELL THE SUBMITTER.
+      //
+      // EventSubmissionForm promises "We'll email you when your event is
+      // approved or if we need more information." The AI path keeps that
+      // promise - triage-event-submission invokes notify-event-submission on
+      // any non-pending decision. This path, where a human decides, sent
+      // nothing at all, so an organizer who was reviewed by a person heard
+      // nothing back and had no way to tell an approval from silence.
+      //
+      // Only eventId and the type are trusted by that function: it looks the
+      // recipient and the title up from the row itself, deliberately, because
+      // it is callable with the anon key (see its header). So there is nothing
+      // to pass here that could redirect the mail.
+      const notified = await notifySubmitters(ids, next, notes);
+      if (notified.failed > 0) {
+        // The status change is already committed, so this is not a failure of
+        // the action - but an admin who thinks the organizer was told, when
+        // they were not, will not chase it. Say so.
+        toast.warning(
+          `${ids.length} submission${ids.length === 1 ? "" : "s"} → ${next}, but ${notified.failed} email${notified.failed === 1 ? "" : "s"} could not be sent`,
+        );
+      } else {
+        toast.success(
+          `${ids.length} submission${ids.length === 1 ? "" : "s"} → ${next}` +
+            (notified.sent > 0
+              ? ` · ${notified.sent} submitter${notified.sent === 1 ? "" : "s"} emailed`
+              : ""),
+        );
+      }
       setSelected(new Set());
       setBulkAction(null);
       setBulkMessage("");

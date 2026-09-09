@@ -75,6 +75,8 @@ export default function Playgrounds() {
   // amenity hit. It is also the only control here with no debounce, so a
   // request per keystroke would be the wrong trade even if it were expressible.
   const { playgrounds: allPlaygrounds, isLoading, error } = usePlaygrounds({
+    // This page renders no total, so it does not pay for one (WEB-PERF-033).
+    countMode: "none",
     age_range: selectedAgeRange !== "all" ? selectedAgeRange : undefined,
     location: location !== "any-location" ? location : undefined,
     featuredOnly: featuredOnly === "featured" || undefined,

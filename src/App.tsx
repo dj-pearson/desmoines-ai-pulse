@@ -185,6 +185,7 @@ const AccessibilityStatement = lazyWithRetry(() => import("./pages/Accessibility
 const CookiePolicy = lazyWithRetry(() => import("./pages/CookiePolicy"));
 const DMCAPolicy = lazyWithRetry(() => import("./pages/DMCAPolicy"));
 const AcceptableUsePolicy = lazyWithRetry(() => import("./pages/AcceptableUsePolicy"));
+const AdvertisingPolicies = lazyWithRetry(() => import("./pages/AdvertisingPolicies"));
 const DataProcessingAgreement = lazyWithRetry(() => import("./pages/DataProcessingAgreement"));
 
 // Cookie consent (GDPR/CCPA opt-in banner) — lightweight, mount globally
@@ -587,6 +588,8 @@ const App = () => (
             <Route path="/cookie-policy" element={<CookiePolicy />} />
             <Route path="/dmca" element={<DMCAPolicy />} />
             <Route path="/acceptable-use" element={<AcceptableUsePolicy />} />
+            {/* WEB-ADS-014: three advertiser surfaces linked here and it was not a route. */}
+            <Route path="/advertising-policies" element={<AdvertisingPolicies />} />
             <Route path="/dpa" element={<DataProcessingAgreement />} />
             {/* One-click newsletter unsubscribe (CAN-SPAM §5(a)(5)) */}
             <Route path="/unsubscribe" element={<Unsubscribe />} />

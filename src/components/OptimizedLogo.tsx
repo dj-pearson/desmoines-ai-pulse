@@ -1,4 +1,5 @@
 import React from 'react';
+import { fetchPriorityAttr } from '@/lib/fetchPriority';
 
 interface OptimizedLogoProps {
   /** Logo variant to use */
@@ -88,7 +89,7 @@ export function OptimizedLogo({
         width={displayWidth}
         height={displayHeight}
         loading={loading}
-        fetchPriority={fetchPriority}
+        {...fetchPriorityAttr(fetchPriority)}
         decoding="async"
       />
     </picture>

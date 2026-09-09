@@ -149,6 +149,103 @@ function emitterState(source, emitter) {
   return { rendered: true, active, count: usages.length };
 }
 
+/**
+ * WEB-SEO-029: exactly one live WebSite node, and its SearchAction must target
+ * a route that reads the parameter.
+ *
+ * WebSite is a claim about the SITE, so a copy on every page is a set of
+ * competing claims rather than a stronger one. Three components emitted it:
+ * Index.tsx (the home page, correct), SEOHead.tsx (30 pages) and
+ * EnhancedLocalSEO.tsx (the event landing pages). The two extras also carried
+ * a SearchAction pointing at /events?search={search_term_string} - a parameter
+ * EventsPage has never read, it reads `q`. A granted sitelinks search box
+ * therefore dropped the visitor on an unfiltered list, which is worse than
+ * having no search box at all.
+ *
+ * Two invariants, both cheap to keep and easy to lose in a review:
+ *   1. Only ALLOWED_WEBSITE_OWNERS may emit a WebSite node.
+ *   2. Any SearchAction target must be a route that honours its own parameter.
+ *      /search?q= is honoured by SearchResults.tsx; /events?search= is not.
+ */
+const ALLOWED_WEBSITE_OWNERS = new Set(['src/pages/Index.tsx']);
+
+/**
+ * Emitters that exist but are mounted nowhere. They are allowed to keep their
+ * WebSite node ONLY while they stay unimported; mounting one puts a second
+ * node on a real page, so the check below fails at that point rather than
+ * silently reintroducing the duplication. WEB-SEO-039 tracks deleting them.
+ */
+const UNMOUNTED_WEBSITE_OWNERS = [
+  'src/components/schema/WebSiteSchema.tsx',
+  'src/components/SEOOptimizedHead.tsx',
+];
+
+/** Targets that name a route which does not read the parameter it is given. */
+const DEAD_SEARCH_TARGETS = [/\/events\?search=\{/];
+
+/**
+ * A WebSite TYPE is not always a WebSite NODE. `isPartOf: { "@type": "WebSite" }`
+ * is a reference to the site from a WebPage or Article node - valid, expected,
+ * and emitted by SpeakableSchema and PseoPage across ~950 pSEO pages. Only a
+ * standalone node competes with the canonical one, so the nesting property
+ * immediately before the type is what separates the two.
+ */
+const NESTED_WEBSITE_PROPS = /(isPartOf|mainEntityOfPage|subjectOf|about|publisher|sourceOrganization)\s*:\s*\{\s*$/;
+
+function emitsTopLevelWebsite(source) {
+  const type = /["']?@type["']?\s*:\s*["']WebSite["']/g;
+  let match;
+  while ((match = type.exec(source)) !== null) {
+    const before = source.slice(Math.max(0, match.index - 120), match.index);
+    if (!NESTED_WEBSITE_PROPS.test(before)) return true;
+  }
+  return false;
+}
+
+function checkWebsiteNodes(files) {
+  const emitters = [];
+  const badTargets = [];
+
+  for (const file of files) {
+    const rel = path.relative(process.cwd(), file).split(path.sep).join('/');
+    const source = stripComments(fs.readFileSync(file, 'utf8'));
+    if (emitsTopLevelWebsite(source)) emitters.push(rel);
+    for (const pattern of DEAD_SEARCH_TARGETS) {
+      if (pattern.test(source)) badTargets.push(rel);
+    }
+  }
+
+  // An unmounted emitter is only tolerable while it stays unmounted.
+  const allSource = files.map((f) => stripComments(fs.readFileSync(f, 'utf8'))).join('\n');
+  const mountedDeadCode = UNMOUNTED_WEBSITE_OWNERS.filter((rel) => {
+    const name = path.basename(rel, '.tsx');
+    return new RegExp(`import\\s+[^;]*\\b${name}\\b[^;]*from`).test(allSource);
+  });
+
+  const unexpected = emitters.filter(
+    (rel) => !ALLOWED_WEBSITE_OWNERS.has(rel) && !UNMOUNTED_WEBSITE_OWNERS.includes(rel),
+  );
+
+  if (unexpected.length || mountedDeadCode.length || badTargets.length) {
+    console.error('\n❌ WebSite / SearchAction problem (WEB-SEO-029)\n');
+    for (const rel of unexpected) {
+      console.error(`  ${rel} emits a WebSite node. Only ${[...ALLOWED_WEBSITE_OWNERS].join(', ')} may.`);
+    }
+    for (const rel of mountedDeadCode) {
+      console.error(`  ${rel} is now imported somewhere and still carries a WebSite node.`);
+    }
+    for (const rel of badTargets) {
+      console.error(`  ${rel} targets /events?search=, which EventsPage does not read (it reads q).`);
+    }
+    console.error('\nWebSite describes the site: emit it on / only, and point SearchAction at /search?q=.\n');
+    process.exit(1);
+  }
+
+  console.log(
+    `✅ WebSite schema: 1 live owner (${[...ALLOWED_WEBSITE_OWNERS][0]}), SearchAction target honoured.`,
+  );
+}
+
 function main() {
   const files = walk(SRC);
 
@@ -156,6 +253,9 @@ function main() {
   // can cost rich results across the whole domain, which is worse than a
   // duplicate FAQPage on one page.
   checkRatingCountSources(files);
+
+  // WEB-SEO-029.
+  checkWebsiteNodes(files);
 
   const stale = assertModelMatchesSource(files);
   if (stale.length) {

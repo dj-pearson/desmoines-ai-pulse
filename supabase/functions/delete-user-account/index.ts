@@ -92,10 +92,30 @@ async function performDeletion(
   // loop there is nothing left to read the subscription id from, and the only
   // remaining way to find the customer is a search by email, which the erasure
   // has also just removed.
-  const { data: subscriptionRows } = await supabase
+  const { data: subscriptionRows, error: subscriptionReadError } = await supabase
     .from("user_subscriptions")
     .select("platform, status, stripe_subscription_id, stripe_customer_id")
     .eq("user_id", userId);
+
+  // WEB-CI-032: this read used to discard its error and fall through on
+  // `subscriptionRows ?? []`. A failed read therefore looked exactly like a
+  // user with no subscription: cancelBillingBeforeErasure had nothing to
+  // cancel, reported no error, and the purge below erased the ONLY mapping
+  // from this user to their Stripe customer - while the charge kept
+  // recurring. That is precisely the outcome the comment above says this
+  // block exists to prevent, arrived at by never reading the rows at all.
+  // Refuse for the same reason a billing failure refuses.
+  if (subscriptionReadError) {
+    console.error("Subscription lookup failed, refusing deletion:", subscriptionReadError);
+    return new Response(
+      JSON.stringify({
+        error: "We could not read your subscription, so the account was not deleted. Nothing has been changed. Please try again.",
+        code: "SUBSCRIPTION_LOOKUP_FAILED",
+        manage_subscription_url: "/profile?tab=subscription",
+      }),
+      { status: 503, headers: { ...corsHeaders, "Content-Type": "application/json" } },
+    );
+  }
 
   const stripeKey = Deno.env.get("STRIPE_SECRET_KEY");
   const stripe: BillingClient | null = stripeKey

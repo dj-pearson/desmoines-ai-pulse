@@ -33,7 +33,22 @@ export const initWasm: any;
 export const parseISO: any;
 export const fromZonedTime: any;
 export const Webhook: any;
-export const assert: any;
+/**
+ * `assert` is the ONE name here that cannot be `any`, and the reason is
+ * narrowing rather than safety (WEB-CI-033).
+ *
+ * These tests are written the way Deno's std/assert intends: `const m =
+ * s.match(re); assert(m, '...'); return m[0];`. Under `any` the assertion
+ * signature is lost, so tsc still sees `m` as possibly null on the NEXT line
+ * and reports TS18047 - nine times across six _tests/ files, which is what
+ * kept `check-edge-types` (a step in pr-checks.yml) red on the default branch
+ * for every PR. The real std/assert IS an assertion function; declaring it as
+ * one here makes the shim less wrong, not more permissive.
+ *
+ * TypeScript requires an assertion call target to have an explicit type
+ * annotation, which this declaration provides. Do not relax it back to `any`.
+ */
+export const assert: (expr: unknown, msg?: string) => asserts expr;
 export const assertFalse: any;
 export const assertThrows: any;
 export const assertEquals: any;

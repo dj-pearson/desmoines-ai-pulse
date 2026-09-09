@@ -3,6 +3,7 @@ import { useNavigate, useSearchParams, Link } from "react-router-dom";
 import { useDocumentTitle } from "@/hooks/useDocumentTitle";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
+import { PasswordInput } from "@/components/ui/PasswordInput";
 import { Label } from "@/components/ui/label";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
@@ -16,6 +17,7 @@ import { PasswordStrengthMeter } from "@/components/PasswordStrengthMeter";
 import { MFAVerificationDialog } from "@/components/auth/MFAVerificationDialog";
 import { Alert, AlertDescription } from "@/components/ui/alert";
 import { SecurityUtils } from "@/lib/securityUtils";
+import { authErrorCopy } from '@/lib/authErrorMessages';
 import { logConsent } from "@/lib/consentLog";
 import { SpriteIcon } from "@/components/ui/SpriteIcon";
 
@@ -35,6 +37,33 @@ const AppleLogo = ({ className }: { className?: string }) => (
     <path d="M17.05 20.28c-.98.95-2.05.8-3.08.35-1.09-.46-2.09-.48-3.24 0-1.44.62-2.2.44-3.06-.35C2.79 15.25 3.51 7.59 9.05 7.31c1.35.07 2.29.74 3.08.8 1.18-.24 2.31-.93 3.57-.84 1.51.12 2.65.72 3.4 1.8-3.12 1.87-2.38 5.98.48 7.13-.57 1.5-1.31 2.99-2.54 4.09l.01-.01zM12.03 7.25c-.15-2.23 1.66-4.07 3.74-4.25.29 2.58-2.34 4.5-3.74 4.25z"/>
   </svg>
 );
+
+/**
+ * Every field the /auth form holds. Named so handleInputChange can be keyed to
+ * it (WEB-AUTH-008): the handler took `(field: string, value: any)`, which
+ * accepted a misspelt field name as a new key on the state object and any
+ * value at all - a typo wrote to a field nothing reads, and the input looked
+ * like it simply did not work.
+ */
+interface SignUpFormData {
+  email: string;
+  password: string;
+  firstName: string;
+  lastName: string;
+  phone: string;
+  location: string;
+  /** ISO yyyy-mm-dd. Empty = not yet provided. */
+  dateOfBirth: string;
+  interests: string[];
+  emailNotifications: boolean;
+  smsNotifications: boolean;
+  eventRecommendations: boolean;
+  termsAccepted: boolean;
+  businessName: string;
+  businessType: string;
+  businessAddress: string;
+  businessWebsite: string;
+}
 
 const INTERESTS = [
   { id: "food", label: "Food & Dining", icon: Coffee },
@@ -65,6 +94,10 @@ export default function Auth() {
   const [showForgotPassword, setShowForgotPassword] = useState(false);
   const [forgotPasswordEmail, setForgotPasswordEmail] = useState("");
   const [signupEmail, setSignupEmail] = useState("");
+  // WEB-AUTH-008: set when a sign-in fails only because the address was never
+  // confirmed. Holds the address so the inline resend below has something to
+  // send to, and doubles as the flag for rendering it.
+  const [unconfirmedEmail, setUnconfirmedEmail] = useState<string | null>(null);
   // WEB-AUTH-004. The confirmation screen stays neutral either way -- saying
   // "that address is taken" outright is the account enumeration Supabase's
   // response shape exists to prevent -- but a Resend button that cannot work
@@ -73,7 +106,7 @@ export default function Auth() {
   const [accountType, setAccountType] = useState<"personal" | "business">("personal");
   const [showMFAVerification, setShowMFAVerification] = useState(false);
   const [mfaFactorId, setMfaFactorId] = useState<string | null>(null);
-  const [formData, setFormData] = useState({
+  const [formData, setFormData] = useState<SignUpFormData>({
     email: "",
     password: "",
     firstName: "",
@@ -83,7 +116,7 @@ export default function Auth() {
     // ISO yyyy-mm-dd string. Empty = not yet provided. Used for COPPA age
     // gate only — we do not store the raw DOB, just a minimum-age attestation.
     dateOfBirth: "",
-    interests: [] as string[],
+    interests: [],
     emailNotifications: false,
     smsNotifications: false,
     eventRecommendations: false,
@@ -148,7 +181,13 @@ export default function Auth() {
     }
   }, [isAuthenticated, isPasswordRecovery, requiresMFA, navigate, searchParams]);
 
-  const handleInputChange = (field: string, value: any) => {
+  // WEB-AUTH-008: was (field: string, value: any). Keyed to the form's own
+  // shape, so a misspelt field name and a value of the wrong type are both
+  // compile errors rather than a silently ignored keystroke.
+  const handleInputChange = <K extends keyof SignUpFormData>(
+    field: K,
+    value: SignUpFormData[K],
+  ) => {
     setFormData(prev => ({ ...prev, [field]: value }));
   };
 
@@ -204,13 +243,24 @@ export default function Auth() {
         // Log failed attempt for security monitoring
         await logFailedAttempt(formData.email, 'login', result.error || 'Invalid credentials');
 
+        // WEB-AUTH-008: Supabase's own message used to go straight into the
+        // toast. authErrorCopy turns it into something actionable, and tells us
+        // when the only problem is an unclicked confirmation link - the one
+        // case where we can fix it for them from this screen.
+        const copy = authErrorCopy(result.errorCode, result.error);
+        setUnconfirmedEmail(
+          copy.action === 'resend_confirmation' ? formData.email : null,
+        );
+
         toast({
-          title: "Login Failed",
-          description: result.error || "Invalid email or password",
+          title: copy.title,
+          description: copy.description,
           variant: "destructive",
         });
         return;
       }
+
+      setUnconfirmedEmail(null);
 
       toast({
         title: "Welcome back!",
@@ -224,9 +274,10 @@ export default function Auth() {
       // Log failed attempt for security monitoring
       await logFailedAttempt(formData.email, 'login', error.message || 'Unknown error');
 
+      const copy = authErrorCopy(undefined, error?.message);
       toast({
-        title: "Login Error",
-        description: error.message || "An unexpected error occurred. Please try again.",
+        title: copy.title,
+        description: copy.description,
         variant: "destructive",
       });
     } finally {
@@ -262,9 +313,12 @@ export default function Auth() {
     });
   };
 
-  const handleResendVerification = async () => {
+  // WEB-AUTH-008: takes the address rather than reading signupEmail, because
+  // there are now two callers - the post-signup screen and the login form,
+  // where the address is whatever the person just typed.
+  const handleResendVerification = async (email: string = signupEmail) => {
     setIsLoading(true);
-    const result = await resendVerificationContext(signupEmail);
+    const result = await resendVerificationContext(email);
 
     if (!result.success) {
       toast({
@@ -818,9 +872,8 @@ export default function Auth() {
                         Forgot password?
                       </button>
                     </div>
-                    <Input
+                    <PasswordInput
                       id="password"
-                      type="password"
                       placeholder="••••••••"
                       value={formData.password}
                       onChange={(e) => handleInputChange("password", e.target.value)}
@@ -832,6 +885,33 @@ export default function Auth() {
                   <Button type="submit" className="w-full" disabled={isLoading || isBlocked}>
                     {isLoading ? "Signing in..." : isBlocked ? "Please wait..." : "Sign In"}
                   </Button>
+
+                  {/* WEB-AUTH-008. A sign-in that fails ONLY because the address
+                      was never confirmed is the one auth failure this screen can
+                      fix for the person, and the resend used to exist only on
+                      the post-signup screen they had already left. Rendered
+                      inline rather than in the toast so it survives the toast
+                      timing out. */}
+                  {unconfirmedEmail && (
+                    <div
+                      className="rounded-lg border border-amber-300 bg-amber-50 p-3 text-sm text-amber-900"
+                      role="status"
+                    >
+                      <p className="mb-2">
+                        This address has not been confirmed yet. Check your inbox and
+                        spam folder for the link, or send a new one.
+                      </p>
+                      <Button
+                        type="button"
+                        variant="outline"
+                        size="sm"
+                        disabled={isLoading}
+                        onClick={() => handleResendVerification(unconfirmedEmail)}
+                      >
+                        {isLoading ? "Sending..." : "Resend confirmation email"}
+                      </Button>
+                    </div>
+                  )}
 
                   <div className="relative my-6">
                     <div className="absolute inset-0 flex items-center">
@@ -1010,9 +1090,8 @@ export default function Auth() {
 
                 <div className="space-y-2">
                   <Label htmlFor="password">Password</Label>
-                  <Input
+                  <PasswordInput
                     id="password"
-                    type="password"
                     placeholder="••••••••"
                     value={formData.password}
                     onChange={(e) => handleInputChange("password", e.target.value)}
@@ -1092,23 +1171,38 @@ export default function Auth() {
                     <div className="grid grid-cols-2 gap-2">
                       {INTERESTS.map((interest) => {
                         const Icon = interest.icon;
+                        const checked = formData.interests.includes(interest.id);
                         return (
-                          <div
+                          // WEB-AUTH-008: this was a <div onClick> wrapping a
+                          // Radix Checkbox given `onChange`, which Radix
+                          // ignores - it exposes onCheckedChange - so that
+                          // handler was dead and the div's click did the work.
+                          //
+                          // Toggling was not the defect: Space on the focused
+                          // checkbox fires a click that bubbled to the div, so
+                          // the tile did respond to the keyboard. The defect
+                          // was that the tile text was a sibling <span>
+                          // associated with nothing, so the checkbox had NO
+                          // ACCESSIBLE NAME - eight tiles that all announce as
+                          // "checkbox, not checked".
+                          //
+                          // A <label> wrapping the control names it and keeps
+                          // the whole tile clickable, with no onClick at all.
+                          <label
                             key={interest.id}
                             className={`flex items-center gap-2 p-2 rounded-lg border cursor-pointer transition-colors ${
-                              formData.interests.includes(interest.id)
+                              checked
                                 ? "bg-primary/10 border-primary"
                                 : "border-border hover:bg-muted"
                             }`}
-                            onClick={() => handleInterestToggle(interest.id)}
                           >
                             <Checkbox
-                              checked={formData.interests.includes(interest.id)}
-                              onChange={() => handleInterestToggle(interest.id)}
+                              checked={checked}
+                              onCheckedChange={() => handleInterestToggle(interest.id)}
                             />
-                            <Icon className="h-4 w-4" />
+                            <Icon className="h-4 w-4" aria-hidden="true" />
                             <span className="text-sm">{interest.label}</span>
-                          </div>
+                          </label>
                         );
                       })}
                     </div>
