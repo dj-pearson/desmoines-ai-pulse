@@ -7925,8 +7925,8 @@
         "vitest for one detail page: error => no noindex; null data => noindex"
       ],
       "priority": 3,
-      "passes": false,
-      "notes": "Filed 2026-09-02 from the codebase audit on claude/codebase-audit-prd-k01kxz. Evidence is from the working tree; production was not probed (no Supabase credentials in the container)."
+      "passes": true,
+      "notes": "Filed 2026-09-02 from the codebase audit on claude/codebase-audit-prd-k01kxz. Evidence is from the working tree; production was not probed (no Supabase credentials in the container). RESOLVED 2026-09-10 on claude/seo-iterative-loop-e92bab. Added src/components/DetailFetchError.tsx: a retry state that emits no robots meta. VenueDetail, TrailDetail, ItineraryDetail, TeamDetail, SeasonalGuide, HotelDetails and EventDetails now destructure error/refetch and branch on error BEFORE the not-found branch, so noindex is emitted only when the query succeeded and returned no row (the hooks already return null on PGRST116 and throw on everything else). EventDetails no longer renders SEOHead in its not-found branch, which removes the robots index,follow tag that sat directly above the noindex one. useHotels.useHotel and useEventBySlug now return refetch. Covered by src/pages/__tests__/detailErrorNoindex.test.tsx (2 tests)."
     },
     {
       "id": "WEB-PERF-028",

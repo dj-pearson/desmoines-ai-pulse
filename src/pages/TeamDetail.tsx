@@ -2,6 +2,7 @@ import { useParams, Link } from 'react-router-dom';
 import { createEventSlugWithCentralTime } from "@/lib/timezone";
 import { RouteCanonical } from "@/components/RouteCanonical";
 import Header from '@/components/Header';
+import { DetailFetchError } from '@/components/DetailFetchError';
 import Footer from '@/components/Footer';
 import { Helmet } from 'react-helmet-async';
 import { useTeam, useTeamGames } from '@/hooks/useTeams';
@@ -14,7 +15,7 @@ import { SpriteIcon } from "@/components/ui/SpriteIcon";
 
 export default function TeamDetail() {
   const { slug } = useParams<{ slug: string }>();
-  const { data: team, isLoading } = useTeam(slug || '');
+  const { data: team, isLoading, error, refetch } = useTeam(slug || '');
   const { data: games } = useTeamGames(team?.name || '');
 
   if (isLoading) {
@@ -27,6 +28,23 @@ export default function TeamDetail() {
           <Skeleton className="h-8 w-64 mb-4" />
           <Skeleton className="h-32 w-full" />
         </div>
+        <Footer />
+      </div>
+    );
+  }
+
+  // WEB-SEO-040: a thrown query is not a missing row. Retry state, no robots meta.
+  if (error) {
+    return (
+      <div className="min-h-screen bg-background">
+        <RouteCanonical path={`/sports/${slug}`} />
+        <Header />
+        <DetailFetchError
+          entityLabel="team"
+          backHref="/sports"
+          backLabel="Back to Sports Hub"
+          onRetry={() => refetch()}
+        />
         <Footer />
       </div>
     );

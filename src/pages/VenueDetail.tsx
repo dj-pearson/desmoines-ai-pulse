@@ -2,6 +2,7 @@ import { useParams, Link } from 'react-router-dom';
 import { createEventSlugWithCentralTime } from "@/lib/timezone";
 import { RouteCanonical } from "@/components/RouteCanonical";
 import Header from '@/components/Header';
+import { DetailFetchError } from '@/components/DetailFetchError';
 import Footer from '@/components/Footer';
 import { Helmet } from 'react-helmet-async';
 import { useVenue, useVenueEvents } from '@/hooks/useVenues';
@@ -23,7 +24,7 @@ const VENUE_TYPE_LABELS: Record<string, string> = {
 
 export default function VenueDetail() {
   const { slug } = useParams<{ slug: string }>();
-  const { data: venue, isLoading } = useVenue(slug || '');
+  const { data: venue, isLoading, error, refetch } = useVenue(slug || '');
   const { data: events } = useVenueEvents(venue?.name || '');
 
   if (isLoading) {
@@ -37,6 +38,23 @@ export default function VenueDetail() {
           <Skeleton className="h-48 w-full mb-4" />
           <Skeleton className="h-32 w-full" />
         </div>
+        <Footer />
+      </div>
+    );
+  }
+
+  // WEB-SEO-040: a thrown query is not a missing row. Retry state, no robots meta.
+  if (error) {
+    return (
+      <div className="min-h-screen bg-background">
+        <RouteCanonical path={`/music/venues/${slug}`} />
+        <Header />
+        <DetailFetchError
+          entityLabel="venue"
+          backHref="/music"
+          backLabel="Back to Music Hub"
+          onRetry={() => refetch()}
+        />
         <Footer />
       </div>
     );

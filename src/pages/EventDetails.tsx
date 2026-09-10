@@ -10,7 +10,6 @@ import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Breadcrumbs } from "@/components/ui/breadcrumbs";
-import SEOHead from "@/components/SEOHead";
 import { RouteCanonical } from "@/components/RouteCanonical";
 import EnhancedEventSEO from "@/components/EnhancedEventSEO";
 import AIWriteup from "@/components/AIWriteup";
@@ -40,6 +39,7 @@ import { NearbyContent } from "@/components/NearbyContent";
 import { LazyLocationMap } from "@/components/LazyLocationMap";
 import { eventPriceContent } from "@/lib/eventOffers";
 import { SpriteIcon } from "@/components/ui/SpriteIcon";
+import { DetailFetchError } from "@/components/DetailFetchError";
 
 /** Upcoming events fetched to populate the related/nearby rails (3 shown each). */
 const RELATED_POOL_SIZE = 50;
@@ -49,7 +49,7 @@ export default function EventDetails() {
   const navigate = useNavigate();
   // Targeted, date-windowed lookup — see useEventBySlug for why the old
   // fetch-everything-then-Array.find approach 404'd listed events (WEB-QA-002).
-  const { event, isLoading } = useEventBySlug(slug);
+  const { event, isLoading, error, refetch } = useEventBySlug(slug);
   // Used by the sticky action bar below; the inline control uses
   // AddToCalendarButton, which owns its own export handlers.
   const { downloadIcsFile } = useCalendarExport();
@@ -128,16 +128,32 @@ export default function EventDetails() {
     );
   }
 
+  // WEB-SEO-040: a thrown query is not a missing event. No robots meta here -
+  // a transient PostgREST error must not publish noindex on a page that ranks.
+  if (error) {
+    return (
+      <div className="min-h-screen bg-background">
+        <Header />
+        <DetailFetchError
+          entityLabel="event"
+          backHref="/events"
+          backLabel="Browse all events"
+          onRetry={() => refetch()}
+        />
+        <Footer />
+      </div>
+    );
+  }
+
   if (!event) {
     return (
       <>
-        <SEOHead
-          title="Event Not Found - Des Moines Events"
-          description="The event you're looking for could not be found. Browse all upcoming events in Des Moines, Iowa."
-          type="website"
-        />
+        {/* WEB-SEO-040: noindex only. SEOHead used to render here too, emitting
+            robots index,follow immediately above this tag. */}
         <Helmet>
+          <title>Event Not Found - Des Moines Events</title>
           <meta name="robots" content="noindex, follow" />
+          <meta name="googlebot" content="noindex, follow" />
         </Helmet>
         <div className="min-h-screen bg-background">
           <Header />
