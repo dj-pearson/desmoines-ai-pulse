@@ -427,8 +427,9 @@ export default function EventsThisWeekend() {
           <>
             <WeatherNotice weather={weather} hasVerdict={hasVerdict} className="mb-6" />
             <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6 mb-8">
-              {orderedEvents.slice(0, VISIBLE_EVENTS).map((event) => (
+              {orderedEvents.slice(0, VISIBLE_EVENTS).map((event, index) => (
                 <SocialEventCard
+                  priority={index < 3}
                   key={event.id}
                   event={event}
                   socialData={batchSocialData?.[event.id]}

@@ -19,6 +19,8 @@ import { Heart } from "lucide-react";
 import { getCanonicalUrl } from "@/lib/brandConfig";
 import { useDocumentTitle } from "@/hooks/useDocumentTitle";
 import { Breadcrumbs } from "@/components/ui/breadcrumbs";
+import { useReloadableFetch } from "@/hooks/useReloadableFetch";
+import { ErrorState } from "@/components/ui/error-state";
 
 interface EventItem {
   id: string;
@@ -37,6 +39,7 @@ interface EventItem {
 export default function DateNightEvents() {
   const [events, setEvents] = useState<EventItem[]>([]);
   const [isLoading, setIsLoading] = useState(true);
+  const { error: loadError, setError: setLoadError, reloadKey, retry } = useReloadableFetch();
   const [eveningOnly, setEveningOnly] = useState(true);
   useDocumentTitle("Date Night Events");
 
@@ -57,12 +60,15 @@ export default function DateNightEvents() {
 
         if (error) {
           log.error('fetchDateNightEvents', 'Error fetching date night events', { error });
+          setLoadError(error);
           setEvents([]);
         } else {
+          setLoadError(null);
           setEvents(data || []);
         }
       } catch (error) {
         log.error('fetchDateNightEvents', 'Unexpected error in fetchDateNightEvents', { error });
+        setLoadError(error);
         setEvents([]);
       } finally {
         setIsLoading(false);
@@ -70,7 +76,7 @@ export default function DateNightEvents() {
     };
 
     fetchDateNightEvents();
-  }, []);
+  }, [reloadKey]);
 
   // WEB-PERF-027. This page has no render cap, and unlike its siblings it
   // actually fills the query's limit(100): the .or() filter above spans five
@@ -304,7 +310,9 @@ export default function DateNightEvents() {
         </div>
 
         {/* Events List */}
-        {isLoading ? (
+        {!isLoading && loadError ? (
+          <ErrorState error={loadError} onRetry={retry} />
+        ) : isLoading ? (
           <div className="grid gap-6 md:grid-cols-2 lg:grid-cols-3">
             {[...Array(6)].map((_, i) => (
               <div key={i} className="animate-pulse">
@@ -320,8 +328,9 @@ export default function DateNightEvents() {
               Upcoming Date Night Events ({matchingEvents.length})
             </h2>
             <div className="grid gap-6 md:grid-cols-2 lg:grid-cols-3">
-              {dateEvents.map((event) => (
+              {dateEvents.map((event, index) => (
                 <SocialEventCard
+                  priority={index < 3}
                   key={event.id}
                   event={event}
                   socialData={batchSocialData?.[event.id]}

@@ -18,6 +18,8 @@ import { getCanonicalUrl } from "@/lib/brandConfig";
 import { useDocumentTitle } from "@/hooks/useDocumentTitle";
 import { Breadcrumbs } from "@/components/ui/breadcrumbs";
 import { RESTAURANT_LIST_COLUMNS } from "@/lib/listColumns";
+import { useReloadableFetch } from "@/hooks/useReloadableFetch";
+import { ErrorState } from "@/components/ui/error-state";
 
 /**
  * WEB-PERF-023. The query fetches 100 and the grid rendered all of them, which
@@ -55,6 +57,7 @@ export default function DietaryRestaurants() {
   const [searchParams, setSearchParams] = useSearchParams();
   const [restaurants, setRestaurants] = useState<Restaurant[]>([]);
   const [isLoading, setIsLoading] = useState(true);
+  const { error: loadError, setError: setLoadError, reloadKey, retry } = useReloadableFetch();
   const [selectedDiet, setSelectedDiet] = useState<string>(searchParams.get("diet") || "");
   useDocumentTitle("Dietary-Friendly Restaurants");
 
@@ -72,11 +75,13 @@ export default function DietaryRestaurants() {
             .limit(100);
 
           if (error) throw error;
+          setLoadError(null);
           setRestaurants(data || []);
         } else {
           // Filter by dietary keywords in description or name
           const dietOption = dietaryOptions.find(d => d.id === selectedDiet);
           if (!dietOption) {
+            // An unrecognised diet slug is a genuine empty result, not a failure.
             setRestaurants([]);
             return;
           }
@@ -94,10 +99,12 @@ export default function DietaryRestaurants() {
             .limit(100);
 
           if (error) throw error;
+          setLoadError(null);
           setRestaurants(data || []);
         }
       } catch (error) {
         log.error('fetchRestaurants', 'Error fetching restaurants', { error });
+        setLoadError(error);
         setRestaurants([]);
       } finally {
         setIsLoading(false);
@@ -105,7 +112,7 @@ export default function DietaryRestaurants() {
     };
 
     fetchRestaurants();
-  }, [selectedDiet]);
+  }, [selectedDiet, reloadKey]);
 
   const handleDietFilter = (dietId: string) => {
     setSelectedDiet(dietId);
@@ -359,7 +366,9 @@ export default function DietaryRestaurants() {
         </Card>
 
         {/* Restaurants List */}
-        {isLoading ? (
+        {!isLoading && loadError ? (
+          <ErrorState error={loadError} onRetry={retry} />
+        ) : isLoading ? (
           <div className="grid gap-6 md:grid-cols-2 lg:grid-cols-3">
             {[...Array(6)].map((_, i) => (
               <div key={i} className="animate-pulse">
@@ -383,9 +392,9 @@ export default function DietaryRestaurants() {
                 heading above and every count in the copy still read
                 restaurants.length, so no displayed number changes. */}
             <div className="grid gap-6 md:grid-cols-2 lg:grid-cols-3">
-              {restaurants.slice(0, VISIBLE_RESTAURANTS).map((restaurant) => (
+              {restaurants.slice(0, VISIBLE_RESTAURANTS).map((restaurant, index) => (
                 <div key={restaurant.id} className="content-auto">
-                  <RestaurantCard restaurant={restaurant} />
+                  <RestaurantCard restaurant={restaurant} priority={index < 3} />
                 </div>
               ))}
             </div>

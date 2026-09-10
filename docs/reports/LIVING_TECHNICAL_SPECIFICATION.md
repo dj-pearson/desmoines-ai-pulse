@@ -1329,7 +1329,7 @@ USING (status = 'published');
 #### Input Validation
 - **SQL Injection Protection:** Parameterized queries only
 - **XSS Prevention:** DOMPurify for user-generated content
-- **CSRF Protection:** JWT tokens
+- **CSRF:** not applicable - the Supabase session is a bearer token in localStorage, not a cookie, so a cross-site page cannot cause it to be sent. `src/lib/csrf.tsx` was written, never imported, and deleted 2026-09-09.
 - **Schema Validation:** Zod schemas for forms
 - **Length Limits:** Enforced on all text inputs
 
@@ -1363,7 +1363,7 @@ Content-Security-Policy: (configured)
 5. ✅ Audit trails for admin actions
 6. ✅ Rate limiting on edge functions
 7. ✅ XSS prevention with DOMPurify
-8. ✅ CSRF protection with JWT
+8. n/a CSRF - no auth cookie exists to forge against (see the Security section)
 9. ✅ No client-side secrets
 10. ✅ Regular security audits (see SECURITY_AUDIT_REPORT.md)
 

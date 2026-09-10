@@ -8847,13 +8847,19 @@
       "title": "Two web manifests, three theme colors, and a dead offline page",
       "description": "As a maintainer, I need one PWA manifest, because index.html links /site.webmanifest (theme #ffffff, no start_url, no maskable icon), public/manifest.json (theme #1e40af, maskable icons) is linked nowhere, index.html's theme-color is #2563eb, and public/offline.html is referenced only by a comment while the service worker self-destructs.",
       "acceptanceCriteria": [
-        "Evidence: index.html:48,300; public/manifest.json; public/offline.html; scripts/prerender-output.mjs:67 comment",
-        "Fold the maskable icon and one theme color into site.webmanifest with a start_url; delete manifest.json and offline.html",
-        "Lighthouse PWA/installability audit passes on / (record the score)"
+        "THE LINKED MANIFEST COULD NOT BE INSTALLED PROPERLY. public/site.webmanifest - the one index.html actually links - had no start_url, no scope and no id. Without start_url the spec defaults it to the document URL, so anyone installing from /events/some-event got a home-screen icon that always relaunches that one event. Now id, start_url and scope are all '/', plus a description and 'any maskable' on the 192px icon so Android uses the adaptive launcher shape instead of letterboxing a square.",
+        "THE THREE THEME COLOURS were index.html #2563eb, SEOHead BRAND.themeColor #3B82F6, and site.webmanifest #ffffff. theme-color paints the browser chrome above the page, so it should match what is at the top - and the header is `bg-background`, measured on a rendered build as #ffffff in light and #060a13 in dark. So the manifest's white was RIGHT and the two blues were wrong: both are Tailwind blues that appear nowhere on this site, and a dark-mode visitor got a blue bar above a near-black page.",
+        "index.html now carries a light/dark pair with prefers-color-scheme media queries. SEOHead's copy is removed entirely - Helmet APPENDS rather than replaces, so it was putting a second and differently-coloured theme-color in the DOM on every route. msapplication-TileColor stays, since a Windows tile wants a solid brand colour rather than a match for the page background.",
+        "VERIFIED by rendering: exactly two theme-color metas, and the one whose media query matches equals the header background in each scheme - #ffffff / rgba(255,255,255,.6) light, #060a13 / rgba(6,10,19,.6) dark.",
+        "THE DEAD MANIFEST is deleted. public/manifest.json was linked from nothing and declared icon sizes that do not match the files - DMI-Icon.png as 192x192 when it is 256x258, DMI-Logo.png as 512x512 when it is 800x800 - which Chrome rejects for install. Its references in performanceConfig.ts and public/_headers are gone with it.",
+        "public/_headers served the manifest as application/json; application/manifest+json is the registered type. Verified over HTTP after the change.",
+        "THE DEAD OFFLINE PAGE is deleted. public/offline.html was referenced by nothing, and nothing could reach it: public/sw.js is a SELF-DESTRUCTING service worker that unregisters and purges on activate, so the site has no service worker and no offline mode at all.",
+        "NOT A DEFECT, checked and recorded so nobody re-spends the time: index.html's inline 'force clear service workers' script, performance.ts's registerServiceWorker (which unregisters despite its name), and sw.js's self-destruct are not fighting each other - all three are one deliberate teardown of a caching SW that had been serving stale HTML with dead asset hashes. registerServiceWorker being named the opposite of what it does is still a trap for the next reader; see WEB-QUAL-014.",
+        "VERIFIED: 588 vitest tests pass, eslint 0 errors, tsc clean, all seven check scripts and check-dead-lib green. check-asset-types still reports only the pre-existing sitemap-hotels.xml, which a partial build cannot generate."
       ],
       "priority": 3,
-      "passes": false,
-      "notes": "Filed 2026-09-02 from the codebase audit on claude/codebase-audit-prd-k01kxz. Evidence is from the working tree; production was not probed (no Supabase credentials in the container)."
+      "passes": true,
+      "notes": "Filed 2026-09-02 from the codebase audit on claude/codebase-audit-prd-k01kxz. Evidence is from the working tree; production was not probed (no Supabase credentials in the container). CLOSED in the loop, iteration 12. /manifest.json now answers with the SPA fallback (text/html) since the file is gone - nothing references it, so nothing asks."
     },
     {
       "id": "WEB-QUAL-008",
@@ -9226,6 +9232,364 @@
       "priority": 1,
       "passes": true,
       "notes": "Found and fixed 2026-09-09 on claude/web-platform-improvements-loop-0px3u1, by auditing user-facing copy for claims the platform does not keep - a theme this loop hit three times before (the newsletter's phantom confirmation email, the 'now live' approval email, and advertising policies that were linked but never written). Verified in a real browser: none of Sarah Martinez, James Chen, 95%, Cityview, Perplexity, '40% increase', '450+' or '500+ restaurants' appears in the rendered home page, and the section still renders. Priority 1 because the testimonials are a legal exposure, not a quality issue, and because this component is built to be quoted by AI assistants."
+    },
+    {
+      "id": "WEB-UX-033",
+      "title": "Subscription tier badges were white text on amber-400 (1.7:1), and VIP was a purple-to-pink gradient that belongs to no part of this brand",
+      "description": "As a member, I need to be able to read which plan I am on, and to see the same colour for that plan on every screen that names it. PremiumBadge, PremiumGate, UpgradeModal, SubscriptionPortal and SubscriptionSuccess each had their own idea of what Insider and VIP look like.",
+      "acceptanceCriteria": [
+        "WHITE TEXT ON from-amber-400 to-orange-500 measures 1.7:1 at the light end. That is the Insider badge, and FeatureTag renders it at text-[10px], so WCAG 1.4.3 wants 4.5:1. Free (from-slate-400) was 3.0:1. Both failed; neither had ever been measured. Tier surfaces are now flat and measured against white: slate-600 7.58, amber-700 5.02, brand --secondary 6.08 light / 5.23 dark.",
+        "VIP was from-purple-500 to-pink-500 in five places - the badge, both PremiumGate CTAs, the UpgradeModal BEST VALUE pill and its CTA, and two Crown icons. Purple is in neither brand colour (#071e62 blue, #c30e31 red). VIP is now the brand red, so the paid tier reads as this platform rather than as a template.",
+        "SubscriptionSuccess had a THIRD scheme - Insider blue, VIP amber - so the tier a member had just paid for changed colour between the upgrade modal and the receipt. Aligned to Insider amber / VIP red.",
+        "Amber icons and selection borders in UpgradeModal were amber-500 on white: 2.15:1, under the 3:1 WCAG 1.4.11 minimum for a non-text selection indicator. Now amber-700 in light, amber-500 in dark.",
+        "VERIFIED: npx impeccable detect src goes 56 -> 48 anti-patterns and reports nothing in any of the five files; 577 vitest tests pass; eslint clean (0 errors) on all five."
+      ],
+      "priority": 2,
+      "passes": true,
+      "notes": "Found by running the impeccable detector CLAUDE.md mandates but that nothing in CI runs. The contrast failures were not what I went looking for - they fell out of computing the replacement colours and discovering the originals had never been checked."
+    },
+    {
+      "id": "WEB-UX-034",
+      "title": "48 UI anti-patterns remain across src, and nothing in CI runs the detector CLAUDE.md mandates",
+      "description": "As the platform owner, I need the craft floor in CLAUDE.md to be enforced rather than aspirational. `npx impeccable detect src` reports 48 remaining findings after WEB-UX-033; no npm script, pre-commit hook or CI job runs it, so the count only moves when someone remembers.",
+      "acceptanceCriteria": [
+        "Baseline at filing: 48 findings. Breakdown by rule - side-tab (border-l-4 / border-left: 4px) is the largest group and the detector calls it the single most recognizable tell; then ai-color-palette (purple/violet/indigo gradients and headings), border-accent-on-rounded, gradient-text, bounce-easing, and one overused-font (Inter, loaded in src/lib/performanceConfig.ts).",
+        "NOT every finding is a defect. src/lib/categoryColors.ts and src/lib/categoryStyles.ts use violet, indigo and purple as CATEGORY-DISTINGUISHING hues with measured contrast ratios recorded in the file header. Those are deliberate and stay. Several border-b-2 hits are hand-rolled `animate-spin rounded-full border-b-2` spinners - the fix there is a shared spinner component, not a colour change.",
+        "Work public surfaces before admin ones: src/pages/Index.tsx (21 off-brand colour tokens, the highest-traffic page on the site), then ThingsToDoHub, TripPlanner, Restaurants, EventsPage, ArticleDetails, the pseo sections.",
+        "Land an npm script (check-ui-craft) that runs the detector against a committed baseline count and fails when the count rises, in the shape of the existing check-dom-budget / check-error-handling ratchets, and add it to pr-checks.yml.",
+        "CORRECTION to this story as filed: src/lib/styleUtils.ts is NOT a shared gradient every page reads - it is imported by nothing at all (see WEB-QUAL-013). Deleting it is the fix there, not recolouring it. Start instead with src/pages/Index.tsx, which has 21 off-brand colour tokens and is the highest-traffic page on the site."
+      ],
+      "priority": 2,
+      "passes": false,
+      "notes": "FILED FROM THE LOOP, iteration 1. Too large for one iteration: ~230 off-brand colour tokens across 72 files. Start with src/pages/Index.tsx."
+    },
+    {
+      "id": "WEB-SEC-034",
+      "title": "The cookie policy and consent banner told visitors that essential cookies include CSRF tokens; the CSRF module was never imported and there is no auth cookie",
+      "description": "As a visitor, I need the cookie disclosure to describe what the site actually stores. Two user-facing surfaces named a protection that does not run and a cookie that is not a cookie.",
+      "acceptanceCriteria": [
+        "src/pages/CookiePolicy.tsx said essential cookies cover 'security (CSRF tokens)' with the examples 'Supabase auth session cookies, Cloudflare load-balancer cookies'. src/components/CookieConsentBanner.tsx said 'Authentication, security, session state, CSRF protection.' Under GDPR/ePrivacy the disclosure has to match what is set, and neither claim did.",
+        "src/lib/csrf.tsx was imported by nothing - it sat in .github/dead-lib-baseline.json as unimported - and the three 'Required Action' items under the tick in docs/security/SECURITY_FIXES_IMPLEMENTATION.md (wire it into edge functions, forms, API calls) were never done. DELETED, not wired up.",
+        "Not wired up because classic CSRF needs the browser to attach credentials to a cross-site request by itself, which means a cookie. src/integrations/supabase/client.ts stores the session in localStorage through the auth.storage adapter, and supabase-js sends it as an Authorization bearer header. The deleted module also stored its token in sessionStorage, so both halves of its 'double submit' came from the same JavaScript-readable store - not a check.",
+        "The only first-party cookie this app writes is the shadcn sidebar state in src/components/ui/sidebar.tsx, an admin layout preference. Both surfaces now describe localStorage and Cloudflare's bot-management cookie instead.",
+        "Docs corrected rather than left standing: SECURITY_FIXES_IMPLEMENTATION.md section 3 rewritten from a tick to a withdrawal with the reasoning, docs/SECURITY.md line 90, LIVING_TECHNICAL_SPECIFICATION.md lines 1332 and 1366 ('CSRF protection with JWT' - JWT bearer auth is why CSRF does not apply, not how it was mitigated)."
+      ],
+      "priority": 1,
+      "passes": true,
+      "notes": "Found while working WEB-UX-034: src/lib/styleUtils.ts turned out to be dead, which led to .github/dead-lib-baseline.json and its 21 entries."
+    },
+    {
+      "id": "WEB-CI-035",
+      "title": "check-dead-lib-modules was red on the default branch, so every PR inherited it",
+      "description": "As a contributor, I need the PR checks to be green on an unmodified branch. src/hooks/use-native-share.tsx was unimported and not baselined, so `node scripts/check-dead-lib-modules.mjs` exited 1 on a pristine checkout of the branch head.",
+      "acceptanceCriteria": [
+        "Confirmed by stashing all local work and running the script on the clean tree: exit 1. Same failure mode as WEB-CI-033.",
+        "use-native-share.tsx was a dead twin. Native sharing has two live implementations already - ShareDialog.tsx's own handleNativeShare (navigator.share with a cancel-tolerant catch) and nativeShare() in src/lib/capacitorUtils.ts for the packaged apps. Deleted, per the baseline file's own instruction not to add entries to make CI pass.",
+        "VERIFIED: script exits 0; npm run check-imports finds no unresolved named imports; 577 vitest tests pass."
+      ],
+      "priority": 1,
+      "passes": true,
+      "notes": ""
+    },
+    {
+      "id": "WEB-QUAL-013",
+      "title": "20 modules in src/lib and src/hooks are imported by nothing, ~2,800 lines, several of them dead twins of a live feature",
+      "description": "As a maintainer, I need the dead-lib baseline to shrink rather than hold. Its own header says 'Do not add entries to make CI pass; delete the module or wire it up', and it has 20 entries plus 3 testOnly.",
+      "acceptanceCriteria": [
+        "Baseline after WEB-SEC-034 and WEB-CI-035: 20 unimported, 3 testOnly. Line counts: sitemapGenerator 331, email-integration 269, errorTracking 253, eventSubmissionService 229, sitemapEnhanced 227, useResourceOwnership 202, styleUtils 199, deferredLoader 195, sitemap 181, useVirtualList 120, queryKeys 112, use-touch-ripple 91, use-long-press 85, webVitalsRum 84, useGoogleIndexing 80, lazyLoad 50, guestFavoriteMigration 47, conversionTracking 42, useReducedMotion 36, sponsoredTracking 28.",
+        "THREE dead sitemap generators (sitemap.ts, sitemapEnhanced.ts, sitemapGenerator.ts, 739 lines) while the live one is scripts/generate-dynamic-sitemaps.ts, wired into `npm run build`. Read them before deleting - if any covers a route type the live generator misses, that is a separate SEO story.",
+        "useReducedMotion.ts is safely deletable: prefers-reduced-motion is already handled in src/index.css (TWO identical @media blocks, lines 833 and 1299 - collapse them) and in useAccessibility.ts.",
+        "styleUtils.ts is safely deletable and should go: it carries `from-blue-600 via-purple-500 to-pink-500` and hardcoded bg-white / text-gray-600 that would break dark mode if anything ever imported it. It is also a second definition of the skip link.",
+        "guestFavoriteMigration.ts is the one to check for USER-VISIBLE loss, not just weight: if a signed-out visitor can favourite and then sign up, this is the code that would carry those over and it does not run. Confirm against WEB-QA-017 first - CLAUDE.md records that the `favorites` table returned 42P01 in production.",
+        "errorTracking.ts (253) vs the live src/lib/errorHandler.ts, and webVitalsRum.ts (84) vs the live useWebVitals.ts, are the classic dead-twin shape: the better-written copy is the one that does not run."
+      ],
+      "priority": 2,
+      "passes": false,
+      "notes": "FILED FROM THE LOOP, iteration 2. Too large for one iteration. HIT THIS ON A LATER ITERATION, starting with the three sitemap generators (739 lines, one read) and guestFavoriteMigration (user-visible, small). UPDATE (iteration 6): useUrlFilterState.ts deleted with WEB-UX-035; testOnly is down to fetchWithRetry.ts and geo.ts."
+    },
+    {
+      "id": "WEB-QA-029",
+      "title": "/music, /sports and the venue and team pages rendered every event date in the READER's timezone, and printed the no-time sentinel as a real showtime",
+      "description": "As a visitor - and especially as the tourist this site is built for, reading it from somewhere else - I need the date and time of a Des Moines event to be the Des Moines date and time. Four routed pages formatted event instants with new Date(event.date).toLocaleDateString() and .getDate(), which format in whatever timezone the browser is set to.",
+      "acceptanceCriteria": [
+        "events.date, event_start_utc and event_start_local are instants (`timestamp with time zone`). A 10pm Central Friday show is 03:00Z Saturday, so an Eastern reader was shown the wrong weekday and the wrong day number on the date tile, and every reader at or east of UTC was shown the wrong date for anything after 6pm Central. 12 renders across /music, /sports, /music/venues/:slug and /sports/:slug, plus NLPSearchBar on the home page, PseoLiveListings, NeighborhoodGuide and both group planners on /community.",
+        "The same call sites printed a time UNCONDITIONALLY, so an event with no known start rendered NO_TIME_MARKER (19:31:58) as a confident '7:31 PM'. hasSpecificTime already knew the answer - it reads the source's own time_tbd flag first and the sentinel second - and nothing was asking it. formatEventTimeOnly now returns null and the pages show 'Time TBA'.",
+        "THE QUERY WINDOWS HAD THE SAME DEFECT, which is worse than the display: useMusicEvents and useSportsEvents built 'tonight', 'this weekend' and 'this week' from `new Date(now.getFullYear(), now.getMonth(), now.getDate())` - midnight where the READER is - and MusicHub took the weekend offset from `now.getDay()`. A reader in London opening /music at 2am was asking for a window that started at 6pm Central the previous day, so 'Tonight' showed last night's shows. Now centralDayStartUtcISO() and centralDayOfWeek().",
+        "useUserSubmittedEvents formatted the event date into the ADMIN NOTIFICATION EMAIL in the submitter's browser timezone, so the date the Des Moines admin read depended on where the submitter was sitting.",
+        "New helpers in src/lib/timezone.ts, matching the source order the existing formatEventDate/formatEventDateShort already use: formatEventPart(event, fmt), formatEventTimeOnly(event), centralDayStartUtcISO(offsetDays), centralDayOfWeek(). centralDayStartUtcISO converts each day start on its own rather than adding 24h, so DST boundaries fall where Des Moines has them.",
+        "VERIFIED: 8 new assertions in src/lib/__tests__/eventCentralTime.test.ts, including the fall-back boundary (Central midnight is 05:00Z before 2026-11-01 and 06:00Z after) and the 23:30-Central-is-tomorrow-in-UTC case. Whole suite re-run under TZ=Europe/London: 585 tests in 61 files pass. eslint 0 errors.",
+        "GUARDED: scripts/check-event-time-tz.mjs, zero-tolerance on reader-facing surfaces, excluding admin/CMS/CRM screens where browser-local is the right answer for a record timestamp. Wired into `npm run validate` and pr-checks.yml."
+      ],
+      "priority": 1,
+      "passes": true,
+      "notes": "Found by asking which public pages format an event date without going through src/lib/timezone.ts. EventDetails was already correct, which is why this survived - the surface everyone checks was the one that worked."
+    },
+    {
+      "id": "WEB-QA-030",
+      "title": "Seven SEO landing pages turned a failed query into 'No Events Scheduled for Today', with no retry short of a page reload",
+      "description": "As a visitor arriving from search, I need to be told when the site could not load something, rather than told there is nothing on. /events/today, /events/free, /events/kids, /events/date-night, /events/in/:location, /restaurants/open-now and /restaurants/dietary/:diet all logged the failure and then set their list to [].",
+      "acceptanceCriteria": [
+        "Both failure paths on each page - the supabase `if (error)` branch and the surrounding catch - ended in setEvents([]) / setRestaurants([]), which renders the empty state. The visitor read 'No Events Scheduled for Today. Check back tomorrow', which is a confident answer to a question the page could not answer. On a site whose whole promise is what is on in Des Moines today, that is the worst available wrong answer.",
+        "These pages fetch in a useEffect, NOT through TanStack Query, so they also got no retries. CLAUDE.md records an earlier finding that hub pages 'show real error copy once TanStack retries settle at ~12s' - that applies to the hubs, not to these. Here the false empty state stood until the visitor reloaded the page.",
+        "A shared ErrorState already existed at src/components/ui/error-state.tsx - it distinguishes offline from server failure and offers a Retry - and only five pages used it (Articles, Attractions, Deals, Hotels, Restaurants). All seven now do.",
+        "New hook src/hooks/useReloadableFetch.ts carries { error, setError, reloadKey, retry } for pages that fetch in an effect: retry clears the error and bumps reloadKey, which is in the effect's dependency array, so Retry re-runs the fetch in place.",
+        "The success paths clear the error too, so a dep-driven refetch after a failure (EventsByLocation on suburb, DietaryRestaurants on diet) does not stay stuck on the old failure.",
+        "NOT every empty list is a failure: DietaryRestaurants' unrecognised-diet branch is a genuine empty result and was left alone. The scripted first pass had wrongly marked it an error, using an `error` binding that was not even in scope there.",
+        "VERIFIED: guard proved against the pre-fix code by reverting FreeEvents.tsx and confirming it reports both failure paths and exits 1, then restoring. 585 vitest tests pass, eslint 0 errors over all of src/.",
+        "GUARDED: scripts/check-false-empty-state.mjs flags a reader-facing page that clears a list inside a catch or an `if (error)` block without recording the failure. In `npm run validate` and pr-checks.yml."
+      ],
+      "priority": 1,
+      "passes": true,
+      "notes": "Found by asking which public pages read isError at all. The answer was five out of roughly thirty."
+    },
+    {
+      "id": "WEB-QA-031",
+      "title": "About twenty more reader-facing pages render an empty state without ever reading isError",
+      "description": "As a visitor, I need a failure to look like a failure everywhere, not only on the seven pages WEB-QA-030 fixed. The remaining pages use TanStack Query - so they do at least retry - but they still fall through to an empty state when the retries are exhausted.",
+      "acceptanceCriteria": [
+        "Pages that render an empty-state message and never mention isError or ErrorState, at the time of filing: MusicHub, SportsHub, VenueDetail, TeamDetail, BreweryTrail, EventsThisWeekend, EventsPage, EventsNearMe, MonthlyEventsPage, Playgrounds, Social, WhatsNew, Gamification, TeamManagement, TripPlanner, UserDashboard, Profile, SubscriptionPortal, Advertise, Pricing.",
+        "The four /music and /sports pages are the sharpest case and should go first: 'No games scheduled for today.' and 'No upcoming events listed for this venue.' are both stated as fact.",
+        "Reuse the same pieces: <ErrorState error={error} onRetry={refetch} /> from @/components/ui/error-state, ahead of the empty branch. These pages already have TanStack's error and refetch to hand, so they do not need useReloadableFetch.",
+        "Then widen scripts/check-false-empty-state.mjs to cover the TanStack shape - a page rendering an empty-state string with no isError in scope - which the current script deliberately does not attempt, since it only understands the useEffect pattern."
+      ],
+      "priority": 2,
+      "passes": false,
+      "notes": "FILED FROM THE LOOP, iteration 4. Too large for one iteration: about twenty pages. HIT THIS ON A LATER ITERATION, starting with MusicHub, SportsHub, VenueDetail and TeamDetail. UPDATE (iteration 8): WEB-QA-032 closed /, /music, /sports, VenueDetail and TeamDetail and added a runtime guard in the smoke lane. Remaining: BreweryTrail, EventsThisWeekend, EventsNearMe, MonthlyEventsPage, Social, WhatsNew, Gamification, TeamManagement, TripPlanner, UserDashboard, Profile, SubscriptionPortal, Advertise, Pricing."
+    },
+    {
+      "id": "WEB-PERF-040",
+      "title": "Every LCP image on the site was loading=\"lazy\" - OptimizedImage's priority prop existed and no caller in the app ever passed it",
+      "description": "As a visitor, I need the biggest image on the page to start downloading immediately. It did not: the largest element on /events, /restaurants and every SEO landing page was lazily loaded, and the three detail-page heroes had no priority hint.",
+      "acceptanceCriteria": [
+        "SocialEventCard renders EVERY event listing on the site - /events, /events/today, /events/free, /events/kids, /events/date-night, /events/this-weekend, /events/in/:location - and its image was hardcoded loading=\"lazy\" with no prop to opt out. Chrome's own guidance is explicit that lazy-loading the LCP image delays it: the browser will not start the fetch until layout has run, so the largest paint waits on work every other element has already finished.",
+        "OptimizedImage has supported `priority` (loading=\"eager\" + fetchpriority=\"high\") since it was written. Grepped the whole of src/: not one caller passed it. EventCard and RestaurantCard both render through OptimizedImage and neither had the prop at all, so there was no way to pass it even if a page had wanted to.",
+        "All three cards now take `priority`, and the ten listing call sites pass priority={index < 3} - one row on a lg:grid-cols-3 grid, which is what is above the fold on desktop and more than covers mobile.",
+        "The three detail-page heroes (EventDetails, RestaurantDetails, AttractionDetails) were already loading=\"eager\", which only removes the lazy delay. They now also carry fetchpriority=\"high\" via fetchPriorityAttr, which is what promotes the request past the scripts and styles the browser found earlier in the document. These are the unambiguous LCP element on their pages.",
+        "VERIFIED: guard proved by stripping the hint from EventDetails.tsx and confirming it names that exact file and reason, then restoring. 585 vitest tests pass, eslint 0 errors over src/, all seven check scripts green.",
+        "GUARDED: scripts/check-lcp-priority.mjs asserts the first <img> in each detail page is eager and high priority. Deliberately does NOT check the listing grids - which card is above the fold depends on viewport, so a hard rule there would be guesswork. In `npm run validate` and pr-checks.yml."
+      ],
+      "priority": 1,
+      "passes": true,
+      "notes": "Found by counting image attributes across src: 79 raw <img> tags, 45 with a loading attribute, 6 with width/height. The priority prop being dead was the surprise - the capability was built and never connected, the same shape as the CSRF module in WEB-SEC-034 and ErrorState in WEB-QA-030."
+    },
+    {
+      "id": "WEB-PERF-041",
+      "title": "79 raw <img> tags bypass OptimizedImage, and only 6 of them set width and height",
+      "description": "As a visitor on a slow connection, I need images to be right-sized and to reserve their space before they load. Most of the site's images do neither.",
+      "acceptanceCriteria": [
+        "Counted at filing: 79 raw <img> in src/, of which 45 set a loading attribute, 15 set decoding, and 6 set width and height. Only 9 files use OptimizedImage, which is the component that emits a transform-based srcset so Supabase Storage serves a right-sized rendition.",
+        "The missing width/height is a CLS problem (target: <0.1). Cards whose container has a fixed height class are fine; the unsized ones inside prose and galleries are not. Audit which of the 73 unsized images sit in a container that does not already reserve height.",
+        "Route the remaining reader-facing <img> through OptimizedImage rather than adding attributes one at a time - it already handles srcset, sizes, the WebP/AVIF probe, the blur placeholder and the error fallback.",
+        "Do NOT route the three detail-page heroes through it blindly without re-checking WEB-PERF-040's guard, which reads the raw <img> tag; the guard needs updating in the same change if the tag stops being a raw <img>."
+      ],
+      "priority": 2,
+      "passes": false,
+      "notes": "FILED FROM THE LOOP, iteration 5. Too large for one iteration: 79 call sites. HIT THIS ON A LATER ITERATION, starting with the images that have no width/height inside a container that does not reserve height."
+    },
+    {
+      "id": "WEB-UX-035",
+      "title": "/playgrounds, /articles and /deals held their filters in local React state, so Back from a detail page came back to an unfiltered list",
+      "description": "As a visitor browsing a filtered list, I need my filters to survive tapping into an item and pressing Back, and I need to be able to share the filtered view. Three list pages kept every filter in useState, so neither worked.",
+      "acceptanceCriteria": [
+        "The everyday cost is the back button, not the shareable link: a parent filters /playgrounds to ages 2-5 in Ankeny, taps a playground, presses Back, and gets the full unfiltered list. Same on /articles and /deals.",
+        "useUrlFilters already existed and is what /events and /attractions use. All three pages now go through it: /playgrounds gets q, age, location, featured; /articles gets q, category, sort; /deals gets category.",
+        "/deals is the sharpest case - the canonical comment in that file already reasons about 'any ?category= permutation', so the SEO handling anticipated a URL param the page never read or wrote.",
+        "viewMode, showFilters and showMobileFilters stay local on purpose. They are chrome, not a description of what is being shown, so they do not belong in a link someone shares.",
+        "Search keeps a local immediate input mirrored to the URL on a 300ms debounce with replace:true, matching what EventsPage already does, so typing does not stack one history entry per keystroke. A second effect pulls the URL value back into the input for back/forward and shared links.",
+        "DELETED src/hooks/useUrlFilterState.ts and its test. It was a dead twin of useUrlFilters, listed as testOnly in the dead-lib baseline - and its test docblock claimed to cover 'the Events/Restaurants/Attractions pages', which use the OTHER hook. That is the trap the baseline's own header names: a green suite over code nothing runs.",
+        "VERIFIED: 8 new assertions in src/hooks/__tests__/useUrlFilters.test.tsx for the live hook, which had none - covering default-value omission, page reset, Clear-all leaving non-filter params alone, and the NaN fallback on getNum. 588 tests in 61 files pass, eslint 0 errors, dead-lib baseline down to 2 testOnly entries."
+      ],
+      "priority": 2,
+      "passes": true,
+      "notes": "Found by asking which list pages sync filters to the URL. Two did, and the tested hook turned out to be the dead one."
+    },
+    {
+      "id": "WEB-PERF-042",
+      "title": "Three.js, Recharts and D3 shipped on EVERY route - a forced manual chunk is a hard dependency edge, so Rollup imported them into every page chunk",
+      "description": "As a visitor, I need a page to download the code that page needs. /acceptable-use-policy, whose own code is 3 KB gzipped, pulled 324 KB gzipped of dependencies including a 3D engine and a charting library.",
+      "acceptanceCriteria": [
+        "vite.config.ts forced three, @react-three, recharts and d3 into named manual chunks. The comment on the three rule said it was 'separate chunk so it's only loaded when HeroCityLite renders'. MEASURED: the opposite. A forced chunk is a hard dependency edge, so Rollup emitted a bare `import \"./vendor-three.js\"` into every route chunk and the browser fetched and evaluated it before running the page module.",
+        "Per-route JS beyond the entry chunks, gzipped, before -> after: /acceptable-use-policy 323.8 -> 3.1; / (home) 287.5 -> 77.2; /events 472.4 -> 268.8; /restaurants 449.5 -> 246.0; /restaurants/:id 454.9 -> 251.2; /playgrounds 396.3 -> 192.8. The entry is unchanged at ~185 KB gz. Home page total JS goes 473 -> 263 KB gz, against a stated budget of under 500 KB.",
+        "The removeLazyPreloads plugin already existed for this and its docblock claimed the problem was fixed. It strips the modulepreload HINT from index.html, which is only half: the static import edge in each route chunk remained, so the bytes still shipped - just without a preload link. Docblock corrected to record that.",
+        "That plugin's regression warning fired when it stripped NOTHING, as a proxy for 'the chunk names changed'. With the forced chunks gone there is usually nothing to strip, so it warned on every good build - which is how people learn to ignore warnings. Replaced with the actual budget assertion: warn when the entry HTML preloads any chunk over 150 KB, whatever it is called. Build is now clean.",
+        "Three.js now travels with HeroCityLite's own dynamic chunk (800 KB), which is what the original comment wanted; HeroCityLite is already in the preload-strip list so that chunk is never preloaded. recharts and d3 travel with the lazy admin analytics pages that actually use them.",
+        "Removing a manual chunk cannot reintroduce the circular-chunk crash the vendor-react comment describes - that failure comes from forcing modules together, not from letting Rollup place them. VERIFIED ANYWAY rather than argued: served dist/ and loaded /, /events, /restaurants, /playgrounds, /acceptable-use-policy, /deals, /articles, /music and /sports in headless Chromium. All nine mounted, root content 533-10,804 chars, zero errors matching the chunk-graph failure signatures (Cannot read propert / before initialization / is not a function / Failed to fetch dynamically imported / SyntaxError / is not defined).",
+        "588 vitest tests pass, eslint 0 errors, tsconfig.node type-check clean, check-dom-budget OK against the new build."
+      ],
+      "priority": 1,
+      "passes": true,
+      "notes": "Found by building the client and measuring what each route actually downloads. check-asset-types reports sitemap-hotels.xml missing under a bare `vite build` - that file is generated by generate-dynamic-sitemaps.ts, which needs the backend, so it is an artifact of the partial build and not a finding. CI runs the full build."
+    },
+    {
+      "id": "WEB-QA-032",
+      "title": "With the backend unreachable the home page said 'No items available in this category right now', and /music and /sports said no shows and no games",
+      "description": "As a first-time visitor arriving during a backend outage, I need to be told the site could not load rather than told there is nothing on in Des Moines. Observed in a real browser against a production build, not inferred from source.",
+      "acceptanceCriteria": [
+        "METHOD: served a production build whose Supabase URL was a placeholder and read what each of 15 reader-facing routes actually rendered after retries settled. Three stated absence as fact - / ('No results found. No items available in this category right now'), /music ('No shows scheduled for tonight'), /sports ('No games scheduled for today'). The rest either showed a real failure state or no such claim. This is the empirical follow-up to WEB-QA-031, which predicted the class from source.",
+        "The home page is the worst of the three: it is the first thing a first-time visitor reads. AllInclusiveDashboard called useEvents, useAttractions and usePlaygrounds - every one of which has always returned `error` and `refetch` - and read neither. Any one source failing makes the merged list wrong, so the error state now wins over the empty state whichever failed.",
+        "MusicHub and SportsHub read neither isError nor refetch from their own useQuery calls. Each page shows one error banner across its sections rather than three, since they share a backend.",
+        "VenueDetail and TeamDetail had a worse variant: a failed load fell through to the not-found branch, which renders 'venue not found' AND a noindex. On a real venue whose page merely failed to load that is a deindexing risk - Googlebot arriving during a blip is told not to index a page that exists. A failure and a missing row now get different pages.",
+        "VERIFIED BY RE-OBSERVATION, not by reading the diff: rebuilt and re-ran the same 15-route sweep. All three now render a failure state ('You're offline' on /, 'went wrong' on /music and /sports).",
+        "GUARDED: tests/backend-down.spec.ts in the smoke lane, which already runs against a production build in e2e.yml. It aborts every Supabase request and asserts seven routes name no absence claim and do show a failure affordance. PROVED AGAINST THE PRE-FIX CODE: stashed the three fixes, rebuilt, ran it - exactly the three broken routes failed, each naming its own claim, and the four already-correct routes passed.",
+        "A runtime guard was necessary here because scripts/check-false-empty-state.mjs only understands the useEffect shape; these pages reach their empty state only after TanStack retries are exhausted, which no source-text check can establish.",
+        "588 vitest tests pass, eslint 0 errors over src/ and tests/, tsc -p tsconfig.app.json clean."
+      ],
+      "priority": 1,
+      "passes": true,
+      "notes": "Closes the first and largest slice of WEB-QA-031. The remaining pages on that story's list are lower-traffic; the guard now covers the seven that matter most."
+    },
+    {
+      "id": "WEB-UX-036",
+      "title": "72 of the ~73 undersized touch targets on every page were footer links, 16-20px tall",
+      "description": "As someone using the site on a phone, I need to be able to hit a footer link. Measured at 375px against a production build: every page carried ~73 interactive elements under this project's 44px standard, and 72 of them were in the footer.",
+      "acceptanceCriteria": [
+        "Footer links rendered at 16-20px tall in lists with 8px gaps. That fails this project's stated 44px touch-target standard AND WCAG 2.5.8's 24px AA minimum. It is also where the legal links live - Privacy, Terms, Cookie Policy, Accessibility, DMCA - which are exactly the ones someone goes looking for deliberately rather than stumbles onto.",
+        "I FIRST MEASURED THIS WRONG and corrected it before acting: the initial sweep flagged elements carrying .tap-area-44 (the header logo at 32x32, the cookie-banner close at 24x24) as broken. That utility supplies its own 44px hit region through an ::after overlay, which getBoundingClientRect on the element does not include. Verified by reading the pseudo-element's computed style under an emulated coarse pointer: display block, min-width and min-height 44px. The utility works; it is applied in only 6 places.",
+        "TWO THRESHOLDS, and the reason is scroll cost. The mobile footer was ALREADY 2871px tall at 375px, most of it SiteDirectory - 60-odd deep links whose job is internal linking and crawlability, not thumb navigation. A uniform 44px measured 3935px: another full screen of footer for links almost nobody taps. So .footer-link (the ~27 links people actually use) gets 44px and .footer-link-compact (the SEO directory) gets WCAG 2.5.8's 24px, which is what those 20px rows were failing. Measured after: 3431px.",
+        "Coarse pointers only, following .tap-area-44's precedent. Desktop footer height is unchanged at 1557px, verified at 1280px. Real padding rather than an ::after overlay, because these links stack a few pixels apart and overlapping hit regions would steal each other's taps - the collision that utility's own docblock warns about.",
+        "TWO LINKS DELIBERATELY LEFT: the Privacy Policy link inside the newsletter consent sentence (12px) and the mailto inside the postal address line (14px). WCAG 2.5.8 explicitly exempts a target 'in a sentence or its size is otherwise constrained by the line-height of non-target text', and .tap-area-44's docblock says not to use it there either.",
+        "The change also removed 27 repeated copies of the same class string from Footer.tsx.",
+        "GUARDED: tests/touch-targets.spec.ts in the smoke lane, measuring rendered boxes at 375px under a coarse pointer - computed layout behind a media query, which no source-text check can see. PROVED AGAINST THE PRE-FIX CODE: stashed the three files, rebuilt, ran it - it failed naming each link and its height ('Events' 20px < 44px, \"Today's Events\" 16px < 44px, ...).",
+        "588 vitest tests pass, eslint 0 errors over src/ and tests/, tsc -p tsconfig.app.json clean, all seven check scripts green.",
+        "NOT A DEFECT, recorded so nobody re-spends the time: no horizontal overflow at 375px on any of the 14 routes swept."
+      ],
+      "priority": 2,
+      "passes": true,
+      "notes": "Found with the headless harness from iteration 8, pointed at a stated standard nothing enforced."
+    },
+    {
+      "id": "WEB-UX-037",
+      "title": "The mobile footer is 3431px tall at 375px - about four screens of links below every page",
+      "description": "As someone on a phone who has scrolled to the bottom, I should not meet four screens of links. WEB-UX-036 made them tappable; it did not make the footer a sensible size, and it added 560px doing so.",
+      "acceptanceCriteria": [
+        "Measured at 375px on /events: 2871px before WEB-UX-036, 3431px after. Desktop is 1557px. The bulk is SiteDirectory (src/components/seo/SiteDirectory.tsx), a 60-odd link SEO block.",
+        "The obvious move is a <details> disclosure on mobile only, which keeps every link in the DOM for crawlers while giving humans a tidy footer. NOT DONE IN WEB-UX-036 ON PURPOSE: SiteDirectory lives under components/seo/ and exists for internal linking, and whether Google should be asked to weigh those links from behind a disclosure is a deliberate SEO call, not a layout tidy-up.",
+        "Decide that call first. If a disclosure is acceptable, the links stay crawlable and .footer-link-compact can go back to the full 44px inside it, since the scroll cost disappears when it is closed by default.",
+        "Check scripts/check-internal-links.mjs and check-hub-inventory.mjs still pass afterwards - both read the footer's links."
+      ],
+      "priority": 3,
+      "passes": false,
+      "notes": "FILED FROM THE LOOP, iteration 9. Needs an SEO decision before any code, which is why it was not folded into WEB-UX-036."
+    },
+    {
+      "id": "WEB-A11Y-002",
+      "title": "/auth had no h1 at all, and /events and /articles lost theirs whenever data was slow or failed - with /events serving an indexable 'Unable to Load Events'",
+      "description": "As a screen-reader user, and as a search engine, I need every page to state what it is. Three reader-facing routes did not.",
+      "acceptanceCriteria": [
+        "/auth had NO <h1> in the document. CardTitle renders an <h3>, so the sign-in page jumped straight to h3 with nothing above it. Fixed with an sr-only h1 rather than a visible one: the card's own title already carries the design and a second visible heading would say the same thing twice.",
+        "/events and /articles both put their loading AND error branches as early returns ABOVE the page's own <h1>, so a slow response or a failed one left the document with no main heading at all. Four branches fixed, not two - the loading case was found only because the guard's 3-second wait caught the pages mid-load.",
+        "THE SHARPEST PART IS SEO, not a11y: /events's error branch swapped the title to 'Unable to Load Events | Des Moines Insider' with a description saying we are having trouble - and left the page INDEXABLE. Googlebot crawling the site's main hub during a backend blip would index that, and keep it until the next crawl. Both error branches now carry noindex,follow, so outbound links still pass. This is the mirror of WEB-QA-032's VenueDetail case, where a transient failure wrongly applied noindex to a real page.",
+        "WHY NOTHING CAUGHT IT: axe's page-has-heading-one is a BEST-PRACTICE rule, outside the wcag2a/wcag2aa/wcag21a/wcag21aa tag set that tests/accessibility.spec.ts filters to. The suite covers 20+ routes and would never have reported this.",
+        "VERIFIED: all 12 routes render exactly one h1 after the fix, confirmed in a browser against a production build. GUARDED by tests/page-headings.spec.ts in the smoke lane, which also asserts that a page whose title announces a failure is not indexable. PROVED AGAINST THE PRE-FIX CODE: /events, /articles and /auth each failed naming the route and the count, plus '/events lost its h1 in the error state'.",
+        "588 vitest tests pass, eslint 0 errors over src/ and tests/, tsc clean, all seven check scripts green."
+      ],
+      "priority": 2,
+      "passes": true,
+      "notes": "Found by measuring rendered titles, descriptions and headings across 30 routes in a browser."
+    },
+    {
+      "id": "WEB-SEO-043",
+      "title": "Nine page titles exceed 60 characters and thirteen meta descriptions exceed 160",
+      "description": "As the platform owner, I need titles and descriptions that survive Google's truncation. Measured across 30 routes in a rendered browser.",
+      "acceptanceCriteria": [
+        "Titles over 60 chars (Google truncates around there): / (69), /sports (77), /stay (65), /guides (63), /pricing (63), /best-of (63), /events/today (68), /events/this-weekend (66). /sports at 77 is the worst - 'Sports in Des Moines - Teams, Schedules & Gameday Guides | Des Moines Insider'.",
+        "Descriptions over 160 chars: /, /restaurants (185), /attractions (206), /playgrounds (229), /articles (188), /guides (178), /privacy-policy (174), /accessibility (206), /events/free (189), /events/kids (214), /restaurants/open-now (165), /neighborhoods (174), /gamification (188). /playgrounds at 229 is the worst.",
+        "WEB-SEO-002 already trimmed one title from 84 chars, so this is a known class that came back. A length check belongs in the same place - a source-level script over the SEOHead props, or an assertion in the prerender-head check that already runs in CI.",
+        "The date-bearing titles (/events/today, /events/this-weekend) are over only because of the date suffix, so they need a shorter base rather than a shorter date.",
+        "/articles' title is 'Des Moines Insider: Events, Restaurants & Attractions' - generic and never mentions articles, which is a separate relevance problem from length."
+      ],
+      "priority": 3,
+      "passes": false,
+      "notes": "FILED FROM THE LOOP, iteration 10. Measured but not fixed: 22 strings across 20 files, and each one is a copywriting decision rather than a mechanical trim."
+    },
+    {
+      "id": "WEB-SEO-044",
+      "title": "Every shared link previewed as an 800x630-shaped crop of a square logo, under width/height that claimed 1200x630 - and the branded card was violet-to-pink",
+      "description": "As the platform owner of a site whose distribution is people sharing links, I need the social card to be the right shape and the right colours. It was neither.",
+      "acceptanceCriteria": [
+        "index.html hardcoded og:image and twitter:image to DMI-Logo.png, an 800x800 SQUARE, alongside og:image:width 1200 and og:image:height 630. Those numbers are what Facebook and Twitter lay the card out from, so declaring them wrongly is WORSE than omitting them - a 1.91:1 box reserved for a square image. Every page declares twitter:card=summary_large_image, which wants roughly 1.91:1.",
+        "The static shell is what actually matters here: most social crawlers do not run JS, and index.html's own comment records that Helmet APPENDS rather than replaces, so the shell's og:image wins. Confirmed by measurement - before the fix every one of 23 routes reported DMI-Logo.png even though SEOHead computes its own.",
+        "public/og-default.png is a real 1200x630 card (1.90:1, 87 kB) in the brand palette, built by scripts/generate-og-default.mjs so it can be regenerated when the wordmark or the colours move. It repaints the existing DMI-Logo-Text.png wordmark white using its own alpha as a mask, so the card carries the real brand letterforms rather than a substituted system font.",
+        "THE DYNAMIC CARD WAS OFF-BRAND TOO: supabase/functions/og-image/index.ts drew its background as a #7c3aed -> #db2777 gradient - violet to pink. Neither colour is in this brand (Des Moines blue #071e62, red #c30e31), and that is the image representing the site in every share of an event, restaurant, attraction or article. Now a navy field with the red as an accent, matching the static default so the two read as one system. NOT a blue-to-red gradient: mixing the two brand colours blends through purple, which is the palette the project's own guidance rules out - checked by rendering it and looking.",
+        "/pricing had NO Open Graph tags at all. It used a raw <Helmet> with title, description and keywords while every other page goes through SEOHead, so sharing the one page whose job is conversion produced a card with no title and no description. Routed through SEOHead.",
+        "brandConfig.ts carried a comment deferring exactly this - 'DMI-Logo.png is 800x800. A purpose-built 1200x630 card would preview better on every network; that is a design task, not a broken-link fix, so it is not done here.' That design task is now done and the comment records what changed.",
+        "VERIFIED: rebuilt and re-measured all 23 routes - every one now reports og-default.png, and /pricing reports a full og:title, og:description and og:url. check-asset-types passes on the new file. 588 vitest tests pass, eslint 0 errors, tsc clean, check-edge-types gained no errors, all seven check scripts green.",
+        "STILL NEEDS A HUMAN, and cannot be done from here: the og-image function's own header already asks for it - validate a live share with the Twitter Card validator and the Facebook Sharing Debugger once deployed, since neither can be reached from CI."
+      ],
+      "priority": 2,
+      "passes": true,
+      "notes": "Found by measuring og/twitter tags across 23 routes in a browser. The 800x800-under-1200x630 mismatch is the part that would never show up in code review - both the file and the numbers look reasonable on their own."
+    },
+    {
+      "id": "WEB-QUAL-014",
+      "title": "registerServiceWorker() unregisters service workers, and lazyInit calls it under a comment that says it registers one",
+      "description": "As the next person to ask 'does this site use a service worker?', I need the code to answer honestly. Reading the call site says yes; the function does the opposite.",
+      "acceptanceCriteria": [
+        "src/lib/performance.ts exports registerServiceWorker(), whose body calls getRegistrations().unregister() on every worker and caches.delete() on every cache. Its own comment says so. The name says the opposite.",
+        "src/lib/lazyInit.ts calls it under the comment 'Priority 3: Service worker (after 5 seconds)', inside an `if ('serviceWorker' in navigator && hostname !== 'localhost')` guard. Everything about that call site reads as registration.",
+        "Rename to something that states what it does - clearServiceWorkers() or unregisterLegacyServiceWorker() - and update lazyInit's comment. This is the dead-twin failure the dead-lib baseline's own header names, in a different shape: code that reads as the implementation of a thing that does not happen.",
+        "While there: the teardown runs THREE times over - the inline script in index.html on every page load, this function 5 seconds in, and public/sw.js's own self-destruct on activate. Two of the three are for clients that registered the old worker long ago and can be retired once enough time has passed; decide a date rather than leaving all three forever.",
+        "Then decide whether the site wants a service worker at all. It has a manifest, is installable, and public/offline.html was deleted in WEB-QUAL-007 because nothing could serve it."
+      ],
+      "priority": 3,
+      "passes": false,
+      "notes": "FILED FROM THE LOOP, iteration 12. Not folded into WEB-QUAL-007 because renaming an exported function touches call sites, and the retire-the-teardown part needs a human to pick a date."
+    },
+    {
+      "id": "WEB-SEC-035",
+      "title": "Nothing checked that the CSP's pinned script hashes still match index.html, and the failure is invisible everywhere except a real deploy",
+      "description": "As a contributor, I need to find out at PR time if I have broken an inline script, not from a user report weeks later. The CSP pins a SHA-256 per inline script and a comment asked people to regenerate them by hand.",
+      "acceptanceCriteria": [
+        "script-src in public/_headers has no 'unsafe-inline' - which is the right call, and is exactly what makes this sharp: a pinned hash is the ONLY thing letting an inline script run. Edit one without regenerating its hash and it is silently blocked.",
+        "THE FAILURE IS INVISIBLE IN EVERY ENVIRONMENT A CONTRIBUTOR USES. The dev server sends no CSP. `vite preview` sends no CSP. Cloudflare only applies _headers on a real deploy. So the first sign is production.",
+        "WHAT BREAKS: the three pinned scripts are the early error handler (Capacitor and browser-extension recovery), the service-worker teardown, and the Google Analytics consent loader. A blocked consent loader means analytics silently stops - the same class of silent failure WEB-BE-032 and WEB-QA-026 already record.",
+        "The _headers comment already said 'If you modify any inline script in index.html, regenerate hashes with: python3 -c ...'. A comment is not a check. scripts/check-csp-hashes.mjs is.",
+        "Runs on the SOURCE index.html rather than dist/, so it sits in the fast lane with no build. Verified first that none of the three blocks contains a %VITE_% placeholder, so the served bytes are the authored bytes.",
+        "It skips type=\"application/ld+json\" blocks. index.html has a fourth inline <script> of that type, and it is NOT a defect: browsers do not execute JSON-LD, so script-src's inline check does not apply. The _headers comment saying 'the 3 inline <script> blocks' is imprecise but not wrong.",
+        "It also fails if 'unsafe-inline' ever reappears in script-src, since that would make every pinned hash decorative.",
+        "VERIFIED against both failure modes by breaking them and restoring: editing the analytics loader reports the blocked script AND the now-stale pin, and prints the corrected hash list ready to paste; adding 'unsafe-inline' back is caught on its own.",
+        "MY OWN CHECK WAS WRONG FIRST and this is why the run matters: the initial regex matched the words 'script-src' and \"'unsafe-inline'\" inside the explanatory COMMENT above the header and reported a policy failure that did not exist. It now reads the directive off the Content-Security-Policy line only.",
+        "Wired into `npm run validate` and pr-checks.yml. 588 vitest tests pass, eslint 0 errors, all eight check scripts green.",
+        "CHECKED AND CURRENT: the three pinned hashes match index.html today, which also confirms this loop's own edits to index.html (og:image in WEB-SEO-044, theme-color in WEB-QUAL-007) touched only meta tags, not scripts."
+      ],
+      "priority": 2,
+      "passes": true,
+      "notes": "Found by verifying the hashes by hand after editing index.html twice in this loop, and noticing that nothing would have told me if I had got it wrong."
+    },
+    {
+      "id": "WEB-QA-033",
+      "title": "/search called the AI search function once per RENDER, not once per query - 82 requests in 16 seconds - and the page just looked empty while it did",
+      "description": "As a visitor searching the site, I need one search to be one search. As the platform owner, I need one search to be one AI call.",
+      "acceptanceCriteria": [
+        "useNLPSearch built its `search` callback with useCallback(..., [searchMutation]). useMutation returns a NEW object on every render, so `search` got a new identity every render - and SearchResults calls search(query) from an effect keyed on it. That is a loop: search -> state change -> re-render -> new identity -> effect re-runs -> search. The dependency is now `mutateAsync`, which TanStack Query keeps referentially stable.",
+        "MEASURED on /search?q=pizza against a production build: 82 calls to the nlp-search edge function in 16 seconds, all failing, before the fix. After: 1. Each call is an AI request against a function rate-limited to 100 per 15 minutes, so a single visitor searching once would trip the limit for that IP in about twenty seconds - and on a working backend, pay for every one of them.",
+        "THE PAGE LOOKED MERELY EMPTY. The mutation restarted before it could settle, so isError never rendered and the page sat in the loading skeleton forever - which has no text, so the results area read as blank. /search?q=pizza showed no results, no error and no message. Now it shows 'AI search is temporarily unavailable - showing keyword matches', which is what the code was always written to do.",
+        "SECOND, SEPARATE BUG: a query under three characters never reaches the search at all (useNLPSearch returns early), so isSearching, isError and parsedIntent were all false and EVERY branch of the results area was skipped. /search?q=x and ?q=ab rendered a search box and then nothing. They now say the search needs three characters.",
+        "A RENDERING ASSERTION WOULD NOT HAVE CAUGHT THE LOOP - the page looked the same either way. tests/search-request-loop.spec.ts counts REQUESTS. Proved against the pre-fix hook: 33 calls for one query, failing the assertion by name.",
+        "THE GUARD WAS BROKEN FIRST, and this is the part worth keeping: two overlapping page.route patterns meant the broad `**://*.supabase.co/**` could swallow the nlp-search request, leaving the counter at zero and the assertion passing on a page that never searched. It passed against reverted code, which is how it was caught. The counting route is now registered last and the test asserts the counter fired at all.",
+        "VERIFIED: all four /search edge states answer - empty query, one character, two characters, whitespace-only, and a real query. 588 vitest tests pass, eslint 0 errors, tsc clean, all eight check scripts green."
+      ],
+      "priority": 1,
+      "passes": true,
+      "notes": "Found by following up an edge case noticed in iteration 1 and never verified: that /search?q=x rendered nothing. The infinite request loop was underneath it and is much the larger defect."
+    },
+    {
+      "id": "WEB-PERF-043",
+      "title": "A request budget per route, because a render loop is invisible to any assertion about the DOM",
+      "description": "As a contributor, I need the next WEB-QA-033 to fail a PR rather than reach production. That defect fired the AI search function 82 times in 16 seconds and the page looked merely empty while it did.",
+      "acceptanceCriteria": [
+        "Generalises the single-route guard from WEB-QA-033 to eight main routes: no backend endpoint may be called more than 20 times on one page load. The defect class is an effect keyed on a callback whose identity changes every render, and no DOM assertion can see it - the page renders the same either way.",
+        "SWEPT FIRST FOR SIBLINGS, and found none. A source scan over 89 useMutation/useQuery bindings across 34 files found no other dependency array holding a whole query or mutation object; useNLPSearch was the only one. A runtime sweep of seventeen routes found no pathological pattern either.",
+        "EVERY COUNT IS EXPLAINED, which is what makes the budget honest rather than arbitrary. With the backend unreachable TanStack retries twice, so one query is three requests. The busiest single endpoint across all seventeen routes was rpc/get_active_ads at 6 on / and /restaurants - CHECKED IN SOURCE rather than assumed: those pages render two and three <AdBanner> components with DIFFERENT placements (top_banner and below_fold; featured_spot, below_fold and sidebar), and the query key includes the placement, so they are legitimately separate queries. Nothing else exceeded 11 for a whole table.",
+        "20 leaves room for a page to grow a section or two and still catches a loop by an order of magnitude.",
+        "The backend is cut deliberately: it makes the run independent of data, and a failing query is also the worst case, being what spins fastest and what a render loop reaches soonest.",
+        "PROVED against the WEB-QA-033 defect by restoring the old dependency and rebuilding: 'called more than 20 times on /search?q=live%20music: nlp-search x34'.",
+        "A FIRST ATTEMPT AT THAT PROOF WAS WORTHLESS and is recorded because the failure mode is easy to repeat: `git stash push` on a file whose fix was already COMMITTED stashes nothing, so the revert never happened and the test passed against the fixed code. Reverting has to edit the file, not stash it.",
+        "588 vitest tests pass, eslint 0 errors, tsc clean, all eight check scripts and check-dead-lib green."
+      ],
+      "priority": 2,
+      "passes": true,
+      "notes": "Final iteration of the loop. Nothing new was broken - this is the durable form of what iteration 14 found by hand."
     }
   ]
 }

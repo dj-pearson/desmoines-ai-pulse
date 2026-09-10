@@ -151,6 +151,44 @@ jobs:
       - name: Internal links resolve to a route
         run: npm run check-internal-links
 
+      # WEB-QA-029. events.date is an instant, so `new Date(x).toLocaleDateString()`
+      # renders it in the READER's timezone. A 10pm Central show is 03:00Z the next
+      # day, which is how /music, /sports and the venue and team pages showed an
+      # Eastern reader the wrong weekday and the wrong day number. The same call
+      # sites printed a time unconditionally, turning the 19:31:58 no-time sentinel
+      # into a confident "7:31 PM". Zero-tolerance on reader-facing surfaces; admin
+      # and CMS screens are excluded, where browser-local is the right answer.
+      - name: Event dates render in Central Time
+        run: npm run check-event-time-tz
+
+      # WEB-QA-030. Seven SEO landing pages logged a failed Supabase query and
+      # then set their list to [], so the visitor was shown "No Events Scheduled
+      # for Today" - a confident answer to a question the page could not answer.
+      # These pages fetch in a useEffect, so unlike the TanStack hubs they got no
+      # retries either: the false empty state stood until a page reload.
+      - name: A failed fetch is not an empty state
+        run: npm run check-false-empty-state
+
+      # WEB-PERF-040. OptimizedImage has supported `priority` since it was
+      # written and no caller passed it, and SocialEventCard - which renders
+      # every event listing on the site - was hardcoded loading="lazy" with no
+      # way to opt out. The LCP element on the hubs and every SEO landing page
+      # was therefore lazily loaded. This guards the three detail-page heroes,
+      # where the LCP element is unambiguous.
+      - name: LCP hero images are eager and high priority
+        run: npm run check-lcp-priority
+
+      # WEB-SEC-035. script-src in public/_headers has no 'unsafe-inline', so a
+      # pinned SHA-256 is the ONLY thing that lets each inline script in
+      # index.html run. Editing one without regenerating its hash blocks it
+      # silently, and ONLY on a real Cloudflare deploy - the dev server and
+      # vite preview send no CSP at all. The three scripts are the early error
+      # handler, the service-worker teardown and the analytics consent loader.
+      # The _headers comment already told people to regenerate by hand; a
+      # comment is not a check.
+      - name: CSP hashes match the inline scripts
+        run: npm run check-csp-hashes
+
       # The old domain and the old brand name must not reappear in shipped copy.
       - name: Check for brand leaks
         run: npm run check-brand-leak

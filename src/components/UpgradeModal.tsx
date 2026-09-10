@@ -171,7 +171,7 @@ export function UpgradeModal({
       <DialogContent className="sm:max-w-xl">
         <DialogHeader>
           <DialogTitle className="flex items-center gap-2 text-xl">
-            <SpriteIcon name="sparkles" className="h-5 w-5 text-amber-500" />
+            <SpriteIcon name="sparkles" className="h-5 w-5 text-amber-700 dark:text-amber-500" />
             Unlock Premium Features
           </DialogTitle>
           <DialogDescription>
@@ -230,17 +230,17 @@ export function UpgradeModal({
               className={cn(
                 "relative p-4 rounded-lg border-2 text-left transition-all",
                 selectedPlan === "insider"
-                  ? "border-amber-500 bg-amber-50 dark:bg-amber-950/20"
-                  : "border-muted hover:border-amber-300"
+                  ? "border-amber-700 bg-amber-50 dark:border-amber-500 dark:bg-amber-950/20"
+                  : "border-muted hover:border-amber-700/40"
               )}
             >
               {selectedPlan === "insider" && (
                 <div className="absolute -top-2 -right-2">
-                  <Check className="h-5 w-5 text-amber-500 bg-white dark:bg-background rounded-full" />
+                  <Check className="h-5 w-5 text-amber-700 dark:text-amber-500 bg-white dark:bg-background rounded-full" />
                 </div>
               )}
               <div className="flex items-center gap-2 mb-2">
-                <SpriteIcon name="sparkles" className="h-4 w-4 text-amber-500" />
+                <SpriteIcon name="sparkles" className="h-4 w-4 text-amber-700 dark:text-amber-500" />
                 <span className="font-semibold">Insider</span>
               </div>
               <div className="text-2xl font-bold">
@@ -263,20 +263,20 @@ export function UpgradeModal({
               className={cn(
                 "relative p-4 rounded-lg border-2 text-left transition-all",
                 selectedPlan === "vip"
-                  ? "border-purple-500 bg-purple-50 dark:bg-purple-950/20"
-                  : "border-muted hover:border-purple-300"
+                  ? "border-secondary bg-secondary/5"
+                  : "border-muted hover:border-secondary/40"
               )}
             >
-              <Badge className="absolute -top-2 left-1/2 -translate-x-1/2 bg-gradient-to-r from-purple-500 to-pink-500 text-white border-0 text-[10px]">
+              <Badge className="absolute -top-2 left-1/2 -translate-x-1/2 bg-secondary text-secondary-foreground border-0 text-[10px]">
                 BEST VALUE
               </Badge>
               {selectedPlan === "vip" && (
                 <div className="absolute -top-2 -right-2">
-                  <Check className="h-5 w-5 text-purple-500 bg-white dark:bg-background rounded-full" />
+                  <Check className="h-5 w-5 text-secondary bg-white dark:bg-background rounded-full" />
                 </div>
               )}
               <div className="flex items-center gap-2 mb-2">
-                <Crown className="h-4 w-4 text-purple-500" />
+                <Crown className="h-4 w-4 text-secondary" />
                 <span className="font-semibold">VIP</span>
               </div>
               <div className="text-2xl font-bold">
@@ -298,12 +298,12 @@ export function UpgradeModal({
             <h4 className="font-medium mb-3 flex items-center gap-2">
               {selectedPlan === "insider" ? (
                 <>
-                  <SpriteIcon name="sparkles" className="h-4 w-4 text-amber-500" />
+                  <SpriteIcon name="sparkles" className="h-4 w-4 text-amber-700 dark:text-amber-500" />
                   Insider Features
                 </>
               ) : (
                 <>
-                  <Crown className="h-4 w-4 text-purple-500" />
+                  <Crown className="h-4 w-4 text-secondary" />
                   VIP Features (includes Insider)
                 </>
               )}
@@ -328,8 +328,8 @@ export function UpgradeModal({
               className={cn(
                 "w-full",
                 selectedPlan === "insider"
-                  ? "bg-gradient-to-r from-amber-500 to-orange-500 hover:from-amber-600 hover:to-orange-600"
-                  : "bg-gradient-to-r from-purple-500 to-pink-500 hover:from-purple-600 hover:to-pink-600"
+                  ? "bg-amber-700 text-white hover:bg-amber-800"
+                  : "bg-secondary text-secondary-foreground hover:bg-secondary/90"
               )}
             >
               <Link

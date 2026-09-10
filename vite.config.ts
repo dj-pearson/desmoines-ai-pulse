@@ -88,6 +88,18 @@ function removeLazyPreloads(): Plugin {
      * of 3D engine, rich-text editor, Recharts and D3 preloads on first paint.
      *
      * Editing the emitted asset here is the only stage where those links exist.
+     *
+     * WEB-PERF-042: stripping the HINT was only half of it. A forced manual
+     * chunk is also a hard dependency edge, so Rollup emitted a bare
+     * `import "./vendor-three.js"` into every route chunk and the browser
+     * fetched it anyway - preload link or not. vendor-three, vendor-recharts
+     * and vendor-d3 are no longer forced (see manualChunks below), so those
+     * three patterns are now dead. They stay listed because a future manual
+     * chunk under any of those names would need the same treatment, and
+     * because the stripped === 0 warning below only means something if the
+     * remaining patterns - vendor-maps, vendor-editor, HeroCityLite - still
+     * match. HeroCityLite is the important one now: Three.js travels with it,
+     * so that chunk is ~800 KB and must never be preloaded.
      */
     generateBundle(_options, bundle) {
       const PATTERNS = [
@@ -113,13 +125,34 @@ function removeLazyPreloads(): Plugin {
         asset.source = html;
       }
 
-      // Loud on regression: if the chunk names change, this silently stops
-      // working again, which is exactly how it went unnoticed before.
-      if (stripped === 0) {
-        this.warn(
-          "remove-lazy-preloads stripped 0 preload links — chunk names may have changed; the critical-path budget is unguarded"
-        );
+      // Loud on regression. This used to warn when it stripped NOTHING, which
+      // was a proxy for "the chunk names changed". Since WEB-PERF-042 removed
+      // the forced vendor-three / vendor-recharts / vendor-d3 chunks there is
+      // usually nothing left to strip, so that condition now fires on success -
+      // a warning on every good build, which is how people learn to ignore
+      // warnings. It asserts the actual budget instead: nothing heavy may be
+      // preloaded from the entry HTML, whatever it happens to be called.
+      const HEAVY_PRELOAD_BYTES = 150 * 1024;
+      for (const asset of Object.values(bundle)) {
+        if (asset.type !== "asset" || !asset.fileName.endsWith(".html")) continue;
+        const preloaded = String(asset.source).match(
+          /<link rel="modulepreload"[^>]*href="\/assets\/([^"]+)"/g
+        ) ?? [];
+        for (const link of preloaded) {
+          const name = link.match(/assets\/([^"]+)/)?.[1];
+          const chunk = name ? bundle[`assets/${name}`] : undefined;
+          if (!chunk || chunk.type !== "chunk") continue;
+          const bytes = Buffer.byteLength(chunk.code);
+          if (bytes > HEAVY_PRELOAD_BYTES) {
+            this.warn(
+              `remove-lazy-preloads: ${name} is ${(bytes / 1024).toFixed(0)} KB ` +
+                `and is preloaded from ${asset.fileName}. That is first-paint ` +
+                `weight - add a pattern above or stop forcing it into a chunk.`
+            );
+          }
+        }
       }
+      void stripped;
     },
   };
 }
@@ -254,18 +287,32 @@ export default defineConfig(({ command, mode }) => {
           // a site stuck on the spinner. Checked rather than assumed: the smoke
           // suite mounts every public route in App.tsx and is 80 passed.
 
-          // Three.js + React Three Fiber - separate chunk so it's only loaded
-          // when HeroCityLite renders (lazy-loaded, deferred via requestIdleCallback).
-          // Without this, Three.js gets bundled into the HeroCityLite page chunk
-          // which Vite may decide to preload.
-          if (
-            id.includes("/three/") ||
-            id.includes("@react-three/") ||
-            id.includes("react-three") ||
-            id.includes("react-reconciler")
-          ) {
-            return "vendor-three";
-          }
+          // Three.js, recharts and d3 are deliberately NOT forced into chunks,
+          // for the same all-or-nothing reason spelled out for Radix above.
+          //
+          // vendor-three carried the comment "separate chunk so it's only loaded
+          // when HeroCityLite renders". MEASURED: the opposite happened. A forced
+          // chunk becomes a hard dependency edge, so Rollup emitted a bare
+          // `import "./vendor-three.js"` into EVERY route chunk - the browser had
+          // to fetch and evaluate it before running the page module. Three.js
+          // shipped on every route, including /acceptable-use-policy, a page of
+          // prose whose own code is 2.7 KB gz. Same for vendor-recharts and
+          // vendor-d3, which are only reached by lazy admin analytics.
+          //
+          // Per-route JS beyond the entry chunks, gzipped, before -> after:
+          //   /acceptable-use-policy  323.8 -> 3.1
+          //   / (home)                287.5 -> 77.2
+          //   /events                 472.4 -> 268.8
+          //   /restaurants            449.5 -> 246.0
+          //   /restaurants/:id        454.9 -> 251.2
+          //   /playgrounds            396.3 -> 192.8
+          // The entry itself is unchanged at ~185 KB gz. Three.js now travels
+          // with HeroCityLite's own dynamic chunk, which is what the original
+          // comment wanted; recharts and d3 travel with the admin pages.
+          //
+          // Removing a manual chunk cannot reintroduce the circular-chunk crash
+          // described above - that failure comes from forcing modules together,
+          // not from letting Rollup place them.
 
           // Maps - Leaflet (DO NOT BUNDLE - causes preload issues)
           // By returning undefined, we let each lazy-loaded map component
@@ -275,16 +322,10 @@ export default defineConfig(({ command, mode }) => {
             return undefined;
           }
 
-          // Charts - Don't bundle together to avoid circular deps
-          // Let Vite handle them naturally
-          if (id.includes("recharts") && !id.includes("d3")) {
-            return "vendor-recharts";
-          }
-
-          // D3 utilities - separate from recharts
-          if (id.includes("d3-")) {
-            return "vendor-d3";
-          }
+          // Charts: see the note above. The comment here used to say "Don't
+          // bundle together to avoid circular deps / Let Vite handle them
+          // naturally" while the code immediately below it did the opposite.
+          // Now the code matches the comment.
 
           // Forms and validation - DO NOT manually chunk these
           // react-hook-form, zod, and @hookform/resolvers have circular dependency

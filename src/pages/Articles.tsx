@@ -17,14 +17,41 @@ import { FAQSection } from '@/components/FAQSection';
 import { BackToTop } from '@/components/BackToTop';
 import { Breadcrumbs } from '@/components/ui/breadcrumbs';
 import { SpriteIcon } from "@/components/ui/SpriteIcon";
+import { useUrlFilters } from '@/hooks/useUrlFilters';
+import NoIndexMeta from '@/components/schema/NoIndexMeta';
 
 const Articles: React.FC = () => {
   const { articles, loading, error, loadArticles } = useArticles();
-  const [searchQuery, setSearchQuery] = useState('');
-  const [selectedCategory, setSelectedCategory] = useState('all');
-  const [sortBy, setSortBy] = useState('newest');
+  // URL-synced filters (WEB-UX-035). These were local React state, so a
+  // filtered view could not be shared or bookmarked, and reading an article
+  // and pressing Back returned to an unfiltered list. viewMode and showFilters
+  // stay local: they are chrome, not a description of what is being shown.
+  const { getStr, setParam } = useUrlFilters();
+  const urlSearch = getStr('q', '');
+  const selectedCategory = getStr('category', 'all');
+  const sortBy = getStr('sort', 'newest');
+
+  const setSelectedCategory = (v: string) => setParam('category', v, { def: 'all' });
+  const setSortBy = (v: string) => setParam('sort', v, { def: 'newest' });
+
+  // Local immediate input, mirrored to the URL debounced with replace so
+  // typing does not stack a history entry per keystroke.
+  const [searchQuery, setSearchQuery] = useState(() => urlSearch);
   const [viewMode, setViewMode] = useState('grid');
   const [showFilters, setShowFilters] = useState(true); // Show filters by default
+
+  useEffect(() => {
+    if (searchQuery === urlSearch) return;
+    const timer = setTimeout(
+      () => setParam('q', searchQuery, { def: '', replace: true }),
+      300,
+    );
+    return () => clearTimeout(timer);
+  }, [searchQuery, urlSearch, setParam]);
+
+  useEffect(() => {
+    setSearchQuery(urlSearch);
+  }, [urlSearch]);
 
   // Get unique categories from published articles
   const categories = Array.from(new Set(articles.filter(article => article.status === 'published').map(article => article.category)));
@@ -82,6 +109,10 @@ const Articles: React.FC = () => {
         <Header />
         <div className="min-h-screen bg-background">
           <div className="container mx-auto px-4 py-8">
+            {/* WEB-A11Y-002: the loading branch is an early return above the
+                page's own <h1>, so a slow response leaves the document with no
+                main heading. */}
+            <h1 className="sr-only">Des Moines stories and insights</h1>
             <CardsGridSkeleton count={6} label="Loading articles..." />
           </div>
         </div>
@@ -93,9 +124,13 @@ const Articles: React.FC = () => {
   if (error) {
     return (
       <>
+        {/* WEB-A11Y-002: same as EventsPage - this early return drops the
+            page's own <h1>, and a transient failure must not be indexed. */}
+        <NoIndexMeta />
         <Header />
         <div className="min-h-screen bg-background">
           <div className="container mx-auto px-4 py-8">
+            <h1 className="sr-only">Des Moines stories and insights</h1>
             <ErrorState error={error} onRetry={loadArticles} />
           </div>
         </div>

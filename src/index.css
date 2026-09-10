@@ -280,6 +280,61 @@ All colors MUST be HSL. Touch targets minimum 44px.
     }
   }
 
+  /**
+   * Footer link rows sized for a thumb.
+   *
+   * WEB-UX-036. Measured at 375px against a production build: 72 of the ~73
+   * interactive elements under 44px on EVERY page were footer links, at 16-20px
+   * tall in lists with 8px gaps. That fails this project's own 44px standard and
+   * WCAG 2.5.8's 24px AA minimum, and it is where the legal links live - Privacy,
+   * Terms, Cookie Policy, Accessibility, DMCA - which are exactly the links
+   * someone goes hunting for deliberately.
+   *
+   * Coarse pointers only, like .tap-area-44 above. A mouse does not need it and
+   * the desktop footer keeps its compact rhythm. Real padding rather than that
+   * utility's ::after overlay, because these links are stacked a few pixels
+   * apart and overlapping hit regions would steal each other's taps - which is
+   * the collision its own docblock warns about.
+   *
+   * The list gap goes to zero on coarse because the row padding now provides
+   * the separation; without that the footer would grow by ~8px per link.
+   *
+   * TWO SIZES, and the reason is scroll cost. The mobile footer was already
+   * 2871px tall at 375px, most of it SiteDirectory - 60-odd deep links whose
+   * job is internal linking and crawlability, not thumb navigation. Sizing
+   * those to 44px measured 3935px, another full screen of footer for links
+   * almost nobody taps. So .footer-link (the ~27 links people actually use -
+   * Explore, Company, Legal) gets the project's 44px, and .footer-link-compact
+   * (the SEO directory) gets 24px, which is the WCAG 2.5.8 AA minimum and what
+   * those 20px rows were failing. Measured at 375px: 2871px before, 3431px
+   * after, rather than the 3935px a uniform 44px produced.
+   */
+  .footer-link {
+    @apply text-neutral-400 hover:text-white transition-colors text-sm;
+  }
+
+  .footer-link-compact {
+    @apply text-neutral-400 hover:text-white transition-colors text-sm;
+  }
+
+  @media (pointer: coarse) {
+    .footer-link {
+      display: flex;
+      align-items: center;
+      min-height: 44px;
+    }
+
+    .footer-link-compact {
+      display: flex;
+      align-items: center;
+      min-height: 24px;
+    }
+
+    .footer-link-list > * + * {
+      margin-top: 0;
+    }
+  }
+
   /* Mobile-optimized spacing */
   .mobile-padding {
     @apply px-4 py-3;

@@ -4,6 +4,7 @@ import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import { SpriteIcon } from "@/components/ui/SpriteIcon";
+import { formatInCentralTime } from "@/lib/timezone";
 
 interface NeighborhoodData {
   description: string;
@@ -190,7 +191,7 @@ export default function NeighborhoodGuide({
                     <CardTitle className="text-lg">{event.title}</CardTitle>
                     <div className="flex items-center text-sm text-muted-foreground">
                       <SpriteIcon name="calendar" className="h-4 w-4 mr-1" />
-                      {new Date(event.start_date).toLocaleDateString()}
+                      {formatInCentralTime(event.start_date, 'MMM d, yyyy')}
                     </div>
                   </CardHeader>
                   <CardContent>

@@ -62,6 +62,15 @@ interface RestaurantCardProps {
     created_at?: string;
   };
   variant?: "default" | "compact" | "featured";
+  /**
+   * True for the cards above the fold on first paint, which loads the image
+   * eagerly at high fetch priority instead of lazily.
+   *
+   * WEB-PERF-040. OptimizedImage has always supported this and NO caller in
+   * the app passed it, so every image on the site - the LCP element on the
+   * hubs included - was loading="lazy" with no priority hint.
+   */
+  priority?: boolean;
 }
 
 function StarRating({ rating }: { rating: number }) {
@@ -92,7 +101,7 @@ function StarRating({ rating }: { rating: number }) {
   return <div className="flex items-center gap-0.5">{stars}</div>;
 }
 
-function RestaurantCardComponent({ restaurant, variant = "default" }: RestaurantCardProps) {
+function RestaurantCardComponent({ restaurant, variant = "default", priority = false }: RestaurantCardProps) {
   const [imageError, setImageError] = useState(false);
   const gradient = getCuisineGradient(restaurant.cuisine);
   const showImage = restaurant.image_url && !imageError;
@@ -142,6 +151,7 @@ function RestaurantCardComponent({ restaurant, variant = "default" }: Restaurant
               className="transition-transform duration-200 group-hover:scale-105 object-cover"
               containerClassName="absolute inset-0"
               sizes="(max-width: 640px) 100vw, (max-width: 1024px) 50vw, 33vw"
+              priority={priority}
               onError={() => setImageError(true)}
             />
           ) : (

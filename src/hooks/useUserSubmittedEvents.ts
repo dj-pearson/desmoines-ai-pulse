@@ -2,7 +2,7 @@ import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
 import { supabase } from "@/integrations/supabase/client";
 import { useAuth } from "./useAuth";
 import { handleError } from "@/lib/errorHandler";
-import { formatInCentralTime, CENTRAL_TIMEZONE } from "@/lib/timezone";
+import { formatInCentralTime, CENTRAL_TIMEZONE, formatEventPart } from "@/lib/timezone";
 
 export interface UserSubmittedEvent {
   id: string;
@@ -105,7 +105,7 @@ export function useSubmitEvent() {
         notificationType: 'event_submitted',
         eventId: data.id,
         eventTitle: data.title,
-        eventDate: data.date ? new Date(data.date).toLocaleDateString() : undefined,
+        eventDate: formatEventPart(data, 'MMM d, yyyy') ?? undefined,
         eventVenue: data.venue || undefined,
         eventCategory: data.category || undefined,
         submitterEmail: user.email || undefined,

@@ -318,8 +318,27 @@ export default function SearchResults() {
                 </div>
               )}
 
+              {/* WEB-QA-033. A query of one or two characters never reaches
+                  the search - useNLPSearch returns early under three - so
+                  isSearching, isError and parsedIntent were all false and
+                  EVERY branch below was skipped. /search?q=x rendered a search
+                  box and then nothing at all: no results, no message, no hint
+                  that the query was too short. */}
+              {!isError && !isSearching && query.trim().length < 3 && (
+                <Card>
+                  <CardContent className="py-12 text-center">
+                    <Search className="mx-auto mb-4 h-12 w-12 text-muted-foreground" />
+                    <h3 className="mb-2 text-lg font-semibold">Keep typing</h3>
+                    <p className="text-muted-foreground">
+                      Searches need at least three characters. Try describing what
+                      you are after, like &quot;live music this weekend&quot;.
+                    </p>
+                  </CardContent>
+                </Card>
+              )}
+
               {/* Empty */}
-              {!isError && !isSearching && parsedIntent && !hasResults && (
+              {!isError && !isSearching && query.trim().length >= 3 && parsedIntent && !hasResults && (
                 <Card>
                   <CardContent className="py-12 text-center">
                     <Search className="mx-auto mb-4 h-12 w-12 text-muted-foreground" />

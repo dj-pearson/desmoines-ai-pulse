@@ -18,6 +18,8 @@ import { Baby } from "lucide-react";
 import { getCanonicalUrl } from "@/lib/brandConfig";
 import { useDocumentTitle } from "@/hooks/useDocumentTitle";
 import { Breadcrumbs } from "@/components/ui/breadcrumbs";
+import { useReloadableFetch } from "@/hooks/useReloadableFetch";
+import { ErrorState } from "@/components/ui/error-state";
 
 interface EventItem {
   id: string;
@@ -36,6 +38,7 @@ interface EventItem {
 export default function KidsEvents() {
   const [events, setEvents] = useState<EventItem[]>([]);
   const [isLoading, setIsLoading] = useState(true);
+  const { error: loadError, setError: setLoadError, reloadKey, retry } = useReloadableFetch();
   useDocumentTitle("Kids Events");
 
   useEffect(() => {
@@ -55,12 +58,15 @@ export default function KidsEvents() {
 
         if (error) {
           log.error('fetchKidsEvents', 'Error fetching kids events', { error });
+          setLoadError(error);
           setEvents([]);
         } else {
+          setLoadError(null);
           setEvents(data || []);
         }
       } catch (error) {
         log.error('fetchKidsEvents', 'Unexpected error in fetchKidsEvents', { error });
+        setLoadError(error);
         setEvents([]);
       } finally {
         setIsLoading(false);
@@ -68,7 +74,7 @@ export default function KidsEvents() {
     };
 
     fetchKidsEvents();
-  }, []);
+  }, [reloadKey]);
 
   const kidsEvents = events || [];
   const freeKidsEvents = kidsEvents.filter(e =>
@@ -259,7 +265,9 @@ export default function KidsEvents() {
         </Card>
 
         {/* Events List */}
-        {isLoading ? (
+        {!isLoading && loadError ? (
+          <ErrorState error={loadError} onRetry={retry} />
+        ) : isLoading ? (
           <div className="grid gap-6 md:grid-cols-2 lg:grid-cols-3">
             {[...Array(6)].map((_, i) => (
               <div key={i} className="animate-pulse">
@@ -275,8 +283,9 @@ export default function KidsEvents() {
               Upcoming Family Events ({kidsEvents.length})
             </h2>
             <div className="grid gap-6 md:grid-cols-2 lg:grid-cols-3">
-              {kidsEvents.map((event) => (
+              {kidsEvents.map((event, index) => (
                 <SocialEventCard
+                  priority={index < 3}
                   key={event.id}
                   event={event}
                   socialData={batchSocialData?.[event.id]}

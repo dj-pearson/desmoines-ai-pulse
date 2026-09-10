@@ -1,5 +1,5 @@
 import { useParams, Link } from 'react-router-dom';
-import { createEventSlugWithCentralTime } from "@/lib/timezone";
+import { createEventSlugWithCentralTime, formatEventPart, formatEventTimeOnly } from "@/lib/timezone";
 import { RouteCanonical } from "@/components/RouteCanonical";
 import Header from '@/components/Header';
 import Footer from '@/components/Footer';
@@ -11,6 +11,7 @@ import { Skeleton } from '@/components/ui/skeleton';
 import { Button } from '@/components/ui/button';
 import { Navigation } from "lucide-react";
 import { SpriteIcon } from "@/components/ui/SpriteIcon";
+import { ErrorState } from '@/components/ui/error-state';
 
 const VENUE_TYPE_LABELS: Record<string, string> = {
   arena: 'Arena',
@@ -23,8 +24,8 @@ const VENUE_TYPE_LABELS: Record<string, string> = {
 
 export default function VenueDetail() {
   const { slug } = useParams<{ slug: string }>();
-  const { data: venue, isLoading } = useVenue(slug || '');
-  const { data: events } = useVenueEvents(venue?.name || '');
+  const { data: venue, isLoading, error: venueError, refetch: refetchVenue } = useVenue(slug || '');
+  const { data: events, error: eventsError, refetch: refetchEvents } = useVenueEvents(venue?.name || '');
 
   if (isLoading) {
     return (
@@ -36,6 +37,27 @@ export default function VenueDetail() {
           <Skeleton className="h-8 w-64 mb-4" />
           <Skeleton className="h-48 w-full mb-4" />
           <Skeleton className="h-32 w-full" />
+        </div>
+        <Footer />
+      </div>
+    );
+  }
+
+  /**
+   * WEB-QA-032. A failed load used to fall straight through to the not-found
+   * branch below, which renders "venue not found" AND a noindex. On a real
+   * venue whose page merely failed to load that is a deindexing risk, not
+   * just bad copy - Googlebot hitting the site during a backend blip would be
+   * told the page should not be indexed. A failure and a missing row are
+   * different answers and get different pages.
+   */
+  if (venueError) {
+    return (
+      <div className="min-h-screen bg-background">
+        <RouteCanonical path={`/music/venues/${slug}`} />
+        <Header />
+        <div className="container mx-auto px-4 py-16">
+          <ErrorState error={venueError} onRetry={() => refetchVenue()} />
         </div>
         <Footer />
       </div>
@@ -151,18 +173,18 @@ export default function VenueDetail() {
                       <CardContent className="p-4 flex items-center gap-4">
                         <div className="text-center min-w-[60px]">
                           <p className="text-xs text-muted-foreground uppercase">
-                            {new Date(event.date).toLocaleDateString([], { month: 'short' })}
+                            {formatEventPart(event, 'MMM')}
                           </p>
                           <p className="text-2xl font-bold">
-                            {new Date(event.date).getDate()}
+                            {formatEventPart(event, 'd')}
                           </p>
                         </div>
                         <div className="flex-1">
                           <h3 className="font-semibold">{event.title}</h3>
                           <p className="text-sm text-muted-foreground">
-                            {new Date(event.date).toLocaleDateString([], { weekday: 'long' })}
+                            {formatEventPart(event, 'EEEE')}
                             {' · '}
-                            {new Date(event.date).toLocaleTimeString([], { hour: 'numeric', minute: '2-digit' })}
+                            {formatEventTimeOnly(event) ?? 'Time TBA'}
                           </p>
                         </div>
                         {event.price && <Badge variant="outline">{event.price}</Badge>}
@@ -172,7 +194,11 @@ export default function VenueDetail() {
                 ))}
               </div>
             ) : (
-              <p className="text-muted-foreground">No upcoming events listed for this venue.</p>
+              eventsError ? (
+                <ErrorState error={eventsError} compact onRetry={refetchEvents} />
+              ) : (
+                <p className="text-muted-foreground">No upcoming events listed for this venue.</p>
+              )
             )}
           </section>
         </div>

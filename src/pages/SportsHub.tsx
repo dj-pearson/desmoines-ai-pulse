@@ -1,5 +1,5 @@
 import { Link } from 'react-router-dom';
-import { createEventSlugWithCentralTime } from "@/lib/timezone";
+import { createEventSlugWithCentralTime, formatEventPart, formatEventTimeOnly, centralDayStartUtcISO } from "@/lib/timezone";
 import Header from '@/components/Header';
 import Footer from '@/components/Footer';
 import SEOHead from '@/components/SEOHead';
@@ -16,12 +16,14 @@ import { Skeleton } from '@/components/ui/skeleton';
 import { Trophy } from "lucide-react";
 import { EVENT_LIST_COLUMNS } from '@/lib/listColumns';
 import { SpriteIcon } from "@/components/ui/SpriteIcon";
+import { ErrorState } from '@/components/ui/error-state';
 
 function useSportsEvents(timeframe: 'today' | 'week') {
-  const now = new Date();
-  const todayStart = new Date(now.getFullYear(), now.getMonth(), now.getDate()).toISOString();
-  const todayEnd = new Date(now.getFullYear(), now.getMonth(), now.getDate() + 1).toISOString();
-  const weekEnd = new Date(now.getFullYear(), now.getMonth(), now.getDate() + 7).toISOString();
+  // WEB-QA-029: these were midnight in the READER's timezone, so "Today"
+  // asked for the wrong window for anyone outside Central.
+  const todayStart = centralDayStartUtcISO(0);
+  const todayEnd = centralDayStartUtcISO(1);
+  const weekEnd = centralDayStartUtcISO(7);
 
   return useQuery({
     queryKey: ['sports-events', timeframe],
@@ -58,8 +60,20 @@ const SPORT_ICONS: Record<string, string> = {
 
 export default function SportsHub() {
   const { data: teams, isLoading: teamsLoading } = useTeams();
-  const { data: todayGames } = useSportsEvents('today');
-  const { data: weekGames } = useSportsEvents('week');
+  const { data: todayGames, error: todayError, refetch: refetchToday } = useSportsEvents('today');
+  const { data: weekGames, error: weekError, refetch: refetchWeek } = useSportsEvents('week');
+
+  /**
+   * WEB-QA-032. These queries always exposed isError and refetch and the page
+   * read neither, so with the backend unreachable /sports said "No games scheduled for today" -
+   * stated as fact. Confirmed in a real browser against a production build.
+   * The sections share one backend, so one error banner beats three.
+   */
+  const gamesError = todayError ?? weekError ?? null;
+  const retryGames = () => {
+    refetchToday();
+    refetchWeek();
+  };
 
   const canonicalUrl = getCanonicalUrl('/sports');
   const pageDescription =
@@ -158,7 +172,7 @@ export default function SportsHub() {
                         )}
                         {event.date && (
                           <p className="text-sm text-muted-foreground mt-1">
-                            {new Date(event.date).toLocaleTimeString([], { hour: 'numeric', minute: '2-digit' })}
+                            {formatEventTimeOnly(event) ?? 'Time TBA'}
                           </p>
                         )}
                         {event.price && <Badge variant="outline" className="mt-2"><SpriteIcon name="ticket" className="h-3 w-3 mr-1" />{event.price}</Badge>}
@@ -168,7 +182,11 @@ export default function SportsHub() {
                 ))}
               </div>
             ) : (
-              <p className="text-muted-foreground">No games scheduled for today.</p>
+              gamesError ? (
+                <ErrorState error={gamesError} compact onRetry={retryGames} />
+              ) : (
+                <p className="text-muted-foreground">No games scheduled for today.</p>
+              )
             )}
           </section>
 
@@ -186,10 +204,10 @@ export default function SportsHub() {
                       <CardContent className="p-4 flex items-center gap-4">
                         <div className="text-center min-w-[60px]">
                           <p className="text-xs text-muted-foreground uppercase">
-                            {new Date(event.date).toLocaleDateString([], { weekday: 'short' })}
+                            {formatEventPart(event, 'EEE')}
                           </p>
                           <p className="text-2xl font-bold">
-                            {new Date(event.date).getDate()}
+                            {formatEventPart(event, 'd')}
                           </p>
                         </div>
                         <div className="flex-1">
@@ -203,7 +221,11 @@ export default function SportsHub() {
                 ))}
               </div>
             ) : (
-              <p className="text-muted-foreground">No games scheduled this week.</p>
+              gamesError ? (
+                <ErrorState error={gamesError} compact onRetry={retryGames} />
+              ) : (
+                <p className="text-muted-foreground">No games scheduled this week.</p>
+              )
             )}
           </section>
 

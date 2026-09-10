@@ -106,8 +106,8 @@ export function PremiumGate({
               onClick={() => setShowModal(true)}
               className={cn(
                 requiredTier === "vip"
-                  ? "bg-gradient-to-r from-purple-500 to-pink-500 hover:from-purple-600 hover:to-pink-600"
-                  : "bg-gradient-to-r from-amber-500 to-orange-500 hover:from-amber-600 hover:to-orange-600"
+                  ? "bg-secondary text-secondary-foreground hover:bg-secondary/90"
+                  : "bg-amber-700 text-white hover:bg-amber-800"
               )}
             >
               {requiredTier === "vip" ? (
@@ -162,9 +162,9 @@ export function PremiumGate({
         <CardContent className="flex flex-col items-center justify-center py-8 text-center">
           <div className="inline-flex items-center justify-center w-14 h-14 rounded-full bg-muted mb-4">
             {requiredTier === "vip" ? (
-              <Crown className="h-6 w-6 text-purple-500" />
+              <Crown className="h-6 w-6 text-secondary" />
             ) : (
-              <SpriteIcon name="sparkles" className="h-6 w-6 text-amber-500" />
+              <SpriteIcon name="sparkles" className="h-6 w-6 text-amber-700 dark:text-amber-500" />
             )}
           </div>
           <FeatureTag requiredTier={requiredTier} size="md" />
@@ -176,8 +176,8 @@ export function PremiumGate({
             onClick={() => setShowModal(true)}
             className={cn(
               requiredTier === "vip"
-                ? "bg-gradient-to-r from-purple-500 to-pink-500 hover:from-purple-600 hover:to-pink-600"
-                : "bg-gradient-to-r from-amber-500 to-orange-500 hover:from-amber-600 hover:to-orange-600"
+                ? "bg-secondary text-secondary-foreground hover:bg-secondary/90"
+                : "bg-amber-700 text-white hover:bg-amber-800"
             )}
           >
             {requiredTier === "vip" ? (

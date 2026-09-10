@@ -23,6 +23,8 @@ import { formatCount } from "@/lib/pluralize";
 import { useWeather, reorderForWeather } from "@/hooks/useWeather";
 import { useEventIndoorFlags } from "@/hooks/useEventIndoorFlags";
 import { WeatherNotice } from "@/components/WeatherNotice";
+import { useReloadableFetch } from "@/hooks/useReloadableFetch";
+import { ErrorState } from "@/components/ui/error-state";
 
 interface EventItem {
   id: string;
@@ -49,6 +51,7 @@ interface EventItem {
 export default function EventsToday() {
   const [events, setEvents] = useState<EventItem[]>([]);
   const [isLoading, setIsLoading] = useState(true);
+  const { error: loadError, setError: setLoadError, reloadKey, retry } = useReloadableFetch();
   useDocumentTitle("Events Today");
 
   useEffect(() => {
@@ -72,12 +75,15 @@ export default function EventsToday() {
         
         if (error) {
           log.error('fetchEvents', 'Error fetching events', { error });
+          setLoadError(error);
           setEvents([]);
         } else {
+          setLoadError(null);
           setEvents(data || []);
         }
       } catch (error) {
         log.error('fetchEvents', 'Unexpected error in fetchEvents', { error });
+        setLoadError(error);
         setEvents([]);
       } finally {
         setIsLoading(false);
@@ -85,7 +91,7 @@ export default function EventsToday() {
     };
 
     fetchEvents();
-  }, []);
+  }, [reloadKey]);
 
   const { weather, hasVerdict } = useWeather();
 
@@ -243,7 +249,9 @@ export default function EventsToday() {
         <WeatherNotice weather={weather} hasVerdict={hasVerdict} className="mb-6" />
 
         {/* Events List */}
-        {isLoading ? (
+        {!isLoading && loadError ? (
+          <ErrorState error={loadError} onRetry={retry} />
+        ) : isLoading ? (
           <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
             {[...Array(6)].map((_, i) => (
               <Card key={i} className="animate-pulse">
@@ -257,8 +265,9 @@ export default function EventsToday() {
           </div>
         ) : todaysEvents.length > 0 ? (
           <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6 mb-8">
-            {todaysEvents.map((event) => (
+            {todaysEvents.map((event, index) => (
               <SocialEventCard
+                priority={index < 3}
                   key={event.id}
                   event={event}
                   socialData={batchSocialData?.[event.id]}
