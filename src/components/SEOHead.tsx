@@ -8,7 +8,13 @@ interface SEOHeadProps {
   imageUrl?: string;
   url?: string;
   keywords?: string[];
-  structuredData?: object;
+  /**
+   * WEB-SEO-027: one page can legitimately describe more than one thing (the
+   * home page publishes a WebSite node and a LocalBusiness node). An array
+   * emits one script tag per node, which is what let SEOStructure be deleted
+   * instead of mounted as a second head manager just to carry a second block.
+   */
+  structuredData?: object | object[];
   alternateUrls?: { [key: string]: string };
   canonicalUrl?: string;
   author?: string;
@@ -208,11 +214,16 @@ export default function SEOHead({
         </script>
       )}
 
-      {structuredData && (
-        <script type="application/ld+json">
-          {JSON.stringify(structuredData)}
-        </script>
-      )}
+      {structuredData &&
+        (Array.isArray(structuredData) ? structuredData : [structuredData]).map(
+          (node, index) => (
+            // Helmet requires a keyed list here; the index is stable because
+            // the array is built once per render from page-level constants.
+            <script type="application/ld+json" key={index}>
+              {JSON.stringify(node)}
+            </script>
+          ),
+        )}
 
       {/* Default Organization Structured Data */}
       <script type="application/ld+json">

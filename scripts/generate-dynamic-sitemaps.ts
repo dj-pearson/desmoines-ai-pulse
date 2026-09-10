@@ -13,6 +13,8 @@ import { computePseoShippable } from './lib/pseoShippable';
 // Slug shapes live in one place so the freshness check cannot build a URL the
 // generator would not have written. See scripts/lib/sitemapSlugs.ts.
 import { createSlug, createEventSlug } from './lib/sitemapSlugs';
+import { isOutsideIowa } from '@/lib/serviceArea';
+import { SITEMAP_CHILDREN, newestChildLastmod, renderSitemapIndex } from './lib/sitemapIndex';
 
 // Load .env for local development (Cloudflare Pages / Infisical set env vars at build time)
 function loadEnvFile(filePath: string): void {
@@ -367,9 +369,13 @@ async function generateRestaurantsSitemap(): Promise<number | null> {
 async function generateAttractionsSitemap(): Promise<number | null> {
   console.log('📍 Generating attractions sitemap...');
 
+  // WEB-SEO-037: is_active, because the hub and functions/_middleware.ts both
+  // filter on it and this generator did not. An inactive attraction was hidden
+  // everywhere a visitor could look and submitted to Google anyway.
   const { data: attractions, error } = await supabase
     .from('attractions')
     .select('id, name, updated_at')
+    .eq('is_active', true)
     .order('name')
     .order('id');
 
@@ -403,7 +409,7 @@ async function generatePlaygroundsSitemap(): Promise<number | null> {
 
   const { data: playgrounds, error } = await supabase
     .from('playgrounds')
-    .select('id, name, updated_at')
+    .select('id, name, location, updated_at')
     .order('name')
     .order('id');
 
@@ -412,7 +418,18 @@ async function generatePlaygroundsSitemap(): Promise<number | null> {
     return null;
   }
 
-  const urls = playgrounds.map(playground => {
+  // WEB-SEO-037: 21 of the 69 playground rows are in Oregon, Washington,
+  // Colorado and Missouri, from a Places import that went wide. They were
+  // submitted to Google as Des Moines content. See isOutsideIowa for why this
+  // is a predicate over fetched rows rather than an `ilike` on the query -
+  // `NOT ILIKE '%, OR%'` also excludes Orange City, Iowa.
+  const inServiceArea = playgrounds.filter(p => !isOutsideIowa(p.location));
+  const dropped = playgrounds.length - inServiceArea.length;
+  if (dropped > 0) {
+    console.log(`   ↳ ${dropped} playground(s) outside Iowa excluded from the sitemap`);
+  }
+
+  const urls = inServiceArea.map(playground => {
     const slug = createSlug(playground.name);
     const lastmod = playground.updated_at ? playground.updated_at.split('T')[0] : currentDate;
     return {
@@ -699,48 +716,26 @@ async function main(): Promise<void> {
 
     const totalUrls = results.filter((r): r is number => r !== null).reduce((sum, count) => sum + count, 0);
 
-    // Update sitemap.xml index lastmod date
+    // WEB-SEO-038: one index, built from the children that actually exist,
+    // each carrying its own newest lastmod rather than today's date.
+    const children = SITEMAP_CHILDREN.filter((name) =>
+      existsSync(join(process.cwd(), 'public', name)),
+    );
+
+    const missing = SITEMAP_CHILDREN.filter((name) => !children.includes(name));
+    if (missing.length > 0) {
+      // Advertising a child that is not on disk hands Google a 404 in the one
+      // file it is told to trust. Say so loudly; do not list it.
+      console.warn(`⚠️ Not in the index (file missing): ${missing.join(', ')}`);
+    }
+
     const sitemapIndexPath = join(process.cwd(), 'public', 'sitemap.xml');
-    const sitemapIndex = `<?xml version="1.0" encoding="UTF-8"?>
-<sitemapindex xmlns="http://www.sitemaps.org/schemas/sitemap/0.9">
-  <sitemap>
-    <loc>${baseUrl}/sitemap-static.xml</loc>
-    <lastmod>${currentDate}</lastmod>
-  </sitemap>
-  <sitemap>
-    <loc>${baseUrl}/sitemap-events.xml</loc>
-    <lastmod>${currentDate}</lastmod>
-  </sitemap>
-  <sitemap>
-    <loc>${baseUrl}/sitemap-restaurants.xml</loc>
-    <lastmod>${currentDate}</lastmod>
-  </sitemap>
-  <sitemap>
-    <loc>${baseUrl}/sitemap-attractions.xml</loc>
-    <lastmod>${currentDate}</lastmod>
-  </sitemap>
-  <sitemap>
-    <loc>${baseUrl}/sitemap-playgrounds.xml</loc>
-    <lastmod>${currentDate}</lastmod>
-  </sitemap>
-  <sitemap>
-    <loc>${baseUrl}/sitemap-articles.xml</loc>
-    <lastmod>${currentDate}</lastmod>
-  </sitemap>
-  <sitemap>
-    <loc>${baseUrl}/sitemap-hotels.xml</loc>
-    <lastmod>${currentDate}</lastmod>
-  </sitemap>
-  <sitemap>
-    <loc>${baseUrl}/sitemap-guides.xml</loc>
-    <lastmod>${currentDate}</lastmod>
-  </sitemap>
-  <sitemap>
-    <loc>${baseUrl}/sitemap-pseo.xml</loc>
-    <lastmod>${currentDate}</lastmod>
-  </sitemap>
-</sitemapindex>`;
-    writeFileSync(sitemapIndexPath, sitemapIndex);
+    writeFileSync(
+      sitemapIndexPath,
+      renderSitemapIndex(baseUrl, children, (name) =>
+        newestChildLastmod(name, currentDate),
+      ),
+    );
 
     console.log('\n' + '='.repeat(50));
     console.log('✨ Dynamic sitemap generation complete!');

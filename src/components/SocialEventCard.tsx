@@ -145,6 +145,11 @@ function SocialEventCardComponent({
                 src={event.image_url}
                 alt={`${event.title} - ${event.category} event in ${event.city || 'Des Moines'}, Iowa`}
                 className="w-full h-full object-cover transition-transform duration-500 group-hover:scale-110"
+                // WEB-SEO-032: intrinsic size so the browser reserves the box
+                // before the bytes land. The card crops with object-cover, so
+                // these are the aspect ratio, not a promise about the file.
+                width={640}
+                height={featured ? 320 : 208}
                 loading={priority ? "eager" : "lazy"}
                 decoding="async"
                 {...fetchPriorityAttr(priority ? "high" : undefined)}

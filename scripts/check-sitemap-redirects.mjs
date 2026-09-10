@@ -59,7 +59,15 @@ const rules = readFileSync(REDIRECTS, 'utf8')
   .filter((p) => p.length >= 3 && /^30[1278]$/.test(p[2]))
   .map((p) => ({ from: norm(p[0]), to: norm(p[1]), code: p[2] }));
 
-const sitemaps = readdirSync(PUBLIC).filter((f) => /^sitemap.*\.xml$/.test(f) && f !== 'sitemap-index.xml');
+// WEB-SEO-038: index files are excluded by CONTENT, not by name. This read
+// `f !== 'sitemap-index.xml'` - a hardcoded exception for the duplicate index
+// that story deleted, which would have silently stopped excluding anything the
+// moment the file was renamed. An index lists sitemaps, not pages, so its
+// <loc> values are not sitemapped paths.
+const allSitemapFiles = readdirSync(PUBLIC).filter((f) => /^sitemap.*\.xml$/.test(f));
+const isIndexFile = (name) =>
+  /<sitemapindex[\s>]/i.test(readFileSync(join(PUBLIC, name), 'utf8'));
+const sitemaps = allSitemapFiles.filter((f) => !isIndexFile(f));
 if (sitemaps.length === 0) {
   console.error('[sitemap-redirects] no sitemaps in public/. Did generate-sitemaps run?');
   process.exit(1);
@@ -89,9 +97,31 @@ const submitted = rules.filter((r) => !r.from.includes('*') && listed.has(r.from
 
 // Direction 2: redirect targets that no sitemap lists. External targets and
 // wildcard/placeholder targets are out of scope.
+//
+// So are the sitemaps themselves (WEB-SEO-038). A sitemap is not a page and
+// must never appear inside another sitemap - listing sitemap.xml as a URL
+// would submit the index for indexing. Redirecting a retired sitemap path to
+// the live one is therefore correct AND permanently "orphaned" by this rule,
+// which is the checker being wrong rather than the redirect.
 const orphanTargets = rules.filter(
-  (r) => !r.to.includes('*') && !/^https?:/i.test(r.to) && !listed.has(r.to),
+  (r) =>
+    !r.to.includes('*') &&
+    !/^https?:/i.test(r.to) &&
+    !/^\/sitemap[\w-]*\.xml$/i.test(r.to) &&
+    !listed.has(r.to),
 );
+
+/**
+ * WEB-SEO-038: exactly one sitemap index in public/.
+ *
+ * public/sitemap-index.xml was a hand copy of the generated public/sitemap.xml,
+ * still deployed, still stamped 2026-03-16 on seven of its eight children while
+ * the generated one said 2026-08-31. Two indexes on one domain is two answers
+ * to "what should I crawl", and whichever Search Console was given, the stale
+ * copy said nothing on this site had changed since March. It is a copy-paste
+ * away from returning, and nothing would have noticed.
+ */
+const indexFiles = allSitemapFiles.filter(isIndexFile);
 
 let failed = false;
 
@@ -105,6 +135,19 @@ if (submitted.length > 0) {
     '\nSearch Console reports these as "Page with redirect" and the crawl is spent\n' +
       'learning the URL moved. Remove the URL from its sitemap, or drop the redirect\n' +
       'if the URL is meant to be canonical.\n',
+  );
+}
+
+if (indexFiles.length !== 1) {
+  failed = true;
+  console.error(
+    `\n${indexFiles.length} sitemap index file(s) in public/: ${indexFiles.join(', ') || 'none'}\n`,
+  );
+  console.error(
+    'Exactly one file in public/ may contain <sitemapindex>. Two indexes give a\n' +
+      'crawler two answers about what to crawl, and the one nobody regenerates goes\n' +
+      'stale silently - which is how a copy stamped 2026-03-16 stayed deployed for\n' +
+      'five months. Delete the extra and 301 its path to /sitemap.xml.\n',
   );
 }
 

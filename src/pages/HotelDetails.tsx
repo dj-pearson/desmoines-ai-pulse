@@ -11,6 +11,7 @@ import { Phone, Globe, Mail, Star, ChevronRight, ArrowLeft, Navigation } from "l
 import { useDocumentTitle } from "@/hooks/useDocumentTitle";
 import AffiliateDisclosureBanner from "@/components/AffiliateDisclosureBanner";
 import Header from "@/components/Header";
+import { DetailFetchError } from "@/components/DetailFetchError";
 import Footer from "@/components/Footer";
 import { LazyLocationMap } from "@/components/LazyLocationMap";
 import { getDirectionsUrl } from "@/lib/directions";
@@ -41,7 +42,7 @@ function StarRating({ rating }: { rating: number }) {
 
 export default function HotelDetails() {
   const { slug } = useParams<{ slug: string }>();
-  const { hotel, isLoading, error } = useHotel(slug);
+  const { hotel, isLoading, error, refetch } = useHotel(slug);
 
   // WEB-FEAT-012. Three call sites below read hotel.source_url, a column
   // public.hotels does not have — confirmed live, the REST API returns 42703
@@ -77,7 +78,25 @@ export default function HotelDetails() {
     );
   }
 
-  if (error || !hotel) {
+  // WEB-SEO-040: a thrown query is not a missing row. `error` used to share the
+  // not-found branch, so any PostgREST hiccup published noindex on a live page.
+  if (error) {
+    return (
+      <div className="min-h-screen bg-background pb-24">
+        <RouteCanonical path={`/stay/${slug}`} />
+        <Header />
+        <DetailFetchError
+          entityLabel="hotel"
+          backHref="/stay"
+          backLabel="Browse all hotels"
+          onRetry={() => refetch()}
+        />
+        <Footer />
+      </div>
+    );
+  }
+
+  if (!hotel) {
     return (
       <div className="min-h-screen bg-background pb-24">
         <Helmet>

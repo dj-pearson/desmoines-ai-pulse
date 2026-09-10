@@ -20,7 +20,7 @@ import { FAQSection } from "@/components/FAQSection";
 import { RatingSystem } from "@/components/RatingSystem";
 import { BackToTop } from "@/components/BackToTop";
 import EnhancedAttractionSEO from "@/components/EnhancedAttractionSEO";
-import SEOHead from "@/components/SEOHead";
+import { BreadcrumbListSchema } from "@/components/schema/BreadcrumbListSchema";
 import { RouteCanonical } from "@/components/RouteCanonical";
 import { BRAND, getCanonicalUrl } from "@/lib/brandConfig";
 import { Star, ArrowLeft, Navigation, Heart, Globe, Info, Camera, Landmark, ChevronRight, TreePine } from "lucide-react";
@@ -83,9 +83,15 @@ export default function AttractionDetails() {
       // attractions has no slug column, so we match the createSlug(name) the
       // routes use. Scan only (id, name) instead of downloading every full row,
       // then fetch the single matched attraction's full row (SEO/GEO intact).
+      // WEB-SEO-037: is_active on the index scan. The hub, useAttractions and
+      // functions/_middleware.ts all hide inactive rows; this page resolved
+      // them anyway, so a deactivated attraction stayed live on its own URL and
+      // in the sitemap. Filtering here also means the not-found branch (and its
+      // noindex) is what an inactive row now gets.
       const { data: index, error } = await supabase
         .from("attractions")
-        .select("id, name");
+        .select("id, name")
+        .eq("is_active", true);
 
       if (error) throw error;
 
@@ -114,6 +120,7 @@ export default function AttractionDetails() {
         .from("attractions")
         .select(ATTRACTION_LIST_COLUMNS)
         .eq("type", attraction.type)
+        .eq("is_active", true)
         .neq("id", attraction.id)
         .limit(4);
 
@@ -243,31 +250,19 @@ export default function AttractionDetails() {
         attraction={attraction}
         slug={attractionSlug}
       />
-      <SEOHead
-        title={`${attraction.name} - ${attraction.type} in ${BRAND.city}, ${BRAND.state}`}
-        description={attraction.description ? `${attraction.description.slice(0, 160)}` : `Visit ${attraction.name}, a popular ${attraction.type?.toLowerCase()} attraction in ${BRAND.city}, ${BRAND.state}.`}
-        type="website"
-        imageUrl={attraction.image_url || undefined}
-        url={`/attractions/${attractionSlug}`}
-        keywords={[
-          attraction.name,
-          attraction.type,
-          `${BRAND.city} attractions`,
-          `things to do ${BRAND.city}`,
-          `${attraction.type} ${BRAND.city}`,
-        ].filter(Boolean) as string[]}
-        modifiedTime={attraction.updated_at}
-        location={{
-          name: attraction.name,
-          address: attraction.location || `${BRAND.city}, ${BRAND.state}`,
-          latitude: attraction.latitude,
-          longitude: attraction.longitude,
-        }}
-        breadcrumbs={[
-          { name: "Home", url: "/" },
-          { name: "Attractions", url: "/attractions" },
-          { name: attraction.type, url: `/attractions?type=${encodeURIComponent(attraction.type)}` },
-          { name: attraction.name, url: `/attractions/${attractionSlug}` },
+      {/* WEB-SEO-027: SEOHead used to mount here alongside EnhancedAttractionSEO.
+          Two head managers on one page meant two <title> sources, two canonicals
+          and six JSON-LD nodes, of which Place duplicated the address and geo the
+          TouristAttraction node already carries. EnhancedAttractionSEO owns the
+          head; the breadcrumb trail is the one thing it did not emit. */}
+      <BreadcrumbListSchema
+        items={[
+          { name: "Home", url: getCanonicalUrl("/") },
+          { name: "Attractions", url: getCanonicalUrl("/attractions") },
+          ...(attraction.type
+            ? [{ name: attraction.type, url: getCanonicalUrl(`/attractions?type=${encodeURIComponent(attraction.type)}`) }]
+            : []),
+          { name: attraction.name, url: getCanonicalUrl(`/attractions/${attractionSlug}`) },
         ]}
       />
 

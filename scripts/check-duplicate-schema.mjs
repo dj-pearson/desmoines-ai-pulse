@@ -257,6 +257,9 @@ function main() {
   // WEB-SEO-029.
   checkWebsiteNodes(files);
 
+  // WEB-SEO-027.
+  checkHeadManagers(files);
+
   const stale = assertModelMatchesSource(files);
   if (stale.length) {
     console.error('\n❌ The FAQPage emitter model has drifted from the source (WEB-SEO-008 AC5)\n');
@@ -315,6 +318,122 @@ function main() {
   );
 }
 
+
+/**
+ * WEB-SEO-027: one <title> source and one BreadcrumbList emitter per rendered
+ * page, counted per return branch.
+ *
+ * Two head managers on one page is not a style problem. Helmet resolves
+ * <title> last-mount-wins, so an edit to the losing component compiles, reads
+ * correctly in review and changes nothing in the shipped HTML - which is how
+ * the home page shipped a title nobody had written for weeks. JSON-LD is
+ * worse: script tags are APPENDED, never deduped, so two emitters put two
+ * BreadcrumbList blocks with different item URLs on the same page and Google
+ * picks neither. The prerenderer's dedupeJsonLd hides exactly this in the
+ * static HTML while the live DOM still carries both, so dist/ cannot be used
+ * to find it.
+ *
+ * Counted PER RETURN BRANCH, because a loading branch and a loaded branch
+ * never mount at the same time, and a whole-file count would call every
+ * page with a skeleton a duplicate.
+ */
+const TITLE_MANAGERS = [
+  'SEOHead',
+  'EnhancedAttractionSEO',
+  'EnhancedEventSEO',
+  'EnhancedLocalSEO',
+  'EnhancedPlaygroundSEO',
+  'LocalSEO',
+  'SEOOptimizedHead',
+];
+
+const BREADCRUMB_EMITTERS = ['BreadcrumbListSchema', 'BreadcrumbSchema'];
+
+/**
+ * The JSX of each top-level `return (` in a file, one string per branch.
+ *
+ * Paren-matching rather than parsing: a return block ends at the paren that
+ * closes the one opening it. Good enough to separate an early-return skeleton
+ * from the real tree, which is the only distinction this check needs.
+ */
+function returnBranches(source) {
+  const branches = [];
+  const re = /\breturn\s*\(/g;
+  let m;
+  while ((m = re.exec(source))) {
+    let depth = 1;
+    let i = m.index + m[0].length;
+    for (; i < source.length && depth > 0; i++) {
+      if (source[i] === '(') depth++;
+      else if (source[i] === ')') depth--;
+    }
+    branches.push(source.slice(m.index, i));
+  }
+  return branches;
+}
+
+function countIn(branch, components) {
+  const found = [];
+  for (const c of components) {
+    const n = jsxUsages(branch, c).length;
+    if (n > 0) found.push({ name: c, n });
+  }
+  return found;
+}
+
+function checkHeadManagers(files) {
+  const pages = files.filter((f) => f.includes(`${path.sep}pages${path.sep}`));
+  const offenders = [];
+
+  for (const file of pages) {
+    const source = stripComments(fs.readFileSync(file, 'utf8'));
+    for (const branch of returnBranches(source)) {
+      const titles = countIn(branch, TITLE_MANAGERS);
+      // A page writing <title> itself (a not-found branch, say) counts too.
+      const inlineTitles = (branch.match(/<title>/g) || []).length;
+      if (inlineTitles > 0) titles.push({ name: '<title> (inline)', n: inlineTitles });
+
+      const crumbs = countIn(branch, BREADCRUMB_EMITTERS);
+      // SEOHead builds its own BreadcrumbList when given the prop.
+      for (const usage of jsxUsages(branch, 'SEOHead')) {
+        if (/breadcrumbs\s*=\s*\{/.test(usage)) {
+          crumbs.push({ name: 'SEOHead[breadcrumbs]', n: 1 });
+        }
+      }
+
+      const titleTotal = titles.reduce((a, t) => a + t.n, 0);
+      const crumbTotal = crumbs.reduce((a, t) => a + t.n, 0);
+      if (titleTotal > 1 || crumbTotal > 1) {
+        offenders.push({
+          file: path.relative(process.cwd(), file),
+          titles: titleTotal > 1 ? titles : [],
+          crumbs: crumbTotal > 1 ? crumbs : [],
+        });
+      }
+    }
+  }
+
+  if (offenders.length) {
+    console.error('\n❌ Two head managers on one page (WEB-SEO-027)\n');
+    for (const o of offenders) {
+      console.error(`  ${o.file}`);
+      if (o.titles.length) {
+        console.error(`      <title> sources: ${o.titles.map((t) => `${t.name} x${t.n}`).join(', ')}`);
+      }
+      if (o.crumbs.length) {
+        console.error(`      BreadcrumbList: ${o.crumbs.map((t) => `${t.name} x${t.n}`).join(', ')}`);
+      }
+    }
+    console.error('\nOne head component per page. Helmet picks a <title> winner silently, and');
+    console.error('two BreadcrumbList blocks are appended, not merged - the prerenderer hides');
+    console.error('both, so this cannot be caught in dist/.\n');
+    process.exit(1);
+  }
+
+  console.log(
+    `✅ Head managers: ${pages.length} pages scanned, 1 title source and at most 1 BreadcrumbList per branch.`,
+  );
+}
 
 /**
  * WEB-SEO-025: a ratingCount must come from stored review data, never from a

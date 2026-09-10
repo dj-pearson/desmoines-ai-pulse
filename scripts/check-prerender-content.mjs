@@ -200,6 +200,31 @@ for (const file of files) {
   // A hub with nothing to show emits no ItemList at all, and an empty one is a
   // question for check-hub-inventory, which asks the DATABASE what the page
   // should have had. The DOM cannot tell "no rows" from "rows never arrived".
+  // WEB-SEO-032: a list page that shipped cards must have shipped an image
+  // with them.
+  //
+  // OptimizedImage renders NO <img> at all until IntersectionObserver fires,
+  // and an observer never fires in a prerender - the capture has no viewport
+  // scroll. So every prerendered hub shipped a grid of empty image containers:
+  // no src for a crawler to fetch, no LCP candidate for a browser to
+  // prioritise, and card alt text (which is often the only place an entity
+  // name appears in full) absent from the HTML entirely.
+  //
+  // CONDITIONAL ON THERE BEING CARDS, because a build with an unreachable
+  // database produces pages with no cards and no images, and failing those
+  // would make this assert something about the database rather than about the
+  // code. Anchors into an entity detail route are the tell that cards
+  // rendered.
+  const cardLinks = root.querySelectorAll(
+    'a[href^="/events/"], a[href^="/restaurants/"], a[href^="/attractions/"], a[href^="/playgrounds/"]',
+  ).length;
+  if (cardLinks >= 3 && root.querySelectorAll('img[src]').length === 0) {
+    failures.push({
+      route,
+      what: `ships ${cardLinks} card link(s) and not one <img src> - pass priority to the first row`,
+    });
+  }
+
   for (const el of doc.querySelectorAll('script[type="application/ld+json"]')) {
     let parsed;
     try {
@@ -220,7 +245,7 @@ for (const file of files) {
   }
 }
 
-console.log(`[prerender-content] ${files.length} prerendered page(s) checked for skeletons, unnamed links and self-contradictory ItemLists.`);
+console.log(`[prerender-content] ${files.length} prerendered page(s) checked for skeletons, unnamed links, imageless card grids and self-contradictory ItemLists.`);
 
 for (const a of allowed) {
   console.log(`  allowed: ${a.route} (aria-busy x${a.occurrences}) - ${a.reason}`);

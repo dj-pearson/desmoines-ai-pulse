@@ -1,6 +1,7 @@
 import { useParams, Link } from 'react-router-dom';
 import { RouteCanonical } from "@/components/RouteCanonical";
 import Header from '@/components/Header';
+import { DetailFetchError } from '@/components/DetailFetchError';
 import Footer from '@/components/Footer';
 import { Helmet } from 'react-helmet-async';
 import { useTrail, getDifficultyLabel, getSurfaceLabel } from '@/hooks/useTrails';
@@ -19,7 +20,7 @@ const DIFFICULTY_COLORS: Record<string, string> = {
 
 export default function TrailDetail() {
   const { slug } = useParams<{ slug: string }>();
-  const { data: trail, isLoading } = useTrail(slug || '');
+  const { data: trail, isLoading, error, refetch } = useTrail(slug || '');
 
   if (isLoading) {
     return (
@@ -32,6 +33,23 @@ export default function TrailDetail() {
           <Skeleton className="h-48 w-full mb-4" />
           <Skeleton className="h-32 w-full" />
         </div>
+        <Footer />
+      </div>
+    );
+  }
+
+  // WEB-SEO-040: a thrown query is not a missing row. Retry state, no robots meta.
+  if (error) {
+    return (
+      <div className="min-h-screen bg-background">
+        <RouteCanonical path={`/outdoors/${slug}`} />
+        <Header />
+        <DetailFetchError
+          entityLabel="trail"
+          backHref="/outdoors"
+          backLabel="Back to Trails & Outdoors"
+          onRetry={() => refetch()}
+        />
         <Footer />
       </div>
     );

@@ -22,7 +22,6 @@ import Header from "@/components/Header";
 import { AdBanner } from "@/components/AdBanner";
 import Footer from "@/components/Footer";
 import SEOHead from "@/components/SEOHead";
-import { SEOEnhancedHead } from "@/components/SEOEnhancedHead";
 import { useToast } from "@/hooks/use-toast";
 import { FAQSection } from "@/components/FAQSection";
 import {
@@ -568,6 +567,14 @@ export default function EventsPage() {
   };
 
   // Loading state
+  /**
+   * WEB-SEO-032: whether the featured rail renders above the grid. Both the
+   * rail and the grid's priority flag read this, so they cannot disagree about
+   * which row holds the LCP image.
+   */
+  const featuredRailVisible =
+    !isLoading && activeFiltersCount === 0 && featuredEvents.length > 0;
+
   if (isLoading && events.length === 0) {
     return (
       <>
@@ -653,11 +660,15 @@ export default function EventsPage() {
 
   return (
     <>
-      <SEOEnhancedHead
+      {/* WEB-SEO-027: this branch used SEOEnhancedHead while the loading branch
+          above used SEOHead, so the head this page shipped depended on whether
+          the query had resolved. One component, both branches. */}
+      <SEOHead
         title={seoTitle}
         description={seoDescription}
-        url={getCanonicalUrl('/events')}
+        url="/events"
         type="website"
+        keywords={["Des Moines events", "Iowa events", "upcoming events", "things to do Des Moines"]}
         structuredData={eventsSchema}
       />
       <BreadcrumbListSchema items={[{ name: "Home", url: BRAND.baseUrl }, { name: "Events", url: getCanonicalUrl('/events') }]} />
@@ -890,7 +901,7 @@ export default function EventsPage() {
           )}
 
           {/* Featured Events Section */}
-          {!isLoading && activeFiltersCount === 0 && featuredEvents.length > 0 && (
+          {featuredRailVisible && (
             <div className="mb-8">
               <div className="flex items-center justify-between mb-4">
                 <h2 className="text-xl font-bold flex items-center gap-2">
@@ -910,6 +921,7 @@ export default function EventsPage() {
                     priority={index < 3}
                     key={`featured-${event.id}`}
                     event={event}
+                    priority={index < 3}
                     socialData={batchSocialData?.[event.id]}
                     socialDataPending={batchSocialPending}
                     featured
@@ -934,8 +946,12 @@ export default function EventsPage() {
                   priority={index < 3}
                   key={event.id}
                   event={event}
+                  // WEB-SEO-032: the first row is the LCP candidate - unless
+                  // the featured rail rendered above it, which then holds the
+                  // three eager images instead.
+                  priority={index < 3 && !featuredRailVisible}
                   socialData={batchSocialData?.[event.id]}
-                    socialDataPending={batchSocialPending}
+                  socialDataPending={batchSocialPending}
                   featured={index === 0 && !searchQuery && selectedCategory === "all" && events.length > 6}
                   onViewDetails={handleViewEventDetails}
                 />

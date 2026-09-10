@@ -5,6 +5,7 @@ import { countOption, type CountMode } from '@/lib/listCount';
 import { Database } from "@/integrations/supabase/types";
 import { queryKeys } from "@/lib/queryKeys";
 import { STALE_TIME, GC_TIME } from "@/lib/queryConfig";
+import { isOutsideIowa } from "@/lib/serviceArea";
 
 type Playground = Database["public"]["Tables"]["playgrounds"]["Row"];
 type PlaygroundInsert = Database["public"]["Tables"]["playgrounds"]["Insert"];
@@ -32,6 +33,20 @@ interface PlaygroundFilters {
   offset?: number;
   /** How hard to work for `totalCount`; see src/lib/listCount.ts (WEB-PERF-033). */
   countMode?: CountMode;
+  /**
+   * WEB-SEO-037. Admin-only: keep the rows that are not in Iowa.
+   *
+   * `playgrounds` holds 69 rows and 21 of them are in Oregon, Washington,
+   * Colorado and Missouri, from a Google Places import that went wide. Nothing
+   * filtered them, so /playgrounds - the module that ranks best on this site -
+   * listed parks 1,000 miles away, and each had its own live detail page in
+   * the sitemap.
+   *
+   * Defaults to false, which is the public behaviour. An admin managing the
+   * catalogue has to be able to SEE those rows to fix or delete them, so the
+   * management surfaces pass true. Same shape as useAttractions' includeInactive.
+   */
+  includeOutsideServiceArea?: boolean;
 }
 
 
@@ -109,9 +124,33 @@ export function usePlaygrounds(filters: PlaygroundFilters = {}) {
         throw error;
       }
 
+      const rows = (data || []) as unknown as Playground[];
+
+      if (filters.includeOutsideServiceArea) {
+        return { playgrounds: rows, totalCount: count || 0 };
+      }
+
+      // WEB-SEO-037. Applied here rather than as a PostgREST filter because the
+      // state has to be matched as a token: `NOT ILIKE '%, OR%'` also excludes
+      // Orange City, Iowa. See src/lib/serviceArea.ts.
+      const inServiceArea = rows.filter((p) => !isOutsideIowa(p.location));
+
+      // The server's count is over the unfiltered set, so it cannot be used
+      // once rows are dropped. Every public caller fetches the whole table
+      // (69 rows, countMode "none", no limit) and filters client-side already,
+      // so the filtered length IS the total. A paginated public caller would
+      // need a different answer, and would be wrong silently - hence the
+      // dev-only warning rather than a quietly approximate number.
+      if (import.meta.env.DEV && (filters.limit || filters.offset)) {
+        console.warn(
+          "[usePlaygrounds] limit/offset with the service-area filter: totalCount " +
+            "counts only this page. Pass includeOutsideServiceArea for admin lists.",
+        );
+      }
+
       return {
-        playgrounds: (data || []) as unknown as Playground[],
-        totalCount: count || 0,
+        playgrounds: inServiceArea,
+        totalCount: inServiceArea.length,
       };
     },
     staleTime: STALE_TIME.CONTENT_LIST,
@@ -222,11 +261,14 @@ export function usePlaygroundFacets() {
         throw error;
       }
 
-      const rows = (data || []) as {
+      // WEB-SEO-037: the same service-area filter as the list. Without it the
+      // suburb chips on /playgrounds offer Portland and Seattle, and the age
+      // and amenity counts describe a catalogue a third of which is not here.
+      const rows = ((data || []) as {
         age_range: string | null;
         location: string | null;
         amenities: string[] | null;
-      }[];
+      }[]).filter((row) => !isOutsideIowa(row.location));
 
       const ageRangeCounts: Record<string, number> = {};
       const amenityCounts: Record<string, number> = {};
