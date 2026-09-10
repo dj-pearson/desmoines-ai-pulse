@@ -13,6 +13,7 @@ import { computePseoShippable } from './lib/pseoShippable';
 // Slug shapes live in one place so the freshness check cannot build a URL the
 // generator would not have written. See scripts/lib/sitemapSlugs.ts.
 import { createSlug, createEventSlug } from './lib/sitemapSlugs';
+import { isOutsideIowa } from '@/lib/serviceArea';
 
 // Load .env for local development (Cloudflare Pages / Infisical set env vars at build time)
 function loadEnvFile(filePath: string): void {
@@ -367,9 +368,13 @@ async function generateRestaurantsSitemap(): Promise<number | null> {
 async function generateAttractionsSitemap(): Promise<number | null> {
   console.log('📍 Generating attractions sitemap...');
 
+  // WEB-SEO-037: is_active, because the hub and functions/_middleware.ts both
+  // filter on it and this generator did not. An inactive attraction was hidden
+  // everywhere a visitor could look and submitted to Google anyway.
   const { data: attractions, error } = await supabase
     .from('attractions')
     .select('id, name, updated_at')
+    .eq('is_active', true)
     .order('name')
     .order('id');
 
@@ -403,7 +408,7 @@ async function generatePlaygroundsSitemap(): Promise<number | null> {
 
   const { data: playgrounds, error } = await supabase
     .from('playgrounds')
-    .select('id, name, updated_at')
+    .select('id, name, location, updated_at')
     .order('name')
     .order('id');
 
@@ -412,7 +417,18 @@ async function generatePlaygroundsSitemap(): Promise<number | null> {
     return null;
   }
 
-  const urls = playgrounds.map(playground => {
+  // WEB-SEO-037: 21 of the 69 playground rows are in Oregon, Washington,
+  // Colorado and Missouri, from a Places import that went wide. They were
+  // submitted to Google as Des Moines content. See isOutsideIowa for why this
+  // is a predicate over fetched rows rather than an `ilike` on the query -
+  // `NOT ILIKE '%, OR%'` also excludes Orange City, Iowa.
+  const inServiceArea = playgrounds.filter(p => !isOutsideIowa(p.location));
+  const dropped = playgrounds.length - inServiceArea.length;
+  if (dropped > 0) {
+    console.log(`   ↳ ${dropped} playground(s) outside Iowa excluded from the sitemap`);
+  }
+
+  const urls = inServiceArea.map(playground => {
     const slug = createSlug(playground.name);
     const lastmod = playground.updated_at ? playground.updated_at.split('T')[0] : currentDate;
     return {

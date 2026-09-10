@@ -82,9 +82,15 @@ export default function AttractionDetails() {
       // attractions has no slug column, so we match the createSlug(name) the
       // routes use. Scan only (id, name) instead of downloading every full row,
       // then fetch the single matched attraction's full row (SEO/GEO intact).
+      // WEB-SEO-037: is_active on the index scan. The hub, useAttractions and
+      // functions/_middleware.ts all hide inactive rows; this page resolved
+      // them anyway, so a deactivated attraction stayed live on its own URL and
+      // in the sitemap. Filtering here also means the not-found branch (and its
+      // noindex) is what an inactive row now gets.
       const { data: index, error } = await supabase
         .from("attractions")
-        .select("id, name");
+        .select("id, name")
+        .eq("is_active", true);
 
       if (error) throw error;
 
@@ -113,6 +119,7 @@ export default function AttractionDetails() {
         .from("attractions")
         .select(ATTRACTION_LIST_COLUMNS)
         .eq("type", attraction.type)
+        .eq("is_active", true)
         .neq("id", attraction.id)
         .limit(4);
 
