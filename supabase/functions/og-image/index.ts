@@ -38,7 +38,10 @@ const SITE_URL = Deno.env.get("SITE_URL") || Deno.env.get("VITE_SITE_URL") || "h
 // /og-image.png does not exist - Cloudflare answers it with the SPA shell, so
 // this fallback handed crawlers 200 text/html where an image belongs. Points at
 // a file that is actually in public/ now.
-const DEFAULT_OG = `${SITE_URL}/DMI-Logo.png`;
+//
+// WEB-SEO-044: and at one that is the right SHAPE. This was DMI-Logo.png, an
+// 800x800 square standing in for a 1200x630 card on every fallback.
+const DEFAULT_OG = `${SITE_URL}/og-default.png`;
 /**
  * JPEG quality for the rendered card.
  *
@@ -236,9 +239,15 @@ function buildSvg(card: Card, imgDataUri: string | null, hasFont: boolean): stri
     : "";
   return `<svg width="${WIDTH}" height="${HEIGHT}" viewBox="0 0 ${WIDTH} ${HEIGHT}" xmlns="http://www.w3.org/2000/svg">
   <defs>
-    <linearGradient id="bg" x1="0" y1="0" x2="1" y2="1">
-      <stop offset="0%" stop-color="#7c3aed"/>
-      <stop offset="100%" stop-color="#db2777"/>
+    <!-- WEB-SEO-044: was #7c3aed -> #db2777, violet to pink. Neither colour is
+         in this brand (Des Moines blue #071e62, red #c30e31), and this is the
+         image that represents the site in every share of an event, restaurant,
+         attraction or article. Navy field with the red as an accent rather than
+         a blue-to-red gradient, because mixing the two brand colours blends
+         through purple - the palette the project's own guidance rules out. -->
+    <linearGradient id="bg" x1="0" y1="0" x2="0.9" y2="1">
+      <stop offset="0%" stop-color="#04143f"/>
+      <stop offset="100%" stop-color="#0a2b86"/>
     </linearGradient>
     <linearGradient id="scrim" x1="0" y1="0" x2="0" y2="1">
       <stop offset="0%" stop-color="rgba(15,15,30,0.25)"/>
@@ -247,6 +256,7 @@ function buildSvg(card: Card, imgDataUri: string | null, hasFont: boolean): stri
   </defs>
   <rect x="0" y="0" width="${WIDTH}" height="${HEIGHT}" fill="url(#bg)"/>
   ${photo}
+  <rect x="0" y="${HEIGHT - 12}" width="${WIDTH}" height="12" fill="#c30e31"/>
   ${badgeSvg}
   ${titleSvg}
   ${wordmark}

@@ -33,12 +33,21 @@
          so a hardcoded one claimed the homepage as every page's share URL, and
          Helmet appends rather than replaces. Helmet supplies the real one. -->
 
+    <!-- WEB-SEO-044. This is the card social crawlers actually get: most do not
+         run JS, and the comment above records that Helmet APPENDS rather than
+         replaces, so the shell's og:image is the one that wins. It pointed at
+         DMI-Logo.png, an 800x800 SQUARE, under width/height that claim
+         1200x630 - numbers Facebook and Twitter lay the card out from. A 1.91:1
+         box reserved for a square image is worse than declaring nothing.
+         og-default.png is a real 1200x630 card; see
+         scripts/generate-og-default.mjs. -->
     <meta
       property="og:image"
-      content="https://desmoinesinsider.com/DMI-Logo.png"
+      content="https://desmoinesinsider.com/og-default.png"
     />
     <meta property="og:image:width" content="1200" />
     <meta property="og:image:height" content="630" />
+    <meta property="og:image:alt" content="Des Moines Insider - events, restaurants and what to do in Des Moines" />
     <meta property="og:locale" content="en_US" />
     <meta property="og:site_name" content="Des Moines Insider" />
     <meta property="og:region" content="IA" />
@@ -472,7 +481,7 @@
     />
     <meta
       name="twitter:image"
-      content="https://desmoinesinsider.com/DMI-Logo.png"
+      content="https://desmoinesinsider.com/og-default.png"
     />
 
     <!-- JSON-LD Structured Data for AI-First Platform -->

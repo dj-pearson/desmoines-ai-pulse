@@ -9495,6 +9495,24 @@
       "priority": 3,
       "passes": false,
       "notes": "FILED FROM THE LOOP, iteration 10. Measured but not fixed: 22 strings across 20 files, and each one is a copywriting decision rather than a mechanical trim."
+    },
+    {
+      "id": "WEB-SEO-044",
+      "title": "Every shared link previewed as an 800x630-shaped crop of a square logo, under width/height that claimed 1200x630 - and the branded card was violet-to-pink",
+      "description": "As the platform owner of a site whose distribution is people sharing links, I need the social card to be the right shape and the right colours. It was neither.",
+      "acceptanceCriteria": [
+        "index.html hardcoded og:image and twitter:image to DMI-Logo.png, an 800x800 SQUARE, alongside og:image:width 1200 and og:image:height 630. Those numbers are what Facebook and Twitter lay the card out from, so declaring them wrongly is WORSE than omitting them - a 1.91:1 box reserved for a square image. Every page declares twitter:card=summary_large_image, which wants roughly 1.91:1.",
+        "The static shell is what actually matters here: most social crawlers do not run JS, and index.html's own comment records that Helmet APPENDS rather than replaces, so the shell's og:image wins. Confirmed by measurement - before the fix every one of 23 routes reported DMI-Logo.png even though SEOHead computes its own.",
+        "public/og-default.png is a real 1200x630 card (1.90:1, 87 kB) in the brand palette, built by scripts/generate-og-default.mjs so it can be regenerated when the wordmark or the colours move. It repaints the existing DMI-Logo-Text.png wordmark white using its own alpha as a mask, so the card carries the real brand letterforms rather than a substituted system font.",
+        "THE DYNAMIC CARD WAS OFF-BRAND TOO: supabase/functions/og-image/index.ts drew its background as a #7c3aed -> #db2777 gradient - violet to pink. Neither colour is in this brand (Des Moines blue #071e62, red #c30e31), and that is the image representing the site in every share of an event, restaurant, attraction or article. Now a navy field with the red as an accent, matching the static default so the two read as one system. NOT a blue-to-red gradient: mixing the two brand colours blends through purple, which is the palette the project's own guidance rules out - checked by rendering it and looking.",
+        "/pricing had NO Open Graph tags at all. It used a raw <Helmet> with title, description and keywords while every other page goes through SEOHead, so sharing the one page whose job is conversion produced a card with no title and no description. Routed through SEOHead.",
+        "brandConfig.ts carried a comment deferring exactly this - 'DMI-Logo.png is 800x800. A purpose-built 1200x630 card would preview better on every network; that is a design task, not a broken-link fix, so it is not done here.' That design task is now done and the comment records what changed.",
+        "VERIFIED: rebuilt and re-measured all 23 routes - every one now reports og-default.png, and /pricing reports a full og:title, og:description and og:url. check-asset-types passes on the new file. 588 vitest tests pass, eslint 0 errors, tsc clean, check-edge-types gained no errors, all seven check scripts green.",
+        "STILL NEEDS A HUMAN, and cannot be done from here: the og-image function's own header already asks for it - validate a live share with the Twitter Card validator and the Facebook Sharing Debugger once deployed, since neither can be reached from CI."
+      ],
+      "priority": 2,
+      "passes": true,
+      "notes": "Found by measuring og/twitter tags across 23 routes in a browser. The 800x800-under-1200x630 mismatch is the part that would never show up in code review - both the file and the numbers look reasonable on their own."
     }
   ]
 }
