@@ -566,6 +566,14 @@ export default function EventsPage() {
   };
 
   // Loading state
+  /**
+   * WEB-SEO-032: whether the featured rail renders above the grid. Both the
+   * rail and the grid's priority flag read this, so they cannot disagree about
+   * which row holds the LCP image.
+   */
+  const featuredRailVisible =
+    !isLoading && activeFiltersCount === 0 && featuredEvents.length > 0;
+
   if (isLoading && events.length === 0) {
     return (
       <>
@@ -879,7 +887,7 @@ export default function EventsPage() {
           )}
 
           {/* Featured Events Section */}
-          {!isLoading && activeFiltersCount === 0 && featuredEvents.length > 0 && (
+          {featuredRailVisible && (
             <div className="mb-8">
               <div className="flex items-center justify-between mb-4">
                 <h2 className="text-xl font-bold flex items-center gap-2">
@@ -894,10 +902,11 @@ export default function EventsPage() {
                 </Link>
               </div>
               <div className={`grid gap-5 ${isMobile ? 'grid-cols-1' : 'sm:grid-cols-2 lg:grid-cols-3'}`}>
-                {featuredEvents.map((event: any) => (
+                {featuredEvents.map((event: any, index: number) => (
                   <SocialEventCard
                     key={`featured-${event.id}`}
                     event={event}
+                    priority={index < 3}
                     socialData={batchSocialData?.[event.id]}
                     socialDataPending={batchSocialPending}
                     featured
@@ -921,8 +930,12 @@ export default function EventsPage() {
                 <SocialEventCard
                   key={event.id}
                   event={event}
+                  // WEB-SEO-032: the first row is the LCP candidate - unless
+                  // the featured rail rendered above it, which then holds the
+                  // three eager images instead.
+                  priority={index < 3 && !featuredRailVisible}
                   socialData={batchSocialData?.[event.id]}
-                    socialDataPending={batchSocialPending}
+                  socialDataPending={batchSocialPending}
                   featured={index === 0 && !searchQuery && selectedCategory === "all" && events.length > 6}
                   onViewDetails={handleViewEventDetails}
                 />

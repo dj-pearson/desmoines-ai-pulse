@@ -280,6 +280,13 @@ export default function Restaurants() {
     [restaurants]
   );
 
+  /**
+   * WEB-SEO-032: whether the featured rail renders above the grid. Both the
+   * rail and the grid's priority flag read this, so they cannot disagree about
+   * which row holds the eager LCP image.
+   */
+  const featuredRailVisible = !hasActiveFilters && featuredRestaurants.length > 0;
+
   // SEO data
   const restaurantsKeywords = [
     "Des Moines restaurants",
@@ -658,7 +665,7 @@ export default function Restaurants() {
             />
 
             {/* Featured Restaurants Row */}
-            {!hasActiveFilters && featuredRestaurants.length > 0 && (
+            {featuredRailVisible && (
               <section aria-labelledby="featured-heading">
                 <div className="flex items-center justify-between mb-4">
                   <h2 id="featured-heading" className="text-2xl font-bold text-gray-900 dark:text-gray-100 flex items-center gap-2">
@@ -679,11 +686,12 @@ export default function Restaurants() {
                   </Button>
                 </div>
                 <div className="grid grid-cols-1 md:grid-cols-3 gap-6">
-                  {featuredRestaurants.map((restaurant) => (
+                  {featuredRestaurants.map((restaurant, index) => (
                     <RestaurantCard
                       key={restaurant.id}
                       restaurant={restaurant}
                       variant="featured"
+                      priority={index < 3}
                     />
                   ))}
                 </div>
@@ -773,10 +781,13 @@ export default function Restaurants() {
                   </p>
 
                   <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-6">
-                    {paginatedRestaurants.map((restaurant) => (
+                    {paginatedRestaurants.map((restaurant, index) => (
                       <RestaurantCard
                         key={restaurant.id}
                         restaurant={restaurant}
+                        // WEB-SEO-032: first row eager, unless the featured rail
+                        // rendered above it and already holds the eager images.
+                        priority={index < 3 && !featuredRailVisible}
                       />
                     ))}
                   </div>

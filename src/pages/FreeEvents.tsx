@@ -286,8 +286,9 @@ export default function FreeEvents() {
               Upcoming Free Events ({freeEvents.length})
             </h2>
             <div className="grid gap-6 md:grid-cols-2 lg:grid-cols-3">
-              {freeEvents.map((event) => (
+              {freeEvents.map((event, index) => (
                 <SocialEventCard
+                  priority={index < 3}
                   key={event.id}
                   event={event}
                   socialData={batchSocialData?.[event.id]}

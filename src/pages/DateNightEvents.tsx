@@ -320,8 +320,9 @@ export default function DateNightEvents() {
               Upcoming Date Night Events ({matchingEvents.length})
             </h2>
             <div className="grid gap-6 md:grid-cols-2 lg:grid-cols-3">
-              {dateEvents.map((event) => (
+              {dateEvents.map((event, index) => (
                 <SocialEventCard
+                  priority={index < 3}
                   key={event.id}
                   event={event}
                   socialData={batchSocialData?.[event.id]}

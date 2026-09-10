@@ -5,6 +5,7 @@ import { Button } from '@/components/ui/button';
 import { FavoriteButton } from '@/components/FavoriteButton';
 import { AddToCalendarButton } from '@/components/AddToCalendarButton';
 import ShareDialog from '@/components/ShareDialog';
+import { fetchPriorityAttr } from "@/lib/fetchPriority";
 import { useEventSocial } from '@/hooks/useEventSocial';
 import { BatchEventSocialData } from '@/hooks/useBatchEventSocial';
 import { Event } from '@/lib/types';
@@ -38,6 +39,13 @@ interface SocialEventCardProps {
    */
   socialDataPending?: boolean;
   featured?: boolean;
+  /**
+   * WEB-SEO-032: eager, high-priority image for the first row of a list.
+   * This card renders a raw <img loading="lazy"> with no width/height, so on
+   * every SEO landing page the LCP element was lazy and the layout shifted
+   * when it arrived. Pass priority on the first three cards.
+   */
+  priority?: boolean;
 }
 
 function SocialEventCardComponent({
@@ -48,6 +56,7 @@ function SocialEventCardComponent({
   socialData,
   socialDataPending = false,
   featured = false,
+  priority = false,
 }: SocialEventCardProps) {
   // Passing '' disables the hook (it early-returns on a falsy id). Skip the
   // individual fetch both when batch data has arrived AND while it is pending.
@@ -129,7 +138,13 @@ function SocialEventCardComponent({
                 src={event.image_url}
                 alt={`${event.title} - ${event.category} event in ${event.city || 'Des Moines'}, Iowa`}
                 className="w-full h-full object-cover transition-transform duration-500 group-hover:scale-110"
-                loading="lazy"
+                // WEB-SEO-032: intrinsic size so the browser reserves the box
+                // before the bytes land. The card crops with object-cover, so
+                // these are the aspect ratio, not a promise about the file.
+                width={640}
+                height={featured ? 320 : 208}
+                loading={priority ? "eager" : "lazy"}
+                {...fetchPriorityAttr(priority ? "high" : undefined)}
                 decoding="async"
                 onError={() => setImageFailed(true)}
               />

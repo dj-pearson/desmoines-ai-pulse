@@ -62,6 +62,16 @@ interface RestaurantCardProps {
     created_at?: string;
   };
   variant?: "default" | "compact" | "featured";
+  /**
+   * WEB-SEO-032: render the <img> eagerly instead of waiting for
+   * IntersectionObserver. Pass it on the first row of any list.
+   *
+   * An observer never fires during a prerender - the capture has no viewport
+   * scroll - so every prerendered hub shipped a grid of empty image
+   * containers, and for a real visitor the LCP element was the one image on
+   * the page that must not be lazy.
+   */
+  priority?: boolean;
 }
 
 function StarRating({ rating }: { rating: number }) {
@@ -92,7 +102,7 @@ function StarRating({ rating }: { rating: number }) {
   return <div className="flex items-center gap-0.5">{stars}</div>;
 }
 
-function RestaurantCardComponent({ restaurant, variant = "default" }: RestaurantCardProps) {
+function RestaurantCardComponent({ restaurant, variant = "default", priority = false }: RestaurantCardProps) {
   const [imageError, setImageError] = useState(false);
   const gradient = getCuisineGradient(restaurant.cuisine);
   const showImage = restaurant.image_url && !imageError;
@@ -139,6 +149,7 @@ function RestaurantCardComponent({ restaurant, variant = "default" }: Restaurant
               alt={`${restaurant.name} - ${restaurant.cuisine || "Restaurant"} in Des Moines`}
               width={640}
               height={192}
+              priority={priority}
               className="transition-transform duration-200 group-hover:scale-105 object-cover"
               containerClassName="absolute inset-0"
               sizes="(max-width: 640px) 100vw, (max-width: 1024px) 50vw, 33vw"

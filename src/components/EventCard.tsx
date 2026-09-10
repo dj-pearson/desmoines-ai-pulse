@@ -51,9 +51,21 @@ const createSlug = (name: string): string => {
 interface EventCardProps {
   event: Event;
   onViewDetails: (event: Event) => void;
+  /**
+   * WEB-SEO-032: render the <img> immediately instead of waiting for
+   * IntersectionObserver. Pass it on the first row of any list.
+   *
+   * OptimizedImage renders NO img element at all until the observer fires, and
+   * an observer never fires in a prerender: the browser that captures the page
+   * has no viewport scroll and the crawler that reads dist/ has no browser. So
+   * every prerendered hub shipped a grid of empty image containers, and for a
+   * real visitor the LCP element was lazy-loaded - the one image on the page
+   * that must not be.
+   */
+  priority?: boolean;
 }
 
-function EventCardComponent({ event, onViewDetails }: EventCardProps) {
+function EventCardComponent({ event, onViewDetails, priority = false }: EventCardProps) {
   const { isAuthenticated } = useAuth();
   const { trackInteraction } = useFeedback();
   const { addToRecentlyViewed } = useRecentlyViewed();
@@ -117,6 +129,7 @@ function EventCardComponent({ event, onViewDetails }: EventCardProps) {
             alt={event.title}
             width={640}
             height={192}
+            priority={priority}
             className="transition-transform duration-200 group-hover:scale-105 object-cover"
             containerClassName="w-full h-48"
             aspectRatio="640/192"
