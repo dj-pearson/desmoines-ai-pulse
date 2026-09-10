@@ -7868,8 +7868,8 @@
         "Cross-reference SEO-015 lateral linking: a neighborhood page is the natural hub for it"
       ],
       "priority": 2,
-      "passes": false,
-      "notes": "Filed 2026-09-02 from the codebase audit on claude/codebase-audit-prd-k01kxz. Evidence is from the working tree; production was not probed (no Supabase credentials in the container)."
+      "passes": true,
+      "notes": "Filed 2026-09-02 from the codebase audit on claude/codebase-audit-prd-k01kxz. Evidence is from the working tree; production was not probed (no Supabase credentials in the container). RESOLVED 2026-09-10 on claude/seo-iterative-loop-e92bab. New src/hooks/useNeighborhoodContent.ts fetches events, restaurants and attractions for a neighborhood with SERVER-side ilike filters on the text the rows already carry (event location/venue, restaurant location/city, attraction location), shared column projections, is_active on attractions, and one Promise.all; the old code filtered a client-side array that was always empty. NeighborhoodPage renders a thin-content guard below NEIGHBORHOOD_MIN_ITEMS=5: NoIndexMeta plus links to the hub and /events, mirroring the pSEO inventory gate. The meta description is now built from the actual row counts instead of promising the best events, restaurants and attractions over three empty arrays. Loading state carries role=status/aria-busy. /neighborhoods/downtown, /beaverdale and /highland-park are removed from prerender-routes.mjs and sitemap-static.xml: all three were linked from nowhere (NeighborhoodsPage lists east-village, west-des-moines, ankeny, urbandale, johnston, clive, waukee, altoona) and have no copy in NeighborhoodGuide table. Route parity now 38 prerendered / 42 sitemapped. Covered by src/pages/__tests__/neighborhoodThinGuard.test.tsx. NOT VERIFIED against live data: no Supabase credentials in this container, so whether Beaverdale or Highland Park match any rows by name is unknown - the guard is what makes that safe either way. The six hub-linked neighborhoods still absent from the sitemap are a deliberate hold until the match rate can be measured."
     },
     {
       "id": "WEB-SEO-037",
