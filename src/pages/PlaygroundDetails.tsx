@@ -1,6 +1,7 @@
 import { useParams, Link } from "react-router-dom";
 import { RouteCanonical } from "@/components/RouteCanonical";
 import { createSlug } from "@/lib/slug";
+import { isOutsideIowa } from "@/lib/serviceArea";
 import { useQuery } from "@tanstack/react-query";
 import { supabase } from "@/integrations/supabase/client";
 import { Card, CardContent } from "@/components/ui/card";
@@ -47,6 +48,16 @@ export default function PlaygroundDetails() {
       const foundPlayground = playgrounds?.find(
         (p) => createSlug(p.name) === slug
       );
+
+      // WEB-SEO-037: a playground in Oregon has no page on a Des Moines guide.
+      // 21 of the 69 rows came from a Places import that went wide; the hub and
+      // the sitemap now hide them, and resolving one here would leave it live
+      // on its own URL with nothing linking to it. Returning null puts it in
+      // the not-found branch, which carries noindex.
+      if (foundPlayground && isOutsideIowa(foundPlayground.location)) {
+        return null;
+      }
+
       return foundPlayground || null;
     },
   });
@@ -60,10 +71,13 @@ export default function PlaygroundDetails() {
         .select("*")
         .eq("age_range", playground.age_range)
         .neq("id", playground.id)
-        .limit(4);
+        .limit(8);
 
       if (error) throw error;
-      return data || [];
+      // Filtered after the fetch for the same reason as everywhere else, and
+      // over 8 rather than 4 so dropping out-of-state rows still leaves a full
+      // set of related links.
+      return (data || []).filter((p) => !isOutsideIowa(p.location)).slice(0, 4);
     },
     enabled: !!playground?.age_range,
   });
@@ -78,10 +92,11 @@ export default function PlaygroundDetails() {
         .neq("id", playground.id)
         .neq("age_range", playground.age_range || "")
         .order("rating", { ascending: false })
-        .limit(4);
+        .limit(8);
 
       if (error) throw error;
-      return data || [];
+      // WEB-SEO-037: same service-area filter as the related rail above.
+      return (data || []).filter((p) => !isOutsideIowa(p.location)).slice(0, 4);
     },
     enabled: !!playground,
   });

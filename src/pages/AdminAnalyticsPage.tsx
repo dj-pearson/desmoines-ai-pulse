@@ -50,7 +50,8 @@ export default function AdminAnalyticsPage() {
   const events = useEvents();
   const restaurants = useRestaurants();
   const attractions = useAttractions();
-  const playgrounds = usePlaygrounds();
+  // WEB-SEO-037: analytics counts the catalogue as stored, not as published.
+  const playgrounds = usePlaygrounds({ includeOutsideServiceArea: true });
 
   const canManageUsers = () => ["admin", "root_admin"].includes(userRole);
 
