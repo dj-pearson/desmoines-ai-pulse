@@ -21,12 +21,23 @@ final class AppTypographyTests: XCTestCase {
         }
     }
 
-    func testEveryStyleShrinksBelowDefault() {
+    /// Not every style shrinks: UIKit's caption2 metric, which `.label` rides,
+    /// is 11pt from xSmall through large, so the small end of the scale is flat
+    /// there by design. What must hold everywhere is that nothing grows when the
+    /// user asks for smaller text.
+    func testNoStyleGrowsBelowDefault() {
         for style in allStyles {
-            XCTAssertLessThan(style.pointSize(for: .xSmall),
-                              style.pointSize(for: .large),
-                              "\(style) ignores the smallest text setting")
+            XCTAssertLessThanOrEqual(style.pointSize(for: .xSmall),
+                                     style.pointSize(for: .large),
+                                     "\(style) grows when the user asks for smaller text")
         }
+    }
+
+    /// Body copy rides the body metric, which does shrink (17pt at large, 14pt
+    /// at xSmall), so the smallest setting reaches it.
+    func testBodyShrinksBelowDefault() {
+        XCTAssertLessThan(AppTextStyle.body.pointSize(for: .xSmall),
+                          AppTextStyle.body.pointSize(for: .large))
     }
 
     /// The declared size is what the style renders at the default setting, so
