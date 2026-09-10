@@ -206,54 +206,54 @@ export default function Footer() {
             {/* Explore */}
             <nav aria-label="Explore links">
               <h4 className="text-sm font-semibold mb-4 uppercase tracking-wider text-neutral-300">Explore</h4>
-              <ul className="space-y-2">
+              <ul className="footer-link-list space-y-2">
                 <li>
-                  <Link to="/events" className="text-neutral-400 hover:text-white transition-colors text-sm flex items-center gap-2">
+                  <Link to="/events" className="footer-link flex items-center gap-2">
                     <SpriteIcon name="calendar" className="h-3.5 w-3.5" /> Events
                   </Link>
                 </li>
                 <li>
-                  <Link to="/events/today" className="text-neutral-400 hover:text-white transition-colors text-sm">
+                  <Link to="/events/today" className="footer-link">
                     Today's Events
                   </Link>
                 </li>
                 <li>
-                  <Link to="/events/this-weekend" className="text-neutral-400 hover:text-white transition-colors text-sm">
+                  <Link to="/events/this-weekend" className="footer-link">
                     This Weekend
                   </Link>
                 </li>
                 <li>
-                  <Link to="/trip-planner" className="text-neutral-400 hover:text-white transition-colors text-sm">
+                  <Link to="/trip-planner" className="footer-link">
                     AI Trip Planner
                   </Link>
                 </li>
                 <li>
-                  <Link to="/restaurants" className="text-neutral-400 hover:text-white transition-colors text-sm flex items-center gap-2">
+                  <Link to="/restaurants" className="footer-link flex items-center gap-2">
                     <Utensils className="h-3.5 w-3.5" /> Restaurants
                   </Link>
                 </li>
                 <li>
-                  <Link to="/attractions" className="text-neutral-400 hover:text-white transition-colors text-sm flex items-center gap-2">
+                  <Link to="/attractions" className="footer-link flex items-center gap-2">
                     <SpriteIcon name="map-pin" className="h-3.5 w-3.5" /> Attractions
                   </Link>
                 </li>
                 <li>
-                  <Link to="/map" className="text-neutral-400 hover:text-white transition-colors text-sm flex items-center gap-2">
+                  <Link to="/map" className="footer-link flex items-center gap-2">
                     <Map className="h-3.5 w-3.5" /> Discover Map
                   </Link>
                 </li>
                 <li>
-                  <Link to="/deals" className="text-neutral-400 hover:text-white transition-colors text-sm flex items-center gap-2">
+                  <Link to="/deals" className="footer-link flex items-center gap-2">
                     <DollarSign className="h-3.5 w-3.5" /> Deals & Coupons
                   </Link>
                 </li>
                 <li>
-                  <Link to="/stay" className="text-neutral-400 hover:text-white transition-colors text-sm flex items-center gap-2">
+                  <Link to="/stay" className="footer-link flex items-center gap-2">
                     <SpriteIcon name="building-2" className="h-3.5 w-3.5" /> Hotels & Stay
                   </Link>
                 </li>
                 <li>
-                  <Link to="/submit-event" className="text-neutral-400 hover:text-white transition-colors text-sm flex items-center gap-2">
+                  <Link to="/submit-event" className="footer-link flex items-center gap-2">
                     <PlusCircle className="h-3.5 w-3.5" /> Submit an Event
                   </Link>
                 </li>
@@ -263,24 +263,24 @@ export default function Footer() {
             {/* For You */}
             <nav aria-label="Account links">
               <h4 className="text-sm font-semibold mb-4 uppercase tracking-wider text-neutral-300">For You</h4>
-              <ul className="space-y-2">
+              <ul className="footer-link-list space-y-2">
                 <li>
-                  <Link to="/pricing" className="text-neutral-400 hover:text-white transition-colors text-sm">
+                  <Link to="/pricing" className="footer-link">
                     Pricing
                   </Link>
                 </li>
                 <li>
-                  <Link to="/auth" className="text-neutral-400 hover:text-white transition-colors text-sm">
+                  <Link to="/auth" className="footer-link">
                     Sign Up Free
                   </Link>
                 </li>
                 <li>
-                  <Link to="/gamification" className="text-neutral-400 hover:text-white transition-colors text-sm">
+                  <Link to="/gamification" className="footer-link">
                     Earn Rewards
                   </Link>
                 </li>
                 <li>
-                  <Link to="/articles" className="text-neutral-400 hover:text-white transition-colors text-sm">
+                  <Link to="/articles" className="footer-link">
                     Articles & Guides
                   </Link>
                 </li>
@@ -290,64 +290,64 @@ export default function Footer() {
             {/* Business & Legal */}
             <nav aria-label="Business links">
               <h4 className="text-sm font-semibold mb-4 uppercase tracking-wider text-neutral-300">Business</h4>
-              <ul className="space-y-2">
+              <ul className="footer-link-list space-y-2">
                 <li>
-                  <Link to="/advertise" className="text-neutral-400 hover:text-white transition-colors text-sm">
+                  <Link to="/advertise" className="footer-link">
                     Advertise With Us
                   </Link>
                 </li>
                 <li>
-                  <Link to="/business-partnership" className="text-neutral-400 hover:text-white transition-colors text-sm">
+                  <Link to="/business-partnership" className="footer-link">
                     Business Partnership
                   </Link>
                 </li>
                 <li>
-                  <Link to="/privacy-policy" className="text-neutral-400 hover:text-white transition-colors text-sm">
+                  <Link to="/privacy-policy" className="footer-link">
                     Privacy Policy
                   </Link>
                 </li>
                 <li>
-                  <Link to="/terms" className="text-neutral-400 hover:text-white transition-colors text-sm">
+                  <Link to="/terms" className="footer-link">
                     Terms of Service
                   </Link>
                 </li>
                 <li>
-                  <Link to="/accessibility" className="text-neutral-400 hover:text-white transition-colors text-sm">
+                  <Link to="/accessibility" className="footer-link">
                     Accessibility
                   </Link>
                 </li>
                 <li>
-                  <Link to="/cookie-policy" className="text-neutral-400 hover:text-white transition-colors text-sm">
+                  <Link to="/cookie-policy" className="footer-link">
                     Cookie Policy
                   </Link>
                 </li>
                 <li>
-                  <Link to="/acceptable-use" className="text-neutral-400 hover:text-white transition-colors text-sm">
+                  <Link to="/acceptable-use" className="footer-link">
                     Acceptable Use
                   </Link>
                 </li>
                 <li>
-                  <Link to="/dmca" className="text-neutral-400 hover:text-white transition-colors text-sm">
+                  <Link to="/dmca" className="footer-link">
                     DMCA / Copyright
                   </Link>
                 </li>
                 <li>
-                  <Link to="/dpa" className="text-neutral-400 hover:text-white transition-colors text-sm">
+                  <Link to="/dpa" className="footer-link">
                     Data Processing (DPA)
                   </Link>
                 </li>
                 <li>
-                  <Link to="/contact" className="text-neutral-400 hover:text-white transition-colors text-sm">
+                  <Link to="/contact" className="footer-link">
                     Contact Us
                   </Link>
                 </li>
                 <li>
-                  <Link to="/support" className="text-neutral-400 hover:text-white transition-colors text-sm">
+                  <Link to="/support" className="footer-link">
                     Help &amp; Support
                   </Link>
                 </li>
                 <li>
-                  <Link to="/affiliate-disclosure" className="text-neutral-400 hover:text-white transition-colors text-sm">
+                  <Link to="/affiliate-disclosure" className="footer-link">
                     Affiliate Disclosure
                   </Link>
                 </li>
@@ -359,7 +359,7 @@ export default function Footer() {
                   <button
                     type="button"
                     onClick={reopenConsentBanner}
-                    className="text-neutral-400 hover:text-white transition-colors text-sm text-left focus:outline-none focus:ring-2 focus:ring-primary rounded-sm"
+                    className="footer-link text-left focus:outline-none focus:ring-2 focus:ring-primary rounded-sm"
                   >
                     Your Privacy Choices
                   </button>

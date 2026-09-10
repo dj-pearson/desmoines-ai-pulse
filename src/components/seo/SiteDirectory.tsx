@@ -164,7 +164,7 @@ export function SiteDirectory({ className = "" }: { className?: string }) {
                   // and it is why the required a11y check went red.
                   // neutral-400 is what the other 19 links in this footer use,
                   // and it measures 7.11:1.
-                  className="text-sm text-neutral-400 hover:text-white hover:underline transition-colors"
+                  className="footer-link-compact hover:underline"
                 >
                   {link.title}
                 </Link>

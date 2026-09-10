@@ -9431,6 +9431,39 @@
       "priority": 1,
       "passes": true,
       "notes": "Closes the first and largest slice of WEB-QA-031. The remaining pages on that story's list are lower-traffic; the guard now covers the seven that matter most."
+    },
+    {
+      "id": "WEB-UX-036",
+      "title": "72 of the ~73 undersized touch targets on every page were footer links, 16-20px tall",
+      "description": "As someone using the site on a phone, I need to be able to hit a footer link. Measured at 375px against a production build: every page carried ~73 interactive elements under this project's 44px standard, and 72 of them were in the footer.",
+      "acceptanceCriteria": [
+        "Footer links rendered at 16-20px tall in lists with 8px gaps. That fails this project's stated 44px touch-target standard AND WCAG 2.5.8's 24px AA minimum. It is also where the legal links live - Privacy, Terms, Cookie Policy, Accessibility, DMCA - which are exactly the ones someone goes looking for deliberately rather than stumbles onto.",
+        "I FIRST MEASURED THIS WRONG and corrected it before acting: the initial sweep flagged elements carrying .tap-area-44 (the header logo at 32x32, the cookie-banner close at 24x24) as broken. That utility supplies its own 44px hit region through an ::after overlay, which getBoundingClientRect on the element does not include. Verified by reading the pseudo-element's computed style under an emulated coarse pointer: display block, min-width and min-height 44px. The utility works; it is applied in only 6 places.",
+        "TWO THRESHOLDS, and the reason is scroll cost. The mobile footer was ALREADY 2871px tall at 375px, most of it SiteDirectory - 60-odd deep links whose job is internal linking and crawlability, not thumb navigation. A uniform 44px measured 3935px: another full screen of footer for links almost nobody taps. So .footer-link (the ~27 links people actually use) gets 44px and .footer-link-compact (the SEO directory) gets WCAG 2.5.8's 24px, which is what those 20px rows were failing. Measured after: 3431px.",
+        "Coarse pointers only, following .tap-area-44's precedent. Desktop footer height is unchanged at 1557px, verified at 1280px. Real padding rather than an ::after overlay, because these links stack a few pixels apart and overlapping hit regions would steal each other's taps - the collision that utility's own docblock warns about.",
+        "TWO LINKS DELIBERATELY LEFT: the Privacy Policy link inside the newsletter consent sentence (12px) and the mailto inside the postal address line (14px). WCAG 2.5.8 explicitly exempts a target 'in a sentence or its size is otherwise constrained by the line-height of non-target text', and .tap-area-44's docblock says not to use it there either.",
+        "The change also removed 27 repeated copies of the same class string from Footer.tsx.",
+        "GUARDED: tests/touch-targets.spec.ts in the smoke lane, measuring rendered boxes at 375px under a coarse pointer - computed layout behind a media query, which no source-text check can see. PROVED AGAINST THE PRE-FIX CODE: stashed the three files, rebuilt, ran it - it failed naming each link and its height ('Events' 20px < 44px, \"Today's Events\" 16px < 44px, ...).",
+        "588 vitest tests pass, eslint 0 errors over src/ and tests/, tsc -p tsconfig.app.json clean, all seven check scripts green.",
+        "NOT A DEFECT, recorded so nobody re-spends the time: no horizontal overflow at 375px on any of the 14 routes swept."
+      ],
+      "priority": 2,
+      "passes": true,
+      "notes": "Found with the headless harness from iteration 8, pointed at a stated standard nothing enforced."
+    },
+    {
+      "id": "WEB-UX-037",
+      "title": "The mobile footer is 3431px tall at 375px - about four screens of links below every page",
+      "description": "As someone on a phone who has scrolled to the bottom, I should not meet four screens of links. WEB-UX-036 made them tappable; it did not make the footer a sensible size, and it added 560px doing so.",
+      "acceptanceCriteria": [
+        "Measured at 375px on /events: 2871px before WEB-UX-036, 3431px after. Desktop is 1557px. The bulk is SiteDirectory (src/components/seo/SiteDirectory.tsx), a 60-odd link SEO block.",
+        "The obvious move is a <details> disclosure on mobile only, which keeps every link in the DOM for crawlers while giving humans a tidy footer. NOT DONE IN WEB-UX-036 ON PURPOSE: SiteDirectory lives under components/seo/ and exists for internal linking, and whether Google should be asked to weigh those links from behind a disclosure is a deliberate SEO call, not a layout tidy-up.",
+        "Decide that call first. If a disclosure is acceptable, the links stay crawlable and .footer-link-compact can go back to the full 44px inside it, since the scroll cost disappears when it is closed by default.",
+        "Check scripts/check-internal-links.mjs and check-hub-inventory.mjs still pass afterwards - both read the footer's links."
+      ],
+      "priority": 3,
+      "passes": false,
+      "notes": "FILED FROM THE LOOP, iteration 9. Needs an SEO decision before any code, which is why it was not folded into WEB-UX-036."
     }
   ]
 }

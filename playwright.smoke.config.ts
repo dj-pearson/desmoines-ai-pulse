@@ -28,6 +28,10 @@ export default defineConfig({
   // check that cannot fail a PR is decorative, and WEB-LEGAL-001 is the exact
   // defect that shipped while a document said it was fixed.
   //
+  // touch-targets.spec.ts is here too: it measures rendered footer link boxes
+  // at 375px under a coarse pointer, which is computed layout behind a media
+  // query - nothing a source-text check can see. WEB-UX-036.
+  //
   // backend-down.spec.ts is here for the same reason: it aborts every Supabase
   // request and asserts no reader-facing route answers "No items available in
   // this category right now". That is a runtime property - the TanStack pages
@@ -38,7 +42,7 @@ export default defineConfig({
   // network requests and cookies - which no source-text check can establish.
   // scripts/check-consent-gate.mjs covers the source side; this covers what
   // actually happens.
-  testMatch: /(route-smoke|cookie-consent|backend-down)\.spec\.ts/,
+  testMatch: /(route-smoke|cookie-consent|backend-down|touch-targets)\.spec\.ts/,
   fullyParallel: true,
   forbidOnly: !!process.env.CI,
   retries: process.env.CI ? 2 : 0,
