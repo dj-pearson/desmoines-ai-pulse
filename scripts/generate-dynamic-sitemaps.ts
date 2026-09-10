@@ -14,6 +14,7 @@ import { computePseoShippable } from './lib/pseoShippable';
 // generator would not have written. See scripts/lib/sitemapSlugs.ts.
 import { createSlug, createEventSlug } from './lib/sitemapSlugs';
 import { isOutsideIowa } from '@/lib/serviceArea';
+import { SITEMAP_CHILDREN, newestChildLastmod, renderSitemapIndex } from './lib/sitemapIndex';
 
 // Load .env for local development (Cloudflare Pages / Infisical set env vars at build time)
 function loadEnvFile(filePath: string): void {
@@ -715,48 +716,26 @@ async function main(): Promise<void> {
 
     const totalUrls = results.filter((r): r is number => r !== null).reduce((sum, count) => sum + count, 0);
 
-    // Update sitemap.xml index lastmod date
+    // WEB-SEO-038: one index, built from the children that actually exist,
+    // each carrying its own newest lastmod rather than today's date.
+    const children = SITEMAP_CHILDREN.filter((name) =>
+      existsSync(join(process.cwd(), 'public', name)),
+    );
+
+    const missing = SITEMAP_CHILDREN.filter((name) => !children.includes(name));
+    if (missing.length > 0) {
+      // Advertising a child that is not on disk hands Google a 404 in the one
+      // file it is told to trust. Say so loudly; do not list it.
+      console.warn(`⚠️ Not in the index (file missing): ${missing.join(', ')}`);
+    }
+
     const sitemapIndexPath = join(process.cwd(), 'public', 'sitemap.xml');
-    const sitemapIndex = `<?xml version="1.0" encoding="UTF-8"?>
-<sitemapindex xmlns="http://www.sitemaps.org/schemas/sitemap/0.9">
-  <sitemap>
-    <loc>${baseUrl}/sitemap-static.xml</loc>
-    <lastmod>${currentDate}</lastmod>
-  </sitemap>
-  <sitemap>
-    <loc>${baseUrl}/sitemap-events.xml</loc>
-    <lastmod>${currentDate}</lastmod>
-  </sitemap>
-  <sitemap>
-    <loc>${baseUrl}/sitemap-restaurants.xml</loc>
-    <lastmod>${currentDate}</lastmod>
-  </sitemap>
-  <sitemap>
-    <loc>${baseUrl}/sitemap-attractions.xml</loc>
-    <lastmod>${currentDate}</lastmod>
-  </sitemap>
-  <sitemap>
-    <loc>${baseUrl}/sitemap-playgrounds.xml</loc>
-    <lastmod>${currentDate}</lastmod>
-  </sitemap>
-  <sitemap>
-    <loc>${baseUrl}/sitemap-articles.xml</loc>
-    <lastmod>${currentDate}</lastmod>
-  </sitemap>
-  <sitemap>
-    <loc>${baseUrl}/sitemap-hotels.xml</loc>
-    <lastmod>${currentDate}</lastmod>
-  </sitemap>
-  <sitemap>
-    <loc>${baseUrl}/sitemap-guides.xml</loc>
-    <lastmod>${currentDate}</lastmod>
-  </sitemap>
-  <sitemap>
-    <loc>${baseUrl}/sitemap-pseo.xml</loc>
-    <lastmod>${currentDate}</lastmod>
-  </sitemap>
-</sitemapindex>`;
-    writeFileSync(sitemapIndexPath, sitemapIndex);
+    writeFileSync(
+      sitemapIndexPath,
+      renderSitemapIndex(baseUrl, children, (name) =>
+        newestChildLastmod(name, currentDate),
+      ),
+    );
 
     console.log('\n' + '='.repeat(50));
     console.log('✨ Dynamic sitemap generation complete!');
