@@ -9572,6 +9572,24 @@
       "priority": 1,
       "passes": true,
       "notes": "Found by following up an edge case noticed in iteration 1 and never verified: that /search?q=x rendered nothing. The infinite request loop was underneath it and is much the larger defect."
+    },
+    {
+      "id": "WEB-PERF-043",
+      "title": "A request budget per route, because a render loop is invisible to any assertion about the DOM",
+      "description": "As a contributor, I need the next WEB-QA-033 to fail a PR rather than reach production. That defect fired the AI search function 82 times in 16 seconds and the page looked merely empty while it did.",
+      "acceptanceCriteria": [
+        "Generalises the single-route guard from WEB-QA-033 to eight main routes: no backend endpoint may be called more than 20 times on one page load. The defect class is an effect keyed on a callback whose identity changes every render, and no DOM assertion can see it - the page renders the same either way.",
+        "SWEPT FIRST FOR SIBLINGS, and found none. A source scan over 89 useMutation/useQuery bindings across 34 files found no other dependency array holding a whole query or mutation object; useNLPSearch was the only one. A runtime sweep of seventeen routes found no pathological pattern either.",
+        "EVERY COUNT IS EXPLAINED, which is what makes the budget honest rather than arbitrary. With the backend unreachable TanStack retries twice, so one query is three requests. The busiest single endpoint across all seventeen routes was rpc/get_active_ads at 6 on / and /restaurants - CHECKED IN SOURCE rather than assumed: those pages render two and three <AdBanner> components with DIFFERENT placements (top_banner and below_fold; featured_spot, below_fold and sidebar), and the query key includes the placement, so they are legitimately separate queries. Nothing else exceeded 11 for a whole table.",
+        "20 leaves room for a page to grow a section or two and still catches a loop by an order of magnitude.",
+        "The backend is cut deliberately: it makes the run independent of data, and a failing query is also the worst case, being what spins fastest and what a render loop reaches soonest.",
+        "PROVED against the WEB-QA-033 defect by restoring the old dependency and rebuilding: 'called more than 20 times on /search?q=live%20music: nlp-search x34'.",
+        "A FIRST ATTEMPT AT THAT PROOF WAS WORTHLESS and is recorded because the failure mode is easy to repeat: `git stash push` on a file whose fix was already COMMITTED stashes nothing, so the revert never happened and the test passed against the fixed code. Reverting has to edit the file, not stash it.",
+        "588 vitest tests pass, eslint 0 errors, tsc clean, all eight check scripts and check-dead-lib green."
+      ],
+      "priority": 2,
+      "passes": true,
+      "notes": "Final iteration of the loop. Nothing new was broken - this is the durable form of what iteration 14 found by hand."
     }
   ]
 }

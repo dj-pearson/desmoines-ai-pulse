@@ -28,6 +28,9 @@ export default defineConfig({
   // check that cannot fail a PR is decorative, and WEB-LEGAL-001 is the exact
   // defect that shipped while a document said it was fixed.
   //
+  // request-budget.spec.ts generalises that to every main route: no endpoint
+  // may be called more than 20 times on one page load. WEB-PERF-043.
+  //
   // search-request-loop.spec.ts counts REQUESTS rather than checking the DOM:
   // an effect keyed on an unstable callback fired nlp-search 82 times in 16
   // seconds for one query, and the page just looked empty while it did.
@@ -52,7 +55,7 @@ export default defineConfig({
   // network requests and cookies - which no source-text check can establish.
   // scripts/check-consent-gate.mjs covers the source side; this covers what
   // actually happens.
-  testMatch: /(route-smoke|cookie-consent|backend-down|touch-targets|page-headings|search-request-loop)\.spec\.ts/,
+  testMatch: /(route-smoke|cookie-consent|backend-down|touch-targets|page-headings|search-request-loop|request-budget)\.spec\.ts/,
   fullyParallel: true,
   forbidOnly: !!process.env.CI,
   retries: process.env.CI ? 2 : 0,
