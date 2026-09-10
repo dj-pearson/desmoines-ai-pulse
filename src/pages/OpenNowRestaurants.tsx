@@ -19,6 +19,8 @@ import { BRAND, getCanonicalUrl } from "@/lib/brandConfig";
 import { useDocumentTitle } from "@/hooks/useDocumentTitle";
 import { Breadcrumbs } from "@/components/ui/breadcrumbs";
 import { RESTAURANT_LIST_COLUMNS } from "@/lib/listColumns";
+import { useReloadableFetch } from "@/hooks/useReloadableFetch";
+import { ErrorState } from "@/components/ui/error-state";
 
 interface Restaurant {
   id: string;
@@ -37,6 +39,7 @@ interface Restaurant {
 export default function OpenNowRestaurants() {
   const [restaurants, setRestaurants] = useState<Restaurant[]>([]);
   const [isLoading, setIsLoading] = useState(true);
+  const { error: loadError, setError: setLoadError, reloadKey, retry } = useReloadableFetch();
   const [currentTime, setCurrentTime] = useState(new Date());
   useDocumentTitle("Open Now Restaurants");
 
@@ -64,6 +67,7 @@ export default function OpenNowRestaurants() {
 
         if (error) {
           log.error('fetchOpenRestaurants', 'Error fetching restaurants', { error });
+          setLoadError(error);
           setRestaurants([]);
         } else {
           // Filter restaurants to only show those with hours data that are currently open
@@ -71,10 +75,12 @@ export default function OpenNowRestaurants() {
             const result = getRestaurantOpenStatus(restaurant.opening);
             return result.isOpen;
           });
+          setLoadError(null);
           setRestaurants(filtered);
         }
       } catch (error) {
         log.error('fetchOpenRestaurants', 'Unexpected error in fetchOpenRestaurants', { error });
+        setLoadError(error);
         setRestaurants([]);
       } finally {
         setIsLoading(false);
@@ -82,7 +88,7 @@ export default function OpenNowRestaurants() {
     };
 
     fetchOpenRestaurants();
-  }, []);
+  }, [reloadKey]);
 
   const openRestaurants = restaurants || [];
   const currentHour = currentTime.getHours();
@@ -300,7 +306,9 @@ export default function OpenNowRestaurants() {
         </Card>
 
         {/* Restaurants List */}
-        {isLoading ? (
+        {!isLoading && loadError ? (
+          <ErrorState error={loadError} onRetry={retry} />
+        ) : isLoading ? (
           <div className="grid gap-6 md:grid-cols-2 lg:grid-cols-3">
             {[...Array(6)].map((_, i) => (
               <div key={i} className="animate-pulse">
@@ -317,9 +325,9 @@ export default function OpenNowRestaurants() {
               Restaurants Open Now ({openRestaurants.length})
             </h2>
             <div className="grid gap-6 md:grid-cols-2 lg:grid-cols-3">
-              {openRestaurants.map((restaurant) => (
+              {openRestaurants.map((restaurant, index) => (
                 <div key={restaurant.id} className="content-auto">
-                  <RestaurantCard restaurant={restaurant} />
+                  <RestaurantCard restaurant={restaurant} priority={index < 3} />
                 </div>
               ))}
             </div>

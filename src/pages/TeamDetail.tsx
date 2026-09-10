@@ -1,5 +1,5 @@
 import { useParams, Link } from 'react-router-dom';
-import { createEventSlugWithCentralTime } from "@/lib/timezone";
+import { createEventSlugWithCentralTime, formatEventPart, formatEventTimeOnly } from "@/lib/timezone";
 import { RouteCanonical } from "@/components/RouteCanonical";
 import Header from '@/components/Header';
 import { DetailFetchError } from '@/components/DetailFetchError';
@@ -15,8 +15,8 @@ import { SpriteIcon } from "@/components/ui/SpriteIcon";
 
 export default function TeamDetail() {
   const { slug } = useParams<{ slug: string }>();
-  const { data: team, isLoading, error, refetch } = useTeam(slug || '');
-  const { data: games } = useTeamGames(team?.name || '');
+  const { data: team, isLoading, error: teamError, refetch: refetchTeam } = useTeam(slug || '');
+  const { data: games, error: gamesError, refetch: refetchGames } = useTeamGames(team?.name || '');
 
   if (isLoading) {
     return (
@@ -34,7 +34,7 @@ export default function TeamDetail() {
   }
 
   // WEB-SEO-040: a thrown query is not a missing row. Retry state, no robots meta.
-  if (error) {
+  if (teamError) {
     return (
       <div className="min-h-screen bg-background">
         <RouteCanonical path={`/sports/${slug}`} />
@@ -43,7 +43,7 @@ export default function TeamDetail() {
           entityLabel="team"
           backHref="/sports"
           backLabel="Back to Sports Hub"
-          onRetry={() => refetch()}
+          onRetry={() => refetchTeam()}
         />
         <Footer />
       </div>
@@ -148,18 +148,18 @@ export default function TeamDetail() {
                       <CardContent className="p-4 flex items-center gap-4">
                         <div className="text-center min-w-[60px]">
                           <p className="text-xs text-muted-foreground uppercase">
-                            {new Date(event.date).toLocaleDateString([], { month: 'short' })}
+                            {formatEventPart(event, 'MMM')}
                           </p>
                           <p className="text-2xl font-bold">
-                            {new Date(event.date).getDate()}
+                            {formatEventPart(event, 'd')}
                           </p>
                         </div>
                         <div className="flex-1">
                           <h3 className="font-semibold">{event.title}</h3>
                           <p className="text-sm text-muted-foreground">
-                            {new Date(event.date).toLocaleDateString([], { weekday: 'long' })}
+                            {formatEventPart(event, 'EEEE')}
                             {' · '}
-                            {new Date(event.date).toLocaleTimeString([], { hour: 'numeric', minute: '2-digit' })}
+                            {formatEventTimeOnly(event) ?? 'Time TBA'}
                           </p>
                           {event.venue && <p className="text-sm text-muted-foreground">{event.venue}</p>}
                         </div>
@@ -170,7 +170,11 @@ export default function TeamDetail() {
                 ))}
               </div>
             ) : (
-              <p className="text-muted-foreground">No upcoming games listed for {team.name}.</p>
+              gamesError ? (
+                <ErrorState error={gamesError} compact onRetry={refetchGames} />
+              ) : (
+                <p className="text-muted-foreground">No upcoming games listed for {team.name}.</p>
+              )
             )}
           </section>
         </div>

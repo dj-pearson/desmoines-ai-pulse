@@ -28,11 +28,34 @@ export default defineConfig({
   // check that cannot fail a PR is decorative, and WEB-LEGAL-001 is the exact
   // defect that shipped while a document said it was fixed.
   //
+  // request-budget.spec.ts generalises that to every main route: no endpoint
+  // may be called more than 20 times on one page load. WEB-PERF-043.
+  //
+  // search-request-loop.spec.ts counts REQUESTS rather than checking the DOM:
+  // an effect keyed on an unstable callback fired nlp-search 82 times in 16
+  // seconds for one query, and the page just looked empty while it did.
+  // WEB-QA-033.
+  //
+  // page-headings.spec.ts asserts one <h1> per route, including when the data
+  // fails - axe's page-has-heading-one is a best-practice rule outside the
+  // wcag2aa tag set accessibility.spec.ts filters to, so nothing caught it.
+  // WEB-A11Y-002.
+  //
+  // touch-targets.spec.ts is here too: it measures rendered footer link boxes
+  // at 375px under a coarse pointer, which is computed layout behind a media
+  // query - nothing a source-text check can see. WEB-UX-036.
+  //
+  // backend-down.spec.ts is here for the same reason: it aborts every Supabase
+  // request and asserts no reader-facing route answers "No items available in
+  // this category right now". That is a runtime property - the TanStack pages
+  // reach their empty state only after retries are exhausted - so no
+  // source-text check can establish it. WEB-QA-032.
+  //
   // It belongs here specifically because it asserts REAL BROWSER BEHAVIOUR -
   // network requests and cookies - which no source-text check can establish.
   // scripts/check-consent-gate.mjs covers the source side; this covers what
   // actually happens.
-  testMatch: /(route-smoke|cookie-consent)\.spec\.ts/,
+  testMatch: /(route-smoke|cookie-consent|backend-down|touch-targets|page-headings|search-request-loop|request-budget)\.spec\.ts/,
   fullyParallel: true,
   forbidOnly: !!process.env.CI,
   retries: process.env.CI ? 2 : 0,

@@ -40,6 +40,7 @@ import { LazyLocationMap } from "@/components/LazyLocationMap";
 import { eventPriceContent } from "@/lib/eventOffers";
 import { SpriteIcon } from "@/components/ui/SpriteIcon";
 import { DetailFetchError } from "@/components/DetailFetchError";
+import { fetchPriorityAttr } from '@/lib/fetchPriority';
 
 /** Upcoming events fetched to populate the related/nearby rails (3 shown each). */
 const RELATED_POOL_SIZE = 50;
@@ -235,6 +236,7 @@ export default function EventDetails() {
               className="w-full h-full object-cover opacity-60"
               loading="eager"
               decoding="async"
+              {...fetchPriorityAttr("high")}
               onError={(e) => {
                 const target = e.target as HTMLImageElement;
                 target.parentElement!.style.display = 'none';

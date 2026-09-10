@@ -686,6 +686,12 @@ export default function Auth() {
 
   return (
     <div className="min-h-screen bg-gradient-to-br from-primary/10 to-accent/10 flex items-center justify-center p-4">
+      {/* WEB-A11Y-002. This page had no <h1> at all: CardTitle renders an <h3>,
+          so the document jumped straight to h3 and a screen-reader user landing
+          here got no statement of what the page is for. Visually hidden rather
+          than shown, because the card's own title carries the design and adding
+          a second visible heading would say the same thing twice. */}
+      <h1 className="sr-only">Sign in or create your Des Moines Insider account</h1>
       <Card className="w-full max-w-md">
         <CardHeader className="text-center">
           <CardTitle className="text-2xl font-bold">Des Moines Insider</CardTitle>

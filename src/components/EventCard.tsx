@@ -52,15 +52,12 @@ interface EventCardProps {
   event: Event;
   onViewDetails: (event: Event) => void;
   /**
-   * WEB-SEO-032: render the <img> immediately instead of waiting for
-   * IntersectionObserver. Pass it on the first row of any list.
+   * True for the cards above the fold on first paint, which loads the image
+   * eagerly at high fetch priority instead of lazily.
    *
-   * OptimizedImage renders NO img element at all until the observer fires, and
-   * an observer never fires in a prerender: the browser that captures the page
-   * has no viewport scroll and the crawler that reads dist/ has no browser. So
-   * every prerendered hub shipped a grid of empty image containers, and for a
-   * real visitor the LCP element was lazy-loaded - the one image on the page
-   * that must not be.
+   * WEB-PERF-040. OptimizedImage has always supported this and NO caller in
+   * the app passed it, so every image on the site - the LCP element on the
+   * hubs included - was loading="lazy" with no priority hint.
    */
   priority?: boolean;
 }
@@ -129,11 +126,11 @@ function EventCardComponent({ event, onViewDetails, priority = false }: EventCar
             alt={event.title}
             width={640}
             height={192}
-            priority={priority}
             className="transition-transform duration-200 group-hover:scale-105 object-cover"
             containerClassName="w-full h-48"
             aspectRatio="640/192"
             sizes="(max-width: 640px) 100vw, (max-width: 1024px) 50vw, 33vw"
+            priority={priority}
             onError={() => setImageError(true)}
           />
         ) : (

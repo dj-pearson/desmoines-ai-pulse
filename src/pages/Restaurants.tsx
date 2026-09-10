@@ -688,6 +688,7 @@ export default function Restaurants() {
                 <div className="grid grid-cols-1 md:grid-cols-3 gap-6">
                   {featuredRestaurants.map((restaurant, index) => (
                     <RestaurantCard
+                      priority={index < 3}
                       key={restaurant.id}
                       restaurant={restaurant}
                       variant="featured"
@@ -783,6 +784,7 @@ export default function Restaurants() {
                   <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-6">
                     {paginatedRestaurants.map((restaurant, index) => (
                       <RestaurantCard
+                        priority={index < 3}
                         key={restaurant.id}
                         restaurant={restaurant}
                         // WEB-SEO-032: first row eager, unless the featured rail

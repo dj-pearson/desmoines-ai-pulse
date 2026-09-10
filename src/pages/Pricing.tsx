@@ -1,6 +1,5 @@
 import { useState, useEffect } from "react";
 import { useNavigate, useSearchParams } from "react-router-dom";
-import { Helmet } from "react-helmet-async";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
@@ -15,6 +14,8 @@ import { useToast } from "@/hooks/use-toast";
 import { useConversionFunnel } from "@/hooks/useConversionFunnel";
 import { Check, Star, Crown, Bell, Heart, Search, Zap, Shield, MessageCircle, Smartphone, Gift, Loader2 } from "lucide-react";
 import { SpriteIcon } from "@/components/ui/SpriteIcon";
+import SEOHead from "@/components/SEOHead";
+import { getCanonicalUrl } from "@/lib/brandConfig";
 
 interface PlanFeature {
   text: string;
@@ -265,14 +266,17 @@ export default function Pricing() {
 
   return (
     <>
-      <Helmet>
-        <title>Pricing - Des Moines Insider | Unlock Premium Local Experiences</title>
-        <meta
-          name="description"
-          content="Choose your Des Moines Insider membership. Get early event access, unlimited favorites, personalized recommendations, and exclusive VIP perks."
-        />
-        <meta name="keywords" content="Des Moines membership, local events subscription, VIP experiences Iowa" />
-      </Helmet>
+      {/* WEB-SEO-044. This was a raw <Helmet> with title, description and
+          keywords only - no Open Graph at all - while every other page goes
+          through SEOHead. Sharing the pricing page anywhere produced a card
+          with no title and no description, on the one page whose whole job is
+          conversion. */}
+      <SEOHead
+        title="Pricing - Des Moines Insider | Unlock Premium Local Experiences"
+        description="Choose your Des Moines Insider membership. Get early event access, unlimited favorites, personalized recommendations, and exclusive VIP perks."
+        keywords={["Des Moines membership", "local events subscription", "VIP experiences Iowa"]}
+        url={getCanonicalUrl("/pricing")}
+      />
 
       <div className="min-h-screen bg-background">
         <Header />

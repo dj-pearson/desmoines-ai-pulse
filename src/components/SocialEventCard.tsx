@@ -1,11 +1,11 @@
 import React from 'react';
+import { fetchPriorityAttr } from '@/lib/fetchPriority';
 import { Card, CardContent } from '@/components/ui/card';
 import { Badge } from '@/components/ui/badge';
 import { Button } from '@/components/ui/button';
 import { FavoriteButton } from '@/components/FavoriteButton';
 import { AddToCalendarButton } from '@/components/AddToCalendarButton';
 import ShareDialog from '@/components/ShareDialog';
-import { fetchPriorityAttr } from "@/lib/fetchPriority";
 import { useEventSocial } from '@/hooks/useEventSocial';
 import { BatchEventSocialData } from '@/hooks/useBatchEventSocial';
 import { Event } from '@/lib/types';
@@ -38,14 +38,21 @@ interface SocialEventCardProps {
    * wired up correctly (WEB-PERF-024).
    */
   socialDataPending?: boolean;
-  featured?: boolean;
   /**
-   * WEB-SEO-032: eager, high-priority image for the first row of a list.
-   * This card renders a raw <img loading="lazy"> with no width/height, so on
-   * every SEO landing page the LCP element was lazy and the layout shifted
-   * when it arrived. Pass priority on the first three cards.
+   * True for the cards above the fold on first paint. The image then loads
+   * eagerly at high fetch priority instead of lazily.
+   *
+   * WEB-PERF-040. This card renders every event listing on the site - /events,
+   * /events/today, /events/free, /events/kids, /events/date-night,
+   * /events/this-weekend, /events/in/:location - and its image was
+   * unconditionally loading="lazy" with no way to opt out. The LCP element on
+   * every one of those pages was therefore lazily loaded, which is the one
+   * thing Chrome's own guidance says not to do: the browser will not start the
+   * fetch until layout has run, so the largest paint waits on work that has
+   * already finished for every other element.
    */
   priority?: boolean;
+  featured?: boolean;
 }
 
 function SocialEventCardComponent({
@@ -144,8 +151,8 @@ function SocialEventCardComponent({
                 width={640}
                 height={featured ? 320 : 208}
                 loading={priority ? "eager" : "lazy"}
-                {...fetchPriorityAttr(priority ? "high" : undefined)}
                 decoding="async"
+                {...fetchPriorityAttr(priority ? "high" : undefined)}
                 onError={() => setImageFailed(true)}
               />
             ) : null}

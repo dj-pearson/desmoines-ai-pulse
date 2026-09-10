@@ -10,6 +10,7 @@ import { useNLPSearch, NLP_SEARCH_EXAMPLES } from "@/hooks/useNLPSearch";
 import { Link } from "react-router-dom";
 import { Search, Utensils, Loader2, X, DollarSign, Star, Lightbulb } from "lucide-react";
 import { SpriteIcon } from "@/components/ui/SpriteIcon";
+import { formatEventPart } from "@/lib/timezone";
 
 interface NLPSearchBarProps {
   placeholder?: string;
@@ -408,7 +409,7 @@ function ResultItem({
           {item.date && (
             <span className="flex items-center gap-1">
               <SpriteIcon name="clock" className="h-3 w-3" />
-              {new Date(item.date).toLocaleDateString()}
+              {formatEventPart(item, 'MMM d, yyyy')}
             </span>
           )}
           {item.cuisine && (

@@ -61,10 +61,18 @@ export const BRAND = {
   // /restaurants, /things-to-do, /trip-planner - while the other 37 pass an
   // explicit DMI-Logo.png. This makes the default the file those 37 already use.
   //
-  // DMI-Logo.png is 800x800. A purpose-built 1200x630 card would preview better
-  // on every network; that is a design task, not a broken-link fix, so it is not
-  // done here. An existing square image beats a 200 of HTML.
-  ogImage: '/DMI-Logo.png',
+  // WEB-SEO-044: the design task this comment used to defer is done.
+  //
+  // The fallback was DMI-Logo.png, 800x800 SQUARE, while SEOHead declares
+  // og:image:width 1200 and og:image:height 630 - so the numbers handed to
+  // Facebook and Twitter did not describe the file. They lay the card out from
+  // those numbers, which is why declaring them wrongly is worse than omitting
+  // them: a 1.91:1 box reserved for a square image.
+  //
+  // public/og-default.png is a real 1200x630 card in the brand palette, built
+  // by scripts/generate-og-default.mjs so it can be regenerated when the
+  // wordmark or the colours move.
+  ogImage: '/og-default.png',
 
   // Theme colors
   themeColor: '#3B82F6',

@@ -1,5 +1,5 @@
 import { useParams, Link } from 'react-router-dom';
-import { createEventSlugWithCentralTime } from "@/lib/timezone";
+import { createEventSlugWithCentralTime, formatEventPart, formatEventTimeOnly } from "@/lib/timezone";
 import { RouteCanonical } from "@/components/RouteCanonical";
 import Header from '@/components/Header';
 import { DetailFetchError } from '@/components/DetailFetchError';
@@ -24,8 +24,8 @@ const VENUE_TYPE_LABELS: Record<string, string> = {
 
 export default function VenueDetail() {
   const { slug } = useParams<{ slug: string }>();
-  const { data: venue, isLoading, error, refetch } = useVenue(slug || '');
-  const { data: events } = useVenueEvents(venue?.name || '');
+  const { data: venue, isLoading, error: venueError, refetch: refetchVenue } = useVenue(slug || '');
+  const { data: events, error: eventsError, refetch: refetchEvents } = useVenueEvents(venue?.name || '');
 
   if (isLoading) {
     return (
@@ -44,7 +44,7 @@ export default function VenueDetail() {
   }
 
   // WEB-SEO-040: a thrown query is not a missing row. Retry state, no robots meta.
-  if (error) {
+  if (venueError) {
     return (
       <div className="min-h-screen bg-background">
         <RouteCanonical path={`/music/venues/${slug}`} />
@@ -53,7 +53,7 @@ export default function VenueDetail() {
           entityLabel="venue"
           backHref="/music"
           backLabel="Back to Music Hub"
-          onRetry={() => refetch()}
+          onRetry={() => refetchVenue()}
         />
         <Footer />
       </div>
@@ -169,18 +169,18 @@ export default function VenueDetail() {
                       <CardContent className="p-4 flex items-center gap-4">
                         <div className="text-center min-w-[60px]">
                           <p className="text-xs text-muted-foreground uppercase">
-                            {new Date(event.date).toLocaleDateString([], { month: 'short' })}
+                            {formatEventPart(event, 'MMM')}
                           </p>
                           <p className="text-2xl font-bold">
-                            {new Date(event.date).getDate()}
+                            {formatEventPart(event, 'd')}
                           </p>
                         </div>
                         <div className="flex-1">
                           <h3 className="font-semibold">{event.title}</h3>
                           <p className="text-sm text-muted-foreground">
-                            {new Date(event.date).toLocaleDateString([], { weekday: 'long' })}
+                            {formatEventPart(event, 'EEEE')}
                             {' · '}
-                            {new Date(event.date).toLocaleTimeString([], { hour: 'numeric', minute: '2-digit' })}
+                            {formatEventTimeOnly(event) ?? 'Time TBA'}
                           </p>
                         </div>
                         {event.price && <Badge variant="outline">{event.price}</Badge>}
@@ -190,7 +190,11 @@ export default function VenueDetail() {
                 ))}
               </div>
             ) : (
-              <p className="text-muted-foreground">No upcoming events listed for this venue.</p>
+              eventsError ? (
+                <ErrorState error={eventsError} compact onRetry={refetchEvents} />
+              ) : (
+                <p className="text-muted-foreground">No upcoming events listed for this venue.</p>
+              )
             )}
           </section>
         </div>

@@ -154,7 +154,19 @@ export function useNLPSearch() {
    * onError below already clears state, so there is nothing left for a caller
    * to do with the rejection; `isError` and `error` remain on the returned
    * object for the ones that want to render it.
+   *
+   * WEB-QA-033: the dependency is `mutateAsync`, NOT `searchMutation`.
+   * useMutation returns a NEW object on every render, so depending on the
+   * whole thing gave `search` a new identity every render - and SearchResults
+   * runs `search(query)` from an effect keyed on it. That is a loop: search ->
+   * state change -> re-render -> new identity -> effect re-runs -> search.
+   * MEASURED on /search?q=pizza: 82 calls to the nlp-search edge function in
+   * 16 seconds, each one an AI request, against a function rate-limited to 100
+   * per 15 minutes. mutateAsync is referentially stable, which breaks it.
    */
+  // Referentially stable across renders, unlike `searchMutation` itself.
+  const { mutateAsync } = searchMutation;
+
   const search = useCallback(
     async (
       query: string,
@@ -163,11 +175,9 @@ export function useNLPSearch() {
       if (!query || query.trim().length < 3) {
         return null;
       }
-      return searchMutation
-        .mutateAsync({ query: query.trim(), contentTypes })
-        .catch(() => null);
+      return mutateAsync({ query: query.trim(), contentTypes }).catch(() => null);
     },
-    [searchMutation]
+    [mutateAsync]
   );
 
   /**

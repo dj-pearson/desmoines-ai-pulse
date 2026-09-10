@@ -1,4 +1,3 @@
-import { useState } from 'react';
 import Header from '@/components/Header';
 import Footer from '@/components/Footer';
 import { Helmet } from 'react-helmet-async';
@@ -11,6 +10,7 @@ import { Button } from '@/components/ui/button';
 import { Tag } from 'lucide-react';
 import AffiliateDisclosureBanner from '@/components/AffiliateDisclosureBanner';
 import { getCanonicalUrl } from '@/lib/brandConfig';
+import { useUrlFilters } from '@/hooks/useUrlFilters';
 
 const CATEGORIES = [
   { value: 'all', label: 'All Deals' },
@@ -22,7 +22,13 @@ const CATEGORIES = [
 ];
 
 export default function Deals() {
-  const [category, setCategory] = useState('all');
+  // URL-synced filter (WEB-UX-035). The canonical comment below already talks
+  // about "any ?category= permutation", but the page never read or wrote that
+  // param - the filter was local React state, so a filtered view could not be
+  // shared and Back from a deal returned to the unfiltered list.
+  const { getStr, setParam } = useUrlFilters();
+  const category = getStr('category', 'all');
+  const setCategory = (v: string) => setParam('category', v, { def: 'all' });
   const { data: deals, isLoading, isError, error, refetch } = useDeals(category);
   const claimDeal = useClaimDeal();
 

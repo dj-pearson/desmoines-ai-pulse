@@ -26,6 +26,7 @@ import { formatCount } from "@/lib/pluralize";
 import { useWeather, reorderForWeather } from "@/hooks/useWeather";
 import { useEventIndoorFlags } from "@/hooks/useEventIndoorFlags";
 import { WeatherNotice } from "@/components/WeatherNotice";
+import { ErrorState } from "@/components/ui/error-state";
 
 interface EventItem {
   id: string;
@@ -64,7 +65,7 @@ export default function EventsToday() {
    * shared EVENT_LIST_COLUMNS rather than a hand-listed set that drifts from
    * public.events.
    */
-  const { data: events = [], isLoading } = useQuery({
+  const { data: events = [], isLoading, error, refetch } = useQuery({
     queryKey: queryKeys.events.list({ window: 'today' }),
     staleTime: STALE_TIME.CONTENT_LIST,
     queryFn: async (): Promise<EventItem[]> => {
@@ -276,6 +277,8 @@ export default function EventsToday() {
               </Card>
             ))}
           </div>
+        ) : error ? (
+          <ErrorState error={error} onRetry={() => refetch()} />
         ) : todaysEvents.length > 0 ? (
           <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6 mb-8">
             {todaysEvents.map((event, index) => (

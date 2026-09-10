@@ -256,7 +256,11 @@ export default function SEOHead({
           honours. Do not re-add it here. */}
 
       {/* Additional Meta for Search Engines */}
-      <meta name="theme-color" content={BRAND.themeColor} />
+      {/* WEB-QUAL-007: theme-color lives in index.html as a light/dark pair.
+          Helmet APPENDS rather than replaces, so emitting one here put a second
+          (and differently-coloured) theme-color in the DOM on every route.
+          msapplication-TileColor stays - it is the Windows tile, a real solid
+          brand colour rather than a match for the page background. */}
       <meta name="msapplication-TileColor" content={BRAND.themeColor} />
       <meta name="application-name" content={BRAND.name} />
       <meta name="apple-mobile-web-app-title" content={BRAND.shortName} />

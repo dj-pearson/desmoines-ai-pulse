@@ -30,12 +30,16 @@ export default function SubscriptionSuccess() {
     verifySubscription();
   }, [refreshSubscription]);
 
+  // Tier colours match PremiumBadge and SubscriptionPortal: Insider is amber,
+  // VIP is the brand red. This screen used to say Insider-blue / VIP-amber, so
+  // the tier a member had just paid for changed colour between the upgrade
+  // modal and the receipt.
   const tierConfig = {
     insider: {
       name: "Insider",
       icon: Sparkles,
-      color: "text-blue-600",
-      bgColor: "bg-blue-100",
+      color: "text-amber-800 dark:text-amber-300",
+      bgColor: "bg-amber-100 dark:bg-amber-900",
       features: [
         "Unlimited favorites",
         "Early access to hot events",
@@ -48,8 +52,8 @@ export default function SubscriptionSuccess() {
     vip: {
       name: "VIP",
       icon: Crown,
-      color: "text-amber-600",
-      bgColor: "bg-amber-100",
+      color: "text-secondary",
+      bgColor: "bg-secondary/10",
       features: [
         "Everything in Insider",
         "Exclusive VIP-only events",

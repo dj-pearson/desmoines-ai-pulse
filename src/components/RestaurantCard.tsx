@@ -63,13 +63,12 @@ interface RestaurantCardProps {
   };
   variant?: "default" | "compact" | "featured";
   /**
-   * WEB-SEO-032: render the <img> eagerly instead of waiting for
-   * IntersectionObserver. Pass it on the first row of any list.
+   * True for the cards above the fold on first paint, which loads the image
+   * eagerly at high fetch priority instead of lazily.
    *
-   * An observer never fires during a prerender - the capture has no viewport
-   * scroll - so every prerendered hub shipped a grid of empty image
-   * containers, and for a real visitor the LCP element was the one image on
-   * the page that must not be lazy.
+   * WEB-PERF-040. OptimizedImage has always supported this and NO caller in
+   * the app passed it, so every image on the site - the LCP element on the
+   * hubs included - was loading="lazy" with no priority hint.
    */
   priority?: boolean;
 }
@@ -149,10 +148,10 @@ function RestaurantCardComponent({ restaurant, variant = "default", priority = f
               alt={`${restaurant.name} - ${restaurant.cuisine || "Restaurant"} in Des Moines`}
               width={640}
               height={192}
-              priority={priority}
               className="transition-transform duration-200 group-hover:scale-105 object-cover"
               containerClassName="absolute inset-0"
               sizes="(max-width: 640px) 100vw, (max-width: 1024px) 50vw, 33vw"
+              priority={priority}
               onError={() => setImageError(true)}
             />
           ) : (

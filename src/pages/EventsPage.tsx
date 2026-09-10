@@ -40,6 +40,7 @@ import { SearchAutocomplete, addRecentSearch } from "@/components/SearchAutocomp
 import { formatCount } from "@/lib/pluralize";
 import { buildEventJsonLd } from "@/lib/eventSchema";
 import { SpriteIcon } from "@/components/ui/SpriteIcon";
+import NoIndexMeta from "@/components/schema/NoIndexMeta";
 
 // Lazy load heavy map component (includes Leaflet library ~150KB)
 const EventsMap = lazy(() => import("@/components/EventsMap"));
@@ -597,6 +598,10 @@ export default function EventsPage() {
             </div>
           </section>
           <div className="container mx-auto px-4 py-8">
+            {/* WEB-A11Y-002: same as the error branch below - this returns above
+                the page's own <h1>, so a slow response leaves the document
+                with no main heading. */}
+            <h1 className="sr-only">Des Moines events</h1>
             <CardsGridSkeleton count={9} variant="event" className="grid gap-6 md:grid-cols-2 lg:grid-cols-3" label="Loading events..." />
           </div>
           <Footer />
@@ -610,9 +615,18 @@ export default function EventsPage() {
     return (
       <>
         <SEOHead title={`Unable to Load Events | ${BRAND.name}`} description="We're having trouble loading events. Please try again." type="website" />
+        {/* WEB-A11Y-002. A transient backend failure must not be indexable.
+            Without this, Googlebot crawling /events during a blip indexes the
+            site's main hub with the title "Unable to Load Events" and a
+            description saying we are having trouble - and keeps it until the
+            next crawl. noindex,follow so the outbound links still pass. */}
+        <NoIndexMeta />
         <div className="min-h-screen bg-background">
           <Header />
           <div className="container mx-auto px-4 py-16">
+            {/* The error branch returns before the page's own <h1>, so without
+                this the document has no main heading at all. */}
+            <h1 className="sr-only">Des Moines events</h1>
             <EmptyState
               icon={AlertCircle}
               title="Unable to Load Events"
@@ -904,6 +918,7 @@ export default function EventsPage() {
               <div className={`grid gap-5 ${isMobile ? 'grid-cols-1' : 'sm:grid-cols-2 lg:grid-cols-3'}`}>
                 {featuredEvents.map((event: any, index: number) => (
                   <SocialEventCard
+                    priority={index < 3}
                     key={`featured-${event.id}`}
                     event={event}
                     priority={index < 3}
@@ -928,6 +943,7 @@ export default function EventsPage() {
             <div className={`grid gap-5 ${isMobile ? 'grid-cols-1' : 'sm:grid-cols-2 lg:grid-cols-3'}`}>
               {events?.map((event, index) => (
                 <SocialEventCard
+                  priority={index < 3}
                   key={event.id}
                   event={event}
                   // WEB-SEO-032: the first row is the LCP candidate - unless

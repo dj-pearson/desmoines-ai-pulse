@@ -38,6 +38,7 @@ import { RestaurantMenuSection } from "@/components/RestaurantMenuSection";
 import { RatingSystem } from "@/components/RatingSystem";
 import { CollapsibleSection } from "@/components/CollapsibleSection";
 import { SpriteIcon } from "@/components/ui/SpriteIcon";
+import { fetchPriorityAttr } from '@/lib/fetchPriority';
 
 export default function RestaurantDetails() {
   const { slug } = useParams();
@@ -453,6 +454,7 @@ export default function RestaurantDetails() {
                   className="absolute inset-0 w-full h-full object-cover"
                   loading="eager"
                   decoding="async"
+                  {...fetchPriorityAttr("high")}
                   onError={() => setImageError(true)}
                 />
               ) : (

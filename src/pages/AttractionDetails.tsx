@@ -31,6 +31,7 @@ import { StickyMobileCTA } from "@/components/StickyMobileCTA";
 import { LastUpdatedBadge } from "@/components/LastUpdatedBadge";
 import { NearbyContent } from "@/components/NearbyContent";
 import { SpriteIcon } from "@/components/ui/SpriteIcon";
+import { fetchPriorityAttr } from '@/lib/fetchPriority';
 
 // Estimated visit duration by attraction type (in minutes)
 const VISIT_DURATION_BY_TYPE: Record<string, { min: number; max: number }> = {
@@ -322,6 +323,7 @@ export default function AttractionDetails() {
                   className="absolute inset-0 w-full h-full object-cover"
                   loading="eager"
                   decoding="async"
+                  {...fetchPriorityAttr("high")}
                   onError={() => setImageError(true)}
                 />
               ) : (

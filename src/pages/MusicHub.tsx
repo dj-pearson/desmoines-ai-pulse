@@ -1,5 +1,5 @@
 import { Link } from 'react-router-dom';
-import { createEventSlugWithCentralTime } from "@/lib/timezone";
+import { createEventSlugWithCentralTime, formatEventPart, formatEventTimeOnly, centralDayStartUtcISO, centralDayOfWeek } from "@/lib/timezone";
 import Header from '@/components/Header';
 import Footer from '@/components/Footer';
 import SEOHead from '@/components/SEOHead';
@@ -17,20 +17,20 @@ import { Music } from "lucide-react";
 import { Button } from '@/components/ui/button';
 import { EVENT_LIST_COLUMNS } from '@/lib/listColumns';
 import { SpriteIcon } from "@/components/ui/SpriteIcon";
+import { ErrorState } from '@/components/ui/error-state';
 
 const GENRE_FILTERS = ['All', 'Rock', 'Country', 'Jazz', 'Hip-Hop', 'Electronic', 'Classical', 'Blues', 'Folk'];
 
 function useMusicEvents(timeframe: 'tonight' | 'weekend' | 'upcoming') {
-  const now = new Date();
-  const todayStart = new Date(now.getFullYear(), now.getMonth(), now.getDate()).toISOString();
-  const todayEnd = new Date(now.getFullYear(), now.getMonth(), now.getDate() + 1).toISOString();
+  // WEB-QA-029: these were midnight and the day-of-week in the READER's
+  // timezone, so "Tonight" and "This Weekend" both slid for anyone outside
+  // Central - a reader in London at 2am was shown last night's shows.
+  const todayStart = centralDayStartUtcISO(0);
+  const todayEnd = centralDayStartUtcISO(1);
 
-  const friday = new Date(now);
-  friday.setDate(now.getDate() + ((5 - now.getDay() + 7) % 7));
-  const weekendStart = new Date(friday.getFullYear(), friday.getMonth(), friday.getDate()).toISOString();
-  const sunday = new Date(friday);
-  sunday.setDate(friday.getDate() + 3);
-  const weekendEnd = sunday.toISOString();
+  const daysToFriday = (5 - centralDayOfWeek() + 7) % 7;
+  const weekendStart = centralDayStartUtcISO(daysToFriday);
+  const weekendEnd = centralDayStartUtcISO(daysToFriday + 3);
 
   return useQuery({
     queryKey: ['music-events', timeframe],
@@ -47,7 +47,7 @@ function useMusicEvents(timeframe: 'tonight' | 'weekend' | 'upcoming') {
       } else if (timeframe === 'weekend') {
         query = query.gte('date', weekendStart).lt('date', weekendEnd);
       } else {
-        query = query.gte('date', now.toISOString());
+        query = query.gte('date', new Date().toISOString());
       }
 
       const { data, error } = await query;
@@ -69,9 +69,22 @@ const VENUE_TYPE_LABELS: Record<string, string> = {
 
 export default function MusicHub() {
   const { data: venues, isLoading: venuesLoading } = useVenues();
-  const { data: tonightShows } = useMusicEvents('tonight');
-  const { data: weekendShows } = useMusicEvents('weekend');
-  const { data: upcomingShows } = useMusicEvents('upcoming');
+  const { data: tonightShows, error: tonightError, refetch: refetchTonight } = useMusicEvents('tonight');
+  const { data: weekendShows, error: weekendError, refetch: refetchWeekend } = useMusicEvents('weekend');
+  const { data: upcomingShows, error: upcomingError, refetch: refetchUpcoming } = useMusicEvents('upcoming');
+
+  /**
+   * WEB-QA-032. These queries always exposed isError and refetch and the page
+   * read neither, so with the backend unreachable /music said "No shows scheduled for tonight" -
+   * stated as fact. Confirmed in a real browser against a production build.
+   * The sections share one backend, so one error banner beats three.
+   */
+  const showsError = tonightError ?? weekendError ?? upcomingError ?? null;
+  const retryShows = () => {
+    refetchTonight();
+    refetchWeekend();
+    refetchUpcoming();
+  };
 
   const canonicalUrl = getCanonicalUrl('/music');
   const pageDescription =
@@ -190,7 +203,7 @@ export default function MusicHub() {
                         )}
                         {event.date && (
                           <p className="text-sm text-muted-foreground mt-1">
-                            {new Date(event.date).toLocaleTimeString([], { hour: 'numeric', minute: '2-digit' })}
+                            {formatEventTimeOnly(event) ?? 'Time TBA'}
                           </p>
                         )}
                         {event.price && <Badge variant="outline" className="mt-2">{event.price}</Badge>}
@@ -200,7 +213,11 @@ export default function MusicHub() {
                 ))}
               </div>
             ) : (
-              <p className="text-muted-foreground">No shows scheduled for tonight. Check back for updates!</p>
+              showsError ? (
+                <ErrorState error={showsError} compact onRetry={retryShows} />
+              ) : (
+                <p className="text-muted-foreground">No shows scheduled for tonight. Check back for updates!</p>
+              )
             )}
           </section>
 
@@ -225,9 +242,9 @@ export default function MusicHub() {
                         )}
                         {event.date && (
                           <p className="text-sm text-muted-foreground mt-1">
-                            {new Date(event.date).toLocaleDateString([], { weekday: 'short', month: 'short', day: 'numeric' })}
+                            {formatEventPart(event, 'EEE, MMM d')}
                             {' · '}
-                            {new Date(event.date).toLocaleTimeString([], { hour: 'numeric', minute: '2-digit' })}
+                            {formatEventTimeOnly(event) ?? 'Time TBA'}
                           </p>
                         )}
                       </CardContent>
@@ -236,7 +253,11 @@ export default function MusicHub() {
                 ))}
               </div>
             ) : (
-              <p className="text-muted-foreground">No weekend shows listed yet. Check upcoming concerts below!</p>
+              showsError ? (
+                <ErrorState error={showsError} compact onRetry={retryShows} />
+              ) : (
+                <p className="text-muted-foreground">No weekend shows listed yet. Check upcoming concerts below!</p>
+              )
             )}
           </section>
 
@@ -254,10 +275,10 @@ export default function MusicHub() {
                       <CardContent className="p-4 flex items-center gap-4">
                         <div className="text-center min-w-[60px]">
                           <p className="text-xs text-muted-foreground uppercase">
-                            {new Date(event.date).toLocaleDateString([], { month: 'short' })}
+                            {formatEventPart(event, 'MMM')}
                           </p>
                           <p className="text-2xl font-bold">
-                            {new Date(event.date).getDate()}
+                            {formatEventPart(event, 'd')}
                           </p>
                         </div>
                         <div className="flex-1">
@@ -273,7 +294,11 @@ export default function MusicHub() {
                 ))}
               </div>
             ) : (
-              <p className="text-muted-foreground">No upcoming concerts found.</p>
+              showsError ? (
+                <ErrorState error={showsError} compact onRetry={retryShows} />
+              ) : (
+                <p className="text-muted-foreground">No upcoming concerts found.</p>
+              )
             )}
           </section>
 

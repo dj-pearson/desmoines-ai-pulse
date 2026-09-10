@@ -246,7 +246,7 @@ export function CookieConsentBanner() {
                     id="cc-essential-desc"
                     className="text-xs text-muted-foreground"
                   >
-                    Authentication, security, session state, CSRF protection. Required for the site to work.
+                    Signing you in, keeping you signed in, and the bot protection in front of the site. Required for the site to work.
                   </p>
                 </div>
               </div>
