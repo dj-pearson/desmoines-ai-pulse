@@ -84,7 +84,7 @@ extension AppTextStyle {
     /// The point size this style renders at for `typeSize`, clamped at the
     /// style's own ceiling.
     func pointSize(for typeSize: DynamicTypeSize) -> CGFloat {
-        let spec = spec
+        let spec = self.spec
         let capped = min(typeSize, spec.maxTypeSize)
         return UIFontMetrics(forTextStyle: spec.metric).scaledValue(
             for: spec.size,
