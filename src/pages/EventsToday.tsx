@@ -1,6 +1,10 @@
-import React, { useState, useEffect, useMemo } from "react";
+import React, { useMemo } from "react";
 import { createLogger } from '@/lib/logger';
+import { useQuery } from "@tanstack/react-query";
 import { supabase } from "@/integrations/supabase/client";
+import { EVENT_LIST_COLUMNS } from "@/lib/listColumns";
+import { queryKeys } from "@/lib/queryKeys";
+import { STALE_TIME } from "@/lib/queryConfig";
 import { SpriteIcon } from "@/components/ui/SpriteIcon";
 
 const log = createLogger('EventsToday');
@@ -13,7 +17,6 @@ import { useBatchEventSocial } from "@/hooks/useBatchEventSocial";
 import EnhancedLocalSEO from "@/components/EnhancedLocalSEO";
 import { EventListJsonLd } from "@/components/schema/EventListJsonLd";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
-import { format } from "date-fns";
 import { toZonedTime, fromZonedTime } from "date-fns-tz";
 import { Link } from "react-router-dom";
 import { BRAND, getCanonicalUrl } from "@/lib/brandConfig";
@@ -47,45 +50,43 @@ interface EventItem {
 }
 
 export default function EventsToday() {
-  const [events, setEvents] = useState<EventItem[]>([]);
-  const [isLoading, setIsLoading] = useState(true);
   useDocumentTitle("Events Today");
 
-  useEffect(() => {
-    const fetchEvents = async () => {
-      try {
-        setIsLoading(true);
-        const tz = "America/Chicago";
-        const now = new Date();
-        const nowLocal = toZonedTime(now, tz);
-        const startLocal = new Date(nowLocal.getFullYear(), nowLocal.getMonth(), nowLocal.getDate(), 0, 0, 0, 0);
-        const endLocal = new Date(nowLocal.getFullYear(), nowLocal.getMonth(), nowLocal.getDate(), 23, 59, 59, 999);
-        const startUtc = fromZonedTime(startLocal, tz).toISOString();
-        const endUtc = fromZonedTime(endLocal, tz).toISOString();
-        
-        const { data, error } = await supabase
-          .from("events")
-          .select("id, title, date, location, venue, price, category, enhanced_description, original_description, image_url, event_start_utc, updated_at")
-          .gte("date", startUtc)
-          .lte("date", endUtc)
-          .order("event_start_utc", { ascending: true, nullsFirst: false });
-        
-        if (error) {
-          log.error('fetchEvents', 'Error fetching events', { error });
-          setEvents([]);
-        } else {
-          setEvents(data || []);
-        }
-      } catch (error) {
-        log.error('fetchEvents', 'Unexpected error in fetchEvents', { error });
-        setEvents([]);
-      } finally {
-        setIsLoading(false);
-      }
-    };
+  /**
+   * WEB-SEO-031. This was useState + useEffect + a raw supabase call, which is
+   * invisible to PrerenderSignal: that component counts queries in flight via
+   * useIsFetching, so a fetch outside React Query never registered and the
+   * prerenderer captured whatever was on screen - a skeleton - and called the
+   * page settled. /events/today shipped with 5 h3 where its sibling had 56.
+   *
+   * The query key goes through the factory so an admin edit invalidating
+   * ['events'] reaches this page too (WEB-PERF-032), and the projection is the
+   * shared EVENT_LIST_COLUMNS rather than a hand-listed set that drifts from
+   * public.events.
+   */
+  const { data: events = [], isLoading } = useQuery({
+    queryKey: queryKeys.events.list({ window: 'today' }),
+    staleTime: STALE_TIME.CONTENT_LIST,
+    queryFn: async (): Promise<EventItem[]> => {
+      const tz = "America/Chicago";
+      const nowLocal = toZonedTime(new Date(), tz);
+      const startLocal = new Date(nowLocal.getFullYear(), nowLocal.getMonth(), nowLocal.getDate(), 0, 0, 0, 0);
+      const endLocal = new Date(nowLocal.getFullYear(), nowLocal.getMonth(), nowLocal.getDate(), 23, 59, 59, 999);
 
-    fetchEvents();
-  }, []);
+      const { data, error } = await supabase
+        .from("events")
+        .select(EVENT_LIST_COLUMNS)
+        .gte("date", fromZonedTime(startLocal, tz).toISOString())
+        .lte("date", fromZonedTime(endLocal, tz).toISOString())
+        .order("event_start_utc", { ascending: true, nullsFirst: false });
+
+      if (error) {
+        log.error('fetchEvents', 'Error fetching events', { error });
+        throw error;
+      }
+      return (data || []) as unknown as EventItem[];
+    },
+  });
 
   const { weather, hasVerdict } = useWeather();
 
@@ -104,8 +105,17 @@ export default function EventsToday() {
     [events, indoorFlags, weather],
   );
 
-  const pageTitle = `Events Today in Des Moines - ${format(new Date(), "MMMM d, yyyy")} | ${BRAND.name}`;
-  const pageDescription = `Find events happening today, ${format(new Date(), "MMMM d, yyyy")}, in Des Moines and suburbs. See times, locations, and details for today's activities and entertainment.`;
+  /**
+   * WEB-SEO-031: NO DATE HERE. Both strings interpolated new Date(), and this
+   * route is prerendered - so the build clock, not the visitor's day, was
+   * frozen into the <title> and the meta description that Google shows. A page
+   * whose whole promise is "today" was advertising a date in the past from the
+   * moment the build finished. The visible, checkable date lives in the body,
+   * rendered by ListFreshness from the newest updated_at among the rows
+   * actually listed, which stays true however old the capture is.
+   */
+  const pageTitle = `Events Today in Des Moines - Tonight's Concerts, Shows and Things to Do | ${BRAND.name}`;
+  const pageDescription = `Everything happening today in Des Moines and the suburbs: concerts, shows, family activities and free events, with times and locations. Rebuilt daily.`;
 
   const breadcrumbs = [
     { name: "Events", url: "/events" },
@@ -160,7 +170,7 @@ export default function EventsToday() {
       />
       <EventListJsonLd
         events={todaysEvents}
-        listName={`Events Today in Des Moines - ${format(new Date(), "MMMM d, yyyy")}`}
+        listName="Events Today in Des Moines"
         listDescription={pageDescription}
         listUrl={getCanonicalUrl('/events/today')}
       />
@@ -194,11 +204,13 @@ export default function EventsToday() {
               a usable date. */}
           <ListFreshness rows={todaysEvents} className="mb-4" />
 
+          {/* WEB-SEO-031: the clock line here read format(new Date(), "EEEE,
+              MMMM d, yyyy"), computed at render - which on a prerendered route
+              means computed once at build and then served frozen. A crawler and
+              every first-paint visitor saw the build's weekday, not their own.
+              ListFreshness above carries the one date on this page that is a
+              fact about the data rather than about the build. */}
           <div className="flex items-center gap-4 text-muted-foreground mb-4">
-            <div className="flex items-center gap-1">
-              <SpriteIcon name="clock" className="h-4 w-4" />
-              <span>{format(new Date(), "EEEE, MMMM d, yyyy")}</span>
-            </div>
             <div className="flex items-center gap-1">
               <SpriteIcon name="map-pin" className="h-4 w-4" />
               <span>Des Moines Metro Area</span>
@@ -244,7 +256,16 @@ export default function EventsToday() {
 
         {/* Events List */}
         {isLoading ? (
-          <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
+          // WEB-SEO-031: role/aria-busy/aria-live are what let the prerender
+          // strict gate tell a skeleton from a rendered list. Without them the
+          // capture of an unsettled page looks like a legitimately empty one.
+          <div
+            className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6"
+            role="status"
+            aria-live="polite"
+            aria-busy="true"
+          >
+            <span className="sr-only">Loading today&apos;s events...</span>
             {[...Array(6)].map((_, i) => (
               <Card key={i} className="animate-pulse">
                 <CardContent className="p-6">

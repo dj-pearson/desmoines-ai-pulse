@@ -7795,8 +7795,8 @@
         "The same audit for /events/this-weekend and /events/kids; list which of the SEO landing pages are still useEffect fetchers in the notes"
       ],
       "priority": 2,
-      "passes": false,
-      "notes": "Filed 2026-09-02 from the codebase audit on claude/codebase-audit-prd-k01kxz. Evidence is from the working tree; production was not probed (no Supabase credentials in the container)."
+      "passes": true,
+      "notes": "Filed 2026-09-02 from the codebase audit on claude/codebase-audit-prd-k01kxz. Evidence is from the working tree; production was not probed (no Supabase credentials in the container). RESOLVED 2026-09-10 on claude/seo-iterative-loop-e92bab. EventsToday now fetches with useQuery (queryKeys.events.list({window:today}), EVENT_LIST_COLUMNS, STALE_TIME.CONTENT_LIST) so PrerenderSignal counts it and the prerenderer stops capturing a skeleton as a settled page; its loading grid carries role=status, aria-live and aria-busy plus an sr-only label, so the strict gate can tell a skeleton from an empty list. Title, meta description and the EventListJsonLd listName no longer interpolate new Date(); nor does the body clock line, which is deleted in favour of ListFreshness (already mounted, sourced from the newest updated_at among the listed rows). EventsThisWeekend got the same title/description treatment, and its Weekend of <date> line is now derived from the first and last event in the window and omitted when the list is empty. EnhancedLocalSEO no longer emits article:published_time, article:modified_time or og:updated_time: all three were new Date() at render (the build clock on four prerendered routes), and the two article tags used name= where the OG article namespace requires property=, so nothing read them. isTimeSensitive still feeds the keyword set. NOT converted, still useState/useEffect fetchers: KidsEvents.tsx, FreeEvents.tsx, EventsNearMe.tsx - same PrerenderSignal blindness, tracked for a later pass."
     },
     {
       "id": "WEB-SEO-032",
