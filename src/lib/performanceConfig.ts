@@ -81,7 +81,6 @@ export const serviceWorkerConfig = {
       '/restaurants',
       '/events', 
       '/neighborhoods',
-      '/manifest.json',
       '/DMI-Logo-Header.png'
     ]
   },

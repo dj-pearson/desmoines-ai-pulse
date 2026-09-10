@@ -8847,13 +8847,19 @@
       "title": "Two web manifests, three theme colors, and a dead offline page",
       "description": "As a maintainer, I need one PWA manifest, because index.html links /site.webmanifest (theme #ffffff, no start_url, no maskable icon), public/manifest.json (theme #1e40af, maskable icons) is linked nowhere, index.html's theme-color is #2563eb, and public/offline.html is referenced only by a comment while the service worker self-destructs.",
       "acceptanceCriteria": [
-        "Evidence: index.html:48,300; public/manifest.json; public/offline.html; scripts/prerender-output.mjs:67 comment",
-        "Fold the maskable icon and one theme color into site.webmanifest with a start_url; delete manifest.json and offline.html",
-        "Lighthouse PWA/installability audit passes on / (record the score)"
+        "THE LINKED MANIFEST COULD NOT BE INSTALLED PROPERLY. public/site.webmanifest - the one index.html actually links - had no start_url, no scope and no id. Without start_url the spec defaults it to the document URL, so anyone installing from /events/some-event got a home-screen icon that always relaunches that one event. Now id, start_url and scope are all '/', plus a description and 'any maskable' on the 192px icon so Android uses the adaptive launcher shape instead of letterboxing a square.",
+        "THE THREE THEME COLOURS were index.html #2563eb, SEOHead BRAND.themeColor #3B82F6, and site.webmanifest #ffffff. theme-color paints the browser chrome above the page, so it should match what is at the top - and the header is `bg-background`, measured on a rendered build as #ffffff in light and #060a13 in dark. So the manifest's white was RIGHT and the two blues were wrong: both are Tailwind blues that appear nowhere on this site, and a dark-mode visitor got a blue bar above a near-black page.",
+        "index.html now carries a light/dark pair with prefers-color-scheme media queries. SEOHead's copy is removed entirely - Helmet APPENDS rather than replaces, so it was putting a second and differently-coloured theme-color in the DOM on every route. msapplication-TileColor stays, since a Windows tile wants a solid brand colour rather than a match for the page background.",
+        "VERIFIED by rendering: exactly two theme-color metas, and the one whose media query matches equals the header background in each scheme - #ffffff / rgba(255,255,255,.6) light, #060a13 / rgba(6,10,19,.6) dark.",
+        "THE DEAD MANIFEST is deleted. public/manifest.json was linked from nothing and declared icon sizes that do not match the files - DMI-Icon.png as 192x192 when it is 256x258, DMI-Logo.png as 512x512 when it is 800x800 - which Chrome rejects for install. Its references in performanceConfig.ts and public/_headers are gone with it.",
+        "public/_headers served the manifest as application/json; application/manifest+json is the registered type. Verified over HTTP after the change.",
+        "THE DEAD OFFLINE PAGE is deleted. public/offline.html was referenced by nothing, and nothing could reach it: public/sw.js is a SELF-DESTRUCTING service worker that unregisters and purges on activate, so the site has no service worker and no offline mode at all.",
+        "NOT A DEFECT, checked and recorded so nobody re-spends the time: index.html's inline 'force clear service workers' script, performance.ts's registerServiceWorker (which unregisters despite its name), and sw.js's self-destruct are not fighting each other - all three are one deliberate teardown of a caching SW that had been serving stale HTML with dead asset hashes. registerServiceWorker being named the opposite of what it does is still a trap for the next reader; see WEB-QUAL-014.",
+        "VERIFIED: 588 vitest tests pass, eslint 0 errors, tsc clean, all seven check scripts and check-dead-lib green. check-asset-types still reports only the pre-existing sitemap-hotels.xml, which a partial build cannot generate."
       ],
       "priority": 3,
-      "passes": false,
-      "notes": "Filed 2026-09-02 from the codebase audit on claude/codebase-audit-prd-k01kxz. Evidence is from the working tree; production was not probed (no Supabase credentials in the container)."
+      "passes": true,
+      "notes": "Filed 2026-09-02 from the codebase audit on claude/codebase-audit-prd-k01kxz. Evidence is from the working tree; production was not probed (no Supabase credentials in the container). CLOSED in the loop, iteration 12. /manifest.json now answers with the SPA fallback (text/html) since the file is gone - nothing references it, so nothing asks."
     },
     {
       "id": "WEB-QUAL-008",
@@ -9513,6 +9519,21 @@
       "priority": 2,
       "passes": true,
       "notes": "Found by measuring og/twitter tags across 23 routes in a browser. The 800x800-under-1200x630 mismatch is the part that would never show up in code review - both the file and the numbers look reasonable on their own."
+    },
+    {
+      "id": "WEB-QUAL-014",
+      "title": "registerServiceWorker() unregisters service workers, and lazyInit calls it under a comment that says it registers one",
+      "description": "As the next person to ask 'does this site use a service worker?', I need the code to answer honestly. Reading the call site says yes; the function does the opposite.",
+      "acceptanceCriteria": [
+        "src/lib/performance.ts exports registerServiceWorker(), whose body calls getRegistrations().unregister() on every worker and caches.delete() on every cache. Its own comment says so. The name says the opposite.",
+        "src/lib/lazyInit.ts calls it under the comment 'Priority 3: Service worker (after 5 seconds)', inside an `if ('serviceWorker' in navigator && hostname !== 'localhost')` guard. Everything about that call site reads as registration.",
+        "Rename to something that states what it does - clearServiceWorkers() or unregisterLegacyServiceWorker() - and update lazyInit's comment. This is the dead-twin failure the dead-lib baseline's own header names, in a different shape: code that reads as the implementation of a thing that does not happen.",
+        "While there: the teardown runs THREE times over - the inline script in index.html on every page load, this function 5 seconds in, and public/sw.js's own self-destruct on activate. Two of the three are for clients that registered the old worker long ago and can be retired once enough time has passed; decide a date rather than leaving all three forever.",
+        "Then decide whether the site wants a service worker at all. It has a manifest, is installable, and public/offline.html was deleted in WEB-QUAL-007 because nothing could serve it."
+      ],
+      "priority": 3,
+      "passes": false,
+      "notes": "FILED FROM THE LOOP, iteration 12. Not folded into WEB-QUAL-007 because renaming an exported function touches call sites, and the retire-the-teardown part needs a human to pick a date."
     }
   ]
 }

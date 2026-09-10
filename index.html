@@ -54,7 +54,16 @@
     <meta property="og:country-name" content="USA" />
 
     <!-- Performance optimizations for mobile -->
-    <meta name="theme-color" content="#2563eb" />
+    <!-- WEB-QUAL-007. theme-color paints the browser chrome above the page, so
+         it should match what is actually at the top: the header is
+         `bg-background`, which is #ffffff in light and #060a13 in dark
+         (measured on a rendered build). It was a single fixed #2563eb - a
+         Tailwind blue-600 that appears nowhere on this site - so a dark-mode
+         visitor got a blue bar sitting above a near-black page. Two metas with
+         a prefers-color-scheme media query is the modern form; browsers that
+         ignore the media attribute fall back to the first. -->
+    <meta name="theme-color" media="(prefers-color-scheme: light)" content="#ffffff" />
+    <meta name="theme-color" media="(prefers-color-scheme: dark)" content="#060a13" />
     <meta name="color-scheme" content="light dark" />
     <meta name="mobile-web-app-capable" content="yes" />
 
