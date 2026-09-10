@@ -28,6 +28,11 @@ export default defineConfig({
   // check that cannot fail a PR is decorative, and WEB-LEGAL-001 is the exact
   // defect that shipped while a document said it was fixed.
   //
+  // page-headings.spec.ts asserts one <h1> per route, including when the data
+  // fails - axe's page-has-heading-one is a best-practice rule outside the
+  // wcag2aa tag set accessibility.spec.ts filters to, so nothing caught it.
+  // WEB-A11Y-002.
+  //
   // touch-targets.spec.ts is here too: it measures rendered footer link boxes
   // at 375px under a coarse pointer, which is computed layout behind a media
   // query - nothing a source-text check can see. WEB-UX-036.
@@ -42,7 +47,7 @@ export default defineConfig({
   // network requests and cookies - which no source-text check can establish.
   // scripts/check-consent-gate.mjs covers the source side; this covers what
   // actually happens.
-  testMatch: /(route-smoke|cookie-consent|backend-down|touch-targets)\.spec\.ts/,
+  testMatch: /(route-smoke|cookie-consent|backend-down|touch-targets|page-headings)\.spec\.ts/,
   fullyParallel: true,
   forbidOnly: !!process.env.CI,
   retries: process.env.CI ? 2 : 0,

@@ -18,6 +18,7 @@ import { BackToTop } from '@/components/BackToTop';
 import { Breadcrumbs } from '@/components/ui/breadcrumbs';
 import { SpriteIcon } from "@/components/ui/SpriteIcon";
 import { useUrlFilters } from '@/hooks/useUrlFilters';
+import NoIndexMeta from '@/components/schema/NoIndexMeta';
 
 const Articles: React.FC = () => {
   const { articles, loading, error, loadArticles } = useArticles();
@@ -108,6 +109,10 @@ const Articles: React.FC = () => {
         <Header />
         <div className="min-h-screen bg-background">
           <div className="container mx-auto px-4 py-8">
+            {/* WEB-A11Y-002: the loading branch is an early return above the
+                page's own <h1>, so a slow response leaves the document with no
+                main heading. */}
+            <h1 className="sr-only">Des Moines stories and insights</h1>
             <CardsGridSkeleton count={6} label="Loading articles..." />
           </div>
         </div>
@@ -119,9 +124,13 @@ const Articles: React.FC = () => {
   if (error) {
     return (
       <>
+        {/* WEB-A11Y-002: same as EventsPage - this early return drops the
+            page's own <h1>, and a transient failure must not be indexed. */}
+        <NoIndexMeta />
         <Header />
         <div className="min-h-screen bg-background">
           <div className="container mx-auto px-4 py-8">
+            <h1 className="sr-only">Des Moines stories and insights</h1>
             <ErrorState error={error} onRetry={loadArticles} />
           </div>
         </div>

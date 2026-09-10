@@ -9464,6 +9464,37 @@
       "priority": 3,
       "passes": false,
       "notes": "FILED FROM THE LOOP, iteration 9. Needs an SEO decision before any code, which is why it was not folded into WEB-UX-036."
+    },
+    {
+      "id": "WEB-A11Y-002",
+      "title": "/auth had no h1 at all, and /events and /articles lost theirs whenever data was slow or failed - with /events serving an indexable 'Unable to Load Events'",
+      "description": "As a screen-reader user, and as a search engine, I need every page to state what it is. Three reader-facing routes did not.",
+      "acceptanceCriteria": [
+        "/auth had NO <h1> in the document. CardTitle renders an <h3>, so the sign-in page jumped straight to h3 with nothing above it. Fixed with an sr-only h1 rather than a visible one: the card's own title already carries the design and a second visible heading would say the same thing twice.",
+        "/events and /articles both put their loading AND error branches as early returns ABOVE the page's own <h1>, so a slow response or a failed one left the document with no main heading at all. Four branches fixed, not two - the loading case was found only because the guard's 3-second wait caught the pages mid-load.",
+        "THE SHARPEST PART IS SEO, not a11y: /events's error branch swapped the title to 'Unable to Load Events | Des Moines Insider' with a description saying we are having trouble - and left the page INDEXABLE. Googlebot crawling the site's main hub during a backend blip would index that, and keep it until the next crawl. Both error branches now carry noindex,follow, so outbound links still pass. This is the mirror of WEB-QA-032's VenueDetail case, where a transient failure wrongly applied noindex to a real page.",
+        "WHY NOTHING CAUGHT IT: axe's page-has-heading-one is a BEST-PRACTICE rule, outside the wcag2a/wcag2aa/wcag21a/wcag21aa tag set that tests/accessibility.spec.ts filters to. The suite covers 20+ routes and would never have reported this.",
+        "VERIFIED: all 12 routes render exactly one h1 after the fix, confirmed in a browser against a production build. GUARDED by tests/page-headings.spec.ts in the smoke lane, which also asserts that a page whose title announces a failure is not indexable. PROVED AGAINST THE PRE-FIX CODE: /events, /articles and /auth each failed naming the route and the count, plus '/events lost its h1 in the error state'.",
+        "588 vitest tests pass, eslint 0 errors over src/ and tests/, tsc clean, all seven check scripts green."
+      ],
+      "priority": 2,
+      "passes": true,
+      "notes": "Found by measuring rendered titles, descriptions and headings across 30 routes in a browser."
+    },
+    {
+      "id": "WEB-SEO-043",
+      "title": "Nine page titles exceed 60 characters and thirteen meta descriptions exceed 160",
+      "description": "As the platform owner, I need titles and descriptions that survive Google's truncation. Measured across 30 routes in a rendered browser.",
+      "acceptanceCriteria": [
+        "Titles over 60 chars (Google truncates around there): / (69), /sports (77), /stay (65), /guides (63), /pricing (63), /best-of (63), /events/today (68), /events/this-weekend (66). /sports at 77 is the worst - 'Sports in Des Moines - Teams, Schedules & Gameday Guides | Des Moines Insider'.",
+        "Descriptions over 160 chars: /, /restaurants (185), /attractions (206), /playgrounds (229), /articles (188), /guides (178), /privacy-policy (174), /accessibility (206), /events/free (189), /events/kids (214), /restaurants/open-now (165), /neighborhoods (174), /gamification (188). /playgrounds at 229 is the worst.",
+        "WEB-SEO-002 already trimmed one title from 84 chars, so this is a known class that came back. A length check belongs in the same place - a source-level script over the SEOHead props, or an assertion in the prerender-head check that already runs in CI.",
+        "The date-bearing titles (/events/today, /events/this-weekend) are over only because of the date suffix, so they need a shorter base rather than a shorter date.",
+        "/articles' title is 'Des Moines Insider: Events, Restaurants & Attractions' - generic and never mentions articles, which is a separate relevance problem from length."
+      ],
+      "priority": 3,
+      "passes": false,
+      "notes": "FILED FROM THE LOOP, iteration 10. Measured but not fixed: 22 strings across 20 files, and each one is a copywriting decision rather than a mechanical trim."
     }
   ]
 }
