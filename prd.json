@@ -9534,6 +9534,27 @@
       "priority": 3,
       "passes": false,
       "notes": "FILED FROM THE LOOP, iteration 12. Not folded into WEB-QUAL-007 because renaming an exported function touches call sites, and the retire-the-teardown part needs a human to pick a date."
+    },
+    {
+      "id": "WEB-SEC-035",
+      "title": "Nothing checked that the CSP's pinned script hashes still match index.html, and the failure is invisible everywhere except a real deploy",
+      "description": "As a contributor, I need to find out at PR time if I have broken an inline script, not from a user report weeks later. The CSP pins a SHA-256 per inline script and a comment asked people to regenerate them by hand.",
+      "acceptanceCriteria": [
+        "script-src in public/_headers has no 'unsafe-inline' - which is the right call, and is exactly what makes this sharp: a pinned hash is the ONLY thing letting an inline script run. Edit one without regenerating its hash and it is silently blocked.",
+        "THE FAILURE IS INVISIBLE IN EVERY ENVIRONMENT A CONTRIBUTOR USES. The dev server sends no CSP. `vite preview` sends no CSP. Cloudflare only applies _headers on a real deploy. So the first sign is production.",
+        "WHAT BREAKS: the three pinned scripts are the early error handler (Capacitor and browser-extension recovery), the service-worker teardown, and the Google Analytics consent loader. A blocked consent loader means analytics silently stops - the same class of silent failure WEB-BE-032 and WEB-QA-026 already record.",
+        "The _headers comment already said 'If you modify any inline script in index.html, regenerate hashes with: python3 -c ...'. A comment is not a check. scripts/check-csp-hashes.mjs is.",
+        "Runs on the SOURCE index.html rather than dist/, so it sits in the fast lane with no build. Verified first that none of the three blocks contains a %VITE_% placeholder, so the served bytes are the authored bytes.",
+        "It skips type=\"application/ld+json\" blocks. index.html has a fourth inline <script> of that type, and it is NOT a defect: browsers do not execute JSON-LD, so script-src's inline check does not apply. The _headers comment saying 'the 3 inline <script> blocks' is imprecise but not wrong.",
+        "It also fails if 'unsafe-inline' ever reappears in script-src, since that would make every pinned hash decorative.",
+        "VERIFIED against both failure modes by breaking them and restoring: editing the analytics loader reports the blocked script AND the now-stale pin, and prints the corrected hash list ready to paste; adding 'unsafe-inline' back is caught on its own.",
+        "MY OWN CHECK WAS WRONG FIRST and this is why the run matters: the initial regex matched the words 'script-src' and \"'unsafe-inline'\" inside the explanatory COMMENT above the header and reported a policy failure that did not exist. It now reads the directive off the Content-Security-Policy line only.",
+        "Wired into `npm run validate` and pr-checks.yml. 588 vitest tests pass, eslint 0 errors, all eight check scripts green.",
+        "CHECKED AND CURRENT: the three pinned hashes match index.html today, which also confirms this loop's own edits to index.html (og:image in WEB-SEO-044, theme-color in WEB-QUAL-007) touched only meta tags, not scripts."
+      ],
+      "priority": 2,
+      "passes": true,
+      "notes": "Found by verifying the hashes by hand after editing index.html twice in this loop, and noticing that nothing would have told me if I had got it wrong."
     }
   ]
 }

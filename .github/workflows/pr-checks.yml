@@ -178,6 +178,17 @@ jobs:
       - name: LCP hero images are eager and high priority
         run: npm run check-lcp-priority
 
+      # WEB-SEC-035. script-src in public/_headers has no 'unsafe-inline', so a
+      # pinned SHA-256 is the ONLY thing that lets each inline script in
+      # index.html run. Editing one without regenerating its hash blocks it
+      # silently, and ONLY on a real Cloudflare deploy - the dev server and
+      # vite preview send no CSP at all. The three scripts are the early error
+      # handler, the service-worker teardown and the analytics consent loader.
+      # The _headers comment already told people to regenerate by hand; a
+      # comment is not a check.
+      - name: CSP hashes match the inline scripts
+        run: npm run check-csp-hashes
+
       # The old domain and the old brand name must not reappear in shipped copy.
       - name: Check for brand leaks
         run: npm run check-brand-leak

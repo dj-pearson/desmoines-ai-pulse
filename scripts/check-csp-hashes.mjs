@@ -1,146 +1,104 @@
+#!/usr/bin/env node
 /**
- * CSP inline-script hash check (WEB-LEGAL-009 AC2).
+ * WEB-SEC-035. The CSP pins a SHA-256 for every inline <script> in index.html,
+ * and nothing checked that the pins still match.
  *
- * public/_headers pins `script-src` to explicit SHA-256 hashes rather than
- * 'unsafe-inline' (SEC-021). That only holds while the hashes match the bytes
- * actually shipped — and the inline bootstrap in index.html is exactly the
- * thing WEB-LEGAL-001 had to edit to add a consent gate. Editing it without
- * regenerating the hash silently breaks the page: the browser refuses to run
- * the script, and nothing in the build says so.
+ * script-src in public/_headers has no 'unsafe-inline', which is the right
+ * call - it means a hash is the ONLY thing letting an inline script run. It
+ * also means that editing one of those scripts without regenerating its hash
+ * gets it silently blocked in production and nowhere else: the dev server
+ * sends no CSP, `vite preview` sends no CSP, and Cloudflare only applies
+ * _headers on a real deploy. The three scripts are the early error handler
+ * (Capacitor and extension recovery), the service-worker teardown, and the
+ * Google Analytics consent loader - so the failure mode is the site quietly
+ * losing its error recovery or its analytics, with no error anyone sees.
  *
- * WHAT IT COMPARES, and why against dist/ rather than index.html:
- * Vite rewrites index.html during the build, so the source file's inline
- * scripts hash differently from the ones served. Measured: index.html has 4
- * inline blocks matching 0 declared hashes, dist/index.html has 10 matching
- * all 3. Checking the source would report a permanent false failure.
+ * The _headers comment already says "If you modify any inline script in
+ * index.html, regenerate hashes with: python3 -c ...". A comment is not a
+ * check. This is.
  *
- * NON-EXECUTABLE TYPES ARE EXCLUDED. Seven of those ten blocks are
- * application/ld+json structured data. Browsers do not execute them and CSP
- * does not block them, so requiring a hash for each would be a permanent false
- * failure in the other direction.
+ * Runs on the SOURCE index.html, not dist/: verified that the three blocks
+ * contain no %VITE_% placeholders, so the served bytes are the authored bytes
+ * and no build is needed.
  *
- *   node scripts/check-csp-hashes.mjs
+ * type="application/ld+json" blocks are skipped. They are data, not code -
+ * browsers do not run them, so script-src's inline check does not apply.
  *
- * Requires a build: dist/index.html must exist. Skips (exit 0) when it does
- * not, so a checkout without a build is not a failure.
+ * Usage: node scripts/check-csp-hashes.mjs
  */
-import { readFileSync, existsSync } from 'node:fs';
-import { join, dirname, resolve } from 'node:path';
-import { fileURLToPath, pathToFileURL } from 'node:url';
+import { readFileSync } from 'node:fs';
 import { createHash } from 'node:crypto';
 
-const ROOT = resolve(dirname(fileURLToPath(import.meta.url)), '..');
-const BUILT_HTML = join(ROOT, 'dist', 'index.html');
-const HEADERS = join(ROOT, 'public', '_headers');
+const HTML = 'index.html';
+const HEADERS = 'public/_headers';
 
-/** Types a browser will actually execute. Anything else CSP ignores. */
-const EXECUTABLE = new Set(['', 'text/javascript', 'application/javascript', 'module']);
+const html = readFileSync(HTML, 'utf8');
+const headers = readFileSync(HEADERS, 'utf8');
 
-/**
- * Strip `#` comment lines before scanning.
- *
- * _headers documents its own CSP in prose — one line reads "CSP script-src uses
- * SHA-256 hashes instead of 'unsafe-inline' for inline scripts (SEC-021)" — so
- * a naive scan of the raw file matches the EXPLANATION rather than the
- * directive. The first version of this check failed on exactly that.
- */
-function withoutComments(src) {
-  return src
-    .split(/\r?\n/)
-    .filter((line) => !/^\s*#/.test(line))
-    .join('\n');
+const INLINE_SCRIPT =
+  /<script(?![^>]*\bsrc=)(?![^>]*type="application\/ld\+json")[^>]*>([\s\S]*?)<\/script>/g;
+
+const found = [];
+for (const m of html.matchAll(INLINE_SCRIPT)) {
+  const body = m[1];
+  const hash = 'sha256-' + createHash('sha256').update(body, 'utf8').digest('base64');
+  const firstLine = body.split('\n').map((l) => l.trim()).find(Boolean) ?? '';
+  found.push({ hash, hint: firstLine.slice(0, 64) });
 }
 
-export function declaredHashes(headersSrc) {
-  // Only the script-src directive counts; style-src carries its own hashes.
-  const directive = withoutComments(headersSrc).match(/script-src[^;\n]*/g) ?? [];
-  const out = new Set();
-  for (const d of directive) {
-    for (const m of d.matchAll(/'sha256-([A-Za-z0-9+/=]+)'/g)) out.add(m[1]);
-  }
-  return out;
+// Read the directive off the actual header line, not out of the comment block
+// above it - that comment contains the words "script-src" and "'unsafe-inline'"
+// while explaining why the hashes exist, and a looser match reads them as the
+// policy itself.
+const cspLine = headers
+  .split('\n')
+  .map((l) => l.trim())
+  .find((l) => l.startsWith('Content-Security-Policy:'));
+if (!cspLine) {
+  console.error(`X No Content-Security-Policy header found in ${HEADERS}.`);
+  process.exit(1);
 }
-
-export function inlineScripts(html) {
-  const out = [];
-  for (const m of html.matchAll(/<script(?![^>]*\bsrc=)([^>]*)>([\s\S]*?)<\/script>/g)) {
-    const typeMatch = m[1].match(/type\s*=\s*"([^"]*)"/);
-    const type = (typeMatch ? typeMatch[1] : '').toLowerCase();
-    out.push({
-      type,
-      body: m[2],
-      executable: EXECUTABLE.has(type),
-      hash: createHash('sha256').update(m[2], 'utf8').digest('base64'),
-    });
-  }
-  return out;
+const scriptSrc = cspLine.match(/script-src ([^;]*)/)?.[1] ?? '';
+if (!scriptSrc) {
+  console.error(`X The Content-Security-Policy in ${HEADERS} has no script-src directive.`);
+  process.exit(1);
 }
-
-function main() {
-  if (!existsSync(BUILT_HTML)) {
-    console.error('[csp-hashes] dist/index.html not found — run npm run build first. Skipping.');
-    process.exit(0);
-  }
-  if (!existsSync(HEADERS)) {
-    console.error('[csp-hashes] public/_headers not found.');
-    process.exit(1);
-  }
-
-  const headersSrc = readFileSync(HEADERS, 'utf8');
-  const declared = declaredHashes(headersSrc);
-  const scripts = inlineScripts(readFileSync(BUILT_HTML, 'utf8'));
-  const executable = scripts.filter((s) => s.executable);
-
-  if (/script-src[^;\n]*'unsafe-inline'/.test(withoutComments(headersSrc))) {
-    // If this ever appears the hashes stop meaning anything, which is a
-    // quieter regression than a mismatch and worth failing on explicitly.
-    console.error(
-      "[csp-hashes] script-src contains 'unsafe-inline'. The SHA-256 pinning in " +
-        'public/_headers (SEC-021) is then decorative — any injected inline script runs.',
-    );
-    process.exit(1);
-  }
-
-  if (executable.length === 0) {
-    // Zero executable inline scripts would mean the parse broke, not that the
-    // page is clean. Reporting a pass here is the false green this exists to
-    // avoid.
-    console.error('[csp-hashes] parsed no executable inline scripts in dist/index.html — refusing to pass.');
-    process.exit(1);
-  }
-
-  const unhashed = executable.filter((s) => !declared.has(s.hash));
-  console.log(
-    `[csp-hashes] ${scripts.length} inline block(s): ${executable.length} executable, ` +
-      `${scripts.length - executable.length} non-executable (ld+json etc). ` +
-      `${declared.size} hash(es) declared.`,
+if (scriptSrc.includes("'unsafe-inline'")) {
+  console.error(
+    `X script-src contains 'unsafe-inline', which makes every pinned hash\n` +
+      `  decorative and lets any injected inline script run. Remove it.`
   );
-
-  if (unhashed.length > 0) {
-    console.error(`\n❌ ${unhashed.length} executable inline script(s) have no matching CSP hash.`);
-    for (const s of unhashed) {
-      console.error(`   sha256-${s.hash}`);
-      console.error(`   first line: ${s.body.trim().split('\n')[0].slice(0, 90)}`);
-    }
-    console.error(
-      '\n   The browser will refuse to run these. Add the hash(es) above to the\n' +
-        "   script-src directive in public/_headers, or revert the edit to the\n" +
-        '   inline script in index.html.',
-    );
-    process.exit(1);
-  }
-
-  // Declared-but-unused is worth saying: a stale hash is dead weight and a hint
-  // that someone edited the script and added rather than replaced.
-  const used = new Set(executable.map((s) => s.hash));
-  const stale = [...declared].filter((h) => !used.has(h));
-  if (stale.length > 0) {
-    console.log(`   note: ${stale.length} declared hash(es) match no current script (stale, not fatal).`);
-  }
-
-  console.log('✅ every executable inline script is covered by a CSP hash.');
+  process.exit(1);
 }
 
-if (process.argv[1] && import.meta.url === pathToFileURL(process.argv[1]).href) {
-  main();
+const pinned = [...scriptSrc.matchAll(/'(sha256-[A-Za-z0-9+/=]+)'/g)].map((m) => m[1]);
+const blocked = found.filter((f) => !pinned.includes(f.hash));
+const stale = pinned.filter((p) => !found.some((f) => f.hash === p));
+
+if (blocked.length === 0 && stale.length === 0) {
+  console.log(
+    `OK All ${found.length} inline script(s) in ${HTML} are pinned in the CSP, with no stale pins.`
+  );
+  process.exit(0);
 }
+
+console.error('');
+for (const b of blocked) {
+  console.error(`X This inline script would be BLOCKED in production - no matching hash:`);
+  console.error(`    ${b.hash}`);
+  console.error(`    starts: ${b.hint}`);
+}
+for (const s of stale) {
+  console.error(`X Stale pin - no inline script in ${HTML} hashes to it:`);
+  console.error(`    ${s}`);
+}
+console.error(`
+The CSP has no 'unsafe-inline', so a hash is the only thing that lets an inline
+script run. A missing one fails ONLY on a real Cloudflare deploy - the dev
+server and vite preview send no CSP at all.
+
+Put these back into the script-src directive in ${HEADERS}:
+
+  ${found.map((f) => `'${f.hash}'`).join(' ')}
+`);
+process.exit(1);
