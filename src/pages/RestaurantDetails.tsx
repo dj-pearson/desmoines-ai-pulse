@@ -321,15 +321,9 @@ export default function RestaurantDetails() {
     },
   };
 
-  const breadcrumbs = [
-    { name: "Home", url: "/" },
-    { name: "Restaurants", url: "/restaurants" },
-    ...(restaurant.cuisine ? [{ name: restaurant.cuisine, url: `/restaurants?cuisine=${encodeURIComponent(restaurant.cuisine)}` }] : []),
-    {
-      name: restaurant.name,
-      url: `/restaurants/${restaurant.slug || restaurant.id}`,
-    },
-  ];
+  // WEB-SEO-027: this array fed SEOHead's `breadcrumbs` prop, which emitted a
+  // SECOND BreadcrumbList with site-relative `item` URLs alongside the
+  // BreadcrumbListSchema below. The typed component and its absolute URLs win.
 
   // Generate dynamic FAQ for this specific restaurant
   const restaurantFaqs = [
@@ -379,7 +373,6 @@ export default function RestaurantDetails() {
         structuredData={restaurantSchema}
         url={`/restaurants/${restaurant.slug || restaurant.id}`}
         imageUrl={ogImageUrl("restaurant", restaurant.id)}
-        breadcrumbs={breadcrumbs}
         location={{
           name: restaurant.name,
           address: restaurant.location || `${cityName}, IA`,

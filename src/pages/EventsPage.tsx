@@ -22,7 +22,6 @@ import Header from "@/components/Header";
 import { AdBanner } from "@/components/AdBanner";
 import Footer from "@/components/Footer";
 import SEOHead from "@/components/SEOHead";
-import { SEOEnhancedHead } from "@/components/SEOEnhancedHead";
 import { useToast } from "@/hooks/use-toast";
 import { FAQSection } from "@/components/FAQSection";
 import {
@@ -639,11 +638,15 @@ export default function EventsPage() {
 
   return (
     <>
-      <SEOEnhancedHead
+      {/* WEB-SEO-027: this branch used SEOEnhancedHead while the loading branch
+          above used SEOHead, so the head this page shipped depended on whether
+          the query had resolved. One component, both branches. */}
+      <SEOHead
         title={seoTitle}
         description={seoDescription}
-        url={getCanonicalUrl('/events')}
+        url="/events"
         type="website"
+        keywords={["Des Moines events", "Iowa events", "upcoming events", "things to do Des Moines"]}
         structuredData={eventsSchema}
       />
       <BreadcrumbListSchema items={[{ name: "Home", url: BRAND.baseUrl }, { name: "Events", url: getCanonicalUrl('/events') }]} />

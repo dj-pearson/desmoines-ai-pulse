@@ -20,7 +20,7 @@ import { FAQSection } from "@/components/FAQSection";
 import { RatingSystem } from "@/components/RatingSystem";
 import { BackToTop } from "@/components/BackToTop";
 import EnhancedAttractionSEO from "@/components/EnhancedAttractionSEO";
-import SEOHead from "@/components/SEOHead";
+import { BreadcrumbListSchema } from "@/components/schema/BreadcrumbListSchema";
 import { RouteCanonical } from "@/components/RouteCanonical";
 import { BRAND, getCanonicalUrl } from "@/lib/brandConfig";
 import { Star, ArrowLeft, Navigation, Heart, Globe, Info, Camera, Landmark, ChevronRight, TreePine } from "lucide-react";
@@ -242,31 +242,19 @@ export default function AttractionDetails() {
         attraction={attraction}
         slug={attractionSlug}
       />
-      <SEOHead
-        title={`${attraction.name} - ${attraction.type} in ${BRAND.city}, ${BRAND.state}`}
-        description={attraction.description ? `${attraction.description.slice(0, 160)}` : `Visit ${attraction.name}, a popular ${attraction.type?.toLowerCase()} attraction in ${BRAND.city}, ${BRAND.state}.`}
-        type="website"
-        imageUrl={attraction.image_url || undefined}
-        url={`/attractions/${attractionSlug}`}
-        keywords={[
-          attraction.name,
-          attraction.type,
-          `${BRAND.city} attractions`,
-          `things to do ${BRAND.city}`,
-          `${attraction.type} ${BRAND.city}`,
-        ].filter(Boolean) as string[]}
-        modifiedTime={attraction.updated_at}
-        location={{
-          name: attraction.name,
-          address: attraction.location || `${BRAND.city}, ${BRAND.state}`,
-          latitude: attraction.latitude,
-          longitude: attraction.longitude,
-        }}
-        breadcrumbs={[
-          { name: "Home", url: "/" },
-          { name: "Attractions", url: "/attractions" },
-          { name: attraction.type, url: `/attractions?type=${encodeURIComponent(attraction.type)}` },
-          { name: attraction.name, url: `/attractions/${attractionSlug}` },
+      {/* WEB-SEO-027: SEOHead used to mount here alongside EnhancedAttractionSEO.
+          Two head managers on one page meant two <title> sources, two canonicals
+          and six JSON-LD nodes, of which Place duplicated the address and geo the
+          TouristAttraction node already carries. EnhancedAttractionSEO owns the
+          head; the breadcrumb trail is the one thing it did not emit. */}
+      <BreadcrumbListSchema
+        items={[
+          { name: "Home", url: getCanonicalUrl("/") },
+          { name: "Attractions", url: getCanonicalUrl("/attractions") },
+          ...(attraction.type
+            ? [{ name: attraction.type, url: getCanonicalUrl(`/attractions?type=${encodeURIComponent(attraction.type)}`) }]
+            : []),
+          { name: attraction.name, url: getCanonicalUrl(`/attractions/${attractionSlug}`) },
         ]}
       />
 

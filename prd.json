@@ -7736,8 +7736,8 @@
         "npm run validate and the prerender strict gate pass with zero dropped duplicate blocks (the build already reports the count; WEB-SEO-008 notes measured 16)"
       ],
       "priority": 2,
-      "passes": false,
-      "notes": "Filed 2026-09-02 from the codebase audit on claude/codebase-audit-prd-k01kxz. Evidence is from the working tree; production was not probed (no Supabase credentials in the container)."
+      "passes": true,
+      "notes": "Filed 2026-09-02 from the codebase audit on claude/codebase-audit-prd-k01kxz. Evidence is from the working tree; production was not probed (no Supabase credentials in the container). RESOLVED 2026-09-10 on claude/seo-iterative-loop-e92bab. AttractionDetails dropped SEOHead (EnhancedAttractionSEO owns the head) and emits its breadcrumb trail once through BreadcrumbListSchema, taking the page from 6 JSON-LD nodes and 2 canonicals to 4 and 1. RestaurantDetails dropped the SEOHead breadcrumbs prop, whose BreadcrumbList carried site-relative item URLs against the absolute ones in BreadcrumbListSchema. Index.tsx and EventsPage.tsx now mount SEOHead only; SEOEnhancedHead.tsx and SEOStructure.tsx are deleted, which also removes SEOStructure default LocalBusiness and its +1-515-000-0000 placeholder telephone. SEOHead.structuredData accepts an array so the home page can publish WebSite and LocalBusiness without a second head manager. Guarded by checkHeadManagers in scripts/check-duplicate-schema.mjs, counted per return branch so a loading skeleton is not miscounted; verified it fails on a reintroduced duplicate BreadcrumbList. Note the Enhanced*SEO components remain as head owners on their own pages - the AC wording (converge on SEOHead everywhere) is not fully met, only the duplication it was written to stop."
     },
     {
       "id": "WEB-SEO-028",
