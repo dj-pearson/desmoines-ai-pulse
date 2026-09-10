@@ -80,6 +80,7 @@ struct DealsView: View {
             UINotificationFeedbackGenerator()
                 .notificationOccurred(viewModel.errorMessage == nil ? .success : .error)
         }
+        .reloadOnReconnect(if: viewModel.allDeals.isEmpty) { await viewModel.refresh() }
         .navigationDestination(item: $entityTarget) { target in
             switch target {
             case .restaurant(let r): RestaurantDetailView(restaurant: r)

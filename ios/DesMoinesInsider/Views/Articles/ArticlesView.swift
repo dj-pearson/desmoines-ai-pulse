@@ -82,6 +82,7 @@ struct ArticlesView: View {
             UINotificationFeedbackGenerator()
                 .notificationOccurred(viewModel.errorMessage == nil ? .success : .error)
         }
+        .reloadOnReconnect(if: viewModel.articles.isEmpty) { await viewModel.refresh() }
         .navigationTitle("Articles & Guides")
         .navigationBarTitleDisplayMode(.large)
         .searchable(

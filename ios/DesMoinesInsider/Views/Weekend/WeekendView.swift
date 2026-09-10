@@ -73,6 +73,7 @@ struct WeekendView: View {
             UINotificationFeedbackGenerator()
                 .notificationOccurred(viewModel.errorMessage == nil ? .success : .error)
         }
+        .reloadOnReconnect(if: viewModel.populatedDays.isEmpty) { await viewModel.refresh() }
         .navigationDestination(for: Event.self) { EventDetailView(event: $0) }
         .navigationDestination(for: Restaurant.self) { RestaurantDetailView(restaurant: $0) }
         .navigationDestination(for: Attraction.self) { AttractionDetailView(attraction: $0) }

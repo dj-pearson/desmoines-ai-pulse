@@ -121,6 +121,7 @@ struct RestaurantsView: View {
                     UINotificationFeedbackGenerator().notificationOccurred(.error)
                 }
             }
+            .reloadOnReconnect(if: viewModel.restaurants.isEmpty) { await viewModel.refresh() }
             .navigationTitle("Dining")
             .searchable(
                 text: $viewModel.searchText,
