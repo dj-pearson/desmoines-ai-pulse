@@ -28,6 +28,11 @@ export default defineConfig({
   // check that cannot fail a PR is decorative, and WEB-LEGAL-001 is the exact
   // defect that shipped while a document said it was fixed.
   //
+  // search-request-loop.spec.ts counts REQUESTS rather than checking the DOM:
+  // an effect keyed on an unstable callback fired nlp-search 82 times in 16
+  // seconds for one query, and the page just looked empty while it did.
+  // WEB-QA-033.
+  //
   // page-headings.spec.ts asserts one <h1> per route, including when the data
   // fails - axe's page-has-heading-one is a best-practice rule outside the
   // wcag2aa tag set accessibility.spec.ts filters to, so nothing caught it.
@@ -47,7 +52,7 @@ export default defineConfig({
   // network requests and cookies - which no source-text check can establish.
   // scripts/check-consent-gate.mjs covers the source side; this covers what
   // actually happens.
-  testMatch: /(route-smoke|cookie-consent|backend-down|touch-targets|page-headings)\.spec\.ts/,
+  testMatch: /(route-smoke|cookie-consent|backend-down|touch-targets|page-headings|search-request-loop)\.spec\.ts/,
   fullyParallel: true,
   forbidOnly: !!process.env.CI,
   retries: process.env.CI ? 2 : 0,

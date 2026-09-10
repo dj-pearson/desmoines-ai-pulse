@@ -9555,6 +9555,23 @@
       "priority": 2,
       "passes": true,
       "notes": "Found by verifying the hashes by hand after editing index.html twice in this loop, and noticing that nothing would have told me if I had got it wrong."
+    },
+    {
+      "id": "WEB-QA-033",
+      "title": "/search called the AI search function once per RENDER, not once per query - 82 requests in 16 seconds - and the page just looked empty while it did",
+      "description": "As a visitor searching the site, I need one search to be one search. As the platform owner, I need one search to be one AI call.",
+      "acceptanceCriteria": [
+        "useNLPSearch built its `search` callback with useCallback(..., [searchMutation]). useMutation returns a NEW object on every render, so `search` got a new identity every render - and SearchResults calls search(query) from an effect keyed on it. That is a loop: search -> state change -> re-render -> new identity -> effect re-runs -> search. The dependency is now `mutateAsync`, which TanStack Query keeps referentially stable.",
+        "MEASURED on /search?q=pizza against a production build: 82 calls to the nlp-search edge function in 16 seconds, all failing, before the fix. After: 1. Each call is an AI request against a function rate-limited to 100 per 15 minutes, so a single visitor searching once would trip the limit for that IP in about twenty seconds - and on a working backend, pay for every one of them.",
+        "THE PAGE LOOKED MERELY EMPTY. The mutation restarted before it could settle, so isError never rendered and the page sat in the loading skeleton forever - which has no text, so the results area read as blank. /search?q=pizza showed no results, no error and no message. Now it shows 'AI search is temporarily unavailable - showing keyword matches', which is what the code was always written to do.",
+        "SECOND, SEPARATE BUG: a query under three characters never reaches the search at all (useNLPSearch returns early), so isSearching, isError and parsedIntent were all false and EVERY branch of the results area was skipped. /search?q=x and ?q=ab rendered a search box and then nothing. They now say the search needs three characters.",
+        "A RENDERING ASSERTION WOULD NOT HAVE CAUGHT THE LOOP - the page looked the same either way. tests/search-request-loop.spec.ts counts REQUESTS. Proved against the pre-fix hook: 33 calls for one query, failing the assertion by name.",
+        "THE GUARD WAS BROKEN FIRST, and this is the part worth keeping: two overlapping page.route patterns meant the broad `**://*.supabase.co/**` could swallow the nlp-search request, leaving the counter at zero and the assertion passing on a page that never searched. It passed against reverted code, which is how it was caught. The counting route is now registered last and the test asserts the counter fired at all.",
+        "VERIFIED: all four /search edge states answer - empty query, one character, two characters, whitespace-only, and a real query. 588 vitest tests pass, eslint 0 errors, tsc clean, all eight check scripts green."
+      ],
+      "priority": 1,
+      "passes": true,
+      "notes": "Found by following up an edge case noticed in iteration 1 and never verified: that /search?q=x rendered nothing. The infinite request loop was underneath it and is much the larger defect."
     }
   ]
 }
