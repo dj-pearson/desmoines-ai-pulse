@@ -117,16 +117,29 @@ struct Deal: Identifiable, Codable, Hashable {
         if let endStr = endDate, let end = Article.parseTimestamp(endStr), now > end { return false }
         guard isRecurring else { return true }
 
+        let tokens = ["sun", "mon", "tue", "wed", "thu", "fri", "sat"]
         let weekdayIndex = calendar.component(.weekday, from: now) // 1=Sun…7=Sat
-        let token = ["sun", "mon", "tue", "wed", "thu", "fri", "sat"][weekdayIndex - 1]
-        guard (daysOfWeek ?? []).map({ $0.lowercased() }).contains(token) else { return false }
+        let today = tokens[weekdayIndex - 1]
+        let yesterday = tokens[(weekdayIndex + 5) % 7]
+        let scheduled = Set((daysOfWeek ?? []).map { $0.lowercased() })
 
-        if let start = startTime, let end = endTime,
-           let startMin = Deal.minutesOfDay(start), let endMin = Deal.minutesOfDay(end) {
-            let nowMin = calendar.component(.hour, from: now) * 60 + calendar.component(.minute, from: now)
-            return nowMin >= startMin && nowMin <= endMin
+        guard let start = startTime, let end = endTime,
+              let startMin = Deal.minutesOfDay(start), let endMin = Deal.minutesOfDay(end) else {
+            return scheduled.contains(today)
         }
-        return true
+
+        let nowMin = calendar.component(.hour, from: now) * 60 + calendar.component(.minute, from: now)
+
+        // A late-night deal is stored as 21:00-02:00 on the day it STARTS, so its
+        // end time is numerically smaller than its start. Comparing the two
+        // against a single day made every such window unsatisfiable: the deal
+        // showed "Active now" never, on either side of midnight.
+        guard endMin < startMin else {
+            return scheduled.contains(today) && nowMin >= startMin && nowMin <= endMin
+        }
+        if scheduled.contains(today), nowMin >= startMin { return true }        // before midnight
+        if scheduled.contains(yesterday), nowMin <= endMin { return true }      // after midnight
+        return false
     }
 
     // MARK: - Helpers

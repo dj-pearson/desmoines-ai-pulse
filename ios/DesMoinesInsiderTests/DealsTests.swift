@@ -79,6 +79,22 @@ final class DealsTests: XCTestCase {
         XCTAssertFalse(deal.isActiveNow(date(2026, 6, 6, 16), calendar: calendar)) // Sat → wrong day
     }
 
+    /// A 21:00-02:00 window belongs to the day it starts on, so its end minute is
+    /// smaller than its start minute. Comparing both against one day made every
+    /// late-night deal permanently inactive.
+    func testActiveNowHandlesOvernightWindow() {
+        var deal = Deal.preview
+        deal.daysOfWeek = ["fri"]
+        deal.startTime = "21:00:00"
+        deal.endTime = "02:00:00"
+        // 2026-06-05 is a Friday, 2026-06-06 a Saturday.
+        XCTAssertTrue(deal.isActiveNow(date(2026, 6, 5, 22), calendar: calendar))   // Fri 10pm
+        XCTAssertTrue(deal.isActiveNow(date(2026, 6, 6, 1), calendar: calendar))    // Sat 1am, still Friday's deal
+        XCTAssertFalse(deal.isActiveNow(date(2026, 6, 6, 3), calendar: calendar))   // Sat 3am, closed
+        XCTAssertFalse(deal.isActiveNow(date(2026, 6, 5, 20), calendar: calendar))  // Fri 8pm, not open yet
+        XCTAssertFalse(deal.isActiveNow(date(2026, 6, 7, 1), calendar: calendar))   // Sun 1am, Saturday isn't scheduled
+    }
+
     func testNonRecurringActiveWithinDateWindow() {
         var deal = Deal.preview
         deal.daysOfWeek = nil

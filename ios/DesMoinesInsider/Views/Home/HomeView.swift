@@ -125,6 +125,13 @@ struct HomeView: View {
                     UINotificationFeedbackGenerator().notificationOccurred(.error)
                 }
             }
+            .reloadOnReconnect(if: viewModel.events.isEmpty) {
+                async let eventsRefresh: () = viewModel.refresh()
+                async let restaurantsRefresh: () = restaurantsVM.refresh()
+                async let attractionsRefresh: () = attractionsVM.refresh()
+                async let weekendRefresh: () = weekendVM.refresh()
+                _ = await (eventsRefresh, restaurantsRefresh, attractionsRefresh, weekendRefresh)
+            }
             .navigationTitle("Des Moines Insider")
             .navigationBarTitleDisplayMode(.large)
             .searchable(
