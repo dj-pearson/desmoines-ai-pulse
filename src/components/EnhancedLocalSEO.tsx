@@ -330,20 +330,23 @@ export default function EnhancedLocalSEO({
       <meta name="twitter:description" content={pageDescription} />
       <meta name="twitter:site" content={BRAND.twitter} />
 
-      {/* Time-sensitive content for AI */}
-      {isTimeSensitive && (
-        <>
-          <meta
-            name="article:published_time"
-            content={new Date().toISOString()}
-          />
-          <meta
-            name="article:modified_time"
-            content={new Date().toISOString()}
-          />
-          <meta property="og:updated_time" content={new Date().toISOString()} />
-        </>
-      )}
+      {/* WEB-SEO-031: the isTimeSensitive block emitted article:published_time,
+          article:modified_time and og:updated_time, all three set to
+          new Date().toISOString() at render. Three things wrong with that, and
+          the first is the one that made it invisible: the two article tags used
+          name= where the Open Graph article namespace requires property=, so
+          nothing consumed them. The second is that /events/today,
+          /events/this-weekend, /open-now and the month pages are lists, not
+          articles - the article namespace does not describe them. The third is
+          that all four routes are prerendered, so the "timestamp" was the build
+          clock asserting a publish time for content nobody published then.
+          A freshness claim that cannot be checked is worse than none: the
+          checkable one is ListFreshness, rendered in the body from the newest
+          updated_at among the rows the page actually lists.
+
+          `isTimeSensitive` still earns its place: it adds "today", "this
+          weekend" and "upcoming" to the keyword set above. It just no longer
+          stamps a timestamp. */}
 
       {/* Schema.org Structured Data */}
       <script type="application/ld+json">

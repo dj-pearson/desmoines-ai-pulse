@@ -93,12 +93,14 @@ async function fetchEventBySlug(slug: string): Promise<Event | null> {
 }
 
 export function useEventBySlug(slug: string | undefined) {
-  const { data, isLoading, error } = useQuery({
+  const { data, isLoading, error, refetch } = useQuery({
     queryKey: ["event-by-slug", slug],
     enabled: Boolean(slug),
     queryFn: () => fetchEventBySlug(slug as string),
     staleTime: 5 * 60 * 1000,
   });
 
-  return { event: data ?? null, isLoading, error };
+  // WEB-SEO-040: `refetch` powers the retry state, which exists so a thrown
+  // query stops sharing the not-found branch and its noindex.
+  return { event: data ?? null, isLoading, error, refetch };
 }

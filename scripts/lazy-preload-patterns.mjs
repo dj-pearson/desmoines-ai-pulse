@@ -167,7 +167,8 @@ export function restoreAsyncFontLinks(html) {
  * NOT a general "one @type per page" rule, and the difference matters. The
  * homepage's two LocalBusiness blocks were genuinely different objects, 1437
  * and 799 bytes, from two components that each emitted one - a source defect,
- * fixed in Index.tsx by giving SEOStructure the block the page already builds.
+ * fixed in Index.tsx by giving SEOStructure the block the page already builds,
+ * and since WEB-SEO-027 there is one head manager there and no second block.
  * This function would have masked that by silently dropping the richer copy,
  * which is why every drop is counted and reported in the prerender summary
  * instead of being done quietly.

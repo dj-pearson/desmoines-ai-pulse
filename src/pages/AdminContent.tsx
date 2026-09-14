@@ -171,7 +171,13 @@ export default function AdminContent() {
   // page maths, which is the one place the number is load-bearing
   // (WEB-PERF-033).
   const attractions = useAttractions({ search: searchTerms.attractions, countMode: "exact" });
-  const playgrounds = usePlaygrounds({ search: searchTerms.playgrounds, countMode: "exact" });
+  // WEB-SEO-037: admin content management sees every row, including the 21
+  // that are not in Iowa and are hidden from /playgrounds.
+  const playgrounds = usePlaygrounds({
+    search: searchTerms.playgrounds,
+    countMode: "exact",
+    includeOutsideServiceArea: true,
+  });
   const restaurantOpenings = useRestaurantOpenings({
     search: searchTerms.restaurantOpenings,
   });

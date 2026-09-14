@@ -105,6 +105,28 @@ export default function EventsThisWeekend() {
     return categoryMatch && locationMatch;
   }), [events, selectedCategory, selectedLocation]);  // `events`, not weekendEvents: `events || []` reallocates when nullish
 
+  /**
+   * WEB-SEO-031: the weekend this list covers, read off the rows rather than
+   * off the clock. Renders nothing when the list is empty - an empty list of
+   * unknown age must not name a weekend it cannot demonstrate. Same rule
+   * ListFreshness follows, and the same reason: a prerendered page freezes
+   * whatever the render computed, so the only durable dates are the ones that
+   * describe the data.
+   */
+  const weekendLabel = useMemo(() => {
+    const stamps = weekendEvents
+      .map((event) => new Date(event.event_start_utc || event.date).getTime())
+      .filter((t) => Number.isFinite(t));
+    if (stamps.length === 0) return null;
+    const first = new Date(Math.min(...stamps));
+    const last = new Date(Math.max(...stamps));
+    return format(first, "MMMM d") === format(last, "MMMM d")
+      ? `Weekend of ${format(first, "MMMM d, yyyy")}`
+      : `${format(first, "MMMM d")} - ${format(last, "MMMM d, yyyy")}`;
+    // `events`, not weekendEvents: `events || []` reallocates when nullish,
+    // same reason filteredEvents above lists it this way.
+  }, [events]);
+
   const { weather, hasVerdict } = useWeather();
   // Separate request on purpose - see the header of useEventIndoorFlags.
   const indoorFlags = useEventIndoorFlags(
@@ -142,14 +164,15 @@ export default function EventsThisWeekend() {
     ),
   ];
 
-  const pageTitle = `Des Moines Events This Weekend - ${format(
-    new Date(),
-    "MMMM d"
-  )} | ${BRAND.name}`;
-  const pageDescription = `Find the best events happening this weekend in Des Moines and suburbs. See dates, times, maps, and tips for ${format(
-    new Date(),
-    "MMMM d"
-  )} weekend activities. Updated daily.`;
+  /**
+   * WEB-SEO-031: no build-clock date in either string. This route is
+   * prerendered, so format(new Date(), "MMMM d") froze the day the build ran
+   * into the <title> and the meta description Google shows - a page promising
+   * "this weekend" while naming a weekend that had already passed. The
+   * checkable date is ListFreshness in the body, taken from the rows listed.
+   */
+  const pageTitle = `Des Moines Events This Weekend - Concerts, Festivals and Things to Do | ${BRAND.name}`;
+  const pageDescription = `Everything happening this weekend in Des Moines and the suburbs: concerts, festivals, family activities and free events, with dates, times and maps. Rebuilt daily.`;
 
   const breadcrumbs = [
     { name: "Events", url: "/events" },
@@ -261,10 +284,17 @@ export default function EventsThisWeekend() {
           <MonthLinks className="mb-6" />
 
           <div className="flex items-center gap-4 text-muted-foreground mb-4">
-            <div className="flex items-center gap-1">
-              <SpriteIcon name="clock" className="h-4 w-4" />
-              <span>Weekend of {format(new Date(), "MMMM d, yyyy")}</span>
-            </div>
+            {/* WEB-SEO-031: was format(new Date(), ...), which on a prerendered
+                route is the build date served to every crawler and every first
+                paint. The window this list actually covers is a fact about the
+                rows, so it is derived from them - and omitted when there are
+                none. */}
+            {weekendLabel && (
+              <div className="flex items-center gap-1">
+                <SpriteIcon name="clock" className="h-4 w-4" />
+                <span>{weekendLabel}</span>
+              </div>
+            )}
             <div className="flex items-center gap-1">
               <SpriteIcon name="map-pin" className="h-4 w-4" />
               <span>Des Moines Metro Area</span>

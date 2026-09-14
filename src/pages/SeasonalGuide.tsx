@@ -1,6 +1,7 @@
 import { useParams, Link } from 'react-router-dom';
 import { RouteCanonical } from "@/components/RouteCanonical";
 import Header from '@/components/Header';
+import { DetailFetchError } from '@/components/DetailFetchError';
 import Footer from '@/components/Footer';
 import { Helmet } from 'react-helmet-async';
 import { useSeasonalGuide, getSeasonLabel, getSeasonColor } from '@/hooks/useSeasonalGuides';
@@ -12,7 +13,7 @@ import { BRAND } from '@/lib/brandConfig';
 
 export default function SeasonalGuide() {
   const { slug } = useParams<{ slug: string }>();
-  const { data: guide, isLoading } = useSeasonalGuide(slug || '');
+  const { data: guide, isLoading, error, refetch } = useSeasonalGuide(slug || '');
 
   if (isLoading) {
     return (
@@ -25,6 +26,23 @@ export default function SeasonalGuide() {
           <Skeleton className="h-48 w-full mb-4" />
           <Skeleton className="h-32 w-full" />
         </div>
+        <Footer />
+      </div>
+    );
+  }
+
+  // WEB-SEO-040: a thrown query is not a missing row. Retry state, no robots meta.
+  if (error) {
+    return (
+      <div className="min-h-screen bg-background">
+        <RouteCanonical path={`/guides/${slug}`} />
+        <Header />
+        <DetailFetchError
+          entityLabel="guide"
+          backHref="/guides"
+          backLabel="Back to Guides"
+          onRetry={() => refetch()}
+        />
         <Footer />
       </div>
     );

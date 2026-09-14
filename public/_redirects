@@ -63,3 +63,12 @@
 # route and its components are removed; this keeps the URL alive per the
 # Backward Compatibility rules in CLAUDE.md, since it was public and indexed.
 /calendar  /events  301
+
+# WEB-SEO-038: public/sitemap-index.xml was a hand-made copy of the generated
+# sitemap.xml, still deployed, still carrying lastmod 2026-03-16 on seven of
+# its eight children. Two sitemap indexes on one domain is two answers to
+# "what should I crawl", and the stale one told Google nothing had changed
+# since March. The file is deleted; this keeps the URL answering for one
+# release per the Backward Compatibility rules in CLAUDE.md, since it was
+# public and may be submitted in Search Console.
+/sitemap-index.xml  /sitemap.xml  301

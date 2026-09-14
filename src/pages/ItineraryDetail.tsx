@@ -1,6 +1,7 @@
 import { useParams, Link } from 'react-router-dom';
 import { RouteCanonical } from "@/components/RouteCanonical";
 import Header from '@/components/Header';
+import { DetailFetchError } from '@/components/DetailFetchError';
 import Footer from '@/components/Footer';
 import { Helmet } from 'react-helmet-async';
 import { useItinerary, getDurationLabel, getThemeLabel } from '@/hooks/useItineraries';
@@ -74,7 +75,7 @@ function downloadICS(title: string, stops: ItineraryStop[]) {
 
 export default function ItineraryDetail() {
   const { slug } = useParams<{ slug: string }>();
-  const { data: itinerary, isLoading } = useItinerary(slug || '');
+  const { data: itinerary, isLoading, error, refetch } = useItinerary(slug || '');
 
   if (isLoading) {
     return (
@@ -89,6 +90,23 @@ export default function ItineraryDetail() {
             <Skeleton key={i} className="h-32 rounded-lg" />
           ))}
         </div>
+        <Footer />
+      </div>
+    );
+  }
+
+  // WEB-SEO-040: a thrown query is not a missing row. Retry state, no robots meta.
+  if (error) {
+    return (
+      <div className="min-h-screen bg-background">
+        <RouteCanonical path={`/itineraries/${slug}`} />
+        <Header />
+        <DetailFetchError
+          entityLabel="itinerary"
+          backHref="/itineraries"
+          backLabel="Back to Itineraries"
+          onRetry={() => refetch()}
+        />
         <Footer />
       </div>
     );

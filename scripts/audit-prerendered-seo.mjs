@@ -1,9 +1,11 @@
 /**
  * WEB-SEO-002 audit: inspect the SEO head of every prerendered route in dist/.
  *
- * Reads the shipped HTML rather than the source, because the source lies. Pages
- * can render two head managers (SEOEnhancedHead and SEOStructure both emit
- * <title> and <meta name="description">), Helmet resolves last-mount-wins, and
+ * Reads the shipped HTML rather than the source, because the source lies. A page
+ * can render two head managers that each emit <title> and
+ * <meta name="description"> (WEB-SEO-027 collapsed the last two, on the home
+ * page and /events, and check-duplicate-schema.mjs now guards against a third
+ * appearing), Helmet resolves last-mount-wins, and
  * Helmet APPENDS meta tags rather than replacing the unmanaged ones baked into
  * index.html. The net effect is that an edit to the "wrong" component compiles,
  * reads correctly in review, and changes nothing in the output — which is

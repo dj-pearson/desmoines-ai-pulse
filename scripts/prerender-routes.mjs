@@ -80,11 +80,17 @@ export const PRERENDER_ROUTES = [
   '/getting-around',
 
   // Neighborhood guides
+  //
+  // WEB-SEO-036: /neighborhoods/downtown, /beaverdale and /highland-park were
+  // here and in sitemap-static.xml, and they are linked from nowhere on the
+  // site - NeighborhoodsPage lists east-village, west-des-moines, ankeny,
+  // urbandale, johnston, clive, waukee and altoona, so those three were
+  // submitted URLs with no inbound link, no guide copy in NeighborhoodGuide's
+  // table, and (until this story) no data at all. They are dropped rather than
+  // prerendered; the page now noindexes any neighborhood holding fewer than
+  // five rows, so nothing thin is submitted whichever way this list grows.
   '/neighborhoods',
-  '/neighborhoods/downtown',
   '/neighborhoods/east-village',
-  '/neighborhoods/beaverdale',
-  '/neighborhoods/highland-park',
 
   // Discovery / planning surfaces
   '/deals',

@@ -21,8 +21,6 @@ import { openExternalUrl } from "@/lib/capacitorUtils";
 import Header from "@/components/Header";
 import { FAQSection } from "@/components/FAQSection";
 import SEOHead from "@/components/SEOHead";
-import SEOStructure from "@/components/SEOStructure";
-import { SEOEnhancedHead } from "@/components/SEOEnhancedHead";
 import SearchSection from "@/components/SearchSection";
 import { NLPSearchBar } from "@/components/NLPSearchBar";
 import { EnhancedHero } from "@/components/EnhancedHero";
@@ -102,8 +100,8 @@ const DashboardSkeleton = () => (
   </div>
 );
 
-// WEB-SEO-012: shared by the two head managers this page renders
-// (SEOEnhancedHead and SEOStructure) so they cannot disagree.
+// WEB-SEO-012: the title this page ships. It was shared by two head managers
+// until WEB-SEO-027 collapsed them into the single SEOHead below.
 //
 // SEO-008: RE-TARGETED. This was "Things to Do in Des Moines This Weekend",
 // which put the homepage in direct competition with two of its own pages:
@@ -403,14 +401,20 @@ export default function Index() {
           Title and description now lead with the query. BRAND.description is
           deliberately left alone: it is the Organization/LocalBusiness
           description in schema, where self-description is correct. */}
-      <SEOEnhancedHead
+      <SEOHead
         title={HOME_TITLE}
         description={HOME_DESCRIPTION}
-        url={`${BRAND.baseUrl}/`}
+        url="/"
         type="website"
-        structuredData={structuredData}
+        /* WEB-SEO-027: SEOEnhancedHead and SEOStructure BOTH mounted here, both
+           set <title> and <meta name="description">, and Helmet resolved it
+           last-mount-wins - which is why editing the title above once had no
+           effect on the shipped HTML. One head manager now, and the two nodes
+           that needed emitting are passed as an array rather than as a reason
+           to mount a second one. SEOStructure's default LocalBusiness (with its
+           +1-515-000-0000 placeholder telephone) is gone with the component. */
+        structuredData={[structuredData, localBusinessData]}
       />
-
 
       {/* BreadcrumbList Schema - Helps with rich snippets in search results */}
       <BreadcrumbListSchema
@@ -424,32 +428,6 @@ export default function Index() {
         name={`${BRAND.name} - AI-Powered City Guide`}
         description={BRAND.description}
         url={BRAND.baseUrl}
-      />
-
-      {/* SEO and structured data for AI optimization */}
-      {/* WEB-SEO-012: SEOStructure mounts AFTER SEOEnhancedHead above and its
-          Helmet also sets <title> and <meta name="description">. React Helmet
-          resolves last-mount-wins, so with only canonicalUrl passed here its
-          defaults silently overrode whatever SEOEnhancedHead set — which is why
-          editing the title above had no effect on the shipped HTML until this
-          was found by grepping dist/index.html rather than trusting the source.
-          Both components are given the same values so the winner is correct
-          whichever way the tree evolves. Collapsing the two head managers into
-          one is tracked separately (WEB-SEO-002). */}
-      <SEOStructure
-        title={HOME_TITLE}
-        description={HOME_DESCRIPTION}
-        canonicalUrl={`${BRAND.baseUrl}/`}
-        /* WEB-SEO-013: without this SEOStructure emits its OWN LocalBusiness
-           default, so the homepage shipped TWO LocalBusiness blocks - measured
-           in dist/index.html at 1437 and 799 bytes, different content, both
-           describing the same business. Google treats a duplicated entity type
-           on one page as ambiguous and may use neither. Passing the block
-           rendered above makes the two emitters agree on one object, which is
-           the same trick the WEB-SEO-012 comment applies to title and
-           description. The default also carried a placeholder telephone,
-           +1-515-000-0000, which is now not emitted at all. */
-        structuredData={localBusinessData}
       />
 
       {/* Main content wrapper with semantic HTML for AI parsing */}

@@ -2,6 +2,7 @@ import { useParams, Link } from 'react-router-dom';
 import { createEventSlugWithCentralTime, formatEventPart, formatEventTimeOnly } from "@/lib/timezone";
 import { RouteCanonical } from "@/components/RouteCanonical";
 import Header from '@/components/Header';
+import { DetailFetchError } from '@/components/DetailFetchError';
 import Footer from '@/components/Footer';
 import { Helmet } from 'react-helmet-async';
 import { useVenue, useVenueEvents } from '@/hooks/useVenues';
@@ -11,7 +12,6 @@ import { Skeleton } from '@/components/ui/skeleton';
 import { Button } from '@/components/ui/button';
 import { Navigation } from "lucide-react";
 import { SpriteIcon } from "@/components/ui/SpriteIcon";
-import { ErrorState } from '@/components/ui/error-state';
 
 const VENUE_TYPE_LABELS: Record<string, string> = {
   arena: 'Arena',
@@ -43,22 +43,18 @@ export default function VenueDetail() {
     );
   }
 
-  /**
-   * WEB-QA-032. A failed load used to fall straight through to the not-found
-   * branch below, which renders "venue not found" AND a noindex. On a real
-   * venue whose page merely failed to load that is a deindexing risk, not
-   * just bad copy - Googlebot hitting the site during a backend blip would be
-   * told the page should not be indexed. A failure and a missing row are
-   * different answers and get different pages.
-   */
+  // WEB-SEO-040: a thrown query is not a missing row. Retry state, no robots meta.
   if (venueError) {
     return (
       <div className="min-h-screen bg-background">
         <RouteCanonical path={`/music/venues/${slug}`} />
         <Header />
-        <div className="container mx-auto px-4 py-16">
-          <ErrorState error={venueError} onRetry={() => refetchVenue()} />
-        </div>
+        <DetailFetchError
+          entityLabel="venue"
+          backHref="/music"
+          backLabel="Back to Music Hub"
+          onRetry={() => refetchVenue()}
+        />
         <Footer />
       </div>
     );

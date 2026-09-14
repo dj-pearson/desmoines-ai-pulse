@@ -2,6 +2,7 @@ import { useParams, Link } from 'react-router-dom';
 import { createEventSlugWithCentralTime, formatEventPart, formatEventTimeOnly } from "@/lib/timezone";
 import { RouteCanonical } from "@/components/RouteCanonical";
 import Header from '@/components/Header';
+import { DetailFetchError } from '@/components/DetailFetchError';
 import Footer from '@/components/Footer';
 import { Helmet } from 'react-helmet-async';
 import { useTeam, useTeamGames } from '@/hooks/useTeams';
@@ -11,7 +12,6 @@ import { Skeleton } from '@/components/ui/skeleton';
 import { Button } from '@/components/ui/button';
 import { Trophy } from "lucide-react";
 import { SpriteIcon } from "@/components/ui/SpriteIcon";
-import { ErrorState } from '@/components/ui/error-state';
 
 export default function TeamDetail() {
   const { slug } = useParams<{ slug: string }>();
@@ -33,22 +33,18 @@ export default function TeamDetail() {
     );
   }
 
-  /**
-   * WEB-QA-032. A failed load used to fall straight through to the not-found
-   * branch below, which renders "team not found" AND a noindex. On a real
-   * team whose page merely failed to load that is a deindexing risk, not
-   * just bad copy - Googlebot hitting the site during a backend blip would be
-   * told the page should not be indexed. A failure and a missing row are
-   * different answers and get different pages.
-   */
+  // WEB-SEO-040: a thrown query is not a missing row. Retry state, no robots meta.
   if (teamError) {
     return (
       <div className="min-h-screen bg-background">
         <RouteCanonical path={`/sports/${slug}`} />
         <Header />
-        <div className="container mx-auto px-4 py-16">
-          <ErrorState error={teamError} onRetry={() => refetchTeam()} />
-        </div>
+        <DetailFetchError
+          entityLabel="team"
+          backHref="/sports"
+          backLabel="Back to Sports Hub"
+          onRetry={() => refetchTeam()}
+        />
         <Footer />
       </div>
     );

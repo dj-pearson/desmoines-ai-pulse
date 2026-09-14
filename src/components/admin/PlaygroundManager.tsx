@@ -307,6 +307,11 @@ export default function PlaygroundManager() {
     // Admin paginates on this number, so it pays for an exact count
     // (WEB-PERF-033).
     countMode: "exact",
+    // WEB-SEO-037: the out-of-state rows are hidden from the public hub, but
+    // this is where someone fixes or deletes them, so they have to be visible
+    // here. This is also the paginated caller, which is the other reason the
+    // filter must not apply: the server count would no longer match the list.
+    includeOutsideServiceArea: true,
     search: search || undefined,
     source: sourceFilter === "all" ? undefined : sourceFilter,
     manuallyCuratedOnly: manuallyCuratedOnly || undefined,
