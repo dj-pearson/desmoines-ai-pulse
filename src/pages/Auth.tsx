@@ -786,8 +786,16 @@ export default function Auth() {
                     <p className="text-sm text-muted-foreground">
                       Didn't receive the email?
                     </p>
+                    {/* WEB-CI-030 AC5. This was `onClick={handleResendVerification}`,
+                        and the handler's first parameter is
+                        `email: string = signupEmail`. onClick passes the React
+                        MouseEvent as the first argument, so the default never
+                        applied and resendVerificationContext was called with a
+                        synthetic event where an address belongs - this button
+                        could not resend anything. The other call site already
+                        wraps it correctly; this one did not. */}
                     <Button
-                      onClick={handleResendVerification}
+                      onClick={() => handleResendVerification()}
                       variant="outline"
                       disabled={isLoading}
                       className="w-full"
@@ -1245,7 +1253,7 @@ export default function Auth() {
                       <Checkbox
                         id="emailNotifications"
                         checked={formData.emailNotifications}
-                        onCheckedChange={(checked) => handleInputChange("emailNotifications", checked)}
+                        onCheckedChange={(checked) => handleInputChange("emailNotifications", !!checked)}
                         className="mt-0.5"
                       />
                       <Label htmlFor="emailNotifications" className="text-sm font-normal leading-snug">
@@ -1256,7 +1264,7 @@ export default function Auth() {
                       <Checkbox
                         id="smsNotifications"
                         checked={formData.smsNotifications}
-                        onCheckedChange={(checked) => handleInputChange("smsNotifications", checked)}
+                        onCheckedChange={(checked) => handleInputChange("smsNotifications", !!checked)}
                         className="mt-0.5"
                       />
                       <Label htmlFor="smsNotifications" className="text-sm font-normal leading-snug">
@@ -1267,7 +1275,7 @@ export default function Auth() {
                       <Checkbox
                         id="eventRecommendations"
                         checked={formData.eventRecommendations}
-                        onCheckedChange={(checked) => handleInputChange("eventRecommendations", checked)}
+                        onCheckedChange={(checked) => handleInputChange("eventRecommendations", !!checked)}
                         className="mt-0.5"
                       />
                       <Label htmlFor="eventRecommendations" className="text-sm font-normal leading-snug">
