@@ -1,0 +1,79 @@
+# App-project type check, nightly (WEB-CI-031 AC4).
+#
+# WHY THIS IS NOT IN pr-checks.yml. `npm run type-check` in the validate job is
+# `tsc --noEmit` against a root tsconfig that is `"files": []` plus project
+# references, so it compiles ZERO files and has always exited 0 (WEB-CI-030).
+# The check that DOES read src/ is `tsc -p tsconfig.app.json`, and it took
+# 21m12s / ~5.2GB RSS on a 4-core Linux container for 882 files. A
+# GitHub-hosted runner is slower, so putting that in the PR path would roughly
+# double the job for every push. WEB-CI-031 AC3 says: do not, until a warm run
+# fits under five minutes.
+#
+# So it runs once a day instead. A regression is caught within a day rather
+# than never, which is the whole of AC4, and it costs nothing on the PR path.
+# Move this into pr-checks.yml when AC1/AC2's optimisation lands - do not add a
+# second copy.
+#
+# It is a RATCHET, not a gate: the app project does not pass clean (365 errors
+# across 67 files in app-type-baseline.json). The run fails only when a file
+# gets worse or a new file appears. See scripts/strict-ratchet.mjs, including
+# why the baseline must only ever be regenerated on Linux.
+
+name: Type Check (app project)
+
+on:
+  schedule:
+    - cron: '0 7 * * *' # daily at 07:00 UTC, before the working day
+  workflow_dispatch:
+
+concurrency:
+  group: type-check-app
+  cancel-in-progress: false
+
+jobs:
+  app-ratchet:
+    name: App type-check ratchet
+    runs-on: ubuntu-latest
+    # 21m12s measured locally; a hosted runner is slower and this must not be
+    # killed mid-run, because a timeout looks identical to a clean pass in the
+    # Actions list until someone opens it.
+    timeout-minutes: 60
+
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v4
+
+      - name: Set up Node.js 20
+        uses: actions/setup-node@v4
+        with:
+          node-version: 20
+          cache: npm
+
+      - name: Install dependencies
+        run: npm ci
+
+      - name: Run the app type-check ratchet
+        id: ratchet
+        run: |
+          set -o pipefail
+          npm run type-check:app:ratchet 2>&1 | tee ratchet.log
+
+      # A red run in the Actions list says nothing about WHICH file regressed,
+      # and nobody opens a scheduled job's logs. Put the ratchet's own output on
+      # the run summary, where the notification links.
+      - name: Publish the result to the run summary
+        if: always()
+        run: |
+          {
+            echo "## App type-check ratchet"
+            echo
+            if [ "${{ steps.ratchet.outcome }}" = "success" ]; then
+              echo "Held. No file gained a type error."
+            else
+              echo "**Regressed.** A file gained a type error, or a new file appeared."
+            fi
+            echo
+            echo '```'
+            tail -n 120 ratchet.log 2>/dev/null || echo "(no output captured)"
+            echo '```'
+          } >> "$GITHUB_STEP_SUMMARY"

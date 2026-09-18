@@ -61,6 +61,15 @@ export interface Activity {
   created_at: string;
 }
 
+/**
+ * An RPC argument the SQL declares `DEFAULT NULL` but the generated Args type
+ * reports as `?: string`. See the call site in awardPoints for why null is sent
+ * rather than the key omitted; this exists so the cast is in one place with the
+ * reason attached, instead of spread across the call.
+ */
+const nullableRpcArg = (value: string | undefined): string | undefined =>
+  (value ?? null) as unknown as string | undefined;
+
 export function useGamification() {
   const [reputation, setReputation] = useState<UserReputation | null>(null);
   const [badges, setBadges] = useState<Badge[]>([]);
@@ -265,8 +274,17 @@ export function useGamification() {
         p_user_id: user.id,
         p_activity_type: activityType,
         p_points: points,
-        p_content_type: contentType ?? null,
-        p_content_id: contentId ?? null,
+        // WEB-CI-030 AC5. These read `contentType ?? null` and were briefly
+        // changed to pass `contentType` instead, which type-checked and broke
+        // the test that pins the null. Sending an explicit null is the correct
+        // behaviour and the generated type is the inaccurate side: the SQL
+        // declares `p_content_type text DEFAULT NULL`, and Supabase's generator
+        // emits every defaulted argument as `?: T`, dropping the nullability.
+        // Omitting a key is also not equivalent to sending null - PostgREST
+        // resolves a function by the SET OF ARGUMENT NAMES supplied, which is
+        // how a call starts picking a different overload or 404ing PGRST202.
+        p_content_type: nullableRpcArg(contentType),
+        p_content_id: nullableRpcArg(contentId),
         p_metadata: metadata,
       });
 

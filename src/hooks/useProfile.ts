@@ -38,6 +38,11 @@ export function useProfile() {
     staleTime: STALE_TIME.CONTENT_LIST,
     gcTime: GC_TIME,
     queryFn: async () => {
+      // `enabled: !!user` above means this cannot run without a user. The guard
+      // is here for the type-checker, and because an invariant that is only
+      // documented is one a future edit to `enabled` can break silently.
+      if (!user) throw new Error("User not authenticated");
+
       const { data, error } = await supabase
         .from("profiles")
         .select("*")

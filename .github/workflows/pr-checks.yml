@@ -95,6 +95,16 @@ jobs:
       - name: Edge functions gained no type errors
         run: npm run check-edge-types
 
+      # supabase-js version pins (WEB-CI-030 AC6). _shared/securityLayers.ts
+      # imported the floating `@2` while create-campaign-checkout - which hands
+      # it a client - pinned `@2.45.0`. esm.sh resolves `@2` to the latest 2.x
+      # at fetch time and SupabaseClient's generics differ in arity between
+      # minors, so `deno check` on that function passed or failed according to
+      # what the module cache happened to hold. Both rules are in the script
+      # header, including why it does not fail on an untyped boundary.
+      - name: supabase-js pins agree across the edge boundary
+        run: npm run check-edge-pins
+
       # The offline suites for the edge/script helpers that have no other
       # coverage: the venue-image reclaim, the /media route, the image_url
       # rewrite and the provider-spend pricing. Each one decides a number or a

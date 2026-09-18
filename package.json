@@ -73,6 +73,8 @@
     "report-drift-decisions": "node scripts/report-drift-decisions.mjs",
     "test:offline": "tsx scripts/run-offline-suites.mjs",
     "check-edge-types": "node scripts/check-edge-types.mjs",
+    "check-edge-pins": "node scripts/check-edge-pins.mjs",
+    "check-edge-pins:update": "node scripts/check-edge-pins.mjs --write",
     "check-agent-drift": "node scripts/check-agent-pair-drift.mjs",
     "check-schema": "node scripts/check-schema-usage.mjs",
     "check-error-handling": "node scripts/check-error-handling.mjs",
