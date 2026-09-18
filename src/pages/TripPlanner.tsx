@@ -579,7 +579,7 @@ export default function TripPlanner() {
                               </Badge>
                             )}
                             {selectedTrip.ai_generated && (
-                              <Badge className="bg-gradient-to-r from-purple-500 to-pink-500">
+                              <Badge>
                                 <SpriteIcon name="sparkles" className="h-3 w-3 mr-1" />
                                 AI Generated
                               </Badge>
@@ -913,7 +913,7 @@ export default function TripPlanner() {
                         <div className="flex items-start justify-between">
                           <CardTitle className="text-lg line-clamp-1">{trip.title}</CardTitle>
                           {trip.ai_generated && (
-                            <Badge className="bg-gradient-to-r from-purple-500 to-pink-500 shrink-0">
+                            <Badge className="shrink-0">
                               <SpriteIcon name="sparkles" className="h-3 w-3" />
                             </Badge>
                           )}

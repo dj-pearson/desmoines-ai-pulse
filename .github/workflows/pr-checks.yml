@@ -530,6 +530,17 @@ jobs:
       - name: Generated types claim nothing production lacks
         run: node scripts/check-types-drift.mjs
 
+      # WEB-UX-034: CLAUDE.md mandates `npx impeccable detect` and nothing ran
+      # it, so 48 UI anti-patterns had accumulated - a thick coloured
+      # border-left on a card, purple gradients, gradient text. A ratchet
+      # rather than a gate, because not every finding is a defect (see the
+      # story's AC2): a file may lose findings freely and may not gain one.
+      # Needs network - the detector comes from npx - and SKIPS rather than
+      # fails when it cannot be fetched, so a registry blip does not turn a
+      # PR red for a reason unrelated to the change.
+      - name: UI anti-patterns do not increase
+        run: npm run check-ui-craft
+
       # WEB-FEAT-029: annual landing pages hold their dates in code, and code
       # does not notice a year passing. IowaStateFairPage shipped a fair two
       # years gone once, and on 2026-09-08 was advertising one that ended on

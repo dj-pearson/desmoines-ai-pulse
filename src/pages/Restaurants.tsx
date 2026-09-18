@@ -412,7 +412,11 @@ export default function Restaurants() {
               */}
               <h1 className="text-4xl md:text-5xl lg:text-6xl font-extrabold text-white mb-4 tracking-tight">
                 Best Restaurants in{' '}
-                <span className="block bg-gradient-to-r from-amber-300 to-orange-400 bg-clip-text text-transparent">
+                {/* WEB-UX-034: was a bg-clip-text gradient. Gradient text is
+                    decorative rather than meaningful, and on an h1 it costs
+                    legibility for nothing - emphasis here comes from the block
+                    break and the weight the heading already carries. */}
+                <span className="block text-amber-300">
                   Des Moines
                 </span>
               </h1>

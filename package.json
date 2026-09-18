@@ -133,7 +133,9 @@
     "check-schema-placeholders": "node scripts/check-schema-placeholders.mjs",
     "check-annual-dates": "node scripts/check-annual-dates.mjs",
     "check-raw-img": "node scripts/check-raw-img.mjs",
-    "check-identity-reads": "node scripts/check-identity-read-policies.mjs"
+    "check-identity-reads": "node scripts/check-identity-read-policies.mjs",
+    "check-ui-craft": "node scripts/check-ui-craft.mjs",
+    "check-ui-craft:update": "node scripts/check-ui-craft.mjs --write"
   },
   "dependencies": {
     "@dnd-kit/core": "^6.3.1",

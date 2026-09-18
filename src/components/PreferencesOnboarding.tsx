@@ -109,8 +109,8 @@ export function PreferencesOnboarding({
         return (
           <div className="text-center space-y-4 py-6">
             <div className="flex justify-center">
-              <div className="rounded-full bg-gradient-to-br from-purple-500 to-pink-500 p-6">
-                <SpriteIcon name="sparkles" className="h-16 w-16 text-white" />
+              <div className="rounded-full bg-primary p-6">
+                <SpriteIcon name="sparkles" className="h-16 w-16 text-primary-foreground" />
               </div>
             </div>
             <div className="space-y-2">

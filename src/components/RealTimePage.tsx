@@ -86,7 +86,7 @@ export default function RealTimePage() {
               <div className="text-sm text-gray-600">Update Frequency</div>
             </div>
             <div className="text-center">
-              <div className="text-2xl font-bold text-purple-600">24/7</div>
+              <div className="text-2xl font-bold text-primary">24/7</div>
               <div className="text-sm text-gray-600">Community Updates</div>
             </div>
           </div>
