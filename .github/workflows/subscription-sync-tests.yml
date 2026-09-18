@@ -190,6 +190,12 @@ jobs:
       # lapse, resubscribe granted another 7 free days, once per cancellation.
       # Pins the first-purchase rule and the two unfiltered reads behind it.
       - run: deno test --allow-read supabase/functions/_tests/trial-eligibility.test.ts
+      # WEB-FEAT-015. One .single() over every platform, so a dual-platform
+      # subscriber matched two rows and read as "no subscription", and an
+      # iOS-only row (no stripe_customer_id) got the same message. Pins the
+      # per-platform reads, the store deep-link answer, and the one place the
+      # site URL now comes from. --allow-env: getSiteUrl reads SITE_URL.
+      - run: deno test --allow-read --allow-env supabase/functions/_tests/manage-subscription-platforms.test.ts
       # WEB-FEAT-016. VIP listed eight benefits at $12.99/month and delivered
       # none. Fails if the pricing page or the stored plan row promises a feature
       # no component gates on.

@@ -915,3 +915,17 @@ Trial is a first-purchase benefit now, on both the server and the copy.
   - `npm run type-check` is a no-op (WEB-CI-030) and the real app check takes ~21 minutes (WEB-CI-031). A tsconfig that `extends` tsconfig.app.json with `include` narrowed to the changed files type-checks them in about a minute.
   - Passing `trial_period_days: 0` to Stripe is an error, not "no trial". `undefined` is the no-trial value.
 ---
+
+## 2026-09-18 - WEB-FEAT-015
+manage-subscription now reads one row per platform instead of one row total.
+- `supabase/functions/manage-subscription/index.ts`: `.eq("platform","web").maybeSingle()` plus a separate ios/android read. portal/cancel/resume answer a store-billed subscriber with `{ managedExternally, manageAt, manageUrl }` at **200**. `details` counts store rows, so tier is the highest plan held on any platform and a store subscriber is no longer reported as free.
+- `supabase/functions/_shared/siteUrl.ts` (new): `getSiteUrl()`, `STORE_MANAGE_URLS`, `manageAtForPlatform`. `emailLayout.ts` now sources its `SITE_URL` from it.
+- `src/hooks/usePayments.ts`, `src/pages/SubscriptionPortal.tsx`: store deep link replaces the Stripe footer when `manageAt` is set.
+- `supabase/functions/_tests/manage-subscription-platforms.test.ts` (new), wired into `subscription-sync-tests.yml` with `--allow-env`.
+- **Learnings for future iterations:**
+  - **`supabase.functions.invoke` DROPS THE BODY of a non-2xx response.** The client gets a `FunctionsHttpError` with `data` null, so any structured payload an edge function wants the UI to act on - a deep link, a code, a retry hint - has to ride a 2xx. This is why the store answer is 200 and not 409.
+  - `user_subscriptions` holds **one row per platform**. Any `.single()` on it without `.eq("platform", ...)` is a latent PGRST116 for exactly the dual-platform users. WEB-FEAT-013 fixed this in create-subscription-checkout; the same defect was still live here.
+  - Once you move to `.maybeSingle()`, a `code !== "PGRST116"` guard is dead code that swallows real errors - maybeSingle never raises it.
+  - `npm run check-edge-types` is the only automated type coverage `supabase/functions/` gets (`type-check:functions` is the Cloudflare `functions/` dir, a different tree). It ratchets per file: "No file gained a type error" is the pass condition.
+  - Comparing a scoped `tsc` run against `app-type-baseline.json` per file is a reliable way to prove you added no type errors without paying the 21-minute full app check.
+---
