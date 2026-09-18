@@ -1061,3 +1061,15 @@ Turnstile wired into signup/login/reset, doing nothing until `VITE_TURNSTILE_SIT
   - Turnstile tokens are **single-use**; call `reset()` after every failed submit or the second attempt fails on a replay with nothing on screen to explain it.
   - **`app-type-baseline.json` lists only 67 files** - absence from it does not mean zero errors. `Auth.tsx` is absent and has four. To prove you added none, stash your change and re-run the same scoped tsc.
 ---
+
+## 2026-09-18 - WEB-SEC-025 AC7 (story stays open on the owner's apply)
+Turned the one-off identity-read sweep into a standing check, and it found something.
+- `scripts/check-identity-read-policies.mjs` (new, in `validate`): SELECT/ALL policies that are `USING(true)` for public/anon over a table carrying an identity column. Baseline 14; the list can only shrink.
+- **FINDING: `user_subscriptions` "Service role can manage all subscriptions" is `FOR ALL USING(true) WITH CHECK(true)` with NO `TO` clause**, so it applies to public. `docs/RLS_AUDIT.md:35` has reported it all along. Not fixed - see the prd note.
+- **Learnings for future iterations:**
+  - **A policy with no `TO` clause applies to PUBLIC**, whatever it is named. "Service role can manage all X" with no `TO service_role` grants everyone. Worth grepping the migrations for.
+  - RLS policies are **permissive and OR'd**: a correct `auth.uid() = user_id` policy sitting beside a `USING(true)` one constrains nothing.
+  - `audit-rls.ts` flags permissive WRITEs and anon writes; it has no rule for a permissive READ over an identity column, which is the `votes` shape. The two checks do not overlap.
+  - **A migration-parsing check reports the repo's INTENDED state, not production.** `votes` is absent from my 14 because the privacy migration is in the repo; it is not applied. Say which one a check answers - `check-anon-exposure.ts` is the one that asks production, and it needs credentials.
+  - A finding that `docs/RLS_AUDIT.md` has printed for months is not "found" - it is *unactioned*. Generating a report nobody gates on is how that happens; putting the same question in `validate` is the difference.
+---

@@ -91,7 +91,7 @@
     "check-migration-drift": "node scripts/check-migration-drift.mjs",
     "check-migration-drift:all": "node scripts/check-migration-drift.mjs --all",
     "test:smoke": "playwright test --config=playwright.smoke.config.ts",
-    "validate": "npm run type-check && npm run check-imports && npm run check-schema && npm run check-error-handling && npm run check-seo-routes && npm run check-internal-links && npm run check-event-time-tz && npm run check-false-empty-state && npm run check-lcp-priority && npm run check-raw-img && npm run check-csp-hashes && npm run check-sitemap-redirects && npm run check-schema-dupes && npm run check-icon-sprite && npm run lint && npm run type-check:scripts && npm run type-check:functions && npm run check-brand-leak && npm run check-schema-placeholders && npm run check-annual-dates",
+    "validate": "npm run type-check && npm run check-imports && npm run check-schema && npm run check-error-handling && npm run check-seo-routes && npm run check-internal-links && npm run check-event-time-tz && npm run check-false-empty-state && npm run check-lcp-priority && npm run check-raw-img && npm run check-identity-reads && npm run check-csp-hashes && npm run check-sitemap-redirects && npm run check-schema-dupes && npm run check-icon-sprite && npm run lint && npm run type-check:scripts && npm run type-check:functions && npm run check-brand-leak && npm run check-schema-placeholders && npm run check-annual-dates",
     "validate:strict": "npm run type-check:strict && npm run lint",
     "setup:stripe": "node scripts/setup-stripe-products.js",
     "setup:stripe:dry-run": "node scripts/setup-stripe-products.js --dry-run",
@@ -132,7 +132,8 @@
     "check-brand-leak": "node scripts/check-brand-leak.mjs",
     "check-schema-placeholders": "node scripts/check-schema-placeholders.mjs",
     "check-annual-dates": "node scripts/check-annual-dates.mjs",
-    "check-raw-img": "node scripts/check-raw-img.mjs"
+    "check-raw-img": "node scripts/check-raw-img.mjs",
+    "check-identity-reads": "node scripts/check-identity-read-policies.mjs"
   },
   "dependencies": {
     "@dnd-kit/core": "^6.3.1",
