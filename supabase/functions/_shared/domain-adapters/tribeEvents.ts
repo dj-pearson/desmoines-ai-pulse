@@ -34,6 +34,7 @@ import {
   type EventSourceProfile,
 } from "../eventSourceProfiles.ts";
 import { BROWSER_HEADERS } from "../eventPageDiscovery.ts";
+import { fetchAllowed } from "./adapterFetch.ts";
 
 const PER_PAGE = 50;
 const MAX_PAGES = 4; // 200 events is far more than any of these venues publishes
@@ -203,10 +204,17 @@ async function getJson(apiUrl: string): Promise<TribeResponse | null> {
   const controller = new AbortController();
   const timer = setTimeout(() => controller.abort(), REQUEST_TIMEOUT_MS);
   try {
-    const res = await fetch(apiUrl, {
+    // WEB-SEC-024: this is a WordPress REST endpoint on SOMEONE ELSE'S site,
+    // discovered by crawling it - not an API published for us the way
+    // statsapi.mlb.com is - so robots.txt applies.
+    const res = await fetchAllowed(apiUrl, {
       headers: { ...BROWSER_HEADERS, Accept: "application/json" },
       signal: controller.signal,
     });
+    if (!res) {
+      console.log(`  ⛔ [wp-tribe-events] ${apiUrl} disallowed by robots.txt`);
+      return null;
+    }
     if (!res.ok) {
       console.log(`  ⚠️ [wp-tribe-events] HTTP ${res.status} for ${apiUrl}`);
       return null;

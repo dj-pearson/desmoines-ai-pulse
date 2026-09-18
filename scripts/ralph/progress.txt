@@ -1073,3 +1073,16 @@ Turned the one-off identity-read sweep into a standing check, and it found somet
   - **A migration-parsing check reports the repo's INTENDED state, not production.** `votes` is absent from my 14 because the privacy migration is in the repo; it is not applied. Say which one a check answers - `check-anon-exposure.ts` is the one that asks production, and it needs credentials.
   - A finding that `docs/RLS_AUDIT.md` has printed for months is not "found" - it is *unactioned*. Generating a report nobody gates on is how that happens; putting the same question in `validate` is the difference.
 ---
+
+## 2026-09-18 - WEB-SEC-024 AC6 (story stays open on AC3, the UA decision)
+Six domain adapters were fetching third-party pages with no robots check and a pasted Chrome UA.
+- `_shared/domain-adapters/adapterFetch.ts` (new): `fetchAllowed()` checks robots.txt with the same `SCRAPER_IGNORE_ROBOTS` hatch as scrapeUrl, and `adapterHeaders()` takes the UA from `getScraperConfig()`.
+- Routed: catchdesmoines, eventbrite, barnstormers, hyveetix, tribeEvents, vibrantmusichall. Not routed, deliberately: milb and seatgeek (documented JSON APIs, no browser UA) and hyveetix's POST to browserless.
+- `_tests/adapter-robots.test.ts` (new), wired into `subscription-sync-tests.yml`.
+- **Learnings for future iterations:**
+  - **I reused the bad import-insertion regex and broke a file again.** `^import .*\n(?:import .*\n)*` stops at a multi-line `import {` and drops the new line inside the block. This is the SECOND time this session. Insert after the last line matching `^import .*;$` OR `^\} from '...';$`, always.
+  - **A guard placed "where nothing can route around it" only holds for callers that go through it.** scrapeUrl checks robots above its own fallback chain - correct and careful - and six adapters simply never called scrapeUrl. When a check lives in a chokepoint, grep for code that does the same job without passing through it.
+  - An AC's file list can be a partial sweep. This one named two adapters; the directory had six with the same shape. `grep -c "globalThis.fetch\|await fetch(" <dir>/*.ts` took one command.
+  - **Return null, don't throw, when a shared helper refuses.** Two of these adapters fetch outside a `try`, so a throw would abort a whole ingestion run instead of skipping one blocked URL. Check the call sites before choosing the failure mode.
+  - Distinguish crawling a site's pages from calling an API it publishes. robots.txt governs the first; routing the second through a robots check would be cargo cult.
+---

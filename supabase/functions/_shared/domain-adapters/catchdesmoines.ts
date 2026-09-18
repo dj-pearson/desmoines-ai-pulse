@@ -21,6 +21,7 @@
 import { DOMParser } from "https://deno.land/x/deno_dom@v0.1.38/deno-dom-wasm.ts";
 import type { AdapterEvent, AdapterResult, DomainAdapter } from "./types.ts";
 import { scrapeUrl } from "../scraper.ts";
+import { fetchAllowed } from "./adapterFetch.ts";
 
 const SITE_ORIGIN = "https://www.catchdesmoines.com";
 const PAGE_SIZE = 12;
@@ -48,13 +49,9 @@ const EXCLUDED_DOMAINS = [
   "cloudflare.com",
 ];
 
-const BROWSER_HEADERS = {
-  "User-Agent":
-    "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36",
-  Accept:
-    "text/html,application/xhtml+xml,application/xml;q=0.9,*/*;q=0.8",
-  "Accept-Language": "en-US,en;q=0.9",
-};
+// WEB-SEC-024: BROWSER_HEADERS used to be declared here, with its own pasted
+// Chrome/120 User-Agent. adapterHeaders() builds them from getScraperConfig(),
+// so SCRAPER_USER_AGENT reaches this adapter instead of being decoration.
 
 interface SchemaOrgEvent {
   "@type"?: string;
@@ -172,7 +169,11 @@ async function discoverEventUrls(baseUrl: string): Promise<Set<string>> {
 
 async function fetchEventDetail(url: string): Promise<AdapterEvent | null> {
   try {
-    const response = await globalThis.fetch(url, { headers: BROWSER_HEADERS });
+    const response = await fetchAllowed(url);
+    if (!response) {
+      console.log(`  ⛔ [catchdesmoines] detail ${url}: disallowed by robots.txt`);
+      return null;
+    }
     if (!response.ok) {
       console.log(
         `  ❌ [catchdesmoines] detail ${url} → HTTP ${response.status}`,

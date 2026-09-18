@@ -20,18 +20,14 @@
  */
 
 import type { AdapterEvent, AdapterResult, DomainAdapter } from "./types.ts";
+import { fetchAllowed } from "./adapterFetch.ts";
 
 const SHOWS_URL = "https://www.vibrantmusichall.com/shows";
 const VENUE_NAME = "Vibrant Music Hall";
 const DEFAULT_LOCATION = "Waukee, IA";
 
-const BROWSER_HEADERS = {
-  "User-Agent":
-    "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36",
-  Accept:
-    "text/html,application/xhtml+xml,application/xml;q=0.9,*/*;q=0.8",
-  "Accept-Language": "en-US,en;q=0.9",
-};
+// WEB-SEC-024: BROWSER_HEADERS removed; adapterHeaders() builds them from
+// getScraperConfig() so there is one User-Agent for the whole project.
 
 type ImageField =
   | string
@@ -83,7 +79,15 @@ export const vibrantmusichallAdapter: DomainAdapter = {
 
     let html: string;
     try {
-      const response = await fetch(SHOWS_URL, { headers: BROWSER_HEADERS });
+      const response = await fetchAllowed(SHOWS_URL);
+      if (!response) {
+        return {
+          success: false,
+          items: [],
+          adapter: "vibrantmusichall",
+          error: "Disallowed by robots.txt",
+        };
+      }
       if (!response.ok) {
         return {
           success: false,

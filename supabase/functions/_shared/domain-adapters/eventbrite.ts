@@ -13,6 +13,7 @@
  */
 
 import type { AdapterEvent, AdapterResult, DomainAdapter } from "./types.ts";
+import { fetchAllowed } from "./adapterFetch.ts";
 
 const BROWSE_URL_RE = /^https?:\/\/(www\.)?eventbrite\.com\/d\//i;
 const SERVER_DATA_RE = /window\.__SERVER_DATA__\s*=\s*(\{[\s\S]+?\});\s*\n/;
@@ -72,15 +73,16 @@ export const eventbriteAdapter: DomainAdapter = {
   async fetch(url: string, _category: string): Promise<AdapterResult> {
     console.log(`🎪 [eventbrite] Fetching ${url}`);
 
-    const response = await globalThis.fetch(url, {
-      headers: {
-        "User-Agent":
-          "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36",
-        Accept:
-          "text/html,application/xhtml+xml,application/xml;q=0.9,*/*;q=0.8",
-        "Accept-Language": "en-US,en;q=0.5",
-      },
-    });
+    const response = await fetchAllowed(url);
+
+    if (!response) {
+      return {
+        success: false,
+        items: [],
+        adapter: "eventbrite",
+        error: "Disallowed by robots.txt",
+      };
+    }
 
     if (!response.ok) {
       return {
