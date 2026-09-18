@@ -38,6 +38,11 @@ export interface LogConsentInput {
     | "cookie_banner"
     | "newsletter_form"
     | "unsubscribe_page"
+    // WEB-QUAL-013: the Event Promotion Planner's modal takes a tick-box
+    // agreement to receive event-promotion email. consent_records.source is
+    // TEXT, so this union is ours to widen; naming the surface is the point of
+    // the column, and "other" would throw that away.
+    | "event_promotion_planner"
     | "api"
     | "other";
   /** Version string of the policy the user accepted, if applicable. */

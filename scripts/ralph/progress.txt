@@ -991,3 +991,17 @@ One head manager per page; SEOEnhancedHead and SEOStructure deleted.
   - `dedupeJsonLd` keys on the FIRST `"@type"` in a block, so a JSON-LD **array** in one `<script>` counts as one block of the first node's type. That makes an array the clean way to ship two nodes from one head component without the prerenderer dropping either.
   - Before deleting an SEO component, check what ONLY it emitted. SEOEnhancedHead's Organization node and apple-mobile-web-app meta both turned out to exist in SEOHead too, and `mobile-web-app-capable` is in index.html - but that had to be verified, not assumed.
 ---
+
+## 2026-09-18 - WEB-QUAL-013
+Dead-lib `unimported` list emptied: 18 modules deleted (2,636 lines), 1 wired up, 1 entry that was never true.
+- Deleted: 3 sitemap generators, guestFavoriteMigration + useGuestFavorites, conversionTracking, sponsoredTracking, errorTracking, webVitalsRum, styleUtils, useReducedMotion, useGoogleIndexing, eventSubmissionService, deferredLoader, lazyLoad, useVirtualList, use-touch-ripple, use-long-press, useResourceOwnership.
+- Wired: `saveEmailCapture` into EventPromotionPlanner (the call was commented out), plus a consent record.
+- `src/index.css`: collapsed the two identical `prefers-reduced-motion` blocks.
+- **Learnings for future iterations:**
+  - **These baselines are ratchets, so a STALE entry can sit in one for months.** A new entry fails the check; an entry that stops being true is only removed by re-running `--write`, and the green output gives no hint. `queryKeys.ts` was listed as unimported while SIX hooks import it - deleting it turned vitest red. `geo.ts` was listed testOnly with a production importer. **Grep for importers before deleting anything a baseline names**, and re-run `--write` when you touch one.
+  - **A dead module importing another keeps it out of the dead list.** `useGuestFavorites` was invisible to the checker because only `guestFavoriteMigration` (itself dead) imported it. Dead code citing dead code reads as live - when you delete a module, re-run the check, because it will reveal a new layer.
+  - `npm run check-imports` and eslint BOTH passed with `useRestaurants.ts` importing a file I had just deleted. Neither resolves `@/` aliases to disk. **`npx vitest run` is what catches a deleted module**, because Vite actually resolves the import.
+  - A commented-out call is worth grepping for on any "dead module" story. `// await saveEmailCapture(data)` is why 269 lines looked dead while the UI around them collected email addresses and discarded them.
+  - `logConsent` takes an optional `email` and hashes it. Omitting it on an anonymous flow writes a consent row that identifies nobody, which is useless as evidence.
+  - Before wiring a module up, check what its transitive calls actually reach. `sendEmail()` here POSTed to `/api/send-email`, a route this stack does not serve at all - wiring the whole function would have thrown on every capture, after the row was written.
+---

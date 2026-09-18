@@ -1,6 +1,22 @@
 /**
- * Email Integration for Event Promotion Planner
- * Handles email capture, sequence management, and API calls
+ * Email capture for the Event Promotion Planner (WEB-QUAL-013).
+ *
+ * THIS MODULE RECORDS, IT DOES NOT SEND. EmailCaptureModal asks for an address
+ * under an explicit agreement "to receive emails about your event promotion",
+ * and EventPromotionPlanner had the one call that would have stored it
+ * COMMENTED OUT - `// await saveEmailCapture(data)`. So a visitor handed over
+ * their address to unlock the timeline and nothing kept it.
+ *
+ * The send half is deleted rather than wired: sendEmail() POSTed to
+ * `/api/send-email`, a route this stack does not serve (Cloudflare Pages plus
+ * Supabase edge functions - there is no /api), and switching on a seven-email
+ * drip with no unsubscribe and no sender would be worse than the silence it
+ * replaced. initializeEmailSequence still QUEUES the rows, which is the state a
+ * sender would read when one exists.
+ *
+ * What the modal promises and this does not yet deliver is recorded in
+ * WEB-QUAL-013's notes. It is the same shape as WEB-FEAT-019's newsletter gap
+ * and wants its own story, not a line in a dead-code cleanup.
  */
 
 import { supabase } from '@/integrations/supabase/client';
@@ -32,13 +48,11 @@ export async function saveEmailCapture(data: EmailCaptureData): Promise<void> {
   const referralCode = generateReferralCode(data.email);
   await createReferral(data.email, referralCode);
 
-  // Trigger email sequence
+  // Queue the sequence rows when they asked for reminders. Nothing sends them
+  // yet; they are the work list for whoever builds the sender.
   if (data.sendReminders) {
     await initializeEmailSequence(data);
   }
-
-  // Send immediate welcome email
-  await sendWelcomeEmail(data);
 }
 
 /**
@@ -103,122 +117,14 @@ async function initializeEmailSequence(data: EmailCaptureData): Promise<void> {
 }
 
 /**
- * Send welcome email (immediate)
- */
-async function sendWelcomeEmail(data: EmailCaptureData): Promise<void> {
-  try {
-    // Call your email service API (Resend, SendGrid, etc.)
-    const response = await fetch('/api/send-email', {
-      method: 'POST',
-      headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({
-        to: data.email,
-        template: 'event-promotion-welcome',
-        data: {
-          eventName: data.eventName || 'Your Event',
-          eventType: data.eventType,
-          eventDate: data.eventDate.toISOString(),
-        },
-      }),
-    });
-
-    if (!response.ok) {
-      throw new Error('Failed to send email');
-    }
-
-    // Update sequence status
-    await supabase
-      .from('event_promotion_email_sequences')
-      .update({ status: 'sent', sent_at: new Date().toISOString() })
-      .eq('email', data.email)
-      .eq('sequence_day', 0);
-  } catch (error) {
-    logger.error('sendWelcomeEmail', 'Error sending welcome email', { error: String(error) });
-  }
-}
-
-/**
- * Send email via server-side API endpoint
- * Note: API keys are stored securely on the server-side, not in client code
- */
-export async function sendEmail(config: {
-  to: string;
-  subject: string;
-  html: string;
-  text?: string;
-}): Promise<void> {
-  // Use server-side API endpoint to send emails
-  // This keeps API keys secure on the server
-  const response = await fetch('/api/send-email', {
-    method: 'POST',
-    headers: {
-      'Content-Type': 'application/json',
-    },
-    body: JSON.stringify({
-      to: config.to,
-      subject: config.subject,
-      html: config.html,
-      text: config.text,
-    }),
-  });
-
-  if (!response.ok) {
-    const error = await response.json().catch(() => ({ message: 'Unknown error' }));
-    logger.error('sendEmail', 'Email send error', { error: String(error) });
-    throw new Error('Failed to send email');
-  }
-}
-
-/**
  * Generate referral code from email
  */
 function generateReferralCode(email: string): string {
   return btoa(email).substring(0, 8).toUpperCase();
 }
 
-/**
- * Track email open (webhook)
- */
-export async function trackEmailOpen(email: string, emailType: string): Promise<void> {
-  await supabase
-    .from('event_promotion_email_sequences')
-    .update({ opened_at: new Date().toISOString() })
-    .eq('email', email)
-    .eq('email_type', emailType)
-    .is('opened_at', null);
-}
 
-/**
- * Track email click (webhook)
- */
-export async function trackEmailClick(email: string, emailType: string): Promise<void> {
-  await supabase
-    .from('event_promotion_email_sequences')
-    .update({ clicked_at: new Date().toISOString() })
-    .eq('email', email)
-    .eq('email_type', emailType)
-    .is('clicked_at', null);
-}
 
-/**
- * Get pending emails to send (for cron job)
- */
-export async function getPendingEmails(): Promise<any[]> {
-  const { data, error } = await supabase
-    .from('event_promotion_email_sequences')
-    .select('*')
-    .eq('status', 'pending')
-    .lte('sequence_day', Math.floor(Date.now() / (1000 * 60 * 60 * 24)))
-    .order('created_at', { ascending: true })
-    .limit(100);
-
-  if (error) {
-    logger.error('getPendingEmails', 'Error fetching pending emails', { error: String(error) });
-    return [];
-  }
-
-  return data || [];
-}
 
 /**
  * Email templates for the 7-day sequence
