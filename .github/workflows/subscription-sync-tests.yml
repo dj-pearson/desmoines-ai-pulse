@@ -196,6 +196,11 @@ jobs:
       # per-platform reads, the store deep-link answer, and the one place the
       # site URL now comes from. --allow-env: getSiteUrl reads SITE_URL.
       - run: deno test --allow-read --allow-env supabase/functions/_tests/manage-subscription-platforms.test.ts
+      # WEB-FEAT-017. Favorites/saved-search caps were browser-only and
+      # saved-search-alerts mailed every row regardless of tier. Pins the
+      # BEFORE INSERT triggers, the -1-is-unlimited rule, the shared 14-day
+      # grace window, and the entitlement filter on the nightly job.
+      - run: deno test --allow-read supabase/functions/_tests/plan-limit-enforcement.test.ts
       # WEB-FEAT-016. VIP listed eight benefits at $12.99/month and delivered
       # none. Fails if the pricing page or the stored plan row promises a feature
       # no component gates on.

@@ -2,6 +2,7 @@ import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
 import { supabase } from "@/integrations/supabase/client";
 import { useAuth } from "@/contexts/AuthContext";
 import type { Database } from "@/integrations/supabase/types";
+import { isPlanLimitError } from "@/lib/planLimitError";
 
 export type SavedSearchRow = Database["public"]["Tables"]["saved_searches"]["Row"];
 
@@ -87,7 +88,17 @@ export function useSavedSearchAlerts() {
         p_filters: filters as never,
       });
       if (error) {
-        if (error.message?.includes("saved_search_limit_reached")) throw new SavedSearchLimitError();
+        // Two server-side refusals now exist for the same rule: this RPC's own
+        // check, and the BEFORE INSERT trigger from WEB-FEAT-017 that also
+        // covers a direct .insert() into saved_searches. The RPC raises first
+        // on this path; the trigger is recognised so the UI is right whichever
+        // one answers.
+        if (
+          error.message?.includes("saved_search_limit_reached") ||
+          isPlanLimitError(error)
+        ) {
+          throw new SavedSearchLimitError();
+        }
         throw error;
       }
       return data;

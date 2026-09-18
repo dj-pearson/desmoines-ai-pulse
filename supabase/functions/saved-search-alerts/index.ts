@@ -22,6 +22,7 @@ import { requireAdminOrApiKey } from "../_shared/apiKeyAuth.ts";
 import { runJob } from "../_shared/jobRunner.ts";
 import { renderEmail, SITE_URL } from "../_shared/emailLayout.ts";
 import { fetchWithTimeout } from "../_shared/fetchWithTimeout.ts";
+import { hasFeatureAccess, resolveEntitledTiers } from "../_shared/entitlements.ts";
 
 const RESEND_API_KEY = Deno.env.get("RESEND_API_KEY");
 const DEFAULT_WINDOW_MS = 24 * 60 * 60 * 1000;
@@ -134,10 +135,33 @@ serve(async (req) => {
     // `{ searches: 0 }` as a SUCCESS - a nightly cron that has stopped working
     // looks exactly like a night with nothing to send (WEB-BE-032 AC2).
     if (searchesError) throw new Error(`saved_searches read failed: ${searchesError.message}`);
-    const searches = (searchesRaw ?? []) as SavedSearch[];
-    if (searches.length === 0) {
+    const allSearches = (searchesRaw ?? []) as SavedSearch[];
+    if (allSearches.length === 0) {
       ctx.meta({ searches: 0 });
       return { searches: 0, emailsSent: 0 };
+    }
+
+    // 1b. WEB-FEAT-017 -- ALERTS ARE AN INSIDER FEATURE AND THIS JOB NEVER ASKED.
+    //
+    // It mailed every row in saved_searches. The free plan's alerts limit is 0
+    // and create_alerts is insider+, so a row belonging to a free account is
+    // either a client-side check that was bypassed or a subscription that has
+    // since lapsed -- and in both cases we were delivering a paid feature for
+    // free, nightly. Nothing shipped depends on the old behaviour: free users
+    // have never been entitled to alerts, so no client can be relying on them.
+    const ownerIds = [...new Set(allSearches.map((s) => s.user_id))];
+    // resolveEntitledTiers THROWS on a failed read rather than returning an
+    // empty map, so a broken subscription read fails the run instead of quietly
+    // skipping every alert -- and a genuinely unentitled night still reports
+    // zero sends rather than raising.
+    const tiers = await resolveEntitledTiers(supabase, ownerIds);
+    const searches = allSearches.filter((s) =>
+      hasFeatureAccess(tiers.get(s.user_id) ?? "free", "create_alerts"),
+    );
+    const skippedUnentitled = allSearches.length - searches.length;
+    if (searches.length === 0) {
+      ctx.meta({ searches: 0, skippedUnentitled });
+      return { searches: 0, emailsSent: 0, skippedUnentitled };
     }
 
     // 2. Candidate events created since the earliest window across all searches.
@@ -290,12 +314,21 @@ serve(async (req) => {
     ctx.failed(failed);
     ctx.meta({
       searches: searches.length,
+      // Counted rather than silently dropped: a jump here is a client-side
+      // check being bypassed, and a run that alerts nobody because everyone
+      // lapsed should not look like a quiet night.
+      skippedUnentitled,
       candidateEvents: events.length,
       usersWithMatches: userIds.length,
       emailsSent,
       resendConfigured: !!RESEND_API_KEY,
     });
-    return { searches: searches.length, emailsSent, usersWithMatches: userIds.length };
+    return {
+      searches: searches.length,
+      skippedUnentitled,
+      emailsSent,
+      usersWithMatches: userIds.length,
+    };
   });
 
   return new Response(

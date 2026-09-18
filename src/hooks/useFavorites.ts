@@ -5,6 +5,7 @@ import { useAuth } from "./useAuth";
 import { useToast } from "./use-toast";
 import { useGamification } from "./useGamification";
 import { useSubscription } from "./useSubscription";
+import { isPlanLimitError, planLimitMessage } from "@/lib/planLimitError";
 
 export function useFavorites() {
   const { user } = useAuth();
@@ -55,9 +56,19 @@ export function useFavorites() {
       queryClient.setQueryData<string[]>(favoritesQueryKey, old => [...(old || []), eventId]);
       return { previous };
     },
-    onError: (_error, _eventId, context) => {
+    onError: (error, _eventId, context) => {
       if (context?.previous) {
         queryClient.setQueryData(favoritesQueryKey, context.previous);
+      }
+      // WEB-FEAT-017: the cap is now enforced by a trigger, so a bypassed or
+      // stale client check comes back here rather than being silently allowed.
+      // "Failed to add to favorites" would be a lie about a refusal we chose.
+      if (isPlanLimitError(error)) {
+        toast({
+          title: "Favorite limit reached",
+          description: planLimitMessage(error, "Upgrade to Insider for unlimited favorites."),
+        });
+        return;
       }
       toast({
         title: "Error",

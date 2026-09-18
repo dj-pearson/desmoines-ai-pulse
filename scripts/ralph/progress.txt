@@ -929,3 +929,19 @@ manage-subscription now reads one row per platform instead of one row total.
   - `npm run check-edge-types` is the only automated type coverage `supabase/functions/` gets (`type-check:functions` is the Cloudflare `functions/` dir, a different tree). It ratchets per file: "No file gained a type error" is the pass condition.
   - Comparing a scoped `tsc` run against `app-type-baseline.json` per file is a reliable way to prove you added no type errors without paying the 21-minute full app check.
 ---
+
+## 2026-09-18 - WEB-FEAT-017
+Plan limits moved from the browser into the database.
+- `supabase/migrations/20260918000001_enforce_plan_limits.sql` (new): `entitled_plan_limit(uuid, text)` mirrors `resolveEntitledTier` in SQL; BEFORE INSERT triggers on `content_favorites`, `user_event_interactions` (WHEN favorite) and `saved_searches`. Both favorite tables count toward one cap.
+- `supabase/functions/_shared/entitlements.ts`: `resolveEntitledTiers` - batched, and **throws** on a failed read.
+- `supabase/functions/saved-search-alerts/index.ts`: drops rows whose owner has no `create_alerts` entitlement; reports `skippedUnentitled`.
+- `src/lib/planLimitError.ts` (new) + `useFavorites`, `useSavedSearchAlerts`.
+- `supabase/functions/_tests/plan-limit-enforcement.test.ts` (new), wired into `subscription-sync-tests.yml`.
+- **Learnings for future iterations:**
+  - **A behavioural Deno test CAN be run in this container after all**, as long as the module under test has no remote imports. `_shared/entitlements.ts` imports nothing, so `npx tsx` imports it directly and the assertions execute for real. Worth checking before falling back to transcribing regexes - the six resolveEntitledTiers cases here found nothing, but they were real coverage rather than a spelling check.
+  - `supabase/functions/_typecheck/remote.d.ts` is an **allowlist**. Using a std/assert name that is not declared there (`assertRejects`) fails `check-edge-types` repo-wide, not just on the branch that added it. Add the name in the same commit.
+  - **PostgREST maps SQLSTATE `PT4xx`/`PT5xx` to that HTTP status.** `RAISE EXCEPTION ... USING ERRCODE = 'PT402'` gives the client a 402 instead of a 500. Don't make the status load-bearing though - key the client off `hint`, which is ours, and check the code as a second signal.
+  - Before adding a limit trigger, **check whether an RPC already enforces it**. `create_event_saved_search` did; the trigger's value was closing the direct-`.insert()` path, not the RPC path. Check the two agree on every tier before shipping both.
+  - `-1` is "unlimited" in `subscription_plans.limits`. Any aggregation over limits must make -1 WIN explicitly - `max(-1, 3)` is 3, which caps a paying subscriber at the free limit.
+  - A cap trigger is a tightening, which CLAUDE.md says to split across releases. It is only safe in one release if **every shipped client already refuses to exceed the cap** - check the iOS and Android sources, not just the web one, and record what you found.
+---
