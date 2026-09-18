@@ -1,5 +1,4 @@
 import { Link } from "react-router-dom";
-import { Star } from "lucide-react";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
@@ -9,8 +8,8 @@ import LocalSEO from "@/components/LocalSEO";
 import { FAQSection } from "@/components/FAQSection";
 import { Breadcrumbs } from "@/components/ui/breadcrumbs";
 import { useDocumentTitle } from "@/hooks/useDocumentTitle";
-import { formatCount } from "@/lib/pluralize";
 import { SpriteIcon } from "@/components/ui/SpriteIcon";
+import { NEIGHBORHOODS } from "@/lib/neighborhoods";
 
 export default function NeighborhoodsPage() {
   // WEB-SEO-002: useDocumentTitle runs after LocalSEO's Helmet and was winning,
@@ -18,92 +17,24 @@ export default function NeighborhoodsPage() {
   // keyword-bearing pageTitle passed to LocalSEO below. Keep the two in sync.
   useDocumentTitle("Des Moines Neighborhoods Guide");
 
-  const neighborhoods = [
-    {
-      name: "East Village",
-      slug: "east-village",
-      description: "Hip downtown district with trendy restaurants, craft breweries, and nightlife",
-      highlights: ["Court Avenue District", "Farmers Market", "Local breweries"],
-      eventCount: 45,
-      restaurantCount: 28,
-      attractionCount: 12,
-      image: "/neighborhood-east-village.jpg"
-    },
-    {
-      name: "West Des Moines", 
-      slug: "west-des-moines",
-      description: "Premier shopping and dining destination with family-friendly attractions",
-      highlights: ["Jordan Creek Town Center", "Valley Junction", "Raccoon River Park"],
-      eventCount: 32,
-      restaurantCount: 41,
-      attractionCount: 15,
-      image: "/neighborhood-west-des-moines.jpg"
-    },
-    {
-      name: "Ankeny",
-      slug: "ankeny", 
-      description: "Fast-growing community with excellent family activities and events",
-      highlights: ["Ankeny Market & Pavilion", "High Trestle Trail", "Prairie Trail"],
-      eventCount: 28,
-      restaurantCount: 22,
-      attractionCount: 18,
-      image: "/neighborhood-ankeny.jpg"
-    },
-    {
-      name: "Urbandale",
-      slug: "urbandale",
-      description: "Suburban community known for parks, trails, and family events",
-      highlights: ["Living History Farms", "Walker Johnston Park", "Community Center"],
-      eventCount: 15,
-      restaurantCount: 18,
-      attractionCount: 10,
-      image: "/neighborhood-urbandale.jpg"
-    },
-    {
-      name: "Johnston", 
-      slug: "johnston",
-      description: "Growing suburb with excellent recreational facilities and community events",
-      highlights: ["Terra Park", "Johnston Commons", "Saylorville Lake access"],
-      eventCount: 12,
-      restaurantCount: 14,
-      attractionCount: 8,
-      image: "/neighborhood-johnston.jpg"
-    },
-    {
-      name: "Clive",
-      slug: "clive",
-      description: "Family-friendly community with top-rated parks and recreational facilities", 
-      highlights: ["Clive Aquatic Center", "Campbell Recreation Area", "Greenbelt Trail"],
-      eventCount: 18,
-      restaurantCount: 16,
-      attractionCount: 12,
-      image: "/neighborhood-clive.jpg"
-    },
-    {
-      name: "Waukee",
-      slug: "waukee",
-      description: "Rapidly growing community with new restaurants and family attractions",
-      highlights: ["Waukee Family YMCA", "Centennial Park", "Sugar Creek Golf Course"],
-      eventCount: 20,
-      restaurantCount: 19,
-      attractionCount: 11,
-      image: "/neighborhood-waukee.jpg"
-    },
-    {
-      name: "Altoona",
-      slug: "altoona", 
-      description: "Home to major entertainment venues and family attractions",
-      highlights: ["Adventureland Park", "Prairie Meadows", "Bass Pro Shops"],
-      eventCount: 25,
-      restaurantCount: 12,
-      attractionCount: 8,
-      image: "/neighborhood-altoona.jpg"
-    }
-  ];
-
-  const totalEvents = neighborhoods.reduce((sum, n) => sum + n.eventCount, 0);
-  const totalRestaurants = neighborhoods.reduce((sum, n) => sum + n.restaurantCount, 0);
-  const totalAttractions = neighborhoods.reduce((sum, n) => sum + n.attractionCount, 0);
+  // WEB-SEO-036. This page used to carry its own eight-entry list, and the
+  // detail page, the guide component and prerender-routes.mjs each carried a
+  // different one. NEIGHBORHOODS is the single inventory now.
+  //
+  // THE COUNTS THAT USED TO BE HERE WERE TYPED BY HAND. Every entry declared
+  // an eventCount / restaurantCount / attractionCount (45, 32, 28, ...), they
+  // were summed into a three-number trust strip rendered in bold at the top of
+  // the page, and none of them had ever been measured - while every detail
+  // page they linked to reported zero. Same shape as the "24/7 AI Assistant"
+  // stat in WEB-QA-005: a fabricated figure sitting among real-looking ones.
+  // The strip is gone rather than reimplemented, because eight
+  // count-per-neighborhood queries to decorate a hub is not worth the requests;
+  // the real counts appear on each detail page, from the database.
+  //
+  // The per-entry `image` field is gone too - it named eight files
+  // (/neighborhood-east-village.jpg and friends) that do not exist in public/,
+  // and nothing rendered them anyway.
+  const neighborhoods = NEIGHBORHOODS;
 
   return (
     <div className="min-h-screen bg-background">
@@ -127,32 +58,15 @@ export default function NeighborhoodsPage() {
           ]}
         />
 
-        {/* Hero Section */}
-        <div className="bg-gradient-to-r from-blue-600 to-purple-600 text-white p-8 rounded-lg mb-8">
+        {/* WEB-UX-034: was `bg-gradient-to-r from-blue-600 to-purple-600`. */}
+        <div className="bg-primary text-primary-foreground p-8 rounded-lg mb-8">
           <div className="flex items-center gap-2 mb-4">
             <SpriteIcon name="map-pin" className="h-8 w-8" />
             <h1 className="text-3xl font-bold">Des Moines Neighborhoods</h1>
           </div>
-          <p className="text-xl text-blue-100 mb-4">
-            Explore the unique character of each Des Moines area community with local events, 
-            dining, and attractions tailored to every neighborhood.
+          <p className="text-xl opacity-90">
+            Eight metro communities, each with its own events, dining and attractions.
           </p>
-          
-          {/* Stats */}
-          <div className="grid grid-cols-3 gap-4 mt-6">
-            <div className="text-center">
-              <div className="text-2xl font-bold">{totalEvents}</div>
-              <div className="text-blue-200 text-sm">Total Events</div>
-            </div>
-            <div className="text-center">
-              <div className="text-2xl font-bold">{totalRestaurants}</div>
-              <div className="text-blue-200 text-sm">Local Restaurants</div>
-            </div>
-            <div className="text-center">
-              <div className="text-2xl font-bold">{totalAttractions}</div>
-              <div className="text-blue-200 text-sm">Attractions</div>
-            </div>
-          </div>
         </div>
 
         {/* Neighborhoods Grid */}
@@ -160,12 +74,7 @@ export default function NeighborhoodsPage() {
           {neighborhoods.map((neighborhood) => (
             <Card key={neighborhood.slug} className="hover:shadow-lg transition-all duration-300 hover:-translate-y-1">
               <CardHeader className="pb-3">
-                <div className="flex justify-between items-start">
-                  <CardTitle className="text-xl">{neighborhood.name}</CardTitle>
-                  <Badge variant="secondary" className="text-xs">
-                    {formatCount(neighborhood.eventCount, 'event')}
-                  </Badge>
-                </div>
+                <CardTitle className="text-xl">{neighborhood.name}</CardTitle>
               </CardHeader>
               <CardContent className="space-y-4">
                 <p className="text-sm text-muted-foreground">
@@ -181,25 +90,6 @@ export default function NeighborhoodsPage() {
                         {highlight}
                       </Badge>
                     ))}
-                  </div>
-                </div>
-
-                {/* Stats */}
-                <div className="grid grid-cols-3 gap-2 text-center text-xs">
-                  <div>
-                    <SpriteIcon name="calendar" className="h-4 w-4 mx-auto mb-1 text-blue-600" />
-                    <div className="font-medium">{neighborhood.eventCount}</div>
-                    <div className="text-muted-foreground">Events</div>
-                  </div>
-                  <div>
-                    <SpriteIcon name="users" className="h-4 w-4 mx-auto mb-1 text-green-600" />
-                    <div className="font-medium">{neighborhood.restaurantCount}</div>
-                    <div className="text-muted-foreground">Dining</div>
-                  </div>
-                  <div>
-                    <Star className="h-4 w-4 mx-auto mb-1 text-yellow-600" />
-                    <div className="font-medium">{neighborhood.attractionCount}</div>
-                    <div className="text-muted-foreground">Attractions</div>
                   </div>
                 </div>
 

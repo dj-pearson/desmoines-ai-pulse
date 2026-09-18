@@ -150,34 +150,64 @@
     <priority>0.8</priority>
   </url>
 
-  <!-- Neighborhood pages -->
+  <!-- Neighborhood pages. WEB-SEO-036: this listed downtown, east-village,
+       beaverdale and highland-park. Three of those four had no editorial entry
+       anywhere in the app and were linked from no page on the site, so they
+       were orphan thin URLs submitted to Google, while the six neighborhoods
+       that DID have content were never listed. Keep in step with NEIGHBORHOODS
+       in src/lib/neighborhoods.ts; scripts/check-neighborhood-inventory.mjs
+       fails the build if this drifts from it. -->
   <url>
     <loc>https://desmoinesinsider.com/neighborhoods</loc>
-    <lastmod>2026-03-16</lastmod>
+    <lastmod>2026-09-18</lastmod>
     <changefreq>monthly</changefreq>
     <priority>0.6</priority>
   </url>
   <url>
-    <loc>https://desmoinesinsider.com/neighborhoods/downtown</loc>
-    <lastmod>2026-03-16</lastmod>
-    <changefreq>weekly</changefreq>
-    <priority>0.7</priority>
-  </url>
-  <url>
     <loc>https://desmoinesinsider.com/neighborhoods/east-village</loc>
-    <lastmod>2026-03-16</lastmod>
+    <lastmod>2026-09-18</lastmod>
     <changefreq>weekly</changefreq>
     <priority>0.7</priority>
   </url>
   <url>
-    <loc>https://desmoinesinsider.com/neighborhoods/beaverdale</loc>
-    <lastmod>2026-03-16</lastmod>
+    <loc>https://desmoinesinsider.com/neighborhoods/west-des-moines</loc>
+    <lastmod>2026-09-18</lastmod>
     <changefreq>weekly</changefreq>
     <priority>0.7</priority>
   </url>
   <url>
-    <loc>https://desmoinesinsider.com/neighborhoods/highland-park</loc>
-    <lastmod>2026-03-16</lastmod>
+    <loc>https://desmoinesinsider.com/neighborhoods/ankeny</loc>
+    <lastmod>2026-09-18</lastmod>
+    <changefreq>weekly</changefreq>
+    <priority>0.7</priority>
+  </url>
+  <url>
+    <loc>https://desmoinesinsider.com/neighborhoods/urbandale</loc>
+    <lastmod>2026-09-18</lastmod>
+    <changefreq>weekly</changefreq>
+    <priority>0.7</priority>
+  </url>
+  <url>
+    <loc>https://desmoinesinsider.com/neighborhoods/johnston</loc>
+    <lastmod>2026-09-18</lastmod>
+    <changefreq>weekly</changefreq>
+    <priority>0.7</priority>
+  </url>
+  <url>
+    <loc>https://desmoinesinsider.com/neighborhoods/clive</loc>
+    <lastmod>2026-09-18</lastmod>
+    <changefreq>weekly</changefreq>
+    <priority>0.7</priority>
+  </url>
+  <url>
+    <loc>https://desmoinesinsider.com/neighborhoods/waukee</loc>
+    <lastmod>2026-09-18</lastmod>
+    <changefreq>weekly</changefreq>
+    <priority>0.7</priority>
+  </url>
+  <url>
+    <loc>https://desmoinesinsider.com/neighborhoods/altoona</loc>
+    <lastmod>2026-09-18</lastmod>
     <changefreq>weekly</changefreq>
     <priority>0.7</priority>
   </url>

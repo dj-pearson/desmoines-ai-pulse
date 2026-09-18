@@ -79,12 +79,21 @@ export const PRERENDER_ROUTES = [
   '/best-of',
   '/getting-around',
 
-  // Neighborhood guides
+  // Neighborhood guides. WEB-SEO-036: this prerendered downtown, east-village,
+  // beaverdale and highland-park. Three of the four had no editorial entry in
+  // the app at all, so the captured HTML was an h1, a generic promise sentence
+  // and three tabs reading Events (0) / Dining (0) / Attractions (0) - and they
+  // were linked from nowhere on the site. Keep this list equal to NEIGHBORHOODS
+  // in src/lib/neighborhoods.ts; check-neighborhood-inventory.mjs enforces it.
   '/neighborhoods',
-  '/neighborhoods/downtown',
   '/neighborhoods/east-village',
-  '/neighborhoods/beaverdale',
-  '/neighborhoods/highland-park',
+  '/neighborhoods/west-des-moines',
+  '/neighborhoods/ankeny',
+  '/neighborhoods/urbandale',
+  '/neighborhoods/johnston',
+  '/neighborhoods/clive',
+  '/neighborhoods/waukee',
+  '/neighborhoods/altoona',
 
   // Discovery / planning surfaces
   '/deals',
