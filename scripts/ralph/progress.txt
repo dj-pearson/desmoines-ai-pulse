@@ -1086,3 +1086,15 @@ Six domain adapters were fetching third-party pages with no robots check and a p
   - **Return null, don't throw, when a shared helper refuses.** Two of these adapters fetch outside a `try`, so a throw would abort a whole ingestion run instead of skipping one blocked URL. Check the call sites before choosing the failure mode.
   - Distinguish crawling a site's pages from calling an API it publishes. robots.txt governs the first; routing the second through a robots check would be cargo cult.
 ---
+
+## 2026-09-18 - WEB-QA-028
+The debug error overlay no longer ships in store builds.
+- `src/main.tsx`: gated on `VITE_DEBUG_ERROR_OVERLAY` instead of `isCapacitor`; REPLACES rather than appends (bounded, newest-first); `tabindex`/`role`/`aria-label` for axe's scrollable-region-focusable.
+- `.env.example` documents the flag; `src/__tests__/errorOverlay.test.ts` (6 cases).
+- **Learnings for future iterations:**
+  - **`isCapacitor` cannot distinguish TestFlight from the App Store** - both are Capacitor. Any "show this only for internal builds" gate gated on the platform is really gated on nothing. A build-time env var can tell them apart; the runtime cannot.
+  - `window.onerror = ...` does NOT clobber `addEventListener('error', ...)`. The two are independent, which is why `lib/sentry.ts`'s early capture survived main.tsx's assignment. Worth knowing before "fixing" a reporting gap that isn't one.
+  - A boolean env flag should match **exactly one** string. `=== 'true'` means `"1"`, `"TRUE"` and `"yes"` are all off - which is right, because a flag that half-matches ships the feature to a lane whose author believed it was off. Test the near-misses.
+  - `innerHTML +=` in an error handler is a slow-motion disaster: the failing path is the one that repeats, so the first and most useful error ends up buried under its own repeats.
+  - axe's `scrollable-region-focusable` wants `tabindex="0"` on the scrollable element. Cheap, and it applies to any overlay/panel with `overflow:auto`.
+---
