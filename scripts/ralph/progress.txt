@@ -1005,3 +1005,16 @@ Dead-lib `unimported` list emptied: 18 modules deleted (2,636 lines), 1 wired up
   - `logConsent` takes an optional `email` and hashes it. Omitting it on an anonymous flow writes a consent row that identifies nobody, which is useless as evidence.
   - Before wiring a module up, check what its transitive calls actually reach. `sendEmail()` here POSTed to `/api/send-email`, a route this stack does not serve at all - wiring the whole function would have thrown on every capture, after the row was written.
 ---
+
+## 2026-09-18 - WEB-PERF-041 (PARTIAL - story stays open)
+Audited all 79 raw `<img>`, fixed the CLS half, added a ratchet. AC3's 38 conversions are NOT done.
+- `scripts/check-raw-img.mjs` (new, in `validate`): per-file raw-`<img>` count plus a reserve-no-height count, both ratcheted down only. Baseline 53 across 43 files, 0 CLS risk.
+- `useAffiliateAd` / `AffiliateAdBanner`: intrinsic size read from the placement key ("728x90"); the above-fold banner reserved nothing before.
+- `RatingSystem`: review-photo lightbox capped at 80vh so the dialog stops resizing on load.
+- **Learnings for future iterations:**
+  - **The story's own numbers can be wrong - measure before working.** "73 unsized images" was really 4 reader-facing CLS risks. Almost every unsized `<img>` here sits in an `h-48` / `aspect-[…]` / `absolute inset-0` where the box is already reserved, so width/height buys nothing.
+  - Of 79 raw `<img>`, only **38** read a DB image url. OptimizedImage adds a wrapper and zero bytes for a local asset or an object URL, so "route everything through it" is the wrong target.
+  - **Write the check, then read its output adversarially.** Mine counted an `<img>` inside a docstring (strip comments - same trap as check-duplicate-schema.mjs) and its reserved-height pattern knew `h-<number>` but not `h-full`, so it flagged a full-screen overlay. Both found by looking at what it named, not by it failing.
+  - `OptimizedImage` already handles BOTH `supabase.co/storage/...` and our own `/media/` route (OptimizedImage.tsx:81-121), and `functions/media/[[path]].ts` forwards width/quality. WEB-OPS-023's repointing did not break the transform pipeline.
+  - **When a change needs a browser and there isn't one, ratchet it and stop.** 38 layout-sensitive conversions with no visual-regression run available is not a thing to ship blind; the guard makes them safe to do in batches later.
+---

@@ -24,7 +24,7 @@ export function useAffiliateAd(placement: AffiliatePlacement) {
   return useMemo(() => {
     const partners = getActiveAffiliatePartners();
     if (partners.length === 0) {
-      return { partner: null, imageUrl: null, affiliateUrl: null };
+      return { partner: null, imageUrl: null, affiliateUrl: null, width: 0, height: 0 };
     }
 
     const now = Date.now();
@@ -44,6 +44,12 @@ export function useAffiliateAd(placement: AffiliatePlacement) {
     const size = AFFILIATE_PLACEMENT_SIZE_MAP[placement];
     const imageUrl = partner.assets[size];
 
-    return { partner, imageUrl, affiliateUrl: partner.affiliateUrl };
+    // WEB-PERF-041: the banner rendered `w-full h-auto` with no width or
+    // height, so it reserved nothing and pushed the page down when it loaded -
+    // above the fold, on the top_banner placement. The exact dimensions were
+    // already sitting in the size key ("728x90"); nothing had read them.
+    const [width, height] = size.split("x").map(Number);
+
+    return { partner, imageUrl, affiliateUrl: partner.affiliateUrl, width, height };
   }, [placement]);
 }
