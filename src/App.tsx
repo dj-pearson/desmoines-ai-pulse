@@ -198,6 +198,8 @@ const Csat = lazyWithRetry(() => import("./pages/Csat"));
 
 // Public CAN-SPAM one-click unsubscribe
 const Unsubscribe = lazyWithRetry(() => import("./pages/Unsubscribe"));
+// Newsletter double opt-in landing (WEB-FEAT-019)
+const NewsletterConfirm = lazyWithRetry(() => import("./pages/NewsletterConfirm"));
 
 // Admin sub-pages
 const AdminContent = lazyWithRetry(() => import("./pages/AdminContent"));
@@ -593,6 +595,8 @@ const App = () => (
             <Route path="/dpa" element={<DataProcessingAgreement />} />
             {/* One-click newsletter unsubscribe (CAN-SPAM §5(a)(5)) */}
             <Route path="/unsubscribe" element={<Unsubscribe />} />
+            {/* Newsletter double opt-in confirmation (WEB-FEAT-019) */}
+            <Route path="/newsletter/confirm" element={<NewsletterConfirm />} />
             {/* Contact page */}
             <Route path="/contact" element={<Contact />} />
             <Route path="/support" element={<Support />} />

@@ -6329,6 +6329,9 @@ export type Database = {
       }
       newsletter_subscribers: {
         Row: {
+          confirm_sent_at: string | null
+          confirm_token: string | null
+          confirmed_at: string | null
           created_at: string | null
           email: string
           first_name: string | null
@@ -6347,6 +6350,9 @@ export type Database = {
           utm_source: string | null
         }
         Insert: {
+          confirm_sent_at?: string | null
+          confirm_token?: string | null
+          confirmed_at?: string | null
           created_at?: string | null
           email: string
           first_name?: string | null
@@ -6365,6 +6371,9 @@ export type Database = {
           utm_source?: string | null
         }
         Update: {
+          confirm_sent_at?: string | null
+          confirm_token?: string | null
+          confirmed_at?: string | null
           created_at?: string | null
           email?: string
           first_name?: string | null
@@ -14203,6 +14212,13 @@ export type Database = {
         Returns: string
       }
       meters_to_miles: { Args: { meters: number }; Returns: number }
+      newsletter_confirm_by_token: {
+        Args: { p_token: string }
+        Returns: {
+          success: boolean
+          already_confirmed: boolean
+        }[]
+      }
       newsletter_unsubscribe_by_token: {
         Args: { p_token: string }
         Returns: {

@@ -25,6 +25,12 @@ on:
       - 'android/app/src/main/java/**'
       - 'src/hooks/useSubscription.ts'
       - 'src/hooks/__tests__/useSubscription.test.ts'
+      # WEB-FEAT-019: the double opt-in test reads the newsletter hook and the
+      # config.toml entry that makes the signup endpoint public, so a change to
+      # either has to run this suite.
+      - 'src/hooks/useNewsletterSubscription.ts'
+      - 'src/hooks/__tests__/useNewsletterSubscription.test.ts'
+      - 'supabase/config.toml'
       - 'src/components/SubscriptionPlatformBreakdown.tsx'
       # The IndexNow key file. Its contents have to match INDEXNOW_KEY exactly
       # or every submission 403s, and the file lives nowhere near the function
@@ -201,6 +207,12 @@ jobs:
       # BEFORE INSERT triggers, the -1-is-unlimited rule, the shared 14-day
       # grace window, and the entitlement filter on the nightly job.
       - run: deno test --allow-read supabase/functions/_tests/plan-limit-enforcement.test.ts
+      # WEB-FEAT-019. The signup promised a confirmation nothing sent, an
+      # unsubscribed address could never come back, and the weekly digest read
+      # this table only for a token while ignoring the status - so the
+      # one-click opt-out stopped nothing. Pins the confirm flow, the upsert,
+      # the single generic answer, and the digest's status check.
+      - run: deno test --allow-read supabase/functions/_tests/newsletter-double-optin.test.ts
       # WEB-FEAT-016. VIP listed eight benefits at $12.99/month and delivered
       # none. Fails if the pricing page or the stored plan row promises a feature
       # no component gates on.

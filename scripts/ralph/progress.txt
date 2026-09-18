@@ -945,3 +945,20 @@ Plan limits moved from the browser into the database.
   - `-1` is "unlimited" in `subscription_plans.limits`. Any aggregation over limits must make -1 WIN explicitly - `max(-1, 3)` is 3, which caps a paying subscriber at the free limit.
   - A cap trigger is a tightening, which CLAUDE.md says to split across releases. It is only safe in one release if **every shipped client already refuses to exceed the cap** - check the iOS and Android sources, not just the web one, and record what you found.
 ---
+
+## 2026-09-18 - WEB-FEAT-019
+Newsletter double opt-in, resubscribe, and a digest that honours the opt-out.
+- `supabase/migrations/20260918000002_newsletter_double_optin.sql` (new): 'pending' status, confirm token, `newsletter_confirm_by_token` RPC that flips pending -> active, spends the token and appends the consent record.
+- `supabase/functions/newsletter-subscribe/` (new, public + rate-limited): upserts on email (the resubscribe fix), sends the confirmation, answers one identical sentence for every outcome.
+- `src/pages/NewsletterConfirm.tsx` + `/newsletter/confirm` route; hook now invokes the function.
+- `send-weekly-digest`: skips any subscriber row that is not `active`.
+- Tests: new Deno suite, plus the hook's vitest suite rewritten (its old assertions became false).
+- **CI STATE: `check-types-drift` is RED and will stay red until this migration is deployed.** Read the prd.json note before "fixing" it.
+- **Learnings for future iterations:**
+  - **Adding a column and selecting it in the same PR has no clean answer in this repo.** `check-schema-usage` compares code against `types.ts`; `check-types-drift` compares `types.ts` against `scripts/db-snapshot.json` (production as of its capture date). Put the column in types.ts and drift goes red; leave it out and schema-usage goes red plus you ship a type error. `check-migration-drift` does NOT cover it - it reads the ledger from the snapshot, so an unapplied migration is invisible rather than flagged. Pick types.ts, say so loudly, and it clears on deploy.
+  - `renderEmail` requires `recipient` even for `category: "transactional"`. It is only used to build the unsubscribe link, which the transactional footer omits, but the type is not optional.
+  - **`supabase/functions/_tests` assertions must strip comments before any "must not appear" check** - the same control `check-edge-auth.mjs` applies. Two of mine failed on the comments explaining the defect they were guarding against.
+  - When a story is "partially done", **check whether the earlier half left tests asserting the OLD behaviour.** `useNewsletterSubscription.test.ts` asserted the copy must not mention a confirmation; finishing the story made that false. Rewrite, don't delete - the reason the old assertion existed is worth keeping in the file header.
+  - A public endpoint that looks up an address must answer identically for every outcome, or it is an enumeration oracle. The friendly error ("you're already subscribed") is the leak.
+  - `check-edge-auth.mjs --write` regenerates the NAME list and keeps the hand-written `notes`. Re-running it can also drop a stale entry - `check-login-attempt` has gained a caller check since the 2026-08-28 capture.
+---

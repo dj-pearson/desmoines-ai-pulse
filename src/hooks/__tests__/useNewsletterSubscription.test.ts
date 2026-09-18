@@ -1,15 +1,26 @@
 import { describe, it, expect, vi, beforeEach } from 'vitest';
 
 /**
- * WEB-FEAT-019. The newsletter signup promised things the platform does not do.
+ * WEB-FEAT-019. The newsletter signup used to promise things the platform does
+ * not do; now it does them, and the assertions move with it.
  *
- * These assert the COPY, which is unusual for a unit test and is the point:
- * the defect was never in the control flow. The insert succeeded, the toast
- * fired, and the sentence it showed was false.
+ * The earlier version of this file asserted that the copy must NOT say
+ * "confirm" or "check your email", because nothing sent either. That is no
+ * longer true: newsletter-subscribe sends a confirmation and the row stays
+ * 'pending' until the link is clicked. What is worth pinning now is narrower
+ * and harder to keep: the hook must not write the table itself, and it must
+ * show the function's answer rather than inventing one, because the function
+ * deliberately says the SAME sentence for a new address, a pending one, an
+ * unsubscribed one and an already-active one. A per-case message on the screen
+ * re-creates the subscription oracle the server was careful not to be.
  */
-const insert = vi.fn();
+const invoke = vi.fn();
+const from = vi.fn();
 vi.mock('@/integrations/supabase/client', () => ({
-  supabase: { from: () => ({ insert: (...a: unknown[]) => insert(...a) }) },
+  supabase: {
+    functions: { invoke: (...a: unknown[]) => invoke(...a) },
+    from: (...a: unknown[]) => from(...a),
+  },
 }));
 
 const toastSuccess = vi.fn();
@@ -26,50 +37,65 @@ vi.mock('sonner', () => ({
 const { renderHook, act } = await import('@testing-library/react');
 const { useNewsletterSubscription } = await import('../useNewsletterSubscription');
 
+const ANSWER =
+  "Almost there. If that address can receive mail from us, a confirmation link is on its way - click it and you're on the list.";
+
 beforeEach(() => {
-  insert.mockReset();
+  invoke.mockReset();
+  from.mockReset();
   toastSuccess.mockReset();
   toastInfo.mockReset();
   toastError.mockReset();
 });
 
-describe('newsletter signup copy', () => {
-  it('does not promise a confirmation email, because nothing sends one', async () => {
-    insert.mockResolvedValue({ error: null });
+describe('newsletter signup', () => {
+  it('goes through the edge function and never writes the table from the browser', async () => {
+    // The direct insert could only ever take the table default ('active') and
+    // could only ever 23505 on a returning address - there is no UPDATE policy
+    // for any role. Both fixes live server-side.
+    invoke.mockResolvedValue({ data: { ok: true, message: ANSWER }, error: null });
     const { result } = renderHook(() => useNewsletterSubscription());
 
     await act(async () => {
-      await result.current.subscribe({ email: 'reader@example.com' });
+      await result.current.subscribe({ email: 'Reader@Example.COM ', source: 'footer' });
     });
 
-    const said = String(toastSuccess.mock.calls[0][0]);
-    // There is no confirmation token, no double opt-in and no sender anywhere
-    // in the repo. Anything that tells the reader to go and look for one sends
-    // them to wait for mail that will not arrive.
-    expect(said).not.toMatch(/confirm/i);
-    expect(said).not.toMatch(/check your email/i);
-    expect(said).toMatch(/on the list/i);
+    expect(from).not.toHaveBeenCalled();
+    expect(invoke).toHaveBeenCalledTimes(1);
+    const [fnName, options] = invoke.mock.calls[0] as [string, { body: Record<string, unknown> }];
+    expect(fnName).toBe('newsletter-subscribe');
+    // Normalised before it leaves, so the address the function looks up is the
+    // one the unique index is on.
+    expect(options.body.email).toBe('reader@example.com');
+    expect(options.body.source).toBe('footer');
   });
 
-  it('does not tell a returning unsubscriber to check their inbox', async () => {
-    // 23505 is a duplicate address. The row may be status='unsubscribed', and
-    // the SELECT policy is admin-only so this hook cannot tell. The old copy
-    // asserted both that they were subscribed and that mail was coming.
-    insert.mockResolvedValue({ error: { code: '23505', message: 'duplicate key' } });
+  it('shows the function answer verbatim, so the screen is not an oracle either', async () => {
+    invoke.mockResolvedValue({ data: { ok: true, message: ANSWER }, error: null });
     const { result } = renderHook(() => useNewsletterSubscription());
 
     await act(async () => {
       await result.current.subscribe({ email: 'returning@example.com' });
     });
 
-    const said = String(toastInfo.mock.calls[0][0]);
-    expect(said).not.toMatch(/check your inbox/i);
-    expect(said).not.toMatch(/you'?re already subscribed/i);
-    expect(said).toMatch(/already on our list/i);
+    expect(String(toastSuccess.mock.calls[0][0])).toBe(ANSWER);
+    // Nothing here may distinguish a returning unsubscriber from a new signup.
+    expect(toastInfo).not.toHaveBeenCalled();
+  });
+
+  it('still says something useful if the function answers without a message', async () => {
+    invoke.mockResolvedValue({ data: { ok: true }, error: null });
+    const { result } = renderHook(() => useNewsletterSubscription());
+
+    await act(async () => {
+      await result.current.subscribe({ email: 'reader@example.com' });
+    });
+
+    expect(String(toastSuccess.mock.calls[0][0])).toMatch(/confirmation link/i);
   });
 
   it('reports a real failure as a failure', async () => {
-    insert.mockResolvedValue({ error: { code: '42501', message: 'denied' } });
+    invoke.mockResolvedValue({ data: null, error: { message: 'boom' } });
     const { result } = renderHook(() => useNewsletterSubscription());
 
     let ok: boolean | undefined;
@@ -86,7 +112,8 @@ describe('newsletter signup copy', () => {
     // newsletter_subscribers has INSERT and admin-SELECT policies and NO
     // UPDATE policy, so the old unsubscribe() matched zero rows, got no error
     // back, and announced success. Re-adding it would restore a false success
-    // on the one action a person has a legal right to.
+    // on the one action a person has a legal right to. The real path is the
+    // emailed token link handled by newsletter_unsubscribe_by_token.
     const { result } = renderHook(() => useNewsletterSubscription());
     expect('unsubscribe' in result.current).toBe(false);
     expect('updatePreferences' in result.current).toBe(false);

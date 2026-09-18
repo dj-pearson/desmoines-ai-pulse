@@ -26,61 +26,53 @@ const defaultPreferences: NewsletterPreferences = {
 export function useNewsletterSubscription() {
   const [loading, setLoading] = useState(false);
 
-  // Subscribe to newsletter
+  // Subscribe to newsletter.
+  //
+  // WEB-FEAT-019: this used to insert straight into newsletter_subscribers from
+  // the browser. Two things a client cannot do are now done by the
+  // newsletter-subscribe edge function under the service role:
+  //   - write status 'pending' with a confirm token the browser must never see;
+  //   - upsert on email, so an address that unsubscribed can come back. The
+  //     table has no UPDATE policy for any role, so the old insert could only
+  //     ever hit 23505 and tell the person they were already subscribed.
   const subscribe = async (data: NewsletterSubscribeData): Promise<boolean> => {
     try {
       setLoading(true);
 
-      // Get UTM parameters from URL
       const urlParams = new URLSearchParams(window.location.search);
 
-      const subscriptionData: Record<string, unknown> = {
-        email: data.email.toLowerCase().trim(),
-        first_name: data.firstName || null,
-        source: data.source || 'website',
-        preferences: { ...defaultPreferences, ...data.preferences },
-        ip_address: null, // Would need server-side to capture
-        user_agent: typeof navigator !== 'undefined' ? navigator.userAgent : null,
-        utm_source: urlParams.get('utm_source') || null,
-        utm_medium: urlParams.get('utm_medium') || null,
-        utm_campaign: urlParams.get('utm_campaign') || null,
-      };
+      const { data: result, error } = await supabase.functions.invoke(
+        "newsletter-subscribe",
+        {
+          body: {
+            email: data.email.toLowerCase().trim(),
+            firstName: data.firstName || null,
+            source: data.source || "website",
+            preferences: { ...defaultPreferences, ...data.preferences },
+            utm: {
+              utm_source: urlParams.get("utm_source"),
+              utm_medium: urlParams.get("utm_medium"),
+              utm_campaign: urlParams.get("utm_campaign"),
+            },
+          },
+        },
+      );
 
-      const { error } = await supabase
-        .from('newsletter_subscribers')
-        .insert(subscriptionData as any);
+      if (error) throw error;
 
-      if (error) {
-        // A duplicate address (WEB-FEAT-019). The old copy was "You're already
-        // subscribed! Check your inbox for our latest updates", and for the
-        // person most likely to see it - someone who unsubscribed and is
-        // trying to come back - BOTH halves were false: their row is
-        // status='unsubscribed', and nothing is going to their inbox. This
-        // hook cannot tell the two apart, because the SELECT policy on
-        // newsletter_subscribers is admin-only, so the copy says only what is
-        // certainly true. Resubscribing needs an UPDATE path that does not
-        // exist yet; the story tracks it.
-        if (error.code === '23505') {
-          toast.info(
-            "That address is already on our list. If you unsubscribed before and want back in, email us and we'll sort it out.",
-          );
-          return true;
-        }
-        throw error;
-      }
-
-      // WEB-FEAT-019: this said "Check your email for a confirmation." Nothing
-      // sends one. There is no confirmation flow anywhere in the repo - no
-      // token, no double opt-in, no sender - so the row is written with the
-      // default status and that was the end of it. People were left waiting
-      // for an email that does not exist, and the ones who concluded the
-      // signup had failed were closer to right than the ones who trusted it.
-      // The copy now describes what actually happens.
-      toast.success("You're on the list. The next Des Moines digest will come straight to your inbox.");
+      // The function answers ONE sentence for every outcome - new address,
+      // pending, unsubscribed, already active - because any per-case wording
+      // turns a public endpoint into an "is this person subscribed" oracle.
+      // Showing its message rather than inventing one here is what keeps that
+      // property true on the screen as well as on the wire.
+      toast.success(
+        result?.message ??
+          "Almost there - check your inbox for a confirmation link.",
+      );
       return true;
     } catch (error) {
-      console.error('Failed to subscribe:', error);
-      toast.error('Failed to subscribe. Please try again.');
+      console.error("Failed to subscribe:", error);
+      toast.error("Failed to subscribe. Please try again.");
       return false;
     } finally {
       setLoading(false);

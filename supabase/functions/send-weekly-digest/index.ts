@@ -133,12 +133,37 @@ async function sendDigestEmail(recipient: Recipient, supabase: any) {
     const bodyText = buildDigestBodyText(recipient, content);
     const subject = `Your Weekly Events: ${totalEvents} Events to Explore 🎉`;
 
-    // Look up unsubscribe token for one-click marketing opt-out.
-    const { data: subscriberRow } = await supabase
+    // Look up the subscriber row: the unsubscribe token for the one-click
+    // marketing opt-out, and the status that says whether we may send at all.
+    const { data: subscriberRow, error: subscriberError } = await supabase
       .from("newsletter_subscribers")
-      .select("unsubscribe_token")
+      .select("status, unsubscribe_token")
       .eq("email", recipient.email.toLowerCase().trim())
       .maybeSingle();
+
+    // WEB-FEAT-019 -- THIS DIGEST USED TO IGNORE THE NEWSLETTER STATUS ENTIRELY.
+    //
+    // Recipients come from user_email_preferences.weekly_digest_enabled, and
+    // this row was read only for its unsubscribe token. So someone who clicked
+    // the one-click unsubscribe in last week's digest -- which sets
+    // newsletter_subscribers.status = 'unsubscribed' and nothing else -- kept
+    // receiving it. The opt-out link worked and changed nothing that mattered,
+    // which is the CAN-SPAM failure the link exists to prevent.
+    //
+    // Anything that is not 'active' is a do-not-send: 'unsubscribed' asked us
+    // to stop, 'bounced' cannot receive, and 'pending' has not yet confirmed
+    // the address is theirs. A recipient with NO row at all still gets the
+    // digest -- weekly_digest_enabled is its own opt-in and predates this
+    // table -- so this narrows nothing for anyone who never signed up here.
+    if (subscriberError) {
+      throw new Error(`newsletter_subscribers read failed: ${subscriberError.message}`);
+    }
+    if (subscriberRow && subscriberRow.status !== "active") {
+      console.log(
+        `Skipping digest for ${recipient.email}: newsletter status is ${subscriberRow.status}`,
+      );
+      return;
+    }
 
     const rendered = renderEmail({
       bodyHtml,
