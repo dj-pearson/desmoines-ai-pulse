@@ -6,7 +6,10 @@ export { default as FAQSchema } from './FAQSchema';
 export { default as BreadcrumbSchema } from './BreadcrumbSchema';
 export { default as WebSiteSchema } from './WebSiteSchema';
 export { default as TouristAttractionSchema } from './TouristAttractionSchema';
-export { default as LocalBusinessSchema } from './LocalBusinessSchema';
+// WEB-SEO-026: LocalBusinessSchema is DELETED. It defaulted to name =
+// BRAND.name, so its whole job was to assert that this aggregator is a local
+// business with a premises. Nothing rendered it. Do not re-add it - the site's
+// identity is the Organization node SEOHead emits.
 export { default as OrganizationSchema } from './OrganizationSchema';
 export { default as HowToSchema } from './HowToSchema';
 export { default as ItemListSchema } from './ItemListSchema';

@@ -315,9 +315,12 @@ Last updated: ${new Date().toLocaleDateString()}`;
   };
 
   const generateSchema = () => {
+    // WEB-SEO-026: generated LocalBusiness, which an admin would then paste
+    // somewhere. This tool is not reader-facing, but it manufactures the exact
+    // claim the rest of this story removed - an aggregator with a premises.
     const businessSchema = {
       "@context": "https://schema.org",
-      "@type": "LocalBusiness",
+      "@type": "Organization",
       name: "Des Moines Insider",
       description:
         "Your AI-powered guide to the best events, restaurants, attractions, and family activities in Des Moines, Iowa",

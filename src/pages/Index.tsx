@@ -252,17 +252,14 @@ export default function Index() {
           ]
         },
         "query-input": "required name=search_term_string"
-      },
-      {
-        "@type": "InteractAction",
-        "name": "SMS Concierge",
-        "description": "Text-based AI assistant for event recommendations"
-      },
-      {
-        "@type": "InteractAction",
-        "name": "Voice Assistant",
-        "description": "Alexa and Google Assistant integration for hands-free discovery"
       }
+      // WEB-SEO-026: TWO MORE InteractActions USED TO SIT HERE - an "SMS
+      // Concierge" and a "Voice Assistant" described as "Alexa and Google
+      // Assistant integration". Neither exists. There is no number to text and
+      // no skill to invoke, and XPLAT-009 records that the assistant is missing
+      // from the web app entirely. potentialAction is a promise about what a
+      // machine can DO with this site; the SearchAction above is the only one
+      // the site can keep.
     ],
     // WEB-SEO-023: this asserted Facebook, X and Instagram profiles on the
     // OLD brand's handle, under the new brand's name. sameAs is a
@@ -271,71 +268,21 @@ export default function Index() {
     ...(BRAND.social.length > 0 ? { sameAs: [...BRAND.social] } : {}),
   };
 
-  // LocalBusiness Schema - CRITICAL for Local SEO
-  const localBusinessData = {
-    "@context": "https://schema.org",
-    "@type": "LocalBusiness",
-    "name": BRAND.name,
-    "image": `${BRAND.baseUrl}${BRAND.logo}`,
-    "description": BRAND.description,
-    "@id": BRAND.baseUrl,
-    "url": BRAND.baseUrl,
-    "telephone": "",
-    "priceRange": "Free",
-    "address": {
-      "@type": "PostalAddress",
-      "streetAddress": "",
-      "addressLocality": BRAND.city,
-      "addressRegion": BRAND.stateAbbr,
-      "postalCode": "50309",
-      "addressCountry": BRAND.country
-    },
-    "geo": {
-      "@type": "GeoCoordinates",
-      "latitude": 41.5868,
-      "longitude": -93.6250
-    },
-    "openingHoursSpecification": {
-      "@type": "OpeningHoursSpecification",
-      "dayOfWeek": [
-        "Monday",
-        "Tuesday",
-        "Wednesday",
-        "Thursday",
-        "Friday",
-        "Saturday",
-        "Sunday"
-      ],
-      "opens": "00:00",
-      "closes": "23:59"
-    },
-    // WEB-SEO-023: this asserted Facebook, X and Instagram profiles on the
-    // OLD brand's handle, under the new brand's name. sameAs is a
-    // machine-readable identity claim, so the property is OMITTED rather
-    // than emitted empty until BRAND.social has real URLs in it.
-    ...(BRAND.social.length > 0 ? { sameAs: [...BRAND.social] } : {}),
-    "areaServed": {
-      "@type": "GeoCircle",
-      "geoMidpoint": {
-        "@type": "GeoCoordinates",
-        "latitude": 41.5868,
-        "longitude": -93.6250
-      },
-      "geoRadius": "50000"
-    },
-    "serviceArea": {
-      "@type": "Place",
-      "name": BRAND.region,
-      "description": `${BRAND.city}, West Des Moines, Ankeny, Urbandale, Johnston, Clive, Waukee, Windsor Heights, and surrounding Central ${BRAND.state} communities`
-    },
-    "hasMap": `https://www.google.com/maps/place/${BRAND.city.replace(' ', '+')},+${BRAND.stateAbbr}/@41.5868,-93.6250,12z`,
-    // WEB-SEO-016: an aggregateRating of 4.8 from 1,247 reviews used to sit
-    // here. Nothing produces those numbers — there is no reviews or ratings
-    // table in the schema at all. Publishing a fabricated rating for our own
-    // business is a direct breach of Google's review-snippet guidelines and is
-    // the kind of thing that draws a manual action. Removed rather than
-    // adjusted: there is no honest value to put in its place.
-  };
+  // WEB-SEO-026: A LocalBusiness NODE USED TO BE BUILT HERE and shipped on the
+  // home page. An aggregator is not a local business, and this one said so
+  // itself: telephone "", streetAddress "", a postalCode of 50309 that belongs
+  // to downtown Des Moines rather than to us, and openingHours of 00:00-23:59
+  // seven days a week. Every one of those is a fact a machine can act on, and
+  // none of them was true.
+  //
+  // WHAT REPLACES IT IS NOTHING, deliberately. The site's identity is the
+  // Organization node SEOHead emits on every page, with a stable @id; the
+  // WebSite node above belongs to / alone. A second, contradictory identity
+  // claim in a different type is not extra coverage - it is ambiguity, and
+  // Google resolves ambiguity by using neither.
+  //
+  // WEB-SEO-016 had already removed an aggregateRating of 4.8 from 1,247
+  // reviews from this same object. Nothing produced those numbers either.
 
   const handleSearch = (
     filters: {
@@ -421,7 +368,7 @@ export default function Index() {
         url="/"
         canonicalUrl={`${BRAND.baseUrl}/`}
         type="website"
-        structuredData={[structuredData, localBusinessData]}
+        structuredData={structuredData}
       />
 
       {/* BreadcrumbList Schema - Helps with rich snippets in search results */}

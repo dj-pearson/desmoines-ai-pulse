@@ -542,8 +542,12 @@ export default function EventsPage() {
       url: `${BRAND.baseUrl}/events`,
       about: { "@type": "City", name: "Des Moines", sameAs: "https://en.wikipedia.org/wiki/Des_Moines,_Iowa" },
     },
+    // WEB-SEO-026: an aggregator is not a LocalBusiness, and the @id ties this
+    // back to the one Organization node SEOHead publishes rather than minting
+    // a second identity for the same entity.
     provider: {
-      "@type": "LocalBusiness",
+      "@type": "Organization",
+      "@id": `${BRAND.baseUrl}/#organization`,
       name: BRAND.name,
       url: BRAND.baseUrl,
       areaServed: { "@type": "City", name: "Des Moines", addressRegion: "Iowa" },

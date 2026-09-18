@@ -232,6 +232,87 @@ function returnBlocks(source) {
   }));
 }
 
+/**
+ * WEB-SEO-026: one Organization node per page, and no LocalBusiness anywhere.
+ *
+ * The site described itself as a local business on nearly every route, and the
+ * facts it used to do it were invented:
+ *   index.html   a SoftwareApplication on ~1,100 routes declaring Alexa, Google
+ *                Assistant, SMS and ChatGPT channels, none of which exist. It
+ *                carried no data-rh attribute, so dedupeJsonLd - which only
+ *                touches Helmet-managed blocks - could never remove it.
+ *   Index.tsx    a LocalBusiness with telephone "", streetAddress "", postcode
+ *                50309 and hours of 00:00-23:59, plus InteractActions for an
+ *                "SMS Concierge" and a "Voice Assistant"
+ *   LocalSEO     telephone "+1-515-DES-MOIN" and an OfferCatalog of services
+ *                nobody sells, on five sitemapped neighbourhood pages
+ *   Enhanced*SEO a site-wide LocalBusiness at @id /#localbusiness on every
+ *                attraction and playground page
+ *
+ * AN AGGREGATOR IS NOT A LOCAL BUSINESS. LocalBusiness implies a premises,
+ * opening hours and a phone number, and every emitter here had to invent all
+ * three. Restaurant, TouristAttraction and Place - which ARE emitted, about
+ * other people's places - are the honest types and are untouched by this rule.
+ *
+ * TOP-LEVEL ONLY. A nested `publisher`, `provider`, `author` or `organizer`
+ * Organization is a reference to an entity, not a second claim about who we
+ * are, and Enhanced*SEO legitimately carry those. The test is whether
+ * "@type" sits directly after a "@context", which is what starts a node.
+ */
+const SCHEMA_NODE = (type) =>
+  new RegExp(`["']@context["']\\s*:\\s*["']https://schema\\.org["'],\\s*\n?\\s*["']@type["']\\s*:\\s*["']${type}["']`);
+
+function checkIdentityNodes(files) {
+  const problems = [];
+
+  // 1. No component may emit a top-level LocalBusiness at all.
+  for (const file of files) {
+    const rel = path.relative(process.cwd(), file);
+    const src = stripComments(fs.readFileSync(file, 'utf8'));
+    if (SCHEMA_NODE('LocalBusiness').test(src)) {
+      problems.push(`${rel} emits a top-level LocalBusiness node`);
+    }
+  }
+
+  // 2. At most one Organization emitter per rendered tree.
+  const orgEmitters = new Set();
+  for (const file of files) {
+    const rel = path.relative(process.cwd(), file).replace(/\\/g, '/');
+    if (!rel.startsWith('src/components/')) continue;
+    const src = stripComments(fs.readFileSync(file, 'utf8'));
+    if (!/from ['"]react-helmet-async['"]/.test(src)) continue;
+    if (SCHEMA_NODE('Organization').test(src)) orgEmitters.add(path.basename(file, '.tsx'));
+  }
+  if (orgEmitters.size === 0) {
+    problems.push('no component emits an Organization node - the site publishes no identity at all');
+  }
+
+  for (const file of files) {
+    const rel = path.relative(process.cwd(), file).replace(/\\/g, '/');
+    if (!/^src\/(pages|pseo)\//.test(rel)) continue;
+    const src = stripComments(fs.readFileSync(file, 'utf8'));
+    for (const block of returnBlocks(src)) {
+      let n = 0;
+      const who = [];
+      for (const name of orgEmitters) {
+        const c = jsxUsages(block.text, name).length;
+        if (c > 0) who.push(name);
+        n += c;
+      }
+      if (SCHEMA_NODE('Organization').test(block.text)) {
+        n += 1;
+        who.push('an inline node in this file');
+      }
+      if (n > 1) {
+        const line = src.slice(0, block.start).split('\n').length;
+        problems.push(`${rel}:${line} mounts ${n} Organization emitters (${who.join(' + ')})`);
+      }
+    }
+  }
+
+  return problems;
+}
+
 function countHeadDuplicates(files, emitters) {
   const problems = [];
   for (const file of files) {
@@ -374,6 +455,22 @@ function main() {
     );
     process.exit(1);
   }
+  // WEB-SEO-026.
+  const identityProblems = checkIdentityNodes(files);
+  if (identityProblems.length) {
+    console.error('\n❌ The site publishes a dishonest or duplicated identity (WEB-SEO-026)\n');
+    for (const p of identityProblems) console.error(`  ${p}`);
+    console.error(
+      '\nAn aggregator is not a LocalBusiness: the type implies a premises, hours\n' +
+        'and a phone, and every emitter that carried it here had to invent all\n' +
+        'three. The site publishes ONE Organization node, from SEOHead, with a\n' +
+        'stable @id; a WebSite node belongs to / alone. Restaurant,\n' +
+        'TouristAttraction and Place - about other people\'s places - are fine.\n',
+    );
+    process.exit(1);
+  }
+  console.log('✅ Identity: one Organization emitter per page, no LocalBusiness claimed by the site.');
+
   const headProblems = countHeadDuplicates(files, emitters);
   if (headProblems.length) {
     console.error('\n❌ More than one head manager on one rendered tree (WEB-SEO-027)\n');

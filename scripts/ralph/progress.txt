@@ -1018,3 +1018,18 @@ Audited all 79 raw `<img>`, fixed the CLS half, added a ratchet. AC3's 38 conver
   - `OptimizedImage` already handles BOTH `supabase.co/storage/...` and our own `/media/` route (OptimizedImage.tsx:81-121), and `functions/media/[[path]].ts` forwards width/quality. WEB-OPS-023's repointing did not break the transform pipeline.
   - **When a change needs a browser and there isn't one, ratchet it and stop.** 38 layout-sensitive conversions with no visual-regression run available is not a thing to ship blind; the guard makes them safe to do in batches later.
 ---
+
+## 2026-09-18 - WEB-SEO-026
+Removed every LocalBusiness the site claimed about itself, plus the phantom-channel claims.
+- `index.html`: SoftwareApplication block deleted (Alexa/Google Assistant/SMS/ChatGPT, on ~1,100 routes); keywords and twitter:description no longer advertise channels that do not exist.
+- `Index.tsx`: both InteractActions and the LocalBusiness (telephone "", postcode 50309, 00:00-23:59) gone; nothing replaces them.
+- `LocalSEO.tsx`: Place / CollectionPage instead of a LocalBusiness with "+1-515-DES-MOIN" and an OfferCatalog.
+- `Enhanced{Attraction,Playground}SEO`, `EventsPage`, `RealTimePage`, `SEOTools`; `LocalBusinessSchema.tsx` deleted.
+- `check-duplicate-schema.mjs`: no top-level LocalBusiness anywhere, at most one Organization emitter per rendered tree.
+- **Learnings for future iterations:**
+  - **Put a schema check on the SOURCE, not on the prerendered HTML.** `dedupeJsonLd` keeps the last block of each @type, so the artefact has already had the duplication removed - a check there measures what survived the dedupe, not what the page emits. The AC asked for a prerender check; the component tree is the honest place for it.
+  - **Distinguish a top-level node from a nested reference.** `publisher`, `provider`, `author` and `organizer` Organizations are references to an entity and are fine; only `"@type"` directly after a `"@context"` starts a new claim. Counting every `"@type": "Organization"` would have flagged Enhanced*SEO, which is correct as written.
+  - An aggregator is not a LocalBusiness: the type implies a premises, hours and a phone, so every emitter that used it had to invent all three. `Restaurant`, `TouristAttraction` and `Place` - about other people's places - are the honest types.
+  - When removing a false claim from schema, **grep the meta tags too**. The same SMS/voice/ChatGPT promise was in `keywords` and `twitter:description`, neither named in the ACs.
+  - A block in `index.html` has no `data-rh` attribute, so `dedupeJsonLd` can never touch it. Anything wrong there ships on every route, forever.
+---
