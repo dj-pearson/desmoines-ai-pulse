@@ -53,9 +53,15 @@ export function useSceneUpdates(filters?: SceneUpdateFilters) {
 
       const { data, error } = await query;
 
+      // WEB-QA-031: this used to log a warning and return [], which is the
+      // false-empty-state defect one level down from the page. TanStack never
+      // saw a failure, so it never retried and never set isError - and
+      // /whats-new rendered "No updates yet", a confident answer to a question
+      // the page could not answer. Throwing restores both the retries and the
+      // error the page needs to tell the two apart.
       if (error) {
         log.warn('useSceneUpdates', 'Failed to fetch scene updates', { error: error.message });
-        return [];
+        throw error;
       }
 
       return (data || []) as unknown as SceneUpdate[];

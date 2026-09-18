@@ -24,6 +24,7 @@ import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogTrigger } from 
 import { format } from "date-fns";
 import { toast } from "sonner";
 import { SpriteIcon } from "@/components/ui/SpriteIcon";
+import { ErrorState } from "@/components/ui/error-state";
 
 const DASHBOARD_TABS = [
   "overview",
@@ -44,9 +45,15 @@ export default function UserDashboard() {
   const navigate = useNavigate();
   const { user } = useAuth(); // No longer need to check authLoading - ProtectedRoute handles it
   useDocumentTitle("My Dashboard");
-  const { data: events, isLoading, refetch } = useUserSubmittedEvents();
+  const { data: events, isLoading, isError, error: eventsError, refetch } =
+    useUserSubmittedEvents();
   const deleteEvent = useDeleteEvent();
-  const { campaigns, isLoading: campaignsLoading } = useCampaigns();
+  const {
+    campaigns,
+    isLoading: campaignsLoading,
+    error: campaignsError,
+    refetch: refetchCampaigns,
+  } = useCampaigns();
   const { tier, isPremium, isExpiringSoon, subscription } = useSubscription();
   const { favoritedEvents, remainingFavorites, favoritesLimit } = useFavorites();
 
@@ -429,6 +436,11 @@ export default function UserDashboard() {
                       </div>
                     ))}
                   </div>
+                ) : isError ? (
+                  // WEB-QA-031: "No events submitted yet" plus a Submit Your
+                  // First Event button tells someone who has submitted events
+                  // that their work is gone.
+                  <ErrorState error={eventsError} compact onRetry={() => void refetch()} />
                 ) : (
                   <div className="text-center py-8">
                     <SpriteIcon name="calendar" className="h-12 w-12 text-muted-foreground mx-auto mb-4" />
@@ -551,6 +563,15 @@ export default function UserDashboard() {
                         </div>
                       ))}
                     </div>
+                  ) : campaignsError ? (
+                    // Same again, and this one is about money: an advertiser
+                    // whose campaign list failed to load is shown a page that
+                    // says they have never run one.
+                    <ErrorState
+                      error={campaignsError}
+                      compact
+                      onRetry={() => void refetchCampaigns()}
+                    />
                   ) : (
                     <div className="text-center py-8">
                       <Megaphone className="h-12 w-12 text-muted-foreground mx-auto mb-4" />

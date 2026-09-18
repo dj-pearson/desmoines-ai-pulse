@@ -22,10 +22,11 @@ import {
   DialogTrigger,
 } from '@/components/ui/dialog';
 import { SpriteIcon } from "@/components/ui/SpriteIcon";
+import { ErrorState } from '@/components/ui/error-state';
 
 export default function BreweryTrail() {
   const { user } = useAuth();
-  const { data: breweries, isLoading } = useBreweries();
+  const { data: breweries, isLoading, isError, error, refetch } = useBreweries();
   const { data: checkins } = useBreweryCheckins();
   const checkinMutation = useCheckinMutation();
   const [checkinBreweryId, setCheckinBreweryId] = useState<string | null>(null);
@@ -281,6 +282,11 @@ export default function BreweryTrail() {
                   );
                 })}
               </div>
+            ) : isError ? (
+              // WEB-QA-031: a failed fetch must not read as "there are no
+              // breweries", which is a claim about Des Moines rather than
+              // about the request.
+              <ErrorState error={error} compact onRetry={() => void refetch()} />
             ) : (
               <p className="text-muted-foreground">No breweries found. Check back soon!</p>
             )}

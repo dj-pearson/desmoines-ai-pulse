@@ -32,6 +32,7 @@ import { SpriteIcon } from "@/components/ui/SpriteIcon";
 import { useWeather, reorderForWeather } from "@/hooks/useWeather";
 import { useEventIndoorFlags } from "@/hooks/useEventIndoorFlags";
 import { WeatherNotice } from "@/components/WeatherNotice";
+import { ErrorState } from "@/components/ui/error-state";
 
 /**
  * WEB-PERF-023. The grid rendered every event in the weekend window and this
@@ -56,7 +57,7 @@ export default function EventsThisWeekend() {
   const [selectedLocation, setSelectedLocation] = useState<string>("all");
   useDocumentTitle("Events This Weekend");
 
-  const { data: events, isLoading } = useQuery({
+  const { data: events, isLoading, isError, error, refetch } = useQuery({
     queryKey: ["events-weekend"],
     queryFn: async () => {
       const tz = "America/Chicago";
@@ -499,6 +500,10 @@ export default function EventsThisWeekend() {
                 only when the content is visible" true by construction. */}
             <FAQSection faqs={faqData} />
           </>
+        ) : isError ? (
+          // WEB-QA-031: "No Weekend Events Found" is a heading that answers
+          // the visitor's question. A failed fetch has not answered it.
+          <ErrorState error={error} onRetry={() => void refetch()} />
         ) : (
           <Card>
             <CardContent className="pt-6 text-center">

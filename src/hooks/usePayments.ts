@@ -134,6 +134,7 @@ export function usePayments() {
     data: payments = [],
     isLoading: paymentsLoading,
     error: paymentsError,
+    refetch: refetchPayments,
   } = useQuery({
     queryKey: ["payments", user?.id],
     queryFn: async () => {
@@ -156,6 +157,7 @@ export function usePayments() {
     data: invoices = [],
     isLoading: invoicesLoading,
     error: invoicesError,
+    refetch: refetchInvoices,
   } = useQuery({
     queryKey: ["invoices", user?.id],
     queryFn: async () => {
@@ -382,6 +384,11 @@ export function usePayments() {
     // Errors
     paymentsError,
     invoicesError,
+    // WEB-QA-031: the portal rendered "No payments yet" whatever happened, so
+    // a failed read looked like a clean billing history. Both panels need a
+    // way out that is not a page reload.
+    refetchPayments,
+    refetchInvoices,
 
     // Actions
     openCustomerPortal,

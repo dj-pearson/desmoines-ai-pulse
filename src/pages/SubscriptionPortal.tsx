@@ -35,6 +35,7 @@ import { Skeleton } from "@/components/ui/skeleton";
 import { ArrowLeft, Crown, CreditCard, Receipt, FileText, Download, Check, AlertCircle, RefreshCw, Printer, Eye } from "lucide-react";
 import { useAuth } from "@/hooks/useAuth";
 import { isStoreManaged, usePayments } from "@/hooks/usePayments";
+import { ErrorState } from "@/components/ui/error-state";
 import { useSubscription } from "@/hooks/useSubscription";
 import { SubscriptionPlatformBreakdown } from "@/components/SubscriptionPlatformBreakdown";
 import { format } from "date-fns";
@@ -66,6 +67,10 @@ export default function SubscriptionPortal() {
     // case none of the Stripe actions on this page can act on it.
     manageAt,
     manageUrl,
+    paymentsError,
+    invoicesError,
+    refetchPayments,
+    refetchInvoices,
   } = usePayments();
   const { tier, isPremium, subscription, plans, startCheckout, checkoutLoading } =
     useSubscription();
@@ -556,7 +561,16 @@ export default function SubscriptionPortal() {
                 </CardDescription>
               </CardHeader>
               <CardContent>
-                {payments.length === 0 ? (
+                {paymentsError ? (
+                  // WEB-QA-031: "No payments yet" is a claim about someone's
+                  // billing history, and it was shown whether the read worked
+                  // or not.
+                  <ErrorState
+                    error={paymentsError}
+                    compact
+                    onRetry={() => void refetchPayments()}
+                  />
+                ) : payments.length === 0 ? (
                   <div className="text-center py-8 text-muted-foreground">
                     <Receipt className="h-12 w-12 mx-auto mb-4 opacity-50" />
                     <p>No payments yet</p>
@@ -638,7 +652,13 @@ export default function SubscriptionPortal() {
                 </CardDescription>
               </CardHeader>
               <CardContent>
-                {invoices.length === 0 ? (
+                {invoicesError ? (
+                  <ErrorState
+                    error={invoicesError}
+                    compact
+                    onRetry={() => void refetchInvoices()}
+                  />
+                ) : invoices.length === 0 ? (
                   <div className="text-center py-8 text-muted-foreground">
                     <FileText className="h-12 w-12 mx-auto mb-4 opacity-50" />
                     <p>No invoices yet</p>

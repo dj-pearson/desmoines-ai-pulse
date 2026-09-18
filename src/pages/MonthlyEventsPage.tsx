@@ -19,6 +19,7 @@ import { Breadcrumbs } from "@/components/ui/breadcrumbs";
 import { EVENT_LIST_COLUMNS } from "@/lib/listColumns";
 import { formatCount } from "@/lib/pluralize";
 import { SpriteIcon } from "@/components/ui/SpriteIcon";
+import { ErrorState } from "@/components/ui/error-state";
 
 /**
  * WEB-PERF-023. The grid rendered every event in the month, which measured
@@ -63,7 +64,7 @@ export default function MonthlyEventsPage() {
   
   // Fetch the full month once; category filtering + category list are derived
   // in memory to avoid a second full-range query (WEB-PERF-011).
-  const { data: allEvents, isLoading } = useQuery({
+  const { data: allEvents, isLoading, isError, error, refetch } = useQuery({
     queryKey: ["monthly-events", monthYear],
     queryFn: async () => {
       const { data, error } = await supabase
@@ -363,6 +364,11 @@ export default function MonthlyEventsPage() {
               </CardContent>
             </Card>
           </>
+        ) : isError ? (
+          // WEB-QA-031: naming the month in the heading makes the claim
+          // sharper, not softer - a failed fetch would be asserting something
+          // specific about that month.
+          <ErrorState error={error} onRetry={() => void refetch()} />
         ) : (
           <Card className="text-center py-12">
             <CardContent>

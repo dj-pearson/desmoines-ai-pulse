@@ -19,12 +19,13 @@ import {
   DropdownMenuItem,
   DropdownMenuTrigger,
 } from "@/components/ui/dropdown-menu";
+import { ErrorState } from "@/components/ui/error-state";
 
 export default function TeamManagement() {
   const navigate = useNavigate();
   const { user } = useAuth();
   useDocumentTitle("Team Management");
-  const { teamMembers, isLoading, inviteTeamMember, resendInvitation, updateMemberRole, removeMember } = useTeamManagement(user?.id);
+  const { teamMembers, isLoading, error, refetch, inviteTeamMember, resendInvitation, updateMemberRole, removeMember } = useTeamManagement(user?.id);
 
   const [inviteDialogOpen, setInviteDialogOpen] = useState(false);
   const [inviteEmail, setInviteEmail] = useState("");
@@ -161,7 +162,11 @@ export default function TeamManagement() {
           </CardDescription>
         </CardHeader>
         <CardContent>
-          {teamMembers.length === 0 ? (
+          {error ? (
+            // WEB-QA-031: "No team members yet" with an Invite button is a
+            // wrong instruction when the list simply failed to load.
+            <ErrorState error={error} onRetry={() => void refetch()} />
+          ) : teamMembers.length === 0 ? (
             <div className="text-center py-12">
               <UserPlus className="h-12 w-12 mx-auto text-muted-foreground mb-4" />
               <h3 className="text-lg font-semibold mb-2">No team members yet</h3>

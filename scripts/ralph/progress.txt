@@ -962,3 +962,18 @@ Newsletter double opt-in, resubscribe, and a digest that honours the opt-out.
   - A public endpoint that looks up an address must answer identically for every outcome, or it is an enumeration oracle. The friendly error ("you're already subscribed") is the leak.
   - `check-edge-auth.mjs --write` regenerates the NAME list and keeps the hand-written `notes`. Re-running it can also drop a stale entry - `check-login-attempt` has gained a caller check since the 2026-08-28 capture.
 ---
+
+## 2026-09-18 - WEB-QA-031
+Twelve pages, two correctly out of scope, one found by the new rule, plus AC4's checker.
+- Pages: BreweryTrail, EventsThisWeekend, MonthlyEventsPage, WhatsNew, Social, Gamification, TeamManagement, TripPlanner, UserDashboard (x2), Profile, SubscriptionPortal (x2), EventsNearMe, OutdoorsHub.
+- Hooks that were swallowing the failure: `useSceneUpdates` (logged + `return []`), `useSocialFeatures` (both branches), `useTeamManagement` (toast only).
+- `scripts/check-false-empty-state.mjs`: second rule for the TanStack shape.
+- `tests/backend-down.spec.ts`: +4 routes, +7 phrases.
+- **Learnings for future iterations:**
+  - **Never insert an import with `/^import .*\n(?:import .*\n)*/`.** It stops at a multi-line `import {` and drops the new line INSIDE the block. Three pages stopped parsing. Insert after the last line matching `^import .*;$` OR `^\} from '...';$` instead. eslint reports it as "Parsing error: Identifier expected", which is the fastest way to notice.
+  - **Check the HOOK before fixing the page.** Three of these pages could not have been fixed from the page at all: the hook turned the error into `[]` before TanStack ever saw it, so there was no `isError` to read and no retries either. `return []` inside `if (error)` is the tell.
+  - A story's AC list may be filed from a coarse grep. Advertise and Pricing were on this one and have no false empty state - their "No ..." strings are in-form selection state and marketing prose. Say so with line evidence rather than editing them to look busy.
+  - A source-text rule stays quiet by being generous about what counts as "handled": this one skips any file containing the word `error` at all. It cannot catch a page that destructures `error` and ignores it, and making it try costs more false positives than the finding is worth. Write the limit into the script header.
+  - Prove a new check FIRES before trusting it. Strip the fix from one file, confirm exit 1 naming the file and line, restore. A rule that reports "clean" against a tree it cannot parse is worse than no rule.
+  - Comparing a scoped `tsc` run against `app-type-baseline.json` per file is the only honest way to say "I added no type errors" here - the run reports the whole transitive closure, most of which is pre-existing.
+---

@@ -23,6 +23,7 @@ import { Badge } from '@/components/ui/badge';
 import { Skeleton } from '@/components/ui/skeleton';
 import { Button } from '@/components/ui/button';
 import { Ruler, Mountain, Bike, Footprints, Route } from 'lucide-react';
+import { ErrorState } from '@/components/ui/error-state';
 
 const DIFFICULTY_COLORS: Record<string, string> = {
   easy: 'bg-green-500/10 text-green-700 dark:text-green-400',
@@ -96,7 +97,7 @@ const RELATED_GUIDES: Array<{ to: string; label: string; note: string }> = [
 ];
 
 export default function OutdoorsHub() {
-  const { data: allTrails, isLoading } = useTrails();
+  const { data: allTrails, isLoading, isError, error, refetch } = useTrails();
   const { data: playgroundsByDestination } = usePlaygroundsNearDestinations();
   const { data: outdoorAttractions } = useOutdoorAttractions();
   const [difficultyFilter, setDifficultyFilter] = useState('All');
@@ -398,6 +399,10 @@ export default function OutdoorsHub() {
                   </Link>
                 ))}
               </div>
+            ) : isError ? (
+              // WEB-QA-031: "No trails match the selected filters" blames the
+              // filters for a failure that had nothing to do with them.
+              <ErrorState error={error} compact onRetry={() => void refetch()} />
             ) : (
               <p className="text-muted-foreground">No trails match the selected filters.</p>
             )}

@@ -17,6 +17,7 @@ import { useToast } from '@/hooks/use-toast';
 import { format } from 'date-fns';
 import { formatCount } from "@/lib/pluralize";
 import { SpriteIcon } from "@/components/ui/SpriteIcon";
+import { ErrorState } from '@/components/ui/error-state';
 
 // Lazy load map component
 const EventsMap = lazy(() => import('@/components/InteractiveMap').then(mod => ({ default: mod.InteractiveMap })));
@@ -33,6 +34,7 @@ export default function EventsNearMe() {
     items: events,
     isLoading,
     error,
+    refetch,
     searchCenter,
   } = useEventsNearby({
     latitude: location?.latitude || 41.5868, // Default to Des Moines
@@ -221,14 +223,11 @@ export default function EventsNearMe() {
             </div>
           )}
 
-          {/* Error State */}
-          {error && (
-            <Card className="border-destructive">
-              <CardContent className="pt-6">
-                <p className="text-destructive">{error}</p>
-              </CardContent>
-            </Card>
-          )}
+          {/* WEB-QA-031: this page already kept the failure and the empty
+              state apart - the empty branch below is gated on !error - so what
+              was missing was a way out. The raw message in a red card left the
+              visitor with nothing to do but reload the page. */}
+          {error && <ErrorState error={error} onRetry={() => void refetch()} />}
 
           {/* List View */}
           {!isLoading && !error && viewMode === 'list' && (
