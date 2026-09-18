@@ -186,6 +186,10 @@ jobs:
       # already paying twice, and a cross-tier upgrade opened a SECOND Stripe
       # subscription. Pins the platform-scoped guard and the in-place upgrade.
       - run: deno test --allow-read supabase/functions/_tests/subscription-upgrade-contract.test.ts
+      # WEB-FEAT-014. The trial was decided from the ACTIVE web row, so cancel,
+      # lapse, resubscribe granted another 7 free days, once per cancellation.
+      # Pins the first-purchase rule and the two unfiltered reads behind it.
+      - run: deno test --allow-read supabase/functions/_tests/trial-eligibility.test.ts
       # WEB-FEAT-016. VIP listed eight benefits at $12.99/month and delivered
       # none. Fails if the pricing page or the stored plan row promises a feature
       # no component gates on.

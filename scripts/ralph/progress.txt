@@ -901,3 +901,17 @@ vacuously, so it is recorded here rather than added. Every other suite under
   announces the wrong number to a screen reader.
 - **A JSX comment cannot go between attributes.** `{/* … */}` inside an element's
   attribute list is a parse error; use a block comment or put it above.
+
+## 2026-09-18 - WEB-FEAT-014
+Trial is a first-purchase benefit now, on both the server and the copy.
+- `supabase/functions/_shared/trialEligibility.ts` (new): pure decision, testable without a DB or a Stripe key.
+- `supabase/functions/create-subscription-checkout/index.ts`: two reads feed it - user_subscriptions rows with `trial_start` set (no status, no platform filter) and `stripe.subscriptions.list({ status: "all" })` on the customer. A failed read returns 503 `subscription_lookup_failed` instead of falling through to a trial.
+- `src/hooks/useTrialEligibility.ts` (new) + `UpgradeModal.tsx`: the trial clause is dropped unless the account has never had one.
+- `src/pages/Pricing.tsx`: FAQ answer and the "Before you subscribe" block say first-time subscribers only.
+- `supabase/functions/_tests/trial-eligibility.test.ts` (new), wired into `subscription-sync-tests.yml`.
+- **Learnings for future iterations:**
+  - `useSubscription` CANNOT answer "has this user ever had X". Its query is `.in("status", ["active","trialing","past_due"])`, so a churned user is indistinguishable from a new one there. Any copy that depends on history needs its own unfiltered read.
+  - deno.land is blocked by this container's egress proxy, so no `_tests/*.test.ts` in this repo can be run locally - the Deno binary and the `deno.land/std` imports are both unreachable. Transcribe the assertions to a throwaway node script and run them against the real source; it catches a wrong regex, which is the only thing that usually breaks in these source-text tests.
+  - `npm run type-check` is a no-op (WEB-CI-030) and the real app check takes ~21 minutes (WEB-CI-031). A tsconfig that `extends` tsconfig.app.json with `include` narrowed to the changed files type-checks them in about a minute.
+  - Passing `trial_period_days: 0` to Stripe is an error, not "no trial". `undefined` is the no-trial value.
+---
