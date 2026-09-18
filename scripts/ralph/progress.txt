@@ -1128,3 +1128,15 @@ The 21-minute app type check is 91% dead code querying tables that do not exist.
   - **Narrow a new check to what it can justify.** check-edge-pins' first draft failed on 16 functions disagreeing with apiKeyAuth.ts - every one a false positive, because apiKeyAuth types its client `any` and no version-bearing type crosses that boundary. They are printed as a warning instead. A check that fails on something it cannot explain is a check that gets turned off.
   - `npm run type-check` compiles ZERO files and is relied on in four places (pr-checks validate, aos-fix-agent, aos-test-gen, and the head of `npm run validate`). Do not read a green validate as evidence that src/ type-checks.
 ---
+
+## 2026-09-18 - WEB-CI-031 AC4 follow-up: the nightly would have been red on day one
+Confirming a new scheduled check before trusting it found two regressed files and one live defect.
+- `src/pages/Auth.tsx:790` read `onClick={handleResendVerification}`, and that handler's first parameter is `email: string = signupEmail`. onClick passes the React MouseEvent as the first argument, so the default never applied and the "Resend Verification Email" button called resendVerificationContext with a synthetic event. The other call site already wrapped it in an arrow.
+- Three `onCheckedChange` handlers passed Radix's `CheckedState` (`boolean | "indeterminate"`) to a boolean parameter; the termsAccepted checkbox 15 lines below already coerced with `!!checked`.
+- `interestTiles.test.tsx` carried a `@ts-expect-error` that had become TS2578 itself.
+- **Learnings for future iterations:**
+  - **Run a new CI check once before committing the workflow that runs it.** I reasoned correctly that my own edits could not add app-project errors (strictNullChecks is off there, so null is assignable everywhere) and that reasoning was sound - and irrelevant, because the baseline was already stale by two files I had never touched. A baseline is a claim about a moment, not a property of your diff.
+  - **`onClick={handler}` where the handler has an optional first parameter is a silent bug, not a style choice.** React hands the event to it. Any `(x = default) => ...` used bare as onClick gets the MouseEvent instead of the default, forever, with no runtime error - the call just goes out with nonsense. Grep for `onClick={handle` next to handlers with defaulted parameters.
+  - **I put a `//` comment between JSX attributes again.** progress.txt already records this exact lesson from WEB-PERF-029. Inside an opening tag every token is an attribute, so `//` is parsed as JSX, not as a comment. The note goes ABOVE the element as `{/* ... */}`, or above the whole statement as `//`. That is now twice for the attribute position and once for the `return (` position - three variants of one mistake.
+  - A `@ts-expect-error` that stops being needed becomes an error itself (TS2578). That is the directive working: here it fired because Radix's Checkbox accepts `onChange` through its HTML props passthrough, which is exactly why the mistake being reproduced compiles and silently does nothing.
+---
