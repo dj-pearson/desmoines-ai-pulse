@@ -33,6 +33,7 @@ import { useWeather, reorderForWeather } from "@/hooks/useWeather";
 import { useEventIndoorFlags } from "@/hooks/useEventIndoorFlags";
 import { WeatherNotice } from "@/components/WeatherNotice";
 import { ErrorState } from "@/components/ui/error-state";
+import { SkeletonGroup } from "@/components/ui/skeleton";
 
 /**
  * WEB-PERF-023. The grid rendered every event in the weekend window and this
@@ -143,14 +144,14 @@ export default function EventsThisWeekend() {
     ),
   ];
 
-  const pageTitle = `Des Moines Events This Weekend - ${format(
-    new Date(),
-    "MMMM d"
-  )} | ${BRAND.name}`;
-  const pageDescription = `Find the best events happening this weekend in Des Moines and suburbs. See dates, times, maps, and tips for ${format(
-    new Date(),
-    "MMMM d"
-  )} weekend activities. Updated daily.`;
+  /**
+   * WEB-SEO-031 (AC5, the same audit applied here): both of these interpolated
+   * `new Date()`, so the PRERENDERED title and description froze the build date
+   * and told a crawler which weekend this page covers - wrongly, every day
+   * after the deploy. The date is carried by the body instead, from data.
+   */
+  const pageTitle = `Des Moines Events This Weekend | ${BRAND.name}`;
+  const pageDescription = `Find the best events happening this weekend in Des Moines and suburbs. See dates, times, maps and tips for the weekend's activities.`;
 
   const breadcrumbs = [
     { name: "Events", url: "/events" },
@@ -264,7 +265,9 @@ export default function EventsThisWeekend() {
           <div className="flex items-center gap-4 text-muted-foreground mb-4">
             <div className="flex items-center gap-1">
               <SpriteIcon name="clock" className="h-4 w-4" />
-              <span>Weekend of {format(new Date(), "MMMM d, yyyy")}</span>
+              {/* WEB-SEO-031: "Weekend of <build date>" in the prerendered
+                  file, shown to a crawler and to any no-JS visitor. */}
+              <span>This weekend in the Des Moines metro</span>
             </div>
             <div className="flex items-center gap-1">
               <SpriteIcon name="map-pin" className="h-4 w-4" />
@@ -413,7 +416,12 @@ export default function EventsThisWeekend() {
 
         {/* Events List */}
         {isLoading ? (
-          <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
+          /* WEB-SEO-031: no aria-busy and no loading text, so the prerender
+             strict gate could not tell a skeleton from a rendered page. */
+          <SkeletonGroup
+            label="Loading this weekend's events..."
+            className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6"
+          >
             {[...Array(6)].map((_, i) => (
               <Card key={i} className="animate-pulse">
                 <CardContent className="p-6">
@@ -423,7 +431,7 @@ export default function EventsThisWeekend() {
                 </CardContent>
               </Card>
             ))}
-          </div>
+          </SkeletonGroup>
         ) : orderedEvents.length > 0 ? (
           <>
             <WeatherNotice weather={weather} hasVerdict={hasVerdict} className="mb-6" />

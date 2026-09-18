@@ -1033,3 +1033,17 @@ Removed every LocalBusiness the site claimed about itself, plus the phantom-chan
   - When removing a false claim from schema, **grep the meta tags too**. The same SMS/voice/ChatGPT promise was in `keywords` and `twitter:description`, neither named in the ACs.
   - A block in `index.html` has no `data-rh` attribute, so `dedupeJsonLd` can never touch it. Anything wrong there ships on every route, forever.
 ---
+
+## 2026-09-18 - WEB-SEO-031
+/events/today no longer ships a skeleton with the build date frozen into it.
+- `EventsToday`, `KidsEvents`: useEffect fetch -> `useQuery` (so PrerenderSignal can see it) + `SkeletonGroup` for aria-busy.
+- `EventsToday`, `EventsThisWeekend`: removed `new Date()` from title, description, JSON-LD listName and the visible hero date - five places, not two.
+- `EnhancedLocalSEO`: dropped the `isTimeSensitive` meta block (inert `name=` article tags on listing pages, all three frozen at build time).
+- **Learnings for future iterations:**
+  - **`new Date()` in a component is correct on the client and a lie in the prerendered file.** That asymmetry is why these survive review - the browser always shows today. Grep `new Date()` in any page the prerenderer captures; every one is the build clock in the shipped HTML.
+  - **A hand-rolled fetch is invisible to `PrerenderSignal`**, which counts TanStack queries via `useIsFetching`. useQuery is not a style preference here - it is what makes the page's data visible to the settle signal at all.
+  - A skeleton needs `aria-busy` for the prerender strict gate as well as for screen readers. `SkeletonGroup` from `@/components/ui/skeleton` supplies `role="status"`, `aria-busy` and an sr-only label.
+  - `article:*` are **Open Graph** properties: written with `name=` they are inert. Worth grepping for - and on a listing page the right fix is to drop them, not to correct the attribute.
+  - Use `EVENT_LIST_COLUMNS` rather than a hand-written projection. PostgREST returns exactly what it is given, so a column the UI reads but the projection omits is silently absent - which is how `ListFreshness` rendered nothing on this page.
+  - Still useEffect fetchers, for whoever picks this up: FreeEvents, DateNightEvents, OpenNowRestaurants, DietaryRestaurants (plus EventsByLocation and MonthlyEventsPage, mixed). None has an aria-busy skeleton either.
+---

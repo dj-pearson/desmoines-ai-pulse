@@ -330,20 +330,29 @@ export default function EnhancedLocalSEO({
       <meta name="twitter:description" content={pageDescription} />
       <meta name="twitter:site" content={BRAND.twitter} />
 
-      {/* Time-sensitive content for AI */}
-      {isTimeSensitive && (
-        <>
-          <meta
-            name="article:published_time"
-            content={new Date().toISOString()}
-          />
-          <meta
-            name="article:modified_time"
-            content={new Date().toISOString()}
-          />
-          <meta property="og:updated_time" content={new Date().toISOString()} />
-        </>
-      )}
+      {/* WEB-SEO-031 -- THREE TIMESTAMPS USED TO BE EMITTED HERE and every one
+          of them was wrong in a different way.
+
+          article:published_time and article:modified_time were written with
+          `name=` instead of `property=`. Those are Open Graph properties, so
+          an OG parser looked for them under `property` and found nothing: the
+          tags were inert on all four pages that pass isTimeSensitive. They are
+          also article metadata on pages that are LISTINGS - /events/today,
+          /events/this-weekend, the monthly pages and /restaurants/open-now are
+          not articles, so the honest fix for those two is not to correct the
+          attribute but to stop claiming it.
+
+          All three, including the og:updated_time that WAS spelled correctly,
+          interpolated `new Date()`. In a client render that is now; in the
+          PRERENDERED file it is the build clock, frozen, so every one of these
+          pages told a crawler it had been updated at the moment of the last
+          deploy, forever. A freshness signal that is always the same date is
+          worse than none - it is a stale claim that looks like a fresh one.
+
+          Freshness is published from DATA instead: <ListFreshness> renders it
+          from the newest row's updated_at. Nothing here has access to that, and
+          plumbing it in only to re-emit a tag two of whose three forms do not
+          belong on a listing page is not worth the prop. */}
 
       {/* Schema.org Structured Data */}
       <script type="application/ld+json">
