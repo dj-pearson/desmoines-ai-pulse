@@ -322,15 +322,12 @@ export default function RestaurantDetails() {
     },
   };
 
-  const breadcrumbs = [
-    { name: "Home", url: "/" },
-    { name: "Restaurants", url: "/restaurants" },
-    ...(restaurant.cuisine ? [{ name: restaurant.cuisine, url: `/restaurants?cuisine=${encodeURIComponent(restaurant.cuisine)}` }] : []),
-    {
-      name: restaurant.name,
-      url: `/restaurants/${restaurant.slug || restaurant.id}`,
-    },
-  ];
+  // WEB-SEO-027: the BreadcrumbList this used to build lived here AND in the
+  // <BreadcrumbListSchema> below, with DIFFERENT urls - relative here, absolute
+  // through getCanonicalUrl there - so the page shipped two competing trails
+  // and the prerenderer's dedupeJsonLd kept whichever came last. One emitter
+  // now, and it is the typed schema component, which is the one with the
+  // absolute URLs a crawler can resolve.
 
   // Generate dynamic FAQ for this specific restaurant
   const restaurantFaqs = [
@@ -380,7 +377,6 @@ export default function RestaurantDetails() {
         structuredData={restaurantSchema}
         url={`/restaurants/${restaurant.slug || restaurant.id}`}
         imageUrl={ogImageUrl("restaurant", restaurant.id)}
-        breadcrumbs={breadcrumbs}
         location={{
           name: restaurant.name,
           address: restaurant.location || `${cityName}, IA`,

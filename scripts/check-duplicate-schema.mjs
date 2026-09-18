@@ -170,6 +170,113 @@ function emitterState(source, emitter) {
 const ALLOWED_WEBSITE_OWNERS = new Set(['src/pages/Index.tsx']);
 
 /**
+ * WEB-SEO-027: one head manager per rendered tree.
+ *
+ * AttractionDetails rendered EnhancedAttractionSEO AND SEOHead, each computing
+ * its own <title> and description; RestaurantDetails emitted BreadcrumbList
+ * twice with different URLs (relative from SEOHead's prop, absolute from
+ * BreadcrumbListSchema); Index rendered SEOEnhancedHead followed by
+ * SEOStructure, whose DEFAULTS silently won because Helmet resolves
+ * last-mount-wins. Each component is correct alone; the defect only exists in
+ * the composition, which is what makes it survive review.
+ *
+ * AND THE PRERENDERER HID IT. dedupeJsonLd keeps the last block of each @type,
+ * so the static HTML a crawler fetches looked settled while the live DOM that
+ * Googlebot renders carried both.
+ *
+ * COUNTED PER `return (`, NOT PER FILE, and that distinction is the whole
+ * accuracy of this rule. A page's loading branch, its error branch and its main
+ * branch are mutually exclusive early returns - EventsPage has three heads in
+ * the source and mounts exactly one. Counting textual occurrences reported
+ * EventDetails, EventsPage and ProfilePage as duplicates when none of them is.
+ * Every emitter is attributed to the nearest preceding `return (`.
+ *
+ * The emitter lists are DERIVED from source, not hand-maintained: any component
+ * importing react-helmet-async and containing <title>, or a BreadcrumbList
+ * @type, is one. A new SEO wrapper is covered the day it is written.
+ */
+
+/** Components under src/components that manage <title> or emit BreadcrumbList. */
+function discoverHeadEmitters(files) {
+  const titles = new Set();
+  /** name -> true when the component only emits BreadcrumbList if given the prop. */
+  const breadcrumbs = new Map();
+  for (const file of files) {
+    if (!/^src[\\/]components[\\/]/.test(path.relative(process.cwd(), file))) continue;
+    const src = stripComments(fs.readFileSync(file, 'utf8'));
+    if (!/from ['"]react-helmet-async['"]/.test(src)) continue;
+    const name = path.basename(file, '.tsx');
+    if (/<title>/.test(src)) titles.add(name);
+    if (/["']@type["']\s*:\s*["']BreadcrumbList["']/.test(src)) {
+      // SEOHead builds its BreadcrumbList only when handed a `breadcrumbs`
+      // prop; BreadcrumbListSchema emits whenever it renders. Reading the
+      // prop declaration keeps that distinction out of a hand-kept table.
+      breadcrumbs.set(name, /breadcrumbs\?:/.test(src));
+    }
+  }
+  return { titles, breadcrumbs };
+}
+
+/**
+ * Splits a component file into the JSX trees it can return, so mutually
+ * exclusive early returns are never counted together.
+ */
+function returnBlocks(source) {
+  const starts = [];
+  const re = /\breturn \(/g;
+  for (let m = re.exec(source); m; m = re.exec(source)) starts.push(m.index);
+  if (starts.length === 0) return [{ start: 0, text: source }];
+  return starts.map((start, i) => ({
+    start,
+    text: source.slice(start, starts[i + 1] ?? source.length),
+  }));
+}
+
+function countHeadDuplicates(files, emitters) {
+  const problems = [];
+  for (const file of files) {
+    const rel = path.relative(process.cwd(), file);
+    if (!/^src[\\/](pages|pseo)[\\/]/.test(rel)) continue;
+    const src = stripComments(fs.readFileSync(file, 'utf8'));
+
+    for (const block of returnBlocks(src)) {
+      const line = src.slice(0, block.start).split('\n').length;
+
+      let titles = 0;
+      const titleNames = [];
+      for (const name of emitters.titles) {
+        const n = jsxUsages(block.text, name).length;
+        if (n > 0) titleNames.push(`${name}${n > 1 ? ` x${n}` : ''}`);
+        titles += n;
+      }
+      // A page writing <title> into its own Helmet is a head manager too.
+      if (/<title>/.test(block.text)) {
+        titles += 1;
+        titleNames.push('its own <Helmet><title>');
+      }
+      if (titles > 1) {
+        problems.push({ rel, line, what: '<title>', who: titleNames.join(' + ') });
+      }
+
+      let crumbs = 0;
+      const crumbNames = [];
+      for (const [name, optIn] of emitters.breadcrumbs) {
+        const usages = jsxUsages(block.text, name);
+        const n = optIn
+          ? usages.filter((u) => /breadcrumbs\s*=\s*\{/.test(u)).length
+          : usages.length;
+        if (n > 0) crumbNames.push(`${name}${n > 1 ? ` x${n}` : ''}`);
+        crumbs += n;
+      }
+      if (crumbs > 1) {
+        problems.push({ rel, line, what: 'BreadcrumbList', who: crumbNames.join(' + ') });
+      }
+    }
+  }
+  return problems;
+}
+
+/**
  * Emitters that exist but are mounted nowhere. They are allowed to keep their
  * WebSite node ONLY while they stay unimported; mounting one puts a second
  * node on a real page, so the check below fails at that point rather than
@@ -256,6 +363,40 @@ function main() {
 
   // WEB-SEO-029.
   checkWebsiteNodes(files);
+
+  // WEB-SEO-027.
+  const emitters = discoverHeadEmitters(files);
+  if (emitters.titles.size === 0 || emitters.breadcrumbs.size === 0) {
+    console.error(
+      '\n❌ Found no <title> or BreadcrumbList emitters at all (WEB-SEO-027).\n' +
+        '  The lists are derived from source, so an empty one means the discovery\n' +
+        '  broke - not that the codebase is clean. Refusing to pass on that.\n',
+    );
+    process.exit(1);
+  }
+  const headProblems = countHeadDuplicates(files, emitters);
+  if (headProblems.length) {
+    console.error('\n❌ More than one head manager on one rendered tree (WEB-SEO-027)\n');
+    for (const p of headProblems) {
+      console.error(`  ${p.rel}:${p.line}  two sources of ${p.what}`);
+      console.error(`    ${p.who}`);
+    }
+    console.error(
+      '\nEach component is correct alone; the duplication only exists in the\n' +
+        'composition, which is why it survives review. Helmet resolves\n' +
+        'last-mount-wins for <title>, so which one ships is decided by render\n' +
+        'order rather than by anyone - and JSON-LD blocks are not deduped at all,\n' +
+        'so two BreadcrumbList emitters put two competing trails in the DOM.\n' +
+        'The prerenderer hides this: dedupeJsonLd keeps the last block of each\n' +
+        '@type, so the static HTML looks right while the live DOM does not.\n' +
+        '\nConverge on SEOHead plus the typed components in src/components/schema.\n',
+    );
+    process.exit(1);
+  }
+  console.log(
+    `✅ Head managers: ${emitters.titles.size} title emitter(s) and ` +
+      `${emitters.breadcrumbs.size} BreadcrumbList emitter(s) known; no page mounts two.`,
+  );
 
   const stale = assertModelMatchesSource(files);
   if (stale.length) {

@@ -977,3 +977,17 @@ Twelve pages, two correctly out of scope, one found by the new rule, plus AC4's 
   - Prove a new check FIRES before trusting it. Strip the fix from one file, confirm exit 1 naming the file and line, restore. A rule that reports "clean" against a tree it cannot parse is worse than no rule.
   - Comparing a scoped `tsc` run against `app-type-baseline.json` per file is the only honest way to say "I added no type errors" here - the run reports the whole transitive closure, most of which is pre-existing.
 ---
+
+## 2026-09-18 - WEB-SEO-027
+One head manager per page; SEOEnhancedHead and SEOStructure deleted.
+- `EnhancedAttractionSEO`: stopped managing the head entirely (title/description/keywords/canonical/robots/OG/Twitter all removed - SEOHead emits every one). Keeps place:* meta and its three schema blocks.
+- `RestaurantDetails`: dropped SEOHead's `breadcrumbs` prop; the typed `BreadcrumbListSchema` is the single emitter and its URLs are absolute.
+- `Index` and `EventsPage`: migrated to `SEOHead`; both deleted components had no other callers.
+- `scripts/check-duplicate-schema.mjs`: new rule, two sources of `<title>` or `BreadcrumbList` on one rendered tree.
+- **Learnings for future iterations:**
+  - **Count head emitters per `return (`, not per file.** A page's loading, not-found and main branches are mutually exclusive early returns. A per-file count reported EventDetails, EventsPage and ProfilePage as duplicates when none of them is - three false positives out of six findings.
+  - **Derive the emitter list from source instead of hand-modelling it.** The FAQPage rule in the same script keeps an `EMITTERS` table and needed `assertModelMatchesSource` to stop it drifting. Reading "imports react-helmet-async AND contains `<title>`" needs no table and covers a new wrapper the day it is written. Read opt-in-ness from the component's own `breadcrumbs?:` prop declaration too.
+  - **Helmet dedupes `<meta>` by name and `<title>` by last-mount-wins, but does NOT dedupe `<script type="application/ld+json">`.** So two components emitting titles is an ambiguity (whichever mounts last wins, decided by render order rather than by anyone), while two emitting BreadcrumbList is a real duplicate in the DOM.
+  - `dedupeJsonLd` keys on the FIRST `"@type"` in a block, so a JSON-LD **array** in one `<script>` counts as one block of the first node's type. That makes an array the clean way to ship two nodes from one head component without the prerenderer dropping either.
+  - Before deleting an SEO component, check what ONLY it emitted. SEOEnhancedHead's Organization node and apple-mobile-web-app meta both turned out to exist in SEOHead too, and `mobile-web-app-capable` is in index.html - but that had to be verified, not assumed.
+---

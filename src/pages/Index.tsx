@@ -21,8 +21,6 @@ import { openExternalUrl } from "@/lib/capacitorUtils";
 import Header from "@/components/Header";
 import { FAQSection } from "@/components/FAQSection";
 import SEOHead from "@/components/SEOHead";
-import SEOStructure from "@/components/SEOStructure";
-import { SEOEnhancedHead } from "@/components/SEOEnhancedHead";
 import SearchSection from "@/components/SearchSection";
 import { NLPSearchBar } from "@/components/NLPSearchBar";
 import { EnhancedHero } from "@/components/EnhancedHero";
@@ -102,8 +100,9 @@ const DashboardSkeleton = () => (
   </div>
 );
 
-// WEB-SEO-012: shared by the two head managers this page renders
-// (SEOEnhancedHead and SEOStructure) so they cannot disagree.
+// WEB-SEO-012: the page title and description. WEB-SEO-027 collapsed the two
+// head managers that used to share these into one, so there is no longer a
+// second component to keep in step - SEOHead owns the head.
 //
 // SEO-008: RE-TARGETED. This was "Things to Do in Des Moines This Weekend",
 // which put the homepage in direct competition with two of its own pages:
@@ -403,14 +402,27 @@ export default function Index() {
           Title and description now lead with the query. BRAND.description is
           deliberately left alone: it is the Organization/LocalBusiness
           description in schema, where self-description is correct. */}
-      <SEOEnhancedHead
+      {/* WEB-SEO-027 -- ONE HEAD MANAGER.
+          This was <SEOEnhancedHead> followed by <SEOStructure>, and both set
+          <title> and <meta name="description">. Helmet resolves last-mount-
+          wins, so SEOStructure's DEFAULTS silently overrode whatever the first
+          set - which is why editing the title here once had no effect on the
+          shipped HTML until someone grepped dist/index.html. The mitigation
+          was to pass both components the same values; the fix is to have one.
+
+          The two schema objects ride together in SEOHead's structuredData. A
+          JSON-LD array is one script tag holding two nodes, which is valid and
+          keeps each @type appearing exactly once on the page - so the
+          prerenderer's dedupeJsonLd has nothing to drop. Organization still
+          ships: SEOHead emits its own, with a stable @id. */}
+      <SEOHead
         title={HOME_TITLE}
         description={HOME_DESCRIPTION}
-        url={`${BRAND.baseUrl}/`}
+        url="/"
+        canonicalUrl={`${BRAND.baseUrl}/`}
         type="website"
-        structuredData={structuredData}
+        structuredData={[structuredData, localBusinessData]}
       />
-
 
       {/* BreadcrumbList Schema - Helps with rich snippets in search results */}
       <BreadcrumbListSchema
@@ -424,32 +436,6 @@ export default function Index() {
         name={`${BRAND.name} - AI-Powered City Guide`}
         description={BRAND.description}
         url={BRAND.baseUrl}
-      />
-
-      {/* SEO and structured data for AI optimization */}
-      {/* WEB-SEO-012: SEOStructure mounts AFTER SEOEnhancedHead above and its
-          Helmet also sets <title> and <meta name="description">. React Helmet
-          resolves last-mount-wins, so with only canonicalUrl passed here its
-          defaults silently overrode whatever SEOEnhancedHead set — which is why
-          editing the title above had no effect on the shipped HTML until this
-          was found by grepping dist/index.html rather than trusting the source.
-          Both components are given the same values so the winner is correct
-          whichever way the tree evolves. Collapsing the two head managers into
-          one is tracked separately (WEB-SEO-002). */}
-      <SEOStructure
-        title={HOME_TITLE}
-        description={HOME_DESCRIPTION}
-        canonicalUrl={`${BRAND.baseUrl}/`}
-        /* WEB-SEO-013: without this SEOStructure emits its OWN LocalBusiness
-           default, so the homepage shipped TWO LocalBusiness blocks - measured
-           in dist/index.html at 1437 and 799 bytes, different content, both
-           describing the same business. Google treats a duplicated entity type
-           on one page as ambiguous and may use neither. Passing the block
-           rendered above makes the two emitters agree on one object, which is
-           the same trick the WEB-SEO-012 comment applies to title and
-           description. The default also carried a placeholder telephone,
-           +1-515-000-0000, which is now not emitted at all. */
-        structuredData={localBusinessData}
       />
 
       {/* Main content wrapper with semantic HTML for AI parsing */}

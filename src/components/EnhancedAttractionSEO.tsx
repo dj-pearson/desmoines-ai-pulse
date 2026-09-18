@@ -1,6 +1,5 @@
 import { Helmet } from "react-helmet-async";
 import { BRAND } from "@/lib/brandConfig";
-import { ogImageUrl } from "@/lib/ogImage";
 
 interface AttractionData {
   id?: string | null;
@@ -36,7 +35,6 @@ export default function EnhancedAttractionSEO({
 }: EnhancedAttractionSEOProps) {
   const attractionUrl = `${BRAND.baseUrl}/attractions/${slug}`;
   // Branded dynamic OG card (WEB-FEAT-008); falls back to the item photo / default.
-  const ogImage = ogImageUrl("attraction", attraction.id) || attraction.image_url || `${BRAND.baseUrl}${BRAND.ogImage}`;
 
   const getOptimizedTitle = () => {
     const parts = [attraction.name];
@@ -206,20 +204,19 @@ export default function EnhancedAttractionSEO({
 
   return (
     <Helmet>
-      <title>{getOptimizedTitle()}</title>
-      <meta name="description" content={getGEODescription()} />
-      <meta name="keywords" content={getLocalKeywords().join(", ")} />
-      <link rel="canonical" href={attractionUrl} />
-
-      {/* Geographic Meta for Local SEO */}
-      <meta name="geo.region" content={`US-${BRAND.stateAbbr}`} />
-      <meta
-        name="geo.placename"
-        content={`${BRAND.city}, ${BRAND.state}`}
-      />
-      <meta name="geo.position" content="41.5868;-93.6250" />
-      <meta name="ICBM" content="41.5868, -93.6250" />
-      <meta name="DC.title" content={getOptimizedTitle()} />
+      {/* WEB-SEO-027 -- THIS COMPONENT NO LONGER MANAGES THE HEAD.
+          It used to emit its own <title>, description, keywords, canonical,
+          robots, DC.title, the full Open Graph set and the full Twitter set,
+          alongside AttractionDetails' <SEOHead>, which emits every one of
+          those too. Two components computing a title independently means the
+          one that ships is decided by mount order rather than by anyone - and
+          the prerenderer's dedupeJsonLd kept the LAST block of each @type, so
+          the static HTML looked settled while the live DOM was not.
+          SEOHead is the single head manager for this page now. What stays here
+          is what SEOHead has no notion of: the place:* meta for AI parsers, and
+          the three typed schema blocks. Nothing observable changed when these
+          were removed - SEOHead mounts second and was already winning every one
+          of them. */}
 
       {/* Place-Specific Meta for AI Parsers */}
       <meta name="place:name" content={attraction.name} />
@@ -242,38 +239,6 @@ export default function EnhancedAttractionSEO({
           content={attraction.rating.toFixed(1)}
         />
       )}
-
-      {/* AI Search Engine Optimization Meta */}
-      <meta
-        name="robots"
-        content="index, follow, max-snippet:-1, max-image-preview:large, max-video-preview:-1"
-      />
-      <meta name="googlebot" content="index, follow" />
-      <meta name="bingbot" content="index, follow" />
-
-      {/* Open Graph */}
-      <meta property="og:type" content="place" />
-      <meta property="og:title" content={getOptimizedTitle()} />
-      <meta property="og:description" content={getGEODescription()} />
-      <meta property="og:locality" content={BRAND.city} />
-      <meta property="og:region" content={BRAND.state} />
-      <meta property="og:country-name" content="United States" />
-      <meta property="og:image" content={ogImage} />
-      <meta property="og:image:width" content="1200" />
-      <meta property="og:image:height" content="630" />
-      <meta
-        property="og:image:alt"
-        content={`${attraction.name} - ${attraction.type} in ${BRAND.city}`}
-      />
-      <meta property="og:url" content={attractionUrl} />
-      <meta property="og:site_name" content={BRAND.name} />
-
-      {/* Twitter Cards */}
-      <meta name="twitter:card" content="summary_large_image" />
-      <meta name="twitter:title" content={getOptimizedTitle()} />
-      <meta name="twitter:description" content={getGEODescription()} />
-      <meta name="twitter:image" content={ogImage} />
-      <meta name="twitter:site" content={BRAND.twitter} />
 
       {/* Structured Data */}
       <script type="application/ld+json">

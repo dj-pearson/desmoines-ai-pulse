@@ -22,7 +22,6 @@ import Header from "@/components/Header";
 import { AdBanner } from "@/components/AdBanner";
 import Footer from "@/components/Footer";
 import SEOHead from "@/components/SEOHead";
-import { SEOEnhancedHead } from "@/components/SEOEnhancedHead";
 import { useToast } from "@/hooks/use-toast";
 import { FAQSection } from "@/components/FAQSection";
 import {
@@ -653,10 +652,16 @@ export default function EventsPage() {
 
   return (
     <>
-      <SEOEnhancedHead
+      {/* WEB-SEO-027: this was <SEOEnhancedHead>, while the loading and error
+          branches above use <SEOHead>. Two head components on one route means
+          the shape of the head changes with the page's state, and the
+          prerenderer captures whichever one happened to be mounted. One
+          component per page, and it is SEOHead. */}
+      <SEOHead
         title={seoTitle}
         description={seoDescription}
-        url={getCanonicalUrl('/events')}
+        url="/events"
+        canonicalUrl={getCanonicalUrl('/events')}
         type="website"
         structuredData={eventsSchema}
       />
