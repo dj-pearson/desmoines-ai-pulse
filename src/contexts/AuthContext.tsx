@@ -33,9 +33,16 @@ interface AuthState {
 }
 
 interface AuthActions {
-  login: (email: string, password: string) => Promise<{ success: boolean; error?: string; errorCode?: string; requiresMFA?: boolean; factorId?: string }>;
+  /**
+   * WEB-SEC-029: captchaToken is OPTIONAL at every one of these three call
+   * sites, and stays optional. Supabase ignores it until Turnstile is switched
+   * on in the dashboard, and the web forms supply it only when
+   * VITE_TURNSTILE_SITE_KEY is set - so an existing caller that passes nothing
+   * behaves exactly as it did.
+   */
+  login: (email: string, password: string, captchaToken?: string) => Promise<{ success: boolean; error?: string; errorCode?: string; requiresMFA?: boolean; factorId?: string }>;
   /** `alreadyRegistered` is true when the address already had an account (WEB-AUTH-004). */
-  signup: (email: string, password: string, metadata?: Record<string, unknown>) => Promise<{ success: boolean; error?: string; needsVerification?: boolean; alreadyRegistered?: boolean }>;
+  signup: (email: string, password: string, metadata?: Record<string, unknown>, captchaToken?: string) => Promise<{ success: boolean; error?: string; needsVerification?: boolean; alreadyRegistered?: boolean }>;
   /**
    * `scope` defaults to 'global', which is right for a deliberate sign-out.
    * A TIMEOUT must pass 'local' (WEB-AUTH-007): an idle desktop tab signing
@@ -47,7 +54,7 @@ interface AuthActions {
   refreshSession: () => Promise<boolean>;
   signInWithGoogle: (redirectTo?: string) => Promise<{ success: boolean; error?: string }>;
   signInWithApple: (redirectTo?: string) => Promise<{ success: boolean; error?: string }>;
-  resetPassword: (email: string) => Promise<{ success: boolean; error?: string }>;
+  resetPassword: (email: string, captchaToken?: string) => Promise<{ success: boolean; error?: string }>;
   updatePassword: (newPassword: string) => Promise<{ success: boolean; error?: string }>;
   /** Starts a double-confirmation email change and alerts the current address (WEB-AUTH-012). */
   updateEmail: (newEmail: string) => Promise<{ success: boolean; error?: string }>;
@@ -567,7 +574,7 @@ export function AuthProvider({ children }: { children: ReactNode }) {
   }, [checkIsAdmin, handleAuthChange]);
 
   // Login with email/password (with attempt throttling)
-  const login = useCallback(async (email: string, password: string): Promise<{ success: boolean; error?: string; errorCode?: string; requiresMFA?: boolean; factorId?: string }> => {
+  const login = useCallback(async (email: string, password: string, captchaToken?: string): Promise<{ success: boolean; error?: string; errorCode?: string; requiresMFA?: boolean; factorId?: string }> => {
     try {
       // Fast local throttle (defense in depth; bypassable so not authoritative).
       const throttle = checkLoginThrottle(email);
@@ -586,7 +593,7 @@ export function AuthProvider({ children }: { children: ReactNode }) {
       }
 
       log.info('login', 'Attempting login', { email });
-      const { data, error } = await supabase.auth.signInWithPassword({ email, password });
+      const { data, error } = await supabase.auth.signInWithPassword({ email, password, options: { captchaToken } });
 
       if (error) {
         recordFailedLogin(email);
@@ -673,13 +680,14 @@ export function AuthProvider({ children }: { children: ReactNode }) {
   }, []);
 
   // Signup with email/password
-  const signup = useCallback(async (email: string, password: string, metadata?: Record<string, unknown>): Promise<{ success: boolean; error?: string; needsVerification?: boolean; alreadyRegistered?: boolean }> => {
+  const signup = useCallback(async (email: string, password: string, metadata?: Record<string, unknown>, captchaToken?: string): Promise<{ success: boolean; error?: string; needsVerification?: boolean; alreadyRegistered?: boolean }> => {
     try {
       log.info('signup', 'Attempting signup', { email });
       const { data, error } = await supabase.auth.signUp({
         email,
         password,
         options: {
+          captchaToken,
           // WEB-AUTH-005. Was /auth/verified directly, which is a page with no
           // machinery: it could not exchange a code, could not wait for a
           // session, and read no error parameter -- so every failed
@@ -900,9 +908,10 @@ export function AuthProvider({ children }: { children: ReactNode }) {
   }, []);
 
   // Reset password via email
-  const resetPassword = useCallback(async (email: string): Promise<{ success: boolean; error?: string }> => {
+  const resetPassword = useCallback(async (email: string, captchaToken?: string): Promise<{ success: boolean; error?: string }> => {
     try {
       const { error } = await supabase.auth.resetPasswordForEmail(email, {
+        captchaToken,
         // WEB-AUTH-001: this pointed at /auth?reset=true, a parameter nothing
         // read, on a page that redirects any authenticated visitor away. The
         // link signed the user in and left the old password in place.

@@ -1047,3 +1047,17 @@ Removed every LocalBusiness the site claimed about itself, plus the phantom-chan
   - Use `EVENT_LIST_COLUMNS` rather than a hand-written projection. PostgREST returns exactly what it is given, so a column the UI reads but the projection omits is silently absent - which is how `ListFreshness` rendered nothing on this page.
   - Still useEffect fetchers, for whoever picks this up: FreeEvents, DateNightEvents, OpenNowRestaurants, DietaryRestaurants (plus EventsByLocation and MonthlyEventsPage, mixed). None has an aria-busy skeleton either.
 ---
+
+## 2026-09-18 - WEB-SEC-029 (code complete, INERT - story stays open on owner actions)
+Turnstile wired into signup/login/reset, doing nothing until `VITE_TURNSTILE_SITE_KEY` is set.
+- `src/lib/turnstile.ts`, `src/hooks/useTurnstile.ts` (new); `captchaToken` threaded through AuthContext's three calls; one widget on `/auth`.
+- `public/_headers`: `challenges.cloudflare.com` added to **both** `script-src` and `frame-src`.
+- 6 vitest cases + `tests/turnstile-inert.spec.ts` in the smoke lane assert the inert path.
+- **AC2/AC4 are owner actions. Do NOT enable enforcement in the Supabase dashboard yet** - see the prd note.
+- **Learnings for future iterations:**
+  - **Turnstile enforcement in Supabase is PROJECT-WIDE.** Switching it on rejects every client that does not send a token, including shipped mobile binaries. That is CLAUDE.md's "adding a required request field older binaries don't send", with the switch in a dashboard instead of a diff - so the web code has to land inert and the ordering has to be written where whoever flips it will read it (`.env.example`, beside the variable).
+  - **A strict CSP needs the third party in `script-src` AND `frame-src`** when the widget renders in an iframe. Missing one fails silently - no script, no token, no symptom until server-side enforcement starts rejecting people.
+  - A captcha should **fail open** on the client: enforcement is server-side, so blocking submission when the script is blocked only punishes the honest visitor behind an ad blocker. A bot never runs the code.
+  - Turnstile tokens are **single-use**; call `reset()` after every failed submit or the second attempt fails on a replay with nothing on screen to explain it.
+  - **`app-type-baseline.json` lists only 67 files** - absence from it does not mean zero errors. `Auth.tsx` is absent and has four. To prove you added none, stash your change and re-run the same scoped tsc.
+---
