@@ -31,6 +31,23 @@ export const CACHE_TIERS = {
 // ── Query Key Factory ────────────────────────────────────────────────────────
 
 export const queryKeys = {
+  /*
+   * WEB-PERF-032. THE SHAPE HERE IS LOAD-BEARING AND IT WAS WRONG IN BOTH
+   * DIRECTIONS AT ONCE.
+   *
+   * Too broad: the homepage's featured rail was keyed ['events','featured',day]
+   * and every write called invalidateQueries({ queryKey: ['events'] }), so
+   * approving one queued event refetched a rail whose contents could not have
+   * changed. Featured now sits under its own sub-namespace and `lists()` does
+   * not reach it - see invalidateEvents in useEvents.ts for when it should be
+   * invalidated (only when is_featured or is_sponsored moved).
+   *
+   * Too narrow: music-events, sports-events, venue-events and team-games were
+   * top-level keys of their own, OUTSIDE the events prefix entirely, so the
+   * same invalidation reached none of them and those four surfaces kept
+   * serving rows an admin had just edited. They are list() calls now, so one
+   * invalidation covers every events list and no more than that.
+   */
   events: {
     all: ['events'] as const,
     lists: () => [...queryKeys.events.all, 'list'] as const,
@@ -38,6 +55,12 @@ export const queryKeys = {
     details: () => [...queryKeys.events.all, 'detail'] as const,
     detail: (id: string) => [...queryKeys.events.details(), id] as const,
     social: (id: string) => [...queryKeys.events.all, 'social', id] as const,
+    /**
+     * The homepage rail. Deliberately NOT under lists(), so a routine content
+     * edit leaves it alone. `day` keys the daily rotation the rail applies.
+     */
+    featured: (day: string) => [...queryKeys.events.all, 'featured', day] as const,
+    featuredAll: () => [...queryKeys.events.all, 'featured'] as const,
   },
 
   restaurants: {

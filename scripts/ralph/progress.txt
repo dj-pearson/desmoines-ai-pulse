@@ -1155,3 +1155,19 @@ Four surfaces each carried their own neighborhood list and no two agreed; the th
   - **A fabricated number rendered in bold next to real ones is the worst content defect in this repo's catalogue,** and this is the third instance (after "24/7 AI Assistant" and the pSEO statistics). The hub summed eight hand-typed counts into a three-number trust strip while every page it linked to reported zero. Grep for hardcoded counts near `reduce((sum`.
   - When you cannot verify a query against production, make the failure mode safe and SAY SO in the code: the thin-content gate is why an unverified ilike can ship - it noindexes rather than submitting an empty promise.
 ---
+
+## 2026-09-18 - WEB-PERF-032 (CLOSED)
+The events cache prefix was wrong in both directions at once.
+- Too broad: the homepage featured rail sat at `['events','featured',day]`, under the `['events']` prefix every write invalidated, so one field edit refetched a rail that could not have changed.
+- Too narrow: music-events, sports-events, venue-events and team-games were top-level keys OUTSIDE the events prefix, so the same invalidation reached none of them and those four pages served rows an admin had just edited.
+- `queryKeys.events` gains `featured(day)` / `featuredAll()`, deliberately not under `lists()`. `invalidateEvents({ featured })` touches the rail only when the write moved `is_featured` or `is_sponsored`.
+- Five dead exports deleted from useSupabase.ts (the story named one), 360 -> 200 lines.
+- `src/lib/__tests__/eventsQueryKeys.test.ts`, 7 assertions, negative-controlled.
+- **Learnings for future iterations:**
+  - **A shared cache prefix fails in two directions and a story usually only sees one.** "Everything is under `['events']`" was the filed complaint; four of the six events surfaces were not under it at all. Before narrowing a prefix, grep for every key that queries the same TABLE, not just every key that starts with the same string.
+  - **A brace-matching script cannot find a function body from `export function name(`.** The first `{` after that is the PARAMETER object in `useEvents(filters?: { category?: string })`, so my cut matched the parameter braces and left a dangling `) {`. `grep -n '^export function\|^}'` and delete explicit line ranges instead - and cut in DESCENDING line order so earlier indices stay valid.
+  - **`select('*')` on a list query is not merely wasteful here, it ships the tsvector and the PostGIS geom.** useVenueEvents and useTeamGames both did it for 20 cards. `EVENT_LIST_COLUMNS` exists precisely for this; the comment at the top of listColumns.ts says which columns it drops and why.
+  - **A hand-rolled fetch on a prerendered route captures a skeleton.** /events/free was still useState/useEffect, which PrerenderSignal cannot see (it counts TanStack queries via useIsFetching), so the GRACE_MS fallback fired at 1.5s. Same defect WEB-SEO-031 fixed on /events/today. Cross-check `PRERENDER_ROUTES` against `grep -l "useEffect" src/pages` when touching any SEO landing page.
+  - **When you narrow every call site, the ones you deliberately left broad start looking like bugs.** useClearEventCache and useContentQueue's approve paths both keep the parent `['events']` key on purpose. Both now carry a comment saying so, in place, because the next reader will otherwise "fix" them.
+  - A key factory must give `{}` and `{ category: undefined }` the SAME key. Spreading the caller's object gives two cache entries for one query - two requests, and a write that refreshes one of them. Spell the fields out and default them; there is a test for it.
+---

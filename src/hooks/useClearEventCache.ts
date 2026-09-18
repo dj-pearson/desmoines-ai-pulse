@@ -8,6 +8,11 @@ export function useClearEventCache() {
   const queryClient = useQueryClient();
   
   const clearEventCache = () => {
+    // WEB-PERF-032: the bare ['events'] prefix is CORRECT here and should stay.
+    // Everywhere else it was too broad (a field edit taking out the homepage
+    // rail); this hook's whole job is "drop everything about events", so the
+    // parent key is what it means. Written down because the surrounding change
+    // narrowed every other call site and this one looks like a miss.
     // Clear all event-related queries
     queryClient.invalidateQueries({ queryKey: ['events'] });
     queryClient.invalidateQueries({ queryKey: ['related-events'] });

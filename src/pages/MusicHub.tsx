@@ -16,6 +16,7 @@ import { Skeleton } from '@/components/ui/skeleton';
 import { Music } from "lucide-react";
 import { Button } from '@/components/ui/button';
 import { EVENT_LIST_COLUMNS } from '@/lib/listColumns';
+import { queryKeys } from '@/lib/queryKeys';
 import { SpriteIcon } from "@/components/ui/SpriteIcon";
 import { ErrorState } from '@/components/ui/error-state';
 
@@ -33,7 +34,10 @@ function useMusicEvents(timeframe: 'tonight' | 'weekend' | 'upcoming') {
   const weekendEnd = centralDayStartUtcISO(daysToFriday + 3);
 
   return useQuery({
-    queryKey: ['music-events', timeframe],
+    // WEB-PERF-032: was the top-level ['music-events', timeframe], OUTSIDE the
+    // events prefix, so no write ever invalidated it and this hub kept serving
+    // rows an admin had already edited.
+    queryKey: queryKeys.events.list({ hub: 'music', timeframe }),
     queryFn: async () => {
       let query = supabase
         .from('events')

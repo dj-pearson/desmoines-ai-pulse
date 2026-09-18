@@ -4,6 +4,7 @@ import { EVENT_LIST_COLUMNS } from "@/lib/listColumns";
 import { createLogger } from "@/lib/logger";
 import { STALE_TIME, GC_TIME, shouldRetry } from "@/lib/queryConfig";
 import { Database } from "@/integrations/supabase/types";
+import { queryKeys } from "@/lib/queryKeys";
 
 const logger = createLogger("useEvents");
 
@@ -177,20 +178,27 @@ async function fetchEvents(filters: EventFilters): Promise<EventsResult> {
   };
 }
 
-/** Query key factory — filter changes flow through here, so a changed filter
- *  starts a new cache entry instead of racing a manual refetch effect. */
-function eventsQueryKey(filters: EventFilters) {
-  return [
-    "events",
-    {
-      status: filters.status ?? null,
-      category: filters.category ?? null,
-      search: filters.search ?? null,
-      limit: filters.limit ?? null,
-      offset: filters.offset ?? null,
-      sortBy: filters.sortBy ?? "soonest",
-    },
-  ] as const;
+/**
+ * Query key factory - filter changes flow through here, so a changed filter
+ * starts a new cache entry instead of racing a manual refetch effect.
+ *
+ * WEB-PERF-032: this returned ["events", {...}], one level above the shared
+ * factory's lists(). That put it on the same rung as the featured rail, so
+ * nothing could invalidate "every list" without also invalidating the rail.
+ * It goes through queryKeys.events.list now, which is ["events","list",{...}].
+ * The filter object is still spelled out field by field rather than passed
+ * through: `{}` and `{ category: undefined }` must produce the SAME key, and
+ * spreading the caller's object would give two cache entries for one query.
+ */
+export function eventsQueryKey(filters: EventFilters) {
+  return queryKeys.events.list({
+    status: filters.status ?? null,
+    category: filters.category ?? null,
+    search: filters.search ?? null,
+    limit: filters.limit ?? null,
+    offset: filters.offset ?? null,
+    sortBy: filters.sortBy ?? "soonest",
+  });
 }
 
 export function useEvents(filters: EventFilters = {}) {
@@ -204,13 +212,30 @@ export function useEvents(filters: EventFilters = {}) {
     retry: shouldRetry,
   });
 
-  /** Drop cached event data after a write so lists and detail pages both
-   *  reflect the change. `event-by-slug` is a separate key owned by
-   *  useEventBySlug and would otherwise keep serving a stale row. */
-  const invalidateEvents = () => {
-    queryClient.invalidateQueries({ queryKey: ["events"] });
+  /**
+   * Drop cached event data after a write so lists and detail pages both
+   * reflect the change. `event-by-slug` is a separate key owned by
+   * useEventBySlug and would otherwise keep serving a stale row.
+   *
+   * WEB-PERF-032: this invalidated the bare ["events"], which is the parent of
+   * the homepage's featured rail as well as of every list - so editing one
+   * queued event refetched the rail on every open tab. It now invalidates
+   * lists() and details() and leaves featured alone unless the write actually
+   * moved is_featured or is_sponsored, which are the only two columns the rail
+   * selects on.
+   */
+  const invalidateEvents = (opts: { featured?: boolean } = {}) => {
+    queryClient.invalidateQueries({ queryKey: queryKeys.events.lists() });
+    queryClient.invalidateQueries({ queryKey: queryKeys.events.details() });
     queryClient.invalidateQueries({ queryKey: ["event-by-slug"] });
+    if (opts.featured) {
+      queryClient.invalidateQueries({ queryKey: queryKeys.events.featuredAll() });
+    }
   };
+
+  /** True when an update touches a column the featured rail selects on. */
+  const touchesFeatured = (updates: EventUpdate | EventInsert) =>
+    "is_featured" in updates || "is_sponsored" in updates;
 
   const createEvent = async (event: EventInsert) => {
     try {
@@ -222,8 +247,8 @@ export function useEvents(filters: EventFilters = {}) {
 
       if (error) throw error;
 
-      // Refresh every cached events list
-      invalidateEvents();
+      // A new row can qualify for the rail, so refresh it unconditionally here.
+      invalidateEvents({ featured: true });
       return data;
     } catch (error) {
       logger.error('createEvent', 'Error creating event', { error });
@@ -242,8 +267,7 @@ export function useEvents(filters: EventFilters = {}) {
 
       if (error) throw error;
 
-      // Refresh every cached events list
-      invalidateEvents();
+      invalidateEvents({ featured: touchesFeatured(updates) });
       return data;
     } catch (error) {
       logger.error('updateEvent', 'Error updating event', { error });
@@ -257,8 +281,9 @@ export function useEvents(filters: EventFilters = {}) {
 
       if (error) throw error;
 
-      // Refresh every cached events list
-      invalidateEvents();
+      // A deleted row may have been ON the rail, and nothing here knows whether
+      // it was, so this one always refreshes it.
+      invalidateEvents({ featured: true });
     } catch (error) {
       logger.error('deleteEvent', 'Error deleting event', { error });
       throw error;

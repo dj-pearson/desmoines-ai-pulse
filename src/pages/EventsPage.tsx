@@ -2,6 +2,7 @@ import React, { useState, useEffect, useCallback, lazy, Suspense, useRef, useMem
 import { Link, useNavigate } from "react-router-dom";
 import { useQuery } from "@tanstack/react-query";
 import { supabase } from "@/integrations/supabase/client";
+import { queryKeys } from "@/lib/queryKeys";
 import { Calendar, Search, List, Map, X, SearchX, Sparkles, Navigation, AlertCircle, RefreshCw, Clock, ChevronDown, Star, Shuffle } from "lucide-react";
 import { useIsMobile } from "@/hooks/use-mobile";
 import { usePullToRefresh } from "@/hooks/use-pull-to-refresh";
@@ -229,18 +230,22 @@ export default function EventsPage() {
   };
 
   const { data: eventsData, isLoading, error, refetch } = useQuery({
-    queryKey: [
-      "events",
-      debouncedSearchQuery,
-      selectedCategory,
-      dateFilter,
+    // WEB-PERF-032: this was a flat ["events", a, b, c, ...] on the same rung as
+    // the homepage's featured rail, so nothing could invalidate "every list"
+    // without the rail as well. queryKeys.events.list nests it under
+    // ["events","list"]. The fields are named rather than positional, so a
+    // reordering here cannot silently reuse another query's cache entry.
+    queryKey: queryKeys.events.list({
+      search: debouncedSearchQuery,
+      category: selectedCategory,
+      date: dateFilter,
       location,
       priceRange,
       page,
       sortBy,
-      isNearMeActive,
+      nearMe: isNearMeActive,
       userLocation,
-    ],
+    }),
     queryFn: async () => {
       if (isNearMeActive && userLocation) {
         const { data, error } = await supabase.rpc('search_events_near_location', {

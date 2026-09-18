@@ -43,6 +43,7 @@ import { ContentItem, ContentType } from "@/lib/types";
 import { supabase } from "@/integrations/supabase/client";
 import { toast } from "sonner";
 import { useQueryClient } from "@tanstack/react-query";
+import { queryKeys } from "@/lib/queryKeys";
 
 const CONTENT_TABS = [
   { id: "events", label: "Events", icon: Calendar },
@@ -335,7 +336,12 @@ export default function AdminContent() {
     try {
       if (contentType === "event") {
         await events.refetch();
-        await queryClient.invalidateQueries({ queryKey: ["events"] });
+        // WEB-PERF-032: was the bare ["events"], which also took out the
+        // homepage's featured rail on every field edit. The edit dialog cannot
+        // change is_featured or is_sponsored, so lists and details are the
+        // whole of what this write can affect.
+        await queryClient.invalidateQueries({ queryKey: queryKeys.events.lists() });
+        await queryClient.invalidateQueries({ queryKey: queryKeys.events.details() });
       } else if (contentType === "restaurant") {
         await restaurants.refetch();
         await queryClient.invalidateQueries({ queryKey: ["restaurants"] });

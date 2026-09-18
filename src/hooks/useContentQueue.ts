@@ -183,6 +183,10 @@ export function useContentQueue(filters?: {
     },
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: ['content-queue'] });
+      // WEB-PERF-032: the parent ['events'] key is right here and stays.
+      // Approving queued content PUBLISHES A NEW ROW, which can qualify for the
+      // featured rail, so unlike a field edit this write really can change
+      // every events surface.
       queryClient.invalidateQueries({ queryKey: ['events'] });
       queryClient.invalidateQueries({ queryKey: ['restaurants'] });
       queryClient.invalidateQueries({ queryKey: ['attractions'] });
