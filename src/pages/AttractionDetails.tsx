@@ -656,11 +656,12 @@ export default function AttractionDetails() {
                     <Card className="h-full hover:shadow-lg transition-all duration-300 hover:-translate-y-1 rounded-2xl overflow-hidden">
                       {related.image_url ? (
                         <div className="aspect-video overflow-hidden">
-                          <img
+                          <OptimizedImage
                             src={related.image_url}
                             alt={`${related.name} - ${related.type} in ${BRAND.city}`}
-                            className="w-full h-full object-cover"
-                            loading="lazy"
+                            className="object-cover"
+                            containerClassName="w-full h-full"
+                            sizes="(max-width: 640px) 100vw, (max-width: 1024px) 50vw, 33vw"
                           />
                         </div>
                       ) : (
@@ -706,11 +707,12 @@ export default function AttractionDetails() {
                     <Card className="h-full hover:shadow-lg transition-all duration-300 hover:-translate-y-1 rounded-2xl overflow-hidden">
                       {nearby.image_url ? (
                         <div className="aspect-video overflow-hidden">
-                          <img
+                          <OptimizedImage
                             src={nearby.image_url}
                             alt={`${nearby.name} - ${nearby.type} in ${BRAND.city}`}
-                            className="w-full h-full object-cover"
-                            loading="lazy"
+                            className="object-cover"
+                            containerClassName="w-full h-full"
+                            sizes="(max-width: 640px) 100vw, (max-width: 1024px) 50vw, 33vw"
                           />
                         </div>
                       ) : (

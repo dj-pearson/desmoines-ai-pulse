@@ -1,4 +1,6 @@
 import { useParams, Link, useNavigate } from "react-router-dom";
+import { useState } from "react";
+import { OptimizedImage } from "@/components/OptimizedImage";
 import { Helmet } from "react-helmet-async";
 import { useEventBySlug } from "@/hooks/useEventBySlug";
 import { useEvents } from "@/hooks/useEvents";
@@ -39,7 +41,6 @@ import { NearbyContent } from "@/components/NearbyContent";
 import { LazyLocationMap } from "@/components/LazyLocationMap";
 import { eventPriceContent } from "@/lib/eventOffers";
 import { SpriteIcon } from "@/components/ui/SpriteIcon";
-import { fetchPriorityAttr } from '@/lib/fetchPriority';
 
 /** Upcoming events fetched to populate the related/nearby rails (3 shown each). */
 const RELATED_POOL_SIZE = 50;
@@ -47,6 +48,9 @@ const RELATED_POOL_SIZE = 50;
 export default function EventDetails() {
   const { slug } = useParams<{ slug: string }>();
   const navigate = useNavigate();
+  // The hero is dropped entirely when its image fails, rather than hidden by
+  // mutating the DOM from an onError handler (WEB-PERF-037).
+  const [heroFailed, setHeroFailed] = useState(false);
   // Targeted, date-windowed lookup — see useEventBySlug for why the old
   // fetch-everything-then-Array.find approach 404'd listed events (WEB-QA-002).
   const { event, isLoading } = useEventBySlug(slug);
@@ -214,19 +218,22 @@ export default function EventDetails() {
         <Header />
 
         {/* Hero Image Section */}
-        {event.image_url && (
+        {event.image_url && !heroFailed && (
           <div className="relative h-48 sm:h-64 md:h-80 lg:h-96 overflow-hidden bg-slate-900">
-            <img
+            {/* WEB-PERF-037. The onError used to reach for target.parentElement
+                and set display:none on it, which hides the hero by mutating a
+                node React owns - the same shape SocialEventCard's comment
+                warns about, where an inline style baked in by a handler
+                survives into prerendered HTML. State instead, so the block is
+                not rendered at all. */}
+            <OptimizedImage
               src={event.image_url}
               alt={`${event.title} - ${event.category} event in ${event.city || 'Des Moines'}, Iowa`}
-              className="w-full h-full object-cover opacity-60"
-              loading="eager"
-              decoding="async"
-              {...fetchPriorityAttr("high")}
-              onError={(e) => {
-                const target = e.target as HTMLImageElement;
-                target.parentElement!.style.display = 'none';
-              }}
+              className="object-cover opacity-60"
+              containerClassName="absolute inset-0"
+              priority
+              sizes="(max-width: 768px) 100vw, 1024px"
+              onError={() => setHeroFailed(true)}
             />
             <div className="absolute inset-0 bg-gradient-to-t from-background via-background/50 to-transparent" />
           </div>

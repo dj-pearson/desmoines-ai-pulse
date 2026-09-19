@@ -1,4 +1,5 @@
 import { useState, useEffect, lazy, Suspense } from "react";
+import { OptimizedImage } from "@/components/OptimizedImage";
 import { Helmet } from "react-helmet-async";
 import { format } from "date-fns";
 import {
@@ -769,16 +770,16 @@ export default function Index() {
               <div className="space-y-4">
                 {selectedEvent.image_url && (
                   <div className="overflow-hidden rounded-lg">
-                    <img
+                    {/* WEB-PERF-037. The onError set display:none on the img
+                        itself, leaving an empty rounded box. OptimizedImage
+                        renders its own "Image unavailable" panel in the same
+                        box, which keeps the layout and says why. */}
+                    <OptimizedImage
                       src={selectedEvent.image_url}
                       alt={selectedEvent.title}
-                      className="w-full h-48 sm:h-64 object-cover"
-                      loading="lazy"
-                      decoding="async"
-                      onError={(e) => {
-                        const target = e.target as HTMLImageElement;
-                        target.style.display = "none";
-                      }}
+                      className="object-cover"
+                      containerClassName="w-full h-48 sm:h-64"
+                      sizes="(max-width: 640px) 100vw, 512px"
                     />
                   </div>
                 )}

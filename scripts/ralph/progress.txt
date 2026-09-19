@@ -2445,3 +2445,46 @@ Learnings for future iterations
    anything, so it cannot distinguish a valid filter from a malformed one, and
    a malformed or() is a 400 on the hub. That belongs in the notes as a named
    first-load check, not as silence.
+
+================================================================================
+2026-09-19  WEB-PERF-037  The last raw database images in src/pages
+================================================================================
+
+AC1's evidence was already stale - the three files it names were converted under
+WEB-PERF-041 this morning. What was left was the same defect elsewhere: 13 raw
+<img> in src/pages bound to a database image column. 37 -> 24 raw tags.
+
+Those 13 were on WEB-PERF-041's "deliberately untouched" list, and that
+exclusion had expired without anyone noticing. It was an argument against
+`priority` (a rail can never be the LCP element), made while OptimizedImage
+still gated its <img> on an IntersectionObserver - so converting a rail meant
+dropping it from prerendered HTML. That gate came out four iterations ago.
+
+AC3 is a gate rather than a ratchet, for one case: a raw <img> in src/pages
+reading image_url and friends. That set is now empty and must stay empty, and a
+ratchet on zero is a gate with extra steps and a baseline file nobody reads.
+
+Learnings for future iterations
+
+1. A recorded exclusion has a reason, and the reason can expire. "Deliberately
+   not touched" listed nine call sites whose justification was a component
+   behaviour that a later iteration removed. When you change a component,
+   grep the notes for what was excluded BECAUSE of the old behaviour.
+
+2. A story's evidence is a snapshot. Two of three files named in AC1 had
+   already been fixed by a neighbouring story hours earlier. Re-verify before
+   planning, every time - this is the second story this session where the
+   named set was smaller than the title.
+
+3. Converting an onError that mutates the DOM is an upgrade, not a
+   translation. Two of these set display:none on a node React owns - one on
+   the img, one on its parent. Both become state, which is what the component
+   model expects and what survives a re-render.
+
+4. The smallest image was the biggest win. A 48px avatar was being served the
+   full-size original - the widest bytes-to-pixels ratio on the site - and it
+   was on the excluded list precisely because it is small.
+
+5. Gate where the set is empty, ratchet where it is not. Mixing them in one
+   script is fine and reads better than two scripts: the ratchet keeps the
+   long tail honest while the gate holds the line that has actually been won.

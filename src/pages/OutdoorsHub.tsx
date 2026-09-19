@@ -1,4 +1,5 @@
 import { useState } from 'react';
+import { OptimizedImage } from "@/components/OptimizedImage";
 import { Link } from 'react-router-dom';
 import Header from '@/components/Header';
 import Footer from '@/components/Footer';
@@ -358,7 +359,13 @@ export default function OutdoorsHub() {
                     <Card className="hover:border-primary transition-colors h-full">
                       {trail.image_url && (
                         <div className="h-40 overflow-hidden rounded-t-lg">
-                          <img src={trail.image_url} alt={trail.name} className="w-full h-full object-cover" loading="lazy" />
+                          <OptimizedImage
+                            src={trail.image_url}
+                            alt={trail.name}
+                            className="object-cover"
+                            containerClassName="w-full h-full"
+                            sizes="(max-width: 640px) 100vw, (max-width: 1024px) 50vw, 33vw"
+                          />
                         </div>
                       )}
                       <CardContent className="p-5">

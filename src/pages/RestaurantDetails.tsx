@@ -1,4 +1,5 @@
 import { useParams, Link } from "react-router-dom";
+import { OptimizedImage } from "@/components/OptimizedImage";
 import { Helmet } from "react-helmet-async";
 import { useQuery } from "@tanstack/react-query";
 import { supabase } from "@/integrations/supabase/client";
@@ -42,7 +43,6 @@ import { RestaurantMenuSection } from "@/components/RestaurantMenuSection";
 import { RatingSystem } from "@/components/RatingSystem";
 import { CollapsibleSection } from "@/components/CollapsibleSection";
 import { SpriteIcon } from "@/components/ui/SpriteIcon";
-import { fetchPriorityAttr } from '@/lib/fetchPriority';
 import { DETAIL_STALE_TIME, detailQueryKey } from "@/lib/detailQueryKeys";
 
 export default function RestaurantDetails() {
@@ -470,13 +470,13 @@ export default function RestaurantDetails() {
             {/* Hero Image / Gradient */}
             <div className="relative h-72 md:h-96 overflow-hidden">
               {showImage ? (
-                <img
+                <OptimizedImage
                   src={restaurant.image_url}
                   alt={`${restaurant.name} - ${restaurant.cuisine || "Restaurant"} in ${cityName}, Iowa`}
-                  className="absolute inset-0 w-full h-full object-cover"
-                  loading="eager"
-                  decoding="async"
-                  {...fetchPriorityAttr("high")}
+                  className="object-cover"
+                  containerClassName="absolute inset-0"
+                  priority
+                  sizes="(max-width: 768px) 100vw, 1024px"
                   onError={() => setImageError(true)}
                 />
               ) : (

@@ -1,4 +1,5 @@
 import { useParams, Link } from 'react-router-dom';
+import { OptimizedImage } from "@/components/OptimizedImage";
 import Header from '@/components/Header';
 import Footer from '@/components/Footer';
 import { Helmet } from 'react-helmet-async';
@@ -119,7 +120,18 @@ export default function BestOfCategory() {
 
                             {/* Image */}
                             {result.image_url ? (
-                              <img src={result.image_url} alt="" className="w-12 h-12 rounded object-cover flex-shrink-0" />
+                              // A 48px box served the full-size original, which is
+                              // the widest ratio of bytes-to-pixels on the site.
+                              // width/height give the transform a target rendition.
+                              <OptimizedImage
+                                src={result.image_url}
+                                alt=""
+                                width={96}
+                                height={96}
+                                className="object-cover"
+                                containerClassName="w-12 h-12 rounded flex-shrink-0"
+                                sizes="48px"
+                              />
                             ) : (
                               <div className="w-12 h-12 rounded bg-muted flex items-center justify-center flex-shrink-0 text-xl">
                                 {result.entity_type === 'custom' ? '✏️' : '🏠'}

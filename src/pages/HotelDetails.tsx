@@ -322,11 +322,12 @@ export default function HotelDetails() {
                   <div className="grid grid-cols-2 md:grid-cols-3 gap-3">
                     {hotel.gallery_urls.map((url, index) => (
                       <div key={index} className="aspect-video rounded-lg overflow-hidden">
-                        <img
+                        <OptimizedImage
                           src={url}
                           alt={`${hotel.name} photo ${index + 1}`}
-                          className="w-full h-full object-cover"
-                          loading="lazy"
+                          className="object-cover"
+                          containerClassName="w-full h-full"
+                          sizes="(max-width: 640px) 100vw, (max-width: 1024px) 50vw, 33vw"
                         />
                       </div>
                     ))}

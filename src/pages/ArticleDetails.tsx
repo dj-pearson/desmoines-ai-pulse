@@ -1,4 +1,5 @@
 import React, { useState, useEffect } from 'react';
+import { OptimizedImage } from "@/components/OptimizedImage";
 import { useParams, Link } from 'react-router-dom';
 import { useArticles } from '@/hooks/useArticles';
 import { Article } from '@/hooks/useArticles';
@@ -174,10 +175,13 @@ const ArticleDetails: React.FC = () => {
           {/* Featured Image */}
           {article.featured_image_url && (
             <div className="relative h-64 md:h-96 lg:h-[500px] overflow-hidden">
-              <img
+              <OptimizedImage
                 src={article.featured_image_url}
                 alt={article.title}
-                className="w-full h-full object-cover"
+                className="object-cover"
+                containerClassName="absolute inset-0"
+                priority
+                sizes="(max-width: 768px) 100vw, 1024px"
               />
               <div className="absolute inset-0 bg-black/30" />
               
