@@ -414,12 +414,48 @@ export function isHomepageShell(html: string, origin: string): boolean {
   return href === `${origin}/` || href === origin;
 }
 
+/**
+ * What the self-canonical rewrite does, as data (WEB-SEO-006).
+ *
+ * SPLIT OUT SO IT CAN BE TESTED. HTMLRewriter is a Cloudflare runtime API with
+ * no Node equivalent, so the half of this fix that produces the output has
+ * never been exercised - functions/__tests__/middleware-canonical.test.mjs
+ * covers the GATE in both directions and says so in its own header. That is
+ * the wrong half to leave uncovered: this fix has already been dead once, when
+ * it was gated on a 404 that single-page-app mode never returns, and nothing
+ * noticed for months.
+ *
+ * What can regress here is not HTMLRewriter's parsing, which is Cloudflare's
+ * to get right. It is the three decisions below: which elements, which
+ * attribute on each, and that the value is the REQUESTED url rather than the
+ * origin. Those are now assertable without a Workers runtime.
+ *
+ * THE LD+JSON REMOVAL IS NOT TIDINESS. The shell being served here is the
+ * homepage, so its JSON-LD describes the homepage - an Organization, a
+ * WebSite, the home ItemLists. Left in place at an entity URL it is
+ * structured data that contradicts the page, which is worse than none.
+ */
+export type SelfCanonicalRewrite =
+  | { selector: string; set: string; to: string }
+  | { selector: string; remove: true };
+
+export function selfCanonicalRewrites(pageUrl: string): SelfCanonicalRewrite[] {
+  return [
+    { selector: 'link[rel="canonical"]', set: "href", to: pageUrl },
+    { selector: 'meta[property="og:url"]', set: "content", to: pageUrl },
+    { selector: 'script[type="application/ld+json"]', remove: true },
+  ];
+}
+
 function withSelfCanonical(shell: Response, pageUrl: string): Response {
-  const rewritten = new HTMLRewriter()
-    .on('link[rel="canonical"]', new AttrSetter("href", pageUrl))
-    .on('meta[property="og:url"]', new AttrSetter("content", pageUrl))
-    .on('script[type="application/ld+json"]', new Remover())
-    .transform(shell);
+  let rewriter = new HTMLRewriter();
+  for (const rule of selfCanonicalRewrites(pageUrl)) {
+    rewriter =
+      "remove" in rule
+        ? rewriter.on(rule.selector, new Remover())
+        : rewriter.on(rule.selector, new AttrSetter(rule.set, rule.to));
+  }
+  const rewritten = rewriter.transform(shell);
 
   return new Response(rewritten.body, {
     status: shell.status,

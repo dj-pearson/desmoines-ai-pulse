@@ -2661,3 +2661,49 @@ Learnings for future iterations
    both directions; the rewrite needs HTMLRewriter, a Cloudflare runtime API
    with no Node equivalent, and its own test file says so. That is the gap to
    close, and it needs miniflare or a deployed assertion, not another unit test.
+
+================================================================================
+2026-09-19  A required CI step has been red on main, and nobody saw it
+================================================================================
+
+Went to close WEB-SEO-006's named coverage gap - the HTMLRewriter half of the
+self-canonical fix - and running the suite that guards it turned up something
+bigger: `npm run test:offline`, a required step in pr-checks.yml, reports
+21/22 and has done since commit 050b82d.
+
+retired-brand.test.mjs reads public/manifest.json. That commit ("fix(ui): make
+subscription tier badges readable and on-brand") consolidated the two PWA
+manifests: it deleted manifest.json, which nothing linked, and expanded
+site.webmanifest, which index.html does link. The consolidation was right; the
+test was never repointed, so it has been CRASHING on ENOENT rather than
+reporting a brand problem. A suite that dies before its assertions run is not a
+failing check, it is an absent one.
+
+Repointed, and it immediately found the drift it exists to find:
+site.webmanifest said name "Des Moines Insider: Events, Restaurants &
+Attractions" and short_name "Des Moines Insider", against brandConfig's
+'Des Moines Insider' and 'DM Insider'. Aligned to brandConfig, which the test's
+own comment names as the single declaration. Added an assertion that index.html
+links the manifest the suite checks, since the whole failure was the suite
+reading a file the app had stopped referencing.
+
+The original errand also landed: selfCanonicalRewrites() is split out of
+withSelfCanonical, so which elements, which attributes and "the requested URL,
+not the origin" are assertable without a Workers runtime. HTMLRewriter applying
+them is still Cloudflare's code and still uncovered, which is the honest limit.
+
+Learnings for future iterations
+
+1. Run the suite before trusting its name. This one is discovered by CI, wired
+   correctly, and had not executed a single assertion in weeks.
+
+2. A crash is not a failure. ENOENT in a test file reads as red in the same
+   place a wrong value does, and the difference is that the crash means no
+   assertion ran at all. Worth checking which kind of red you have.
+
+3. Deleting a file the app does not reference is safe; leaving a test pointed
+   at it is not. Grep for the path, not just for the import.
+
+4. Extract the decision, leave the platform call thin. selfCanonicalRewrites
+   returns three objects; withSelfCanonical loops over them. The part that
+   regresses is now testable in Node, and no dependency was added to get there.
