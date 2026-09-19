@@ -2317,3 +2317,49 @@ Learnings for future iterations
    live Supabase project, and the admin dark-mode panels, whose verification
    needs an admin session this container cannot make. Checking whether a story
    CAN close before starting it is worth the two minutes.
+
+================================================================================
+2026-09-19  WEB-SEO-028  One title source per page
+================================================================================
+
+The story said 74 pages fight over the title. Counted: 58 call the hook, and
+only 7 also render a head component. The other 50 are admin screens and auth
+callbacks with no head component - the case AC2 says to keep.
+
+Measured on the built site before changing anything, the hook wins every time,
+so those seven shipped two titles to two readers:
+
+  /neighborhoods/ankeny  <title> "Ankeny Guide"
+                         og:title "Ankeny Events, Restaurants & Attractions"
+  /events/ankeny         <title> "Events in Ankeny"
+                         og:title "Ankeny Events - Things To Do"
+
+Google takes the first, every social and AI crawler takes the second. After
+removing the hook from all seven, the two agree on each page, verified in
+Chromium. Also removed the hook's restore-on-unmount, which in a router
+overwrites the incoming page's title with the outgoing page's.
+
+Learnings for future iterations
+
+1. Measure the pages the fix does NOT touch. /submit-event was in the 50 that
+   legitimately keep the hook, and it rendered "Submit an Event | Des Moines
+   Insider | Des Moines Insider" because the call passed a title that already
+   carried the suffix. Nothing in the story pointed at it; it showed up
+   because I printed the titles of a control group.
+
+2. og:title versus <title> is the cheapest way to prove a title conflict. Both
+   are in the DOM, both come from different sources, and if they disagree the
+   page has two owners. Far more direct than reasoning about effect ordering.
+
+3. A previous story "fixed" this by making two sources agree by hand, with a
+   comment saying "keep the two in sync". That is a fix with a half-life, and
+   its comment is the evidence that it expired. When a comment instructs a
+   human to maintain an invariant, the invariant needs a check instead.
+
+4. AC3 asked for an output check that cannot exist. The captured HTML has one
+   title element and no record of what wrote it, so comparing it to "the title
+   the page declares" means reading the source anyway. Build the check that
+   can answer the question and say why it is not the one asked for.
+
+5. A story sized at 74 files was 7. Re-count before planning; the count in a
+   story is a snapshot from the day it was filed.

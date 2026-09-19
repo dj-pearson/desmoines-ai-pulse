@@ -4,7 +4,6 @@ import Header from "@/components/Header";
 import Footer from "@/components/Footer";
 import NeighborhoodGuide from "@/components/NeighborhoodGuide";
 import LocalSEO from "@/components/LocalSEO";
-import { useDocumentTitle } from "@/hooks/useDocumentTitle";
 import { Button } from "@/components/ui/button";
 import { Breadcrumbs } from "@/components/ui/breadcrumbs";
 import { ArrowLeft } from "lucide-react";
@@ -34,7 +33,6 @@ export default function NeighborhoodPage() {
   const { neighborhood: slug } = useParams<{ neighborhood: string }>();
   const neighborhood = findNeighborhood(slug);
 
-  useDocumentTitle(neighborhood ? `${neighborhood.name} Guide` : "Neighborhoods");
 
   const { data, isLoading, error, refetch } = useNeighborhoodContent(neighborhood);
 

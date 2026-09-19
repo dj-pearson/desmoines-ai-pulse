@@ -25,7 +25,6 @@ import { RouteCanonical } from "@/components/RouteCanonical";
 import { BRAND, getCanonicalUrl } from "@/lib/brandConfig";
 import { Star, ArrowLeft, Navigation, Heart, Globe, Info, Camera, Landmark, ChevronRight, TreePine } from "lucide-react";
 import { useState } from "react";
-import { useDocumentTitle } from "@/hooks/useDocumentTitle";
 import { useContentTracking } from "@/hooks/useContentTracking";
 import { StickyMobileCTA } from "@/components/StickyMobileCTA";
 import { LastUpdatedBadge } from "@/components/LastUpdatedBadge";
@@ -128,7 +127,6 @@ export default function AttractionDetails() {
     enabled: !!attraction,
   });
 
-  useDocumentTitle(attraction?.name || "Attraction Details");
 
   if (isLoading) {
     return (

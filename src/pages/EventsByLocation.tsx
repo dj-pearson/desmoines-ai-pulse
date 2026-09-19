@@ -13,7 +13,6 @@ import { SocialEventCard } from "@/components/SocialEventCard";
 import { useBatchEventSocial } from "@/hooks/useBatchEventSocial";
 import EnhancedLocalSEO from "@/components/EnhancedLocalSEO";
 import { EventListJsonLd } from "@/components/schema/EventListJsonLd";
-import { useDocumentTitle } from "@/hooks/useDocumentTitle";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Star } from "lucide-react";
 import { format, parseISO, isAfter } from "date-fns";
@@ -46,7 +45,6 @@ export default function EventsByLocation() {
 
   const suburbInfo = slug ? SUBURBS[slug as keyof typeof SUBURBS] : null;
 
-  useDocumentTitle(suburbInfo?.name ? `Events in ${suburbInfo.name}` : "Events by Location");
 
   interface EventItem {
     id: string;

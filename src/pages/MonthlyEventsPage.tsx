@@ -7,7 +7,6 @@ import EventCard from "@/components/EventCard";
 import EnhancedLocalSEO from "@/components/EnhancedLocalSEO";
 import { EventListJsonLd } from "@/components/schema/EventListJsonLd";
 import { FAQSection } from "@/components/FAQSection";
-import { useDocumentTitle } from "@/hooks/useDocumentTitle";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
@@ -100,7 +99,6 @@ export default function MonthlyEventsPage() {
     [allEvents]
   );
 
-  useDocumentTitle(isValidDate ? `${format(targetDate, "MMMM yyyy")} Events` : "Monthly Events");
 
   // Check validity AFTER hooks
   if (!isValidDate) {

@@ -9,7 +9,6 @@ import { Badge } from "@/components/ui/badge";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Skeleton } from "@/components/ui/skeleton";
 import { Phone, Globe, Mail, Star, ChevronRight, ArrowLeft, Navigation } from "lucide-react";
-import { useDocumentTitle } from "@/hooks/useDocumentTitle";
 import AffiliateDisclosureBanner from "@/components/AffiliateDisclosureBanner";
 import Header from "@/components/Header";
 import Footer from "@/components/Footer";
@@ -55,7 +54,6 @@ export default function HotelDetails() {
   // is the fallback, and today it is the one that is actually populated.
   const bookingUrl = hotel?.affiliate_url ?? hotel?.website ?? undefined;
 
-  useDocumentTitle(hotel ? `${hotel.name} - Stay in Des Moines` : "Hotel Details");
 
   if (isLoading) {
     return (

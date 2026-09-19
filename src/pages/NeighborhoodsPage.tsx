@@ -7,15 +7,15 @@ import Footer from "@/components/Footer";
 import LocalSEO from "@/components/LocalSEO";
 import { FAQSection } from "@/components/FAQSection";
 import { Breadcrumbs } from "@/components/ui/breadcrumbs";
-import { useDocumentTitle } from "@/hooks/useDocumentTitle";
 import { SpriteIcon } from "@/components/ui/SpriteIcon";
 import { NEIGHBORHOODS } from "@/lib/neighborhoods";
 
 export default function NeighborhoodsPage() {
-  // WEB-SEO-002: useDocumentTitle runs after LocalSEO's Helmet and was winning,
-  // so the shipped title was the bare word "Neighborhoods" rather than the
-  // keyword-bearing pageTitle passed to LocalSEO below. Keep the two in sync.
-  useDocumentTitle("Des Moines Neighborhoods Guide");
+  // WEB-SEO-028: the useDocumentTitle call that used to be here is GONE, and
+  // the instruction it carried - "keep the two in sync" - is why. WEB-SEO-002
+  // found the same conflict on this page and resolved it by making two title
+  // sources agree by hand, which lasts exactly until one of them is edited.
+  // LocalSEO's pageTitle below is now the only title this page declares.
 
   // WEB-SEO-036. This page used to carry its own eight-entry list, and the
   // detail page, the guide component and prerender-routes.mjs each carried a

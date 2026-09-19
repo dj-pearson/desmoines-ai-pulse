@@ -26,7 +26,6 @@ import { BRAND, getCanonicalUrl } from "@/lib/brandConfig";
 import { Helmet } from "react-helmet-async";
 import { Star, ArrowLeft, Navigation, Heart, Check, Info, Zap, ChevronRight, TreePine, Baby, Shield } from "lucide-react";
 import { useState } from "react";
-import { useDocumentTitle } from "@/hooks/useDocumentTitle";
 import { SpriteIcon } from "@/components/ui/SpriteIcon";
 import { OptimizedImage } from "@/components/OptimizedImage";
 import { DETAIL_STALE_TIME, detailQueryKey } from "@/lib/detailQueryKeys";
@@ -86,7 +85,6 @@ export default function PlaygroundDetails() {
     enabled: !!playground,
   });
 
-  useDocumentTitle(playground?.name || "Playground Details");
 
   if (isLoading) {
     return (
