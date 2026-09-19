@@ -17,6 +17,7 @@ import { createClient } from "https://esm.sh/@supabase/supabase-js@2.45.0";
 import { handleCors, getCorsHeaders, isOriginAllowed } from "../_shared/cors.ts";
 import { checkRateLimit, addRateLimitHeaders } from "../_shared/rateLimit.ts";
 import { trialPeriodDays } from "../_shared/trialEligibility.ts";
+import { decideCheckout } from "./decision.ts";
 
 serve(async (req) => {
   // Handle CORS preflight
@@ -211,46 +212,25 @@ serve(async (req) => {
       );
     }
 
-    const requestedRank = Number(plan.sort_order ?? 0);
-    const blockingStoreSub = (storeSubscriptions ?? []).find((row) => {
-      const rank = Number(
-        (row as { subscription_plans?: { sort_order?: number } }).subscription_plans?.sort_order ?? 0,
-      );
-      return rank >= requestedRank;
+    // WEB-CI-029 AC3. The branch order - store first, then cancel-at-period-end,
+    // then same-plan, then upgrade - is the behaviour, and it now lives in a
+    // pure module so it can be tested without Stripe or a database. See
+    // ./decision.ts for why each check is where it is.
+    const outcome = decideCheckout({
+      requestedPlanId: planId,
+      requestedSortOrder: Number(plan.sort_order ?? 0),
+      webSubscription,
+      storeSubscriptions,
     });
 
-    if (blockingStoreSub) {
-      const where = blockingStoreSub.platform === "ios" ? "the App Store" : "Google Play";
+    if (outcome.kind === "refuse") {
       return new Response(
         JSON.stringify({
-          error:
-            `You already subscribe through ${where}. Manage or change that subscription there -- buying here would charge you twice.`,
-          code: "store_subscription_active",
-          platform: blockingStoreSub.platform,
+          error: outcome.error,
+          code: outcome.code,
+          ...(outcome.platform ? { platform: outcome.platform } : {}),
         }),
-        { status: 409, headers: { ...corsHeaders, "Content-Type": "application/json" } }
-      );
-    }
-
-    // PROD-SUB-005: a subscription set to cancel at period end should be
-    // RESUMED from the billing portal, not replaced by a second one.
-    if (webSubscription?.cancel_at_period_end) {
-      return new Response(
-        JSON.stringify({
-          error:
-            "Your subscription is set to cancel at the end of the period. Please resume it from Manage Subscription instead of buying a new one.",
-          code: "resume_required",
-        }),
-        { status: 409, headers: { ...corsHeaders, "Content-Type": "application/json" } }
-      );
-    }
-    if (webSubscription && webSubscription.plan_id === planId) {
-      return new Response(
-        JSON.stringify({
-          error: "You already have an active subscription to this plan.",
-          code: "already_subscribed",
-        }),
-        { status: 409, headers: { ...corsHeaders, "Content-Type": "application/json" } }
+        { status: outcome.status, headers: { ...corsHeaders, "Content-Type": "application/json" } }
       );
     }
 
@@ -262,10 +242,10 @@ serve(async (req) => {
     // Changing the price on the existing subscription is the operation Stripe
     // provides for this, and create_prorations credits the unused part of the
     // old tier against the new one.
-    if (webSubscription?.stripe_subscription_id) {
+    if (outcome.kind === "change_plan") {
       try {
         const current = await stripe.subscriptions.retrieve(
-          webSubscription.stripe_subscription_id
+          outcome.stripeSubscriptionId
         );
         const itemId = current.items?.data?.[0]?.id;
         if (!itemId) throw new Error("subscription has no items to update");
@@ -276,7 +256,7 @@ serve(async (req) => {
         try {
           const preview = await stripe.invoices.retrieveUpcoming({
             customer: typeof current.customer === "string" ? current.customer : current.customer?.id,
-            subscription: webSubscription.stripe_subscription_id,
+            subscription: outcome.stripeSubscriptionId,
             subscription_items: [{ id: itemId, price: stripePriceId }],
             subscription_proration_behavior: "create_prorations",
           });
@@ -288,7 +268,7 @@ serve(async (req) => {
         }
 
         const updated = await stripe.subscriptions.update(
-          webSubscription.stripe_subscription_id,
+          outcome.stripeSubscriptionId,
           {
             items: [{ id: itemId, price: stripePriceId }],
             proration_behavior: "create_prorations",
@@ -296,7 +276,7 @@ serve(async (req) => {
               userId: user.id,
               planId: planId,
               planName: plan.name,
-              changedFromPlanId: webSubscription.plan_id ?? "",
+              changedFromPlanId: webSubscription?.plan_id ?? "",
             },
           }
         );
