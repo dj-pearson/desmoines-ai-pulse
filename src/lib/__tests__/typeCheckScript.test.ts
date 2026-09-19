@@ -42,6 +42,19 @@ describe("the type-check script", () => {
     expect(pkg.scripts.validate).toContain("npm run type-check");
   });
 
+  it("is still the job that type-checks src/ in CI", () => {
+    // The validate job in pr-checks.yml deliberately does NOT run
+    // `npm run type-check` - the app-type-ratchet job runs it in parallel
+    // instead, so the answer is not on the critical path. That makes the job
+    // load-bearing on its own: delete it and src/ is unchecked in CI again,
+    // with every other check still green. WEB-CI-031.
+    const wf = readFileSync(".github/workflows/pr-checks.yml", "utf8");
+    const lines = wf.split("\n").filter((l) => !l.trim().startsWith("#"));
+    const body = lines.join("\n");
+    expect(body).toMatch(/^ {2}app-type-ratchet:$/m);
+    expect(body).toContain("npm run type-check:app:ratchet");
+  });
+
   it("keeps the root tsconfig's shape on the record", () => {
     // If someone gives the root tsconfig real `files`/`include`, the reason
     // this test exists changes and it should be revisited rather than deleted.

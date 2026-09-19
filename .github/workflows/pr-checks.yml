@@ -475,22 +475,23 @@ jobs:
       - name: CSP inline-script hashes
         run: node scripts/check-csp-hashes.mjs
 
-  # WEB-CI-023. `npm run type-check` above runs `tsc --noEmit` against the root
-  # tsconfig, which is `"files": []` plus project references — so it compiles
-  # ZERO files and has always exited 0. Two P1 crashes shipped straight through
-  # it in one week: /stay called getCanonicalUrl with no import (TS2304), and
-  # useSocialFeatures returned a bare `loading` after an unused-var autofix
-  # renamed the binding (TS2552). Both are one-line errors that
-  # `tsc -p tsconfig.app.json` reports.
+  # WEB-CI-023. THIS JOB IS THE ONLY THING TYPE-CHECKING src/ IN CI. The
+  # validate job above deliberately does not run `npm run type-check` (see the
+  # comment at its top), so deleting this job returns src/ to what it was:
+  # unchecked. `tsc --noEmit` against the root tsconfig - `"files": []` plus
+  # project references - compiles ZERO files and exits 0 on anything, and two
+  # P1 crashes shipped straight through it in one week: /stay called
+  # getCanonicalUrl with no import (TS2304), and useSocialFeatures returned a
+  # bare `loading` after an unused-var autofix renamed the binding (TS2552).
+  # src/lib/__tests__/typeCheckScript.test.ts asserts this job still exists.
   #
-  # It cannot gate on zero: the app project has 400 pre-existing errors, mostly
+  # It cannot gate on zero: the app project has 139 pre-existing errors, mostly
   # PostgREST generic-instantiation noise. So it ratchets per-file, exactly like
-  # the strict one — a file that gets worse, or a new file that starts erroring,
+  # the strict one - a file that gets worse, or a new file that starts erroring,
   # fails the build.
   #
-  # Its own job rather than a step in `validate`: it must not sit in front of
-  # the build. Deliberately NOT in `npm run validate` for the same reason -
-  # local validate has to stay usable.
+  # Its own job rather than a step in `validate`: at 2m45s it must not sit in
+  # front of the build, and the validate job's steps answer in seconds.
   #
   # IT COST 21m12s AT ~5.2GB RSS UNTIL 2026-09-19, and that is why WEB-CI-031
   # was filed and why a duplicate nightly workflow existed. The cause was not
