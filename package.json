@@ -154,7 +154,8 @@
     "check-supabase-await": "node scripts/check-supabase-await.mjs",
     "check-identity-reads": "node scripts/check-identity-read-policies.mjs",
     "check-ui-craft": "node scripts/check-ui-craft.mjs",
-    "check-ui-craft:update": "node scripts/check-ui-craft.mjs --write"
+    "check-ui-craft:update": "node scripts/check-ui-craft.mjs --write",
+    "measure-vitals": "node scripts/measure-vitals.mjs"
   },
   "dependencies": {
     "@dnd-kit/core": "^6.3.1",

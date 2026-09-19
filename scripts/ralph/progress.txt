@@ -2017,3 +2017,64 @@ Learnings for future iterations
    lives. Two of six sites had it on the img with no height on the parent, so
    moving the tag without moving the class would have collapsed the box. The
    other four were already in a fixed box and needed nothing.
+
+================================================================================
+2026-09-19  WEB-SEO-032 AC4 + WEB-PERF-020 AC2/AC3  Core Web Vitals, measured
+================================================================================
+
+Two stories closed with one measurement rig. Both had sat open on "no data in
+this container": every Supabase query fails against the placeholder host, so
+/events and /restaurants render an error branch, and an LCP taken on a page
+whose cards never arrive is not that page's LCP. A Playwright route handler
+answers the queries with twelve fixture rows. That was the whole blocker.
+
+scripts/measure-vitals.mjs, wired as `npm run measure-vitals`: production build,
+vite preview on 127.0.0.1:4173, Chromium from /opt/pw-browsers, 4x CPU throttle
+and Slow 4G over CDP, 390x844 iPhone profile plus a 1280x900 desktop pass, and
+two consent states because a first visit and a returning visit are different
+pages.
+
+The headline result is a negative one, and it is the useful kind. THE LCP
+ELEMENT IS TEXT IN ALL TWELVE RUNS - a heading or a hero paragraph, never a card
+image. A before/after build with every image reverted to lazy and unhinted moves
+LCP by less than run-to-run noise (mobile returning /restaurants: 4768ms before,
+4764ms after). So WEB-SEO-032's eager-first-three work, which the AC assumed
+would show up here, cannot: at 390x844 the first card is below the fold.
+
+  mobile  returning  /             5544ms LCP, 1164ms FCP, CLS 0,     TBT  740ms
+  mobile  returning  /restaurants  4764ms LCP, 1140ms FCP, CLS 0.001, TBT  605ms
+  mobile  returning  /events       5224ms LCP, 1148ms FCP, CLS 0.006, TBT  962ms
+  mobile  first-vis  all three     ~1.9s LCP, and the element is the COOKIE BANNER
+
+Learnings for future iterations
+
+1. "Blocked on data" is usually blocked on a fixture. Two stories sat open for
+   weeks because the container has no Supabase credentials. page.route() is
+   twenty lines and serves whatever shape the page reads. Before recording an
+   AC as blocked on an environment, ask what the page actually needs - it is
+   rows, not a database.
+
+2. Measure WHICH element the browser picked, not just the number. The LCP
+   figure alone would have looked like "5.2s, the images must be slow" and the
+   next iteration would have optimised images. `entry.element` said text, every
+   time, and that redirected the whole conclusion to the client-render gap.
+
+3. Run both consent states. The cookie banner is the LCP element on every first
+   visit at ~1.9s, while the content behind it takes ~5s. Field data is mostly
+   first visits, so CrUX will report the banner. A green field LCP on this site
+   is not evidence that the content is fast - and I would have recorded exactly
+   that if I had measured one state.
+
+4. getEntriesByType does NOT return largest-contentful-paint, layout-shift or
+   longtask entries. Only a PerformanceObserver sees them, and it has to be
+   registered before any app code runs - page.addInitScript. My first run
+   reported LCP null on all three routes and looked like a broken page.
+
+5. The before/after that costs one extra build is worth it even when you are
+   confident. I expected no LCP movement and got none, but "measured, within
+   noise" is a different claim from "reasoned, should be zero", and the AC
+   asked for the first.
+
+6. Promote the throwaway rig. This one took most of an iteration to build and
+   is now three commands in a committed script. The next Core Web Vitals
+   question against this app costs a minute.
