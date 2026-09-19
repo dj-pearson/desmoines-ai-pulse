@@ -330,3 +330,78 @@ export function getRestaurantOpenStatus(opening: string | null | undefined, now?
 
   return { status: 'closed', isOpen: false, closingSoon: false };
 }
+
+/**
+ * The stored shape of restaurants.hours_json (WEB-BE-045).
+ *
+ * Written by supabase/functions/_shared/placeHours.ts. Declared again here
+ * rather than imported: that module is Deno source for the edge functions, and
+ * this one is in the browser bundle. The Deno test place-hours.test.ts pins the
+ * writer's shape; this reader treats every field as untrusted anyway, because
+ * the row could predate any version of it.
+ */
+export interface StoredOpeningHours {
+  version?: number;
+  timeZone?: string;
+  periods?: Array<{
+    open?: { day?: number; hour?: number; minute?: number };
+    close?: { day?: number; hour?: number; minute?: number };
+  }>;
+  weekdayDescriptions?: string[];
+}
+
+/**
+ * schema.org OpeningHoursSpecification from the STRUCTURED hours, or null.
+ *
+ * Preferred over the free-text parser wherever a row has this column, because
+ * the text parser is a best effort over strings like "Mon-Sat 11am-10pm, Sun
+ * 12-9pm" and this is what Google returned. Null when there is nothing usable,
+ * so the caller omits the node rather than publishing invented hours - the
+ * WEB-SEO-024 rule.
+ *
+ * A PERIOD WITH NO `close` IS DROPPED, not published as open-ended. Places uses
+ * that for a venue open 24 hours, and the honest schema.org form for it is
+ * opens 00:00 / closes 23:59 - which is a claim about the venue rather than a
+ * transcription, so it waits for a row that actually has one.
+ *
+ * A period that crosses midnight (open Friday 20:00, close Saturday 02:00) is
+ * emitted against the OPENING day. schema.org has no cross-day form, and
+ * splitting it into two entries would advertise Saturday 00:00-02:00 as a
+ * separate opening, which reads as "open Saturday morning".
+ */
+export function getOpeningHoursSpecificationFromJson(
+  hours: StoredOpeningHours | null | undefined
+): OpeningHoursSpecification[] | null {
+  const periods = hours?.periods;
+  if (!Array.isArray(periods) || periods.length === 0) return null;
+
+  const specs: OpeningHoursSpecification[] = [];
+  for (const period of periods) {
+    const open = period?.open;
+    const close = period?.close;
+    if (!open || typeof open.day !== 'number' || typeof open.hour !== 'number') continue;
+    if (!close || typeof close.hour !== 'number') continue;
+    const day = SCHEMA_DAY_NAMES[open.day];
+    if (!day) continue;
+    specs.push({
+      '@type': 'OpeningHoursSpecification',
+      dayOfWeek: [day],
+      opens: minutesToClock(open.hour * 60 + (open.minute ?? 0)),
+      closes: minutesToClock(close.hour * 60 + (close.minute ?? 0)),
+    });
+  }
+  return specs.length > 0 ? specs : null;
+}
+
+/**
+ * The structured hours when the row has them, the free text otherwise.
+ *
+ * One entry point so a caller cannot accidentally publish the weaker source
+ * while the better one sits in the same row (WEB-BE-045 AC4).
+ */
+export function resolveOpeningHoursSpecification(
+  hoursJson: StoredOpeningHours | null | undefined,
+  opening: string | null | undefined
+): OpeningHoursSpecification[] | null {
+  return getOpeningHoursSpecificationFromJson(hoursJson) ?? getOpeningHoursSpecification(opening);
+}

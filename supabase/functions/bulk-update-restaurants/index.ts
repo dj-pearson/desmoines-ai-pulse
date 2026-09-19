@@ -8,6 +8,8 @@ import { fetchWithTimeout } from '../_shared/fetchWithTimeout.ts';
 import { isUnknownColumnError } from '../_shared/postgrestErrors.ts'
 import { runJob } from '../_shared/jobRunner.ts'
 import { isPlacesMediaUrl, GOOGLE_ATTRIBUTION_TEXT } from '../_shared/placesPhoto.ts'
+import { normalizeBusinessStatus, normalizeOpeningHours } from '../_shared/placeHours.ts'
+import type { BusinessStatus, StoredHours } from '../_shared/placeHours.ts'
 
 interface GooglePlaceDetails {
   id: string;
@@ -35,6 +37,10 @@ interface GooglePlaceDetails {
   /** WEB-FEAT-024: real Place fields, per the Places API (New) reference. */
   reservable?: boolean;
   googleMapsUri?: string;
+  /** WEB-BE-045. Requested in the field mask; shape validated by
+   *  _shared/placeHours.ts rather than trusted, since this is a network
+   *  response typed by hand. */
+  regularOpeningHours?: unknown;
 }
 
 interface RestaurantUpdate {
@@ -59,6 +65,11 @@ interface RestaurantUpdate {
   places_photo_name?: string;
   places_photo_attribution?: string;
   places_photo_seen_at?: string;
+  /** WEB-BE-045. Added by migration 20260919000009; guarded the same way as
+   *  the two sets above. business_status is one of three literal values or
+   *  absent - never a raw pass-through of whatever Places returned. */
+  business_status?: BusinessStatus;
+  hours_json?: StoredHours;
   enhanced: string;
   updated_at: string;
 }
@@ -250,7 +261,10 @@ serve(async (req) => {
             method: 'GET',
             headers: {
               'X-Goog-Api-Key': googleApiKey,
-              'X-Goog-FieldMask': 'id,displayName,formattedAddress,rating,editorialSummary,nationalPhoneNumber,websiteUri,photos,photos.authorAttributions,types,businessStatus,reservable,googleMapsUri'
+              // regularOpeningHours is new (WEB-BE-045). businessStatus was already
+              // here and its answer was thrown away - the mask asked for it and
+              // nothing wrote it, which is why no restaurant was ever marked closed.
+              'X-Goog-FieldMask': 'id,displayName,formattedAddress,rating,editorialSummary,nationalPhoneNumber,websiteUri,photos,photos.authorAttributions,types,businessStatus,regularOpeningHours,reservable,googleMapsUri'
             }
           })
 
@@ -408,6 +422,22 @@ serve(async (req) => {
             }
           }
 
+          // WEB-BE-045. Both go through the normalizer rather than straight
+          // from the response: an unrecognised status is dropped instead of
+          // stored, because the column is filtered on and a value nobody
+          // anticipated must not be read as a closure OR as an operating
+          // venue; and hours are null rather than an empty periods array,
+          // because `{periods: []}` reads as "closed all week" and means
+          // "Google did not answer".
+          const businessStatus = normalizeBusinessStatus(placeDetails.businessStatus)
+          if (businessStatus) {
+            update.business_status = businessStatus
+          }
+          const hours = normalizeOpeningHours(placeDetails.regularOpeningHours)
+          if (hours) {
+            update.hours_json = hours
+          }
+
           // A belt-and-braces stop on the defect above: nothing in this
           // function may put a Places media URL into image_url again, however
           // it got there.
@@ -459,7 +489,7 @@ serve(async (req) => {
         // new columns and nothing else.
         if (updateError && isUnknownColumnError(updateError)) {
           console.warn(
-            `Reservation or Places-provenance columns not present yet; retrying ${update.name} without them`
+            `Reservation, Places-provenance or hours columns not present yet; retrying ${update.name} without them`
           )
           const {
             reservable,
@@ -467,6 +497,12 @@ serve(async (req) => {
             places_photo_name,
             places_photo_attribution,
             places_photo_seen_at,
+            // WEB-BE-045: added by 20260919000009 and stripped here for the
+            // same reason as the rest. Missing them costs hours and a closure
+            // flag; leaving them in when the migration has not landed costs
+            // the whole update.
+            business_status,
+            hours_json,
             ...legacyUpdate
           } = update
           const retry = await supabase

@@ -172,6 +172,14 @@ jobs:
       # `getMinutes() || 30`, turning every on-the-hour time into :30 and
       # midnight into 7 PM. Pins all of it.
       - run: deno test --allow-read supabase/functions/_tests/no-time-marker.test.ts
+      # WEB-BE-045. Nothing ever marked a restaurant closed: the Places field
+      # mask asked for businessStatus and the answer was thrown away, and there
+      # was no hours column at all. The normalizer decides two things a query
+      # then depends on - an unrecognised status is dropped rather than stored,
+      # so it cannot be read as a closure or as an operating venue; and hours
+      # are null rather than an empty periods array, because `{periods: []}`
+      # reads as "closed all week" and means "Google did not answer".
+      - run: deno test --allow-read supabase/functions/_tests/place-hours.test.ts
       # WEB-BE-039. firecrawl-scraper matched a scraped venue with `includes`
       # either way, guarded by `searchText.length >= 5 || venueLower.length >= 5`
       # - an OR whose right-hand side is about the KNOWN venue, so it always

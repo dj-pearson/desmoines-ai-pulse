@@ -27,7 +27,11 @@ import { qualifyTitleWithCity } from "@/lib/seoTitleLocation";
 import { Phone, Star, DollarSign, ArrowLeft, Navigation, Heart, MessageCircle, Award, Utensils, Globe, Check, BookOpen, Info, Map, CalendarCheck } from "lucide-react";
 import { useState, useMemo } from "react";
 import { useContentTracking } from "@/hooks/useContentTracking";
-import { getRestaurantOpenStatus, getOpeningHoursSpecification } from "@/lib/restaurantHours";
+import {
+  getRestaurantOpenStatus,
+  resolveOpeningHoursSpecification,
+  type StoredOpeningHours,
+} from "@/lib/restaurantHours";
 import { LazyLocationMap } from "@/components/LazyLocationMap";
 import { getDirectionsUrl } from "@/lib/directions";
 import { resolveReservation } from "@/lib/reservations";
@@ -295,10 +299,23 @@ export default function RestaurantDetails() {
           },
         }
       : {}),
-    // Derived from the same parser as the visible open/closed badge; omitted
-    // entirely when the free-form hours can't be parsed (no fabricated hours).
-    ...(getOpeningHoursSpecification(restaurant.opening)
-      ? { openingHoursSpecification: getOpeningHoursSpecification(restaurant.opening) }
+    // WEB-BE-045: hours_json first, the free-text `opening` parser second.
+    // The structured column is what Google returned; the text parser is a best
+    // effort over strings nobody writes. Omitted entirely when neither yields
+    // anything, because inventing hours is the WEB-SEO-024 rule this whole
+    // object is built around. Note the column is absent until migration
+    // 20260919000009 is applied - select('*') makes that undefined rather than
+    // an error, and the text path carries the page until then.
+    ...(resolveOpeningHoursSpecification(
+      (restaurant as { hours_json?: StoredOpeningHours | null }).hours_json,
+      restaurant.opening,
+    )
+      ? {
+          openingHoursSpecification: resolveOpeningHoursSpecification(
+            (restaurant as { hours_json?: StoredOpeningHours | null }).hours_json,
+            restaurant.opening,
+          ),
+        }
       : {}),
     // paymentAccepted IS GONE (WEB-SEO-024). No column backs it, and it claimed
     // card acceptance for every restaurant in the set including the cash-only
