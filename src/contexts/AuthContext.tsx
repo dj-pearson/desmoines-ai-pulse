@@ -9,6 +9,7 @@ import { User, Session, AuthChangeEvent } from "@supabase/supabase-js";
 // dompurify onto the critical path (WEB-PERF-020).
 import { isValidRedirectUrl } from "@/lib/redirectSafety";
 import { createLogger } from '@/lib/logger';
+import { DEFAULT_ROLE, highestRole, isFullAdmin, isUserRole, type UserRole } from '@/lib/roles';
 
 const log = createLogger('AuthContext');
 
@@ -18,6 +19,13 @@ interface AuthState {
   isLoading: boolean;
   isAuthenticated: boolean;
   isAdmin: boolean;
+  /**
+   * The strongest role the user holds (WEB-AUTH-010). `isAdmin` is derived
+   * from it via isFullAdmin, so the nav and the route guard cannot disagree -
+   * they used to, because useAdminAuth resolved the role separately and ranked
+   * by created_at instead of by precedence.
+   */
+  userRole: UserRole;
   isAdminLoading: boolean; // True while admin check is in progress
   requiresMFA: boolean;
   mfaFactorId: string | null;
@@ -76,6 +84,8 @@ export interface AuthFlags {
   isLoading: boolean;
   isAuthenticated: boolean;
   isAdmin: boolean;
+  /** WEB-AUTH-010: the strongest role held; isAdmin is isFullAdmin(userRole). */
+  userRole: UserRole;
   isAdminLoading: boolean;
   requiresMFA: boolean;
   isPasswordRecovery: boolean;
@@ -86,10 +96,12 @@ const AuthStateContext = createContext<AuthState | undefined>(undefined);
 const AuthFlagsContext = createContext<AuthFlags | undefined>(undefined);
 const AuthActionsContext = createContext<AuthActions | undefined>(undefined);
 
-// Cache for admin status
-const adminStatusCache = new Map<string, { isAdmin: boolean; timestamp: number }>();
+// Cache for the resolved role. WEB-AUTH-010: this held a boolean, which is
+// why a second consumer (useAdminAuth) had to re-query for the role name and
+// could reach a different answer.
+const roleCache = new Map<string, { role: UserRole; timestamp: number }>();
 const CACHE_TTL = 5 * 60 * 1000;
-const pendingChecks = new Map<string, Promise<boolean>>();
+const pendingChecks = new Map<string, Promise<UserRole | null>>();
 
 /**
  * Synchronous read of the admin cache. Returns null when there is no fresh
@@ -97,10 +109,10 @@ const pendingChecks = new Map<string, Promise<boolean>>();
  * entering the `isAdminLoading` state (which unmounts ProtectedRoute
  * subtrees). See handleAuthChange. (WEB-UX-008)
  */
-function readCachedAdmin(userId: string): boolean | null {
-  const cached = adminStatusCache.get(userId);
+function readCachedRole(userId: string): UserRole | null {
+  const cached = roleCache.get(userId);
   if (cached && Date.now() - cached.timestamp < CACHE_TTL) {
-    return cached.isAdmin;
+    return cached.role;
   }
   return null;
 }
@@ -187,6 +199,7 @@ export function AuthProvider({ children }: { children: ReactNode }) {
     isLoading: true,
     isAuthenticated: false,
     isAdmin: false,
+    userRole: DEFAULT_ROLE,
     isAdminLoading: false,
     requiresMFA: false,
     mfaFactorId: null,
@@ -202,12 +215,14 @@ export function AuthProvider({ children }: { children: ReactNode }) {
   // already hold. (WEB-UX-008 — see handleAuthChange.)
   const resolvedAdminForUserRef = useRef<string | null>(null);
 
-  // Check admin status with caching
-  const checkIsAdmin = useCallback(async (user: User): Promise<boolean> => {
-    const cached = adminStatusCache.get(user.id);
-    if (cached && (Date.now() - cached.timestamp) < CACHE_TTL) {
-      return cached.isAdmin;
-    }
+  /**
+   * The user's strongest role, cached. Returns null when the read FAILED, which
+   * is not the same as `'user'`: callers deny access on either, but only the
+   * real answer is cached (WEB-CI-032).
+   */
+  const resolveRole = useCallback(async (user: User): Promise<UserRole | null> => {
+    const cached = readCachedRole(user.id);
+    if (cached !== null) return cached;
 
     const pending = pendingChecks.get(user.id);
     if (pending) return pending;
@@ -226,21 +241,46 @@ export function AuthProvider({ children }: { children: ReactNode }) {
         // A failure is not an answer, so it is not cached. `false` is still
         // returned - denying admin on an unknown is the safe direction - but
         // the next call retries instead of reading back a guess.
+        // WEB-AUTH-010: ALL rows, ranked by precedence. This was
+        // .maybeSingle(), which resolves with PGRST116 when a user holds two
+        // role rows - so the handler above logged it and returned false, and
+        // an extra row silently revoked admin. A role row is a grant; holding
+        // two means holding both, and the effective role is the strongest.
         const { data: rolesData, error: rolesError } = await supabase
           .from("user_roles")
           .select("role")
-          .eq("user_id", user.id)
-          .maybeSingle();
+          .eq("user_id", user.id);
 
         if (rolesError) {
-          log.error('checkIsAdmin', 'Role read failed; not caching', { error: rolesError });
-          return false;
+          log.error('resolveRole', 'Role read failed; not caching', { error: rolesError });
+          return null;
         }
 
-        if (rolesData?.role) {
-          const isAdmin = rolesData.role === 'admin' || rolesData.role === 'root_admin';
-          adminStatusCache.set(user.id, { isAdmin, timestamp: Date.now() });
-          return isAdmin;
+        if (rolesData && rolesData.length > 0) {
+          const role = highestRole(rolesData);
+          roleCache.set(user.id, { role, timestamp: Date.now() });
+          return role;
+        }
+
+        // OAUTH ROLE LINKING, moved here from useAdminAuth (WEB-AUTH-010).
+        //
+        // A user who signs in with Google gets a NEW auth user id, so their
+        // user_roles rows - keyed by the id of the account they made with a
+        // password - do not match. sync_oauth_user_role links them by email.
+        // useAdminAuth called it and AuthContext did not, which is a second way
+        // the two disagreed: an OAuth admin got the nav and then Access Denied.
+        //
+        // Consulted before the profiles fallback, matching the order
+        // useAdminAuth used, so no user loses a role they had yesterday. An
+        // error is ignored rather than fatal: the RPC is a best-effort link,
+        // and a user with no linkable row is the normal case.
+        const { data: syncedRole, error: syncError } = await supabase.rpc(
+          'sync_oauth_user_role',
+          { p_user_id: user.id },
+        );
+        if (!syncError && isUserRole(syncedRole) && syncedRole !== DEFAULT_ROLE) {
+          roleCache.set(user.id, { role: syncedRole, timestamp: Date.now() });
+          return syncedRole;
         }
 
         const { data: profileData, error: profileError } = await supabase
@@ -250,23 +290,23 @@ export function AuthProvider({ children }: { children: ReactNode }) {
           .maybeSingle();
 
         if (profileError) {
-          log.error('checkIsAdmin', 'Profile role read failed; not caching', { error: profileError });
-          return false;
+          log.error('resolveRole', 'Profile role read failed; not caching', { error: profileError });
+          return null;
         }
 
         if (profileData?.user_role) {
-          const isAdmin = profileData.user_role === 'admin' || profileData.user_role === 'root_admin';
-          adminStatusCache.set(user.id, { isAdmin, timestamp: Date.now() });
-          return isAdmin;
+          const role = highestRole([{ role: profileData.user_role }]);
+          roleCache.set(user.id, { role, timestamp: Date.now() });
+          return role;
         }
 
         // Both reads succeeded and neither carries a role: a real answer, so
         // it is safe to cache.
-        adminStatusCache.set(user.id, { isAdmin: false, timestamp: Date.now() });
-        return false;
+        roleCache.set(user.id, { role: DEFAULT_ROLE, timestamp: Date.now() });
+        return DEFAULT_ROLE;
       } catch (error) {
-        log.error('checkIsAdmin', 'Admin check error', { error });
-        return false;
+        log.error('resolveRole', 'Role check error', { error });
+        return null;
       } finally {
         pendingChecks.delete(user.id);
       }
@@ -286,14 +326,17 @@ export function AuthProvider({ children }: { children: ReactNode }) {
    * case. (WEB-UX-008)
    */
   const revalidateAdminSilently = useCallback(async (user: User) => {
-    const isAdmin = await checkIsAdmin(user);
+    const role = await resolveRole(user);
     if (isLoggingOutRef.current) return;
+    const nextRole = role ?? DEFAULT_ROLE;
+    const isAdmin = role !== null && isFullAdmin(role);
     setAuthState(prev => {
-      if (prev.user?.id !== user.id || prev.isAdmin === isAdmin) return prev;
-      log.debug('revalidateAdminSilently', 'Admin status changed', { isAdmin });
-      return { ...prev, isAdmin };
+      if (prev.user?.id !== user.id) return prev;
+      if (prev.isAdmin === isAdmin && prev.userRole === nextRole) return prev;
+      log.debug('revalidateAdminSilently', 'Role changed', { role: nextRole, isAdmin });
+      return { ...prev, isAdmin, userRole: nextRole };
     });
-  }, [checkIsAdmin]);
+  }, [resolveRole]);
 
   /**
    * Drop every cached query when a session ends (WEB-SEC-031).
@@ -341,7 +384,7 @@ export function AuthProvider({ children }: { children: ReactNode }) {
     if (event === 'SIGNED_OUT') {
       log.info('handleAuthChange', 'User signed out via event');
       clearQueryCache();
-      adminStatusCache.clear();
+      roleCache.clear();
       resolvedAdminForUserRef.current = null;
       setAuthState({
         user: null,
@@ -349,6 +392,7 @@ export function AuthProvider({ children }: { children: ReactNode }) {
         isLoading: false,
         isAuthenticated: false,
         isAdmin: false,
+        userRole: DEFAULT_ROLE,
         isAdminLoading: false,
         requiresMFA: false,
         mfaFactorId: null,
@@ -467,10 +511,10 @@ export function AuthProvider({ children }: { children: ReactNode }) {
 
     // A fresh admin answer already in cache resolves synchronously — no loading
     // state, so a returning user never sees the page blink.
-    const cachedAdmin = nextUser ? readCachedAdmin(nextUser.id) : null;
+    const cachedRole = nextUser ? readCachedRole(nextUser.id) : null;
     const needsAdminCheck =
       !!nextUser &&
-      cachedAdmin === null &&
+      cachedRole === null &&
       (event === 'SIGNED_IN' || event === 'INITIAL_SESSION');
 
     setAuthState(prev => ({
@@ -481,24 +525,31 @@ export function AuthProvider({ children }: { children: ReactNode }) {
       // WEB-SEC-026: a session that still owes a second factor is not signed in.
       isAuthenticated: !!session && !mfaPending,
       requiresMFA: mfaPending,
-      isAdmin: cachedAdmin ?? prev.isAdmin, // Keep previous admin status while checking
+      // Keep the previous answer while checking.
+      isAdmin: cachedRole !== null ? isFullAdmin(cachedRole) : prev.isAdmin,
+      userRole: cachedRole ?? prev.userRole,
       isAdminLoading: needsAdminCheck ? true : prev.isAdminLoading, // Mark as loading if checking
     }));
 
-    if (nextUser && cachedAdmin !== null) {
+    if (nextUser && cachedRole !== null) {
       resolvedAdminForUserRef.current = nextUser.id;
     }
 
     // Check admin status for new sessions
     if (needsAdminCheck) {
-      const isAdmin = await checkIsAdmin(nextUser);
+      const role = await resolveRole(nextUser);
       if (isMounted && !isLoggingOutRef.current) {
-        log.debug('handleAuthChange', 'Admin check result', { isAdmin });
+        log.debug('handleAuthChange', 'Role check result', { role });
         resolvedAdminForUserRef.current = nextUser.id;
-        setAuthState(prev => ({ ...prev, isAdmin, isAdminLoading: false }));
+        setAuthState(prev => ({
+          ...prev,
+          isAdmin: role !== null && isFullAdmin(role),
+          userRole: role ?? DEFAULT_ROLE,
+          isAdminLoading: false,
+        }));
       }
     }
-  }, [checkIsAdmin, revalidateAdminSilently, clearQueryCache]);
+  }, [resolveRole, revalidateAdminSilently, clearQueryCache]);
 
   useEffect(() => {
     log.info('init', 'Initializing auth context');
@@ -520,15 +571,16 @@ export function AuthProvider({ children }: { children: ReactNode }) {
         if (!isMounted) return;
         log.debug('init', 'Initial session', { hasSession: !!session, email: session?.user?.email });
 
-        const cachedAdmin = session?.user ? readCachedAdmin(session.user.id) : null;
+        const cachedRole = session?.user ? readCachedRole(session.user.id) : null;
 
         setAuthState(prev => ({
           user: session?.user || null,
           session,
           isLoading: false,
           isAuthenticated: !!session,
-          isAdmin: cachedAdmin ?? false,
-          isAdminLoading: !!session?.user && cachedAdmin === null, // Set to true if we have a user to check
+          isAdmin: cachedRole !== null && isFullAdmin(cachedRole),
+          userRole: cachedRole ?? DEFAULT_ROLE,
+          isAdminLoading: !!session?.user && cachedRole === null, // Set to true if we have a user to check
           requiresMFA: false,
           mfaFactorId: null,
           // PASSWORD_RECOVERY and INITIAL_SESSION can arrive in either order on
@@ -537,14 +589,19 @@ export function AuthProvider({ children }: { children: ReactNode }) {
         }));
 
         if (session?.user) {
-          if (cachedAdmin !== null) {
+          if (cachedRole !== null) {
             resolvedAdminForUserRef.current = session.user.id;
           } else {
-            const isAdmin = await checkIsAdmin(session.user);
+            const role = await resolveRole(session.user);
             if (isMounted) {
-              log.debug('init', 'Initial admin check', { isAdmin });
+              log.debug('init', 'Initial role check', { role });
               resolvedAdminForUserRef.current = session.user.id;
-              setAuthState(prev => ({ ...prev, isAdmin, isAdminLoading: false }));
+              setAuthState(prev => ({
+                ...prev,
+                isAdmin: role !== null && isFullAdmin(role),
+                userRole: role ?? DEFAULT_ROLE,
+                isAdminLoading: false,
+              }));
             }
           }
         }
@@ -571,7 +628,7 @@ export function AuthProvider({ children }: { children: ReactNode }) {
       subscriptionRef.current = null;
       log.debug('cleanup', 'Auth context cleanup');
     };
-  }, [checkIsAdmin, handleAuthChange]);
+  }, [resolveRole, handleAuthChange]);
 
   // Login with email/password (with attempt throttling)
   const login = useCallback(async (email: string, password: string, captchaToken?: string): Promise<{ success: boolean; error?: string; errorCode?: string; requiresMFA?: boolean; factorId?: string }> => {
@@ -741,7 +798,7 @@ export function AuthProvider({ children }: { children: ReactNode }) {
     clearQueryCache();
 
     // Clear admin cache first
-    adminStatusCache.clear();
+    roleCache.clear();
     pendingChecks.clear();
     resolvedAdminForUserRef.current = null;
 
@@ -752,6 +809,7 @@ export function AuthProvider({ children }: { children: ReactNode }) {
       isLoading: false,
       isAuthenticated: false,
       isAdmin: false,
+      userRole: DEFAULT_ROLE,
       isAdminLoading: false,
       requiresMFA: false,
       mfaFactorId: null,
@@ -1072,6 +1130,7 @@ export function AuthProvider({ children }: { children: ReactNode }) {
     isLoading: authState.isLoading,
     isAuthenticated: authState.isAuthenticated,
     isAdmin: authState.isAdmin,
+    userRole: authState.userRole,
     isAdminLoading: authState.isAdminLoading,
     requiresMFA: authState.requiresMFA,
     isPasswordRecovery: authState.isPasswordRecovery,
@@ -1079,6 +1138,7 @@ export function AuthProvider({ children }: { children: ReactNode }) {
     authState.isLoading,
     authState.isAuthenticated,
     authState.isAdmin,
+    authState.userRole,
     authState.isAdminLoading,
     authState.requiresMFA,
     authState.isPasswordRecovery,

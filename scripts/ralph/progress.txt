@@ -1431,3 +1431,17 @@ The writeup prompt instructed the model to invent attendance figures and attribu
   - **"Fact 1, Fact 2, Fact 3, Fact 4" is four slots to fill.** A list template with a fixed length tells the model that four is the right answer, and the fourth is where invention lives. "Up to 4, each supported by the details below" plus "fewer is correct" is the same field with the pressure removed.
   - **My own flagging rule failed its first self-test.** The superlative regex matched "the largest market IN IOWA" and missed "IOWA'S largest and oldest farmers market" - the possessive comes first. The fixture that caught it was the old prompt's fabricated example, which is the ideal one: it contains every claim type the rules exist to find, so a rule set that cannot flag it cannot flag the rows it produced.
   - **A disclosure makes fabrication worse, not better.** The AI-use disclosure already passes. A reader told "AI-generated" still reads "According to the Des Moines Register" as a citation.
+
+## 2026-09-19 - WEB-AUTH-010 (all five ACs)
+Four rankings of four roles, and a user with two role rows was silently non-admin.
+- `src/lib/roles.ts` is the single resolver: precedence, `highestRole` over all rows, `isFullAdmin` matching `public.is_admin()`.
+- `useAdminAuth` went from 130 lines with its own query and auth listener to a 20-line derivation; `AdminNav` dropped its private `ROLE_RANK`.
+- Moderator allowlist decided and documented as empty; the nav and the guard read it.
+- 14 vitest cases, four negative controls.
+- **Learnings for future iterations:**
+  - **`.maybeSingle()` on a table that permits multiple rows is a silent revocation.** It resolves with PGRST116 when a user holds two role rows, the handler logged it and returned false, and an extra grant removed admin. The SQL side had this right all along - `EXISTS ... role IN (...)` is correct with any number of rows - so the client disagreed with the gate that actually enforces.
+  - **Ordering by `created_at` asks a question nobody meant to ask.** A role row is a grant; holding two means holding both. "Newest" answered a different question and downgraded an admin who was later given a moderator row.
+  - **Four maps that agree are still four maps.** `AdminNav` kept its own `ROLE_RANK`, inverted relative to `ROLE_PRECEDENCE`. Same order, opposite direction - agreeing by coincidence is not agreeing, and it was the fourth place in the codebase deciding what outranks what.
+  - **I nearly shipped a regression and papered it with a confident comment.** My first rewrite dropped `useAdminAuth`'s `sync_oauth_user_role` fallback, and I wrote that it "only mattered because this hook ran before AuthContext had resolved anything". That was a guess. A Google sign-in creates a new auth user id, so the RPC is what links the role rows by email - and AuthContext never called it, which was a fifth disagreement. When removing something, find out what it does before writing why it did not matter.
+  - **An empty allowlist can be the decision.** The only migration policy mentioning `moderator` is an INSERT on `admin_action_logs`; no moderator can SELECT anything. Granting moderators a route before granting them a policy produces a page that loads and shows nothing, which is worse than no link.
+  - **A test that breaks on a shape change is doing its job.** `AuthContext.test.tsx` stubbed `.maybeSingle()`; awaiting the builder directly needs a `then`, and without one `await` yields the chain object. That is precisely the change under test.

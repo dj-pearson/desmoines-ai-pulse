@@ -56,6 +56,7 @@ import {
 } from "@/components/ui/accordion";
 import { cn } from "@/lib/utils";
 import { useAdminAuth, type UserRole } from "@/hooks/useAdminAuth";
+import { roleAtLeast } from "@/lib/roles";
 
 interface NavItem {
   label: string;
@@ -74,13 +75,6 @@ interface NavGroup {
   minRole: "moderator" | "admin" | "root_admin";
   items: NavItem[];
 }
-
-const ROLE_RANK: Record<UserRole, number> = {
-  user: 0,
-  moderator: 1,
-  admin: 2,
-  root_admin: 3,
-};
 
 const NAV_GROUPS: NavGroup[] = [
   {
@@ -148,7 +142,10 @@ const NAV_GROUPS: NavGroup[] = [
 ];
 
 function canSeeGroup(group: NavGroup, role: UserRole): boolean {
-  return ROLE_RANK[role] >= ROLE_RANK[group.minRole];
+  // WEB-AUTH-010: the shared ranking. This file kept its own ROLE_RANK map,
+  // inverted relative to ROLE_PRECEDENCE - they agreed, but by coincidence, and
+  // it was the fourth place in the codebase that decided what outranks what.
+  return roleAtLeast(role, group.minRole);
 }
 
 function isActiveItem(pathname: string, href: string): boolean {
