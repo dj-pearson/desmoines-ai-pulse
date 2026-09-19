@@ -28,6 +28,7 @@ import { Star, ArrowLeft, Navigation, Heart, Check, Info, Zap, ChevronRight, Tre
 import { useState } from "react";
 import { useDocumentTitle } from "@/hooks/useDocumentTitle";
 import { SpriteIcon } from "@/components/ui/SpriteIcon";
+import { OptimizedImage } from "@/components/OptimizedImage";
 
 type Playground = Database["public"]["Tables"]["playgrounds"]["Row"];
 
@@ -245,12 +246,12 @@ export default function PlaygroundDetails() {
             {/* Hero Image / Gradient */}
             <div className="relative h-72 md:h-96 overflow-hidden">
               {showImage ? (
-                <img
+                <OptimizedImage
                   src={playground.image_url}
                   alt={`${playground.name} - Playground in ${BRAND.city}, ${BRAND.state}`}
-                  className="absolute inset-0 w-full h-full object-cover"
-                  loading="eager"
-                  decoding="async"
+                  priority
+                  sizes="(max-width: 768px) 100vw, 1024px"
+                  containerClassName="absolute inset-0"
                   onError={() => setImageError(true)}
                 />
               ) : (

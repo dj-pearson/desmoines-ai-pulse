@@ -21,6 +21,7 @@ import { StickyMobileCTA } from "@/components/StickyMobileCTA";
 import { BreadcrumbListSchema } from "@/components/schema/BreadcrumbListSchema";
 import { BRAND, getCanonicalUrl } from "@/lib/brandConfig";
 import { SpriteIcon } from "@/components/ui/SpriteIcon";
+import { OptimizedImage } from "@/components/OptimizedImage";
 
 function StarRating({ rating }: { rating: number }) {
   const stars = [];
@@ -217,10 +218,12 @@ export default function HotelDetails() {
         <div className="container mx-auto px-4 mb-8">
           <div className="relative h-64 md:h-96 rounded-xl overflow-hidden">
             {hotel.image_url ? (
-              <img
+              <OptimizedImage
                 src={hotel.image_url}
                 alt={hotel.name}
-                className="w-full h-full object-cover"
+                priority
+                sizes="(max-width: 768px) 100vw, 1024px"
+                containerClassName="absolute inset-0"
               />
             ) : (
               <div className="w-full h-full bg-gradient-to-br from-[#1a0f3c] via-[#2D1B69] to-[#DC143C] flex items-center justify-center">

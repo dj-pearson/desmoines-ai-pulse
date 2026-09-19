@@ -42,27 +42,59 @@ const HEROES = [
   'src/pages/EventDetails.tsx',
   'src/pages/RestaurantDetails.tsx',
   'src/pages/AttractionDetails.tsx',
+  // Added 2026-09-19 (WEB-PERF-041 AC4). Both were full-bleed detail heroes
+  // this check did not look at: PlaygroundDetails was eager with no
+  // fetchpriority hint, and HotelDetails set no loading, no decoding and no
+  // hint at all. A list of "the three detail pages" stops being true the
+  // moment a fourth detail page ships.
+  'src/pages/PlaygroundDetails.tsx',
+  'src/pages/HotelDetails.tsx',
 ];
+
+/**
+ * A hero is either a raw <img> carrying the two attributes, or an
+ * <OptimizedImage priority>, which sets loading="eager" and
+ * fetchpriority="high" itself AND - the part that matters - renders its <img>
+ * immediately instead of waiting for the IntersectionObserver. Without
+ * `priority` that component ships prerendered HTML with no hero in it, so
+ * "uses OptimizedImage" is not on its own good enough here.
+ */
+function heroProblems(file, text) {
+  const out = [];
+  const rawAt = text.indexOf('<img');
+  const optAt = text.indexOf('<OptimizedImage');
+  const usesOptimized = optAt !== -1 && (rawAt === -1 || optAt < rawAt);
+
+  if (usesOptimized) {
+    const tag = text.slice(optAt, text.indexOf('/>', optAt) + 2);
+    // `priority` (bare) or priority={true}. priority={false} is not priority.
+    if (!/\spriority(\s|\/>|=\{true\})/.test(tag)) {
+      out.push(`${file}: the hero <OptimizedImage> has no priority, so it renders no <img> until it scrolls into view`);
+    }
+    return out;
+  }
+
+  if (rawAt === -1) {
+    out.push(`${file}: no <img> or <OptimizedImage> found - has the hero moved to a component?`);
+    return out;
+  }
+  // The hero is the first <img> in the file; later ones are gallery thumbnails.
+  const tag = text.slice(rawAt, text.indexOf('/>', rawAt) + 2);
+  if (/loading=["']lazy["']/.test(tag)) {
+    out.push(`${file}: the hero image is loading="lazy"`);
+  }
+  if (!/loading=["']eager["']/.test(tag)) {
+    out.push(`${file}: the hero image has no loading="eager"`);
+  }
+  if (!/fetchPriorityAttr\(\s*["']high["']\s*\)/.test(tag)) {
+    out.push(`${file}: the hero image has no fetchpriority="high" hint`);
+  }
+  return out;
+}
 
 const problems = [];
 for (const file of HEROES) {
-  const text = readFileSync(file, 'utf8');
-  // The hero is the first <img> in the file; later ones are gallery thumbnails.
-  const first = text.indexOf('<img');
-  if (first === -1) {
-    problems.push(`${file}: no <img> found - has the hero moved to a component?`);
-    continue;
-  }
-  const tag = text.slice(first, text.indexOf('/>', first) + 2);
-  if (/loading=["']lazy["']/.test(tag)) {
-    problems.push(`${file}: the hero image is loading="lazy"`);
-  }
-  if (!/loading=["']eager["']/.test(tag)) {
-    problems.push(`${file}: the hero image has no loading="eager"`);
-  }
-  if (!/fetchPriorityAttr\(\s*["']high["']\s*\)/.test(tag)) {
-    problems.push(`${file}: the hero image has no fetchpriority="high" hint`);
-  }
+  problems.push(...heroProblems(file, readFileSync(file, 'utf8')));
 }
 
 /**
@@ -120,7 +152,7 @@ for (const [route, file] of Object.entries(LISTING_PAGES)) {
 
 if (problems.length === 0) {
   console.log(
-    `OK Every detail-page hero and all ${Object.keys(LISTING_PAGES).length} listing grids prioritise their first image.`,
+    `OK All ${HEROES.length} detail-page heroes and ${Object.keys(LISTING_PAGES).length} listing grids prioritise their first image.`,
   );
   process.exit(0);
 }
@@ -133,6 +165,8 @@ delay; fetchpriority="high" is what promotes the request past the scripts and
 styles the browser found earlier in the document. Both are needed.
 
 Use {...fetchPriorityAttr("high")} from @/lib/fetchPriority on a raw <img>, or
-priority on <OptimizedImage>.
+priority on <OptimizedImage>. On OptimizedImage the flag is load-bearing twice
+over: it sets both attributes AND renders the <img> without waiting for the
+IntersectionObserver, which is what keeps the hero in the prerendered HTML.
 `);
 process.exit(1);

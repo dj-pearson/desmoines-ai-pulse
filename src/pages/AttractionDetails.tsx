@@ -31,10 +31,10 @@ import { StickyMobileCTA } from "@/components/StickyMobileCTA";
 import { LastUpdatedBadge } from "@/components/LastUpdatedBadge";
 import { NearbyContent } from "@/components/NearbyContent";
 import { SpriteIcon } from "@/components/ui/SpriteIcon";
-import { fetchPriorityAttr } from '@/lib/fetchPriority';
 import { createSlug } from "@/lib/slug";
 import { fetchBySlug } from "@/lib/resolveBySlug";
 import type { Database } from "@/integrations/supabase/types";
+import { OptimizedImage } from "@/components/OptimizedImage";
 
 type Attraction = Database["public"]["Tables"]["attractions"]["Row"];
 
@@ -307,13 +307,12 @@ export default function AttractionDetails() {
             {/* Hero Image / Gradient */}
             <div className="relative h-72 md:h-96 overflow-hidden">
               {showImage ? (
-                <img
+                <OptimizedImage
                   src={attraction.image_url}
                   alt={`${attraction.name} - ${attraction.type} in ${BRAND.city}, ${BRAND.state}`}
-                  className="absolute inset-0 w-full h-full object-cover"
-                  loading="eager"
-                  decoding="async"
-                  {...fetchPriorityAttr("high")}
+                  priority
+                  sizes="(max-width: 768px) 100vw, 1024px"
+                  containerClassName="absolute inset-0"
                   onError={() => setImageError(true)}
                 />
               ) : (

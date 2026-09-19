@@ -49,25 +49,34 @@ export interface OptimizedImageProps {
 }
 
 /**
- * Check if browser supports WebP format
+ * Probe a codec by asking a 1x1 canvas to encode it.
+ *
+ * toDataURL is not guaranteed to return a string: a canvas-blocking extension
+ * or privacy mode can return null or throw, and jsdom returns null without the
+ * optional canvas package. An unhandled null here takes the whole image down -
+ * including the hero - for a question whose answer only ever selects a
+ * <source>, so a failed probe reports "unsupported" and the plain <img src>
+ * serves.
  */
-function supportsWebP(): boolean {
+function supportsFormat(mime: string): boolean {
   if (typeof window === "undefined") return false;
-  const canvas = document.createElement("canvas");
-  canvas.width = 1;
-  canvas.height = 1;
-  return canvas.toDataURL("image/webp").startsWith("data:image/webp");
+  try {
+    const canvas = document.createElement("canvas");
+    canvas.width = 1;
+    canvas.height = 1;
+    const url = canvas.toDataURL(mime);
+    return typeof url === "string" && url.startsWith(`data:${mime}`);
+  } catch {
+    return false;
+  }
 }
 
-/**
- * Check if browser supports AVIF format
- */
+function supportsWebP(): boolean {
+  return supportsFormat("image/webp");
+}
+
 function supportsAVIF(): boolean {
-  if (typeof window === "undefined") return false;
-  const canvas = document.createElement("canvas");
-  canvas.width = 1;
-  canvas.height = 1;
-  return canvas.toDataURL("image/avif").startsWith("data:image/avif");
+  return supportsFormat("image/avif");
 }
 
 /**
