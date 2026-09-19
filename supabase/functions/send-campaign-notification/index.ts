@@ -25,7 +25,8 @@ import { escapeHtml } from "../_shared/escapeHtml.ts";
 import { checkRateLimit } from "../_shared/rateLimit.ts";
 import { renderEmail } from "../_shared/emailLayout.ts";
 import { fetchWithTimeout } from "../_shared/fetchWithTimeout.ts";
-import { isAdminUserId } from "../_shared/apiKeyAuth.ts";
+import { isAdminUserId, listAdminUserIds } from "../_shared/apiKeyAuth.ts";
+import { decideNotification } from "./decision.ts";
 
 serve(async (req) => {
   const corsResponse = handleCors(req);
@@ -56,33 +57,30 @@ serve(async (req) => {
       Deno.env.get("SUPABASE_SERVICE_ROLE_KEY") ?? ""
     );
 
-    // Require authentication (SEC-014)
+    // Authorization and routing live in ./decision.ts, which is importable in a
+    // test - this file is not, because of the esm.sh imports above.
+    // WEB-ADS-013 AC4.
     const authHeader = req.headers.get("Authorization");
-    if (!authHeader) {
-      return new Response(
-        JSON.stringify({ error: "Authorization required" }),
-        { status: 401, headers: { ...corsHeaders, "Content-Type": "application/json" } }
-      );
-    }
+    let userId: string | null = null;
+    let isAdmin = false;
 
-    const token = authHeader.replace("Bearer ", "");
-    const { data: { user }, error: authError } = await supabase.auth.getUser(token);
-    if (authError || !user) {
-      return new Response(
-        JSON.stringify({ error: "Invalid authentication" }),
-        { status: 401, headers: { ...corsHeaders, "Content-Type": "application/json" } }
-      );
+    if (authHeader) {
+      const token = authHeader.replace("Bearer ", "");
+      const { data: { user }, error: authError } = await supabase.auth.getUser(token);
+      if (authError) {
+        // A token that does not resolve is a 401 either way, but the REASON
+        // matters when it is the auth service failing rather than the token
+        // being bad - discarded, those two look identical from the outside.
+        console.error("auth.getUser failed:", authError.message);
+      }
+      userId = user?.id ?? null;
+      if (userId) {
+        // WEB-SEC-023: was profiles.role keyed by the row PK - a column not in
+        // the schema, so isAdmin was always false and admins were treated as
+        // ordinary users. isAdminUserId is the one shared definition.
+        isAdmin = await isAdminUserId(supabase, userId, "send-campaign-notification");
+      }
     }
-
-    // Check if user is admin or campaign owner.
-    // WEB-SEC-023: was profiles.role keyed by the row PK — a column that is not
-    // in the schema, so isAdmin was always false and admins were treated as
-    // ordinary users. isAdminUserId is the one shared definition.
-    const isAdmin = await isAdminUserId(
-      supabase,
-      user.id,
-      "send-campaign-notification",
-    );
 
     const body = await req.json();
     const {
@@ -94,32 +92,83 @@ serve(async (req) => {
       title,
       message,
       metadata,
+      // WEB-ADS-013. Fan out to every admin, resolved HERE with the service
+      // role. The browser used to do this itself, selecting other users'
+      // profiles.user_role to find out who the admins are - a read no ordinary
+      // advertiser should be able to make, and one that leaks the shape of the
+      // admin list to anyone who opens devtools.
+      notifyAdmins: shouldNotifyAdmins,
     } = body;
 
-    if (!notificationType || !campaignId) {
-      return new Response(
-        JSON.stringify({ error: "notificationType and campaignId are required" }),
-        {
-          status: 400,
-          headers: { ...corsHeaders, "Content-Type": "application/json" },
-        }
-      );
-    }
-
-    // Verify user is admin or owns the campaign
-    if (!isAdmin) {
-      const { data: campaign } = await supabase
+    // Only looked up when it is needed, and only for a caller who is not an
+    // admin - an admin is authorized for every campaign.
+    let campaignOwnerId: string | null = null;
+    if (userId && !isAdmin && campaignId) {
+      const { data: campaign, error: campaignError } = await supabase
         .from("campaigns")
         .select("user_id")
         .eq("id", campaignId)
         .single();
-
-      if (!campaign || campaign.user_id !== user.id) {
-        return new Response(
-          JSON.stringify({ error: "Forbidden: not authorized for this campaign" }),
-          { status: 403, headers: { ...corsHeaders, "Content-Type": "application/json" } }
-        );
+      if (campaignError && campaignError.code !== "PGRST116") {
+        // PGRST116 is "no rows" - an ordinary not-found, already handled by
+        // leaving the owner null. Anything else is the lookup itself failing,
+        // which would otherwise be indistinguishable from a stranger's request.
+        console.error("campaign lookup failed:", campaignError.message);
       }
+      campaignOwnerId = campaign?.user_id ?? null;
+    } else if (isAdmin) {
+      campaignOwnerId = userId;
+    }
+
+    const decision = decideNotification({
+      hasAuthHeader: !!authHeader,
+      userId,
+      isAdmin,
+      campaignOwnerId,
+      notificationType,
+      campaignId,
+      notifyAdmins: !!shouldNotifyAdmins,
+    });
+
+    if (decision.kind === "unauthenticated" || decision.kind === "invalid_request" || decision.kind === "forbidden") {
+      return new Response(
+        JSON.stringify({ error: decision.error }),
+        { status: decision.status, headers: { ...corsHeaders, "Content-Type": "application/json" } },
+      );
+    }
+
+    // Admin fan-out: one stored notification per admin, service-role written.
+    // No email here - the admin digest is not a transactional message to the
+    // advertiser, and send-campaign-notification's email path addresses one
+    // recipient.
+    if (decision.kind === "notify_admins") {
+      const adminUserIds = await listAdminUserIds(supabase);
+      if (adminUserIds.length > 0) {
+        const { error: fanOutError } = await supabase
+          .from("campaign_notifications")
+          .insert(
+            adminUserIds.map((adminUserId: string) => ({
+              campaign_id: campaignId,
+              recipient_user_id: adminUserId,
+              notification_type: notificationType,
+              title: title || `Campaign Update: ${campaignName}`,
+              message: message || "You have a campaign update.",
+              is_read: false,
+              metadata: metadata || {},
+            })),
+          );
+        if (fanOutError) {
+          console.error("Failed to store admin notifications:", fanOutError);
+          return new Response(
+            JSON.stringify({ error: "Failed to store admin notifications" }),
+            { status: 500, headers: { ...corsHeaders, "Content-Type": "application/json" } },
+          );
+        }
+      }
+      return new Response(
+        JSON.stringify({ success: true, adminsNotified: adminUserIds.length }),
+        { status: 200, headers: { ...corsHeaders, "Content-Type": "application/json" } },
+      );
     }
 
     // Resolve recipient email if not provided

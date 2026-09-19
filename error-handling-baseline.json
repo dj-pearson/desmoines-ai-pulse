@@ -1,6 +1,6 @@
 {
   "scope": "src + supabase/functions; data|count destructures; rule-scoped counting",
-  "total": 131,
+  "total": 129,
   "files": {
     "src/components/AIEnhancementManager.tsx": 1,
     "src/components/CatchDesmoinUrlExtractor.tsx": 2,
@@ -27,7 +27,6 @@
     "src/hooks/useAnalytics.ts": 1,
     "src/hooks/useArticles.ts": 1,
     "src/hooks/useBusinessPartnership.ts": 1,
-    "src/hooks/useCampaignNotifications.ts": 1,
     "src/hooks/useCommunityFeatures.ts": 1,
     "src/hooks/useCrmNotes.ts": 1,
     "src/hooks/usePayments.ts": 2,
@@ -84,7 +83,7 @@
     "supabase/functions/restaurant-opening-scraper/index.ts": 1,
     "supabase/functions/run-scheduled-audit/index.ts": 3,
     "supabase/functions/security-middleware/index.ts": 1,
-    "supabase/functions/send-campaign-notification/index.ts": 2,
+    "supabase/functions/send-campaign-notification/index.ts": 1,
     "supabase/functions/send-event-reminders/index.ts": 1,
     "supabase/functions/send-seo-notification/index.ts": 1,
     "supabase/functions/subscription-lifecycle/index.ts": 1,

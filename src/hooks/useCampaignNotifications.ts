@@ -35,24 +35,11 @@ interface NotificationPayload {
  */
 export async function sendCampaignNotification(payload: NotificationPayload): Promise<boolean> {
   try {
-    // Store notification in campaign_notifications table
-    const { error: insertError } = await supabase
-      .from('campaign_notifications')
-      .insert({
-        campaign_id: payload.campaignId,
-        recipient_user_id: payload.recipientUserId || null,
-        recipient_email: payload.recipientEmail || null,
-        notification_type: payload.notificationType,
-        title: getNotificationTitle(payload.notificationType, payload.campaignName),
-        message: getNotificationMessage(payload.notificationType, payload.campaignName, payload.metadata),
-        is_read: false,
-        metadata: payload.metadata || {},
-      });
-
-    if (insertError) {
-      // Table may not exist yet - log but don't fail
-      log.warn('sendNotification', 'Could not store notification', { error: insertError.message });
-    }
+    // No insert here. campaign_notifications has SELECT and UPDATE policies for
+    // the recipient and ALL for service_role, and NO insert policy for
+    // authenticated - so this call was rejected by RLS every single time and
+    // only log.warn'd about it ("Table may not exist yet"). The row is written
+    // by send-campaign-notification below, with the service role. WEB-ADS-013.
 
     // Attempt to send email notification via edge function
     try {
@@ -89,31 +76,26 @@ export async function notifyAdmins(
   notificationType: NotificationType,
   metadata?: Record<string, string | number | boolean>
 ): Promise<void> {
+  // The admin list is resolved SERVER-SIDE (WEB-ADS-013). This used to select
+  // ids from `profiles` where user_role was admin or root_admin - a read of
+  // other people's roles, issued from the browser by whoever was filling in an
+  // advertising form. send-campaign-notification does it with the service role
+  // now, behind the same authorization it already applied: the caller must be
+  // an admin or own the campaign.
   try {
-    // `profiles` has no `username` or `role` column — the admin flag is
-    // `user_role`. Both names were wrong, so this query failed with 42703 on
-    // every call, left `admins` undefined, and silently sent no admin
-    // notification for any campaign event. `username` was never read.
-    //
-    // Matches AuthContext's admin test, which counts root_admin as admin too;
-    // filtering on 'admin' alone would skip root admins entirely.
-    const { data: admins } = await supabase
-      .from('profiles')
-      .select('id')
-      .in('user_role', ['admin', 'root_admin']);
-
-    if (admins && admins.length > 0) {
-      await Promise.all(
-        admins.map((admin) =>
-          sendCampaignNotification({
-            campaignId,
-            campaignName,
-            recipientUserId: admin.id,
-            notificationType,
-            metadata,
-          })
-        )
-      );
+    const { error } = await supabase.functions.invoke('send-campaign-notification', {
+      body: {
+        notifyAdmins: true,
+        campaignId,
+        campaignName,
+        notificationType,
+        title: getNotificationTitle(notificationType, campaignName),
+        message: getNotificationMessage(notificationType, campaignName, metadata),
+        metadata,
+      },
+    });
+    if (error) {
+      log.warn('notifyAdmins', 'Admin notification not delivered', { message: error.message });
     }
   } catch (error) {
     log.error('notifyAdmins', 'Failed to notify admins', { error });

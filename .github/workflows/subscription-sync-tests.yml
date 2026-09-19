@@ -83,6 +83,12 @@ jobs:
       # XPLAT-011. Asserts docstring, implementation and all three clients agree
       # on the request contract -- the comparison nobody was making when
       # XPLAT-001 shipped a two-step docstring against three bodyless clients.
+      # WEB-ADS-013. The whole authorization surface of
+      # send-campaign-notification: an unauthenticated call cannot notify, a
+      # stranger cannot notify about someone else's campaign, and the admin
+      # fan-out is considered only AFTER that check - otherwise anyone with a
+      # token could write a row to every admin's notification list.
+      - run: deno test --allow-read supabase/functions/_tests/campaign-notification-authorization.test.ts
       - run: deno test --allow-read supabase/functions/_tests/client-contract.test.ts
       - run: deno test --allow-read supabase/functions/_tests/account-deletion-contract.test.ts
       # Erasure has to reach uploaded files, not just table rows. Every upload

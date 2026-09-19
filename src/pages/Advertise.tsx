@@ -19,7 +19,6 @@ import { useAuth } from "@/hooks/useAuth";
 import { PLACEMENT_SPECS } from "@/lib/placementSpecs";
 import type { PlacementType } from "@/lib/placementSpecs";
 import { Alert, AlertDescription } from "@/components/ui/alert";
-import { notifyAdmins } from "@/hooks/useCampaignNotifications";
 import { supabase } from "@/integrations/supabase/client";
 import { ListingPicker } from "@/components/advertising/ListingPicker";
 import type { LinkedListing } from "@/components/advertising/ListingPicker";
@@ -175,12 +174,11 @@ export default function Advertise() {
         });
       }
 
-      // Notify admins about new campaign
-      notifyAdmins(campaign.id, campaignName, 'campaign_created', {
-        totalCost: calculateTotalCost(),
-        startDate: format(startDate, "yyyy-MM-dd"),
-        ...(linkedListing && { sponsoredListing: `${linkedListing.type}:${linkedListing.id}` }),
-      });
+      // No admin ping here (WEB-ADS-013 AC3). This fired on campaign_created,
+      // which is BEFORE the advertiser has been sent to Stripe - so every
+      // abandoned draft notified every admin about a campaign that was never
+      // paid for and never ran. stripe-webhook notifies admins on
+      // payment_received, from the event that means money arrived.
 
       toast({
         title: "Campaign Created!",
