@@ -1,6 +1,6 @@
 import { useQuery, useQueryClient } from "@tanstack/react-query";
 import { supabase } from "@/integrations/supabase/client";
-import { EVENT_LIST_COLUMNS } from "@/lib/listColumns";
+import { EVENT_LIST_COLUMNS, withAdminColumns } from "@/lib/listColumns";
 import { createLogger } from "@/lib/logger";
 import { STALE_TIME, GC_TIME, shouldRetry } from "@/lib/queryConfig";
 import { Database } from "@/integrations/supabase/types";
@@ -34,6 +34,16 @@ interface EventFilters {
   offset?: number;
   /** Web parity for IOS-DISCOVER-2026-003 — defaults to "soonest". */
   sortBy?: EventSortBy;
+  /**
+   * Ask for the admin-only columns as well (WEB-PERF-035). Only
+   * /admin/content sets it: ai_writeup is a 250-350 word paragraph per row and
+   * the only thing that reads it is ContentTable's "has a writeup" tick, so the
+   * public lists no longer carry it.
+   *
+   * It is part of the query key below, or the admin table would be served the
+   * public cache entry and its tick column would be blank.
+   */
+  includeAdminFields?: boolean;
 }
 
 /**
@@ -56,7 +66,7 @@ async function fetchEvents(filters: EventFilters): Promise<EventsResult> {
   const sortBy: EventSortBy = filters.sortBy ?? "soonest";
   let query = supabase
     .from("events")
-    .select(EVENT_LIST_COLUMNS, { count: "exact" })
+    .select(withAdminColumns(EVENT_LIST_COLUMNS, filters.includeAdminFields), { count: "exact" })
     .gte("date", today) // Only today and future events
     .neq("is_merged", true) // Hide rows merged into a duplicate (WEB-AUTO-005)
     .neq("is_hidden", true) // Hide soft-hidden stale events (WEB-AUTO-006)
@@ -198,6 +208,7 @@ export function eventsQueryKey(filters: EventFilters) {
     limit: filters.limit ?? null,
     offset: filters.offset ?? null,
     sortBy: filters.sortBy ?? "soonest",
+    includeAdminFields: filters.includeAdminFields ?? false,
   });
 }
 

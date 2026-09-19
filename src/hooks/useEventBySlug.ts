@@ -2,6 +2,7 @@ import { useQuery } from "@tanstack/react-query";
 import { supabase } from "@/integrations/supabase/client";
 import { createLogger } from "@/lib/logger";
 import { createEventSlugWithCentralTime } from "@/lib/timezone";
+import { EVENT_SLUG_COLUMNS } from "@/lib/listColumns";
 import type { Database } from "@/integrations/supabase/types";
 
 const log = createLogger("useEventBySlug");
@@ -46,9 +47,15 @@ export function parseSlugDate(slug: string): string | null {
 async function fetchEventBySlug(slug: string): Promise<Event | null> {
   const slugDate = parseSlugDate(slug);
 
+  // The candidate scan asks for the four columns the slug is DERIVED from, not
+  // the whole row (WEB-PERF-035). The dateless branch below scans up to 1000
+  // events to keep one; under select("*") the other 999 each arrived carrying
+  // the SEO/GEO text, search_vector and the PostGIS geometry. The match is
+  // re-fetched in full at the bottom, because the detail page renders that
+  // content.
   let query = supabase
     .from("events")
-    .select("*")
+    .select(EVENT_SLUG_COLUMNS)
     // Must mirror EventsPage / useEvents, or a listed event won't resolve here.
     .neq("is_merged", true)
     .neq("is_hidden", true)
@@ -89,7 +96,28 @@ async function fetchEventBySlug(slug: string): Promise<Event | null> {
     (e) => createEventSlugWithCentralTime(e.title, e) === slug
   );
 
-  return match ?? null;
+  if (!match) return null;
+
+  // Second round trip, only on a cache miss and only for the one row that
+  // matched. select("*") is right here: EventDetail renders seo_*, geo_* and
+  // the enhanced description.
+  const { data: full, error: fullError } = await supabase
+    .from("events")
+    .select("*")
+    .eq("id", match.id)
+    .maybeSingle();
+
+  if (fullError) {
+    log.error("fetchEventBySlug", "Could not load the matched event", {
+      slug,
+      id: match.id,
+      message: fullError.message,
+      code: fullError.code,
+    });
+    throw fullError;
+  }
+
+  return (full as Event) ?? null;
 }
 
 export function useEventBySlug(slug: string | undefined) {

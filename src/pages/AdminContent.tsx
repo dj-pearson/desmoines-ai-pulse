@@ -166,8 +166,11 @@ export default function AdminContent() {
   });
 
   // Data hooks with search filters
-  const events = useEvents({ search: searchTerms.events });
-  const restaurants = useRestaurants({ search: searchTerms.restaurants });
+  // includeAdminFields: ContentTable shows a "has a writeup" tick, and
+  // ai_writeup left the public list projections because it is ~2 KB of prose
+  // per row that no card renders (WEB-PERF-035).
+  const events = useEvents({ search: searchTerms.events, includeAdminFields: true });
+  const restaurants = useRestaurants({ search: searchTerms.restaurants, includeAdminFields: true });
   // countMode: "exact" - these three feed ContentTable's "N total" and its
   // page maths, which is the one place the number is load-bearing
   // (WEB-PERF-033).

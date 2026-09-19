@@ -3,7 +3,7 @@ import { useQuery, useQueryClient } from "@tanstack/react-query";
 import { supabase } from "@/integrations/supabase/client";
 import { Database } from "@/integrations/supabase/types";
 import { getRestaurantRotationSeed } from "@/lib/restaurantRotation";
-import { RESTAURANT_LIST_COLUMNS } from "@/lib/listColumns";
+import { RESTAURANT_LIST_COLUMNS, withAdminColumns } from "@/lib/listColumns";
 import { STALE_TIME, GC_TIME } from "@/lib/queryConfig";
 import { queryKeys } from "@/lib/queryKeys";
 import { createLogger } from "@/lib/logger";
@@ -44,6 +44,15 @@ interface RestaurantFilters {
   dietary?: string[];
   limit?: number;
   offset?: number;
+  /**
+   * Ask for the admin-only columns as well (WEB-PERF-035). Only
+   * /admin/content sets it: ai_writeup is a 250-350 word paragraph per row and
+   * the only thing that reads it is ContentTable's "has a writeup" tick.
+   *
+   * The whole filters object is the query key here, so setting this already
+   * produces its own cache entry.
+   */
+  includeAdminFields?: boolean;
 }
 
 /** Full rating range — i.e. the user has not actually narrowed by rating.
@@ -209,7 +218,7 @@ export function useRestaurants(filters: RestaurantFilters = {}) {
         // the planner estimate only for large result sets, so it keeps the
         // WEB-PERF-009 intent (no forced full-table count on every filter/sort)
         // while always yielding a number.
-        .select(RESTAURANT_LIST_COLUMNS, { count: "estimated" })
+        .select(withAdminColumns(RESTAURANT_LIST_COLUMNS, filters.includeAdminFields), { count: "estimated" })
         .neq("is_merged", true); // Hide rows merged into a duplicate (WEB-AUTO-005)
 
       // Use full-text search with tsvector for better performance and relevance ranking

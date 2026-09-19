@@ -1,7 +1,12 @@
 import { useQuery } from '@tanstack/react-query';
 import { STALE_TIME, GC_TIME, shouldRetry } from '@/lib/queryConfig';
 import { supabase } from '@/integrations/supabase/client';
-import { EVENT_LIST_COLUMNS, RESTAURANT_LIST_COLUMNS, ATTRACTION_LIST_COLUMNS } from '@/lib/listColumns';
+import {
+  EVENT_LIST_COLUMNS,
+  RESTAURANT_LIST_COLUMNS,
+  ATTRACTION_LIST_COLUMNS,
+  PLAYGROUND_LIST_COLUMNS,
+} from '@/lib/listColumns';
 import { createLogger } from '@/lib/logger';
 
 const logger = createLogger('useTrending');
@@ -139,7 +144,7 @@ export function useTrending(config: FallbackConfig = { useRealData: true, minIte
           ? supabase.from('attractions').select(ATTRACTION_LIST_COLUMNS).in('id', idsByType.attraction)
           : null,
         idsByType.playground.length
-          ? supabase.from('playgrounds').select('*').in('id', idsByType.playground) // No playground LIST_COLUMNS constant
+          ? supabase.from('playgrounds').select(PLAYGROUND_LIST_COLUMNS).in('id', idsByType.playground)
           : null,
       ]);
 
@@ -192,11 +197,11 @@ export function useTrending(config: FallbackConfig = { useRealData: true, minIte
       // Fetch featured and recent events.
       //
       // Both use EVENT_LIST_COLUMNS rather than select('*'), matching the
-      // primary path at line ~112 and the restaurant/attraction fallbacks
-      // just below — these two were the only queries in this file still
-      // pulling every column. select('*') drags the SEO/GEO text blocks,
+      // primary path at line ~112. select('*') drags the SEO/GEO text blocks,
       // search_vector and the PostGIS geometry into a card payload that
-      // renders none of them.
+      // renders none of them. The restaurant, attraction and playground
+      // fallbacks below now do the same (WEB-PERF-035) - they were still on
+      // select('*') when this comment claimed these two were the last.
       //
       // Measured on the homepage against production: these two responses were
       // 21,106 and 13,160 bytes; the same six rows under the projection are
@@ -241,7 +246,7 @@ export function useTrending(config: FallbackConfig = { useRealData: true, minIte
       // Similar for restaurants (using featured)
       const { data: restaurants, error: restaurantsError } = await supabase
         .from('restaurants')
-        .select('*')
+        .select(RESTAURANT_LIST_COLUMNS)
         .eq('is_featured', true)
         .order('created_at', { ascending: false })
         .limit(4);
@@ -262,7 +267,7 @@ export function useTrending(config: FallbackConfig = { useRealData: true, minIte
       // Similar for attractions
       const { data: attractions, error: attractionsError } = await supabase
         .from('attractions')
-        .select('*')
+        .select(ATTRACTION_LIST_COLUMNS)
         .eq('is_featured', true)
         .order('created_at', { ascending: false })
         .limit(4);
@@ -283,7 +288,7 @@ export function useTrending(config: FallbackConfig = { useRealData: true, minIte
       // Similar for playgrounds
       const { data: playgrounds, error: playgroundsError } = await supabase
         .from('playgrounds')
-        .select('*')
+        .select(PLAYGROUND_LIST_COLUMNS)
         .eq('is_featured', true)
         .order('created_at', { ascending: false })
         .limit(4);
