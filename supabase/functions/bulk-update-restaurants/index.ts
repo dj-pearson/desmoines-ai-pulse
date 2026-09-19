@@ -6,6 +6,7 @@ import { checkRateLimit } from "../_shared/rateLimit.ts";
 import { writeAuditLog, auditIp } from "../_shared/auditLog.ts";
 import { fetchWithTimeout } from '../_shared/fetchWithTimeout.ts';
 import { isUnknownColumnError } from '../_shared/postgrestErrors.ts'
+import { runJob } from '../_shared/jobRunner.ts'
 
 interface GooglePlaceDetails {
   id: string;
@@ -120,11 +121,18 @@ serve(async (req) => {
     }
 
     if (!restaurants || restaurants.length === 0) {
+      // WEB-BE-043: a run with nothing to do is still a run. Returning without
+      // recording one is why "this job has been enriching nothing for a month"
+      // and "there was nothing to enrich today" produced identical evidence.
+      const emptyRun = await runJob('bulk-update-restaurants', async (ctx) => {
+        ctx.meta({ sources: { 'google-places': { fetched: 0, inserted: 0, duplicates: 0, errors: 0 } } })
+      })
       return new Response(
         JSON.stringify({ 
           success: true, 
           message: 'No restaurants found that need updating',
-          updated: 0 
+          updated: 0,
+          runId: emptyRun.runId
         }),
         { 
           headers: { ...corsHeaders, 'Content-Type': 'application/json' },
@@ -138,6 +146,13 @@ serve(async (req) => {
     const updates: RestaurantUpdate[] = []
     const errors: Array<{ id: string; name: string; error: string }> = []
 
+    // WEB-BE-043. The Google Places call is what goes dark here - a quota
+    // exhaustion or a retired key makes every lookup come back empty and the
+    // function still answers 200 with "Bulk update completed". `updatedCount`
+    // is declared out here so the response below can read it after the wrapper
+    // returns.
+    let updatedCount = 0
+    const job = await runJob('bulk-update-restaurants', async (ctx) => {
     // Process each restaurant
     for (const restaurant of restaurants) {
       try {
@@ -388,7 +403,6 @@ serve(async (req) => {
     }
 
     // Batch update the database
-    let updatedCount = 0
     if (updates.length > 0) {
       console.log(`Updating ${updates.length} restaurants in database`)
       
@@ -435,8 +449,34 @@ serve(async (req) => {
       }
     }
 
+      ctx.processed(updatedCount)
+      ctx.failed(errors.length)
+      ctx.meta({
+        sources: {
+          'google-places': {
+            fetched: restaurants.length,
+            // Enrichment writes are updates; this function never inserts, so
+            // `updated` is what the zero-result rule has to read as work done.
+            inserted: updatedCount,
+            duplicates: 0,
+            errors: errors.length,
+          },
+        },
+      })
+    })
+
+    if (!job.ok) {
+      // runJob records the failed run and returns rather than rethrowing, so
+      // the catch below no longer sees it.
+      return new Response(
+        JSON.stringify({ success: false, error: job.error ?? 'Bulk update failed', runId: job.runId }),
+        { headers: { ...corsHeaders, 'Content-Type': 'application/json' }, status: 500 }
+      )
+    }
+
     const response = {
       success: true,
+      runId: job.runId,
       message: `Bulk update completed`,
       processed: restaurants.length,
       updated: updatedCount,

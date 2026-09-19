@@ -439,6 +439,19 @@ FORMAT AS JSON ARRAY ONLY - no other text:
         inserted: summary.body.inserted,
         updated: summary.body.updated,
         perSource,
+        // WEB-BE-043. The same outcomes in the shape the per-source rule reads.
+        // Written alongside `perSource` rather than instead of it: the admin
+        // panel and the response shape both read the itemised array, and
+        // _shared/ingestionHealth.ts can parse either, so neither reader breaks
+        // whichever side is deployed first.
+        sources: Object.fromEntries(perSource.map((o) => [o.name, {
+          fetched: o.found,
+          // An update is a write - a source that only refreshes existing
+          // openings is alive, not dark.
+          inserted: o.inserted + o.updated,
+          duplicates: 0,
+          errors: o.ok ? 0 : 1,
+        }])),
       });
       // Throwing marks the ledger row failed and alerts. The HTTP status is
       // decided below from perSource either way, so a ledger write that fails

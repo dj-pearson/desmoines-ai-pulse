@@ -17,6 +17,8 @@ import { createClient } from "https://esm.sh/@supabase/supabase-js@2";
 import { getAIConfig, buildClaudeRequest, getClaudeHeaders, getAnthropicApiKey } from "../_shared/aiConfig.ts";
 import { requireAdminOrApiKey } from "../_shared/apiKeyAuth.ts";
 import { acceptedJobStatuses, JOB_STATUS_IDLE } from "../_shared/scrapingJobStatus.ts";
+import { runJob } from "../_shared/jobRunner.ts";
+import type { SourceCounts } from "../_shared/ingestionHealth.ts";
 
 const corsHeaders = {
   "Access-Control-Allow-Origin": "*",
@@ -205,7 +207,11 @@ function querySelectorText(html: string, selector: string): string {
 async function scrapeJobWithFirecrawl(
   job: ScrapingJob,
   supabase: any
-): Promise<{ success: boolean; eventsFound: number; errors: string[] }> {
+): Promise<{ success: boolean; eventsFound: number; errors: string[]; counts: SourceCounts }> {
+  // WEB-BE-043. `eventsFound` alone cannot tell a dark source from a quiet one:
+  // both are zero. The four counts come straight off firecrawl-scraper's
+  // response so the ledger records what the source actually did.
+  const noCounts: SourceCounts = { fetched: 0, inserted: 0, duplicates: 0, errors: 0 };
   try {
     console.log(
       `🚀 Starting Firecrawl scrape for job: ${job.name} - ${job.config.url}`
@@ -229,6 +235,7 @@ async function scrapeJobWithFirecrawl(
         success: false,
         eventsFound: 0,
         errors: [error.message || "Firecrawl error"],
+        counts: { ...noCounts, errors: 1 },
       };
     }
 
@@ -240,17 +247,24 @@ async function scrapeJobWithFirecrawl(
         success: true,
         eventsFound: data.inserted + data.updated,
         errors: data.errors > 0 ? [`${data.errors} processing errors`] : [],
+        counts: {
+          fetched: data.totalFound ?? 0,
+          inserted: (data.inserted ?? 0) + (data.updated ?? 0),
+          duplicates: data.duplicates ?? 0,
+          errors: data.errors ?? 0,
+        },
       };
     } else {
       return {
         success: false,
         eventsFound: 0,
         errors: [data?.error || "Unknown error"],
+        counts: { ...noCounts, errors: 1 },
       };
     }
   } catch (error) {
     console.error(`❌ Error scraping job ${job.name}:`, error);
-    return { success: false, eventsFound: 0, errors: [error.message] };
+    return { success: false, eventsFound: 0, errors: [error.message], counts: { ...noCounts, errors: 1 } };
   }
 }
 
@@ -2071,7 +2085,11 @@ serve(async (req) => {
     let totalEventsFound = 0;
     let totalErrors = 0;
     const jobResults = [];
+    // WEB-BE-043. Keyed by scraping job name, which is what an operator reads
+    // in the admin panel and what eventSourceProfiles calls a source.
+    const sources: Record<string, SourceCounts> = {};
 
+    const ledger = await runJob("scrape-events", async (ctx) => {
     for (const jobRow of jobsToProcess) {
       const job: ScrapingJob = {
         id: jobRow.id,
@@ -2087,6 +2105,7 @@ serve(async (req) => {
 
       totalEventsFound += scrapeResult.eventsFound;
       totalErrors += scrapeResult.errors.length;
+      sources[job.name] = scrapeResult.counts;
 
       jobResults.push({
         jobName: job.name,
@@ -2113,6 +2132,21 @@ serve(async (req) => {
         `✅ Completed ${job.name}: ${scrapeResult.eventsFound} events found`
       );
     }
+
+      ctx.processed(totalEventsFound);
+      ctx.failed(totalErrors);
+      ctx.meta({
+        jobsProcessed: jobsToProcess.length,
+        jobsSkipped: skippedJobs.length,
+        sources,
+      });
+      // Total failure is a failed run, so the ledger and the HTTP status agree.
+      // The status is still computed below from the same counts, so a ledger
+      // write that fails cannot change what the caller is told.
+      if (jobsToProcess.length > 0 && totalErrors >= jobsToProcess.length) {
+        throw new Error(`all ${jobsToProcess.length} scraping jobs errored, 0 events found`);
+      }
+    });
 
     console.log(
       `Processed ${jobsToProcess.length} jobs, found ${totalEventsFound} total events`
@@ -2143,6 +2177,8 @@ serve(async (req) => {
     return new Response(
       JSON.stringify({
         success: !everyJobFailed,
+        runId: ledger.runId,
+        ...(ledger.status === "skipped" ? { paused: true } : {}),
         message: everyJobFailed
           ? `Scraping FAILED: all ${jobsToProcess.length} jobs errored, 0 events found`
           : `Scraping completed: ${totalEventsFound} events found across ${jobsToProcess.length} jobs`,

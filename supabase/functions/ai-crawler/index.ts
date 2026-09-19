@@ -31,6 +31,8 @@ import { isHostAllowed } from "../_shared/fetchGuard.ts";
 import { fetchWithTimeout } from "../_shared/fetchWithTimeout.ts";
 import { recordAnthropicUsage } from "../_shared/providerUsage.ts";
 import { sanitizeLikeInput } from "../_shared/validation.ts";
+import { runJob } from "../_shared/jobRunner.ts";
+import type { SourceCounts } from "../_shared/ingestionHealth.ts";
 
 const corsHeaders = {
   "Access-Control-Allow-Origin": "*",
@@ -1611,6 +1613,14 @@ Deno.serve(async (req) => {
       );
     }
 
+    // WEB-BE-043. This function is invoked per URL, so the host IS the source
+    // as far as the ledger is concerned - the same identity firecrawl-scraper
+    // records, so a site crawled by both reconciles.
+    const crawlSource = (() => {
+      try { return new URL(url).hostname; } catch { return url; }
+    })();
+    const emptyCounts: SourceCounts = { fetched: 0, inserted: 0, duplicates: 0, errors: 0 };
+
     // Initialize services
     const supabaseUrl = Deno.env.get("SUPABASE_URL")!;
     const supabaseKey = Deno.env.get("SUPABASE_SERVICE_ROLE_KEY")!;
@@ -1826,10 +1836,18 @@ Deno.serve(async (req) => {
     );
 
     if (filteredItems.length === 0) {
+      // WEB-BE-043. THIS is the path that has to be recorded. "The page had no
+      // events" is what a source looks like the day its markup changes and the
+      // extractor starts returning nothing, and this branch used to answer 200
+      // and leave no trace of it anywhere.
+      const emptyRun = await runJob("ai-crawler", async (ctx) => {
+        ctx.meta({ url, category, sources: { [crawlSource]: emptyCounts } });
+      });
       return new Response(
         JSON.stringify({
           success: true,
           message: `No ${category} found on the website`,
+          runId: emptyRun.runId,
           results: {
             totalFound: 0,
             newItems: 0,
@@ -1853,19 +1871,24 @@ Deno.serve(async (req) => {
       );
     }
 
+    // deno-lint-ignore no-explicit-any
+    let newItems: any[] = [];
+    let duplicates = 0;
+    let insertedCount = 0;
+    // deno-lint-ignore no-explicit-any
+    let insertErrors: any[] = [];
+
+    const job = await runJob("ai-crawler", async (ctx) => {
     // Check for duplicates
-    const { newItems, duplicates } = await checkForDuplicates(
+    ({ newItems, duplicates } = await checkForDuplicates(
       supabase,
       category,
       filteredItems
-    );
+    ));
 
     console.log(
       `📊 Found ${newItems.length} new items, ${duplicates} duplicates`
     );
-
-    let insertedCount = 0;
-    let insertErrors: any[] = [];
 
     // Insert new items
     if (newItems.length > 0) {
@@ -1888,9 +1911,42 @@ Deno.serve(async (req) => {
       console.log(`⏭️ No new items to insert for ${category}`);
     }
 
+      ctx.processed(insertedCount);
+      ctx.failed(insertErrors.length);
+      ctx.meta({
+        url,
+        category,
+        sources: {
+          [crawlSource]: {
+            fetched: filteredItems.length,
+            inserted: insertedCount,
+            duplicates,
+            errors: insertErrors.length,
+          },
+        },
+      });
+    });
+
+    // runJob records the failure and returns rather than rethrowing, so the
+    // catch below no longer sees a duplicate-check or insert failure. Without
+    // this the function would answer 200 "Successfully crawled" for a run that
+    // wrote nothing.
+    if (!job.ok) {
+      return new Response(
+        JSON.stringify({
+          error: "crawl failed",
+          details: job.error,
+          runId: job.runId,
+        }),
+        { status: 500, headers: { ...corsHeaders, "Content-Type": "application/json" } },
+      );
+    }
+
     const response_data = {
       success: true,
       message: `Successfully crawled ${url} for ${category}`,
+      runId: job.runId,
+      ...(job.status === "skipped" ? { paused: true } : {}),
       results: {
         totalFound: filteredItems.length,
         newItems: newItems.length,

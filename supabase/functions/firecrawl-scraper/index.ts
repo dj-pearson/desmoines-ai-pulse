@@ -27,6 +27,7 @@ import {
   SPORTS_CONTENT_BUDGET,
 } from "../_shared/htmlContentWindow.ts";
 import { resolveEventImage } from "../_shared/venueImage.ts";
+import { runJob } from "../_shared/jobRunner.ts";
 
 // Marker time for events without specific times (7:31:58 PM Central)
 
@@ -627,8 +628,26 @@ serve(async (req) => {
     const tableName = tableMapping[category as keyof typeof tableMapping] || 'events';
     let insertedCount = 0;
     let updatedCount = 0;
+    // WEB-BE-043: counted, not just skipped. Duplicates were the one outcome
+    // this function never reported, and "extracted 40, inserted 0" reads as a
+    // broken source when it may only mean the page has not changed.
+    //
+    // It OVERLAPS with updatedCount on purpose: an event that already exists is
+    // a duplicate, and the events branch below may also heal its image or
+    // upgrade its source_url, which is a real write. So the three counts do not
+    // partition `totalFound`, and nothing downstream assumes they do - the
+    // zero-result rule reads `inserted`, the error-rate rule reads `errors`.
+    let duplicateCount = 0;
     const errors = [];
 
+    // WEB-BE-043. One ledger row per scrape, keyed by the host being scraped -
+    // this function is invoked per URL, so the host IS the source. Without it a
+    // source that stops producing events is invisible: the run still returns
+    // 200 with inserted: 0, which is also what a quiet week looks like.
+    const sourceKey = (() => {
+      try { return new URL(url).hostname; } catch { return url; }
+    })();
+    const job = await runJob("firecrawl-scraper", async (ctx) => {
     if (filteredItems.length > 0) {
       // Process in batches
       const batchSize = 10;
@@ -834,6 +853,7 @@ serve(async (req) => {
             }
 
             if (existingItems.length > 0) {
+              duplicateCount++;
               const existingItem = existingItems[0];
 
               // For events: heal a missing image and/or upgrade to a better
@@ -1003,12 +1023,36 @@ serve(async (req) => {
       }
     }
 
+      ctx.processed(insertedCount + updatedCount);
+      ctx.failed(errors.length);
+      ctx.meta({
+        url,
+        category,
+        sources: {
+          [sourceKey]: {
+            fetched: allExtractedItems.length,
+            // An update is a write. A source whose events all already exist and
+            // get refreshed is alive, and counting only inserts would page about it.
+            inserted: insertedCount + updatedCount,
+            duplicates: duplicateCount,
+            errors: errors.length,
+          },
+        },
+      });
+    });
+
     const result = {
       success: true,
+      runId: job.runId,
+      // The kill switch makes runJob skip the body entirely. scrape-events
+      // reads `inserted` from this response, so without this flag a paused
+      // scraper would be recorded upstream as a source that produced nothing.
+      ...(job.status === "skipped" ? { paused: true } : {}),
       totalFound: allExtractedItems.length,
       futureEvents: batchInfo.totalEvents,
       inserted: insertedCount,
       updated: updatedCount,
+      duplicates: duplicateCount,
       errors: errors.length,
       url: url,
       // Batch processing info

@@ -248,6 +248,9 @@ class CatchDesMoinesCrawler:
         # Extraction failures are counted, not swallowed. A run that extracts
         # nothing because the API call blew up must not exit 0 looking healthy.
         self.extraction_errors: int = 0
+        # Set at the top of run(); the heartbeat row needs a start as well as a
+        # finish or "how long did this take" is unanswerable after the fact.
+        self.started_at: Optional[str] = None
 
     def _init_clients(self):
         """Initialize Supabase and Anthropic clients."""
@@ -655,8 +658,73 @@ Return ONLY the JSON array. No other text."""
             logger.error(f"Error inserting event '{event.get('title')}': {e}")
             return False
 
+    def post_heartbeat(self, result: Optional[dict]) -> None:
+        """Record this run in automation_job_runs (WEB-BE-043).
+
+        WHY A PYTHON WRITE AND NOT AN EDGE FUNCTION. This crawler is a GitHub
+        Actions job. Nothing inside Supabase schedules it, so nothing inside
+        Supabase can tell the difference between "ran and found nothing" and
+        "has not run since February" - which is exactly what happened: the
+        workflow failed on a missing secret every day for six months and the
+        only place that was visible was the Actions tab (WEB-SEO-017). The
+        watchdog reads automation_job_runs, so the crawler has to post there
+        itself.
+
+        BEST EFFORT, ALWAYS. A ledger write that fails must never fail the
+        crawl or change its exit code - the events are already in the table.
+        """
+        if self.dry_run or not self.supabase:
+            return
+
+        found = result["total_found"] if result else 0
+        inserted = result["inserted"] if result else 0
+        duplicates = result["duplicates"] if result else 0
+        errors = result["extraction_errors"] if result else 1
+
+        # `result is None` means run() aborted on the first page, which is a
+        # failure however few errors were counted.
+        if result is None:
+            status = "failed"
+            error = "crawl aborted: the first listing page returned no HTML"
+        elif errors:
+            status = "failed"
+            error = f"{errors} extraction error(s)"
+        else:
+            status = "success"
+            error = None
+
+        row = {
+            "job_name": "github-event-crawler",
+            "started_at": self.started_at,
+            "finished_at": datetime.now(tz=ZoneInfo("UTC")).isoformat(),
+            "status": status,
+            "items_processed": inserted,
+            "items_failed": errors,
+            "error": error,
+            "metadata": {
+                "runner": "github-actions",
+                "maxPages": self.max_pages,
+                # The shape supabase/functions/_shared/ingestionHealth.ts reads.
+                "sources": {
+                    "catchdesmoines.com": {
+                        "fetched": found,
+                        "inserted": inserted,
+                        "duplicates": duplicates,
+                        "errors": errors,
+                    }
+                },
+            },
+        }
+
+        try:
+            self.supabase.table("automation_job_runs").insert(row).execute()
+            logger.info("Posted heartbeat row to automation_job_runs")
+        except Exception as e:  # noqa: BLE001 - never let the ledger fail the crawl
+            logger.warning(f"Could not post heartbeat row: {e}")
+
     async def run(self):
         """Run the crawler."""
+        self.started_at = datetime.now(tz=ZoneInfo("UTC")).isoformat()
         logger.info("=" * 60)
         logger.info("CatchDesMoines Event Crawler")
         logger.info(f"Dry Run: {self.dry_run}")
@@ -768,7 +836,18 @@ async def main():
         pass
 
     crawler = CatchDesMoinesCrawler(dry_run=args.dry_run, max_pages=args.max_pages)
-    result = await crawler.run()
+    try:
+        result = await crawler.run()
+    except Exception:
+        # A crash mid-crawl is the case the ledger most needs to record, and it
+        # is the one an early return would miss. Re-raised immediately after, so
+        # the exit code is unchanged.
+        crawler.post_heartbeat(None)
+        raise
+
+    # Posted before the GITHUB_OUTPUT write and outside any success check, so a
+    # failed crawl leaves a failed row rather than no row at all.
+    crawler.post_heartbeat(result)
 
     # Output for GitHub Actions
     if os.environ.get("GITHUB_OUTPUT"):
