@@ -1780,3 +1780,12 @@ The story is about vitals POSTed to a URL that does not exist. The real finding 
   - **Instrument, then build, then read the console.** Four browser runs guessing at where the path stopped taught me nothing; one build with three `console.info` lines at the early returns answered it immediately and showed the metric firing with zero requests behind it.
   - **The story named the wrong defect and was still worth doing.** Its own AC2 offered "point the endpoint at an edge function" as the alternative - and that endpoint already existed, wired, sampled and RLS-bounded. Reading why the option was already satisfied is what surfaced the real bug.
   - **Latch the guard after the gates, not before.** `started = true` above the consent check would have made the re-entry on acceptance a no-op, and the test for "granted later on the same load" is the only thing that would have caught it.
+
+## 2026-09-19 - Follow-up: the dropped-builder pattern is now a check
+Acted on the previous entry's own closing line. Eleven `void supabase` sites; seven are `functions.invoke`/`auth.*`, which return real promises. Of the four query builders, three already ended in `.then(...)`. `webVitals.ts` was the only instance - which is exactly why it needed a check rather than a note.
+- `scripts/check-supabase-await.mjs` in `npm run validate` and as its own step in pr-checks.yml. Negative-controlled twice.
+- **Learnings for future iterations:**
+  - **One instance in a codebase that otherwise gets it right is the shape that survives review forever.** Three of four sites had the terminator. Nobody was being careless; the one that was wrong just never looked wrong.
+  - **My own error message failed another check.** The hint spelled out an example query and `check-schema-usage` reported the placeholder table as missing. Third time this session a check has fired on the prose explaining a check - strip comments and string literals *and* keep example code out of error text.
+  - **A statement boundary is not a bracket.** The backward scan stopped at the `[` of `await Promise.all([builder, builder])`, excluding the `await`, and reported five correct edge functions. An unmatched `(` or `[` means the consumer is outside it; only an unmatched `{` is a real boundary.
+  - **Read the first run's output, do not trust its count.** Every one of the three false-positive classes was visible in the first run and invisible in the number.

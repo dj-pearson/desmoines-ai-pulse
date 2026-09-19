@@ -222,6 +222,17 @@ jobs:
       - name: A failed fetch is not an empty state
         run: npm run check-false-empty-state
 
+      # WEB-PERF-039. A PostgrestBuilder is a THENABLE, not a promise: it
+      # sends no HTTP request until something calls .then() on it. So
+      # `void supabase.from("web_vitals").insert(row);` evaluates the builder
+      # and throws it away - no request, no error, no log. That line shipped,
+      # and the RUM table had never received a single row; the admin panel's
+      # "No web-vitals rollup yet" was read as low traffic for months. It is
+      # invisible in review because `void` is exactly how you say "fire and
+      # forget" for a real promise.
+      - name: No supabase query builder is dropped unsubscribed
+        run: npm run check-supabase-await
+
       # WEB-PERF-040. OptimizedImage has supported `priority` since it was
       # written and no caller passed it, and SocialEventCard - which renders
       # every event listing on the site - was hardcoded loading="lazy" with no
