@@ -1258,3 +1258,16 @@ A four-character venue extraction moved the event to another venue's address.
   - **Fixing a migration's syntax does not make it apply.** schema_migrations already has its row. The file gets a header saying so, because a correct-looking migration that never ran is more misleading than an obviously broken one.
   - **Before fixing a dead migration, check whether anyone wants it.** All five objects in that file have zero references across src/, supabase/functions/ and scripts/, and none are in the generated types. The real question was never "how do we apply this" - it was "does the product want location tracking", and nobody had to answer it because the failure was silent.
 ---
+
+## 2026-09-19 - WEB-ADS-007 (CLOSED): a placement on sale that the database could not store
+- `sidebar` was in PLACEMENT_SPECS and on /advertise, and absent from all three systems needed to sell it: the `placement_type` enum, `ad_rate_card`, and create-campaign-checkout's label map. Buying it created the campaigns row, failed the campaign_placements insert, and left an orphan draft.
+- Dropped from seven files (AC3 lists five; `lib/affiliateAds.ts` and `AffiliateAdBanner.tsx` carried it too).
+- `createCampaign` now deletes the draft when the placement insert fails.
+- `scripts/check-placement-enum.mjs` compares the two lists; in validate and pr-checks.
+- **Learnings for future iterations:**
+  - **Two internally-consistent files that only meet at runtime are where this class of bug lives.** The spec reads like a product decision, the enum reads like a schema, and neither is wrong on its own. Nothing compared them, so a placement was on sale for months that the database could not store. Whenever a TS union mirrors a DB enum, something should assert it.
+  - **A compensating delete beats an RPC you cannot deploy atomically.** AC4 asked for a transactional RPC. A client calling an RPC before its migration is applied fails with PGRST202 on EVERY call, not the rare one - the WEB-FEAT-019 bind. The delete is strictly better than today with no deploy-order hazard, and the comment says what the stronger shape would be.
+  - **Report the error the user needs, not the one you just caused.** The cleanup's own failure is logged; the placement error is what gets thrown, because that is what the advertiser has to see.
+  - **My check's first version found the wrong `placement_type:`.** The generated types use that key both as a COLUMN inside a table Row and as the enum itself; searching from the top found the column and read foreign-key names as enum members. It anchors on the `Enums:` block now. The failure direction was at least right - it refused to pass while confused, rather than reporting success over garbage.
+  - **The strict ratchet caught what validate did not.** `validate` passed with a leftover `sidebar` key in a `Record<AffiliatePlacement, ...>`, because the strict project is not in validate - only in pr-checks. When you narrow a union, grep for every `Record<ThatUnion,` as well as every usage.
+---

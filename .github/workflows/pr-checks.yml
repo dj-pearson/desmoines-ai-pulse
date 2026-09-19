@@ -125,6 +125,16 @@ jobs:
       - name: Every migration parses
         run: npm run check-migrations-parse
 
+      # WEB-ADS-007. placementSpecs defined five placements and /advertise
+      # renders every one as purchasable; the placement_type enum had four. So
+      # Sidebar Skyscraper was on sale, and buying it created the campaigns row
+      # and then failed the campaign_placements insert - an error for the
+      # advertiser and an orphan draft in the database. Nothing compared the two
+      # lists, because each file is internally consistent and they only meet at
+      # an INSERT.
+      - name: Purchasable placements exist in the DB enum
+        run: npm run check-placement-enum
+
       # The offline suites for the edge/script helpers that have no other
       # coverage: the venue-image reclaim, the /media route, the image_url
       # rewrite and the provider-spend pricing. Each one decides a number or a

@@ -47,10 +47,10 @@ const AD_STALE_TIME = 5 * 60 * 1000;
  *      -> top_banner, featured_spot, below_fold, sponsored_listing
  *  and get_active_ads('sponsored_listing') returns HTTP 200.
  *
- *  `sidebar` is still deliberately absent: it is a front-end-only name that was
- *  never added to the enum, which is why isServable short-circuits it below
- *  rather than letting it reach the RPC (AC3 is the decision on whether it
- *  should exist at all). */
+ *  WEB-ADS-007 removed `sidebar`, which used to sit alongside these as a
+ *  front-end-only name that was never in the enum. There is no longer an
+ *  unservable placement, so the isServable() short-circuit that existed for it
+ *  is gone too. */
 const SERVABLE_PLACEMENTS = [
   'top_banner',
   'featured_spot',
@@ -59,19 +59,19 @@ const SERVABLE_PLACEMENTS = [
 ] as const;
 
 type ServablePlacement = typeof SERVABLE_PLACEMENTS[number];
-export type AdPlacement = ServablePlacement | 'sidebar';
 
-function isServable(placement: AdPlacement): placement is ServablePlacement {
-  return (SERVABLE_PLACEMENTS as readonly string[]).includes(placement);
-}
+/*
+ * WEB-ADS-007. This was `ServablePlacement | 'sidebar'`, with an isServable()
+ * guard below that skipped the RPC for sidebar and let the caller fall back to
+ * a house ad. `sidebar` was never in the placement_type enum, so no campaign
+ * could target it and the RPC rejected it outright - the short-circuit was the
+ * workaround for a placement that should not have been in the union. It is gone
+ * from PLACEMENT_SPECS now, so every value here is servable and the type says
+ * so.
+ */
+export type AdPlacement = ServablePlacement;
 
 export function useActiveAds(placementType: AdPlacement) {
-  // `sidebar` is a front-end-only placement — it exists in PLACEMENT_SPECS but was
-  // never added to the `placement_type` DB enum, so no campaign can ever target it
-  // and the RPC rejects it outright. Skip the call and let the caller fall back to a
-  // house ad instead of erroring on every render (WEB-QA-003).
-  const servable = isServable(placementType);
-
   // WEB-SEC-031. The RPC below is passed p_user_id and applies PER-ACCOUNT
   // frequency caps with it (WEB-ADS-002), so its answer is user-specific -- but
   // the key was not, so after a logout the next person on the browser was
@@ -82,7 +82,6 @@ export function useActiveAds(placementType: AdPlacement) {
 
   const { data, isLoading, refetch } = useQuery({
     queryKey: ['active-ads', placementType, user?.id ?? 'anonymous'],
-    enabled: servable,
     queryFn: async (): Promise<ActiveAd | null> => {
       // Send all three parameters, even though the last two are DEFAULT NULL.
       //
@@ -156,5 +155,5 @@ export function useActiveAds(placementType: AdPlacement) {
     staleTime: AD_STALE_TIME,
   });
 
-  return { ad: data ?? null, isLoading: servable ? isLoading : false, refetch };
+  return { ad: data ?? null, isLoading, refetch };
 }

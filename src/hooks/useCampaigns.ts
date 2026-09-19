@@ -1,6 +1,9 @@
 import { useState, useEffect } from "react";
 import { supabase } from "@/integrations/supabase/client";
 import { useAuth } from "./useAuth";
+import { createLogger } from "@/lib/logger";
+
+const logger = createLogger("useCampaigns");
 
 export interface Campaign {
   id: string;
@@ -246,7 +249,42 @@ export function useCampaigns() {
         .from("campaign_placements")
         .insert(placementInserts);
 
-      if (placementError) throw placementError;
+      if (placementError) {
+        // WEB-ADS-007 AC4. THIS USED TO `throw` AND LEAVE THE CAMPAIGN BEHIND.
+        //
+        // The campaigns row is already written by the time we get here, so a
+        // failed placement insert left a draft campaign with no placements: an
+        // advertiser who saw an error, and a row that can never be checked out
+        // because create-campaign-checkout builds its line items from the
+        // placements. Buying the `sidebar` placement did exactly this on every
+        // attempt, because the value was not in the placement_type enum.
+        //
+        // A compensating delete, not an RPC. A transactional
+        // create_campaign_with_placements() would be stronger and is the right
+        // eventual shape - but it does not exist yet, and a client that calls
+        // an RPC before its migration is applied fails with PGRST202 on every
+        // campaign rather than on the rare one. This is strictly better than
+        // today with no deploy-order hazard.
+        //
+        // The cleanup is best-effort and its own failure is reported alongside
+        // the real error rather than replacing it: the placement error is what
+        // the advertiser needs to see, and swallowing it to report a failed
+        // tidy-up would be the worse trade.
+        const { error: cleanupError } = await supabase
+          .from("campaigns")
+          .delete()
+          .eq("id", campaign.id);
+
+        if (cleanupError) {
+          logger.error("createCampaign", "Placement insert failed AND the draft campaign could not be removed", {
+            campaignId: campaign.id,
+            placementError,
+            cleanupError,
+          });
+        }
+
+        throw placementError;
+      }
 
       await fetchCampaigns();
       return campaign;

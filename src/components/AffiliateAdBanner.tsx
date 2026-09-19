@@ -42,8 +42,6 @@ export function AffiliateAdBanner({ placement, className = '' }: AffiliateAdBann
         return 'max-w-[728px] mx-auto';
       case 'featured_spot':
         return 'max-w-[300px] mx-auto';
-      case 'sidebar':
-        return 'hidden lg:block max-w-[160px]';
       default:
         return '';
     }
