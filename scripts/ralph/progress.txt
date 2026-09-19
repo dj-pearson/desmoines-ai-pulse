@@ -1631,3 +1631,11 @@ No code. The story says decide the SEO call first, and the measurement shows tha
   - **The blocked half and the unblocked half were not separated.** Filing one story for "the footer is too tall" bundled a real SEO judgement call with a plain mobile-layout job, and the judgement call froze both for weeks. Measuring first would have split them.
   - **Half the numbers in the AC were right.** Desktop 1557px matched to the pixel; mobile was off by 557px and happened to land within 3px of the figure quoted as the *before*. Same measuring session, same story, one number stale - so "it was measured once" is not the same as "it is measured".
   - **A browser makes "needs a decision" into "here is the decision with numbers".** This iteration changed no code and is still the most useful thing available for this story, because what was missing was never the implementation.
+
+## 2026-09-19 - WEB-UX-037, unblocked half: footer link columns pair up on a phone
+2874px -> 2686px at 375px. Desktop and tablet unchanged, all 74 links intact, no horizontal overflow.
+- **Learnings for future iterations:**
+  - **The first attempt made the tablet footer 336px taller, and only measuring the *before* at 768 caught it.** `col-span-2` on the brand cell carried into the `md` 2-column layout and took a whole row. `md:col-span-1` scopes it. A change measured only at the width it targets is a change half measured - and this one would have shipped as an improvement.
+  - **I had to correct my own note from two hours earlier.** It said the ordinary nav is 51% of the footer and implied the opportunity was there. True, but of that 1376px the brand-and-newsletter cell is 360px and pairing the link columns recovers 188px - 6.5% of the footer, against SiteDirectory's 1073px. Both statements were accurate; the emphasis was wrong, which is its own kind of wrong.
+  - **Measuring twice cost two 50-second builds and was the whole value of the iteration.** Without the before/after at three widths this would have been "looks tidier" with a number attached to the one viewport I happened to check.
+  - **The required lanes are the regression net for a layout change.** touch-targets measures footer link boxes at 375px under a coarse pointer, which is exactly what narrowing columns threatens; it passes 3/3, and axe is 48/48.
