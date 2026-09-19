@@ -1890,3 +1890,14 @@ The ApiKeyManager half stays open - AC3 ties it to WEB-QA-018's owner decision.
   - **An AC can hand half of itself to another story.** AC3 says delete ApiKeyManager *with* the WEB-QA-018 decision. Deleting it now would pre-empt the "build it" branch of a call the owner has not made, so the story stays open rather than the work being faked.
   - **Check who else references a hook before deleting it.** `useApiKeys` is named in `logoutCacheTeardown.test.ts`, which pins its query key as user-scoped so two accounts cannot share a cache entry. That deletion is an edit to a security test, not a file removal.
   - **A baseline should shrink by exactly what was removed.** 96 -> 94 is the two `useLoginActivity` RPCs and nothing else; the four `api_keys` entries stay because that code stays. A baseline that drops more than the diff is hiding something.
+
+## 2026-09-19 - WEB-QUAL-008 CLOSED: /admin/security told the operator the site was locked when it was not
+- The AC names two fake controls. Four of the five tabs were mocks on a real admin route: a maintenance toggle that toasted "Only admins can access", a Save writing to localStorage, "Active Threats"/"Blocked IPs" counters computed from hardcoded arrays, and three invented security-log rows with a fake IP.
+- Removed rather than implemented (AC2 allows either). Cloudflare Pages already does maintenance pages and IP rules; wiring the IP tab to `blocked_ips` - which exists - would have made the UI honest about writing a row while still blocking nobody.
+- `/admin/security` now renders only `BlockedEmailDomainsManager`, the one tab that queried a real table, above a note saying where maintenance and IP rules actually live.
+- `Enhanced404` deleted, not swapped in: it renders `SEOHead` (`index, follow`) *and* its own Helmet `noindex`. 7 tests, 2 negative controls. validate exit 0, vitest 783/783, app type baseline improved 139 -> 135.
+- **Learnings for future iterations:**
+  - **A security control that reports success without acting is worse than none.** It is the screen someone opens during an incident. Every other fabrication this session cost accuracy; this one could cost an operator their belief that the site was closed.
+  - **Making a mock honest can still leave it useless.** `blocked_ips` exists, so the tempting fix was to wire the UI to it. Nothing reads that table, so the page would have truthfully recorded a block that blocks nobody - the lie moved one layer down, and harder to spot.
+  - **Check the second implementation before adopting it.** AC3 offered "delete or swap in". `Enhanced404` emits two contradictory robots metas - the exact WEB-SEO-040 defect - on the page type where `noindex` matters most. The orphan was worse than the thing it would have replaced.
+  - **Deleting dead code can move a ratchet.** The app type baseline improved by 4 and was re-cut to 135. Worth re-running the ratchet after any deletion rather than assuming it is unchanged.
