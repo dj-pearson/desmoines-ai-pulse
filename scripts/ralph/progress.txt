@@ -2539,3 +2539,42 @@ Learnings for future iterations
 5. Not every story can be closed by the loop, and three of this story's four
    ACs are wrong on the evidence. Correcting the evidence IS the work; the next
    pass starts from facts instead of re-deriving them.
+
+================================================================================
+2026-09-19  Hook-name collisions: gated, after the third one turned up
+================================================================================
+
+Yesterday's WEB-BE-054 investigation turned on two hooks called
+useRestaurantOpenings reading different tables. WEB-QA-015 AC2 independently
+records two called useUserPreferences holding different preference bags. Counted
+properly: 302 exported hooks, three names exported from more than one file, all
+three live.
+
+The third was unfiled. useTrending.ts is a TanStack query over trending_scores
+(MostSearched.tsx); useTrendingContent.ts is a useState/useEffect fetch
+(TrendingContent.tsx), which PrerenderSignal cannot see - it publishes
+data-queries-settled from useIsFetching(), a count of TanStack queries only - so
+a capture can land before its rows arrive.
+
+scripts/check-hook-name-collisions.mjs allows the three by name with their
+reasons and fails on a fourth. It also fails when an allowlisted name STOPS
+colliding, so a stale entry cannot mask a later collision under the same name.
+
+Learnings for future iterations
+
+1. When one investigation turns on a defect class, count the class. The
+   collision that cost most of an iteration was one of three, and the third was
+   in nobody's backlog.
+
+2. A gate whose allowlist can go stale needs a rule for the allowlist too.
+   "These three are known" silently becomes "these three are permitted
+   forever" the moment one is fixed and the entry stays.
+
+3. A name collision is the hardest kind of bug to see in review because every
+   call site is correct in isolation. Six correct-looking imports, three
+   different behaviours. Nothing short of counting exports finds it.
+
+4. Two greps with different quote styles gave different answers this iteration:
+   the first said useTrendingContent had no importers, and it has one. When a
+   result supports a conclusion you want (dead code, safe to delete), check it
+   the other way before acting.
