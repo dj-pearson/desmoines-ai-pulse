@@ -171,6 +171,15 @@ jobs:
       # address and coordinates, so the event moved. Pins the length, word-
       # boundary and coverage rules, and that the scraper uses the shared matcher.
       - run: deno test --allow-read supabase/functions/_tests/venue-match.test.ts
+      # WEB-CI-029 AC2. The money path had no test that crossed its own seam:
+      # stripe-webhook decides what a Stripe status becomes in
+      # user_subscriptions, _shared/entitlements.ts reads that column back and
+      # decides entitlement, and nothing checked them together - so a status the
+      # webhook writes but isSubscriptionRowEntitled does not recognise would
+      # lock out a paying customer with no failure anywhere. Pins the status
+      # map, the past_due grace window, platform='web' on the checkout row, and
+      # that the update patch carries no identity columns.
+      - run: deno test --allow-read supabase/functions/_tests/subscription-status-entitlement.test.ts
       # WEB-BE-032. The ops digest counted with `count ?? 0` and discarded the
       # error, so a digest that could read nothing printed the same eleven
       # zeros as a system with nothing wrong. Pins that an unreadable section

@@ -15,6 +15,11 @@ import { createClient } from "https://esm.sh/@supabase/supabase-js@2.45.0";
 import { listAdminUserIds } from "../_shared/apiKeyAuth.ts";
 import { sendNurtureEmail } from "../_shared/sendNurtureEmail.ts";
 import { buildTrialNotice, planAmount } from "../_shared/trialNotice.ts";
+import {
+  subscriptionUpdatePatch,
+  webSubscriptionRow,
+  type StripeSubscriptionLike,
+} from "../_shared/stripeSubscriptionRow.ts";
 
 // Stripe webhooks are server-to-server and do not require CORS headers.
 // Removing Access-Control-Allow-Origin prevents browser-based spoofing.
@@ -366,27 +371,18 @@ async function handleSubscriptionPayment(
     throw existingSubscriptionError;
   }
 
-  const subscriptionData = {
-    user_id: userId,
-    plan_id: planId,
-    status: mapStripeStatus(subscription.status),
-    stripe_subscription_id: subscriptionId,
-    stripe_customer_id: session.customer as string,
-    platform: "web",
-    current_period_start: new Date(subscription.current_period_start * 1000).toISOString(),
-    current_period_end: new Date(subscription.current_period_end * 1000).toISOString(),
-    cancel_at_period_end: subscription.cancel_at_period_end,
-    trial_start: subscription.trial_start
-      ? new Date(subscription.trial_start * 1000).toISOString()
-      : null,
-    trial_end: subscription.trial_end
-      ? new Date(subscription.trial_end * 1000).toISOString()
-      : null,
-    // WEB-LEGAL-006: needed to state the real renewal amount in the
-    // trial-conversion notice. Nothing else recorded monthly vs yearly, and it
-    // cannot be inferred during a trial because current_period_end is trial_end.
-    billing_interval: subscription.items?.data?.[0]?.price?.recurring?.interval ?? null,
-  };
+  // WEB-CI-029. Built by _shared/stripeSubscriptionRow.ts rather than inline, so
+  // the mapping this row encodes - including platform='web', which the read and
+  // the UPDATE above both scope on, and billing_interval, which WEB-LEGAL-006
+  // needs because nothing else records monthly vs yearly and a trial cannot
+  // imply it - is reachable by a test. It was not: this file imports Stripe
+  // from esm.sh and exports nothing.
+  const subscriptionData = webSubscriptionRow({
+    userId,
+    planId,
+    subscription: subscription as unknown as StripeSubscriptionLike,
+    stripeCustomerId: session.customer as string,
+  });
 
   if (existingSubscription) {
     // Update existing web subscription
@@ -438,20 +434,11 @@ async function handleSubscriptionUpdated(
 
   const { error } = await supabase
     .from("user_subscriptions")
-    .update({
-      status: mapStripeStatus(subscription.status),
-      current_period_start: new Date(subscription.current_period_start * 1000).toISOString(),
-      current_period_end: new Date(subscription.current_period_end * 1000).toISOString(),
-      cancel_at_period_end: subscription.cancel_at_period_end,
-      canceled_at: subscription.canceled_at
-        ? new Date(subscription.canceled_at * 1000).toISOString()
-        : null,
-      // Backfills existing rows as Stripe sends updates (WEB-LEGAL-006).
-      billing_interval: subscription.items?.data?.[0]?.price?.recurring?.interval ?? null,
-      trial_end: subscription.trial_end
-        ? new Date(subscription.trial_end * 1000).toISOString()
-        : null,
-    })
+    // WEB-CI-029: the patch, not the full row. Keyed on stripe_subscription_id,
+    // so re-sending user_id, plan_id or platform would let a malformed event
+    // rewrite who the subscription belongs to. Also backfills billing_interval
+    // on existing rows as Stripe sends updates (WEB-LEGAL-006).
+    .update(subscriptionUpdatePatch(subscription as unknown as StripeSubscriptionLike))
     .eq("stripe_subscription_id", subscription.id);
 
   if (error) {
@@ -594,22 +581,6 @@ async function handleInvoicePaymentFailed(
 /**
  * Map Stripe subscription status to our status
  */
-function mapStripeStatus(stripeStatus: Stripe.Subscription.Status): string {
-  const statusMap: Record<string, string> = {
-    active: "active",
-    canceled: "canceled",
-    incomplete: "past_due",
-    incomplete_expired: "canceled",
-    past_due: "past_due",
-    trialing: "trialing",
-    unpaid: "past_due",
-    paused: "paused",
-  };
-
-  return statusMap[stripeStatus] || "active";
-}
-
-
 /**
  * customer.subscription.trial_will_end (WEB-LEGAL-006).
  *

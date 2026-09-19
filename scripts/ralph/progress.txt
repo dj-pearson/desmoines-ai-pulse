@@ -1286,3 +1286,17 @@ Nine Playwright specs ran nowhere, and 37MB of snapshots could not match on any 
   - **Exclude the sweeping config from the check that measures coverage.** If check-e2e-lanes counted playwright.config.ts as a lane, every spec would look wired and the check would assert nothing - the same shape as a grep satisfied by its own comment.
   - **Do not promote a spec into a required lane you have not watched pass.** AC2 and AC4 both ask for that, and both need a production build this container cannot make. Baselining the list keeps it visible without risking a red required lane.
 ---
+
+## 2026-09-19 - WEB-CI-029 AC1/AC2 (AC3 tractable the same way; AC4 needs a production build)
+The money path had no test that crossed its own seam.
+- stripe-webhook decides what a Stripe status becomes in `user_subscriptions`; `_shared/entitlements.ts` reads it back and decides entitlement. Each side plausible alone; nothing checked them together.
+- `_shared/stripeSubscriptionRow.ts` holds the status map and both row shapes as pure functions over a structural type; the webhook calls it.
+- `_tests/subscription-status-entitlement.test.ts`, 9 assertions, negative-controlled three ways, wired into CI.
+- **Learnings for future iterations:**
+  - **The untested thing is usually a seam, not a file.** Both sides of this one had tests. What had none was the sentence "the status the webhook writes is a status entitlements recognises" - and a violation of it locks out a paying customer with no exception, no log, nothing. When two modules pass a value through a database column, test the round trip, not the ends.
+  - **A module that imports from esm.sh and exports nothing is untestable by construction.** stripe-webhook is 700 lines of money handling and not one line of it could be imported. Extracting the pure part to a leaf module is now the fourth time today (summary.ts, catchdesmoinesCategory.ts, venueMatch.ts, stripeSubscriptionRow.ts) - it is the default move, not a special case.
+  - **Say out loud when a default grants rather than withholds.** `mapStripeStatus` returns 'active' for an unknown status, so a status Stripe adds later gives away the product. That is the right trade here, but it was undocumented, which made the real risk - a silent edit to the map - invisible. Pin the map value by value and comment the default.
+  - **`undefined` and `null` are not interchangeable in a PostgREST patch.** JSON.stringify drops undefined keys, so a column that should be CLEARED keeps its old value on an update. The row builder returns null explicitly and there is a test for it.
+  - **An update patch keyed on an external id must not carry identity columns.** Sending user_id or platform alongside `.eq('stripe_subscription_id', ...)` would let a malformed event rewrite who a subscription belongs to.
+  - **A source-text assertion pins WHERE code lives, not what it does.** My refactor broke trial-notice.test.ts, which counted `billing_interval:` occurrences in stripe-webhook and needed two. The test was right about the requirement and wrong about the location. Repointed and strengthened to assert both builders exist AND the webhook calls them. When you move code, run the suites that READ the file you moved it out of.
+---
