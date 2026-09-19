@@ -1567,3 +1567,15 @@ The card rails the last note named: ForYouRail, RecentlyViewed x2, RecentlyViewe
   - **Keep the container you already have.** OptimizedImage adds a wrapper div, which is what makes these edits layout-sensitive. Every one of these sites already sat in a box that fixes the shape, so keeping that box and giving the new wrapper `w-full h-full` makes the change additive. An explicit height also beats `aspect-ratio` in CSS, so the style the component derives from width/height cannot resize it.
   - **AC2's framing oversold this batch.** It frames the work as CLS, and all seven were already inside height-reserving containers - the CLS win is nil. What it actually buys is srcset/WebP and one component instead of seven hand-rolled tags. Worth saying out loud rather than claiming the headline number.
   - **A behaviour change hid in an `onError`.** PersonalizedRecommendations hid the img on failure, leaving an empty box; OptimizedImage shows "Image unavailable" in the same box. Same layout, different pixels, and nothing in this container can see either.
+
+## 2026-09-19 - WEB-CI-028 AC2: ran the candidates instead of assuming
+The previous note said AC2 "needs a build". It does not - a build works here.
+- `npx vite build` with placeholder env: 51s, exit 0. Chromium is preinstalled.
+- `url-filter-state.spec.ts` against the built site: **6 passed, 3 failed**, and all three failures are `/events`.
+- Traced by DOM probe to `EventsPage.tsx:615`, not inferred. Method written into `TESTING.md`.
+- **Learnings for future iterations:**
+  - **"Needs a build" was wrong and had been recorded as fact.** `npm run build` fails here because `generate-sitemaps` wants credentials; `npx vite build` does not. One is the blocker, the other is the whole script. An earlier iteration wrote the blocker down without separating them, and it stopped the next three from trying.
+  - **A placeholder backend is not a neutral backend.** It decides which branch a page renders. `/events` returns its noindex error page, which replaces the hero and with it the search input, so every filter spec fails there while passing on `/restaurants` and `/attractions`. The result looked like a spec defect and was environmental.
+  - **The three hubs disagree about what a failed query does to the filter UI,** and that is invisible with a healthy backend. It is also exactly what will make these specs flaky in CI the first time Supabase blips mid-run - worth knowing before promoting them into a gating lane.
+  - **Two obstacles had nothing to do with the code and cost most of the iteration.** `vite preview` binds `::` and dies with `EAFNOSUPPORT` where there is no IPv6. Playwright looks for `chrome-headless-shell` at a revision that is not installed while the full chromium is. Both are now in TESTING.md, because rediscovering them is pure loss.
+  - **Running it beat reading it, and still did not finish the AC.** The evidence is real - 6/9, with a file and line for each failure - but AC2 asks for a pass against a real backend, and refusing to promote on a placeholder run is the same answer as before with a much better reason.
