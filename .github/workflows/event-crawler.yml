@@ -71,6 +71,13 @@ jobs:
       - name: Check the category vocabulary loads and normalizes
         run: python crawlers/test_categories.py
 
+      # Fourth in the no-dependency block. The duplicate check passes a scraped
+      # title and venue to .ilike(), where they are PATTERNS - one stored title
+      # carries a literal percent - and its failure policy used to be "not a
+      # duplicate", so one PostgREST hiccup re-inserted the batch (WEB-BE-048).
+      - name: Check the LIKE escaping and the duplicate-check failure policy
+        run: python crawlers/test_like_escape.py
+
       - name: Install dependencies
         run: |
           python -m pip install --upgrade pip

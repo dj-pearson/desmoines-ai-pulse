@@ -240,6 +240,14 @@ jobs:
       # inserted forty events. Pins reachability, the removed read, that no
       # scraper fires a promise it will not await, and the batch arithmetic.
       - run: deno test --allow-read supabase/functions/_tests/scraper-dead-code.test.ts
+      # WEB-BE-048. ai-crawler's policy on a failed duplicate check was "On
+      # error, still add the item", so one PostgREST hiccup re-inserted the
+      # whole batch - that check is the only thing between a re-crawl and a
+      # duplicate row. Its events branch escaped its ilike pattern and its
+      # restaurant/playground/attraction branch did not, so a name carrying a
+      # percent became a wildcard and silently dropped a real record. Pins both
+      # rules across the TypeScript and Python paths.
+      - run: deno test --allow-read supabase/functions/_tests/duplicate-check-policy.test.ts
       # WEB-BE-032. The ops digest counted with `count ?? 0` and discarded the
       # error, so a digest that could read nothing printed the same eleven
       # zeros as a system with nothing wrong. Pins that an unreadable section

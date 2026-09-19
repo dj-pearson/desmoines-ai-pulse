@@ -1220,10 +1220,15 @@ async function checkForDuplicates(
   supabase: any,
   category: string,
   items: any[]
-): Promise<{ newItems: any[]; duplicates: number }> {
+): Promise<{ newItems: any[]; duplicates: number; checkErrors: number }> {
   const tableName =
     category === "restaurant_openings" ? "restaurants" : category;
   let duplicates = 0;
+  // WEB-BE-048. An item skipped because its duplicate check failed is an
+  // ERROR, not a duplicate: folding it into `duplicates` would make a run
+  // where PostgREST was unreachable look like a run where the page had not
+  // changed, which is the distinction WEB-BE-043's zero-result rule depends on.
+  let checkErrors = 0;
   const newItems = [];
 
   // First remove duplicates within the batch itself
@@ -1283,7 +1288,13 @@ async function checkForDuplicates(
           query = supabase
             .from(tableName)
             .select("id")
-            .ilike("name", item.name?.trim());
+            // WEB-BE-048. sanitizeLikeInput here too. The events branch above
+            // has escaped its pattern since WEB-SEO-017 and this branch never
+            // did, so a restaurant, playground or attraction whose name carries
+            // a percent or an underscore turned this check into a wildcard
+            // match - and the check GATES THE INSERT, so a false match silently
+            // drops a real record.
+            .ilike("name", sanitizeLikeInput(item.name?.trim() ?? ""));
           break;
         case "restaurant_openings":
           // For restaurant openings, use exact name match to avoid false duplicates
@@ -1302,12 +1313,18 @@ async function checkForDuplicates(
       const { data: existing, error } = await query.limit(1);
 
       if (error) {
+        // WEB-BE-048. SKIP, do not insert. "On error, still add the item" meant
+        // one PostgREST hiccup re-inserted the whole batch, because this check
+        // is the only thing standing between a re-crawl and a duplicate row.
+        // firecrawl-scraper documents the opposite policy and it is the right
+        // one: a skip costs one cycle of latency and the next scheduled run
+        // re-scrapes the item, while a wrong insert has to be found and cleaned
+        // up by hand.
         console.error(
-          `Error checking duplicate for ${item.title || item.name}:`,
+          `Error checking duplicate for ${item.title || item.name}; skipping rather than risking a duplicate insert:`,
           error
         );
-        // On error, still add the item
-        newItems.push({ ...item, fingerprint });
+        checkErrors++;
       } else if (existing && existing.length > 0) {
         console.log(`⚠️ Database duplicate found: ${item.title || item.name}`);
         duplicates++;
@@ -1315,13 +1332,17 @@ async function checkForDuplicates(
         newItems.push({ ...item, fingerprint });
       }
     } catch (error) {
-      console.error(`Error processing item ${item.title || item.name}:`, error);
-      // On error, still add the item to avoid losing data
-      newItems.push({ ...item, fingerprint });
+      // Same policy as the read failure above: a thrown check is no more
+      // evidence that the item is new than a returned error is.
+      console.error(
+        `Error processing item ${item.title || item.name}; skipping rather than risking a duplicate insert:`,
+        error,
+      );
+      checkErrors++;
     }
   }
 
-  return { newItems, duplicates };
+  return { newItems, duplicates, checkErrors };
 }
 
 // Delegate to the shared imageStorage utility
@@ -1901,20 +1922,25 @@ Deno.serve(async (req) => {
     // deno-lint-ignore no-explicit-any
     let newItems: any[] = [];
     let duplicates = 0;
+    // WEB-BE-048: items skipped because their duplicate check could not be
+    // completed. Kept apart from `duplicates` and folded into the run's error
+    // count, so a PostgREST outage does not read as a quiet page.
+    let checkErrors = 0;
     let insertedCount = 0;
     // deno-lint-ignore no-explicit-any
     let insertErrors: any[] = [];
 
     const job = await runJob("ai-crawler", async (ctx) => {
     // Check for duplicates
-    ({ newItems, duplicates } = await checkForDuplicates(
+    ({ newItems, duplicates, checkErrors } = await checkForDuplicates(
       supabase,
       category,
       filteredItems
     ));
 
     console.log(
-      `📊 Found ${newItems.length} new items, ${duplicates} duplicates`
+      `📊 Found ${newItems.length} new items, ${duplicates} duplicates` +
+      (checkErrors > 0 ? `, ${checkErrors} skipped after a failed duplicate check` : '')
     );
 
     // Insert new items
@@ -1939,7 +1965,7 @@ Deno.serve(async (req) => {
     }
 
       ctx.processed(insertedCount);
-      ctx.failed(insertErrors.length);
+      ctx.failed(insertErrors.length + checkErrors);
       ctx.meta({
         url,
         category,
@@ -1948,7 +1974,7 @@ Deno.serve(async (req) => {
             fetched: filteredItems.length,
             inserted: insertedCount,
             duplicates,
-            errors: insertErrors.length,
+            errors: insertErrors.length + checkErrors,
           },
         },
       });
@@ -1979,7 +2005,10 @@ Deno.serve(async (req) => {
         newItems: newItems.length,
         duplicates: duplicates,
         inserted: insertedCount,
-        errors: insertErrors.length,
+        errors: insertErrors.length + checkErrors,
+        // Reported separately so an operator can tell "the page had not
+        // changed" from "we could not find out" (WEB-BE-048).
+        skippedAfterCheckError: checkErrors,
       },
       items: filteredItems.slice(0, 5), // Return first 5 items as preview
     };

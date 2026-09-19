@@ -111,6 +111,35 @@ EVENT_CATEGORIES, FALLBACK_CATEGORY, _CATEGORY_KEYWORDS = _load_category_vocabul
 CATEGORY_VOCABULARY = "/".join(EVENT_CATEGORIES)
 
 
+def sanitize_like(value: str, max_length: int = 500) -> str:
+    """Escape LIKE/ILIKE wildcards in a value used as a PATTERN (WEB-BE-048).
+
+    Port of sanitizeLikeInput in supabase/functions/_shared/validation.ts, and
+    it must stay in step with it: the same titles pass through both paths.
+
+    WHY IT MATTERS HERE. _check_duplicate passes a scraped title and venue to
+    .ilike(), where they are patterns rather than values. One stored title
+    already carries a literal percent ("Monday Pop Up Hours and 10% Bourbon"),
+    and in an ilike that percent matches anything - so the check can report a
+    duplicate that is not one. It GATES THE INSERT, so a false match silently
+    drops a real event.
+
+    APOSTROPHES ARE KEPT, for the reason the TypeScript version records:
+    stripping them turned "Chef George's" into "Chef Georges" and MISSED the
+    real duplicate. Many venue names here carry one.
+    """
+    if not isinstance(value, str):
+        return ""
+    return (
+        value[:max_length]
+        .replace("\\", "\\\\")  # backslash first, or the escapes below get escaped
+        .replace("%", "\\%")
+        .replace("_", "\\_")
+        .replace(";", "")
+        .strip()
+    )
+
+
 def normalize_category(raw) -> str:
     """Port of supabase/functions/_shared/eventCategories.ts normalizeCategory.
     Total: every input produces a canonical value."""
@@ -318,6 +347,10 @@ class CatchDesMoinesCrawler:
         # Extraction failures are counted, not swallowed. A run that extracts
         # nothing because the API call blew up must not exit 0 looking healthy.
         self.extraction_errors: int = 0
+        # Items skipped because their duplicate check could not be completed
+        # (WEB-BE-048). Kept apart from duplicates_skipped: "the event was
+        # already there" and "we could not find out" are different facts.
+        self.duplicate_check_errors: int = 0
         # Set at the top of run(); the heartbeat row needs a start as well as a
         # finish or "how long did this take" is unanswerable after the fact.
         self.started_at: Optional[str] = None
@@ -649,9 +682,9 @@ Return ONLY the JSON array. No other text."""
             day_end = day_start + timedelta(days=1)
 
             result = self.supabase.table("events").select("id").ilike(
-                "title", self._record_title(event).strip()
+                "title", sanitize_like(self._record_title(event))
             ).ilike(
-                "venue", self._record_venue(event).strip()
+                "venue", sanitize_like(self._record_venue(event))
             ).gte(
                 "date", day_start.isoformat()
             ).lt(
@@ -661,8 +694,19 @@ Return ONLY the JSON array. No other text."""
             return len(result.data) > 0
 
         except Exception as e:
-            logger.warning(f"Error checking duplicate: {e}")
-            return False
+            # WEB-BE-048. TREAT AS A DUPLICATE, i.e. skip. Returning False here
+            # meant "not a duplicate", so one PostgREST hiccup re-inserted every
+            # event in the batch - and this check is the only thing between a
+            # re-crawl and a duplicate row. A skip costs one cycle of latency
+            # and the next scheduled run re-crawls the event; a wrong insert has
+            # to be found and cleaned up by hand. Counted as an extraction error
+            # so the run does not report success while flying blind.
+            logger.warning(
+                f"Error checking duplicate for {self._record_title(event)}; "
+                f"skipping rather than risking a duplicate insert: {e}"
+            )
+            self.duplicate_check_errors += 1
+            return True
 
     async def _insert_event(self, event: dict) -> bool:
         """Insert event into Supabase."""
@@ -751,7 +795,11 @@ Return ONLY the JSON array. No other text."""
         found = result["total_found"] if result else 0
         inserted = result["inserted"] if result else 0
         duplicates = result["duplicates"] if result else 0
-        errors = result["extraction_errors"] if result else 1
+        errors = (
+            result["extraction_errors"] + result.get("duplicate_check_errors", 0)
+            if result
+            else 1
+        )
 
         # `result is None` means run() aborted on the first page, which is a
         # failure however few errors were counted.
@@ -880,6 +928,7 @@ Return ONLY the JSON array. No other text."""
         logger.info(f"Total events extracted: {len(all_events)}")
         logger.info(f"Events inserted: {self.events_inserted}")
         logger.info(f"Duplicates skipped: {self.duplicates_skipped}")
+        logger.info(f"Duplicate-check errors (skipped): {self.duplicate_check_errors}")
         logger.info(f"Extraction errors: {self.extraction_errors}")
         logger.info("=" * 60)
 
@@ -888,6 +937,9 @@ Return ONLY the JSON array. No other text."""
             "inserted": self.events_inserted,
             "duplicates": self.duplicates_skipped,
             "extraction_errors": self.extraction_errors,
+            # Reported apart from duplicates so an operator can tell "already
+            # there" from "could not find out" (WEB-BE-048).
+            "duplicate_check_errors": self.duplicate_check_errors,
         }
 
 

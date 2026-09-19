@@ -1404,3 +1404,16 @@ The scraper rate-limited its own orchestrator, and five of fifteen jobs had neve
   - **A const object literal that nothing mutates is a response full of zeros.** `batchInfo` reported `processedStart: 0, processedEnd: 0, remainingEvents: 0, nextSkipEvents: null` on a run that had just inserted forty events, so a caller paginating stopped after the first request. Grep for where a reported field is written, not just where it is declared.
   - **Write the reachability control first.** The walk that found 1,180 dead lines is crude regex, so before trusting it I appended one uncalled function to the real source and checked it was reported. My first version of the walk had a slicing bug and claimed 1,759 lines - the control is what separated the two numbers.
   - **`type-check:edge` does not catch a missing import.** `tsc -p tsconfig.edge.json` passed with `getAnthropicApiKey` used but not imported. `check-edge-types.mjs` caught it. A clean tsc run on these files proves less than it looks.
+
+## 2026-09-19 - WEB-BE-048 (all four ACs)
+A failed duplicate check inserted, and two of three ilike patterns were unescaped.
+- `sanitize_like()` in the Python crawler, a port of `sanitizeLikeInput`; both patterns escaped.
+- ai-crawler's name branch escaped; both failure paths skip and count instead of inserting.
+- 6 Deno tests + 21 offline Python checks, both in CI. Six negative controls.
+- **Learnings for future iterations:**
+  - **"Avoid losing data" was the comment on the line that duplicated it.** `On error, still add the item to avoid losing data` reads like caution and is the opposite: the duplicate check is the only thing between a re-crawl and a duplicate row, so a failed check that inserts turns one PostgREST hiccup into a re-inserted batch. A skip costs one cycle of latency; a wrong insert is cleaned up by hand.
+  - **When two writers of one table disagree about a policy, fix both.** The story named ai-crawler. The Python crawler's `except: return False` was the same bug in another language, and leaving it would have taught the next person the wrong policy from whichever file they opened.
+  - **A test over one branch does not catch an asymmetric fix.** ai-crawler's events branch had been escaping its pattern since WEB-SEO-017 while the restaurant/playground/attraction branch never did. The test now walks *every* `.ilike(` in the function and requires each argument to start with `sanitizeLikeInput(`, which is a shape a future branch cannot dodge.
+  - **A port needs a test against the original, not just against itself.** `sanitize_like` can drift from `sanitizeLikeInput` silently. The Python test reads `validation.ts` and fails if it stops escaping any of the four characters - and the control for that is deleting the percent escape from the TypeScript file and watching the Python test go red.
+  - **"Could not find out" is not "nothing changed".** A skipped item is counted as an error and kept out of `duplicates`, because both produce `inserted: 0` and WEB-BE-043's zero-result rule has to tell a dark source from an unreachable database.
+  - **Left one gap open on purpose:** PostgREST also treats `*` as a LIKE wildcard, and escaping it is not a one-liner (it rewrites `*` to `%` before SQL, so `\*` becomes a literal percent). Named in the notes rather than half-fixed across every caller of the shared helper.
