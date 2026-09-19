@@ -1845,3 +1845,15 @@ AC6 (stripe_customer_id + idempotency key) stays open - it needs a migration app
   - **Order the authorization check against the most powerful branch.** Reading `notifyAdmins` before the ownership check would let anyone with a token write a row into every admin's notification list. The test asserts the refusal wins, not merely that both exist.
   - **The ratchet caught a regression I introduced while fixing something else.** Routing the handler through one decision function dropped the `error` from `auth.getUser`, and check-error-handling failed with `2 -> 3`. Fixed both discards instead of re-baselining up; the file went to 1 and the baseline down to 129.
   - **Half of an AC can already be true on the server.** `stripe-webhook` had done the payment_received fan-out correctly for a while. The client half was still wrong, and the AC reads as though neither existed.
+
+## 2026-09-19 - WEB-ADS-012 AC1/AC3/AC4: the reach numbers on /advertise were invented
+AC2 (source visits from user_analytics) needs a migration and stays open.
+- The story says the block "hides itself today". It did not. It fell back to hardcoded 12,400 impressions / 980 clicks / 7.9% CTR with an asterisk reading "Estimated - sync pending", under a heading saying "Real audience data". GSC has never synced, so those invented figures are the only numbers any advertiser has ever seen there.
+- No fallbacks now; the block returns null below a real sample (7 days, at least one non-zero measure). Labels say Search Impressions / Search Clicks / Avg. Search CTR under "Search Performance", with a footnote saying plainly these are search impressions, not ad impressions. The "Active Audience: Des Moines" card - a constant string dressed as a metric - is gone.
+- 10 tests, 3 negative controls. validate exit 0, vitest 764/764.
+- **Learnings for future iterations:**
+  - **"It hides itself today" was the part of the story worth checking.** The AC treated the mislabelling as the defect and the empty state as harmless. The empty state was the defect: it filled itself in with numbers nobody measured, on the page where someone decides what to spend.
+  - **An asterisk saying "estimated" launders a fabrication.** It reads as a caveat and implies an estimate of something. Deleting the figure is the only version that is true.
+  - **A constant is not a metric.** "Active Audience: Des Moines" sat in the same grid, in the same card shape, next to three numbers. Shape is a claim.
+  - **The test caught me, not the code.** I asserted 1450 formats as "1.5K"; it is "1.4K", because toFixed works on the binary double. Understating is the safe direction for a reach figure, so the test now pins the real behaviour and says why, instead of my changing the code to match an intuition.
+  - **Sixth time an assertion fired on the prose explaining it.** My docstring used the word "estimated" while asserting the word was gone. Assert on code shapes - `: 12400`, `const estimated` - not on words that will also appear in the explanation.
