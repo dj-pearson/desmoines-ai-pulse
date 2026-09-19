@@ -1187,3 +1187,18 @@ restaurant-opening-scraper hardcoded a retired model and reported success anyway
   - **Exempt the sanctioned home from a "do not hardcode X" check, but gate it harder.** `_shared/aiConfig.ts` is where the id belongs, so listing it would make the fix look like the defect. Its defaults instead fail outright if retired, with no baseline excuse, because that fallback reaches every caller at once.
   - `deno.lock` picks up esm.sh integrity hashes from any local `npx deno@2 check`. Revert it - this is the second time it has appeared in a diff it did not belong in.
 ---
+
+## 2026-09-19 - WEB-BE-042 AC3/AC4/AC5 (AC2's ownership decision and AC6's week of observation stay open)
+The Catch Des Moines adapter parsed the site's own ld+json @type and then threw it away.
+- `category: "Community"` was stamped on every event - concerts, hockey games, Playhouse runs - so none of them were visible to the category filters or the music and sports hubs.
+- `_shared/domain-adapters/catchdesmoinesCategory.ts` maps @type to the Python crawler's vocabulary (Music/Sports/Arts/Community/Entertainment/Festival/Food); Community stays the fallback.
+- `_tests/catchdesmoines-category.test.ts`, 5 assertions, negative-controlled twice, wired into CI.
+- `Scraper.py` deleted (215 lines, referenced by nothing).
+- **Learnings for future iterations:**
+  - **Two of the AC's own evidence claims were wrong, and both changed what to do.** `extract-catchdesmoines-urls` is listed for deletion and is LIVE - AdminContent.tsx:407 renders a component that calls it. `n8n/main.json` is one of ten n8n artifacts in that directory. Check every "delete this, it's dead" claim with a grep for callers before acting on it; this is the fourth partial-sweep AC this session.
+  - **An AC gated on an open decision should stay undone.** AC4 says remove ai-crawler's Visit-Website extractor "if the adapter owns it", and AC2's ownership decision is explicitly open. Doing it anyway would pre-empt the decision the story defers, in a live function nothing here can run. Say so in the notes rather than half-doing it.
+  - **A test that restates a vocabulary cannot catch the two sides drifting apart.** The shared-category test READS the list out of `crawlers/catchdesmoines_crawler.py`'s prompt instead of hardcoding it, so a change on either writer fails CI. Two writers for one source only stay in agreement if something compares them.
+  - **The load-bearing assertion is the one about the CALL SITE, not the mapper.** An edit back to `category: "Community"` passes every mapping test, because the mapper is still correct - it just is not called. Assert that the derivation is wired in, not only that it works.
+  - **Split a pure function out when its module imports something heavy.** catchdesmoines.ts imports deno_dom, so a test importing the adapter cannot run without network. Same move as summary.ts an hour earlier; it is becoming the default shape for anything I want to test here.
+  - `check-edge-types` caught TS18048 in my own new test: `node:assert`'s `ok` is not declared as an assertion function in the edge shim, so it does not narrow `string | undefined`. Use `?? ''` + assert.notEqual, not assert.ok, when the value is used afterwards.
+---

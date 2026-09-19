@@ -22,6 +22,7 @@ import { DOMParser } from "https://deno.land/x/deno_dom@v0.1.38/deno-dom-wasm.ts
 import type { AdapterEvent, AdapterResult, DomainAdapter } from "./types.ts";
 import { scrapeUrl } from "../scraper.ts";
 import { fetchAllowed } from "./adapterFetch.ts";
+import { categoryForEventType } from "./catchdesmoinesCategory.ts";
 
 const SITE_ORIGIN = "https://www.catchdesmoines.com";
 const PAGE_SIZE = 12;
@@ -298,7 +299,7 @@ function toAdapterEvent(
     date,
     location,
     venue,
-    category: "Community",
+    category: categoryForEventType(ev["@type"]),
     price: "See website",
     source_url: externalUrl ?? detailUrl,
     image_url: image,

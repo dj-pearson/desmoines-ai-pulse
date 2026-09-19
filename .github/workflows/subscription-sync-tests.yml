@@ -147,6 +147,14 @@ jobs:
       # that all-sources-failed is a non-2xx, that a quiet day and a partial
       # failure are not, and that no model id is pasted back into index.ts.
       - run: deno test --allow-read supabase/functions/_tests/restaurant-opening-run-summary.test.ts
+      # WEB-BE-042 AC3/AC5. The Catch Des Moines adapter parsed the site's own
+      # ld+json @type and then discarded it, stamping category: "Community" on
+      # every event - concerts, hockey games and theatre runs alike - while the
+      # other live writer for the same source (the daily Python crawler) asks a
+      # model for a real category. Pins the @type mapping, that the adapter
+      # still derives rather than stamps, and that both writers use one
+      # vocabulary, read from the Python crawler's own prompt.
+      - run: deno test --allow-read supabase/functions/_tests/catchdesmoines-category.test.ts
       # WEB-BE-032. The ops digest counted with `count ?? 0` and discarded the
       # error, so a digest that could read nothing printed the same eleven
       # zeros as a system with nothing wrong. Pins that an unreadable section
