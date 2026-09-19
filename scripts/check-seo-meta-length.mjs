@@ -91,6 +91,13 @@ const PATTERNS = [
   { re: /useDocumentTitle\(\s*["'`]([^"'`$]*)["'`]/g, appendsBrand: true, kind: 'title' },
   // A literal <title> element inside Helmet, which carries what it says.
   { re: /<title>([^<{]*)<\/title>/g, appendsBrand: false, kind: 'title' },
+  // `const pageTitle = ...` IS NOT MEASURED, and the attempt is worth
+  // recording. Its consumers disagree about the brand suffix - /guides renders
+  // its 52-character pageTitle verbatim while others append - and on
+  // /events/free and /events/kids the rendered title is 32 characters, set by
+  // a different path entirely, so the const is not what reaches the document.
+  // Measuring it produced two false positives out of four. The literals
+  // themselves were shortened anyway; the inconsistency is its own defect.
   // `const pageDescription = "..."` / a template with interpolations.
   { re: /\bpageDescription\s*=\s*["'`]([^"'`]*)["'`]/g, appendsBrand: false, kind: 'description' },
   { re: /\bpageDescription\s*=\s*`([\s\S]*?)`/g, appendsBrand: false, kind: 'description' },
@@ -121,7 +128,9 @@ for (const file of [...walk(ROOT), ...EXTRA_FILES]) {
     for (const m of found) {
       // An interpolated count stands in at four digits; any other expression
       // makes the length unknowable from source, so the string is skipped.
-      const raw = m.literal.replace(/\$\{[^}]*\.length\}/g, COUNT_PLACEHOLDER);
+      const raw = m.literal
+        .replace(/\$\{\s*BRAND\.name\s*\}/g, BRAND)
+        .replace(/\$\{[^}]*\.length\}/g, COUNT_PLACEHOLDER);
       if (raw.includes('${')) continue;
       const literal = raw.replace(/\s+/g, ' ').trim();
       const appendsBrand = m.appendsBrand;

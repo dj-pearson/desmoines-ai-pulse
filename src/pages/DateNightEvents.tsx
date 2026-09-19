@@ -107,7 +107,7 @@ export default function DateNightEvents() {
   const dateEvents = matchingEvents.slice(0, VISIBLE_EVENT_LIMIT);
   const hiddenEventCount = matchingEvents.length - dateEvents.length;
 
-  const pageTitle = "Date Night Ideas & Events in Des Moines - Romantic Activities | Des Moines Insider";
+  const pageTitle = "Date Night Events in Des Moines | Des Moines Insider";
   const pageDescription = `Find ${matchingEvents.length}+ date night events in Des Moines: live music, wine tastings, dinner shows and evening entertainment for two.`;
 
   const breadcrumbs = [
