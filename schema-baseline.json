@@ -22,8 +22,6 @@
     "rpc|src/hooks/useCrmSegments.ts|add_crm_activity",
     "rpc|src/hooks/useCrmSegments.ts|evaluate_segment_rules",
     "rpc|src/hooks/useCrmTasks.ts|add_crm_activity",
-    "rpc|src/hooks/useLoginActivity.ts|get_user_login_activity",
-    "rpc|src/hooks/useLoginActivity.ts|log_login_activity",
     "rpc|src/hooks/usePasswordPolicy.ts|get_active_password_policy",
     "rpc|src/hooks/usePasswordPolicy.ts|validate_password_policy",
     "rpc|src/hooks/usePayments.ts|get_user_payment_summary",

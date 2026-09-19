@@ -1879,3 +1879,14 @@ AC2 (source visits from user_analytics) needs a migration and stays open.
   - **Renaming a large tracked binary directory doubles its cost.** 58 MB of screenshots get stored again under the new paths while the old ones stay in history. The AC offered the rename as tidying; it is the opposite.
   - **Do not delete the evidence a document is written from.** Four CSVs totalling 1.9 KB are the entire basis of a GSC fixes doc. They belong beside it, not in the bin.
   - **`git stash` to take a "before" measurement mutated what I was measuring.** The pop restored the index so 18 staged deletions silently became unstaged, and my next measurement reported 0.00 MB removed. Second time this session that a git command used as a convenience quietly undid real work - measure from `git ls-tree HEAD` instead of moving the working tree around.
+
+## 2026-09-19 - WEB-AUTH-011 AC2/AC4 + half of AC3: the admin login form would have reported every failure as a success
+The ApiKeyManager half stays open - AC3 ties it to WEB-QA-018's owner decision.
+- `AdminLogin.tsx` did `const success = await login(...)` and branched on it, while `login()` returns `{ success, error, ... }`. An object is always truthy, so a failed login took the success branch and called `navigate(0)`; the error message below it was unreachable. Deleted - `/admin/*` already goes through `ProtectedRoute requireAdmin`.
+- `LoginActivityList.tsx` + `useLoginActivity.ts` deleted: `get_user_login_activity` and `log_login_activity` are both absent from the generated types, so it was UI with nothing behind it.
+- `schema-baseline.json` 96 -> 94, exactly the two removed RPC references. `deadAuthSurface.test.ts` 5 cases, negative-controlled. validate exit 0, vitest 776/776.
+- **Learnings for future iterations:**
+  - **Dead code hid a bug that would have shipped on the day someone wired it up.** The form treated a result object as a boolean, so every failed admin login would have reloaded the page and shown nothing. It was harmless only because no import existed.
+  - **An AC can hand half of itself to another story.** AC3 says delete ApiKeyManager *with* the WEB-QA-018 decision. Deleting it now would pre-empt the "build it" branch of a call the owner has not made, so the story stays open rather than the work being faked.
+  - **Check who else references a hook before deleting it.** `useApiKeys` is named in `logoutCacheTeardown.test.ts`, which pins its query key as user-scoped so two accounts cannot share a cache entry. That deletion is an edit to a security test, not a file removal.
+  - **A baseline should shrink by exactly what was removed.** 96 -> 94 is the two `useLoginActivity` RPCs and nothing else; the four `api_keys` entries stay because that code stays. A baseline that drops more than the diff is hiding something.
