@@ -2893,3 +2893,84 @@ LEARNINGS FOR FUTURE ITERATIONS
     to a single entry each against the placeholder Supabase. Caught in `git
     status` before the commit. Check what a build touched, not just what you
     edited.
+
+================================================================================
+2026-09-19  WEB-QUAL-015  (claude/admiring-cori-ukwzcp)
+@supabase/supabase-js 2.85+ tightens the PostgREST types
+================================================================================
+
+CLOSED. The bump landed and NINE LIVE DEFECTS came out with it. Event check-in
+had never worked. Publishing from the content queue had never worked. Every
+successful 2FA verification reported failure. user_journeys has never held a
+row. The affiliate scan silently skipped two of the five tables it claimed to
+cover. All of them failed the same way: PostgREST answers a bad column with
+PGRST204, the hook's catch runs, the UI renders an empty state, nobody files a
+bug because nothing looks broken.
+
+LEARNINGS FOR FUTURE ITERATIONS
+
+1. A DEPENDENCY BUMP CAN BE AN AUDIT. supabase-js 2.85 added
+   RejectExcessProperties on insert/update and started resolving column names
+   at .eq(). That is a type change on paper; in practice it read every write in
+   the codebase against the real schema for the first time and found nine
+   features that do not work. When a bump surfaces a pile of errors, read them
+   before deciding they are noise - the ratio here was 9 real to 5 mechanical.
+
+2. THE GAP WAS ALWAYS THERE AND THE REPO'S OWN CHECKER DOES NOT COVER IT.
+   check-schema-usage.mjs reads .select() literals and .from()/.rpc() names. It
+   does NOT read the object passed to .insert() or .update(). Every one of the
+   nine sat in that gap and NONE appear in schema-baseline.json - the WEB-QA-017
+   inventory has a blind spot the size of every write in the app.
+
+3. PostgREST REJECTS THE STATEMENT, NOT THE KEY. The worst of the nine is the
+   content-queue publish: it set status, published_at AND review_status in one
+   update. review_status does not exist, so the two real columns were discarded
+   with it. One bad key does not degrade a write, it deletes it.
+
+4. A `CREATE TABLE` AND A LATER `DROP TABLE ... CASCADE; CREATE TABLE` ARE TWO
+   DIFFERENT TABLES WITH ONE NAME. event_checkins was created 2025-08-29 and
+   recreated by 20251110000010 with a completely different column set. The
+   caller was never updated, and an exported interface still described the old
+   shape - which is what made the broken insert read as correct. Grep every
+   migration that names a table, not just the one that creates it.
+
+5. A DEAD TYPE IS WORSE THAN NO TYPE. Nothing imported EventCheckin. What it
+   did was sit above checkInToEvent making its columns look deliberate. Deleting
+   it was part of the fix, not tidying afterwards.
+
+6. MY FIRST DIAGNOSIS OF THE TS2589 WAS WRONG AND THE PROBE WAS CHEAP. I
+   assumed the untyped createClient() in the script; typing it changed nothing.
+   A ten-line scratch file testing three shapes against the real Database type
+   settled it in one compile: a pure chain is fine, a filter-to-filter
+   reassignment is fine, and only assigning a TRANSFORM builder back into a
+   variable declared as a FILTER builder exceeds the depth limit. Two minutes
+   of probe beat twenty of theorising.
+
+7. `never` IN A SUPABASE ERROR MESSAGE MEANS THE NAME WAS DECIDED AT RUNTIME.
+   `Argument of type '"id"' is not assignable to parameter of type 'never'` is
+   what supabase.from(<variable>) looks like from 2.85 on: no overload matched,
+   so the row type collapsed. fromUnknownTable() is the handle for it, and the
+   case is genuinely different from the one its header describes - not an
+   unknown relation, an unknown-at-compile-time relation NAME.
+
+8. A GENERIC HELPER OVER A BUILDER IS AN INSTANTIATION BOMB. DiscoverMap's
+   inBounds() was `<T extends { gte(c,v): T; lte(c,v): T }>`, which inferred T
+   as the whole eight-parameter PostgrestFilterBuilder at three call sites. It
+   only ever needed two methods. Ask for the two methods.
+
+9. RE-BASELINING UPWARD IS SOMETIMES RIGHT, AND THE NET IS THE NUMBER THAT
+   MATTERS. useCrmActivities went 10 -> 13 and I took it, because all thirteen
+   are dead queries already in schema-baseline.json in a module whose deletion
+   is WEB-QA-018's decision. The app baseline still fell 135 -> 129 and strict
+   18 -> 17. Refusing the trade would have meant rewriting a hook against a
+   schema nobody has committed to.
+
+10. RUN THE SMOKE LANE BOTH SIDES OF A RUNTIME-TOUCHING CHANGE. Fourteen files
+    changed, several of them rendering code. 174 passed / 13 failed, the same
+    13 and the same set as before the bump. That is a measurement; "the types
+    changed, not the runtime" is a hope.
+
+11. THE FIX FOR A CHECK THAT FIRES ON ITS OWN EXPLANATION, TENTH OCCURRENCE.
+    dead-column-writes.test.mjs greps source files for column names that must
+    not come back - and the fix commit fills those same files with comments
+    naming them. Strip comments before matching, every time.

@@ -38,6 +38,7 @@ import {
 } from "@/components/ui/table";
 import { Plus, Edit, Trash2, MapPin, Phone, Globe, Search, Building2, Users, CheckCircle2, XCircle, Navigation, RefreshCw, ArrowRight, Loader2 } from "lucide-react";
 import { supabase } from "@/integrations/supabase/client";
+import type { Database } from "@/integrations/supabase/types";
 import { toast } from "sonner";
 import {
   useKnownVenues,
@@ -589,7 +590,11 @@ function BackfillDialog({ open, onOpenChange, venues }: BackfillDialogProps) {
     try {
       for (const event of selectedEvents) {
         const autoFillData = getAutoFillData(event.matchedVenue);
-        const updateData: Record<string, any> = {};
+        // Typed as the events Update row rather than Record<string, any>: an
+        // index signature promises nothing about the keys, supabase-js 2.85+
+        // rejects it on an update, and a key `events` does not have comes back
+        // PGRST204 with the backfill silently doing nothing.
+        const updateData: Database["public"]["Tables"]["events"]["Update"] = {};
 
         if (event.fieldsToUpdate.includes("location") && autoFillData.location) {
           updateData.location = autoFillData.location;

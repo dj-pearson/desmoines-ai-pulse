@@ -1,3 +1,4 @@
+import type { PostgrestError } from "@supabase/supabase-js";
 import { supabase } from "@/integrations/supabase/client";
 import { isUnknownColumnError } from "@/lib/postgrestErrors";
 import { createSlug } from "@/lib/slug";
@@ -26,9 +27,24 @@ export async function fetchBySlug<T>(
   slug: string,
   columns = "*",
 ): Promise<T | null> {
-  const bySlug = await supabase
-    .from(table)
-    .select(columns)
+  // THE `slug` COLUMN IS AHEAD OF THE GENERATED TYPES, deliberately and
+  // temporarily. Migration 20260919000008_content_slugs.sql adds it to both
+  // tables; regenerating src/integrations/supabase/types.ts needs Supabase
+  // credentials the repo does not carry (WEB-PERF-031 AC5), so the types still
+  // describe the pre-migration shape and supabase-js 2.85+ - the first version
+  // that actually checks the column name at .eq() - rejects it.
+  //
+  // The assumption is written out rather than hidden behind `as never`: this
+  // says "the builder accepts an eq on a string column named slug", which is
+  // exactly what the migration makes true. Regenerate the types and this whole
+  // block goes, together with the fallback below.
+  type SlugQueryable = {
+    eq(
+      column: "slug",
+      value: string,
+    ): { maybeSingle(): Promise<{ data: unknown; error: PostgrestError | null }> };
+  };
+  const bySlug = await (supabase.from(table).select(columns) as unknown as SlugQueryable)
     .eq("slug", slug)
     .maybeSingle();
 

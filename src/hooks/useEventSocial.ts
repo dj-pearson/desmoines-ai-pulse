@@ -43,14 +43,13 @@ export interface EventLiveStats {
   last_activity: string | null;
 }
 
-export interface EventCheckin {
-  id: string;
-  event_id: string;
-  user_id: string;
-  checked_in_at: string;
-  check_in_method: 'manual' | 'qr_code' | 'geofence';
-  location_verified: boolean;
-}
+// The EventCheckin interface that was here described the event_checkins table
+// as it existed on 2025-08-29 - checked_in_at, check_in_method,
+// location_verified - and migration 20251110000010_add_social_features.sql
+// DROPped that table and recreated it with none of those columns. Nothing
+// imported the type; what it did do was make checkInToEvent's insert below
+// read as correct. Deleted rather than corrected, because nothing needs it:
+// the insert is typed by the generated Database.
 
 /**
  * Social data for one event.
@@ -331,13 +330,21 @@ export function useEventSocial(
     if (!user || !eventId) return;
 
     try {
+      // THIS INSERT NAMED TWO COLUMNS THAT DO NOT EXIST, so every check-in
+      // came back PGRST204 and the user saw "Failed to check in to the event".
+      // event_checkins was created 2025-08-29 with check_in_method and
+      // location_verified, then DROPped and recreated by migration
+      // 20251110000010_add_social_features.sql (line 75, `DROP TABLE IF EXISTS
+      // ... CASCADE`) with a different shape: checkin_latitude/longitude,
+      // distance_from_venue_meters, is_verified, checkin_message. The caller
+      // was never updated. is_verified defaults to false, which is what
+      // location_verified: false was saying, and the recreated table models no
+      // check-in method at all - so both fields go rather than get renamed.
       const { error } = await supabase
         .from('event_checkins')
         .insert({
           event_id: eventId,
           user_id: user.id,
-          check_in_method: 'manual',
-          location_verified: false,
         });
 
       if (error) throw error;

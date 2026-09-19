@@ -110,8 +110,12 @@ const HOLDS = [
   check('every hold names a package and a reason', missing.length === 0, JSON.stringify(missing));
   const undated = holds.filter((h) => !h.review);
   check('every hold carries a review date', undated.length === 0, undated.map((h) => h.name).join(', '));
-  const supa = holds.find((h) => h.name === '@supabase/supabase-js');
-  check('supabase-js is held from 2.85.0 up', Boolean(supa) && supa.firstBadVersion === '2.85.0');
+  // The supabase-js hold was lifted by WEB-QUAL-015; asserting its ABSENCE keeps
+  // anyone from reinstating it without reading why it went.
+  check(
+    'supabase-js is no longer held',
+    !holds.some((h) => h.name === '@supabase/supabase-js'),
+  );
 }
 
 if (failures > 0) {

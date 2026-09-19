@@ -268,11 +268,10 @@ export default function EnhancedArticleEditor() {
         await handleSave(false);
       }
 
-      // Update article review status
-      await supabase
-        .from('articles')
-        .update({ review_status: 'pending_review' })
-        .eq('id', articleId);
+      // The `articles.review_status` update that used to be here wrote a column
+      // that does not exist, so it came back PGRST204 and changed nothing. The
+      // content_queue row inserted below is what actually records that this
+      // article is awaiting review, and it always was.
 
       // Add to content queue
       const { data: { user } } = await supabase.auth.getUser();

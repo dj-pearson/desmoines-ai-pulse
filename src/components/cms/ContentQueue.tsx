@@ -175,22 +175,20 @@ export function ContentQueue() {
 
       if (error) throw error;
 
-      // If approved, update article status
-      if (newStatus === 'approved' && selectedItem.article) {
-        await supabase
-          .from('articles')
-          .update({ review_status: 'approved' })
-          .eq('id', selectedItem.article_id);
-      }
-
-      // If published, publish the article
+      // `articles.review_status` DOES NOT EXIST. There is no such column on the
+      // table (nor anywhere in the generated types), so both writes below came
+      // back PGRST204 - and because PostgREST rejects the whole statement, not
+      // just the bad key, PUBLISHING FROM THIS QUEUE HAS NEVER WORKED: the
+      // status and published_at in the second update were discarded with it.
+      // The queue's own row already records approval, so the approve branch was
+      // pure no-op and is gone; the publish branch keeps the two real columns.
+      // supabase-js 2.85+ is the first version whose types say so.
       if (newStatus === 'published' && selectedItem.article) {
         await supabase
           .from('articles')
           .update({
             status: 'published',
             published_at: new Date().toISOString(),
-            review_status: 'approved',
           })
           .eq('id', selectedItem.article_id);
       }

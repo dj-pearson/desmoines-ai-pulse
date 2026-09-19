@@ -6,7 +6,9 @@
     "A hold exists because the agent installs every non-breaking update as ONE batch and",
     "gates the batch on `npm run validate && npm run build`. One package that fails the",
     "gate therefore blocks the other sixty. That is not hypothetical: every run from",
-    "2026-07-13 to 2026-09-14 failed on a single package and opened zero PRs (WEB-QUAL-011).",
+    "2026-07-13 to 2026-09-14 failed on @supabase/supabase-js alone and opened zero PRs",
+    "(WEB-QUAL-011). That hold was lifted on 2026-09-19 by WEB-QUAL-015, which fixed the",
+    "fourteen files 2.85+ newly rejected - nine of them live defects.",
     "",
     "A hold is a deferral, not a decision. Each entry names an owning story and a",
     "`review` date; scripts/__tests__/dep-update-plan.test.mjs fails without them.",
@@ -14,13 +16,6 @@
     "that version and everything after it, so patch releases below it still land."
   ],
   "holds": [
-    {
-      "name": "@supabase/supabase-js",
-      "firstBadVersion": "2.85.0",
-      "review": "2026-12-01",
-      "reason": "2.85+ tightens the PostgREST types: inserts gain RejectExcessProperties, a .select() built from a runtime string resolves to GenericStringError, and two files hit TS2589. Reproduced 2026-09-19: scripts/event-datetime-sql-generator.ts fails type-check:scripts at 2.116.0 and passes at 2.84.0. That single error is what failed all ten agent runs.",
-      "story": "WEB-QUAL-015"
-    },
     {
       "name": "three",
       "review": "2026-12-01",

@@ -1,7 +1,7 @@
 import { useState, useEffect, useCallback } from "react";
 import { useTabState } from "@/hooks/useTabState";
 import { useNavigate } from "react-router-dom";
-import { useAdminCampaigns } from "@/hooks/useAdminCampaigns";
+import { useAdminCampaigns, type CampaignStatus } from "@/hooks/useAdminCampaigns";
 import { useDocumentTitle } from "@/hooks/useDocumentTitle";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
@@ -64,7 +64,10 @@ export default function AdminCampaigns() {
     validTabs: ["campaigns", "sponsored", "rates", "affiliates"],
   });
   const [searchQuery, setSearchQuery] = useState("");
-  const [statusFilter, setStatusFilter] = useState("all");
+  // Typed against the generated campaign_status enum plus the "all" sentinel,
+  // so the ten <SelectItem> values below and the filter passed to
+  // fetchCampaigns are checked against the column rather than being any string.
+  const [statusFilter, setStatusFilter] = useState<CampaignStatus | "all">("all");
   const [dateFrom, setDateFrom] = useState("");
   const [dateTo, setDateTo] = useState("");
   const [sponsoredListings, setSponsoredListings] = useState<SponsoredListingRow[]>([]);
@@ -340,7 +343,7 @@ export default function AdminCampaigns() {
               />
             </div>
 
-            <Select value={statusFilter} onValueChange={setStatusFilter}>
+            <Select value={statusFilter} onValueChange={(v) => setStatusFilter(v as CampaignStatus | "all")}>
               <SelectTrigger>
                 <SelectValue placeholder="All statuses" />
               </SelectTrigger>
