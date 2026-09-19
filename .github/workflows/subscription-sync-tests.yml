@@ -231,6 +231,15 @@ jobs:
       # header), that the exemption is opt-in, and that the ORDER BY precedes
       # the limit.
       - run: deno test --allow-read supabase/functions/_tests/scraper-rate-limit.test.ts
+      # WEB-BE-046. scrape-events was 2,234 lines of which 1,180 were
+      # unreachable, and its handler read 60 days of events plus every future
+      # one to print a log line. firecrawl-scraper called generateEventSEO
+      # without await, so the Edge Runtime killed every one of those Haiku
+      # requests when the response was returned - and the .catch() made it look
+      # handled. Its batch block reported 0/0/0/null on a run that had just
+      # inserted forty events. Pins reachability, the removed read, that no
+      # scraper fires a promise it will not await, and the batch arithmetic.
+      - run: deno test --allow-read supabase/functions/_tests/scraper-dead-code.test.ts
       # WEB-BE-032. The ops digest counted with `count ?? 0` and discarded the
       # error, so a digest that could read nothing printed the same eleven
       # zeros as a system with nothing wrong. Pins that an unreadable section
