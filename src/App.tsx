@@ -5,12 +5,8 @@ import { BrowserRouter, Routes, Route } from "react-router-dom";
 import { lazy, Suspense, useState, useEffect, useRef, ComponentType } from "react";
 import { sessionStore } from "@/lib/safeStorage";
 import { useKeyboardShortcuts } from "@/hooks/use-keyboard-shortcuts";
-import { useKeyboardAware } from "@/hooks/useKeyboardAware";
 import { usePageTransition } from "@/hooks/usePageTransition";
-import { usePushNotifications } from "@/hooks/usePushNotifications";
-import { useDeepLinks } from "@/hooks/useDeepLinks";
-import { useSwipeBack } from "@/hooks/useSwipeBack";
-import { useStatusBarStyle } from "@/hooks/useStatusBarStyle";
+import { isCapacitor } from "@/lib/capacitorUtils";
 import { useFocusOnRouteChange } from "@/hooks/useFocusOnRouteChange";
 import { usePageTracking } from "@/hooks/usePageTracking";
 import { useLocation, useNavigationType } from "react-router-dom";
@@ -57,6 +53,11 @@ const Toaster = lazyWithRetry(() =>
 const Sonner = lazyWithRetry(() =>
   import("@/components/ui/sonner").then((m) => ({ default: m.Toaster })),
 );
+
+// Capacitor-only effects. Mounted behind isCapacitor(), so a web visitor never
+// requests the chunk. See the component for why the condition lives here and
+// not inside each hook.
+const CapacitorRuntime = lazyWithRetry(() => import("@/components/CapacitorRuntime"));
 
 const Index = lazyWithRetry(() => import("./pages/Index"));
 const Auth = lazyWithRetry(() => import("./pages/Auth"));
@@ -352,26 +353,21 @@ const KeyboardShortcutsProvider = ({ children }: { children: React.ReactNode }) 
     onShowHelp: () => setShowShortcutsModal(true),
   });
 
-  // Ensure iOS keyboard doesn't obscure focused inputs
-  useKeyboardAware();
-
-  // Register for push notifications on Capacitor (auto-registers if previously enabled)
-  usePushNotifications();
-
-  // Handle incoming deep links (Universal Links / App Links)
-  useDeepLinks();
-
-  // Enable swipe-from-left-edge to go back on iOS
-  useSwipeBack();
-
-  // Switch status bar text color based on page (light on dark heroes, dark elsewhere)
-  useStatusBarStyle();
-
-  // Subtle page transition animation for Capacitor (no-op on web)
+  // Subtle page transition animation for Capacitor (no-op on web). Stays here
+  // rather than moving into CapacitorRuntime because it returns the ref the
+  // wrapper below needs.
   const pageTransitionRef = usePageTransition<HTMLDivElement>();
 
   return (
     <div ref={pageTransitionRef}>
+      {/* Push registration, deep links, swipe-back, status bar and keyboard
+          avoidance. Every one of them opens with `if (!isCapacitor()) return`,
+          so on the web this chunk is never requested. WEB-PERF-020 AC4. */}
+      {isCapacitor() && (
+        <Suspense fallback={null}>
+          <CapacitorRuntime />
+        </Suspense>
+      )}
       {children}
       {/* WEB-PERF-020 AC3: mounted only while open, so its chunk is fetched the
           first time someone presses "?" rather than by every visitor. */}

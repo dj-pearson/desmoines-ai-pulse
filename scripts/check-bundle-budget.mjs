@@ -34,8 +34,15 @@
  * the baseline is the tighter of the two numbers, and a gate at 200 would
  * silently permit 3.3 KB of regression.
  *
+ * THE BASELINE ONLY SHRINKS. --update refuses to write a number larger than
+ * the one already recorded; raising it needs --allow-regression as well. The
+ * tolerance below decides when a build FAILS, and without that rule the two
+ * together let the figure walk upward a few KB at a time: each build passes on
+ * tolerance, and then some later --update records the drift as the new normal.
+ *
  *   node scripts/check-bundle-budget.mjs            # check
- *   node scripts/check-bundle-budget.mjs --update   # re-baseline
+ *   node scripts/check-bundle-budget.mjs --update   # re-baseline (down only)
+ *   node scripts/check-bundle-budget.mjs --update --allow-regression
  *
  * Requires a build first: dist/index.html must exist.
  */
@@ -48,6 +55,7 @@ const ROOT = resolve(dirname(fileURLToPath(import.meta.url)), '..');
 const DIST = join(ROOT, 'dist');
 const BASELINE = join(ROOT, 'bundle-budget-baseline.json');
 const UPDATE = process.argv.includes('--update');
+const ALLOW_REGRESSION = process.argv.includes('--allow-regression');
 
 /** CLAUDE.md, Quality Standards: "<500KB gzipped target, <200KB critical path". */
 const GOAL_KB = 200;
@@ -96,9 +104,26 @@ function main() {
   }
 
   if (UPDATE) {
+    // AC4 says this baseline only shrinks, and until now nothing enforced it:
+    // --update wrote whatever the current build measured, so a 4 KB regression
+    // could pass the check on tolerance and then be recorded as the new normal
+    // by the next person who ran --update for an unrelated reason. Raising it
+    // now takes a flag, which is a thing a reviewer can see in a diff.
+    if (existsSync(BASELINE) && !ALLOW_REGRESSION) {
+      const prev = JSON.parse(readFileSync(BASELINE, 'utf8'));
+      if (round(totalKb) > prev.criticalPathKb) {
+        console.error(
+          `\n[bundle-budget] refusing to raise the baseline from ${prev.criticalPathKb} KB to ${round(totalKb)} KB.\n` +
+            '   The baseline only shrinks (WEB-PERF-020 AC4). If the growth is deliberate and\n' +
+            '   worth it, say so explicitly:\n' +
+            '     node scripts/check-bundle-budget.mjs --update --allow-regression',
+        );
+        process.exit(1);
+      }
+    }
     writeFileSync(
       BASELINE,
-      `${JSON.stringify({ $comment: 'WEB-PERF-020 AC4. Critical-path gzipped JS. Lower is better; the goal is ' + GOAL_KB + ' KB. Re-baseline with: node scripts/check-bundle-budget.mjs --update', generated: new Date().toISOString().slice(0, 10), goalKb: GOAL_KB, toleranceKb: TOLERANCE_KB, criticalPathKb: round(totalKb) }, null, 2)}\n`,
+      `${JSON.stringify({ $comment: 'WEB-PERF-020 AC4. Critical-path gzipped JS. Lower is better; the goal is ' + GOAL_KB + ' KB. This number only shrinks: node scripts/check-bundle-budget.mjs --update refuses to raise it without --allow-regression.', generated: new Date().toISOString().slice(0, 10), goalKb: GOAL_KB, toleranceKb: TOLERANCE_KB, criticalPathKb: round(totalKb) }, null, 2)}\n`,
     );
     console.log(`[bundle-budget] baseline written: ${round(totalKb)} KB gz`);
     return;
@@ -123,8 +148,8 @@ function main() {
   if (delta > TOLERANCE_KB) {
     console.error(
       `\n❌ critical-path JS grew by ${round(delta)} KB, past the ${TOLERANCE_KB} KB tolerance.\n` +
-        '   Either lazy-load what you added, or if the growth is deliberate re-baseline with:\n' +
-        '     node scripts/check-bundle-budget.mjs --update',
+        '   Either lazy-load what you added, or if the growth is deliberate say so:\n' +
+        '     node scripts/check-bundle-budget.mjs --update --allow-regression',
     );
     process.exit(1);
   }

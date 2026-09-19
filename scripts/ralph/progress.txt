@@ -1730,3 +1730,15 @@ Every AC re-checked against the tree. Cold re-time with the tsbuildinfo removed:
   - **`priority` on OptimizedImage is not a performance hint, it is a rendering condition.** Without it the component renders no `<img>` until the observer fires, so a hero converted and left unflagged passes any "uses OptimizedImage" rule while shipping HTML with no hero. The guard had to learn the flag, not just the component.
   - **A guard with a hardcoded list of "the three detail pages" is a guard that stops being true.** Two more detail pages had shipped since it was written and inherited no coverage at all. The list now carries a comment saying that is how it rots.
   - **The AC's warning was the cheap half.** AC4 said the guard reads the raw tag and needs updating in the same change. True, and updating it also surfaced two unguarded heroes - the warning was about not breaking the check, and following it found what the check was missing.
+
+## 2026-09-19 - WEB-PERF-020 AC4: the baseline now actually only shrinks, and 10.4 KB of Capacitor left the entry
+Entry chunk 56.2 -> 54.8 KB gz; critical path 186.4 -> 185.0. Story stays open on AC2/AC3.
+- Five hooks that open with `if (!isCapacitor()) return;` moved into `src/components/CapacitorRuntime.tsx`, mounted behind `isCapacitor() &&` and a lazy import. Verified in Chromium against the built output: the homepage requests 83 asset chunks and CapacitorRuntime is not one of them.
+- `--update` on the bundle budget refuses to write a larger number without `--allow-regression`. Both directions proved.
+- `capacitorRuntime.test.ts` 13 cases, two negative controls. Suite 724/724 across 76 files; validate exit 0.
+- **Learnings for future iterations:**
+  - **A tolerance and a free re-baseline are a ratchet that leaks.** The check failed at +5 KB and `--update` wrote whatever it measured. Each build passes on tolerance; then some later `--update`, run for an unrelated reason, records the drift as the new normal. Neither rule is wrong alone and together they let the number walk upward forever.
+  - **The error message pointed at a command that would now be refused.** Adding a rule means re-reading every string that told someone what to do. Mine said "re-baseline with --update" three lines above the code that rejects exactly that.
+  - **Rules of hooks do not stop you moving the condition, only the call.** Five hooks that each early-return on web cannot be called conditionally, so the condition moved up to whether the component containing them renders at all. The gate is the same; what changed is that the chunk is never fetched.
+  - **The note's "largest removable item" was already removed.** It named a ~99 KB floating-ui cluster; App.tsx already had a comment explaining its removal. Re-measuring the entry before optimising took one build and saved chasing something that no longer existed.
+  - **AC2 is blocked by data, not by access.** A production build and a real browser are both available here now. What is missing is content: /events and /restaurants render skeletons against the placeholder backend, and an LCP measured on a page whose largest element never arrives is not that page's LCP.
