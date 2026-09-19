@@ -1901,3 +1901,62 @@ The ApiKeyManager half stays open - AC3 ties it to WEB-QA-018's owner decision.
   - **Making a mock honest can still leave it useless.** `blocked_ips` exists, so the tempting fix was to wire the UI to it. Nothing reads that table, so the page would have truthfully recorded a block that blocks nobody - the lie moved one layer down, and harder to spot.
   - **Check the second implementation before adopting it.** AC3 offered "delete or swap in". `Enhanced404` emits two contradictory robots metas - the exact WEB-SEO-040 defect - on the page type where `noindex` matters most. The orphan was worse than the thing it would have replaced.
   - **Deleting dead code can move a ratchet.** The app type baseline improved by 4 and was re-cut to 135. Worth re-running the ratchet after any deletion rather than assuming it is unchanged.
+
+================================================================================
+2026-09-19  WEB-SEO-039  Thirteen SEO/schema components imported by nothing
+================================================================================
+
+Deleted 14 files. Wrote the surviving inventory into SEO_IMPLEMENTATION_GUIDE.md
+and pinned it with src/components/__tests__/seoSurfaceInventory.test.ts.
+
+What actually made this story possible to get wrong: src/components/schema/index.ts
+was a barrel re-exporting eleven components, and NOTHING imported the barrel. So
+`grep -rl RestaurantSchema src/` returned a hit, the component looked reachable,
+and an audit that stopped there would have kept all eleven. Deleting members
+without deleting the barrel would have rebuilt the same trap. Deleting
+seo/Breadcrumbs.tsx then surfaced a SECOND dead barrel the same way: seo/index.ts
+broke with TS2307 on a file nothing imported either.
+
+AC2 asked to either wire TouristAttractionSchema into AttractionDetails
+"replacing the inline node" or delete it. There is no inline node on that page.
+AttractionDetails already publishes TouristAttraction through
+EnhancedAttractionSEO. Wiring the component in would have added a second,
+independently computed node of the same @type, which is precisely WEB-SEO-027.
+Deleted it, and SEO-011 AC2's goal is met by what is already shipping.
+
+Verified: npm run validate 0 errors, app ratchet 135/135 unchanged; vitest
+816/816 across 84 files; check-imports clean; bundle budget 184.9 KB against a
+183.4 KB baseline, inside the 5 KB tolerance.
+
+Learnings for future iterations
+
+1. A barrel with no importers is worse than dead code, it is dead code that
+   reads as live. Before concluding a component is used, check whether the
+   importer is itself imported. `npm run check-imports` does not catch this:
+   the barrel's re-exports all resolved fine.
+
+2. Count import specifiers, not name mentions. This repo is full of comments
+   naming deleted components on purpose (SEOEnhancedHead and SEOStructure
+   appear in EventsPage.tsx and Index.tsx as WEB-SEO-027 tombstones). A grep
+   that counts those says a deleted file is alive.
+
+3. Eighth occurrence of the assertion-fires-on-its-own-prose bug, and it will
+   be the ninth soon. EnhancedAttractionSEO's comment lists the tags it no
+   longer emits, `<title>` among them, so `expect(src).not.toMatch(/<title>/)`
+   failed on the sentence explaining why it passes. Strip comments first. The
+   helper is three lines and belongs in every file-scanning test.
+
+4. Two head managers on one page is not automatically the WEB-SEO-027 bug.
+   AttractionDetails mounts EnhancedAttractionSEO AND SEOHead and that is
+   correct, because 027 already stripped the first one down to place meta plus
+   JSON-LD. Read what a component emits before calling a pairing a collision.
+   The test pins the stripped state rather than the mount count.
+
+5. A bundle-budget delta is only attributable to your change if your change
+   could have reached the bundle. +1.5 KB showed up here against files that had
+   zero importers and therefore were never bundled. Say "pre-existing drift"
+   and leave the shrink-only baseline alone rather than re-cutting it upward.
+
+6. Deletions bought nothing on the type ratchet (135 before, 135 after). Dead
+   files are not where type errors live, because nobody ever exercised them
+   enough to break them.
