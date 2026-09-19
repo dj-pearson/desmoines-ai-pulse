@@ -39,7 +39,7 @@ export default function Itineraries() {
   return (
     <>
       <Helmet>
-        <title>Curated Itineraries — Des Moines Trip Plans | Des Moines Insider</title>
+        <title>Des Moines Trip Plans & Itineraries | Des Moines Insider</title>
         <meta name="description" content="Browse curated Des Moines itineraries for weekends, date days, family fun, food tours, and art walks. Printable checklists included." />
         {/* WEB-SEO-002: sitemapped and prerendered, but had no canonical. */}
         <link rel="canonical" href={getCanonicalUrl('/itineraries')} />

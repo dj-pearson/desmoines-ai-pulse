@@ -69,7 +69,7 @@ export default function GroupTravel() {
   return (
     <>
       <Helmet>
-        <title>Meeting Planner & Group Travel — Venues, RFP | Des Moines Insider</title>
+        <title>Group Travel & Meetings in Des Moines | Des Moines Insider</title>
         <meta name="description" content="Plan meetings, conferences, weddings, and group travel in Des Moines. Search venues by capacity, submit an RFP, and explore group itineraries." />
       </Helmet>
       <div className="min-h-screen bg-background">

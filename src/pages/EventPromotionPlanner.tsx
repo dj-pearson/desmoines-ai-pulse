@@ -182,7 +182,7 @@ export default function EventPromotionPlanner() {
   return (
     <>
       <Helmet>
-        <title>Free Event Promotion Timeline Generator | DesMoinesInsider.com</title>
+        <title>Event Promotion Timeline Generator | Des Moines Insider</title>
         <meta
           name="description"
           content="Generate a custom 8-week event promotion plan in 2 minutes. Free tool for Des Moines event organizers. Get your timeline now."

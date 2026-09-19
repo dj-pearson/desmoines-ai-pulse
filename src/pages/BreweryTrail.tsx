@@ -92,7 +92,7 @@ export default function BreweryTrail() {
   return (
     <>
       <SEOHead
-        title="Des Moines Brewery Trail — Craft Beer Passport"
+        title="Des Moines Brewery Trail - Craft Beer"
         description="Explore the Des Moines craft beer scene with our Brewery Trail. Visit local breweries, check in, earn rewards, and complete the trail."
         url={canonicalUrl}
         canonicalUrl={canonicalUrl}

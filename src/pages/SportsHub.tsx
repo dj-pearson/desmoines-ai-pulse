@@ -106,7 +106,7 @@ export default function SportsHub() {
   return (
     <>
       <SEOHead
-        title="Sports in Des Moines — Teams, Schedules & Gameday Guides"
+        title="Des Moines Sports - Teams & Schedules"
         description={pageDescription}
         url={canonicalUrl}
         canonicalUrl={canonicalUrl}

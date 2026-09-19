@@ -114,7 +114,8 @@ const DashboardSkeleton = () => (
 //
 // The homepage takes the brand and the city entity, and names the categories
 // without claiming any hub's exact head term. The hubs keep theirs.
-const HOME_TITLE = 'Des Moines Insider | Events, Restaurants and What to Do in Des Moines';
+// 60 chars is where Google truncates; this was 69 (WEB-SEO-043).
+const HOME_TITLE = 'Des Moines Insider | Events, Restaurants & Things to Do';
 const HOME_DESCRIPTION =
   "What's happening in Des Moines, Iowa right now: live events, concerts and festivals, restaurants open tonight, family activities and weekend plans. Updated daily across Des Moines, West Des Moines, Ankeny, Urbandale, Johnston, Altoona and the metro.";
 

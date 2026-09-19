@@ -121,7 +121,8 @@ const faqData = [
 export default function GuidesPage() {
   useDocumentTitle("City Guides");
   const { data: seasonalGuides } = useSeasonalGuides();
-  const pageTitle = "Des Moines Local Guides - Best Activities, Dining & Attractions";
+  // 63 chars, over Google's ~60 truncation point (WEB-SEO-043).
+  const pageTitle = "Des Moines Guides - Activities, Dining & Attractions";
   const pageDescription = "Comprehensive guides to the best of Des Moines. Find seasonal activities, dining recommendations, family fun, date night spots, and local insider tips for Des Moines and suburbs.";
   
   const breadcrumbs = [

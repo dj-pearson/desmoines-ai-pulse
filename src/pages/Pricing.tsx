@@ -272,7 +272,7 @@ export default function Pricing() {
           with no title and no description, on the one page whose whole job is
           conversion. */}
       <SEOHead
-        title="Pricing - Des Moines Insider | Unlock Premium Local Experiences"
+        title="Pricing - Premium Local Experiences | Des Moines Insider"
         description="Choose your Des Moines Insider membership. Get early event access, unlimited favorites, personalized recommendations, and exclusive VIP perks."
         keywords={["Des Moines membership", "local events subscription", "VIP experiences Iowa"]}
         url={getCanonicalUrl("/pricing")}

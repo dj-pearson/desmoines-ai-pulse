@@ -580,7 +580,8 @@ export default function EventsPage() {
     return (
       <>
         <SEOHead
-          title={`Events in Des Moines - Concerts, Festivals & Things To Do | ${BRAND.name}`}
+          // 78 chars with the brand suffix, the worst on the site (WEB-SEO-043).
+          title={`Des Moines Events: Concerts & Festivals | ${BRAND.name}`}
           description="Discover upcoming events in Des Moines, Iowa. Find concerts, festivals, community gatherings, and entertainment activities happening now."
           type="website"
           keywords={["Des Moines events", "Iowa events", "upcoming events", "things to do Des Moines"]}
