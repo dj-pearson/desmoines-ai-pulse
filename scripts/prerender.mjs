@@ -222,6 +222,16 @@ const ENTITY_SITEMAPS = [
   // now, so being in one is the change that matters; being prerendered is the
   // improvement after it.
   'sitemap-hotels.xml',
+  // WEB-SEO-035, and AFTER hotels for the reason the hotels comment gives: the
+  // list is a strict priority order and the budget shortfall falls on the tail,
+  // so a new family inserted higher takes an existing family's allocation
+  // rather than sharing the cost. These four are small (venues, trails, teams
+  // and published itineraries are tens of rows, not hundreds) and had no
+  // sitemap at all until now, so being submitted is the change that matters.
+  'sitemap-venues.xml',
+  'sitemap-trails.xml',
+  'sitemap-teams.xml',
+  'sitemap-itineraries.xml',
   'sitemap-guides.xml',
 ];
 

@@ -1518,3 +1518,16 @@ The app type-check cost 21 minutes because of one thing: `supabase.from()` on a 
   - **A no-op script is worse than a missing one.** Every workflow that runs it believes it did something - and here the difference between the no-op and the working version is one word. That asymmetry is what earns a four-line test.
   - **Two workflows changed behaviour without being named.** `aos-fix-agent.yml` and `aos-test-gen.yml` both run `npm run type-check` and were getting exit 0 on anything. They now get a ratchet. That is the right direction, but it is a change this story's ACs do not mention, so it goes in the notes rather than being discovered later.
   - **`tsc --build` leaves `.tsbuildinfo` behind.** Two of them turned up as untracked files after the experiment. Added to `.gitignore` rather than committed.
+
+## 2026-09-19 - WEB-SEO-035 AC2/AC3/AC4 (four route families reach a sitemap)
+/music/venues/:slug, /outdoors/:slug, /sports/:slug and /itineraries/:slug had a page, a hook and a hub, and no way for a crawler to find any of them.
+- Four generators in `generate-dynamic-sitemaps.ts`, registered in the index, robots.txt, the committed index and `ENTITY_SITEMAPS`.
+- `scripts/check-sitemap-registration.mjs` in validate: all four lists must agree, both directions.
+- best-of excluded (no `RouteCanonical`), neighborhoods excluded per AC4.
+- **Learnings for future iterations:**
+  - **Four hand-maintained lists is three too many.** `sitemap-hotels.xml` was generated, in robots.txt, in the index the generator writes and in the prerender order - and missing from `public/sitemap-index.xml`. Nothing failed, because nothing compared them. The story asked for four more families; the thing worth building was the check.
+  - **Derive the sitemap URL from what the page resolves with, not from the name.** `useVenue`, `useTrail`, `useTeam` and `useItinerary` all filter `.eq('slug', slug)`. A generator using `createSlug(name)` would submit URLs the app answers with a not-found state - which is worse than submitting nothing, because Search Console counts it against the site.
+  - **A URL in two sitemaps is a URL reported twice.** The hotels generator unshifts its hub because `/stay` is in no static sitemap. These four hubs are, so the hub is the empty-set fallback only. Copying the neighbouring generator without checking that difference would have duplicated four URLs.
+  - **"Fix or exclude" is a real choice and exclude was right once.** `/best-of/:category` has a Helmet title and no `RouteCanonical`, so submitting it would submit pages carrying the SPA fallback's canonical - every one declaring itself a duplicate of the homepage. Submitting them makes the problem measurable rather than fixing it.
+  - **Two of these tables have no `updated_at` at all.** `trails` and `teams` carry only `created_at`. A generator that assumed the common shape would have written `undefined` into `lastmod` or fallen back to today's date on every row, which tells a crawler everything changed every build.
+  - **A hand-maintained copy of a generated file is a trap, and deleting it needs evidence I do not have from here.** `public/sitemap-index.xml` duplicates `sitemap.xml`, which the build writes. Nothing in the repo references it. It is now correct and carries a comment saying what it is; deleting it wants a server log first.

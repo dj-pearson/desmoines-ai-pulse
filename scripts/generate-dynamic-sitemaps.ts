@@ -1,5 +1,7 @@
 /**
- * Generate dynamic sitemaps for events, restaurants, attractions, playgrounds, articles, and guides.
+ * Generate dynamic sitemaps for events, restaurants, attractions, playgrounds,
+ * articles, hotels, music venues, trails, teams, curated itineraries, guides
+ * and pSEO pages.
  * Run before build to populate individual sitemap XML files.
  *
  * Requires: VITE_SUPABASE_URL, VITE_SUPABASE_ANON_KEY
@@ -480,6 +482,184 @@ async function generateHotelsSitemap(): Promise<number | null> {
   return written;
 }
 
+/**
+ * Music venues, trails, teams and curated itineraries (WEB-SEO-035).
+ *
+ * Four route families with a detail page, a hook and a hub, and no generator -
+ * so /music/venues/:slug, /outdoors/:slug, /sports/:slug and
+ * /itineraries/:slug were reachable only by following an internal link. A
+ * crawler that does not execute JavaScript never saw one.
+ *
+ * ALL FOUR USE THE `slug` COLUMN, not createSlug(name), for the reason the
+ * hotels generator gives above: useVenue, useTrail, useTeam and useItinerary
+ * each resolve with `.eq('slug', slug)`, so a derived slug that disagreed with
+ * the stored one would submit URLs the app answers with a not-found state.
+ * That is worse than submitting nothing.
+ *
+ * NO HUB URL IS UNSHIFTED. /music, /outdoors, /sports and /itineraries are
+ * already in sitemap-static.xml, and a URL in two sitemaps is a URL reported
+ * twice. The hub is used only as the empty-set fallback, matching the articles
+ * generator, because an empty urlset is a Search Console warning.
+ */
+async function generateVenuesSitemap(): Promise<number | null> {
+  console.log('🎵 Generating music venues sitemap...');
+
+  const { data: venues, error } = await supabase
+    .from('venues')
+    .select('id, slug, updated_at')
+    .not('slug', 'is', null)
+    .order('updated_at', { ascending: false })
+    .order('id');
+
+  if (error) {
+    console.error('❌ Error fetching venues:', error);
+    return null;
+  }
+
+  const urls = (venues ?? [])
+    .filter((venue) => !!venue.slug)
+    .map((venue) => ({
+      loc: `${baseUrl}/music/venues/${venue.slug}`,
+      lastmod: venue.updated_at ? venue.updated_at.split('T')[0] : currentDate,
+      changefreq: 'monthly',
+      priority: '0.6',
+    }));
+
+  if (urls.length === 0) {
+    urls.push({ loc: `${baseUrl}/music`, lastmod: currentDate, changefreq: 'weekly', priority: '0.7' });
+  }
+
+  const written = writeSitemap('sitemap-venues.xml', urls, 'venues');
+  console.log(`✅ Music venues sitemap generated: ${written} URLs`);
+  return written;
+}
+
+/**
+ * Trails. `trails` has NO updated_at column - created_at is the only date it
+ * carries - so lastmod is the creation date rather than a stale guess at a
+ * modification date.
+ */
+async function generateTrailsSitemap(): Promise<number | null> {
+  console.log('🥾 Generating trails sitemap...');
+
+  const { data: trails, error } = await supabase
+    .from('trails')
+    .select('id, slug, created_at')
+    .not('slug', 'is', null)
+    .order('created_at', { ascending: false })
+    .order('id');
+
+  if (error) {
+    console.error('❌ Error fetching trails:', error);
+    return null;
+  }
+
+  const urls = (trails ?? [])
+    .filter((trail) => !!trail.slug)
+    .map((trail) => ({
+      loc: `${baseUrl}/outdoors/${trail.slug}`,
+      lastmod: trail.created_at ? trail.created_at.split('T')[0] : currentDate,
+      changefreq: 'monthly',
+      priority: '0.6',
+    }));
+
+  if (urls.length === 0) {
+    urls.push({ loc: `${baseUrl}/outdoors`, lastmod: currentDate, changefreq: 'weekly', priority: '0.7' });
+  }
+
+  const written = writeSitemap('sitemap-trails.xml', urls, 'trails');
+  console.log(`✅ Trails sitemap generated: ${written} URLs`);
+  return written;
+}
+
+/** Teams. Same shape as trails: no updated_at on the table. */
+async function generateTeamsSitemap(): Promise<number | null> {
+  console.log('🏟️ Generating teams sitemap...');
+
+  const { data: teams, error } = await supabase
+    .from('teams')
+    .select('id, slug, created_at')
+    .not('slug', 'is', null)
+    .order('created_at', { ascending: false })
+    .order('id');
+
+  if (error) {
+    console.error('❌ Error fetching teams:', error);
+    return null;
+  }
+
+  const urls = (teams ?? [])
+    .filter((team) => !!team.slug)
+    .map((team) => ({
+      loc: `${baseUrl}/sports/${team.slug}`,
+      lastmod: team.created_at ? team.created_at.split('T')[0] : currentDate,
+      changefreq: 'monthly',
+      priority: '0.6',
+    }));
+
+  if (urls.length === 0) {
+    urls.push({ loc: `${baseUrl}/sports`, lastmod: currentDate, changefreq: 'weekly', priority: '0.7' });
+  }
+
+  const written = writeSitemap('sitemap-teams.xml', urls, 'teams');
+  console.log(`✅ Teams sitemap generated: ${written} URLs`);
+  return written;
+}
+
+/**
+ * Curated itineraries. GATED ON is_published, because useItinerary filters on
+ * it - an unpublished itinerary resolves to nothing, so submitting its URL
+ * would submit a not-found page.
+ */
+async function generateItinerariesSitemap(): Promise<number | null> {
+  console.log('🗺️ Generating itineraries sitemap...');
+
+  const { data: itineraries, error } = await supabase
+    .from('curated_itineraries')
+    .select('id, slug, updated_at')
+    .eq('is_published', true)
+    .not('slug', 'is', null)
+    .order('updated_at', { ascending: false })
+    .order('id');
+
+  if (error) {
+    console.error('❌ Error fetching itineraries:', error);
+    return null;
+  }
+
+  const urls = (itineraries ?? [])
+    .filter((itinerary) => !!itinerary.slug)
+    .map((itinerary) => ({
+      loc: `${baseUrl}/itineraries/${itinerary.slug}`,
+      lastmod: itinerary.updated_at ? itinerary.updated_at.split('T')[0] : currentDate,
+      changefreq: 'monthly',
+      priority: '0.7',
+    }));
+
+  if (urls.length === 0) {
+    urls.push({ loc: `${baseUrl}/itineraries`, lastmod: currentDate, changefreq: 'weekly', priority: '0.7' });
+  }
+
+  const written = writeSitemap('sitemap-itineraries.xml', urls, 'itineraries');
+  console.log(`✅ Itineraries sitemap generated: ${written} URLs`);
+  return written;
+}
+
+/*
+ * TWO FAMILIES DELIBERATELY EXCLUDED (WEB-SEO-035 AC3 and AC4).
+ *
+ * /best-of/:category (voting_categories). BestOfCategory.tsx has a Helmet
+ * title and description and NO RouteCanonical, so every category page would be
+ * submitted with the SPA fallback's canonical - which is what WEB-SEO-006
+ * describes as every page declaring itself a duplicate of the homepage.
+ * Submitting them in that state makes the problem measurable rather than
+ * fixing it. Add RouteCanonical and a schema first, then a generator.
+ *
+ * /neighborhoods/:neighborhood. Excluded by AC4 until WEB-SEO-036 gives those
+ * pages data - they are currently mock arrays, already prerendered and already
+ * sitemapped, which is the opposite problem.
+ */
+
 async function generateArticlesSitemap(): Promise<number | null> {
   console.log('📰 Generating articles sitemap...');
 
@@ -693,6 +873,10 @@ async function main(): Promise<void> {
       generatePlaygroundsSitemap(),
       generateArticlesSitemap(),
       generateHotelsSitemap(),
+      generateVenuesSitemap(),
+      generateTrailsSitemap(),
+      generateTeamsSitemap(),
+      generateItinerariesSitemap(),
       generateGuidesSitemap(),
       generatePseoSitemap()
     ]);
@@ -729,6 +913,22 @@ async function main(): Promise<void> {
   </sitemap>
   <sitemap>
     <loc>${baseUrl}/sitemap-hotels.xml</loc>
+    <lastmod>${currentDate}</lastmod>
+  </sitemap>
+  <sitemap>
+    <loc>${baseUrl}/sitemap-venues.xml</loc>
+    <lastmod>${currentDate}</lastmod>
+  </sitemap>
+  <sitemap>
+    <loc>${baseUrl}/sitemap-trails.xml</loc>
+    <lastmod>${currentDate}</lastmod>
+  </sitemap>
+  <sitemap>
+    <loc>${baseUrl}/sitemap-teams.xml</loc>
+    <lastmod>${currentDate}</lastmod>
+  </sitemap>
+  <sitemap>
+    <loc>${baseUrl}/sitemap-itineraries.xml</loc>
     <lastmod>${currentDate}</lastmod>
   </sitemap>
   <sitemap>
