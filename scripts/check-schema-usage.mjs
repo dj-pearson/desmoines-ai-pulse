@@ -520,7 +520,138 @@ function loadDriftAttribution() {
   return attribution;
 }
 
+
+// ---------------------------------------------------------------------------
+// --probe: ask PostgREST instead of the generated types
+// ---------------------------------------------------------------------------
+
+/**
+ * WHY THIS MODE EXISTS. Everything above compares code against
+ * src/integrations/supabase/types.ts, and CLAUDE.md is explicit that the
+ * generated types are not proof: favorites, ratings, reviews and advertisements
+ * were all listed there and all four answer 42P01 in production. The error runs
+ * in both directions - a table absent from the types can be perfectly real
+ * (playgrounds and attractions are created by no tracked migration either) - so
+ * the static pass can report a missing table that exists and stay silent about
+ * one that does not.
+ *
+ * This mode probes EVERY referenced table and RPC, not just the ones the static
+ * pass suspects, because the reverse error is the one nothing else can catch.
+ *
+ * It is read-only: `select=*&limit=0` returns no rows and still answers 42P01
+ * when the relation is gone, and an RPC is POSTed with no arguments, which
+ * distinguishes PGRST202 (no such function) from a 400 (it exists and wanted
+ * arguments). Neither touches data.
+ *
+ * Needs VITE_SUPABASE_URL and VITE_SUPABASE_ANON_KEY in the environment. The
+ * key is read, never printed.
+ */
+function collectReferences() {
+  const tables = new Map();
+  const rpcs = new Map();
+  const add = (map, name, rel) => {
+    if (!map.has(name)) map.set(name, new Set());
+    map.get(name).add(rel);
+  };
+
+  for (const root of SCAN_ROOTS) {
+    if (!existsSync(root)) continue;
+    for (const file of walk(root)) {
+      const src = stripComments(readFileSync(file, 'utf8'));
+      const rel = relative(ROOT, file).replace(/\\/g, '/');
+      for (const m of src.matchAll(/\.rpc[<(]\s*[<(]?\s*['"`](\w+)['"`]/g)) add(rpcs, m[1], rel);
+      for (const m of src.matchAll(/\.from[<(]\s*[<(]?\s*['"`]([A-Za-z_][\w]*)['"`]/g)) {
+        add(tables, m[1], rel);
+      }
+    }
+  }
+  return { tables, rpcs };
+}
+
+async function probe() {
+  const url = process.env.VITE_SUPABASE_URL;
+  const key = process.env.VITE_SUPABASE_ANON_KEY;
+  if (!url || !key) {
+    console.error(
+      'check-schema-usage --probe needs VITE_SUPABASE_URL and VITE_SUPABASE_ANON_KEY\n' +
+        'in the environment. They are read and never printed. See .env.example.',
+    );
+    process.exit(2);
+  }
+  const base = url.replace(/\/+$/, '');
+  const headers = { apikey: key, Authorization: `Bearer ${key}` };
+  const schema = parseSchema();
+  const { tables, rpcs } = collectReferences();
+
+  const classify = (status, body) => {
+    const code = body && typeof body === 'object' ? body.code : undefined;
+    if (status >= 200 && status < 300) return 'exists';
+    if (code === '42P01' || code === 'PGRST205') return 'MISSING';
+    if (code === 'PGRST202') return 'MISSING';
+    if (code === '42703') return 'exists (a column in the call is missing)';
+    if (status === 401 || status === 403) return 'exists (RLS hid it; not a schema problem)';
+    if (status === 400) return 'exists (rejected the empty call, which means it resolved)';
+    return `unclear (HTTP ${status}${code ? `, ${code}` : ''})`;
+  };
+
+  const rows = [];
+  for (const [table, files] of [...tables].sort()) {
+    const res = await fetch(`${base}/rest/v1/${table}?select=*&limit=0`, { headers });
+    const body = await res.json().catch(() => null);
+    rows.push({
+      kind: 'table',
+      name: table,
+      verdict: classify(res.status, body),
+      inTypes: schema.tables.has(table),
+      files: [...files].slice(0, 3),
+    });
+  }
+  for (const [fn, files] of [...rpcs].sort()) {
+    const res = await fetch(`${base}/rest/v1/rpc/${fn}`, {
+      method: 'POST',
+      headers: { ...headers, 'Content-Type': 'application/json' },
+      body: '{}',
+    });
+    const body = await res.json().catch(() => null);
+    rows.push({
+      kind: 'rpc',
+      name: fn,
+      verdict: classify(res.status, body),
+      inTypes: schema.functions.has(fn),
+      files: [...files].slice(0, 3),
+    });
+  }
+
+  if (process.argv.includes('--json')) {
+    console.log(JSON.stringify({ probed: rows.length, rows }, null, 2));
+    return;
+  }
+
+  const missing = rows.filter((r) => r.verdict === 'MISSING');
+  // THE ROWS THAT MATTER MOST are the ones where the types and production
+  // disagree: a reference the static pass calls fine that production 42P01s is
+  // invisible to every other check in this repo.
+  const lying = rows.filter((r) => r.inTypes && r.verdict === 'MISSING');
+  const surprising = rows.filter((r) => !r.inTypes && r.verdict.startsWith('exists'));
+
+  console.log(`\n[probe] ${rows.length} referenced object(s) against ${base}\n`);
+  for (const r of rows) {
+    const flag = r.verdict === 'MISSING' ? 'X' : ' ';
+    console.log(
+      `${flag} ${r.kind.padEnd(5)} ${r.name.padEnd(38)} ${r.verdict}` +
+        (r.inTypes ? '' : '   [not in types.ts]'),
+    );
+  }
+  console.log(`\n  missing in production      ${missing.length}`);
+  console.log(`  in types.ts but MISSING    ${lying.length}${lying.length ? '  <- nothing else catches these' : ''}`);
+  console.log(`  real but absent from types ${surprising.length}`);
+  console.log('\nRe-generate types.ts before trusting the static pass again.\n');
+}
+
 function main() {
+  if (process.argv.includes('--probe')) {
+    return probe();
+  }
   const asJson = process.argv.includes('--json');
   const showAll = process.argv.includes('--all');
   const update = process.argv.includes('--update');

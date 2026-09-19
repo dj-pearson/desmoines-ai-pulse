@@ -158,7 +158,8 @@
     "measure-vitals": "node scripts/measure-vitals.mjs",
     "check-document-title": "node scripts/check-document-title.mjs",
     "test:sitemap-lastmod": "tsx scripts/__tests__/sitemap-lastmod.test.mjs",
-    "check-hook-names": "node scripts/check-hook-name-collisions.mjs"
+    "check-hook-names": "node scripts/check-hook-name-collisions.mjs",
+    "check-schema:probe": "node scripts/check-schema-usage.mjs --probe"
   },
   "dependencies": {
     "@dnd-kit/core": "^6.3.1",

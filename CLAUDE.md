@@ -88,6 +88,19 @@ curl -s -H "apikey: $VITE_SUPABASE_ANON_KEY" \
 # 42P01 = no such table, 42703 = no such column, [] = exists (RLS may hide rows)
 ```
 
+To check **everything at once**, with credentials in the environment:
+
+```bash
+npm run check-schema:probe          # --json for machine-readable output
+```
+
+It probes every table and RPC the code references (276 today) and classifies
+each. The line to read first is "in types.ts but MISSING": a reference the
+static `npm run check-schema` calls fine and that production answers 42P01 on.
+Nothing else in this repo can catch those, and they are the shape that produced
+WEB-QA-017. Read-only: `select=*&limit=0` and an argument-less RPC POST touch
+no data. The key is read from the environment and never printed.
+
 Common columns across content tables: `id` (UUID PK), `name`/`title`, `description`, `category`, `image_url`, SEO fields (`seo_title`, `seo_description`, `seo_keywords`), GEO fields (`geo_summary`, `geo_key_facts`, `geo_faq`), `latitude`, `longitude`, `created_at`, `updated_at`.
 
 **RLS is enabled on all tables.** Pattern: public read, authenticated write with role checks, admin-only for sensitive ops. Auto-update `updated_at` via triggers.

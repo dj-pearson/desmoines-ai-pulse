@@ -2578,3 +2578,43 @@ Learnings for future iterations
    the first said useTrendingContent had no importers, and it has one. When a
    result supports a conclusion you want (dead code, safe to delete), check it
    the other way before acting.
+
+================================================================================
+2026-09-19  check-schema --probe: the blocked cluster becomes one command
+================================================================================
+
+Every remaining P1 and most of the open P2s are blocked on the same thing - no
+database from this container - and four of them (WEB-QA-017/018/019,
+WEB-BE-054) are blocked on the SAME question: does this table or function
+actually exist. That question had a documented curl in CLAUDE.md and no way to
+ask it in bulk.
+
+`npm run check-schema:probe` now hits PostgREST for every table and RPC the code
+references: 276 objects, 207 tables and 69 functions. Read-only -
+select=*&limit=0 returns no rows and still 42P01s when the relation is gone, and
+an argument-less RPC POST distinguishes PGRST202 from a 400.
+
+It answers the direction nothing else could. The static pass compares code
+against types.ts; CLAUDE.md records four tables listed there that 42P01 in
+production, and playgrounds and attractions are created by no tracked migration
+yet plainly exist. So the types are wrong in both directions, and the probe
+prints an explicit count of references that are IN types.ts and MISSING in
+production - the class no other check in this repo can see.
+
+Learnings for future iterations
+
+1. When several blocked stories share one question, build the thing that asks
+   it. Four stories, one curl, and nobody had put it in a loop.
+
+2. A probe script that has never run is worth nothing. Stood up a stand-in
+   PostgREST on localhost and proved both the MISSING path and the
+   in-types-but-missing counter fire. That is the WEB-SEO-037 lesson applied
+   before shipping rather than recorded afterwards.
+
+3. Extend the existing script rather than adding a neighbour. check-schema-usage
+   already parsed types.ts and walked the same roots; --probe is 100 lines
+   against a new script that would have duplicated all of it and then drifted.
+
+4. Read the key, never print it. The probe names the env vars in its error and
+   never echoes a value - the rule from the shared CLAUDE block, applied to a
+   script whose whole job is to authenticate.
