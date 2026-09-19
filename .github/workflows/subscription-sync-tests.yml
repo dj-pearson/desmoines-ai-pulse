@@ -204,6 +204,14 @@ jobs:
       # plain includes() filed "Block Party" under Arts), and that every row
       # builder, the crawler, the prompt and the submission form use it.
       - run: deno test --allow-read supabase/functions/_tests/event-categories.test.ts
+      # WEB-BE-044. bulk-update-restaurants wrote a key-less Places media URL
+      # into restaurants.image_url under a comment claiming it stored the photo
+      # reference name - so those rows render a 403 - and backfill-images copies
+      # Place photo bytes into Storage permanently, while the Maps Platform
+      # terms allow caching Place content for 30 days. Pins the detector, the
+      # 30-day rule (an undated copy reads as EXPIRED), and that the guard in
+      # fetchAndStoreImage is wired and nothing opts out of it.
+      - run: deno test --allow-read supabase/functions/_tests/places-photo-terms.test.ts
       # WEB-BE-032. The ops digest counted with `count ?? 0` and discarded the
       # error, so a digest that could read nothing printed the same eleven
       # zeros as a system with nothing wrong. Pins that an unreadable section

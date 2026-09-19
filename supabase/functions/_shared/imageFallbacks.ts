@@ -8,6 +8,7 @@
  */
 
 import { extractImageFromHtml } from "./imageStorage.ts";
+import { placesMediaUrl } from "./placesPhoto.ts";
 
 /**
  * Look up a venue by name in restaurants and attractions tables.
@@ -165,9 +166,12 @@ export async function getGooglePlacesPhoto(
     const photoName: string | undefined = data?.places?.[0]?.photos?.[0]?.name;
     if (!photoName) return null;
 
-    // Place photo media endpoint redirects to the actual image — passing the API key
-    // in the URL is fine for server-side fetches and matches Places API docs.
-    return `https://places.googleapis.com/v1/${photoName}/media?maxHeightPx=1200&maxWidthPx=1600&key=${apiKey}`;
+    // Place photo media endpoint redirects to the actual image. Passing the API
+    // key in the URL is fine for a SERVER-SIDE fetch and matches the Places
+    // docs; it is not fine for anything that reaches a browser or a database
+    // column, which is why the URL is built here per call and never stored
+    // (WEB-BE-044).
+    return placesMediaUrl(photoName, { apiKey });
   } catch (err) {
     console.warn(`getGooglePlacesPhoto error for "${venueName}":`, (err as Error).message);
     return null;
@@ -220,7 +224,14 @@ export async function getGooglePlacesPhotos(
       .slice(0, maxPhotos)
       .map((p) => p.name)
       .filter((n): n is string => !!n)
-      .map((n) => `https://places.googleapis.com/v1/${n}/media?maxHeightPx=1200&maxWidthPx=1600&key=${apiKey}`);
+      // NOTE (WEB-BE-044): these URLs carry the API key and this function's only
+      // caller, find-image-candidates, returns them in an HTTP response to the
+      // admin browser. Admin-gated, so the exposure is narrow, but the key is
+      // still readable in a network tab. Fixing it needs more than stripping
+      // the key: a key-less media URL 403s, and image-proxy - which could add
+      // the key server-side - requires an Authorization header that an <img>
+      // tag cannot send. Recorded rather than half-fixed.
+      .map((n) => placesMediaUrl(n, { apiKey }));
   } catch {
     return [];
   }

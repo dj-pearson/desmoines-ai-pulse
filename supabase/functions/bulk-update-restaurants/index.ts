@@ -7,6 +7,7 @@ import { writeAuditLog, auditIp } from "../_shared/auditLog.ts";
 import { fetchWithTimeout } from '../_shared/fetchWithTimeout.ts';
 import { isUnknownColumnError } from '../_shared/postgrestErrors.ts'
 import { runJob } from '../_shared/jobRunner.ts'
+import { isPlacesMediaUrl, GOOGLE_ATTRIBUTION_TEXT } from '../_shared/placesPhoto.ts'
 
 interface GooglePlaceDetails {
   id: string;
@@ -24,6 +25,10 @@ interface GooglePlaceDetails {
     name: string;
     widthPx: number;
     heightPx: number;
+    /** WEB-BE-044. Places requires this to be shown wherever the photo is.
+     *  Requested explicitly in the field mask below - an unrequested field is
+     *  simply absent from the response, which is how it went unnoticed. */
+    authorAttributions?: Array<{ displayName?: string; uri?: string }>;
   }>;
   types: string[];
   businessStatus: string;
@@ -47,6 +52,13 @@ interface RestaurantUpdate {
    *  that migration not being applied yet. */
   reservable?: boolean;
   google_maps_uri?: string;
+  /** WEB-BE-044. Added by migration 20260919000004; guarded the same way.
+   *  The RESOURCE NAME, never a media URL - "places/<id>/photos/<ref>". It is
+   *  a reference, so the 30-day Place content cache limit does not apply to it
+   *  the way it applies to the bytes. */
+  places_photo_name?: string;
+  places_photo_attribution?: string;
+  places_photo_seen_at?: string;
   enhanced: string;
   updated_at: string;
 }
@@ -238,7 +250,7 @@ serve(async (req) => {
             method: 'GET',
             headers: {
               'X-Goog-Api-Key': googleApiKey,
-              'X-Goog-FieldMask': 'id,displayName,formattedAddress,rating,editorialSummary,nationalPhoneNumber,websiteUri,photos,types,businessStatus,reservable,googleMapsUri'
+              'X-Goog-FieldMask': 'id,displayName,formattedAddress,rating,editorialSummary,nationalPhoneNumber,websiteUri,photos,photos.authorAttributions,types,businessStatus,reservable,googleMapsUri'
             }
           })
 
@@ -374,11 +386,34 @@ serve(async (req) => {
             update.google_maps_uri = placeDetails.googleMapsUri
           }
 
-          // Get the main photo URL (proxy through server to avoid leaking API key)
+          // WEB-BE-044. THE COMMENT HERE USED TO SAY it stored "the photo
+          // reference name instead of the full URL with API key", and what it
+          // assigned was a full media URL with the key stripped out. That URL
+          // 403s, so every restaurant enriched this way has been rendering a
+          // broken image; and hot-linking Places media out of a content column
+          // is outside the Maps Platform terms even when it works.
+          //
+          // The resource name goes on the row instead. It is a reference, not
+          // Place content, so it can be stored; anything that wants the bytes
+          // builds the media URL at fetch time and does not keep them past the
+          // 30-day window.
           if (placeDetails.photos && placeDetails.photos.length > 0) {
             const photo = placeDetails.photos[0]
-            // Store the photo reference name instead of the full URL with API key
-            update.image_url = `https://places.googleapis.com/v1/${photo.name}/media?maxWidthPx=1200&maxHeightPx=800`
+            if (photo.name) {
+              update.places_photo_name = photo.name
+              update.places_photo_attribution =
+                photo.authorAttributions?.map((a) => a.displayName).filter(Boolean).join(', ')
+                || GOOGLE_ATTRIBUTION_TEXT
+              update.places_photo_seen_at = new Date().toISOString()
+            }
+          }
+
+          // A belt-and-braces stop on the defect above: nothing in this
+          // function may put a Places media URL into image_url again, however
+          // it got there.
+          if (isPlacesMediaUrl(update.image_url)) {
+            console.warn(`Refusing to write a Places media URL into image_url for ${restaurant.name}`)
+            delete update.image_url
           }
           
           console.log(`Update object for ${restaurant.name}:`, update)
@@ -424,9 +459,16 @@ serve(async (req) => {
         // new columns and nothing else.
         if (updateError && isUnknownColumnError(updateError)) {
           console.warn(
-            `Reservation columns not present yet; retrying ${update.name} without them`
+            `Reservation or Places-provenance columns not present yet; retrying ${update.name} without them`
           )
-          const { reservable, google_maps_uri, ...legacyUpdate } = update
+          const {
+            reservable,
+            google_maps_uri,
+            places_photo_name,
+            places_photo_attribution,
+            places_photo_seen_at,
+            ...legacyUpdate
+          } = update
           const retry = await supabase
             .from('restaurants')
             .update(legacyUpdate)

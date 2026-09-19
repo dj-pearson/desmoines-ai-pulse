@@ -4,6 +4,7 @@
  */
 
 import { validateURLForSSRF } from "./validation.ts";
+import { isPlacesMediaUrl, redactPlacesKey, PLACES_CACHE_MAX_AGE_DAYS } from "./placesPhoto.ts";
 
 export const IMAGE_MAX_BYTES = 8 * 1024 * 1024; // 8 MB
 
@@ -489,13 +490,45 @@ async function insertSharedAssetRow(
  *    content_hash, skip the upload and reuse that storage object.
  *  - Otherwise upload as a new file and record content_hash + source_url.
  */
+export interface FetchAndStoreOptions {
+  /**
+   * Opt IN to copying a Google Places photo (WEB-BE-044).
+   *
+   * Maps Platform terms permit caching Place content for at most 30 days, and
+   * every copy this function makes is permanent - it uploads to Storage and
+   * nothing ever revisits it. So a Places media URL is REFUSED by default, and
+   * a caller that has a refresh path (one that records when the copy was taken
+   * and replaces it within PLACES_CACHE_MAX_AGE_DAYS) opts in explicitly.
+   *
+   * Nothing opts in today. That is the point: the refusal is what stops the
+   * permanent copies accumulating while the refresh path is built, and the
+   * flag is what will let it be turned back on in one place rather than by
+   * deleting this guard.
+   */
+  allowPlacesRefresh?: boolean;
+}
+
 export async function fetchAndStoreImage(
   supabase: any,
   sourceImageUrl: string,
   category: string,
-  contentId: string
+  contentId: string,
+  options: FetchAndStoreOptions = {}
 ): Promise<string | null> {
   if (!sourceImageUrl) return null;
+
+  // WEB-BE-044. Refused before the SSRF check rather than after, because this
+  // is not a safety question - the URL is Google's and it is safe. It is a
+  // licensing one, and the cheapest place to enforce it is the single function
+  // every ingestion path funnels image bytes through.
+  if (isPlacesMediaUrl(sourceImageUrl) && !options.allowPlacesRefresh) {
+    console.warn(
+      `[imageStorage] refusing to store a Google Places photo permanently ` +
+        `(Maps Platform terms allow caching Place content for ${PLACES_CACHE_MAX_AGE_DAYS} days): ` +
+        redactPlacesKey(sourceImageUrl),
+    );
+    return null;
+  }
 
   try {
     // SSRF guard: image URLs come from scraped pages / DB rows (attacker-
