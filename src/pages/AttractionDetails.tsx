@@ -32,6 +32,11 @@ import { LastUpdatedBadge } from "@/components/LastUpdatedBadge";
 import { NearbyContent } from "@/components/NearbyContent";
 import { SpriteIcon } from "@/components/ui/SpriteIcon";
 import { fetchPriorityAttr } from '@/lib/fetchPriority';
+import { createSlug } from "@/lib/slug";
+import { fetchBySlug } from "@/lib/resolveBySlug";
+import type { Database } from "@/integrations/supabase/types";
+
+type Attraction = Database["public"]["Tables"]["attractions"]["Row"];
 
 // Estimated visit duration by attraction type (in minutes)
 const VISIT_DURATION_BY_TYPE: Record<string, { min: number; max: number }> = {
@@ -62,13 +67,6 @@ function getEstimatedDuration(type: string | null): string {
   return `${formatTime(duration.min)} - ${formatTime(duration.max)}`;
 }
 
-const createSlug = (name: string): string => {
-  return name
-    .toLowerCase()
-    .replace(/[^a-z0-9]+/g, "-")
-    .replace(/(^-|-$)/g, "");
-};
-
 export default function AttractionDetails() {
   const { slug } = useParams();
   const [imageError, setImageError] = useState(false);
@@ -79,28 +77,15 @@ export default function AttractionDetails() {
     error,
   } = useQuery({
     queryKey: ["attraction", slug],
-    queryFn: async () => {
-      // attractions has no slug column, so we match the createSlug(name) the
-      // routes use. Scan only (id, name) instead of downloading every full row,
-      // then fetch the single matched attraction's full row (SEO/GEO intact).
-      const { data: index, error } = await supabase
-        .from("attractions")
-        .select("id, name");
-
-      if (error) throw error;
-
-      const match = index?.find((a) => createSlug(a.name) === slug);
-      if (!match) return null;
-
-      const { data, error: rowError } = await supabase
-        .from("attractions")
-        .select("*")
-        .eq("id", match.id)
-        .maybeSingle();
-
-      if (rowError) throw rowError;
-      return data || null;
-    },
+    // attractions now has a slug column (migration 20260919000008), so this is
+    // one row by unique key. The (id, name) scan this replaces is still in
+    // fetchBySlug as the fallback for the window before that migration is
+    // applied (WEB-PERF-031).
+    queryFn: () => fetchBySlug<Attraction>("attractions", slug ?? ""),
+    enabled: Boolean(slug),
+    // Matches usePrefetchAttraction, or the prefetch is discarded as stale the
+    // instant the page mounts and the hover cost bought nothing.
+    staleTime: 2 * 60 * 1000,
   });
 
   // Track page view and content interactions

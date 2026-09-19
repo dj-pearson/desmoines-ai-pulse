@@ -1,6 +1,8 @@
 import { useParams, Link } from "react-router-dom";
 import { RouteCanonical } from "@/components/RouteCanonical";
 import { createSlug } from "@/lib/slug";
+import { fetchBySlug } from "@/lib/resolveBySlug";
+import type { Database } from "@/integrations/supabase/types";
 import { useQuery } from "@tanstack/react-query";
 import { supabase } from "@/integrations/supabase/client";
 import { Card, CardContent } from "@/components/ui/card";
@@ -27,6 +29,8 @@ import { useState } from "react";
 import { useDocumentTitle } from "@/hooks/useDocumentTitle";
 import { SpriteIcon } from "@/components/ui/SpriteIcon";
 
+type Playground = Database["public"]["Tables"]["playgrounds"]["Row"];
+
 export default function PlaygroundDetails() {
   const { slug } = useParams();
   const [imageError, setImageError] = useState(false);
@@ -37,18 +41,11 @@ export default function PlaygroundDetails() {
     error,
   } = useQuery({
     queryKey: ["playground", slug],
-    queryFn: async () => {
-      const { data: playgrounds, error } = await supabase
-        .from("playgrounds")
-        .select("*");
-
-      if (error) throw error;
-
-      const foundPlayground = playgrounds?.find(
-        (p) => createSlug(p.name) === slug
-      );
-      return foundPlayground || null;
-    },
+    // One row by slug, not the whole table (WEB-PERF-031). fetchBySlug keeps
+    // the createSlug(name) scan as a fallback for the window between this
+    // deploying and migration 20260919000008 being applied.
+    queryFn: () => fetchBySlug<Playground>("playgrounds", slug ?? ""),
+    enabled: Boolean(slug),
   });
 
   const { data: relatedPlaygrounds } = useQuery({
@@ -588,7 +585,15 @@ export default function PlaygroundDetails() {
                 {relatedPlaygrounds.map((related) => (
                   <Link
                     key={related.id}
-                    to={`/playgrounds/${createSlug(related.name)}`}
+                    // The stored slug wins where the two disagree: two
+                    // playgrounds sharing a name get one bare slug and one
+                    // numeric suffix (migration 20260919000008), and the
+                    // name-derived link would send both to the first row. The
+                    // fallback covers the window before that migration lands.
+                    // AttractionDetails cannot do this - its related/nearby
+                    // queries use ATTRACTION_LIST_COLUMNS, which does not carry
+                    // slug and must not until the column is live.
+                    to={`/playgrounds/${related.slug || createSlug(related.name)}`}
                     className="block"
                   >
                     <Card className="h-full hover:shadow-lg transition-all duration-300 hover:-translate-y-1 rounded-2xl overflow-hidden">
@@ -640,7 +645,7 @@ export default function PlaygroundDetails() {
                 {nearbyPlaygrounds.map((nearby) => (
                   <Link
                     key={nearby.id}
-                    to={`/playgrounds/${createSlug(nearby.name)}`}
+                    to={`/playgrounds/${nearby.slug || createSlug(nearby.name)}`}
                     className="block"
                   >
                     <Card className="h-full hover:shadow-lg transition-all duration-300 hover:-translate-y-1 rounded-2xl overflow-hidden">

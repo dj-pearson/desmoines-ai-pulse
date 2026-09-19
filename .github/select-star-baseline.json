@@ -1,5 +1,5 @@
 {
-  "count": 148,
+  "count": 145,
   "sites": [
     "src/hooks/useAIConfiguration.ts:24",
     "src/hooks/useAIModels.ts:30",
@@ -63,7 +63,7 @@
     "src/hooks/useEmailPreferences.ts:42",
     "src/hooks/useEnhancedRecommendations.ts:128",
     "src/hooks/useEnhancedRecommendations.ts:45",
-    "src/hooks/useEventBySlug.ts:106",
+    "src/hooks/useEventBySlug.ts:113",
     "src/hooks/useEventSocial.ts:103",
     "src/hooks/useEventSocial.ts:111",
     "src/hooks/useEventSocial.ts:95",
@@ -95,9 +95,8 @@
     "src/hooks/usePersonalizedRecommendations.ts:344",
     "src/hooks/usePersonalizedRecommendations.ts:385",
     "src/hooks/usePlaygrounds.ts:50",
-    "src/hooks/usePrefetchDetail.ts:25",
-    "src/hooks/usePrefetchDetail.ts:31",
-    "src/hooks/usePrefetchDetail.ts:67",
+    "src/hooks/usePrefetchDetail.ts:26",
+    "src/hooks/usePrefetchDetail.ts:32",
     "src/hooks/useProfile.ts:48",
     "src/hooks/useProfile.ts:83",
     "src/hooks/useProviderCosts.ts:40",
@@ -143,10 +142,8 @@
     "src/hooks/useVoting.ts:53",
     "src/pages/AdminCampaigns.tsx:92",
     "src/pages/AdminRefunds.tsx:166",
-    "src/pages/AttractionDetails.tsx:97",
-    "src/pages/PlaygroundDetails.tsx:43",
-    "src/pages/PlaygroundDetails.tsx:60",
-    "src/pages/PlaygroundDetails.tsx:77",
+    "src/pages/PlaygroundDetails.tsx:57",
+    "src/pages/PlaygroundDetails.tsx:74",
     "src/pages/RestaurantDetails.tsx:56",
     "src/pages/RestaurantDetails.tsx:63"
   ]

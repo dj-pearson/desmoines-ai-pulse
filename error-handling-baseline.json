@@ -1,6 +1,6 @@
 {
   "scope": "src + supabase/functions; data|count destructures; rule-scoped counting",
-  "total": 134,
+  "total": 131,
   "files": {
     "src/components/AIEnhancementManager.tsx": 1,
     "src/components/CatchDesmoinUrlExtractor.tsx": 2,
@@ -24,7 +24,6 @@
     "src/components/cms/EnhancedArticleEditor.tsx": 1,
     "src/hooks/use-user-preferences.ts": 1,
     "src/hooks/useAIConfiguration.ts": 1,
-    "src/hooks/useAdminAuth.ts": 2,
     "src/hooks/useAnalytics.ts": 1,
     "src/hooks/useArticles.ts": 1,
     "src/hooks/useBusinessPartnership.ts": 1,
@@ -32,7 +31,7 @@
     "src/hooks/useCommunityFeatures.ts": 1,
     "src/hooks/useCrmNotes.ts": 1,
     "src/hooks/usePayments.ts": 2,
-    "src/hooks/usePrefetchDetail.ts": 2,
+    "src/hooks/usePrefetchDetail.ts": 1,
     "src/hooks/usePushNotifications.ts": 1,
     "src/hooks/useRatings.ts": 1,
     "src/hooks/useRestaurantMenu.ts": 2,

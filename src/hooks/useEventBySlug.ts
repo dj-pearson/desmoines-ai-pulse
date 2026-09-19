@@ -3,6 +3,7 @@ import { supabase } from "@/integrations/supabase/client";
 import { createLogger } from "@/lib/logger";
 import { createEventSlugWithCentralTime } from "@/lib/timezone";
 import { EVENT_SLUG_COLUMNS } from "@/lib/listColumns";
+import { slugToTitlePattern } from "@/lib/slug";
 import type { Database } from "@/integrations/supabase/types";
 
 const log = createLogger("useEventBySlug");
@@ -48,11 +49,10 @@ async function fetchEventBySlug(slug: string): Promise<Event | null> {
   const slugDate = parseSlugDate(slug);
 
   // The candidate scan asks for the four columns the slug is DERIVED from, not
-  // the whole row (WEB-PERF-035). The dateless branch below scans up to 1000
-  // events to keep one; under select("*") the other 999 each arrived carrying
-  // the SEO/GEO text, search_vector and the PostGIS geometry. The match is
-  // re-fetched in full at the bottom, because the detail page renders that
-  // content.
+  // the whole row (WEB-PERF-035): under select("*") every candidate arrived
+  // carrying the SEO/GEO text, search_vector and the PostGIS geometry so that
+  // one of them could be kept. The match is re-fetched in full at the bottom,
+  // because the detail page renders that content.
   let query = supabase
     .from("events")
     .select(EVENT_SLUG_COLUMNS)
@@ -71,12 +71,19 @@ async function fetchEventBySlug(slug: string): Promise<Event | null> {
       .gte("date", shiftDate(slugDate, -DAY_WINDOW))
       .lt("date", shiftDate(slugDate, DAY_WINDOW + 1));
   } else {
-    // Legacy/dateless slug: fall back to a bounded scan of upcoming events rather
-    // than an unbounded one, so behaviour degrades predictably.
+    // Legacy/dateless slug. This was a 1,000-row scan of everything upcoming,
+    // filtered in JavaScript - the widest query on the site, run to find one
+    // row (WEB-PERF-031). Slugging is lossy but only in one direction: every
+    // run of non-alphanumerics became a hyphen, so the slug turns back into an
+    // ilike pattern that the database can narrow with, and 20 candidates is
+    // plenty to settle by exact slug afterwards.
+    const pattern = slugToTitlePattern(slug);
+    if (!pattern) return null;
     query = query
+      .ilike("title", pattern)
       .gte("date", new Date().toISOString().split("T")[0])
       .order("date", { ascending: true })
-      .limit(1000);
+      .limit(20);
   }
 
   const { data, error } = await query;

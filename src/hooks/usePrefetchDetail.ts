@@ -1,6 +1,7 @@
 import { useCallback, useRef } from 'react';
 import { useQueryClient } from '@tanstack/react-query';
 import { supabase } from '@/integrations/supabase/client';
+import { fetchBySlug } from '@/lib/resolveBySlug';
 
 /**
  * Hook to prefetch detail page data on card hover.
@@ -61,14 +62,14 @@ export function usePrefetchAttraction() {
       const doFetch = () => {
         queryClient.prefetchQuery({
           queryKey: ['attraction', slug],
-          queryFn: async () => {
-            const { data: attractions } = await supabase
-              .from('attractions')
-              .select('*');
-            const createSlug = (name: string) =>
-              name.toLowerCase().replace(/[^a-z0-9]+/g, '-').replace(/(^-|-$)/g, '');
-            return attractions?.find((a) => createSlug(a.name) === slug) || null;
-          },
+          // THIS RAN ON HOVER AND DOWNLOADED THE WHOLE TABLE (WEB-PERF-031).
+          // select('*') on attractions with no filter, once per card the
+          // pointer crossed until prefetchedRef caught up - so the thing meant
+          // to make the detail page feel instant was the most expensive request
+          // on the listing page. It is now one row by slug, sharing
+          // AttractionDetails' resolver so the prefetched entry is the one the
+          // page reads rather than a differently-shaped near-miss.
+          queryFn: () => fetchBySlug('attractions', slug),
           staleTime: 2 * 60 * 1000,
         });
       };
