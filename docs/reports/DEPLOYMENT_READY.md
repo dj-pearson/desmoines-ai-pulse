@@ -40,7 +40,7 @@
 ### Option 1: Use the Deployment Script
 
 ```powershell
-.\deploy-fixes.ps1
+.\scripts\windows\deploy-fixes.ps1
 ```
 
 ### Option 2: Manual Deployment

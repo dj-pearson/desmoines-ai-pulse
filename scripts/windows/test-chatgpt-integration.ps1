@@ -189,7 +189,7 @@ if ($errors -eq 0 -and $warnings -eq 0) {
     Write-Host "Your ChatGPT plugin integration is ready!" -ForegroundColor Cyan
     Write-Host ""
     Write-Host "Next steps:" -ForegroundColor White
-    Write-Host "  1. Deploy functions: .\deploy-chatgpt-plugin.ps1" -ForegroundColor Gray
+    Write-Host "  1. Deploy functions: .\scripts\windows\deploy-chatgpt-plugin.ps1" -ForegroundColor Gray
     Write-Host "  2. Push to production: git push" -ForegroundColor Gray
     Write-Host "  3. Register at: https://chat.openai.com" -ForegroundColor Gray
 } elseif ($errors -eq 0) {

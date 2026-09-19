@@ -1868,3 +1868,14 @@ AC2 (source visits from user_analytics) needs a migration and stays open.
   - **One label was holding the whole body on the wire.** The list selects `content` solely to render "N min read". No word_count column exists, so AC3's projection needs a migration - the cheap-looking half of an AC can be the blocked one.
   - **A pending RPC belongs in PENDING_MIGRATIONS, not the dead-query baseline.** `check-schema-usage` failed on a function that does not exist yet; the baseline is for references with no fix in flight, and putting it there would have hidden it permanently.
   - **Seventh time an assertion fired on its own explanation.** The comment I added said "not window.location.href", and the assertion checking that string was gone matched the comment. Assert on the code shape - `url={window.location.href}` - not the bare phrase.
+
+## 2026-09-19 - WEB-QUAL-009 CLOSED: the dead PostCSS config was a trap, and 2.70 MB left the root
+- `postcss.config.cjs` adds cssnano, which is not a dependency - so it could never have loaded without failing the build. It never loaded: PostCSS searches `.js` first. It was a landmine for whoever deleted `postcss.config.js`, not a config. Deleted; the survivor documents why there is one and why no minifier is needed (Vite minifies CSS via esbuild).
+- 18 files, 2.70 MB, tracked root files 110 -> 77. Eleven Windows scripts moved to `scripts/windows/` with the five docs that invoke them rewritten as PowerShell paths.
+- The four GSC CSVs moved to `docs/gsc-exports/` rather than being deleted: 1.9 KB total, and `docs/GSC_INDEXING_FIXES.md` is written from them.
+- Declined: renaming `ios-screenshots/`. validate exit 0, vitest 771/771, build clean with CSS minified.
+- **Learnings for future iterations:**
+  - **A config that cannot work is safe only while it is shadowed.** The `.cjs` would have failed the build the moment it loaded, and the only thing stopping it was PostCSS's search order. Deleting the file that works is a normal-looking change that would have broken production.
+  - **Renaming a large tracked binary directory doubles its cost.** 58 MB of screenshots get stored again under the new paths while the old ones stay in history. The AC offered the rename as tidying; it is the opposite.
+  - **Do not delete the evidence a document is written from.** Four CSVs totalling 1.9 KB are the entire basis of a GSC fixes doc. They belong beside it, not in the bin.
+  - **`git stash` to take a "before" measurement mutated what I was measuring.** The pop restored the index so 18 staged deletions silently became unstaged, and my next measurement reported 0.00 MB removed. Second time this session that a git command used as a convenience quietly undid real work - measure from `git ls-tree HEAD` instead of moving the working tree around.
