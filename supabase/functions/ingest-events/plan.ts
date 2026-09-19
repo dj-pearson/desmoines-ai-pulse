@@ -13,6 +13,7 @@ import {
   type ExistingEvent,
 } from '../_shared/eventDedup.ts';
 import { parseEventDateTime } from '../_shared/eventDateTime.ts';
+import { normalizeCategory } from '../_shared/eventCategories.ts';
 export interface IncomingItem {
   title?: string;
   date?: string;
@@ -80,7 +81,10 @@ export function validateItem(item: IncomingItem, fallbackUrl: string): { ok: tru
       event_start_utc: parsed.event_start_utc,
       location: (item.location || "Des Moines, IA").substring(0, 200),
       venue: (item.venue || "").substring(0, 200),
-      category: (item.category || "General").substring(0, 50),
+      // WEB-BE-049: normalized, not truncated. "General" was this file's
+      // default and two adapters' default, and none of them is a category
+      // anyone can filter by - it means nobody decided.
+      category: normalizeCategory(item.category),
       price: (item.price || "See website").substring(0, 50),
       source_url: sourceUrl.substring(0, 500),
       is_enhanced: false,

@@ -114,3 +114,4 @@ coverage/
 keyword/*
 # SEO-027: wall-clock stamp for the adaptive prerender budget (scripts/build-clock.mjs)
 .build-start
+__pycache__/

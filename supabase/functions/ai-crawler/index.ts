@@ -32,6 +32,7 @@ import { fetchWithTimeout } from "../_shared/fetchWithTimeout.ts";
 import { recordAnthropicUsage } from "../_shared/providerUsage.ts";
 import { sanitizeLikeInput } from "../_shared/validation.ts";
 import { runJob } from "../_shared/jobRunner.ts";
+import { normalizeCategory } from "../_shared/eventCategories.ts";
 import type { SourceCounts } from "../_shared/ingestionHealth.ts";
 
 const corsHeaders = {
@@ -1422,7 +1423,8 @@ async function insertData(
                   item.venue?.substring(0, 100) ||
                   item.location?.substring(0, 100) ||
                   "TBD",
-                category: item.category?.substring(0, 50) || "General",
+                // WEB-BE-049.
+                category: normalizeCategory(item.category),
                 price: item.price?.substring(0, 50) || "See website",
                 source_url: item.source_url || "",
                 image_url: resolvedImageUrl || null,

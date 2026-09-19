@@ -40,6 +40,9 @@ on:
       # automation_job_runs (WEB-BE-043) - nothing inside Supabase can observe
       # an external process - so a change to it has to run the health suite.
       - 'crawlers/catchdesmoines_crawler.py'
+      # The canonical category vocabulary and its browser mirror (WEB-BE-049).
+      - 'src/lib/eventCategories.*'
+      - 'src/components/EventSubmissionForm.tsx'
       - '.github/workflows/subscription-sync-tests.yml'
 
 concurrency:
@@ -192,6 +195,15 @@ jobs:
       # after a non-zero baseline, and it stays quiet for a source that never
       # produced, a paused run and an empty calendar.
       - run: deno test --allow-read supabase/functions/_tests/ingestion-health.test.ts
+      # WEB-BE-049. There was no canonical category list: SeatGeek wrote
+      # "Comedy" and "Family" no other path produced, three row builders
+      # defaulted to "General", and the shared extraction prompt asked for six
+      # categories then showed the model an example using a seventh. The
+      # /events filter chips are a SELECT DISTINCT, so every one of those words
+      # became a chip. Pins the vocabulary, the word-prefix matching rule (a
+      # plain includes() filed "Block Party" under Arts), and that every row
+      # builder, the crawler, the prompt and the submission form use it.
+      - run: deno test --allow-read supabase/functions/_tests/event-categories.test.ts
       # WEB-BE-032. The ops digest counted with `count ?? 0` and discarded the
       # error, so a digest that could read nothing printed the same eleven
       # zeros as a system with nothing wrong. Pins that an unreadable section

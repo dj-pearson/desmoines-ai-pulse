@@ -62,6 +62,15 @@ jobs:
       - name: Check the duplicate detection
         run: python crawlers/test_dedupe.py
 
+      # Third in the same no-dependency block, and for the same reason: this
+      # crawler writes to `events` directly with a service-role key, so no edge
+      # function and no TypeScript check ever sees its rows. It reads the
+      # canonical category vocabulary off disk; if that read fails it falls back
+      # to a one-word list and every event it writes becomes "Other"
+      # (WEB-BE-049).
+      - name: Check the category vocabulary loads and normalizes
+        run: python crawlers/test_categories.py
+
       - name: Install dependencies
         run: |
           python -m pip install --upgrade pip

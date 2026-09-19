@@ -64,6 +64,76 @@ except ImportError:
 # Configuration
 CATCHDESMOINES_BASE_URL = "https://www.catchdesmoines.com"
 EVENTS_LIST_URL = f"{CATCHDESMOINES_BASE_URL}/events/"
+
+# WEB-BE-049. The canonical event category vocabulary, read from the SAME file
+# the edge functions and the browser bundle read. A fourth hand-maintained copy
+# is how the vocabularies diverged in the first place: this crawler's prompt
+# asked for one list, the shared prompt asked for a different one, and that
+# prompt's own example used a word in neither.
+_CATEGORY_JSON = os.path.join("supabase", "functions", "_shared", "eventCategories.json")
+
+
+def _category_data_path() -> str:
+    """The workflow runs this with cwd=crawlers, the offline tests exec the
+    module source with no __file__, and a developer may run it from the repo
+    root. Try all three rather than assume one."""
+    candidates = []
+    here = globals().get("__file__")
+    if here:
+        candidates.append(os.path.join(os.path.dirname(os.path.abspath(here)), "..", _CATEGORY_JSON))
+    candidates.append(os.path.join("..", _CATEGORY_JSON))
+    candidates.append(_CATEGORY_JSON)
+    for c in candidates:
+        if os.path.exists(c):
+            return c
+    return candidates[0]
+
+
+def _load_category_vocabulary() -> tuple:
+    """(categories, fallback, keyword_groups). Falls back to a bare vocabulary
+    if the file is unreadable - a crawl that cannot read a JSON file should not
+    stop, but it must not silently invent categories either."""
+    path = _category_data_path()
+    try:
+        with open(path, encoding="utf-8") as fh:
+            data = json.load(fh)
+        return (
+            list(data["categories"]),
+            data["fallback"],
+            [(g["category"], list(g["match"])) for g in data["keywords"]],
+        )
+    except Exception as e:  # noqa: BLE001
+        logger.warning(f"Could not read the category vocabulary at {path}: {e}")
+        return (["Other"], "Other", [])
+
+
+EVENT_CATEGORIES, FALLBACK_CATEGORY, _CATEGORY_KEYWORDS = _load_category_vocabulary()
+CATEGORY_VOCABULARY = "/".join(EVENT_CATEGORIES)
+
+
+def normalize_category(raw) -> str:
+    """Port of supabase/functions/_shared/eventCategories.ts normalizeCategory.
+    Total: every input produces a canonical value."""
+    if not isinstance(raw, str):
+        return FALLBACK_CATEGORY
+    trimmed = raw.strip()
+    if not trimmed:
+        return FALLBACK_CATEGORY
+    lower = trimmed.lower()
+    for canonical in EVENT_CATEGORIES:
+        if canonical.lower() == lower:
+            return canonical
+    # Word-prefix, not substring: a plain `in` filed "Block Party" under Arts
+    # because it contains "art". A keyword that is not plain letters ("trade
+    # show", "stand-up") is matched whole, because the split would tear it in
+    # half and it could never fire.
+    words = [w for w in re.split(r"[^a-z]+", lower) if w]
+    for category, matches in _CATEGORY_KEYWORDS:
+        for kw in matches:
+            hit = kw in lower if re.search(r"[^a-z]", kw) else any(w.startswith(kw) for w in words)
+            if hit:
+                return category
+    return FALLBACK_CATEGORY
 CENTRAL_TZ = ZoneInfo("America/Chicago")
 
 # Claude 4.5 Sonnet model
@@ -440,7 +510,7 @@ For EACH event, extract:
 - date: YYYY-MM-DD HH:MM:SS (Central Time)
 - location: City/venue (default: "Des Moines, IA")
 - venue: Specific venue name
-- category: Music/Sports/Arts/Community/Entertainment/Festival/Food
+- category: EXACTLY ONE OF {CATEGORY_VOCABULARY} - not a word of your own
 - price: Price or "See website"
 - detail_url: The event detail page path (e.g., /event/event-name/12345/)
 
@@ -452,7 +522,7 @@ FORMAT AS JSON ARRAY ONLY:
     "date": "2025-MM-DD HH:MM:SS",
     "location": "Des Moines, IA",
     "venue": "Venue Name",
-    "category": "Category",
+    "category": "Music",
     "price": "Price",
     "detail_url": "/event/event-name/12345/"
   }}
@@ -633,7 +703,9 @@ Return ONLY the JSON array. No other text."""
                 "event_start_utc": parsed_dt.isoformat(),
                 "location": event.get("location", "Des Moines, IA")[:100],
                 "venue": self._record_venue(event),
-                "category": event.get("category", "General")[:50],
+                # WEB-BE-049: normalized here as well as prompted for, because a
+                # prompt is a request and this is the write.
+                "category": normalize_category(event.get("category")),
                 "price": event.get("price", "See website")[:50],
                 "source_url": event.get("source_url", ""),
                 "is_featured": False,

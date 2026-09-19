@@ -45,25 +45,21 @@ Deno.test('an unknown or absent type falls back to Community', () => {
   assert.equal(categoryForEventType(42), 'Community');
 });
 
-Deno.test('every mapped category is one the Python crawler also emits', async () => {
-  // AC5. Two live writers ingest this source and must agree until AC2 retires
-  // one. The Python crawler hands Sonnet an explicit vocabulary; this reads it
-  // from that file rather than restating it, so a change on either side that
-  // breaks the agreement fails here instead of producing two spellings of one
-  // category in the table.
-  const py = await Deno.readTextFile(
-    new URL('crawlers/catchdesmoines_crawler.py', REPO),
-  );
-  // `?? ''` rather than a truthiness assert: node:assert's `ok` is not declared
-  // as an assertion function in the edge type shim, so it does not narrow
-  // `string | undefined` and check-edge-types flagged both later uses.
-  const line = py.split('\n').find((l) => l.includes('- category:')) ?? '';
-  assert.notEqual(line, '', 'crawlers/catchdesmoines_crawler.py no longer declares a category vocabulary');
-
-  const allowed = new Set(
-    line.slice(line.indexOf(':') + 1).trim().split('/').map((s) => s.trim()),
-  );
-  assert.ok(allowed.size >= 5, `parsed too few categories from: ${line}`);
+Deno.test('every mapped category is in the canonical vocabulary', async () => {
+  // AC5. Two live writers ingest this source and must agree about what a
+  // category is. They used to agree by coincidence: this adapter's map and the
+  // Python crawler's prompt listed overlapping words and this test read the
+  // prompt line to compare them.
+  //
+  // WEB-BE-049 replaced the coincidence with one file. The crawler's prompt now
+  // interpolates the shared vocabulary instead of restating it, so there is no
+  // literal list left to read - and the thing worth asserting is no longer
+  // "these two lists overlap" but "this map emits nothing outside the list".
+  const vocabulary: string[] = JSON.parse(
+    await Deno.readTextFile(
+      new URL('supabase/functions/_shared/eventCategories.json', REPO),
+    ),
+  ).categories;
 
   for (const type of [
     'MusicEvent', 'SportsEvent', 'TheaterEvent', 'ComedyEvent',
@@ -71,10 +67,21 @@ Deno.test('every mapped category is one the Python crawler also emits', async ()
   ]) {
     const mapped = categoryForEventType(type);
     assert.ok(
-      allowed.has(mapped),
-      `adapter maps ${type} -> "${mapped}", which the Python crawler never emits (${[...allowed].join('/')})`,
+      vocabulary.includes(mapped),
+      `adapter maps ${type} -> "${mapped}", which is not in the canonical vocabulary (${vocabulary.join('/')})`,
     );
   }
+
+  const py = await Deno.readTextFile(
+    new URL('crawlers/catchdesmoines_crawler.py', REPO),
+  );
+  const line = py.split('\n').find((l) => l.includes('- category:')) ?? '';
+  assert.notEqual(line, '', 'crawlers/catchdesmoines_crawler.py no longer declares a category field');
+  assert.match(
+    line,
+    /\{CATEGORY_VOCABULARY\}/,
+    'the crawler prompt must interpolate the shared vocabulary rather than restate one',
+  );
 });
 
 Deno.test('the adapter does not stamp a constant category', async () => {

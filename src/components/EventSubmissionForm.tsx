@@ -18,25 +18,16 @@ import { useMediaUpload } from "@/hooks/useMediaUpload";
 import { toast } from "sonner";
 import { createLogger } from '@/lib/logger';
 import { FormErrorSummary, useFormErrors } from "./ui/form-error-summary";
+import { EVENT_CATEGORIES } from "@/lib/eventCategories";
 
 const log = createLogger('EventSubmissionForm');
 
-const EVENT_CATEGORIES = [
-  "Art & Culture",
-  "Business & Networking",
-  "Entertainment",
-  "Family & Kids",
-  "Food & Dining",
-  "Health & Wellness",
-  "Music & Concerts",
-  "Nightlife",
-  "Outdoor & Recreation",
-  "Sports & Fitness",
-  "Shopping",
-  "Education & Learning",
-  "Community Service",
-  "Other"
-];
+// WEB-BE-049. This used to be fourteen labels of its own - "Art & Culture",
+// "Music & Concerts", "Community Service" - none of which any ingestion path
+// produced and none of which the /events filter chips could ever show, because
+// those come from SELECT DISTINCT over what the crawlers wrote. A visitor
+// submitting an event picked from one vocabulary and their event was filed
+// under another.
 
 const POPULAR_TAGS = [
   "Free",

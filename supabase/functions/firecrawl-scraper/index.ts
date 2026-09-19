@@ -28,6 +28,7 @@ import {
 } from "../_shared/htmlContentWindow.ts";
 import { resolveEventImage } from "../_shared/venueImage.ts";
 import { runJob } from "../_shared/jobRunner.ts";
+import { normalizeCategory } from "../_shared/eventCategories.ts";
 
 // Marker time for events without specific times (7:31:58 PM Central)
 
@@ -719,7 +720,10 @@ serve(async (req) => {
                   time_tbd: item.time_tbd === true,
                   location: eventLocation,
                   venue: eventVenue,
-                  category: item.category?.substring(0, 50) || "General",
+                  // WEB-BE-049. Every domain adapter's output passes through
+                  // here, so this one call covers all twelve of them plus
+                  // whatever the model wrote.
+                  category: normalizeCategory(item.category),
                   price: item.price?.substring(0, 50) || "See website",
                   source_url: item.source_url || url,
                   is_enhanced: false,

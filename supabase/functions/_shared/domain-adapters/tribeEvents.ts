@@ -35,6 +35,7 @@ import {
 } from "../eventSourceProfiles.ts";
 import { BROWSER_HEADERS } from "../eventPageDiscovery.ts";
 import { fetchAllowed } from "./adapterFetch.ts";
+import { normalizeCategory } from "../eventCategories.ts";
 
 const PER_PAGE = 50;
 const MAX_PAGES = 4; // 200 events is far more than any of these venues publishes
@@ -261,7 +262,8 @@ function toAdapterEvent(
     location: location.substring(0, 200),
     // The plugin's own venue name wins; the profile default only fills a blank.
     venue: (venueName || profile.venue?.name || "TBD").substring(0, 100),
-    category: mapCategory(evt.categories) ?? profile.defaultCategory ?? "General",
+    // WEB-BE-049: the canonical fallback, not "General".
+    category: normalizeCategory(mapCategory(evt.categories) ?? profile.defaultCategory),
     price: normalizeCost(evt.cost),
     // `url` is the event permalink — a real per-event deep link, which is
     // exactly what the listing-page-only path could never produce.
