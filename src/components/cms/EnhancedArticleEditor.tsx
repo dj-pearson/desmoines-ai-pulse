@@ -21,6 +21,7 @@ import { toast } from 'sonner';
 import { cn } from '@/lib/utils';
 import { createLogger } from '@/lib/logger';
 import { LoadingSpinner } from "@/components/ui/loading-skeleton";
+import { fromUnknownTable } from "@/integrations/supabase/unknownTable";
 
 const log = createLogger('EnhancedArticleEditor');
 
@@ -107,9 +108,9 @@ export default function EnhancedArticleEditor() {
   useEffect(() => {
     const loadData = async () => {
       const [authorsRes, categoriesRes, tagsRes] = await Promise.all([
-        supabase.from('author_profiles').select('id, display_name, avatar_url').eq('is_active', true),
-        supabase.from('article_categories').select('id, name, slug, color').eq('is_active', true).order('sort_order'),
-        supabase.from('article_tags').select('id, name, slug, color').order('usage_count', { ascending: false }),
+        fromUnknownTable('author_profiles').select('id, display_name, avatar_url').eq('is_active', true),
+        fromUnknownTable('article_categories').select('id, name, slug, color').eq('is_active', true).order('sort_order'),
+        fromUnknownTable('article_tags').select('id, name, slug, color').order('usage_count', { ascending: false }),
       ]);
 
       if (authorsRes.data) setAuthors(authorsRes.data);

@@ -291,7 +291,13 @@ function scanFile(file, schema, findings) {
   }
 
   // --- Tables and their chained columns ---------------------------------
-  for (const m of src.matchAll(/\.from\(\s*['"`](\w+)['"`]\s*\)/g)) {
+  //
+  // fromUnknownTable() COUNTS AS .from(). It is the untyped builder introduced
+  // by WEB-CI-031 for relations the generated types do not know - which is
+  // precisely the set this script exists to report. Matching only `.from(`
+  // dropped 99 of 193 findings the moment those call sites were rewritten:
+  // the queries did not get less dead, the inventory just stopped seeing them.
+  for (const m of src.matchAll(/(?:\.from|\bfromUnknownTable)\(\s*['"`](\w+)['"`]\s*\)/g)) {
     const table = m[1];
     const line = lineOf(src, m.index);
 
@@ -357,7 +363,18 @@ function scanFile(file, schema, findings) {
     // PostgREST chain never passes the client to itself. Like the `.from(`
     // bound, this only ever shrinks a segment.
     const rest = src.slice(m.index + m[0].length);
-    const stops = [rest.search(/\.from\(/), rest.search(/\b\w+\(\s*supabase\s*,/)].filter((i) => i !== -1);
+    //
+    // fromUnknownTable( ENDS A CHAIN TOO, for the same reason. When the
+    // WEB-CI-031 rewrite turned 106 `.from()` calls into helper calls, the
+    // segment after a KNOWN table stopped terminating at the next query and
+    // absorbed its columns: useCrmDashboard reported status, due_date, name and
+    // contact_count against crm_activities, which is a real table - they belong
+    // to the crm_tasks and crm_segments queries below it.
+    const stops = [
+      rest.search(/\.from\(/),
+      rest.search(/\bfromUnknownTable\(/),
+      rest.search(/\b\w+\(\s*supabase\s*,/),
+    ].filter((i) => i !== -1);
     const cut = stops.length > 0 ? Math.min(...stops) : -1;
     const segment = cut === -1 ? rest.slice(0, 2000) : rest.slice(0, Math.min(cut, 2000));
 

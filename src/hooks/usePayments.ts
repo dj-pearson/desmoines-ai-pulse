@@ -3,6 +3,7 @@ import { supabase } from "@/integrations/supabase/client";
 import { createLogger } from "@/lib/logger";
 import { useAuth } from "./useAuth";
 import { useState } from "react";
+import { fromUnknownTable } from "@/integrations/supabase/unknownTable";
 
 const logger = createLogger('usePayments');
 
@@ -140,8 +141,7 @@ export function usePayments() {
     queryFn: async () => {
       if (!user) return [];
 
-      const { data, error } = await supabase
-        .from("payments")
+      const { data, error } = await fromUnknownTable("payments")
         .select("*")
         .eq("user_id", user.id)
         .order("created_at", { ascending: false });
@@ -163,8 +163,7 @@ export function usePayments() {
     queryFn: async () => {
       if (!user) return [];
 
-      const { data, error } = await supabase
-        .from("invoices")
+      const { data, error } = await fromUnknownTable("invoices")
         .select("*")
         .eq("user_id", user.id)
         .order("invoice_date", { ascending: false });

@@ -10,6 +10,7 @@ import type {
   CrmDealStageHistory,
   CrmPipelineMetrics,
 } from '@/types/crm';
+import { fromUnknownTable } from "@/integrations/supabase/unknownTable";
 
 const CRM_DEALS_KEY = 'crm-deals';
 const CRM_PIPELINE_KEY = 'crm-pipeline';
@@ -18,8 +19,7 @@ export function useCrmPipelineStages() {
   return useQuery({
     queryKey: [CRM_PIPELINE_KEY, 'stages'],
     queryFn: async () => {
-      const { data, error } = await supabase
-        .from('crm_pipeline_stages')
+      const { data, error } = await fromUnknownTable('crm_pipeline_stages')
         .select('*')
         .order('stage_order', { ascending: true });
 
@@ -33,8 +33,7 @@ export function useCrmDeals(filters?: CrmDealFilters) {
   return useQuery({
     queryKey: [CRM_DEALS_KEY, filters],
     queryFn: async () => {
-      let query = supabase
-        .from('crm_deals')
+      let query = fromUnknownTable('crm_deals')
         .select(`
           *,
           stage:crm_pipeline_stages(*),
@@ -112,8 +111,7 @@ export function useCrmDeal(dealId: string | undefined) {
     queryFn: async () => {
       if (!dealId) return null;
 
-      const { data, error } = await supabase
-        .from('crm_deals')
+      const { data, error } = await fromUnknownTable('crm_deals')
         .select(`
           *,
           stage:crm_pipeline_stages(*),
@@ -135,8 +133,7 @@ export function useCrmDealsByStage() {
   return useQuery({
     queryKey: [CRM_DEALS_KEY, 'by-stage'],
     queryFn: async () => {
-      const { data, error } = await supabase
-        .from('crm_deals')
+      const { data, error } = await fromUnknownTable('crm_deals')
         .select(`
           *,
           stage:crm_pipeline_stages(*),
@@ -171,8 +168,7 @@ export function useCrmDealStageHistory(dealId: string | undefined) {
     queryFn: async () => {
       if (!dealId) return [];
 
-      const { data, error } = await supabase
-        .from('crm_deal_stage_history')
+      const { data, error } = await fromUnknownTable('crm_deal_stage_history')
         .select(`
           *,
           from_stage:crm_pipeline_stages!crm_deal_stage_history_from_stage_id_fkey(name, color),
@@ -194,8 +190,7 @@ export function useCrmDealMutations() {
 
   const createDeal = useMutation({
     mutationFn: async (input: CrmDealInput) => {
-      const { data, error } = await supabase
-        .from('crm_deals')
+      const { data, error } = await fromUnknownTable('crm_deals')
         .insert(input)
         .select()
         .single();
@@ -231,8 +226,7 @@ export function useCrmDealMutations() {
 
   const updateDeal = useMutation({
     mutationFn: async ({ id, ...input }: Partial<CrmDealInput> & { id: string }) => {
-      const { data, error } = await supabase
-        .from('crm_deals')
+      const { data, error } = await fromUnknownTable('crm_deals')
         .update(input)
         .eq('id', id)
         .select()
@@ -260,8 +254,7 @@ export function useCrmDealMutations() {
 
   const moveDealToStage = useMutation({
     mutationFn: async ({ dealId, stageId }: { dealId: string; stageId: string }) => {
-      const { data, error } = await supabase
-        .from('crm_deals')
+      const { data, error } = await fromUnknownTable('crm_deals')
         .update({ stage_id: stageId })
         .eq('id', dealId)
         .select()
@@ -288,8 +281,7 @@ export function useCrmDealMutations() {
 
   const closeDeal = useMutation({
     mutationFn: async ({ dealId, status, reason }: { dealId: string; status: 'won' | 'lost'; reason?: string }) => {
-      const { data, error } = await supabase
-        .from('crm_deals')
+      const { data, error } = await fromUnknownTable('crm_deals')
         .update({
           status,
           close_reason: reason,
@@ -332,8 +324,7 @@ export function useCrmDealMutations() {
 
   const deleteDeal = useMutation({
     mutationFn: async (id: string) => {
-      const { error } = await supabase
-        .from('crm_deals')
+      const { error } = await fromUnknownTable('crm_deals')
         .delete()
         .eq('id', id);
 
@@ -373,8 +364,7 @@ export function useCrmPipelineMetrics() {
     queryFn: async () => {
       if (!stages) return [];
 
-      const { data: deals, error } = await supabase
-        .from('crm_deals')
+      const { data: deals, error } = await fromUnknownTable('crm_deals')
         .select('stage_id, status, value');
 
       if (error) throw error;
@@ -411,8 +401,7 @@ export function useCrmDealStats() {
   return useQuery({
     queryKey: [CRM_DEALS_KEY, 'stats'],
     queryFn: async () => {
-      const { data: deals, error } = await supabase
-        .from('crm_deals')
+      const { data: deals, error } = await fromUnknownTable('crm_deals')
         .select('status, value, created_at, actual_close_date');
 
       if (error) throw error;

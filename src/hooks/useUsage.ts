@@ -1,6 +1,7 @@
 import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
 import { supabase } from "@/integrations/supabase/client";
 import { useAuth } from "./useAuth";
+import { fromUnknownTable } from "@/integrations/supabase/unknownTable";
 
 export type UsageEventType =
   | "api_call"
@@ -76,8 +77,7 @@ export function useUsage() {
     queryFn: async () => {
       if (!user) return [];
 
-      const { data, error } = await supabase
-        .from("usage_events")
+      const { data, error } = await fromUnknownTable("usage_events")
         .select("*")
         .eq("user_id", user.id)
         .order("created_at", { ascending: false })

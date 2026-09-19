@@ -4,6 +4,7 @@ import { supabase } from '@/integrations/supabase/client';
 import { useAuth } from './useAuth';
 import { toast } from 'sonner';
 import { createLogger } from '@/lib/logger';
+import { fromUnknownTable } from "@/integrations/supabase/unknownTable";
 
 const log = createLogger('useTripPlanner');
 
@@ -142,7 +143,7 @@ export function useTripPlanner() {
       if (!user) return [];
 
       // @ts-ignore -- Supabase SDK TS2589: deep type instantiation under strict mode
-      const plansQuery = supabase.from('trip_plans');
+      const plansQuery = fromUnknownTable('trip_plans');
       // @ts-ignore -- Supabase SDK TS2769: overload resolution under strict mode
       const { data, error } = await plansQuery.select('*').eq('user_id', user.id).order('created_at', { ascending: false });
 
@@ -203,7 +204,7 @@ export function useTripPlanner() {
   // Fetch a specific trip with its items
   const fetchTripDetails = useCallback(async (tripId: string): Promise<TripPlan | null> => {
     // @ts-ignore -- Supabase SDK TS2589: deep type instantiation under strict mode
-    const tripQuery = supabase.from('trip_plans');
+    const tripQuery = fromUnknownTable('trip_plans');
     // @ts-ignore -- Supabase SDK TS2769: overload resolution under strict mode
     const { data: tripData, error: tripError } = await tripQuery.select('*').eq('id', tripId).single();
 
@@ -236,7 +237,7 @@ export function useTripPlanner() {
       updates: Partial<TripPlan>;
     }) => {
       // @ts-ignore -- Supabase SDK TS2589: deep type instantiation under strict mode
-      const updateQuery = supabase.from('trip_plans');
+      const updateQuery = fromUnknownTable('trip_plans');
       // @ts-ignore -- Supabase SDK TS2769: overload resolution under strict mode
       const { data, error } = await updateQuery.update(updates as Record<string, unknown>).eq('id', tripId).select().single();
 
@@ -256,7 +257,7 @@ export function useTripPlanner() {
   const deleteTripMutation = useMutation({
     mutationFn: async (tripId: string) => {
       // @ts-ignore -- Supabase SDK TS2589: deep type instantiation under strict mode
-      const deleteQuery = supabase.from('trip_plans');
+      const deleteQuery = fromUnknownTable('trip_plans');
       // @ts-ignore -- Supabase SDK TS2769: overload resolution under strict mode
       const { error } = await deleteQuery.delete().eq('id', tripId);
 
@@ -282,7 +283,7 @@ export function useTripPlanner() {
       updates: Partial<TripPlanItem>;
     }) => {
       // @ts-ignore -- Supabase SDK TS2589: deep type instantiation under strict mode
-      const itemUpdateQuery = supabase.from('trip_plan_items');
+      const itemUpdateQuery = fromUnknownTable('trip_plan_items');
       // @ts-ignore -- Supabase SDK TS2769: overload resolution under strict mode
       const { data, error } = await itemUpdateQuery.update(updates as Record<string, unknown>).eq('id', itemId).select().single();
 
@@ -314,7 +315,7 @@ export function useTripPlanner() {
       await Promise.all(
         swaps.map((s) =>
           // @ts-ignore -- Supabase SDK deep-type instantiation under strict mode
-          supabase.from('trip_plan_items').update({ order_index: s.order_index }).eq('id', s.id)
+          fromUnknownTable('trip_plan_items').update({ order_index: s.order_index }).eq('id', s.id)
         )
       );
     },
@@ -342,7 +343,7 @@ export function useTripPlanner() {
       item: Partial<TripPlanItem>;
     }) => {
       // @ts-ignore -- Supabase SDK TS2589: deep type instantiation under strict mode
-      const itemInsertQuery = supabase.from('trip_plan_items');
+      const itemInsertQuery = fromUnknownTable('trip_plan_items');
       // @ts-ignore -- Supabase SDK TS2769: overload resolution under strict mode
       const { data, error } = await itemInsertQuery.insert({ trip_plan_id: tripId, ...(item as Record<string, unknown>) }).select().single();
 
@@ -369,7 +370,7 @@ export function useTripPlanner() {
   const removeItemMutation = useMutation({
     mutationFn: async (itemId: string) => {
       // @ts-ignore -- Supabase SDK TS2589: deep type instantiation under strict mode
-      const itemDeleteQuery = supabase.from('trip_plan_items');
+      const itemDeleteQuery = fromUnknownTable('trip_plan_items');
       // @ts-ignore -- Supabase SDK TS2769: overload resolution under strict mode
       const { error } = await itemDeleteQuery.delete().eq('id', itemId);
 
@@ -395,7 +396,7 @@ export function useTripPlanner() {
   const shareTripMutation = useMutation({
     mutationFn: async (tripId: string) => {
       // @ts-ignore -- Supabase SDK TS2589: deep type instantiation under strict mode
-      const shareQuery = supabase.from('trip_plans');
+      const shareQuery = fromUnknownTable('trip_plans');
       // @ts-ignore -- Supabase SDK TS2769: overload resolution under strict mode
       const { data, error } = await shareQuery.update({ is_public: true }).eq('id', tripId).select('share_code').single();
 
@@ -416,7 +417,7 @@ export function useTripPlanner() {
   // Fetch shared trip by code
   const fetchSharedTrip = useCallback(async (shareCode: string): Promise<TripPlan | null> => {
     // @ts-ignore -- Supabase SDK TS2589: deep type instantiation under strict mode
-    const sharedQuery = supabase.from('trip_plans');
+    const sharedQuery = fromUnknownTable('trip_plans');
     // @ts-ignore -- Supabase SDK TS2769: overload resolution under strict mode
     const { data, error } = await sharedQuery.select('*').eq('share_code', shareCode).eq('is_public', true).single();
 

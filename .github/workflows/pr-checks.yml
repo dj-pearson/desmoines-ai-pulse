@@ -483,13 +483,29 @@ jobs:
   # the strict one — a file that gets worse, or a new file that starts erroring,
   # fails the build.
   #
-  # Its own job rather than a step in `validate`: tsc over this project takes
-  # several minutes (the generated Supabase types provoke a lot of TS2589), and
-  # it must not sit in front of the build. Deliberately NOT in `npm run
-  # validate` for the same reason — local validate has to stay usable.
+  # Its own job rather than a step in `validate`: it must not sit in front of
+  # the build. Deliberately NOT in `npm run validate` for the same reason -
+  # local validate has to stay usable.
+  #
+  # IT COST 21m12s AT ~5.2GB RSS UNTIL 2026-09-19, and that is why WEB-CI-031
+  # was filed and why a duplicate nightly workflow existed. The cause was not
+  # the generated types in general: it was `supabase.from('<relation the
+  # generated Database type does not have>')`, where no overload matches and
+  # every chained call is re-instantiated over a 270-member SelectQueryError
+  # union. Rewriting those 106 call sites to the untyped helper took the run to
+  # 2m45s at 1.4GB, cold, and the error count from 361 to 139.
+  # scripts/check-unknown-tables.mjs holds the measurement and keeps it from
+  # coming back.
+  #
+  # The nightly .github/workflows/type-check-app.yml was deleted in the same
+  # change: it existed only because this was thought to be too slow for the PR
+  # path, and it was a second copy of this job.
   app-type-ratchet:
     name: App project type ratchet
     runs-on: ubuntu-latest
+    # A timeout, because a killed run and a clean pass look identical in the
+    # Actions list until somebody opens it.
+    timeout-minutes: 20
     steps:
       - uses: actions/checkout@v4
       - uses: actions/setup-node@v4

@@ -65,6 +65,7 @@ import {
 } from "recharts";
 import { Download } from "lucide-react";
 import { SpriteIcon } from "@/components/ui/SpriteIcon";
+import { fromUnknownTable } from "@/integrations/supabase/unknownTable";
 
 // ADMIN-REFUND-001: structured taxonomy for finance reporting.
 const REFUND_REASON_OPTIONS = [
@@ -161,8 +162,7 @@ export default function AdminRefunds() {
   const { data: eligiblePayments = [], isLoading: paymentsLoading } = useQuery({
     queryKey: ["admin-refund-eligible-payments", searchQuery],
     queryFn: async () => {
-      let query = supabase
-        .from("payments")
+      let query = fromUnknownTable("payments")
         .select("*")
         .eq("status", "succeeded")
         .order("created_at", { ascending: false })

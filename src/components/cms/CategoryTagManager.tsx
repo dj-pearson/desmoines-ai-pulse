@@ -25,6 +25,7 @@ import {
 } from 'lucide-react';
 import { createLogger } from '@/lib/logger';
 import { LoadingSpinner } from "@/components/ui/loading-skeleton";
+import { fromUnknownTable } from "@/integrations/supabase/unknownTable";
 
 const log = createLogger('CategoryTagManager');
 
@@ -136,8 +137,8 @@ export function CategoryTagManager() {
     try {
       setLoading(true);
       const [categoriesRes, tagsRes] = await Promise.all([
-        supabase.from('article_categories').select('*').order('sort_order', { ascending: true }),
-        supabase.from('article_tags').select('*').order('usage_count', { ascending: false }),
+        fromUnknownTable('article_categories').select('*').order('sort_order', { ascending: true }),
+        fromUnknownTable('article_tags').select('*').order('usage_count', { ascending: false }),
       ]);
 
       if (categoriesRes.error) throw categoriesRes.error;
@@ -183,8 +184,7 @@ export function CategoryTagManager() {
       setIsSaving(true);
 
       if (editingCategory) {
-        const { error } = await supabase
-          .from('article_categories')
+        const { error } = await fromUnknownTable('article_categories')
           .update({
             name: categoryForm.name,
             description: categoryForm.description || null,
@@ -199,7 +199,7 @@ export function CategoryTagManager() {
         if (error) throw error;
         toast.success('Category updated');
       } else {
-        const { error } = await supabase.from('article_categories').insert({
+        const { error } = await fromUnknownTable('article_categories').insert({
           name: categoryForm.name,
           slug: '',
           description: categoryForm.description || null,
@@ -228,8 +228,7 @@ export function CategoryTagManager() {
 
   const handleDeleteCategory = async (category: Category) => {
     try {
-      const { error } = await supabase
-        .from('article_categories')
+      const { error } = await fromUnknownTable('article_categories')
         .delete()
         .eq('id', category.id);
 
@@ -269,8 +268,7 @@ export function CategoryTagManager() {
       setIsSaving(true);
 
       if (editingTag) {
-        const { error } = await supabase
-          .from('article_tags')
+        const { error } = await fromUnknownTable('article_tags')
           .update({
             name: tagForm.name,
             description: tagForm.description || null,
@@ -282,7 +280,7 @@ export function CategoryTagManager() {
         if (error) throw error;
         toast.success('Tag updated');
       } else {
-        const { error } = await supabase.from('article_tags').insert({
+        const { error } = await fromUnknownTable('article_tags').insert({
           name: tagForm.name,
           slug: '',
           description: tagForm.description || null,
@@ -308,8 +306,7 @@ export function CategoryTagManager() {
 
   const handleDeleteTag = async (tag: Tag) => {
     try {
-      const { error } = await supabase
-        .from('article_tags')
+      const { error } = await fromUnknownTable('article_tags')
         .delete()
         .eq('id', tag.id);
 

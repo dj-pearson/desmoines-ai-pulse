@@ -27,6 +27,7 @@ import {
 import { Link } from 'react-router-dom';
 import { createLogger } from '@/lib/logger';
 import { LoadingSpinner } from "@/components/ui/loading-skeleton";
+import { fromUnknownTable } from "@/integrations/supabase/unknownTable";
 
 const log = createLogger('ContentQueue');
 
@@ -142,8 +143,7 @@ export function ContentQueue() {
 
   const loadComments = async (queueItemId: string) => {
     try {
-      const { data, error } = await supabase
-        .from('content_queue_comments')
+      const { data, error } = await fromUnknownTable('content_queue_comments')
         .select('*')
         .eq('queue_item_id', queueItemId)
         .order('created_at', { ascending: true });
@@ -210,7 +210,7 @@ export function ContentQueue() {
     try {
       const { data: { user } } = await supabase.auth.getUser();
 
-      const { error } = await supabase.from('content_queue_comments').insert({
+      const { error } = await fromUnknownTable('content_queue_comments').insert({
         queue_item_id: selectedItem.id,
         user_id: user?.id,
         comment: newComment,
