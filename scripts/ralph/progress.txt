@@ -2801,3 +2801,95 @@ Learnings for future iterations
 4. Backticks inside a double-quoted `node -e` are shell command substitution.
    `supabase db push` in a note silently became empty, and the note read "so
    skips it". Heredocs quoted with 'EOF' are safe; -e strings are not.
+
+================================================================================
+2026-09-19  WEB-QUAL-011  (claude/admiring-cori-ukwzcp)
+Framework versions are one to two majors behind with no update PRs landing
+================================================================================
+
+CLOSED. 60 same-major bumps landed, 3 held with reasons, 5 follow-up stories
+filed (WEB-QUAL-015..019), and the weekly update agent fixed rather than
+replaced.
+
+THE FINDING THAT MADE THE STORY WORTH DOING was not in the story. Its AC3 says
+dependency-update.yml "only runs npm outdated weekly". It has installed the
+batch, gated it on validate + build, and opened a PR since 2026-08-13. It has
+run ten times. Every run is green in the Actions list. Every run opened zero
+PRs. The log says why in one line:
+
+    scripts/event-datetime-sql-generator.ts(257,17): error TS2589
+
+That is @supabase/supabase-js 2.85+. One package failed the all-or-nothing
+gate and took sixty other bumps down with it, weekly, for ten weeks - and the
+failure path echoed a `::warning::` and exited 0, so the job reported SUCCESS.
+A workflow whose whole purpose is "no dependency PRs are landing" spent ten
+weeks reporting that everything was fine.
+
+LEARNINGS FOR FUTURE ITERATIONS
+
+1. A GREEN WORKFLOW IS NOT A WORKING WORKFLOW. `list_workflow_runs` showed ten
+   consecutive successes. `list_workflow_jobs` showed "Open PR when green"
+   SKIPPED and "Annotate on red" RUN on every one of them. The step list is
+   where a workflow tells the truth; the conclusion is where it tells you what
+   its last step exited with. Read the steps.
+
+2. A 90-SECOND RUN OF A JOB THAT INSTALLS 60 PACKAGES AND RUNS validate+build
+   IS THE TELL. The duration was the first thing that did not add up, before
+   any log was read. Timings are free evidence.
+
+3. DECLARED RANGE != INSTALLED VERSION, AND CI INSTALLS THE LOCKFILE. The story
+   read "supabase-js 2.53 / 2.112" off package.json's caret floor; the lock had
+   2.84.0. Four of its eight version claims were this mistake. When a story
+   quotes a version, check which of the three numbers (floor, locked, latest)
+   it means.
+
+4. THE A/B IS CHEAP AND THE ASSUMPTION IS EXPENSIVE. Seven strict-ratchet
+   regressions appeared after the bump. Restoring the old tree with `npm ci`
+   and re-running showed four of them were already there - a stale baseline,
+   third occurrence of that pattern in this repo. Two minutes of npm ci turned
+   "the bump broke four files" into "the bump broke three".
+
+5. AND AGAIN FOR THE TEST RUNNER. Playwright 1.57 -> 1.63 could not be argued
+   safe from a type-check. Running the smoke lane at both versions against the
+   same build took 14 minutes and produced a number: 14 failures before, 13
+   after, identical sets bar one that only 1.57 fails. That is the difference
+   between a claim and a measurement, on a REQUIRED lane.
+
+6. "IT CANNOT BE RUN IN THIS CONTAINER" IS USUALLY WRONG, AND THE REPO USUALLY
+   SAYS SO. I concluded the smoke lane was unrunnable here (browser revision
+   1194 vs the 1200/1243 Playwright wants, CDN blocked by the proxy). The
+   config already had PLAYWRIGHT_CHROMIUM_PATH, added under WEB-CI-028 for
+   exactly this. Read the config before declaring an environment limit.
+
+7. A BATCH GATE NEEDS AN ESCAPE HATCH OR IT BECOMES A NEVER-GATE. All-or-
+   nothing batching is fine until one member is permanently broken; then the
+   batch stops moving and the failure is indistinguishable from "nothing to
+   do". .github/dependency-update-holds.json is the hatch: a package, a reason,
+   an owning story, a review date, and a firstBadVersion floor so patch
+   releases below the broken one still land.
+
+8. RULES IN A YAML HEREDOC ARE EXERCISED ONCE A WEEK, IN PRODUCTION, WITH
+   NOTHING ASSERTING ANYTHING. Extracting the planner into
+   scripts/plan-dep-updates.mjs and writing 18 tests found a THIRD defect
+   nobody had noticed: PRIORITY was read from process.env and never exported,
+   so the CVE-first sort the workflow's own header advertises had never run.
+
+9. npm's `latest` IS NOT ALWAYS FORWARD. @types/dompurify's latest is 3.0.5
+   against an installed 3.2.0 - the deprecation stub. An updater that trusts
+   `latest` will downgrade. Compare versions before installing.
+
+10. PEER RANGES ARE FACTS, AND STORY BLOCKER LISTS ARE GUESSES. `npm view <pkg>
+    peerDependencies` at both the installed and latest version, for ten
+    packages, took one command and corrected WEB-QUAL-011's blocker list in
+    both directions: FullCalendar is named as a blocker and is not a dependency
+    of this repo at all (CLAUDE.md's tech stack lists it; package.json does
+    not), while react-leaflet, vaul and react-day-picker are real blockers it
+    does not name. It also surfaced a ceiling nobody had looked for -
+    @react-three/fiber 9 peers `react >=19 <19.3` against a React latest of
+    19.3.0, so "upgrade to React 19" means 19.2.x or dropping three.js.
+
+11. DON'T COMMIT WHAT THE BUILD REGENERATED AGAINST A DEAD BACKEND. `npm run
+    build` runs generate-sitemaps, which rewrote three checked-in sitemaps down
+    to a single entry each against the placeholder Supabase. Caught in `git
+    status` before the commit. Check what a build touched, not just what you
+    edited.
