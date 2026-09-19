@@ -17,15 +17,16 @@
 ```
 src/
 ├── components/        # React components (ui/ for shadcn primitives)
-├── hooks/             # 101 custom hooks
+├── hooks/             # custom hooks (`ls src/hooks | wc -l` - 160 on 2026-09-19)
 ├── contexts/          # AuthContext, etc.
 ├── integrations/supabase/  # Client + generated types
 ├── lib/               # Utilities (errorHandler, safeStorage, utils)
 ├── pages/             # Route pages
 └── App.tsx            # Routing entry
 supabase/
-├── functions/         # 73 Edge Functions (_shared/ for CORS, rate limiting, validation)
-└── migrations/        # 142 SQL migrations
+├── functions/         # Edge Functions, _shared/ for CORS, rate limiting, validation
+│                     # (`ls supabase/functions | wc -l` - 166 on 2026-09-19)
+└── migrations/        # SQL migrations (`ls supabase/migrations/*.sql | wc -l` - 396)
 tests/                 # Playwright suites
 scripts/               # Utility scripts
 ```
@@ -213,9 +214,12 @@ are gone; the fourteen DOM-measuring tests survive as `layout-integrity.spec.ts`
 ```bash
 # Development
 npm run dev                 # http://localhost:8080
-npm run validate            # lint + type-check
+# validate is ~30 offline checks, then eslint, then the app-project type
+# ratchet. It runs NO tests - `npm test` and the Deno suites are separate.
+# About 3m30s, most of it the type ratchet at the end.
+npm run validate            # checks + lint + type-check (no tests)
 npm run validate:strict     # strict variant
-npm test                    # all Playwright tests
+npm test                    # all Playwright tests (not part of validate)
 
 # Build
 npm run build               # production
@@ -237,6 +241,18 @@ node scripts/generate-sitemap.js
 ## Critical Rules
 
 These override anything else in this file. Read before doing work.
+
+### Money is decided on the server
+
+Nothing the browser computes may reach a row that says what someone is charged.
+For advertisers, `placementTotalPrice()` in `src/hooks/useCampaigns.ts` mirrors
+`calculate_campaign_pricing()` for DISPLAY ONLY; the trigger on
+`campaign_placements` and `create-campaign-checkout` decide the amount, from the
+same rate card, server-side. WEB-ADS-003 is what happens when that slips: the
+summary totalled a hardcoded daily rate with no volume discount while the stored
+row came from the RPC with one, so the page said $70 and the row said $66.50.
+Two formulas for one price is a bug generator. Same rule for subscriptions -
+`create-subscription-checkout` owns the plan and the amount.
 
 ### Branch first, code second
 
@@ -443,7 +459,10 @@ Pre-deploy: `npm run validate && npm test && npm run build`. Rollback via Cloudf
 
 ---
 
-**Last Updated**: 2026-04-28 — refined for conciseness. Update this file when patterns shift.
+**Last Updated**: 2026-09-19 - counts replaced with the command that produces
+them (they were stale by 2-3x), the `npm run validate` line corrected (it runs
+no tests), and the server-side pricing rule added. Update this file when
+patterns shift; prefer a command over a number.
 
 <!-- SELVEDGE:START -->
 ## Pearson Media — shared context

@@ -40,10 +40,17 @@ const ROOT = resolve(dirname(fileURLToPath(import.meta.url)), '..');
  */
 const LEAK = /desmoinespulse\.com|\/desmoinespulse\b|@desmoinespulse\b/i;
 
-const SCAN_ROOTS = ['src', 'supabase/functions'];
+// public/ is served VERBATIM to visitors and crawlers, which makes it the one
+// place a retired hostname is not merely untidy. public/.well-known/security.txt
+// carried the old domain in its Contact, Canonical and Policy fields for
+// months (WEB-QUAL-010): a reporter following the mailbox reached nobody, and
+// RFC 9116 section 3.6 says a Canonical that disagrees with the URL the file
+// came from is to be treated as suspect. Nothing was scanning it, because the
+// extension list below was code-only.
+const SCAN_ROOTS = ['src', 'supabase/functions', 'public'];
 const SKIP_DIRS = new Set(['node_modules', 'dist', '.git', '__tests__', '_tests']);
 const SKIP_FILE = /redirects?/i;
-const EXTS = /\.(ts|tsx|js|jsx|mjs|cjs)$/;
+const EXTS = /\.(ts|tsx|js|jsx|mjs|cjs|txt|json|xml|yaml|yml|html|webmanifest)$/;
 
 function* walk(dir) {
   let entries;
@@ -85,4 +92,4 @@ if (hits.length > 0) {
   process.exit(1);
 }
 
-console.log('✅ Brand: no references to the retired domain in src/ or supabase/functions/.');
+console.log(`✅ Brand: no references to the retired domain in ${SCAN_ROOTS.join(', ')}.`);

@@ -1810,3 +1810,14 @@ AC2 (one round trip via a view or RPC) stays open - it needs a migration and a t
   - **I nearly shipped the blank.** The first version put the projections in and left the JSX alone. A ten-line script comparing fields-read against columns-projected caught three of the six before the build; extending it to the events tab caught the other three. That comparison is now the test.
   - **The duplicate cache was documented and still live.** `useContentFavorites`' docstring already said "different caches over the same fact", and the fix it described was applied to invalidation only. A note explaining a problem reads, to the next person, like a note explaining a fix.
   - **`event.time` was not worth re-implementing.** The column does not exist; the times live in `event_start_local`/`event_start_utc`, and printing one is a Central-timezone question with its own check. Deleting a span that has never rendered is not a regression, and guessing at a formatter here would have been.
+
+## 2026-09-19 - WEB-QUAL-010 CLOSED: the brand leak was in the one directory nobody scanned
+AC2 read as done - zero hits in `src/` and `supabase/functions/`, enforced since WEB-SEO-023. `public/` was never in scope, and `public/.well-known/security.txt` still had its Contact, Canonical and Policy on the retired domain.
+- All three now point at the live domain, using the security address the site already publishes on /contact. `check-brand-leak` scans `public/` now, with text extensions added. Negative-controlled.
+- CLAUDE.md counts (73/142/101 vs 166/396/160) replaced with the command that produces each number. The `npm run validate` line corrected - it runs ~30 checks, eslint and the type ratchet, and no tests. "Money is decided on the server" added to Critical Rules, from evidence already in `useCampaigns.ts`.
+- validate exit 0, vitest 750/750.
+- **Learnings for future iterations:**
+  - **A check's scope is a claim, and it was wrong in the direction that matters.** "No references to the retired domain" was true of the code and false of the bytes we serve. `public/` is the one directory where a stale hostname reaches a stranger - and it was excluded by an extension list, not by a decision.
+  - **A security.txt that points at a domain you do not run is worse than not having one.** It is the file a reporter is told to read first, and RFC 9116 makes a mismatched Canonical a reason to distrust the whole document.
+  - **The file I fixed would have failed the check I extended.** Its comment explained the change by naming the old hostname. A served file has no non-served text, so the comment had to describe the domain instead of spelling it - fourth time this session that explanatory prose tripped the rule it was explaining.
+  - **A number in a doc rots; a command does not.** All three counts were stale by 2-3x, and the AC itself offered "see ls" as the alternative. Each line now carries the command, the value and the date it was taken.
