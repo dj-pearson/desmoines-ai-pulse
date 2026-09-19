@@ -311,7 +311,7 @@ export default function Restaurants() {
     "@type": "ItemList",
     name: "Best Restaurants in Des Moines, Iowa",
     description:
-      "Complete guide to the best restaurants in Des Moines, Iowa. Browse 200+ local restaurants with ratings, reviews, menus, and real-time availability.",
+      "The best restaurants in Des Moines, Iowa: browse 200+ local spots with ratings, reviews, menus and real-time open or closed status.",
     // numberOfItems COUNTS THE ITEMS ACTUALLY LISTED, not the collection the
     // page was drawn from. This read `totalCount || restaurants.length` while
     // itemListElement was sliced to 20, so the prerendered page declared an
@@ -369,7 +369,7 @@ export default function Restaurants() {
     <>
       <SEOHead
         title="Best Restaurants in Des Moines, Iowa"
-        description="Find the best restaurants in Des Moines, Iowa. Browse 200+ local restaurants with ratings, reviews, photos, and real-time open/closed status. Filter by cuisine, price, and neighborhood."
+        description="The best restaurants in Des Moines, Iowa: 200+ local spots with ratings, reviews and photos, filtered by cuisine, price or neighborhood."
         type="website"
         keywords={restaurantsKeywords}
         structuredData={restaurantsSchema}

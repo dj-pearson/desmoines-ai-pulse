@@ -96,7 +96,7 @@ export default function OpenNowRestaurants() {
 
   // WEB-SEO-002: was 74 chars and used the retired "Des Moines AI Pulse" brand.
   const pageTitle = `Restaurants Open Now in Des Moines | ${BRAND.name}`;
-  const pageDescription = `Find ${openRestaurants.length}+ restaurants open right now in Des Moines. Real-time operating hours updated continuously. ${isLateNight ? 'Late-night dining options available.' : 'Current lunch and dinner options.'} Order now for pickup or delivery.`;
+  const pageDescription = `Find ${openRestaurants.length}+ restaurants open right now in Des Moines, with hours updated continuously. ${isLateNight ? 'Late-night dining options.' : 'Lunch and dinner options.'}`;
 
   const breadcrumbs = [
     { name: "Restaurants", url: "/restaurants" },

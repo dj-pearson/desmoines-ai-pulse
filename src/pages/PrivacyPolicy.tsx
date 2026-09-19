@@ -25,7 +25,7 @@ export default function PrivacyPolicy() {
     <div className="min-h-screen bg-background">
       <SEOHead
         title="Privacy Policy | Des Moines Insider"
-        description="Learn how Des Moines Insider collects, uses, and protects your personal information. Our privacy policy explains your rights under GDPR, CCPA/CPRA, and US state privacy laws."
+        description="How Des Moines Insider collects, uses and protects your personal information, and your rights under GDPR, CCPA/CPRA and US state privacy laws."
         url="https://desmoinesinsider.com/privacy-policy"
         type="website"
       />

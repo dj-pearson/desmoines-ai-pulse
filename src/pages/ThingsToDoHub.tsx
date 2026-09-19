@@ -75,7 +75,7 @@ export default function ThingsToDoHub() {
     <>
       <SEOHead
         title="Things to Do in Des Moines, Iowa | Des Moines Insider"
-        description="Discover the best things to do in Des Moines and the surrounding area. Browse by neighborhood, activity type, or occasion — family-friendly, date nights, free events & more."
+        description="The best things to do in Des Moines and around it, by neighborhood, activity or occasion: family-friendly, date nights and free events."
         url={canonicalUrl}
         canonicalUrl={canonicalUrl}
         keywords={['things to do des moines', 'des moines activities', 'des moines attractions', 'what to do in des moines']}

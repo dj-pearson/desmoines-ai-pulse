@@ -40,7 +40,7 @@ export default function NeighborhoodsPage() {
     <div className="min-h-screen bg-background">
       <LocalSEO 
         pageTitle="Des Moines Neighborhoods Guide"
-        pageDescription="Explore Des Moines neighborhoods including East Village, West Des Moines, Ankeny, and more. Find local events, restaurants, and attractions in each Des Moines area community."
+        pageDescription="Explore Des Moines neighborhoods: East Village, West Des Moines, Ankeny and more, with local events, restaurants and attractions in each."
         breadcrumbs={[
           { name: "Home", url: "/" },
           { name: "Neighborhoods", url: "/neighborhoods" }

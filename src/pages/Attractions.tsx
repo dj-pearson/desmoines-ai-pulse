@@ -222,7 +222,7 @@ export default function Attractions() {
     ? `${selectedType} Attractions in Des Moines`
     : "Des Moines Attractions - Museums, Parks & Things to Do";
 
-  const pageDescription = `Discover ${filteredAttractions.length}+ attractions in Des Moines, Iowa. Explore museums, parks, entertainment venues, and cultural destinations. Find visitor information, hours, and directions for the best things to do in Des Moines.`;
+  const pageDescription = `Discover ${filteredAttractions.length}+ attractions in Des Moines, Iowa: museums, parks, entertainment venues and cultural destinations, with hours and directions.`;
 
   const breadcrumbs = [
     { name: "Home", url: "/" },

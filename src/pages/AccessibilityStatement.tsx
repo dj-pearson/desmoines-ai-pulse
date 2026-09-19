@@ -218,7 +218,7 @@ export default function AccessibilityStatement() {
     <div className="min-h-screen bg-background">
       <SEOHead
         title="Accessibility Statement | Des Moines Insider"
-        description="Des Moines Insider is committed to digital accessibility for people with disabilities. Learn about our WCAG 2.1 Level AA conformance, ADA compliance, Apple accessibility support, and accessibility features."
+        description="Des Moines Insider's commitment to digital accessibility: WCAG 2.1 Level AA conformance, ADA compliance and the features we support."
         url="https://desmoinesinsider.com/accessibility"
         type="website"
       />

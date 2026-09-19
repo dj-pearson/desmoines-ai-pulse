@@ -95,7 +95,7 @@ export default function FreeEvents() {
 
   // WEB-SEO-002: was 84 chars and used the retired "Des Moines AI Pulse" brand.
   const pageTitle = `Free Events in Des Moines - Free Things to Do | ${BRAND.name}`;
-  const pageDescription = `Discover ${freeEvents.length}+ free events in Des Moines and surrounding areas. From family activities to concerts, find no-cost entertainment happening now. Updated daily with verified free admission events.`;
+  const pageDescription = `Discover ${freeEvents.length}+ free events in Des Moines and the suburbs. Family activities, concerts and no-cost entertainment, updated daily with verified free admission.`;
 
   const breadcrumbs = [
     { name: "Events", url: "/events" },

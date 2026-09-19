@@ -1,6 +1,7 @@
 #!/usr/bin/env node
 /**
- * A page title must survive Google's truncation (WEB-SEO-043 AC3).
+ * A page title and meta description must survive Google's truncation
+ * (WEB-SEO-043 AC3).
  *
  * Google cuts the SERP title around 60 characters. Nine hub titles were over
  * when this was written, the worst at 78 - and WEB-SEO-002 had already trimmed
@@ -30,9 +31,20 @@ import { readFileSync, readdirSync, statSync } from 'node:fs';
 import { join, relative, sep } from 'node:path';
 
 const MAX_TITLE = 60;
+/** Google cuts the SERP snippet around here; thirteen pages were over. */
+const MAX_DESCRIPTION = 160;
+/**
+ * A description built from a count - `${events.length}+ free events` - is
+ * measured with the count standing in at four digits. The empty backend in a
+ * container renders "0+", so measuring what a template produces there
+ * understates every one of them by three characters.
+ */
+const COUNT_PLACEHOLDER = '9999';
 const BRAND = 'Des Moines Insider';
 const SUFFIX = ` | ${BRAND}`;
 const ROOT = 'src/pages';
+/** index.html carries the site-wide default description. */
+const EXTRA_FILES = ['index.html'];
 
 function* walk(dir) {
   for (const name of readdirSync(dir)) {
@@ -65,8 +77,10 @@ function* componentTitles(text) {
       const end = text.indexOf('>', m.index);
       if (end < 0) continue;
       const el = text.slice(m.index, end);
-      const prop = el.match(/\btitle=\{?["'`]([^"'`$]*)["'`]\}?/);
-      if (prop) yield { literal: prop[1], at: m.index, appendsBrand: true };
+      const title = el.match(/\btitle=\{?["'`]([^"'`$]*)["'`]\}?/);
+      if (title) yield { literal: title[1], at: m.index, appendsBrand: true, kind: 'title' };
+      const desc = el.match(/\b(?:description|pageDescription)=\{?["'`]([^"'`]*)["'`]\}?/);
+      if (desc) yield { literal: desc[1], at: m.index, appendsBrand: false, kind: 'description' };
     }
   }
 }
@@ -74,38 +88,56 @@ function* componentTitles(text) {
 /** A literal title and how it reaches the document. */
 const PATTERNS = [
   // useDocumentTitle("...")
-  { re: /useDocumentTitle\(\s*["'`]([^"'`$]*)["'`]/g, appendsBrand: true },
+  { re: /useDocumentTitle\(\s*["'`]([^"'`$]*)["'`]/g, appendsBrand: true, kind: 'title' },
   // A literal <title> element inside Helmet, which carries what it says.
-  { re: /<title>([^<{]*)<\/title>/g, appendsBrand: false },
+  { re: /<title>([^<{]*)<\/title>/g, appendsBrand: false, kind: 'title' },
+  // `const pageDescription = "..."` / a template with interpolations.
+  { re: /\bpageDescription\s*=\s*["'`]([^"'`]*)["'`]/g, appendsBrand: false, kind: 'description' },
+  { re: /\bpageDescription\s*=\s*`([\s\S]*?)`/g, appendsBrand: false, kind: 'description' },
+  // <meta name="description" content="...">
+  { re: /<meta\s+name="description"\s+content="([^"]*)"/g, appendsBrand: false, kind: 'description' },
 ];
 
+// Two patterns can match the same literal - a `pageDescription` template is
+// caught by both the quoted and the backtick rule - so findings are keyed by
+// file, line and kind. A check that reports the same string twice reads as two
+// defects.
+const seen = new Set();
 const problems = [];
 let measured = 0;
 
-for (const file of walk(ROOT)) {
+for (const file of [...walk(ROOT), ...EXTRA_FILES]) {
   const rel = relative('.', file).split(sep).join('/');
   const text = readFileSync(file, 'utf8');
 
   const found = [
     ...componentTitles(text),
-    ...PATTERNS.flatMap(({ re, appendsBrand }) =>
-      [...text.matchAll(re)].map((m) => ({ literal: m[1], at: m.index, appendsBrand })),
+    ...PATTERNS.flatMap(({ re, appendsBrand, kind }) =>
+      [...text.matchAll(re)].map((m) => ({ literal: m[1], at: m.index, appendsBrand, kind })),
     ),
   ];
 
   {
     for (const m of found) {
-      const literal = m.literal.trim();
+      // An interpolated count stands in at four digits; any other expression
+      // makes the length unknowable from source, so the string is skipped.
+      const raw = m.literal.replace(/\$\{[^}]*\.length\}/g, COUNT_PLACEHOLDER);
+      if (raw.includes('${')) continue;
+      const literal = raw.replace(/\s+/g, ' ').trim();
       const appendsBrand = m.appendsBrand;
       // Skip empties and the props of unrelated components that happen to be
       // called `title` - a real page title says where it is.
       if (literal.length < 12) continue;
+      const max = m.kind === 'title' ? MAX_TITLE : MAX_DESCRIPTION;
       const rendered = appendsBrand && !literal.includes(BRAND) ? literal + SUFFIX : literal;
       measured += 1;
-      if (rendered.length > MAX_TITLE) {
+      if (rendered.length > max) {
         const line = text.slice(0, m.at).split('\n').length;
+        const key = `${rel}:${line}:${m.kind}`;
+        if (seen.has(key)) continue;
+        seen.add(key);
         problems.push(
-          `${rel}:${line} title is ${rendered.length} chars, over ${MAX_TITLE}: ${JSON.stringify(rendered)}`,
+          `${rel}:${line} ${m.kind} is ${rendered.length} chars, over ${max}: ${JSON.stringify(rendered.slice(0, 90))}`,
         );
       }
     }
@@ -113,13 +145,18 @@ for (const file of walk(ROOT)) {
 }
 
 if (problems.length > 0) {
-  console.error(`\nX A page title will be truncated in search results:\n`);
+  console.error(`\nX A page title or description will be truncated in search results:\n`);
   for (const p of problems) console.error(`  ${p}`);
   console.error(
-    `\nGoogle cuts around ${MAX_TITLE} characters, and the brand suffix "${SUFFIX.trim()}"\n` +
-      'counts - both title paths append it when the literal does not already say it.\n',
+    `\nGoogle cuts titles around ${MAX_TITLE} characters and snippets around ${MAX_DESCRIPTION}.\n` +
+      `The brand suffix "${SUFFIX.trim()}" counts - both title paths append it when\n` +
+      `the literal does not already say it - and an interpolated count is measured\n` +
+      `as ${COUNT_PLACEHOLDER.length} digits, because the empty backend in a container renders "0+".\n`,
   );
   process.exit(1);
 }
 
-console.log(`[seo-title-length] ${measured} literal title(s) in ${ROOT} all fit ${MAX_TITLE} characters.`);
+console.log(
+  `[seo-meta-length] ${measured} literal title(s) and description(s) in ${ROOT} fit ` +
+    `${MAX_TITLE}/${MAX_DESCRIPTION} characters.`,
+);

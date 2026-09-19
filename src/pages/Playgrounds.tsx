@@ -168,7 +168,7 @@ export default function Playgrounds() {
     ? `Playgrounds for Ages ${selectedAgeRange} in Des Moines`
     : "Des Moines Playgrounds - Parks, Splash Pads & Family Fun";
 
-  const pageDescription = `Discover ${filteredPlaygrounds.length}+ playgrounds in Des Moines, Iowa. Find the best parks with splash pads, accessible equipment, climbing structures, and family-friendly amenities. Free public playgrounds for all ages across the Greater Des Moines Area.`;
+  const pageDescription = `Discover ${filteredPlaygrounds.length}+ playgrounds in Des Moines, Iowa: splash pads, accessible equipment and climbing structures, free and open to all ages across the metro.`;
 
   const breadcrumbs = [
     { name: "Home", url: "/" },

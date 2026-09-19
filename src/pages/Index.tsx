@@ -117,7 +117,7 @@ const DashboardSkeleton = () => (
 // 60 chars is where Google truncates; this was 69 (WEB-SEO-043).
 const HOME_TITLE = 'Des Moines Insider | Events, Restaurants & Things to Do';
 const HOME_DESCRIPTION =
-  "What's happening in Des Moines, Iowa right now: live events, concerts and festivals, restaurants open tonight, family activities and weekend plans. Updated daily across Des Moines, West Des Moines, Ankeny, Urbandale, Johnston, Altoona and the metro.";
+  "What's on in Des Moines, Iowa right now: live events and festivals, restaurants open tonight, and family plans for the weekend. Updated daily across the metro.";
 
 export default function Index() {
   const [selectedEvent, setSelectedEvent] = useState<Event | null>(null);

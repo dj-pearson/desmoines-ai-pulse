@@ -79,7 +79,7 @@ export default function KidsEvents() {
   );
 
   const pageTitle = "Kids & Family Events in Des Moines - Family-Friendly Activities | Des Moines Insider";
-  const pageDescription = `Find ${kidsEvents.length}+ family-friendly events in Des Moines perfect for kids and children. From story times to festivals, discover activities for toddlers, preschoolers, and teens. Indoor and outdoor options available year-round.`;
+  const pageDescription = `Find ${kidsEvents.length}+ family-friendly events in Des Moines for kids and teens: story times, festivals, and indoor and outdoor activities, updated daily.`;
 
   const breadcrumbs = [
     { name: "Events", url: "/events" },

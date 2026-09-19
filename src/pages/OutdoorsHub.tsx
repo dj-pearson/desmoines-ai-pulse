@@ -209,7 +209,7 @@ export default function OutdoorsHub() {
     <>
       <SEOHead
         title="Trails, Parks & Hiking Near Des Moines"
-        description="Where to hike, bike, paddle and camp around Des Moines: Gray's Lake, Ledges State Park, the High Trestle bridge, Big Creek and Jester Park, with parking, dog rules and what stays open in winter."
+        description="Where to hike, bike, paddle and camp around Des Moines: Gray's Lake, Ledges, the High Trestle bridge, Big Creek and Jester Park."
         url={canonicalUrl}
         canonicalUrl={canonicalUrl}
         keywords={[
