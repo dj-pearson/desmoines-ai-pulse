@@ -9,7 +9,14 @@ import { format } from "date-fns";
 import { useFavorites } from "@/hooks/useFavorites";
 import { Badge } from "@/components/ui/badge";
 import { createSlug } from "@/lib/slug";
-import { favoritedListQueryKey } from "@/hooks/useContentFavorites";
+import { useFavoritedRows } from "@/hooks/useFavoritedRows";
+import {
+  EVENT_LIST_COLUMNS,
+  RESTAURANT_LIST_COLUMNS,
+  ATTRACTION_LIST_COLUMNS,
+  PLAYGROUND_LIST_COLUMNS,
+  HOTEL_LIST_COLUMNS,
+} from "@/lib/listColumns";
 import { createLogger } from '@/lib/logger';
 import { SpriteIcon } from "@/components/ui/SpriteIcon";
 
@@ -21,13 +28,13 @@ export function FavoritesView() {
 
   // Fetch full event details for favorited events
   const { data: events, isLoading: eventsLoading } = useQuery({
-    queryKey: ["favorited-events-details", favoritedEvents],
+    queryKey: ["favorited-events-details", user?.id, favoritedEvents],
     queryFn: async () => {
       if (!favoritedEvents || favoritedEvents.length === 0) return [];
 
       const { data, error } = await supabase
         .from("events")
-        .select("*")
+        .select(EVENT_LIST_COLUMNS)
         .in("id", favoritedEvents)
         .order("date", { ascending: true });
 
@@ -43,93 +50,15 @@ export function FavoritesView() {
   // behind every non-event FavoriteButton) actually writes. This previously read
   // `user_restaurant_interactions`, which nothing writes to, so saved
   // restaurants never appeared here (WEB-QA-010).
-  const { data: favoritedRestaurants = [], isLoading: restaurantsLoading } = useQuery({
-    queryKey: [favoritedListQueryKey("restaurant"), user?.id],
-    queryFn: async () => {
-      if (!user) return [];
-
-      // Two steps, not an embedded join: content_favorites.content_id is
-      // polymorphic (it points at whichever table content_type names), so there
-      // is no foreign key for PostgREST to traverse and `restaurants:content_id(*)`
-      // fails with PGRST200.
-      const { data: rows, error } = await supabase
-        .from("content_favorites")
-        .select("content_id")
-        .eq("user_id", user.id)
-        .eq("content_type", "restaurant");
-
-      if (error) {
-        log.error('fetchRestaurants', 'Failed to load favorited restaurants', {
-          message: error.message, code: error.code, details: error.details, hint: error.hint,
-        });
-        return [];
-      }
-
-      const ids = (rows || []).map((r) => r.content_id).filter(Boolean);
-      if (ids.length === 0) return [];
-
-      const { data, error: contentError } = await supabase
-        .from("restaurants")
-        .select("*")
-        .in("id", ids);
-
-      if (contentError) {
-        log.error('fetchRestaurants', 'Failed to load restaurants rows for favorites', {
-          message: contentError.message, code: contentError.code,
-        });
-        return [];
-      }
-
-      return data || [];
-    },
-    enabled: !!user,
-  });
+  const { data: favoritedRestaurants, isLoading: restaurantsLoading } =
+    useFavoritedRows<Record<string, unknown>>("restaurant", "restaurants", RESTAURANT_LIST_COLUMNS);
 
   // Fetch favorited attractions. Same source as restaurants above — the write
   // path is useContentFavorites -> content_favorites (WEB-QA-010). This
   // previously read `user_attraction_interactions`, which does not exist in the
   // schema at all, so the query always errored and the block always returned [].
-  const { data: favoritedAttractions = [], isLoading: attractionsLoading } = useQuery({
-    queryKey: [favoritedListQueryKey("attraction"), user?.id],
-    queryFn: async () => {
-      if (!user) return [];
-
-      // Two steps, not an embedded join: content_favorites.content_id is
-      // polymorphic (it points at whichever table content_type names), so there
-      // is no foreign key for PostgREST to traverse and `attractions:content_id(*)`
-      // fails with PGRST200.
-      const { data: rows, error } = await supabase
-        .from("content_favorites")
-        .select("content_id")
-        .eq("user_id", user.id)
-        .eq("content_type", "attraction");
-
-      if (error) {
-        log.error('fetchAttractions', 'Failed to load favorited attractions', {
-          message: error.message, code: error.code, details: error.details, hint: error.hint,
-        });
-        return [];
-      }
-
-      const ids = (rows || []).map((r) => r.content_id).filter(Boolean);
-      if (ids.length === 0) return [];
-
-      const { data, error: contentError } = await supabase
-        .from("attractions")
-        .select("*")
-        .in("id", ids);
-
-      if (contentError) {
-        log.error('fetchAttractions', 'Failed to load attractions rows for favorites', {
-          message: contentError.message, code: contentError.code,
-        });
-        return [];
-      }
-
-      return data || [];
-    },
-    enabled: !!user,
-  });
+  const { data: favoritedAttractions, isLoading: attractionsLoading } =
+    useFavoritedRows<Record<string, unknown>>("attraction", "attractions", ATTRACTION_LIST_COLUMNS);
 
   // Fetch favorited playgrounds.
   //
@@ -145,45 +74,8 @@ export function FavoritesView() {
   // the save control and the filled heart on return, and never say the item has
   // to appear in the favorites list. The unused `Play` icon imported at the top
   // of this file is what is left of the tab that was meant to go with it.
-  const { data: favoritedPlaygrounds = [], isLoading: playgroundsLoading } = useQuery({
-    queryKey: [favoritedListQueryKey("playground"), user?.id],
-    queryFn: async () => {
-      if (!user) return [];
-
-      // Same two-step as restaurants and attractions above: content_id is
-      // polymorphic, so there is no foreign key for PostgREST to embed across.
-      const { data: rows, error } = await supabase
-        .from("content_favorites")
-        .select("content_id")
-        .eq("user_id", user.id)
-        .eq("content_type", "playground");
-
-      if (error) {
-        log.error('fetchPlaygrounds', 'Failed to load favorited playgrounds', {
-          message: error.message, code: error.code, details: error.details, hint: error.hint,
-        });
-        return [];
-      }
-
-      const ids = (rows || []).map((r) => r.content_id).filter(Boolean);
-      if (ids.length === 0) return [];
-
-      const { data, error: contentError } = await supabase
-        .from("playgrounds")
-        .select("*")
-        .in("id", ids);
-
-      if (contentError) {
-        log.error('fetchPlaygrounds', 'Failed to load playgrounds rows for favorites', {
-          message: contentError.message, code: contentError.code,
-        });
-        return [];
-      }
-
-      return data || [];
-    },
-    enabled: !!user,
-  });
+  const { data: favoritedPlaygrounds, isLoading: playgroundsLoading } =
+    useFavoritedRows<Record<string, unknown>>("playground", "playgrounds", PLAYGROUND_LIST_COLUMNS);
 
   // Fetch favorited hotels. Until WEB-UX-010's second pass there was no way to
   // create one of these rows: "hotel" was a declared content type in
@@ -193,43 +85,8 @@ export function FavoritesView() {
   //
   // `hotels` is the one content table here with a real `slug` column, so the
   // link below does not need lib/slug the way the playground one does.
-  const { data: favoritedHotels = [], isLoading: hotelsLoading } = useQuery({
-    queryKey: [favoritedListQueryKey("hotel"), user?.id],
-    queryFn: async () => {
-      if (!user) return [];
-
-      const { data: rows, error } = await supabase
-        .from("content_favorites")
-        .select("content_id")
-        .eq("user_id", user.id)
-        .eq("content_type", "hotel");
-
-      if (error) {
-        log.error('fetchHotels', 'Failed to load favorited hotels', {
-          message: error.message, code: error.code, details: error.details, hint: error.hint,
-        });
-        return [];
-      }
-
-      const ids = (rows || []).map((r) => r.content_id).filter(Boolean);
-      if (ids.length === 0) return [];
-
-      const { data, error: contentError } = await supabase
-        .from("hotels")
-        .select("*")
-        .in("id", ids);
-
-      if (contentError) {
-        log.error('fetchHotels', 'Failed to load hotels rows for favorites', {
-          message: contentError.message, code: contentError.code,
-        });
-        return [];
-      }
-
-      return data || [];
-    },
-    enabled: !!user,
-  });
+  const { data: favoritedHotels, isLoading: hotelsLoading } =
+    useFavoritedRows<Record<string, unknown>>("hotel", "hotels", HOTEL_LIST_COLUMNS);
 
   const isLoading = eventsLoading || restaurantsLoading || attractionsLoading || playgroundsLoading || hotelsLoading;
 
@@ -333,7 +190,11 @@ export function FavoritesView() {
                     <div className="flex items-center gap-2 text-sm text-muted-foreground mb-2">
                       <SpriteIcon name="calendar" className="h-4 w-4" />
                       <span>{format(new Date(event.date), "MMM d, yyyy")}</span>
-                      {event.time && <span>at {event.time}</span>}
+                      {/* No `at {time}` span here: public.events has no `time`
+                          column, so it had never rendered. The times live in
+                          event_start_local / event_start_utc, and rendering one
+                          is a Central-timezone question (WEB-QA-029) rather
+                          than a string to print. WEB-PERF-034. */}
                     </div>
                   )}
 
@@ -346,13 +207,17 @@ export function FavoritesView() {
 
                   <div className="flex gap-2">
                     <Button asChild size="sm" className="flex-1">
-                      <a href={`/events/${event.slug || event.id}`}>
+                      {/* The id: events have no slug column, so the fallback
+                          was always what ran. */}
+                      <a href={`/events/${event.id}`}>
                         View Details
                       </a>
                     </Button>
-                    {event.url && (
+                    {/* `source_url`, not `url`: there is no url column, so
+                        this button had never appeared for any event. */}
+                    {event.source_url && (
                       <Button asChild size="sm" variant="outline">
-                        <a href={event.url} target="_blank" rel="noopener noreferrer">
+                        <a href={event.source_url} target="_blank" rel="noopener noreferrer">
                           <SpriteIcon name="external-link" className="h-4 w-4" />
                         </a>
                       </Button>
@@ -390,10 +255,14 @@ export function FavoritesView() {
                     </div>
                   </div>
 
-                  {restaurant.address && (
+                  {/* `location`, not `address`: public.restaurants has no
+                      address column, so this line had never rendered. It was
+                      invisible under select('*') - the field came back
+                      undefined and the && swallowed it. WEB-PERF-034. */}
+                  {restaurant.location && (
                     <div className="flex items-center gap-2 text-sm text-muted-foreground mb-4">
                       <SpriteIcon name="map-pin" className="h-4 w-4" />
-                      <span className="line-clamp-1">{restaurant.address}</span>
+                      <span className="line-clamp-1">{restaurant.location}</span>
                     </div>
                   )}
 
@@ -432,9 +301,12 @@ export function FavoritesView() {
                       <h3 className="font-semibold text-lg mb-1 line-clamp-2">
                         {attraction.name}
                       </h3>
-                      {attraction.category && (
+                      {/* `type`, not `category`, for the same reason: no
+                          category column on public.attractions, so this badge
+                          had never rendered either. */}
+                      {attraction.type && (
                         <Badge variant="secondary" className="mb-2">
-                          {attraction.category}
+                          {attraction.type}
                         </Badge>
                       )}
                     </div>
@@ -454,7 +326,12 @@ export function FavoritesView() {
                   )}
 
                   <Button asChild size="sm" className="w-full">
-                    <a href={`/attractions/${attraction.slug || attraction.id}`}>
+                    {/* The id, not a slug: attractions.slug is not in the
+                        generated types yet (migration 20260919000008 is not
+                        applied), and selecting a column that does not exist
+                        makes PostgREST reject the WHOLE projection with 42703.
+                        The id route works for both. */}
+                    <a href={`/attractions/${attraction.id}`}>
                       View Details
                     </a>
                   </Button>
