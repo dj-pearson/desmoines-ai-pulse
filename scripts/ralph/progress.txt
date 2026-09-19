@@ -1376,3 +1376,17 @@ Only one of two scrapers set coordinates, the geocoding trigger never geocoded, 
   - **Half a coordinate pair is worse than none.** Every distance query reads both, and a row with only a latitude looks geocoded to the backfill that would otherwise fix it. Same for (0, 0), which is the Atlantic and also what a null looks like after something coerced it to a number.
   - **Don't consolidate two overlapping jobs when only one of them is silent.** The AC asked for the sweeper's coordinate step to go too. It escalates and keeps a run ledger; choosing between two jobs that both escalate needs each one's production fill rate. Removing the two that report success either way is the part that is knowable from here.
   - **Refuse to leave no owner.** The unschedule migration raises if `data-quality-heal-nightly` is not scheduled, so it cannot be the change that silently ends geocoding.
+
+## 2026-09-19 - WEB-BE-047 (all four ACs)
+The scraper rate-limited its own orchestrator, and five of fifteen jobs had never run.
+- `_shared/callerKind.ts` owns "machine or person"; `apiKeyAuth.ts` answered it inline three times and nothing else could ask.
+- `checkRateLimitPersistent` gained `exemptInternal`, opt-in per endpoint.
+- `scrape-events` orders by `last_run` NULLS FIRST then `next_run` before the limit.
+- 12 Deno tests in CI, five negative controls.
+- **Learnings for future iterations:**
+  - **A rate limit keyed by IP throttles whoever fans out, not whoever abuses.** 10 requests per 15 minutes, one egress address, 15 seeded jobs: the limit's only real victim was the cron that ingests the site's events. The credential that would have distinguished them was already on every request and nothing could read it.
+  - **`.limit(N)` with no ORDER BY is a silent cap, not a sample.** The same ten rows came back every run, so five scraping jobs were never scraped and the ten that ran reported success. Nothing on earth was going to report that. Any `.limit()` over rows that are meant to take turns needs an explicit order, and the test has to assert the order is applied *before* the limit.
+  - **Exempting a credential that already grants everything costs nothing.** `EDGE_FUNCTION_API_KEY` authorises the whole function surface and the service-role key the whole database. Throttling a caller holding one protects nothing - it can do the damage directly. Worth writing down, because "we removed a rate limit" reads as a regression until you say who it was limiting.
+  - **A control that passes is the finding.** My first negative control deleted a guard and all 12 tests stayed green, because the guard was redundant with an inner check. The real hazard was one level down: `timingSafeEqual('', '')` is TRUE, so an unconfigured secret would classify every empty header as internal. Second time this session a control has taught me more than the code did.
+  - **Back up by path, never by basename.** I copied `firecrawl-scraper/index.ts` and `scrape-events/index.ts` to `$S/nc.index.ts.bak`, the second clobbered the first, and the restore put scrape-events' contents into firecrawl-scraper. The type check and the wiring test caught it; recovery was `git checkout HEAD --` on the one file whose only uncommitted change I could re-apply from memory. Basenames repeat constantly in this repo - `index.ts` is 73 of them.
+  - **And `git checkout <file>` to undo an experiment ate the ORDER BY edit** in the same sequence. Copy to the scratchpad and copy back; git is not an undo button for work it has never seen.

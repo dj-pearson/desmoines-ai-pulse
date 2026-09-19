@@ -222,6 +222,15 @@ jobs:
       # RAISE NOTICEd. Pins both-or-neither coordinates, the (0,0) refusal, and
       # that both scrapers go through _shared/knownVenues.ts.
       - run: deno test --allow-read supabase/functions/_tests/ingest-coordinates.test.ts
+      # WEB-BE-047. firecrawl-scraper allows 10 requests per 15 minutes keyed by
+      # client IP; scrape-events invokes it once per scraping job from ONE
+      # egress address, and 15 jobs are seeded - so the scraper throttled its
+      # own orchestrator. And .limit(10) had no ORDER BY, so the same ten rows
+      # came back every run and five jobs had never been scraped at all. Pins
+      # the caller classification (an unset secret must not match an empty
+      # header), that the exemption is opt-in, and that the ORDER BY precedes
+      # the limit.
+      - run: deno test --allow-read supabase/functions/_tests/scraper-rate-limit.test.ts
       # WEB-BE-032. The ops digest counted with `count ?? 0` and discarded the
       # error, so a digest that could read nothing printed the same eleven
       # zeros as a system with nothing wrong. Pins that an unreadable section

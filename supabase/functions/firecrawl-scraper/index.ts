@@ -245,8 +245,20 @@ serve(async (req) => {
   const authFailure = await requireAdminOrApiKey(req, corsHeaders);
   if (authFailure) return authFailure;
 
-  // Rate limiting: 10 requests per 15 minutes (SEC-022), persistent across cold starts
-  const rateLimit = await checkRateLimitPersistent(req, { endpoint: 'firecrawl-scraper', max: 10, message: 'Scraper rate limit exceeded.' });
+  // Rate limiting: 10 requests per 15 minutes (SEC-022), persistent across cold
+  // starts - and NOT applied to internal callers (WEB-BE-047).
+  //
+  // The limit is keyed by client IP. scrape-events invokes this function once
+  // per scraping job from a single egress address and there are 15 seeded jobs,
+  // so the scraper was spending its own budget on itself: the eleventh job of a
+  // run got a 429, which is the "Edge Function returned a non-2xx status code"
+  // that every job_results entry carried on the days every source failed.
+  const rateLimit = await checkRateLimitPersistent(req, {
+    endpoint: 'firecrawl-scraper',
+    max: 10,
+    message: 'Scraper rate limit exceeded.',
+    exemptInternal: true,
+  });
   if (!rateLimit.success && rateLimit.response) {
     return rateLimit.response;
   }

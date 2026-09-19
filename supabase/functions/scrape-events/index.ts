@@ -1994,8 +1994,19 @@ serve(async (req) => {
       console.log(`Filtering for specific job: ${jobId}`);
       jobsQuery = jobsQuery.eq("id", jobId);
     } else {
-      console.log("No specific jobId, will fetch all active jobs");
-      jobsQuery = jobsQuery.limit(10); // Limit only when processing all jobs
+      // WEB-BE-047. `.limit(10)` with no ORDER BY returned whatever Postgres
+      // handed back - in practice the same ten rows every run, so the five
+      // scraping jobs beyond them had never been scraped at all.
+      //
+      // last_run NULLS FIRST puts a job that has never run at the front, then
+      // the least recently run; next_run breaks the tie for jobs the dispatcher
+      // has scheduled. Every job now gets a turn, and a job that was skipped
+      // moves to the head of the queue by construction rather than by luck.
+      console.log("No specific jobId, will fetch the ten least recently run jobs");
+      jobsQuery = jobsQuery
+        .order("last_run", { ascending: true, nullsFirst: true })
+        .order("next_run", { ascending: true, nullsFirst: true })
+        .limit(10);
     }
 
     const { data: scrapingJobs, error: jobsError } = await jobsQuery;
