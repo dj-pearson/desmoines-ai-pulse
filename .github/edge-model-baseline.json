@@ -3,24 +3,12 @@
   "generated": "2026-09-19",
   "pins": [
     {
-      "file": "supabase/functions/analyze-competitor/index.ts",
-      "model": "claude-3-haiku-20240307"
-    },
-    {
       "file": "supabase/functions/batch-enhance-events/index.ts",
       "model": "claude-sonnet-4-20250514"
     },
     {
       "file": "supabase/functions/campaign-creative-review/index.ts",
       "model": "claude-haiku-4-5-20251001"
-    },
-    {
-      "file": "supabase/functions/moderate-content/index.ts",
-      "model": "claude-3-haiku-20240307"
-    },
-    {
-      "file": "supabase/functions/triage-event-submission/index.ts",
-      "model": "claude-3-haiku-20240307"
     },
     {
       "file": "supabase/functions/validate-source-urls/index.ts",

@@ -18,7 +18,7 @@ import { handleCors, getCorsHeaders } from '../_shared/cors.ts';
 import { checkRateLimitPersistent } from '../_shared/rateLimit.ts';
 import { runJob } from '../_shared/jobRunner.ts';
 import { fetchWithTimeout } from '../_shared/fetchWithTimeout.ts';
-import { getAnthropicApiKey, extractClaudeText } from '../_shared/aiConfig.ts';
+import { getAnthropicApiKey, extractClaudeText, buildLightweightClaudeRequest } from '../_shared/aiConfig.ts';
 import {
   AUTO_APPROVE_THRESHOLD,
   AUTO_REJECT_THRESHOLD,
@@ -43,15 +43,28 @@ async function safetyCheck(s: Submission): Promise<SafetyVerdict> {
   if (!key) return { safe: false, determined: false, reasons: ['Safety check unavailable (no API key)'] };
   try {
     const { system, userContent } = buildSafetyRequest(s);
+    // WEB-BE-041. The model was 'claude-3-haiku-20240307', which is RETIRED -
+    // the call 404s, and because this check fails closed, every submission has
+    // been coming back undetermined and staying out of the auto-approve path.
+    // A safety gate that always says "I could not tell" is not a safety gate.
+    //
+    // buildLightweightClaudeRequest is the Haiku-tier equivalent of the
+    // buildClaudeRequest route AC2 asks for: the id comes from the ai_config
+    // row with a non-retired fallback, so the next model change is one row
+    // rather than three files. `system` is spread back on because that helper
+    // returns only model/max_tokens/temperature/messages.
+    const base = await buildLightweightClaudeRequest(
+      [{ role: 'user', content: userContent }],
+      {
+        supabaseUrl: Deno.env.get('SUPABASE_URL') ?? '',
+        supabaseKey: Deno.env.get('SUPABASE_SERVICE_ROLE_KEY') ?? '',
+        customMaxTokens: 300,
+      },
+    );
     const res = await fetchWithTimeout('https://api.anthropic.com/v1/messages', {
       method: 'POST',
       headers: { 'Content-Type': 'application/json', 'x-api-key': key, 'anthropic-version': '2023-06-01' },
-      body: JSON.stringify({
-        model: 'claude-3-haiku-20240307',
-        max_tokens: 300,
-        system,
-        messages: [{ role: 'user', content: userContent }],
-      }),
+      body: JSON.stringify({ ...base, system }),
     }, 60_000);
     if (!res.ok) return { safe: false, determined: false, reasons: [`Safety check upstream error (${res.status})`] };
     const data = await res.json();

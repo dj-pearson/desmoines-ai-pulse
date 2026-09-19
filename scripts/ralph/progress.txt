@@ -2707,3 +2707,44 @@ Learnings for future iterations
 4. Extract the decision, leave the platform call thin. selfCanonicalRewrites
    returns three objects; withSelfCanonical loops over them. The part that
    regresses is now testable in Node, and no dependency was added to get there.
+
+================================================================================
+2026-09-19  Four Claude calls that have been 404ing, fixed
+================================================================================
+
+Swept every check pr-checks.yml runs, expecting more of yesterday's finding (a
+required step silently absent). All 19 pass and say something substantive. But
+check-edge-models prints, on every run and exiting 0 because they are
+baselined: "3 of them name a RETIRED model. These calls 404 today."
+
+It was four calls, not three - analyze-competitor has two and the checker
+reports files. Each function swallowed the 404 differently and none reported an
+outage: the triage safety check fails closed, so every submission came back
+"undetermined" and stayed out of auto-approve; moderation returned its error
+verdict; the competitor analysis threw. A gate that always answers "I could not
+tell" reads as a degraded-but-fine path, which is how a retired pin survived in
+a codebase that has a checker for it.
+
+All four now build through buildLightweightClaudeRequest, so the id comes from
+the ai_config row with a non-retired fallback. Baseline 6 -> 3, and the RETIRED
+line is gone.
+
+Learnings for future iterations
+
+1. A baselined finding that prints a warning on every run is not being seen.
+   This one said "these calls 404 today" in CI output for weeks. If a check
+   can describe a live outage and still exit 0, the description is doing no
+   work - either fail on it or fix it.
+
+2. Sweeping the checks was worth it even though they all passed. The value was
+   not a broken check; it was reading 19 outputs carefully enough to notice one
+   of them reporting a production defect in its passing output.
+
+3. "Fixed the file" is not "fixed the calls". The checker reports per file, I
+   converted the first call in analyze-competitor, and the file kept failing -
+   which is the only reason the second was found. Count the call sites.
+
+4. When a helper returns a narrower shape than the call it replaces, the
+   dropped field is the regression. buildLightweightClaudeRequest has no
+   `system`, and triage's safety prompt lives there; without the spread the
+   check still returns 200 and simply stops being told what to look for.
