@@ -18,7 +18,6 @@ import { format } from "date-fns";
 import { toZonedTime, fromZonedTime } from "date-fns-tz";
 import { Link } from "react-router-dom";
 import { BRAND, getCanonicalUrl } from "@/lib/brandConfig";
-import { useDocumentTitle } from "@/hooks/useDocumentTitle";
 import { Breadcrumbs } from "@/components/ui/breadcrumbs";
 import { formatCount } from "@/lib/pluralize";
 import { useWeather, reorderForWeather } from "@/hooks/useWeather";
@@ -52,7 +51,6 @@ interface EventItem {
 }
 
 export default function EventsToday() {
-  useDocumentTitle("Events Today");
 
   /**
    * WEB-SEO-031 -- THIS WAS A useState/useEffect FETCH, AND THAT IS WHY THE

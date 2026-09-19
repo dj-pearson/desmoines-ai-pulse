@@ -25,7 +25,6 @@ import { Search, SlidersHorizontal, X, Building2 } from "lucide-react";
 import { Skeleton } from "@/components/ui/skeleton";
 import { EmptyState } from "@/components/ui/empty-state";
 import { ErrorState } from "@/components/ui/error-state";
-import { useDocumentTitle } from "@/hooks/useDocumentTitle";
 import { getCanonicalUrl } from "@/lib/brandConfig";
 import AffiliateDisclosureBanner from "@/components/AffiliateDisclosureBanner";
 import Header from "@/components/Header";
@@ -84,7 +83,6 @@ const SORT_OPTIONS = [
 type SortOption = "featured" | "price_low" | "price_high" | "rating" | "alphabetical" | "newest";
 
 export default function Hotels() {
-  useDocumentTitle("Hotels in Des Moines - Where to Stay");
 
   const [search, setSearch] = useState("");
   const [debouncedSearch, setDebouncedSearch] = useState("");

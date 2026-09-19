@@ -24,7 +24,6 @@ import { Button } from "@/components/ui/button";
 import { Link } from "react-router-dom";
 import { toZonedTime, fromZonedTime } from "date-fns-tz";
 import { BRAND, getCanonicalUrl } from "@/lib/brandConfig";
-import { useDocumentTitle } from "@/hooks/useDocumentTitle";
 import { Breadcrumbs } from "@/components/ui/breadcrumbs";
 import { EVENT_LIST_COLUMNS } from "@/lib/listColumns";
 import { formatCount } from "@/lib/pluralize";
@@ -56,7 +55,6 @@ const VISIBLE_EVENTS = 36;
 export default function EventsThisWeekend() {
   const [selectedCategory, setSelectedCategory] = useState<string>("all");
   const [selectedLocation, setSelectedLocation] = useState<string>("all");
-  useDocumentTitle("Events This Weekend");
 
   const { data: events, isLoading, isError, error, refetch } = useQuery({
     queryKey: ["events-weekend"],

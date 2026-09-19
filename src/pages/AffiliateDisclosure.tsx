@@ -1,9 +1,7 @@
 import { Helmet } from "react-helmet-async";
 import { Link } from "react-router-dom";
-import { useDocumentTitle } from "@/hooks/useDocumentTitle";
 
 export default function AffiliateDisclosure() {
-  useDocumentTitle("Affiliate Disclosure");
 
   return (
     <>

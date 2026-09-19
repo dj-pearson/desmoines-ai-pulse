@@ -28,13 +28,11 @@ import {
 } from "@/components/ui/card";
 import { Alert, AlertDescription } from "@/components/ui/alert";
 import { supabase } from "@/integrations/supabase/client";
-import { useDocumentTitle } from "@/hooks/useDocumentTitle";
 import { AlertCircle, CheckCircle2, Loader2, MailCheck } from "lucide-react";
 
 type Status = "loading" | "success" | "already" | "invalid" | "error";
 
 export default function NewsletterConfirm() {
-  useDocumentTitle("Confirm your subscription");
   const [params] = useSearchParams();
   const token = params.get("token") ?? "";
   const [status, setStatus] = useState<Status>("loading");

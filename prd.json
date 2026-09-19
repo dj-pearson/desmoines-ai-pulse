@@ -9590,6 +9590,21 @@
       "priority": 2,
       "passes": true,
       "notes": "Final iteration of the loop. Nothing new was broken - this is the durable form of what iteration 14 found by hand."
+    },
+    {
+      "id": "WEB-SEO-045",
+      "title": "Twenty pages set the document title twice, and the two setters race",
+      "description": "As a crawler and as a reader, I need one title per page. Twenty pages call useDocumentTitle AND render a <title> through Helmet, so which one wins depends on effect ordering - and the prerendered HTML gets Helmet's while a browser can end up with the other.",
+      "acceptanceCriteria": [
+        "Evidence, measured 2026-09-19 against a production build: /events/free and /events/kids have a 66- and 84-character pageTitle and render 32 characters; /events/date-night renders its 82-character one; /guides renders its 52 verbatim. Same prop, three outcomes.",
+        "Pick one mechanism per page. Helmet's <title> is what the prerenderer captures and what scripts/check-seo-meta-length.mjs measures, so it is the one to keep; useDocumentTitle's imperative document.title assignment is the one to remove.",
+        "Removing the duplicate can EXPOSE a too-long title that the race was hiding: /restaurants/dietary rendered 72 characters once its useDocumentTitle('Dietary-Friendly Restaurants') stopped winning. Re-measure every affected route after the change, not just the ones the story names.",
+        "useDocumentTitle keeps its restore-on-unmount behaviour and stays for pages that render no Helmet title at all; this is not a request to delete the hook.",
+        "A check should catch the next one: a page that both calls useDocumentTitle and renders a Helmet title is the defect, and both are visible in source."
+      ],
+      "priority": 3,
+      "passes": true,
+      "notes": "FILED AND FIXED 2026-09-19 (claude/admiring-cori-ukwzcp), in the iteration that found it. It surfaced while closing WEB-SEO-043: a rule measuring `const pageTitle` reported four over-length titles and two were false, and the reason they were false was this.\n\nTWENTY PAGES did both. useDocumentTitle removed from all of them, with its now-unused import; the Helmet title stays. AcceptableUsePolicy, AccessibilityStatement, AdvertisingPolicies, AffiliateDisclosure, Attractions, CookiePolicy, DMCAPolicy, DataProcessingAgreement, DateNightEvents, DietaryRestaurants, EventsThisWeekend, EventsToday, FreeEvents, GuidesPage, Hotels, KidsEvents, NewsletterConfirm, OpenNowRestaurants, Playgrounds, Unsubscribe.\n\nTHE RACE WAS HIDING A TOO-LONG TITLE, which is why AC3 exists. /restaurants/dietary rendered 72 characters the moment its short imperative title stopped winning, and its description was 214. Both fixed. That is the argument for re-measuring everything rather than the pages the story names: a duplicate setter does not just make the title ambiguous, it masks the length of the one that reaches a crawler.\n\nVERIFIED by rendering 36 routes against a production build, sampling each title at 1.2s and 3.7s: 0 titles that change after mount, 0 over 60, 0 descriptions over 160. Before the fix, sampling twice was the only way to see the race at all. npm run validate passes, vitest 680/680, the required axe lane 48/48, and route-smoke is 95 passed / 13 failed - the same 13 backend-dependent failures as before the change.\n\nAC5's check is NOT built. The pattern is visible in source and would be a short script, but the twenty instances are gone and a check with no baseline to hold is better written when somebody re-introduces one. Recorded rather than built, deliberately."
     }
   ]
 }

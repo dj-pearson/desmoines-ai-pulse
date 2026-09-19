@@ -1665,3 +1665,14 @@ AC1/AC2/AC3 done and re-rendered; AC4 and AC5 retired as stale.
   - **Half of the check's new rule was false positives, and finding out why was the real result.** `const pageTitle` means three different things across four pages: rendered verbatim on `/guides`, rendered as-is at 82 chars on `/events/date-night`, and overridden by a 32-character title from another path on `/events/free` and `/events/kids`. A check with a 50% false-positive rate is a check nobody keeps, so the rule came out - and the inconsistency it exposed is worth its own story.
   - **A title can change after mount, so one sample is not a measurement.** `/events/date-night` measured clean on a single-sample sweep and 82 characters on a later one, because competing setters race. The final sweep samples twice and takes the longer.
   - **Shorten the literal even when the check was wrong about it.** Two of the four were not what reached the document, but a 66- or 84-character literal sitting in a page is a loaded gun for whoever changes the title path next.
+
+## 2026-09-19 - WEB-SEO-045 (filed and fixed): twenty pages set the title twice
+Found while closing WEB-SEO-043: a rule measuring `const pageTitle` reported four over-length titles and two were false. The reason they were false was the defect.
+- `useDocumentTitle` removed from 20 pages that also render a Helmet `<title>`; Helmet is what the prerenderer captures.
+- 36 routes re-rendered, sampled at 1.2s and 3.7s: 0 races, 0 titles over 60, 0 descriptions over 160.
+- **Learnings for future iterations:**
+  - **A false positive was the finding.** `/events/free` has a 66-character `pageTitle` and rendered 32. The rule was right about the literal and wrong about what reached the page, and chasing *why* found twenty pages with two competing title mechanisms. A check that disagrees with the browser is worth understanding before it is deleted.
+  - **The race was hiding a too-long title.** `/restaurants/dietary` rendered 72 characters the moment its short imperative title stopped winning, and its description was 214. A duplicate setter does not just make the title ambiguous - it masks the length of the one a crawler gets.
+  - **Sampling once cannot see a race.** Every measurement in this story takes the title at 1.2s and again at 3.7s. Before the fix that was the only way to observe the problem; after it, `t1 === t2` on 36 routes is the proof it is gone.
+  - **`s.count(name) != 1` is the wrong guard for an unused import,** because `import { useDocumentTitle } from "@/hooks/useDocumentTitle"` contains the name twice - the binding and the module path. The first pass removed 0 imports and reported success.
+  - **I did not build AC5's check.** The pattern is greppable and the script would be short, but all twenty instances are gone and a ratchet with nothing to hold is better written when somebody re-introduces one. Recorded as a deliberate omission rather than quietly skipped.

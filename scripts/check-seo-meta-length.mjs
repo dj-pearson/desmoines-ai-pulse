@@ -91,13 +91,18 @@ const PATTERNS = [
   { re: /useDocumentTitle\(\s*["'`]([^"'`$]*)["'`]/g, appendsBrand: true, kind: 'title' },
   // A literal <title> element inside Helmet, which carries what it says.
   { re: /<title>([^<{]*)<\/title>/g, appendsBrand: false, kind: 'title' },
-  // `const pageTitle = ...` IS NOT MEASURED, and the attempt is worth
-  // recording. Its consumers disagree about the brand suffix - /guides renders
-  // its 52-character pageTitle verbatim while others append - and on
-  // /events/free and /events/kids the rendered title is 32 characters, set by
-  // a different path entirely, so the const is not what reaches the document.
-  // Measuring it produced two false positives out of four. The literals
-  // themselves were shortened anyway; the inconsistency is its own defect.
+  // `const pageTitle = ...`, which EnhancedLocalSEO renders VERBATIM into
+  // <title> - no brand suffix, unlike SEOHead.
+  //
+  // This rule was written, reverted and restored in one session, and the round
+  // trip is the point. It first reported four over-length titles of which two
+  // were false: /events/free and /events/kids rendered 32 characters, not the
+  // 66 and 84 in their consts. The cause was not the rule - those pages set
+  // the title TWICE, once through Helmet and once through useDocumentTitle,
+  // and the two raced. With the duplicate setter gone from all twenty such
+  // pages, pageTitle is the only title on the page and measuring it is sound.
+  { re: /\bpageTitle\s*=\s*["'`]([^"'`]*)["'`]/g, appendsBrand: false, kind: 'title' },
+  { re: /\bpageTitle\s*=\s*`([\s\S]*?)`/g, appendsBrand: false, kind: 'title' },
   // `const pageDescription = "..."` / a template with interpolations.
   { re: /\bpageDescription\s*=\s*["'`]([^"'`]*)["'`]/g, appendsBrand: false, kind: 'description' },
   { re: /\bpageDescription\s*=\s*`([\s\S]*?)`/g, appendsBrand: false, kind: 'description' },

@@ -7,7 +7,6 @@ import { Breadcrumbs } from "@/components/ui/breadcrumbs";
 import { FAQSection } from "@/components/FAQSection";
 import { usePlaygroundFacets, usePlaygrounds } from "@/hooks/usePlaygrounds";
 import { useToast } from "@/hooks/use-toast";
-import { useDocumentTitle } from "@/hooks/useDocumentTitle";
 import { BackToTop } from "@/components/BackToTop";
 import { getCanonicalUrl } from "@/lib/brandConfig";
 import { useIsMobile } from "@/hooks/use-mobile";
@@ -55,7 +54,6 @@ const createSlug = (name: string): string => {
 export default function Playgrounds() {
   const { toast } = useToast();
   const isMobile = useIsMobile();
-  useDocumentTitle("Playgrounds");
 
   // URL-synced filters (WEB-UX-035). These lived in local React state, so a
   // filtered view could not be shared or bookmarked and - the everyday cost -

@@ -10,7 +10,6 @@ import { useSeasonalGuides, getSeasonLabel, getSeasonColor } from "@/hooks/useSe
 import { Users, Heart, Coffee, Utensils, Camera, Star, Umbrella, Sun, Snowflake } from "lucide-react";
 import OptimizedImage from "@/components/OptimizedImage";
 import { getCanonicalUrl } from "@/lib/brandConfig";
-import { useDocumentTitle } from "@/hooks/useDocumentTitle";
 import { SpriteIcon } from "@/components/ui/SpriteIcon";
 import { fetchPriorityAttr } from "@/lib/fetchPriority";
 
@@ -119,7 +118,6 @@ const faqData = [
 ];
 
 export default function GuidesPage() {
-  useDocumentTitle("City Guides");
   const { data: seasonalGuides } = useSeasonalGuides();
   // 63 chars, over Google's ~60 truncation point (WEB-SEO-043).
   const pageTitle = "Des Moines Guides - Activities, Dining & Attractions";

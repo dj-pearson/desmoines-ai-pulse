@@ -16,7 +16,6 @@ import { Card, CardContent } from "@/components/ui/card";
 import { Utensils } from "lucide-react";
 import { format } from "date-fns";
 import { BRAND, getCanonicalUrl } from "@/lib/brandConfig";
-import { useDocumentTitle } from "@/hooks/useDocumentTitle";
 import { Breadcrumbs } from "@/components/ui/breadcrumbs";
 import { RESTAURANT_LIST_COLUMNS } from "@/lib/listColumns";
 import { useReloadableFetch } from "@/hooks/useReloadableFetch";
@@ -41,7 +40,6 @@ export default function OpenNowRestaurants() {
   const [isLoading, setIsLoading] = useState(true);
   const { error: loadError, setError: setLoadError, reloadKey, retry } = useReloadableFetch();
   const [currentTime, setCurrentTime] = useState(new Date());
-  useDocumentTitle("Open Now Restaurants");
 
   useEffect(() => {
     // Update current time every minute

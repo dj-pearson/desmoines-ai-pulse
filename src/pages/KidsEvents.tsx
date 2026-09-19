@@ -17,7 +17,6 @@ import { FAQSection } from "@/components/FAQSection";
 import { Card, CardContent } from "@/components/ui/card";
 import { Baby } from "lucide-react";
 import { getCanonicalUrl } from "@/lib/brandConfig";
-import { useDocumentTitle } from "@/hooks/useDocumentTitle";
 import { Breadcrumbs } from "@/components/ui/breadcrumbs";
 import { ErrorState } from "@/components/ui/error-state";
 import { SkeletonGroup } from "@/components/ui/skeleton";
@@ -38,7 +37,6 @@ interface EventItem {
 }
 
 export default function KidsEvents() {
-  useDocumentTitle("Kids Events");
 
   /**
    * WEB-SEO-031 AC5: converted from useState/useEffect for the reason

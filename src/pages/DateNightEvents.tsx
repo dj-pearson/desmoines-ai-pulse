@@ -17,7 +17,6 @@ import { Card, CardContent } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import { Heart } from "lucide-react";
 import { getCanonicalUrl } from "@/lib/brandConfig";
-import { useDocumentTitle } from "@/hooks/useDocumentTitle";
 import { Breadcrumbs } from "@/components/ui/breadcrumbs";
 import { useReloadableFetch } from "@/hooks/useReloadableFetch";
 import { ErrorState } from "@/components/ui/error-state";
@@ -41,7 +40,6 @@ export default function DateNightEvents() {
   const [isLoading, setIsLoading] = useState(true);
   const { error: loadError, setError: setLoadError, reloadKey, retry } = useReloadableFetch();
   const [eveningOnly, setEveningOnly] = useState(true);
-  useDocumentTitle("Date Night Events");
 
   useEffect(() => {
     const fetchDateNightEvents = async () => {

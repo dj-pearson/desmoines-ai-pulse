@@ -21,7 +21,6 @@ import { Card, CardContent } from "@/components/ui/card";
 import { DollarSign, Gift } from "lucide-react";
 import { format } from "date-fns";
 import { BRAND, getCanonicalUrl } from "@/lib/brandConfig";
-import { useDocumentTitle } from "@/hooks/useDocumentTitle";
 import { Breadcrumbs } from "@/components/ui/breadcrumbs";
 import { ErrorState } from "@/components/ui/error-state";
 
@@ -44,7 +43,6 @@ interface EventItem {
 const EMPTY_EVENTS: EventItem[] = [];
 
 export default function FreeEvents() {
-  useDocumentTitle("Free Events");
 
   /*
    * WEB-PERF-032 / WEB-SEO-031. THIS WAS A useState/useEffect FETCH ON A
