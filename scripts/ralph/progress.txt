@@ -1621,3 +1621,13 @@ The AC said rename; reading the third layer said delete.
   - **"Three copies" is not automatically three layers.** Two of these run in the same document five seconds apart, so the later one is redundant by construction. The third is reached by a different mechanism entirely - the browser fetching `sw.js` - and is not. Counting occurrences suggested one answer; asking who reaches each suggested another.
   - **The comment explaining the removal broke the test checking the removal.** Third time this session. The fix is the same every time: strip comments before matching. Worth doing by default in any source-text assertion that names the thing it forbids.
   - **`git checkout <file>` ate the real edit during a negative control, again.** Same mistake, same session: restoring a file from HEAD reverts work HEAD has never seen. The scratchpad copy is the restore point; git is not.
+
+## 2026-09-19 - WEB-UX-037: measured the footer, and the story's premise is wrong
+No code. The story says decide the SEO call first, and the measurement shows that call fixes a third of the problem.
+- Footer at 375px is **2874px**, not 3431px. Desktop 1557px matches AC1 exactly.
+- Per block: ordinary nav **1472px / 28 links**, SiteDirectory **1073px / 44 links**, CTA 196px, legal bar 133px.
+- **Learnings for future iterations:**
+  - **"The bulk is X" was worth checking and was wrong.** SiteDirectory is 37% of the footer; the ordinary Events/Explore/Company/Legal nav is 51%. The whole story is gated on an SEO decision about the smaller half, while the larger half needs no decision at all.
+  - **The blocked half and the unblocked half were not separated.** Filing one story for "the footer is too tall" bundled a real SEO judgement call with a plain mobile-layout job, and the judgement call froze both for weeks. Measuring first would have split them.
+  - **Half the numbers in the AC were right.** Desktop 1557px matched to the pixel; mobile was off by 557px and happened to land within 3px of the figure quoted as the *before*. Same measuring session, same story, one number stale - so "it was measured once" is not the same as "it is measured".
+  - **A browser makes "needs a decision" into "here is the decision with numbers".** This iteration changed no code and is still the most useful thing available for this story, because what was missing was never the implementation.
