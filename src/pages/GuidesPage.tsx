@@ -12,6 +12,7 @@ import OptimizedImage from "@/components/OptimizedImage";
 import { getCanonicalUrl } from "@/lib/brandConfig";
 import { useDocumentTitle } from "@/hooks/useDocumentTitle";
 import { SpriteIcon } from "@/components/ui/SpriteIcon";
+import { fetchPriorityAttr } from "@/lib/fetchPriority";
 
 const guides = [
   {
@@ -222,7 +223,7 @@ export default function GuidesPage() {
 
         {/* Guides Grid */}
         <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-8 mb-12">
-          {guides.map((guide) => {
+          {guides.map((guide, index) => {
             const IconComponent = guide.icon;
             return (
               <Card key={guide.id} className="overflow-hidden hover:shadow-lg transition-shadow">
@@ -231,8 +232,12 @@ export default function GuidesPage() {
                     src={guide.image}
                     alt={guide.title}
                     className="w-full h-full object-cover"
-                    loading="lazy"
+                    // The first row of a three-column grid. Chrome does not start a lazy
+                    // image's fetch until layout has run, so the LCP candidate on a listing
+                    // page must not be lazy (WEB-SEO-032).
+                    loading={index < 3 ? "eager" : "lazy"}
                     decoding="async"
+                    {...fetchPriorityAttr(index < 3 ? "high" : undefined)}
                   />
                   <div className="absolute top-4 left-4">
                     <Badge variant="secondary" className="bg-background/90 backdrop-blur">

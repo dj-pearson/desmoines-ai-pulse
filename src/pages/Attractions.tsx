@@ -633,7 +633,7 @@ export default function Attractions() {
             </p>
 
             <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
-              {paginatedAttractions.map((attraction) => (
+              {paginatedAttractions.map((attraction, index) => (
                 <Link
                   key={attraction.id}
                   to={`/attractions/${createSlug(attraction.name)}`}
@@ -655,6 +655,13 @@ export default function Attractions() {
                         <OptimizedImage
                           src={attraction.image_url}
                           alt={`${attraction.name} - ${attraction.type} in Des Moines`}
+                          // The first row of a three-column grid. Chrome does not start a lazy
+                          // image's fetch until layout has run, so the LCP candidate on a listing
+                          // page must not be lazy (WEB-SEO-032).
+                          // OptimizedImage renders no <img> at all until its
+                          // IntersectionObserver fires, so without this the
+                          // prerendered HTML carries no card image either.
+                          priority={index < 3}
                           width={640}
                           height={360}
                           className="transition-transform duration-200 hover:scale-105 object-cover"

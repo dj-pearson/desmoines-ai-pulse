@@ -317,8 +317,11 @@ export default function MonthlyEventsPage() {
                 count below still read events.length, so no displayed number
                 changes. */}
             <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6 mb-12">
-              {events.slice(0, VISIBLE_EVENTS).map((event) => (
-                <EventCard key={event.id} event={event} onViewDetails={() => {}} />
+              {events.slice(0, VISIBLE_EVENTS).map((event, index) => (
+                // The first row of a three-column grid. Chrome does not start a lazy
+                // image's fetch until layout has run, so the LCP candidate on a listing
+                // page must not be lazy (WEB-SEO-032).
+                <EventCard key={event.id} event={event} onViewDetails={() => {}} priority={index < 3} />
               ))}
             </div>
 

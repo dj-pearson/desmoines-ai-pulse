@@ -18,6 +18,7 @@ import { format } from 'date-fns';
 import { formatCount } from "@/lib/pluralize";
 import { SpriteIcon } from "@/components/ui/SpriteIcon";
 import { ErrorState } from '@/components/ui/error-state';
+import { fetchPriorityAttr } from "@/lib/fetchPriority";
 
 // Lazy load map component
 const EventsMap = lazy(() => import('@/components/InteractiveMap').then(mod => ({ default: mod.InteractiveMap })));
@@ -232,7 +233,7 @@ export default function EventsNearMe() {
           {/* List View */}
           {!isLoading && !error && viewMode === 'list' && (
             <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
-              {events.map(event => (
+              {events.map((event, index) => (
                 <Card key={event.id} className="hover:shadow-lg transition-shadow">
                   <Link to={`/events/${createEventSlugWithCentralTime(event.title, event)}`}>
                     {event.image_url && (
@@ -241,7 +242,12 @@ export default function EventsNearMe() {
                           src={event.image_url}
                           alt={event.title}
                           className="w-full h-48 object-cover"
-                          loading="lazy"
+                          // The first row of a three-column grid. Chrome does not start a lazy
+                          // image's fetch until layout has run, so the LCP candidate on a listing
+                          // page must not be lazy (WEB-SEO-032).
+                          loading={index < 3 ? "eager" : "lazy"}
+                          decoding="async"
+                          {...fetchPriorityAttr(index < 3 ? "high" : undefined)}
                         />
                       </div>
                     )}

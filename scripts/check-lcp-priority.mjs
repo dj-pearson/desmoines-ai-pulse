@@ -10,10 +10,29 @@
  * is the one thing Chrome's guidance says not to do: the browser will not
  * start that fetch until layout has run.
  *
- * This checks the three DETAIL page heroes, where the LCP element is
- * unambiguous - one full-bleed image at the top of the page, above everything
- * else. The listing grids are not checked here: which card is above the fold
- * depends on the viewport, so a hard rule there would be guesswork.
+ * TWO RULES.
+ *
+ * HEROES: the three detail pages, where the LCP element is unambiguous - one
+ * full-bleed image at the top, above everything else.
+ *
+ * LISTING GRIDS: every hub and SEO landing page whose primary content is a card
+ * grid. This used to be excluded on the grounds that "which card is above the
+ * fold depends on the viewport, so a hard rule there would be guesswork".
+ * WEB-SEO-032 settled it: the first three, which is the first row of the
+ * three-column desktop grid and the first card on a phone. Guessing which of
+ * three is above the fold costs one wasted eager fetch; guessing wrong the other
+ * way costs the LCP on every listing page on the site.
+ *
+ * It matters more than the attribute suggests on the OptimizedImage paths:
+ * that component renders NO <img> at all until its IntersectionObserver fires,
+ * so a card grid without `priority` also ships prerendered HTML with no card
+ * images in it - which the AI crawlers robots.txt invites, none of which run
+ * JavaScript, see as a page of empty cards.
+ *
+ * NOT LISTED HERE, deliberately: related-content rails on detail pages,
+ * dashboard and profile grids, dialog images, and the 48px avatars in
+ * BestOfCategory. None of them can be the LCP element, and marking them eager
+ * would compete with the image that is.
  *
  * Usage: node scripts/check-lcp-priority.mjs
  */
@@ -46,8 +65,63 @@ for (const file of HEROES) {
   }
 }
 
+/**
+ * Pages whose primary content is a card grid, keyed by the route they serve.
+ * Every one of these is prerendered (scripts/prerender-routes.mjs) except
+ * /events/near-me, which is geolocated and so cannot be - the LCP argument
+ * holds for a live visitor either way.
+ */
+const LISTING_PAGES = {
+  '/events': 'src/pages/EventsPage.tsx',
+  '/events/today': 'src/pages/EventsToday.tsx',
+  '/events/this-weekend': 'src/pages/EventsThisWeekend.tsx',
+  '/events/free': 'src/pages/FreeEvents.tsx',
+  '/events/kids': 'src/pages/KidsEvents.tsx',
+  '/events/date-night': 'src/pages/DateNightEvents.tsx',
+  '/events/<suburb>': 'src/pages/EventsByLocation.tsx',
+  '/events/<month>-<year>': 'src/pages/MonthlyEventsPage.tsx',
+  '/events/near-me': 'src/pages/EventsNearMe.tsx',
+  '/restaurants': 'src/pages/Restaurants.tsx',
+  '/restaurants/open-now': 'src/pages/OpenNowRestaurants.tsx',
+  '/restaurants/dietary': 'src/pages/DietaryRestaurants.tsx',
+  '/attractions': 'src/pages/Attractions.tsx',
+  '/playgrounds': 'src/pages/Playgrounds.tsx',
+  '/articles': 'src/pages/Articles.tsx',
+  '/guides': 'src/pages/GuidesPage.tsx',
+  '/breweries': 'src/pages/BreweryTrail.tsx',
+  '/itineraries': 'src/pages/Itineraries.tsx',
+};
+
+/**
+ * The two spellings of "the first three load eagerly". Both are literal on
+ * purpose - a helper called isAboveFold(i) would read better and would make
+ * this check impossible to write without evaluating the module.
+ */
+const FIRST_ROW_EAGER = [
+  // <Card priority={index < 3} /> - the component forwards it to OptimizedImage.
+  /priority=\{\s*\w+\s*(?:===\s*0\s*&&\s*\w+\s*)?<\s*\d+\s*\}/,
+  // A raw <img> deciding its own loading attribute.
+  /loading=\{[^}]*<\s*\d+\s*\?\s*["']eager["']/,
+];
+
+for (const [route, file] of Object.entries(LISTING_PAGES)) {
+  let text;
+  try {
+    text = readFileSync(file, 'utf8');
+  } catch {
+    problems.push(`${file}: listed as the grid for ${route} and not found. Renamed, or the route retired?`);
+    continue;
+  }
+  if (FIRST_ROW_EAGER.some((re) => re.test(text))) continue;
+  problems.push(
+    `${file} (${route}): no first-row eager treatment. The LCP image on this page is lazy.`,
+  );
+}
+
 if (problems.length === 0) {
-  console.log('OK Every detail-page hero image loads eagerly at high fetch priority.');
+  console.log(
+    `OK Every detail-page hero and all ${Object.keys(LISTING_PAGES).length} listing grids prioritise their first image.`,
+  );
   process.exit(0);
 }
 

@@ -40,6 +40,7 @@ import { Star, Filter, List, Map, TreePine, SlidersHorizontal, ChevronRight } fr
 import { SpriteIcon } from "@/components/ui/SpriteIcon";
 import { Link } from "react-router-dom";
 import { useUrlFilters } from "@/hooks/useUrlFilters";
+import { fetchPriorityAttr } from "@/lib/fetchPriority";
 
 // Lazy load map to prevent react-leaflet bundling issues
 const PlaygroundsMap = lazy(() => import("@/components/PlaygroundsMap"));
@@ -516,7 +517,7 @@ export default function Playgrounds() {
           </div>
         ) : (
           <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
-            {filteredPlaygrounds.map((playground) => (
+            {filteredPlaygrounds.map((playground, index) => (
               <Link
                 key={playground.id}
                 to={`/playgrounds/${createSlug(playground.name)}`}
@@ -529,7 +530,12 @@ export default function Playgrounds() {
                         src={playground.image_url}
                         alt={`${playground.name} - Playground in Des Moines`}
                         className="w-full h-full object-cover transition-transform duration-300 hover:scale-105"
-                        loading="lazy"
+                        // The first row of a three-column grid. Chrome does not start a lazy
+                        // image's fetch until layout has run, so the LCP candidate on a listing
+                        // page must not be lazy (WEB-SEO-032).
+                        loading={index < 3 ? "eager" : "lazy"}
+                        decoding="async"
+                        {...fetchPriorityAttr(index < 3 ? "high" : undefined)}
                       />
                     </div>
                   ) : (

@@ -9,6 +9,7 @@ import { Skeleton } from '@/components/ui/skeleton';
 import { Heart, Users, Palette, Dumbbell, Utensils, Compass } from "lucide-react";
 import { getCanonicalUrl } from '@/lib/brandConfig';
 import { SpriteIcon } from "@/components/ui/SpriteIcon";
+import { fetchPriorityAttr } from "@/lib/fetchPriority";
 
 const THEME_ICONS: Record<string, typeof Heart> = {
   romance: Heart,
@@ -77,7 +78,7 @@ export default function Itineraries() {
               ))}
             </div>
           ) : (
-            sortedThemes.map((theme) => {
+            sortedThemes.map((theme, themeIndex) => {
               const items = groupedByTheme![theme];
               const Icon = THEME_ICONS[theme] || Compass;
               return (
@@ -87,7 +88,7 @@ export default function Itineraries() {
                     <h2 className="text-2xl font-bold">{getThemeLabel(theme)}</h2>
                   </div>
                   <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-6">
-                    {items.map((it) => (
+                    {items.map((it, index) => (
                       <Link key={it.id} to={`/itineraries/${it.slug}`}>
                         <Card className="hover:border-primary transition-colors h-full">
                           {it.cover_image && (
@@ -96,7 +97,14 @@ export default function Itineraries() {
                                 src={it.cover_image}
                                 alt={it.title}
                                 className="w-full h-full object-cover"
-                                loading="lazy"
+                                // Only the first theme's first row is above the
+                                // fold; every later section is scrolled to.
+                                // The first row of a three-column grid. Chrome does not start a lazy
+                                // image's fetch until layout has run, so the LCP candidate on a listing
+                                // page must not be lazy (WEB-SEO-032).
+                                loading={themeIndex === 0 && index < 3 ? "eager" : "lazy"}
+                                decoding="async"
+                                {...fetchPriorityAttr(themeIndex === 0 && index < 3 ? "high" : undefined)}
                               />
                             </div>
                           )}

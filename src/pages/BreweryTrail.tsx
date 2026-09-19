@@ -23,6 +23,7 @@ import {
 } from '@/components/ui/dialog';
 import { SpriteIcon } from "@/components/ui/SpriteIcon";
 import { ErrorState } from '@/components/ui/error-state';
+import { fetchPriorityAttr } from "@/lib/fetchPriority";
 
 export default function BreweryTrail() {
   const { user } = useAuth();
@@ -168,14 +169,24 @@ export default function BreweryTrail() {
               </div>
             ) : breweries && breweries.length > 0 ? (
               <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-6">
-                {breweries.map((brewery) => {
+                {breweries.map((brewery, index) => {
                   const isCheckedIn = checkedInIds.has(brewery.id);
                   const checkin = checkins?.find((c) => c.restaurant_id === brewery.id);
                   return (
                     <Card key={brewery.id} className={`transition-colors h-full ${isCheckedIn ? 'border-amber-500/50 bg-amber-500/5' : 'hover:border-primary'}`}>
                       {brewery.image_url && (
                         <div className="h-40 overflow-hidden rounded-t-lg relative">
-                          <img src={brewery.image_url} alt={brewery.name} className="w-full h-full object-cover" loading="lazy" />
+                          {/* The first row of a three-column grid. Chrome does not start a lazy
+                              image's fetch until layout has run, so the LCP candidate on a listing
+                              page must not be lazy (WEB-SEO-032). */}
+                          <img
+                            src={brewery.image_url}
+                            alt={brewery.name}
+                            className="w-full h-full object-cover"
+                            loading={index < 3 ? "eager" : "lazy"}
+                            decoding="async"
+                            {...fetchPriorityAttr(index < 3 ? "high" : undefined)}
+                          />
                           {isCheckedIn && (
                             <div className="absolute top-2 right-2">
                               <Badge className="bg-amber-500 text-white">

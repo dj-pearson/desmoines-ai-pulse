@@ -147,6 +147,75 @@ const ALLOWED_SKELETON_ROUTES = new Map([
   // ['/example', 'why a crawler seeing this skeleton is acceptable'],
 ]);
 
+/**
+ * Routes whose content is a grid of cards, where a card with no image is not a
+ * design choice (WEB-SEO-032 AC3).
+ *
+ * WHY THIS NEEDED A GUARD. OptimizedImage renders no <img> at all until its
+ * IntersectionObserver fires. Nothing in the app passed `priority`, so at
+ * capture time the prerenderer got a card grid with zero images in it - and
+ * every AI crawler public/robots.txt explicitly invites (GPTBot, ClaudeBot,
+ * PerplexityBot and the rest) runs no JavaScript, so that is the page they
+ * index. It is the same failure mode as the skeleton this file was written for:
+ * correct in a browser, empty everywhere else.
+ *
+ * GATED ON THE PAGE'S OWN CLAIM, not on a fixed number. The assertion only
+ * fires when the route's ItemList says it rendered items - a hub with nothing
+ * to show legitimately has no images, and the DOM cannot tell "no rows" from
+ * "rows never arrived" (see the ItemList note below for the same reasoning).
+ */
+const CARD_IMAGE_ROUTES = new Set([
+  '/events',
+  '/events/today',
+  '/events/this-weekend',
+  '/events/free',
+  '/events/kids',
+  '/events/date-night',
+  '/events/west-des-moines',
+  '/events/ankeny',
+  '/events/urbandale',
+  '/events/johnston',
+  '/events/altoona',
+  '/events/clive',
+  '/events/windsor-heights',
+  '/restaurants',
+  '/restaurants/open-now',
+  '/restaurants/dietary',
+  '/attractions',
+  '/playgrounds',
+  '/articles',
+  '/guides',
+  '/breweries',
+  '/itineraries',
+]);
+
+/**
+ * THE BAR IS ONE IMAGE, NOT THREE, and the reason matters.
+ *
+ * "The first three cards loaded eagerly" is the rule, and it is enforced at the
+ * source by scripts/check-lcp-priority.mjs, which can see the code. This file
+ * sees only the output, and the output cannot distinguish a card whose image
+ * did not render from a card whose row has no image_url - every one of these
+ * grids guards its <img> on the row actually having one. Asserting three would
+ * turn "the first three itineraries have no cover art" into a red build.
+ *
+ * One is what the DOM can prove: the defect that shipped was OptimizedImage
+ * rendering NO <img> at all until its IntersectionObserver fired, so the
+ * prerendered grid had zero images in it. Zero is the failure; one is evidence
+ * the mechanism works.
+ */
+const MIN_CARD_IMAGES = 1;
+
+/**
+ * Listing routes permitted to prerender no card images, each with the reason.
+ * EMPTY TODAY. An entry here means every JS-less crawler sees an imageless grid
+ * on that route - add one only when the rows genuinely carry no images, never
+ * to make a red build green.
+ */
+const ALLOWED_IMAGELESS_ROUTES = new Map([
+  // ['/example', 'why this grid legitimately has no images'],
+]);
+
 /** An <a> with nothing a screen reader or a crawler could announce. */
 function unnamedLinks(doc, root) {
   return [...root.querySelectorAll('a[href]')].filter((a) => {
@@ -184,6 +253,10 @@ for (const file of files) {
   const unnamed = unnamedLinks(doc, root).length;
   if (unnamed > 0) failures.push({ route, what: `${unnamed} link(s) with no accessible name` });
 
+  // Card images, for the listing routes only. `declaredItems` is filled by the
+  // ItemList pass below and read after it.
+  let declaredItems = null;
+
   // THE ITEMLIST HALF OF THE DEFECT IN THIS FILE'S HEADER, which went
   // unguarded. The header opens with "/restaurants shipped ... an ItemList with
   // numberOfItems 0", and the two assertions above cover the skeleton and the
@@ -212,15 +285,32 @@ for (const file of files) {
       if (!node || node['@type'] !== 'ItemList') continue;
       const declared = node.numberOfItems;
       if (typeof declared !== 'number') continue;
+      declaredItems = Math.max(declaredItems ?? 0, declared);
       const actual = Array.isArray(node.itemListElement) ? node.itemListElement.length : 0;
       if (declared !== actual) {
         failures.push({ route, what: `ItemList declares numberOfItems ${declared} but supplies ${actual}` });
       }
     }
   }
+
+  if (CARD_IMAGE_ROUTES.has(route) && declaredItems !== null && declaredItems > 0) {
+    // src must be non-empty: a lazy placeholder with src="" is exactly what
+    // this is looking for, and it would satisfy a bare img[src] selector.
+    const withSrc = [...root.querySelectorAll('img[src]')].filter(
+      (img) => (img.getAttribute('src') || '').trim() !== '',
+    ).length;
+    if (withSrc < MIN_CARD_IMAGES && !ALLOWED_IMAGELESS_ROUTES.has(route)) {
+      failures.push({
+        route,
+        what:
+          `renders ${declaredItems} card(s) and not one <img src>. A JS-less crawler - ` +
+          'which is every AI crawler robots.txt invites - sees a grid of empty cards.',
+      });
+    }
+  }
 }
 
-console.log(`[prerender-content] ${files.length} prerendered page(s) checked for skeletons, unnamed links and self-contradictory ItemLists.`);
+console.log(`[prerender-content] ${files.length} prerendered page(s) checked for skeletons, unnamed links, self-contradictory ItemLists and imageless card grids.`);
 
 for (const a of allowed) {
   console.log(`  allowed: ${a.route} (aria-busy x${a.occurrences}) - ${a.reason}`);

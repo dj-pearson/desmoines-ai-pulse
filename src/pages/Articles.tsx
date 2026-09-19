@@ -19,6 +19,7 @@ import { Breadcrumbs } from '@/components/ui/breadcrumbs';
 import { SpriteIcon } from "@/components/ui/SpriteIcon";
 import { useUrlFilters } from '@/hooks/useUrlFilters';
 import NoIndexMeta from '@/components/schema/NoIndexMeta';
+import { fetchPriorityAttr } from "@/lib/fetchPriority";
 
 const Articles: React.FC = () => {
   const { articles, loading, error, loadArticles } = useArticles();
@@ -370,8 +371,12 @@ const Articles: React.FC = () => {
                           className={`w-full object-cover transition-transform duration-300 group-hover:scale-105 ${
                             viewMode === 'list' ? 'h-48 md:h-full' : 'h-full'
                           }`}
-                          loading="lazy"
+                          // The first row of a three-column grid. Chrome does not start a lazy
+                          // image's fetch until layout has run, so the LCP candidate on a listing
+                          // page must not be lazy (WEB-SEO-032).
+                          loading={index < 3 ? "eager" : "lazy"}
                           decoding="async"
+                          {...fetchPriorityAttr(index < 3 ? "high" : undefined)}
                         />
                       </div>
                     )}
