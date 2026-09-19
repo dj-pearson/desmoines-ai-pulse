@@ -40,6 +40,8 @@ on:
       # automation_job_runs (WEB-BE-043) - nothing inside Supabase can observe
       # an external process - so a change to it has to run the health suite.
       - 'crawlers/catchdesmoines_crawler.py'
+      # CLAUDE.md is asserted by ingest-coordinates.test.ts (WEB-BE-050).
+      - 'CLAUDE.md'
       # The canonical category vocabulary and its browser mirror (WEB-BE-049).
       - 'src/lib/eventCategories.*'
       - 'src/components/EventSubmissionForm.tsx'
@@ -212,6 +214,14 @@ jobs:
       # 30-day rule (an undated copy reads as EXPIRED), and that the guard in
       # fetchAndStoreImage is wired and nothing opts out of it.
       - run: deno test --allow-read supabase/functions/_tests/places-photo-terms.test.ts
+      # WEB-BE-050. Only firecrawl-scraper set coordinates on an event, from a
+      # known-venue match it held privately; ai-crawler set none at all, so
+      # whether an event reached the map depended on which scraper found it -
+      # and four nightly jobs existed to paper over the difference. CLAUDE.md
+      # said "geocoding triggers maintain lat/lng" while the trigger only
+      # RAISE NOTICEd. Pins both-or-neither coordinates, the (0,0) refusal, and
+      # that both scrapers go through _shared/knownVenues.ts.
+      - run: deno test --allow-read supabase/functions/_tests/ingest-coordinates.test.ts
       # WEB-BE-032. The ops digest counted with `count ?? 0` and discarded the
       # error, so a digest that could read nothing printed the same eleven
       # zeros as a system with nothing wrong. Pins that an unreadable section

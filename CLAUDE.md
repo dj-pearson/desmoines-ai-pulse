@@ -89,7 +89,21 @@ curl -s -H "apikey: $VITE_SUPABASE_ANON_KEY" \
 
 Common columns across content tables: `id` (UUID PK), `name`/`title`, `description`, `category`, `image_url`, SEO fields (`seo_title`, `seo_description`, `seo_keywords`), GEO fields (`geo_summary`, `geo_key_facts`, `geo_faq`), `latitude`, `longitude`, `created_at`, `updated_at`.
 
-**RLS is enabled on all tables.** Pattern: public read, authenticated write with role checks, admin-only for sensitive ops. Auto-update `updated_at` via triggers; geocoding triggers maintain lat/lng.
+**RLS is enabled on all tables.** Pattern: public read, authenticated write with role checks, admin-only for sensitive ops. Auto-update `updated_at` via triggers.
+
+**There is no geocoding trigger.** This file said "geocoding triggers maintain
+lat/lng" and it was never true: `auto_geocode_location()` only ever
+`RAISE NOTICE`d that a row needed geocoding, and a NOTICE from a BEFORE trigger
+goes to the Postgres log and nowhere else. The claim is why four separate
+nightly jobs were written to backfill the same coordinates. What the trigger
+actually does is keep `geom` in sync with the numeric pair, and it is now named
+for that (`sync_geom_from_latlng`, migration 20260919000005).
+
+Coordinates are set **at ingest**, from a known-venue match, by
+`supabase/functions/_shared/knownVenues.ts` - used by both `firecrawl-scraper`
+and `ai-crawler`. `data-quality-heal-nightly` is the safety net for rows the
+match refused. If you add an ingestion path, call `findKnownVenue` and spread
+`venueCoordinates` into the row; a Deno test asserts both scrapers do.
 
 Generated types live in `src/integrations/supabase/types.ts`:
 ```typescript

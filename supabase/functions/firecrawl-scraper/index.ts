@@ -17,7 +17,7 @@ import { getAIConfig, buildClaudeRequest, buildLightweightClaudeRequest, getClau
 import { validateURLForSSRF } from "../_shared/validation.ts";
 import { checkRateLimitPersistent } from "../_shared/rateLimit.ts";
 import { tryDomainAdapter } from "../_shared/domain-adapters/index.ts";
-import { matchKnownVenue, type MatchableVenue } from "../_shared/venueMatch.ts";
+import { findKnownVenue, type KnownVenue } from "../_shared/knownVenues.ts";
 import { extractEventsFromJsonLd } from "../_shared/jsonLdEvents.ts";
 import { requireAdminOrApiKey } from "../_shared/apiKeyAuth.ts";
 import { fetchAndStoreImage, CONTENT_TYPE_MAP } from "../_shared/imageStorage.ts";
@@ -70,90 +70,17 @@ const supabaseKey = Deno.env.get('SUPABASE_SERVICE_ROLE_KEY')!;
 
 const supabase = createClient(supabaseUrl, supabaseKey);
 
-// Known venue data interface
-interface KnownVenueData {
-  id: string;
-  name: string;
-  address: string | null;
-  city: string | null;
-  state: string | null;
-  zip: string | null;
-  latitude: number | null;
-  longitude: number | null;
-  phone: string | null;
-  email: string | null;
-  website: string | null;
-}
-
-// Cache for known venues to avoid repeated DB queries
-let knownVenuesCache: KnownVenueData[] | null = null;
-let venuesCacheLoadedAt: number = 0;
-const VENUES_CACHE_TTL = 5 * 60 * 1000; // 5 minutes
-
-/**
- * Load all known venues into memory cache for fast matching
- */
-async function loadKnownVenuesCache(): Promise<KnownVenueData[]> {
-  const now = Date.now();
-
-  // Return cached data if still valid
-  if (knownVenuesCache && (now - venuesCacheLoadedAt) < VENUES_CACHE_TTL) {
-    return knownVenuesCache;
-  }
-
-  console.log('🏢 Loading known venues cache...');
-
-  const { data, error } = await supabase
-    .from('known_venues')
-    .select('id, name, aliases, address, city, state, zip, latitude, longitude, phone, email, website')
-    .eq('is_active', true);
-
-  if (error) {
-    console.error('❌ Error loading known venues:', error);
-    return [];
-  }
-
-  knownVenuesCache = data || [];
-  venuesCacheLoadedAt = now;
-
-  console.log(`✅ Loaded ${knownVenuesCache.length} known venues into cache`);
-  return knownVenuesCache;
-}
-
-/**
- * Find a matching known venue by name or alias (WEB-BE-039).
- *
- * THE LOOP THAT USED TO LIVE HERE matched with `includes` either way, guarded
- * by `searchText.length >= 5 || venueLower.length >= 5`. That OR is the bug:
- * its right-hand side is about the KNOWN venue, which is always five
- * characters or more, so the guard passed for every extraction and a
- * 3-4 character one - "Park", "The", "Hall" - matched the first known venue
- * containing it. The caller below then overwrote the event's venue name, its
- * full street ADDRESS and its LATITUDE and LONGITUDE, so an event extracted as
- * "Park" was stored at Principal Park's address and pinned at its coordinates.
- *
- * The rules now live in _shared/venueMatch.ts, where they are unit-testable
- * without a database: exact and alias always canonicalize, a partial match
- * needs length, word boundaries and coverage, and anything short of that
- * returns null so the caller keeps what the source said.
- */
-async function findMatchingKnownVenue(venueName: string): Promise<KnownVenueData | null> {
-  const venues = await loadKnownVenuesCache();
-  const match = matchKnownVenue(venueName, venues as unknown as MatchableVenue[]);
-
-  if (!match) {
-    // Deliberately loud. A refused canonicalization is the correct outcome, but
-    // a source that stops matching at all is worth noticing, and this is the
-    // only place it is visible.
-    console.log(`🚫 No confident venue match for "${venueName}" - keeping the extracted value`);
-    return null;
-  }
-
-  console.log(
-    `🎯 ${match.kind} venue match: "${venueName}" -> "${match.venue.name}" (via "${match.matchedOn}")`,
-  );
-  return match.venue as unknown as KnownVenueData;
-}
+// WEB-BE-050. The cache, the query and the matcher wrapper used to live here,
+// privately, which is why this was the only ingestion path that set
+// coordinates on an event - ai-crawler set none. They are in
+// _shared/knownVenues.ts now and both paths use them.
+//
+// The local name is kept so the ~12 call sites below read unchanged; the
+// behaviour is identical, including the deliberately loud log on a refused
+// match (a source that stops matching at all is worth noticing, and this is
+// the only place it is visible).
+type KnownVenueData = KnownVenue;
+const findMatchingKnownVenue = (venueName: string) => findKnownVenue(supabase, venueName);
 
 /**
  * Generate SEO content for an event using the lightweight AI model (Haiku)

@@ -92,20 +92,44 @@ Deno.test('empty and whitespace input match nothing', () => {
   assert.equal(matchKnownVenue('   ', VENUES), null);
 });
 
-Deno.test('firecrawl-scraper uses the shared matcher, not its own loop', async () => {
-  // The regression that matters: the rules above are correct and irrelevant if
-  // the scraper keeps its own copy.
-  const src = await Deno.readTextFile(
-    new URL('../firecrawl-scraper/index.ts', import.meta.url),
-  );
-  const code = src.replace(/\/\*[\s\S]*?\*\//g, '').replace(/^[ \t]*\/\/[^\n]*$/gm, '');
+const codeOnly = (src: string) =>
+  src.replace(/\/\*[\s\S]*?\*\//g, '').replace(/^[ \t]*\/\/[^\n]*$/gm, '');
 
-  assert.ok(
-    /matchKnownVenue/.test(code),
-    'firecrawl-scraper must canonicalize through _shared/venueMatch.ts',
+Deno.test('every ingestion path canonicalizes through the shared matcher', async () => {
+  // The regression that matters: the rules above are correct and irrelevant if
+  // a scraper keeps its own copy.
+  //
+  // The chain gained a link under WEB-BE-050. firecrawl-scraper held the venue
+  // cache, the query and the matcher wrapper privately, which is why it was the
+  // only path that set coordinates; they moved to _shared/knownVenues.ts so
+  // ai-crawler could use them too. So the assertion is now that the scrapers
+  // reach matchKnownVenue THROUGH that module, and that the module is the only
+  // thing between them and it.
+  const shared = codeOnly(
+    await Deno.readTextFile(new URL('../_shared/knownVenues.ts', import.meta.url)),
   );
-  assert.ok(
-    !/searchText\.length\s*>=\s*5\s*\|\|/.test(code),
-    'the OR-guarded partial match is back',
+  assert.match(
+    shared,
+    /import \{ matchKnownVenue[^}]*\} from "\.\/venueMatch\.ts"/,
+    '_shared/knownVenues.ts must canonicalize through _shared/venueMatch.ts',
   );
+
+  for (const fn of ['firecrawl-scraper', 'ai-crawler']) {
+    const code = codeOnly(
+      await Deno.readTextFile(new URL(`../${fn}/index.ts`, import.meta.url)),
+    );
+    assert.match(
+      code,
+      /from "\.\.\/_shared\/knownVenues\.ts"/,
+      `${fn} must look venues up through _shared/knownVenues.ts`,
+    );
+    assert.ok(
+      !/searchText\.length\s*>=\s*5\s*\|\|/.test(code),
+      `${fn}: the OR-guarded partial match is back`,
+    );
+    assert.ok(
+      !/from\(['"]known_venues['"]\)/.test(code),
+      `${fn} queries known_venues directly again - the cache and the match rules belong in one place`,
+    );
+  }
 });

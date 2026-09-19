@@ -1360,3 +1360,19 @@ Google Places photos were hot-linked out of a content column and copied into Sto
   - **An unrequested field comes back absent, not null.** `photos.authorAttributions` had to be added to the `X-Goog-FieldMask` or the attribution would have been an invented constant on every row. Adding a field to a response type is only half of reading it.
   - **Put the licensing refusal before the safety check.** A URL that fails SSRF returns first, so a guard placed after it is unreachable for that URL. Harmless today, and exactly the ordering that rots.
   - **Report what you cannot fix cleanly.** `find-image-candidates` returns Places media URLs with the API key to the admin browser. The obvious fix does not work - a key-less URL 403s, and image-proxy needs an `Authorization` header an `<img>` cannot send - so it is a comment at the source and a line in the notes, not a half-change.
+
+## 2026-09-19 - WEB-BE-050 AC1/AC2/AC4 + the coordinate half of AC3
+Only one of two scrapers set coordinates, the geocoding trigger never geocoded, and four nightly jobs chased the same rows.
+- `_shared/knownVenues.ts`: the cache, the query and the matcher wrapper firecrawl-scraper kept privately. Both scrapers use it.
+- ai-crawler sets lat/lng at ingest; `venueCoordinates` is both-or-neither and refuses (0, 0).
+- `20260919000005` renames the stub to `sync_geom_from_latlng`, strips the dead branch, repoints four triggers.
+- `20260919000006` unschedules the two silent duplicate backfills, keeping the one that escalates.
+- CLAUDE.md's "geocoding triggers maintain lat/lng" removed; 8 Deno tests, three negative controls.
+- **Learnings for future iterations:**
+  - **A false line in CLAUDE.md is an architecture decision.** "Geocoding triggers maintain lat/lng" was never true, and four separate nightly jobs were written anyway to do the thing the docs said was automatic. Nobody could say which one owned the fill, so all four kept running and all four kept reporting success. Documentation that lies does not confuse people, it makes them build redundancy around it.
+  - **"Replace or drop it" was a false choice.** The stub trigger had two halves: a dead geocoding branch that only `RAISE NOTICE`d, and a live one keeping the PostGIS `geom` column in sync. Dropping it would have taken out every distance query and map marker. Read the whole function before accepting the story's options.
+  - **A trigger function cannot delegate to another trigger function.** `NEW` is only bound when Postgres invokes it *as* a trigger, so `RETURN other_trigger_fn()` raises. The deprecated shim and the live function share a plain `geom_from_latlng(lat, lng)` instead - which is better anyway, because the two cannot diverge while both exist.
+  - **A private helper is why a capability stops at one caller.** firecrawl-scraper held the venue cache, the query and the matcher wrapper in its own file, so it was the only path that could set coordinates - and the fix for ai-crawler looked like "write geocoding" rather than "move sixty lines". The backfill jobs existed to paper over a module boundary.
+  - **Half a coordinate pair is worse than none.** Every distance query reads both, and a row with only a latitude looks geocoded to the backfill that would otherwise fix it. Same for (0, 0), which is the Atlantic and also what a null looks like after something coerced it to a number.
+  - **Don't consolidate two overlapping jobs when only one of them is silent.** The AC asked for the sweeper's coordinate step to go too. It escalates and keeps a run ledger; choosing between two jobs that both escalate needs each one's production fill rate. Removing the two that report success either way is the part that is knowable from here.
+  - **Refuse to leave no owner.** The unschedule migration raises if `data-quality-heal-nightly` is not scheduled, so it cannot be the change that silently ends geocoding.

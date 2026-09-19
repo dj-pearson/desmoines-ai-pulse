@@ -33,6 +33,7 @@ import { recordAnthropicUsage } from "../_shared/providerUsage.ts";
 import { sanitizeLikeInput } from "../_shared/validation.ts";
 import { runJob } from "../_shared/jobRunner.ts";
 import { normalizeCategory } from "../_shared/eventCategories.ts";
+import { findKnownVenue, venueCoordinates } from "../_shared/knownVenues.ts";
 import type { SourceCounts } from "../_shared/ingestionHealth.ts";
 
 const corsHeaders = {
@@ -1378,6 +1379,26 @@ async function insertData(
         })
       );
 
+      // WEB-BE-050. THIS FUNCTION SET NO COORDINATES AT ALL - `grep latitude`
+      // over this file returned nothing - while firecrawl-scraper set them
+      // from a known-venue match. So whether an event reached the map depended
+      // on which scraper happened to find it, and four nightly backfill jobs
+      // existed to paper over the difference. Resolved per batch rather than
+      // inside the transform below, which is synchronous.
+      //
+      // Only the coordinates are taken. firecrawl also rewrites the venue name,
+      // the address and the location string from a match; widening what this
+      // path overwrites is a separate decision from filling in a null latitude
+      // (WEB-BE-039 is the story about that going wrong).
+      const venueMatches: Array<{ latitude: number | null; longitude: number | null } | null> =
+        category === "events"
+          ? await Promise.all(
+              batchWithIds.map((item) =>
+                findKnownVenue(supabase, item.venue || item.location || ""),
+              ),
+            )
+          : [];
+
       // Transform data for database schema
       const transformedBatch = batchWithIds
         .map((item, idx) => {
@@ -1425,6 +1446,10 @@ async function insertData(
                   "TBD",
                 // WEB-BE-049.
                 category: normalizeCategory(item.category),
+                // WEB-BE-050. Spread, so a venue with no usable pair adds
+                // nothing rather than writing nulls over a column a later pass
+                // might fill. Both or neither - see venueCoordinates.
+                ...venueCoordinates(venueMatches[idx] ?? null),
                 price: item.price?.substring(0, 50) || "See website",
                 source_url: item.source_url || "",
                 image_url: resolvedImageUrl || null,
