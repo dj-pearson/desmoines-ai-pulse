@@ -298,22 +298,34 @@ export function useScraping() {
         };
       })
         .from("scraping_jobs")
+        // `results` AND `error_message` ARE NOT COLUMNS ON scraping_jobs, and
+        // PostgREST fails the whole update on either - so this write has never
+        // landed and a job has never been marked completed. That matters
+        // beyond this hook: WEB-BE-035 records the cloud scraper as dead
+        // because run_scraping_jobs marks jobs `running` and scrape-events
+        // only accepts `idle`, and a completion write that never lands is how
+        // a job stays `running` forever. The cast above is what hid it - the
+        // builder is retyped by hand, so nothing checked these names.
+        // Persisting the payload and the error needs columns that do not
+        // exist; that is WEB-QA-034's.
         .update({
           status: "completed",
           last_run: now,
           events_found: eventsFound,
-          results: data || {},
-          error_message: null,
           updated_at: now,
         })
         .eq("id", jobId);
 
       return { success: true, eventsFound };
     } catch (error) {
-      log.error('runScrapingJob', 'Job execution failed', { jobId, error: String(error) });
+      // The message is logged here because scraping_jobs has nowhere to store
+      // it (WEB-QA-034); it used to be written to a column that does not exist.
+      log.error('runScrapingJob', 'Job execution failed', {
+        jobId,
+        error: error instanceof Error ? error.message : String(error),
+      });
 
       const now = new Date().toISOString();
-      const errorMsg = error instanceof Error ? error.message : String(error);
 
       setState((prev) => ({
         ...prev,
@@ -331,9 +343,11 @@ export function useScraping() {
         };
       })
         .from("scraping_jobs")
+        // Same dead column as the completion write above, same consequence:
+        // a failed job was never marked failed. errorMsg is logged rather than
+        // stored until scraping_jobs has somewhere to put it (WEB-QA-034).
         .update({
           status: "failed",
-          error_message: errorMsg,
           updated_at: now,
         })
         .eq("id", jobId);

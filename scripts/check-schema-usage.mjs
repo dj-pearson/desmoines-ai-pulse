@@ -280,6 +280,121 @@ function columnOf({ text: entry, embed }) {
   return /^\w+$/.test(bare) ? bare : null;
 }
 
+/**
+ * Top-level keys of the object literal a write call is given, with the offset
+ * of each so a finding can point at the right line.
+ *
+ * WHY THIS EXISTS (WEB-QUAL-015). Everything else in this file reads
+ * `.select()` lists and filter arguments. Nothing read the object passed to
+ * `.insert()` / `.update()` / `.upsert()`, so a write naming a column the table
+ * does not have was invisible here - and PostgREST rejects the WHOLE statement
+ * with PGRST204, not just the offending key, so the real columns beside it are
+ * discarded too. Nine such writes were found by a dependency bump rather than
+ * by this script: articles.review_status took the content queue's entire
+ * publish with it, and event_checkins.check_in_method meant no check-in has
+ * ever been recorded. None of them appeared in schema-baseline.json.
+ *
+ * Conservative in the same way as the rest of the file - it reports only what
+ * it can prove:
+ *   - a non-literal argument (`.insert(payload)`) yields nothing
+ *   - a computed key (`[\`preferred_${c}s\`]:`) yields nothing for that entry
+ *   - a spread (`...rest`) yields nothing for that entry; the literal keys
+ *     beside it are still real claims and are still checked
+ *   - only depth-1 keys count, so a nested `{ preference_confidence: { x: 1 } }`
+ *     contributes `preference_confidence` and not `x`
+ *   - an array of rows (`.insert([{...}, {...}])`) is walked at the object level
+ *
+ * @param {string} segment  the chained call region following one `.from()`
+ * @returns {{key: string, at: number}[]}
+ */
+export function writeKeys(segment) {
+  const out = [];
+  for (const call of segment.matchAll(/\.(insert|update|upsert)\(\s*/g)) {
+    let i = call.index + call[0].length;
+    // An array of rows is unwrapped one level; anything that is not a literal
+    // object or array of objects is skipped entirely.
+    let arrayDepth = 0;
+    if (segment[i] === '[') { arrayDepth = 1; i += 1; while (/\s/.test(segment[i])) i += 1; }
+    if (segment[i] !== '{') continue;
+
+    // Depth counted across ALL bracket kinds so a value like `f({a: 1})` or
+    // `[x]` cannot be mistaken for the end of the row object.
+    let depth = 0;
+    let quote = null;
+    // True only where the next token would be a key: after `{` and after a
+    // depth-1 comma.
+    let expectingKey = false;
+    for (; i < segment.length; i += 1) {
+      const ch = segment[i];
+      if (quote) {
+        if (ch === '\\') { i += 1; continue; }
+        if (ch === quote) quote = null;
+        continue;
+      }
+      // A QUOTED KEY MUST BE READ BEFORE STRING MODE SWALLOWS IT. `{ 'id': x }`
+      // opens with a quote, so entering string mode first loses the key.
+      if (depth === 1 && expectingKey && (ch === "'" || ch === '"')) {
+        const quoted = /^['"](\w+)['"]\s*:/.exec(segment.slice(i));
+        if (quoted) {
+          out.push({ key: quoted[1], at: i });
+          expectingKey = false;
+          i += quoted[0].length - 1;
+          continue;
+        }
+      }
+      if (ch === "'" || ch === '"' || ch === '`') { quote = ch; continue; }
+      if (ch === '{' || ch === '[' || ch === '(') {
+        depth += 1;
+        if (depth === 1 && ch === '{') expectingKey = true;
+        continue;
+      }
+      if (ch === '}' || ch === ']' || ch === ')') {
+        depth -= 1;
+        if (depth === 0) {
+          // End of this row object. Keep going for the next element of an
+          // array of rows; otherwise this write is done.
+          if (arrayDepth === 1) {
+            let j = i + 1;
+            while (/[\s,]/.test(segment[j])) j += 1;
+            if (segment[j] === '{') { i = j - 1; expectingKey = false; continue; }
+          }
+          break;
+        }
+        continue;
+      }
+      if (depth !== 1) continue;
+
+      // A KEY IS ONLY READ WHERE A KEY CAN BE: straight after the opening brace
+      // or after a depth-1 comma. Scanning for `word:` anywhere at depth 1
+      // reads VALUES as keys, which is not a small over-report - the first
+      // draft of this turned 193 findings into 975, because
+      //     .update({ status: "x", stripe_payment_intent_id: y as string })
+      // contributed `string`, and
+      //     .update({ source_url_broken: false, source_url_checked_at: nowIso })
+      // contributed `false` and `nowIso`.
+      if (ch === ',') { expectingKey = true; continue; }
+      if (/\s/.test(ch)) continue;
+      if (!expectingKey) continue;
+      expectingKey = false;
+
+      // `key:`, `'key':` or shorthand `key` followed by , or }
+      const tail = segment.slice(i);
+      const keyed = /^(?:(\w+)|['"](\w+)['"])\s*:/.exec(tail);
+      if (keyed) {
+        out.push({ key: keyed[1] ?? keyed[2], at: i });
+        i += keyed[0].length - 1;
+        continue;
+      }
+      const shorthand = /^(\w+)\s*(?=[,}])/.exec(tail);
+      if (shorthand && !/^\d/.test(shorthand[1])) {
+        out.push({ key: shorthand[1], at: i });
+        i += shorthand[0].length - 1;
+      }
+    }
+  }
+  return out;
+}
+
 function scanFile(file, schema, findings) {
   const raw = readFileSync(file, 'utf8');
   const src = stripComments(raw);
@@ -404,6 +519,14 @@ function scanFile(file, schema, findings) {
 
     for (const f of segment.matchAll(/\.(eq|neq|gt|gte|lt|lte|like|ilike|is|in|contains|order)\(\s*['"`](\w+)['"`]/g)) {
       report(f[2], f.index, `.${f[1]}('${f[2]}')`, '42703 (column does not exist)');
+    }
+
+    // Writes. PGRST204 rather than 42703: PostgREST reports an unknown column
+    // on an insert/update as "column not found in schema cache", and it fails
+    // the whole statement, so every real column in the same object is lost
+    // with it (WEB-QUAL-015).
+    for (const w of writeKeys(segment)) {
+      report(w.key, w.at, `.insert/.update({ ${w.key}: ... })`, 'PGRST204 (column not found, whole write rejected)');
     }
 
     // --- profiles: id is the row PK, user_id is the auth.users FK ----------
@@ -782,4 +905,9 @@ function main() {
   process.exit(1);
 }
 
-main();
+// Only when run as a script. writeKeys() is imported by
+// scripts/__tests__/schema-write-keys.test.mjs, and without this guard that
+// import would run the whole check and process.exit() out of the test.
+const invokedDirectly =
+  process.argv[1] && resolve(process.argv[1]).endsWith('check-schema-usage.mjs');
+if (invokedDirectly) main();

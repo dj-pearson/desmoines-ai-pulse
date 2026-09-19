@@ -430,16 +430,22 @@ Return ONLY the JSON object, no other text.`;
       user_id: userId,
       search_query: query,
       results_count: results.events.length + results.restaurants.length + results.attractions.length,
+      // nlp_parsed, model_used AND response_time_ms WERE THREE COLUMNS
+      // search_analytics DOES NOT HAVE, and PostgREST rejects the whole insert
+      // on any one of them - so no NLP search has ever been logged, including
+      // the real columns beside them (WEB-QUAL-015, WEB-QA-017). They are
+      // folded into search_filters, which is jsonb, rather than dropped: the
+      // data is worth keeping and this needs no migration.
       search_filters: {
         type: 'nlp',
         contentTypes: parsedIntent.contentTypes,
         dateFilter: parsedIntent.dateFilter,
         priceRange: parsedIntent.priceRange,
         location: parsedIntent.location,
+        nlpParsed: parsedIntent,
+        modelUsed: config.lightweight_model,
+        responseTimeMs: responseTime,
       },
-      nlp_parsed: parsedIntent,
-      model_used: config.lightweight_model,
-      response_time_ms: responseTime,
     }).catch(err => console.warn('Failed to log analytics:', err));
 
     console.log(`NLP Search completed in ${responseTime}ms. Found: ${results.events.length} events, ${results.restaurants.length} restaurants, ${results.attractions.length} attractions`);

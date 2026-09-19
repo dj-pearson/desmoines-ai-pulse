@@ -2974,3 +2974,66 @@ LEARNINGS FOR FUTURE ITERATIONS
     dead-column-writes.test.mjs greps source files for column names that must
     not come back - and the fix commit fills those same files with comments
     naming them. Strip comments before matching, every time.
+
+================================================================================
+2026-09-19  WEB-QA-017  (claude/admiring-cori-ukwzcp)
+The schema-usage inventory could not see a single write
+================================================================================
+
+STILL OPEN (95 baselined findings, AC1 wants zero), but the checker can now see
+the half of the query surface it had been blind to. Twelve dead writes found on
+the first run; ten fixed, two filed as WEB-QA-034.
+
+The AI article pipeline has never published an article. No NLP search has ever
+been logged. No experiment assignment has ever been recorded. And a scraping
+job has never been marked completed or failed - which is not a logging nit,
+it is why WEB-BE-035 reports the cloud scraper as dead: the job sits at
+`running` and the next dispatch refuses it.
+
+LEARNINGS FOR FUTURE ITERATIONS
+
+1. ASK WHAT A CHECKER DOES NOT READ. check-schema-usage.mjs has a careful
+   785-line header about what it reports and why it is conservative. Nothing in
+   it says "and it never looks at inserts or updates". A checker's blind spots
+   are invisible precisely because it reports confidently on everything else -
+   yesterday's dependency bump found nine defects this script had been quiet
+   about for months.
+
+2. THE WORST CLASS IS THE ONE WHERE A BAD KEY TAKES GOOD ONES WITH IT.
+   PostgREST rejects the whole insert/update on any unknown column, so
+   `{status, published_at, review_status}` loses status and published_at too.
+   A dead select returns fewer columns; a dead write returns nothing and
+   changes nothing. That asymmetry is why this class deserved its own error
+   code in the output (PGRST204, not 42703).
+
+3. MY FIRST PARSER OVER-REPORTED 5x AND THE NUMBER IS THE TELL. 193 findings
+   became 975. The cause: reading `word:` anywhere at depth 1 reads VALUES as
+   keys - `x as string` gives `string`, `checked_at: nowIso` gives `nowIso`,
+   `broken: false` gives `false`. A key can only appear right after `{` or
+   after a depth-1 comma. When a new check's first run multiplies the finding
+   count, suspect the check before the codebase.
+
+4. AND THE FIX FOR OVER-REPORTING IS TESTS OF WHAT MUST *NOT* FIRE. Thirteen
+   of the twenty-one cases in the new test are false-positive controls. A
+   checker nobody trusts gets baselined into silence, which is worse than not
+   having it.
+
+5. STRING MODE EATS QUOTED KEYS. `{ 'id': x }` opens with a quote, so a
+   scanner that enters string mode on sight loses the key. Read the key first,
+   then enter string mode.
+
+6. A HAND-WRITTEN CAST OVER THE QUERY BUILDER IS WHERE DEAD COLUMNS LIVE.
+   useScraping had `as unknown as { from: (t: string) => { update: (d:
+   Record<string, unknown>) => ... } }`. That is not a shortcut, it is a
+   type-checking off-switch, and both writes underneath it named columns that
+   do not exist. Grep for `as unknown as` over a supabase client the way you
+   would grep for `@ts-ignore`.
+
+7. A BASELINE THAT GROWS BECAUSE THE CHECKER IMPROVED IS NOT THE THING THE
+   RATCHET GUARDS AGAINST. 94 -> 95. Say which it is in the commit, or the
+   next person reads the number and assumes a regression.
+
+8. A DEFECT THREE STORIES AWAY CAN BE THE SAME DEFECT. WEB-BE-035's "cloud
+   scraper is dead because jobs sit at running" and WEB-QA-017's "useScraping
+   writes a column that does not exist" are one bug described from two ends.
+   When a fix explains an open story's symptom, say so in both.
