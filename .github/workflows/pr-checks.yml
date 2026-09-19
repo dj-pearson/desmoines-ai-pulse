@@ -114,6 +114,17 @@ jobs:
       - name: No edge function hardcodes a Claude model id
         run: npm run check-edge-models
 
+      # WEB-BE-039. Nothing here could check a migration without a database, so
+      # a syntax error looked exactly like a correct file until someone ran it -
+      # and then failed quietly, because the ledger takes its row while the
+      # transaction rolls back and the objects never appear. Its first run found
+      # 20251203000004_add_location_tracking.sql, dead since December and
+      # already sitting in the drift baseline with no explanation. Uses
+      # libpg_query, the actual Postgres parser, so "parses" means what the
+      # server means.
+      - name: Every migration parses
+        run: npm run check-migrations-parse
+
       # The offline suites for the edge/script helpers that have no other
       # coverage: the venue-image reclaim, the /media route, the image_url
       # rewrite and the provider-spend pricing. Each one decides a number or a
