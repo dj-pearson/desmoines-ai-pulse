@@ -115,3 +115,6 @@ keyword/*
 # SEO-027: wall-clock stamp for the adaptive prerender budget (scripts/build-clock.mjs)
 .build-start
 __pycache__/
+
+# tsc --build leaves these; they are generated, never committed.
+*.tsbuildinfo

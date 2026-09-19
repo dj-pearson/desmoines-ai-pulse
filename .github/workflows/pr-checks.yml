@@ -46,8 +46,13 @@ jobs:
       - name: Run ESLint
         run: npm run lint
 
-      - name: Run TypeScript type check
-        run: npm run type-check
+      # `npm run type-check` is NOT run here. It used to be, and it used to be
+      # `tsc --noEmit` against a root tsconfig that is `"files": []` plus
+      # project references - so it compiled zero files and exited 0 on
+      # anything, including the two P1 crashes WEB-CI-023 lists. It now runs
+      # the app-project ratchet (WEB-CI-030 AC2), which the `app-type-ratchet`
+      # job below already runs IN PARALLEL with this one. Calling it here too
+      # would just add 2m45s to the critical path for the same answer.
 
       # scripts/ was in NO tsconfig, so the type-checker never read a line of it:
       # `npm run type-check` exited 0 on a script containing
