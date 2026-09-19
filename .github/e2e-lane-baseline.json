@@ -7,9 +7,6 @@
     "layout-integrity",
     "restaurant-dietary-filter",
     "restaurant-reservations",
-    "search-filters",
-    "sticky-filter-chips",
-    "url-filter-state",
     "weather-aware-events"
   ]
 }

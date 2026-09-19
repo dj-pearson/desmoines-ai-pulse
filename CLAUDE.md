@@ -178,12 +178,23 @@ ratchets the list.
 
 | Lane | Config | Specs | Required? |
 |---|---|---|---|
-| Smoke | `playwright.smoke.config.ts`, against a production build | route-smoke, cookie-consent, backend-down, touch-targets, page-headings, search-request-loop, request-budget, turnstile-inert | **Yes** — no `continue-on-error` |
+| Smoke | `playwright.smoke.config.ts`, against a production build | route-smoke, cookie-consent, backend-down, touch-targets, page-headings, search-request-loop, request-budget, turnstile-inert, subscription-checkout, search-filters, url-filter-state, sticky-filter-chips | **Yes** — no `continue-on-error` |
 | Accessibility (axe) | `playwright.a11y.config.ts`, against a production build | the axe block only | **Yes** |
 | Broad suites | `playwright.config.ts` | accessibility, links-and-buttons, forms, mobile-responsive | No — `continue-on-error: true` |
 
 Everything else in `tests/` runs only when someone runs it by hand. See
 `.github/e2e-lane-baseline.json` for the current list.
+
+**A spec that needs rows uses `tests/support/fixtureBackend.ts`.** The smoke
+lane builds with placeholder `VITE_SUPABASE_*`, so every query fails and no list
+page ever shows a result. `installFixtureBackend(page)` answers PostgREST from
+fixtures, which is what let the three filter specs above join the lane after
+four passes of "they need a live backend". It does not emulate filtering on
+purpose - a fake that pretended to would let a broken filter pass. Two things it
+had to get right, both of which presented as "the backend is down": a count-only
+query is a HEAD request and must not be given a body, and an RPC's return shape
+is part of its contract (`get_rotated_restaurants` returns
+`{ restaurant_data, total_count }`, not bare rows).
 
 ### Configs
 

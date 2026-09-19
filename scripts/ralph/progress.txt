@@ -2233,3 +2233,49 @@ Learnings for future iterations
    neighborhoods until WEB-SEO-036 gave them data; that story closed an hour
    earlier, so AC4 was already discharged. Re-read the dependencies of an AC
    before assuming they still hold.
+
+================================================================================
+2026-09-19  WEB-CI-028 AC2  Three specs that ran nowhere now gate the lane
+================================================================================
+
+45/45 green against the production build, added to playwright.smoke.config.ts.
+Full smoke lane 174 passed / 13 failed, against 127/13 before - the same 13
+environmental route-smoke failures, unchanged in composition.
+
+The blocker held for five passes and was wrong by one word. Every note said the
+seven result-asserting tests "need a preview deploy with a live backend". They
+need ROWS. tests/support/fixtureBackend.ts answers PostgREST from fixtures in
+about a hundred lines.
+
+It also turned up a production bug. useRestaurants did
+`rpcData.map((r) => r.restaurant_data) as unknown as Restaurant[]` - a cast, not
+a check - and the next call reads r.status on every element. Any row from the
+rotation RPC whose restaurant_data is absent takes the whole /restaurants page
+to "Something went wrong", which a visitor cannot tell from an outage.
+
+Learnings for future iterations
+
+1. "Needs a live backend" almost always means "needs rows". Three stories in
+   this session have now turned on that distinction. A page needs data of the
+   right SHAPE; where it comes from is the test author's choice.
+
+2. Three separate fixture mistakes all rendered as "Something went wrong",
+   which is exactly what an outage renders. A count-only query is a HEAD
+   request and must not get a body; an RPC's return shape is part of its
+   contract; a fixture row must match the PROJECTION, not the assertions.
+   Read the request log, not the page, when a stubbed page looks broken.
+
+3. A cast is not a check, and the distance between the cast and the crash is
+   where the bug hides. `as unknown as Restaurant[]` followed by `.status` two
+   lines later is a page-wide outage for one malformed row.
+
+4. A spec file can contradict itself. Its own Filter Functionality test records
+   that '[data-testid*="result"], article, .card' matches nothing in this app,
+   and the Mobile Search test 200 lines down still used it. When you fix a
+   selector, grep the file for the others.
+
+5. A failing test can be asserting a false premise. "advanced-search should
+   have filter options" pointed at /search, which has no filters by design,
+   under a name for /advanced-search, which 404s, while the real page is
+   /search/advanced behind a paywall. Three errors in one table row, and
+   "allow failure" would have hidden all three.

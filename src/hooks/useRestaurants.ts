@@ -188,7 +188,17 @@ export function useRestaurants(filters: RestaurantFilters = {}) {
         if (!rpcError && rpcData) {
           return {
             restaurants: deprioritizeUnvisitable(
-              rpcData.map((r) => r.restaurant_data) as unknown as Restaurant[]
+              // .filter(Boolean) because the cast below is a promise, not a
+              // check. A row whose restaurant_data is absent maps to undefined
+              // and the very next thing that happens is `r.status` in
+              // deprioritizeUnvisitable, which throws and drops the WHOLE page
+              // to "Something went wrong" - the same thing a visitor sees when
+              // the backend is down. Found while giving the E2E specs a fixture
+              // backend (WEB-CI-028): one row of the wrong shape, and the page
+              // reported an outage.
+              rpcData
+                .map((r) => r.restaurant_data)
+                .filter(Boolean) as unknown as Restaurant[]
             ),
             totalCount:
               rpcData.length > 0 ? Number(rpcData[0].total_count) : 0,

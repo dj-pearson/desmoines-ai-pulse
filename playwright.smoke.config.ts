@@ -66,7 +66,15 @@ export default defineConfig({
   // network requests and cookies - which no source-text check can establish.
   // scripts/check-consent-gate.mjs covers the source side; this covers what
   // actually happens.
-  testMatch: /(route-smoke|cookie-consent|backend-down|touch-targets|page-headings|search-request-loop|request-budget|turnstile-inert|subscription-checkout)\.spec\.ts/,
+  //
+  // search-filters, url-filter-state and sticky-filter-chips joined for
+  // WEB-CI-028 AC2, which required them to pass against the built site first.
+  // The blocker recorded for four passes was "they need a preview deploy with
+  // a live backend": seven of their tests assert on RESULTS, and the lane
+  // builds with placeholder VITE_SUPABASE_* so no row ever arrives. They do not
+  // need a backend, they need rows - tests/support/fixtureBackend.ts answers
+  // PostgREST from fixtures. 45/45 against the production build.
+  testMatch: /(search-filters|url-filter-state|sticky-filter-chips|route-smoke|cookie-consent|backend-down|touch-targets|page-headings|search-request-loop|request-budget|turnstile-inert|subscription-checkout)\.spec\.ts/,
   fullyParallel: true,
   forbidOnly: !!process.env.CI,
   retries: process.env.CI ? 2 : 0,
