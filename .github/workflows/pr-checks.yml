@@ -135,6 +135,14 @@ jobs:
       - name: Purchasable placements exist in the DB enum
         run: npm run check-placement-enum
 
+      # WEB-CI-028. playwright.config.ts has testDir './tests', so locally
+      # everything runs and a spec looks wired up - but no workflow uses that
+      # config. The lanes name their specs in e2e.yml or in a testMatch, so a
+      # spec nobody adds to one is written, committed, and never executed again.
+      # The story says four were orphaned; there were nine. Ratchets the list.
+      - name: Every Playwright spec is run by some lane
+        run: npm run check-e2e-lanes
+
       # The offline suites for the edge/script helpers that have no other
       # coverage: the venue-image reclaim, the /media route, the image_url
       # rewrite and the provider-spend pricing. Each one decides a number or a

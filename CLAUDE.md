@@ -152,21 +152,47 @@ External → internal components → hooks → utilities → types → styles.
 
 ## Testing
 
-Playwright suites in `tests/`:
-- `accessibility.spec.ts` — WCAG 2.1 AA
-- `mobile-responsive.spec.ts` — iPhone, Pixel viewports
-- `performance.spec.ts` — Lighthouse >90, Core Web Vitals
-- `forms.spec.ts`, `search-filters.spec.ts`, `links-and-buttons.spec.ts`, `visual-regression.spec.ts`
+**Writing a spec is not the same as running it** (WEB-CI-028). `playwright.config.ts`
+has `testDir: './tests'`, so `npm test` runs everything locally and a new spec looks
+wired up — but **no CI workflow uses that config**. The lanes name their specs
+explicitly, so a spec nobody adds to a lane is written, committed, and never executed
+again. Nine were in that state when this was written. `npm run check-e2e-lanes`
+ratchets the list.
 
-Config (`playwright.config.ts`): base URL `http://localhost:8082`, Chromium/Firefox/WebKit (desktop + mobile), 60s timeout, 2 retries on CI.
+### What actually runs in CI (`.github/workflows/e2e.yml`)
+
+| Lane | Config | Specs | Required? |
+|---|---|---|---|
+| Smoke | `playwright.smoke.config.ts`, against a production build | route-smoke, cookie-consent, backend-down, touch-targets, page-headings, search-request-loop, request-budget, turnstile-inert | **Yes** — no `continue-on-error` |
+| Accessibility (axe) | `playwright.a11y.config.ts`, against a production build | the axe block only | **Yes** |
+| Broad suites | `playwright.config.ts` | accessibility, links-and-buttons, forms, mobile-responsive | No — `continue-on-error: true` |
+
+Everything else in `tests/` runs only when someone runs it by hand. See
+`.github/e2e-lane-baseline.json` for the current list.
+
+### Configs
+
+- `playwright.config.ts` — base URL `http://localhost:8080`, chromium/firefox/webkit
+  desktop plus mobile projects, 60s timeout, 2 retries on CI. Sweeps all of `tests/`
+  except `route-smoke.spec.ts`.
+- `playwright.smoke.config.ts` — base URL `http://localhost:4173`, an explicit
+  `testMatch` of the critical journeys.
+- `playwright.a11y.config.ts` — base URL `http://localhost:4174`, the axe block.
+
+### Commands
 
 ```bash
-npm test                  # All tests
-npm run test:a11y         # Accessibility
-npm run test:mobile       # Mobile responsive
-npm run test:performance  # Performance
-npm run test:ui           # Interactive UI
+npm test                  # every spec in tests/, locally only
+npm run test:a11y         # accessibility
+npm run test:mobile       # mobile responsive
+npm run test:performance  # performance
+npm run test:ui           # interactive UI
+npm run check-e2e-lanes   # which specs no CI lane runs
 ```
+
+There are **no visual snapshots**. `visual-regression.spec.ts` carried 37MB of
+`-win32` baselines that could not match on any CI runner, so its two screenshot tests
+are gone; the fourteen DOM-measuring tests survive as `layout-integrity.spec.ts`.
 
 ## Common Commands
 

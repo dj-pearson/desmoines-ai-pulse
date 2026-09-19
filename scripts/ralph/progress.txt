@@ -1271,3 +1271,18 @@ A four-character venue extraction moved the event to another venue's address.
   - **My check's first version found the wrong `placement_type:`.** The generated types use that key both as a COLUMN inside a table Row and as the enum itself; searching from the top found the column and read foreign-key names as enum members. It anchors on the `Enums:` block now. The failure direction was at least right - it refused to pass while confused, rather than reporting success over garbage.
   - **The strict ratchet caught what validate did not.** `validate` passed with a leftover `sidebar` key in a `Record<AffiliatePlacement, ...>`, because the strict project is not in validate - only in pr-checks. When you narrow a union, grep for every `Record<ThatUnion,` as well as every usage.
 ---
+
+## 2026-09-19 - WEB-CI-028 AC1/AC3/AC5 (AC2 and AC4 need a production build)
+Nine Playwright specs ran nowhere, and 37MB of snapshots could not match on any CI runner.
+- `playwright.config.ts` has `testDir: './tests'`, so `npm test` runs everything locally and a new spec LOOKS wired up. No CI workflow uses that config: the lanes name their specs in e2e.yml or a testMatch.
+- visual-regression was two suites in one file. The two `toHaveScreenshot` tests and all 41 `-win32` baselines are gone; the fourteen DOM-measuring tests survive as `layout-integrity.spec.ts`. tests/ went 37MB -> 244KB.
+- `scripts/check-e2e-lanes.mjs` + baseline, in validate and pr-checks, negative-controlled both ways.
+- CLAUDE.md's Testing section now says what each lane runs and which gate.
+- **Learnings for future iterations:**
+  - **A config that sweeps a directory makes every file in it look covered.** That one line, `testDir: './tests'`, is why nine orphaned specs accumulated without anyone noticing: locally they all run. The question to ask is never "is this spec in the test directory" but "which CI lane NAMES it".
+  - **Read the file before choosing between the story's two options.** AC3 offered delete-or-regenerate. Neither was right: only 2 of the 16 tests needed a baseline at all, and the other 14 were portable, useful, and being thrown out with them. The best answer was not on the menu.
+  - **A snapshot baseline is platform-scoped, so win32-only snapshots are not "out of date", they are unusable.** Playwright names them per platform; on ubuntu it finds none, writes one, and fails telling you it did. 37MB of images for ten test cases that were never executed.
+  - **Rename a file whose name has stopped being true.** `visual-regression.spec.ts` that captures nothing sends the next reader hunting for baselines that do not exist.
+  - **Exclude the sweeping config from the check that measures coverage.** If check-e2e-lanes counted playwright.config.ts as a lane, every spec would look wired and the check would assert nothing - the same shape as a grep satisfied by its own comment.
+  - **Do not promote a spec into a required lane you have not watched pass.** AC2 and AC4 both ask for that, and both need a production build this container cannot make. Baselining the list keeps it visible without risking a red required lane.
+---

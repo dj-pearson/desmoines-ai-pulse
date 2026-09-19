@@ -1,15 +1,21 @@
 import { test, expect, Page } from '@playwright/test';
 
 /**
- * Visual Regression and Layout Testing Suite
+ * Layout integrity (WEB-CI-028 AC3).
  *
- * This suite validates:
- * - No overlapping text or UI elements
- * - Consistent layout across viewports
- * - Visual snapshots for regression detection
- * - Z-index issues
- * - Modal and dialog positioning
- * - Fixed/sticky element positioning
+ * Was visual-regression.spec.ts. It is renamed because it no longer takes
+ * screenshots: a file called visual-regression that captures nothing is a name
+ * that sends the next reader looking for baselines.
+ *
+ * What it asserts, all of it by MEASURING THE DOM rather than comparing images,
+ * so it runs identically on any platform:
+ * - no overlapping text at mobile, tablet and desktop widths
+ * - the header and footer are consistent across pages
+ * - no z-index conflicts, and modals sit above everything
+ * - a fixed header does not cover content on scroll
+ * - sticky elements behave on mobile
+ * - no negative margins or content extending past the page edge
+ * - tab order follows visual order
  */
 
 const pages = [
@@ -191,32 +197,30 @@ test.describe('Visual Regression - Text Overlap Detection', () => {
   }
 });
 
-test.describe('Visual Regression - Screenshots', () => {
-  for (const page of pages) {
-    test(`${page.name} visual regression on mobile`, async ({ page: pw }) => {
-      await pw.setViewportSize({ width: 375, height: 667 });
-      await pw.goto(page.path, { waitUntil: 'networkidle' });
-      await pw.waitForTimeout(2000); // Wait for animations and lazy loading
-
-      // Take screenshot of the full page
-      await expect(pw).toHaveScreenshot(`${page.name}-mobile.png`, {
-        fullPage: true,
-        maxDiffPixels: 100, // Allow minor differences
-      });
-    });
-
-    test(`${page.name} visual regression on desktop`, async ({ page: pw }) => {
-      await pw.setViewportSize({ width: 1920, height: 1080 });
-      await pw.goto(page.path, { waitUntil: 'networkidle' });
-      await pw.waitForTimeout(2000);
-
-      await expect(pw).toHaveScreenshot(`${page.name}-desktop.png`, {
-        fullPage: true,
-        maxDiffPixels: 100,
-      });
-    });
-  }
-});
+/*
+ * WEB-CI-028 AC3. THE SCREENSHOT TESTS THAT LIVED HERE COULD NOT PASS ANYWHERE
+ * BUT ONE LAPTOP.
+ *
+ * Playwright names a snapshot per platform, and all 41 committed baselines were
+ * `-win32`. On ubuntu - which is every CI runner - toHaveScreenshot finds no
+ * baseline, writes one, and fails the run telling you it did. So this file was
+ * referenced by no workflow and no config's testMatch, which is the only reason
+ * nobody noticed: it was 37MB of images for ten test cases that were never
+ * executed.
+ *
+ * Deleting the two screenshot tests rather than the whole file, because the
+ * OTHER FOURTEEN tests here need no baseline at all. Overlap detection, z-index
+ * conflicts, sticky positioning, horizontal overflow and tab order are DOM
+ * measurements - they run identically on any platform, and they are the half
+ * that catches real layout breakage. The file went from "cannot run" to "runs
+ * anywhere" by removing what was never portable.
+ *
+ * Regenerating linux baselines was the alternative the story offers. It needs a
+ * production build against live data, which this container cannot make (no
+ * Supabase credentials), and committing another 37MB of images to a repository
+ * WEB-QUAL-009 is already trying to slim is a decision for the owner rather
+ * than a side effect of getting the suite runnable.
+ */
 
 test.describe('Layout Consistency', () => {
   test('header should be consistent across pages', async ({ page }) => {
