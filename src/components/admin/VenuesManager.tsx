@@ -435,7 +435,7 @@ function VenueDialog({
               onChange={(e) =>
                 setFormData({ ...formData, is_active: e.target.checked })
               }
-              className="rounded border-gray-300"
+              className="rounded border-input"
             />
             <Label htmlFor="is_active">Active (available for matching)</Label>
           </div>
@@ -930,7 +930,7 @@ export default function VenuesManager() {
               type="checkbox"
               checked={showInactive}
               onChange={(e) => setShowInactive(e.target.checked)}
-              className="rounded border-gray-300"
+              className="rounded border-input"
             />
             Show inactive
           </label>

@@ -115,7 +115,10 @@ export function KeywordAnalytics({ dateRange, propertyId, connectedProviders }: 
   const getTrendIcon = (trend: string) => {
     if (trend === "up") return <TrendingUp className="h-4 w-4 text-green-500" />;
     if (trend === "down") return <TrendingDown className="h-4 w-4 text-red-500" />;
-    return <Minus className="h-4 w-4 text-gray-500" />;
+    // Flat trend. text-muted-foreground rather than a raw gray: the arrows
+    // beside it are semantic (up good, down bad) and this one deliberately is
+    // not, so it takes the theme's neutral and follows dark mode with it.
+    return <Minus className="h-4 w-4 text-muted-foreground" />;
   };
 
   const getTrendBadge = (trend: string): "default" | "secondary" | "destructive" => {

@@ -14,6 +14,10 @@ import { toast } from "sonner";
 // thick top border: the border fought the card's rounded corners, and the dot
 // has no contrast floor to meet the way tinted label text would.
 const STAGE_TONE: Record<string, string> = {
+  // slate is a MEMBER OF THIS SET, not a stray neutral (WEB-UX-034 AC2).
+  // The six dots identify six stages and slate is the one that means "not
+  // yet anything"; swapping it for a theme token to clear a grep would leave
+  // the other five arbitrary without making the set less of a palette.
   new: "bg-slate-400",
   qualified: "bg-blue-500",
   contacted: "bg-cyan-500",

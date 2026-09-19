@@ -80,7 +80,9 @@ export function SiteHealth({ dateRange, propertyId, connectedProviders }: SiteHe
       case "info":
         return <Info className="h-5 w-5 text-blue-500" />;
       default:
-        return <Activity className="h-5 w-5 text-gray-500" />;
+        // Unknown status, the neutral member of a semantic set - so the
+        // theme token rather than a raw gray, which does not follow dark mode.
+        return <Activity className="h-5 w-5 text-muted-foreground" />;
     }
   };
 

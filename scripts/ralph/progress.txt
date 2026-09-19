@@ -2279,3 +2279,41 @@ Learnings for future iterations
    under a name for /advanced-search, which 404s, while the real page is
    /search/advanced behind a paywall. Three errors in one table row, and
    "allow failure" would have hidden all three.
+
+================================================================================
+2026-09-19  WEB-UX-034  The admin sweep, measured instead of done
+================================================================================
+
+The remaining scope was recorded as "~200 off-brand colour tokens across the
+admin surfaces". Counted: 287 tokens, of which 9 are neutral grays with an exact
+theme-token equivalent and ZERO produce unreadable text in dark mode. The rest
+are status hues on a dashboard, where the hue is the signal.
+
+Fixed the four with no judgement in them (two border-gray-300 checkboxes, two
+text-gray-500 neutral-status icons). Left the five slates that are members of a
+distinguishing set, with the reason written at each one. Closed the story, and
+said in the notes why the other 278 are not its unfinished tail.
+
+Learnings for future iterations
+
+1. Count before committing an iteration to a sweep. "~200 tokens" sounded like
+   a day of work and described four real edits. The grep that mattered was not
+   "how many raw colours" but "how many are unreadable" - and that one
+   returned zero.
+
+2. The test for a colour defect is a READABILITY test, not a token count. A
+   light tinted panel with theme-token text is invisible in dark mode and is
+   worth finding; the same panel with matching dark text is a white slab in a
+   dark UI, which is cosmetic. Those two greps look almost identical and mean
+   completely different things.
+
+3. Closing a story with "here is what is left and why it is not worth doing"
+   is a result. Leaving it open at 278 tokens would have read as unfinished
+   work forever, and every future iteration would have had to re-derive that
+   the tokens are load-bearing.
+
+4. Two stories were looked at and put back this iteration before landing on
+   this one - WEB-SEC-029, whose remaining ACs are dashboard actions and a
+   live Supabase project, and the admin dark-mode panels, whose verification
+   needs an admin session this container cannot make. Checking whether a story
+   CAN close before starting it is worth the two minutes.
