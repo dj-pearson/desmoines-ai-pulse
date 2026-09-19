@@ -2130,3 +2130,53 @@ Learnings for future iterations
 
 5. Third time this session a `pkill` in a command chain returned 144 and killed
    everything after it. Put process cleanup in its own call.
+
+================================================================================
+2026-09-19  WEB-SEO-036 AC5  Lateral linking between neighborhoods and suburbs
+================================================================================
+
+AC5 said "cross-reference SEO-015 lateral linking". SEO-015 is about unsupported
+statistics and has nothing to do with linking, so the reference is wrong; took
+the AC on its own terms instead.
+
+The find: /neighborhoods/ankeny and /events/ankeny are both pages about Ankeny
+and neither linked to the other, because each was built from its own list in its
+own file - NEIGHBORHOODS in src/lib/neighborhoods.ts, and a SUBURBS object
+living INSIDE EventsByLocation.tsx where nothing could read it. That is the
+exact shape this story already fixed once across four surfaces, still live
+across two page families.
+
+src/lib/suburbs.ts is the extraction; PlaceCrossLinks renders the cross-family
+link when the target exists, plus every sibling guide. Conditional because the
+lists do not match: east-village and waukee have a guide and no events page,
+windsor-heights the reverse, and App.tsx mounts those seven paths one at a time
+with no catch-all, so /events/waukee is a 404 on a sitemapped page.
+
+Browser-verified with fixtures, five route/data combinations: cross-links
+present exactly where both pages exist, thin-content gate at noindex with 3
+items and index with 13, 31 detail links with hrefs, zero page errors.
+
+Learnings for future iterations
+
+1. A PRD cross-reference can be wrong. AC5 pointed at a story about statistics.
+   Read the referenced story before building to it - and say in the notes that
+   the reference was wrong, or the next person re-checks it too.
+
+2. When a docstring says "four surfaces each carried their own list", go
+   looking for the fifth. neighborhoods.ts opens with exactly that warning and
+   the suburb list two directories away had never been counted as one of them.
+
+3. Match a route check on the ELEMENT, not the path. My first version matched
+   path="/events/<slug>" and needed a hand-written list of which /events/*
+   paths are not suburbs - and shipped with near-me missing from it.
+   `element={<EventsByLocation` is the actual question and maintains itself.
+
+4. A conditional link needs a test that enumerates the whole inventory, not two
+   examples. "Every link this component can emit is a mounted route" catches
+   the next slug somebody adds to one list and not the other; "ankeny works"
+   does not.
+
+5. The fixture rig now pays for itself on non-performance work. Five
+   route/data combinations in one run confirmed the render path, the hrefs, the
+   noindex threshold from both sides, and the conditional link - all things
+   three earlier notes on this story had to leave as "not verified".

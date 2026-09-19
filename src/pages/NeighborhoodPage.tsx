@@ -11,6 +11,7 @@ import { ArrowLeft } from "lucide-react";
 import { findNeighborhood, NEIGHBORHOOD_MIN_ITEMS } from "@/lib/neighborhoods";
 import { useNeighborhoodContent } from "@/hooks/useNeighborhoodContent";
 import { ErrorState } from "@/components/ui/error-state";
+import { PlaceCrossLinks } from "@/components/PlaceCrossLinks";
 import { Skeleton, SkeletonGroup } from "@/components/ui/skeleton";
 
 /**
@@ -136,6 +137,11 @@ export default function NeighborhoodPage() {
             attractions={data?.attractions ?? []}
           />
         )}
+
+        {/* WEB-SEO-036 AC5. Outside the loading branch on purpose: these links
+            do not depend on the fetch, and a crawler that times out waiting for
+            content should still leave with somewhere to go. */}
+        <PlaceCrossLinks slug={neighborhood.slug} from="neighborhood" />
       </div>
 
       <Footer />

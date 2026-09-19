@@ -31,6 +31,7 @@ import { join } from 'node:path';
 import { PRERENDER_ROUTES } from './prerender-routes.mjs';
 
 const ROOT = process.cwd();
+
 const INVENTORY = join(ROOT, 'src', 'lib', 'neighborhoods.ts');
 const SITEMAP = join(ROOT, 'public', 'sitemap-static.xml');
 
@@ -111,9 +112,72 @@ if (!IMPORTS_INVENTORY.test(hub)) {
   );
 }
 
+// -------------------------------------------------------------------------
+// The suburb inventory behind /events/<slug> (WEB-SEO-036 AC5).
+//
+// PlaceCrossLinks links /neighborhoods/<slug> to /events/<slug> when the second
+// one exists, and it decides that from src/lib/suburbs.ts. App.tsx mounts those
+// seven paths ONE AT A TIME with no catch-all behind them, so an entry added to
+// suburbs.ts without a matching route is a link straight to a 404 - and the
+// link renders on a prerendered, sitemapped page, so a crawler finds it before
+// anyone else does.
+const SUBURBS_FILE = join(ROOT, 'src', 'lib', 'suburbs.ts');
+const suburbSrc = readFileSync(SUBURBS_FILE, 'utf8');
+const suburbBody = suburbSrc.slice(suburbSrc.indexOf('export const SUBURBS'));
+const suburbSlugs = [...suburbBody.matchAll(/^  "?([a-z0-9-]+)"?: \{$/gm)].map((m) => m[1]);
+if (suburbSlugs.length === 0) {
+  console.error(
+    '[neighborhoods] read 0 slugs from src/lib/suburbs.ts. The file changed shape;\n' +
+      'update the matcher here rather than deleting this check.'
+  );
+  process.exit(1);
+}
+
+const appSrc = readFileSync(join(ROOT, 'src', 'App.tsx'), 'utf8');
+// Matched on the ELEMENT, not on the path. App.tsx also mounts /events/today,
+// /events/near-me, /events/free and others under that prefix; a path-only match
+// needs a hand-maintained list of which of them are not suburbs, and the first
+// version of this check shipped with near-me missing from it. "Routes to
+// EventsByLocation" is the actual question and it maintains itself. The bridge
+// between the two attributes is bounded because prettier wraps this element
+// over three lines when the slug is long enough.
+const routedSuburbs = [
+  ...appSrc.matchAll(/path="\/events\/([a-z0-9-]+)"[\s\S]{0,40}?element=\{<EventsByLocation/g),
+].map((m) => m[1]);
+
+const missingRoute = suburbSlugs.filter((slug) => !routedSuburbs.includes(slug));
+if (missingRoute.length > 0) {
+  failed = true;
+  console.error(
+    `\n[neighborhoods] src/lib/suburbs.ts lists ${missingRoute.join(', ')} with no matching\n` +
+      '  <Route path="/events/<slug>"> in src/App.tsx. PlaceCrossLinks will render a link to a 404.'
+  );
+}
+
+const orphanRoute = routedSuburbs.filter((slug) => !suburbSlugs.includes(slug));
+if (orphanRoute.length > 0) {
+  failed = true;
+  console.error(
+    `\n[neighborhoods] src/App.tsx routes /events/${orphanRoute.join(', /events/')} to\n` +
+      '  EventsByLocation, but src/lib/suburbs.ts has no entry - the page renders "Location Not Found".'
+  );
+}
+
+// EventsByLocation must IMPORT the inventory. A local copy there is how the
+// neighborhood lists drifted in the first place, and this file exists because
+// of that.
+const byLocation = readFileSync(join(ROOT, 'src', 'pages', 'EventsByLocation.tsx'), 'utf8');
+if (!/import\s*\{[^}]*\bSUBURBS\b[^}]*\}\s*from\s*['"][^'"]*lib\/suburbs['"]/.test(byLocation)) {
+  failed = true;
+  console.error(
+    '\n[neighborhoods] src/pages/EventsByLocation.tsx no longer imports SUBURBS from\n' +
+      '  @/lib/suburbs. A local copy there and the cross-links can disagree silently.'
+  );
+}
+
 if (failed) process.exit(1);
 
 console.log(
   `[neighborhoods] ${want.length} neighborhood(s) agree across the inventory, the prerender ` +
-    `routes and the sitemap.`
+    `routes and the sitemap; ${suburbSlugs.length} suburb page(s) agree with App.tsx's routes.`
 );
