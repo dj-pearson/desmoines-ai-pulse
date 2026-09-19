@@ -1590,3 +1590,13 @@ Ran `playwright.smoke.config.ts` against the built site. 123 passed, 17 failed; 
   - **These had never passed.** The tests landed 2026-09-02; the colliding Header aria-label landed 2026-08-29. The test was written against a page that already had the collision. "It's in a required lane" is not evidence that it runs, and neither is a green Actions badge on a lane whose failures nobody reads.
   - **Running the lane was worth it even though most failures were environmental.** The useful half of the answer was the other one: none of this session's nine commits broke a gating test that can run without a backend. That is not knowable by reading.
   - **A regex-driven edit across three config files mangled three multi-line blocks** into `, ...localChromium },` on its own line - a parse error, caught by eslint inside `npm run validate` and not by `tsc -p tsconfig.node.json`, which did not include them. Search-and-replace across structured code needs the result read, not just the count.
+
+## 2026-09-19 - WEB-CI-028, third pass: the a11y lane is 48/48, and I had broken its config
+- `...localChromium` had been spread INSIDE `viewport: { width, height }` in four places by last commit's regex.
+- Inert in CI (the spread is `{}` unset), so eslint, tsc and validate all passed. Found by the a11y lane reporting 48 "Executable doesn't exist".
+- Required a11y lane now 48 passed, 0 failed against a build, 52s.
+- **Learnings for future iterations:**
+  - **I repeated the lesson I had just written down.** One iteration earlier the same regex mangled three multi-line blocks into a parse error, and I recorded "search-and-replace across structured code needs the result read, not just the count". The same edit also produced this second instance, which is worse because it lints and type-checks clean - a spread of `{}` into the wrong object is valid TypeScript and a silent no-op until the variable is set.
+  - **An inert bug is still a bug, and the inertness is what hides it.** `localChromium` is `{}` in CI, so nothing anywhere would have caught this. It only surfaces for the one person who sets the variable - which is the only person the feature exists for.
+  - **`.first()` is the other half of the strict-mode problem.** The specs that avoid ambiguous locators mostly do it by taking the first match, which does not fail on ambiguity - it picks. `turnstile-inert.spec.ts` (in the required lane) takes `getByLabel(/email/i).first()` on `/auth`, and passes only because the footer newsletter input happens to come later in the DOM. Nothing pins that.
+  - **Both required lanes are now accounted for after nine commits of changes:** smoke 127/13 with all 13 environmental, axe 48/48. That is the answer the previous two passes were actually chasing.
