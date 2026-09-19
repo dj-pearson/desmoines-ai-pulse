@@ -38,8 +38,16 @@ test.describe('Turnstile is inert without a site key', () => {
     await page.goto('/auth');
 
     // The form itself must be unchanged: same fields, same enabled submit.
-    const email = page.getByLabel(/email/i).first();
-    const password = page.getByLabel(/password/i).first();
+    //
+    // `.and(input)` rather than `.first()` on the password field: /password/i
+    // matches TWO elements on /auth - the input and the show/hide toggle
+    // button beside it. `.first()` happened to pick the input because of DOM
+    // order and nothing pinned that, so a toggle moved ahead of the field
+    // would have left this test filling a button and still passing
+    // toBeVisible (WEB-CI-028). Probed 2026-09-19: email resolves to one
+    // element, password to two.
+    const email = page.getByLabel(/email/i);
+    const password = page.getByLabel(/password/i).and(page.locator('input'));
     await expect(email).toBeVisible();
     await expect(password).toBeVisible();
 
@@ -48,7 +56,9 @@ test.describe('Turnstile is inert without a site key', () => {
 
     // Enabled means no captcha gate was added in front of submission. The form
     // is deliberately NOT submitted - this lane has no database.
-    const submit = page.getByRole('button', { name: /sign in|log in/i }).first();
+    // One match on /auth today; kept unanchored because the button's label is
+    // the thing under test and either wording satisfies it.
+    const submit = page.getByRole('button', { name: /sign in|log in/i });
     await expect(submit).toBeEnabled();
   });
 

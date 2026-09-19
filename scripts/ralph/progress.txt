@@ -1600,3 +1600,13 @@ Ran `playwright.smoke.config.ts` against the built site. 123 passed, 17 failed; 
   - **An inert bug is still a bug, and the inertness is what hides it.** `localChromium` is `{}` in CI, so nothing anywhere would have caught this. It only surfaces for the one person who sets the variable - which is the only person the feature exists for.
   - **`.first()` is the other half of the strict-mode problem.** The specs that avoid ambiguous locators mostly do it by taking the first match, which does not fail on ambiguity - it picks. `turnstile-inert.spec.ts` (in the required lane) takes `getByLabel(/email/i).first()` on `/auth`, and passes only because the footer newsletter input happens to come later in the DOM. Nothing pins that.
   - **Both required lanes are now accounted for after nine commits of changes:** smoke 127/13 with all 13 environmental, axe 48/48. That is the answer the previous two passes were actually chasing.
+
+## 2026-09-19 - WEB-CI-028, fourth pass: the `.first()` sweep, by probing
+- `turnstile-inert.spec.ts` (required lane): `/password/i` resolves to TWO elements - the input and its show/hide toggle. Now `.and(page.locator('input'))`, negative-controlled.
+- `/email/i` resolves to ONE. My previous note guessed it collided with the footer newsletter input; it does not.
+- `route-smoke.spec.ts`'s three `.first()` calls read: two fine, one weak and left alone with a reason.
+- **Learnings for future iterations:**
+  - **I guessed wrong in writing, one iteration ago, about which locator was ambiguous.** The note said the email field collided with the footer's newsletter input. Counting the matches took one probe and showed email is unique while *password* is the one with two - the second being a button. A plausible mechanism written down as a finding is still a guess.
+  - **`.first()` picking the right element on DOM order is not a passing test, it is a coincidence with a green tick.** Filling a `<button>` would not have failed `toBeVisible`, so a toggle moved ahead of the field would have left this green while testing nothing.
+  - **`.and()` says what `.first()` only implies.** `getByLabel(/password/i).and(page.locator('input'))` names the disambiguator, so the next person does not have to re-derive why the first match was the right one. The negative control is cheap: point the filter at `button` and watch it go red.
+  - **Not every loose locator is worth tightening.** `route-smoke:474` is the fallback arm of an either/or whose primary assertion is a redirect. Tightening it blind risks turning a green required test red for a reason I cannot verify here, so it is recorded instead.
