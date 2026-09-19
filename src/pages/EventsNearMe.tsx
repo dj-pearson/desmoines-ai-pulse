@@ -18,7 +18,7 @@ import { format } from 'date-fns';
 import { formatCount } from "@/lib/pluralize";
 import { SpriteIcon } from "@/components/ui/SpriteIcon";
 import { ErrorState } from '@/components/ui/error-state';
-import { fetchPriorityAttr } from "@/lib/fetchPriority";
+import { OptimizedImage } from "@/components/OptimizedImage";
 
 // Lazy load map component
 const EventsMap = lazy(() => import('@/components/InteractiveMap').then(mod => ({ default: mod.InteractiveMap })));
@@ -238,16 +238,19 @@ export default function EventsNearMe() {
                   <Link to={`/events/${createEventSlugWithCentralTime(event.title, event)}`}>
                     {event.image_url && (
                       <div className="overflow-hidden rounded-t-lg">
-                        <img
+                        <OptimizedImage
                           src={event.image_url}
                           alt={event.title}
-                          className="w-full h-48 object-cover"
+                          className="object-cover"
+                          // h-48 was on the img, and the wrapper div above it
+                          // sets no height - so the height moves ONTO the
+                          // component's own container or the box collapses.
+                          containerClassName="w-full h-48"
                           // The first row of a three-column grid. Chrome does not start a lazy
                           // image's fetch until layout has run, so the LCP candidate on a listing
                           // page must not be lazy (WEB-SEO-032).
-                          loading={index < 3 ? "eager" : "lazy"}
-                          decoding="async"
-                          {...fetchPriorityAttr(index < 3 ? "high" : undefined)}
+                          priority={index < 3}
+                          sizes="(max-width: 640px) 100vw, (max-width: 1024px) 50vw, 33vw"
                         />
                       </div>
                     )}

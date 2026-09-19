@@ -656,11 +656,9 @@ export default function Attractions() {
                           // The first row of a three-column grid. Chrome does not start a lazy
                           // image's fetch until layout has run, so the LCP candidate on a listing
                           // page must not be lazy (WEB-SEO-032).
-                          // OptimizedImage renders no image element at all
-                          // until its IntersectionObserver fires, so without
-                          // this the prerendered HTML carries no card image
-                          // either. (Spelling the tag out here made impeccable's
-                          // broken-image rule fire on the comment - WEB-UX-034.)
+                          // It used to decide whether the card appeared in the
+                          // prerendered HTML at all; WEB-PERF-041 removed that
+                          // gate, so now it only decides the fetch.
                           priority={index < 3}
                           width={640}
                           height={360}

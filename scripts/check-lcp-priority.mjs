@@ -23,11 +23,13 @@
  * three is above the fold costs one wasted eager fetch; guessing wrong the other
  * way costs the LCP on every listing page on the site.
  *
- * It matters more than the attribute suggests on the OptimizedImage paths:
- * that component renders NO <img> at all until its IntersectionObserver fires,
- * so a card grid without `priority` also ships prerendered HTML with no card
- * images in it - which the AI crawlers robots.txt invites, none of which run
- * JavaScript, see as a page of empty cards.
+ * THE SECOND JOB THIS FLAG USED TO DO IS GONE, and the rule survives without
+ * it. OptimizedImage used to render NO img element at all until its
+ * IntersectionObserver fired, so `priority` decided whether a card appeared in
+ * prerendered HTML as well as how fast it was fetched. WEB-PERF-041 removed
+ * that gate: the element is always rendered and `loading="lazy"` defers only
+ * the fetch. So a missing `priority` no longer empties a page for a crawler -
+ * it costs the LCP, which is what this check was named for.
  *
  * NOT LISTED HERE, deliberately: related-content rails on detail pages,
  * dashboard and profile grids, dialog images, and the 48px avatars in
@@ -53,10 +55,9 @@ const HEROES = [
 
 /**
  * A hero is either a raw <img> carrying the two attributes, or an
- * <OptimizedImage priority>, which sets loading="eager" and
- * fetchpriority="high" itself AND - the part that matters - renders its <img>
- * immediately instead of waiting for the IntersectionObserver. Without
- * `priority` that component ships prerendered HTML with no hero in it, so
+ * <OptimizedImage priority>, which sets loading="eager" and fetchpriority=
+ * "high" itself. Without the flag that component defaults to loading="lazy",
+ * and a lazy LCP element is the defect this whole check exists to catch, so
  * "uses OptimizedImage" is not on its own good enough here.
  */
 function heroProblems(file, text) {
@@ -165,8 +166,8 @@ delay; fetchpriority="high" is what promotes the request past the scripts and
 styles the browser found earlier in the document. Both are needed.
 
 Use {...fetchPriorityAttr("high")} from @/lib/fetchPriority on a raw <img>, or
-priority on <OptimizedImage>. On OptimizedImage the flag is load-bearing twice
-over: it sets both attributes AND renders the <img> without waiting for the
-IntersectionObserver, which is what keeps the hero in the prerendered HTML.
+priority on <OptimizedImage>, which sets both attributes. Without it that
+component defaults to loading="lazy", and the browser will not start the LCP
+image until it has finished layout.
 `);
 process.exit(1);

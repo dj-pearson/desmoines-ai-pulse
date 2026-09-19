@@ -9,7 +9,7 @@ import { Skeleton } from '@/components/ui/skeleton';
 import { Heart, Users, Palette, Dumbbell, Utensils, Compass } from "lucide-react";
 import { getCanonicalUrl } from '@/lib/brandConfig';
 import { SpriteIcon } from "@/components/ui/SpriteIcon";
-import { fetchPriorityAttr } from "@/lib/fetchPriority";
+import { OptimizedImage } from "@/components/OptimizedImage";
 
 const THEME_ICONS: Record<string, typeof Heart> = {
   romance: Heart,
@@ -93,18 +93,18 @@ export default function Itineraries() {
                         <Card className="hover:border-primary transition-colors h-full">
                           {it.cover_image && (
                             <div className="h-40 overflow-hidden rounded-t-lg">
-                              <img
+                              <OptimizedImage
                                 src={it.cover_image}
                                 alt={it.title}
-                                className="w-full h-full object-cover"
+                                className="object-cover"
+                                containerClassName="w-full h-full"
                                 // Only the first theme's first row is above the
                                 // fold; every later section is scrolled to.
                                 // The first row of a three-column grid. Chrome does not start a lazy
                                 // image's fetch until layout has run, so the LCP candidate on a listing
                                 // page must not be lazy (WEB-SEO-032).
-                                loading={themeIndex === 0 && index < 3 ? "eager" : "lazy"}
-                                decoding="async"
-                                {...fetchPriorityAttr(themeIndex === 0 && index < 3 ? "high" : undefined)}
+                                priority={themeIndex === 0 && index < 3}
+                                sizes="(max-width: 640px) 100vw, (max-width: 1024px) 50vw, 33vw"
                               />
                             </div>
                           )}

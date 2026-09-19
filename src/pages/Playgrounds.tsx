@@ -39,7 +39,7 @@ import { Star, Filter, List, Map, TreePine, SlidersHorizontal, ChevronRight } fr
 import { SpriteIcon } from "@/components/ui/SpriteIcon";
 import { Link } from "react-router-dom";
 import { useUrlFilters } from "@/hooks/useUrlFilters";
-import { fetchPriorityAttr } from "@/lib/fetchPriority";
+import { OptimizedImage } from "@/components/OptimizedImage";
 
 // Lazy load map to prevent react-leaflet bundling issues
 const PlaygroundsMap = lazy(() => import("@/components/PlaygroundsMap"));
@@ -524,16 +524,16 @@ export default function Playgrounds() {
                 <Card className="h-full hover:shadow-lg transition-all duration-300 hover:-translate-y-1 rounded-2xl overflow-hidden">
                   {playground.image_url ? (
                     <div className="aspect-video overflow-hidden">
-                      <img
+                      <OptimizedImage
                         src={playground.image_url}
                         alt={`${playground.name} - Playground in Des Moines`}
-                        className="w-full h-full object-cover transition-transform duration-300 hover:scale-105"
+                        className="object-cover transition-transform duration-300 hover:scale-105"
+                        containerClassName="w-full h-full"
                         // The first row of a three-column grid. Chrome does not start a lazy
                         // image's fetch until layout has run, so the LCP candidate on a listing
                         // page must not be lazy (WEB-SEO-032).
-                        loading={index < 3 ? "eager" : "lazy"}
-                        decoding="async"
-                        {...fetchPriorityAttr(index < 3 ? "high" : undefined)}
+                        priority={index < 3}
+                        sizes="(max-width: 640px) 100vw, (max-width: 1024px) 50vw, 33vw"
                       />
                     </div>
                   ) : (

@@ -23,7 +23,7 @@ import {
 } from '@/components/ui/dialog';
 import { SpriteIcon } from "@/components/ui/SpriteIcon";
 import { ErrorState } from '@/components/ui/error-state';
-import { fetchPriorityAttr } from "@/lib/fetchPriority";
+import { OptimizedImage } from "@/components/OptimizedImage";
 
 export default function BreweryTrail() {
   const { user } = useAuth();
@@ -179,13 +179,13 @@ export default function BreweryTrail() {
                           {/* The first row of a three-column grid. Chrome does not start a lazy
                               image's fetch until layout has run, so the LCP candidate on a listing
                               page must not be lazy (WEB-SEO-032). */}
-                          <img
+                          <OptimizedImage
                             src={brewery.image_url}
                             alt={brewery.name}
-                            className="w-full h-full object-cover"
-                            loading={index < 3 ? "eager" : "lazy"}
-                            decoding="async"
-                            {...fetchPriorityAttr(index < 3 ? "high" : undefined)}
+                            className="object-cover"
+                            containerClassName="w-full h-full"
+                            priority={index < 3}
+                            sizes="(max-width: 640px) 100vw, (max-width: 1024px) 50vw, 33vw"
                           />
                           {isCheckedIn && (
                             <div className="absolute top-2 right-2">

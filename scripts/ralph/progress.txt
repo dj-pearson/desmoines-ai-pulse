@@ -1960,3 +1960,60 @@ Learnings for future iterations
 6. Deletions bought nothing on the type ratchet (135 before, 135 after). Dead
    files are not where type errors live, because nobody ever exercised them
    enough to break them.
+
+================================================================================
+2026-09-19  WEB-PERF-041  AC3 batch four: removed the IntersectionObserver gate
+================================================================================
+
+OptimizedImage gated the img ELEMENT's existence on an IntersectionObserver, so
+without `priority` there was no img in the DOM until something scrolled. Three
+previous batches of this story routed around that rather than fixing it. Removed
+it; `loading="lazy"` already does the deferring natively. 43 -> 37 raw <img>,
+with SocialEventCard, Playgrounds, BreweryTrail, Itineraries, EventsNearMe and
+Articles converted now that conversion no longer costs prerendered HTML.
+
+Measured in Chromium on the real build, before and after, /playgrounds at
+1280x1000 with nine fixture rows served through a Playwright route stub:
+    BEFORE  3 img elements for 9 cards
+    AFTER   9, the first three eager+high and the rest lazy
+Geometry identical either way (every img exactly its 391x220 aspect-video box),
+computed opacity 1, zero page errors.
+
+Also fixed a latent bug the change would have spread: the opacity fade runs off
+onLoad, and React does not replay a load event that fired before hydration, so a
+prerendered page's images could stick at opacity-0. A ref callback reads
+img.complete on attach, guarded by naturalWidth so a failed request does not
+fade a broken image in over the error panel.
+
+Learnings for future iterations
+
+1. When three consecutive iterations of a story each write a paragraph
+   explaining what they could NOT do because of one component's behaviour,
+   the component's behaviour is the story. I nearly took a fourth batch of
+   conversions around it. Read your own previous notes for the sentence that
+   keeps repeating.
+
+2. "There is no browser in this container" was wrong again, and this time it
+   cost three batches of unverified layout claims. `npx vite build` with
+   placeholder VITE_SUPABASE_* works, `vite preview --host 127.0.0.1` serves
+   it, Chromium is at /opt/pw-browsers, and page.route() can stub the backend
+   the container has no credentials for. A fixture PNG is 40 lines of zlib.
+   That is a full before/after measurement, not a proxy.
+
+3. The strongest control available for a component change is to rebuild with
+   the OLD component and the NEW call sites. It isolates exactly the claim
+   ("3 images become 9") and needs no reasoning about what else moved.
+
+4. A progressive enhancement that duplicates a platform feature is a liability
+   with a cost you will not see. The observer bought a 100px rootMargin over
+   native lazy loading; it cost the site every below-fold image in its
+   prerendered HTML, and it cost this story three iterations of workarounds.
+
+5. React does not replay load events across hydration. Any onLoad-driven
+   reveal needs a `complete` check on the ref, and the check needs
+   naturalWidth because `complete` is also true for a request that failed.
+
+6. Converting a raw <img> to a wrapper component: look at where the HEIGHT
+   lives. Two of six sites had it on the img with no height on the parent, so
+   moving the tag without moving the class would have collapsed the box. The
+   other four were already in a fixed box and needed nothing.

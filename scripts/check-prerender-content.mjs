@@ -151,13 +151,19 @@ const ALLOWED_SKELETON_ROUTES = new Map([
  * Routes whose content is a grid of cards, where a card with no image is not a
  * design choice (WEB-SEO-032 AC3).
  *
- * WHY THIS NEEDED A GUARD. OptimizedImage renders no <img> at all until its
- * IntersectionObserver fires. Nothing in the app passed `priority`, so at
- * capture time the prerenderer got a card grid with zero images in it - and
- * every AI crawler public/robots.txt explicitly invites (GPTBot, ClaudeBot,
- * PerplexityBot and the rest) runs no JavaScript, so that is the page they
- * index. It is the same failure mode as the skeleton this file was written for:
- * correct in a browser, empty everywhere else.
+ * WHY THIS NEEDED A GUARD. OptimizedImage used to render no img element at all
+ * until its IntersectionObserver fired. Nothing in the app passed `priority`,
+ * so at capture time the prerenderer got a card grid with zero images in it -
+ * and every AI crawler public/robots.txt explicitly invites (GPTBot,
+ * ClaudeBot, PerplexityBot and the rest) runs no JavaScript, so that is the
+ * page they index. It is the same failure mode as the skeleton this file was
+ * written for: correct in a browser, empty everywhere else.
+ *
+ * WEB-PERF-041 removed the gate, so the component no longer creates that
+ * failure. The guard stays because the failure did not depend on the gate: a
+ * grid that renders its cards from a query the prerenderer never resolves
+ * produces the identical empty page, and that is the shape this file has
+ * caught before.
  *
  * GATED ON THE PAGE'S OWN CLAIM, not on a fixed number. The assertion only
  * fires when the route's ItemList says it rendered items - a hub with nothing
@@ -199,10 +205,11 @@ const CARD_IMAGE_ROUTES = new Set([
  * grids guards its <img> on the row actually having one. Asserting three would
  * turn "the first three itineraries have no cover art" into a red build.
  *
- * One is what the DOM can prove: the defect that shipped was OptimizedImage
- * rendering NO <img> at all until its IntersectionObserver fired, so the
+ * One is what the DOM can prove. The defect that shipped was OptimizedImage
+ * rendering no img element at all until its IntersectionObserver fired, so the
  * prerendered grid had zero images in it. Zero is the failure; one is evidence
- * the mechanism works.
+ * the mechanism works. Raising the bar now that the gate is gone would still
+ * be measuring the rows rather than the rendering.
  */
 const MIN_CARD_IMAGES = 1;
 

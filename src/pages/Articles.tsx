@@ -19,7 +19,7 @@ import { Breadcrumbs } from '@/components/ui/breadcrumbs';
 import { SpriteIcon } from "@/components/ui/SpriteIcon";
 import { useUrlFilters } from '@/hooks/useUrlFilters';
 import NoIndexMeta from '@/components/schema/NoIndexMeta';
-import { fetchPriorityAttr } from "@/lib/fetchPriority";
+import { OptimizedImage } from "@/components/OptimizedImage";
 
 const Articles: React.FC = () => {
   // 'published' rather than the default 'all' (WEB-BE-056 AC3). This page
@@ -359,18 +359,21 @@ const Articles: React.FC = () => {
                       <div className={`overflow-hidden ${
                         viewMode === 'list' ? 'md:w-64 md:flex-shrink-0' : 'aspect-video'
                       }`}>
-                        <img
+                        <OptimizedImage
                           src={article.featured_image_url}
                           alt={article.title}
-                          className={`w-full object-cover transition-transform duration-300 group-hover:scale-105 ${
+                          className="object-cover transition-transform duration-300 group-hover:scale-105"
+                          // The height lived on the img, and in list mode the
+                          // wrapper above sets none (it only fixes a width), so
+                          // both variants move onto the component's container.
+                          containerClassName={`w-full ${
                             viewMode === 'list' ? 'h-48 md:h-full' : 'h-full'
                           }`}
                           // The first row of a three-column grid. Chrome does not start a lazy
                           // image's fetch until layout has run, so the LCP candidate on a listing
                           // page must not be lazy (WEB-SEO-032).
-                          loading={index < 3 ? "eager" : "lazy"}
-                          decoding="async"
-                          {...fetchPriorityAttr(index < 3 ? "high" : undefined)}
+                          priority={index < 3}
+                          sizes={viewMode === 'list' ? '(max-width: 768px) 100vw, 256px' : '(max-width: 640px) 100vw, (max-width: 1024px) 50vw, 33vw'}
                         />
                       </div>
                     )}

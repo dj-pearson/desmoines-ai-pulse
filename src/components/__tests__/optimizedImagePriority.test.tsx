@@ -9,16 +9,19 @@ import { OptimizedImage } from "@/components/OptimizedImage";
  * The obvious one: loading="eager" plus fetchpriority="high", so the browser
  * starts the hero's request before layout instead of after it.
  *
- * The one that is easy to lose: WITHOUT `priority` the component renders no
- * <img> element at all until its IntersectionObserver fires. jsdom has no
- * IntersectionObserver and neither does a prerender pass that snapshots the
- * DOM, so a hero converted to OptimizedImage and left without the flag ships
- * HTML with no hero image in it - to crawlers that do not run JavaScript, an
- * empty box. scripts/check-lcp-priority.mjs fails on that case; this asserts
- * the behaviour that check is asserting the source of.
+ * The one that WAS easy to lose, and is now structural: the component used to
+ * gate the img element's EXISTENCE on an IntersectionObserver, so without
+ * `priority` there was no img in the DOM until something scrolled. A prerender
+ * pass snapshots the DOM rather than scrolling it, so every card past the
+ * observer's reach shipped as an empty box. That gate is gone - the element is
+ * always rendered and `loading="lazy"` defers the fetch - and the cases below
+ * pin both halves: priority still means eager + high, and the absence of
+ * priority no longer means the absence of an image.
  *
- * The observer is deliberately stubbed to NEVER fire, which is the state both
- * a crawler and a first paint are in.
+ * The observer is still stubbed to never fire, and the point of the stub has
+ * inverted: it used to reproduce the trap, and now it proves nothing depends
+ * on an observer any more. That is also the state jsdom, a crawler and a
+ * first paint are all in.
  */
 class NeverFiringObserver implements IntersectionObserver {
   readonly root = null;
@@ -54,9 +57,57 @@ describe("OptimizedImage priority", () => {
     expect(img.getAttribute("fetchpriority")).toBe("high");
   });
 
-  it("renders NO img without it, which is the prerender trap", () => {
+  it("renders the img WITHOUT it too, and defers only the fetch", () => {
+    // The whole point of removing the observer gate. A card grid without
+    // `priority` must still put every one of its images into the DOM the
+    // prerenderer snapshots; `loading="lazy"` is what keeps them off the wire
+    // until the reader scrolls.
     render(<OptimizedImage src={SRC} alt="Lazy" />);
-    expect(screen.queryByAltText("Lazy")).toBeNull();
+    const img = screen.getByAltText("Lazy");
+    expect(img.getAttribute("loading")).toBe("lazy");
+    expect(img.getAttribute("src")).toBe(SRC);
+  });
+
+  it("reveals an image that was already complete when React attached", () => {
+    // onLoad drives the opacity fade and React does not replay a load event
+    // that fired before hydration. Without the complete check, a prerendered
+    // page's images stay at opacity-0 with no way back.
+    Object.defineProperty(HTMLImageElement.prototype, "complete", {
+      configurable: true,
+      get: () => true,
+    });
+    Object.defineProperty(HTMLImageElement.prototype, "naturalWidth", {
+      configurable: true,
+      get: () => 800,
+    });
+    try {
+      render(<OptimizedImage src={SRC} alt="Hydrated" />);
+      expect(screen.getByAltText("Hydrated").className).toContain("opacity-100");
+    } finally {
+      delete (HTMLImageElement.prototype as unknown as Record<string, unknown>).complete;
+      delete (HTMLImageElement.prototype as unknown as Record<string, unknown>).naturalWidth;
+    }
+  });
+
+  it("does not reveal an image whose request failed", () => {
+    // complete is true for a FAILED request as well, which is why the guard
+    // reads naturalWidth. Revealing here would fade in a broken image over the
+    // error panel.
+    Object.defineProperty(HTMLImageElement.prototype, "complete", {
+      configurable: true,
+      get: () => true,
+    });
+    Object.defineProperty(HTMLImageElement.prototype, "naturalWidth", {
+      configurable: true,
+      get: () => 0,
+    });
+    try {
+      render(<OptimizedImage src={SRC} alt="Broken" />);
+      expect(screen.getByAltText("Broken").className).toContain("opacity-0");
+    } finally {
+      delete (HTMLImageElement.prototype as unknown as Record<string, unknown>).complete;
+      delete (HTMLImageElement.prototype as unknown as Record<string, unknown>).naturalWidth;
+    }
   });
 
   it("lets containerClassName replace the wrapper's own positioning", () => {
