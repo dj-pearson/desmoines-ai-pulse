@@ -9,6 +9,17 @@ import { defineConfig, devices } from '@playwright/test';
 /**
  * See https://playwright.dev/docs/test-configuration.
  */
+/**
+ * A locally installed Chromium, when Playwright's own download is absent or at
+ * a different revision (WEB-CI-028). Inert in CI, where the browsers Playwright
+ * expects are installed by the workflow. See TESTING.md for why this is needed
+ * in a container: Playwright looks for chrome-headless-shell at the revision it
+ * shipped with, and a preinstalled full chromium is at a different path.
+ */
+const localChromium = process.env.PLAYWRIGHT_CHROMIUM_PATH
+  ? { launchOptions: { executablePath: process.env.PLAYWRIGHT_CHROMIUM_PATH } }
+  : {};
+
 export default defineConfig({
   testDir: './tests',
   // route-smoke.spec.ts must run against a production build, not the dev server —
@@ -52,7 +63,7 @@ export default defineConfig({
       name: 'chromium-desktop',
       use: {
         ...devices['Desktop Chrome'],
-        viewport: { width: 1920, height: 1080 }
+        viewport: { width: 1920, height: 1080, ...localChromium }
       },
     },
 
@@ -60,7 +71,7 @@ export default defineConfig({
       name: 'firefox-desktop',
       use: {
         ...devices['Desktop Firefox'],
-        viewport: { width: 1920, height: 1080 }
+        viewport: { width: 1920, height: 1080, ...localChromium }
       },
     },
 
@@ -68,22 +79,22 @@ export default defineConfig({
       name: 'webkit-desktop',
       use: {
         ...devices['Desktop Safari'],
-        viewport: { width: 1920, height: 1080 }
+        viewport: { width: 1920, height: 1080, ...localChromium }
       },
     },
 
     /* Test against mobile viewports - PRIMARY FOCUS */
     {
       name: 'mobile-chrome',
-      use: { ...devices['Pixel 5'] },
+      use: { ...devices['Pixel 5'], ...localChromium },
     },
     {
       name: 'mobile-safari',
-      use: { ...devices['iPhone 12'] },
+      use: { ...devices['iPhone 12'], ...localChromium },
     },
     {
       name: 'tablet-ipad',
-      use: { ...devices['iPad Pro'] },
+      use: { ...devices['iPad Pro'], ...localChromium },
     },
 
     /* Additional mobile devices for comprehensive testing */
@@ -91,18 +102,21 @@ export default defineConfig({
       name: 'mobile-small',
       use: {
         ...devices['iPhone SE'],
+        ...localChromium,
       },
     },
     {
       name: 'mobile-large',
       use: {
         ...devices['Pixel 5'],
+        ...localChromium,
       },
     },
     {
       name: 'tablet-landscape',
       use: {
         ...devices['iPad Pro landscape'],
+        ...localChromium,
       },
     },
   ],

@@ -18,6 +18,17 @@ import { defineConfig, devices } from '@playwright/test';
  *
  * Usage: npm run test:smoke
  */
+/**
+ * A locally installed Chromium, when Playwright's own download is absent or at
+ * a different revision (WEB-CI-028). Inert in CI, where the browsers Playwright
+ * expects are installed by the workflow. See TESTING.md for why this is needed
+ * in a container: Playwright looks for chrome-headless-shell at the revision it
+ * shipped with, and a preinstalled full chromium is at a different path.
+ */
+const localChromium = process.env.PLAYWRIGHT_CHROMIUM_PATH
+  ? { launchOptions: { executablePath: process.env.PLAYWRIGHT_CHROMIUM_PATH } }
+  : {};
+
 export default defineConfig({
   testDir: './tests',
   // cookie-consent.spec.ts joins route-smoke here for WEB-LEGAL-009 AC5.
@@ -71,7 +82,7 @@ export default defineConfig({
   projects: [
     {
       name: 'chromium-desktop',
-      use: { ...devices['Desktop Chrome'] },
+      use: { ...devices['Desktop Chrome'], ...localChromium },
     },
   ],
 
