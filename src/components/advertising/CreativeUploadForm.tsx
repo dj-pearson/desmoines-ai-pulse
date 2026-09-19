@@ -15,6 +15,22 @@ import { notifyAdmins } from "@/hooks/useCampaignNotifications";
 
 const log = createLogger('CreativeUploadForm');
 
+/**
+ * The campaign statuses a creative may be uploaded from (WEB-ADS-014 AC3).
+ *
+ * pending_payment is NOT one of them. Payment is what moves a campaign to
+ * pending_creative, and only two things are allowed to make that move:
+ * stripe-webhook and verify-campaign-payment, both server-side, both after
+ * Stripe says the money arrived.
+ *
+ * This form used to make it itself, updating the campaign row straight to
+ * pending_creative whenever it found one still awaiting payment. That let an
+ * unpaid advertiser promote their own campaign by uploading a file, and left
+ * verify-campaign-payment reconciling a state machine that had already moved
+ * without it.
+ */
+const UPLOADABLE_STATUSES = ["pending_creative", "pending_review", "active"] as const;
+
 interface CreativeUploadFormProps {
   campaignId: string;
   placementType: PlacementType;
@@ -140,6 +156,30 @@ export function CreativeUploadForm({
     setIsUploading(true);
 
     try {
+      // Checked BEFORE the file leaves the browser: an upload from an unpaid
+      // campaign should not put an object in the review bucket at all.
+      const { data: campaignRow, error: statusError } = await supabase
+        .from('campaigns')
+        .select('status')
+        .eq('id', campaignId)
+        .single();
+
+      if (statusError) throw statusError;
+
+      const status = campaignRow?.status as string | undefined;
+      if (!status || !UPLOADABLE_STATUSES.includes(status as (typeof UPLOADABLE_STATUSES)[number])) {
+        toast({
+          title: status === 'pending_payment' ? "Payment not received yet" : "This campaign cannot accept creatives",
+          description:
+            status === 'pending_payment'
+              ? "Your creative can be uploaded as soon as the payment clears. You will get an email when it does."
+              : `A campaign with status "${status ?? 'unknown'}" is not accepting creative uploads.`,
+          variant: "destructive",
+        });
+        setIsUploading(false);
+        return;
+      }
+
       // Upload to the private review bucket. image_url stays null until an
       // admin approves and the object is copied into the public bucket.
       const reviewPath = await uploadToStorage(uploadedFile!);
@@ -165,12 +205,8 @@ export function CreativeUploadForm({
 
       if (createError) throw createError;
 
-      // Update campaign status to pending_creative if it's still in pending_payment
-      await supabase
-        .from('campaigns')
-        .update({ status: 'pending_creative' })
-        .eq('id', campaignId)
-        .eq('status', 'pending_payment');
+      // No status change here. See UPLOADABLE_STATUSES above: payment is what
+      // advances a campaign, and only the server decides that.
 
       // Fetch campaign name for notification
       const { data: campaignData } = await supabase

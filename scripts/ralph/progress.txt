@@ -1821,3 +1821,16 @@ AC2 read as done - zero hits in `src/` and `supabase/functions/`, enforced since
   - **A security.txt that points at a domain you do not run is worse than not having one.** It is the file a reporter is told to read first, and RFC 9116 makes a mismatched Canonical a reason to distrust the whole document.
   - **The file I fixed would have failed the check I extended.** Its comment explained the change by naming the old hostname. A served file has no non-served text, so the comment had to describe the domain instead of spelling it - fourth time this session that explanatory prose tripped the rule it was explaining.
   - **A number in a doc rots; a command does not.** All three counts were stale by 2-3x, and the AC itself offered "see ls" as the alternative. Each line now carries the command, the value and the date it was taken.
+
+## 2026-09-19 - WEB-ADS-014 AC3/AC4/half of AC5: an unpaid campaign could upload, and was told its payment had arrived
+AC6 (stripe_customer_id + idempotency key) stays open - it needs a migration applied.
+- `CreativeUploadForm` promoted `pending_payment` -> `pending_creative` itself. Only `stripe-webhook` and `verify-campaign-payment` may make that move, after Stripe confirms. The write is gone and the upload is gated on the live status, checked before the file leaves the browser.
+- `UploadCreatives.tsx:166` rendered **"Payment received!"** on `pending_payment` - the status that means the payment has not arrived. The AC never mentions it, and it is why advertisers tried to upload.
+- `/campaigns/team` was routed, protected and linked from nowhere; `campaign_team_members` is real and the page works. Linked from CampaignDetail.
+- `useMultipleAdTracking` deleted. 4 tests, 3 negative controls. validate exit 0, vitest 754/754.
+- **Learnings for future iterations:**
+  - **The AC named the effect and missed the cause.** It describes the state-machine corruption in precise detail and says nothing about the banner telling unpaid advertisers their payment had been received. Reading the screen the AC points at found the thing the AC was a symptom of.
+  - **Order the guard against the side effect, not against the write.** Checking the status after `uploadToStorage` would still pass a naive "is it gated" test while leaving an unpaid campaign's artwork in the private review bucket. The test asserts the gate's index is below the upload's.
+  - **An AC can ask for something a standing rule forbids.** AC5 wanted a 369-line component folded into a 456-line one; CLAUDE.md says don't write 1000-line components. Declined with the reason in the notes, rather than doing it or quietly dropping it.
+  - **"Routed and linked from nowhere" has two fixes and the story offered both.** Delete is right when the feature is dead; here the table exists and the page works, so the defect was that nobody could reach it. Check which one it is before picking.
+  - **Fifth time: an assertion fired on the prose explaining it.** My docstring quoted the exact `.update({ status: ... })` call it was describing, and the guard I had just written to catch that call caught the comment instead.

@@ -112,10 +112,19 @@ export default function CampaignDetail() {
             Created {format(new Date(campaign.created_at), "MMMM d, yyyy")}
           </p>
         </div>
-        <Button variant="outline" onClick={() => navigate("/campaigns")}>
-          <ArrowLeft className="h-4 w-4 mr-2" />
-          All Campaigns
-        </Button>
+        <div className="flex items-center gap-2">
+          {/* /campaigns/team was routed, protected and linked from nowhere
+              (WEB-ADS-014 AC4). campaign_team_members is a real table and the
+              page works; it just could not be reached without typing the URL,
+              which is the same as not shipping it. */}
+          <Button variant="outline" onClick={() => navigate("/campaigns/team")}>
+            Team Access
+          </Button>
+          <Button variant="outline" onClick={() => navigate("/campaigns")}>
+            <ArrowLeft className="h-4 w-4 mr-2" />
+            All Campaigns
+          </Button>
+        </div>
       </div>
 
       {/* Overview Stats */}
