@@ -104,23 +104,11 @@ const Articles: React.FC = () => {
     loadArticles('all');
   }, []);
 
-  if (loading) {
-    return (
-      <>
-        <Header />
-        <div className="min-h-screen bg-background">
-          <div className="container mx-auto px-4 py-8">
-            {/* WEB-A11Y-002: the loading branch is an early return above the
-                page's own <h1>, so a slow response leaves the document with no
-                main heading. */}
-            <h1 className="sr-only">Des Moines stories and insights</h1>
-            <CardsGridSkeleton count={6} label="Loading articles..." />
-          </div>
-        </div>
-        <Footer />
-      </>
-    );
-  }
+  // No separate loading return. It was an early return above the page's own
+  // <h1>, so a slow response left the document with an sr-only stand-in and no
+  // search box at all - the reader could not start typing until the articles
+  // they were waiting for had arrived. The skeleton moved down into the grid,
+  // which is the only part that has nothing to show yet. WEB-CI-028 AC2.
 
   if (error) {
     return (
@@ -169,16 +157,16 @@ const Articles: React.FC = () => {
               {/* Featured Stats */}
               <div className="grid grid-cols-2 md:grid-cols-3 gap-4 mb-8">
                 <div className="bg-card/50 backdrop-blur-sm rounded-lg p-4 border">
-                  <div className="text-2xl font-bold text-primary">{filteredAndSortedArticles.length}</div>
+                  <div className="text-2xl font-bold text-primary">{loading ? "-" : filteredAndSortedArticles.length}</div>
                   <div className="text-sm text-muted-foreground">Articles</div>
                 </div>
                 <div className="bg-card/50 backdrop-blur-sm rounded-lg p-4 border">
-                  <div className="text-2xl font-bold text-primary">{categories.length}</div>
+                  <div className="text-2xl font-bold text-primary">{loading ? "-" : categories.length}</div>
                   <div className="text-sm text-muted-foreground">Categories</div>
                 </div>
                 <div className="bg-card/50 backdrop-blur-sm rounded-lg p-4 border col-span-2 md:col-span-1">
                   <div className="text-2xl font-bold text-primary">
-                    {Math.round(filteredAndSortedArticles.reduce((acc, article) => acc + (article.view_count || 0), 0) / filteredAndSortedArticles.length) || 0}
+                    {loading ? "-" : Math.round(filteredAndSortedArticles.reduce((acc, article) => acc + (article.view_count || 0), 0) / filteredAndSortedArticles.length) || 0}
                   </div>
                   <div className="text-sm text-muted-foreground">Avg. Views</div>
                 </div>
@@ -322,7 +310,9 @@ const Articles: React.FC = () => {
           </div>
 
           {/* Articles Grid/List */}
-          {filteredAndSortedArticles.length === 0 ? (
+          {loading ? (
+            <CardsGridSkeleton count={6} label="Loading articles..." />
+          ) : filteredAndSortedArticles.length === 0 ? (
             (searchQuery || selectedCategory !== 'all') ? (
               <EmptyState
                 icon={BookOpen}

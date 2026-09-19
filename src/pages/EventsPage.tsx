@@ -575,42 +575,13 @@ export default function EventsPage() {
     })),
   };
 
-  // Loading state
-  if (isLoading && events.length === 0) {
-    return (
-      <>
-        <SEOHead
-          // 78 chars with the brand suffix, the worst on the site (WEB-SEO-043).
-          title={`Des Moines Events: Concerts & Festivals | ${BRAND.name}`}
-          description="Discover upcoming events in Des Moines, Iowa. Find concerts, festivals, community gatherings, and entertainment activities happening now."
-          type="website"
-          keywords={["Des Moines events", "Iowa events", "upcoming events", "things to do Des Moines"]}
-        />
-        <div className="min-h-screen bg-background">
-          <Header />
-          <section className="relative bg-gradient-to-br from-[#1a1a2e] via-[#16213e] to-[#0f3460] overflow-hidden min-h-[340px]" role="status" aria-live="polite" aria-busy="true">
-            <div className="absolute inset-0 bg-[radial-gradient(ellipse_at_top,rgba(255,255,255,0.08),transparent_50%)]" />
-            <div className="relative container mx-auto px-4 py-16 md:py-20 text-center">
-              <div className="animate-pulse space-y-4 motion-reduce:animate-none">
-                <div className="h-10 md:h-14 bg-white/10 rounded-lg w-3/4 mx-auto" />
-                <div className="h-6 bg-white/10 rounded w-1/2 mx-auto" />
-                <div className="h-14 bg-white/10 rounded-xl w-full max-w-2xl mx-auto mt-8" />
-                <span className="sr-only">Loading events page...</span>
-              </div>
-            </div>
-          </section>
-          <div className="container mx-auto px-4 py-8">
-            {/* WEB-A11Y-002: same as the error branch below - this returns above
-                the page's own <h1>, so a slow response leaves the document
-                with no main heading. */}
-            <h1 className="sr-only">Des Moines events</h1>
-            <CardsGridSkeleton count={9} variant="event" className="grid gap-6 md:grid-cols-2 lg:grid-cols-3" label="Loading events..." />
-          </div>
-          <Footer />
-        </div>
-      </>
-    );
-  }
+  // No separate loading return. The render below already draws a
+  // CardsGridSkeleton while isLoading and the real grid after, and returning
+  // early replaced the hero - title, search box and filter chips - with a
+  // pulsing bar, so a visitor could not start typing until the results they
+  // were waiting for had arrived. It also meant a second <SEOHead> and an
+  // sr-only <h1> standing in for the real one (WEB-A11Y-002), both of which
+  // exist only because of the early return. WEB-CI-028 AC2.
 
   // Error state
   if (error) {

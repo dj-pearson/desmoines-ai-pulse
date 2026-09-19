@@ -1742,3 +1742,16 @@ Entry chunk 56.2 -> 54.8 KB gz; critical path 186.4 -> 185.0. Story stays open o
   - **Rules of hooks do not stop you moving the condition, only the call.** Five hooks that each early-return on web cannot be called conditionally, so the condition moved up to whether the component containing them renders at all. The gate is the same; what changed is that the chunk is never fetched.
   - **The note's "largest removable item" was already removed.** It named a ~99 KB floating-ui cluster; App.tsx already had a comment explaining its removal. Re-measuring the entry before optimising took one build and saved chasing something that no longer existed.
   - **AC2 is blocked by data, not by access.** A production build and a real browser are both available here now. What is missing is content: /events and /restaurants render skeletons against the placeholder backend, and an LCP measured on a page whose largest element never arrives is not that page's LCP.
+
+## 2026-09-19 - WEB-CI-028 AC2 measured: 12 spec failures -> 7, and two of them were page defects
+The recorded blocker ("this container cannot make a production build") was wrong. It can, and the specs ran.
+- `/events` and `/articles` each had an early `if (loading) return` that replaced the whole page with a skeleton: no search box, no filter chips, an sr-only `<h1>` standing in for the real one. EventsPage's was redundant (the main render already skeletons the grid) and was deleted; Articles' skeleton moved into the grid slot, with the hero counters showing "-" instead of 0 while loading.
+- Measured on the built site with `/events` stuck loading: 0 search inputs -> 1, sr-only `<h1>` -> a visible "Des Moines Events", skeletons confined to the results grid.
+- AC2 stays open: 7 specs still fail, all asserting on results that never arrive against the placeholder backend. They need a preview deploy, not a build.
+- Required lanes unchanged: smoke 127 passed / 13 failed, the same 13 environmental failures as before; page-headings 14/14; validate exit 0; vitest 724/724.
+- **Learnings for future iterations:**
+  - **A recorded blocker is a claim with a date on it, not a fact.** "This container cannot make a production build" was true when written and false today, and it was quietly gating two ACs across several iterations. The cheapest thing I did all session was try the thing the notes said was impossible.
+  - **When a spec and a page disagree, check which one is wrong.** Five failures looked environmental and were a real defect: the pages hid their search box behind the fetch they were waiting on. The test was describing the product correctly.
+  - **A full-page loading return is usually redundant with the grid's own skeleton.** EventsPage rendered `isLoading && <CardsGridSkeleton>` AND returned early before ever reaching it. The early return was pure cost: a second `<SEOHead>`, an sr-only `<h1>` workaround, and an unusable hero.
+  - **Deleting the branch fixed the workaround too.** Two filed defects - WEB-A11Y-002's stand-in heading and the page's own complaint about two head components on one route - existed only because of the early return.
+  - **A backend that never answers is a good fixture for a loading state.** The placeholder host leaves `/events` permanently loading, which is the state that is otherwise hard to hold still long enough to photograph.
