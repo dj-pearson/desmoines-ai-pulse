@@ -107,6 +107,13 @@ const PENDING_MIGRATIONS = [
   // whole query on 42703, so a not-yet-applied column in the list SELECT would
   // blank /events/today rather than just skip the reorder.
   { table: 'events', column: 'is_indoor', migration: '20260908000001' },
+  // The article view counter (WEB-BE-056). What it replaces is a client
+  // read-modify-write that RLS rejected for every anonymous reader, so
+  // view_count has never moved; until this is applied the RPC 404s with
+  // PGRST202, which is the same no-op. Fire-and-forget by construction -
+  // recordArticleView attaches a rejection handler and returns, so the pending
+  // window cannot affect the page the way a missing COLUMN in a SELECT would.
+  { rpc: 'increment_article_view', migration: '20260919000010' },
 ];
 
 const isPending = (table, column) =>

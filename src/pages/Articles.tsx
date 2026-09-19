@@ -22,7 +22,11 @@ import NoIndexMeta from '@/components/schema/NoIndexMeta';
 import { fetchPriorityAttr } from "@/lib/fetchPriority";
 
 const Articles: React.FC = () => {
-  const { articles, loading, error, loadArticles } = useArticles();
+  // 'published' rather than the default 'all' (WEB-BE-056 AC3). This page
+  // pulled every article - drafts included, bodies and all - and then filtered
+  // status in the browser, so unpublished work crossed the wire to every
+  // visitor and only a `return false` kept it off the screen.
+  const { articles, loading, error, loadArticles } = useArticles({ status: 'published' });
   // URL-synced filters (WEB-UX-035). These were local React state, so a
   // filtered view could not be shared or bookmarked, and reading an article
   // and pressing Back returned to an unfiltered list. viewMode and showFilters

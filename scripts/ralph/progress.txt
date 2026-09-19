@@ -1857,3 +1857,14 @@ AC2 (source visits from user_analytics) needs a migration and stays open.
   - **A constant is not a metric.** "Active Audience: Des Moines" sat in the same grid, in the same card shape, next to three numbers. Shape is a claim.
   - **The test caught me, not the code.** I asserted 1450 formats as "1.5K"; it is "1.4K", because toFixed works on the binary double. Understating is the safe direction for a reach figure, so the test now pins the real behaviour and says why, instead of my changing the code to match an intuition.
   - **Sixth time an assertion fired on the prose explaining it.** My docstring used the word "estimated" while asserting the word was gone. Assert on code shapes - `: 12400`, `const estimated` - not on words that will also appear in the explanation.
+
+## 2026-09-19 - WEB-BE-056 AC2/AC4 + half of AC3: the article view counter has never counted
+- The counter was a client read-modify-write on a table where anon has SELECT only. Rejected for every reader who has ever opened an article, swallowed into a catch, so `view_count` is zero everywhere and the "popular" sort orders by a column of zeros.
+- `increment_article_view(p_slug)` SECURITY DEFINER (migration 20260919000010), called through `recordArticleView` with a webdriver/headless guard - `prerender.mjs` drives a browser over the site every build and would otherwise be the platform's most engaged reader.
+- `/articles` now asks the database for published rows instead of pulling drafts and filtering in the browser. Three ShareDialog call sites moved off `window.location.href`, which baked `http://127.0.0.1:<port>` into prerendered markup.
+- 7 tests, 2 negative controls. validate exit 0, vitest 771/771, 397 migrations parse.
+- **Learnings for future iterations:**
+  - **Even with the grant, the write was wrong.** Read-modify-write loses counts whenever two readers arrive together. The RLS rejection hid a second defect that would have shipped the moment someone "fixed" the permission.
+  - **One label was holding the whole body on the wire.** The list selects `content` solely to render "N min read". No word_count column exists, so AC3's projection needs a migration - the cheap-looking half of an AC can be the blocked one.
+  - **A pending RPC belongs in PENDING_MIGRATIONS, not the dead-query baseline.** `check-schema-usage` failed on a function that does not exist yet; the baseline is for references with no fix in flight, and putting it there would have hidden it permanently.
+  - **Seventh time an assertion fired on its own explanation.** The comment I added said "not window.location.href", and the assertion checking that string was gone matched the comment. Assert on the code shape - `url={window.location.href}` - not the bare phrase.

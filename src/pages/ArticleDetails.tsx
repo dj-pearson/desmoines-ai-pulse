@@ -18,13 +18,18 @@ import SEOHead from '@/components/SEOHead';
 import { ogImageUrl } from '@/lib/ogImage';
 import ShareDialog from '@/components/ShareDialog';
 import { Helmet } from 'react-helmet-async';
-import { BRAND } from '@/lib/brandConfig';
+import { BRAND, getCanonicalUrl } from '@/lib/brandConfig';
 import SpeakableSchema from '@/components/schema/SpeakableSchema';
 import FAQSchema from '@/components/schema/FAQSchema';
 import { SpriteIcon } from "@/components/ui/SpriteIcon";
 
 const ArticleDetails: React.FC = () => {
   const { slug } = useParams();
+  // The canonical URL, not the browser's current address (WEB-BE-056 AC4).
+  // scripts/prerender.mjs captures these pages from a headless browser pointed
+  // at http://127.0.0.1:<port>, so every share link in the prerendered markup
+  // carried a localhost address - a share target nobody can open.
+  const canonicalUrl = getCanonicalUrl(`/articles/${slug ?? ''}`);
   const { getArticleBySlug } = useArticles({ autoLoad: false });
   const [article, setArticle] = useState<Article | null>(null);
   const [loading, setLoading] = useState(true);
@@ -274,7 +279,7 @@ const ArticleDetails: React.FC = () => {
                   <ShareDialog 
                     title={article.title}
                     description={article.excerpt || article.title}
-                    url={window.location.href}
+                    url={canonicalUrl}
                     trigger={
                       <Button variant="outline" size="sm" className="gap-2">
                         <SpriteIcon name="share-2" className="h-4 w-4" />
@@ -367,7 +372,7 @@ const ArticleDetails: React.FC = () => {
                       <ShareDialog 
                         title={article.title}
                         description={article.excerpt || article.title}
-                        url={window.location.href}
+                        url={canonicalUrl}
                         trigger={
                           <Button variant="default" size="sm" className="gap-2">
                             <SpriteIcon name="share-2" className="h-4 w-4" />
@@ -427,7 +432,7 @@ const ArticleDetails: React.FC = () => {
       <ShareDialog 
         title={article.title}
         description={article.excerpt || article.title}
-        url={window.location.href}
+        url={canonicalUrl}
       />
     </>
   );
