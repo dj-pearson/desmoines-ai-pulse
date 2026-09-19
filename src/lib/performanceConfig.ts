@@ -120,11 +120,16 @@ export const webVitalsConfig = {
     }
   },
   
-  // Real User Monitoring (RUM) setup
+  // Sampling for the dev overlay's GA4 forwarding (src/hooks/useWebVitals.ts).
+  //
+  // There is no `endpoint` here any more. It read '/api/performance-metrics',
+  // a route functions/ has never contained, and the one caller POSTed to it on
+  // every metric. Real-user collection is src/lib/webVitals.ts writing the
+  // web_vitals table - the one the weekly rollup and the admin panel read.
+  // WEB-PERF-039.
   rumConfig: {
     sampleRate: 0.1, // 10% of users for performance monitoring
-    reportInterval: 30000, // Report every 30 seconds
-    endpoint: '/api/performance-metrics'
+    reportInterval: 30000 // Report every 30 seconds
   }
 };
 
