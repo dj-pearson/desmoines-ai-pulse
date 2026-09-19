@@ -2748,3 +2748,56 @@ Learnings for future iterations
    dropped field is the regression. buildLightweightClaudeRequest has no
    `system`, and triage's safety prompt lives there; without the spread the
    check still returns 200 and simply stops being told what to look for.
+
+================================================================================
+2026-09-19  WEB-QA-018: 29 tables is ten migrations, ranked
+================================================================================
+
+Followed yesterday's thread - a baselined finding that describes a live defect -
+into schema-baseline.json's 94 entries. They are not 94 independent decisions.
+Every missing object traces to one of ten migrations, and
+.github/migration-drift-baseline.json already lists 31 such files with the
+mechanism at the top: the ledger row exists, so `supabase db push` will never
+run them again. That was captured and never ranked.
+
+Ranked by dependent files and surface:
+
+   9  payments_and_invoices     MONEY - stripe-webhook, manage-subscription,
+                                generate-invoice-pdf, usePayments, AdminRefunds.
+                                Also filed separately as WEB-ADS-005.
+   8  crm_infrastructure        DEAD MODULE - 93 of the 94 findings' bulk
+   4  cms_features              ADMIN
+   3  security_features         AUTH
+   3  usage_tracking            QUOTA - no usage_events means premium quotas
+                                record nothing
+   3  advanced_seo_features     EDGE
+   2  user_sessions             AUTH - "sign out my other sessions" calls two
+                                RPCs that do not exist
+   2  ai_trip_planner           PUBLIC - /trip-planner is linked from the footer;
+                                an itinerary cannot be saved or reopened
+   2  seo_automated_monitoring  EDGE
+   2  create_seo_management     EDGE
+
+So the P1's "build them or delete the dead UI" is three decisions, not one:
+re-apply where the feature is live and visibly broken, delete the CRM module,
+and hand the three seo_* migrations to WEB-BE-031 which already owns them.
+
+Learnings for future iterations
+
+1. Before proposing a triage, check whether it exists. The drift baseline had
+   the mechanism written at the top of the file, better than I would have put
+   it. What was genuinely missing was the ORDER, which is a smaller and more
+   useful contribution than the one I set out to make.
+
+2. A flat list of 94 findings hides that three of them are the Stripe webhook
+   and two are a public feature linked from the footer. Ratchets are good at
+   "no worse" and bad at "what first" - the ranking has to live somewhere
+   else, and the story that says DECISION REQUIRED is the right somewhere.
+
+3. Two stories described one root cause from different ends: WEB-ADS-005 says
+   the payments tables do not exist, WEB-QA-018 counts the queries against
+   them. Cross-referencing is cheaper than either one re-deriving it.
+
+4. Backticks inside a double-quoted `node -e` are shell command substitution.
+   `supabase db push` in a note silently became empty, and the note read "so
+   skips it". Heredocs quoted with 'EOF' are safe; -e strings are not.
