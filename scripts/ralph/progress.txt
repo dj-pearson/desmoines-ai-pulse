@@ -1232,3 +1232,17 @@ A story marked `passes: true` whose central change had not taken effect in any d
   - **Negative-control every assertion, including the ones that "obviously" work.** My ordering assertion passed with the two SQL statements swapped, because the migration's header comment quotes the defective statement and `indexOf` found the prose first. Third time this session a check has been satisfied by its own explanation - after the `NEIGHBORHOODS` word-grep and the `check-raw-img` comment match. Strip comments before asserting on source, always.
   - **An applied migration cannot be repaired by editing it.** schema_migrations says it ran; `db push` will never run it again. The fix is always a new file. WEB-QA-005 documents the same trap costing the trip planner its tables.
 ---
+
+## 2026-09-19 - WEB-BE-039 AC1-AC4 (AC5's dry-run listing needs the database)
+A four-character venue extraction moved the event to another venue's address.
+- The guard was `searchText.length >= 5 || venueLower.length >= 5`. The OR's right-hand side is about the KNOWN venue, always long enough, so the length test passed for every extraction and "Park" matched the first venue containing it. The caller then overwrote venue name, street address, latitude and longitude.
+- `_shared/venueMatch.ts`: exact/alias always canonicalize; a partial needs 5+ characters AND word boundaries AND >=50% coverage. Below that it returns null and the caller keeps what the source said.
+- `20260919000002` hardens `find_matching_venue()` to the same rules.
+- `_tests/venue-match.test.ts`, 10 assertions, wired into CI.
+- **Learnings for future iterations:**
+  - **Check an AC that says "reuse the shared implementation" before reusing it.** AC3 said to converge on `find_matching_venue` rather than keep a second matcher. That RPC has NO length guard at all - it is a bare LIKE both ways - so converging would have made the defect worse and spread it to the web app, which calls it. The shared thing is not automatically the correct thing.
+  - **A length floor alone does not make substring matching safe.** "Center" is six characters and is 6 of the 18 in "Iowa Events Center". Coverage - how much of the candidate the match accounts for - is the rule that does the work; length only removes the common nouns.
+  - **`pip install pglast` gives you Postgres's own parser offline.** `parse_sql()` validates the statement, `parse_plpgsql()` validates the function body. This repo had no way to check a migration without a database, and both migrations I wrote today are now syntax-verified rather than hoped-for.
+  - **It found a live broken migration in 0.57 seconds across all 389.** `20251203000004_add_location_tracking.sql` has `RETURNS TABLE (..., timestamp TIMESTAMPTZ, ...)`; `timestamp` is a col_name_keyword and cannot be a bare column name there, so the statement is a syntax error and everything after it in the file never ran. It sits in the drift baseline as "drifted" - this is WHY. A `check-migrations-parse` script is the obvious next move.
+  - **Fix the type shim, not the tests it inconveniences.** `_typecheck/deno.d.ts` declared `node:assert`'s `strict` as `any`, so `assert.ok(x)` did not narrow x and every test that asserts-then-uses hit TS18047. I had already worked around it once today with `?? ''`. Declaring `ok(value): asserts value` and keeping an index signature for everything else fixed three errors without touching a single test, and preserved the original "don't approximate what nobody has exercised" intent.
+---

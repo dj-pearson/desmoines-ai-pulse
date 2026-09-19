@@ -17,6 +17,7 @@ import { getAIConfig, buildClaudeRequest, buildLightweightClaudeRequest, getClau
 import { validateURLForSSRF } from "../_shared/validation.ts";
 import { checkRateLimitPersistent } from "../_shared/rateLimit.ts";
 import { tryDomainAdapter } from "../_shared/domain-adapters/index.ts";
+import { matchKnownVenue, type MatchableVenue } from "../_shared/venueMatch.ts";
 import { extractEventsFromJsonLd } from "../_shared/jsonLdEvents.ts";
 import { requireAdminOrApiKey } from "../_shared/apiKeyAuth.ts";
 import { fetchAndStoreImage, CONTENT_TYPE_MAP } from "../_shared/imageStorage.ts";
@@ -118,67 +119,38 @@ async function loadKnownVenuesCache(): Promise<KnownVenueData[]> {
 }
 
 /**
- * Find a matching known venue by name or alias
- * Returns venue data if found, null otherwise
+ * Find a matching known venue by name or alias (WEB-BE-039).
+ *
+ * THE LOOP THAT USED TO LIVE HERE matched with `includes` either way, guarded
+ * by `searchText.length >= 5 || venueLower.length >= 5`. That OR is the bug:
+ * its right-hand side is about the KNOWN venue, which is always five
+ * characters or more, so the guard passed for every extraction and a
+ * 3-4 character one - "Park", "The", "Hall" - matched the first known venue
+ * containing it. The caller below then overwrote the event's venue name, its
+ * full street ADDRESS and its LATITUDE and LONGITUDE, so an event extracted as
+ * "Park" was stored at Principal Park's address and pinned at its coordinates.
+ *
+ * The rules now live in _shared/venueMatch.ts, where they are unit-testable
+ * without a database: exact and alias always canonicalize, a partial match
+ * needs length, word boundaries and coverage, and anything short of that
+ * returns null so the caller keeps what the source said.
  */
 async function findMatchingKnownVenue(venueName: string): Promise<KnownVenueData | null> {
-  if (!venueName || venueName.trim().length === 0) {
+  const venues = await loadKnownVenuesCache();
+  const match = matchKnownVenue(venueName, venues as unknown as MatchableVenue[]);
+
+  if (!match) {
+    // Deliberately loud. A refused canonicalization is the correct outcome, but
+    // a source that stops matching at all is worth noticing, and this is the
+    // only place it is visible.
+    console.log(`🚫 No confident venue match for "${venueName}" - keeping the extracted value`);
     return null;
   }
 
-  const venues = await loadKnownVenuesCache();
-  const searchText = venueName.toLowerCase().trim();
-
-  // First, try exact name match
-  for (const venue of venues) {
-    if (venue.name.toLowerCase() === searchText) {
-      console.log(`🎯 Exact venue match: "${venueName}" -> "${venue.name}"`);
-      return venue;
-    }
-  }
-
-  // Then, try alias match
-  for (const venue of venues) {
-    const venueData = venue as any;
-    if (venueData.aliases && Array.isArray(venueData.aliases)) {
-      for (const alias of venueData.aliases) {
-        if (alias.toLowerCase() === searchText) {
-          console.log(`🎯 Alias match: "${venueName}" -> "${venue.name}" (via alias "${alias}")`);
-          return venue;
-        }
-      }
-    }
-  }
-
-  // Try partial match on name (venue name contains search or vice versa)
-  for (const venue of venues) {
-    const venueLower = venue.name.toLowerCase();
-    if (venueLower.includes(searchText) || searchText.includes(venueLower)) {
-      // Only match if significant overlap (avoid matching "The" in everything)
-      if (searchText.length >= 5 || venueLower.length >= 5) {
-        console.log(`🎯 Partial venue match: "${venueName}" -> "${venue.name}"`);
-        return venue;
-      }
-    }
-  }
-
-  // Try partial match on aliases
-  for (const venue of venues) {
-    const venueData = venue as any;
-    if (venueData.aliases && Array.isArray(venueData.aliases)) {
-      for (const alias of venueData.aliases) {
-        const aliasLower = alias.toLowerCase();
-        if (aliasLower.includes(searchText) || searchText.includes(aliasLower)) {
-          if (searchText.length >= 5 || aliasLower.length >= 5) {
-            console.log(`🎯 Partial alias match: "${venueName}" -> "${venue.name}" (via alias "${alias}")`);
-            return venue;
-          }
-        }
-      }
-    }
-  }
-
-  return null;
+  console.log(
+    `🎯 ${match.kind} venue match: "${venueName}" -> "${match.venue.name}" (via "${match.matchedOn}")`,
+  );
+  return match.venue as unknown as KnownVenueData;
 }
 
 /**

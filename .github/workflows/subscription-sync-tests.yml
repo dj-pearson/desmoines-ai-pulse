@@ -163,6 +163,14 @@ jobs:
       # `getMinutes() || 30`, turning every on-the-hour time into :30 and
       # midnight into 7 PM. Pins all of it.
       - run: deno test --allow-read supabase/functions/_tests/no-time-marker.test.ts
+      # WEB-BE-039. firecrawl-scraper matched a scraped venue with `includes`
+      # either way, guarded by `searchText.length >= 5 || venueLower.length >= 5`
+      # - an OR whose right-hand side is about the KNOWN venue, so it always
+      # passed and a 4-character extraction like "Park" matched the first venue
+      # containing it. The caller then overwrote the event's venue name, street
+      # address and coordinates, so the event moved. Pins the length, word-
+      # boundary and coverage rules, and that the scraper uses the shared matcher.
+      - run: deno test --allow-read supabase/functions/_tests/venue-match.test.ts
       # WEB-BE-032. The ops digest counted with `count ?? 0` and discarded the
       # error, so a digest that could read nothing printed the same eleven
       # zeros as a system with nothing wrong. Pins that an unreadable section
