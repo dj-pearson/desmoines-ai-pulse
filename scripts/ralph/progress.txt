@@ -1610,3 +1610,14 @@ Ran `playwright.smoke.config.ts` against the built site. 123 passed, 17 failed; 
   - **`.first()` picking the right element on DOM order is not a passing test, it is a coincidence with a green tick.** Filling a `<button>` would not have failed `toBeVisible`, so a toggle moved ahead of the field would have left this green while testing nothing.
   - **`.and()` says what `.first()` only implies.** `getByLabel(/password/i).and(page.locator('input'))` names the disambiguator, so the next person does not have to re-derive why the first match was the right one. The negative control is cheap: point the filter at `button` and watch it go red.
   - **Not every loose locator is worth tightening.** `route-smoke:474` is the fallback arm of an either/or whose primary assertion is a redirect. Tightening it blind risks turning a green required test red for a reason I cannot verify here, so it is recorded instead.
+
+## 2026-09-19 - WEB-QUAL-014 (registerServiceWorker() registered nothing)
+The AC said rename; reading the third layer said delete.
+- `registerServiceWorker()` gone from `performance.ts`, and its `lazyInit` call with it - `index.html`'s inline script already runs the same teardown in the same document, five seconds earlier.
+- Two layers remain and are genuinely different: the inline script (ordinary page load) and `public/sw.js` (the browser's own update check).
+- 5 vitest cases, three negative controls.
+- **Learnings for future iterations:**
+  - **A renamed function nobody calls is the same dead twin in a new coat.** The AC asked for `clearServiceWorkers()`. Checking whether the call was *needed* - rather than whether the name was honest - turned a rename into a deletion plus one fewer dynamic import and timer per page load.
+  - **"Three copies" is not automatically three layers.** Two of these run in the same document five seconds apart, so the later one is redundant by construction. The third is reached by a different mechanism entirely - the browser fetching `sw.js` - and is not. Counting occurrences suggested one answer; asking who reaches each suggested another.
+  - **The comment explaining the removal broke the test checking the removal.** Third time this session. The fix is the same every time: strip comments before matching. Worth doing by default in any source-text assertion that names the thing it forbids.
+  - **`git checkout <file>` ate the real edit during a negative control, again.** Same mistake, same session: restoring a file from HEAD reverts work HEAD has never seen. The scratchpad copy is the restore point; git is not.
