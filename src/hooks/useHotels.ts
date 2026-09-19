@@ -269,7 +269,7 @@ export function useHotels(filters: HotelFilters = {}) {
 export function useHotel(slug: string | undefined) {
   // `enabled` replaces the `if (!slug) { setIsLoading(false); return; }` guard:
   // with no slug there is nothing to fetch, and the query never runs.
-  const { data, isLoading, error } = useQuery<Hotel | null>({
+  const { data, isLoading, error, refetch } = useQuery<Hotel | null>({
     queryKey: queryKeys.hotels.detail(slug ?? ""),
     enabled: !!slug,
     staleTime: STALE_TIME.CONTENT_LIST,
@@ -301,6 +301,10 @@ export function useHotel(slug: string | undefined) {
         ? error.message
         : "Failed to fetch hotel"
       : null,
+    // WEB-SEO-040: the detail page needs a retry on its error branch, which is
+    // now separate from "no such hotel" - the two used to share one render and
+    // one noindex.
+    refetch,
   };
 }
 

@@ -1,5 +1,6 @@
 import { useParams, Link } from "react-router-dom";
 import { RouteCanonical } from "@/components/RouteCanonical";
+import { ErrorState } from "@/components/ui/error-state";
 import { Helmet } from "react-helmet-async";
 import { useHotel } from "@/hooks/useHotels";
 import HotelSchema from "@/components/schema/HotelSchema";
@@ -41,7 +42,7 @@ function StarRating({ rating }: { rating: number }) {
 
 export default function HotelDetails() {
   const { slug } = useParams<{ slug: string }>();
-  const { hotel, isLoading, error } = useHotel(slug);
+  const { hotel, isLoading, error, refetch } = useHotel(slug);
 
   // WEB-FEAT-012. Three call sites below read hotel.source_url, a column
   // public.hotels does not have — confirmed live, the REST API returns 42703
@@ -77,7 +78,28 @@ export default function HotelDetails() {
     );
   }
 
-  if (error || !hotel) {
+  /**
+   * WEB-SEO-040. THIS BRANCH USED TO READ `if (error || !hotel)`, so a failed
+   * fetch and a missing row produced the same page - "Hotel Not Found" plus a
+   * noindex. A transient PostgREST error on a real hotel page therefore asked
+   * Google to drop it. The two answers are separated now; the retry state
+   * carries no robots meta at all, because the page is fine and saying nothing
+   * leaves whatever is indexed alone.
+   */
+  if (error) {
+    return (
+      <div className="min-h-screen bg-background pb-24">
+        <RouteCanonical path={`/stay/${slug}`} />
+        <Header />
+        <div className="container mx-auto px-4 py-16">
+          <ErrorState error={error} onRetry={() => void refetch()} />
+        </div>
+        <Footer />
+      </div>
+    );
+  }
+
+  if (!hotel) {
     return (
       <div className="min-h-screen bg-background pb-24">
         <Helmet>

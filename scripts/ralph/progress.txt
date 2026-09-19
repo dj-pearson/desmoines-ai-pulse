@@ -1676,3 +1676,18 @@ Found while closing WEB-SEO-043: a rule measuring `const pageTitle` reported fou
   - **Sampling once cannot see a race.** Every measurement in this story takes the title at 1.2s and again at 3.7s. Before the fix that was the only way to observe the problem; after it, `t1 === t2` on 36 routes is the proof it is gone.
   - **`s.count(name) != 1` is the wrong guard for an unused import,** because `import { useDocumentTitle } from "@/hooks/useDocumentTitle"` contains the name twice - the binding and the module path. The first pass removed 0 imports and reported success.
   - **I did not build AC5's check.** The pattern is greppable and the script would be short, but all twenty instances are gone and a ratchet with nothing to hold is better written when somebody re-introduces one. Recorded as a deliberate omission rather than quietly skipped.
+
+## 2026-09-19 - WEB-SEO-040 CLOSED: a failed fetch is not a missing page
+Four detail pages rendered the not-found branch (with `noindex`) whenever the query threw, so a backend blip told Googlebot to drop the URL. EventDetails published two contradictory robots metas on that branch.
+- `TrailDetail`, `ItineraryDetail`, `SeasonalGuide`, `HotelDetails` now check `error` first and render `<ErrorState>` with a retry, carrying no robots meta at all. `useHotel` returns `refetch` so the retry works.
+- `<SEOHead>` removed from EventDetails' not-found branch; the page now emits exactly one `noindex, follow`.
+- `src/pages/__tests__/detailErrorNotFound.test.ts`: 25 assertions, three negative controls fired on the right one. Suite 705/705 across 73 files, `npm run validate` clean.
+- Runtime probe against a production build: `/outdoors/x`, `/itineraries/x`, `/guides/x`, `/stay/x`, `/music/venues/x`, `/sports/x` publish no robots meta when the fetch fails.
+- **Learnings for future iterations:**
+  - **The AC's file list was two pages stale.** VenueDetail and TeamDetail were named as broken and had already been fixed under WEB-QA-032. Re-reading the evidence before implementing is not optional bookkeeping - half the work here was already done, and the half that was not (HotelDetails) was worse than described.
+  - **`if (error || !hotel)` merges two answers into one.** "The server is down" and "there is no such hotel" want opposite robots directives, and the `||` picks the wrong one for the first case every time. Splitting the condition is the whole fix.
+  - **Order of branches is the behaviour.** A `!data` check placed first swallows the error, because a failed query also has no data. Every one of these pages has to test `error` before `!data`, and the test asserts the index of one is below the index of the other rather than just their presence.
+  - **The retry state carries no robots meta on purpose.** Emitting an explicit `index` would claim the page is fine; emitting `noindex` is the bug. Saying nothing lets the crawler fall back to the page's default and try again later.
+  - **Two robots metas is a coin toss dressed as a decision.** EventDetails rendered `noindex, follow` from Helmet and `index, follow, max-image-preview:large` from `SEOHead` on the same branch. Whichever lands last wins, and nothing in the source says which that is.
+  - **The placeholder backend is what made the runtime check possible.** `placeholder.supabase.co` does not resolve, so every detail query fails - which is exactly the state this story is about. The environment that usually blocks verification was the fixture.
+  - **What was not verified, recorded in the note:** that a *successful* query returning no row still noindexes. No query succeeds here, so that path is asserted in source only.

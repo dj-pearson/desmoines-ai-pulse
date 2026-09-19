@@ -10,7 +10,6 @@ import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Breadcrumbs } from "@/components/ui/breadcrumbs";
-import SEOHead from "@/components/SEOHead";
 import { RouteCanonical } from "@/components/RouteCanonical";
 import EnhancedEventSEO from "@/components/EnhancedEventSEO";
 import AIWriteup from "@/components/AIWriteup";
@@ -132,13 +131,16 @@ export default function EventDetails() {
   if (!event) {
     return (
       <>
-        <SEOHead
-          title="Event Not Found - Des Moines Events"
-          description="The event you're looking for could not be found. Browse all upcoming events in Des Moines, Iowa."
-          type="website"
-        />
+        {/* NO SEOHead HERE (WEB-SEO-040). It emits
+            robots="index, follow, max-image-preview:large, ..." unconditionally,
+            so this branch published TWO conflicting robots metas - one asking
+            for indexing and one refusing it - on the same page. Google resolves
+            a conflict by taking the most restrictive, so the outcome happened to
+            be right, but publishing both is a coin toss dressed as a decision.
+            A page that does not exist needs the refusal and nothing else. */}
         <Helmet>
           <meta name="robots" content="noindex, follow" />
+          <meta name="googlebot" content="noindex, follow" />
         </Helmet>
         <div className="min-h-screen bg-background">
           <Header />
