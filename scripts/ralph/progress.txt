@@ -2618,3 +2618,46 @@ Learnings for future iterations
 4. Read the key, never print it. The probe names the env vars in its error and
    never echoes a value - the rule from the shared CLAUDE block, applied to a
    script whose whole job is to authenticate.
+
+================================================================================
+2026-09-19  WEB-SEO-006  Two defects described as one, and one of them is fixed
+================================================================================
+
+The P1 says 883 entity pages "declare themselves a duplicate of the homepage".
+That was true when written on 2026-08-18 and the fix landed on 2026-08-27:
+functions/_middleware.ts rewrites the canonical and og:url to the requested URL
+whenever the served HTML is the homepage shell at a non-homepage path, and
+strips the homepage's JSON-LD with it.
+
+I reproduced the raw defect locally - built, captured the rendered homepage into
+dist/index.html the way prerender does, served it, and got the homepage title,
+canonical and og:url back from three entity URLs. THE CAVEAT IS THE POINT:
+vite preview runs no Pages Functions, so that measurement is "what Pages would
+serve WITHOUT the middleware". It shows what the middleware prevents, not what
+production does. Production could not be fetched - egress to the site is not
+permitted here - so the last step is an owner-side curl, written into the notes.
+
+What remains is one defect, not two: entity pages are thin, not mislabelled.
+AC4 and AC6 are what PRERENDER_ENTITIES=true is for, and that flag is host-side.
+
+Learnings for future iterations
+
+1. A story's current-state paragraph ages faster than its ACs. This one was
+   nine days older than the fix for half of what it described, and reading it
+   as current would have sent this iteration at a solved problem.
+
+2. State the harness limits of a local reproduction IN the reproduction. Three
+   curl outputs showing the homepage canonical at entity URLs look damning and
+   mean nothing without "vite preview runs no Pages Functions". Without that
+   sentence the next person files it as a live defect.
+
+3. Check that the fix can RUN, not just that it exists. public/_routes.json
+   including "/*" and being copied into dist/ is what puts the middleware in
+   the request path; an exclusion there would have made the committed fix
+   inert, which is exactly how its predecessor spent months gated on a 404
+   that single-page-app mode never returns.
+
+4. The untestable half is where a fix regresses twice. The gate is covered in
+   both directions; the rewrite needs HTMLRewriter, a Cloudflare runtime API
+   with no Node equivalent, and its own test file says so. That is the gap to
+   close, and it needs miniflare or a deployed assertion, not another unit test.
