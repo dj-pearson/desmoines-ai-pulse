@@ -248,6 +248,14 @@ jobs:
       # percent became a wildcard and silently dropped a real record. Pins both
       # rules across the TypeScript and Python paths.
       - run: deno test --allow-read supabase/functions/_tests/duplicate-check-policy.test.ts
+      # WEB-BE-053. bulk-enhance-events told the model, in capitals, to ADD
+      # STATISTICS (attendance, years running, venue capacity) and INCLUDE
+      # QUOTES/CITATIONS ("According to Des Moines Register...") while giving it
+      # five fields containing no number, no year and no quote - so every one it
+      # produced was invented, and attributed, and published. Its worked example
+      # demonstrated five fabrications in six sentences. Pins that the prompt no
+      # longer asks for any of it and that the example models omission.
+      - run: deno test --allow-read supabase/functions/_tests/writeup-grounding.test.ts
       # WEB-BE-032. The ops digest counted with `count ?? 0` and discarded the
       # error, so a digest that could read nothing printed the same eleven
       # zeros as a system with nothing wrong. Pins that an unreadable section

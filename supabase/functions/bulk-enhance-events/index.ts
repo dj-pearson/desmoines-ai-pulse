@@ -10,6 +10,7 @@ import { createClient } from "https://esm.sh/@supabase/supabase-js@2.43.1";
 import { getAIConfig, buildClaudeRequest, getClaudeHeaders, getAnthropicApiKey, extractClaudeText } from "../_shared/aiConfig.ts";
 import { requireAdminOrApiKey } from "../_shared/apiKeyAuth.ts";
 import { fetchWithTimeout } from "../_shared/fetchWithTimeout.ts";
+import { buildEnhancePrompt } from "./prompt.ts";
 
 const corsHeaders = {
   "Access-Control-Allow-Origin": "*",
@@ -109,106 +110,14 @@ serve(async (req) => {
     console.log(`📋 Found ${eventsToEnhance.length} events needing enhancement`);
 
     // Build comprehensive prompt for all events in one API call with GEO optimization
-    const bulkPrompt = `You are an expert local SEO and GEO (Generative Engine Optimization) content writer specializing in Des Moines, Iowa events. Your task is to create AI-enhanced writeups optimized for both traditional search engines AND AI assistants (ChatGPT, Perplexity, Claude).
-
-CURRENT DATE: ${new Date().toLocaleDateString('en-US', {
-  timeZone: 'America/Chicago',
-  year: 'numeric',
-  month: 'long',
-  day: 'numeric'
-})}
-
-LOCATION CONTEXT: Des Moines, Iowa and surrounding metro area (West Des Moines, Ankeny, Johnston, Urbandale, etc.)
-
-🎯 GEO OPTIMIZATION METHODS (CRITICAL):
-
-1. STATISTICS METHOD (Add Quantifiable Data):
-   - Include specific numbers: attendance figures, years running, awards won
-   - Example: "This festival has attracted over 5,000 attendees annually since 2015"
-   - Example: "One of only 3 authentic cultural celebrations in Des Moines"
-   - Add venue capacity, typical crowd size, historical data
-
-2. QUOTATION METHOD (Add Authority & Credibility):
-   - Include quotes from organizers, past attendees, or local experts when possible
-   - Example: "According to the Des Moines Register, this is 'the premier family event of the summer'"
-   - Use phrases like "Described by locals as...", "Event organizers note that..."
-
-3. CITE SOURCES METHOD (Build Trust):
-   - Reference authoritative sources when making claims
-   - Example: "According to the venue's official announcement..."
-   - Example: "As featured in the Des Moines Register..."
-   - Mention official website, social media following, media coverage
-
-4. EASY-TO-UNDERSTAND METHOD (Structure for AI Parsing):
-   - Start with the most important information first
-   - Use clear, scannable structure
-   - Include concrete details (dates, times, prices, locations)
-   - Answer: What? When? Where? Who? Why? How much?
-
-5. LOCAL AUTHORITY SIGNALS:
-   - Include "Des Moines" or specific neighborhood names
-   - Reference local landmarks, venues, or attractions
-   - Use geo-specific keywords naturally (Iowa, Central Iowa, Greater DSM)
-   - Connect to local culture, food scene, or community aspects
-
-CONTENT GUIDELINES:
-- Length: 250-350 words per event (increased for GEO depth)
-- Tone: Authoritative yet friendly, factual, locally-aware
-- Focus: Statistics, quotes, sources, practical details, local connections
-- Structure: Answer-first format, clear sections
-- Avoid: Generic descriptions, unsupported claims, vague language
-
-EVENTS TO ENHANCE:
-
-${eventsToEnhance.map((event, index) => `
-EVENT ${index + 1}:
-ID: ${event.id}
-Title: ${event.title}
-Original Description: ${event.original_description || 'No description provided'}
-Enhanced Description: ${event.enhanced_description || 'Not enhanced yet'}
-Location: ${event.location || 'Des Moines, IA'}
-Venue: ${event.venue || 'TBD'}
-Category: ${event.category || 'General'}
-Date: ${new Date(event.date).toLocaleDateString('en-US', { 
-  timeZone: 'America/Chicago',
-  weekday: 'long',
-  year: 'numeric', 
-  month: 'long', 
-  day: 'numeric',
-  hour: 'numeric',
-  minute: '2-digit'
-})}
-Source URL: ${event.source_url || 'Not provided'}
-`).join('\n')}
-
-INSTRUCTIONS:
-For each event, create a GEO-optimized writeup that:
-1. OPENS with key facts: What it is, when, where, cost (answer-first format for AI engines)
-2. ADDS STATISTICS: Include quantifiable data (attendance, years running, venue capacity)
-3. INCLUDES QUOTES/CITATIONS: Reference sources like "According to Des Moines Register..." or "Event organizers note..."
-4. EXPLAINS LOCAL CONTEXT: What makes this special in Des Moines
-5. PROVIDES PRACTICAL DETAILS: Parking, family-friendly, accessibility, duration
-6. ADDS LOCAL CONNECTIONS: Nearby restaurants, attractions, neighborhood info
-7. ENDS with a clear call-to-action
-
-EXAMPLE GEO-OPTIMIZED PARAGRAPH:
-"The Downtown Farmers Market returns every Saturday from 7 AM to 12 PM at Court Avenue (May through October). Established in 1975, this is Iowa's largest and oldest farmers market, attracting over 20,000 visitors weekly at peak season. According to Des Moines Tourism, the market features 300+ vendors selling local produce, artisan goods, and prepared foods. 'It's become a Des Moines tradition,' notes the market director. Located in the heart of downtown Des Moines, free parking is available in nearby ramps, and the event is family-friendly with stroller accessibility. Arrive early for the best selection and pair your visit with brunch at nearby Lucca or Zombie Burger."
-
-FORMAT YOUR RESPONSE AS JSON:
-{
-  "results": [
-    {
-      "eventId": "uuid-here",
-      "aiWriteup": "Your 200-300 word writeup here..."
-    },
-    {
-      "eventId": "uuid-here", 
-      "aiWriteup": "Your 200-300 word writeup here..."
-    }
-  ]
-}
-
-Generate writeups for ALL ${eventsToEnhance.length} events listed above. Each writeup should be unique, locally-focused, and SEO-optimized for Des Moines area searches.`;
+    // WEB-BE-053. The prompt that used to sit here told the model, in
+    // capitals, to ADD STATISTICS (attendance, years running, venue
+    // capacity) and INCLUDE QUOTES/CITATIONS ("According to Des Moines
+    // Register...") - while giving it five fields, none of which contains a
+    // number, a year or a quote. Every one it produced was invented, and
+    // attributed. It is a builder now so a test can read what it actually
+    // asks for; see ./prompt.ts for what replaced it and why.
+    const bulkPrompt = buildEnhancePrompt(eventsToEnhance);
 
     // Make Claude API call
     console.log('🤖 Sending bulk request to Claude API...');

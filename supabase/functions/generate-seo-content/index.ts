@@ -6,6 +6,7 @@
  */
 import "https://deno.land/x/xhr@0.1.0/mod.ts";
 import { fetchWithTimeout } from "../_shared/fetchWithTimeout.ts";
+import { createEventSEOPrompt, createRestaurantSEOPrompt } from './prompts.ts';
 import { serve } from "https://deno.land/std@0.168.0/http/server.ts";
 import { createClient } from 'https://esm.sh/@supabase/supabase-js@2';
 import { getAIConfig, buildLightweightClaudeRequest, getClaudeHeaders, getAnthropicApiKey, extractClaudeText } from "../_shared/aiConfig.ts";
@@ -219,64 +220,6 @@ serve(async (req) => {
     );
   }
 });
-
-function createEventSEOPrompt(event: any): string {
-  return `Generate comprehensive SEO and GEO optimization content for this Des Moines event. Return ONLY a JSON object with these exact fields:
-
-{
-  "title": "SEO title (under 60 chars, include event name + Des Moines + date)",
-  "description": "Meta description (150-155 chars, compelling with local keywords)",
-  "keywords": ["keyword1", "keyword2", "keyword3", "keyword4", "keyword5"],
-  "h1": "H1 tag matching primary search intent",
-  "summary": "2-3 sentence GEO summary for AI engines, location-focused",
-  "keyFacts": ["Fact 1", "Fact 2", "Fact 3", "Fact 4"],
-  "faq": [
-    {"question": "When is [event]?", "answer": "Answer with date and time"},
-    {"question": "Where is [event] located?", "answer": "Answer with venue and Des Moines"},
-    {"question": "What type of event is [event]?", "answer": "Answer with category"}
-  ]
-}
-
-Event Details:
-- Title: ${event.title}
-- Venue: ${event.venue || 'N/A'}
-- Location: ${event.location}
-- Date: ${event.date}
-- Category: ${event.category}
-- AI Writeup: ${event.ai_writeup ? event.ai_writeup.substring(0, 200) + '...' : 'N/A'}
-
-Focus on Des Moines local SEO and GEO optimization for AI search engines.`;
-}
-
-function createRestaurantSEOPrompt(restaurant: any): string {
-  return `Generate comprehensive SEO and GEO optimization content for this Des Moines restaurant. Return ONLY a JSON object with these exact fields:
-
-{
-  "title": "SEO title (under 60 chars, include restaurant name + cuisine + Des Moines)",
-  "description": "Meta description (150-155 chars, compelling with local keywords)",
-  "keywords": ["keyword1", "keyword2", "keyword3", "keyword4", "keyword5"],
-  "h1": "H1 tag matching primary search intent",
-  "summary": "2-3 sentence GEO summary for AI engines, location-focused",
-  "keyFacts": ["Fact 1", "Fact 2", "Fact 3", "Fact 4"],
-  "faq": [
-    {"question": "What type of cuisine does [restaurant] serve?", "answer": "Answer with cuisine type"},
-    {"question": "Where is [restaurant] located?", "answer": "Answer with address and Des Moines"},
-    {"question": "What is the price range at [restaurant]?", "answer": "Answer with price range"}
-  ]
-}
-
-Restaurant Details:
-- Name: ${restaurant.name}
-- Description: ${restaurant.description || 'N/A'}
-- Cuisine: ${restaurant.cuisine}
-- Location: ${restaurant.location}
-- Price Range: ${restaurant.price_range || 'N/A'}
-- Status: ${restaurant.status || 'N/A'}
-- Opening Date: ${restaurant.opening_date || 'N/A'}
-- AI Writeup: ${restaurant.ai_writeup ? restaurant.ai_writeup.substring(0, 200) + '...' : 'N/A'}
-
-Focus on Des Moines local SEO and GEO optimization for AI search engines.`;
-}
 
 function parseClaudeResponse(response: string): any {
   try {
