@@ -7,6 +7,7 @@ import { Badge } from '@/components/ui/badge';
 import { Button } from '@/components/ui/button';
 import { Star } from "lucide-react";
 import { SpriteIcon } from "@/components/ui/SpriteIcon";
+import { OptimizedImage } from "@/components/OptimizedImage";
 
 interface TrendingContentProps {
   contentType?: 'event' | 'restaurant' | 'attraction' | 'playground';
@@ -153,12 +154,12 @@ export default function TrendingContent({
           >
             {item.content?.image_url && (
               <div className="relative h-40 overflow-hidden rounded-t-lg">
-                <img
+                <OptimizedImage
                   src={item.content.image_url}
                   alt={item.content.name || item.content.title}
-                  className="w-full h-full object-cover"
-                  loading="lazy"
-                  decoding="async"
+                  containerClassName="w-full h-full"
+                  className="object-cover"
+                  sizes="(max-width: 768px) 100vw, 33vw"
                 />
                 <div className="absolute top-2 right-2">
                   <Badge 
