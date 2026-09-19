@@ -1202,3 +1202,19 @@ The Catch Des Moines adapter parsed the site's own ld+json @type and then threw 
   - **Split a pure function out when its module imports something heavy.** catchdesmoines.ts imports deno_dom, so a test importing the adapter cannot run without network. Same move as summary.ts an hour earlier; it is becoming the default shape for anything I want to test here.
   - `check-edge-types` caught TS18048 in my own new test: `node:assert`'s `ok` is not declared as an assertion function in the edge shim, so it does not narrow `string | undefined`. Use `?? ''` + assert.notEqual, not assert.ok, when the value is used afterwards.
 ---
+
+## 2026-09-19 - WEB-BE-037 AC1/AC2/AC3 (AC4's backfill needs the database)
+Four ingestion paths had four answers for "a day, but no time" - and one of them rewrote real times.
+- ai-crawler's private `parseEventDateTime` deleted (83 lines); the file imports the shared one.
+- `catchdesmoines.ts`, `jsonLdEvents.ts` now emit a DATE-ONLY string when the source gave no time, so `parseEventDateTime` stamps NO_TIME_MARKER; `catchdesmoines_crawler.py` writes 19:31:58 directly.
+- `_tests/no-time-marker.test.ts`, 7 assertions, negative-controlled three times, wired into CI.
+- **Learnings for future iterations:**
+  - **`x || 19` is not a default, it is a rewrite.** ai-crawler read `getHours() || 19` and `getMinutes() || 30`, so every on-the-hour time became :30 and midnight became 7 PM. A 7:00 PM show was stored as 7:30 PM. Any `||` on a numeric field where 0 is meaningful is this bug; use `??`.
+  - **The prompt is an ingestion path too.** The story lists five code defaults and misses the two that produce most of the rows: the extraction prompt told Claude "No time? Default to 19:00:00". Fixing the parser while the model is asked to fill the gap first achieves nothing - what arrives is a complete timestamp the parser is right to believe. When auditing defaults, grep the prompt strings.
+  - **While in that prompt I found `"6:00PM" -> "19:00:00"`.** 6 PM is 18:00. An hour-shifted example of the exact conversion the prompt exists to teach. Read prompt examples as code, because that is what they are.
+  - **A "no value" sentinel must be an odd value.** NO_TIME_MARKER is 19:31:58 precisely so a reader can tell it from a real 7:30 show. Three of the four paths picked round numbers and became indistinguishable from real data the moment they were written.
+  - **Verify the chain before changing a producer to emit less.** Emitting a bare date only earns the marker if something downstream runs the shared parser; I checked that ai-crawler, firecrawl-scraper and ingest-events/plan.ts all do, rather than assuming.
+  - **A literal ban is the wrong assertion when the literal is sometimes correct.** Banning `19:00:00` in ai-crawler fails on `"7:00 PM" -> "19:00:00"`, a correct conversion example. Ban the defaulting INSTRUCTION there; keep the literal ban where every clock literal was a default.
+  - **Run the suites that READ the files you changed, even if they need network.** `seatgeek-time-tbd` and `event-unique-key` both read files this story touched and both import std/assert, which deno.land blocks here. A 10-line local shim plus `--import-map` runs them. Doing that found `event-unique-key` failing on the CURRENT tree, before any change of mine (see below) - which I would otherwise have blamed on myself or, worse, not noticed.
+  - **PRE-EXISTING AND CI IS RED ON IT:** migration 20260902000006 creates `events_title_venue_unique` as a plain UNIQUE INDEX and then retires it with `ALTER TABLE ... DROP CONSTRAINT IF EXISTS`. In Postgres that is a silent NO-OP on an index that is not a constraint, so the old one-row-per-title+venue index survives and the multi-night runs the migration exists to unlock are still blocked. Needs a NEW migration, not an edit to one the ledger says already ran. WEB-BE-036.
+---

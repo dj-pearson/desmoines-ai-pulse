@@ -312,9 +312,16 @@ function parseDateTime(raw: string | undefined): string | null {
   const m = raw.match(/^(\d{4}-\d{2}-\d{2})(?:T(\d{2}:\d{2})(?::(\d{2}))?)?/);
   if (!m) return null;
   const date = m[1];
-  const hhmm = m[2] ?? "19:00";
+  // WEB-BE-037. This defaulted an all-day schema.org date to "19:00", which is
+  // indistinguishable from a real 7pm show and disagreed with the three other
+  // ingestion paths (19:31:58, 19:30, 19:00). Returning the DATE ONLY hands the
+  // decision to parseEventDateTime in _shared/eventDateTime.ts, which stamps
+  // NO_TIME_MARKER - the one value that means "the source published no time".
+  // Both consumers of this adapter (ai-crawler, firecrawl-scraper) run that
+  // parser over item.date, so the marker is what lands.
+  if (m[2] === undefined) return date;
   const ss = m[3] ?? "00";
-  return `${date} ${hhmm}:${ss}`;
+  return `${date} ${m[2]}:${ss}`;
 }
 
 // Minimal Element interface — deno-dom's types don't carry through cleanly

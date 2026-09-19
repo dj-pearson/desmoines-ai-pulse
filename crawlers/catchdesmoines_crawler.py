@@ -503,7 +503,14 @@ Return ONLY the JSON array. No other text."""
                 dt = datetime.strptime(date_str, "%Y-%m-%d %H:%M:%S")
             elif re.match(r'^\d{4}-\d{2}-\d{2}$', date_str):
                 dt = datetime.strptime(date_str, "%Y-%m-%d")
-                dt = dt.replace(hour=19, minute=0, second=0)  # Default 7 PM
+                # WEB-BE-037. This stamped 19:00:00, which is indistinguishable
+                # from a real 7pm show and disagreed with the three other
+                # ingestion paths. NO_TIME_MARKER (19:31:58) is the project-wide
+                # sentinel for "the source published a day but no time"; it is
+                # deliberately an odd value so a reader can tell the two apart.
+                # Keep in step with NO_TIME_MARKER in
+                # supabase/functions/_shared/eventDateTime.ts.
+                dt = dt.replace(hour=19, minute=31, second=58)
             else:
                 dt = date_parser.parse(date_str)
 

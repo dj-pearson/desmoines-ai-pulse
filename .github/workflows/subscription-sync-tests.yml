@@ -155,6 +155,14 @@ jobs:
       # still derives rather than stamps, and that both writers use one
       # vocabulary, read from the Python crawler's own prompt.
       - run: deno test --allow-read supabase/functions/_tests/catchdesmoines-category.test.ts
+      # WEB-BE-037. Four ingestion paths had four answers for "the source
+      # published a day but no time" (19:31:58, 19:30, 19:00, 19:00), plus two
+      # prompt instructions telling the model to invent 7 PM - so the same event
+      # through two producers got two instants and same-date dedup could not
+      # match them. ai-crawler's private parser also read `getHours() || 19` and
+      # `getMinutes() || 30`, turning every on-the-hour time into :30 and
+      # midnight into 7 PM. Pins all of it.
+      - run: deno test --allow-read supabase/functions/_tests/no-time-marker.test.ts
       # WEB-BE-032. The ops digest counted with `count ?? 0` and discarded the
       # error, so a digest that could read nothing printed the same eleven
       # zeros as a system with nothing wrong. Pins that an unreadable section
