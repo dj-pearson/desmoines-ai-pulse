@@ -29,6 +29,7 @@ import { useState } from "react";
 import { SpriteIcon } from "@/components/ui/SpriteIcon";
 import { OptimizedImage } from "@/components/OptimizedImage";
 import { DETAIL_STALE_TIME, detailQueryKey } from "@/lib/detailQueryKeys";
+import { isInMetro } from "@/lib/geo";
 
 type Playground = Database["public"]["Tables"]["playgrounds"]["Row"];
 
@@ -112,7 +113,15 @@ export default function PlaygroundDetails() {
     );
   }
 
-  if (error || !playground) {
+  // WEB-SEO-037 AC3. 21 of the 69 playground rows are in Oregon, Washington,
+  // Colorado and Missouri (a Google Places import that went wide) and the
+  // detail page resolved every one of them - so a URL the hub never links and
+  // the sitemap no longer submits still rendered a full page for a park a
+  // thousand miles away. Treated as not found, which is also what the
+  // noindex below then says about it.
+  const outsideMetro = Boolean(playground) && !isInMetro(playground?.latitude, playground?.longitude);
+
+  if (error || !playground || outsideMetro) {
     return (
       <>
         <Helmet>

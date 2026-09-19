@@ -14,6 +14,7 @@ import { readFileSync, existsSync, writeFileSync } from 'fs';
 import { join } from 'path';
 import { computePseoShippable } from './lib/pseoShippable';
 import { childLastmod } from './lib/sitemapLastmod';
+import { isInMetro } from '../src/lib/geo';
 // Slug shapes live in one place so the freshness check cannot build a URL the
 // generator would not have written. See scripts/lib/sitemapSlugs.ts.
 import { createSlug, createEventSlug } from './lib/sitemapSlugs';
@@ -371,9 +372,14 @@ async function generateRestaurantsSitemap(): Promise<number | null> {
 async function generateAttractionsSitemap(): Promise<number | null> {
   console.log('📍 Generating attractions sitemap...');
 
+  // is_active, because the HUB filters it and this did not (WEB-SEO-037 AC2).
+  // useAttractions and functions/_middleware.ts both drop inactive rows, so a
+  // sitemap that lists them submits URLs the site itself will not show - and
+  // the detail page resolved them anyway, which is the other half of the fix.
   const { data: attractions, error } = await supabase
     .from('attractions')
     .select('id, name, updated_at')
+    .eq('is_active', true)
     .order('name')
     .order('id');
 
@@ -405,9 +411,17 @@ async function generateAttractionsSitemap(): Promise<number | null> {
 async function generatePlaygroundsSitemap(): Promise<number | null> {
   console.log('🎮 Generating playgrounds sitemap...');
 
+  // WEB-SEO-037 AC3. 21 of the 69 rows are in Oregon, Washington, Colorado and
+  // Missouri - a Google Places import that went wide - so a third of this
+  // sitemap pointed at parks a Des Moines reader cannot visit, on the module
+  // SEO-014 records as the site's best performing. Filtered in TypeScript
+  // rather than in the query because a row with no coordinates counts as
+  // inside (see isInMetro), and expressing "in the box OR null" as a PostgREST
+  // or(...) is less legible than the predicate it is imitating. The table is
+  // 69 rows.
   const { data: playgrounds, error } = await supabase
     .from('playgrounds')
-    .select('id, name, updated_at')
+    .select('id, name, updated_at, latitude, longitude')
     .order('name')
     .order('id');
 
@@ -416,7 +430,13 @@ async function generatePlaygroundsSitemap(): Promise<number | null> {
     return null;
   }
 
-  const urls = playgrounds.map(playground => {
+  const inMetro = playgrounds.filter((p) => isInMetro(p.latitude, p.longitude));
+  const dropped = playgrounds.length - inMetro.length;
+  if (dropped > 0) {
+    console.log(`   ${dropped} playground(s) outside the Des Moines metro box, not submitted`);
+  }
+
+  const urls = inMetro.map(playground => {
     const slug = createSlug(playground.name);
     const lastmod = playground.updated_at ? playground.updated_at.split('T')[0] : currentDate;
     return {

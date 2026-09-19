@@ -2409,3 +2409,39 @@ Learnings for future iterations
    needed a real fix, not a suppression: one was reading the index out of a
    template literal that no longer existed, the other was applying a page rule
    to a sitemap file. A check that goes red on your change is a design review.
+
+================================================================================
+2026-09-19  WEB-SEO-037  The sitemap now lists what the hub shows
+================================================================================
+
+21 of the 69 playground rows are in Oregon, Washington, Colorado and Missouri -
+a Google Places import that went wide - and the hub, the hook, the detail page
+and the sitemap generator all had no filter. A third of the URLs on the site's
+best-performing module pointed at parks a Des Moines reader cannot visit.
+
+AC3 offers "add is_active (additive) or a state check". There is no state
+column, and adding is_active means a migration - and a reader that names a
+not-yet-applied column gets 42703 on the WHOLE select, so /playgrounds would go
+blank for the deploy window. latitude and longitude already exist, populated by
+the import that caused this. So: a bounding box, no migration, no window.
+
+Learnings for future iterations
+
+1. When an AC offers two implementations, check whether one of them is a
+   deploy-order hazard. "Add a column and filter on it" reads as the tidier
+   option and would have blanked the page it was fixing for the length of a
+   deploy. The other option needed no migration at all.
+
+2. Check the columns before choosing the approach the AC names. AC3 said "a
+   state check"; playgrounds has no state column. The AC was written from the
+   symptom (rows in other states), not from the schema.
+
+3. A .gte against a NULL column excludes the row silently - PostgREST has no
+   "coalesce to true". Any range filter added to an optional column needs the
+   null arm written out, or the fix quietly deletes rows it was never about.
+
+4. Say what you could not verify, specifically. The or() string has never been
+   executed against a real PostgREST; the fixture backend answers 200 to
+   anything, so it cannot distinguish a valid filter from a malformed one, and
+   a malformed or() is a 400 on the hub. That belongs in the notes as a named
+   first-load check, not as silence.

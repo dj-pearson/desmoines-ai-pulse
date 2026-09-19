@@ -1,4 +1,5 @@
 import { useCallback } from "react";
+import { DES_MOINES_METRO_BOUNDS } from "@/lib/geo";
 import { useQuery, useQueryClient } from "@tanstack/react-query";
 import { supabase } from "@/integrations/supabase/client";
 import { countOption, type CountMode } from '@/lib/listCount';
@@ -79,6 +80,23 @@ export function usePlaygrounds(filters: PlaygroundFilters = {}) {
       if (filters.location) {
         query = query.ilike("location", `%${filters.location}%`);
       }
+
+      // WEB-SEO-037 AC3. 21 of the 69 rows are in Oregon, Washington, Colorado
+      // and Missouri - a Google Places import that went wide - and nothing on
+      // this hub, its detail page or its sitemap filtered them, on what
+      // SEO-014 records as the site's best-performing module.
+      //
+      // SERVER-SIDE, and expressed as "in the box OR has no coordinates"
+      // because a row we cannot place should not be dropped for missing data
+      // (see isInMetro). The or() carries the null arms explicitly; PostgREST
+      // has no "coalesce to true" and a .gte on a null column excludes the row
+      // silently, which is the failure this shape exists to avoid.
+      const b = DES_MOINES_METRO_BOUNDS;
+      query = query.or(
+        `and(latitude.gte.${b.minLatitude},latitude.lte.${b.maxLatitude},` +
+          `longitude.gte.${b.minLongitude},longitude.lte.${b.maxLongitude}),` +
+          `latitude.is.null,longitude.is.null`,
+      );
 
       if (filters.featuredOnly) {
         query = query.eq("is_featured", true);

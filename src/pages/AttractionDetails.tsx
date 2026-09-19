@@ -154,7 +154,12 @@ export default function AttractionDetails() {
     );
   }
 
-  if (error || !attraction) {
+  // WEB-SEO-037 AC2. The hub (useAttractions) and functions/_middleware.ts
+  // both filter is_active; this page resolved any row, so an attraction taken
+  // off the site stayed reachable by its own URL and kept its indexable page.
+  const inactive = Boolean(attraction) && attraction?.is_active === false;
+
+  if (error || !attraction || inactive) {
     return (
       <>
         <Helmet>
