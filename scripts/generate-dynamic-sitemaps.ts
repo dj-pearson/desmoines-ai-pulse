@@ -13,6 +13,7 @@ import { createClient } from '@supabase/supabase-js';
 import { readFileSync, existsSync, writeFileSync } from 'fs';
 import { join } from 'path';
 import { computePseoShippable } from './lib/pseoShippable';
+import { childLastmod } from './lib/sitemapLastmod';
 // Slug shapes live in one place so the freshness check cannot build a URL the
 // generator would not have written. See scripts/lib/sitemapSlugs.ts.
 import { createSlug, createEventSlug } from './lib/sitemapSlugs';
@@ -938,66 +939,46 @@ async function main(): Promise<void> {
 
     const totalUrls = results.filter((r): r is number => r !== null).reduce((sum, count) => sum + count, 0);
 
-    // Update sitemap.xml index lastmod date
+    // THE INDEX'S lastmod IS EACH CHILD'S OWN, NOT TODAY'S (WEB-SEO-038 AC3).
+    //
+    // Every child used to be stamped with currentDate on every build, so the
+    // index told a crawler that all thirteen sitemaps had changed every day -
+    // including sitemap-static.xml, which is a committed file that changes a
+    // few times a year. A lastmod that is always "now" carries no signal, and
+    // Google's own guidance is that it will stop trusting the value rather
+    // than re-crawl on it.
+    //
+    // Read back off the files just written rather than threaded through
+    // thirteen generator return types: the index is describing those files, so
+    // deriving its stamps from them is both the smallest change and the one
+    // that cannot disagree with what shipped. A child that does not exist yet
+    // (a generator that failed, or one whose table is empty on a fresh
+    // project) falls back to today, which is the old behaviour for that one
+    // file only.
+    const CHILD_SITEMAPS = [
+      'sitemap-static.xml',
+      'sitemap-events.xml',
+      'sitemap-restaurants.xml',
+      'sitemap-attractions.xml',
+      'sitemap-playgrounds.xml',
+      'sitemap-articles.xml',
+      'sitemap-hotels.xml',
+      'sitemap-venues.xml',
+      'sitemap-trails.xml',
+      'sitemap-teams.xml',
+      'sitemap-best-of.xml',
+      'sitemap-itineraries.xml',
+      'sitemap-guides.xml',
+      'sitemap-pseo.xml',
+    ];
+
     const sitemapIndexPath = join(process.cwd(), 'public', 'sitemap.xml');
     const sitemapIndex = `<?xml version="1.0" encoding="UTF-8"?>
 <sitemapindex xmlns="http://www.sitemaps.org/schemas/sitemap/0.9">
-  <sitemap>
-    <loc>${baseUrl}/sitemap-static.xml</loc>
-    <lastmod>${currentDate}</lastmod>
-  </sitemap>
-  <sitemap>
-    <loc>${baseUrl}/sitemap-events.xml</loc>
-    <lastmod>${currentDate}</lastmod>
-  </sitemap>
-  <sitemap>
-    <loc>${baseUrl}/sitemap-restaurants.xml</loc>
-    <lastmod>${currentDate}</lastmod>
-  </sitemap>
-  <sitemap>
-    <loc>${baseUrl}/sitemap-attractions.xml</loc>
-    <lastmod>${currentDate}</lastmod>
-  </sitemap>
-  <sitemap>
-    <loc>${baseUrl}/sitemap-playgrounds.xml</loc>
-    <lastmod>${currentDate}</lastmod>
-  </sitemap>
-  <sitemap>
-    <loc>${baseUrl}/sitemap-articles.xml</loc>
-    <lastmod>${currentDate}</lastmod>
-  </sitemap>
-  <sitemap>
-    <loc>${baseUrl}/sitemap-hotels.xml</loc>
-    <lastmod>${currentDate}</lastmod>
-  </sitemap>
-  <sitemap>
-    <loc>${baseUrl}/sitemap-venues.xml</loc>
-    <lastmod>${currentDate}</lastmod>
-  </sitemap>
-  <sitemap>
-    <loc>${baseUrl}/sitemap-trails.xml</loc>
-    <lastmod>${currentDate}</lastmod>
-  </sitemap>
-  <sitemap>
-    <loc>${baseUrl}/sitemap-teams.xml</loc>
-    <lastmod>${currentDate}</lastmod>
-  </sitemap>
-  <sitemap>
-    <loc>${baseUrl}/sitemap-best-of.xml</loc>
-    <lastmod>${currentDate}</lastmod>
-  </sitemap>
-  <sitemap>
-    <loc>${baseUrl}/sitemap-itineraries.xml</loc>
-    <lastmod>${currentDate}</lastmod>
-  </sitemap>
-  <sitemap>
-    <loc>${baseUrl}/sitemap-guides.xml</loc>
-    <lastmod>${currentDate}</lastmod>
-  </sitemap>
-  <sitemap>
-    <loc>${baseUrl}/sitemap-pseo.xml</loc>
-    <lastmod>${currentDate}</lastmod>
-  </sitemap>
+${CHILD_SITEMAPS.map((file) => `  <sitemap>
+    <loc>${baseUrl}/${file}</loc>
+    <lastmod>${childLastmod(join(process.cwd(), 'public', file), currentDate)}</lastmod>
+  </sitemap>`).join('\n')}
 </sitemapindex>`;
     writeFileSync(sitemapIndexPath, sitemapIndex);
 

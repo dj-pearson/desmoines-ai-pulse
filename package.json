@@ -156,7 +156,8 @@
     "check-ui-craft": "node scripts/check-ui-craft.mjs",
     "check-ui-craft:update": "node scripts/check-ui-craft.mjs --write",
     "measure-vitals": "node scripts/measure-vitals.mjs",
-    "check-document-title": "node scripts/check-document-title.mjs"
+    "check-document-title": "node scripts/check-document-title.mjs",
+    "test:sitemap-lastmod": "tsx scripts/__tests__/sitemap-lastmod.test.mjs"
   },
   "dependencies": {
     "@dnd-kit/core": "^6.3.1",

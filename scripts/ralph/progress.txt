@@ -2363,3 +2363,49 @@ Learnings for future iterations
 
 5. A story sized at 74 files was 7. Re-count before planning; the count in a
    story is a snapshot from the day it was filed.
+
+================================================================================
+2026-09-19  WEB-SEO-038  One sitemap index, with honest lastmod stamps
+================================================================================
+
+The story described two sitemap indexes. There were three, and the third is the
+one worth knowing about.
+
+AC2: public/sitemap-index.xml deleted with a 301 to /sitemap.xml. Two earlier
+passes talked themselves out of deleting it pending a server log; the AC's own
+instruction is the answer - a redirect is what you do about an unknown external
+reference, and it costs one line.
+
+AC3: each child's lastmod is now the max of its own entries, read back off the
+file just written. The index used to stamp today on all fourteen every build,
+including sitemap-static.xml, which changes a few times a year.
+
+AC4: the check now fails on a second index FILE in public/ and on any file
+outside an allowlist that ASSEMBLES a sitemapindex. The second rule found
+supabase/functions/generate-sitemaps - live, invoked from the admin SEO tools -
+building an index with three children out of fourteen that lists sitemap.xml
+among them, i.e. the index nested inside itself. It returns the string rather
+than writing it, so nothing ships; anything that published that response would
+submit a self-referential index. Allowlisted with the defect written down,
+because deleting an endpoint an admin screen calls is a backward-compat event.
+
+Learnings for future iterations
+
+1. "Deleting it needs evidence I do not have from here" was recorded twice and
+   was wrong both times. The evidence was not needed: a 301 makes an unknown
+   external reference a non-question. When a cleanup is blocked on proving
+   nobody uses something, look for the change that makes the proof unnecessary.
+
+2. A file-level rule and a code-level rule catch different things. "No second
+   index file" would never have found an edge function assembling one in a
+   template literal. If the thing being forbidden can be built as well as
+   committed, the check needs both halves.
+
+3. Ninth time a check fired on the text explaining it, and the first where
+   stripping comments was not enough - the literal was inside the regex doing
+   the searching. A file that scans for a token cannot scan itself.
+
+4. Two neighbouring checks were correct to complain about the change and both
+   needed a real fix, not a suppression: one was reading the index out of a
+   template literal that no longer existed, the other was applying a page rule
+   to a sitemap file. A check that goes red on your change is a design review.

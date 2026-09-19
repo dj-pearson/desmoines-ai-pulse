@@ -63,3 +63,12 @@
 # route and its components are removed; this keeps the URL alive per the
 # Backward Compatibility rules in CLAUDE.md, since it was public and indexed.
 /calendar  /events  301
+
+# WEB-SEO-038: public/sitemap-index.xml was a HAND COPY of the generated
+# sitemap.xml, deployed with a lastmod frozen at 2026-03-16 and missing
+# sitemap-hotels.xml for weeks. Nothing in the repo pointed at it - robots.txt
+# submits /sitemap.xml - but an external reference cannot be ruled out from
+# inside the repo, and a sitemap index a crawler already knows about is exactly
+# the URL not to 404. Deleted, with this 301 for at least one release cycle,
+# per the Backward Compatibility rules in CLAUDE.md.
+/sitemap-index.xml  /sitemap.xml  301

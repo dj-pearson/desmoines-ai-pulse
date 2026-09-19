@@ -89,8 +89,21 @@ const submitted = rules.filter((r) => !r.from.includes('*') && listed.has(r.from
 
 // Direction 2: redirect targets that no sitemap lists. External targets and
 // wildcard/placeholder targets are out of scope.
+//
+// SO IS A SITEMAP FILE, and it has to be said explicitly because the rule
+// below is about PAGES. WEB-SEO-038 deleted public/sitemap-index.xml, a hand
+// copy of the generated index, and left a 301 to /sitemap.xml so a crawler
+// that already knows the old URL does not get a 404. A sitemap never lists
+// itself and never lists another sitemap - that is what the index is for - so
+// this target is orphaned by construction and always will be.
+const isSitemapFile = (to) => /^\/sitemap[a-z0-9-]*\.xml$/i.test(to);
+
 const orphanTargets = rules.filter(
-  (r) => !r.to.includes('*') && !/^https?:/i.test(r.to) && !listed.has(r.to),
+  (r) =>
+    !r.to.includes('*') &&
+    !/^https?:/i.test(r.to) &&
+    !isSitemapFile(r.to) &&
+    !listed.has(r.to),
 );
 
 let failed = false;
