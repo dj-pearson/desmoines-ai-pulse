@@ -2488,3 +2488,54 @@ Learnings for future iterations
 5. Gate where the set is empty, ratchet where it is not. Mixing them in one
    script is fine and reads better than two scripts: the ratchet keeps the
    long tail honest while the gate holds the line that has actually been won.
+
+================================================================================
+2026-09-19  WEB-BE-054  Wrote the fix, reverted it, kept the investigation
+================================================================================
+
+AC3 says firecrawl maps restaurant_openings to a table with no migration while
+ai-crawler maps it to restaurants, so "pick one". I picked restaurants, wrote
+the change with a confident comment explaining that the table does not exist and
+nothing reads it, and then found both halves of that comment were false.
+
+  - The migration ledger does not settle existence. playgrounds and attractions
+    are created by no tracked migration either; my check failed on exactly
+    those two. types.ts does not settle it either - CLAUDE.md records four
+    tables listed there that 42P01 in production.
+  - BOTH tables have readers. RestaurantOpenings.tsx uses a useRestaurantOpenings
+    from @/hooks/useSupabase that reads `restaurants`; AdminContent.tsx uses a
+    DIFFERENT hook of the SAME NAME in its own file that reads and writes
+    `restaurant_openings`. Two hooks, one name, two tables, one public and one
+    admin. That is the real finding and it is in no AC.
+
+So "pick one" is a product decision that turns on whether restaurant_openings
+holds rows, which this container cannot probe. Reverted everything; the notes
+carry the one curl that settles it and what each of the three answers implies.
+
+AC1's other evidence is also off: n8n/restaurant-openings.json targets
+`restaurants`, not restaurant_openings; the second file that does
+(n8n-restaurant-qs.json) is not named; scrape-ticketmaster-events is an
+admin-invocable affiliate matcher that vibrantmusichall.ts was written to feed;
+and the n8n exports are the payload of a live deploy script.
+
+Learnings for future iterations
+
+1. Writing the comment is a test of the reasoning. I only noticed the premise
+   was wrong because the comment had to state it plainly. If a justification is
+   hard to write without hedging, the change is not ready.
+
+2. "No migration creates it" is not evidence a table is missing, in this repo
+   specifically. Two tables the whole app depends on are in the same position.
+   CLAUDE.md says to ask PostgREST; there is no repo-side substitute.
+
+3. Two hooks with the same name in different files is a bug that greps as
+   fine. `useRestaurantOpenings` resolved to two different tables depending on
+   the import path, and both call sites looked correct in isolation.
+
+4. Reverting and writing up beats shipping a plausible change to an ingestion
+   path. A wrong table map loses rows silently, and the cost of being wrong is
+   asymmetric against the cost of one more iteration.
+
+5. Not every story can be closed by the loop, and three of this story's four
+   ACs are wrong on the evidence. Correcting the evidence IS the work; the next
+   pass starts from facts instead of re-deriving them.
