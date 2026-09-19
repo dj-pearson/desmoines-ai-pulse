@@ -341,7 +341,11 @@ export function useRestaurants(filters: RestaurantFilters = {}) {
         );
       }
 
-      let { data, error, count } = await query;
+      // .returns<Restaurant[]> for the same reason as useEvents: the
+      // projection comes from withAdminColumns() at runtime, so supabase-js
+      // types the rows as GenericStringError[] and every later assignment
+      // fails against it.
+      let { data, error, count } = await query.returns<Restaurant[]>();
 
       if (error) {
         throw error;

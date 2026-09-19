@@ -47,24 +47,14 @@ jobs:
               -H "x-api-key: ${EDGE_FUNCTION_API_KEY}" -H "Content-Type: application/json" \
               --data '{"mode":"priority"}' | node -e "let s='';process.stdin.on('data',d=>s+=d).on('end',()=>{try{process.stdout.write(JSON.stringify(JSON.parse(s).packages||[]))}catch(e){process.stdout.write('[]')}})")
           fi
-          node <<'EOF'
-          const fs = require('fs');
-          const outdated = JSON.parse(fs.readFileSync('outdated.json','utf8') || '{}');
-          const priority = new Set(JSON.parse(process.env.PRIORITY || '[]'));
-          const nonBreaking = [], majors = [];
-          const major = (v) => String(v||'').replace(/^[^\d]*/,'').split('.')[0];
-          for (const [name, info] of Object.entries(outdated)) {
-            const cur = info.current, wanted = info.wanted, latest = info.latest;
-            if (!cur || !latest) continue;
-            if (major(cur) === major(latest)) nonBreaking.push({ name, wanted: wanted || latest });
-            else majors.push({ name, current: cur, latest });
-          }
-          // Prioritize security-affected packages to the front.
-          nonBreaking.sort((a,b) => (priority.has(b.name)?1:0) - (priority.has(a.name)?1:0));
-          fs.writeFileSync('nonbreaking.json', JSON.stringify(nonBreaking));
-          fs.writeFileSync('majors.json', JSON.stringify(majors));
-          console.log(`non-breaking=${nonBreaking.length} majors=${majors.length}`);
-          EOF
+          # PRIORITY is passed on the command line, not left as a shell variable.
+          # It was never exported, so the planner's security-first sort read an
+          # empty env var on every run since this workflow was written.
+          PRIORITY="$PRIORITY" node scripts/plan-dep-updates.mjs --file outdated.json --out-dir .
+          {
+            echo "### Dependency update plan"
+            node -e "const p=require('./nonbreaking.json'),m=require('./majors.json'),h=require('./held.json');console.log('- '+p.length+' non-breaking, '+m.length+' major(s) escalated, '+h.length+' held back');for(const x of h)console.log('  - held: \`'+x.name+'\` -> '+x.target+(x.story?' ('+x.story+')':'')+' - '+x.reason);"
+          } >> "$GITHUB_STEP_SUMMARY"
           echo "PRIORITY<<E" >> "$GITHUB_ENV"; echo "$PRIORITY" >> "$GITHUB_ENV"; echo "E" >> "$GITHUB_ENV"
 
       - name: Escalate majors to tier-2
@@ -108,8 +98,19 @@ jobs:
             --body "Automated non-breaking (patch/minor) dependency bumps. Passed validate + build. Security-affected packages prioritized. Majors are escalated as separate tier-2 review tasks." \
             2>/dev/null || echo "PR may already exist"
 
-      - name: Annotate on red
+      # FAIL THE JOB, do not warn. This step used to echo a `::warning::` and exit
+      # 0, so ten consecutive runs (2026-07-13 to 2026-09-14) that installed the
+      # batch, failed the gate and opened no PR all reported "success" in the
+      # Actions list. The thing this workflow exists to prevent - no update PRs
+      # landing - was true the whole time, and the workflow said it was fine.
+      # A red run is the only signal anybody reads (WEB-QUAL-011).
+      - name: Fail on red
         if: steps.apply.outputs.green != '0' && steps.apply.outputs.green != 'skip'
         run: |
-          echo "::warning::Non-breaking dependency updates failed validate/build — no PR opened. Review the logs."
-          echo "## Dependency update: FAILED validate/build (no PR opened)" >> "$GITHUB_STEP_SUMMARY"
+          {
+            echo "## Dependency update: FAILED validate/build (no PR opened)"
+            echo "Add the offending package to .github/dependency-update-holds.json with a"
+            echo "reason and an owning story, so the rest of the batch can land."
+          } >> "$GITHUB_STEP_SUMMARY"
+          echo "::error::Non-breaking dependency updates failed validate/build - no PR opened."
+          exit 1

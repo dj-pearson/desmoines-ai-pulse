@@ -1,0 +1,37 @@
+{
+  "_comment": [
+    "Packages the weekly Dependency Update Agent must NOT bump, with the reason and",
+    "the story that owns lifting the hold. Read by .github/workflows/dependency-update.yml.",
+    "",
+    "A hold exists because the agent installs every non-breaking update as ONE batch and",
+    "gates the batch on `npm run validate && npm run build`. One package that fails the",
+    "gate therefore blocks the other sixty. That is not hypothetical: every run from",
+    "2026-07-13 to 2026-09-14 failed on a single package and opened zero PRs (WEB-QUAL-011).",
+    "",
+    "A hold is a deferral, not a decision. Each entry names an owning story and a",
+    "`review` date; scripts/__tests__/dep-update-plan.test.mjs fails without them.",
+    "`firstBadVersion` is the earliest version known to fail the gate - the hold blocks",
+    "that version and everything after it, so patch releases below it still land."
+  ],
+  "holds": [
+    {
+      "name": "@supabase/supabase-js",
+      "firstBadVersion": "2.85.0",
+      "review": "2026-12-01",
+      "reason": "2.85+ tightens the PostgREST types: inserts gain RejectExcessProperties, a .select() built from a runtime string resolves to GenericStringError, and two files hit TS2589. Reproduced 2026-09-19: scripts/event-datetime-sql-generator.ts fails type-check:scripts at 2.116.0 and passes at 2.84.0. That single error is what failed all ten agent runs.",
+      "story": "WEB-QUAL-015"
+    },
+    {
+      "name": "three",
+      "review": "2026-12-01",
+      "reason": "0.160 -> 0.186 is a breaking change in three's 0.x scheme, and @react-three/fiber is pinned at 8.16.8 whose peer range predates it. three moves with the fiber 8 -> 9 major, not on its own.",
+      "story": "WEB-QUAL-016"
+    },
+    {
+      "name": "@types/dompurify",
+      "review": "2026-12-01",
+      "reason": "npm's `latest` for this package is 3.0.5, BELOW the installed 3.2.0 - the 3.0.5 publish is the deprecation stub that redirects to dompurify's own bundled types. Bumping to `latest` is a downgrade.",
+      "story": null
+    }
+  ]
+}

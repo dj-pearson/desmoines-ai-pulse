@@ -80,7 +80,11 @@ function SocialEventCardComponent({
   // handler baking inline styles into prerendered HTML that hydration will not
   // clean up.
   const [imageFailed, setImageFailed] = useState(false);
-  const showImage = Boolean(event.image_url) && !imageFailed;
+  // Held in a const so the truthiness check below NARROWS it. `Boolean(x)`
+  // tells TypeScript nothing about x at the JSX, which is why
+  // OptimizedImage's `src: string` was being handed `string | undefined`.
+  const imageUrl = event.image_url;
+  const showImage = !imageFailed && Boolean(imageUrl);
 
   const categoryStyle = getEventCategoryStyle(event.category);
 
@@ -140,7 +144,7 @@ function SocialEventCardComponent({
         <CardContent className="p-0">
           {/* Image Section with Overlay */}
           <div className={`relative overflow-hidden ${featured ? 'h-64 md:h-80' : 'h-52'}`}>
-            {showImage ? (
+            {showImage && imageUrl ? (
               // Converted to OptimizedImage in WEB-PERF-041 once the component
               // stopped gating the img element on an IntersectionObserver.
               // Before that, converting this one card would have dropped every
@@ -154,7 +158,7 @@ function SocialEventCardComponent({
               // setImageFailed flips showImage, which unmounts this in the same
               // render, so that panel is never painted.
               <OptimizedImage
-                src={event.image_url}
+                src={imageUrl}
                 alt={`${event.title} - ${event.category} event in ${event.city || 'Des Moines'}, Iowa`}
                 className="object-cover transition-transform duration-500 group-hover:scale-110"
                 containerClassName="w-full h-full"

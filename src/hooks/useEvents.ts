@@ -144,7 +144,14 @@ async function fetchEvents(filters: EventFilters): Promise<EventsResult> {
     );
   }
 
-  let { data, error, count } = await query;
+  // .returns<Event[]> because the projection is a RUNTIME string.
+  // withAdminColumns() builds the column list from a flag, so supabase-js
+  // cannot parse it into a row type and falls back to GenericStringError[] -
+  // which then poisons the fuzzy-search reassignment below and the return.
+  // Event[] is the type this function already declares it resolves to
+  // (EventsResult), so this states the existing contract rather than widening
+  // anything; EVENT_LIST_COLUMNS is what keeps it honest.
+  let { data, error, count } = await query.returns<Event[]>();
 
   if (error) {
     // Surface the PostgREST fields explicitly. Logging the bare object rendered
