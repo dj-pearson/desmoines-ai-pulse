@@ -75,6 +75,8 @@
     "check-edge-types": "node scripts/check-edge-types.mjs",
     "check-edge-pins": "node scripts/check-edge-pins.mjs",
     "check-edge-pins:update": "node scripts/check-edge-pins.mjs --write",
+    "check-edge-models": "node scripts/check-edge-model-pins.mjs",
+    "check-edge-models:update": "node scripts/check-edge-model-pins.mjs --write",
     "check-agent-drift": "node scripts/check-agent-pair-drift.mjs",
     "check-schema": "node scripts/check-schema-usage.mjs",
     "check-error-handling": "node scripts/check-error-handling.mjs",

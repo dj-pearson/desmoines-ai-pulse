@@ -1171,3 +1171,19 @@ The events cache prefix was wrong in both directions at once.
   - **When you narrow every call site, the ones you deliberately left broad start looking like bugs.** useClearEventCache and useContentQueue's approve paths both keep the parent `['events']` key on purpose. Both now carry a comment saying so, in place, because the next reader will otherwise "fix" them.
   - A key factory must give `{}` and `{ category: undefined }` the SAME key. Spreading the caller's object gives two cache entries for one query - two requests, and a write that refreshes one of them. Spell the fields out and default them; there is a test for it.
 ---
+
+## 2026-09-19 - WEB-BE-041 (AC1/AC2/AC3/AC5; AC4's re-sourcing stays the owner's)
+restaurant-opening-scraper hardcoded a retired model and reported success anyway.
+- The call goes through `getClaudeHeaders` + `buildClaudeRequest` from `_shared/aiConfig.ts`; no id in the function.
+- `summary.ts` is a pure `summarizeRun(perSource)` -> `{ status, body }`: 502 when every source failed (and when none were attempted), 200 for a quiet day or a partial failure. Per-source outcomes replace three totals and a flat errors array. Wrapped in `runJob` for the WEB-BE-043 ledger row.
+- `_tests/restaurant-opening-run-summary.test.ts`, 7 assertions, wired into subscription-sync-tests.yml, negative-controlled twice.
+- `scripts/check-edge-model-pins.mjs` + `.github/edge-model-baseline.json` ratchet the six remaining hardcoded ids across six other functions; three of them are retired and 404 today.
+- **Learnings for future iterations:**
+  - **A hardcoded model id is a time bomb with a silent fuse.** The id retires, the call 404s inside a try/catch, the error goes into an array, and the handler returns 200. pg_cron records the POST as succeeded either way (WEB-OPS-007), so nothing anywhere can tell a job that has not worked in months from one that just ran clean. The defect is the hardcoding, not the id.
+  - **The story named one function; a sweep for quoted `claude-*` found seven call sites across six more,** three on `claude-3-haiku-20240307`. Third time this session an AC's file list has been a partial sweep. Run the grep before believing the count.
+  - **Widening a matcher finds a different bug than the one you were looking for.** My first regex required a word boundary before "model", so `claudeModel:` did not match. Widening it surfaced bulk-enhance-events reporting `claudeModel: "claude-sonnet-4-20250514"` in its response body while actually calling through buildClaudeRequest - the audit field for "which model enhanced this event" was a literal that had never been true.
+  - **Put the status decision in a pure module.** `summarizeRun(perSource)` is testable with no network, no database and no `Deno.serve`, which is the only reason AC5 was satisfiable in a container that cannot reach deno.land or Supabase. A decision buried in a `serve()` handler is a decision nothing can test.
+  - **A partial failure must not fail the run.** One dead source turning the job red permanently is how a check gets ignored - already recorded here twice as WEB-CI-020 / WEB-CI-021. 502 only when EVERY source failed; the per-source breakdown carries the rest.
+  - **Exempt the sanctioned home from a "do not hardcode X" check, but gate it harder.** `_shared/aiConfig.ts` is where the id belongs, so listing it would make the fix look like the defect. Its defaults instead fail outright if retired, with no baseline excuse, because that fallback reaches every caller at once.
+  - `deno.lock` picks up esm.sh integrity hashes from any local `npx deno@2 check`. Revert it - this is the second time it has appeared in a diff it did not belong in.
+---

@@ -105,6 +105,15 @@ jobs:
       - name: supabase-js pins agree across the edge boundary
         run: npm run check-edge-pins
 
+      # WEB-BE-041. restaurant-opening-scraper hardcoded the retired model
+      # claude-3-5-sonnet-20241022 against api.anthropic.com, bypassing
+      # _shared/aiConfig.ts - so every run 404'd and still reported success.
+      # Ratchets the remaining hardcoded ids (they can only shrink) and fails
+      # outright on a retired default inside aiConfig itself, which would break
+      # every caller at once.
+      - name: No edge function hardcodes a Claude model id
+        run: npm run check-edge-models
+
       # The offline suites for the edge/script helpers that have no other
       # coverage: the venue-image reclaim, the /media route, the image_url
       # rewrite and the provider-spend pricing. Each one decides a number or a

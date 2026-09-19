@@ -140,6 +140,13 @@ jobs:
       # Chrome UA. Pins that they fetch through the robots-checked helper and
       # declare no User-Agent of their own.
       - run: deno test --allow-read supabase/functions/_tests/adapter-robots.test.ts
+      # WEB-BE-041. restaurant-opening-scraper hardcoded the retired model
+      # claude-3-5-sonnet-20241022, so the API answered not_found for every
+      # source on every run - and the handler returned success: true with HTTP
+      # 200 regardless, which pg_cron then recorded as a successful POST. Pins
+      # that all-sources-failed is a non-2xx, that a quiet day and a partial
+      # failure are not, and that no model id is pasted back into index.ts.
+      - run: deno test --allow-read supabase/functions/_tests/restaurant-opening-run-summary.test.ts
       # WEB-BE-032. The ops digest counted with `count ?? 0` and discarded the
       # error, so a digest that could read nothing printed the same eleven
       # zeros as a system with nothing wrong. Pins that an unreadable section

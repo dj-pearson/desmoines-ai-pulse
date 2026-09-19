@@ -351,7 +351,11 @@ Generate writeups for ALL ${eventsToEnhance.length} events listed above. Each wr
       failureCount,
       results,
       promptUsed,
-      claudeModel: "claude-sonnet-4-20250514"
+      // WEB-BE-041. This was the literal "claude-sonnet-4-20250514" while the
+      // call above went through buildClaudeRequest, so the audit field reported
+      // a model this function does not use - and would keep reporting it after
+      // an ai_config change. Report what was actually sent.
+      claudeModel: requestBody.model
     }), {
       headers: { ...corsHeaders, "Content-Type": "application/json" },
       status: 200

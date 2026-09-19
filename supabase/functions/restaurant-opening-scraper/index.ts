@@ -10,7 +10,9 @@ import { createClient } from "https://esm.sh/@supabase/supabase-js@2";
 import { scrapeUrl } from "../_shared/scraper.ts";
 import { requireAdminOrApiKey } from "../_shared/apiKeyAuth.ts";
 import { fetchWithTimeout } from "../_shared/fetchWithTimeout.ts";
-import { getAnthropicApiKey } from "../_shared/aiConfig.ts";
+import { getAnthropicApiKey, buildClaudeRequest, getClaudeHeaders } from "../_shared/aiConfig.ts";
+import { runJob } from "../_shared/jobRunner.ts";
+import { summarizeRun, type SourceOutcome } from "./summary.ts";
 import { sanitizeLikeInput } from '../_shared/validation.ts';
 
 const corsHeaders = {
@@ -74,16 +76,28 @@ serve(async (req) => {
 
   try {
     const { sources = DEFAULT_SOURCES } = await req.json().catch(() => ({}));
-    
+
     console.log(`🚀 Starting restaurant opening scraper with ${sources.length} sources`);
 
-    let totalRestaurantsFound = 0;
-    let totalInserted = 0;
-    let totalUpdated = 0;
-    const errors: string[] = [];
+    // WEB-BE-041 AC3. Per-source outcomes replace three running totals and a
+    // flat string array. The totals could not say WHICH source produced them,
+    // and the errors array was written and then thrown away by a response that
+    // always said success.
+    const perSource: SourceOutcome[] = [];
 
+    const job = await runJob("restaurant-opening-scraper", async (ctx) => {
     for (const source of sources) {
       console.log(`🌐 Scraping source: ${source.name} (${source.url})`);
+      const outcome: SourceOutcome = {
+        name: source.name,
+        url: source.url,
+        ok: false,
+        found: 0,
+        inserted: 0,
+        updated: 0,
+      };
+      perSource.push(outcome);
+      const rowErrors: string[] = [];
 
       try {
         // Use universal scraper (Puppeteer/Playwright/Firecrawl)
@@ -94,7 +108,7 @@ serve(async (req) => {
 
         if (!scrapeResult.success) {
           console.error(`❌ Scraping error for ${source.url}: ${scrapeResult.error}`);
-          errors.push(`Failed to scrape ${source.name}: ${scrapeResult.error}`);
+          outcome.error = `scrape failed: ${scrapeResult.error}`;
           continue;
         }
 
@@ -104,7 +118,7 @@ serve(async (req) => {
 
         if (!content || content.length < 100) {
           console.error(`❌ No usable content returned from ${source.url}`);
-          errors.push(`No usable content from ${source.name}`);
+          outcome.error = `no usable content (${content.length} chars)`;
           continue;
         }
 
@@ -201,27 +215,34 @@ FORMAT AS JSON ARRAY ONLY - no other text:
 
         console.log(`🤖 Sending content to Claude AI for extraction...`);
 
+        // WEB-BE-041 AC2. This hardcoded `model: 'claude-3-5-sonnet-20241022'` and
+        // its own headers, bypassing _shared/aiConfig.ts entirely. That model is
+        // retired: the API answers not_found, so EVERY extraction failed - and
+        // the handler below still returned success: true with HTTP 200. The
+        // model now comes from getAIConfig (one place, overridable from the
+        // ai_config row) and the version header from the same config.
+        const [claudeHeaders, claudeBody] = await Promise.all([
+          getClaudeHeaders(claudeApiKey, supabaseUrl, supabaseKey),
+          buildClaudeRequest(
+            [{ role: 'user', content: claudePrompt }],
+            { supabaseUrl, supabaseKey, customMaxTokens: 4096 },
+          ),
+        ]);
+
         const claudeResponse = await fetchWithTimeout('https://api.anthropic.com/v1/messages', {
           method: 'POST',
-          headers: {
-            'x-api-key': claudeApiKey,
-            'anthropic-version': '2023-06-01',
-            'content-type': 'application/json',
-          },
-          body: JSON.stringify({
-            model: 'claude-3-5-sonnet-20241022',
-            max_tokens: 4096,
-            messages: [{
-              role: 'user',
-              content: claudePrompt
-            }]
-          }),
+          headers: claudeHeaders,
+          body: JSON.stringify(claudeBody),
         }, 60_000);
 
         if (!claudeResponse.ok) {
           const errorText = await claudeResponse.text();
           console.error(`❌ Claude API error: ${claudeResponse.status} - ${errorText}`);
-          errors.push(`Claude AI extraction failed for ${source.name}`);
+          // The status and the model are both in the message: a 404 here means
+          // the configured model is gone, which is the exact failure that went
+          // unreported for months and is indistinguishable from a rate limit
+          // without them.
+          outcome.error = `model call failed (${claudeResponse.status}, model ${claudeBody.model}): ${errorText.slice(0, 200)}`;
           continue;
         }
 
@@ -239,12 +260,15 @@ FORMAT AS JSON ARRAY ONLY - no other text:
           }
         } catch (parseError) {
           console.error(`❌ Failed to parse Claude response as JSON:`, parseError);
-          errors.push(`Failed to parse AI response for ${source.name}`);
+          outcome.error = `model returned unparseable JSON: ${String(parseError).slice(0, 200)}`;
           continue;
         }
 
         console.log(`✨ Extracted ${restaurants.length} restaurant openings from ${source.name}`);
-        totalRestaurantsFound += restaurants.length;
+        // Reaching here means the source scraped AND the model answered with
+        // parseable JSON. Zero rows is a legitimate answer - see summary.ts.
+        outcome.ok = true;
+        outcome.found = restaurants.length;
 
         // Insert or update restaurants in database
         for (const restaurant of restaurants) {
@@ -345,13 +369,13 @@ FORMAT AS JSON ARRAY ONLY - no other text:
 
                 if (updateError) {
                   console.error(`❌ Error updating restaurant ${restaurant.name}:`, updateError);
-                  errors.push(`Failed to update ${restaurant.name}: ${updateError.message}`);
+                  rowErrors.push(`update ${restaurant.name}: ${updateError.message}`);
                 } else {
                   const changes = [];
                   if (updateData.status) changes.push(`status: ${existing.status} → ${restaurant.status}`);
                   if (updateData.opening_date) changes.push(`date: ${existing.opening_date || 'none'} → ${restaurant.opening_date}`);
                   console.log(`✅ Updated: ${restaurant.name} (${changes.join(', ')})`);
-                  totalUpdated++;
+                  outcome.updated++;
                 }
               } else {
                 console.log(`⏭️ Skipped: ${restaurant.name} (no significant changes)`);
@@ -378,36 +402,65 @@ FORMAT AS JSON ARRAY ONLY - no other text:
 
               if (insertError) {
                 console.error(`❌ Error inserting restaurant ${restaurant.name}:`, insertError);
-                errors.push(`Failed to insert ${restaurant.name}: ${insertError.message}`);
+                rowErrors.push(`insert ${restaurant.name}: ${insertError.message}`);
               } else {
                 console.log(`✅ Inserted: ${restaurant.name} (${restaurant.status})`);
-                totalInserted++;
+                outcome.inserted++;
               }
             }
           } catch (dbError) {
             console.error(`❌ Database error for ${restaurant.name}:`, dbError);
-            errors.push(`Database error for ${restaurant.name}`);
+            rowErrors.push(`db error for ${restaurant.name}: ${String(dbError).slice(0, 120)}`);
           }
         }
 
       } catch (sourceError) {
         console.error(`❌ Error processing source ${source.name}:`, sourceError);
-        errors.push(`Error processing ${source.name}: ${sourceError.message}`);
+        // Overwrites any row-level note: a thrown source is a worse failure
+        // than a handful of rejected rows, and outcome.ok stays false either way.
+        outcome.error = `unhandled: ${sourceError instanceof Error ? sourceError.message : String(sourceError)}`;
       }
+
+      // Row-level failures do NOT make the source a failure - the model
+      // answered and some rows landed. They ride along so a run that inserted
+      // 2 of 30 is visibly different from one that inserted 30.
+      if (rowErrors.length > 0) {
+        outcome.error = `${outcome.error ? outcome.error + '; ' : ''}${rowErrors.length} row error(s): ${rowErrors.slice(0, 3).join('; ')}`;
+      }
+      ctx.processed(outcome.inserted + outcome.updated);
+      ctx.failed(rowErrors.length + (outcome.ok ? 0 : 1));
     }
 
-    console.log(`✅ Scraping complete: Found ${totalRestaurantsFound}, Inserted ${totalInserted}, Updated ${totalUpdated}`);
+      const summary = summarizeRun(perSource);
+      ctx.meta({
+        sourcesAttempted: summary.body.sourcesAttempted,
+        sourcesSucceeded: summary.body.sourcesSucceeded,
+        totalFound: summary.body.totalFound,
+        inserted: summary.body.inserted,
+        updated: summary.body.updated,
+        perSource,
+      });
+      // Throwing marks the ledger row failed and alerts. The HTTP status is
+      // decided below from perSource either way, so a ledger write that fails
+      // cannot change what the caller is told.
+      if (!summary.body.success) {
+        throw new Error(
+          `every source failed (${summary.body.sourcesAttempted} attempted)`,
+        );
+      }
+      return summary;
+    });
+
+    const summary = summarizeRun(perSource);
+    console.log(
+      `✅ Scraping complete: ${summary.body.sourcesSucceeded}/${summary.body.sourcesAttempted} sources, ` +
+      `found ${summary.body.totalFound}, inserted ${summary.body.inserted}, updated ${summary.body.updated}`,
+    );
 
     return new Response(
-      JSON.stringify({
-        success: true,
-        totalFound: totalRestaurantsFound,
-        inserted: totalInserted,
-        updated: totalUpdated,
-        errors: errors.length > 0 ? errors : undefined,
-      }),
+      JSON.stringify({ ...summary.body, runId: job.runId }),
       {
-        status: 200,
+        status: summary.status,
         headers: { ...corsHeaders, "Content-Type": "application/json" },
       }
     );
