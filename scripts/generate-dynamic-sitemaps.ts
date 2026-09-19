@@ -1,6 +1,7 @@
 /**
  * Generate dynamic sitemaps for events, restaurants, attractions, playgrounds,
- * articles, hotels, music venues, trails, teams, curated itineraries, guides
+ * articles, hotels, music venues, trails, teams, curated itineraries,
+ * Best-Of voting categories, guides
  * and pSEO pages.
  * Run before build to populate individual sitemap XML files.
  *
@@ -803,6 +804,59 @@ async function generatePseoSitemap(): Promise<number | null> {
   return written;
 }
 
+/**
+ * Best-Of voting categories (WEB-SEO-035 AC3).
+ *
+ * HELD OUT OF THE FIRST PASS ON PURPOSE, and this is what changed. AC3 says to
+ * include a family only once its detail page carries SEO metadata and schema.
+ * BestOfCategory.tsx had a Helmet title and description and NO CANONICAL AT
+ * ALL, so every category page would have been submitted carrying the SPA
+ * shell's canonical - each one declaring itself a duplicate of the home page,
+ * which is precisely the WEB-SEO-006 failure. It now renders RouteCanonical
+ * and an ItemList of the ranked winners, so it is submittable.
+ *
+ * GATED ON is_active, matching useVotingCategories. An inactive category still
+ * has a row and a slug; the hub does not link it and submitting it would point
+ * a crawler at a page the site does not consider live.
+ *
+ * `slug` is the COLUMN, as useCategoryResults resolves with .eq('slug', slug).
+ * voting_categories has no updated_at, so lastmod is created_at - the same
+ * decision the trails generator documents.
+ */
+async function generateVotingCategoriesSitemap(): Promise<number | null> {
+  console.log('\ud83c\udfc6 Generating Best-Of categories sitemap...');
+
+  const { data: categories, error } = await supabase
+    .from('voting_categories')
+    .select('id, slug, created_at')
+    .eq('is_active', true)
+    .not('slug', 'is', null)
+    .order('created_at', { ascending: false })
+    .order('id');
+
+  if (error) {
+    console.error('\u274c Error fetching voting categories:', error);
+    return null;
+  }
+
+  const urls = (categories ?? [])
+    .filter((category) => !!category.slug)
+    .map((category) => ({
+      loc: `${baseUrl}/best-of/${category.slug}`,
+      lastmod: category.created_at ? category.created_at.split('T')[0] : currentDate,
+      changefreq: 'weekly',
+      priority: '0.6',
+    }));
+
+  if (urls.length === 0) {
+    urls.push({ loc: `${baseUrl}/best-of`, lastmod: currentDate, changefreq: 'weekly', priority: '0.7' });
+  }
+
+  const written = writeSitemap('sitemap-best-of.xml', urls, 'voting categories');
+  console.log(`\u2705 Best-Of categories sitemap generated: ${written} URLs`);
+  return written;
+}
+
 async function generateGuidesSitemap(): Promise<number | null> {
   console.log('📖 Generating guides sitemap...');
 
@@ -877,6 +931,7 @@ async function main(): Promise<void> {
       generateTrailsSitemap(),
       generateTeamsSitemap(),
       generateItinerariesSitemap(),
+      generateVotingCategoriesSitemap(),
       generateGuidesSitemap(),
       generatePseoSitemap()
     ]);
@@ -925,6 +980,10 @@ async function main(): Promise<void> {
   </sitemap>
   <sitemap>
     <loc>${baseUrl}/sitemap-teams.xml</loc>
+    <lastmod>${currentDate}</lastmod>
+  </sitemap>
+  <sitemap>
+    <loc>${baseUrl}/sitemap-best-of.xml</loc>
     <lastmod>${currentDate}</lastmod>
   </sitemap>
   <sitemap>

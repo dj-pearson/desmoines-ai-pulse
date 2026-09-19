@@ -232,6 +232,10 @@ const ENTITY_SITEMAPS = [
   'sitemap-trails.xml',
   'sitemap-teams.xml',
   'sitemap-itineraries.xml',
+  // WEB-SEO-035 AC3, added once BestOfCategory.tsx got a canonical and an
+  // ItemList. Behind the other four for the same tail-priority reason, and it
+  // is the smallest family of the lot - one URL per active voting category.
+  'sitemap-best-of.xml',
   'sitemap-guides.xml',
 ];
 

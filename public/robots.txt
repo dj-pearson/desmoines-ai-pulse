@@ -211,5 +211,6 @@ Sitemap: https://desmoinesinsider.com/sitemap-venues.xml
 Sitemap: https://desmoinesinsider.com/sitemap-trails.xml
 Sitemap: https://desmoinesinsider.com/sitemap-teams.xml
 Sitemap: https://desmoinesinsider.com/sitemap-itineraries.xml
+Sitemap: https://desmoinesinsider.com/sitemap-best-of.xml
 Sitemap: https://desmoinesinsider.com/sitemap-guides.xml
 Sitemap: https://desmoinesinsider.com/sitemap-pseo.xml

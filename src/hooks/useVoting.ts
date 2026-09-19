@@ -2,6 +2,7 @@ import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
 import { supabase } from '@/integrations/supabase/client';
 import { useAuth } from '@/contexts/AuthContext';
 import { createLogger } from '@/lib/logger';
+import { createSlug } from '@/lib/slug';
 
 const log = createLogger('useVoting');
 
@@ -39,6 +40,20 @@ export interface VoteResult {
    *  so the optional marker alone was not enough — `string | undefined` cannot
    *  hold the `null` those columns actually return. */
   image_url?: string | null;
+  /**
+   * The winner's own detail page, when one can be addressed (WEB-SEO-035).
+   *
+   * A leaderboard whose entries are not clickable is a dead end, and it is also
+   * why /best-of/:category carried no ItemList - the schema needs a url per
+   * item and the page had none. Restaurants use the `slug` COLUMN with the id
+   * as the fallback, exactly as RestaurantCard does; attractions use
+   * createSlug(name), exactly as the attractions grid does, and deliberately
+   * NOT attractions.slug - that column arrives with migration 20260919000008
+   * and naming it in this SELECT before it is applied would 42703 the whole
+   * query and empty the leaderboard. Custom write-ins have no page, so they
+   * get no link and no ItemList entry.
+   */
+  url?: string;
 }
 
 /**
@@ -140,7 +155,7 @@ export function useCategoryResults(categorySlug: string) {
       if (restaurantIds.length > 0) {
         const { data: restaurants } = await supabase
           .from('restaurants')
-          .select('id, name, image_url')
+          .select('id, name, image_url, slug')
           .in('id', restaurantIds);
 
         if (restaurants) {
@@ -151,6 +166,7 @@ export function useCategoryResults(categorySlug: string) {
               if (rest) {
                 result.name = rest.name;
                 result.image_url = rest.image_url;
+                result.url = `/restaurants/${rest.slug || rest.id}`;
               }
             }
           }
@@ -173,6 +189,7 @@ export function useCategoryResults(categorySlug: string) {
               if (attr) {
                 result.name = attr.name;
                 result.image_url = attr.image_url;
+                result.url = `/attractions/${createSlug(attr.name)}`;
               }
             }
           }

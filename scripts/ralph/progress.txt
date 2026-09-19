@@ -2180,3 +2180,56 @@ Learnings for future iterations
    route/data combinations in one run confirmed the render path, the hrefs, the
    noindex threshold from both sides, and the conditional link - all things
    three earlier notes on this story had to leave as "not verified".
+
+================================================================================
+2026-09-19  WEB-SEO-035 AC3  The sixth route family, fixed rather than excluded
+================================================================================
+
+The previous pass held /best-of/:category out of the sitemaps because
+BestOfCategory.tsx had no canonical. AC3's wording is "fix or exclude", so this
+pass took the other branch: RouteCanonical, an ItemList of the ranked winners,
+and the family registered in all four lists.
+
+The exclusion's stated MECHANISM was wrong and the correction matters. The note
+said each page "would be submitted carrying the SPA fallback's canonical - each
+one declaring itself a duplicate of the homepage". Rebuilt without the fix and
+measured: the page publishes ZERO canonical tags, because index.html carries
+none for Helmet to leave behind. The cost was no canonical, which is what the
+prerender strict gate refuses - right call, wrong reason.
+
+Making the schema possible required making the leaderboard clickable, which it
+should have been anyway: ranked entries were plain text, so a Best-Of page was a
+dead end and ItemListSchema had no url per item to emit. Restaurants link via
+the slug column, attractions via createSlug(name), custom write-ins not at all.
+
+Browser-verified: one canonical at the right URL, ItemList numberOfItems 2 =
+2 elements = the two addressable winners, the write-in in neither, 0 errors.
+
+Learnings for future iterations
+
+1. A guard written in one iteration paid off in the next. Adding the generator
+   alone failed check-sitemap-registration naming robots.txt, sitemap-index.xml
+   and ENTITY_SITEMAPS - three of the four lists I would have forgotten. That
+   check was built for a defect that had already shipped; this is the first
+   time it stopped one before it did.
+
+2. Re-derive the REASON a previous iteration gave, not just its conclusion.
+   "Inherits the shell's canonical" and "has no canonical" lead to the same
+   decision and to different fixes, and only one of them is what the page does.
+   A rebuild without the fix settled it in one run.
+
+3. A docstring that states a PLACEMENT is hiding a rule. RouteCanonical said
+   "render this ONLY in the loading branch", which is true of detail pages and
+   false as a rule - the actual rule is one canonical per render. I would have
+   skipped this page rather than question the instruction.
+
+4. Check the pending-migration list before reaching for a column. attractions
+   .slug exists in the types and in a committed migration and is NOT applied;
+   PostgREST fails the whole query on 42703, so it would have emptied the
+   leaderboard rather than dropped one link. The page next door derives the
+   slug from the name, which is both safe and already the site's convention.
+
+5. Two ACs unblocked each other across iterations. AC4 said to exclude
+   neighborhoods until WEB-SEO-036 gave them data; that story closed an hour
+   earlier, so AC4 was already discharged. Re-read the dependencies of an AC
+   before assuming they still hold.

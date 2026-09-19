@@ -8,6 +8,9 @@ import { Card, CardContent } from '@/components/ui/card';
 import { Badge } from '@/components/ui/badge';
 import { Skeleton } from '@/components/ui/skeleton';
 import { Trophy, ArrowLeft, Medal } from 'lucide-react';
+import { RouteCanonical } from '@/components/RouteCanonical';
+import ItemListSchema from '@/components/schema/ItemListSchema';
+import { getCanonicalUrl } from '@/lib/brandConfig';
 
 export default function BestOfCategory() {
   const { category: categorySlug } = useParams<{ category: string }>();
@@ -17,12 +20,39 @@ export default function BestOfCategory() {
   const results = data?.results || [];
   const totalVotes = results.reduce((sum, r) => sum + r.vote_count, 0);
 
+  // WEB-SEO-035 AC3. Only the ranked entries that HAVE a page, and in rank
+  // order, so numberOfItems and the positions match what a crawler reads off
+  // the list above. Custom write-ins are not addressable and are left out of
+  // both the links and the schema.
+  const schemaItems = results
+    .filter((r) => r.url && r.name)
+    .map((r, index) => ({
+      name: r.name as string,
+      url: getCanonicalUrl(r.url as string),
+      position: index + 1,
+      ...(r.image_url ? { image: r.image_url } : {}),
+    }));
+
   return (
     <>
+      {/* WEB-SEO-035. This page had NO canonical at all, so every /best-of/
+          category inherited the SPA shell's - each one declaring itself a
+          duplicate of the home page. That is why the family was held out of
+          the sitemaps. Unlike the detail pages, this one is not in a loading
+          branch: nothing else here emits a canonical, so there is no second
+          tag for it to collide with. */}
+      <RouteCanonical path={`/best-of/${categorySlug ?? ''}`} />
       <Helmet>
         <title>{category ? `${category.name} - Des Best` : 'Des Best'} | Des Moines Insider</title>
         <meta name="description" content={category?.description || 'Vote for the best of Des Moines'} />
       </Helmet>
+      {schemaItems.length > 0 && (
+        <ItemListSchema
+          name={category ? `Best ${category.name} in Des Moines` : 'Des Best rankings'}
+          description={category?.description || undefined}
+          items={schemaItems}
+        />
+      )}
       <div className="min-h-screen bg-background">
         <Header />
         <div className="container mx-auto px-4 py-8 max-w-3xl">
@@ -98,7 +128,16 @@ export default function BestOfCategory() {
 
                             {/* Info */}
                             <div className="flex-1 min-w-0">
-                              <p className="font-medium truncate">{result.name || 'Unknown'}</p>
+                              {result.url ? (
+                                <Link
+                                  to={result.url}
+                                  className="font-medium truncate block hover:text-primary underline-offset-4 hover:underline"
+                                >
+                                  {result.name}
+                                </Link>
+                              ) : (
+                                <p className="font-medium truncate">{result.name || 'Unknown'}</p>
+                              )}
                               <div className="flex items-center gap-2 mt-1">
                                 <div className="flex-1 h-2 bg-muted rounded-full overflow-hidden">
                                   <div
