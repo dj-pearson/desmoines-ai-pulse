@@ -26,6 +26,7 @@ import {
 } from 'lucide-react';
 import { Link } from 'react-router-dom';
 import { createLogger } from '@/lib/logger';
+import { LoadingSpinner } from "@/components/ui/loading-skeleton";
 
 const log = createLogger('ContentQueue');
 
@@ -87,7 +88,7 @@ const statusConfig: Record<string, { label: string; color: string; icon: any }> 
   approved: { label: 'Approved', color: 'bg-green-500', icon: CheckCircle },
   rejected: { label: 'Rejected', color: 'bg-red-500', icon: XCircle },
   changes_requested: { label: 'Changes Requested', color: 'bg-orange-500', icon: AlertCircle },
-  published: { label: 'Published', color: 'bg-purple-500', icon: Send },
+  published: { label: 'Published', color: 'bg-teal-500', icon: Send },
 };
 
 const priorityLabels: Record<number, { label: string; color: string }> = {
@@ -284,7 +285,7 @@ export function ContentQueue() {
     return (
       <Card>
         <CardContent className="flex items-center justify-center py-8">
-          <div className="animate-spin rounded-full h-8 w-8 border-b-2 border-primary"></div>
+          <LoadingSpinner size="lg" label="Loading the content queue" />
         </CardContent>
       </Card>
     );
@@ -323,8 +324,8 @@ export function ContentQueue() {
               <div className="text-2xl font-bold text-red-600">{statusCounts.rejected}</div>
               <div className="text-xs text-muted-foreground">Rejected</div>
             </div>
-            <div className="bg-purple-500/10 p-3 rounded-lg text-center">
-              <div className="text-2xl font-bold text-purple-600">{statusCounts.published}</div>
+            <div className="bg-teal-500/10 p-3 rounded-lg text-center">
+              <div className="text-2xl font-bold text-teal-600">{statusCounts.published}</div>
               <div className="text-xs text-muted-foreground">Published</div>
             </div>
           </div>

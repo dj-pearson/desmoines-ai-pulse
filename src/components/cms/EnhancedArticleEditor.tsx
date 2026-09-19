@@ -20,6 +20,7 @@ import { FileText, Save, Eye, Trash2, ArrowLeft, Plus, X, Globe, Search, Tag, Us
 import { toast } from 'sonner';
 import { cn } from '@/lib/utils';
 import { createLogger } from '@/lib/logger';
+import { LoadingSpinner } from "@/components/ui/loading-skeleton";
 
 const log = createLogger('EnhancedArticleEditor');
 
@@ -309,7 +310,7 @@ export default function EnhancedArticleEditor() {
   if (loading) {
     return (
       <div className="flex items-center justify-center min-h-screen">
-        <div className="animate-spin rounded-full h-8 w-8 border-b-2 border-primary"></div>
+        <LoadingSpinner size="lg" label="Loading article" />
       </div>
     );
   }

@@ -6,6 +6,7 @@ import { type Permission, type UserRole } from "@/lib/security";
 import { sessionStore } from "@/lib/safeStorage";
 import { ShieldAlert, ArrowLeft } from "lucide-react";
 import { Button } from "@/components/ui/button";
+import { Spinner } from "@/components/ui/loading-skeleton";
 
 interface ProtectedRouteProps {
   children: ReactNode;
@@ -136,7 +137,7 @@ export function ProtectedRoute({
     return (
       <div className="min-h-screen bg-background flex items-center justify-center">
         <div className="text-center space-y-4">
-          <div className="animate-spin rounded-full h-12 w-12 border-b-2 border-primary mx-auto"></div>
+          <Spinner size="xl" className="mx-auto" />
           <p className="text-muted-foreground">
             {requireAdmin && isAdminLoading
               ? "Verifying admin access..."

@@ -25,6 +25,7 @@ import { format } from "date-fns";
 import { toast } from "sonner";
 import { SpriteIcon } from "@/components/ui/SpriteIcon";
 import { ErrorState } from "@/components/ui/error-state";
+import { Spinner } from "@/components/ui/loading-skeleton";
 
 const DASHBOARD_TABS = [
   "overview",
@@ -353,7 +354,7 @@ export default function UserDashboard() {
               <CardContent>
                 {isLoading ? (
                   <div className="text-center py-8">
-                    <div className="animate-spin rounded-full h-8 w-8 border-b-2 border-primary mx-auto mb-4"></div>
+                    <Spinner size="lg" className="mx-auto mb-4" />
                     <p>Loading your events...</p>
                   </div>
                 ) : events && events.length > 0 ? (
@@ -504,7 +505,7 @@ export default function UserDashboard() {
                 <CardContent>
                   {campaignsLoading ? (
                     <div className="text-center py-6">
-                      <div className="animate-spin rounded-full h-8 w-8 border-b-2 border-primary mx-auto mb-4"></div>
+                      <Spinner size="lg" className="mx-auto mb-4" />
                       <p className="text-sm text-muted-foreground">Loading campaigns...</p>
                     </div>
                   ) : campaigns.length > 0 ? (

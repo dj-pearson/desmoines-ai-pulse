@@ -301,13 +301,61 @@ export function PageLoadingOverlay({ message = "Loading..." }: { message?: strin
       aria-busy="true"
     >
       <div className="text-center space-y-4">
-        <div
-          className="animate-spin rounded-full h-8 w-8 border-b-2 border-primary mx-auto motion-reduce:animate-pulse"
-          aria-hidden="true"
-        ></div>
+        <Spinner size="lg" className="mx-auto" />
         <p className="text-sm text-muted-foreground animate-pulse motion-reduce:animate-none">{message}</p>
       </div>
     </div>
+  );
+}
+
+export type SpinnerSize = "sm" | "default" | "lg" | "xl";
+
+const SPINNER_SIZES: Record<SpinnerSize, string> = {
+  sm: "h-4 w-4",
+  default: "h-6 w-6",
+  lg: "h-8 w-8",
+  xl: "h-12 w-12",
+};
+
+/**
+ * The spinner ring, with no ARIA of its own (WEB-UX-034).
+ *
+ * TWELVE COPIES of the same hand-rolled spinner - a spin animation on a
+ * rounded box with a single thick bottom border - were pasted across the admin
+ * and CMS screens. (The class string is not written out here: quoting it made
+ * impeccable's border-accent-on-rounded rule fire on this very comment.)
+ * A single thick border on one
+ * edge of a rounded box is what impeccable's border-accent-on-rounded rule
+ * flags, and it was the largest group in the report - not because twelve
+ * screens each made a design choice, but because one snippet was copied twelve
+ * times. A full ring with a tinted top reads as a spinner at any angle; a
+ * bottom-only border reads as a rounded box with a stray edge until it moves.
+ *
+ * This is the visual half only. It is aria-hidden, so it can sit inside a
+ * container that already carries role="status" without announcing twice -
+ * which PageLoadingOverlay above does. Use LoadingSpinner when the spinner is
+ * the whole status region.
+ */
+export function Spinner({
+  size = "default",
+  tone = "primary",
+  className = "",
+}: {
+  size?: SpinnerSize;
+  /** "current" inherits the surrounding text colour, for spinners inside buttons. */
+  tone?: "primary" | "current";
+  className?: string;
+}) {
+  const ring =
+    tone === "current"
+      ? "border-current border-t-transparent"
+      : "border-muted border-t-primary";
+
+  return (
+    <div
+      className={`animate-spin rounded-full border-2 motion-reduce:animate-pulse ${ring} ${SPINNER_SIZES[size]} ${className}`}
+      aria-hidden="true"
+    />
   );
 }
 
@@ -317,26 +365,17 @@ export function LoadingSpinner({
   className = "",
   label = "Loading..."
 }: {
-  size?: "sm" | "default" | "lg";
+  size?: SpinnerSize;
   className?: string;
   label?: string;
 }) {
-  const sizeClasses = {
-    sm: "h-4 w-4",
-    default: "h-6 w-6",
-    lg: "h-8 w-8"
-  };
-
   return (
     <div
       role="status"
       aria-live="polite"
       className="inline-flex items-center justify-center"
     >
-      <div
-        className={`animate-spin rounded-full border-2 border-muted border-t-primary motion-reduce:animate-pulse ${sizeClasses[size]} ${className}`}
-        aria-hidden="true"
-      />
+      <Spinner size={size} className={className} />
       <span className="sr-only">{label}</span>
     </div>
   );

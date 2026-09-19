@@ -14,6 +14,7 @@ import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from '@
 import { toast } from 'sonner';
 import { Users, Plus, Edit, Trash2, FileText, Globe, Twitter, Linkedin, Search, UserPlus } from 'lucide-react';
 import { createLogger } from '@/lib/logger';
+import { LoadingSpinner } from "@/components/ui/loading-skeleton";
 
 const log = createLogger('AuthorManager');
 
@@ -207,7 +208,7 @@ export function AuthorManager() {
     return (
       <Card>
         <CardContent className="flex items-center justify-center py-8">
-          <div className="animate-spin rounded-full h-8 w-8 border-b-2 border-primary"></div>
+          <LoadingSpinner size="lg" label="Loading authors" />
         </CardContent>
       </Card>
     );

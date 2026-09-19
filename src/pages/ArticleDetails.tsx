@@ -315,6 +315,16 @@ const ArticleDetails: React.FC = () => {
               {/* Main Content */}
               <article className="lg:col-span-8">
                 <Card className="p-6 md:p-8">
+                  {/* prose-blockquote:border-l-4 below is the one side-tab
+                      finding in this file that impeccable counts and that
+                      stays. CLAUDE.md's rule names cards, list items, callouts
+                      and alerts; a rule down the side of a quotation is
+                      typography, and it is what Tailwind Typography ships. It
+                      is left in the ratchet's count rather than ignored,
+                      because the only ignore the detector offers would silence
+                      side-tab for this WHOLE file - and an article page is
+                      where a real one is most likely to appear
+                      (WEB-UX-034 AC2). */}
                   <div className="prose prose-lg max-w-none dark:prose-invert 
                                prose-headings:font-bold prose-headings:text-foreground
                                prose-h2:text-2xl prose-h2:mt-8 prose-h2:mb-4
