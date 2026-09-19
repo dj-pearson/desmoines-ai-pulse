@@ -35,6 +35,7 @@ import { createSlug } from "@/lib/slug";
 import { fetchBySlug } from "@/lib/resolveBySlug";
 import type { Database } from "@/integrations/supabase/types";
 import { OptimizedImage } from "@/components/OptimizedImage";
+import { DETAIL_STALE_TIME, detailQueryKey } from "@/lib/detailQueryKeys";
 
 type Attraction = Database["public"]["Tables"]["attractions"]["Row"];
 
@@ -76,16 +77,17 @@ export default function AttractionDetails() {
     isLoading,
     error,
   } = useQuery({
-    queryKey: ["attraction", slug],
+    queryKey: detailQueryKey("attraction", slug ?? ""),
     // attractions now has a slug column (migration 20260919000008), so this is
     // one row by unique key. The (id, name) scan this replaces is still in
     // fetchBySlug as the fallback for the window before that migration is
     // applied (WEB-PERF-031).
     queryFn: () => fetchBySlug<Attraction>("attractions", slug ?? ""),
     enabled: Boolean(slug),
-    // Matches usePrefetchAttraction, or the prefetch is discarded as stale the
-    // instant the page mounts and the hover cost bought nothing.
-    staleTime: 2 * 60 * 1000,
+    // Shared with usePrefetchAttraction through detailQueryKeys, or the
+    // prefetch is discarded as stale the instant the page mounts and the hover
+    // cost bought nothing.
+    staleTime: DETAIL_STALE_TIME,
   });
 
   // Track page view and content interactions

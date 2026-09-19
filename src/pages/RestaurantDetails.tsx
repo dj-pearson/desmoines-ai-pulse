@@ -43,6 +43,7 @@ import { RatingSystem } from "@/components/RatingSystem";
 import { CollapsibleSection } from "@/components/CollapsibleSection";
 import { SpriteIcon } from "@/components/ui/SpriteIcon";
 import { fetchPriorityAttr } from '@/lib/fetchPriority';
+import { DETAIL_STALE_TIME, detailQueryKey } from "@/lib/detailQueryKeys";
 
 export default function RestaurantDetails() {
   const { slug } = useParams();
@@ -53,7 +54,7 @@ export default function RestaurantDetails() {
     isLoading,
     error,
   } = useQuery({
-    queryKey: ["restaurant", slug],
+    queryKey: detailQueryKey("restaurant", slug ?? ""),
     queryFn: async () => {
       let { data, error } = await supabase
         .from("restaurants")
@@ -74,6 +75,7 @@ export default function RestaurantDetails() {
       if (error) throw error;
       return data;
     },
+    staleTime: DETAIL_STALE_TIME,
   });
 
   // Track page view and content interactions

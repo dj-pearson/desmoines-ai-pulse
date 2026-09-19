@@ -1789,3 +1789,13 @@ Acted on the previous entry's own closing line. Eleven `void supabase` sites; se
   - **My own error message failed another check.** The hint spelled out an example query and `check-schema-usage` reported the placeholder table as missing. Third time this session a check has fired on the prose explaining a check - strip comments and string literals *and* keep example code out of error text.
   - **A statement boundary is not a bracket.** The backward scan stopped at the `[` of `await Promise.all([builder, builder])`, excluding the `await`, and reported five correct edge functions. An unmatched `(` or `[` means the consumer is outside it; only an unmatched `{` is a real boundary.
   - **Read the first run's output, do not trust its count.** Every one of the three false-positive classes was visible in the first run and invisible in the number.
+
+## 2026-09-19 - WEB-PERF-036 CLOSED: the prefetch key and the page key are now one function
+AC1's evidence was three weeks old and two of its three numbers had moved: PlaygroundDetails and RestaurantDetails had no staleTime at all (global 60s), while AttractionDetails had drifted to 2 minutes, agreeing with the prefetchers and nothing else.
+- `src/lib/detailQueryKeys.ts` builds both the key and `DETAIL_STALE_TIME` (= `STALE_TIME.CONTENT_DETAIL`), so the page and its prefetcher match by construction.
+- 10 tests, 3 negative controls. validate exit 0, vitest 743/743.
+- **Learnings for future iterations:**
+  - **AC3 asked for the weakest possible version of the test.** "A vitest asserting the key equality between prefetch and page" means comparing two string literals, which is only as good as the next edit to either file. Making them the same key by construction and asserting that both sides use the builder is the assertion that survives a rename.
+  - **A prefetch under the wrong key is silent in every direction.** The hover still costs a request, the page still fetches, nothing logs a miss, and the only symptom is that a feature built to feel instant does not. That is why it sat for three weeks with the numbers drifting.
+  - **staleTime belongs wherever the key does.** A prefetch is discarded the moment the page mounts if the page thinks it is stale, so the two values have to agree - and keeping them in separate files is precisely how one ended up at 60 seconds and the other at two minutes.
+  - **"Both prefetchers" was three pages and two hooks.** Playgrounds has no hover prefetch at all, so the AC's wording reads as more coverage than exists. Worth saying out loud in the closure rather than leaving a reader to assume symmetry.

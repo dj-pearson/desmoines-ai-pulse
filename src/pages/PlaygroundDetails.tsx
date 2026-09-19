@@ -29,6 +29,7 @@ import { useState } from "react";
 import { useDocumentTitle } from "@/hooks/useDocumentTitle";
 import { SpriteIcon } from "@/components/ui/SpriteIcon";
 import { OptimizedImage } from "@/components/OptimizedImage";
+import { DETAIL_STALE_TIME, detailQueryKey } from "@/lib/detailQueryKeys";
 
 type Playground = Database["public"]["Tables"]["playgrounds"]["Row"];
 
@@ -41,12 +42,13 @@ export default function PlaygroundDetails() {
     isLoading,
     error,
   } = useQuery({
-    queryKey: ["playground", slug],
+    queryKey: detailQueryKey("playground", slug ?? ""),
     // One row by slug, not the whole table (WEB-PERF-031). fetchBySlug keeps
     // the createSlug(name) scan as a fallback for the window between this
     // deploying and migration 20260919000008 being applied.
     queryFn: () => fetchBySlug<Playground>("playgrounds", slug ?? ""),
     enabled: Boolean(slug),
+    staleTime: DETAIL_STALE_TIME,
   });
 
   const { data: relatedPlaygrounds } = useQuery({

@@ -2,6 +2,7 @@ import { useCallback, useRef } from 'react';
 import { useQueryClient } from '@tanstack/react-query';
 import { supabase } from '@/integrations/supabase/client';
 import { fetchBySlug } from '@/lib/resolveBySlug';
+import { DETAIL_STALE_TIME, detailQueryKey } from '@/lib/detailQueryKeys';
 
 /**
  * Hook to prefetch detail page data on card hover.
@@ -19,7 +20,7 @@ export function usePrefetchRestaurant() {
 
       const doFetch = () => {
         queryClient.prefetchQuery({
-          queryKey: ['restaurant', slugOrId],
+          queryKey: detailQueryKey('restaurant', slugOrId),
           queryFn: async () => {
             let { data } = await supabase
               .from('restaurants')
@@ -36,7 +37,7 @@ export function usePrefetchRestaurant() {
             }
             return data;
           },
-          staleTime: 2 * 60 * 1000,
+          staleTime: DETAIL_STALE_TIME,
         });
       };
 
@@ -61,7 +62,7 @@ export function usePrefetchAttraction() {
 
       const doFetch = () => {
         queryClient.prefetchQuery({
-          queryKey: ['attraction', slug],
+          queryKey: detailQueryKey('attraction', slug),
           // THIS RAN ON HOVER AND DOWNLOADED THE WHOLE TABLE (WEB-PERF-031).
           // select('*') on attractions with no filter, once per card the
           // pointer crossed until prefetchedRef caught up - so the thing meant
@@ -70,7 +71,7 @@ export function usePrefetchAttraction() {
           // AttractionDetails' resolver so the prefetched entry is the one the
           // page reads rather than a differently-shaped near-miss.
           queryFn: () => fetchBySlug('attractions', slug),
-          staleTime: 2 * 60 * 1000,
+          staleTime: DETAIL_STALE_TIME,
         });
       };
 
