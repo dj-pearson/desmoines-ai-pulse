@@ -269,6 +269,35 @@ function initializeApp() {
   }
 
   try {
+    // CREATEROOT, NOT HYDRATEROOT, AND IT IS A MEASURED DECISION (WEB-PERF-038).
+    //
+    // On a prerendered route this throws the static tree away and rebuilds it.
+    // That is a real cost and it was worth trying to remove: measured on a
+    // prerendered /restaurants, 390x844, 4x CPU throttle, Slow 4G, median of
+    // three runs each --
+    //
+    //                 LCP      FCP      TBT     prerendered DOM discarded at
+    //   createRoot    1552ms   1552ms   626ms   2130ms
+    //   hydrateRoot   1552ms   1552ms   782ms   2205ms
+    //
+    // hydrateRoot was WORSE, and it still discarded the tree, because it
+    // reported EIGHT React #418 mismatches and fell back to client rendering
+    // after paying for the hydration attempt. The mismatches are not one stale
+    // date in one component; the stacks land at Suspense, nav, main, button and
+    // several div, which is two separate problems:
+    //
+    //   1. Every route in App.tsx is lazy(). The first client render of a
+    //      prerendered route is the <Suspense> FALLBACK, because the route
+    //      chunk has not resolved yet, while the captured HTML holds the whole
+    //      page. That mismatch is structural and fires on every prerendered
+    //      route.
+    //   2. There are mismatches in the shell too (the `at nav` stack is
+    //      Header), so fixing the lazy boundary alone would not be enough.
+    //
+    // So AC2's option (a) needs both surfaces made hydration-safe before it can
+    // pay, and option (b) is what ships: stay with createRoot and keep the
+    // prerendered DOM small, which is WEB-PERF-023. Re-run the comparison with
+    // scripts/measure-vitals.mjs before changing this line.
     const root = createRoot(rootElement);
 
     // Render immediately - this is the critical path

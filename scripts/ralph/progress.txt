@@ -2078,3 +2078,55 @@ Learnings for future iterations
 6. Promote the throwaway rig. This one took most of an iteration to build and
    is now three commands in a committed script. The next Core Web Vitals
    question against this app costs a minute.
+
+================================================================================
+2026-09-19  WEB-PERF-038  createRoot vs hydrateRoot, decided by measurement
+================================================================================
+
+AC2 asked for a decision recorded with a measurement. The answer is (b), stay
+with createRoot, and hydrateRoot is not a near miss - it measured worse.
+
+Needed a genuinely prerendered page first, which this container could not make
+(prerender.mjs needs data). Captured one instead: render /restaurants in
+Chromium with the backend stubbed, wait for PrerenderSignal, dump
+documentElement.outerHTML to dist/restaurants.html, strip data-queries-settled
+to match what stripPrerenderSignal removes in production. vite preview serves
+that flat file at /restaurants, which is the shape prerender-output.mjs writes.
+
+  390x844, 4x CPU, Slow 4G, median of three runs each:
+                  LCP      FCP      TBT     prerendered DOM discarded at
+    createRoot    1552ms   1552ms   626ms   2130ms
+    hydrateRoot   1552ms   1552ms   782ms   2205ms
+
+hydrateRoot reported eight React #418 mismatches and fell back to client
+rendering, so it discarded the tree anyway AND paid for the hydration attempt.
+The stacks land at Suspense, nav, main, button: every route in App.tsx is
+lazy(), so the first client render of a prerendered route is the Suspense
+fallback while the captured HTML holds the finished page - and the shell
+mismatches too, so fixing the lazy boundary alone would not be enough.
+
+Learnings for future iterations
+
+1. A MutationObserver on #root turns "React throws the prerendered DOM away"
+   from a claim into a timestamp. Removals are recorded; hydration adopts and
+   records none. Find the observable form of the defect before arguing about
+   the fix.
+
+2. When a story offers two options and one is obviously "the right thing",
+   measure it anyway. hydrateRoot is what everyone would have picked, and it
+   is 156ms of TBT worse here for reasons nobody would have guessed from
+   reading the code.
+
+3. The capture trick generalises: any question about prerendered HTML can be
+   answered without the prerender pipeline. Render with fixtures, dump
+   outerHTML, write the flat file, and post-process it the way the real script
+   does. Check what the real script STRIPS - data-queries-settled is removed
+   in production, so a marker built on it would have worked in my rig and
+   failed in production.
+
+4. Record a measured decision AT THE CALL SITE, with the numbers, and pin it
+   with a test. The change this decision argues against is one word, and a
+   comment does not fail a build.
+
+5. Third time this session a `pkill` in a command chain returned 144 and killed
+   everything after it. Put process cleanup in its own call.
