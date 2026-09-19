@@ -25,6 +25,11 @@ interface EventPreset {
   gradient: string;
 }
 
+// One hue pair per preset, chosen so eight chips are told apart at a glance.
+// `impeccable detect` counts the violet and indigo members as ai-color-palette
+// findings; they stay. The hue is doing identifying work, and swapping one
+// member of a distinguishing set to dodge a rule makes the set arbitrary
+// without making it less gradient. Decided as a set (WEB-UX-034 AC2).
 const EVENT_SMART_PRESETS: EventPreset[] = [
   {
     id: "free-weekend",

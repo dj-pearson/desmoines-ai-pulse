@@ -256,7 +256,7 @@ export function EnhancedHero({
 
         {/* Scroll indicator */}
         <div className="flex justify-center pt-8">
-          <div className="animate-bounce" role="presentation" aria-hidden="true">
+          <div className="animate-float" role="presentation" aria-hidden="true">
             <svg
               className="w-6 h-6 text-white/60"
               fill="none"

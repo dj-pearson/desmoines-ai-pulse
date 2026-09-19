@@ -296,8 +296,8 @@ function MobileNav({
                             className={cn(
                               "flex items-center gap-2 px-3 py-2 rounded-md text-sm transition-colors",
                               itemActive
-                                ? "bg-primary text-primary-foreground border-l-4 border-primary"
-                                : "hover:bg-accent text-foreground border-l-4 border-transparent",
+                                ? "bg-primary text-primary-foreground"
+                                : "hover:bg-accent text-foreground",
                             )}
                           >
                             <ItemIcon className="h-4 w-4" />

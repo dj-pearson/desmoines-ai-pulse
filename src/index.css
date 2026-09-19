@@ -173,14 +173,6 @@
   .glass-card {
     @apply bg-white/80 dark:bg-black/40 backdrop-blur-md border border-white/20 dark:border-white/10 shadow-sm hover:shadow-md transition-all duration-300;
   }
-
-  .text-gradient {
-    @apply bg-clip-text text-transparent bg-gradient-to-r from-primary to-secondary;
-  }
-
-  .text-gradient-blue {
-    @apply bg-clip-text text-transparent bg-gradient-to-r from-[#071e62] to-[#0a2a8a] dark:from-[#4d7cfe] dark:to-[#071e62];
-  }
 }
 
 /* Mobile-First Design System - Optimized for GEO and Performance

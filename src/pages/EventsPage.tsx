@@ -589,7 +589,7 @@ export default function EventsPage() {
         <div className="min-h-screen bg-background">
           <Header />
           <section className="relative bg-gradient-to-br from-[#1a1a2e] via-[#16213e] to-[#0f3460] overflow-hidden min-h-[340px]" role="status" aria-live="polite" aria-busy="true">
-            <div className="absolute inset-0 bg-[radial-gradient(ellipse_at_top,rgba(99,102,241,0.15),transparent_50%)]" />
+            <div className="absolute inset-0 bg-[radial-gradient(ellipse_at_top,rgba(255,255,255,0.08),transparent_50%)]" />
             <div className="relative container mx-auto px-4 py-16 md:py-20 text-center">
               <div className="animate-pulse space-y-4 motion-reduce:animate-none">
                 <div className="h-10 md:h-14 bg-white/10 rounded-lg w-3/4 mx-auto" />
@@ -683,9 +683,9 @@ export default function EventsPage() {
         {/* Hero Section - Modern Dark Gradient */}
         <section className="relative bg-gradient-to-br from-[#1a1a2e] via-[#16213e] to-[#0f3460] overflow-hidden">
           {/* Decorative elements */}
-          <div className="absolute inset-0 bg-[radial-gradient(ellipse_at_top,rgba(99,102,241,0.15),transparent_50%)]" />
-          <div className="absolute top-0 left-1/4 w-72 h-72 bg-indigo-500/10 rounded-full blur-3xl" />
-          <div className="absolute bottom-0 right-1/4 w-96 h-96 bg-violet-500/10 rounded-full blur-3xl" />
+          <div className="absolute inset-0 bg-[radial-gradient(ellipse_at_top,rgba(255,255,255,0.08),transparent_50%)]" />
+          <div className="absolute top-0 left-1/4 w-72 h-72 bg-white/5 rounded-full blur-3xl" />
+          <div className="absolute bottom-0 right-1/4 w-96 h-96 bg-white/5 rounded-full blur-3xl" />
 
           <div className="relative container mx-auto px-4 py-12 md:py-20">
             <div className="text-center max-w-3xl mx-auto">
@@ -699,7 +699,7 @@ export default function EventsPage() {
               {/* Search Bar */}
               <div className="max-w-2xl mx-auto mb-6">
                 <div className="relative">
-                  <Search className="absolute left-4 top-1/2 -translate-y-1/2 h-5 w-5 text-slate-400 pointer-events-none z-10" />
+                  <Search className="absolute left-4 top-1/2 -translate-y-1/2 h-5 w-5 text-white/60 pointer-events-none z-10" />
                   <Input
                     ref={searchInputRef}
                     type="search"
@@ -711,7 +711,7 @@ export default function EventsPage() {
                         addRecentSearch('events', searchQuery);
                       }
                     }}
-                    className="pl-12 pr-12 h-14 bg-white/10 backdrop-blur-md border-white/20 text-white placeholder:text-white/50 rounded-xl text-base focus:bg-white/15 focus:border-white/40 focus:ring-2 focus:ring-indigo-400/50 transition-all"
+                    className="pl-12 pr-12 h-14 bg-white/10 backdrop-blur-md border-white/20 text-white placeholder:text-white/50 rounded-xl text-base focus:bg-white/15 focus:border-white/40 focus:ring-2 focus:ring-white/40 transition-all"
                     aria-label="Search events (Press 'f' to focus)"
                     role="searchbox"
                     autoComplete="off"
@@ -771,7 +771,7 @@ export default function EventsPage() {
                   variant="secondary"
                   className={`rounded-full ${
                     isNearMeActive
-                      ? "bg-indigo-500 text-white hover:bg-indigo-600 border-0"
+                      ? "bg-white text-slate-900 hover:bg-white/90 border-0"
                       : "bg-white/10 hover:bg-white/20 text-white border-white/10"
                   }`}
                   disabled={isLoadingLocation}

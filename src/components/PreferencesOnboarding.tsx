@@ -472,7 +472,7 @@ export function PreferencesOnboarding({
         return (
           <div className="text-center space-y-6 py-6">
             <div className="flex justify-center">
-              <div className="rounded-full bg-gradient-to-br from-green-500 to-emerald-500 p-6 animate-bounce">
+              <div className="rounded-full bg-gradient-to-br from-green-500 to-emerald-500 p-6 animate-scale-in">
                 <Check className="h-16 w-16 text-white" />
               </div>
             </div>

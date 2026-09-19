@@ -137,7 +137,13 @@ export function getCuisineGradient(cuisine?: string | null): string {
   return CUISINE_GRADIENTS.default;
 }
 
-/** Lodging type -> decorative image-fallback gradient (used by HotelCard). */
+/**
+ * Lodging type -> decorative image-fallback gradient (used by HotelCard).
+ * Six types, six hue pairs, no text on top. `impeccable detect` counts the
+ * Boutique Hotel purple as an ai-color-palette finding; it stays for the same
+ * reason the category hues above do - it is a member of a distinguishing set,
+ * and recolouring one member to clear a rule leaves the set arbitrary.
+ */
 const HOTEL_TYPE_GRADIENTS: Record<string, string> = {
   "Hotel": "from-blue-600 to-indigo-500",
   "Boutique Hotel": "from-purple-600 to-pink-500",

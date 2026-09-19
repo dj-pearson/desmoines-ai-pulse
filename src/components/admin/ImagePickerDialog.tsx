@@ -57,7 +57,7 @@ const SOURCE_LABEL: Record<ImageSource, string> = {
   twitter: "Twitter",
   jsonld: "JSON-LD",
   image_src: "image_src",
-  img: "page <img>",
+  img: "page image",
   venue: "venue",
   places: "Places",
 };

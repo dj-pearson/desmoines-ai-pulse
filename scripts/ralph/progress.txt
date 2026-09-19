@@ -1691,3 +1691,19 @@ Four detail pages rendered the not-found branch (with `noindex`) whenever the qu
   - **Two robots metas is a coin toss dressed as a decision.** EventDetails rendered `noindex, follow` from Helmet and `index, follow, max-image-preview:large` from `SEOHead` on the same branch. Whichever lands last wins, and nothing in the source says which that is.
   - **The placeholder backend is what made the runtime check possible.** `placeholder.supabase.co` does not resolve, so every detail query fails - which is exactly the state this story is about. The environment that usually blocks verification was the fixture.
   - **What was not verified, recorded in the note:** that a *successful* query returning no row still noindexes. No query succeeds here, so that path is asserted in source only.
+
+## 2026-09-19 - WEB-UX-034 batch three: 22 UI anti-patterns -> 7, all seven decided
+AC3's public surfaces are done; the story stays open for the admin colour sweep.
+- Side-tabs gone from ContentTable (4), CronMonitorSimple, AdminNav, SEOOpportunities, SiteHealth; CrmBoard's border-t-4 column heads now carry their stage hue as a dot. `impactColor` and `getSeverityBorderColor` deleted with the borders they fed.
+- `animate-bounce` -> `animate-float` (hero scroll cue) and `animate-scale-in` (onboarding medallion), both already in tailwind.config.ts.
+- `.text-gradient` and `.text-gradient-blue` deleted from index.css: zero call sites anywhere in the repository.
+- Index.tsx 117 raw palette tokens -> 24, Restaurants.tsx 68 -> 13, EventsPage.tsx 7 -> 3.
+- Verified: check-ui-craft 22 -> 7 re-baselined, two negative controls fail with the file named; validate exit 0; vitest 705/705 across 73 files; both pages rendered in Chromium against a production build in light AND dark, contrast read off the live DOM.
+- **Learnings for future iterations:**
+  - **Converting text to tokens before the surface under it makes things worse.** The Restaurants guide had seven `bg-white` panels holding `text-gray-900` with no dark variant. Swapping the text to `text-foreground` first produced white-on-white in dark mode - a regression I shipped into a build and only caught because I screenshotted it. Surface and text are one change, not two.
+  - **A theme token is wrong inside an element that is one colour in both themes.** The restaurant search box is `bg-white` always, so `text-muted-foreground` on its icon would be a light grey on white in dark mode. Three tokens had to go back to explicit slate.
+  - **The dark-mode bug was invisible because it was in dark mode.** Nobody had filed `text-gray-600` with no `dark:` on a page section that is below the fold, on a theme most people never switch to. The colour sweep found a readability defect the detector does not model.
+  - **Two of the seven findings were strings.** `"page <img>"` as a dropdown label and two blockquote rules. The detector reads source, not the DOM, and a label is source.
+  - **A 4px border on a surface its own colour marks nothing.** AdminNav's active item was `border-l-4 border-primary` on `bg-primary`, with `border-transparent` on the inactive one purely to keep the rows aligned. Both removed, alignment unchanged.
+  - **Deciding a palette set is a smaller job than it sounds.** The prior two batches deferred the violet/indigo/purple gradients three times. Writing the reason at each declaration - the hue identifies one member of a set of six or eight - took three comments and converts four open findings into four settled ones.
+  - **A redundant signal is the cheapest thing to delete.** Every side-tab that went had a Badge, a tint or a label already saying the same thing. None of them needed a design decision, only someone noticing the duplication.

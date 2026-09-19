@@ -93,19 +93,6 @@ export function SiteHealth({ dateRange, propertyId, connectedProviders }: SiteHe
     return variants[severity] || "secondary";
   };
 
-  const getSeverityBorderColor = (severity: string) => {
-    switch (severity) {
-      case "critical":
-        return "#ef4444";
-      case "warning":
-        return "#f59e0b";
-      case "info":
-        return "#0ea5e9";
-      default:
-        return "#6b7280";
-    }
-  };
-
   if (loading) {
     return (
       <div className="space-y-4">
@@ -171,11 +158,7 @@ export function SiteHealth({ dateRange, propertyId, connectedProviders }: SiteHe
           {healthMetrics.length > 0 ? (
             <div className="space-y-4">
               {healthMetrics.map((metric, index) => (
-                <Card
-                  key={index}
-                  className="border-l-4"
-                  style={{ borderLeftColor: getSeverityBorderColor(metric.severity) }}
-                >
+                <Card key={index}>
                   <CardHeader className="pb-3">
                     <div className="flex items-start justify-between">
                       <div className="flex items-center gap-3">

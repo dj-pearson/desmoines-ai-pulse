@@ -462,135 +462,139 @@ export default function Index() {
         </div>
 
         {/* AI Conversational Features Section */}
-        <section className="py-16 bg-gradient-to-br from-blue-50 via-white to-purple-50 dark:from-gray-900 dark:via-gray-800 dark:to-gray-900">
+        <section className="py-16 bg-muted/30">
           <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8">
             <div className="text-center mb-12">
-              <h2 className="text-3xl md:text-4xl font-bold text-gray-900 dark:text-white mb-4">
+              <h2 className="text-3xl md:text-4xl font-bold text-foreground mb-4">
                 More Than a Directory—Your AI-Powered City Companion
               </h2>
-              <p className="text-lg text-gray-600 dark:text-gray-300 max-w-3xl mx-auto">
+              <p className="text-lg text-muted-foreground max-w-3xl mx-auto">
                 Des Moines Insider goes beyond traditional event listings. We understand context, learn from your behavior, and proactively guide you to the best experiences across every channel.
               </p>
             </div>
 
+            {/* One hue per card, carried by the icon medallion only. Everything
+                else on these cards - surface, border, body copy, the accent row
+                and the hover arrow - uses theme tokens, so the six hues read as
+                six subjects rather than as a colour scheme. */}
             <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-8">
               {/* Conversational Intelligence */}
-              <Link to="/events" className="group bg-white dark:bg-gray-800 rounded-lg p-6 shadow-lg border border-gray-200 dark:border-gray-700 hover:shadow-xl transition-all hover:border-blue-300 dark:hover:border-blue-600">
+              <Link to="/events" className="group rounded-lg border border-border bg-card p-6 transition-colors hover:border-primary/40">
                 <div className="flex items-center gap-3 mb-4">
                   <div className="bg-blue-100 dark:bg-blue-900/30 rounded-full p-3">
                     <Brain className="h-6 w-6 text-blue-600 dark:text-blue-400" />
                   </div>
-                  <h3 className="text-xl font-semibold text-gray-900 dark:text-white">Conversational Intelligence</h3>
+                  <h3 className="text-xl font-semibold text-foreground">Conversational Intelligence</h3>
                 </div>
-                <p className="text-gray-600 dark:text-gray-300 mb-4">
+                <p className="text-muted-foreground mb-4">
                   Ask naturally, like you're talking to a local friend. "Find romantic dinner spots with live music tonight" or "Plan a family-friendly Saturday morning."
                 </p>
                 <div className="flex items-center justify-between">
-                  <div className="flex items-center gap-2 text-sm text-blue-600 dark:text-blue-400">
+                  <div className="flex items-center gap-2 text-sm text-primary">
                     <SpriteIcon name="sparkles" className="h-4 w-4" />
                     <span>Semantic search understands intent</span>
                   </div>
-                  <SpriteIcon name="arrow-right" className="h-4 w-4 text-blue-600 dark:text-blue-400 opacity-0 group-hover:opacity-100 transition-opacity" />
+                  <SpriteIcon name="arrow-right" className="h-4 w-4 text-primary opacity-0 group-hover:opacity-100 transition-opacity" />
                 </div>
               </Link>
 
               {/* Context-Aware Recommendations */}
-              <Link to="/events" className="group bg-white dark:bg-gray-800 rounded-lg p-6 shadow-lg border border-gray-200 dark:border-gray-700 hover:shadow-xl transition-all hover:border-green-300 dark:hover:border-green-600">
+              <Link to="/events" className="group rounded-lg border border-border bg-card p-6 transition-colors hover:border-primary/40">
                 <div className="flex items-center gap-3 mb-4">
                   <div className="bg-green-100 dark:bg-green-900/30 rounded-full p-3">
                     <Zap className="h-6 w-6 text-green-600 dark:text-green-400" />
                   </div>
-                  <h3 className="text-xl font-semibold text-gray-900 dark:text-white">Context-Aware</h3>
+                  <h3 className="text-xl font-semibold text-foreground">Context-Aware</h3>
                 </div>
-                <p className="text-gray-600 dark:text-gray-300 mb-4">
+                <p className="text-muted-foreground mb-4">
                   We consider time, weather, location, your past preferences, and real-time availability to suggest the perfect experiences for you.
                 </p>
                 <div className="flex items-center justify-between">
-                  <div className="flex items-center gap-2 text-sm text-green-700 dark:text-green-400">
+                  <div className="flex items-center gap-2 text-sm text-primary">
                     <Brain className="h-4 w-4" />
                     <span>Learns from your behavior</span>
                   </div>
-                  <SpriteIcon name="arrow-right" className="h-4 w-4 text-green-600 dark:text-green-400 opacity-0 group-hover:opacity-100 transition-opacity" />
+                  <SpriteIcon name="arrow-right" className="h-4 w-4 text-primary opacity-0 group-hover:opacity-100 transition-opacity" />
                 </div>
               </Link>
 
               {/* Proactive Assistance */}
-              <Link to="/events/today" className="group bg-white dark:bg-gray-800 rounded-lg p-6 shadow-lg border border-gray-200 dark:border-gray-700 hover:shadow-xl transition-all hover:border-orange-300 dark:hover:border-orange-600">
+              <Link to="/events/today" className="group rounded-lg border border-border bg-card p-6 transition-colors hover:border-primary/40">
                 <div className="flex items-center gap-3 mb-4">
                   <div className="bg-orange-100 dark:bg-orange-900/30 rounded-full p-3">
                     <SpriteIcon name="trending-up" className="h-6 w-6 text-orange-600 dark:text-orange-400" />
                   </div>
-                  <h3 className="text-xl font-semibold text-gray-900 dark:text-white">Proactive Intelligence</h3>
+                  <h3 className="text-xl font-semibold text-foreground">Proactive Intelligence</h3>
                 </div>
-                <p className="text-gray-600 dark:text-gray-300 mb-4">
+                <p className="text-muted-foreground mb-4">
                   Get alerts for events you'll love, weather changes affecting your plans, and last-minute availability—before you even ask.
                 </p>
                 <div className="flex items-center justify-between">
-                  <div className="flex items-center gap-2 text-sm text-orange-700 dark:text-orange-400">
+                  <div className="flex items-center gap-2 text-sm text-primary">
                     <SpriteIcon name="sparkles" className="h-4 w-4" />
                     <span>Smart notifications & alerts</span>
                   </div>
-                  <SpriteIcon name="arrow-right" className="h-4 w-4 text-orange-600 dark:text-orange-400 opacity-0 group-hover:opacity-100 transition-opacity" />
+                  <SpriteIcon name="arrow-right" className="h-4 w-4 text-primary opacity-0 group-hover:opacity-100 transition-opacity" />
                 </div>
               </Link>
 
               {/* Predictive Analytics */}
-              <Link to="/restaurants" className="group bg-white dark:bg-gray-800 rounded-lg p-6 shadow-lg border border-gray-200 dark:border-gray-700 hover:shadow-xl transition-all hover:border-red-300 dark:hover:border-red-600">
+              <Link to="/restaurants" className="group rounded-lg border border-border bg-card p-6 transition-colors hover:border-primary/40">
                 <div className="flex items-center gap-3 mb-4">
                   <div className="bg-red-100 dark:bg-red-900/30 rounded-full p-3">
                     <SpriteIcon name="trending-up" className="h-6 w-6 text-red-600 dark:text-red-400" />
                   </div>
-                  <h3 className="text-xl font-semibold text-gray-900 dark:text-white">Predictive Insights</h3>
+                  <h3 className="text-xl font-semibold text-foreground">Predictive Insights</h3>
                 </div>
-                <p className="text-gray-600 dark:text-gray-300 mb-4">
+                <p className="text-muted-foreground mb-4">
                   See demand forecasts, optimal visit times, and sell-out predictions. Make smarter decisions with data-driven intelligence.
                 </p>
                 <div className="flex items-center justify-between">
-                  <div className="flex items-center gap-2 text-sm text-red-600 dark:text-red-400">
+                  <div className="flex items-center gap-2 text-sm text-primary">
                     <SpriteIcon name="trending-up" className="h-4 w-4" />
                     <span>Real-time demand analytics</span>
                   </div>
-                  <SpriteIcon name="arrow-right" className="h-4 w-4 text-red-600 dark:text-red-400 opacity-0 group-hover:opacity-100 transition-opacity" />
+                  <SpriteIcon name="arrow-right" className="h-4 w-4 text-primary opacity-0 group-hover:opacity-100 transition-opacity" />
                 </div>
               </Link>
 
               {/* Automated Trip Planning */}
-              <Link to="/trip-planner" className="group bg-white dark:bg-gray-800 rounded-lg p-6 shadow-lg border border-gray-200 dark:border-gray-700 hover:shadow-xl transition-all hover:border-indigo-300 dark:hover:border-indigo-600">
+              <Link to="/trip-planner" className="group rounded-lg border border-border bg-card p-6 transition-colors hover:border-primary/40">
                 <div className="flex items-center gap-3 mb-4">
                   <div className="bg-indigo-100 dark:bg-indigo-900/30 rounded-full p-3">
                     <SpriteIcon name="calendar" className="h-6 w-6 text-indigo-600 dark:text-indigo-400" />
                   </div>
-                  <h3 className="text-xl font-semibold text-gray-900 dark:text-white">AI Trip Planner</h3>
+                  <h3 className="text-xl font-semibold text-foreground">AI Trip Planner</h3>
                 </div>
-                <p className="text-gray-600 dark:text-gray-300 mb-4">
+                <p className="text-muted-foreground mb-4">
                   Generate complete day-by-day itineraries in seconds. Optimized for travel times, variety, and your unique interests.
                 </p>
                 <div className="flex items-center justify-between">
-                  <div className="flex items-center gap-2 text-sm text-indigo-600 dark:text-indigo-400">
+                  <div className="flex items-center gap-2 text-sm text-primary">
                     <SpriteIcon name="sparkles" className="h-4 w-4" />
                     <span>Automated itinerary generation</span>
                   </div>
-                  <SpriteIcon name="arrow-right" className="h-4 w-4 text-indigo-600 dark:text-indigo-400 opacity-0 group-hover:opacity-100 transition-opacity" />
+                  <SpriteIcon name="arrow-right" className="h-4 w-4 text-primary opacity-0 group-hover:opacity-100 transition-opacity" />
                 </div>
               </Link>
 
               {/* Attractions & Playgrounds */}
-              <Link to="/attractions" className="group bg-white dark:bg-gray-800 rounded-lg p-6 shadow-lg border border-gray-200 dark:border-gray-700 hover:shadow-xl transition-all hover:border-purple-300 dark:hover:border-purple-600">
+              <Link to="/attractions" className="group rounded-lg border border-border bg-card p-6 transition-colors hover:border-primary/40">
                 <div className="flex items-center gap-3 mb-4">
                   <div className="bg-purple-100 dark:bg-purple-900/30 rounded-full p-3">
                     <SpriteIcon name="map-pin" className="h-6 w-6 text-purple-600 dark:text-purple-400" />
                   </div>
-                  <h3 className="text-xl font-semibold text-gray-900 dark:text-white">Attractions & More</h3>
+                  <h3 className="text-xl font-semibold text-foreground">Attractions & More</h3>
                 </div>
-                <p className="text-gray-600 dark:text-gray-300 mb-4">
+                <p className="text-muted-foreground mb-4">
                   Discover museums, parks, playgrounds, and landmarks. Find the perfect family-friendly activity or hidden gem in Des Moines.
                 </p>
                 <div className="flex items-center justify-between">
-                  <div className="flex items-center gap-2 text-sm text-purple-600 dark:text-purple-400">
+                  <div className="flex items-center gap-2 text-sm text-primary">
                     <SpriteIcon name="sparkles" className="h-4 w-4" />
                     <span>50+ attractions mapped</span>
                   </div>
-                  <SpriteIcon name="arrow-right" className="h-4 w-4 text-purple-600 dark:text-purple-400 opacity-0 group-hover:opacity-100 transition-opacity" />
+                  <SpriteIcon name="arrow-right" className="h-4 w-4 text-primary opacity-0 group-hover:opacity-100 transition-opacity" />
                 </div>
               </Link>
             </div>
@@ -623,10 +627,10 @@ export default function Index() {
                 <section className="py-8">
                   <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8">
                     <div className="text-center mb-8">
-                      <h2 className="text-3xl font-bold text-gray-900 dark:text-white mb-4">
+                      <h2 className="text-3xl font-bold text-foreground mb-4">
                         Discover Amazing Events
                       </h2>
-                      <p className="text-lg text-gray-600 dark:text-gray-300">
+                      <p className="text-lg text-muted-foreground">
                         Find exactly what you're looking for with smart
                         filtering and recommendations
                       </p>
@@ -780,12 +784,12 @@ export default function Index() {
                 )}
 
                 <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
-                  <div className="flex items-start text-neutral-600 dark:text-neutral-400">
+                  <div className="flex items-start text-muted-foreground">
                     <SpriteIcon name="calendar" className="h-5 w-5 mr-2 mt-0.5 flex-shrink-0" />
                     <span className="text-sm sm:text-base">{formatEventDate(selectedEvent.date)}</span>
                   </div>
 
-                  <div className="flex items-start text-neutral-600 dark:text-neutral-400">
+                  <div className="flex items-start text-muted-foreground">
                     <SpriteIcon name="map-pin" className="h-5 w-5 mr-2 mt-0.5 flex-shrink-0" />
                     <span className="text-sm sm:text-base">{selectedEvent.location}</span>
                   </div>
@@ -796,13 +800,13 @@ export default function Index() {
                     {selectedEvent.venue && (
                       <div>
                         <h3 className="font-semibold mb-1 text-sm">Venue</h3>
-                        <p className="text-neutral-600 dark:text-neutral-400 text-sm">{selectedEvent.venue}</p>
+                        <p className="text-muted-foreground text-sm">{selectedEvent.venue}</p>
                       </div>
                     )}
                     {selectedEvent.price && (
                       <div>
                         <h3 className="font-semibold mb-1 text-sm">Price</h3>
-                        <p className="text-neutral-600 dark:text-neutral-400 text-sm">{selectedEvent.price}</p>
+                        <p className="text-muted-foreground text-sm">{selectedEvent.price}</p>
                       </div>
                     )}
                   </div>
@@ -810,7 +814,7 @@ export default function Index() {
 
                 <div>
                   <h3 className="font-semibold mb-2 text-sm">Description</h3>
-                  <p className="text-neutral-600 dark:text-neutral-400 leading-relaxed text-sm">
+                  <p className="text-muted-foreground leading-relaxed text-sm">
                     {selectedEvent.enhanced_description ||
                       selectedEvent.original_description}
                   </p>

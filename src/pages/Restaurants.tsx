@@ -429,7 +429,7 @@ export default function Restaurants() {
             {/* Search Bar - The Main Event */}
             <div className="max-w-3xl mx-auto">
               <div className="relative">
-                <Search className="absolute left-5 top-1/2 -translate-y-1/2 h-5 w-5 text-gray-500 z-10" />
+                <Search className="absolute left-5 top-1/2 -translate-y-1/2 h-5 w-5 text-slate-500 z-10" />
                 <Input
                   ref={searchInputRef}
                   type="text"
@@ -441,7 +441,7 @@ export default function Restaurants() {
                       addRecentSearch('restaurants', searchInput);
                     }
                   }}
-                  className="w-full h-14 pl-14 pr-36 text-base md:text-lg bg-white border-0 rounded-2xl shadow-2xl shadow-black/20 focus-visible:ring-2 focus-visible:ring-amber-400 focus-visible:ring-offset-0 placeholder:text-gray-500"
+                  className="w-full h-14 pl-14 pr-36 text-base md:text-lg bg-white border-0 rounded-2xl shadow-2xl shadow-black/20 focus-visible:ring-2 focus-visible:ring-amber-400 focus-visible:ring-offset-0 placeholder:text-slate-500"
                   aria-label="Search restaurants"
                 />
                 <div className="absolute right-2 top-1/2 -translate-y-1/2 flex items-center gap-2">
@@ -449,7 +449,7 @@ export default function Restaurants() {
                     <Button
                       variant="ghost"
                       size="icon"
-                      className="h-11 w-11 sm:h-8 sm:w-8 text-gray-500 hover:text-gray-600"
+                      className="h-11 w-11 sm:h-8 sm:w-8 text-slate-500 hover:text-slate-900"
                       onClick={() => {
                         setSearchInput("");
                         setFilters((prev) => ({ ...prev, search: "" }));
@@ -500,7 +500,7 @@ export default function Restaurants() {
                   onClick={() => setFilters((prev) => ({ ...prev, openNow: !prev.openNow }))}
                   className={`rounded-full text-sm ${
                     filters.openNow
-                      ? "bg-emerald-500 hover:bg-emerald-600 text-white"
+                      ? "bg-white text-slate-900 hover:bg-white/90"
                       : "bg-white/15 hover:bg-white/25 text-white border-white/20"
                   }`}
                 >
@@ -513,7 +513,7 @@ export default function Restaurants() {
                   onClick={() => setFilters((prev) => ({ ...prev, featuredOnly: !prev.featuredOnly }))}
                   className={`rounded-full text-sm ${
                     filters.featuredOnly
-                      ? "bg-amber-500 hover:bg-amber-600 text-white"
+                      ? "bg-white text-slate-900 hover:bg-white/90"
                       : "bg-white/15 hover:bg-white/25 text-white border-white/20"
                   }`}
                 >
@@ -665,7 +665,7 @@ export default function Restaurants() {
             {!hasActiveFilters && featuredRestaurants.length > 0 && (
               <section aria-labelledby="featured-heading">
                 <div className="flex items-center justify-between mb-4">
-                  <h2 id="featured-heading" className="text-2xl font-bold text-gray-900 dark:text-gray-100 flex items-center gap-2">
+                  <h2 id="featured-heading" className="text-2xl font-bold text-foreground flex items-center gap-2">
                     <SpriteIcon name="sparkles" className="h-6 w-6 text-amber-500" />
                     Featured Restaurants
                   </h2>
@@ -706,7 +706,7 @@ export default function Restaurants() {
             {/* Main Restaurant Grid */}
             <section aria-labelledby="all-restaurants-heading">
               <div className="flex items-center justify-between mb-4">
-                <h2 id="all-restaurants-heading" className="text-2xl font-bold text-gray-900 dark:text-gray-100">
+                <h2 id="all-restaurants-heading" className="text-2xl font-bold text-foreground">
                   {hasActiveFilters ? "Search Results" : "All Restaurants"}
                 </h2>
               </div>
@@ -876,7 +876,7 @@ export default function Restaurants() {
               <section className="py-8" aria-labelledby="browse-cuisine-heading">
                 <h2
                   id="browse-cuisine-heading"
-                  className="text-2xl font-bold text-gray-900 dark:text-gray-100 mb-2"
+                  className="text-2xl font-bold text-foreground mb-2"
                 >
                   Browse by Cuisine
                 </h2>
@@ -894,7 +894,7 @@ export default function Restaurants() {
                         // run (WEB-QA-017).
                         document.getElementById('all-restaurants-heading')?.scrollIntoView({ behavior: 'smooth' });
                       }}
-                      className="inline-flex items-center gap-1.5 px-4 py-2 min-h-[44px] rounded-full text-sm font-medium border border-gray-200 dark:border-gray-700 bg-white dark:bg-card text-gray-700 dark:text-gray-300 hover:border-[#2D1B69] dark:hover:border-primary hover:bg-[#2D1B69]/5 dark:hover:bg-primary/10 transition-all duration-200 shadow-sm"
+                      className="inline-flex items-center gap-1.5 px-4 py-2 min-h-[44px] rounded-full text-sm font-medium border border-border bg-card text-foreground hover:border-primary hover:bg-primary/5 transition-colors duration-200"
                     >
                       <SpriteIcon name="chef-hat" className="h-3.5 w-3.5 text-muted-foreground" />
                       {cuisine}
@@ -908,16 +908,16 @@ export default function Restaurants() {
             {/* SEO Content Section */}
             <section className="max-w-4xl mx-auto space-y-12 mt-16" aria-labelledby="guide-heading">
               <div className="prose prose-lg max-w-none">
-                <h2 id="guide-heading" className="text-3xl font-bold mb-6 text-center text-gray-900 dark:text-gray-100">
+                <h2 id="guide-heading" className="text-3xl font-bold mb-6 text-center text-foreground">
                   Des Moines Restaurant Guide: Your Complete Local Dining Directory
                 </h2>
 
-                <div className="bg-gradient-to-r from-blue-50 to-indigo-50 dark:from-blue-950/50 dark:to-indigo-950/50 p-6 rounded-2xl mb-8 border border-blue-100 dark:border-blue-900">
-                  <h3 className="text-xl font-semibold mb-3 flex items-center gap-2 text-gray-900 dark:text-gray-100">
-                    <SpriteIcon name="chef-hat" className="h-5 w-5 text-blue-600" />
+                <div className="bg-muted/50 p-6 rounded-2xl mb-8 border border-border">
+                  <h3 className="text-xl font-semibold mb-3 flex items-center gap-2 text-foreground">
+                    <SpriteIcon name="chef-hat" className="h-5 w-5 text-primary" />
                     Des Moines Dining at a Glance
                   </h3>
-                  <p className="text-lg leading-relaxed text-gray-700">
+                  <p className="text-lg leading-relaxed text-muted-foreground">
                     Des Moines, Iowa offers over 200 diverse restaurants spanning 30+ cuisines across downtown,
                     East Village, West Des Moines, and Ankeny. From James Beard-nominated fine dining establishments
                     to beloved neighborhood diners, the capital city's food scene rivals cities twice its size.
@@ -926,68 +926,68 @@ export default function Restaurants() {
                   </p>
                 </div>
 
-                <h3 className="text-2xl font-semibold mb-4 text-gray-900 dark:text-gray-100">Best Neighborhoods for Dining in Des Moines</h3>
+                <h3 className="text-2xl font-semibold mb-4 text-foreground">Best Neighborhoods for Dining in Des Moines</h3>
 
                 <div className="grid md:grid-cols-2 gap-6 mb-8 not-prose">
-                  <div className="bg-white p-6 rounded-2xl shadow-sm border">
-                    <h4 className="text-xl font-semibold mb-3 text-gray-900">East Village & Downtown</h4>
-                    <p className="mb-3 text-gray-600">
+                  <div className="bg-card p-6 rounded-2xl border border-border">
+                    <h4 className="text-xl font-semibold mb-3 text-foreground">East Village & Downtown</h4>
+                    <p className="mb-3 text-muted-foreground">
                       The epicenter of Des Moines dining. Farm-to-table restaurants, craft cocktail bars,
                       and critically acclaimed fine dining. Home to Harbinger, Alba, and other nationally
                       recognized establishments. Best area for date nights and special occasions.
                     </p>
-                    <p className="text-sm text-gray-500">
+                    <p className="text-sm text-muted-foreground">
                       <strong>Best for:</strong> Fine dining, date nights, craft cocktails, farm-to-table
                     </p>
                   </div>
 
-                  <div className="bg-white p-6 rounded-2xl shadow-sm border">
-                    <h4 className="text-xl font-semibold mb-3 text-gray-900">West Des Moines & Jordan Creek</h4>
-                    <p className="mb-3 text-gray-600">
+                  <div className="bg-card p-6 rounded-2xl border border-border">
+                    <h4 className="text-xl font-semibold mb-3 text-foreground">West Des Moines & Jordan Creek</h4>
+                    <p className="mb-3 text-muted-foreground">
                       The fastest-growing dining corridor in the metro. Family-friendly restaurants near
                       Jordan Creek Town Center plus diverse ethnic eateries along University Avenue.
                       Particularly strong in Asian and Latin American cuisines.
                     </p>
-                    <p className="text-sm text-gray-500">
+                    <p className="text-sm text-muted-foreground">
                       <strong>Best for:</strong> Family dining, international cuisine, suburban convenience
                     </p>
                   </div>
 
-                  <div className="bg-white p-6 rounded-2xl shadow-sm border">
-                    <h4 className="text-xl font-semibold mb-3 text-gray-900">Ingersoll & Grand Avenue</h4>
-                    <p className="mb-3 text-gray-600">
+                  <div className="bg-card p-6 rounded-2xl border border-border">
+                    <h4 className="text-xl font-semibold mb-3 text-foreground">Ingersoll & Grand Avenue</h4>
+                    <p className="mb-3 text-muted-foreground">
                       Classic Des Moines neighborhood dining. Locally-owned institutions serving the community
                       for decades alongside trendy newcomers. Known for brunch spots, neighborhood bars,
                       and casual American dining.
                     </p>
-                    <p className="text-sm text-gray-500">
+                    <p className="text-sm text-muted-foreground">
                       <strong>Best for:</strong> Brunch, neighborhood favorites, casual dining
                     </p>
                   </div>
 
-                  <div className="bg-white p-6 rounded-2xl shadow-sm border">
-                    <h4 className="text-xl font-semibold mb-3 text-gray-900">Ankeny & Altoona</h4>
-                    <p className="mb-3 text-gray-600">
+                  <div className="bg-card p-6 rounded-2xl border border-border">
+                    <h4 className="text-xl font-semibold mb-3 text-foreground">Ankeny & Altoona</h4>
+                    <p className="mb-3 text-muted-foreground">
                       Rapidly expanding suburban dining with new openings monthly. Excellent value,
                       family-friendly atmospheres, and convenient access. Growing selection of
                       independent restaurants alongside popular chains.
                     </p>
-                    <p className="text-sm text-gray-500">
+                    <p className="text-sm text-muted-foreground">
                       <strong>Best for:</strong> Value dining, families, new restaurant openings
                     </p>
                   </div>
                 </div>
 
-                <h3 className="text-2xl font-semibold mb-4 text-gray-900 dark:text-gray-100">Dining Tips for Des Moines</h3>
+                <h3 className="text-2xl font-semibold mb-4 text-foreground">Dining Tips for Des Moines</h3>
 
                 <div className="space-y-4 mb-8 not-prose">
-                  <div className="bg-white p-5 rounded-xl border flex gap-4 items-start">
+                  <div className="bg-card p-5 rounded-xl border border-border flex gap-4 items-start">
                     <div className="bg-amber-100 rounded-full p-2 shrink-0 mt-0.5">
                       <SpriteIcon name="clock" className="h-5 w-5 text-amber-600" />
                     </div>
                     <div>
-                      <h4 className="font-semibold text-gray-900 mb-1">Peak Hours & Reservations</h4>
-                      <p className="text-gray-600 text-sm">
+                      <h4 className="font-semibold text-foreground mb-1">Peak Hours & Reservations</h4>
+                      <p className="text-muted-foreground text-sm">
                         Friday and Saturday evenings (6-8 PM) are busiest. Make reservations for fine dining
                         and popular spots. Most casual restaurants accommodate walk-ins even during peak hours.
                         Sunday brunch is popular from 9-11 AM at East Village and Ingersoll restaurants.
@@ -995,13 +995,13 @@ export default function Restaurants() {
                     </div>
                   </div>
 
-                  <div className="bg-white p-5 rounded-xl border flex gap-4 items-start">
+                  <div className="bg-card p-5 rounded-xl border border-border flex gap-4 items-start">
                     <div className="bg-emerald-100 rounded-full p-2 shrink-0 mt-0.5">
                       <DollarSign className="h-5 w-5 text-emerald-600" />
                     </div>
                     <div>
-                      <h4 className="font-semibold text-gray-900 mb-1">Best Value Dining</h4>
-                      <p className="text-gray-600 text-sm">
+                      <h4 className="font-semibold text-foreground mb-1">Best Value Dining</h4>
+                      <p className="text-muted-foreground text-sm">
                         Des Moines offers exceptional dining value compared to larger metros. Many top-rated
                         restaurants fall in the $15-30 per person range. Plenty of downtown bars and
                         restaurants run happy hours, though times and offers vary by venue - check with the
@@ -1010,13 +1010,13 @@ export default function Restaurants() {
                     </div>
                   </div>
 
-                  <div className="bg-white p-5 rounded-xl border flex gap-4 items-start">
+                  <div className="bg-card p-5 rounded-xl border border-border flex gap-4 items-start">
                     <div className="bg-purple-100 rounded-full p-2 shrink-0 mt-0.5">
                       <Leaf className="h-5 w-5 text-purple-600" />
                     </div>
                     <div>
-                      <h4 className="font-semibold text-gray-900 mb-1">Dietary Accommodations</h4>
-                      <p className="text-gray-600 text-sm">
+                      <h4 className="font-semibold text-foreground mb-1">Dietary Accommodations</h4>
+                      <p className="text-muted-foreground text-sm">
                         The Des Moines dining scene increasingly caters to dietary needs. Vegetarian and
                         vegan options are available at most restaurants. Gluten-free menus are common at
                         upscale establishments. Asian and Mediterranean restaurants naturally offer many
@@ -1026,9 +1026,9 @@ export default function Restaurants() {
                   </div>
                 </div>
 
-                <div className="bg-gradient-to-r from-emerald-50 to-teal-50 p-6 rounded-2xl border border-emerald-100">
-                  <h4 className="text-lg font-semibold mb-3 text-gray-900">Des Moines Food Scene by the Numbers</h4>
-                  <ul className="list-disc list-inside space-y-2 text-gray-700">
+                <div className="bg-muted/50 p-6 rounded-2xl border border-border">
+                  <h4 className="text-lg font-semibold mb-3 text-foreground">Des Moines Food Scene by the Numbers</h4>
+                  <ul className="list-disc list-inside space-y-2 text-muted-foreground">
                     <li><strong>200+ restaurants</strong> in the greater Des Moines metro area</li>
                     <li><strong>30+ cuisine types</strong> from farm-to-table to authentic international</li>
                     <li><strong>Weekly new openings</strong> tracked and verified by local experts</li>
