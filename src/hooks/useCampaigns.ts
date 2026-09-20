@@ -381,6 +381,17 @@ export function useCampaigns() {
       p_paused: paused,
     });
 
+  /**
+   * Clone the campaign as an unpaid draft (WEB-ADS-011 AC3).
+   *
+   * Returns the new campaign's id. The clone carries placement TYPES only -
+   * trg_campaign_placement_pricing prices it from the rate card for the new
+   * dates, so a renewal is charged at today's rates and not at whatever the
+   * original cost.
+   */
+  const renewCampaign = (campaignId: string) =>
+    callCampaignRpc<string>('renew_campaign', { p_campaign_id: campaignId });
+
   /** Opens a support ticket. It does NOT refund - process-stripe-refund is admin-only. */
   const requestRefund = (campaignId: string, reason: string) =>
     callCampaignRpc<string>('request_campaign_refund', {
@@ -400,6 +411,7 @@ export function useCampaigns() {
     getCurrentPricing,
     cancelCampaign,
     setCampaignPaused,
+    renewCampaign,
     requestRefund,
     refetch: fetchCampaigns,
   };

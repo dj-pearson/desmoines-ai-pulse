@@ -6,7 +6,7 @@ import { Badge } from "@/components/ui/badge";
 import { useCampaigns } from "@/hooks/useCampaigns";
 import { useAuth } from "@/hooks/useAuth";
 import { format } from "date-fns";
-import { Eye, DollarSign, Plus, Upload, BarChart3, Pause, Play, X, Receipt } from "lucide-react";
+import { Eye, DollarSign, Plus, Upload, BarChart3, Pause, Play, X, Receipt, RefreshCw } from "lucide-react";
 import { toast } from "sonner";
 import { useDocumentTitle } from "@/hooks/useDocumentTitle";
 import { SpriteIcon } from "@/components/ui/SpriteIcon";
@@ -27,7 +27,8 @@ const STATUS_COLORS = {
 export default function CampaignDashboard() {
   const navigate = useNavigate();
   const { user } = useAuth();
-  const { campaigns, isLoading, cancelCampaign, setCampaignPaused, requestRefund } = useCampaigns();
+  const { campaigns, isLoading, cancelCampaign, setCampaignPaused, renewCampaign, requestRefund } =
+    useCampaigns();
   // One id at a time, so a slow request disables only the row it belongs to.
   const [pendingId, setPendingId] = useState<string | null>(null);
 
@@ -262,6 +263,32 @@ export default function CampaignDashboard() {
                     >
                       <Play className="h-3 w-3 mr-1" />
                       Resume
+                    </Button>
+                  )}
+                  {/*
+                    WEB-ADS-011 AC3. renewal_eligible is set by the lifecycle
+                    job seven days before the end and on completion, so this
+                    appears while there is still time to renew without a gap -
+                    the flag used to be written on completion ONLY, by which
+                    point renewing buys one.
+                  */}
+                  {campaign.renewal_eligible && (
+                    <Button
+                      size="sm"
+                      disabled={pendingId === campaign.id}
+                      onClick={() =>
+                        run(
+                          campaign.id,
+                          async () => {
+                            const newId = await renewCampaign(campaign.id);
+                            if (newId) navigate(`/campaigns/${newId}`);
+                          },
+                          "Renewed as a draft. Review the dates and pay to start it.",
+                        )
+                      }
+                    >
+                      <RefreshCw className="h-3 w-3 mr-1" />
+                      Renew
                     </Button>
                   )}
                   {/*

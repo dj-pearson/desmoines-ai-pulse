@@ -138,6 +138,7 @@ const PENDING_MIGRATIONS = [
   { rpc: 'cancel_campaign', migration: '20260920000003' },
   { rpc: 'set_campaign_paused', migration: '20260920000003' },
   { rpc: 'request_campaign_refund', migration: '20260920000003' },
+  { rpc: 'renew_campaign', migration: '20260920000004' },
 ];
 
 const isPending = (table, column) =>

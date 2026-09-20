@@ -3801,3 +3801,51 @@ Learnings for future iterations:
    gate - it passed while nothing resolved. Worth knowing before trusting that
    check to catch a new function; the PENDING_MIGRATIONS entries were added by
    hand for the record and for its "landed" reminder.
+
+================================================================================
+2026-09-20 - WEB-ADS-011 AC3: renewal, and a test that would have stopped
+                              measuring the moment I changed the function
+================================================================================
+
+AC3 was recorded as blocked on WEB-ADS-004's lifecycle job. That story is
+passing and the job has been scheduled since 20260902000003. The real gap was
+narrower: renewal_eligible was written in exactly one place, on COMPLETION, so
+by the time an advertiser was prompted to renew, their ads had already stopped.
+
+Changed:
+  supabase/migrations/20260920000004_campaign_renewal.sql   new, 7-day window + renew
+  supabase/functions/_tests/campaign-lifecycle-contract.test.ts  repointed
+  src/hooks/useCampaigns.ts, src/pages/CampaignDashboard.tsx     Renew
+  scripts/__tests__/campaign-renewal.test.mjs              new, 30 checks
+  tests/campaign-self-service.spec.ts                      5 tests now
+
+Learnings for future iterations:
+
+1. "BLOCKED ON X" IS WORTH RE-CHECKING WHEN X IS MARKED PASSING. The dependency
+   was real when it was written and stale by the time I read it. Two minutes of
+   grep turned a blocked AC into a done one.
+
+2. REPLACING A FUNCTION A TEST READS BY PATH SILENTLY RETIRES THE TEST.
+   campaign-lifecycle-contract.test.ts reads process_campaign_lifecycle out of
+   a named migration. A CREATE OR REPLACE in a later file leaves it asserting
+   against a body the database no longer has: still green, measuring nothing -
+   the exact shape of check-edge-types and the ballot guard. Repointing it is
+   the fix; the thing worth building is the check that FAILS when a migration
+   newer than any path the test names redefines the function, so the next
+   person is told instead of finding out.
+
+3. A CLONE MUST NOT CARRY A PRICE. renew_campaign inserts placement_type and
+   nothing else, and trg_campaign_placement_pricing fills the money columns
+   from the rate card for the new dates. Copying total_cost across would charge
+   last quarter's rates - WEB-ADS-003 in a new place. The test asserts the
+   INSERT's column list, because that is where the mistake would be made.
+
+4. SECURITY DEFINER DOES NOT CHANGE auth.role(). It still reads the caller's
+   JWT, so the pricing trigger's service-role exemption does not accidentally
+   apply to an advertiser calling a definer function. Worth knowing before
+   assuming either way: the answer decides whether the rate card or the client
+   sets the price.
+
+5. THE DRAFT IS THE HONEST OUTCOME. Renew produces an unpaid draft and the page
+   navigates to it. Anything that reads as "renewed" without a payment would be
+   the same class of claim as the approval email that said an event was live.
