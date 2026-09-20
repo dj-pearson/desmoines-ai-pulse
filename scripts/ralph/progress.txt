@@ -3152,3 +3152,47 @@ LEARNINGS FOR FUTURE ITERATIONS
    whether code is waiting on a migration; it changes whether the obvious
    remedy for that verdict does anything. Printed as its own section after
    REAPPLY and NO READERS, with the verdict shown alongside.
+
+================================================================================
+2026-09-19  WEB-SEO-006  (claude/admiring-cori-ukwzcp)
+"No Node equivalent" was true of the API and false of the engine
+================================================================================
+
+STILL OPEN (AC4 and AC6 need the deployed site), but the gap its own notes
+called "the one place this fix could regress silently a second time" is closed.
+
+The self-canonical rewrite had never been exercised, because HTMLRewriter is a
+Cloudflare runtime API. html-rewriter-wasm is a WebAssembly build of
+cloudflare/lol-html - the parser HTMLRewriter is built on - so the rules now run
+through the same engine, not a stand-in. 15 assertions, three negative controls.
+
+LEARNINGS FOR FUTURE ITERATIONS
+
+1. "THERE IS NO NODE EQUIVALENT" IS A CLAIM ABOUT THE API, NOT ABOUT THE
+   ENGINE. HTMLRewriter is Cloudflare-only; lol-html underneath it is open
+   source and ships as WASM on npm, written for Miniflare. Three files in this
+   repo carried the "cannot be tested outside the Workers runtime" note and
+   none of them had gone looking. Before writing a comment that something is
+   untestable, spend two minutes on npm.
+
+2. THE ASSERTION THAT MATTERS MOST WAS THE ONE NOBODY WOULD THINK TO WRITE.
+   The three rules' correctness is the obvious thing to test. What actually
+   protects the site is that `script[type="application/ld+json"]` does NOT
+   match the application's module script - broaden that selector to `script`
+   and every page serves an empty <div id="root">. That control is the reason
+   the suite is worth its runtime.
+
+3. A NEGATIVE CONTROL PER RULE, NOT PER SUITE. Three rules, three controls, and
+   each one failed a DIFFERENT set of assertions - the origin-instead-of-url
+   mistake failed four, the og:url attribute mistake failed one. If two
+   controls fail the same assertion the suite is thinner than its line count
+   suggests.
+
+4. TEST AGAINST THE SHAPE THE THING ACTUALLY SEES. The shell here is the built
+   index.html plus the two JSON-LD blocks React injects FOR THE HOMEPAGE, which
+   is the entire defect. A minimal `<html><head><link rel=canonical>` fixture
+   would have passed every assertion and proved nothing about the real input.
+
+5. AND TEST THE ABSENCES. The real index.html has NO static og:url, on purpose
+   (WEB-SEO-002). A rewrite that quietly depended on one being present would
+   have passed a fixture that had one.

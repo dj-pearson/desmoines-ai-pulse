@@ -417,18 +417,22 @@ export function isHomepageShell(html: string, origin: string): boolean {
 /**
  * What the self-canonical rewrite does, as data (WEB-SEO-006).
  *
- * SPLIT OUT SO IT CAN BE TESTED. HTMLRewriter is a Cloudflare runtime API with
- * no Node equivalent, so the half of this fix that produces the output has
- * never been exercised - functions/__tests__/middleware-canonical.test.mjs
- * covers the GATE in both directions and says so in its own header. That is
- * the wrong half to leave uncovered: this fix has already been dead once, when
+ * SPLIT OUT SO IT CAN BE TESTED, and now tested BOTH WAYS.
+ * middleware-canonical.test.mjs covers the GATE that decides whether to
+ * rewrite, and these rules as data;
+ * middleware-self-canonical-rewrite.test.mjs runs them through
+ * html-rewriter-wasm - a WebAssembly build of cloudflare/lol-html, the parser
+ * Cloudflare's HTMLRewriter is built on - so the half that produces the output
+ * is exercised too. It had never been, and this fix has already been dead once:
  * it was gated on a 404 that single-page-app mode never returns, and nothing
  * noticed for months.
  *
- * What can regress here is not HTMLRewriter's parsing, which is Cloudflare's
- * to get right. It is the three decisions below: which elements, which
- * attribute on each, and that the value is the REQUESTED url rather than the
- * origin. Those are now assertable without a Workers runtime.
+ * What can regress here is not lol-html's parsing, which is Cloudflare's to get
+ * right. It is the three decisions below: which elements, which attribute on
+ * each, and that the value is the REQUESTED url rather than the origin. All
+ * three have a negative control in that suite; broadening the ld+json selector
+ * to `script` fails it on the application's own module script, which is the
+ * mistake that would blank every page.
  *
  * THE LD+JSON REMOVAL IS NOT TIDINESS. The shell being served here is the
  * homepage, so its JSON-LD describes the homepage - an Organization, a
