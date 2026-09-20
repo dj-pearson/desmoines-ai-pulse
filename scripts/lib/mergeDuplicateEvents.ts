@@ -13,6 +13,13 @@
  * around it is I/O.
  */
 
+import {
+  centralCalendarDate,
+  MIN_TITLE_KEY_LENGTH,
+  normalizeEventTitle,
+  normalizeVenueName,
+} from '../../supabase/functions/_shared/eventDedup.ts';
+
 export interface EventRow {
   id: string;
   title: string | null;
@@ -54,7 +61,7 @@ export const normalise = (value: string | null): string =>
     .replace(/[̀-ͯ]/g, '')
     .replace(/[^a-z0-9]/g, '');
 
-export const groupKey = (r: EventRow): string =>
+export const groupKey = (r: Pick<EventRow, 'title' | 'date' | 'venue'>): string =>
   `${normalise(r.title)}|${r.date ?? ''}|${normalise(r.venue)}`;
 
 export const descLength = (r: EventRow): number =>
@@ -130,4 +137,85 @@ export function decide(key: string, rows: EventRow[]): Decision {
     ambiguous,
     fill,
   };
+}
+
+/**
+ * ── THE NEAR-DUPLICATE KEY (WEB-BE-052) ──────────────────────────────────────
+ *
+ * `groupKey` above needs the titles to be character-identical after punctuation
+ * is stripped, so the same concert from SeatGeek, the venue and Catch Des
+ * Moines stays three rows: one of them adds a subtitle, another a promoter
+ * prefix. `nearGroupKey` is the looser key, and it is deliberately the SAME
+ * normalizer `isDuplicateEvent`'s tier 4 uses rather than a second copy of the
+ * rule - a merger that disagrees with the ingest-time dedup would merge rows
+ * ingest considers distinct, which is the drift this file's header already
+ * warns about for the detector.
+ *
+ * It is opt-in (`--near`) on both the merge script and the detector, because
+ * duplicate-events-baseline.json was measured with the exact key and a looser
+ * key changes what CI calls a new group.
+ */
+export interface NearRow {
+  title: string | null;
+  date: string | null;
+  venue: string | null;
+  is_merged?: boolean | null;
+}
+
+export const nearGroupKey = (r: NearRow): string | null => {
+  const title = normalizeEventTitle(r.title ?? '');
+  if (title.key.length < MIN_TITLE_KEY_LENGTH || !r.date) return null;
+  return `${title.key}|${centralCalendarDate(r.date)}|${normalizeVenueName(r.venue ?? '')}`;
+};
+
+export interface NearGroup<T extends NearRow = EventRow> {
+  key: string;
+  rows: T[];
+  /** Every row already shares one exact `groupKey`, so the exact pass has it. */
+  exactAlready: boolean;
+  /** Set when the group must NOT be merged; the text says why. */
+  refused?: string;
+}
+
+/**
+ * Group rows by the loose key, refusing the one case that would delete a real
+ * event.
+ *
+ * TWO DIFFERENT SUBTITLES UNDER ONE PREFIX ARE A SERIES, not one show reported
+ * twice - "<long prefix>: Bob Smith" and "<long prefix>: Sue Jones" are two
+ * nights. Tier 4 guards this per pair with `!(a.hadSubtitle && b.hadSubtitle)`;
+ * the same guard across a whole group is: at most one distinct full title among
+ * the members whose subtitle was cut.
+ */
+export function nearGroups<T extends NearRow>(rows: T[]): NearGroup<T>[] {
+  const buckets = new Map<string, T[]>();
+  for (const row of rows) {
+    if (row.is_merged) continue;
+    const key = nearGroupKey(row);
+    if (!key) continue;
+    if (!buckets.has(key)) buckets.set(key, []);
+    buckets.get(key)!.push(row);
+  }
+
+  const out: NearGroup<T>[] = [];
+  for (const [key, members] of buckets) {
+    if (members.length < 2) continue;
+
+    const subtitled = new Set(
+      members
+        .filter((r) => normalizeEventTitle(r.title ?? '').hadSubtitle)
+        .map((r) => normalise(r.title)),
+    );
+
+    out.push({
+      key,
+      rows: members,
+      exactAlready: new Set(members.map(groupKey)).size === 1,
+      refused:
+        subtitled.size > 1
+          ? `${subtitled.size} different subtitles share this prefix - likely a series, not one show`
+          : undefined,
+    });
+  }
+  return out;
 }

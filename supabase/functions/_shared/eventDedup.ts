@@ -14,12 +14,14 @@
  * one story earlier, at which point a SECOND copy of the sports prompt was
  * found already drifted in `ai-crawler`.
  *
- * NOTHING HERE CHANGED. The three tiers, their order, their thresholds and their
- * reason strings are the ones that were in `scrape-events/index.ts`, moved
- * verbatim. The reason strings in particular are load-bearing: they are written
- * into the scrape log and a reader greps for them.
+ * NOTHING CHANGED IN TIERS 1-3. Their order, their thresholds and their reason
+ * strings are the ones that were in `scrape-events/index.ts`, moved verbatim.
+ * The reason strings in particular are load-bearing: they are written into the
+ * scrape log and a reader greps for them. Tier 4 was added afterwards
+ * (WEB-BE-052) and is the only addition; it runs last, so it can only catch
+ * rows the three original tiers let through.
  *
- * ── THE THREE TIERS, IN ORDER ───────────────────────────────────────────────
+ * ── THE FOUR TIERS, IN ORDER ────────────────────────────────────────────────
  *
  *   1. EXACT FINGERPRINT. Both sides must actually have one; a missing
  *      fingerprint is not a match, it is unknown.
@@ -27,6 +29,11 @@
  *      whose title was reworded between runs.
  *   3. SAME TITLE + SAME VENUE + SAME CENTRAL CALENDAR DATE. Catches a
  *      recurring show re-listed with a slightly different start time.
+ *   4. SAME NORMALIZED TITLE + SAME NORMALIZED VENUE + SAME CENTRAL CALENDAR
+ *      DATE, with at most one of the two titles carrying a subtitle. Catches
+ *      the same concert reported by SeatGeek, the venue and Catch Des Moines,
+ *      each of which words it differently. Tiers 2 and 3 cannot: tier 2 needs
+ *      one source_url on both sides, tier 3 needs the titles to be EQUAL.
  *
  * They are tried in that order and the FIRST match wins, so the reported reason
  * is the strongest one that applied rather than the last one checked.
@@ -72,6 +79,14 @@
  */
 
 import { centralWallClockFromUtc } from "./centralTime.ts";
+
+/**
+ * How many alphanumeric characters a title must keep after its subtitle is cut
+ * before that prefix is trusted to identify a show. Twelve is deliberate:
+ * "comedynight" is eleven, so "Comedy Night: Bob Smith" and "Comedy Night: Sue
+ * Jones" keep their subtitles and stay two events, which is correct.
+ */
+export const MIN_TITLE_KEY_LENGTH = 12;
 
 export interface DedupEvent {
   title: string;
@@ -165,6 +180,68 @@ export function calculateTitleSimilarity(title1: string, title2: string): number
 }
 
 /**
+ * A title reduced to the part that identifies the SHOW (WEB-BE-052).
+ *
+ * The same concert arrives from three sources with three titles: SeatGeek
+ * lists "George Thorogood & The Destroyers", the venue lists
+ * "George Thorogood & The Destroyers: The Baddest Show on Earth", and Catch
+ * Des Moines lists it with a promoter prefix. Tier 3 below compares titles for
+ * EQUALITY, so all three stay separate rows.
+ *
+ * Returns { key, hadSubtitle }. The flag matters as much as the key - see
+ * isDuplicateEvent's tier 4 for why merging two differently-subtitled titles
+ * is the over-merge this must not do.
+ */
+export function normalizeEventTitle(title: string): { key: string; hadSubtitle: boolean } {
+  let work = (title || "").toLowerCase().trim();
+
+  // "Live Nation presents: X" / "AEG Presents X" - the promoter is not the show.
+  work = work.replace(/^.{1,30}?\spresents:?\s+/, "");
+
+  // The subtitle after the first colon or spaced dash. Cut only when what comes
+  // BEFORE it is long enough to identify something on its own: "DMSO: Remix" must
+  // not collapse to "dmso".
+  const cut = work.search(/\s*[:\u2013\u2014]\s|\s+-\s+/);
+  let hadSubtitle = false;
+  if (cut > 0) {
+    const head = work.slice(0, cut);
+    if (head.replace(/[^a-z0-9]/g, "").length >= MIN_TITLE_KEY_LENGTH) {
+      work = head;
+      hadSubtitle = true;
+    }
+  }
+
+  // Filler that one source adds and another does not. Whole words only, so
+  // "Live Nation" and "Tourist Trap" are untouched.
+  work = work.replace(/\b(live in concert|in concert|live|official|the tour|tour)\b/g, " ");
+
+  // "&" and "and" are the same word, and stripping punctuation alone does not
+  // make them agree: "George Thorogood & The Destroyers" reduces to
+  // "georgethorogoodthedestroyers" while the venue's "...and the Destroyers"
+  // reduces to "georgethorogoodandthedestroyers". Dropping the standalone word
+  // makes both sides the ampersand form. Word-bounded, so "Sandra" survives.
+  work = work.replace(/\band\b/g, " ");
+
+  return { key: work.replace(/[^a-z0-9]/g, ""), hadSubtitle };
+}
+
+/**
+ * A venue reduced for comparison. String-only on purpose: isDuplicateEvent is
+ * synchronous and the known-venue alias table (knownVenues.ts) needs a database
+ * round trip, so "Wells Fargo Arena" and "Wells Fargo Arena - Des Moines" match
+ * here while a genuine alias pair like "Hoyt Sherman" and "Hoyt Sherman Place"
+ * does not. Aliasing belongs in the weekly dedupe-content merge (AC3), which
+ * has a client.
+ */
+export function normalizeVenueName(venue: string): string {
+  return (venue || "")
+    .toLowerCase()
+    .replace(/^the\s+/, "")
+    .replace(/\s+-\s+.*$/, "")
+    .replace(/[^a-z0-9]/g, "");
+}
+
+/**
  * Is `newEvent` already in `existingEvents`?
  *
  * Returns the REASON as well as the verdict, because "this was a duplicate" and
@@ -222,6 +299,34 @@ export function isDuplicateEvent(
           existingEvent: existing,
         };
       }
+    }
+
+    // 4. Same show, different source's wording (WEB-BE-052). Tier 3 requires
+    //    the titles to be EQUAL, so a subtitle or a promoter prefix one source
+    //    adds keeps the same concert as two rows.
+    //
+    //    AT MOST ONE SUBTITLE. This is the whole safety of the tier: a plain
+    //    title matching a subtitled one is the same show described twice
+    //    ("George Thorogood & The Destroyers" / "...: The Baddest Show on
+    //    Earth"), while TWO different subtitles under one prefix are usually
+    //    two events in a series ("Comedy Night: Bob" / "Comedy Night: Sue").
+    //    Merging those would delete a real event from the site, which is worse
+    //    than listing one twice.
+    const newTitle = normalizeEventTitle(newEvent.title);
+    const oldTitle = normalizeEventTitle(existing.title);
+
+    if (
+      newTitle.key.length >= MIN_TITLE_KEY_LENGTH &&
+      newTitle.key === oldTitle.key &&
+      !(newTitle.hadSubtitle && oldTitle.hadSubtitle) &&
+      normalizeVenueName(newEvent.venue) === normalizeVenueName(existing.venue) &&
+      centralCalendarDate(newEvent.date) === centralCalendarDate(existing.date)
+    ) {
+      return {
+        isDuplicate: true,
+        reason: "normalized_title_venue_same_day",
+        existingEvent: existing,
+      };
     }
   }
 

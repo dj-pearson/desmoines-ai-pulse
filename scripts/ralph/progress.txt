@@ -3477,3 +3477,75 @@ LEARNINGS FOR FUTURE ITERATIONS
    house pattern here. What makes them worth having is choosing lines somebody
    could delete while the handler still looks right - the three .eq() calls -
    and saying plainly in the header what the test cannot establish.
+
+================================================================================
+2026-09-20 - WEB-BE-052: cross-source duplicates collapse only on exact title
+================================================================================
+
+Tier 3 of isDuplicateEvent compares titles for EQUALITY, so one concert arriving
+from SeatGeek, the venue and Catch Des Moines is three rows. Added tier 4
+(normalized title + normalized venue + same Central calendar day) and gave the
+merge script the same key behind an opt-in --near.
+
+Changed:
+  supabase/functions/_shared/eventDedup.ts   normalizeEventTitle,
+                                             normalizeVenueName, tier 4
+  scripts/lib/mergeDuplicateEvents.ts        nearGroupKey, nearGroups
+  scripts/merge-duplicate-events.ts          --near
+  scripts/check-duplicate-entities.ts        --near, report-only
+  scripts/__tests__/event-dedup-normalizer.test.mjs      new, 25 assertions
+  scripts/__tests__/merge-duplicate-events.test.mjs      +15 assertions
+
+Learnings for future iterations:
+
+1. A DEDUP'S TESTS ARE ITS COUNTER-ASSERTIONS. A rule that returns true for
+   everything passes every "it catches the duplicate" test ever written, and the
+   production symptom is not an error - it is events silently never being
+   inserted. Tier 4's real content is the AT-MOST-ONE-SUBTITLE guard: a plain
+   title against a subtitled one is one show described twice, but two DIFFERENT
+   subtitles under one prefix are a series. Merging those deletes a real event,
+   which is worse than listing one twice. Seven negative controls, each firing
+   exactly one named assertion, are what establish the guard is load-bearing.
+
+2. STRIPPING PUNCTUATION DOES NOT MAKE "&" AND "and" AGREE. The story's own
+   example failed on the first test run for this reason:
+   "George Thorogood & The Destroyers" reduces to georgethorogoodthedestroyers
+   and the venue's "...and the Destroyers" to georgethorogoodandthedestroyers.
+   A normalizer that drops every non-alphanumeric character looks complete and
+   is not. The fix is a word-bounded strip of standalone "and", and the control
+   that keeps it honest is "Sandra".
+
+3. BEFORE BUILDING THE SECOND HALF OF AN AC, CHECK WHETHER IT ALREADY EXISTS.
+   AC2 asked for "prefer the row with the richer source and merge source_urls".
+   All of that shipped under WEB-SEO-017 in scripts/lib/mergeDuplicateEvents.ts
+   - keeper rule, ambiguity refusal, field union. What was missing was reach,
+   not logic. The iteration's real work turned out to be one exported function
+   and two flags.
+
+4. ONE NORMALIZER, THREE CONSUMERS. mergeDuplicateEvents.ts's own header warns
+   that if its key disagrees with the detector's, "this script merges rows the
+   detector does not consider duplicates". A near-duplicate key written a second
+   time in the merger would have had the same problem against ingest. It imports
+   the Deno module instead - which works because eventDedup.ts imports nothing
+   but ./centralTime.ts.
+
+5. AN OFFLINE .mjs TEST BEATS A DENO TEST WHEN THE MODULE ALLOWS IT. Deno is not
+   installed here and the Deno suites are named one-by-one in a workflow;
+   npm run test:offline discovers every *.test.mjs automatically. A module whose
+   only import is relative can be tested in the lane that actually runs.
+
+6. SAY WHICH TESTS YOU READ AND WHICH YOU RAN. The two existing Deno suites were
+   checked against tier 4 by reading them, because Deno is absent. That is a
+   weaker claim than a green run and the notes say so in those words rather than
+   reporting them as passing.
+
+7. AN ACCEPTANCE CRITERION'S PREMISE CAN BE WRONG. AC4 said to test against "the
+   baseline's known pairs"; duplicate-events-baseline.json holds ten EXACT
+   duplicate groups and not one near-duplicate pair. The near-duplicates this
+   story is about are invisible to that file - which is exactly why nobody had
+   counted them. Recorded in the notes rather than worked around silently.
+
+8. OPT-IN WHEN A LOOSER RULE MEETS A MEASURED BASELINE. --near is off by default
+   on both scripts. The baseline was measured with the exact key, so shipping
+   the loose key as the default would have made CI red on groups nobody has
+   reviewed - the permanently-red failure mode this repo keeps re-learning.

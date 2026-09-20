@@ -5,6 +5,7 @@
  *   npx tsx scripts/merge-duplicate-events.ts             # DRY RUN, the default
  *   npx tsx scripts/merge-duplicate-events.ts --apply     # actually merge
  *   npx tsx scripts/merge-duplicate-events.ts --json      # machine-readable plan
+ *   npx tsx scripts/merge-duplicate-events.ts --near      # loose title key (WEB-BE-052)
  *
  * The dry run is READ-ONLY and works with VITE_SUPABASE_ANON_KEY, because
  * reading events needs nothing more. --apply needs SUPABASE_SERVICE_ROLE_KEY.
@@ -57,11 +58,15 @@ import {
   type Decision,
   groupKey,
   decide,
+  nearGroups,
 } from './lib/mergeDuplicateEvents.ts';
 
 
 const APPLY = process.argv.includes('--apply');
 const JSON_OUT = process.argv.includes('--json');
+// WEB-BE-052. Off by default: the loose key finds groups the exact key does
+// not, and duplicate-events-baseline.json was measured with the exact one.
+const NEAR = process.argv.includes('--near');
 
 /** Reads a key from the environment, falling back to .env. */
 function env(key: string): string | undefined {
@@ -132,24 +137,38 @@ async function main() {
   const rows = await fetchAllEvents();
   if (rows.length === 0) throw new Error('zero events read - refusing to report "no duplicates"');
 
-  const groups = new Map<string, EventRow[]>();
-  for (const row of rows) {
-    if (row.is_merged) continue; // already merged, not a duplicate any more
-    const key = groupKey(row);
-    if (!groups.has(key)) groups.set(key, []);
-    groups.get(key)!.push(row);
-  }
+  let decisions: Decision[];
 
-  const decisions = [...groups.entries()]
-    .filter(([, v]) => v.length > 1)
-    .map(([k, v]) => decide(k, v));
+  if (NEAR) {
+    // A refused group becomes an AMBIGUOUS decision rather than a dropped one,
+    // so it is printed as SKIP and can never reach the --apply loop below.
+    decisions = nearGroups(rows).map((g) => {
+      const d = decide(g.key, g.rows);
+      return g.refused ? { ...d, ambiguous: true, reason: g.refused } : d;
+    });
+  } else {
+    const groups = new Map<string, EventRow[]>();
+    for (const row of rows) {
+      if (row.is_merged) continue; // already merged, not a duplicate any more
+      const key = groupKey(row);
+      if (!groups.has(key)) groups.set(key, []);
+      groups.get(key)!.push(row);
+    }
+
+    decisions = [...groups.entries()]
+      .filter(([, v]) => v.length > 1)
+      .map(([k, v]) => decide(k, v));
+  }
 
   if (JSON_OUT) {
     console.log(JSON.stringify(decisions, null, 2));
     return;
   }
 
-  console.log(`[merge-events] ${rows.length} event(s) read, ${decisions.length} duplicate group(s).`);
+  console.log(
+    `[merge-events] ${rows.length} event(s) read, ${decisions.length} ` +
+      `${NEAR ? 'near-duplicate' : 'duplicate'} group(s).`,
+  );
   if (decisions.length === 0) {
     console.log('Nothing to merge.');
     return;
