@@ -3549,3 +3549,71 @@ Learnings for future iterations:
    on both scripts. The baseline was measured with the exact key, so shipping
    the loose key as the default would have made CI red on groups nobody has
    reviewed - the permanently-red failure mode this repo keeps re-learning.
+
+================================================================================
+2026-09-20 - WEB-ADS-005: an advertiser pays and hears nothing
+================================================================================
+
+create-campaign-checkout set no receipt_email, so Stripe sent no receipt.
+handleCampaignPayment inserted a campaign_notifications row and stopped, which
+is an in-app bell, not an email. AdvertiseSuccess.tsx told the advertiser "A
+confirmation email has been sent to your registered email address with your
+receipt and campaign details". Nothing failed anywhere.
+
+Changed:
+  supabase/functions/create-campaign-checkout/index.ts   receipt_email
+  supabase/functions/_shared/campaignNotificationEmail.ts  new, renderer + send
+  supabase/functions/send-campaign-notification/index.ts   uses it
+  supabase/functions/stripe-webhook/index.ts               sends the email
+  supabase/functions/_shared/siteUrl.ts                    Deno via globalThis
+  src/pages/AdvertiseSuccess.tsx                           truthful copy
+  tests/advertise-success-receipt.spec.ts                  new, in the smoke lane
+  scripts/__tests__/campaign-payment-email.test.mjs        new, 26 checks
+
+Learnings for future iterations:
+
+1. A COMMENT NAMING AN OUTCOME IS NOT THE OUTCOME. The checkout carried
+   `billing_address_collection: "auto"` under the comment "Billing address for
+   receipts". Collecting an address does not make Stripe send one; receipt_email
+   on the PaymentIntent does, and customer_email on the session does not reach
+   it. The comment was why nobody looked again.
+
+2. WHEN THE OBVIOUS ROUTE IS CLOSED, SAY WHICH DOOR IS LOCKED. AC3 said to send
+   "via the existing send-campaign-notification path". That endpoint requires a
+   user bearer token - WEB-ADS-013 locked it down on purpose - and Stripe is not
+   a user. The choice was a machine-auth branch on a hardened endpoint, a new
+   secret, or extracting the renderer. Extracting it keeps one email, one
+   provider choice and one from-address without widening anything, and the
+   reason is written at the top of the new module so the next person does not
+   re-litigate it.
+
+3. CHECK THE COLUMN BEFORE YOU INSERT IT. recipient_email was verified in the
+   migration and the generated types before being written. A PGRST204 on an
+   insert fails the WHOLE statement, so one unknown key discards the real
+   columns beside it - the notification would have vanished, not degraded.
+
+4. THE LINK IN THE EMAIL AND THE SENTENCE IN THE EMAIL MUST AGREE. The
+   payment_received message has always ended "You can now upload your ad
+   creatives" and its button went to the campaign page. Nobody reads a CTA map
+   and a message template side by side; a test that asserts the pair does.
+   The text part carried no link at all, so a plain-text client got an
+   instruction with no way to follow it.
+
+5. A STALE BUILD HANDED ME THE NEGATIVE CONTROL. The first smoke run reused a
+   preview server on an old dist and failed on the old copy. That is the
+   assertion firing on exactly the string it exists to catch - worth more than
+   a green first run, and worth recording rather than quietly rebuilding.
+
+6. MEASURE THE LANE'S EXISTING FAILURES BEFORE CLAIMING YOURS ARE NEW OR NOT.
+   174 passed / 16 failed. Stash, rebuild, re-run proved the same 16 fail on a
+   clean tree. "Probably pre-existing" and "verified pre-existing" read the
+   same in a note and are not the same claim.
+
+7. `Deno.env.get` AS A BARE BINDING MAKES A MODULE DENO-ONLY, INCLUDING FOR
+   TYPE-CHECKING. siteUrl.ts threw a ReferenceError on import anywhere else and
+   was TS2304 under tsconfig.scripts.json. Reading through globalThis costs
+   nothing under Deno and puts the module in reach of the lane CI actually runs.
+
+8. ORDER THE BEST-EFFORT WORK SO A KNOWN-BROKEN STEP CANNOT EAT THE REST. The
+   `payments` upsert is 42P01 until WEB-QA-018 lands. The email runs after it
+   and logs rather than throws, so the advertiser is told either way.

@@ -14,12 +14,25 @@
 
 const DEFAULT_SITE_URL = "https://desmoinesinsider.com";
 
+/**
+ * Deno.env reached through globalThis, so importing this module does not throw
+ * a ReferenceError outside Deno (WEB-ADS-005).
+ *
+ * emailLayout.ts calls getSiteUrl, and _shared/campaignNotificationEmail.ts
+ * imports emailLayout so stripe-webhook and send-campaign-notification render
+ * one email rather than two. That put this file in the graph of an offline
+ * test, where `Deno` is not a binding at all - and the bare reference is also
+ * why tsconfig.scripts.json could not type-check it. Under Deno nothing here
+ * changes: Deno.env exists, and env access still needs --allow-env.
+ */
+function envVar(name: string): string | undefined {
+  return (globalThis as { Deno?: { env?: { get(key: string): string | undefined } } })
+    .Deno?.env?.get(name);
+}
+
 /** Public site origin, no trailing slash. */
 export function getSiteUrl(): string {
-  const configured =
-    Deno.env.get("SITE_URL") ||
-    Deno.env.get("VITE_SITE_URL") ||
-    DEFAULT_SITE_URL;
+  const configured = envVar("SITE_URL") || envVar("VITE_SITE_URL") || DEFAULT_SITE_URL;
   return configured.replace(/\/+$/, "");
 }
 

@@ -312,8 +312,16 @@ serve(async (req) => {
         userId: user.id,
         campaignName: campaign.name,
       },
-      // Payment intent data for refunds
+      // Payment intent data for refunds, and the receipt address.
+      //
+      // WEB-ADS-005: receipt_email is why an advertiser got nothing after paying.
+      // billing_address_collection below is commented "for receipts" and does not
+      // cause one - Stripe emails a receipt for a one-off payment only when the
+      // PaymentIntent carries an address, and `customer_email` on the session
+      // does not reach it. The success page has been promising this email since
+      // the feature shipped.
       payment_intent_data: {
+        receipt_email: user.email,
         metadata: {
           campaignId,
           userId: user.id,

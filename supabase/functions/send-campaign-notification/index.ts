@@ -21,10 +21,8 @@
 import { serve } from "https://deno.land/std@0.190.0/http/server.ts";
 import { createClient } from "https://esm.sh/@supabase/supabase-js@2.45.0";
 import { handleCors, getCorsHeaders, isOriginAllowed } from "../_shared/cors.ts";
-import { escapeHtml } from "../_shared/escapeHtml.ts";
 import { checkRateLimit } from "../_shared/rateLimit.ts";
-import { renderEmail } from "../_shared/emailLayout.ts";
-import { fetchWithTimeout } from "../_shared/fetchWithTimeout.ts";
+import { sendCampaignEmail } from "../_shared/campaignNotificationEmail.ts";
 import { isAdminUserId, listAdminUserIds } from "../_shared/apiKeyAuth.ts";
 import { decideNotification } from "./decision.ts";
 
@@ -199,85 +197,27 @@ serve(async (req) => {
       console.error("Failed to store notification:", notifError);
     }
 
-    // Attempt email delivery if we have a recipient email
+    // Attempt email delivery if we have a recipient email.
+    //
+    // The renderer and the provider call live in _shared/campaignNotificationEmail.ts
+    // (WEB-ADS-005) because stripe-webhook needs the same email and cannot reach
+    // this endpoint - it has no user token, and decision.ts requires one.
     let emailSent = false;
     if (emailAddress) {
-      const resendApiKey = Deno.env.get("RESEND_API_KEY");
-      const sendgridApiKey = Deno.env.get("SENDGRID_API_KEY");
-      const fromEmail = Deno.env.get("NOTIFICATION_FROM_EMAIL") || "noreply@desmoinesinsider.com";
-      const siteUrl = Deno.env.get("VITE_SITE_URL") || "https://desmoinesinsider.com";
-
-      const emailSubject = title || `Campaign Update: ${campaignName}`;
-      const bodyHtml = buildEmailBodyHtml({
-        title: emailSubject,
-        message: message || "",
-        campaignName,
-        campaignId,
-        notificationType,
-        siteUrl,
+      emailSent = await sendCampaignEmail({
+        to: emailAddress,
+        content: {
+          title: title || `Campaign Update: ${campaignName}`,
+          message: message || "",
+          campaignName,
+          campaignId,
+          notificationType,
+          siteUrl: Deno.env.get("VITE_SITE_URL") || "https://desmoinesinsider.com",
+        },
+        resendApiKey: Deno.env.get("RESEND_API_KEY") ?? undefined,
+        sendgridApiKey: Deno.env.get("SENDGRID_API_KEY") ?? undefined,
+        fromEmail: Deno.env.get("NOTIFICATION_FROM_EMAIL") || "noreply@desmoinesinsider.com",
       });
-      const bodyText = buildEmailBodyText({
-        title: emailSubject,
-        message: message || "",
-        campaignName,
-      });
-
-      // Campaign notifications are transactional — they are responses to the
-      // recipient's own advertising-campaign activity. The transactional footer
-      // includes the postal address but no unsubscribe link (CAN-SPAM §5(a) does
-      // not require one for true transactional messages).
-      const rendered = renderEmail({
-        bodyHtml,
-        bodyText,
-        category: "transactional",
-        recipient: { email: emailAddress },
-      });
-      const emailHtml = rendered.html;
-      const emailText = rendered.text;
-
-      if (resendApiKey) {
-        try {
-          const res = await fetchWithTimeout("https://api.resend.com/emails", {
-            method: "POST",
-            headers: {
-              Authorization: `Bearer ${resendApiKey}`,
-              "Content-Type": "application/json",
-            },
-            body: JSON.stringify({
-              from: fromEmail,
-              to: [emailAddress],
-              subject: emailSubject,
-              html: emailHtml,
-              text: emailText,
-            }),
-          });
-          emailSent = res.ok;
-        } catch (err) {
-          console.error("Resend email failed:", err);
-        }
-      } else if (sendgridApiKey) {
-        try {
-          const res = await fetchWithTimeout("https://api.sendgrid.com/v3/mail/send", {
-            method: "POST",
-            headers: {
-              Authorization: `Bearer ${sendgridApiKey}`,
-              "Content-Type": "application/json",
-            },
-            body: JSON.stringify({
-              personalizations: [{ to: [{ email: emailAddress }] }],
-              from: { email: fromEmail },
-              subject: emailSubject,
-              content: [
-                { type: "text/plain", value: emailText },
-                { type: "text/html", value: emailHtml },
-              ],
-            }),
-          });
-          emailSent = res.ok || res.status === 202;
-        } catch (err) {
-          console.error("SendGrid email failed:", err);
-        }
-      }
     }
 
     return new Response(
@@ -302,84 +242,3 @@ serve(async (req) => {
     );
   }
 });
-
-function buildEmailBodyHtml(params: {
-  title: string;
-  message: string;
-  campaignName: string;
-  campaignId: string;
-  notificationType: string;
-  siteUrl: string;
-}): string {
-  const { title, message, campaignName, campaignId, siteUrl, notificationType } = params;
-
-  const ctaUrl = getCampaignCtaUrl(notificationType, campaignId, siteUrl);
-  const ctaLabel = getCampaignCtaLabel(notificationType);
-
-  return `
-    <div style="background-color:#1a1a2e;padding:24px 32px;border-radius:8px 8px 0 0;">
-      <h1 style="margin:0;color:#ffffff;font-size:18px;font-weight:600;">Des Moines AI Pulse</h1>
-      <p style="margin:4px 0 0;color:#a0a0b0;font-size:13px;">Advertising Platform</p>
-    </div>
-    <div style="padding:32px;background-color:#ffffff;border:1px solid #e4e4e7;border-top:none;border-radius:0 0 8px 8px;">
-      <h2 style="margin:0 0 16px;color:#1a1a2e;font-size:20px;font-weight:600;">${escapeHtml(title)}</h2>
-      <p style="margin:0 0 24px;color:#4a4a5a;font-size:15px;line-height:1.6;">${escapeHtml(message)}</p>
-      ${ctaUrl ? `
-      <a href="${escapeHtml(ctaUrl)}" style="display:inline-block;background-color:#6366f1;color:#ffffff;text-decoration:none;padding:12px 24px;border-radius:6px;font-weight:500;font-size:14px;">
-        ${escapeHtml(ctaLabel)}
-      </a>
-      ` : ''}
-      <hr style="margin:32px 0;border:none;border-top:1px solid #e4e4e7;">
-      <p style="margin:0;color:#71717a;font-size:13px;">Campaign: <strong>${escapeHtml(campaignName)}</strong> &bull;
-        <a href="${siteUrl}/campaigns" style="color:#6366f1;text-decoration:none;">Manage campaigns</a>
-      </p>
-    </div>
-  `;
-}
-
-function buildEmailBodyText(params: {
-  title: string;
-  message: string;
-  campaignName: string;
-}): string {
-  return `${params.title}\n\n${params.message}\n\nCampaign: ${params.campaignName}`;
-}
-
-function getCampaignCtaUrl(type: string, campaignId: string, siteUrl: string): string {
-  switch (type) {
-    case 'creative_uploaded':
-    case 'campaign_created':
-      return `${siteUrl}/admin/campaigns/${campaignId}`;
-    case 'creative_rejected':
-    case 'creative_deadline_warning':
-      return `${siteUrl}/campaigns/${campaignId}/creatives`;
-    case 'campaign_activated':
-    case 'campaign_completed':
-    case 'campaign_expiring_soon':
-      return `${siteUrl}/campaigns/${campaignId}/analytics`;
-    case 'creative_approved':
-    case 'payment_received':
-      return `${siteUrl}/campaigns/${campaignId}`;
-    default:
-      return `${siteUrl}/campaigns/${campaignId}`;
-  }
-}
-
-function getCampaignCtaLabel(type: string): string {
-  switch (type) {
-    case 'creative_uploaded':
-      return 'Review Creatives';
-    case 'creative_rejected':
-      return 'Upload Revised Creative';
-    case 'campaign_activated':
-      return 'View Analytics';
-    case 'campaign_expiring_soon':
-      return 'Renew Campaign';
-    case 'campaign_completed':
-      return 'View Final Report';
-    case 'creative_deadline_warning':
-      return 'Upload Creatives Now';
-    default:
-      return 'View Campaign';
-  }
-}

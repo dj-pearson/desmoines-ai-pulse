@@ -14,6 +14,7 @@ import Stripe from "https://esm.sh/stripe@14.21.0";
 import { createClient } from "https://esm.sh/@supabase/supabase-js@2.45.0";
 import { listAdminUserIds } from "../_shared/apiKeyAuth.ts";
 import { sendNurtureEmail } from "../_shared/sendNurtureEmail.ts";
+import { sendCampaignEmail } from "../_shared/campaignNotificationEmail.ts";
 import { buildTrialNotice, planAmount } from "../_shared/trialNotice.ts";
 import {
   subscriptionUpdatePatch,
@@ -393,17 +394,73 @@ async function handleCampaignPayment(
     console.error("Failed to log campaign payment:", paymentError);
   }
 
-  // Send payment confirmation notification to the advertiser
+  // Send payment confirmation to the advertiser: the stored notification AND an
+  // email.
+  //
+  // WEB-ADS-005: only the row was written, so the advertiser's confirmation was
+  // an in-app bell they had to come back and look at, while AdvertiseSuccess.tsx
+  // told them "A confirmation email has been sent". The obvious route -
+  // invoking send-campaign-notification - does not work from here: that endpoint
+  // requires a user bearer token (decision.ts, WEB-ADS-013) and Stripe is not a
+  // user. So the renderer and the provider call were extracted to
+  // _shared/campaignNotificationEmail.ts and both callers use them.
   if (campaign?.user_id) {
+    const title = `Payment Confirmed: ${campaign.name || 'Campaign'}`;
+    const message =
+      `Payment of $${amountPaid.toFixed(2)} has been received for your campaign ` +
+      `"${campaign.name}". You can now upload your ad creatives.`;
+
+    // Resolved here rather than left null so the row records who was mailed.
+    // A failure is logged, not thrown - see below.
+    const { data: recipient, error: recipientError } = await supabase.auth.admin
+      .getUserById(campaign.user_id);
+    if (recipientError) {
+      console.error(
+        `Could not resolve the advertiser's email for campaign ${campaignId}: ${recipientError.message}`,
+      );
+    }
+    const recipientEmail = recipient?.user?.email ?? null;
+
     await supabase.from("campaign_notifications").insert({
       campaign_id: campaignId,
       recipient_user_id: campaign.user_id,
+      recipient_email: recipientEmail,
       notification_type: "payment_received",
-      title: `Payment Confirmed: ${campaign.name || 'Campaign'}`,
-      message: `Payment of $${amountPaid.toFixed(2)} has been received for your campaign "${campaign.name}". You can now upload your ad creatives.`,
+      title,
+      message,
       is_read: false,
       metadata: { amount: amountPaid },
     });
+
+    // NOT thrown on, deliberately. The payment is taken and the campaign row is
+    // already advanced to pending_creative; a mail outage must not return non-2xx
+    // and have Stripe redeliver an event whose real work is done. Stripe's own
+    // receipt (create-campaign-checkout sets receipt_email) is the second path
+    // to the same inbox, so a failure here is not silence.
+    if (recipientEmail) {
+      const sent = await sendCampaignEmail({
+        to: recipientEmail,
+        content: {
+          title,
+          message,
+          campaignName: campaign.name || "Campaign",
+          campaignId,
+          notificationType: "payment_received",
+          siteUrl: Deno.env.get("VITE_SITE_URL") || "https://desmoinesinsider.com",
+        },
+        resendApiKey: Deno.env.get("RESEND_API_KEY") ?? undefined,
+        sendgridApiKey: Deno.env.get("SENDGRID_API_KEY") ?? undefined,
+        fromEmail: Deno.env.get("NOTIFICATION_FROM_EMAIL") || "noreply@desmoinesinsider.com",
+      });
+      if (!sent) {
+        console.error(`Payment confirmation email was not accepted for campaign ${campaignId}.`);
+      }
+    } else {
+      console.error(
+        `Campaign ${campaignId} paid but the advertiser has no email address on file - ` +
+          `no confirmation sent.`,
+      );
+    }
   }
 
   // Notify admins about the new paid campaign.

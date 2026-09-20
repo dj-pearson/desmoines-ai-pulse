@@ -178,7 +178,12 @@ export default function AdvertiseSuccess() {
 
           <Alert>
             <AlertDescription>
-              A confirmation email has been sent to your registered email address with your receipt and campaign details.
+              Stripe emails the payment receipt to the address on your account. Campaign
+              details stay on this page and in{" "}
+              <a href="/campaigns" className="underline underline-offset-4">
+                your campaigns
+              </a>
+              .
             </AlertDescription>
           </Alert>
         </CardContent>
