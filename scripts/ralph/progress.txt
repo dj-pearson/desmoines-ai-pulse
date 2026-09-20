@@ -3247,3 +3247,46 @@ LEARNINGS FOR FUTURE ITERATIONS
    what actually carries the noindex), and class TextSetter was already dead.
    Reading a file closely enough to test it is how you find the parts that do
    nothing.
+
+================================================================================
+2026-09-20  WEB-SEO-006, third pass  (claude/admiring-cori-ukwzcp)
+CORRECTION: the middleware does not rewrite index.html
+================================================================================
+
+The previous entry recorded that the 404/410 branch's `meta[name="robots"]`
+rewrite never fires, because index.html has no robots meta. That is wrong.
+The middleware rewrites the SPA fallback, which is the PRERENDERED homepage,
+and its head comes from SEOHead through Helmet - which emits a robots meta on
+every page. The rewrite fires.
+
+Checking the same way but against the right file found a real one:
+`meta[property="og:image:secure_url"]` is rewritten by entityShellRewrites and
+nothing in the codebase emits that tag. Removed, and guarded.
+
+LEARNINGS FOR FUTURE ITERATIONS
+
+1. ASK WHICH ARTEFACT THE CODE ACTUALLY SEES. index.html is the source shell;
+   dist/index.html after prerendering is what Cloudflare serves and what the
+   middleware rewrites. They have different heads, because Helmet writes half
+   of one. I grepped the first and drew a conclusion about the second, in a
+   note, in the PRD, where the next person would have believed it.
+
+2. AND THE LOCAL BUILD IS NOT THE SERVED ONE EITHER. dist/index.html in this
+   container has no canonical, because `/` failed to prerender against the
+   placeholder backend. Reasoning from it would have produced a third wrong
+   answer - that the whole fix is inert. The reliable offline source of truth
+   is the COMPONENT that writes the head, not any built artefact.
+
+3. THE SAME METHOD THAT PRODUCED THE ERROR, POINTED AT THE RIGHT FILE,
+   PRODUCED THE FINDING. Not a reason to distrust the method; a reason to
+   check its input. og:image:secure_url had been inert since it was written.
+
+4. GUARD THE COUPLING IN BOTH DIRECTIONS. A middleware rule and the component
+   that emits its tag must agree, and either side can break it. The control
+   that matters more is the second: renaming SEOHead's twitter:image leaves
+   the middleware rule looking perfectly correct while it silently stops
+   doing anything. Nobody reviewing the middleware would see it.
+
+5. A CORRECTION GOES WHERE THE CLAIM WAS. The wrong sentence is edited in
+   place to point at the correction, rather than being deleted - somebody may
+   have already read it.

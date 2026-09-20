@@ -377,7 +377,13 @@ export function entityShellRewrites(opts: {
     { selector: 'meta[property="og:url"]', setAttribute: "content", to: pageUrl },
     { selector: 'meta[property="og:type"]', setAttribute: "content", to: OG_TYPE[type] || "website" },
     { selector: 'meta[property="og:image"]', setAttribute: "content", to: ogImage },
-    { selector: 'meta[property="og:image:secure_url"]', setAttribute: "content", to: ogImage },
+    // There WAS a rule here for og:image:secure_url and it had never fired:
+    // nothing in this codebase emits that tag - not SEOHead, which owns the
+    // head on the shell this rewrites, not index.html, not any other component.
+    // A rewrite targeting a tag that is never rendered is a statement of
+    // intent, not a behaviour. og:image already carries the https URL, which is
+    // what secure_url was for back when og:image could be http.
+    // middleware-shell-selectors.test.mjs stops the next one being added.
     { selector: 'meta[name="twitter:image"]', setAttribute: "content", to: ogImage },
     // The entity's own node goes in the head. Nothing is REMOVED here: the
     // shell's blocks describe the site, and a page may carry both.
