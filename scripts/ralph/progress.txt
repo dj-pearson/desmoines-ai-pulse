@@ -3849,3 +3849,46 @@ Learnings for future iterations:
 5. THE DRAFT IS THE HONEST OUTCOME. Renew produces an unpaid draft and the page
    navigates to it. Anything that reads as "renewed" without a payment would be
    the same class of claim as the approval email that said an event was live.
+
+================================================================================
+2026-09-20 - WEB-BE-039 AC5: a review list for venues canonicalized wrongly
+================================================================================
+
+The partial-match bug is fixed (venueMatch.ts, and the RPC in 20260919000002).
+The rows written before that are not, and AC5 asks for the list. It was
+recorded as "needs the database and stays the owner's" - true of RUNNING the
+script, not of writing it.
+
+Changed:
+  scripts/lib/venueCanonicalizationReview.ts              new, the decision
+  scripts/review-canonicalized-venues.ts                  new, read-only
+  scripts/__tests__/venue-canonicalization-review.test.mjs new, 24 checks
+
+Learnings for future iterations:
+
+1. "NEEDS THE DATABASE" USUALLY MEANS "NEEDS IT TO RUN". merge-duplicate-events
+   .ts was written in this container without one and works on the anon key.
+   Reading the note the other way parked a completable AC for a day.
+
+2. WHEN AN AC ASKS FOR SOMETHING UNRECOVERABLE, SAY SO AND FIND THE EFFECT.
+   AC5 wanted rows keyed by the LENGTH of the text that matched them. The
+   overwrite destroyed that text - venue, location, latitude and longitude all
+   became the matched venue's, and `location` is the column that looks like it
+   survived and did not. What did survive is source_url, and a single-venue
+   source plus a different venue name is the same corruption, observable.
+
+3. THREE VERDICTS, BECAUSE "NOT CHECKABLE" IS NOT "FINE". Aggregator sources
+   say nothing about the venue. Folding them into OK would report a clean bill
+   of health earned by rows nobody looked at - which is the failure mode this
+   whole audit keeps finding.
+
+4. A NEGATIVE CONTROL CAUGHT A HOLE IN MY OWN TEST, and this is the one to
+   remember. Deleting the alias rule left the suite GREEN: the alias row still
+   returned 'ok', but through the "not a known venue" branch - a different
+   claim with the same verdict. Asserting the VERDICT alone let a rule stop
+   being tested with no assertion changing. Assert the reason when two paths
+   can produce one answer.
+
+5. WEIGHT A REVIEW LIST'S TESTS TOWARD FALSE POSITIVES. Every wrong entry is a
+   correct row a human is invited to "fix", so six of the cases are rows that
+   must come back OK and two are the ones that must be caught.
