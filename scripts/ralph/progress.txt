@@ -3391,3 +3391,49 @@ LEARNINGS FOR FUTURE ITERATIONS
 7. SAY WHAT THE CHECK CANNOT SEE. A file with two marketing sends that gates
    one of them passes. Writing that down in the header is what stops the next
    person treating a green check as proof of something it never claimed.
+
+================================================================================
+2026-09-20  WEB-ADS-010  (claude/admiring-cori-ukwzcp)
+Four price books, and the fourth is a fallback nobody counted
+================================================================================
+
+The story says two competing advertiser price books. There are four:
+advertising_packages ($99/$299/$599 a month, rendered, unpurchasable),
+ad_price_list ($149-$799, read by the proposal generator), ad_rate_card (the
+live per-day card /advertise sells from), and the CASE expression inside
+calculate_campaign_pricing() that invents a rate when the card has no row.
+
+The first three need a product decision. The fourth did not.
+
+LEARNINGS FOR FUTURE ITERATIONS
+
+1. COUNT THE SOURCES BEFORE ACCEPTING THE COUNT IN THE STORY. "Two competing
+   offers" was the framing; the migrations have four. A business reads $99/mo
+   on one page, gets a proposal quoting $149/mo, and is billed per day.
+
+2. A FALLBACK IS A PRICE BOOK. `WHEN 'featured_spot' THEN 5.00` inside a
+   pricing function is a rate card with no table, no audit and no UI. It only
+   appears when something else is missing, which is exactly when nobody is
+   looking.
+
+3. AND THE DANGEROUS HALF IS THE ASYMMETRY. The SQL falls back to a price;
+   fetchRateCard() selects only ACTIVE rows and falls back to nothing. So the
+   server charges and the client cannot display - the buyer sees no price and
+   is billed one. That is WEB-ADS-003 again with the sides swapped.
+
+4. EXTEND THE CHECK THAT ALREADY OWNS THE COUPLING. check-placement-enum
+   already compared PLACEMENT_SPECS against the enum. "On sale" needs two
+   things - a value the insert accepts and a price - and they belong in one
+   check, because a placement that has one and not the other fails in a
+   different way each time.
+
+5. SQL COMMENTS START WITH `--`, AND stripComments() DID NOT KNOW THAT. My
+   reader would have counted a commented-out seed as a real price. The test
+   caught it, not review. Twelfth time a check in this repo has been caught
+   reading its own commentary, and the first time the comment syntax itself
+   was the gap.
+
+6. SHIP THE MEASUREMENT EVEN WHEN THE DECISION IS NOT YOURS. Which price book
+   wins is the owner's. Writing down what the four actually say, with the
+   migration each comes from, is what makes that decision a five-minute one
+   instead of an afternoon.
