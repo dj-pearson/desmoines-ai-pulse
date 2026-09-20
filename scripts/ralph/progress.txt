@@ -3437,3 +3437,43 @@ LEARNINGS FOR FUTURE ITERATIONS
    wins is the owner's. Writing down what the four actually say, with the
    migration each comes from, is what makes that decision a five-minute one
    instead of an afternoon.
+
+================================================================================
+2026-09-20  WEB-ADS-011  (claude/admiring-cori-ukwzcp)
+An abandoned checkout left the campaign stuck at pending_payment
+================================================================================
+
+AC4 done. stripe-webhook now handles checkout.session.expired and returns the
+campaign to draft. AC2, AC3 and AC5 are UI work and a scheduled job.
+
+LEARNINGS FOR FUTURE ITERATIONS
+
+1. READ THE OTHER SIDE OF THE HANDSHAKE BEFORE WRITING THE COMMENT. I wrote
+   "Stripe fires this roughly 24 hours later" from memory of the default.
+   create-campaign-checkout sets expires_at to 30 MINUTES. The stuck row
+   appears in the same session the advertiser abandoned, not the next day -
+   which changes how bad the defect is, and I would have shipped the wrong
+   number.
+
+2. AND IT CHANGED A DESIGN DECISION TOO. The same file accepts a campaign in
+   `draft` OR `pending_payment` for checkout, so an advertiser who retries
+   overwrites stripe_session_id. Scoping the revert to the session id is not
+   defensive coding, it is the difference between correct and dragging a live
+   checkout back to draft.
+
+3. THROW ON THE PART THAT MATTERS, SWALLOW THE PART THAT DOES NOT. A failed
+   revert throws so Stripe redelivers. A failed notification is logged, because
+   its CHECK constraint may not be applied yet and the alternative is Stripe
+   retrying an event that already did its real work. Opposite decisions in one
+   function, each with its reason written next to it.
+
+4. WIDENING A CHECK IS SAFE; ASSERT THAT IT STAYED WIDE. The test names all
+   eleven pre-existing values, so a future edit cannot quietly drop one while
+   adding another - which is what a DROP CONSTRAINT / ADD CONSTRAINT pair
+   makes easy.
+
+5. AN EDGE FUNCTION CANNOT BE IMPORTED INTO NODE, AND THAT IS NOT A REASON TO
+   SKIP THE TEST. Deno plus esm.sh imports means source assertions are the
+   house pattern here. What makes them worth having is choosing lines somebody
+   could delete while the handler still looks right - the three .eq() calls -
+   and saying plainly in the header what the test cannot establish.

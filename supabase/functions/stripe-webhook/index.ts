@@ -128,6 +128,18 @@ serve(async (req) => {
         break;
       }
 
+      // WEB-ADS-011 AC4. Without this, an abandoned checkout leaves the
+      // campaign at pending_payment FOREVER: admin lists count it as awaiting
+      // money that is never coming, and the row carries a session id that can
+      // no longer be paid. create-campaign-checkout sets expires_at to 30
+      // minutes (index.ts:327), so Stripe fires this once, half an hour after
+      // the advertiser walked away.
+      case "checkout.session.expired": {
+        const session = event.data.object as Stripe.Checkout.Session;
+        await handleCheckoutSessionExpired(supabase, session);
+        break;
+      }
+
       case "customer.subscription.created": {
         const subscription = event.data.object as Stripe.Subscription;
         await handleSubscriptionCreated(supabase, subscription);
@@ -219,6 +231,91 @@ async function handleCheckoutSessionCompleted(
   } else {
     console.log("Unknown checkout session type:", session.id);
   }
+}
+
+/**
+ * An abandoned campaign checkout (WEB-ADS-011 AC4).
+ *
+ * Returns the campaign to `draft` so the advertiser can start again, and tells
+ * them once. Subscription checkouts are left alone: nothing is reserved for
+ * them, and create-subscription-checkout owns that flow.
+ *
+ * TWO CONDITIONS ON THE UPDATE, AND BOTH MATTER.
+ *   stripe_session_id  scopes the revert to THIS session. That is not
+ *                      hypothetical: create-campaign-checkout accepts a
+ *                      campaign in `draft` OR `pending_payment` (index.ts:149),
+ *                      so an advertiser who retries overwrites the id, and the
+ *                      first session's expiry must then match nothing rather
+ *                      than drag a live checkout back to draft.
+ *   status             a campaign that has since been paid, cancelled or
+ *                      rejected must not be dragged back to draft by a late
+ *                      webhook. Stripe can deliver out of order.
+ *
+ * The notification is BEST EFFORT and is not allowed to throw. Its type lives in
+ * a CHECK constraint widened by 20260920000000; if that migration has not been
+ * applied, the insert fails and the advertiser is not told - but the status
+ * revert, which is the part that unsticks them, still happened, and Stripe is
+ * not made to retry an event that was processed.
+ */
+async function handleCheckoutSessionExpired(
+  supabase: ReturnType<typeof createClient>,
+  session: Stripe.Checkout.Session
+) {
+  const campaignId = (session.metadata || {}).campaignId;
+  if (!campaignId) {
+    console.log(`Checkout session ${session.id} expired with no campaignId - nothing to revert.`);
+    return;
+  }
+
+  console.log(`Processing expired campaign checkout: ${campaignId} (session ${session.id})`);
+
+  const { data: reverted, error } = await supabase
+    .from("campaigns")
+    .update({ status: "draft", stripe_session_id: null })
+    .eq("id", campaignId)
+    .eq("stripe_session_id", session.id)
+    .eq("status", "pending_payment")
+    .select("id, name, user_id");
+
+  // THROW, unlike the notification below. A failed revert is the whole job of
+  // this handler, and a non-2xx makes Stripe redeliver - which is what we want,
+  // because the alternative is a campaign stuck at pending_payment forever.
+  if (error) {
+    console.error(`Failed to revert campaign ${campaignId} after checkout expiry: ${error.message}`);
+    throw error;
+  }
+
+  const campaign = reverted?.[0];
+  if (!campaign) {
+    // Already paid, already cancelled, or a newer checkout owns the row.
+    console.log(`Campaign ${campaignId} was not pending_payment for session ${session.id} - left as is.`);
+    return;
+  }
+
+  if (!campaign.user_id) {
+    console.log(`Campaign ${campaignId} reverted to draft; no user_id to notify.`);
+    return;
+  }
+
+  const { error: notifyError } = await supabase.from("campaign_notifications").insert({
+    campaign_id: campaignId,
+    recipient_user_id: campaign.user_id,
+    notification_type: "checkout_expired",
+    title: `Checkout expired: ${campaign.name || "Campaign"}`,
+    message:
+      `Your checkout for "${campaign.name || "your campaign"}" expired before payment completed, so the ` +
+      `campaign is back in drafts. Nothing was charged. Open it to pick your dates and check out again.`,
+    is_read: false,
+    metadata: { stripe_session_id: session.id },
+  });
+
+  if (notifyError) {
+    console.error(
+      `Campaign ${campaignId} was reverted to draft but the advertiser was NOT notified: ${notifyError.message}`,
+    );
+  }
+
+  console.log(`Campaign ${campaignId} returned to draft after checkout expiry.`);
 }
 
 /**
