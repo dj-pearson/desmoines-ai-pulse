@@ -38,6 +38,35 @@ npx playwright install
 
 ## Running Tests
 
+### Against a production build, without CI
+
+The lanes that gate PRs run against a build, not the dev server, and several
+specs behave differently there (see `playwright.smoke.config.ts` for why). To
+reproduce one locally:
+
+```bash
+VITE_SUPABASE_URL=... VITE_SUPABASE_ANON_KEY=... npx vite build
+npx vite preview --port 4173 --host 127.0.0.1
+PLAYWRIGHT_TEST_BASE_URL=http://127.0.0.1:4173 npm run test:smoke
+```
+
+Three things that cost an afternoon, recorded so they do not cost another
+(WEB-CI-028):
+
+- **`--host 127.0.0.1` is not optional in a container.** `vite preview` binds
+  `::` by default and fails with `EAFNOSUPPORT` where IPv6 is unavailable.
+- **The browser may be preinstalled at a path Playwright does not expect.** If
+  a run fails with `Executable doesn't exist at .../chrome-headless-shell`,
+  point at the installed binary with
+  `launchOptions: { executablePath: '/opt/pw-browsers/chromium-<rev>/chrome-linux/chrome' }`
+  rather than running `playwright install`.
+- **A placeholder Supabase URL is not a neutral backend.** It changes what the
+  page renders: `/events` returns its error branch, which replaces the hero and
+  with it the search input, so any spec that types into a filter fails there
+  while passing on `/restaurants` and `/attractions`. Measured 2026-09-19:
+  `url-filter-state.spec.ts` was 6 passed / 3 failed against a placeholder, and
+  all three failures were `/events`.
+
 ### All Tests
 
 Run all test suites across all configured browsers and devices:

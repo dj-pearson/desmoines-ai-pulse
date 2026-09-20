@@ -31,6 +31,7 @@ import {
   type ExistingEvent,
 } from "../_shared/eventDedup.ts";
 import { planIngest, type IncomingItem, type Provenance } from "./plan.ts";
+import { runJob } from "../_shared/jobRunner.ts";
 
 const corsHeaders = {
   "Access-Control-Allow-Origin": "*",
@@ -128,6 +129,14 @@ Deno.serve(async (req: Request) => {
   let inserted = 0;
   let constraintDuplicates = 0;
   const writeErrors: string[] = [];
+
+  // WEB-BE-043. The hub is an external process: when one of its four sources
+  // stops producing, nothing inside Supabase sees a change, because this
+  // function keeps being called and keeps answering 200 with inserted: 0.
+  // Recording the batch here, keyed by the source the hub named, is what makes
+  // that visible - the per-source rule in _shared/ingestionHealth.ts reads
+  // exactly these counts.
+  const job = await runJob("ingest-events", async (ctx) => {
   if (plan.rows.length > 0) {
     const stamped = plan.rows.map((r) => ({
       ...r,
@@ -173,7 +182,35 @@ Deno.serve(async (req: Request) => {
     }
   }
 
+    ctx.processed(inserted);
+    ctx.failed(plan.rejected.length + writeErrors.length);
+    ctx.meta({
+      producedBy,
+      sources: {
+        [source]: {
+          fetched: items.length,
+          inserted,
+          duplicates: plan.duplicates + constraintDuplicates,
+          errors: plan.rejected.length + writeErrors.length,
+        },
+      },
+    });
+    // A write that failed outright is a failed run, not a quiet one. The HTTP
+    // status below is decided from writeErrors either way, so a ledger write
+    // that itself fails cannot change what the hub is told.
+    if (writeErrors.length > 0) {
+      throw new Error(`the events write failed: ${writeErrors.join('; ')}`);
+    }
+  });
+
   return json({
+    runId: job.runId,
+    // The kill switch (AOS-CORE-009) makes runJob return without running the
+    // body. The hub would otherwise read that as "accepted, quiet batch" and
+    // discard items nothing ever wrote.
+    ...(job.status === "skipped"
+      ? { paused: true, pausedNote: "automation is paused; this batch was NOT written and should be resent" }
+      : {}),
     source,
     inserted,
     // A REAL ZERO. This producer never updates an existing row; enriching

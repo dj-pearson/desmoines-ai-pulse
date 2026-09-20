@@ -23,7 +23,11 @@ import { Checkbox } from "@/components/ui/checkbox";
 function BrokenTile({ onToggle }: { onToggle: () => void }) {
   return (
     <div onClick={onToggle}>
-      {/* @ts-expect-error - onChange is exactly the mistake being reproduced */}
+      {/* onChange is exactly the mistake being reproduced. It carried a
+          @ts-expect-error, which became an ERROR itself (TS2578, unused
+          directive) once Radix's Checkbox started accepting onChange through
+          its HTML props passthrough - the very reason the mistake compiles and
+          silently does nothing. Reproducing it needs no suppression. */}
       <Checkbox checked={false} onChange={onToggle} />
       <span>Food &amp; Dining</span>
     </div>

@@ -31,7 +31,7 @@ const HOUSE_MESSAGES = [
 ] as const;
 
 interface HouseAdProps {
-  placement: "top_banner" | "featured_spot" | "below_fold" | "sidebar";
+  placement: "top_banner" | "featured_spot" | "below_fold";
   className?: string;
 }
 
@@ -55,8 +55,6 @@ export function HouseAd({ placement, className = "" }: HouseAdProps) {
   const sizeClasses =
     placement === "featured_spot"
       ? "min-h-[220px] md:min-h-[250px]"
-      : placement === "sidebar"
-      ? "w-[160px] min-h-[600px]"
       : "h-20 md:h-28";
 
   return (

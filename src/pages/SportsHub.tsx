@@ -15,6 +15,7 @@ import { Badge } from '@/components/ui/badge';
 import { Skeleton } from '@/components/ui/skeleton';
 import { Trophy } from "lucide-react";
 import { EVENT_LIST_COLUMNS } from '@/lib/listColumns';
+import { queryKeys } from '@/lib/queryKeys';
 import { SpriteIcon } from "@/components/ui/SpriteIcon";
 import { ErrorState } from '@/components/ui/error-state';
 
@@ -26,7 +27,8 @@ function useSportsEvents(timeframe: 'today' | 'week') {
   const weekEnd = centralDayStartUtcISO(7);
 
   return useQuery({
-    queryKey: ['sports-events', timeframe],
+    // WEB-PERF-032: see MusicHub - this key was outside the events prefix too.
+    queryKey: queryKeys.events.list({ hub: 'sports', timeframe }),
     queryFn: async () => {
       let query = supabase
         .from('events')
@@ -104,7 +106,7 @@ export default function SportsHub() {
   return (
     <>
       <SEOHead
-        title="Sports in Des Moines — Teams, Schedules & Gameday Guides"
+        title="Des Moines Sports - Teams & Schedules"
         description={pageDescription}
         url={canonicalUrl}
         canonicalUrl={canonicalUrl}

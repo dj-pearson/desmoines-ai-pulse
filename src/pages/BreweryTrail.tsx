@@ -22,10 +22,12 @@ import {
   DialogTrigger,
 } from '@/components/ui/dialog';
 import { SpriteIcon } from "@/components/ui/SpriteIcon";
+import { ErrorState } from '@/components/ui/error-state';
+import { OptimizedImage } from "@/components/OptimizedImage";
 
 export default function BreweryTrail() {
   const { user } = useAuth();
-  const { data: breweries, isLoading } = useBreweries();
+  const { data: breweries, isLoading, isError, error, refetch } = useBreweries();
   const { data: checkins } = useBreweryCheckins();
   const checkinMutation = useCheckinMutation();
   const [checkinBreweryId, setCheckinBreweryId] = useState<string | null>(null);
@@ -90,7 +92,7 @@ export default function BreweryTrail() {
   return (
     <>
       <SEOHead
-        title="Des Moines Brewery Trail — Craft Beer Passport"
+        title="Des Moines Brewery Trail - Craft Beer"
         description="Explore the Des Moines craft beer scene with our Brewery Trail. Visit local breweries, check in, earn rewards, and complete the trail."
         url={canonicalUrl}
         canonicalUrl={canonicalUrl}
@@ -167,14 +169,24 @@ export default function BreweryTrail() {
               </div>
             ) : breweries && breweries.length > 0 ? (
               <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-6">
-                {breweries.map((brewery) => {
+                {breweries.map((brewery, index) => {
                   const isCheckedIn = checkedInIds.has(brewery.id);
                   const checkin = checkins?.find((c) => c.restaurant_id === brewery.id);
                   return (
                     <Card key={brewery.id} className={`transition-colors h-full ${isCheckedIn ? 'border-amber-500/50 bg-amber-500/5' : 'hover:border-primary'}`}>
                       {brewery.image_url && (
                         <div className="h-40 overflow-hidden rounded-t-lg relative">
-                          <img src={brewery.image_url} alt={brewery.name} className="w-full h-full object-cover" loading="lazy" />
+                          {/* The first row of a three-column grid. Chrome does not start a lazy
+                              image's fetch until layout has run, so the LCP candidate on a listing
+                              page must not be lazy (WEB-SEO-032). */}
+                          <OptimizedImage
+                            src={brewery.image_url}
+                            alt={brewery.name}
+                            className="object-cover"
+                            containerClassName="w-full h-full"
+                            priority={index < 3}
+                            sizes="(max-width: 640px) 100vw, (max-width: 1024px) 50vw, 33vw"
+                          />
                           {isCheckedIn && (
                             <div className="absolute top-2 right-2">
                               <Badge className="bg-amber-500 text-white">
@@ -281,6 +293,11 @@ export default function BreweryTrail() {
                   );
                 })}
               </div>
+            ) : isError ? (
+              // WEB-QA-031: a failed fetch must not read as "there are no
+              // breweries", which is a claim about Des Moines rather than
+              // about the request.
+              <ErrorState error={error} compact onRetry={() => void refetch()} />
             ) : (
               <p className="text-muted-foreground">No breweries found. Check back soon!</p>
             )}

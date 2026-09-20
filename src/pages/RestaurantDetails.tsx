@@ -1,4 +1,5 @@
 import { useParams, Link } from "react-router-dom";
+import { OptimizedImage } from "@/components/OptimizedImage";
 import { Helmet } from "react-helmet-async";
 import { useQuery } from "@tanstack/react-query";
 import { supabase } from "@/integrations/supabase/client";
@@ -27,7 +28,11 @@ import { qualifyTitleWithCity } from "@/lib/seoTitleLocation";
 import { Phone, Star, DollarSign, ArrowLeft, Navigation, Heart, MessageCircle, Award, Utensils, Globe, Check, BookOpen, Info, Map, CalendarCheck } from "lucide-react";
 import { useState, useMemo } from "react";
 import { useContentTracking } from "@/hooks/useContentTracking";
-import { getRestaurantOpenStatus, getOpeningHoursSpecification } from "@/lib/restaurantHours";
+import {
+  getRestaurantOpenStatus,
+  resolveOpeningHoursSpecification,
+  type StoredOpeningHours,
+} from "@/lib/restaurantHours";
 import { LazyLocationMap } from "@/components/LazyLocationMap";
 import { getDirectionsUrl } from "@/lib/directions";
 import { resolveReservation } from "@/lib/reservations";
@@ -36,9 +41,10 @@ import { LastUpdatedBadge } from "@/components/LastUpdatedBadge";
 import { NearbyContent } from "@/components/NearbyContent";
 import { RestaurantMenuSection } from "@/components/RestaurantMenuSection";
 import { RatingSystem } from "@/components/RatingSystem";
+import { ClaimListingCta } from "@/components/business/ClaimListingCta";
 import { CollapsibleSection } from "@/components/CollapsibleSection";
 import { SpriteIcon } from "@/components/ui/SpriteIcon";
-import { fetchPriorityAttr } from '@/lib/fetchPriority';
+import { DETAIL_STALE_TIME, detailQueryKey } from "@/lib/detailQueryKeys";
 
 export default function RestaurantDetails() {
   const { slug } = useParams();
@@ -49,7 +55,7 @@ export default function RestaurantDetails() {
     isLoading,
     error,
   } = useQuery({
-    queryKey: ["restaurant", slug],
+    queryKey: detailQueryKey("restaurant", slug ?? ""),
     queryFn: async () => {
       let { data, error } = await supabase
         .from("restaurants")
@@ -70,6 +76,7 @@ export default function RestaurantDetails() {
       if (error) throw error;
       return data;
     },
+    staleTime: DETAIL_STALE_TIME,
   });
 
   // Track page view and content interactions
@@ -295,10 +302,23 @@ export default function RestaurantDetails() {
           },
         }
       : {}),
-    // Derived from the same parser as the visible open/closed badge; omitted
-    // entirely when the free-form hours can't be parsed (no fabricated hours).
-    ...(getOpeningHoursSpecification(restaurant.opening)
-      ? { openingHoursSpecification: getOpeningHoursSpecification(restaurant.opening) }
+    // WEB-BE-045: hours_json first, the free-text `opening` parser second.
+    // The structured column is what Google returned; the text parser is a best
+    // effort over strings nobody writes. Omitted entirely when neither yields
+    // anything, because inventing hours is the WEB-SEO-024 rule this whole
+    // object is built around. Note the column is absent until migration
+    // 20260919000009 is applied - select('*') makes that undefined rather than
+    // an error, and the text path carries the page until then.
+    ...(resolveOpeningHoursSpecification(
+      (restaurant as { hours_json?: StoredOpeningHours | null }).hours_json,
+      restaurant.opening,
+    )
+      ? {
+          openingHoursSpecification: resolveOpeningHoursSpecification(
+            (restaurant as { hours_json?: StoredOpeningHours | null }).hours_json,
+            restaurant.opening,
+          ),
+        }
       : {}),
     // paymentAccepted IS GONE (WEB-SEO-024). No column backs it, and it claimed
     // card acceptance for every restaurant in the set including the cash-only
@@ -322,15 +342,12 @@ export default function RestaurantDetails() {
     },
   };
 
-  const breadcrumbs = [
-    { name: "Home", url: "/" },
-    { name: "Restaurants", url: "/restaurants" },
-    ...(restaurant.cuisine ? [{ name: restaurant.cuisine, url: `/restaurants?cuisine=${encodeURIComponent(restaurant.cuisine)}` }] : []),
-    {
-      name: restaurant.name,
-      url: `/restaurants/${restaurant.slug || restaurant.id}`,
-    },
-  ];
+  // WEB-SEO-027: the BreadcrumbList this used to build lived here AND in the
+  // <BreadcrumbListSchema> below, with DIFFERENT urls - relative here, absolute
+  // through getCanonicalUrl there - so the page shipped two competing trails
+  // and the prerenderer's dedupeJsonLd kept whichever came last. One emitter
+  // now, and it is the typed schema component, which is the one with the
+  // absolute URLs a crawler can resolve.
 
   // Generate dynamic FAQ for this specific restaurant
   const restaurantFaqs = [
@@ -380,7 +397,6 @@ export default function RestaurantDetails() {
         structuredData={restaurantSchema}
         url={`/restaurants/${restaurant.slug || restaurant.id}`}
         imageUrl={ogImageUrl("restaurant", restaurant.id)}
-        breadcrumbs={breadcrumbs}
         location={{
           name: restaurant.name,
           address: restaurant.location || `${cityName}, IA`,
@@ -455,13 +471,13 @@ export default function RestaurantDetails() {
             {/* Hero Image / Gradient */}
             <div className="relative h-72 md:h-96 overflow-hidden">
               {showImage ? (
-                <img
+                <OptimizedImage
                   src={restaurant.image_url}
                   alt={`${restaurant.name} - ${restaurant.cuisine || "Restaurant"} in ${cityName}, Iowa`}
-                  className="absolute inset-0 w-full h-full object-cover"
-                  loading="eager"
-                  decoding="async"
-                  {...fetchPriorityAttr("high")}
+                  className="object-cover"
+                  containerClassName="absolute inset-0"
+                  priority
+                  sizes="(max-width: 768px) 100vw, 1024px"
                   onError={() => setImageError(true)}
                 />
               ) : (
@@ -877,6 +893,15 @@ export default function RestaurantDetails() {
               )}
             </CardContent>
           </Card>
+
+          {/* Own this business? (WEB-ADS-009) */}
+          <div className="mb-8">
+            <ClaimListingCta
+              listingType="restaurant"
+              listingId={restaurant.id}
+              listingName={restaurant.name}
+            />
+          </div>
 
           {/* Ratings & Reviews (WEB-FEAT-010) */}
           <div id="reviews" className="mb-8">

@@ -4,6 +4,7 @@ import { RefreshCw } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { useForYouRail } from "@/hooks/useForYouRail";
 import { SpriteIcon } from "@/components/ui/SpriteIcon";
+import { OptimizedImage } from "@/components/OptimizedImage";
 
 /**
  * Web parity for the iOS HomeView For You rail (IOS-DISCOVER-2026-002).
@@ -61,11 +62,14 @@ export function ForYouRail() {
             >
               <div className="aspect-video w-56 overflow-hidden rounded-lg bg-muted">
                 {rec.image_url ? (
-                  <img
+                  <OptimizedImage
                     src={rec.image_url}
                     alt={rec.title ?? "Event"}
-                    className="h-full w-full object-cover group-hover:scale-105 transition-transform duration-200"
-                    loading="lazy"
+                    width={224}
+                    height={126}
+                    containerClassName="h-full w-full"
+                    className="object-cover group-hover:scale-105 transition-transform duration-200"
+                    sizes="224px"
                   />
                 ) : (
                   <div className="h-full w-full flex items-center justify-center text-muted-foreground">

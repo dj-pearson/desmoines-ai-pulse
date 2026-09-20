@@ -5,6 +5,7 @@ import { useToast } from '@/hooks/use-toast';
 import { createLogger } from '@/lib/logger';
 import { queryKeys } from '@/lib/queryKeys';
 import { STALE_TIME, GC_TIME } from '@/lib/queryConfig';
+import { recordArticleView } from "@/lib/recordArticleView";
 
 const log = createLogger('useArticles');
 
@@ -49,13 +50,13 @@ export interface UpdateArticleData extends Partial<CreateArticleData> {
   id: string;
 }
 
-export const useArticles = (options?: { autoLoad?: boolean }) => {
+export const useArticles = (options?: { autoLoad?: boolean; status?: string; limit?: number }) => {
   // WEB-PERF-028. The LIST is a query now; these two remain for the mutations
   // below, which report their own progress and failures through the same
   // `loading` and `error` fields callers already read.
   const [mutating, setMutating] = useState(false);
   const [mutationError, setMutationError] = useState<string | null>(null);
-  const [statusFilter, setStatusFilter] = useState<string | undefined>(undefined);
+  const [statusFilter, setStatusFilter] = useState<string | undefined>(options?.status);
   const queryClient = useQueryClient();
   const { toast } = useToast();
 
@@ -71,7 +72,7 @@ export const useArticles = (options?: { autoLoad?: boolean }) => {
     isLoading,
     error: queryError,
   } = useQuery<Article[]>({
-    queryKey: queryKeys.articles.list({ status: statusFilter ?? 'all' }),
+    queryKey: queryKeys.articles.list({ status: statusFilter ?? 'all', limit: options?.limit ?? 0 }),
     queryFn: async () => {
       let query = supabase
         .from('articles')
@@ -81,7 +82,12 @@ export const useArticles = (options?: { autoLoad?: boolean }) => {
       if (statusFilter && statusFilter !== 'all') {
         query = query.eq('status', statusFilter);
       }
-      // No status, or 'all', loads every article without filtering.
+      // No status, or 'all', loads every article without filtering. That is
+      // the ADMIN case - the editors and ArticlesManager need drafts.
+
+      // A bound, so one page cannot grow into an unbounded response as the
+      // archive does. The public list paginates client-side below this.
+      if (options?.limit) query = query.limit(options.limit);
 
       const { data, error } = await query;
       if (error) throw error;
@@ -134,13 +140,7 @@ export const useArticles = (options?: { autoLoad?: boolean }) => {
 
       if (error) throw error;
 
-      // Increment view count
-      if (data) {
-        await supabase
-          .from('articles')
-          .update({ view_count: data.view_count + 1 })
-          .eq('id', data.id);
-      }
+      if (data) recordArticleView(slug);
 
       return data;
     } catch (err: any) {

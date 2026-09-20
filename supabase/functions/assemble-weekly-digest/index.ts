@@ -123,6 +123,9 @@ async function gatherContent(supabase: SupabaseClient): Promise<DigestContent> {
     .lte('date', weekOut)
     .neq('is_hidden', true)
     .neq('is_merged', true)
+    // WEB-BE-034: the other unpublish switch. A digest that mails an archived
+    // event is the failure this pair of filters exists to prevent.
+    .is('archived_at', null)
     .order('is_featured', { ascending: false, nullsFirst: false })
     .order('date', { ascending: true })
     .limit(MAX_EVENTS);

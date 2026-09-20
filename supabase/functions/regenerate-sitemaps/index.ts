@@ -110,6 +110,9 @@ async function buildSitemaps(supabase: Supa) {
       .from("events")
       .select("id, title, date, event_start_utc, updated_at")
       .neq("is_hidden", true)
+      // WEB-BE-034: and the other unpublish switch. Without it an archived
+      // event stayed in sitemap-events.xml and kept being crawled.
+      .is("archived_at", null)
       .order("date", { ascending: false })
       .limit(5000);
     // THROW, do not fall back to an empty list. Every read in this builder

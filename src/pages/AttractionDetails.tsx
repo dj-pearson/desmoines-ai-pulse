@@ -18,6 +18,7 @@ import { OpenStatusChip } from "@/components/OpenStatusChip";
 import ShareDialog from "@/components/ShareDialog";
 import { FAQSection } from "@/components/FAQSection";
 import { RatingSystem } from "@/components/RatingSystem";
+import { ClaimListingCta } from "@/components/business/ClaimListingCta";
 import { BackToTop } from "@/components/BackToTop";
 import EnhancedAttractionSEO from "@/components/EnhancedAttractionSEO";
 import SEOHead from "@/components/SEOHead";
@@ -25,13 +26,18 @@ import { RouteCanonical } from "@/components/RouteCanonical";
 import { BRAND, getCanonicalUrl } from "@/lib/brandConfig";
 import { Star, ArrowLeft, Navigation, Heart, Globe, Info, Camera, Landmark, ChevronRight, TreePine } from "lucide-react";
 import { useState } from "react";
-import { useDocumentTitle } from "@/hooks/useDocumentTitle";
 import { useContentTracking } from "@/hooks/useContentTracking";
 import { StickyMobileCTA } from "@/components/StickyMobileCTA";
 import { LastUpdatedBadge } from "@/components/LastUpdatedBadge";
 import { NearbyContent } from "@/components/NearbyContent";
 import { SpriteIcon } from "@/components/ui/SpriteIcon";
-import { fetchPriorityAttr } from '@/lib/fetchPriority';
+import { createSlug } from "@/lib/slug";
+import { fetchBySlug } from "@/lib/resolveBySlug";
+import type { Database } from "@/integrations/supabase/types";
+import { OptimizedImage } from "@/components/OptimizedImage";
+import { DETAIL_STALE_TIME, detailQueryKey } from "@/lib/detailQueryKeys";
+
+type Attraction = Database["public"]["Tables"]["attractions"]["Row"];
 
 // Estimated visit duration by attraction type (in minutes)
 const VISIT_DURATION_BY_TYPE: Record<string, { min: number; max: number }> = {
@@ -62,13 +68,6 @@ function getEstimatedDuration(type: string | null): string {
   return `${formatTime(duration.min)} - ${formatTime(duration.max)}`;
 }
 
-const createSlug = (name: string): string => {
-  return name
-    .toLowerCase()
-    .replace(/[^a-z0-9]+/g, "-")
-    .replace(/(^-|-$)/g, "");
-};
-
 export default function AttractionDetails() {
   const { slug } = useParams();
   const [imageError, setImageError] = useState(false);
@@ -78,29 +77,17 @@ export default function AttractionDetails() {
     isLoading,
     error,
   } = useQuery({
-    queryKey: ["attraction", slug],
-    queryFn: async () => {
-      // attractions has no slug column, so we match the createSlug(name) the
-      // routes use. Scan only (id, name) instead of downloading every full row,
-      // then fetch the single matched attraction's full row (SEO/GEO intact).
-      const { data: index, error } = await supabase
-        .from("attractions")
-        .select("id, name");
-
-      if (error) throw error;
-
-      const match = index?.find((a) => createSlug(a.name) === slug);
-      if (!match) return null;
-
-      const { data, error: rowError } = await supabase
-        .from("attractions")
-        .select("*")
-        .eq("id", match.id)
-        .maybeSingle();
-
-      if (rowError) throw rowError;
-      return data || null;
-    },
+    queryKey: detailQueryKey("attraction", slug ?? ""),
+    // attractions now has a slug column (migration 20260919000008), so this is
+    // one row by unique key. The (id, name) scan this replaces is still in
+    // fetchBySlug as the fallback for the window before that migration is
+    // applied (WEB-PERF-031).
+    queryFn: () => fetchBySlug<Attraction>("attractions", slug ?? ""),
+    enabled: Boolean(slug),
+    // Shared with usePrefetchAttraction through detailQueryKeys, or the
+    // prefetch is discarded as stale the instant the page mounts and the hover
+    // cost bought nothing.
+    staleTime: DETAIL_STALE_TIME,
   });
 
   // Track page view and content interactions
@@ -141,7 +128,6 @@ export default function AttractionDetails() {
     enabled: !!attraction,
   });
 
-  useDocumentTitle(attraction?.name || "Attraction Details");
 
   if (isLoading) {
     return (
@@ -169,7 +155,12 @@ export default function AttractionDetails() {
     );
   }
 
-  if (error || !attraction) {
+  // WEB-SEO-037 AC2. The hub (useAttractions) and functions/_middleware.ts
+  // both filter is_active; this page resolved any row, so an attraction taken
+  // off the site stayed reachable by its own URL and kept its indexable page.
+  const inactive = Boolean(attraction) && attraction?.is_active === false;
+
+  if (error || !attraction || inactive) {
     return (
       <>
         <Helmet>
@@ -322,13 +313,12 @@ export default function AttractionDetails() {
             {/* Hero Image / Gradient */}
             <div className="relative h-72 md:h-96 overflow-hidden">
               {showImage ? (
-                <img
+                <OptimizedImage
                   src={attraction.image_url}
                   alt={`${attraction.name} - ${attraction.type} in ${BRAND.city}, ${BRAND.state}`}
-                  className="absolute inset-0 w-full h-full object-cover"
-                  loading="eager"
-                  decoding="async"
-                  {...fetchPriorityAttr("high")}
+                  priority
+                  sizes="(max-width: 768px) 100vw, 1024px"
+                  containerClassName="absolute inset-0"
                   onError={() => setImageError(true)}
                 />
               ) : (
@@ -632,6 +622,15 @@ export default function AttractionDetails() {
             </CardContent>
           </Card>
 
+          {/* Own this business? (WEB-ADS-009) */}
+          <div className="mb-8">
+            <ClaimListingCta
+              listingType="attraction"
+              listingId={attraction.id}
+              listingName={attraction.name}
+            />
+          </div>
+
           {/* Ratings & Reviews (WEB-FEAT-010) */}
           <div id="reviews" className="mb-8">
             <RatingSystem contentType="attraction" contentId={attraction.id} showReviews />
@@ -667,11 +666,12 @@ export default function AttractionDetails() {
                     <Card className="h-full hover:shadow-lg transition-all duration-300 hover:-translate-y-1 rounded-2xl overflow-hidden">
                       {related.image_url ? (
                         <div className="aspect-video overflow-hidden">
-                          <img
+                          <OptimizedImage
                             src={related.image_url}
                             alt={`${related.name} - ${related.type} in ${BRAND.city}`}
-                            className="w-full h-full object-cover"
-                            loading="lazy"
+                            className="object-cover"
+                            containerClassName="w-full h-full"
+                            sizes="(max-width: 640px) 100vw, (max-width: 1024px) 50vw, 33vw"
                           />
                         </div>
                       ) : (
@@ -717,11 +717,12 @@ export default function AttractionDetails() {
                     <Card className="h-full hover:shadow-lg transition-all duration-300 hover:-translate-y-1 rounded-2xl overflow-hidden">
                       {nearby.image_url ? (
                         <div className="aspect-video overflow-hidden">
-                          <img
+                          <OptimizedImage
                             src={nearby.image_url}
                             alt={`${nearby.name} - ${nearby.type} in ${BRAND.city}`}
-                            className="w-full h-full object-cover"
-                            loading="lazy"
+                            className="object-cover"
+                            containerClassName="w-full h-full"
+                            sizes="(max-width: 640px) 100vw, (max-width: 1024px) 50vw, 33vw"
                           />
                         </div>
                       ) : (

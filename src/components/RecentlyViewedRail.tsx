@@ -5,6 +5,7 @@ import { useRecentlyViewedFeed } from "@/hooks/useRecentlyViewedFeed";
 import type { RecentlyViewedType } from "@/lib/recentlyViewed";
 import { cn } from "@/lib/utils";
 import { SpriteIcon } from "@/components/ui/SpriteIcon";
+import { OptimizedImage } from "@/components/OptimizedImage";
 
 const TYPE_ICON: Record<RecentlyViewedType, typeof Calendar> = {
   event: Calendar,
@@ -51,14 +52,14 @@ export function RecentlyViewedRail({ limit = 12 }: { limit?: number }) {
                 >
                   <div className="aspect-video bg-muted overflow-hidden">
                     {item.image_url ? (
-                      <img
+                      <OptimizedImage
                         src={item.image_url}
                         alt={item.title}
                         width={176}
                         height={99}
-                        loading="lazy"
-                        decoding="async"
-                        className="w-full h-full object-cover"
+                        containerClassName="w-full h-full"
+                        className="object-cover"
+                        sizes="176px"
                       />
                     ) : (
                       <div className="w-full h-full flex items-center justify-center">

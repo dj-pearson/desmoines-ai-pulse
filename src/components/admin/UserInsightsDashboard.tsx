@@ -117,12 +117,12 @@ export default function UserInsightsDashboard() {
         <Card>
           <CardHeader className="pb-2">
             <CardTitle className="text-sm font-medium flex items-center gap-2">
-              <TrendingUp className="h-4 w-4 text-purple-500" />
+              <TrendingUp className="h-4 w-4 text-teal-500" />
               New This Month
             </CardTitle>
           </CardHeader>
           <CardContent>
-            <div className="text-3xl font-bold text-purple-600">{data.newThisMonth}</div>
+            <div className="text-3xl font-bold text-teal-600">{data.newThisMonth}</div>
             <p className="text-xs text-muted-foreground mt-1">Last 30 days</p>
           </CardContent>
         </Card>

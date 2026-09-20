@@ -12,10 +12,6 @@ import { createClient } from "https://esm.sh/@supabase/supabase-js@2.39.3";
 // date-fns-tz@2, which does not export it (that name arrived in v3) — so it was
 // silently `undefined`, which is why this file hand-rolled a DST guess instead.
 import { format as dateFnsFormat } from "https://esm.sh/date-fns@2.30.0";
-import {
-  CENTRAL_TZ,
-  centralOffsetString,
-} from "../_shared/centralTime.ts";
 import { resolveListingUrls } from "../_shared/eventSourceProfiles.ts";
 import {
   DEFAULT_CONTENT_BUDGET,
@@ -29,11 +25,16 @@ import { fetchAndStoreImage as _fetchAndStoreImageShared } from "../_shared/imag
 import { resolveEventImage } from "../_shared/venueImage.ts";
 import { tryDomainAdapter } from "../_shared/domain-adapters/index.ts";
 import { extractEventsFromJsonLd } from "../_shared/jsonLdEvents.ts";
+import { parseEventDateTime } from "../_shared/eventDateTime.ts";
 import { requireAdminOrApiKey } from "../_shared/apiKeyAuth.ts";
 import { isHostAllowed } from "../_shared/fetchGuard.ts";
 import { fetchWithTimeout } from "../_shared/fetchWithTimeout.ts";
 import { recordAnthropicUsage } from "../_shared/providerUsage.ts";
 import { sanitizeLikeInput } from "../_shared/validation.ts";
+import { runJob } from "../_shared/jobRunner.ts";
+import { normalizeCategory } from "../_shared/eventCategories.ts";
+import { findKnownVenue, venueCoordinates } from "../_shared/knownVenues.ts";
+import type { SourceCounts } from "../_shared/ingestionHealth.ts";
 
 const corsHeaders = {
   "Access-Control-Allow-Origin": "*",
@@ -444,9 +445,11 @@ ${relevantContent}
 
 📅 DATE CONVERSION (Central Time - Des Moines, Iowa):
 - All times are Central (CT/CDT)
-- "6:00PM" → "19:00:00", "7:00 PM" → "19:00:00", "5:05PM" → "17:05:00"
+- "6:00PM" → "18:00:00", "7:00 PM" → "19:00:00", "5:05PM" → "17:05:00"
 - "Fri, Mar 6 6:05PM" → "2026-03-06 18:05:00"
-- No time? Default to 19:00:00 (7:00 PM)
+- NO TIME PUBLISHED? Return the DATE ONLY, e.g. "2026-03-06". Do NOT invent a
+  time. The system stamps its own marker for a date with no time, and a made-up
+  7 PM is indistinguishable from a real 7 PM show.
 - SKIP past dates (before ${currentDate})
 
 🔗 TICKET/SOURCE URL (CRITICAL):
@@ -632,12 +635,12 @@ CRITICAL PARSING INSTRUCTIONS:
   following year. NEVER default to a past year.
 
 EXAMPLES (current year is ${currentYearStr}):
-- "Aug 15th" → "${currentYearStr}-08-15 19:00:00" (7:00 PM Central Time default, if still upcoming)
+- "Aug 15th" → "${currentYearStr}-08-15" (DATE ONLY - no time was published)
 - "7:30 PM" → "${currentYearStr}-MM-DD 19:30:00" (keep Central Time)
 - "8 AM" → "${currentYearStr}-MM-DD 08:00:00" (morning events)
 - "Through Aug 28" → create events until that date
-- No specific time? → default to 7:00 PM Central (19:00:00)
-- All-day events → use 12:00 PM Central (12:00:00)
+- NO SPECIFIC TIME? → return the DATE ONLY. Never invent one.
+- All-day events → return the DATE ONLY
 - Past dates (before ${nowCentralStr}) → SKIP these events
 
 ⚠️ TIMEZONE CRITICAL: Store times in Central Time format (not UTC). The system will handle UTC conversion automatically.
@@ -1130,90 +1133,24 @@ Return empty array [] if no attractions found.`,
   return [];
 }
 
-interface ParsedDateTime {
-  event_start_local: string;
-  event_timezone: string;
-  event_start_utc: Date;
-}
-
-
-// Enhanced time parsing for AI-extracted events
-function parseEventDateTime(dateStr: string): ParsedDateTime | null {
-  if (!dateStr) return null;
-
-  const eventTimeZone = CENTRAL_TZ; // Des Moines events are always Central
-
-  try {
-    console.log(`🕐 Parsing date string: "${dateStr}"`);
-
-    // Parse the date string as Central Time and convert to UTC
-    // The AI provides dates like "2025-10-04 19:00:00" which should be interpreted as Central Time
-
-    let year: number, month: number, day: number, hours: number, minutes: number, seconds: number;
-
-    // Match YYYY-MM-DD HH:MM:SS format
-    const datetimeMatch = dateStr.match(/^(\d{4})-(\d{2})-(\d{2})\s+(\d{2}):(\d{2}):(\d{2})$/);
-    if (datetimeMatch) {
-      [, year, month, day, hours, minutes, seconds] = datetimeMatch.map(Number);
-    }
-    // Match YYYY-MM-DD format (default to 7:30 PM Central)
-    else {
-      const dateMatch = dateStr.match(/^(\d{4})-(\d{2})-(\d{2})$/);
-      if (dateMatch) {
-        [, year, month, day] = dateMatch.map(Number);
-        hours = 19;
-        minutes = 30;
-        seconds = 0;
-      } else {
-        // Fallback: try to parse with Date constructor
-        const fallbackDate = new Date(dateStr);
-        if (isNaN(fallbackDate.getTime())) {
-          console.log(`⚠️ Could not parse date: ${dateStr}`);
-          return null;
-        }
-        year = fallbackDate.getFullYear();
-        month = fallbackDate.getMonth() + 1;
-        day = fallbackDate.getDate();
-        hours = fallbackDate.getHours() || 19;
-        minutes = fallbackDate.getMinutes() || 30;
-        seconds = fallbackDate.getSeconds() || 0;
-      }
-    }
-
-    // Create a proper date object representing this time in Central timezone
-    const centralTimeString = `${year}-${String(month).padStart(2, "0")}-${String(day).padStart(2, "0")} ${String(hours).padStart(2, "0")}:${String(minutes).padStart(2, "0")}:${String(seconds).padStart(2, "0")}`;
-
-    // Convert the Central wall-clock time to the correct UTC instant.
-    //
-    // This used to guess the offset with `month >= 2 && month <= 10` (i.e. treat
-    // all of March through all of November as CDT), which is wrong at both ends
-    // of DST: US DST starts the 2nd Sunday of March and ends the 1st Sunday of
-    // November, so early-March and most-of-November events were stamped an hour
-    // off — enough to show a 7:00 PM show as 8:00 PM. centralOffsetHours() asks
-    // the runtime's IANA tz database for the real offset on that date instead.
-    const offsetStr = centralOffsetString(year, month, day, hours, minutes);
-
-    // Create ISO string with timezone
-    const isoWithTimezone = `${year}-${String(month).padStart(2, "0")}-${String(day).padStart(2, "0")}T${String(hours).padStart(2, "0")}:${String(minutes).padStart(2, "0")}:${String(seconds).padStart(2, "0")}${offsetStr}`;
-    const utcDate = new Date(isoWithTimezone);
-
-    console.log(
-      `🕐 Parsed: ${dateStr} -> Central: ${centralTimeString} (offset: ${offsetStr}) -> UTC: ${utcDate.toISOString()}`
-    );
-
-    if (!isNaN(utcDate.getTime())) {
-      return {
-        event_start_local: centralTimeString,
-        event_timezone: eventTimeZone,
-        event_start_utc: utcDate,
-      };
-    }
-  } catch (error) {
-    console.log(`⚠️ Could not parse AI date: ${dateStr}`, error);
-  }
-
-  return null;
-}
+// WEB-BE-037. THE PRIVATE parseEventDateTime THAT LIVED HERE HAD TWO DEFECTS,
+// and the second one silently rewrote real times.
+//
+// 1. Its date-only default was 19:30:00, while _shared/eventDateTime.ts has
+//    defined NO_TIME_MARKER = 19:31:58 for exactly this case. The marker is an
+//    odd value on purpose: a row reading 19:31:58 was never given a time,
+//    while 19:30 is indistinguishable from a real 7:30 show. Four ingestion
+//    paths each had their own answer (19:31:58, 19:30, 19:00, 19:00), so the
+//    same event through two producers got two instants and same-date dedup
+//    could not match them.
+//
+// 2. Its fallback branch read `hours = fallbackDate.getHours() || 19` and
+//    `minutes = fallbackDate.getMinutes() || 30`. Zero is falsy, so EVERY
+//    on-the-hour time became :30 and MIDNIGHT became 7 PM - not a default for
+//    a missing time, but a corruption of a time the source did publish.
+//
+// The shared parser handles all three input shapes this one did, so the fix is
+// the import at the top of this file, not a repair.
 
 // Filter out past events with enhanced date handling
 function filterFutureEvents(events: any[]): any[] {
@@ -1283,10 +1220,15 @@ async function checkForDuplicates(
   supabase: any,
   category: string,
   items: any[]
-): Promise<{ newItems: any[]; duplicates: number }> {
+): Promise<{ newItems: any[]; duplicates: number; checkErrors: number }> {
   const tableName =
     category === "restaurant_openings" ? "restaurants" : category;
   let duplicates = 0;
+  // WEB-BE-048. An item skipped because its duplicate check failed is an
+  // ERROR, not a duplicate: folding it into `duplicates` would make a run
+  // where PostgREST was unreachable look like a run where the page had not
+  // changed, which is the distinction WEB-BE-043's zero-result rule depends on.
+  let checkErrors = 0;
   const newItems = [];
 
   // First remove duplicates within the batch itself
@@ -1346,7 +1288,13 @@ async function checkForDuplicates(
           query = supabase
             .from(tableName)
             .select("id")
-            .ilike("name", item.name?.trim());
+            // WEB-BE-048. sanitizeLikeInput here too. The events branch above
+            // has escaped its pattern since WEB-SEO-017 and this branch never
+            // did, so a restaurant, playground or attraction whose name carries
+            // a percent or an underscore turned this check into a wildcard
+            // match - and the check GATES THE INSERT, so a false match silently
+            // drops a real record.
+            .ilike("name", sanitizeLikeInput(item.name?.trim() ?? ""));
           break;
         case "restaurant_openings":
           // For restaurant openings, use exact name match to avoid false duplicates
@@ -1365,12 +1313,18 @@ async function checkForDuplicates(
       const { data: existing, error } = await query.limit(1);
 
       if (error) {
+        // WEB-BE-048. SKIP, do not insert. "On error, still add the item" meant
+        // one PostgREST hiccup re-inserted the whole batch, because this check
+        // is the only thing standing between a re-crawl and a duplicate row.
+        // firecrawl-scraper documents the opposite policy and it is the right
+        // one: a skip costs one cycle of latency and the next scheduled run
+        // re-scrapes the item, while a wrong insert has to be found and cleaned
+        // up by hand.
         console.error(
-          `Error checking duplicate for ${item.title || item.name}:`,
+          `Error checking duplicate for ${item.title || item.name}; skipping rather than risking a duplicate insert:`,
           error
         );
-        // On error, still add the item
-        newItems.push({ ...item, fingerprint });
+        checkErrors++;
       } else if (existing && existing.length > 0) {
         console.log(`⚠️ Database duplicate found: ${item.title || item.name}`);
         duplicates++;
@@ -1378,13 +1332,17 @@ async function checkForDuplicates(
         newItems.push({ ...item, fingerprint });
       }
     } catch (error) {
-      console.error(`Error processing item ${item.title || item.name}:`, error);
-      // On error, still add the item to avoid losing data
-      newItems.push({ ...item, fingerprint });
+      // Same policy as the read failure above: a thrown check is no more
+      // evidence that the item is new than a returned error is.
+      console.error(
+        `Error processing item ${item.title || item.name}; skipping rather than risking a duplicate insert:`,
+        error,
+      );
+      checkErrors++;
     }
   }
 
-  return { newItems, duplicates };
+  return { newItems, duplicates, checkErrors };
 }
 
 // Delegate to the shared imageStorage utility
@@ -1442,6 +1400,26 @@ async function insertData(
         })
       );
 
+      // WEB-BE-050. THIS FUNCTION SET NO COORDINATES AT ALL - `grep latitude`
+      // over this file returned nothing - while firecrawl-scraper set them
+      // from a known-venue match. So whether an event reached the map depended
+      // on which scraper happened to find it, and four nightly backfill jobs
+      // existed to paper over the difference. Resolved per batch rather than
+      // inside the transform below, which is synchronous.
+      //
+      // Only the coordinates are taken. firecrawl also rewrites the venue name,
+      // the address and the location string from a match; widening what this
+      // path overwrites is a separate decision from filling in a null latitude
+      // (WEB-BE-039 is the story about that going wrong).
+      const venueMatches: Array<{ latitude: number | null; longitude: number | null } | null> =
+        category === "events"
+          ? await Promise.all(
+              batchWithIds.map((item) =>
+                findKnownVenue(supabase, item.venue || item.location || ""),
+              ),
+            )
+          : [];
+
       // Transform data for database schema
       const transformedBatch = batchWithIds
         .map((item, idx) => {
@@ -1487,7 +1465,12 @@ async function insertData(
                   item.venue?.substring(0, 100) ||
                   item.location?.substring(0, 100) ||
                   "TBD",
-                category: item.category?.substring(0, 50) || "General",
+                // WEB-BE-049.
+                category: normalizeCategory(item.category),
+                // WEB-BE-050. Spread, so a venue with no usable pair adds
+                // nothing rather than writing nulls over a column a later pass
+                // might fill. Both or neither - see venueCoordinates.
+                ...venueCoordinates(venueMatches[idx] ?? null),
                 price: item.price?.substring(0, 50) || "See website",
                 source_url: item.source_url || "",
                 image_url: resolvedImageUrl || null,
@@ -1677,6 +1660,14 @@ Deno.serve(async (req) => {
         }
       );
     }
+
+    // WEB-BE-043. This function is invoked per URL, so the host IS the source
+    // as far as the ledger is concerned - the same identity firecrawl-scraper
+    // records, so a site crawled by both reconciles.
+    const crawlSource = (() => {
+      try { return new URL(url).hostname; } catch { return url; }
+    })();
+    const emptyCounts: SourceCounts = { fetched: 0, inserted: 0, duplicates: 0, errors: 0 };
 
     // Initialize services
     const supabaseUrl = Deno.env.get("SUPABASE_URL")!;
@@ -1893,10 +1884,18 @@ Deno.serve(async (req) => {
     );
 
     if (filteredItems.length === 0) {
+      // WEB-BE-043. THIS is the path that has to be recorded. "The page had no
+      // events" is what a source looks like the day its markup changes and the
+      // extractor starts returning nothing, and this branch used to answer 200
+      // and leave no trace of it anywhere.
+      const emptyRun = await runJob("ai-crawler", async (ctx) => {
+        ctx.meta({ url, category, sources: { [crawlSource]: emptyCounts } });
+      });
       return new Response(
         JSON.stringify({
           success: true,
           message: `No ${category} found on the website`,
+          runId: emptyRun.runId,
           results: {
             totalFound: 0,
             newItems: 0,
@@ -1920,19 +1919,29 @@ Deno.serve(async (req) => {
       );
     }
 
+    // deno-lint-ignore no-explicit-any
+    let newItems: any[] = [];
+    let duplicates = 0;
+    // WEB-BE-048: items skipped because their duplicate check could not be
+    // completed. Kept apart from `duplicates` and folded into the run's error
+    // count, so a PostgREST outage does not read as a quiet page.
+    let checkErrors = 0;
+    let insertedCount = 0;
+    // deno-lint-ignore no-explicit-any
+    let insertErrors: any[] = [];
+
+    const job = await runJob("ai-crawler", async (ctx) => {
     // Check for duplicates
-    const { newItems, duplicates } = await checkForDuplicates(
+    ({ newItems, duplicates, checkErrors } = await checkForDuplicates(
       supabase,
       category,
       filteredItems
-    );
+    ));
 
     console.log(
-      `📊 Found ${newItems.length} new items, ${duplicates} duplicates`
+      `📊 Found ${newItems.length} new items, ${duplicates} duplicates` +
+      (checkErrors > 0 ? `, ${checkErrors} skipped after a failed duplicate check` : '')
     );
-
-    let insertedCount = 0;
-    let insertErrors: any[] = [];
 
     // Insert new items
     if (newItems.length > 0) {
@@ -1955,15 +1964,51 @@ Deno.serve(async (req) => {
       console.log(`⏭️ No new items to insert for ${category}`);
     }
 
+      ctx.processed(insertedCount);
+      ctx.failed(insertErrors.length + checkErrors);
+      ctx.meta({
+        url,
+        category,
+        sources: {
+          [crawlSource]: {
+            fetched: filteredItems.length,
+            inserted: insertedCount,
+            duplicates,
+            errors: insertErrors.length + checkErrors,
+          },
+        },
+      });
+    });
+
+    // runJob records the failure and returns rather than rethrowing, so the
+    // catch below no longer sees a duplicate-check or insert failure. Without
+    // this the function would answer 200 "Successfully crawled" for a run that
+    // wrote nothing.
+    if (!job.ok) {
+      return new Response(
+        JSON.stringify({
+          error: "crawl failed",
+          details: job.error,
+          runId: job.runId,
+        }),
+        { status: 500, headers: { ...corsHeaders, "Content-Type": "application/json" } },
+      );
+    }
+
     const response_data = {
       success: true,
       message: `Successfully crawled ${url} for ${category}`,
+      runId: job.runId,
+      ...(job.status === "skipped" ? { paused: true } : {}),
       results: {
         totalFound: filteredItems.length,
         newItems: newItems.length,
         duplicates: duplicates,
         inserted: insertedCount,
-        errors: insertErrors.length,
+        errors: insertErrors.length + checkErrors,
+        // Reported separately so an operator can tell "the page had not
+        // changed" from "we could not find out" (WEB-BE-048).
+        skippedAfterCheckError: checkErrors,
       },
       items: filteredItems.slice(0, 5), // Return first 5 items as preview
     };

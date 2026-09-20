@@ -114,3 +114,19 @@ coverage/
 keyword/*
 # SEO-027: wall-clock stamp for the adaptive prerender budget (scripts/build-clock.mjs)
 .build-start
+__pycache__/
+
+# tsc --build leaves these; they are generated, never committed.
+*.tsbuildinfo
+
+# Root clutter that kept coming back (WEB-QUAL-009). Search Console exports,
+# phone screenshots, Word documents, Lighthouse reports, production log dumps
+# and test-run CSVs are outputs, not sources. Keeping them ignored is what
+# stops the next one being committed by a `git add .`.
+*.zip
+*.docx
+IMG_*.PNG
+IMG_*.jpg
+*.report.html
+supabase_logs.json
+test-failures.csv

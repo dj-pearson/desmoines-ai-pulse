@@ -11,19 +11,19 @@ The `generate-writeup` edge function can now **automatically select and generate
 ### Option 1: PowerShell Script (Easiest)
 ```powershell
 cd c:\Users\dpearson\Documents\Des-Moines-Insider\Des-Moines-Insider\desmoines-ai-pulse
-.\generate-random-writeup.ps1
+.\scripts\windows\generate-random-writeup.ps1
 ```
 
 ### Option 2: Batch Generate Multiple (Recommended for Bulk)
 ```powershell
 # Generate 5 random restaurant writeups
-.\batch-generate-writeups.ps1 -Count 5
+.\scripts\windows\batch-generate-writeups.ps1 -Count 5
 
 # Generate 10 with longer delays
-.\batch-generate-writeups.ps1 -Count 10 -DelaySeconds 5
+.\scripts\windows\batch-generate-writeups.ps1 -Count 10 -DelaySeconds 5
 
 # Generate random events instead
-.\batch-generate-writeups.ps1 -Count 3 -Type "event"
+.\scripts\windows\batch-generate-writeups.ps1 -Count 3 -Type "event"
 ```
 
 ### Option 3: Direct cURL Command
@@ -134,7 +134,7 @@ Run the batch script to generate writeups for all restaurants:
 
 ```powershell
 # Generate 50 writeups with 3-second delays
-.\batch-generate-writeups.ps1 -Count 50 -DelaySeconds 3
+.\scripts\windows\batch-generate-writeups.ps1 -Count 50 -DelaySeconds 3
 ```
 
 ---
@@ -160,7 +160,7 @@ $env:SUPABASE_URL = "https://your-project.supabase.co"
 $env:SUPABASE_ANON_KEY = "your-anon-key"
 
 # Then just run:
-.\batch-generate-writeups.ps1 -Count 5
+.\scripts\windows\batch-generate-writeups.ps1 -Count 5
 ```
 
 ```bash
@@ -190,7 +190,7 @@ AND website IS NOT NULL;
 ### Rate Limiting
 **Solution**: Increase delay between requests:
 ```powershell
-.\batch-generate-writeups.ps1 -Count 10 -DelaySeconds 5
+.\scripts\windows\batch-generate-writeups.ps1 -Count 10 -DelaySeconds 5
 ```
 
 ---
@@ -206,8 +206,8 @@ For complete details, see:
 
 ## 🎉 Next Steps
 
-1. **Test it**: Run `.\generate-random-writeup.ps1`
-2. **Batch process**: Generate 10-20 writeups: `.\batch-generate-writeups.ps1 -Count 20`
+1. **Test it**: Run `.\scripts\windows\generate-random-writeup.ps1`
+2. **Batch process**: Generate 10-20 writeups: `.\scripts\windows\batch-generate-writeups.ps1 -Count 20`
 3. **Set up automation**: Schedule daily cron job
 4. **Monitor**: Check writeup quality in admin panel
 5. **Customize**: Modify AI prompts in edge function if needed

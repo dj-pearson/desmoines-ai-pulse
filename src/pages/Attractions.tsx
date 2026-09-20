@@ -11,7 +11,6 @@ import { useUrlFilters } from "@/hooks/useUrlFilters";
 import { ActiveFilterChips } from "@/components/filters/ActiveFilterChips";
 import { getCanonicalUrl } from "@/lib/brandConfig";
 import { useToast } from "@/hooks/use-toast";
-import { useDocumentTitle } from "@/hooks/useDocumentTitle";
 import { BackToTop } from "@/components/BackToTop";
 import { useAnnounce } from "@/hooks/use-announce";
 import {
@@ -78,7 +77,6 @@ export default function Attractions() {
   const navigate = useNavigate();
   const { toast } = useToast();
   const isMobile = useIsMobile();
-  useDocumentTitle("Attractions");
 
   const searchInputRef = useRef<HTMLInputElement>(null);
   const prefetchAttraction = usePrefetchAttraction();
@@ -222,7 +220,7 @@ export default function Attractions() {
     ? `${selectedType} Attractions in Des Moines`
     : "Des Moines Attractions - Museums, Parks & Things to Do";
 
-  const pageDescription = `Discover ${filteredAttractions.length}+ attractions in Des Moines, Iowa. Explore museums, parks, entertainment venues, and cultural destinations. Find visitor information, hours, and directions for the best things to do in Des Moines.`;
+  const pageDescription = `Discover ${filteredAttractions.length}+ attractions in Des Moines, Iowa: museums, parks, entertainment venues and cultural destinations, with hours and directions.`;
 
   const breadcrumbs = [
     { name: "Home", url: "/" },
@@ -633,7 +631,7 @@ export default function Attractions() {
             </p>
 
             <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
-              {paginatedAttractions.map((attraction) => (
+              {paginatedAttractions.map((attraction, index) => (
                 <Link
                   key={attraction.id}
                   to={`/attractions/${createSlug(attraction.name)}`}
@@ -655,6 +653,13 @@ export default function Attractions() {
                         <OptimizedImage
                           src={attraction.image_url}
                           alt={`${attraction.name} - ${attraction.type} in Des Moines`}
+                          // The first row of a three-column grid. Chrome does not start a lazy
+                          // image's fetch until layout has run, so the LCP candidate on a listing
+                          // page must not be lazy (WEB-SEO-032).
+                          // It used to decide whether the card appeared in the
+                          // prerendered HTML at all; WEB-PERF-041 removed that
+                          // gate, so now it only decides the fetch.
+                          priority={index < 3}
                           width={640}
                           height={360}
                           className="transition-transform duration-200 hover:scale-105 object-cover"
@@ -812,7 +817,6 @@ export default function Attractions() {
       {/* Sidebar Ad - Desktop Only */}
       <aside className="hidden lg:block w-[160px] flex-shrink-0" aria-label="Sidebar advertisement">
         <div className="sticky top-24">
-          <AdBanner placement="sidebar" />
         </div>
       </aside>
       </div>

@@ -1,4 +1,5 @@
 import { Link } from 'react-router-dom';
+import { OptimizedImage } from "@/components/OptimizedImage";
 import { createEventSlugWithCentralTime, formatEventPart, formatEventTimeOnly, centralDayStartUtcISO, centralDayOfWeek } from "@/lib/timezone";
 import Header from '@/components/Header';
 import Footer from '@/components/Footer';
@@ -16,6 +17,7 @@ import { Skeleton } from '@/components/ui/skeleton';
 import { Music } from "lucide-react";
 import { Button } from '@/components/ui/button';
 import { EVENT_LIST_COLUMNS } from '@/lib/listColumns';
+import { queryKeys } from '@/lib/queryKeys';
 import { SpriteIcon } from "@/components/ui/SpriteIcon";
 import { ErrorState } from '@/components/ui/error-state';
 
@@ -33,7 +35,10 @@ function useMusicEvents(timeframe: 'tonight' | 'weekend' | 'upcoming') {
   const weekendEnd = centralDayStartUtcISO(daysToFriday + 3);
 
   return useQuery({
-    queryKey: ['music-events', timeframe],
+    // WEB-PERF-032: was the top-level ['music-events', timeframe], OUTSIDE the
+    // events prefix, so no write ever invalidated it and this hub kept serving
+    // rows an admin had already edited.
+    queryKey: queryKeys.events.list({ hub: 'music', timeframe }),
     queryFn: async () => {
       let query = supabase
         .from('events')
@@ -321,7 +326,13 @@ export default function MusicHub() {
                     <Card className="hover:border-primary transition-colors h-full">
                       {venue.image_url && (
                         <div className="h-40 overflow-hidden rounded-t-lg">
-                          <img src={venue.image_url} alt={venue.name} className="w-full h-full object-cover" loading="lazy" />
+                          <OptimizedImage
+                            src={venue.image_url}
+                            alt={venue.name}
+                            className="object-cover"
+                            containerClassName="w-full h-full"
+                            sizes="(max-width: 640px) 100vw, (max-width: 1024px) 50vw, 33vw"
+                          />
                         </div>
                       )}
                       <CardContent className="p-5">

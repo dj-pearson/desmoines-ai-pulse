@@ -62,7 +62,7 @@ Deno.serve(async (req) => {
 
     // Shared content, fetched once.
     const [{ data: evs }, { data: rests }, { data: attrs }] = await Promise.all([
-      supabase.from("events").select("id, title, category, date, city, image_url").gte("date", todayIso).lte("date", in14).is("archived_at", null).order("date", { ascending: true }).limit(60),
+      supabase.from("events").select("id, title, category, date, city, image_url").gte("date", todayIso).lte("date", in14).is("archived_at", null).neq("is_hidden", true).order("date", { ascending: true }).limit(60),
       supabase.from("restaurants").select("id, name, is_sponsored").gte("created_at", since14).order("created_at", { ascending: false }).limit(20),
       supabase.from("attractions").select("id, name, is_sponsored").gte("created_at", since14).order("created_at", { ascending: false }).limit(20),
     ]);

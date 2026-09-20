@@ -7,7 +7,6 @@ import EventCard from "@/components/EventCard";
 import EnhancedLocalSEO from "@/components/EnhancedLocalSEO";
 import { EventListJsonLd } from "@/components/schema/EventListJsonLd";
 import { FAQSection } from "@/components/FAQSection";
-import { useDocumentTitle } from "@/hooks/useDocumentTitle";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
@@ -19,6 +18,7 @@ import { Breadcrumbs } from "@/components/ui/breadcrumbs";
 import { EVENT_LIST_COLUMNS } from "@/lib/listColumns";
 import { formatCount } from "@/lib/pluralize";
 import { SpriteIcon } from "@/components/ui/SpriteIcon";
+import { ErrorState } from "@/components/ui/error-state";
 
 /**
  * WEB-PERF-023. The grid rendered every event in the month, which measured
@@ -63,7 +63,7 @@ export default function MonthlyEventsPage() {
   
   // Fetch the full month once; category filtering + category list are derived
   // in memory to avoid a second full-range query (WEB-PERF-011).
-  const { data: allEvents, isLoading } = useQuery({
+  const { data: allEvents, isLoading, isError, error, refetch } = useQuery({
     queryKey: ["monthly-events", monthYear],
     queryFn: async () => {
       const { data, error } = await supabase
@@ -99,7 +99,6 @@ export default function MonthlyEventsPage() {
     [allEvents]
   );
 
-  useDocumentTitle(isValidDate ? `${format(targetDate, "MMMM yyyy")} Events` : "Monthly Events");
 
   // Check validity AFTER hooks
   if (!isValidDate) {
@@ -316,8 +315,11 @@ export default function MonthlyEventsPage() {
                 count below still read events.length, so no displayed number
                 changes. */}
             <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6 mb-12">
-              {events.slice(0, VISIBLE_EVENTS).map((event) => (
-                <EventCard key={event.id} event={event} onViewDetails={() => {}} />
+              {events.slice(0, VISIBLE_EVENTS).map((event, index) => (
+                // The first row of a three-column grid. Chrome does not start a lazy
+                // image's fetch until layout has run, so the LCP candidate on a listing
+                // page must not be lazy (WEB-SEO-032).
+                <EventCard key={event.id} event={event} onViewDetails={() => {}} priority={index < 3} />
               ))}
             </div>
 
@@ -363,6 +365,11 @@ export default function MonthlyEventsPage() {
               </CardContent>
             </Card>
           </>
+        ) : isError ? (
+          // WEB-QA-031: naming the month in the heading makes the claim
+          // sharper, not softer - a failed fetch would be asserting something
+          // specific about that month.
+          <ErrorState error={error} onRetry={() => void refetch()} />
         ) : (
           <Card className="text-center py-12">
             <CardContent>

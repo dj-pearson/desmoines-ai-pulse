@@ -68,8 +68,11 @@ import { Textarea } from "@/components/ui/textarea";
 import { useDebounce } from "@/hooks/useDebounce";
 import { supabase } from "@/integrations/supabase/client";
 import { handleError } from "@/lib/errorHandler";
+import { createLogger } from "@/lib/logger";
 import { cn } from "@/lib/utils";
 import { toast } from "sonner";
+
+const log = createLogger("EventSubmissionsManager");
 
 interface Submission {
   id: string;
@@ -314,6 +317,59 @@ export default function EventSubmissionsManager() {
     setBusy(true);
     try {
       const { data: user } = await supabase.auth.getUser();
+
+      // WEB-ADS-008: APPROVING PUBLISHES.
+      //
+      // This branch used to set status = 'approved' and stop. The panel below
+      // told the admin to "promote them from the existing /admin/content
+      // workflow", and that workflow has no path for user_submitted_events -
+      // grep across src/ finds this file, its hook and the generated types.
+      // So every human approval since the queue shipped published nothing,
+      // while the organizer got an email saying they had been approved.
+      //
+      // publish_submission (20260920000001) does the insert, maps every
+      // collected field, links the events row back to the submission and the
+      // submitter, and sets status = 'approved' itself - which is why the
+      // patch below only carries the reviewer stamp for this branch. It is
+      // idempotent on submission_id, so re-approving updates the live listing
+      // rather than creating a second one.
+      const published: string[] = [];
+      const failedToPublish: string[] = [];
+      if (next === "approved") {
+        for (const id of ids) {
+          // `as never` until the types are regenerated against a database with
+          // 20260920000001 applied - the house pattern here (see
+          // ModerationQueuePanel, MergeReviewPanel, useCommunityFeatures). Until
+          // the migration IS applied this call returns PGRST202, which lands in
+          // failedToPublish and leaves the submission pending, rather than
+          // marking it approved with nothing published.
+          const { error: publishError } = await supabase.rpc("publish_submission" as never, {
+            p_submission_id: id,
+            p_admin_notes: notes ?? null,
+          } as never);
+          if (publishError) {
+            // Not thrown: one submission missing a date must not abandon the
+            // rest of a bulk approve half-done. Reported below instead, and
+            // an unpublished submission is NOT marked approved.
+            log.error("publish", "publish_submission failed", { id, error: publishError });
+            failedToPublish.push(id);
+          } else {
+            published.push(id);
+          }
+        }
+        if (published.length === 0) {
+          throw new Error(
+            failedToPublish.length === 1
+              ? "The submission could not be published. See the admin log for the reason."
+              : `None of the ${failedToPublish.length} submissions could be published.`,
+          );
+        }
+      }
+
+      // Only the rows that actually published are stamped approved. For every
+      // other status this is still the whole update.
+      const idsToPatch = next === "approved" ? published : ids;
+
       const patch: Record<string, unknown> = {
         status: next,
         admin_reviewed_by: user.user?.id ?? null,
@@ -324,13 +380,13 @@ export default function EventSubmissionsManager() {
       const { error } = await supabase
         .from("user_submitted_events")
         .update(patch as never)
-        .in("id", ids);
+        .in("id", idsToPatch);
       if (error) throw error;
 
       await supabase
         .from("security_audit_logs")
         .insert(
-          ids.map((id) => ({
+          idsToPatch.map((id) => ({
             event_type: "admin_action",
             identifier: user.user?.email ?? "admin",
             severity: "low",
@@ -354,17 +410,27 @@ export default function EventSubmissionsManager() {
       // recipient and the title up from the row itself, deliberately, because
       // it is callable with the anon key (see its header). So there is nothing
       // to pass here that could redirect the mail.
-      const notified = await notifySubmitters(ids, next, notes);
-      if (notified.failed > 0) {
+      const notified = await notifySubmitters(idsToPatch, next, notes);
+      const count = idsToPatch.length;
+      const headline = `${count} submission${count === 1 ? "" : "s"} → ${next}`;
+
+      if (failedToPublish.length > 0) {
+        // Said first and loudest: these are still pending, and an admin who
+        // reads "5 approved" on a bulk action where 2 did not publish will
+        // never come back for them.
+        toast.warning(
+          `${headline} · ${failedToPublish.length} could not be published and ${failedToPublish.length === 1 ? "is" : "are"} still pending`,
+        );
+      } else if (notified.failed > 0) {
         // The status change is already committed, so this is not a failure of
         // the action - but an admin who thinks the organizer was told, when
         // they were not, will not chase it. Say so.
         toast.warning(
-          `${ids.length} submission${ids.length === 1 ? "" : "s"} → ${next}, but ${notified.failed} email${notified.failed === 1 ? "" : "s"} could not be sent`,
+          `${headline}, but ${notified.failed} email${notified.failed === 1 ? "" : "s"} could not be sent`,
         );
       } else {
         toast.success(
-          `${ids.length} submission${ids.length === 1 ? "" : "s"} → ${next}` +
+          headline +
             (notified.sent > 0
               ? ` · ${notified.sent} submitter${notified.sent === 1 ? "" : "s"} emailed`
               : ""),
@@ -784,9 +850,10 @@ export default function EventSubmissionsManager() {
           <AlertDialogHeader>
             <AlertDialogTitle>Approve {selectedIds.length} submission{selectedIds.length === 1 ? "" : "s"}?</AlertDialogTitle>
             <AlertDialogDescription>
-              Sets status to approved and stamps the reviewer. Approved
-              submissions show in the user's dashboard; promote them to
-              live events from the existing /admin/content workflow.
+              Publishes each one to the live events list and emails the
+              organizer. Re-approving a submission that is already live updates
+              that listing rather than creating a second one. A submission
+              missing a title or a date is reported and stays pending.
             </AlertDialogDescription>
           </AlertDialogHeader>
           <AlertDialogFooter>

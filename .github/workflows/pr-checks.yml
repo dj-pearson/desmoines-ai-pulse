@@ -46,8 +46,13 @@ jobs:
       - name: Run ESLint
         run: npm run lint
 
-      - name: Run TypeScript type check
-        run: npm run type-check
+      # `npm run type-check` is NOT run here. It used to be, and it used to be
+      # `tsc --noEmit` against a root tsconfig that is `"files": []` plus
+      # project references - so it compiled zero files and exited 0 on
+      # anything, including the two P1 crashes WEB-CI-023 lists. It now runs
+      # the app-project ratchet (WEB-CI-030 AC2), which the `app-type-ratchet`
+      # job below already runs IN PARALLEL with this one. Calling it here too
+      # would just add 2m45s to the critical path for the same answer.
 
       # scripts/ was in NO tsconfig, so the type-checker never read a line of it:
       # `npm run type-check` exited 0 on a script containing
@@ -94,6 +99,54 @@ jobs:
       # load, in the one directory npm run check-imports does not cover.
       - name: Edge functions gained no type errors
         run: npm run check-edge-types
+
+      # supabase-js version pins (WEB-CI-030 AC6). _shared/securityLayers.ts
+      # imported the floating `@2` while create-campaign-checkout - which hands
+      # it a client - pinned `@2.45.0`. esm.sh resolves `@2` to the latest 2.x
+      # at fetch time and SupabaseClient's generics differ in arity between
+      # minors, so `deno check` on that function passed or failed according to
+      # what the module cache happened to hold. Both rules are in the script
+      # header, including why it does not fail on an untyped boundary.
+      - name: supabase-js pins agree across the edge boundary
+        run: npm run check-edge-pins
+
+      # WEB-BE-041. restaurant-opening-scraper hardcoded the retired model
+      # claude-3-5-sonnet-20241022 against api.anthropic.com, bypassing
+      # _shared/aiConfig.ts - so every run 404'd and still reported success.
+      # Ratchets the remaining hardcoded ids (they can only shrink) and fails
+      # outright on a retired default inside aiConfig itself, which would break
+      # every caller at once.
+      - name: No edge function hardcodes a Claude model id
+        run: npm run check-edge-models
+
+      # WEB-BE-039. Nothing here could check a migration without a database, so
+      # a syntax error looked exactly like a correct file until someone ran it -
+      # and then failed quietly, because the ledger takes its row while the
+      # transaction rolls back and the objects never appear. Its first run found
+      # 20251203000004_add_location_tracking.sql, dead since December and
+      # already sitting in the drift baseline with no explanation. Uses
+      # libpg_query, the actual Postgres parser, so "parses" means what the
+      # server means.
+      - name: Every migration parses
+        run: npm run check-migrations-parse
+
+      # WEB-ADS-007. placementSpecs defined five placements and /advertise
+      # renders every one as purchasable; the placement_type enum had four. So
+      # Sidebar Skyscraper was on sale, and buying it created the campaigns row
+      # and then failed the campaign_placements insert - an error for the
+      # advertiser and an orphan draft in the database. Nothing compared the two
+      # lists, because each file is internally consistent and they only meet at
+      # an INSERT.
+      - name: Purchasable placements exist in the DB enum
+        run: npm run check-placement-enum
+
+      # WEB-CI-028. playwright.config.ts has testDir './tests', so locally
+      # everything runs and a spec looks wired up - but no workflow uses that
+      # config. The lanes name their specs in e2e.yml or in a testMatch, so a
+      # spec nobody adds to one is written, committed, and never executed again.
+      # The story says four were orphaned; there were nine. Ratchets the list.
+      - name: Every Playwright spec is run by some lane
+        run: npm run check-e2e-lanes
 
       # The offline suites for the edge/script helpers that have no other
       # coverage: the venue-image reclaim, the /media route, the image_url
@@ -168,6 +221,17 @@ jobs:
       # retries either: the false empty state stood until a page reload.
       - name: A failed fetch is not an empty state
         run: npm run check-false-empty-state
+
+      # WEB-PERF-039. A PostgrestBuilder is a THENABLE, not a promise: it
+      # sends no HTTP request until something calls .then() on it. So
+      # `void supabase.from("web_vitals").insert(row);` evaluates the builder
+      # and throws it away - no request, no error, no log. That line shipped,
+      # and the RUM table had never received a single row; the admin panel's
+      # "No web-vitals rollup yet" was read as low traffic for months. It is
+      # invisible in review because `void` is exactly how you say "fire and
+      # forget" for a real promise.
+      - name: No supabase query builder is dropped unsubscribed
+        run: npm run check-supabase-await
 
       # WEB-PERF-040. OptimizedImage has supported `priority` since it was
       # written and no caller passed it, and SocialEventCard - which renders
@@ -422,26 +486,43 @@ jobs:
       - name: CSP inline-script hashes
         run: node scripts/check-csp-hashes.mjs
 
-  # WEB-CI-023. `npm run type-check` above runs `tsc --noEmit` against the root
-  # tsconfig, which is `"files": []` plus project references — so it compiles
-  # ZERO files and has always exited 0. Two P1 crashes shipped straight through
-  # it in one week: /stay called getCanonicalUrl with no import (TS2304), and
-  # useSocialFeatures returned a bare `loading` after an unused-var autofix
-  # renamed the binding (TS2552). Both are one-line errors that
-  # `tsc -p tsconfig.app.json` reports.
+  # WEB-CI-023. THIS JOB IS THE ONLY THING TYPE-CHECKING src/ IN CI. The
+  # validate job above deliberately does not run `npm run type-check` (see the
+  # comment at its top), so deleting this job returns src/ to what it was:
+  # unchecked. `tsc --noEmit` against the root tsconfig - `"files": []` plus
+  # project references - compiles ZERO files and exits 0 on anything, and two
+  # P1 crashes shipped straight through it in one week: /stay called
+  # getCanonicalUrl with no import (TS2304), and useSocialFeatures returned a
+  # bare `loading` after an unused-var autofix renamed the binding (TS2552).
+  # src/lib/__tests__/typeCheckScript.test.ts asserts this job still exists.
   #
-  # It cannot gate on zero: the app project has 400 pre-existing errors, mostly
+  # It cannot gate on zero: the app project has 139 pre-existing errors, mostly
   # PostgREST generic-instantiation noise. So it ratchets per-file, exactly like
-  # the strict one — a file that gets worse, or a new file that starts erroring,
+  # the strict one - a file that gets worse, or a new file that starts erroring,
   # fails the build.
   #
-  # Its own job rather than a step in `validate`: tsc over this project takes
-  # several minutes (the generated Supabase types provoke a lot of TS2589), and
-  # it must not sit in front of the build. Deliberately NOT in `npm run
-  # validate` for the same reason — local validate has to stay usable.
+  # Its own job rather than a step in `validate`: at 2m45s it must not sit in
+  # front of the build, and the validate job's steps answer in seconds.
+  #
+  # IT COST 21m12s AT ~5.2GB RSS UNTIL 2026-09-19, and that is why WEB-CI-031
+  # was filed and why a duplicate nightly workflow existed. The cause was not
+  # the generated types in general: it was `supabase.from('<relation the
+  # generated Database type does not have>')`, where no overload matches and
+  # every chained call is re-instantiated over a 270-member SelectQueryError
+  # union. Rewriting those 106 call sites to the untyped helper took the run to
+  # 2m45s at 1.4GB, cold, and the error count from 361 to 139.
+  # scripts/check-unknown-tables.mjs holds the measurement and keeps it from
+  # coming back.
+  #
+  # The nightly .github/workflows/type-check-app.yml was deleted in the same
+  # change: it existed only because this was thought to be too slow for the PR
+  # path, and it was a second copy of this job.
   app-type-ratchet:
     name: App project type ratchet
     runs-on: ubuntu-latest
+    # A timeout, because a killed run and a clean pass look identical in the
+    # Actions list until somebody opens it.
+    timeout-minutes: 20
     steps:
       - uses: actions/checkout@v4
       - uses: actions/setup-node@v4
@@ -529,6 +610,17 @@ jobs:
       # check-schema-usage, and 42703s at runtime. Offline; same snapshot as above.
       - name: Generated types claim nothing production lacks
         run: node scripts/check-types-drift.mjs
+
+      # WEB-UX-034: CLAUDE.md mandates `npx impeccable detect` and nothing ran
+      # it, so 48 UI anti-patterns had accumulated - a thick coloured
+      # border-left on a card, purple gradients, gradient text. A ratchet
+      # rather than a gate, because not every finding is a defect (see the
+      # story's AC2): a file may lose findings freely and may not gain one.
+      # Needs network - the detector comes from npx - and SKIPS rather than
+      # fails when it cannot be fetched, so a registry blip does not turn a
+      # PR red for a reason unrelated to the change.
+      - name: UI anti-patterns do not increase
+        run: npm run check-ui-craft
 
       # WEB-FEAT-029: annual landing pages hold their dates in code, and code
       # does not notice a year passing. IowaStateFairPage shipped a fair two

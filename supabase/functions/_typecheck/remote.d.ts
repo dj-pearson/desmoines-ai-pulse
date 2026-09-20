@@ -51,6 +51,7 @@ export const Webhook: any;
 export const assert: (expr: unknown, msg?: string) => asserts expr;
 export const assertFalse: any;
 export const assertThrows: any;
+export const assertRejects: any;
 export const assertEquals: any;
 export const assertStringIncludes: any;
 export const init: any;

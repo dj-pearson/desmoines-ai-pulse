@@ -26,12 +26,18 @@ import { Badge } from "@/components/ui/badge";
 import { Alert, AlertDescription } from "@/components/ui/alert";
 import { CheckCircle, XCircle, AlertTriangle, Clock } from "lucide-react";
 import { SpriteIcon } from "@/components/ui/SpriteIcon";
+import { ErrorState } from "@/components/ui/error-state";
 
 export default function Profile() {
   const { profile, updateProfile, isLoading } = useProfile();
   useDocumentTitle("Profile Settings");
   const { friends, friendGroups } = useSocialFeatures();
-  const { data: submittedEvents } = useUserSubmittedEvents();
+  const {
+    data: submittedEvents,
+    isError: submittedEventsError,
+    error: submittedEventsErrorValue,
+    refetch: refetchSubmittedEvents,
+  } = useUserSubmittedEvents();
   const { userLevel, userXP, badges } = useGamification();
   const { toast } = useToast();
   const [activeTab, setActiveTab] = useTabState("overview");
@@ -358,6 +364,14 @@ export default function Profile() {
                       </div>
                     ))}
                   </div>
+                ) : submittedEventsError ? (
+                  // WEB-QA-031: same false empty state as the dashboard's, on
+                  // the same query.
+                  <ErrorState
+                    error={submittedEventsErrorValue}
+                    compact
+                    onRetry={() => void refetchSubmittedEvents()}
+                  />
                 ) : (
                   <div className="text-center py-8">
                     <SpriteIcon name="calendar" className="h-12 w-12 text-muted-foreground mx-auto mb-4" />

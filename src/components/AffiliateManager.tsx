@@ -19,6 +19,35 @@ import { supabase } from "@/integrations/supabase/client";
 import { toast } from "sonner";
 import { createLogger } from '@/lib/logger';
 
+/**
+ * Writes one URL column on one content table.
+ *
+ * A switch rather than `.from(table).update({ [column]: url })`: which columns
+ * exist differs per table (`events` has source_url and no website, `attractions`
+ * the reverse), and TypeScript cannot correlate the table with the column when
+ * both come out of the same config object. Each branch below is checked against
+ * the real table.
+ */
+async function updateUrlColumn(
+  table: 'events' | 'restaurants' | 'attractions' | 'restaurant_openings',
+  column: 'source_url' | 'website',
+  id: string,
+  url: string,
+) {
+  switch (table) {
+    case 'events':
+      return supabase.from('events').update({ source_url: url }).eq('id', id);
+    case 'restaurant_openings':
+      return supabase.from('restaurant_openings').update({ source_url: url }).eq('id', id);
+    case 'attractions':
+      return supabase.from('attractions').update({ website: url }).eq('id', id);
+    case 'restaurants':
+      return column === 'website'
+        ? supabase.from('restaurants').update({ website: url }).eq('id', id)
+        : supabase.from('restaurants').update({ source_url: url }).eq('id', id);
+  }
+}
+
 const log = createLogger('AffiliateManager');
 
 interface UniqueURL {
@@ -58,11 +87,17 @@ export default function AffiliateManager() {
 
       // Define tables and their URL columns
       const tableConfigs = [
-        { table: 'events' as const, urlColumns: ['source_url'] },
-        { table: 'restaurants' as const, urlColumns: ['source_url', 'website'] },
-        { table: 'attractions' as const, urlColumns: ['website'] },
-        { table: 'playgrounds' as const, urlColumns: ['source_url', 'website'] },
-        { table: 'restaurant_openings' as const, urlColumns: ['source_url', 'website'] }
+        // COLUMNS CORRECTED AGAINST THE GENERATED TYPES 2026-09-19. This list
+        // claimed source_url and website on `playgrounds`, which has NEITHER,
+        // and website on `restaurant_openings`, which does not have it. Those
+        // selects returned 42703 and the updates would have too; the affiliate
+        // scan silently skipped the tables it thought it was covering.
+        // check-schema-usage missed them because the column name reaches
+        // .select() through a variable rather than as a literal.
+        { table: 'events' as const, urlColumns: ['source_url'] as const },
+        { table: 'restaurants' as const, urlColumns: ['source_url', 'website'] as const },
+        { table: 'attractions' as const, urlColumns: ['website'] as const },
+        { table: 'restaurant_openings' as const, urlColumns: ['source_url'] as const }
       ];
 
       for (const config of tableConfigs) {
@@ -179,11 +214,17 @@ export default function AffiliateManager() {
 
       // Define tables and their URL columns
       const tableConfigs = [
-        { table: 'events' as const, urlColumns: ['source_url'] },
-        { table: 'restaurants' as const, urlColumns: ['source_url', 'website'] },
-        { table: 'attractions' as const, urlColumns: ['website'] },
-        { table: 'playgrounds' as const, urlColumns: ['source_url', 'website'] },
-        { table: 'restaurant_openings' as const, urlColumns: ['source_url', 'website'] }
+        // COLUMNS CORRECTED AGAINST THE GENERATED TYPES 2026-09-19. This list
+        // claimed source_url and website on `playgrounds`, which has NEITHER,
+        // and website on `restaurant_openings`, which does not have it. Those
+        // selects returned 42703 and the updates would have too; the affiliate
+        // scan silently skipped the tables it thought it was covering.
+        // check-schema-usage missed them because the column name reaches
+        // .select() through a variable rather than as a literal.
+        { table: 'events' as const, urlColumns: ['source_url'] as const },
+        { table: 'restaurants' as const, urlColumns: ['source_url', 'website'] as const },
+        { table: 'attractions' as const, urlColumns: ['website'] as const },
+        { table: 'restaurant_openings' as const, urlColumns: ['source_url'] as const }
       ];
 
       for (const config of tableConfigs) {
@@ -212,12 +253,19 @@ export default function AffiliateManager() {
             for (const record of recordsToUpdate) {
               const originalUrl = record[column];
               const urlWithUtm = appendUtmToUrl(originalUrl, utmParameters);
-              const updateData = { [column]: urlWithUtm };
-              
-              const { error: updateError } = await supabase
-                .from(config.table)
-                .update(updateData)
-                .eq('id', (record as any).id);
+              // WRITTEN AS A SWITCH RATHER THAN A COMPUTED KEY. `{ [column]: v }`
+              // types as `{ [x: string]: string }`, an index signature saying
+              // "this may carry any column at all", which supabase-js 2.85+
+              // rejects on an update - correctly, since a key the table does
+              // not have comes back PGRST204 and the write is silently lost.
+              // A switch is the only form TypeScript can check here, because
+              // it cannot correlate config.table with config.urlColumns.
+              const { error: updateError } = await updateUrlColumn(
+                config.table,
+                column,
+                (record as any).id,
+                urlWithUtm,
+              );
 
               if (updateError) {
                 log.error('processUtm', `Error updating ${config.table}.${column}`, { data: updateError });

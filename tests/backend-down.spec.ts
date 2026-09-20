@@ -37,13 +37,37 @@ const STATES_ABSENCE = [
   'No upcoming concerts found',
   'No upcoming events listed for this venue',
   'No Events Scheduled for Today',
+  // WEB-QA-031, the second batch of pages.
+  'No breweries found',
+  'No Weekend Events Found',
+  'No events are scheduled for this weekend',
+  'No Events Found for',
+  'No events are currently scheduled for this month',
+  'No updates yet',
+  'No trails match the selected filters',
 ];
 
 /** Any of these means the page owned up to the failure. */
 const ADMITS_FAILURE =
   /went wrong|couldn'?t load|could not load|you'?re offline|try again|retry|temporarily unavailable/i;
 
-const ROUTES = ['/', '/music', '/sports', '/events', '/restaurants', '/attractions', '/playgrounds'];
+const ROUTES = [
+  '/',
+  '/music',
+  '/sports',
+  '/events',
+  '/restaurants',
+  '/attractions',
+  '/playgrounds',
+  // WEB-QA-031. Reader-facing and reachable without an account, so the same
+  // runtime assertion applies. The signed-in pages this story also fixed
+  // (dashboard, profile, trips, billing) are out of scope here rather than
+  // untested - they need a session, which this lane does not have.
+  '/breweries',
+  '/events/this-weekend',
+  '/whats-new',
+  '/outdoors',
+];
 
 for (const route of ROUTES) {
   test(`${route} admits a backend failure instead of claiming emptiness`, async ({ page }) => {

@@ -8,7 +8,16 @@
  * Layer 4: Database RLS (automatic via Supabase)
  */
 
-import { createClient, SupabaseClient, User } from 'https://esm.sh/@supabase/supabase-js@2';
+// WEB-CI-030 AC6. PINNED, and it has to stay pinned to what its callers pin.
+// This read `@2`, while create-campaign-checkout - the function that passes its
+// client to securityMiddleware - pins `@2.45.0`. esm.sh serves `@2` as whatever
+// the latest 2.x is at resolution time, and SupabaseClient's generic parameters
+// differ in arity between 2.x minors, so the two specifiers can produce two
+// incompatible SupabaseClient types from one dependency. `deno check` on a
+// given function then passes or fails depending on what the module cache
+// resolved and when - a failure that reproduces on one machine and not the
+// next. scripts/check-edge-pins.mjs holds the line.
+import { createClient, SupabaseClient, User } from 'https://esm.sh/@supabase/supabase-js@2.45.0';
 
 // =============================================================================
 // TYPES

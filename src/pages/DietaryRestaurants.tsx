@@ -15,7 +15,6 @@ import { Card, CardContent } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import { Leaf, Wheat, Beef, FilterX } from "lucide-react";
 import { getCanonicalUrl } from "@/lib/brandConfig";
-import { useDocumentTitle } from "@/hooks/useDocumentTitle";
 import { Breadcrumbs } from "@/components/ui/breadcrumbs";
 import { RESTAURANT_LIST_COLUMNS } from "@/lib/listColumns";
 import { useReloadableFetch } from "@/hooks/useReloadableFetch";
@@ -59,7 +58,6 @@ export default function DietaryRestaurants() {
   const [isLoading, setIsLoading] = useState(true);
   const { error: loadError, setError: setLoadError, reloadKey, retry } = useReloadableFetch();
   const [selectedDiet, setSelectedDiet] = useState<string>(searchParams.get("diet") || "");
-  useDocumentTitle("Dietary-Friendly Restaurants");
 
   useEffect(() => {
     const fetchRestaurants = async () => {
@@ -125,13 +123,17 @@ export default function DietaryRestaurants() {
   };
 
   const selectedOption = dietaryOptions.find(d => d.id === selectedDiet);
+  // Both arms are under 60 with the longest label ("Dairy-Free", 10 chars):
+  // 10 + 39 = 49. The untitled arm was 72 and only looked fine because
+  // useDocumentTitle("Dietary-Friendly Restaurants") raced it and usually won
+  // (WEB-SEO-045).
   const pageTitle = selectedDiet
-    ? `${selectedOption?.label} Restaurants in Des Moines - Dietary Options | Des Moines Insider`
-    : "Dietary Restriction Friendly Restaurants Des Moines | Des Moines Insider";
+    ? `${selectedOption?.label} Restaurants in Des Moines | Des Moines Insider`
+    : "Dietary-Friendly Restaurants | Des Moines Insider";
 
   const pageDescription = selectedDiet
-    ? `Find ${restaurants.length}+ ${selectedOption?.label.toLowerCase()} restaurants in Des Moines. Verified ${selectedOption?.label} menu options, dedicated kitchens, and dietary-conscious dining. Updated daily with new ${selectedOption?.label} friendly venues.`
-    : `Discover dietary-friendly restaurants in Des Moines. Vegan, vegetarian, gluten-free, keto, halal, and kosher options. Over 100 restaurants accommodate special diets with verified menu items and preparation methods.`;
+    ? `Find ${restaurants.length}+ ${selectedOption?.label.toLowerCase()} restaurants in Des Moines, with verified menu options and dedicated kitchens. Updated daily.`
+    : `Dietary-friendly restaurants in Des Moines: vegan, vegetarian, gluten-free, keto, halal and kosher options, with verified menu items.`;
 
   const breadcrumbs = [
     { name: "Restaurants", url: "/restaurants" },

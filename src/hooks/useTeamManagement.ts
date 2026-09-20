@@ -17,6 +17,10 @@ export interface TeamMember {
 export function useTeamManagement(campaignOwnerId?: string) {
   const [teamMembers, setTeamMembers] = useState<TeamMember[]>([]);
   const [isLoading, setIsLoading] = useState(false);
+  // WEB-QA-031: the fetch toasted and left teamMembers as [], so the page
+  // rendered "No team members yet" to someone who may well have several. A
+  // toast is gone in five seconds; the empty state is what stays on screen.
+  const [error, setError] = useState<unknown>(null);
   const { toast } = useToast();
 
   useEffect(() => {
@@ -31,6 +35,7 @@ export function useTeamManagement(campaignOwnerId?: string) {
 
     try {
       setIsLoading(true);
+      setError(null);
       const { data, error } = await supabase
         .from("campaign_team_members")
         .select("*")
@@ -41,6 +46,7 @@ export function useTeamManagement(campaignOwnerId?: string) {
 
       setTeamMembers((data as TeamMember[]) || []);
     } catch (err) {
+      setError(err);
       console.error("Error fetching team members:", err);
       toast({
         variant: "destructive",
@@ -270,6 +276,7 @@ export function useTeamManagement(campaignOwnerId?: string) {
   return {
     teamMembers,
     isLoading,
+    error,
     inviteTeamMember,
     resendInvitation,
     updateMemberRole,

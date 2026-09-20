@@ -1,0 +1,21 @@
+{
+  "_comment": "Modules under supabase/functions/_shared/ that import @supabase/supabase-js without an exact version (WEB-CI-030 AC6). This list must only ever SHRINK. See scripts/check-edge-pins.mjs.",
+  "generated": "2026-09-18",
+  "floating": [
+    "supabase/functions/_shared/agentApprovals.ts",
+    "supabase/functions/_shared/agentConfig.ts",
+    "supabase/functions/_shared/agentRun.ts",
+    "supabase/functions/_shared/agentRuntime.ts",
+    "supabase/functions/_shared/agentTasks.ts",
+    "supabase/functions/_shared/agents/types.ts",
+    "supabase/functions/_shared/aiConfig.ts",
+    "supabase/functions/_shared/billingExecutors.ts",
+    "supabase/functions/_shared/instrument.ts",
+    "supabase/functions/_shared/jobRunner.ts",
+    "supabase/functions/_shared/kbRetrieve.ts",
+    "supabase/functions/_shared/nurtureCoordination.ts",
+    "supabase/functions/_shared/outreachExecutors.ts",
+    "supabase/functions/_shared/rateLimit.ts",
+    "supabase/functions/_shared/sendNurtureEmail.ts"
+  ]
+}

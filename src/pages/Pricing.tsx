@@ -140,7 +140,7 @@ const faqs = [
   },
   {
     question: "Is there a free trial?",
-    answer: "New Insider and VIP members get a 7-day free trial. We email you before it ends, stating the exact amount and the date of the first charge. If you don't cancel before the trial ends, your card will be charged the plan price shown at checkout and will auto-renew at the same price each period. Cancel any time during the trial from Account › Subscription and you won't be charged.",
+    answer: "First-time Insider and VIP subscribers get a 7-day free trial; if you have had one before, on any plan or platform, billing starts immediately. We email you before it ends, stating the exact amount and the date of the first charge. If you don't cancel before the trial ends, your card will be charged the plan price shown at checkout and will auto-renew at the same price each period. Cancel any time during the trial from Account › Subscription and you won't be charged.",
   },
   {
     question: "What payment methods do you accept?",
@@ -272,7 +272,7 @@ export default function Pricing() {
           with no title and no description, on the one page whose whole job is
           conversion. */}
       <SEOHead
-        title="Pricing - Des Moines Insider | Unlock Premium Local Experiences"
+        title="Pricing - Premium Local Experiences | Des Moines Insider"
         description="Choose your Des Moines Insider membership. Get early event access, unlimited favorites, personalized recommendations, and exclusive VIP perks."
         keywords={["Des Moines membership", "local events subscription", "VIP experiences Iowa"]}
         url={getCanonicalUrl("/pricing")}
@@ -353,8 +353,11 @@ export default function Pricing() {
                     the same price shown above, until you cancel.
                   </li>
                   <li>
-                    The 7-day free trial converts to a paid subscription at the
-                    displayed price if you don&apos;t cancel before it ends.
+                    The 7-day free trial is for first-time subscribers only. If
+                    you have had a trial before — on any plan or platform —
+                    billing starts immediately. When you do get the trial, it
+                    converts to a paid subscription at the displayed price
+                    unless you cancel before it ends.
                   </li>
                   <li>
                     You can cancel online any time from{" "}

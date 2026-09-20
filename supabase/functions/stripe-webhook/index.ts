@@ -14,7 +14,13 @@ import Stripe from "https://esm.sh/stripe@14.21.0";
 import { createClient } from "https://esm.sh/@supabase/supabase-js@2.45.0";
 import { listAdminUserIds } from "../_shared/apiKeyAuth.ts";
 import { sendNurtureEmail } from "../_shared/sendNurtureEmail.ts";
+import { sendCampaignEmail } from "../_shared/campaignNotificationEmail.ts";
 import { buildTrialNotice, planAmount } from "../_shared/trialNotice.ts";
+import {
+  subscriptionUpdatePatch,
+  webSubscriptionRow,
+  type StripeSubscriptionLike,
+} from "../_shared/stripeSubscriptionRow.ts";
 
 // Stripe webhooks are server-to-server and do not require CORS headers.
 // Removing Access-Control-Allow-Origin prevents browser-based spoofing.
@@ -123,6 +129,18 @@ serve(async (req) => {
         break;
       }
 
+      // WEB-ADS-011 AC4. Without this, an abandoned checkout leaves the
+      // campaign at pending_payment FOREVER: admin lists count it as awaiting
+      // money that is never coming, and the row carries a session id that can
+      // no longer be paid. create-campaign-checkout sets expires_at to 30
+      // minutes (index.ts:327), so Stripe fires this once, half an hour after
+      // the advertiser walked away.
+      case "checkout.session.expired": {
+        const session = event.data.object as Stripe.Checkout.Session;
+        await handleCheckoutSessionExpired(supabase, session);
+        break;
+      }
+
       case "customer.subscription.created": {
         const subscription = event.data.object as Stripe.Subscription;
         await handleSubscriptionCreated(supabase, subscription);
@@ -217,6 +235,91 @@ async function handleCheckoutSessionCompleted(
 }
 
 /**
+ * An abandoned campaign checkout (WEB-ADS-011 AC4).
+ *
+ * Returns the campaign to `draft` so the advertiser can start again, and tells
+ * them once. Subscription checkouts are left alone: nothing is reserved for
+ * them, and create-subscription-checkout owns that flow.
+ *
+ * TWO CONDITIONS ON THE UPDATE, AND BOTH MATTER.
+ *   stripe_session_id  scopes the revert to THIS session. That is not
+ *                      hypothetical: create-campaign-checkout accepts a
+ *                      campaign in `draft` OR `pending_payment` (index.ts:149),
+ *                      so an advertiser who retries overwrites the id, and the
+ *                      first session's expiry must then match nothing rather
+ *                      than drag a live checkout back to draft.
+ *   status             a campaign that has since been paid, cancelled or
+ *                      rejected must not be dragged back to draft by a late
+ *                      webhook. Stripe can deliver out of order.
+ *
+ * The notification is BEST EFFORT and is not allowed to throw. Its type lives in
+ * a CHECK constraint widened by 20260920000000; if that migration has not been
+ * applied, the insert fails and the advertiser is not told - but the status
+ * revert, which is the part that unsticks them, still happened, and Stripe is
+ * not made to retry an event that was processed.
+ */
+async function handleCheckoutSessionExpired(
+  supabase: ReturnType<typeof createClient>,
+  session: Stripe.Checkout.Session
+) {
+  const campaignId = (session.metadata || {}).campaignId;
+  if (!campaignId) {
+    console.log(`Checkout session ${session.id} expired with no campaignId - nothing to revert.`);
+    return;
+  }
+
+  console.log(`Processing expired campaign checkout: ${campaignId} (session ${session.id})`);
+
+  const { data: reverted, error } = await supabase
+    .from("campaigns")
+    .update({ status: "draft", stripe_session_id: null })
+    .eq("id", campaignId)
+    .eq("stripe_session_id", session.id)
+    .eq("status", "pending_payment")
+    .select("id, name, user_id");
+
+  // THROW, unlike the notification below. A failed revert is the whole job of
+  // this handler, and a non-2xx makes Stripe redeliver - which is what we want,
+  // because the alternative is a campaign stuck at pending_payment forever.
+  if (error) {
+    console.error(`Failed to revert campaign ${campaignId} after checkout expiry: ${error.message}`);
+    throw error;
+  }
+
+  const campaign = reverted?.[0];
+  if (!campaign) {
+    // Already paid, already cancelled, or a newer checkout owns the row.
+    console.log(`Campaign ${campaignId} was not pending_payment for session ${session.id} - left as is.`);
+    return;
+  }
+
+  if (!campaign.user_id) {
+    console.log(`Campaign ${campaignId} reverted to draft; no user_id to notify.`);
+    return;
+  }
+
+  const { error: notifyError } = await supabase.from("campaign_notifications").insert({
+    campaign_id: campaignId,
+    recipient_user_id: campaign.user_id,
+    notification_type: "checkout_expired",
+    title: `Checkout expired: ${campaign.name || "Campaign"}`,
+    message:
+      `Your checkout for "${campaign.name || "your campaign"}" expired before payment completed, so the ` +
+      `campaign is back in drafts. Nothing was charged. Open it to pick your dates and check out again.`,
+    is_read: false,
+    metadata: { stripe_session_id: session.id },
+  });
+
+  if (notifyError) {
+    console.error(
+      `Campaign ${campaignId} was reverted to draft but the advertiser was NOT notified: ${notifyError.message}`,
+    );
+  }
+
+  console.log(`Campaign ${campaignId} returned to draft after checkout expiry.`);
+}
+
+/**
  * Handle campaign payment completion
  */
 async function handleCampaignPayment(
@@ -291,17 +394,73 @@ async function handleCampaignPayment(
     console.error("Failed to log campaign payment:", paymentError);
   }
 
-  // Send payment confirmation notification to the advertiser
+  // Send payment confirmation to the advertiser: the stored notification AND an
+  // email.
+  //
+  // WEB-ADS-005: only the row was written, so the advertiser's confirmation was
+  // an in-app bell they had to come back and look at, while AdvertiseSuccess.tsx
+  // told them "A confirmation email has been sent". The obvious route -
+  // invoking send-campaign-notification - does not work from here: that endpoint
+  // requires a user bearer token (decision.ts, WEB-ADS-013) and Stripe is not a
+  // user. So the renderer and the provider call were extracted to
+  // _shared/campaignNotificationEmail.ts and both callers use them.
   if (campaign?.user_id) {
+    const title = `Payment Confirmed: ${campaign.name || 'Campaign'}`;
+    const message =
+      `Payment of $${amountPaid.toFixed(2)} has been received for your campaign ` +
+      `"${campaign.name}". You can now upload your ad creatives.`;
+
+    // Resolved here rather than left null so the row records who was mailed.
+    // A failure is logged, not thrown - see below.
+    const { data: recipient, error: recipientError } = await supabase.auth.admin
+      .getUserById(campaign.user_id);
+    if (recipientError) {
+      console.error(
+        `Could not resolve the advertiser's email for campaign ${campaignId}: ${recipientError.message}`,
+      );
+    }
+    const recipientEmail = recipient?.user?.email ?? null;
+
     await supabase.from("campaign_notifications").insert({
       campaign_id: campaignId,
       recipient_user_id: campaign.user_id,
+      recipient_email: recipientEmail,
       notification_type: "payment_received",
-      title: `Payment Confirmed: ${campaign.name || 'Campaign'}`,
-      message: `Payment of $${amountPaid.toFixed(2)} has been received for your campaign "${campaign.name}". You can now upload your ad creatives.`,
+      title,
+      message,
       is_read: false,
       metadata: { amount: amountPaid },
     });
+
+    // NOT thrown on, deliberately. The payment is taken and the campaign row is
+    // already advanced to pending_creative; a mail outage must not return non-2xx
+    // and have Stripe redeliver an event whose real work is done. Stripe's own
+    // receipt (create-campaign-checkout sets receipt_email) is the second path
+    // to the same inbox, so a failure here is not silence.
+    if (recipientEmail) {
+      const sent = await sendCampaignEmail({
+        to: recipientEmail,
+        content: {
+          title,
+          message,
+          campaignName: campaign.name || "Campaign",
+          campaignId,
+          notificationType: "payment_received",
+          siteUrl: Deno.env.get("VITE_SITE_URL") || "https://desmoinesinsider.com",
+        },
+        resendApiKey: Deno.env.get("RESEND_API_KEY") ?? undefined,
+        sendgridApiKey: Deno.env.get("SENDGRID_API_KEY") ?? undefined,
+        fromEmail: Deno.env.get("NOTIFICATION_FROM_EMAIL") || "noreply@desmoinesinsider.com",
+      });
+      if (!sent) {
+        console.error(`Payment confirmation email was not accepted for campaign ${campaignId}.`);
+      }
+    } else {
+      console.error(
+        `Campaign ${campaignId} paid but the advertiser has no email address on file - ` +
+          `no confirmation sent.`,
+      );
+    }
   }
 
   // Notify admins about the new paid campaign.
@@ -366,27 +525,18 @@ async function handleSubscriptionPayment(
     throw existingSubscriptionError;
   }
 
-  const subscriptionData = {
-    user_id: userId,
-    plan_id: planId,
-    status: mapStripeStatus(subscription.status),
-    stripe_subscription_id: subscriptionId,
-    stripe_customer_id: session.customer as string,
-    platform: "web",
-    current_period_start: new Date(subscription.current_period_start * 1000).toISOString(),
-    current_period_end: new Date(subscription.current_period_end * 1000).toISOString(),
-    cancel_at_period_end: subscription.cancel_at_period_end,
-    trial_start: subscription.trial_start
-      ? new Date(subscription.trial_start * 1000).toISOString()
-      : null,
-    trial_end: subscription.trial_end
-      ? new Date(subscription.trial_end * 1000).toISOString()
-      : null,
-    // WEB-LEGAL-006: needed to state the real renewal amount in the
-    // trial-conversion notice. Nothing else recorded monthly vs yearly, and it
-    // cannot be inferred during a trial because current_period_end is trial_end.
-    billing_interval: subscription.items?.data?.[0]?.price?.recurring?.interval ?? null,
-  };
+  // WEB-CI-029. Built by _shared/stripeSubscriptionRow.ts rather than inline, so
+  // the mapping this row encodes - including platform='web', which the read and
+  // the UPDATE above both scope on, and billing_interval, which WEB-LEGAL-006
+  // needs because nothing else records monthly vs yearly and a trial cannot
+  // imply it - is reachable by a test. It was not: this file imports Stripe
+  // from esm.sh and exports nothing.
+  const subscriptionData = webSubscriptionRow({
+    userId,
+    planId,
+    subscription: subscription as unknown as StripeSubscriptionLike,
+    stripeCustomerId: session.customer as string,
+  });
 
   if (existingSubscription) {
     // Update existing web subscription
@@ -438,20 +588,11 @@ async function handleSubscriptionUpdated(
 
   const { error } = await supabase
     .from("user_subscriptions")
-    .update({
-      status: mapStripeStatus(subscription.status),
-      current_period_start: new Date(subscription.current_period_start * 1000).toISOString(),
-      current_period_end: new Date(subscription.current_period_end * 1000).toISOString(),
-      cancel_at_period_end: subscription.cancel_at_period_end,
-      canceled_at: subscription.canceled_at
-        ? new Date(subscription.canceled_at * 1000).toISOString()
-        : null,
-      // Backfills existing rows as Stripe sends updates (WEB-LEGAL-006).
-      billing_interval: subscription.items?.data?.[0]?.price?.recurring?.interval ?? null,
-      trial_end: subscription.trial_end
-        ? new Date(subscription.trial_end * 1000).toISOString()
-        : null,
-    })
+    // WEB-CI-029: the patch, not the full row. Keyed on stripe_subscription_id,
+    // so re-sending user_id, plan_id or platform would let a malformed event
+    // rewrite who the subscription belongs to. Also backfills billing_interval
+    // on existing rows as Stripe sends updates (WEB-LEGAL-006).
+    .update(subscriptionUpdatePatch(subscription as unknown as StripeSubscriptionLike))
     .eq("stripe_subscription_id", subscription.id);
 
   if (error) {
@@ -594,22 +735,6 @@ async function handleInvoicePaymentFailed(
 /**
  * Map Stripe subscription status to our status
  */
-function mapStripeStatus(stripeStatus: Stripe.Subscription.Status): string {
-  const statusMap: Record<string, string> = {
-    active: "active",
-    canceled: "canceled",
-    incomplete: "past_due",
-    incomplete_expired: "canceled",
-    past_due: "past_due",
-    trialing: "trialing",
-    unpaid: "past_due",
-    paused: "paused",
-  };
-
-  return statusMap[stripeStatus] || "active";
-}
-
-
 /**
  * customer.subscription.trial_will_end (WEB-LEGAL-006).
  *

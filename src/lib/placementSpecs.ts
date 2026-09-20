@@ -3,7 +3,27 @@
  * Used by both the Advertise page (informational) and CreativeUploader (validation).
  */
 
-export type PlacementType = 'top_banner' | 'featured_spot' | 'below_fold' | 'sidebar' | 'sponsored_listing';
+/*
+ * WEB-ADS-007. `sidebar` WAS IN THIS UNION AND IN NOTHING ELSE THAT MATTERED.
+ *
+ * /advertise renders every entry of PLACEMENT_SPECS as purchasable, so Sidebar
+ * Skyscraper was on sale. It was absent from all three systems needed to
+ * actually sell it: the `placement_type` DB enum (top_banner, featured_spot,
+ * below_fold, sponsored_listing), the ad_rate_card, and the label map in
+ * create-campaign-checkout. Buying it created the campaigns row and then failed
+ * the campaign_placements insert, leaving an orphan draft campaign and an
+ * advertiser with nothing.
+ *
+ * Dropped rather than added, per the story's own recommendation and on the
+ * evidence: adding it needs a price nobody has set, inventory nobody has
+ * committed, and a mobile placement that does not exist (XPLAT-005). Its two
+ * render slots only ever served house ads, because useActiveAds short-circuited
+ * on it, and both pages already carry other slots.
+ *
+ * Every value here must exist in the DB enum. scripts/check-placement-enum.mjs
+ * enforces that now, which is the check that was missing.
+ */
+export type PlacementType = 'top_banner' | 'featured_spot' | 'below_fold' | 'sponsored_listing';
 
 export interface PlacementDimension {
   width: number;
@@ -100,27 +120,7 @@ export const PLACEMENT_SPECS: Record<PlacementType, PlacementSpec> = {
       'Local Des Moines imagery encouraged',
     ],
   },
-  sidebar: {
-    type: 'sidebar',
-    name: 'Sidebar Skyscraper',
-    description: 'Vertical placement alongside content listings on desktop',
-    dimensions: [
-      { width: 160, height: 600, label: '160x600 (Wide Skyscraper)' },
-    ],
-    maxSize: 409600, // 400KB
-    maxSizeLabel: '400KB',
-    aspectRatio: '4:15',
-    formats: ['JPG', 'PNG', 'WebP'],
-    animationType: 'Static images only',
-    features: ['Desktop-only placement', 'Sticky positioning', 'High visibility alongside listings'],
-    specifications: [
-      'Vertical layout optimized for sidebar',
-      'Clear branding and call-to-action',
-      'High-resolution images (300 DPI recommended)',
-      'Visible only on large screens (1024px+)',
-    ],
-  },
-  sponsored_listing: {
+sponsored_listing: {
     type: 'sponsored_listing',
     name: 'Sponsored Listing',
     description: 'Promote your event or restaurant as a sponsored featured item — appears first in the featured section with a "Sponsored" badge. Uses your existing listing details, no image upload needed.',

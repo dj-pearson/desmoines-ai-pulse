@@ -44,7 +44,7 @@ export default function GettingAround() {
           FAQPage is the type that matches. SEOHead is here for the canonical,
           which the bare Helmet never supplied. */}
       <SEOHead
-        title="Getting Around Des Moines — Parking, Skywalk, Transit Guide"
+        title="Des Moines Parking & Transit"
         description="How to get around Des Moines: downtown parking map, skywalk system guide, BCycle bike share, DART transit, airport info, and rideshare tips."
         url={getCanonicalUrl('/getting-around')}
         canonicalUrl={getCanonicalUrl('/getting-around')}

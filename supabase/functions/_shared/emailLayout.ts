@@ -21,10 +21,10 @@
  */
 
 import { escapeHtml } from "./escapeHtml.ts";
+import { getSiteUrl } from "./siteUrl.ts";
 
 /** Public-facing site URL used for building unsubscribe links. */
-export const SITE_URL =
-  Deno.env.get("SITE_URL") ?? "https://desmoinesinsider.com";
+export const SITE_URL = getSiteUrl();
 
 /** Postal address used in every commercial email — single source of truth. */
 export const POSTAL_ADDRESS = {

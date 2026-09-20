@@ -1,4 +1,5 @@
 import { useEffect, useState } from "react";
+import { OptimizedImage } from "@/components/OptimizedImage";
 import { Link, useSearchParams } from "react-router-dom";
 import Header from "@/components/Header";
 import Footer from "@/components/Footer";
@@ -53,11 +54,12 @@ function ResultCard({ item, type }: { item: CardItem; type: ResultType }) {
       <Card className="h-full overflow-hidden transition-shadow hover:shadow-lg">
         {item.image_url && (
           <div className="relative h-40 overflow-hidden">
-            <img
+            <OptimizedImage
               src={item.image_url}
               alt={title}
-              loading="lazy"
-              className="h-full w-full object-cover transition-transform duration-300 group-hover:scale-105"
+              className="object-cover transition-transform duration-300 group-hover:scale-105"
+              containerClassName="h-full w-full"
+              sizes="(max-width: 640px) 100vw, (max-width: 1024px) 50vw, 33vw"
             />
             <Badge variant="secondary" className="absolute left-2 top-2 flex items-center gap-1">
               <Icon className="h-3 w-3" />

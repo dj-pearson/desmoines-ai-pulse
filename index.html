@@ -434,7 +434,7 @@
     <meta
       data-rh="true"
       name="description"
-      content="Events, restaurants, and things to do in Des Moines, Iowa. Find what's happening today and this weekend across Des Moines, West Des Moines, Ankeny, Urbandale and the metro — updated daily."
+      content="Events, restaurants and things to do in Des Moines, Iowa. What's on today and this weekend across the metro, updated daily."
     />
     <meta name="author" content="Des Moines Insider" />
     <!--
@@ -455,9 +455,13 @@
       text-based audits as a phantom second canonical.)
     -->
 
+    <!-- WEB-SEO-026: this listed "SMS concierge Des Moines", "voice assistant
+         Des Moines events" and "ChatGPT Des Moines plugin" among the terms the
+         site wants to be found for. None of the three exists. Targeting a
+         query the site cannot answer earns a bounce, not a ranking. -->
     <meta
       name="keywords"
-      content="Des Moines AI guide, conversational city assistant, AI event recommendations Des Moines, intelligent local guide, SMS concierge Des Moines, voice assistant Des Moines events, ChatGPT Des Moines plugin, semantic search events, predictive analytics restaurants, context-aware recommendations, AI trip planner Des Moines, personalized Des Moines guide, multi-channel city guide, behavioral intelligence, proactive event alerts, Des Moines conversational AI"
+      content="Des Moines events, Des Moines restaurants, things to do Des Moines, Des Moines attractions, Des Moines concerts, family activities Des Moines, Des Moines event calendar, restaurant openings Des Moines, Des Moines trip planner, Iowa events"
     />
 
     <!-- Enhanced meta tags for AI optimization -->
@@ -485,47 +489,28 @@
     <meta data-rh="true" name="twitter:title"
       content="Des Moines Insider: Events, Restaurants & Attractions"
     />
+    <!-- WEB-SEO-026: promised recommendations "via web, SMS, voice, or
+         ChatGPT". Only the web one exists. -->
     <meta data-rh="true" name="twitter:description"
-      content="Beyond directories. Get AI-powered recommendations via web, SMS, voice, or ChatGPT. Context-aware, learns from behavior, proactively assists. Des Moines redefined."
+      content="Events, restaurants and attractions in Des Moines, Iowa - what's on this week, where to eat, and what to do."
     />
     <meta
       name="twitter:image"
       content="https://desmoinesinsider.com/og-default.png"
     />
 
-    <!-- JSON-LD Structured Data for AI-First Platform -->
-    <script type="application/ld+json">
-      {
-        "@context": "https://schema.org",
-        "@type": "SoftwareApplication",
-        "name": "Des Moines Insider",
-        "applicationCategory": "LifestyleApplication",
-        "operatingSystem": "Web, iOS, Android, Alexa, Google Assistant",
-        "description": "First truly conversational AI city guide for Des Moines, Iowa. Provides personalized, context-aware recommendations via web, SMS, voice assistants, and ChatGPT. Features semantic search, predictive analytics, and proactive assistance.",
-        "offers": {
-          "@type": "Offer",
-          "price": "0",
-          "priceCurrency": "USD"
-        },
-        "featureList": [
-          "Conversational AI search",
-          "Multi-channel access (Web, SMS, Voice, ChatGPT)",
-          "Context-aware recommendations",
-          "Behavioral learning",
-          "Predictive analytics",
-          "Automated trip planning",
-          "Real-time event updates",
-          "Proactive notifications"
-        ],
-        "screenshot": "https://desmoinesinsider.com/DMI-Logo.png",
-        "applicationSubCategory": "City Guide, Travel Planner, Event Discovery",
-        "provider": {
-          "@type": "Organization",
-          "name": "Des Moines Insider",
-          "url": "https://desmoinesinsider.com"
-        }
-      }
-    </script>
+    <!-- WEB-SEO-026: A SoftwareApplication BLOCK USED TO SHIP FROM HERE, ON
+         EVERY ROUTE, and it was a list of channels that do not exist. It
+         declared operatingSystem "Web, iOS, Android, Alexa, Google Assistant"
+         and a featureList including "Multi-channel access (Web, SMS, Voice,
+         ChatGPT)". There is no Alexa skill, no Google Assistant action, no SMS
+         number and no ChatGPT plugin; XPLAT-009 records that the assistant is
+         missing from the web app entirely.
+         It also had no data-rh attribute, so the prerenderer's dedupeJsonLd -
+         which only touches Helmet-managed blocks - could never replace or
+         remove it. Every page carried it verbatim.
+         The site's identity now comes from ONE Organization node emitted by
+         SEOHead, with a stable @id, and the WebSite node lives on / only. -->
 
   </head>
 

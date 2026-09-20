@@ -1,29 +1,7 @@
 {
-  "_comment": "Modules production code does not import. Several are dead TWINS of a live feature - see the script header. testOnly is worse than unimported: the suite is green on code nothing runs. Do not add entries to make CI pass; delete the module or wire it up.",
-  "unimported": [
-    "src/hooks/use-long-press.tsx",
-    "src/hooks/use-touch-ripple.tsx",
-    "src/hooks/useGoogleIndexing.ts",
-    "src/hooks/useReducedMotion.ts",
-    "src/hooks/useResourceOwnership.ts",
-    "src/hooks/useVirtualList.ts",
-    "src/lib/conversionTracking.ts",
-    "src/lib/deferredLoader.ts",
-    "src/lib/email-integration.ts",
-    "src/lib/errorTracking.ts",
-    "src/lib/eventSubmissionService.ts",
-    "src/lib/guestFavoriteMigration.ts",
-    "src/lib/lazyLoad.ts",
-    "src/lib/queryKeys.ts",
-    "src/lib/sitemap.ts",
-    "src/lib/sitemapEnhanced.ts",
-    "src/lib/sitemapGenerator.ts",
-    "src/lib/sponsoredTracking.ts",
-    "src/lib/styleUtils.ts",
-    "src/lib/webVitalsRum.ts"
-  ],
+  "_comment": "Modules production code does not import. Several were dead TWINS of a live feature - see the script header. testOnly is worse than unimported: the suite is green on code nothing runs. Do not add entries to make CI pass; delete the module or wire it up. WEB-QUAL-013 emptied `unimported` (19 modules deleted, 1 wired up). TWO ENTRIES WERE STALE, which is worth knowing before trusting this file: queryKeys.ts was listed while SIX hooks import it, and geo.ts was listed as testOnly while production had started importing it. This list is a ratchet - a new entry fails the check, but an entry that stops being true is only removed by re-running --write, so a stale one can sit here for months.",
+  "unimported": [],
   "testOnly": [
-    "src/lib/fetchWithRetry.ts",
-    "src/lib/geo.ts"
+    "src/lib/fetchWithRetry.ts"
   ]
 }

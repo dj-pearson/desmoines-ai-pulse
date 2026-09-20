@@ -95,9 +95,22 @@ export default function Footer() {
       {/* Main Footer */}
       <div className="py-12">
         <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8">
-          <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-5 gap-8">
+          {/* TWO-UP LINK COLUMNS ON A PHONE (WEB-UX-037).
+              Measured at 375x800: this grid was 1376px with everything in one
+              column - brand 360, Explore 320, For You 156, Business 444. The
+              three link columns are short lists of one-line items, so stacking
+              them wasted the right half of the screen for 920px of the scroll.
+              grid-cols-2 pairs them; the brand cell keeps the full width
+              because its newsletter input needs it. */}
+          <div className="grid grid-cols-2 md:grid-cols-2 lg:grid-cols-5 gap-x-6 gap-y-8">
             {/* Brand */}
-            <div className="lg:col-span-2">
+            {/* md:col-span-1 is LOAD-BEARING. Without it the mobile
+                `col-span-2` carries into the md 2-column layout, the brand cell
+                takes a whole row of its own, and the tablet footer grows 336px
+                (2157 -> 2493 measured at 768). The full width is only wanted
+                where the grid is 2 columns wide and the newsletter input needs
+                them both. */}
+            <div className="col-span-2 md:col-span-1 lg:col-span-2">
               <OptimizedLogo
                 variant="logo2"
                 alt="Des Moines Insider"

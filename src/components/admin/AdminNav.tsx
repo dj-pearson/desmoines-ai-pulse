@@ -5,6 +5,7 @@ import {
   BookOpen,
   Bot,
   Briefcase,
+  Building2,
   ChevronDown,
   CreditCard,
   FileText,
@@ -56,6 +57,7 @@ import {
 } from "@/components/ui/accordion";
 import { cn } from "@/lib/utils";
 import { useAdminAuth, type UserRole } from "@/hooks/useAdminAuth";
+import { roleAtLeast } from "@/lib/roles";
 
 interface NavItem {
   label: string;
@@ -75,13 +77,6 @@ interface NavGroup {
   items: NavItem[];
 }
 
-const ROLE_RANK: Record<UserRole, number> = {
-  user: 0,
-  moderator: 1,
-  admin: 2,
-  root_admin: 3,
-};
-
 const NAV_GROUPS: NavGroup[] = [
   {
     key: "content",
@@ -94,6 +89,7 @@ const NAV_GROUPS: NavGroup[] = [
       { label: "Attractions", href: "/admin/attractions", icon: LandPlot },
       { label: "Playgrounds", href: "/admin/playgrounds", icon: TreeDeciduous },
       { label: "Event submissions", href: "/admin/event-submissions", icon: Inbox, description: "User-submitted events queue" },
+      { label: "Business claims", href: "/admin/business-claims", icon: Building2, description: "Owners claiming their listing" },
       { label: "Menus", href: "/admin/menus", icon: UtensilsCrossed },
       { label: "Media", href: "/admin/media", icon: ImageIcon },
     ],
@@ -148,7 +144,10 @@ const NAV_GROUPS: NavGroup[] = [
 ];
 
 function canSeeGroup(group: NavGroup, role: UserRole): boolean {
-  return ROLE_RANK[role] >= ROLE_RANK[group.minRole];
+  // WEB-AUTH-010: the shared ranking. This file kept its own ROLE_RANK map,
+  // inverted relative to ROLE_PRECEDENCE - they agreed, but by coincidence, and
+  // it was the fourth place in the codebase that decided what outranks what.
+  return roleAtLeast(role, group.minRole);
 }
 
 function isActiveItem(pathname: string, href: string): boolean {
@@ -299,8 +298,8 @@ function MobileNav({
                             className={cn(
                               "flex items-center gap-2 px-3 py-2 rounded-md text-sm transition-colors",
                               itemActive
-                                ? "bg-primary text-primary-foreground border-l-4 border-primary"
-                                : "hover:bg-accent text-foreground border-l-4 border-transparent",
+                                ? "bg-primary text-primary-foreground"
+                                : "hover:bg-accent text-foreground",
                             )}
                           >
                             <ItemIcon className="h-4 w-4" />

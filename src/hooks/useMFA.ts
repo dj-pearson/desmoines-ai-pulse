@@ -166,9 +166,23 @@ export function useMFA() {
 
       if (error) throw error;
 
-      // Check if we achieved AAL2 (second factor verified)
-      const aal = data?.user?.aal;
-      if (aal === 'aal2') {
+      // WAS `data?.user?.aal`, WHICH IS NOT A FIELD ON User AND NEVER HAS BEEN.
+      // The AAL is a claim inside the session's access token, not a property of
+      // the user object, so this read was `undefined` at runtime and the
+      // comparison below was always false: every SUCCESSFUL 2FA verification
+      // returned false to the caller. supabase-js 2.85+ is the first version
+      // whose types say so. mfa.verify() already returns an error when the code
+      // is wrong, and getAuthenticatorAssuranceLevel() is the supported way to
+      // read the level the new session actually reached.
+      const { data: aalData, error: aalError } = await supabase.auth.mfa.getAuthenticatorAssuranceLevel();
+      if (aalError) {
+        // mfa.verify() already resolved without an error, which means the code
+        // was accepted and the session was upgraded. A failed AAL read after
+        // that is a second request going wrong, not a rejected factor, so it
+        // must not be reported to the user as a failed verification.
+        logger.warn('verifyChallenge', 'AAL read failed after a successful verify', { error: aalError });
+      }
+      if (aalError || aalData?.currentLevel === 'aal2') {
         toast({
           title: 'Login Successful',
           description: 'Two-factor authentication verified',
@@ -267,7 +281,12 @@ export function useMFA() {
 
       if (error) throw error;
 
-      return data?.currentLevel || null;
+      // AuthenticatorAssuranceLevels is `'aal1' | 'aal2' | (string & {})`, so
+      // it carries values this function does not promise. Narrowed rather than
+      // cast: an aal3 from a future Supabase release reads as null here, which
+      // is the honest answer for a caller that only understands two levels.
+      const level = data?.currentLevel;
+      return level === 'aal1' || level === 'aal2' ? level : null;
     } catch (error) {
       logger.error('getAssuranceLevel', 'Get AAL error', { error });
       return null;

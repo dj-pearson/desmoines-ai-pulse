@@ -2,6 +2,7 @@ import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
 import { supabase } from "@/integrations/supabase/client";
 import { useAuth } from "@/contexts/AuthContext";
 import { createLogger } from '@/lib/logger';
+import { fromUnknownTable } from "@/integrations/supabase/unknownTable";
 
 const log = createLogger('useApiKeys');
 
@@ -104,8 +105,7 @@ export function useApiKeys() {
     queryFn: async () => {
       if (!user) return [];
 
-      const { data, error } = await supabase
-        .from('api_keys')
+      const { data, error } = await fromUnknownTable('api_keys')
         .select('*')
         .eq('user_id', user.id)
         .order('created_at', { ascending: false });
@@ -123,8 +123,7 @@ export function useApiKeys() {
 
   // Fetch usage for a specific key
   const fetchKeyUsage = async (keyId: string, limit: number = 100): Promise<ApiKeyUsage[]> => {
-    const { data, error } = await supabase
-      .from('api_key_usage')
+    const { data, error } = await fromUnknownTable('api_key_usage')
       .select('*')
       .eq('api_key_id', keyId)
       .order('created_at', { ascending: false })
@@ -189,8 +188,7 @@ export function useApiKeys() {
       keyId: string;
       updates: Partial<Pick<ApiKey, 'name' | 'description' | 'permissions' | 'scopes' | 'rate_limit_per_minute' | 'rate_limit_per_day' | 'allowed_ips' | 'allowed_origins'>>;
     }) => {
-      const { data, error } = await supabase
-        .from('api_keys')
+      const { data, error } = await fromUnknownTable('api_keys')
         .update({
           ...updates,
           updated_at: new Date().toISOString(),

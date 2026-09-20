@@ -8,7 +8,7 @@ import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
 import { Alert, AlertDescription } from "@/components/ui/alert";
 import { Progress } from "@/components/ui/progress";
-import { Plus, User, Settings, Eye, Edit, Trash2, CheckCircle, XCircle, AlertTriangle, ArrowLeft, Megaphone, Crown, Heart, Bell, Zap, Upload, BarChart3, DollarSign } from "lucide-react";
+import { Plus, User, Settings, Eye, Edit, Trash2, CheckCircle, XCircle, AlertTriangle, ArrowLeft, Megaphone, Crown, Heart, Bell, Zap, Upload, BarChart3, DollarSign, ExternalLink } from "lucide-react";
 import { useAuth } from "@/hooks/useAuth";
 import { useUserSubmittedEvents, useDeleteEvent } from "@/hooks/useUserSubmittedEvents";
 import { useSubscription } from "@/hooks/useSubscription";
@@ -24,6 +24,8 @@ import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogTrigger } from 
 import { format } from "date-fns";
 import { toast } from "sonner";
 import { SpriteIcon } from "@/components/ui/SpriteIcon";
+import { ErrorState } from "@/components/ui/error-state";
+import { Spinner } from "@/components/ui/loading-skeleton";
 
 const DASHBOARD_TABS = [
   "overview",
@@ -44,9 +46,15 @@ export default function UserDashboard() {
   const navigate = useNavigate();
   const { user } = useAuth(); // No longer need to check authLoading - ProtectedRoute handles it
   useDocumentTitle("My Dashboard");
-  const { data: events, isLoading, refetch } = useUserSubmittedEvents();
+  const { data: events, isLoading, isError, error: eventsError, refetch } =
+    useUserSubmittedEvents();
   const deleteEvent = useDeleteEvent();
-  const { campaigns, isLoading: campaignsLoading } = useCampaigns();
+  const {
+    campaigns,
+    isLoading: campaignsLoading,
+    error: campaignsError,
+    refetch: refetchCampaigns,
+  } = useCampaigns();
   const { tier, isPremium, isExpiringSoon, subscription } = useSubscription();
   const { favoritedEvents, remainingFavorites, favoritesLimit } = useFavorites();
 
@@ -346,7 +354,7 @@ export default function UserDashboard() {
               <CardContent>
                 {isLoading ? (
                   <div className="text-center py-8">
-                    <div className="animate-spin rounded-full h-8 w-8 border-b-2 border-primary mx-auto mb-4"></div>
+                    <Spinner size="lg" className="mx-auto mb-4" />
                     <p>Loading your events...</p>
                   </div>
                 ) : events && events.length > 0 ? (
@@ -389,6 +397,22 @@ export default function UserDashboard() {
                               </p>
                             )}
                             <div className="flex gap-1 mt-1">
+                              {/*
+                                WEB-ADS-008 AC5. Approval used to mean a badge
+                                and nothing else - no listing was ever created,
+                                so there was nothing to link to. This appears
+                                only when a visible events row exists, which is
+                                what makes it an answer to "where is my event?"
+                                rather than another claim about it.
+                              */}
+                              {event.live_event_id && (
+                                <Button variant="outline" size="sm" asChild>
+                                  <a href={`/events/${event.live_event_id}`}>
+                                    <ExternalLink className="h-3 w-3 mr-1" />
+                                    View listing
+                                  </a>
+                                </Button>
+                              )}
                               {(event.status === "needs_revision" || event.status === "pending") && (
                                 <Dialog open={editingEventId === event.id} onOpenChange={(open) => setEditingEventId(open ? event.id : null)}>
                                   <DialogTrigger asChild>
@@ -429,6 +453,11 @@ export default function UserDashboard() {
                       </div>
                     ))}
                   </div>
+                ) : isError ? (
+                  // WEB-QA-031: "No events submitted yet" plus a Submit Your
+                  // First Event button tells someone who has submitted events
+                  // that their work is gone.
+                  <ErrorState error={eventsError} compact onRetry={() => void refetch()} />
                 ) : (
                   <div className="text-center py-8">
                     <SpriteIcon name="calendar" className="h-12 w-12 text-muted-foreground mx-auto mb-4" />
@@ -492,7 +521,7 @@ export default function UserDashboard() {
                 <CardContent>
                   {campaignsLoading ? (
                     <div className="text-center py-6">
-                      <div className="animate-spin rounded-full h-8 w-8 border-b-2 border-primary mx-auto mb-4"></div>
+                      <Spinner size="lg" className="mx-auto mb-4" />
                       <p className="text-sm text-muted-foreground">Loading campaigns...</p>
                     </div>
                   ) : campaigns.length > 0 ? (
@@ -551,6 +580,15 @@ export default function UserDashboard() {
                         </div>
                       ))}
                     </div>
+                  ) : campaignsError ? (
+                    // Same again, and this one is about money: an advertiser
+                    // whose campaign list failed to load is shown a page that
+                    // says they have never run one.
+                    <ErrorState
+                      error={campaignsError}
+                      compact
+                      onRetry={() => void refetchCampaigns()}
+                    />
                   ) : (
                     <div className="text-center py-8">
                       <Megaphone className="h-12 w-12 text-muted-foreground mx-auto mb-4" />

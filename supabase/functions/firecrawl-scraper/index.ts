@@ -10,13 +10,13 @@ import { renderExtractionPrompt, contentWindowFor } from "../_shared/prompts/ind
 import { fetchWithTimeout } from "../_shared/fetchWithTimeout.ts";
 import { serve } from "https://deno.land/std@0.168.0/http/server.ts";
 import { createClient } from "https://esm.sh/@supabase/supabase-js@2";
-import { parseISO, format as dateFnsFormat } from "https://esm.sh/date-fns@3.6.0";
-import { fromZonedTime } from "https://esm.sh/date-fns-tz@3.2.0";
-import { scrapeUrl, scrapeUrls } from "../_shared/scraper.ts";
-import { getAIConfig, buildClaudeRequest, buildLightweightClaudeRequest, getClaudeHeaders, getAnthropicApiKey } from "../_shared/aiConfig.ts";
+import { format as dateFnsFormat } from "https://esm.sh/date-fns@3.6.0";
+import { scrapeUrls } from "../_shared/scraper.ts";
+import { getAIConfig, buildClaudeRequest, getClaudeHeaders, getAnthropicApiKey } from "../_shared/aiConfig.ts";
 import { validateURLForSSRF } from "../_shared/validation.ts";
 import { checkRateLimitPersistent } from "../_shared/rateLimit.ts";
 import { tryDomainAdapter } from "../_shared/domain-adapters/index.ts";
+import { findKnownVenue, type KnownVenue } from "../_shared/knownVenues.ts";
 import { extractEventsFromJsonLd } from "../_shared/jsonLdEvents.ts";
 import { requireAdminOrApiKey } from "../_shared/apiKeyAuth.ts";
 import { fetchAndStoreImage, CONTENT_TYPE_MAP } from "../_shared/imageStorage.ts";
@@ -26,6 +26,8 @@ import {
   SPORTS_CONTENT_BUDGET,
 } from "../_shared/htmlContentWindow.ts";
 import { resolveEventImage } from "../_shared/venueImage.ts";
+import { runJob } from "../_shared/jobRunner.ts";
+import { normalizeCategory } from "../_shared/eventCategories.ts";
 
 // Marker time for events without specific times (7:31:58 PM Central)
 
@@ -45,7 +47,15 @@ function isSportsScheduleDomain(url: string): boolean {
 interface ScrapRequest {
   url: string;
   category: string;
-  maxPages?: number; // Optional parameter for pagination
+  /**
+   * ACCEPTED AND IGNORED (WEB-BE-046). There is no multi-page crawl here:
+   * urlsToScrape is always [url]. The field stays because removing a request
+   * field is a contract change (CLAUDE.md, Supabase Edge Functions) and the
+   * shipped callers send it; a caller that wants more than one page should
+   * call this function once per page, or use skipEvents/batchSize to page
+   * through what one page yielded.
+   */
+  maxPages?: number;
   scraperBackend?: 'browserless' | 'puppeteer' | 'playwright' | 'firecrawl' | 'fetch'; // Allow backend override
   // Batching parameters for processing events in smaller chunks
   batchSize?: number; // Max events to process per request (default: 5)
@@ -53,8 +63,11 @@ interface ScrapRequest {
   skipVisitWebsite?: boolean; // Skip fetching Visit Website URLs (faster, uses catchdesmoines URLs)
 }
 
-// Default batch size - keep small to avoid timeouts
-const DEFAULT_BATCH_SIZE = 5;
+// NO DEFAULT CAP (WEB-BE-046). This constant was 5, and applying it as a
+// default when the request omits batchSize would have capped every scrape at
+// five items - a severe ingestion regression, because the parameter was never
+// applied so a scrape has always written everything it extracted. An unset
+// batchSize therefore means "all of them"; 5 was a value nobody ever ran.
 
 const corsHeaders = {
   'Access-Control-Allow-Origin': '*',
@@ -67,234 +80,18 @@ const supabaseKey = Deno.env.get('SUPABASE_SERVICE_ROLE_KEY')!;
 
 const supabase = createClient(supabaseUrl, supabaseKey);
 
-// Known venue data interface
-interface KnownVenueData {
-  id: string;
-  name: string;
-  address: string | null;
-  city: string | null;
-  state: string | null;
-  zip: string | null;
-  latitude: number | null;
-  longitude: number | null;
-  phone: string | null;
-  email: string | null;
-  website: string | null;
-}
+// WEB-BE-050. The cache, the query and the matcher wrapper used to live here,
+// privately, which is why this was the only ingestion path that set
+// coordinates on an event - ai-crawler set none. They are in
+// _shared/knownVenues.ts now and both paths use them.
+//
+// The local name is kept so the ~12 call sites below read unchanged; the
+// behaviour is identical, including the deliberately loud log on a refused
+// match (a source that stops matching at all is worth noticing, and this is
+// the only place it is visible).
+type KnownVenueData = KnownVenue;
+const findMatchingKnownVenue = (venueName: string) => findKnownVenue(supabase, venueName);
 
-// Cache for known venues to avoid repeated DB queries
-let knownVenuesCache: KnownVenueData[] | null = null;
-let venuesCacheLoadedAt: number = 0;
-const VENUES_CACHE_TTL = 5 * 60 * 1000; // 5 minutes
-
-/**
- * Load all known venues into memory cache for fast matching
- */
-async function loadKnownVenuesCache(): Promise<KnownVenueData[]> {
-  const now = Date.now();
-
-  // Return cached data if still valid
-  if (knownVenuesCache && (now - venuesCacheLoadedAt) < VENUES_CACHE_TTL) {
-    return knownVenuesCache;
-  }
-
-  console.log('🏢 Loading known venues cache...');
-
-  const { data, error } = await supabase
-    .from('known_venues')
-    .select('id, name, aliases, address, city, state, zip, latitude, longitude, phone, email, website')
-    .eq('is_active', true);
-
-  if (error) {
-    console.error('❌ Error loading known venues:', error);
-    return [];
-  }
-
-  knownVenuesCache = data || [];
-  venuesCacheLoadedAt = now;
-
-  console.log(`✅ Loaded ${knownVenuesCache.length} known venues into cache`);
-  return knownVenuesCache;
-}
-
-/**
- * Find a matching known venue by name or alias
- * Returns venue data if found, null otherwise
- */
-async function findMatchingKnownVenue(venueName: string): Promise<KnownVenueData | null> {
-  if (!venueName || venueName.trim().length === 0) {
-    return null;
-  }
-
-  const venues = await loadKnownVenuesCache();
-  const searchText = venueName.toLowerCase().trim();
-
-  // First, try exact name match
-  for (const venue of venues) {
-    if (venue.name.toLowerCase() === searchText) {
-      console.log(`🎯 Exact venue match: "${venueName}" -> "${venue.name}"`);
-      return venue;
-    }
-  }
-
-  // Then, try alias match
-  for (const venue of venues) {
-    const venueData = venue as any;
-    if (venueData.aliases && Array.isArray(venueData.aliases)) {
-      for (const alias of venueData.aliases) {
-        if (alias.toLowerCase() === searchText) {
-          console.log(`🎯 Alias match: "${venueName}" -> "${venue.name}" (via alias "${alias}")`);
-          return venue;
-        }
-      }
-    }
-  }
-
-  // Try partial match on name (venue name contains search or vice versa)
-  for (const venue of venues) {
-    const venueLower = venue.name.toLowerCase();
-    if (venueLower.includes(searchText) || searchText.includes(venueLower)) {
-      // Only match if significant overlap (avoid matching "The" in everything)
-      if (searchText.length >= 5 || venueLower.length >= 5) {
-        console.log(`🎯 Partial venue match: "${venueName}" -> "${venue.name}"`);
-        return venue;
-      }
-    }
-  }
-
-  // Try partial match on aliases
-  for (const venue of venues) {
-    const venueData = venue as any;
-    if (venueData.aliases && Array.isArray(venueData.aliases)) {
-      for (const alias of venueData.aliases) {
-        const aliasLower = alias.toLowerCase();
-        if (aliasLower.includes(searchText) || searchText.includes(aliasLower)) {
-          if (searchText.length >= 5 || aliasLower.length >= 5) {
-            console.log(`🎯 Partial alias match: "${venueName}" -> "${venue.name}" (via alias "${alias}")`);
-            return venue;
-          }
-        }
-      }
-    }
-  }
-
-  return null;
-}
-
-/**
- * Generate SEO content for an event using the lightweight AI model (Haiku)
- * This generates seo_title, seo_description, seo_keywords, seo_h1, and GEO content
- */
-async function generateEventSEO(
-  eventId: string,
-  event: { title: string; venue?: string; location?: string; date?: string; category?: string },
-  supabaseClient: any,
-  claudeApiKey: string,
-  supabaseUrl: string,
-  supabaseKey: string
-): Promise<boolean> {
-  try {
-    console.log(`🔍 Generating SEO content for event: ${event.title}`);
-
-    const prompt = `Generate comprehensive SEO and GEO optimization content for this Des Moines event. Return ONLY a JSON object with these exact fields:
-
-{
-  "title": "SEO title (under 60 chars, include event name + Des Moines + date)",
-  "description": "Meta description (150-155 chars, compelling with local keywords)",
-  "keywords": ["keyword1", "keyword2", "keyword3", "keyword4", "keyword5"],
-  "h1": "H1 tag matching primary search intent",
-  "summary": "2-3 sentence GEO summary for AI engines, location-focused",
-  "keyFacts": ["Fact 1", "Fact 2", "Fact 3", "Fact 4"],
-  "faq": [
-    {"question": "When is ${event.title}?", "answer": "Answer with date and time"},
-    {"question": "Where is ${event.title} located?", "answer": "Answer with venue and Des Moines"},
-    {"question": "What type of event is ${event.title}?", "answer": "Answer with category"}
-  ]
-}
-
-Event Details:
-- Title: ${event.title}
-- Venue: ${event.venue || 'N/A'}
-- Location: ${event.location || 'Des Moines, IA'}
-- Date: ${event.date || 'N/A'}
-- Category: ${event.category || 'General'}
-
-Focus on Des Moines local SEO and GEO optimization for AI search engines.`;
-
-    const config = await getAIConfig(supabaseUrl, supabaseKey);
-    const headers = await getClaudeHeaders(claudeApiKey, supabaseUrl, supabaseKey);
-    // Use lightweight model (Haiku) for SEO - fast and cost-effective
-    const requestBody = await buildLightweightClaudeRequest(
-      [{ role: 'user', content: prompt }],
-      {
-        supabaseUrl,
-        supabaseKey,
-        customMaxTokens: 1000,
-        customTemperature: 0.1
-      }
-    );
-
-    const claudeResponse = await fetchWithTimeout(config.api_endpoint, {
-      method: 'POST',
-      headers,
-      body: JSON.stringify(requestBody)
-    }, 60_000);
-
-    if (!claudeResponse.ok) {
-      console.error(`❌ SEO generation API error: ${claudeResponse.status}`);
-      return false;
-    }
-
-    const claudeData = await claudeResponse.json();
-    const generatedContent = claudeData.content?.[0]?.text;
-
-    if (!generatedContent) {
-      console.error(`❌ No SEO content generated for: ${event.title}`);
-      return false;
-    }
-
-    // Parse the JSON response
-    let seoData;
-    try {
-      const jsonMatch = generatedContent.match(/\{[\s\S]*\}/);
-      if (!jsonMatch) {
-        throw new Error('No JSON found in response');
-      }
-      seoData = JSON.parse(jsonMatch[0]);
-    } catch (parseError) {
-      console.error(`❌ Failed to parse SEO response for: ${event.title}`, parseError);
-      return false;
-    }
-
-    // Update the event with SEO content
-    const { error: updateError } = await supabaseClient
-      .from('events')
-      .update({
-        seo_title: seoData.title,
-        seo_description: seoData.description,
-        seo_keywords: seoData.keywords,
-        seo_h1: seoData.h1,
-        geo_summary: seoData.summary,
-        geo_key_facts: seoData.keyFacts,
-        geo_faq: seoData.faq,
-        updated_at: new Date().toISOString()
-      })
-      .eq('id', eventId);
-
-    if (updateError) {
-      console.error(`❌ Failed to save SEO content for: ${event.title}`, updateError);
-      return false;
-    }
-
-    console.log(`✅ SEO content generated for: ${event.title}`);
-    return true;
-  } catch (error) {
-    console.error(`❌ Error generating SEO for event: ${event.title}`, error);
-    return false;
-  }
-}
-
-// Sports schedule AI prompt - for Iowa Cubs, Iowa Wild, Iowa Barnstormers, Iowa Wolves
 function getSportsSchedulePrompt(url: string, content: string): string {
   const now = new Date();
   const currentDate = dateFnsFormat(now, "MMMM d, yyyy");
@@ -344,8 +141,20 @@ serve(async (req) => {
   const authFailure = await requireAdminOrApiKey(req, corsHeaders);
   if (authFailure) return authFailure;
 
-  // Rate limiting: 10 requests per 15 minutes (SEC-022), persistent across cold starts
-  const rateLimit = await checkRateLimitPersistent(req, { endpoint: 'firecrawl-scraper', max: 10, message: 'Scraper rate limit exceeded.' });
+  // Rate limiting: 10 requests per 15 minutes (SEC-022), persistent across cold
+  // starts - and NOT applied to internal callers (WEB-BE-047).
+  //
+  // The limit is keyed by client IP. scrape-events invokes this function once
+  // per scraping job from a single egress address and there are 15 seeded jobs,
+  // so the scraper was spending its own budget on itself: the eleventh job of a
+  // run got a 429, which is the "Edge Function returned a non-2xx status code"
+  // that every job_results entry carried on the days every source failed.
+  const rateLimit = await checkRateLimitPersistent(req, {
+    endpoint: 'firecrawl-scraper',
+    max: 10,
+    message: 'Scraper rate limit exceeded.',
+    exemptInternal: true,
+  });
   if (!rateLimit.success && rateLimit.response) {
     return rateLimit.response;
   }
@@ -361,14 +170,13 @@ serve(async (req) => {
     const {
       url,
       category,
-      maxPages = 3,
       scraperBackend,
-      batchSize = DEFAULT_BATCH_SIZE,
+      batchSize,
       skipEvents = 0,
       skipVisitWebsite = false
     }: ScrapRequest = await req.json();
 
-    console.log(`📦 Batch settings: size=${batchSize}, skip=${skipEvents}, skipVisitWebsite=${skipVisitWebsite}`);
+    console.log(`📦 Batch settings: size=${batchSize ?? 'all'}, skip=${skipEvents}, skipVisitWebsite=${skipVisitWebsite}`);
 
     if (!url || !category) {
       return new Response(
@@ -392,7 +200,9 @@ serve(async (req) => {
       );
     }
 
-    console.log(`🚀 Starting scrape of ${url} for ${category} (max ${maxPages} pages) using ${scraperBackend || 'default backend'}`);
+    // NOT "(max N pages)". This said so while scraping exactly one, two lines
+    // above a log that says "Will scrape 1 pages" (WEB-BE-046).
+    console.log(`🚀 Starting scrape of ${url} for ${category} using ${scraperBackend || 'default backend'}`);
 
     // Try a domain-specific API adapter first (e.g. statsapi.mlb.com for Iowa
     // Cubs, SeatGeek Platform API). If it returns items, skip scrape + Claude.
@@ -405,7 +215,6 @@ serve(async (req) => {
     console.log(`📄 Will scrape ${urlsToScrape.length} pages`);
 
     const allExtractedItems: any[] = adapterResult ? [...adapterResult.items] : [];
-    let totalContentLength = 0;
 
     if (adapterResult) {
       console.log(`🎯 Using ${adapterResult.adapter} adapter — bypassing scrape + Claude (${adapterResult.items.length} items)`);
@@ -434,7 +243,6 @@ serve(async (req) => {
       const rawContent = result.markdown || result.text || result.html || '';
 
       console.log(`📄 ${result.backend} returned ${rawContent.length} characters (took ${result.duration}ms)`);
-      totalContentLength += rawContent.length;
 
       if (!rawContent || rawContent.length < 100) {
         console.error(`❌ No usable content returned from ${currentUrl}`);
@@ -615,11 +423,31 @@ serve(async (req) => {
     console.log(`🕒 After filtering: ${filteredItems.length} items (removed ${allExtractedItems.length - filteredItems.length} items)`);
 
     // Track batch processing info for response
+    // WEB-BE-046. THE THREE NUMBERS BELOW WERE ALWAYS ZERO. batchInfo was a
+    // const object literal that nothing ever mutated, so every response
+    // reported processedStart: 0, processedEnd: 0, processedCount: 0,
+    // remainingEvents: 0 and nextSkipEvents: null - on a run that had just
+    // inserted forty events. A caller trying to page through a large listing
+    // read nextSkipEvents: null and stopped after the first request.
+    //
+    // `skipEvents` and `batchSize` were parsed off the request, logged, echoed
+    // back in the response, and never applied: the insert loop declared its own
+    // `const batchSize = 10` that shadowed the request's. So all three request
+    // fields were documented, accepted and ignored.
+    //
+    // They are implemented rather than removed. Removing a request field is a
+    // contract change (CLAUDE.md, Supabase Edge Functions) and these are the
+    // pagination a caller needs for a listing bigger than one invocation can
+    // process.
+    const processedStart = Math.max(0, Math.min(skipEvents, filteredItems.length));
+    const effectiveBatchSize =
+      typeof batchSize === 'number' && batchSize > 0 ? batchSize : filteredItems.length;
+    const processedEnd = Math.min(processedStart + effectiveBatchSize, filteredItems.length);
     const batchInfo = {
       totalEvents: filteredItems.length,
-      processedStart: 0,
-      processedEnd: 0,
-      remainingEvents: 0,
+      processedStart,
+      processedEnd,
+      remainingEvents: filteredItems.length - processedEnd,
       visitWebsiteExtracted: 0,
       skippedVisitWebsite: skipVisitWebsite,
     };
@@ -652,16 +480,45 @@ serve(async (req) => {
       competitor_analysis: 'competitor_content'
     };
 
+    // The slice the request actually asked for. Applied here rather than inside
+    // the loop so that every count below - inserted, duplicates, errors - is
+    // about the same set of items the response says it processed.
+    const itemsToWrite = filteredItems.slice(batchInfo.processedStart, batchInfo.processedEnd);
+    console.log(
+      `📦 Writing items ${batchInfo.processedStart}-${batchInfo.processedEnd} of ${batchInfo.totalEvents} ` +
+      `(${batchInfo.remainingEvents} remaining)`,
+    );
+
     const tableName = tableMapping[category as keyof typeof tableMapping] || 'events';
     let insertedCount = 0;
     let updatedCount = 0;
+    // WEB-BE-043: counted, not just skipped. Duplicates were the one outcome
+    // this function never reported, and "extracted 40, inserted 0" reads as a
+    // broken source when it may only mean the page has not changed.
+    //
+    // It OVERLAPS with updatedCount on purpose: an event that already exists is
+    // a duplicate, and the events branch below may also heal its image or
+    // upgrade its source_url, which is a real write. So the three counts do not
+    // partition `totalFound`, and nothing downstream assumes they do - the
+    // zero-result rule reads `inserted`, the error-rate rule reads `errors`.
+    let duplicateCount = 0;
     const errors = [];
 
-    if (filteredItems.length > 0) {
-      // Process in batches
-      const batchSize = 10;
-      for (let i = 0; i < filteredItems.length; i += batchSize) {
-        const batch = filteredItems.slice(i, i + batchSize);
+    // WEB-BE-043. One ledger row per scrape, keyed by the host being scraped -
+    // this function is invoked per URL, so the host IS the source. Without it a
+    // source that stops producing events is invisible: the run still returns
+    // 200 with inserted: 0, which is also what a quiet week looks like.
+    const sourceKey = (() => {
+      try { return new URL(url).hostname; } catch { return url; }
+    })();
+    const job = await runJob("firecrawl-scraper", async (ctx) => {
+    if (itemsToWrite.length > 0) {
+      // How many rows are handled per inner pass. NOT the request's batchSize -
+      // this one used to shadow it, which is how a documented request field
+      // came to be ignored (WEB-BE-046).
+      const WRITE_CHUNK = 10;
+      for (let i = 0; i < itemsToWrite.length; i += WRITE_CHUNK) {
+        const batch = itemsToWrite.slice(i, i + WRITE_CHUNK);
 
         for (const item of batch) {
           try {
@@ -728,7 +585,10 @@ serve(async (req) => {
                   time_tbd: item.time_tbd === true,
                   location: eventLocation,
                   venue: eventVenue,
-                  category: item.category?.substring(0, 50) || "General",
+                  // WEB-BE-049. Every domain adapter's output passes through
+                  // here, so this one call covers all twelve of them plus
+                  // whatever the model wrote.
+                  category: normalizeCategory(item.category),
                   price: item.price?.substring(0, 50) || "See website",
                   source_url: item.source_url || url,
                   is_enhanced: false,
@@ -862,6 +722,7 @@ serve(async (req) => {
             }
 
             if (existingItems.length > 0) {
+              duplicateCount++;
               const existingItem = existingItems[0];
 
               // For events: heal a missing image and/or upgrade to a better
@@ -982,11 +843,9 @@ serve(async (req) => {
                 );
               }
 
-              // For events, get the inserted ID for SEO generation
-              const { data: insertedData, error: insertError } = await supabase
+              const { error: insertError } = await supabase
                 .from(tableName)
-                .insert([transformedData])
-                .select('id');
+                .insert([transformedData]);
 
               if (insertError) {
                 console.error(`❌ Error inserting ${category} item:`, insertError);
@@ -995,32 +854,20 @@ serve(async (req) => {
                 insertedCount++;
                 console.log(`✅ Inserted new ${category}: ${transformedData.title || transformedData.name}`);
 
-                // Generate SEO content for newly inserted events using lightweight AI (Haiku)
-                if (category === 'events' && insertedData?.[0]?.id) {
-                  const claudeApiKey = getAnthropicApiKey();
-                  if (claudeApiKey) {
-                    // Include known venue info for better SEO
-                    const seoVenueInfo = knownVenue
-                      ? `${knownVenue.name} at ${knownVenue.address || ''}, ${knownVenue.city || 'Des Moines'}, ${knownVenue.state || 'IA'}`
-                      : transformedData.venue;
-
-                    // Run SEO generation asynchronously (don't wait, don't block)
-                    generateEventSEO(
-                      insertedData[0].id,
-                      {
-                        title: transformedData.title,
-                        venue: seoVenueInfo,
-                        location: transformedData.location,
-                        date: transformedData.event_start_local,
-                        category: transformedData.category
-                      },
-                      supabase,
-                      claudeApiKey,
-                      supabaseUrl,
-                      supabaseKey
-                    ).catch(err => console.error(`SEO generation failed: ${err.message}`));
-                  }
-                }
+                // WEB-BE-046. THE SEO CALL THAT USED TO BE HERE NEVER FINISHED.
+                // It was invoked without await and without EdgeRuntime.waitUntil
+                // - "Run SEO generation asynchronously (don't wait, don't
+                // block)" - and the Supabase Edge Runtime kills pending
+                // promises when the response is returned. So a Haiku request
+                // was started for every inserted event and abandoned mid-flight
+                // a few milliseconds later. The .catch() attached to it made it
+                // look handled; what it caught was nothing, because the isolate
+                // was gone before the fetch resolved.
+                //
+                // Nothing is lost by removing it: generate-seo-content selects
+                // exactly the rows this was for (seo_title IS NULL OR ''), and
+                // data-quality-heal runs it nightly. The row gets its SEO
+                // fields from a call that is actually awaited.
               }
             }
           } catch (error) {
@@ -1031,17 +878,44 @@ serve(async (req) => {
       }
     }
 
+      ctx.processed(insertedCount + updatedCount);
+      ctx.failed(errors.length);
+      ctx.meta({
+        url,
+        category,
+        sources: {
+          [sourceKey]: {
+            fetched: allExtractedItems.length,
+            // An update is a write. A source whose events all already exist and
+            // get refreshed is alive, and counting only inserts would page about it.
+            inserted: insertedCount + updatedCount,
+            duplicates: duplicateCount,
+            errors: errors.length,
+          },
+        },
+      });
+    });
+
     const result = {
       success: true,
+      runId: job.runId,
+      // The kill switch makes runJob skip the body entirely. scrape-events
+      // reads `inserted` from this response, so without this flag a paused
+      // scraper would be recorded upstream as a source that produced nothing.
+      ...(job.status === "skipped" ? { paused: true } : {}),
       totalFound: allExtractedItems.length,
       futureEvents: batchInfo.totalEvents,
       inserted: insertedCount,
       updated: updatedCount,
+      duplicates: duplicateCount,
       errors: errors.length,
       url: url,
       // Batch processing info
       batch: {
-        size: batchSize,
+        // The size actually applied, not the one that was asked for - they
+        // differ when the request omitted batchSize, which is every scheduled
+        // call.
+        size: effectiveBatchSize,
         processedStart: batchInfo.processedStart,
         processedEnd: batchInfo.processedEnd,
         processedCount: batchInfo.processedEnd - batchInfo.processedStart,

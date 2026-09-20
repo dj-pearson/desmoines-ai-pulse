@@ -114,12 +114,26 @@ test('no user-agent list decides what a requester is shown', () => {
 });
 
 test('JSON-LD is injected, never stripped, on the fallback path', () => {
-  assert.match(SRC, /class JsonLdInjector/, 'the entity gets its own node');
-  assert.match(SRC, /\.on\("head", new JsonLdInjector\(node\)\)/);
+  // The BEHAVIOUR is proved in middleware-entity-shell.test.mjs, which runs
+  // these rules through lol-html and reads the document that comes out. What
+  // is worth asserting from the source is the structural invariant: the entity
+  // path appends and never removes.
+  assert.match(SRC, /\{ selector: "head", appendHtml: jsonLdScript\(node\) \}/, 'the entity gets its own node');
   // withSelfCanonical still removes the homepage's blocks on NON-detail shells,
   // which is correct; what must not happen is stripping on a detail page.
-  const entityShell = SRC.slice(SRC.indexOf('function entityShell('), SRC.indexOf('class JsonLdInjector'));
-  assert.doesNotMatch(entityShell, /new Remover\(\)/, 'the entity path must not strip ld+json');
+  //
+  // COMMENTS STRIPPED BEFORE MATCHING. The slice runs to `function
+  // entityShell(`, and that declaration's doc comment - which sits before it -
+  // recounts the old branch that "removed every ld+json block". A check that
+  // fires on the sentence explaining it is a trap this repo has now walked into
+  // eleven times.
+  const rules = SRC.slice(
+    SRC.indexOf('export function entityShellRewrites('),
+    SRC.indexOf('function entityShell('),
+  )
+    .replace(/\/\*[\s\S]*?\*\//g, '')
+    .replace(/^\s*\/\/.*$/gm, '');
+  assert.doesNotMatch(rules, /remove/i, 'the entity path must not strip ld+json');
 });
 
 test('og:type follows the segment instead of collapsing to website', () => {

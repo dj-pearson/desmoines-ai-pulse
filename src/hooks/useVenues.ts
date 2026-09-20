@@ -1,5 +1,8 @@
 import { useQuery } from '@tanstack/react-query';
 import { supabase } from '@/integrations/supabase/client';
+import { EVENT_LIST_COLUMNS } from '@/lib/listColumns';
+import { queryKeys } from '@/lib/queryKeys';
+import { escapeLikePattern } from '@/lib/postgrestPattern';
 
 export interface Venue {
   id: string;
@@ -55,12 +58,16 @@ export function useVenue(slug: string) {
 
 export function useVenueEvents(venueName: string) {
   return useQuery({
-    queryKey: ['venue-events', venueName],
+    // WEB-PERF-032: the key was top-level, so an admin edit never reached it;
+    // and select('*') pulled search_vector and the PostGIS geom into a list of
+    // 20 cards. Both fixed. The venue name is escaped because % and _ are LIKE
+    // wildcards - an unescaped one silently widens the match.
+    queryKey: queryKeys.events.list({ venue: venueName }),
     queryFn: async () => {
       const { data, error } = await supabase
         .from('events')
-        .select('*')
-        .ilike('venue', `%${venueName}%`)
+        .select(EVENT_LIST_COLUMNS)
+        .ilike('venue', `%${escapeLikePattern(venueName)}%`)
         .gte('date', new Date().toISOString())
         .order('date', { ascending: true })
         .limit(20);

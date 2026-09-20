@@ -23,7 +23,6 @@ import {
 import { Alert, AlertDescription } from "@/components/ui/alert";
 import { supabase } from "@/integrations/supabase/client";
 import { logConsent } from "@/lib/consentLog";
-import { useDocumentTitle } from "@/hooks/useDocumentTitle";
 import {
   CheckCircle2,
   AlertCircle,
@@ -34,7 +33,6 @@ import {
 type Status = "loading" | "success" | "already" | "invalid" | "error";
 
 export default function Unsubscribe() {
-  useDocumentTitle("Unsubscribe");
   const [params] = useSearchParams();
   const token = params.get("token") ?? "";
   const [status, setStatus] = useState<Status>("loading");

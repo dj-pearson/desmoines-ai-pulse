@@ -75,7 +75,7 @@ export default function VisitorsGuide() {
   return (
     <>
       <Helmet>
-        <title>Free Des Moines Visitor Guide — Download or Request | Des Moines Insider</title>
+        <title>Free Des Moines Visitor Guide | Des Moines Insider</title>
         <meta name="description" content="Get your free Des Moines visitor guide! Download the digital edition instantly or request a free printed copy mailed to your door." />
         <link rel="canonical" href={getCanonicalUrl('/visitors-guide')} />
         <script type="application/ld+json">

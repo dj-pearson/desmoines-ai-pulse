@@ -38,6 +38,7 @@ import { UpgradeModal } from "@/components/UpgradeModal";
 import { PremiumGate } from "@/components/PremiumGate";
 import { AIDisclosureNotice } from "@/components/AIDisclosureBadge";
 import { DollarSign, ChevronDown, ChevronRight, Trash2, Edit2, Copy, Check, Plus, Lightbulb, Utensils, Music, TreePine, Palette, Baby, Car, Coffee, Loader2, AlertCircle, Download, ArrowUp, ArrowDown, CalendarPlus } from "lucide-react";
+import { ErrorState } from "@/components/ui/error-state";
 
 export default function TripPlanner() {
   const { user } = useAuth();
@@ -45,6 +46,8 @@ export default function TripPlanner() {
   const {
     tripPlans,
     isLoadingTrips,
+    tripsError,
+    refetchTrips,
     selectedTrip,
     setSelectedTrip,
     fetchTripDetails,
@@ -576,7 +579,7 @@ export default function TripPlanner() {
                               </Badge>
                             )}
                             {selectedTrip.ai_generated && (
-                              <Badge className="bg-gradient-to-r from-purple-500 to-pink-500">
+                              <Badge>
                                 <SpriteIcon name="sparkles" className="h-3 w-3 mr-1" />
                                 AI Generated
                               </Badge>
@@ -879,6 +882,12 @@ export default function TripPlanner() {
                     </Card>
                   ))}
                 </div>
+              ) : tripsError ? (
+                // WEB-QA-031: "No trips yet" with a Plan Your First Trip
+                // button is told to someone whose saved itineraries simply
+                // failed to load - the flagship AI feature reporting that
+                // their work does not exist.
+                <ErrorState error={tripsError} onRetry={() => void refetchTrips()} />
               ) : tripPlans.length === 0 ? (
                 <Card className="text-center py-12">
                   <CardContent>
@@ -904,7 +913,7 @@ export default function TripPlanner() {
                         <div className="flex items-start justify-between">
                           <CardTitle className="text-lg line-clamp-1">{trip.title}</CardTitle>
                           {trip.ai_generated && (
-                            <Badge className="bg-gradient-to-r from-purple-500 to-pink-500 shrink-0">
+                            <Badge className="shrink-0">
                               <SpriteIcon name="sparkles" className="h-3 w-3" />
                             </Badge>
                           )}

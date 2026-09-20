@@ -159,42 +159,13 @@ export default function EnhancedPlaygroundSEO({
     url: playgroundUrl,
   };
 
-  const localBusinessSchema = {
-    "@context": "https://schema.org",
-    "@type": "LocalBusiness",
-    "@id": `${BRAND.baseUrl}/#localbusiness`,
-    name: BRAND.name,
-    description: BRAND.tagline,
-    url: BRAND.baseUrl,
-    address: {
-      "@type": "PostalAddress",
-      addressLocality: BRAND.city,
-      addressRegion: BRAND.state,
-      addressCountry: BRAND.country,
-    },
-    geo: {
-      "@type": "GeoCoordinates",
-      latitude: 41.5868,
-      longitude: -93.625,
-    },
-    areaServed: {
-      "@type": "GeoCircle",
-      geoMidpoint: {
-        "@type": "GeoCoordinates",
-        latitude: 41.5868,
-        longitude: -93.625,
-      },
-      geoRadius: "50000",
-    },
-    serviceType: "Local Playground Information",
-    knowsAbout: [
-      `${BRAND.city} playgrounds`,
-      `${BRAND.state} parks`,
-      "children recreation",
-      "family activities",
-      "parks and playgrounds",
-    ],
-  };
+  // WEB-SEO-026: A SITE-WIDE LocalBusiness USED TO BE BUILT HERE, so every
+  // playground page carried a second identity claim about US, at
+  // @id /#localbusiness, alongside the playground it is actually about. An
+  // aggregator is not a local business, and a page about someone else's place
+  // is the worst position from which to say otherwise. SEOHead's Organization
+  // node, with a stable @id, is the one identity this site publishes.
+
 
   return (
     <Helmet>
@@ -276,9 +247,6 @@ export default function EnhancedPlaygroundSEO({
       </script>
       <script type="application/ld+json">
         {JSON.stringify(speakableSchema)}
-      </script>
-      <script type="application/ld+json">
-        {JSON.stringify(localBusinessSchema)}
       </script>
     </Helmet>
   );

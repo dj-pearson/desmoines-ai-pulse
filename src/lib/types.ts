@@ -16,8 +16,15 @@ export interface Event {
   is_featured?: boolean;
   is_sponsored?: boolean;
   sponsored_until?: string | null;
-  created_at?: string;
-  updated_at?: string;
+  /*
+   * Nullable, not merely optional. The generated schema has events.created_at
+   * and events.updated_at as `string | null`, and EVENT_LIST_COLUMNS selects
+   * updated_at for ListFreshness - so a row read straight from the table was
+   * not assignable to this type, which is what broke EventsToday under
+   * strictNullChecks.
+   */
+  created_at?: string | null;
+  updated_at?: string | null;
   // New timezone fields
   event_start_utc?: string;
   /**

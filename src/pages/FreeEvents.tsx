@@ -1,8 +1,12 @@
-import React, { useState, useEffect, useMemo } from "react";
+import React, { useMemo } from "react";
+import { useQuery } from "@tanstack/react-query";
 import { Link } from "react-router-dom";
 import { createLogger } from '@/lib/logger';
 import { supabase } from "@/integrations/supabase/client";
 import { SpriteIcon } from "@/components/ui/SpriteIcon";
+import { EVENT_LIST_COLUMNS } from "@/lib/listColumns";
+import { queryKeys } from "@/lib/queryKeys";
+import { STALE_TIME, GC_TIME } from "@/lib/queryConfig";
 
 const log = createLogger('FreeEvents');
 import Header from "@/components/Header";
@@ -17,9 +21,7 @@ import { Card, CardContent } from "@/components/ui/card";
 import { DollarSign, Gift } from "lucide-react";
 import { format } from "date-fns";
 import { BRAND, getCanonicalUrl } from "@/lib/brandConfig";
-import { useDocumentTitle } from "@/hooks/useDocumentTitle";
 import { Breadcrumbs } from "@/components/ui/breadcrumbs";
-import { useReloadableFetch } from "@/hooks/useReloadableFetch";
 import { ErrorState } from "@/components/ui/error-state";
 
 interface EventItem {
@@ -36,47 +38,53 @@ interface EventItem {
   event_start_utc: string;
 }
 
+/** Stable empty array; a fresh `[]` per render gives `freeEvents` a new
+ *  identity and re-fires any consumer effect that depends on it. */
+const EMPTY_EVENTS: EventItem[] = [];
+
 export default function FreeEvents() {
-  const [events, setEvents] = useState<EventItem[]>([]);
-  const [isLoading, setIsLoading] = useState(true);
-  const { error: loadError, setError: setLoadError, reloadKey, retry } = useReloadableFetch();
-  useDocumentTitle("Free Events");
 
-  useEffect(() => {
-    const fetchFreeEvents = async () => {
-      try {
-        setIsLoading(true);
-        const now = new Date().toISOString();
+  /*
+   * WEB-PERF-032 / WEB-SEO-031. THIS WAS A useState/useEffect FETCH ON A
+   * PRERENDERED ROUTE, which is the exact defect WEB-SEO-031 fixed on
+   * /events/today and left live here.
+   *
+   * PrerenderSignal publishes "the data has arrived" from useIsFetching - a
+   * count of TanStack queries in flight. A hand-rolled fetch is invisible to
+   * that count, so `seen` never became true, the GRACE_MS fallback fired at
+   * 1.5s, and prerender.mjs captured whatever had rendered by then. /events/free
+   * is in PRERENDER_ROUTES, so that capture is what every JS-less crawler gets.
+   *
+   * The key is queryKeys.events.list, so an admin edit now reaches this page's
+   * cache; it was `['events', ...]`-free entirely before, being no query at all.
+   */
+  const {
+    data: freeEvents = EMPTY_EVENTS,
+    isLoading,
+    error: loadError,
+    refetch,
+  } = useQuery<EventItem[]>({
+    queryKey: queryKeys.events.list({ price: "free" }),
+    staleTime: STALE_TIME.CONTENT_LIST,
+    gcTime: GC_TIME,
+    queryFn: async () => {
+      const now = new Date().toISOString();
+      const { data, error } = await supabase
+        .from("events")
+        .select(EVENT_LIST_COLUMNS)
+        .gte("date", now)
+        .or("price.ilike.%free%,price.eq.0,price.is.null")
+        .order("date", { ascending: true })
+        .limit(100);
 
-        const { data, error } = await supabase
-          .from("events")
-          .select("id, title, date, location, venue, price, category, enhanced_description, original_description, image_url, event_start_utc")
-          .gte("date", now)
-          .or("price.ilike.%free%,price.eq.0,price.is.null")
-          .order("date", { ascending: true })
-          .limit(100);
-
-        if (error) {
-          log.error('fetchFreeEvents', 'Error fetching free events', { error });
-          setLoadError(error);
-          setEvents([]);
-        } else {
-          setLoadError(null);
-          setEvents(data || []);
-        }
-      } catch (error) {
-        log.error('fetchFreeEvents', 'Unexpected error in fetchFreeEvents', { error });
-        setLoadError(error);
-        setEvents([]);
-      } finally {
-        setIsLoading(false);
+      if (error) {
+        log.error('fetchFreeEvents', 'Error fetching free events', { error });
+        throw error;
       }
-    };
-
-    fetchFreeEvents();
-  }, [reloadKey]);
-
-  const freeEvents = events || [];
+      return (data ?? []) as unknown as EventItem[];
+    },
+  });
+  const retry = () => void refetch();
   const categoryCounts = freeEvents.reduce((acc: any, event) => {
     const cat = event.category || "Other";
     acc[cat] = (acc[cat] || 0) + 1;
@@ -84,8 +92,8 @@ export default function FreeEvents() {
   }, {});
 
   // WEB-SEO-002: was 84 chars and used the retired "Des Moines AI Pulse" brand.
-  const pageTitle = `Free Events in Des Moines - Free Things to Do | ${BRAND.name}`;
-  const pageDescription = `Discover ${freeEvents.length}+ free events in Des Moines and surrounding areas. From family activities to concerts, find no-cost entertainment happening now. Updated daily with verified free admission events.`;
+  const pageTitle = `Free Events in Des Moines | ${BRAND.name}`;
+  const pageDescription = `Discover ${freeEvents.length}+ free events in Des Moines and the suburbs. Family activities, concerts and no-cost entertainment, updated daily with verified free admission.`;
 
   const breadcrumbs = [
     { name: "Events", url: "/events" },

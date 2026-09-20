@@ -1,5 +1,8 @@
 import { useQuery } from '@tanstack/react-query';
 import { supabase } from '@/integrations/supabase/client';
+import { EVENT_LIST_COLUMNS } from '@/lib/listColumns';
+import { queryKeys } from '@/lib/queryKeys';
+import { sanitizePostgrestPattern } from '@/lib/postgrestPattern';
 
 export interface Team {
   id: string;
@@ -55,12 +58,17 @@ export function useTeam(slug: string) {
 
 export function useTeamGames(teamName: string) {
   return useQuery({
-    queryKey: ['team-games', teamName],
+    // WEB-PERF-032: same three faults as useVenueEvents - a key outside the
+    // events prefix, select('*'), and a raw interpolation. A comma ENDS a
+    // clause inside or(...), so a team name containing one produced
+    // "failed to parse logic tree" rather than no results.
+    queryKey: queryKeys.events.list({ team: teamName }),
     queryFn: async () => {
+      const safeTeam = sanitizePostgrestPattern(teamName);
       const { data, error } = await supabase
         .from('events')
-        .select('*')
-        .or(`title.ilike.%${teamName}%,venue.ilike.%${teamName}%`)
+        .select(EVENT_LIST_COLUMNS)
+        .or(`title.ilike.%${safeTeam}%,venue.ilike.%${safeTeam}%`)
         .gte('date', new Date().toISOString())
         .order('date', { ascending: true })
         .limit(20);

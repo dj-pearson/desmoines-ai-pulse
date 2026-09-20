@@ -11,6 +11,15 @@ verify_jwt = false
 [functions.weather]
 verify_jwt = false
 
+# WEB-FEAT-019: newsletter double opt-in. The caller is an anonymous visitor
+# typing their own address, so there is no bearer to verify - verify_jwt=true
+# would only mean "somebody loaded the site", since the anon key ships in every
+# bundle. Bounded by checkRateLimit (5 per 15 min) instead, and it answers the
+# same sentence for every outcome so it cannot be used to test whether an
+# address is subscribed.
+[functions.newsletter-subscribe]
+verify_jwt = false
+
 # Sponsored picks for AI discovery flows (IOS-ADS-015). Public sponsored content,
 # so JWT is optional — tier is resolved opportunistically from the bearer token
 # when present (premium users get no ads); anonymous/free callers are eligible.

@@ -17,15 +17,16 @@
 ```
 src/
 ├── components/        # React components (ui/ for shadcn primitives)
-├── hooks/             # 101 custom hooks
+├── hooks/             # custom hooks (`ls src/hooks | wc -l` - 160 on 2026-09-19)
 ├── contexts/          # AuthContext, etc.
 ├── integrations/supabase/  # Client + generated types
 ├── lib/               # Utilities (errorHandler, safeStorage, utils)
 ├── pages/             # Route pages
 └── App.tsx            # Routing entry
 supabase/
-├── functions/         # 73 Edge Functions (_shared/ for CORS, rate limiting, validation)
-└── migrations/        # 142 SQL migrations
+├── functions/         # Edge Functions, _shared/ for CORS, rate limiting, validation
+│                     # (`ls supabase/functions | wc -l` - 166 on 2026-09-19)
+└── migrations/        # SQL migrations (`ls supabase/migrations/*.sql | wc -l` - 396)
 tests/                 # Playwright suites
 scripts/               # Utility scripts
 ```
@@ -87,9 +88,36 @@ curl -s -H "apikey: $VITE_SUPABASE_ANON_KEY" \
 # 42P01 = no such table, 42703 = no such column, [] = exists (RLS may hide rows)
 ```
 
+To check **everything at once**, with credentials in the environment:
+
+```bash
+npm run check-schema:probe          # --json for machine-readable output
+```
+
+It probes every table and RPC the code references (276 today) and classifies
+each. The line to read first is "in types.ts but MISSING": a reference the
+static `npm run check-schema` calls fine and that production answers 42P01 on.
+Nothing else in this repo can catch those, and they are the shape that produced
+WEB-QA-017. Read-only: `select=*&limit=0` and an argument-less RPC POST touch
+no data. The key is read from the environment and never printed.
+
 Common columns across content tables: `id` (UUID PK), `name`/`title`, `description`, `category`, `image_url`, SEO fields (`seo_title`, `seo_description`, `seo_keywords`), GEO fields (`geo_summary`, `geo_key_facts`, `geo_faq`), `latitude`, `longitude`, `created_at`, `updated_at`.
 
-**RLS is enabled on all tables.** Pattern: public read, authenticated write with role checks, admin-only for sensitive ops. Auto-update `updated_at` via triggers; geocoding triggers maintain lat/lng.
+**RLS is enabled on all tables.** Pattern: public read, authenticated write with role checks, admin-only for sensitive ops. Auto-update `updated_at` via triggers.
+
+**There is no geocoding trigger.** This file said "geocoding triggers maintain
+lat/lng" and it was never true: `auto_geocode_location()` only ever
+`RAISE NOTICE`d that a row needed geocoding, and a NOTICE from a BEFORE trigger
+goes to the Postgres log and nowhere else. The claim is why four separate
+nightly jobs were written to backfill the same coordinates. What the trigger
+actually does is keep `geom` in sync with the numeric pair, and it is now named
+for that (`sync_geom_from_latlng`, migration 20260919000005).
+
+Coordinates are set **at ingest**, from a known-venue match, by
+`supabase/functions/_shared/knownVenues.ts` - used by both `firecrawl-scraper`
+and `ai-crawler`. `data-quality-heal-nightly` is the safety net for rows the
+match refused. If you add an ingestion path, call `findKnownVenue` and spread
+`venueCoordinates` into the row; a Deno test asserts both scrapers do.
 
 Generated types live in `src/integrations/supabase/types.ts`:
 ```typescript
@@ -152,30 +180,70 @@ External → internal components → hooks → utilities → types → styles.
 
 ## Testing
 
-Playwright suites in `tests/`:
-- `accessibility.spec.ts` — WCAG 2.1 AA
-- `mobile-responsive.spec.ts` — iPhone, Pixel viewports
-- `performance.spec.ts` — Lighthouse >90, Core Web Vitals
-- `forms.spec.ts`, `search-filters.spec.ts`, `links-and-buttons.spec.ts`, `visual-regression.spec.ts`
+**Writing a spec is not the same as running it** (WEB-CI-028). `playwright.config.ts`
+has `testDir: './tests'`, so `npm test` runs everything locally and a new spec looks
+wired up — but **no CI workflow uses that config**. The lanes name their specs
+explicitly, so a spec nobody adds to a lane is written, committed, and never executed
+again. Nine were in that state when this was written. `npm run check-e2e-lanes`
+ratchets the list.
 
-Config (`playwright.config.ts`): base URL `http://localhost:8082`, Chromium/Firefox/WebKit (desktop + mobile), 60s timeout, 2 retries on CI.
+### What actually runs in CI (`.github/workflows/e2e.yml`)
+
+| Lane | Config | Specs | Required? |
+|---|---|---|---|
+| Smoke | `playwright.smoke.config.ts`, against a production build | route-smoke, cookie-consent, backend-down, touch-targets, page-headings, search-request-loop, request-budget, turnstile-inert, subscription-checkout, search-filters, url-filter-state, sticky-filter-chips | **Yes** — no `continue-on-error` |
+| Accessibility (axe) | `playwright.a11y.config.ts`, against a production build | the axe block only | **Yes** |
+| Broad suites | `playwright.config.ts` | accessibility, links-and-buttons, forms, mobile-responsive | No — `continue-on-error: true` |
+
+Everything else in `tests/` runs only when someone runs it by hand. See
+`.github/e2e-lane-baseline.json` for the current list.
+
+**A spec that needs rows uses `tests/support/fixtureBackend.ts`.** The smoke
+lane builds with placeholder `VITE_SUPABASE_*`, so every query fails and no list
+page ever shows a result. `installFixtureBackend(page)` answers PostgREST from
+fixtures, which is what let the three filter specs above join the lane after
+four passes of "they need a live backend". It does not emulate filtering on
+purpose - a fake that pretended to would let a broken filter pass. Two things it
+had to get right, both of which presented as "the backend is down": a count-only
+query is a HEAD request and must not be given a body, and an RPC's return shape
+is part of its contract (`get_rotated_restaurants` returns
+`{ restaurant_data, total_count }`, not bare rows).
+
+### Configs
+
+- `playwright.config.ts` — base URL `http://localhost:8080`, chromium/firefox/webkit
+  desktop plus mobile projects, 60s timeout, 2 retries on CI. Sweeps all of `tests/`
+  except `route-smoke.spec.ts`.
+- `playwright.smoke.config.ts` — base URL `http://localhost:4173`, an explicit
+  `testMatch` of the critical journeys.
+- `playwright.a11y.config.ts` — base URL `http://localhost:4174`, the axe block.
+
+### Commands
 
 ```bash
-npm test                  # All tests
-npm run test:a11y         # Accessibility
-npm run test:mobile       # Mobile responsive
-npm run test:performance  # Performance
-npm run test:ui           # Interactive UI
+npm test                  # every spec in tests/, locally only
+npm run test:a11y         # accessibility
+npm run test:mobile       # mobile responsive
+npm run test:performance  # performance
+npm run test:ui           # interactive UI
+npm run check-e2e-lanes   # which specs no CI lane runs
 ```
+
+There are **no visual snapshots**. `visual-regression.spec.ts` carried 37MB of
+`-win32` baselines that could not match on any CI runner, so its two screenshot tests
+are gone; the fourteen DOM-measuring tests survive as `layout-integrity.spec.ts`.
 
 ## Common Commands
 
 ```bash
 # Development
 npm run dev                 # http://localhost:8080
-npm run validate            # lint + type-check
+# validate is ~30 offline checks, then eslint, then the app-project type
+# ratchet. It runs NO tests - `npm test` and the Deno suites are separate.
+# About 3m30s, most of it the type ratchet at the end.
+npm run validate            # checks + lint + type-check (no tests)
 npm run validate:strict     # strict variant
-npm test                    # all Playwright tests
+npm test                    # all Playwright tests (not part of validate)
 
 # Build
 npm run build               # production
@@ -197,6 +265,18 @@ node scripts/generate-sitemap.js
 ## Critical Rules
 
 These override anything else in this file. Read before doing work.
+
+### Money is decided on the server
+
+Nothing the browser computes may reach a row that says what someone is charged.
+For advertisers, `placementTotalPrice()` in `src/hooks/useCampaigns.ts` mirrors
+`calculate_campaign_pricing()` for DISPLAY ONLY; the trigger on
+`campaign_placements` and `create-campaign-checkout` decide the amount, from the
+same rate card, server-side. WEB-ADS-003 is what happens when that slips: the
+summary totalled a hardcoded daily rate with no volume discount while the stored
+row came from the RPC with one, so the page said $70 and the row said $66.50.
+Two formulas for one price is a bug generator. Same rule for subscriptions -
+`create-subscription-checkout` owns the plan and the amount.
 
 ### Branch first, code second
 
@@ -403,7 +483,10 @@ Pre-deploy: `npm run validate && npm test && npm run build`. Rollback via Cloudf
 
 ---
 
-**Last Updated**: 2026-04-28 — refined for conciseness. Update this file when patterns shift.
+**Last Updated**: 2026-09-19 - counts replaced with the command that produces
+them (they were stale by 2-3x), the `npm run validate` line corrected (it runs
+no tests), and the server-side pricing rule added. Update this file when
+patterns shift; prefer a command over a number.
 
 <!-- SELVEDGE:START -->
 ## Pearson Media — shared context

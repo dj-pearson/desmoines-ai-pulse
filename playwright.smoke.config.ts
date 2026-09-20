@@ -18,6 +18,17 @@ import { defineConfig, devices } from '@playwright/test';
  *
  * Usage: npm run test:smoke
  */
+/**
+ * A locally installed Chromium, when Playwright's own download is absent or at
+ * a different revision (WEB-CI-028). Inert in CI, where the browsers Playwright
+ * expects are installed by the workflow. See TESTING.md for why this is needed
+ * in a container: Playwright looks for chrome-headless-shell at the revision it
+ * shipped with, and a preinstalled full chromium is at a different path.
+ */
+const localChromium = process.env.PLAYWRIGHT_CHROMIUM_PATH
+  ? { launchOptions: { executablePath: process.env.PLAYWRIGHT_CHROMIUM_PATH } }
+  : {};
+
 export default defineConfig({
   testDir: './tests',
   // cookie-consent.spec.ts joins route-smoke here for WEB-LEGAL-009 AC5.
@@ -55,7 +66,15 @@ export default defineConfig({
   // network requests and cookies - which no source-text check can establish.
   // scripts/check-consent-gate.mjs covers the source side; this covers what
   // actually happens.
-  testMatch: /(route-smoke|cookie-consent|backend-down|touch-targets|page-headings|search-request-loop|request-budget)\.spec\.ts/,
+  //
+  // search-filters, url-filter-state and sticky-filter-chips joined for
+  // WEB-CI-028 AC2, which required them to pass against the built site first.
+  // The blocker recorded for four passes was "they need a preview deploy with
+  // a live backend": seven of their tests assert on RESULTS, and the lane
+  // builds with placeholder VITE_SUPABASE_* so no row ever arrives. They do not
+  // need a backend, they need rows - tests/support/fixtureBackend.ts answers
+  // PostgREST from fixtures. 45/45 against the production build.
+  testMatch: /(search-filters|url-filter-state|sticky-filter-chips|route-smoke|cookie-consent|backend-down|touch-targets|page-headings|search-request-loop|request-budget|turnstile-inert|subscription-checkout|advertise-success-receipt|submission-live-link|campaign-self-service)\.spec\.ts/,
   fullyParallel: true,
   forbidOnly: !!process.env.CI,
   retries: process.env.CI ? 2 : 0,
@@ -71,7 +90,7 @@ export default defineConfig({
   projects: [
     {
       name: 'chromium-desktop',
-      use: { ...devices['Desktop Chrome'] },
+      use: { ...devices['Desktop Chrome'], ...localChromium },
     },
   ],
 

@@ -173,14 +173,6 @@
   .glass-card {
     @apply bg-white/80 dark:bg-black/40 backdrop-blur-md border border-white/20 dark:border-white/10 shadow-sm hover:shadow-md transition-all duration-300;
   }
-
-  .text-gradient {
-    @apply bg-clip-text text-transparent bg-gradient-to-r from-primary to-secondary;
-  }
-
-  .text-gradient-blue {
-    @apply bg-clip-text text-transparent bg-gradient-to-r from-[#071e62] to-[#0a2a8a] dark:from-[#4d7cfe] dark:to-[#071e62];
-  }
 }
 
 /* Mobile-First Design System - Optimized for GEO and Performance
@@ -884,7 +876,18 @@ All colors MUST be HSL. Touch targets minimum 44px.
   }
 }
 
-/* Reduced motion support */
+/* Reduced motion: respect the OS preference, for users with vestibular
+   disorders among others (WEB-QUAL-013 AC3).
+
+   THIS BLOCK WAS HERE TWICE, character for character, ~470 lines apart. Two
+   identical copies are not a bug in the rendered CSS - the second is simply
+   redundant - but they are a maintenance trap: editing one leaves the other
+   asserting the old rule, and the file gives no hint the other exists. The
+   duplicate at the end of the file is deleted.
+
+   There was a THIRD implementation of the same idea in src/hooks/useReducedMotion.ts,
+   imported by nothing. It is deleted too; useAccessibility.ts is the hook that
+   actually runs when a component needs to branch on this in JS. */
 @media (prefers-reduced-motion: reduce) {
   *,
   *::before,
@@ -1350,14 +1353,3 @@ html.capacitor-app,
   height: env(safe-area-inset-top, 0px);
 }
 
-/* --- Reduced motion: respect OS preference for users with vestibular disorders --- */
-@media (prefers-reduced-motion: reduce) {
-  *,
-  *::before,
-  *::after {
-    animation-duration: 0.01ms !important;
-    animation-iteration-count: 1 !important;
-    transition-duration: 0.01ms !important;
-    scroll-behavior: auto !important;
-  }
-}

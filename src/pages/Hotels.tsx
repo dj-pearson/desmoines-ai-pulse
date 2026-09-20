@@ -25,7 +25,6 @@ import { Search, SlidersHorizontal, X, Building2 } from "lucide-react";
 import { Skeleton } from "@/components/ui/skeleton";
 import { EmptyState } from "@/components/ui/empty-state";
 import { ErrorState } from "@/components/ui/error-state";
-import { useDocumentTitle } from "@/hooks/useDocumentTitle";
 import { getCanonicalUrl } from "@/lib/brandConfig";
 import AffiliateDisclosureBanner from "@/components/AffiliateDisclosureBanner";
 import Header from "@/components/Header";
@@ -84,7 +83,6 @@ const SORT_OPTIONS = [
 type SortOption = "featured" | "price_low" | "price_high" | "rating" | "alphabetical" | "newest";
 
 export default function Hotels() {
-  useDocumentTitle("Stay in Des Moines - Hotels & Accommodations");
 
   const [search, setSearch] = useState("");
   const [debouncedSearch, setDebouncedSearch] = useState("");
@@ -269,7 +267,7 @@ export default function Hotels() {
   return (
     <>
       <Helmet>
-        <title>Stay in Des Moines - Hotels &amp; Accommodations | Des Moines Insider</title>
+        <title>Hotels in Des Moines - Where to Stay | Des Moines Insider</title>
         <meta
           name="description"
           content="Find the best hotels in Des Moines, Iowa. Browse downtown hotels, West Des Moines accommodations, and hotels near popular event venues. Book your stay today."
@@ -282,7 +280,7 @@ export default function Hotels() {
             static og: and twitter: tags were the only ones shipping — pinned to the
             homepage on every route. Emitting them here lets the static copies be
             marked data-rh and replaced rather than duplicated. */}
-        <meta property="og:title" content="Stay in Des Moines - Hotels & Accommodations | Des Moines Insider" />
+        <meta property="og:title" content="Hotels in Des Moines - Where to Stay | Des Moines Insider" />
         <meta property="og:description" content="Find the best hotels in Des Moines, Iowa. Browse downtown hotels, West Des Moines accommodations, and hotels near popular event venues. Book your stay today." />
         <meta property="og:url" content={getCanonicalUrl('/stay')} />
         <meta name="twitter:title" content="Stay in Des Moines - Hotels & Accommodations | Des Moines Insider" />

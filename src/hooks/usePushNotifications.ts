@@ -3,6 +3,7 @@ import { useNavigate } from 'react-router-dom';
 import { isCapacitor, getPlatform } from '@/lib/capacitorUtils';
 import { supabase } from '@/integrations/supabase/client';
 import { storage } from '@/lib/safeStorage';
+import { fromUnknownTable } from "@/integrations/supabase/unknownTable";
 
 const PUSH_TOKEN_KEY = 'push_notification_token';
 const PUSH_ENABLED_KEY = 'push_notifications_enabled';
@@ -36,7 +37,7 @@ export function usePushNotifications() {
     try {
       const { data: { user } } = await supabase.auth.getUser();
       if (user) {
-        await supabase.from('device_tokens').upsert(
+        await fromUnknownTable('device_tokens').upsert(
           {
             user_id: user.id,
             token: deviceToken,

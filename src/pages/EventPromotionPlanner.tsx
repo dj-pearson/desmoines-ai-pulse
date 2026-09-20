@@ -37,6 +37,8 @@ import { storage } from '@/lib/safeStorage';
 import { getCanonicalUrl } from '@/lib/brandConfig';
 import { Breadcrumbs } from '@/components/ui/breadcrumbs';
 import type { EventFormData, PromotionTimeline, EmailCaptureData } from '@/types/event-promotion';
+import { saveEmailCapture } from '@/lib/email-integration';
+import { logConsent } from '@/lib/consentLog';
 
 export default function EventPromotionPlanner() {
   const [searchParams] = useSearchParams();
@@ -85,8 +87,24 @@ export default function EventPromotionPlanner() {
 
   const handleEmailCapture = async (data: EmailCaptureData) => {
     try {
-      // Send to backend/email service
-      // await saveEmailCapture(data);
+      // WEB-QUAL-013: this line was COMMENTED OUT. The modal asks for an
+      // address under an explicit agreement to receive emails, and the address
+      // went nowhere - the visitor unlocked the timeline and we kept nothing.
+      // Stored before anything else in this handler, so a failure to keep it
+      // cannot be hidden by the unlock succeeding.
+      await saveEmailCapture(data);
+
+      // The modal takes a tick-box agreement; consent_records is where we have
+      // to be able to demonstrate it (GDPR Art. 7). logConsent never throws.
+      void logConsent({
+        type: "marketing_email",
+        granted: true,
+        source: "event_promotion_planner",
+        // Hashed before storage by logConsent. Without it the row identifies
+        // nobody, which makes it useless as evidence of THIS person's consent.
+        email: data.email,
+        metadata: { sendReminders: data.sendReminders },
+      });
 
       setUserEmail(data.email);
       setShowEmailModal(false);
@@ -104,7 +122,11 @@ export default function EventPromotionPlanner() {
 
       trackEmailCaptured(data.email, data.sendReminders);
 
-      toast.success('🎉 Full timeline unlocked! Check your email for your playbook.');
+      // WEB-QUAL-013: this said "Check your email for your playbook", and
+      // nothing emails one - the PDF downloads below, from the browser. Same
+      // shape as WEB-FEAT-019's newsletter toast: copy describing a send that
+      // does not exist. It now describes what the next second actually does.
+      toast.success('Full timeline unlocked. Your PDF playbook is downloading.');
 
       // Auto-download PDF
       if (timeline) {
@@ -160,7 +182,7 @@ export default function EventPromotionPlanner() {
   return (
     <>
       <Helmet>
-        <title>Free Event Promotion Timeline Generator | DesMoinesInsider.com</title>
+        <title>Event Promotion Timeline Generator | Des Moines Insider</title>
         <meta
           name="description"
           content="Generate a custom 8-week event promotion plan in 2 minutes. Free tool for Des Moines event organizers. Get your timeline now."
@@ -187,10 +209,10 @@ export default function EventPromotionPlanner() {
         {step === 'intro' && (
           <div className="container mx-auto px-4 py-12 max-w-6xl">
             <div className="text-center mb-12">
-              <Badge className="mb-4 bg-gradient-to-r from-blue-600 to-purple-600 text-white">
+              <Badge className="mb-4">
                 FREE TOOL
               </Badge>
-              <h1 className="text-4xl md:text-6xl font-bold mb-4 bg-gradient-to-r from-blue-600 to-purple-600 bg-clip-text text-transparent">
+              <h1 className="text-4xl md:text-6xl font-bold mb-4 text-foreground">
                 Event Promotion Timeline Generator
               </h1>
               <p className="text-xl text-gray-600 mb-8 max-w-3xl mx-auto">

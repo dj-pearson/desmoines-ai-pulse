@@ -12,7 +12,7 @@ import { validateURLForSSRF } from "../_shared/validation.ts";
 import { requireAdminOrApiKey } from "../_shared/apiKeyAuth.ts";
 import { isHostAllowed, fetchTextWithSizeCap } from "../_shared/fetchGuard.ts";
 import { fetchWithTimeout } from "../_shared/fetchWithTimeout.ts";
-import { getAnthropicApiKey, extractClaudeText } from "../_shared/aiConfig.ts";
+import { getAnthropicApiKey, extractClaudeText, buildLightweightClaudeRequest } from "../_shared/aiConfig.ts";
 
 const corsHeaders = {
   'Access-Control-Allow-Origin': '*',
@@ -283,14 +283,18 @@ Please provide analysis in the following JSON format:
       'x-api-key': claudeApiKey,
       'anthropic-version': '2023-06-01'
     },
-    body: JSON.stringify({
-      model: 'claude-3-haiku-20240307',
-      max_tokens: 1000,
-      messages: [{
-        role: 'user',
-        content: analysisPrompt
-      }]
-    })
+    // WEB-BE-041. Was pinned to 'claude-3-haiku-20240307', which is RETIRED and
+    // 404s, so this analysis has been failing on every call. The id now comes
+    // from the ai_config row via buildLightweightClaudeRequest - the Haiku-tier
+    // form of the buildClaudeRequest route AC2 asks for - with a non-retired
+    // fallback, so the next model change is one row rather than three files.
+    body: JSON.stringify(
+      await buildLightweightClaudeRequest([{ role: 'user', content: analysisPrompt }], {
+        supabaseUrl: Deno.env.get('SUPABASE_URL') ?? '',
+        supabaseKey: Deno.env.get('SUPABASE_SERVICE_ROLE_KEY') ?? '',
+        customMaxTokens: 1000,
+      }),
+    )
   }, 60_000);
 
   if (!response.ok) {
@@ -392,14 +396,15 @@ Return as JSON array.
       'x-api-key': claudeApiKey,
       'anthropic-version': '2023-06-01'
     },
-    body: JSON.stringify({
-      model: 'claude-3-haiku-20240307',
-      max_tokens: 1500,
-      messages: [{
-        role: 'user',
-        content: suggestionPrompt
-      }]
-    })
+    // WEB-BE-041, the second of this file's two calls. Same retired pin, same
+    // 404; both now read the id from ai_config.
+    body: JSON.stringify(
+      await buildLightweightClaudeRequest([{ role: 'user', content: suggestionPrompt }], {
+        supabaseUrl: Deno.env.get('SUPABASE_URL') ?? '',
+        supabaseKey: Deno.env.get('SUPABASE_SERVICE_ROLE_KEY') ?? '',
+        customMaxTokens: 1500,
+      }),
+    )
   }, 60_000);
 
   if (!response.ok) {

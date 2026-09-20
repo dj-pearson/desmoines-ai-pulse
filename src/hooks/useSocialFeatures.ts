@@ -116,6 +116,11 @@ export function useSocialFeatures() {
   const [friends, setFriends] = useState<Friend[]>([]);
   const [pendingRequests, setPendingRequests] = useState<Friend[]>([]);
   const [loading, setLoading] = useState(false);
+  // WEB-QA-031: both failure branches below logged and set friends to [], so
+  // /community rendered "No friends yet. Start by sending some friend
+  // requests!" to someone whose friend list simply failed to load - an
+  // instruction to fix a problem they do not have.
+  const [error, setError] = useState<unknown>(null);
 
   const fetchFriends = useCallback(async () => {
     if (!user) {
@@ -125,6 +130,7 @@ export function useSocialFeatures() {
     }
 
     setLoading(true);
+    setError(null);
     try {
       // Both directions: a row is written once, by whoever asked, so the other
       // party's connection is the row where they are the friend_id.
@@ -135,6 +141,7 @@ export function useSocialFeatures() {
 
       if (error) {
         logger.error('fetchFriends', 'Failed to fetch friends', { error });
+        setError(error);
         setFriends([]);
         setPendingRequests([]);
         return;
@@ -149,6 +156,7 @@ export function useSocialFeatures() {
       );
     } catch (error) {
       logger.error('fetchFriends', 'Failed to fetch friends', { error });
+      setError(error);
       setFriends([]);
       setPendingRequests([]);
     } finally {
@@ -262,6 +270,7 @@ export function useSocialFeatures() {
     friendGroups: [] as FriendGroup[],
     groupsAvailable: false,
     loading,
+    error,
     fetchFriends,
     sendFriendRequest,
     acceptFriendRequest,

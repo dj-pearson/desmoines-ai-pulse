@@ -16,7 +16,6 @@ import { Card, CardContent } from "@/components/ui/card";
 import { Utensils } from "lucide-react";
 import { format } from "date-fns";
 import { BRAND, getCanonicalUrl } from "@/lib/brandConfig";
-import { useDocumentTitle } from "@/hooks/useDocumentTitle";
 import { Breadcrumbs } from "@/components/ui/breadcrumbs";
 import { RESTAURANT_LIST_COLUMNS } from "@/lib/listColumns";
 import { useReloadableFetch } from "@/hooks/useReloadableFetch";
@@ -41,7 +40,6 @@ export default function OpenNowRestaurants() {
   const [isLoading, setIsLoading] = useState(true);
   const { error: loadError, setError: setLoadError, reloadKey, retry } = useReloadableFetch();
   const [currentTime, setCurrentTime] = useState(new Date());
-  useDocumentTitle("Open Now Restaurants");
 
   useEffect(() => {
     // Update current time every minute
@@ -96,7 +94,7 @@ export default function OpenNowRestaurants() {
 
   // WEB-SEO-002: was 74 chars and used the retired "Des Moines AI Pulse" brand.
   const pageTitle = `Restaurants Open Now in Des Moines | ${BRAND.name}`;
-  const pageDescription = `Find ${openRestaurants.length}+ restaurants open right now in Des Moines. Real-time operating hours updated continuously. ${isLateNight ? 'Late-night dining options available.' : 'Current lunch and dinner options.'} Order now for pickup or delivery.`;
+  const pageDescription = `Find ${openRestaurants.length}+ restaurants open right now in Des Moines, with hours updated continuously. ${isLateNight ? 'Late-night dining options.' : 'Lunch and dinner options.'}`;
 
   const breadcrumbs = [
     { name: "Restaurants", url: "/restaurants" },

@@ -13,14 +13,16 @@ export interface AffiliatePartner {
   isActive: boolean;
 }
 
-export type AffiliatePlacement = 'top_banner' | 'below_fold' | 'featured_spot' | 'sidebar';
+// WEB-ADS-007: `sidebar` dropped here too. AffiliateAdBanner is reachable only
+// through AdBanner, whose placement prop no longer admits it, so the branch was
+// unreachable the moment the campaign placement went.
+export type AffiliatePlacement = 'top_banner' | 'below_fold' | 'featured_spot';
 
 /** Maps ad placements to the image size used for that slot */
 export const AFFILIATE_PLACEMENT_SIZE_MAP: Record<AffiliatePlacement, AffiliateAdSize> = {
   top_banner: '728x90',
   below_fold: '728x90',
   featured_spot: '300x250',
-  sidebar: '160x600',
 };
 
 export const AFFILIATE_PARTNERS: AffiliatePartner[] = [

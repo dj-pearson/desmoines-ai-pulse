@@ -13,6 +13,7 @@
 
 import { DOMParser } from "https://deno.land/x/deno_dom@v0.1.38/deno-dom-wasm.ts";
 import type { AdapterEvent, AdapterResult, DomainAdapter } from "./types.ts";
+import { fetchAllowed } from "./adapterFetch.ts";
 
 const TICKETS_URL = "https://theiowabarnstormers.com/tickets";
 
@@ -30,15 +31,16 @@ export const barnstormersAdapter: DomainAdapter = {
   async fetch(url: string, _category: string): Promise<AdapterResult> {
     console.log(`🏈 [iowa-barnstormers] Fetching ${url}`);
 
-    const response = await globalThis.fetch(url, {
-      headers: {
-        "User-Agent":
-          "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36",
-        Accept:
-          "text/html,application/xhtml+xml,application/xml;q=0.9,*/*;q=0.8",
-        "Accept-Language": "en-US,en;q=0.5",
-      },
-    });
+    const response = await fetchAllowed(url);
+
+    if (!response) {
+      return {
+        success: false,
+        items: [],
+        adapter: "iowa-barnstormers",
+        error: "Disallowed by robots.txt",
+      };
+    }
 
     if (!response.ok) {
       return {

@@ -34,7 +34,7 @@ servers:
 ### 3️⃣ Deploy Edge Functions
 
 ```bash
-./deploy-chatgpt-plugin.ps1
+.\scripts\windows\deploy-chatgpt-plugin.ps1
 ```
 
 This deploys:
@@ -60,7 +60,7 @@ This publishes:
 **Test your APIs:**
 
 ```bash
-./test-chatgpt-integration.ps1
+.\scripts\windows\test-chatgpt-integration.ps1
 ```
 
 **Register with ChatGPT:**
@@ -158,8 +158,8 @@ desmoines-ai-pulse/
 ├── CHATGPT_INTEGRATION_GUIDE.md     # Full documentation
 ├── CHATGPT_PLUGIN_SUMMARY.md        # Implementation summary
 ├── CHATGPT_QUICK_START.md          # This file
-├── deploy-chatgpt-plugin.ps1        # Deployment script
-└── test-chatgpt-integration.ps1     # Testing script
+├── .\scripts\windows\deploy-chatgpt-plugin.ps1        # Deployment script
+└── .\scripts\windows\test-chatgpt-integration.ps1     # Testing script
 ```
 
 ## What ChatGPT Can Do
@@ -188,4 +188,4 @@ desmoines-ai-pulse/
 
 ---
 
-**Ready?** Start with Step 1 above, or run `./test-chatgpt-integration.ps1` to validate your setup!
+**Ready?** Start with Step 1 above, or run `.\scripts\windows\test-chatgpt-integration.ps1` to validate your setup!

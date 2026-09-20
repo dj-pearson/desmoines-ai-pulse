@@ -8,6 +8,7 @@
  */
 
 import { supabase } from '@/integrations/supabase/client';
+import { fromUnknownTable } from '@/integrations/supabase/unknownTable';
 import type { Database } from '@/integrations/supabase/types';
 import {
   type SecurityContext,
@@ -51,11 +52,16 @@ export async function isResourceOwner(
   }
 
   try {
-    // `ownerColumn` is a runtime string, so the select projection cannot be
-    // statically typed; the row is therefore read as an index map rather than
-    // `any`, which keeps property access on it checked (WEB-QUAL-004).
-    const { data, error } = await supabase
-      .from(tableName)
+    // BOTH the table and the projection are runtime strings here - which
+    // table is decided by resourceType, and which column by OWNERSHIP_COLUMNS.
+    // supabase.from(<non-literal>) matches no overload, so from 2.85+ the
+    // builder resolves to `never` and even .eq('id', ...) fails to type.
+    // fromUnknownTable is the right handle for exactly this: one overload, no
+    // column checking to lose (there is none to begin with when the name is
+    // decided at runtime), and none of the 270-member union cost WEB-CI-031
+    // measured. The row is still read as an index map rather than `any`, which
+    // keeps property access on it checked (WEB-QUAL-004).
+    const { data, error } = await fromUnknownTable(tableName)
       .select(ownerColumn)
       .eq('id', resourceId)
       .single<Record<string, unknown>>();
@@ -280,9 +286,8 @@ export async function validateResourceAccess<T = Record<string, unknown>>(
   }
 
   try {
-    // Fetch the resource
-    const { data, error } = await supabase
-      .from(tableName)
+    // Fetch the resource. Same runtime-table reason as isResourceOwner above.
+    const { data, error } = await fromUnknownTable(tableName)
       .select(config?.select || '*')
       .eq('id', resourceId)
       .single<Record<string, unknown>>();

@@ -162,11 +162,23 @@ export default function UploadCreatives() {
         </div>
       </div>
 
-      {/* Status Banner */}
+      {/* Status Banner. pending_payment means the payment has NOT arrived -
+          this said "Payment received!" to exactly the advertisers whose money
+          had not cleared, which is a false statement about money and the
+          reason they then tried to upload (WEB-ADS-014 AC3). */}
       {campaign.status === 'pending_payment' && (
+        <Alert className="mb-6" variant="destructive">
+          <AlertDescription>
+            <strong>Waiting for payment.</strong> Creatives can be uploaded once
+            the payment clears. You will be emailed when it does.
+          </AlertDescription>
+        </Alert>
+      )}
+      {campaign.status === 'pending_creative' && (
         <Alert className="mb-6">
           <AlertDescription>
-            <strong>Payment received!</strong> You can now upload your ad creatives. They will be reviewed before going live.
+            <strong>Payment received.</strong> You can now upload your ad
+            creatives. They will be reviewed before going live.
           </AlertDescription>
         </Alert>
       )}

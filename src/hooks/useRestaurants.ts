@@ -3,7 +3,7 @@ import { useQuery, useQueryClient } from "@tanstack/react-query";
 import { supabase } from "@/integrations/supabase/client";
 import { Database } from "@/integrations/supabase/types";
 import { getRestaurantRotationSeed } from "@/lib/restaurantRotation";
-import { RESTAURANT_LIST_COLUMNS } from "@/lib/listColumns";
+import { RESTAURANT_LIST_COLUMNS, withAdminColumns } from "@/lib/listColumns";
 import { STALE_TIME, GC_TIME } from "@/lib/queryConfig";
 import { queryKeys } from "@/lib/queryKeys";
 import { createLogger } from "@/lib/logger";
@@ -44,6 +44,15 @@ interface RestaurantFilters {
   dietary?: string[];
   limit?: number;
   offset?: number;
+  /**
+   * Ask for the admin-only columns as well (WEB-PERF-035). Only
+   * /admin/content sets it: ai_writeup is a 250-350 word paragraph per row and
+   * the only thing that reads it is ContentTable's "has a writeup" tick.
+   *
+   * The whole filters object is the query key here, so setting this already
+   * produces its own cache entry.
+   */
+  includeAdminFields?: boolean;
 }
 
 /** Full rating range — i.e. the user has not actually narrowed by rating.
@@ -179,7 +188,17 @@ export function useRestaurants(filters: RestaurantFilters = {}) {
         if (!rpcError && rpcData) {
           return {
             restaurants: deprioritizeUnvisitable(
-              rpcData.map((r) => r.restaurant_data) as unknown as Restaurant[]
+              // .filter(Boolean) because the cast below is a promise, not a
+              // check. A row whose restaurant_data is absent maps to undefined
+              // and the very next thing that happens is `r.status` in
+              // deprioritizeUnvisitable, which throws and drops the WHOLE page
+              // to "Something went wrong" - the same thing a visitor sees when
+              // the backend is down. Found while giving the E2E specs a fixture
+              // backend (WEB-CI-028): one row of the wrong shape, and the page
+              // reported an outage.
+              rpcData
+                .map((r) => r.restaurant_data)
+                .filter(Boolean) as unknown as Restaurant[]
             ),
             totalCount:
               rpcData.length > 0 ? Number(rpcData[0].total_count) : 0,
@@ -209,7 +228,7 @@ export function useRestaurants(filters: RestaurantFilters = {}) {
         // the planner estimate only for large result sets, so it keeps the
         // WEB-PERF-009 intent (no forced full-table count on every filter/sort)
         // while always yielding a number.
-        .select(RESTAURANT_LIST_COLUMNS, { count: "estimated" })
+        .select(withAdminColumns(RESTAURANT_LIST_COLUMNS, filters.includeAdminFields), { count: "estimated" })
         .neq("is_merged", true); // Hide rows merged into a duplicate (WEB-AUTO-005)
 
       // Use full-text search with tsvector for better performance and relevance ranking
@@ -322,7 +341,11 @@ export function useRestaurants(filters: RestaurantFilters = {}) {
         );
       }
 
-      let { data, error, count } = await query;
+      // .returns<Restaurant[]> for the same reason as useEvents: the
+      // projection comes from withAdminColumns() at runtime, so supabase-js
+      // types the rows as GenericStringError[] and every later assignment
+      // fails against it.
+      let { data, error, count } = await query.returns<Restaurant[]>();
 
       if (error) {
         throw error;

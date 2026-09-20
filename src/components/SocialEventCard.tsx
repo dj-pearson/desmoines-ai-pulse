@@ -1,5 +1,5 @@
 import React from 'react';
-import { fetchPriorityAttr } from '@/lib/fetchPriority';
+import { OptimizedImage } from '@/components/OptimizedImage';
 import { Card, CardContent } from '@/components/ui/card';
 import { Badge } from '@/components/ui/badge';
 import { Button } from '@/components/ui/button';
@@ -80,7 +80,11 @@ function SocialEventCardComponent({
   // handler baking inline styles into prerendered HTML that hydration will not
   // clean up.
   const [imageFailed, setImageFailed] = useState(false);
-  const showImage = Boolean(event.image_url) && !imageFailed;
+  // Held in a const so the truthiness check below NARROWS it. `Boolean(x)`
+  // tells TypeScript nothing about x at the JSX, which is why
+  // OptimizedImage's `src: string` was being handed `string | undefined`.
+  const imageUrl = event.image_url;
+  const showImage = !imageFailed && Boolean(imageUrl);
 
   const categoryStyle = getEventCategoryStyle(event.category);
 
@@ -140,14 +144,26 @@ function SocialEventCardComponent({
         <CardContent className="p-0">
           {/* Image Section with Overlay */}
           <div className={`relative overflow-hidden ${featured ? 'h-64 md:h-80' : 'h-52'}`}>
-            {showImage ? (
-              <img
-                src={event.image_url}
+            {showImage && imageUrl ? (
+              // Converted to OptimizedImage in WEB-PERF-041 once the component
+              // stopped gating the img element on an IntersectionObserver.
+              // Before that, converting this one card would have dropped every
+              // event past the first three out of the prerendered HTML - it
+              // renders every event listing on the site - which the raw tag it
+              // replaced did not do. Now the element always renders and only
+              // the fetch is deferred, so the srcset comes for free.
+              //
+              // onError still drives the designed category fallback below
+              // rather than OptimizedImage's own "Image unavailable" panel:
+              // setImageFailed flips showImage, which unmounts this in the same
+              // render, so that panel is never painted.
+              <OptimizedImage
+                src={imageUrl}
                 alt={`${event.title} - ${event.category} event in ${event.city || 'Des Moines'}, Iowa`}
-                className="w-full h-full object-cover transition-transform duration-500 group-hover:scale-110"
-                loading={priority ? "eager" : "lazy"}
-                decoding="async"
-                {...fetchPriorityAttr(priority ? "high" : undefined)}
+                className="object-cover transition-transform duration-500 group-hover:scale-110"
+                containerClassName="w-full h-full"
+                priority={priority}
+                sizes="(max-width: 640px) 100vw, (max-width: 1024px) 50vw, 33vw"
                 onError={() => setImageFailed(true)}
               />
             ) : null}

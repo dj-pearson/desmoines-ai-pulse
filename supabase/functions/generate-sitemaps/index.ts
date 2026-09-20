@@ -131,6 +131,9 @@ serve(async (req) => {
         .select("id, title, date, updated_at, created_at, event_start_utc")
         .gte("date", new Date().toISOString().split("T")[0])
         .neq("is_hidden", true) // Exclude soft-hidden stale events (WEB-AUTO-006)
+        // WEB-BE-034: and the other unpublish switch. Without it an archived
+        // event stayed in sitemap-events.xml and kept being crawled.
+        .is("archived_at", null)
         .order("date", { ascending: true })
         .limit(1000);
 

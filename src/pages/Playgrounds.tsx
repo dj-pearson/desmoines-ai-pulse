@@ -7,7 +7,6 @@ import { Breadcrumbs } from "@/components/ui/breadcrumbs";
 import { FAQSection } from "@/components/FAQSection";
 import { usePlaygroundFacets, usePlaygrounds } from "@/hooks/usePlaygrounds";
 import { useToast } from "@/hooks/use-toast";
-import { useDocumentTitle } from "@/hooks/useDocumentTitle";
 import { BackToTop } from "@/components/BackToTop";
 import { getCanonicalUrl } from "@/lib/brandConfig";
 import { useIsMobile } from "@/hooks/use-mobile";
@@ -40,6 +39,7 @@ import { Star, Filter, List, Map, TreePine, SlidersHorizontal, ChevronRight } fr
 import { SpriteIcon } from "@/components/ui/SpriteIcon";
 import { Link } from "react-router-dom";
 import { useUrlFilters } from "@/hooks/useUrlFilters";
+import { OptimizedImage } from "@/components/OptimizedImage";
 
 // Lazy load map to prevent react-leaflet bundling issues
 const PlaygroundsMap = lazy(() => import("@/components/PlaygroundsMap"));
@@ -54,7 +54,6 @@ const createSlug = (name: string): string => {
 export default function Playgrounds() {
   const { toast } = useToast();
   const isMobile = useIsMobile();
-  useDocumentTitle("Playgrounds");
 
   // URL-synced filters (WEB-UX-035). These lived in local React state, so a
   // filtered view could not be shared or bookmarked and - the everyday cost -
@@ -167,7 +166,7 @@ export default function Playgrounds() {
     ? `Playgrounds for Ages ${selectedAgeRange} in Des Moines`
     : "Des Moines Playgrounds - Parks, Splash Pads & Family Fun";
 
-  const pageDescription = `Discover ${filteredPlaygrounds.length}+ playgrounds in Des Moines, Iowa. Find the best parks with splash pads, accessible equipment, climbing structures, and family-friendly amenities. Free public playgrounds for all ages across the Greater Des Moines Area.`;
+  const pageDescription = `Discover ${filteredPlaygrounds.length}+ playgrounds in Des Moines, Iowa: splash pads, accessible equipment and climbing structures, free and open to all ages across the metro.`;
 
   const breadcrumbs = [
     { name: "Home", url: "/" },
@@ -516,7 +515,7 @@ export default function Playgrounds() {
           </div>
         ) : (
           <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
-            {filteredPlaygrounds.map((playground) => (
+            {filteredPlaygrounds.map((playground, index) => (
               <Link
                 key={playground.id}
                 to={`/playgrounds/${createSlug(playground.name)}`}
@@ -525,11 +524,16 @@ export default function Playgrounds() {
                 <Card className="h-full hover:shadow-lg transition-all duration-300 hover:-translate-y-1 rounded-2xl overflow-hidden">
                   {playground.image_url ? (
                     <div className="aspect-video overflow-hidden">
-                      <img
+                      <OptimizedImage
                         src={playground.image_url}
                         alt={`${playground.name} - Playground in Des Moines`}
-                        className="w-full h-full object-cover transition-transform duration-300 hover:scale-105"
-                        loading="lazy"
+                        className="object-cover transition-transform duration-300 hover:scale-105"
+                        containerClassName="w-full h-full"
+                        // The first row of a three-column grid. Chrome does not start a lazy
+                        // image's fetch until layout has run, so the LCP candidate on a listing
+                        // page must not be lazy (WEB-SEO-032).
+                        priority={index < 3}
+                        sizes="(max-width: 640px) 100vw, (max-width: 1024px) 50vw, 33vw"
                       />
                     </div>
                   ) : (

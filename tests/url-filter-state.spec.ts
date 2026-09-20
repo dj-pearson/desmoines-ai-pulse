@@ -1,4 +1,5 @@
 import { test, expect } from '@playwright/test';
+import { installFixtureBackend } from './support/fixtureBackend';
 
 /**
  * WEB-UX-001 — URL-synced filter state.
@@ -15,6 +16,14 @@ const listPages = [
 ];
 
 test.describe('URL-synced filter state (WEB-UX-001)', () => {
+  // These nine pass against a dead backend too - the URL is written from the
+  // input, not from results. Fixtures are installed anyway so the page under
+  // test is the one a reader sees, rather than a permanent error state that
+  // happens to keep the input mounted.
+  test.beforeEach(async ({ page }) => {
+    await installFixtureBackend(page);
+  });
+
   for (const { path, name } of listPages) {
     test(`${name}: a shareable URL with params applies filters on load`, async ({ page }) => {
       // q is the shared search param across all three list pages.

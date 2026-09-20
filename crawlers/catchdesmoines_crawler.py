@@ -64,6 +64,105 @@ except ImportError:
 # Configuration
 CATCHDESMOINES_BASE_URL = "https://www.catchdesmoines.com"
 EVENTS_LIST_URL = f"{CATCHDESMOINES_BASE_URL}/events/"
+
+# WEB-BE-049. The canonical event category vocabulary, read from the SAME file
+# the edge functions and the browser bundle read. A fourth hand-maintained copy
+# is how the vocabularies diverged in the first place: this crawler's prompt
+# asked for one list, the shared prompt asked for a different one, and that
+# prompt's own example used a word in neither.
+_CATEGORY_JSON = os.path.join("supabase", "functions", "_shared", "eventCategories.json")
+
+
+def _category_data_path() -> str:
+    """The workflow runs this with cwd=crawlers, the offline tests exec the
+    module source with no __file__, and a developer may run it from the repo
+    root. Try all three rather than assume one."""
+    candidates = []
+    here = globals().get("__file__")
+    if here:
+        candidates.append(os.path.join(os.path.dirname(os.path.abspath(here)), "..", _CATEGORY_JSON))
+    candidates.append(os.path.join("..", _CATEGORY_JSON))
+    candidates.append(_CATEGORY_JSON)
+    for c in candidates:
+        if os.path.exists(c):
+            return c
+    return candidates[0]
+
+
+def _load_category_vocabulary() -> tuple:
+    """(categories, fallback, keyword_groups). Falls back to a bare vocabulary
+    if the file is unreadable - a crawl that cannot read a JSON file should not
+    stop, but it must not silently invent categories either."""
+    path = _category_data_path()
+    try:
+        with open(path, encoding="utf-8") as fh:
+            data = json.load(fh)
+        return (
+            list(data["categories"]),
+            data["fallback"],
+            [(g["category"], list(g["match"])) for g in data["keywords"]],
+        )
+    except Exception as e:  # noqa: BLE001
+        logger.warning(f"Could not read the category vocabulary at {path}: {e}")
+        return (["Other"], "Other", [])
+
+
+EVENT_CATEGORIES, FALLBACK_CATEGORY, _CATEGORY_KEYWORDS = _load_category_vocabulary()
+CATEGORY_VOCABULARY = "/".join(EVENT_CATEGORIES)
+
+
+def sanitize_like(value: str, max_length: int = 500) -> str:
+    """Escape LIKE/ILIKE wildcards in a value used as a PATTERN (WEB-BE-048).
+
+    Port of sanitizeLikeInput in supabase/functions/_shared/validation.ts, and
+    it must stay in step with it: the same titles pass through both paths.
+
+    WHY IT MATTERS HERE. _check_duplicate passes a scraped title and venue to
+    .ilike(), where they are patterns rather than values. One stored title
+    already carries a literal percent ("Monday Pop Up Hours and 10% Bourbon"),
+    and in an ilike that percent matches anything - so the check can report a
+    duplicate that is not one. It GATES THE INSERT, so a false match silently
+    drops a real event.
+
+    APOSTROPHES ARE KEPT, for the reason the TypeScript version records:
+    stripping them turned "Chef George's" into "Chef Georges" and MISSED the
+    real duplicate. Many venue names here carry one.
+    """
+    if not isinstance(value, str):
+        return ""
+    return (
+        value[:max_length]
+        .replace("\\", "\\\\")  # backslash first, or the escapes below get escaped
+        .replace("%", "\\%")
+        .replace("_", "\\_")
+        .replace(";", "")
+        .strip()
+    )
+
+
+def normalize_category(raw) -> str:
+    """Port of supabase/functions/_shared/eventCategories.ts normalizeCategory.
+    Total: every input produces a canonical value."""
+    if not isinstance(raw, str):
+        return FALLBACK_CATEGORY
+    trimmed = raw.strip()
+    if not trimmed:
+        return FALLBACK_CATEGORY
+    lower = trimmed.lower()
+    for canonical in EVENT_CATEGORIES:
+        if canonical.lower() == lower:
+            return canonical
+    # Word-prefix, not substring: a plain `in` filed "Block Party" under Arts
+    # because it contains "art". A keyword that is not plain letters ("trade
+    # show", "stand-up") is matched whole, because the split would tear it in
+    # half and it could never fire.
+    words = [w for w in re.split(r"[^a-z]+", lower) if w]
+    for category, matches in _CATEGORY_KEYWORDS:
+        for kw in matches:
+            hit = kw in lower if re.search(r"[^a-z]", kw) else any(w.startswith(kw) for w in words)
+            if hit:
+                return category
+    return FALLBACK_CATEGORY
 CENTRAL_TZ = ZoneInfo("America/Chicago")
 
 # Claude 4.5 Sonnet model
@@ -248,6 +347,13 @@ class CatchDesMoinesCrawler:
         # Extraction failures are counted, not swallowed. A run that extracts
         # nothing because the API call blew up must not exit 0 looking healthy.
         self.extraction_errors: int = 0
+        # Items skipped because their duplicate check could not be completed
+        # (WEB-BE-048). Kept apart from duplicates_skipped: "the event was
+        # already there" and "we could not find out" are different facts.
+        self.duplicate_check_errors: int = 0
+        # Set at the top of run(); the heartbeat row needs a start as well as a
+        # finish or "how long did this take" is unanswerable after the fact.
+        self.started_at: Optional[str] = None
 
     def _init_clients(self):
         """Initialize Supabase and Anthropic clients."""
@@ -437,7 +543,7 @@ For EACH event, extract:
 - date: YYYY-MM-DD HH:MM:SS (Central Time)
 - location: City/venue (default: "Des Moines, IA")
 - venue: Specific venue name
-- category: Music/Sports/Arts/Community/Entertainment/Festival/Food
+- category: EXACTLY ONE OF {CATEGORY_VOCABULARY} - not a word of your own
 - price: Price or "See website"
 - detail_url: The event detail page path (e.g., /event/event-name/12345/)
 
@@ -449,7 +555,7 @@ FORMAT AS JSON ARRAY ONLY:
     "date": "2025-MM-DD HH:MM:SS",
     "location": "Des Moines, IA",
     "venue": "Venue Name",
-    "category": "Category",
+    "category": "Music",
     "price": "Price",
     "detail_url": "/event/event-name/12345/"
   }}
@@ -503,7 +609,14 @@ Return ONLY the JSON array. No other text."""
                 dt = datetime.strptime(date_str, "%Y-%m-%d %H:%M:%S")
             elif re.match(r'^\d{4}-\d{2}-\d{2}$', date_str):
                 dt = datetime.strptime(date_str, "%Y-%m-%d")
-                dt = dt.replace(hour=19, minute=0, second=0)  # Default 7 PM
+                # WEB-BE-037. This stamped 19:00:00, which is indistinguishable
+                # from a real 7pm show and disagreed with the three other
+                # ingestion paths. NO_TIME_MARKER (19:31:58) is the project-wide
+                # sentinel for "the source published a day but no time"; it is
+                # deliberately an odd value so a reader can tell the two apart.
+                # Keep in step with NO_TIME_MARKER in
+                # supabase/functions/_shared/eventDateTime.ts.
+                dt = dt.replace(hour=19, minute=31, second=58)
             else:
                 dt = date_parser.parse(date_str)
 
@@ -569,9 +682,9 @@ Return ONLY the JSON array. No other text."""
             day_end = day_start + timedelta(days=1)
 
             result = self.supabase.table("events").select("id").ilike(
-                "title", self._record_title(event).strip()
+                "title", sanitize_like(self._record_title(event))
             ).ilike(
-                "venue", self._record_venue(event).strip()
+                "venue", sanitize_like(self._record_venue(event))
             ).gte(
                 "date", day_start.isoformat()
             ).lt(
@@ -581,8 +694,19 @@ Return ONLY the JSON array. No other text."""
             return len(result.data) > 0
 
         except Exception as e:
-            logger.warning(f"Error checking duplicate: {e}")
-            return False
+            # WEB-BE-048. TREAT AS A DUPLICATE, i.e. skip. Returning False here
+            # meant "not a duplicate", so one PostgREST hiccup re-inserted every
+            # event in the batch - and this check is the only thing between a
+            # re-crawl and a duplicate row. A skip costs one cycle of latency
+            # and the next scheduled run re-crawls the event; a wrong insert has
+            # to be found and cleaned up by hand. Counted as an extraction error
+            # so the run does not report success while flying blind.
+            logger.warning(
+                f"Error checking duplicate for {self._record_title(event)}; "
+                f"skipping rather than risking a duplicate insert: {e}"
+            )
+            self.duplicate_check_errors += 1
+            return True
 
     async def _insert_event(self, event: dict) -> bool:
         """Insert event into Supabase."""
@@ -623,7 +747,9 @@ Return ONLY the JSON array. No other text."""
                 "event_start_utc": parsed_dt.isoformat(),
                 "location": event.get("location", "Des Moines, IA")[:100],
                 "venue": self._record_venue(event),
-                "category": event.get("category", "General")[:50],
+                # WEB-BE-049: normalized here as well as prompted for, because a
+                # prompt is a request and this is the write.
+                "category": normalize_category(event.get("category")),
                 "price": event.get("price", "See website")[:50],
                 "source_url": event.get("source_url", ""),
                 "is_featured": False,
@@ -648,8 +774,77 @@ Return ONLY the JSON array. No other text."""
             logger.error(f"Error inserting event '{event.get('title')}': {e}")
             return False
 
+    def post_heartbeat(self, result: Optional[dict]) -> None:
+        """Record this run in automation_job_runs (WEB-BE-043).
+
+        WHY A PYTHON WRITE AND NOT AN EDGE FUNCTION. This crawler is a GitHub
+        Actions job. Nothing inside Supabase schedules it, so nothing inside
+        Supabase can tell the difference between "ran and found nothing" and
+        "has not run since February" - which is exactly what happened: the
+        workflow failed on a missing secret every day for six months and the
+        only place that was visible was the Actions tab (WEB-SEO-017). The
+        watchdog reads automation_job_runs, so the crawler has to post there
+        itself.
+
+        BEST EFFORT, ALWAYS. A ledger write that fails must never fail the
+        crawl or change its exit code - the events are already in the table.
+        """
+        if self.dry_run or not self.supabase:
+            return
+
+        found = result["total_found"] if result else 0
+        inserted = result["inserted"] if result else 0
+        duplicates = result["duplicates"] if result else 0
+        errors = (
+            result["extraction_errors"] + result.get("duplicate_check_errors", 0)
+            if result
+            else 1
+        )
+
+        # `result is None` means run() aborted on the first page, which is a
+        # failure however few errors were counted.
+        if result is None:
+            status = "failed"
+            error = "crawl aborted: the first listing page returned no HTML"
+        elif errors:
+            status = "failed"
+            error = f"{errors} extraction error(s)"
+        else:
+            status = "success"
+            error = None
+
+        row = {
+            "job_name": "github-event-crawler",
+            "started_at": self.started_at,
+            "finished_at": datetime.now(tz=ZoneInfo("UTC")).isoformat(),
+            "status": status,
+            "items_processed": inserted,
+            "items_failed": errors,
+            "error": error,
+            "metadata": {
+                "runner": "github-actions",
+                "maxPages": self.max_pages,
+                # The shape supabase/functions/_shared/ingestionHealth.ts reads.
+                "sources": {
+                    "catchdesmoines.com": {
+                        "fetched": found,
+                        "inserted": inserted,
+                        "duplicates": duplicates,
+                        "errors": errors,
+                    }
+                },
+            },
+        }
+
+        try:
+            self.supabase.table("automation_job_runs").insert(row).execute()
+            logger.info("Posted heartbeat row to automation_job_runs")
+        except Exception as e:  # noqa: BLE001 - never let the ledger fail the crawl
+            logger.warning(f"Could not post heartbeat row: {e}")
+
     async def run(self):
         """Run the crawler."""
+        self.started_at = datetime.now(tz=ZoneInfo("UTC")).isoformat()
         logger.info("=" * 60)
         logger.info("CatchDesMoines Event Crawler")
         logger.info(f"Dry Run: {self.dry_run}")
@@ -733,6 +928,7 @@ Return ONLY the JSON array. No other text."""
         logger.info(f"Total events extracted: {len(all_events)}")
         logger.info(f"Events inserted: {self.events_inserted}")
         logger.info(f"Duplicates skipped: {self.duplicates_skipped}")
+        logger.info(f"Duplicate-check errors (skipped): {self.duplicate_check_errors}")
         logger.info(f"Extraction errors: {self.extraction_errors}")
         logger.info("=" * 60)
 
@@ -741,6 +937,9 @@ Return ONLY the JSON array. No other text."""
             "inserted": self.events_inserted,
             "duplicates": self.duplicates_skipped,
             "extraction_errors": self.extraction_errors,
+            # Reported apart from duplicates so an operator can tell "already
+            # there" from "could not find out" (WEB-BE-048).
+            "duplicate_check_errors": self.duplicate_check_errors,
         }
 
 
@@ -761,7 +960,18 @@ async def main():
         pass
 
     crawler = CatchDesMoinesCrawler(dry_run=args.dry_run, max_pages=args.max_pages)
-    result = await crawler.run()
+    try:
+        result = await crawler.run()
+    except Exception:
+        # A crash mid-crawl is the case the ledger most needs to record, and it
+        # is the one an early return would miss. Re-raised immediately after, so
+        # the exit code is unchanged.
+        crawler.post_heartbeat(None)
+        raise
+
+    # Posted before the GITHUB_OUTPUT write and outside any success check, so a
+    # failed crawl leaves a failed row rather than no row at all.
+    crawler.post_heartbeat(result)
 
     # Output for GitHub Actions
     if os.environ.get("GITHUB_OUTPUT"):

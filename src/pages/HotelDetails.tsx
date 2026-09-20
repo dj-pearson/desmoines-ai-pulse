@@ -1,5 +1,6 @@
 import { useParams, Link } from "react-router-dom";
 import { RouteCanonical } from "@/components/RouteCanonical";
+import { ErrorState } from "@/components/ui/error-state";
 import { Helmet } from "react-helmet-async";
 import { useHotel } from "@/hooks/useHotels";
 import HotelSchema from "@/components/schema/HotelSchema";
@@ -8,7 +9,6 @@ import { Badge } from "@/components/ui/badge";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Skeleton } from "@/components/ui/skeleton";
 import { Phone, Globe, Mail, Star, ChevronRight, ArrowLeft, Navigation } from "lucide-react";
-import { useDocumentTitle } from "@/hooks/useDocumentTitle";
 import AffiliateDisclosureBanner from "@/components/AffiliateDisclosureBanner";
 import Header from "@/components/Header";
 import Footer from "@/components/Footer";
@@ -20,6 +20,7 @@ import { StickyMobileCTA } from "@/components/StickyMobileCTA";
 import { BreadcrumbListSchema } from "@/components/schema/BreadcrumbListSchema";
 import { BRAND, getCanonicalUrl } from "@/lib/brandConfig";
 import { SpriteIcon } from "@/components/ui/SpriteIcon";
+import { OptimizedImage } from "@/components/OptimizedImage";
 
 function StarRating({ rating }: { rating: number }) {
   const stars = [];
@@ -41,7 +42,7 @@ function StarRating({ rating }: { rating: number }) {
 
 export default function HotelDetails() {
   const { slug } = useParams<{ slug: string }>();
-  const { hotel, isLoading, error } = useHotel(slug);
+  const { hotel, isLoading, error, refetch } = useHotel(slug);
 
   // WEB-FEAT-012. Three call sites below read hotel.source_url, a column
   // public.hotels does not have — confirmed live, the REST API returns 42703
@@ -53,7 +54,6 @@ export default function HotelDetails() {
   // is the fallback, and today it is the one that is actually populated.
   const bookingUrl = hotel?.affiliate_url ?? hotel?.website ?? undefined;
 
-  useDocumentTitle(hotel ? `${hotel.name} - Stay in Des Moines` : "Hotel Details");
 
   if (isLoading) {
     return (
@@ -77,7 +77,28 @@ export default function HotelDetails() {
     );
   }
 
-  if (error || !hotel) {
+  /**
+   * WEB-SEO-040. THIS BRANCH USED TO READ `if (error || !hotel)`, so a failed
+   * fetch and a missing row produced the same page - "Hotel Not Found" plus a
+   * noindex. A transient PostgREST error on a real hotel page therefore asked
+   * Google to drop it. The two answers are separated now; the retry state
+   * carries no robots meta at all, because the page is fine and saying nothing
+   * leaves whatever is indexed alone.
+   */
+  if (error) {
+    return (
+      <div className="min-h-screen bg-background pb-24">
+        <RouteCanonical path={`/stay/${slug}`} />
+        <Header />
+        <div className="container mx-auto px-4 py-16">
+          <ErrorState error={error} onRetry={() => void refetch()} />
+        </div>
+        <Footer />
+      </div>
+    );
+  }
+
+  if (!hotel) {
     return (
       <div className="min-h-screen bg-background pb-24">
         <Helmet>
@@ -195,10 +216,12 @@ export default function HotelDetails() {
         <div className="container mx-auto px-4 mb-8">
           <div className="relative h-64 md:h-96 rounded-xl overflow-hidden">
             {hotel.image_url ? (
-              <img
+              <OptimizedImage
                 src={hotel.image_url}
                 alt={hotel.name}
-                className="w-full h-full object-cover"
+                priority
+                sizes="(max-width: 768px) 100vw, 1024px"
+                containerClassName="absolute inset-0"
               />
             ) : (
               <div className="w-full h-full bg-gradient-to-br from-[#1a0f3c] via-[#2D1B69] to-[#DC143C] flex items-center justify-center">
@@ -299,11 +322,12 @@ export default function HotelDetails() {
                   <div className="grid grid-cols-2 md:grid-cols-3 gap-3">
                     {hotel.gallery_urls.map((url, index) => (
                       <div key={index} className="aspect-video rounded-lg overflow-hidden">
-                        <img
+                        <OptimizedImage
                           src={url}
                           alt={`${hotel.name} photo ${index + 1}`}
-                          className="w-full h-full object-cover"
-                          loading="lazy"
+                          className="object-cover"
+                          containerClassName="w-full h-full"
+                          sizes="(max-width: 640px) 100vw, (max-width: 1024px) 50vw, 33vw"
                         />
                       </div>
                     ))}

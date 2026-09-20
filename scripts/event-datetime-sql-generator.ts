@@ -14,6 +14,22 @@ if (!SUPABASE_PUBLISHABLE_KEY) {
 
 const supabase = createClient(SUPABASE_URL, SUPABASE_PUBLISHABLE_KEY);
 
+/** Single-event pages on the platforms this script knows how to read. */
+const PLATFORM_URL_PATTERNS = [
+  "%eventbrite.com/e/%",
+  "%firstfleetconcerts.com/events/detail/%",
+  "%desmoinesperformingarts.org/whats-on/events/%",
+  "%ticketmaster.com%",
+];
+
+/** Listing pages rather than a single event, so there is no date to extract. */
+const GENERIC_CALENDAR_URL_PATTERNS = [
+  "%/events?%",
+  "%/events/?%",
+  "%catchdesmoines.com/events/?skip=%",
+  "%catchdesmoines.com/events/?utm_source=%",
+];
+
 interface EventDateTimeInfo {
   id: string;
   title: string;
@@ -238,43 +254,56 @@ class EventDateTimeCrawlerSQL {
     console.log("🚀 Event DateTime Crawler - SQL Generator");
     console.log("═".repeat(50));
 
-    let query = supabase
+    // FILTERS ARE CHAINED, NEVER REASSIGNED, and that is deliberate.
+    // `let query = <filter builder>` followed by `query = query.order(...)`
+    // assigns a PostgrestTransformBuilder back into a variable whose declared
+    // type is a PostgrestFilterBuilder. Under @supabase/supabase-js 2.85+ the
+    // structural check between the two exceeds the instantiation depth limit
+    // and `npm run type-check:scripts` reports TS2589 - the single error that
+    // failed every run of the weekly Dependency Update Agent from 2026-07-13
+    // to 2026-09-14 (WEB-QUAL-011). Measured: a pure chain and a single
+    // filter-to-filter reassignment both check fine; it is the filter-to-
+    // transform reassignment that does not. Keep the transforms at the end.
+    const base = supabase
       .from("events")
       .select("id, title, date, source_url")
       .not("source_url", "is", null);
 
-    if (eventId) {
-      query = query.eq("id", eventId);
-      console.log(`🎯 Target Event ID: ${eventId}`);
-    } else {
-      // Apply filtering based on URL patterns
+    const scoped = (() => {
+      if (eventId) {
+        console.log(`🎯 Target Event ID: ${eventId}`);
+        return base.eq("id", eventId);
+      }
       if (filterType === 'platform') {
         console.log(`🏢 Filter: Specific Platforms Only (Eventbrite, First Fleet, DMPA)`);
-        query = query.or(
-          "source_url.ilike.%eventbrite.com/e/%," +
-          "source_url.ilike.%firstfleetconcerts.com/events/detail/%," +
-          "source_url.ilike.%desmoinesperformingarts.org/whats-on/events/%," +
-          "source_url.ilike.%ticketmaster.com%"
-        );
-      } else if (filterType === 'safe') {
+        return base.or(PLATFORM_URL_PATTERNS.map((p) => `source_url.ilike.${p}`).join(","));
+      }
+      if (filterType === 'safe') {
         console.log(`🛡️ Filter: Safe URLs Only (excluding generic calendar pages)`);
-        query = query
-          .not("source_url", "ilike", "%/events?%")
-          .not("source_url", "ilike", "%/events/?%")
-          .not("source_url", "ilike", "%catchdesmoines.com/events/?skip=%")
-          .not("source_url", "ilike", "%catchdesmoines.com/events/?utm_source=%");
-      } else if (filterType === 'all') {
-        console.log(`🌍 Filter: ALL Events (including problematic URLs)`);
-      } else {
-        console.log(`📊 Filter: Default (all events)`);
+        return base
+          .not("source_url", "ilike", GENERIC_CALENDAR_URL_PATTERNS[0])
+          .not("source_url", "ilike", GENERIC_CALENDAR_URL_PATTERNS[1])
+          .not("source_url", "ilike", GENERIC_CALENDAR_URL_PATTERNS[2])
+          .not("source_url", "ilike", GENERIC_CALENDAR_URL_PATTERNS[3]);
       }
-      
-      query = query.order("date", { ascending: true });
-      if (limit) {
-        query = query.limit(limit);
-        console.log(`📊 Limit: ${limit} events`);
-      }
+      console.log(
+        filterType === 'all'
+          ? `🌍 Filter: ALL Events (including problematic URLs)`
+          : `📊 Filter: Default (all events)`,
+      );
+      return base;
+    })();
+
+    // A single event is fetched by id, so ordering and limiting it is noise -
+    // same as before this was restructured.
+    if (limit && !eventId) {
+      console.log(`📊 Limit: ${limit} events`);
     }
+    const query = eventId
+      ? scoped
+      : limit
+        ? scoped.order("date", { ascending: true }).limit(limit)
+        : scoped.order("date", { ascending: true });
 
     const { data: events, error } = await query;
 

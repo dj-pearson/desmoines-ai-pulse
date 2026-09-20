@@ -8,6 +8,7 @@ import { Link } from "react-router-dom";
 import { formatEventDateShort } from "@/lib/timezone";
 import { cn } from "@/lib/utils";
 import { SpriteIcon } from "@/components/ui/SpriteIcon";
+import { OptimizedImage } from "@/components/OptimizedImage";
 
 interface RecentlyViewedProps {
   limit?: number;
@@ -69,12 +70,14 @@ export function RecentlyViewed({
               <div className="flex items-center gap-3 p-3 rounded-lg hover:bg-muted/50 transition-colors">
                 {item.image_url && (
                   <div className="relative w-16 h-16 rounded overflow-hidden flex-shrink-0">
-                    <img
+                    <OptimizedImage
                       src={item.image_url}
                       alt={item.title}
-                      className="w-full h-full object-cover group-hover:scale-110 transition-transform duration-300"
-                      loading="lazy"
-                      decoding="async"
+                      width={64}
+                      height={64}
+                      containerClassName="w-full h-full"
+                      className="object-cover group-hover:scale-110 transition-transform duration-300"
+                      sizes="64px"
                     />
                   </div>
                 )}
@@ -154,12 +157,14 @@ export function RecentlyViewed({
               <div className="flex gap-4 p-3 rounded-lg hover:bg-muted/50 transition-all duration-300 hover:shadow-md">
                 {item.image_url && (
                   <div className="relative w-24 h-24 rounded overflow-hidden flex-shrink-0">
-                    <img
+                    <OptimizedImage
                       src={item.image_url}
                       alt={item.title}
-                      className="w-full h-full object-cover group-hover:scale-110 transition-transform duration-300"
-                      loading="lazy"
-                      decoding="async"
+                      width={96}
+                      height={96}
+                      containerClassName="w-full h-full"
+                      className="object-cover group-hover:scale-110 transition-transform duration-300"
+                      sizes="96px"
                     />
                   </div>
                 )}

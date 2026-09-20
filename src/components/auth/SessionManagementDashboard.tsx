@@ -19,6 +19,7 @@ import { useToast } from '@/hooks/use-toast';
 import { Monitor, Smartphone, Tablet, MapPin, Clock, LogOut, CheckCircle2, Loader2 } from 'lucide-react';
 import { formatDistanceToNow } from 'date-fns';
 import { createLogger } from '@/lib/logger';
+import { fromUnknownTable } from "@/integrations/supabase/unknownTable";
 
 const log = createLogger('SessionManagementDashboard');
 
@@ -62,8 +63,7 @@ export function SessionManagementDashboard() {
   const loadSessions = async () => {
     setIsLoading(true);
     try {
-      const { data, error } = await supabase
-        .from('user_sessions')
+      const { data, error } = await fromUnknownTable('user_sessions')
         .select('*')
         .eq('user_id', user?.id)
         .eq('is_active', true)

@@ -1,6 +1,6 @@
 {
   "$comment": "Known unresolvable Supabase references, frozen by scripts/check-schema-usage.mjs --update. This list must only ever SHRINK. Each entry is a feature that silently does nothing in production.",
-  "generated": 195,
+  "generated": 193,
   "findings": [
     "column|src/hooks/useCrmActivities.ts|crm_activities.activity_type",
     "column|src/hooks/useCrmActivities.ts|crm_activities.contact_id",
@@ -10,6 +10,8 @@
     "column|src/hooks/useCrmActivities.ts|crm_activities.performed_by",
     "column|src/hooks/useCrmContacts.ts|crm_activities.contact_id",
     "column|src/hooks/useCrmDashboard.ts|crm_activities.performed_at",
+    "embed|src/hooks/useCrmActivities.ts|crm_activities->crm_contacts",
+    "embed|src/hooks/useCrmDashboard.ts|crm_activities->crm_contacts",
     "rpc|scripts/run-migration.ts|exec_sql",
     "rpc|src/components/auth/SessionManagementDashboard.tsx|revoke_all_other_sessions",
     "rpc|src/components/auth/SessionManagementDashboard.tsx|revoke_session",
@@ -22,8 +24,6 @@
     "rpc|src/hooks/useCrmSegments.ts|add_crm_activity",
     "rpc|src/hooks/useCrmSegments.ts|evaluate_segment_rules",
     "rpc|src/hooks/useCrmTasks.ts|add_crm_activity",
-    "rpc|src/hooks/useLoginActivity.ts|get_user_login_activity",
-    "rpc|src/hooks/useLoginActivity.ts|log_login_activity",
     "rpc|src/hooks/usePasswordPolicy.ts|get_active_password_policy",
     "rpc|src/hooks/usePasswordPolicy.ts|validate_password_policy",
     "rpc|src/hooks/usePayments.ts|get_user_payment_summary",
@@ -41,7 +41,6 @@
     "table|src/components/cms/AuthorManager.tsx|author_profiles",
     "table|src/components/cms/CategoryTagManager.tsx|article_categories",
     "table|src/components/cms/CategoryTagManager.tsx|article_tags",
-    "table|src/components/cms/ContentQueue.tsx|content_queue_comments",
     "table|src/components/cms/EnhancedArticleEditor.tsx|article_categories",
     "table|src/components/cms/EnhancedArticleEditor.tsx|article_tags",
     "table|src/components/cms/EnhancedArticleEditor.tsx|author_profiles",

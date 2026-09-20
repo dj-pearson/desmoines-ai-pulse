@@ -40,11 +40,38 @@ declare const Deno: {
 /**
  * Deno's node: compatibility layer. A test that must run without a route to
  * deno.land imports node:assert instead of the std assert module, and tsc has
- * no idea what a `node:` specifier is. Same rule as remote.d.ts: `any`, because
- * a hand-written approximation would be wrong somewhere nobody would look.
+ * no idea what a `node:` specifier is.
+ *
+ * THIS WAS A BARE `any`, on the reasoning that a hand-written approximation
+ * would be wrong somewhere nobody would look. That is right about the shape of
+ * the risk and wrong about the cost: with `any`, `assert.ok(x)` does not NARROW
+ * x, so every test that asserts a value is present and then uses it reports
+ * TS18047 against the edge-types ratchet. It has cost two detours and two
+ * `?? ''` workarounds that made tests read worse than the thing they check.
+ *
+ * So: `ok` is declared as a real assertion function and the handful of members
+ * these suites use are typed. Everything else stays `any` through the index
+ * signature, which keeps the original concern intact for members nobody has
+ * exercised yet - an unlisted method still compiles, it just does not narrow.
  */
 declare module 'node:assert' {
-  const strict: any;
+  interface StrictAssert {
+    /** The one that matters: `asserts value` is what makes narrowing work. */
+    ok(value: unknown, message?: string | Error): asserts value;
+    equal(actual: unknown, expected: unknown, message?: string | Error): void;
+    notEqual(actual: unknown, expected: unknown, message?: string | Error): void;
+    strictEqual(actual: unknown, expected: unknown, message?: string | Error): void;
+    notStrictEqual(actual: unknown, expected: unknown, message?: string | Error): void;
+    deepStrictEqual(actual: unknown, expected: unknown, message?: string | Error): void;
+    notDeepStrictEqual(actual: unknown, expected: unknown, message?: string | Error): void;
+    match(value: string, regExp: RegExp, message?: string | Error): void;
+    throws(fn: () => unknown, ...rest: unknown[]): void;
+    rejects(fn: () => Promise<unknown>, ...rest: unknown[]): Promise<void>;
+    fail(message?: string | Error): never;
+    // eslint-disable-next-line @typescript-eslint/no-explicit-any
+    [member: string]: any;
+  }
+  const strict: StrictAssert;
   export { strict };
   const _default: any;
   export default _default;

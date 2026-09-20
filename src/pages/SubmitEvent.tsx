@@ -14,7 +14,10 @@ import { SpriteIcon } from "@/components/ui/SpriteIcon";
 export default function SubmitEvent() {
   const { user, isLoading: authLoading } = useAuth();
   const navigate = useNavigate();
-  useDocumentTitle("Submit an Event | Des Moines Insider");
+  // The hook appends " | Des Moines Insider" itself, so passing it here
+  // rendered "Submit an Event | Des Moines Insider | Des Moines Insider" in
+  // the tab (WEB-SEO-028).
+  useDocumentTitle("Submit an Event");
 
   const handleEventSubmitted = () => {
     toast.success("Event submitted successfully! We'll review it within 48 hours.");

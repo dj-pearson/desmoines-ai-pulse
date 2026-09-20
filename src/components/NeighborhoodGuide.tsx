@@ -1,153 +1,104 @@
 import { useState } from "react";
+import { Link } from "react-router-dom";
 import { Star } from "lucide-react";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import { SpriteIcon } from "@/components/ui/SpriteIcon";
-import { formatInCentralTime } from "@/lib/timezone";
-
-interface NeighborhoodData {
-  description: string;
-  highlights: string[];
-  zipCodes: string[];
-  keywords: string;
-  detailedDescription?: string;
-  demographics?: string;
-  bestFor?: string;
-}
+import { formatInCentralTime, createEventSlugWithCentralTime } from "@/lib/timezone";
+import { createSlug } from "@/lib/slug";
+import { NEIGHBORHOOD_MIN_ITEMS, type Neighborhood } from "@/lib/neighborhoods";
+import type {
+  NeighborhoodAttraction,
+  NeighborhoodRestaurant,
+} from "@/hooks/useNeighborhoodContent";
+import type { Event } from "@/lib/types";
 
 interface NeighborhoodGuideProps {
-  neighborhood: string;
-  events?: any[];
-  restaurants?: any[];
-  attractions?: any[];
+  neighborhood: Neighborhood;
+  events: Event[];
+  restaurants: NeighborhoodRestaurant[];
+  attractions: NeighborhoodAttraction[];
 }
 
-export default function NeighborhoodGuide({ 
-  neighborhood, 
-  events = [], 
-  restaurants = [], 
-  attractions = [] 
+/**
+ * The body of a neighborhood guide (WEB-SEO-036).
+ *
+ * THIS COMPONENT USED TO OWN ITS OWN COPY OF THE NEIGHBORHOOD LIST, keyed by
+ * DISPLAY NAME, and it knew seven neighborhoods while the routes prerendered
+ * four - only one of which overlapped. The list now lives in
+ * src/lib/neighborhoods.ts and arrives as a prop, so there is one inventory.
+ *
+ * THREE THINGS WERE READING COLUMNS THAT DO NOT EXIST, and nothing caught it
+ * because the arrays were hardcoded `[]` so no card ever rendered:
+ *     event.start_date        -> the column is `date` / `event_start_utc`
+ *     restaurant.cuisine_type -> the column is `cuisine`
+ *     attraction.category     -> the column is `type`
+ * The "Details", "Visit" and "Learn More" buttons had no href either - they
+ * were buttons that did nothing, on cards that never appeared.
+ *
+ * THE FAQ BLOCK IS GONE. It was a ternary chain with real answers for West Des
+ * Moines and Ankeny and, for the other six, sentences like "<name> offers
+ * various family-friendly activities including parks, community centers, local
+ * events, and seasonal festivals". That is a generated non-answer, and writing
+ * six more by hand would be inventing facts about places this repo holds no
+ * data on. Removing invented content beats adding more of it; if these pages
+ * earn an FAQ later it belongs in <FAQSection>, which SEO-003 made the single
+ * emitter of FAQPage schema.
+ */
+export default function NeighborhoodGuide({
+  neighborhood,
+  events,
+  restaurants,
+  attractions,
 }: NeighborhoodGuideProps) {
-  
   const [activeTab, setActiveTab] = useState<"events" | "dining" | "attractions">("events");
 
-  // Neighborhood-specific content
-  const neighborhoodData: Record<string, NeighborhoodData> = {
-    "West Des Moines": {
-      description: "Discover what's happening in West Des Moines, Iowa's premier shopping and dining destination with 400+ monthly events and activities.",
-      highlights: ["Jordan Creek Town Center", "Valley Junction Historic District", "Raccoon River Park"],
-      zipCodes: ["50265", "50266", "50061"],
-      keywords: "West Des Moines events, Jordan Creek shopping, Valley Junction historic district",
-      detailedDescription: `West Des Moines stands as the Des Moines metro area's premier shopping, dining, and family entertainment destination. 
-        Home to Jordan Creek Town Center - Iowa's largest shopping mall - and the historic Valley Junction district, 
-        West Des Moines offers diverse activities from upscale shopping to historic walking tours. The community hosts 200+ 
-        family-friendly events annually, featuring outdoor concerts, farmers markets, and seasonal festivals. Raccoon River Park 
-        provides year-round recreation with trails, playgrounds, and natural areas perfect for family activities.`,
-      demographics: "Population 68,723 | Median household income $82,492 | 23% families with children under 18",
-      bestFor: "Shopping, family dining, suburban events, historic tours, upscale attractions"
-    },
-    "Ankeny": {
-      description: "Find family-friendly events and activities in Ankeny, one of Iowa's fastest-growing communities with 300+ monthly activities.",
-      highlights: ["Ankeny Market & Pavilion", "High Trestle Trail", "Ankeny Art Center"],
-      zipCodes: ["50023", "50021"],
-      keywords: "Ankeny family events, High Trestle Trail activities, Ankeny community center",
-      detailedDescription: `Ankeny represents one of Iowa's most rapidly growing suburban communities, known for exceptional 
-        family amenities and community engagement. The city features the High Trestle Trail bridge - a architectural marvel 
-        and top cycling destination - plus comprehensive community programming through the Ankeny Market & Pavilion. 
-        With 150+ family-focused events annually, Ankeny excels in youth sports, community festivals, and educational programming. 
-        The area attracts families seeking small-town community feel with big-city amenities.`,
-      demographics: "Population 67,887 | Median household income $89,234 | 28% families with children under 18",
-      bestFor: "Family activities, cycling recreation, community events, youth sports, educational programs"
-    },
-    "East Village": {
-      description: "Experience Des Moines' hip East Village district with trendy restaurants, breweries, and cultural events.",
-      highlights: ["Court Avenue Entertainment District", "East Village breweries", "Farmer's Market"],
-      zipCodes: ["50309", "50312"],
-      keywords: "East Village Des Moines, Court Avenue nightlife, downtown Des Moines events",
-      detailedDescription: `The East Village serves as Des Moines' cultural and nightlife hub, featuring eclectic dining, 
-        craft breweries, and vibrant arts scene. Court Avenue anchors the entertainment district with live music venues, 
-        rooftop bars, and late-night dining. The area attracts young professionals and culture enthusiasts with its walkable 
-        urban environment and frequent festivals including the Downtown Farmers Market - Iowa's largest.`,
-      demographics: "Population 8,500+ | Median age 29 | 45% professionals aged 25-40",
-      bestFor: "Urban nightlife, craft breweries, cultural events, downtown dining, young professional scene"
-    },
-    "Urbandale": {
-      description: "Explore Urbandale's community events, parks, and family-friendly activities in this Des Moines suburb.",
-      highlights: ["Living History Farms", "Walker Johnston Park", "Urbandale Community Center"],
-      zipCodes: ["50322", "50323"],
-      keywords: "Urbandale family activities, Living History Farms events, Urbandale parks",
-      detailedDescription: `Urbandale combines suburban comfort with rich historical attractions, anchored by Living History Farms - 
-        one of Iowa's premier educational destinations. The community emphasizes family recreation through extensive park systems 
-        and year-round programming. Walker Johnston Park offers comprehensive athletic facilities while the Urbandale Community Center 
-        hosts 100+ annual events focused on families and seniors.`,
-      demographics: "Population 45,378 | Median household income $76,543 | 31% families with children under 18",
-      bestFor: "Historical education, family recreation, community sports, senior programs, suburban living"
-    },
-    "Johnston": {
-      description: "Discover Johnston's community events, trails, and local attractions in this thriving Des Moines suburb.",
-      highlights: ["Terra Park", "Johnston Commons", "Saylorville Lake"],
-      zipCodes: ["50131"],
-      keywords: "Johnston Iowa events, Terra Park activities, Saylorville Lake recreation",
-      detailedDescription: `Johnston offers exceptional outdoor recreation centered around Saylorville Lake and extensive trail systems. 
-        Terra Park provides state-of-the-art athletic facilities while Johnston Commons serves as the community's social hub. 
-        The city excels in outdoor programming with 150+ annual events focusing on water recreation, cycling, and nature education.`,
-      demographics: "Population 24,375 | Median household income $88,765 | 35% families with children under 18", 
-      bestFor: "Outdoor recreation, water activities, trail systems, youth sports, nature programs"
-    },
-    "Clive": {
-      description: "Find events and activities in Clive, known for its excellent parks and family-friendly community.",
-      highlights: ["Clive Aquatic Center", "Campbell Recreation Area", "Clive Community Center"],
-      zipCodes: ["50325"],
-      keywords: "Clive Iowa activities, Campbell Recreation Area, Clive family events",
-      detailedDescription: `Clive distinguishes itself through premier recreational facilities, headlined by the Clive Aquatic Center - 
-        one of Iowa's most comprehensive aquatic facilities. Campbell Recreation Area offers diverse outdoor activities while 
-        the Clive Community Center hosts year-round programming. The community focuses on family wellness with 120+ annual 
-        events emphasizing fitness, aquatics, and community engagement.`,
-      demographics: "Population 18,597 | Median household income $91,234 | 29% families with children under 18",
-      bestFor: "Aquatic recreation, family fitness, community wellness, outdoor activities, suburban amenities"
-    },
-    "Waukee": {
-      description: "Explore Waukee's rapidly growing community with new restaurants, events, and family activities.",
-      highlights: ["Waukee Family YMCA", "Centennial Park", "Triumph Park"],
-      zipCodes: ["50263"],
-      keywords: "Waukee Iowa events, Centennial Park activities, Waukee family fun",
-      detailedDescription: `Waukee represents one of Iowa's fastest-growing communities, blending small-town charm with modern amenities. 
-        The Waukee Family YMCA anchors community wellness programming while Centennial Park and Triumph Park provide extensive 
-        recreational opportunities. With 180+ family-focused events annually, Waukee excels in youth development, community festivals, 
-        and innovative programming that serves its rapidly expanding population.`,
-      demographics: "Population 24,435 | Median household income $85,123 | 42% families with children under 18",
-      bestFor: "Family development, youth programs, community growth, modern amenities, expanding opportunities"
-    }
-  };
-
-  const currentNeighborhood = neighborhoodData[neighborhood as keyof typeof neighborhoodData];
+  const total = events.length + restaurants.length + attractions.length;
+  const isThin = total < NEIGHBORHOOD_MIN_ITEMS;
 
   return (
     <div className="space-y-6">
-      {/* Neighborhood Header */}
-      <div className="bg-gradient-to-r from-blue-600 to-purple-600 text-white p-6 rounded-lg">
+      {/* WEB-UX-034: this header was `bg-gradient-to-r from-blue-600 to-purple-600`,
+          the detector's most-cited tell. The brand surface carries the same
+          separation without it. */}
+      <div className="bg-primary text-primary-foreground p-6 rounded-lg">
         <div className="flex items-center gap-2 mb-2">
           <SpriteIcon name="map-pin" className="h-6 w-6" />
-          <h1 className="text-2xl font-bold">
-            {neighborhood} Events & Activities
-          </h1>
+          <h1 className="text-2xl font-bold">{neighborhood.name} Events &amp; Activities</h1>
         </div>
-        <p className="text-blue-100 mb-4">
-          {currentNeighborhood?.description || `Discover the best events, restaurants, and activities in ${neighborhood}, Des Moines.`}
-        </p>
-        
-        {/* Local Highlights */}
-        {currentNeighborhood?.highlights && (
-          <div className="flex flex-wrap gap-2">
-            {currentNeighborhood.highlights.map((highlight, index) => (
-              <Badge key={index} variant="secondary" className="bg-white/20 text-white border-white/30">
-                {highlight}
-              </Badge>
-            ))}
-          </div>
-        )}
+        <p className="opacity-90 mb-4">{neighborhood.description}</p>
+
+        <div className="flex flex-wrap gap-2">
+          {neighborhood.highlights.map((highlight) => (
+            <Badge
+              key={highlight}
+              variant="secondary"
+              className="bg-primary-foreground/15 text-primary-foreground border-primary-foreground/25"
+            >
+              {highlight}
+            </Badge>
+          ))}
+        </div>
       </div>
+
+      {/* Say so when there is little to show, rather than presenting three
+          empty tabs as though the neighborhood simply has nothing on. The page
+          also noindexes itself at this threshold - see NeighborhoodPage. */}
+      {isThin && (
+        <Card className="bg-muted/50">
+          <CardContent className="p-6">
+            <p className="text-sm">
+              We're still building out {neighborhood.name}. There{" "}
+              {total === 1 ? "is 1 listing" : `are ${total} listings`} here so far.{" "}
+              <Link to="/events" className="underline underline-offset-4">
+                Browse every event in the metro
+              </Link>{" "}
+              in the meantime.
+            </p>
+          </CardContent>
+        </Card>
+      )}
 
       {/* Navigation Tabs */}
       <div className="flex space-x-1 bg-muted p-1 rounded-lg">
@@ -177,31 +128,38 @@ export default function NeighborhoodGuide({
         </Button>
       </div>
 
-      {/* Content Sections */}
       {activeTab === "events" && (
         <div className="space-y-4">
-          <h2 className="text-xl font-semibold">
-            Upcoming Events in {neighborhood}
-          </h2>
+          <h2 className="text-xl font-semibold">Upcoming Events in {neighborhood.name}</h2>
           {events.length > 0 ? (
             <div className="grid gap-4 md:grid-cols-2">
-              {events.slice(0, 6).map((event, index) => (
-                <Card key={index} className="hover:shadow-lg transition-shadow">
+              {events.map((event) => (
+                <Card key={event.id} className="hover:shadow-lg transition-shadow">
                   <CardHeader className="pb-2">
-                    <CardTitle className="text-lg">{event.title}</CardTitle>
+                    <CardTitle className="text-lg">
+                      <Link
+                        to={`/events/${createEventSlugWithCentralTime(event.title, event)}`}
+                        className="hover:underline"
+                      >
+                        {event.title}
+                      </Link>
+                    </CardTitle>
                     <div className="flex items-center text-sm text-muted-foreground">
                       <SpriteIcon name="calendar" className="h-4 w-4 mr-1" />
-                      {formatInCentralTime(event.start_date, 'MMM d, yyyy')}
+                      {formatInCentralTime(event.event_start_utc ?? String(event.date), "MMM d, yyyy")}
                     </div>
                   </CardHeader>
                   <CardContent>
-                    <p className="text-sm mb-2">{event.description?.slice(0, 100)}...</p>
+                    {event.original_description && (
+                      <p className="text-sm mb-2 line-clamp-2">{event.original_description}</p>
+                    )}
                     <div className="flex justify-between items-center">
                       <Badge variant="outline">{event.category}</Badge>
-                      <Button size="sm" variant="outline">
-                        <SpriteIcon name="external-link" className="h-3 w-3 mr-1" />
-                        Details
-                      </Button>
+                      <Link to={`/events/${createEventSlugWithCentralTime(event.title, event)}`}>
+                        <Button size="sm" variant="outline">
+                          Details
+                        </Button>
+                      </Link>
                     </div>
                   </CardContent>
                 </Card>
@@ -212,7 +170,7 @@ export default function NeighborhoodGuide({
               <CardContent className="text-center p-8">
                 <SpriteIcon name="calendar" className="h-12 w-12 mx-auto mb-4 text-muted-foreground" />
                 <p className="text-muted-foreground">
-                  No events currently listed for {neighborhood}. Check back soon or explore nearby areas!
+                  No upcoming events listed for {neighborhood.name} right now.
                 </p>
               </CardContent>
             </Card>
@@ -222,39 +180,51 @@ export default function NeighborhoodGuide({
 
       {activeTab === "dining" && (
         <div className="space-y-4">
-          <h2 className="text-xl font-semibold">
-            Best Restaurants in {neighborhood}
-          </h2>
+          <h2 className="text-xl font-semibold">Restaurants in {neighborhood.name}</h2>
           {restaurants.length > 0 ? (
             <div className="grid gap-4 md:grid-cols-2">
-              {restaurants.slice(0, 6).map((restaurant, index) => (
-                <Card key={index} className="hover:shadow-lg transition-shadow">
-                  <CardHeader className="pb-2">
-                    <CardTitle className="text-lg">{restaurant.name}</CardTitle>
-                    <div className="flex items-center text-sm text-muted-foreground">
-                      <SpriteIcon name="map-pin" className="h-4 w-4 mr-1" />
-                      {restaurant.location}
-                    </div>
-                  </CardHeader>
-                  <CardContent>
-                    <p className="text-sm mb-2">{restaurant.description?.slice(0, 100)}...</p>
-                    <div className="flex justify-between items-center">
-                      <Badge variant="outline">{restaurant.cuisine_type}</Badge>
-                      <Button size="sm" variant="outline">
-                        <SpriteIcon name="external-link" className="h-3 w-3 mr-1" />
-                        Visit
-                      </Button>
-                    </div>
-                  </CardContent>
-                </Card>
-              ))}
+              {restaurants.map((restaurant) => {
+                const href = `/restaurants/${restaurant.slug ?? createSlug(restaurant.name)}`;
+                return (
+                  <Card key={restaurant.id} className="hover:shadow-lg transition-shadow">
+                    <CardHeader className="pb-2">
+                      <CardTitle className="text-lg">
+                        <Link to={href} className="hover:underline">
+                          {restaurant.name}
+                        </Link>
+                      </CardTitle>
+                      {restaurant.location && (
+                        <div className="flex items-center text-sm text-muted-foreground">
+                          <SpriteIcon name="map-pin" className="h-4 w-4 mr-1" />
+                          {restaurant.location}
+                        </div>
+                      )}
+                    </CardHeader>
+                    <CardContent>
+                      <div className="flex justify-between items-center">
+                        <div className="flex gap-2">
+                          {restaurant.cuisine && <Badge variant="outline">{restaurant.cuisine}</Badge>}
+                          {restaurant.price_range && (
+                            <Badge variant="outline">{restaurant.price_range}</Badge>
+                          )}
+                        </div>
+                        <Link to={href}>
+                          <Button size="sm" variant="outline">
+                            View
+                          </Button>
+                        </Link>
+                      </div>
+                    </CardContent>
+                  </Card>
+                );
+              })}
             </div>
           ) : (
             <Card>
               <CardContent className="text-center p-8">
                 <SpriteIcon name="users" className="h-12 w-12 mx-auto mb-4 text-muted-foreground" />
                 <p className="text-muted-foreground">
-                  Restaurant listings for {neighborhood} coming soon!
+                  No restaurants listed for {neighborhood.name} yet.
                 </p>
               </CardContent>
             </Card>
@@ -264,40 +234,49 @@ export default function NeighborhoodGuide({
 
       {activeTab === "attractions" && (
         <div className="space-y-4">
-          <h2 className="text-xl font-semibold">
-            Top Attractions in {neighborhood}
-          </h2>
+          <h2 className="text-xl font-semibold">Attractions in {neighborhood.name}</h2>
           {attractions.length > 0 ? (
             <div className="grid gap-4 md:grid-cols-2">
-              {attractions.slice(0, 6).map((attraction, index) => (
-                <Card key={index} className="hover:shadow-lg transition-shadow">
-                  <CardHeader className="pb-2">
-                    <CardTitle className="text-lg">{attraction.name}</CardTitle>
-                    <div className="flex items-center text-sm text-muted-foreground">
-                      <SpriteIcon name="map-pin" className="h-4 w-4 mr-1" />
-                      {attraction.location}
-                    </div>
-                  </CardHeader>
-                  <CardContent>
-                    <p className="text-sm mb-2">{attraction.description?.slice(0, 100)}...</p>
-                    <div className="flex justify-between items-center">
-                      <Badge variant="outline">{attraction.category}</Badge>
-                      <Button size="sm" variant="outline" aria-label={`Learn more about ${attraction.name}`}>
-                        <SpriteIcon name="external-link" className="h-3 w-3 mr-1" />
-                        <span aria-hidden="true">Learn More</span>
-                        <span className="sr-only"> about {attraction.name}</span>
-                      </Button>
-                    </div>
-                  </CardContent>
-                </Card>
-              ))}
+              {attractions.map((attraction) => {
+                // attractions has no slug column; AttractionDetails matches on
+                // createSlug(name), so the link has to be built the same way.
+                const href = `/attractions/${createSlug(attraction.name)}`;
+                return (
+                  <Card key={attraction.id} className="hover:shadow-lg transition-shadow">
+                    <CardHeader className="pb-2">
+                      <CardTitle className="text-lg">
+                        <Link to={href} className="hover:underline">
+                          {attraction.name}
+                        </Link>
+                      </CardTitle>
+                      {(attraction.location || attraction.address) && (
+                        <div className="flex items-center text-sm text-muted-foreground">
+                          <SpriteIcon name="map-pin" className="h-4 w-4 mr-1" />
+                          {attraction.location ?? attraction.address}
+                        </div>
+                      )}
+                    </CardHeader>
+                    <CardContent>
+                      <div className="flex justify-between items-center">
+                        {attraction.type ? <Badge variant="outline">{attraction.type}</Badge> : <span />}
+                        <Link to={href}>
+                          <Button size="sm" variant="outline">
+                            <span aria-hidden="true">Learn more</span>
+                            <span className="sr-only">Learn more about {attraction.name}</span>
+                          </Button>
+                        </Link>
+                      </div>
+                    </CardContent>
+                  </Card>
+                );
+              })}
             </div>
           ) : (
             <Card>
               <CardContent className="text-center p-8">
                 <Star className="h-12 w-12 mx-auto mb-4 text-muted-foreground" />
                 <p className="text-muted-foreground">
-                  Attraction listings for {neighborhood} coming soon!
+                  No attractions listed for {neighborhood.name} yet.
                 </p>
               </CardContent>
             </Card>
@@ -305,103 +284,24 @@ export default function NeighborhoodGuide({
         </div>
       )}
 
-      {/* Enhanced Local SEO Content */}
-      <div className="space-y-6">
-        {/* Neighborhood Overview */}
-        <Card className="bg-muted/50">
-          <CardContent className="p-6">
-            <h3 className="font-semibold mb-3">About {neighborhood}</h3>
-            <p className="text-sm text-muted-foreground leading-relaxed mb-4">
-              {currentNeighborhood?.detailedDescription || 
-                `${neighborhood} is a vibrant part of the greater Des Moines metropolitan area, offering residents and visitors 
-                a unique blend of local events, dining options, and community attractions. Whether you're looking for 
-                family-friendly activities, date night restaurants, or weekend events, ${neighborhood} has something for everyone.`
-              }
-            </p>
-            
-            {currentNeighborhood?.demographics && (
-              <div className="mb-4 p-3 bg-white rounded-md">
-                <h4 className="text-sm font-semibold mb-2">Community Profile</h4>
-                <p className="text-xs text-muted-foreground">{currentNeighborhood.demographics}</p>
-              </div>
-            )}
-            
-            {currentNeighborhood?.bestFor && (
-              <div className="mb-4 p-3 bg-blue-50 rounded-md">
-                <h4 className="text-sm font-semibold mb-2">Best Known For</h4>
-                <p className="text-xs text-blue-700">{currentNeighborhood.bestFor}</p>
-              </div>
-            )}
-            
-            {currentNeighborhood?.keywords && (
-              <div className="mt-4">
-                <h4 className="text-sm font-medium mb-2">Popular searches:</h4>
-                <p className="text-xs text-muted-foreground">
-                  {currentNeighborhood.keywords}
-                </p>
-              </div>
-            )}
-          </CardContent>
-        </Card>
-
-        {/* Neighborhood FAQ Section for AI Search Optimization */}
-        <Card>
-          <CardHeader>
-            <CardTitle className="text-lg">Frequently Asked Questions</CardTitle>
-          </CardHeader>
-          <CardContent className="space-y-4">
-            <div className="space-y-4">
-              <div className="p-4 bg-gray-50 rounded-lg">
-                <h4 className="font-semibold mb-2">What are the best family activities in {neighborhood}?</h4>
-                <p className="text-sm text-gray-700">
-                  {neighborhood === "West Des Moines" 
-                    ? "West Des Moines offers Jordan Creek Town Center for shopping and entertainment, Valley Junction for historic tours and antique shopping, plus Raccoon River Park with trails, playgrounds, and year-round outdoor activities perfect for families."
-                    : neighborhood === "Ankeny"
-                    ? "Ankeny features the High Trestle Trail for cycling and walking, Ankeny Market & Pavilion for community events, plus numerous parks, sports complexes, and family-friendly festivals throughout the year."
-                    : `${neighborhood} offers various family-friendly activities including parks, community centers, local events, and seasonal festivals that cater to residents of all ages.`
-                  }
-                </p>
-              </div>
-              
-              <div className="p-4 bg-gray-50 rounded-lg">
-                <h4 className="font-semibold mb-2">Where are the best restaurants in {neighborhood}?</h4>
-                <p className="text-sm text-gray-700">
-                  {neighborhood === "West Des Moines"
-                    ? "West Des Moines dining centers around Jordan Creek area with chain restaurants and local favorites, plus Valley Junction's unique local eateries. The area excels in family-friendly dining with diverse cuisine options and competitive pricing."
-                    : neighborhood === "Ankeny"
-                    ? "Ankeny's restaurant scene focuses on family-friendly establishments with good value pricing. The community features both chain restaurants and local favorites, with new openings regularly added to serve the growing suburban population."
-                    : `${neighborhood} offers a variety of dining options ranging from casual family restaurants to local specialty eateries, with new establishments regularly opening to serve the community.`
-                  }
-                </p>
-              </div>
-              
-              <div className="p-4 bg-gray-50 rounded-lg">
-                <h4 className="font-semibold mb-2">What events happen regularly in {neighborhood}?</h4>
-                <p className="text-sm text-gray-700">
-                  {neighborhood === "West Des Moines"
-                    ? "Regular events include Valley Junction festivals, Jordan Creek seasonal celebrations, farmers markets, outdoor concerts at Raccoon River Park, and community gatherings. Many events are family-oriented with activities for all ages."
-                    : neighborhood === "Ankeny"
-                    ? "Ankeny hosts regular community events at the Market & Pavilion, seasonal festivals, youth sports tournaments, cycling events on the High Trestle Trail, and educational programs throughout the year."
-                    : `${neighborhood} hosts regular community events, seasonal festivals, recreational activities, and local gatherings that bring residents together throughout the year.`
-                  }
-                </p>
-              </div>
-              
-              <div className="p-4 bg-gray-50 rounded-lg">
-                <h4 className="font-semibold mb-2">How do I get to {neighborhood} from downtown Des Moines?</h4>
-                <p className="text-sm text-gray-700">
-                  {neighborhood === "West Des Moines"
-                    ? "West Des Moines is easily accessible via I-235 West to I-35 South, approximately 15-20 minutes from downtown Des Moines. DART bus routes serve major destinations like Jordan Creek Town Center with regular service."
-                    : neighborhood === "Ankeny"
-                    ? "Ankeny is located north of Des Moines, accessible via I-35 North or Highway 69. The drive takes approximately 20-25 minutes from downtown Des Moines, with DART bus service available on major routes."
-                    : `${neighborhood} is accessible from downtown Des Moines via major highways and public transportation options, with typical driving times of 15-30 minutes depending on traffic and destination.`
-                  }
-                </p>
-              </div>
-            </div>
-          </CardContent>
-        </Card>
-      </div>
+      <Card className="bg-muted/50">
+        <CardHeader>
+          <CardTitle className="text-lg">About {neighborhood.name}</CardTitle>
+        </CardHeader>
+        <CardContent className="space-y-4">
+          <p className="text-sm text-muted-foreground leading-relaxed">
+            {neighborhood.detailedDescription}
+          </p>
+          <div>
+            <h3 className="text-sm font-semibold mb-1">Best known for</h3>
+            <p className="text-sm text-muted-foreground">{neighborhood.bestFor}</p>
+          </div>
+          <div>
+            <h3 className="text-sm font-semibold mb-1">ZIP codes</h3>
+            <p className="text-sm text-muted-foreground">{neighborhood.zipCodes.join(", ")}</p>
+          </div>
+        </CardContent>
+      </Card>
     </div>
   );
 }

@@ -322,7 +322,11 @@ test.describe('Password reset leads to a form that changes the password (WEB-AUT
     // An anonymous visitor has no recovery session, so the page must offer a
     // new link rather than an unusable form or a blank screen.
     await expect(page.getByRole('button', { name: /send again/i })).toBeVisible({ timeout: 30_000 });
-    await expect(page.getByLabel(/email address/i)).toBeVisible();
+    // ANCHORED, for the same reason as the sign-in link below: the footer's
+    // newsletter input is labelled "Email address for newsletter" and is on
+    // every page, so /email address/i resolved to two elements and failed
+    // strict mode without ever asserting anything about this form.
+    await expect(page.getByLabel(/^email address$/i)).toBeVisible();
 
     const invariantErrors = consoleErrors.filter((e) => /Minified React error #130|Element type is invalid/i.test(e));
     expect(invariantErrors, `React #130 on /auth/reset-password: ${invariantErrors.join('\n')}`).toHaveLength(0);
@@ -396,6 +400,18 @@ test.describe('Landing pages do not open a websocket per card (WEB-PERF-030)', (
   });
 });
 
+/**
+ * The heading AuthVerified renders on the error branch.
+ *
+ * This was /could not confirm your email/i and matched nothing: the page says
+ * "We couldn't confirm your email" (AuthVerified.tsx:112), and the contraction
+ * is not the two words. Both forms are accepted here because
+ * src/lib/authCallbackError.ts writes "We could not confirm your email with
+ * that link" into the DESCRIPTION for one of the error codes, and the
+ * apostrophe class covers a typographic one if the copy is ever re-typed.
+ */
+const CONFIRM_FAILED_HEADING = /(could not|couldn['\u2019]t) confirm your email/i;
+
 test.describe('Email confirmation failures are explained, not celebrated (WEB-AUTH-005)', () => {
   // /auth/verified rendered "Email Verified! 🎉" no matter what brought the
   // reader there. It read no error parameter, so an expired link, a reused link
@@ -406,7 +422,7 @@ test.describe('Email confirmation failures are explained, not celebrated (WEB-AU
     await page.goto('/auth/verified?error_code=otp_expired');
     await expectNoErrorBoundary(page);
 
-    await expect(page.getByText(/could not confirm your email/i)).toBeVisible();
+    await expect(page.getByText(CONFIRM_FAILED_HEADING)).toBeVisible();
     await expect(page.getByText(/expired/i).first()).toBeVisible();
     await expect(page.getByText(/Email Verified/i)).toHaveCount(0);
   });
@@ -414,7 +430,11 @@ test.describe('Email confirmation failures are explained, not celebrated (WEB-AU
   test('the error branch offers a new link and a way to sign in', async ({ page }) => {
     await page.goto('/auth/verified?error_code=otp_expired');
     await expect(page.getByRole('button', { name: /send a new confirmation link/i })).toBeVisible();
-    await expect(page.getByRole('link', { name: /sign in/i })).toBeVisible();
+    // ANCHORED. /sign in/i also matches the Header's "Sign in to your account",
+    // which is on every page - so this resolved to two elements and failed
+    // strict mode while asserting nothing about the error branch. The card's
+    // own link is exactly "Sign in".
+    await expect(page.getByRole('link', { name: /^sign in$/i })).toBeVisible();
   });
 
   test('a fragment error is read too, which is where email links put it', async ({ page }) => {
@@ -422,7 +442,7 @@ test.describe('Email confirmation failures are explained, not celebrated (WEB-AU
     // fragment never reaches a server and useSearchParams does not expose it.
     await page.goto('/auth/verified#error=access_denied&error_code=otp_expired');
     await expectNoErrorBoundary(page);
-    await expect(page.getByText(/could not confirm your email/i)).toBeVisible();
+    await expect(page.getByText(CONFIRM_FAILED_HEADING)).toBeVisible();
   });
 
   test('the error branch does not bounce the reader to the homepage', async ({ page }) => {

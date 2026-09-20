@@ -1,7 +1,7 @@
 {
   "id": "/",
-  "name": "Des Moines Insider: Events, Restaurants & Attractions",
-  "short_name": "Des Moines Insider",
+  "name": "Des Moines Insider",
+  "short_name": "DM Insider",
   "description": "Events, restaurants and what to do in Des Moines, Iowa.",
   "start_url": "/",
   "scope": "/",

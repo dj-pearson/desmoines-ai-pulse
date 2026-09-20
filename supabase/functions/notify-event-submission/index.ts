@@ -154,6 +154,26 @@ serve(async (req) => {
       case "event_approved": {
         recipientEmail = submitterAddress ?? "";
         emailSubject = `Your event "${escapeHtml(verifiedTitle)}" has been approved`;
+
+        // WEB-ADS-008 AC4: the live URL, resolved from the events row
+        // publish_submission linked back to this submission.
+        //
+        // THE LINK IS WHAT LICENSES THE CLAIM. The wording below says "now
+        // live" only when this lookup found a row, so the sentence cannot be
+        // false the way the original one was. With 20260920000001 unapplied the
+        // column does not exist, this 42703s, and the email falls back to the
+        // accepted-for-listing wording - which is still true.
+        let liveUrl: string | null = null;
+        const { data: publishedEvent, error: publishedError } = await supabase
+          .from("events")
+          .select("id")
+          .eq("submission_id", eventId)
+          .maybeSingle();
+        if (publishedError) {
+          console.error("[notify-event-submission] published lookup failed:", publishedError);
+        } else if (publishedEvent?.id) {
+          liveUrl = `${siteUrl}/events/${publishedEvent.id}`;
+        }
         // WEB-ADS-008: this used to say "approved and is NOW LIVE on Des Moines
         // Insider". It is not live. Approval sets user_submitted_events.status
         // and nothing copies the row into `events` - not the admin queue, which
@@ -163,17 +183,19 @@ serve(async (req) => {
         // the ones who went looking had every reason to think the site was
         // broken.
         //
-        // The wording now says what is certainly true - the event has been
-        // accepted - and promises nothing about when it appears. Restore a
-        // liveness claim only once publish_submission exists and the approve
-        // path calls it; the same story tracks that.
+        // publish_submission now exists and both approve paths call it, so the
+        // liveness claim is restored - but CONDITIONALLY, on having found the
+        // row. That is the difference from the original: the old sentence was
+        // unconditional, so it was wrong every single time.
         emailHtml = buildSubmitterEmail({
           eventTitle: verifiedTitle,
           status: "approved",
-          message:
-            "Good news - your event has been approved for listing on Des Moines Insider. We'll be in touch if anything else is needed.",
+          message: liveUrl
+            ? "Good news - your event has been approved and is now live on Des Moines Insider. The link below goes straight to your listing."
+            : "Good news - your event has been approved for listing on Des Moines Insider. We'll be in touch if anything else is needed.",
           siteUrl,
           adminNotes,
+          liveUrl,
         });
         break;
       }
@@ -348,13 +370,18 @@ function buildSubmitterEmail(params: {
   message: string;
   siteUrl: string;
   adminNotes?: string;
+  /** The published listing, when one exists. WEB-ADS-008 AC4. */
+  liveUrl?: string | null;
 }): string {
-  const { eventTitle, status, message, siteUrl, adminNotes } = params;
+  const { eventTitle, status, message, siteUrl, adminNotes, liveUrl } = params;
 
   const statusColor = status === 'approved' ? '#16a34a' : status === 'rejected' ? '#dc2626' : '#ca8a04';
   const statusLabel = status === 'approved' ? 'Approved' : status === 'rejected' ? 'Rejected' : 'Needs Revision';
-  const ctaUrl = status === 'approved' ? `${siteUrl}/events` : `${siteUrl}/dashboard?tab=events`;
-  const ctaLabel = status === 'approved' ? 'View Events' : 'View My Submissions';
+  // The organizer's own listing when it exists, the events list when it does
+  // not. "View Events" pointed at a list of a thousand rows and made the reader
+  // hunt for their own - and while nothing published, there was nothing to find.
+  const ctaUrl = liveUrl || (status === 'approved' ? `${siteUrl}/events` : `${siteUrl}/dashboard?tab=events`);
+  const ctaLabel = liveUrl ? 'View Your Listing' : status === 'approved' ? 'View Events' : 'View My Submissions';
 
   return `
     <!DOCTYPE html>

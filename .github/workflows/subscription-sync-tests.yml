@@ -25,11 +25,26 @@ on:
       - 'android/app/src/main/java/**'
       - 'src/hooks/useSubscription.ts'
       - 'src/hooks/__tests__/useSubscription.test.ts'
+      # WEB-FEAT-019: the double opt-in test reads the newsletter hook and the
+      # config.toml entry that makes the signup endpoint public, so a change to
+      # either has to run this suite.
+      - 'src/hooks/useNewsletterSubscription.ts'
+      - 'src/hooks/__tests__/useNewsletterSubscription.test.ts'
+      - 'supabase/config.toml'
       - 'src/components/SubscriptionPlatformBreakdown.tsx'
       # The IndexNow key file. Its contents have to match INDEXNOW_KEY exactly
       # or every submission 403s, and the file lives nowhere near the function
       # that depends on it — so a PR touching only public/ must run this suite.
       - 'public/*.txt'
+      # The GitHub Actions crawler posts its own heartbeat row into
+      # automation_job_runs (WEB-BE-043) - nothing inside Supabase can observe
+      # an external process - so a change to it has to run the health suite.
+      - 'crawlers/catchdesmoines_crawler.py'
+      # CLAUDE.md is asserted by ingest-coordinates.test.ts (WEB-BE-050).
+      - 'CLAUDE.md'
+      # The canonical category vocabulary and its browser mirror (WEB-BE-049).
+      - 'src/lib/eventCategories.*'
+      - 'src/components/EventSubmissionForm.tsx'
       - '.github/workflows/subscription-sync-tests.yml'
 
 concurrency:
@@ -68,6 +83,12 @@ jobs:
       # XPLAT-011. Asserts docstring, implementation and all three clients agree
       # on the request contract -- the comparison nobody was making when
       # XPLAT-001 shipped a two-step docstring against three bodyless clients.
+      # WEB-ADS-013. The whole authorization surface of
+      # send-campaign-notification: an unauthenticated call cannot notify, a
+      # stranger cannot notify about someone else's campaign, and the admin
+      # fan-out is considered only AFTER that check - otherwise anyone with a
+      # token could write a row to every admin's notification list.
+      - run: deno test --allow-read supabase/functions/_tests/campaign-notification-authorization.test.ts
       - run: deno test --allow-read supabase/functions/_tests/client-contract.test.ts
       - run: deno test --allow-read supabase/functions/_tests/account-deletion-contract.test.ts
       # Erasure has to reach uploaded files, not just table rows. Every upload
@@ -128,6 +149,136 @@ jobs:
       # crawled anyway. Found while drafting the Privacy Policy's sources section:
       # the ordinary reassurance would have been a false statement in it.
       - run: deno test --allow-read supabase/functions/_tests/robots.test.ts
+      # WEB-SEC-024 AC6. scrapeUrl checks robots.txt above the backend fallback
+      # chain so nothing can route around it - and six domain adapters routed
+      # around it anyway by not calling scrapeUrl, each with its own pasted
+      # Chrome UA. Pins that they fetch through the robots-checked helper and
+      # declare no User-Agent of their own.
+      - run: deno test --allow-read supabase/functions/_tests/adapter-robots.test.ts
+      # WEB-BE-041. restaurant-opening-scraper hardcoded the retired model
+      # claude-3-5-sonnet-20241022, so the API answered not_found for every
+      # source on every run - and the handler returned success: true with HTTP
+      # 200 regardless, which pg_cron then recorded as a successful POST. Pins
+      # that all-sources-failed is a non-2xx, that a quiet day and a partial
+      # failure are not, and that no model id is pasted back into index.ts.
+      - run: deno test --allow-read supabase/functions/_tests/restaurant-opening-run-summary.test.ts
+      # WEB-BE-042 AC3/AC5. The Catch Des Moines adapter parsed the site's own
+      # ld+json @type and then discarded it, stamping category: "Community" on
+      # every event - concerts, hockey games and theatre runs alike - while the
+      # other live writer for the same source (the daily Python crawler) asks a
+      # model for a real category. Pins the @type mapping, that the adapter
+      # still derives rather than stamps, and that both writers use one
+      # vocabulary, read from the Python crawler's own prompt.
+      - run: deno test --allow-read supabase/functions/_tests/catchdesmoines-category.test.ts
+      # WEB-BE-037. Four ingestion paths had four answers for "the source
+      # published a day but no time" (19:31:58, 19:30, 19:00, 19:00), plus two
+      # prompt instructions telling the model to invent 7 PM - so the same event
+      # through two producers got two instants and same-date dedup could not
+      # match them. ai-crawler's private parser also read `getHours() || 19` and
+      # `getMinutes() || 30`, turning every on-the-hour time into :30 and
+      # midnight into 7 PM. Pins all of it.
+      - run: deno test --allow-read supabase/functions/_tests/no-time-marker.test.ts
+      # WEB-BE-045. Nothing ever marked a restaurant closed: the Places field
+      # mask asked for businessStatus and the answer was thrown away, and there
+      # was no hours column at all. The normalizer decides two things a query
+      # then depends on - an unrecognised status is dropped rather than stored,
+      # so it cannot be read as a closure or as an operating venue; and hours
+      # are null rather than an empty periods array, because `{periods: []}`
+      # reads as "closed all week" and means "Google did not answer".
+      - run: deno test --allow-read supabase/functions/_tests/place-hours.test.ts
+      # WEB-CI-029 AC3. create-subscription-checkout decides whether a signed-in
+      # user is sold a second subscription, and the decision was reachable only
+      # through a live Stripe key. The ORDER of its checks is the behaviour: the
+      # store check has to run before the upgrade path, or a user paying Apple
+      # gets their Stripe subscription re-priced underneath them; and
+      # cancel-at-period-end has to run before same-plan, since both are true of
+      # that row and only one is actionable. Four negative controls prove each
+      # ordering and the `>=` on store rank.
+      - run: deno test --allow-read supabase/functions/_tests/checkout-decision.test.ts
+      # WEB-BE-039. firecrawl-scraper matched a scraped venue with `includes`
+      # either way, guarded by `searchText.length >= 5 || venueLower.length >= 5`
+      # - an OR whose right-hand side is about the KNOWN venue, so it always
+      # passed and a 4-character extraction like "Park" matched the first venue
+      # containing it. The caller then overwrote the event's venue name, street
+      # address and coordinates, so the event moved. Pins the length, word-
+      # boundary and coverage rules, and that the scraper uses the shared matcher.
+      - run: deno test --allow-read supabase/functions/_tests/venue-match.test.ts
+      # WEB-CI-029 AC2. The money path had no test that crossed its own seam:
+      # stripe-webhook decides what a Stripe status becomes in
+      # user_subscriptions, _shared/entitlements.ts reads that column back and
+      # decides entitlement, and nothing checked them together - so a status the
+      # webhook writes but isSubscriptionRowEntitled does not recognise would
+      # lock out a paying customer with no failure anywhere. Pins the status
+      # map, the past_due grace window, platform='web' on the checkout row, and
+      # that the update patch carries no identity columns.
+      - run: deno test --allow-read supabase/functions/_tests/subscription-status-entitlement.test.ts
+      # WEB-BE-043 AC6. The ingestion functions were the one class of automation
+      # with no job ledger, so a source going dark was invisible: SeatGeek - 375
+      # events, the largest single source - stopped ingesting on 2026-08-21 and
+      # every run still returned 200 with 0 inserted, which is also what a quiet
+      # week looks like. Pins the zero-result rule in both directions: it fires
+      # after a non-zero baseline, and it stays quiet for a source that never
+      # produced, a paused run and an empty calendar.
+      - run: deno test --allow-read supabase/functions/_tests/ingestion-health.test.ts
+      # WEB-BE-049. There was no canonical category list: SeatGeek wrote
+      # "Comedy" and "Family" no other path produced, three row builders
+      # defaulted to "General", and the shared extraction prompt asked for six
+      # categories then showed the model an example using a seventh. The
+      # /events filter chips are a SELECT DISTINCT, so every one of those words
+      # became a chip. Pins the vocabulary, the word-prefix matching rule (a
+      # plain includes() filed "Block Party" under Arts), and that every row
+      # builder, the crawler, the prompt and the submission form use it.
+      - run: deno test --allow-read supabase/functions/_tests/event-categories.test.ts
+      # WEB-BE-044. bulk-update-restaurants wrote a key-less Places media URL
+      # into restaurants.image_url under a comment claiming it stored the photo
+      # reference name - so those rows render a 403 - and backfill-images copies
+      # Place photo bytes into Storage permanently, while the Maps Platform
+      # terms allow caching Place content for 30 days. Pins the detector, the
+      # 30-day rule (an undated copy reads as EXPIRED), and that the guard in
+      # fetchAndStoreImage is wired and nothing opts out of it.
+      - run: deno test --allow-read supabase/functions/_tests/places-photo-terms.test.ts
+      # WEB-BE-050. Only firecrawl-scraper set coordinates on an event, from a
+      # known-venue match it held privately; ai-crawler set none at all, so
+      # whether an event reached the map depended on which scraper found it -
+      # and four nightly jobs existed to paper over the difference. CLAUDE.md
+      # said "geocoding triggers maintain lat/lng" while the trigger only
+      # RAISE NOTICEd. Pins both-or-neither coordinates, the (0,0) refusal, and
+      # that both scrapers go through _shared/knownVenues.ts.
+      - run: deno test --allow-read supabase/functions/_tests/ingest-coordinates.test.ts
+      # WEB-BE-047. firecrawl-scraper allows 10 requests per 15 minutes keyed by
+      # client IP; scrape-events invokes it once per scraping job from ONE
+      # egress address, and 15 jobs are seeded - so the scraper throttled its
+      # own orchestrator. And .limit(10) had no ORDER BY, so the same ten rows
+      # came back every run and five jobs had never been scraped at all. Pins
+      # the caller classification (an unset secret must not match an empty
+      # header), that the exemption is opt-in, and that the ORDER BY precedes
+      # the limit.
+      - run: deno test --allow-read supabase/functions/_tests/scraper-rate-limit.test.ts
+      # WEB-BE-046. scrape-events was 2,234 lines of which 1,180 were
+      # unreachable, and its handler read 60 days of events plus every future
+      # one to print a log line. firecrawl-scraper called generateEventSEO
+      # without await, so the Edge Runtime killed every one of those Haiku
+      # requests when the response was returned - and the .catch() made it look
+      # handled. Its batch block reported 0/0/0/null on a run that had just
+      # inserted forty events. Pins reachability, the removed read, that no
+      # scraper fires a promise it will not await, and the batch arithmetic.
+      - run: deno test --allow-read supabase/functions/_tests/scraper-dead-code.test.ts
+      # WEB-BE-048. ai-crawler's policy on a failed duplicate check was "On
+      # error, still add the item", so one PostgREST hiccup re-inserted the
+      # whole batch - that check is the only thing between a re-crawl and a
+      # duplicate row. Its events branch escaped its ilike pattern and its
+      # restaurant/playground/attraction branch did not, so a name carrying a
+      # percent became a wildcard and silently dropped a real record. Pins both
+      # rules across the TypeScript and Python paths.
+      - run: deno test --allow-read supabase/functions/_tests/duplicate-check-policy.test.ts
+      # WEB-BE-053. bulk-enhance-events told the model, in capitals, to ADD
+      # STATISTICS (attendance, years running, venue capacity) and INCLUDE
+      # QUOTES/CITATIONS ("According to Des Moines Register...") while giving it
+      # five fields containing no number, no year and no quote - so every one it
+      # produced was invented, and attributed, and published. Its worked example
+      # demonstrated five fabrications in six sentences. Pins that the prompt no
+      # longer asks for any of it and that the example models omission.
+      - run: deno test --allow-read supabase/functions/_tests/writeup-grounding.test.ts
       # WEB-BE-032. The ops digest counted with `count ?? 0` and discarded the
       # error, so a digest that could read nothing printed the same eleven
       # zeros as a system with nothing wrong. Pins that an unreadable section
@@ -186,6 +337,27 @@ jobs:
       # already paying twice, and a cross-tier upgrade opened a SECOND Stripe
       # subscription. Pins the platform-scoped guard and the in-place upgrade.
       - run: deno test --allow-read supabase/functions/_tests/subscription-upgrade-contract.test.ts
+      # WEB-FEAT-014. The trial was decided from the ACTIVE web row, so cancel,
+      # lapse, resubscribe granted another 7 free days, once per cancellation.
+      # Pins the first-purchase rule and the two unfiltered reads behind it.
+      - run: deno test --allow-read supabase/functions/_tests/trial-eligibility.test.ts
+      # WEB-FEAT-015. One .single() over every platform, so a dual-platform
+      # subscriber matched two rows and read as "no subscription", and an
+      # iOS-only row (no stripe_customer_id) got the same message. Pins the
+      # per-platform reads, the store deep-link answer, and the one place the
+      # site URL now comes from. --allow-env: getSiteUrl reads SITE_URL.
+      - run: deno test --allow-read --allow-env supabase/functions/_tests/manage-subscription-platforms.test.ts
+      # WEB-FEAT-017. Favorites/saved-search caps were browser-only and
+      # saved-search-alerts mailed every row regardless of tier. Pins the
+      # BEFORE INSERT triggers, the -1-is-unlimited rule, the shared 14-day
+      # grace window, and the entitlement filter on the nightly job.
+      - run: deno test --allow-read supabase/functions/_tests/plan-limit-enforcement.test.ts
+      # WEB-FEAT-019. The signup promised a confirmation nothing sent, an
+      # unsubscribed address could never come back, and the weekly digest read
+      # this table only for a token while ignoring the status - so the
+      # one-click opt-out stopped nothing. Pins the confirm flow, the upsert,
+      # the single generic answer, and the digest's status check.
+      - run: deno test --allow-read supabase/functions/_tests/newsletter-double-optin.test.ts
       # WEB-FEAT-016. VIP listed eight benefits at $12.99/month and delivered
       # none. Fails if the pricing page or the stored plan row promises a feature
       # no component gates on.

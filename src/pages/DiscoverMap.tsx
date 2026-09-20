@@ -53,15 +53,32 @@ function useMapEntities(bounds: MapBounds | null) {
     queryFn: async (): Promise<MapEntity[]> => {
       const results: MapEntity[] = [];
 
-      const inBounds = <T extends { gte: (c: string, v: number) => T; lte: (c: string, v: number) => T }>(
-        query: T,
-      ): T => {
+      // NOT GENERIC OVER THE BUILDER, deliberately. This used to constrain T to
+      // `{ gte(c, v): T; lte(c, v): T }` and infer T from the query passed in,
+      // which made TypeScript instantiate the full PostgrestFilterBuilder -
+      // eight generic parameters and a select-string parser - once per call
+      // site, and then re-check it against `scoped` on reassignment. Under
+      // @supabase/supabase-js 2.85+ all three call sites below reported TS2589,
+      // "instantiation is excessively deep". The helper only ever needed two
+      // methods, so it asks for exactly those and hands the caller's own type
+      // back. Runtime behaviour is identical; .order()/.limit() return the same
+      // builder instance, so the filters still land on the request.
+      type BoundsFilterable = {
+        gte(column: string, value: number): BoundsFilterable;
+        lte(column: string, value: number): BoundsFilterable;
+      };
+      const inBounds = <T,>(query: T): T => {
         if (!bounds) return query;
-        let scoped = query.gte('latitude', bounds.south).lte('latitude', bounds.north);
-        if (bounds.west <= bounds.east) {
-          scoped = scoped.gte('longitude', bounds.west).lte('longitude', bounds.east);
-        }
-        return scoped;
+        const byLatitude = (query as BoundsFilterable)
+          .gte('latitude', bounds.south)
+          .lte('latitude', bounds.north);
+        // A viewport straddling the antimeridian has west > east, and a
+        // between-filter would then exclude everything. Latitude still applies.
+        const scoped =
+          bounds.west <= bounds.east
+            ? byLatitude.gte('longitude', bounds.west).lte('longitude', bounds.east)
+            : byLatitude;
+        return scoped as T;
       };
 
       const [eventsRes, restaurantsRes, attractionsRes] = await Promise.all([

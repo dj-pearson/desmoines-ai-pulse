@@ -1,4 +1,5 @@
 import { test, expect } from '@playwright/test';
+import { installFixtureBackend } from './support/fixtureBackend';
 
 /**
  * WEB-UX-003 — sticky filter bar, removable chips, visible result count.
@@ -6,6 +7,12 @@ import { test, expect } from '@playwright/test';
  * Loads each list page with a search filter in the URL and verifies the active-
  * filter chip renders (all viewports incl. mobile projects), the result count is
  * visible, and removing the chip clears the filter from the URL.
+ *
+ * RUNS AGAINST FIXTURES (WEB-CI-028 AC2). A chip and a count are both things
+ * the page renders ABOUT results, so with the smoke lane's placeholder backend
+ * there is nothing for them to describe and the spec could never be wired into
+ * a lane. installFixtureBackend supplies rows; it does not emulate filtering,
+ * which is deliberate - see its header.
  */
 
 const listPages = [
@@ -15,6 +22,10 @@ const listPages = [
 ];
 
 test.describe('Sticky filter bar + chips (WEB-UX-003)', () => {
+  test.beforeEach(async ({ page }) => {
+    await installFixtureBackend(page);
+  });
+
   for (const { path, name } of listPages) {
     test(`${name}: active search renders a removable chip that clears the URL`, async ({ page }) => {
       await page.goto(`${path}?q=jazz`);

@@ -1,4 +1,4 @@
-import { useEffect } from "react";
+import { useEffect, useState } from "react";
 import { useNavigate } from "react-router-dom";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
@@ -6,7 +6,8 @@ import { Badge } from "@/components/ui/badge";
 import { useCampaigns } from "@/hooks/useCampaigns";
 import { useAuth } from "@/hooks/useAuth";
 import { format } from "date-fns";
-import { Eye, DollarSign, Plus, Upload, BarChart3 } from "lucide-react";
+import { Eye, DollarSign, Plus, Upload, BarChart3, Pause, Play, X, Receipt, RefreshCw } from "lucide-react";
+import { toast } from "sonner";
 import { useDocumentTitle } from "@/hooks/useDocumentTitle";
 import { SpriteIcon } from "@/components/ui/SpriteIcon";
 
@@ -16,6 +17,7 @@ const STATUS_COLORS = {
   pending_creative: "outline",
   pending_review: "outline",
   active: "default",
+  paused: "outline",
   completed: "secondary",
   cancelled: "destructive",
   rejected: "destructive",
@@ -25,7 +27,28 @@ const STATUS_COLORS = {
 export default function CampaignDashboard() {
   const navigate = useNavigate();
   const { user } = useAuth();
-  const { campaigns, isLoading } = useCampaigns();
+  const { campaigns, isLoading, cancelCampaign, setCampaignPaused, renewCampaign, requestRefund } =
+    useCampaigns();
+  // One id at a time, so a slow request disables only the row it belongs to.
+  const [pendingId, setPendingId] = useState<string | null>(null);
+
+  /**
+   * WEB-ADS-011 AC2. Every one of these is a server call that can refuse - the
+   * status rules live in the functions, not here - so the failure has to reach
+   * the advertiser. The version that swallows it leaves them pressing a button
+   * that appears to do nothing.
+   */
+  const run = async (campaignId: string, action: () => Promise<unknown>, success: string) => {
+    setPendingId(campaignId);
+    try {
+      await action();
+      toast.success(success);
+    } catch (err) {
+      toast.error(err instanceof Error ? err.message : "That did not work. Please try again.");
+    } finally {
+      setPendingId(null);
+    }
+  };
   useDocumentTitle("Campaign Dashboard");
 
   useEffect(() => {
@@ -188,6 +211,112 @@ export default function CampaignDashboard() {
                     >
                       <BarChart3 className="h-3 w-3 mr-1" />
                       Analytics
+                    </Button>
+                  )}
+
+                  {/*
+                    WEB-ADS-011 AC2. None of these existed: an advertiser who
+                    changed their mind had no button at all, and a refund was
+                    admin-only with no way to ask for one.
+                  */}
+                  {(campaign.status === 'draft' || campaign.status === 'pending_payment') && (
+                    <Button
+                      size="sm"
+                      variant="ghost"
+                      disabled={pendingId === campaign.id}
+                      onClick={() =>
+                        run(campaign.id, () => cancelCampaign(campaign.id), "Campaign cancelled")
+                      }
+                    >
+                      <X className="h-3 w-3 mr-1" />
+                      Cancel
+                    </Button>
+                  )}
+                  {campaign.status === 'active' && (
+                    <Button
+                      size="sm"
+                      variant="outline"
+                      disabled={pendingId === campaign.id}
+                      onClick={() =>
+                        run(
+                          campaign.id,
+                          () => setCampaignPaused(campaign.id, true),
+                          "Paused. The days you have left are held for you.",
+                        )
+                      }
+                    >
+                      <Pause className="h-3 w-3 mr-1" />
+                      Pause
+                    </Button>
+                  )}
+                  {campaign.status === 'paused' && (
+                    <Button
+                      size="sm"
+                      disabled={pendingId === campaign.id}
+                      onClick={() =>
+                        run(
+                          campaign.id,
+                          () => setCampaignPaused(campaign.id, false),
+                          "Resumed. Your end date has moved out by the days you had left.",
+                        )
+                      }
+                    >
+                      <Play className="h-3 w-3 mr-1" />
+                      Resume
+                    </Button>
+                  )}
+                  {/*
+                    WEB-ADS-011 AC3. renewal_eligible is set by the lifecycle
+                    job seven days before the end and on completion, so this
+                    appears while there is still time to renew without a gap -
+                    the flag used to be written on completion ONLY, by which
+                    point renewing buys one.
+                  */}
+                  {campaign.renewal_eligible && (
+                    <Button
+                      size="sm"
+                      disabled={pendingId === campaign.id}
+                      onClick={() =>
+                        run(
+                          campaign.id,
+                          async () => {
+                            const newId = await renewCampaign(campaign.id);
+                            if (newId) navigate(`/campaigns/${newId}`);
+                          },
+                          "Renewed as a draft. Review the dates and pay to start it.",
+                        )
+                      }
+                    >
+                      <RefreshCw className="h-3 w-3 mr-1" />
+                      Renew
+                    </Button>
+                  )}
+                  {/*
+                    A REQUEST, not a refund. process-stripe-refund stays
+                    admin-only; this opens a ticket somebody has to answer,
+                    which is what an advertiser did not have.
+                  */}
+                  {['pending_creative', 'pending_review', 'active', 'paused', 'completed'].includes(
+                    campaign.status,
+                  ) && (
+                    <Button
+                      size="sm"
+                      variant="ghost"
+                      disabled={pendingId === campaign.id}
+                      onClick={() =>
+                        run(
+                          campaign.id,
+                          () =>
+                            requestRefund(
+                              campaign.id,
+                              "Requested from the campaign dashboard.",
+                            ),
+                          "Refund requested. We will be in touch.",
+                        )
+                      }
+                    >
+                      <Receipt className="h-3 w-3 mr-1" />
+                      Request refund
                     </Button>
                   )}
                 </div>

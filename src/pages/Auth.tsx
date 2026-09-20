@@ -20,6 +20,7 @@ import { SecurityUtils } from "@/lib/securityUtils";
 import { authErrorCopy } from '@/lib/authErrorMessages';
 import { logConsent } from "@/lib/consentLog";
 import { SpriteIcon } from "@/components/ui/SpriteIcon";
+import { useTurnstile } from "@/hooks/useTurnstile";
 
 // Google Logo SVG Component (official colors)
 const GoogleLogo = ({ className }: { className?: string }) => (
@@ -144,6 +145,15 @@ export default function Auth() {
     resendVerification: resendVerificationContext,
   } = useAuth();
 
+  /**
+   * WEB-SEC-029. Solves in the background and renders nothing unless
+   * Cloudflare wants to interrogate this visitor, so the form stays one step.
+   * With no VITE_TURNSTILE_SITE_KEY configured this is inert: `token` is
+   * undefined, every call below passes undefined, and nothing changes.
+   */
+  const turnstile = useTurnstile();
+
+
   // Security hooks for rate limiting and validation
   const {
     isBlocked,
@@ -229,7 +239,7 @@ export default function Auth() {
         return;
       }
 
-      const result = await login(formData.email, formData.password);
+      const result = await login(formData.email, formData.password, turnstile.token);
 
       // Check if MFA verification is required
       if (result.requiresMFA && result.factorId) {
@@ -240,6 +250,11 @@ export default function Auth() {
       }
 
       if (!result.success) {
+        // WEB-SEC-029: a Turnstile token is SINGLE-USE. Without this the
+        // visitor's second attempt fails on a replayed token, for a reason
+        // nothing on screen explains.
+        turnstile.reset();
+
         // Log failed attempt for security monitoring
         await logFailedAttempt(formData.email, 'login', result.error || 'Invalid credentials');
 
@@ -348,9 +363,10 @@ export default function Auth() {
     }
 
     setIsLoading(true);
-    const result = await resetPasswordContext(forgotPasswordEmail);
+    const result = await resetPasswordContext(forgotPasswordEmail, turnstile.token);
 
     if (!result.success) {
+      turnstile.reset();
       toast({
         title: "Reset Failed",
         description: result.error || "Failed to send reset email",
@@ -573,9 +589,10 @@ export default function Auth() {
           consent: consentRecord,
         };
 
-    const result = await signup(formData.email, formData.password, metadata);
+    const result = await signup(formData.email, formData.password, metadata, turnstile.token);
 
     if (!result.success) {
+      turnstile.reset();
       toast({
         title: "Signup Failed",
         description: result.error || "Failed to create account",
@@ -769,8 +786,16 @@ export default function Auth() {
                     <p className="text-sm text-muted-foreground">
                       Didn't receive the email?
                     </p>
+                    {/* WEB-CI-030 AC5. This was `onClick={handleResendVerification}`,
+                        and the handler's first parameter is
+                        `email: string = signupEmail`. onClick passes the React
+                        MouseEvent as the first argument, so the default never
+                        applied and resendVerificationContext was called with a
+                        synthetic event where an address belongs - this button
+                        could not resend anything. The other call site already
+                        wraps it correctly; this one did not. */}
                     <Button
-                      onClick={handleResendVerification}
+                      onClick={() => handleResendVerification()}
                       variant="outline"
                       disabled={isLoading}
                       className="w-full"
@@ -1228,7 +1253,7 @@ export default function Auth() {
                       <Checkbox
                         id="emailNotifications"
                         checked={formData.emailNotifications}
-                        onCheckedChange={(checked) => handleInputChange("emailNotifications", checked)}
+                        onCheckedChange={(checked) => handleInputChange("emailNotifications", !!checked)}
                         className="mt-0.5"
                       />
                       <Label htmlFor="emailNotifications" className="text-sm font-normal leading-snug">
@@ -1239,7 +1264,7 @@ export default function Auth() {
                       <Checkbox
                         id="smsNotifications"
                         checked={formData.smsNotifications}
-                        onCheckedChange={(checked) => handleInputChange("smsNotifications", checked)}
+                        onCheckedChange={(checked) => handleInputChange("smsNotifications", !!checked)}
                         className="mt-0.5"
                       />
                       <Label htmlFor="smsNotifications" className="text-sm font-normal leading-snug">
@@ -1250,7 +1275,7 @@ export default function Auth() {
                       <Checkbox
                         id="eventRecommendations"
                         checked={formData.eventRecommendations}
-                        onCheckedChange={(checked) => handleInputChange("eventRecommendations", checked)}
+                        onCheckedChange={(checked) => handleInputChange("eventRecommendations", !!checked)}
                         className="mt-0.5"
                       />
                       <Label htmlFor="eventRecommendations" className="text-sm font-normal leading-snug">
@@ -1295,6 +1320,28 @@ export default function Auth() {
           )}
         </CardContent>
       </Card>
+
+      {/* WEB-SEC-029. ONE widget for all three forms on this page - sign in,
+          sign up and the forgot-password dialog all read the same token, and
+          all three reset it on failure because Supabase rejects a replayed
+          one.
+
+          Rendered outside the Card and with no heading because in managed mode
+          it usually draws NOTHING: appearance "execute" shows a challenge only
+          for a visitor Cloudflare wants to interrogate. The container is still
+          in the tree so the widget has somewhere to appear when it does.
+
+          aria-hidden is deliberate and narrow: the empty container carries no
+          information, and when Cloudflare does render a challenge it manages
+          its own iframe's accessibility. Marking the wrapper stops a screen
+          reader announcing an empty landmark on every visit to /auth. */}
+      {turnstile.enabled && (
+        <div
+          ref={turnstile.containerRef}
+          aria-hidden="true"
+          className="mt-4 flex justify-center empty:hidden"
+        />
+      )}
 
       {/* MFA Verification Dialog */}
       {mfaFactorId && (

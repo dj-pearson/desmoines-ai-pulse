@@ -16,6 +16,8 @@ import Stripe from "https://esm.sh/stripe@14.21.0";
 import { createClient } from "https://esm.sh/@supabase/supabase-js@2.45.0";
 import { handleCors, getCorsHeaders, isOriginAllowed } from "../_shared/cors.ts";
 import { checkRateLimit, addRateLimitHeaders } from "../_shared/rateLimit.ts";
+import { trialPeriodDays } from "../_shared/trialEligibility.ts";
+import { decideCheckout } from "./decision.ts";
 
 serve(async (req) => {
   // Handle CORS preflight
@@ -210,46 +212,25 @@ serve(async (req) => {
       );
     }
 
-    const requestedRank = Number(plan.sort_order ?? 0);
-    const blockingStoreSub = (storeSubscriptions ?? []).find((row) => {
-      const rank = Number(
-        (row as { subscription_plans?: { sort_order?: number } }).subscription_plans?.sort_order ?? 0,
-      );
-      return rank >= requestedRank;
+    // WEB-CI-029 AC3. The branch order - store first, then cancel-at-period-end,
+    // then same-plan, then upgrade - is the behaviour, and it now lives in a
+    // pure module so it can be tested without Stripe or a database. See
+    // ./decision.ts for why each check is where it is.
+    const outcome = decideCheckout({
+      requestedPlanId: planId,
+      requestedSortOrder: Number(plan.sort_order ?? 0),
+      webSubscription,
+      storeSubscriptions,
     });
 
-    if (blockingStoreSub) {
-      const where = blockingStoreSub.platform === "ios" ? "the App Store" : "Google Play";
+    if (outcome.kind === "refuse") {
       return new Response(
         JSON.stringify({
-          error:
-            `You already subscribe through ${where}. Manage or change that subscription there -- buying here would charge you twice.`,
-          code: "store_subscription_active",
-          platform: blockingStoreSub.platform,
+          error: outcome.error,
+          code: outcome.code,
+          ...(outcome.platform ? { platform: outcome.platform } : {}),
         }),
-        { status: 409, headers: { ...corsHeaders, "Content-Type": "application/json" } }
-      );
-    }
-
-    // PROD-SUB-005: a subscription set to cancel at period end should be
-    // RESUMED from the billing portal, not replaced by a second one.
-    if (webSubscription?.cancel_at_period_end) {
-      return new Response(
-        JSON.stringify({
-          error:
-            "Your subscription is set to cancel at the end of the period. Please resume it from Manage Subscription instead of buying a new one.",
-          code: "resume_required",
-        }),
-        { status: 409, headers: { ...corsHeaders, "Content-Type": "application/json" } }
-      );
-    }
-    if (webSubscription && webSubscription.plan_id === planId) {
-      return new Response(
-        JSON.stringify({
-          error: "You already have an active subscription to this plan.",
-          code: "already_subscribed",
-        }),
-        { status: 409, headers: { ...corsHeaders, "Content-Type": "application/json" } }
+        { status: outcome.status, headers: { ...corsHeaders, "Content-Type": "application/json" } }
       );
     }
 
@@ -261,10 +242,10 @@ serve(async (req) => {
     // Changing the price on the existing subscription is the operation Stripe
     // provides for this, and create_prorations credits the unused part of the
     // old tier against the new one.
-    if (webSubscription?.stripe_subscription_id) {
+    if (outcome.kind === "change_plan") {
       try {
         const current = await stripe.subscriptions.retrieve(
-          webSubscription.stripe_subscription_id
+          outcome.stripeSubscriptionId
         );
         const itemId = current.items?.data?.[0]?.id;
         if (!itemId) throw new Error("subscription has no items to update");
@@ -275,7 +256,7 @@ serve(async (req) => {
         try {
           const preview = await stripe.invoices.retrieveUpcoming({
             customer: typeof current.customer === "string" ? current.customer : current.customer?.id,
-            subscription: webSubscription.stripe_subscription_id,
+            subscription: outcome.stripeSubscriptionId,
             subscription_items: [{ id: itemId, price: stripePriceId }],
             subscription_proration_behavior: "create_prorations",
           });
@@ -287,7 +268,7 @@ serve(async (req) => {
         }
 
         const updated = await stripe.subscriptions.update(
-          webSubscription.stripe_subscription_id,
+          outcome.stripeSubscriptionId,
           {
             items: [{ id: itemId, price: stripePriceId }],
             proration_behavior: "create_prorations",
@@ -295,7 +276,7 @@ serve(async (req) => {
               userId: user.id,
               planId: planId,
               planName: plan.name,
-              changedFromPlanId: webSubscription.plan_id ?? "",
+              changedFromPlanId: webSubscription?.plan_id ?? "",
             },
           }
         );
@@ -339,6 +320,50 @@ serve(async (req) => {
       customerId = customers.data[0].id;
     }
 
+    // WEB-FEAT-014 -- THE TRIAL IS A FIRST-PURCHASE BENEFIT, NOT A PER-PURCHASE ONE.
+    //
+    // The decision used to be `existingSubscription ? undefined : 7`, reading the
+    // active-or-trialing WEB row. Cancel, lapse, resubscribe matched nothing and
+    // bought another 7 free days, repeatable once per cancellation. Both reads
+    // below are deliberately unfiltered by status and platform: a cancelled row
+    // and an iOS row are each a trial this user has already had.
+    const { count: priorTrialRowCount, error: trialHistoryError } = await supabase
+      .from("user_subscriptions")
+      .select("id", { count: "exact", head: true })
+      .eq("user_id", user.id)
+      .not("trial_start", "is", null);
+
+    if (trialHistoryError) {
+      // Same posture as the two guards above: a discarded error here reads as
+      // "never had a trial" and hands out the thing this story exists to stop.
+      console.error("Trial-history lookup failed, refusing checkout:", trialHistoryError);
+      return new Response(
+        JSON.stringify({
+          error: "We could not confirm your current subscription, so we have not started a checkout. Please try again in a moment.",
+          code: "subscription_lookup_failed",
+        }),
+        { status: 503, headers: { ...corsHeaders, "Content-Type": "application/json" } }
+      );
+    }
+
+    // Stripe remembers what our own table does not: delete the account, sign up
+    // again with the same email, and the customer -- with its subscription
+    // history -- is still there.
+    let priorStripeSubscriptionCount = 0;
+    if (customerId) {
+      const priorStripeSubs = await stripe.subscriptions.list({
+        customer: customerId,
+        status: "all",
+        limit: 1,
+      });
+      priorStripeSubscriptionCount = priorStripeSubs.data.length;
+    }
+
+    const trialDays = trialPeriodDays({
+      priorTrialRowCount: priorTrialRowCount ?? 0,
+      priorStripeSubscriptionCount,
+    });
+
     // Build success and cancel URLs (siteUrl is declared above)
     const successUrl = `${siteUrl}/subscription/success?session_id={CHECKOUT_SESSION_ID}`;
     const cancelUrl = `${siteUrl}/pricing?canceled=true`;
@@ -368,8 +393,8 @@ serve(async (req) => {
           planId: planId,
           planName: plan.name,
         },
-        // Add 7-day trial for new subscribers
-        trial_period_days: webSubscription ? undefined : 7,
+        // First purchase only -- see the two reads above (WEB-FEAT-014).
+        trial_period_days: trialDays,
       },
       // Allow promotion codes
       allow_promotion_codes: true,

@@ -111,3 +111,57 @@ export const DES_MOINES_CENTER: Coordinates = {
   latitude: 41.5868,
   longitude: -93.625,
 };
+
+/**
+ * The Des Moines metro, as a bounding box (WEB-SEO-037).
+ *
+ * WHAT THIS IS FOR. `playgrounds` holds 69 rows and 21 of them are in Oregon,
+ * Washington, Colorado and Missouri - a Google Places import that went wide.
+ * The hub, the hook, the detail page and the sitemap generator all had no
+ * filter, so a third of sitemap-playgrounds.xml pointed at parks a Des Moines
+ * reader cannot visit, on what SEO-014 records as the site's best-performing
+ * module.
+ *
+ * A BOX ON EXISTING COLUMNS RATHER THAN A NEW is_active FLAG, which is the
+ * other option WEB-SEO-037 AC3 offers. Adding a column means a migration, and
+ * a reader that names a not-yet-applied column gets 42703 on the WHOLE select
+ * - PostgREST fails the query, not the predicate - so /playgrounds would go
+ * blank for the length of the deploy window. latitude and longitude are
+ * already there, already populated by the import that caused this, and need
+ * no window. useOutdoorsNearby reached the same conclusion for the same rows:
+ * "proximity filtering drops them for free".
+ *
+ * THE BOX IS DELIBERATELY LOOSE. It reaches past the county line so a genuine
+ * metro park never falls out on a rounding error: Waukee (-93.88), Altoona
+ * (-93.46), Ankeny (41.73) and Indianola (41.36) are all comfortably inside,
+ * Ames (42.03) is outside because it is not the metro, and the nearest of the
+ * 21 strays is several hundred miles away. This is a sanity bound, not a
+ * service-area definition.
+ */
+export const DES_MOINES_METRO_BOUNDS = {
+  minLatitude: 41.2,
+  maxLatitude: 42.0,
+  minLongitude: -94.3,
+  maxLongitude: -93.1,
+} as const;
+
+/**
+ * Is this point inside the metro box?
+ *
+ * A row with NO COORDINATES counts as inside. We cannot place it, and dropping
+ * a row for missing data would hide hand-curated parks that were added without
+ * a lat/lng - the 21 strays all came from a Places import, which supplies
+ * coordinates, so they are not the rows this ambiguity protects.
+ */
+export function isInMetro(
+  latitude?: number | null,
+  longitude?: number | null,
+): boolean {
+  if (latitude == null || longitude == null) return true;
+  return (
+    latitude >= DES_MOINES_METRO_BOUNDS.minLatitude &&
+    latitude <= DES_MOINES_METRO_BOUNDS.maxLatitude &&
+    longitude >= DES_MOINES_METRO_BOUNDS.minLongitude &&
+    longitude <= DES_MOINES_METRO_BOUNDS.maxLongitude
+  );
+}

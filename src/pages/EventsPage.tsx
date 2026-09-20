@@ -2,6 +2,7 @@ import React, { useState, useEffect, useCallback, lazy, Suspense, useRef, useMem
 import { Link, useNavigate } from "react-router-dom";
 import { useQuery } from "@tanstack/react-query";
 import { supabase } from "@/integrations/supabase/client";
+import { queryKeys } from "@/lib/queryKeys";
 import { Calendar, Search, List, Map, X, SearchX, Sparkles, Navigation, AlertCircle, RefreshCw, Clock, ChevronDown, Star, Shuffle } from "lucide-react";
 import { useIsMobile } from "@/hooks/use-mobile";
 import { usePullToRefresh } from "@/hooks/use-pull-to-refresh";
@@ -22,7 +23,6 @@ import Header from "@/components/Header";
 import { AdBanner } from "@/components/AdBanner";
 import Footer from "@/components/Footer";
 import SEOHead from "@/components/SEOHead";
-import { SEOEnhancedHead } from "@/components/SEOEnhancedHead";
 import { useToast } from "@/hooks/use-toast";
 import { FAQSection } from "@/components/FAQSection";
 import {
@@ -230,18 +230,22 @@ export default function EventsPage() {
   };
 
   const { data: eventsData, isLoading, error, refetch } = useQuery({
-    queryKey: [
-      "events",
-      debouncedSearchQuery,
-      selectedCategory,
-      dateFilter,
+    // WEB-PERF-032: this was a flat ["events", a, b, c, ...] on the same rung as
+    // the homepage's featured rail, so nothing could invalidate "every list"
+    // without the rail as well. queryKeys.events.list nests it under
+    // ["events","list"]. The fields are named rather than positional, so a
+    // reordering here cannot silently reuse another query's cache entry.
+    queryKey: queryKeys.events.list({
+      search: debouncedSearchQuery,
+      category: selectedCategory,
+      date: dateFilter,
       location,
       priceRange,
       page,
       sortBy,
-      isNearMeActive,
+      nearMe: isNearMeActive,
       userLocation,
-    ],
+    }),
     queryFn: async () => {
       if (isNearMeActive && userLocation) {
         const { data, error } = await supabase.rpc('search_events_near_location', {
@@ -286,7 +290,10 @@ export default function EventsPage() {
         .select("id, title, date, location, category, image_url, price, venue, is_featured, event_start_utc, event_start_local, city, latitude, longitude, enhanced_description, original_description", { count: 'exact' })
         .gte("date", new Date().toISOString().split("T")[0])
         .neq("is_merged", true)
-        .neq("is_hidden", true);
+        .neq("is_hidden", true)
+        // WEB-BE-034: archived_at is the OTHER unpublish switch, written by the
+        // agent sweep. This hub filtered one and not the other.
+        .is("archived_at", null);
 
       // Push the active sort into the query so it covers the full result set,
       // not just the current page (WEB-UX-018). 'newest' = recently added.
@@ -543,8 +550,12 @@ export default function EventsPage() {
       url: `${BRAND.baseUrl}/events`,
       about: { "@type": "City", name: "Des Moines", sameAs: "https://en.wikipedia.org/wiki/Des_Moines,_Iowa" },
     },
+    // WEB-SEO-026: an aggregator is not a LocalBusiness, and the @id ties this
+    // back to the one Organization node SEOHead publishes rather than minting
+    // a second identity for the same entity.
     provider: {
-      "@type": "LocalBusiness",
+      "@type": "Organization",
+      "@id": `${BRAND.baseUrl}/#organization`,
       name: BRAND.name,
       url: BRAND.baseUrl,
       areaServed: { "@type": "City", name: "Des Moines", addressRegion: "Iowa" },
@@ -567,41 +578,13 @@ export default function EventsPage() {
     })),
   };
 
-  // Loading state
-  if (isLoading && events.length === 0) {
-    return (
-      <>
-        <SEOHead
-          title={`Events in Des Moines - Concerts, Festivals & Things To Do | ${BRAND.name}`}
-          description="Discover upcoming events in Des Moines, Iowa. Find concerts, festivals, community gatherings, and entertainment activities happening now."
-          type="website"
-          keywords={["Des Moines events", "Iowa events", "upcoming events", "things to do Des Moines"]}
-        />
-        <div className="min-h-screen bg-background">
-          <Header />
-          <section className="relative bg-gradient-to-br from-[#1a1a2e] via-[#16213e] to-[#0f3460] overflow-hidden min-h-[340px]" role="status" aria-live="polite" aria-busy="true">
-            <div className="absolute inset-0 bg-[radial-gradient(ellipse_at_top,rgba(99,102,241,0.15),transparent_50%)]" />
-            <div className="relative container mx-auto px-4 py-16 md:py-20 text-center">
-              <div className="animate-pulse space-y-4 motion-reduce:animate-none">
-                <div className="h-10 md:h-14 bg-white/10 rounded-lg w-3/4 mx-auto" />
-                <div className="h-6 bg-white/10 rounded w-1/2 mx-auto" />
-                <div className="h-14 bg-white/10 rounded-xl w-full max-w-2xl mx-auto mt-8" />
-                <span className="sr-only">Loading events page...</span>
-              </div>
-            </div>
-          </section>
-          <div className="container mx-auto px-4 py-8">
-            {/* WEB-A11Y-002: same as the error branch below - this returns above
-                the page's own <h1>, so a slow response leaves the document
-                with no main heading. */}
-            <h1 className="sr-only">Des Moines events</h1>
-            <CardsGridSkeleton count={9} variant="event" className="grid gap-6 md:grid-cols-2 lg:grid-cols-3" label="Loading events..." />
-          </div>
-          <Footer />
-        </div>
-      </>
-    );
-  }
+  // No separate loading return. The render below already draws a
+  // CardsGridSkeleton while isLoading and the real grid after, and returning
+  // early replaced the hero - title, search box and filter chips - with a
+  // pulsing bar, so a visitor could not start typing until the results they
+  // were waiting for had arrived. It also meant a second <SEOHead> and an
+  // sr-only <h1> standing in for the real one (WEB-A11Y-002), both of which
+  // exist only because of the early return. WEB-CI-028 AC2.
 
   // Error state
   if (error) {
@@ -653,10 +636,16 @@ export default function EventsPage() {
 
   return (
     <>
-      <SEOEnhancedHead
+      {/* WEB-SEO-027: this was <SEOEnhancedHead>, while the loading and error
+          branches above use <SEOHead>. Two head components on one route means
+          the shape of the head changes with the page's state, and the
+          prerenderer captures whichever one happened to be mounted. One
+          component per page, and it is SEOHead. */}
+      <SEOHead
         title={seoTitle}
         description={seoDescription}
-        url={getCanonicalUrl('/events')}
+        url="/events"
+        canonicalUrl={getCanonicalUrl('/events')}
         type="website"
         structuredData={eventsSchema}
       />
@@ -668,9 +657,9 @@ export default function EventsPage() {
         {/* Hero Section - Modern Dark Gradient */}
         <section className="relative bg-gradient-to-br from-[#1a1a2e] via-[#16213e] to-[#0f3460] overflow-hidden">
           {/* Decorative elements */}
-          <div className="absolute inset-0 bg-[radial-gradient(ellipse_at_top,rgba(99,102,241,0.15),transparent_50%)]" />
-          <div className="absolute top-0 left-1/4 w-72 h-72 bg-indigo-500/10 rounded-full blur-3xl" />
-          <div className="absolute bottom-0 right-1/4 w-96 h-96 bg-violet-500/10 rounded-full blur-3xl" />
+          <div className="absolute inset-0 bg-[radial-gradient(ellipse_at_top,rgba(255,255,255,0.08),transparent_50%)]" />
+          <div className="absolute top-0 left-1/4 w-72 h-72 bg-white/5 rounded-full blur-3xl" />
+          <div className="absolute bottom-0 right-1/4 w-96 h-96 bg-white/5 rounded-full blur-3xl" />
 
           <div className="relative container mx-auto px-4 py-12 md:py-20">
             <div className="text-center max-w-3xl mx-auto">
@@ -684,7 +673,7 @@ export default function EventsPage() {
               {/* Search Bar */}
               <div className="max-w-2xl mx-auto mb-6">
                 <div className="relative">
-                  <Search className="absolute left-4 top-1/2 -translate-y-1/2 h-5 w-5 text-slate-400 pointer-events-none z-10" />
+                  <Search className="absolute left-4 top-1/2 -translate-y-1/2 h-5 w-5 text-white/60 pointer-events-none z-10" />
                   <Input
                     ref={searchInputRef}
                     type="search"
@@ -696,7 +685,7 @@ export default function EventsPage() {
                         addRecentSearch('events', searchQuery);
                       }
                     }}
-                    className="pl-12 pr-12 h-14 bg-white/10 backdrop-blur-md border-white/20 text-white placeholder:text-white/50 rounded-xl text-base focus:bg-white/15 focus:border-white/40 focus:ring-2 focus:ring-indigo-400/50 transition-all"
+                    className="pl-12 pr-12 h-14 bg-white/10 backdrop-blur-md border-white/20 text-white placeholder:text-white/50 rounded-xl text-base focus:bg-white/15 focus:border-white/40 focus:ring-2 focus:ring-white/40 transition-all"
                     aria-label="Search events (Press 'f' to focus)"
                     role="searchbox"
                     autoComplete="off"
@@ -756,7 +745,7 @@ export default function EventsPage() {
                   variant="secondary"
                   className={`rounded-full ${
                     isNearMeActive
-                      ? "bg-indigo-500 text-white hover:bg-indigo-600 border-0"
+                      ? "bg-white text-slate-900 hover:bg-white/90 border-0"
                       : "bg-white/10 hover:bg-white/20 text-white border-white/10"
                   }`}
                   disabled={isLoadingLocation}

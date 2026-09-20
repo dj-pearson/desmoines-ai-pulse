@@ -19,16 +19,64 @@ import { centralCalendarDate, isDuplicateEvent } from '../_shared/eventDedup.ts'
 const REPO = new URL('../../../', import.meta.url);
 const read = (rel: string) => Deno.readTextFile(new URL(rel, REPO));
 
-const MIGRATION = 'supabase/migrations/20260902000006_events_recurring_unique_key.sql';
+/** SQL line comments, so an explanation cannot satisfy an assertion about SQL. */
+const stripSqlComments = (sql: string) => sql.replace(/^\s*--[^\n]*$/gm, '');
 
-Deno.test('the migration records the production index, then replaces it in that order', async () => {
+const MIGRATION = 'supabase/migrations/20260902000006_events_recurring_unique_key.sql';
+/**
+ * The drop lives in its own later file. 20260902000006 retired the old object
+ * with `ALTER TABLE ... DROP CONSTRAINT IF EXISTS`, which is a silent no-op on
+ * a name belonging to a plain unique INDEX - and step 1 of that same migration
+ * creates it as an index. So the old (title, venue) key survived and the table
+ * still could not hold a recurring event. It could not be fixed in place:
+ * schema_migrations records 20260902000006 as applied, so it will never run
+ * again.
+ */
+const DROP_MIGRATION =
+  'supabase/migrations/20260919000001_drop_events_title_venue_unique_index.sql';
+
+Deno.test('the migration records the production index, then creates the new one', async () => {
   const sql = await read(MIGRATION);
   const recorded = sql.indexOf('CREATE UNIQUE INDEX IF NOT EXISTS events_title_venue_unique');
   const created = sql.indexOf('CREATE UNIQUE INDEX IF NOT EXISTS events_title_venue_date_unique');
-  const dropped = sql.indexOf('DROP INDEX IF EXISTS public.events_title_venue_unique');
   assert(recorded > 0, 'the production-only index must be recorded in the ledger');
   assert(created > recorded, 'the new index comes after');
-  assert(dropped > created, 'the old index is dropped only once the new one exists');
+});
+
+Deno.test('the old key is dropped as an INDEX, not only as a constraint', async () => {
+  // THE ASSERTION THAT WAS RED, and it was right to be. It looked for the DROP
+  // INDEX in 20260902000006, which only ever had the DROP CONSTRAINT - a
+  // silent no-op against an index, so events_title_venue_unique survived and
+  // every recurring event still collided. The drop now lives in its own
+  // migration, because an applied one cannot be repaired by editing it.
+  // STRIP THE COMMENTS FIRST. That migration's header QUOTES the defective
+  // `DROP CONSTRAINT IF EXISTS ...` to explain what went wrong, so a raw
+  // indexOf finds the prose before the statement - and the ordering assertion
+  // below passed with the two statements swapped. A check an explanation can
+  // satisfy is measuring the explanation.
+  const sql = stripSqlComments(await read(DROP_MIGRATION));
+  const constraint = sql.indexOf('DROP CONSTRAINT IF EXISTS events_title_venue_unique');
+  const index = sql.indexOf('DROP INDEX IF EXISTS public.events_title_venue_unique');
+
+  assert(constraint > 0, 'the constraint form must still be attempted');
+  assert(index > 0, 'the INDEX form is the one that was missing');
+  // Constraint first: dropping a unique constraint also drops its backing
+  // index, so the reverse order would leave the constraint behind.
+  assert(index > constraint, 'drop the constraint first, then the index');
+});
+
+Deno.test('the drop migration refuses to report success while the index lives', async () => {
+  // A migration whose whole job is a deletion must not be able to pass with
+  // the object still there. That is precisely how the first attempt failed.
+  const sql = await read(DROP_MIGRATION);
+  assert(
+    /RAISE EXCEPTION[^;]*events_title_venue_unique still exists/.test(sql),
+    'the drop must be verified against pg_class, not assumed',
+  );
+  assert(
+    sql.includes('events_title_venue_date_unique is missing'),
+    'it must also refuse to leave events with no unique key at all',
+  );
 });
 
 Deno.test('the new key is title + venue + the Central calendar date', async () => {

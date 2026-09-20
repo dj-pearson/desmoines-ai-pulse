@@ -7,6 +7,7 @@ import { SceneUpdateCard } from '@/components/SceneUpdateCard';
 import { Button } from '@/components/ui/button';
 import { Skeleton } from '@/components/ui/skeleton';
 import { SpriteIcon } from "@/components/ui/SpriteIcon";
+import { ErrorState } from '@/components/ui/error-state';
 
 
 const UPDATE_TYPES = [
@@ -20,7 +21,7 @@ const UPDATE_TYPES = [
 
 export default function WhatsNew() {
   const [typeFilter, setTypeFilter] = useState('');
-  const { data: updates, isLoading } = useSceneUpdates({
+  const { data: updates, isLoading, isError, error, refetch } = useSceneUpdates({
     type: typeFilter || undefined,
     limit: 50,
   });
@@ -67,6 +68,10 @@ export default function WhatsNew() {
                 <Skeleton key={i} className="h-24 rounded-lg" />
               ))}
             </div>
+          ) : isError ? (
+            // WEB-QA-031: "No updates yet" is a statement of fact. A failed
+            // fetch has to look different from a quiet week.
+            <ErrorState error={error} onRetry={() => void refetch()} />
           ) : !updates || updates.length === 0 ? (
             <div className="text-center py-16">
               <SpriteIcon name="sparkles" className="h-12 w-12 text-muted-foreground mx-auto mb-4" />

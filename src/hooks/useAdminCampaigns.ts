@@ -1,5 +1,6 @@
 import { useState, useEffect } from "react";
 import { supabase } from "@/integrations/supabase/client";
+import type { Database } from "@/integrations/supabase/types";
 import { useToast } from "./use-toast";
 import { Campaign, CampaignCreative } from "./useCampaigns";
 import { createLogger } from '@/lib/logger';
@@ -20,8 +21,12 @@ interface ApproveCreativeResult {
 
 const log = createLogger('useAdminCampaigns');
 
+/** The values `campaigns.status` can actually hold, from the generated enum. */
+export type CampaignStatus = Database["public"]["Enums"]["campaign_status"];
+
 export interface AdminCampaignFilters {
-  status?: string;
+  /** "all" is the unfiltered sentinel the admin UI uses; anything else is a real status. */
+  status?: CampaignStatus | "all";
   dateFrom?: string;
   dateTo?: string;
   searchQuery?: string;
@@ -349,11 +354,17 @@ export function useAdminCampaigns() {
 
   const updateCampaignStatus = async (
     campaignId: string,
-    status: string,
+    status: CampaignStatus,
     notes?: string
   ): Promise<boolean> => {
     try {
-      const updates: Record<string, string> = { status };
+      // Typed as the table's own Update row rather than Record<string, string>.
+      // An index-signature type says "this object may carry any key", which
+      // supabase-js 2.85+ rejects on an update - correctly, because a key the
+      // table does not have comes back PGRST204 and the write is lost. It also
+      // means `status` is now checked against the campaign_status enum here
+      // and at the .eq() filter above, instead of being any string at all.
+      const updates: Database["public"]["Tables"]["campaigns"]["Update"] = { status };
 
       if (notes) {
         updates.approval_notes = notes;

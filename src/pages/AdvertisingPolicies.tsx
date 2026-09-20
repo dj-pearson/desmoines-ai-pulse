@@ -1,6 +1,5 @@
 import { Helmet } from "react-helmet-async";
 import { Link } from "react-router-dom";
-import { useDocumentTitle } from "@/hooks/useDocumentTitle";
 
 /**
  * Advertising policies (WEB-ADS-014).
@@ -20,7 +19,6 @@ import { useDocumentTitle } from "@/hooks/useDocumentTitle";
  * change this page in the same commit.
  */
 export default function AdvertisingPolicies() {
-  useDocumentTitle("Advertising Policies");
 
   return (
     <>

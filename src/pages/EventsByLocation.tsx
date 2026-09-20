@@ -13,7 +13,6 @@ import { SocialEventCard } from "@/components/SocialEventCard";
 import { useBatchEventSocial } from "@/hooks/useBatchEventSocial";
 import EnhancedLocalSEO from "@/components/EnhancedLocalSEO";
 import { EventListJsonLd } from "@/components/schema/EventListJsonLd";
-import { useDocumentTitle } from "@/hooks/useDocumentTitle";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Star } from "lucide-react";
 import { format, parseISO, isAfter } from "date-fns";
@@ -22,59 +21,8 @@ import { Breadcrumbs } from "@/components/ui/breadcrumbs";
 import { RESTAURANT_LIST_COLUMNS } from "@/lib/listColumns";
 import { useReloadableFetch } from "@/hooks/useReloadableFetch";
 import { ErrorState } from "@/components/ui/error-state";
-
-// Suburb mapping for SEO-friendly URLs and proper names
-const SUBURBS = {
-  "west-des-moines": {
-    name: "West Des Moines",
-    searchTerms: ["West Des Moines", "WDM", "Valley Junction"],
-    description:
-      "West Des Moines offers family-friendly events, outdoor activities, and cultural attractions in the heart of Iowa.",
-    neighborhoods: ["Valley Junction", "Jordan Creek", "Clive"],
-  },
-  ankeny: {
-    name: "Ankeny",
-    searchTerms: ["Ankeny"],
-    description:
-      "Ankeny is known for its community events, parks, and family activities just north of Des Moines.",
-    neighborhoods: ["Downtown Ankeny", "Prairie Trail"],
-  },
-  urbandale: {
-    name: "Urbandale",
-    searchTerms: ["Urbandale"],
-    description:
-      "Urbandale hosts seasonal festivals, community gatherings, and outdoor recreation events.",
-    neighborhoods: ["Downtown Urbandale", "Living History Farms"],
-  },
-  johnston: {
-    name: "Johnston",
-    searchTerms: ["Johnston"],
-    description:
-      "Johnston features community events, outdoor activities, and family-friendly attractions.",
-    neighborhoods: ["Downtown Johnston", "Terra Park"],
-  },
-  altoona: {
-    name: "Altoona",
-    searchTerms: ["Altoona", "Adventureland"],
-    description:
-      "Altoona is home to Adventureland and hosts numerous family events and community celebrations.",
-    neighborhoods: ["Downtown Altoona", "Adventureland Area"],
-  },
-  clive: {
-    name: "Clive",
-    searchTerms: ["Clive"],
-    description:
-      "Clive offers upscale events, outdoor activities, and community gatherings in west Des Moines metro.",
-    neighborhoods: ["Clive Village", "Greenbelt Trail"],
-  },
-  "windsor-heights": {
-    name: "Windsor Heights",
-    searchTerms: ["Windsor Heights"],
-    description:
-      "Windsor Heights hosts intimate community events and local gatherings in a charming suburban setting.",
-    neighborhoods: ["Downtown Windsor Heights"],
-  },
-};
+import { SUBURBS } from "@/lib/suburbs";
+import { PlaceCrossLinks } from "@/components/PlaceCrossLinks";
 
 export default function EventsByLocation() {
   // WEB-SEO-002: this read `useParams().location`, but App.tsx mounts this
@@ -97,7 +45,6 @@ export default function EventsByLocation() {
 
   const suburbInfo = slug ? SUBURBS[slug as keyof typeof SUBURBS] : null;
 
-  useDocumentTitle(suburbInfo?.name ? `Events in ${suburbInfo.name}` : "Events by Location");
 
   interface EventItem {
     id: string;
@@ -493,6 +440,10 @@ export default function EventsByLocation() {
             the page. The heading stays "About <suburb>" — it is the visible
             title, and the questions underneath are the same either way. */}
         <FAQSection faqs={faqData} title={`About ${suburbInfo.name}`} />
+
+        {/* WEB-SEO-036 AC5. /events/ankeny and /neighborhoods/ankeny are both
+            pages about Ankeny and neither linked to the other. */}
+        <PlaceCrossLinks slug={slug ?? ""} from="events" />
       </div>
 
       <Footer />

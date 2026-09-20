@@ -1,0 +1,18 @@
+{
+  "_comment": "Edge functions that hardcode a Claude model id instead of reading it from _shared/aiConfig.ts (WEB-BE-041). This list must only ever SHRINK. See scripts/check-edge-model-pins.mjs.",
+  "generated": "2026-09-19",
+  "pins": [
+    {
+      "file": "supabase/functions/batch-enhance-events/index.ts",
+      "model": "claude-sonnet-4-20250514"
+    },
+    {
+      "file": "supabase/functions/campaign-creative-review/index.ts",
+      "model": "claude-haiku-4-5-20251001"
+    },
+    {
+      "file": "supabase/functions/validate-source-urls/index.ts",
+      "model": "claude-sonnet-4-20250514"
+    }
+  ]
+}

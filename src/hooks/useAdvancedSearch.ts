@@ -5,7 +5,12 @@ import { supabase } from '@/integrations/supabase/client';
 import { useAuth } from './useAuth';
 import { toast } from 'sonner';
 import { createLogger } from '@/lib/logger';
-import { EVENT_LIST_COLUMNS, RESTAURANT_LIST_COLUMNS, ATTRACTION_LIST_COLUMNS } from '@/lib/listColumns';
+import {
+  EVENT_LIST_COLUMNS,
+  RESTAURANT_LIST_COLUMNS,
+  ATTRACTION_LIST_COLUMNS,
+  PLAYGROUND_LIST_COLUMNS,
+} from '@/lib/listColumns';
 import { sanitizePostgrestPattern } from '@/lib/postgrestPattern';
 
 const log = createLogger('useAdvancedSearch');
@@ -366,7 +371,7 @@ export function useAdvancedSearch() {
   const searchPlaygrounds = async (searchFilters: AdvancedSearchFilters): Promise<SearchResult[]> => {
     let query = supabase
       .from('playgrounds')
-      .select('*') // No playground LIST_COLUMNS constant exists; projection left as-is
+      .select(PLAYGROUND_LIST_COLUMNS)
       .limit(50);
 
     // Apply text search

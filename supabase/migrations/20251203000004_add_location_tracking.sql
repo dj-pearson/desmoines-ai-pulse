@@ -1,5 +1,33 @@
 -- Add location history tracking for mobile app
 -- Stores user location data for analytics, trip tracking, and personalization
+--
+-- ===========================================================================
+-- THIS MIGRATION HAS NEVER APPLIED, AND FIXING ITS SYNTAX DOES NOT CHANGE THAT.
+--
+-- It contained a syntax error at PART 2 - `timestamp` as a bare column name in
+-- a RETURNS TABLE list, which Postgres rejects even though it accepts the same
+-- word as a column name in the CREATE TABLE above. A migration runs in one
+-- transaction, so the error rolled back the whole file: no location_history
+-- table, none of the four functions. It sits in
+-- .github/migration-drift-baseline.json as drifted, and this is why.
+--
+-- supabase_migrations.schema_migrations records it as applied, so `supabase db
+-- push` will never run it again whatever it contains. The quote added below
+-- makes the file correct; it does not make the objects exist. Creating them
+-- needs a NEW migration - and before anyone writes one:
+--
+--   NOTHING IN THIS REPOSITORY USES ANY OF IT. location_history,
+--   user_location_path, calculate_distance_traveled,
+--   user_most_visited_locations and cleanup_old_location_history have zero
+--   references across src/, supabase/functions/ and scripts/, and none are in
+--   the generated types. So the question is not "how do we apply this" but
+--   "does the product still want location tracking" - which is an owner's call,
+--   and one nobody has had to make because the failure was silent.
+--
+-- The syntax is fixed rather than the file deleted so that
+-- scripts/check-migrations-parse.mjs can gate every migration without an
+-- exception list. Found by that check (WEB-BE-039).
+-- ===========================================================================
 
 -- ============================================================================
 -- PART 1: Create location_history table
@@ -59,7 +87,10 @@ CREATE OR REPLACE FUNCTION user_location_path(
 RETURNS TABLE (
   latitude DOUBLE PRECISION,
   longitude DOUBLE PRECISION,
-  timestamp TIMESTAMPTZ,
+  -- QUOTED. `timestamp` is a col_name_keyword: Postgres accepts it as a bare
+  -- column name in CREATE TABLE (line 19) but NOT in a RETURNS TABLE list, so
+  -- this one position was a syntax error - see the header.
+  "timestamp" TIMESTAMPTZ,
   speed DOUBLE PRECISION,
   heading DOUBLE PRECISION
 ) AS $$

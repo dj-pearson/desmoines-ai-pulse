@@ -11,7 +11,7 @@ import { openExternalUrl, isCapacitor } from "@/lib/capacitorUtils";
 import { SpriteIcon } from "@/components/ui/SpriteIcon";
 
 interface AdBannerProps {
-  placement: 'top_banner' | 'featured_spot' | 'below_fold' | 'sidebar';
+  placement: 'top_banner' | 'featured_spot' | 'below_fold';
   className?: string;
   /** Optional fallback content when no ads are available */
   fallback?: React.ReactNode;
@@ -71,8 +71,6 @@ export function AdBanner({ placement, className = "", fallback }: AdBannerProps)
         return "min-h-[220px] md:min-h-[250px]";
       case 'below_fold':
         return "h-20 md:h-28";
-      case 'sidebar':
-        return "w-[160px] min-h-[600px]";
       default:
         return "h-24 md:h-28";
     }

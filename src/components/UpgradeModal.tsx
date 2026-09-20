@@ -23,6 +23,7 @@ import {
   X,
 } from "lucide-react";
 import { useSubscription } from "@/hooks/useSubscription";
+import { useTrialEligibility } from "@/hooks/useTrialEligibility";
 import { logPaywallEvent } from "@/lib/paywallAnalytics";
 import { cn } from "@/lib/utils";
 import { SpriteIcon } from "@/components/ui/SpriteIcon";
@@ -135,6 +136,9 @@ export function UpgradeModal({
   requiredTier = "insider",
 }: UpgradeModalProps) {
   const { tier: currentTier } = useSubscription();
+  // WEB-FEAT-014: an Insider upgrading to VIP, and anyone resubscribing after a
+  // cancellation, gets no trial. Promising one here was copy the checkout refuses.
+  const { isEligibleForTrial } = useTrialEligibility();
   const [selectedPlan, setSelectedPlan] = useState<"insider" | "vip">(
     requiredTier
   );
@@ -350,7 +354,8 @@ export function UpgradeModal({
 
           {/* Trust Indicators */}
           <p className="text-xs text-center text-muted-foreground">
-            Cancel anytime • 7-day free trial • Secure checkout
+            Cancel anytime{isEligibleForTrial ? " • 7-day free trial" : ""} • Secure
+            checkout
           </p>
         </div>
       </DialogContent>

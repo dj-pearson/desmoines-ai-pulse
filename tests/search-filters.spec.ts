@@ -1,4 +1,5 @@
 import { test, expect, Page } from '@playwright/test';
+import { installFixtureBackend } from './support/fixtureBackend';
 
 /**
  * Search and Filter Functionality Testing Suite
@@ -19,7 +20,14 @@ const pagesWithSearch = [
   { path: '/restaurants', name: 'restaurants', hasFilters: true },
   { path: '/attractions', name: 'attractions', hasFilters: true },
   { path: '/articles', name: 'articles', hasFilters: true },
-  { path: '/search', name: 'advanced-search', hasFilters: true },
+  // /search is the PLAIN-LANGUAGE search page ("Describe what you're looking
+  // for..."), not the advanced one, and it has no filter controls by design -
+  // measured on the build: 2 inputs, 0 comboboxes, 0 aria-pressed, 0 tabs. The
+  // advanced-filter UI is at /search/advanced and sits behind a PremiumGate, so
+  // an anonymous run sees the upsell rather than the filters. This entry
+  // asserted filters on a page that has none and was named for a route that
+  // does not exist (/advanced-search 404s).
+  { path: '/search', name: 'search', hasFilters: false },
 ];
 
 async function findSearchInputs(page: Page): Promise<any[]> {
@@ -71,6 +79,16 @@ async function findFilters(page: Page): Promise<any[]> {
       }))
   );
 }
+
+/**
+ * Every describe in this file runs against fixtures (WEB-CI-028 AC2). The smoke
+ * lane builds with placeholder VITE_SUPABASE_*, so without this a "search
+ * returns results" assertion is asserting against a page that can never have
+ * any - which is why this spec sat in no lane for four passes.
+ */
+test.beforeEach(async ({ page }) => {
+  await installFixtureBackend(page);
+});
 
 test.describe('Search Bar Discovery', () => {
   for (const page of pagesWithSearch) {
@@ -539,9 +557,13 @@ test.describe('Mobile Search Experience', () => {
     await searchInput.fill('food');
     await page.waitForTimeout(800);
 
-    // Results should be visible
-    const resultsVisible = await page.locator('[data-testid*="result"], article, .card').first().isVisible();
-    expect(resultsVisible, 'Search results should be visible on mobile').toBe(true);
+    // THE SELECTOR THIS USED MATCHES NOTHING IN THIS APP, and the same file
+    // already says so: the Filter Functionality test 200 lines up records
+    // '[data-testid*="result"], article, .card' measuring 0 while the page
+    // showed 40 event cards. That fix never reached this test, so it asserted
+    // "search results are visible on mobile" against a locator that could
+    // never resolve. Event cards are a[href^="/events/"] inside the grid.
+    await expect(page.locator('a[href^="/events/"]').first()).toBeVisible();
   });
 
   test('filters should be mobile-friendly', async ({ page }) => {

@@ -30,7 +30,7 @@ import { requireAdminOrApiKey } from '../_shared/apiKeyAuth.ts';
 import { checkRateLimitPersistent } from '../_shared/rateLimit.ts';
 import { runJob } from '../_shared/jobRunner.ts';
 import { fetchWithTimeout } from '../_shared/fetchWithTimeout.ts';
-import { getAnthropicApiKey } from '../_shared/aiConfig.ts';
+import { getAnthropicApiKey, buildLightweightClaudeRequest } from '../_shared/aiConfig.ts';
 
 type SupabaseClient = ReturnType<typeof createClient>;
 type ContentType = 'review' | 'contact';
@@ -38,7 +38,11 @@ type Verdict = 'approved' | 'flagged' | 'rejected' | 'error';
 
 const PAUSE_FLAG = 'content_moderation_enabled';
 const SWEEP_BATCH = 25;     // reviews re-moderated per sweep run
-const MODEL = 'claude-3-haiku-20240307';
+// WEB-BE-041. The model used to be pinned here as 'claude-3-haiku-20240307',
+// which is RETIRED: the call 404s, so every moderation verdict has been the
+// error path. The id now comes from the ai_config row via
+// buildLightweightClaudeRequest, which is the Haiku-tier form of the
+// buildClaudeRequest route AC2 asks for, with a non-retired fallback.
 
 function json(body: unknown, status = 200, headers: Record<string, string> = {}): Response {
   return new Response(JSON.stringify(body), { status, headers: { ...headers, 'Content-Type': 'application/json' } });
@@ -87,7 +91,13 @@ async function scoreText(text: string, kind: ContentType): Promise<Scores> {
     const res = await fetchWithTimeout('https://api.anthropic.com/v1/messages', {
       method: 'POST',
       headers: { 'Content-Type': 'application/json', 'x-api-key': key, 'anthropic-version': '2023-06-01' },
-      body: JSON.stringify({ model: MODEL, max_tokens: 300, messages: [{ role: 'user', content: prompt }] }),
+      body: JSON.stringify(
+        await buildLightweightClaudeRequest([{ role: 'user', content: prompt }], {
+          supabaseUrl: Deno.env.get('SUPABASE_URL') ?? '',
+          supabaseKey: Deno.env.get('SUPABASE_SERVICE_ROLE_KEY') ?? '',
+          customMaxTokens: 300,
+        }),
+      ),
     }, 60_000);
     if (!res.ok) return { toxicity: 0, spam: 0, off_topic: 0, reasons: [], ok: false };
     const data = await res.json();

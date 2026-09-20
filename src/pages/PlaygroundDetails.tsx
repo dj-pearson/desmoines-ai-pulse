@@ -1,6 +1,8 @@
 import { useParams, Link } from "react-router-dom";
 import { RouteCanonical } from "@/components/RouteCanonical";
 import { createSlug } from "@/lib/slug";
+import { fetchBySlug } from "@/lib/resolveBySlug";
+import type { Database } from "@/integrations/supabase/types";
 import { useQuery } from "@tanstack/react-query";
 import { supabase } from "@/integrations/supabase/client";
 import { Card, CardContent } from "@/components/ui/card";
@@ -24,8 +26,12 @@ import { BRAND, getCanonicalUrl } from "@/lib/brandConfig";
 import { Helmet } from "react-helmet-async";
 import { Star, ArrowLeft, Navigation, Heart, Check, Info, Zap, ChevronRight, TreePine, Baby, Shield } from "lucide-react";
 import { useState } from "react";
-import { useDocumentTitle } from "@/hooks/useDocumentTitle";
 import { SpriteIcon } from "@/components/ui/SpriteIcon";
+import { OptimizedImage } from "@/components/OptimizedImage";
+import { DETAIL_STALE_TIME, detailQueryKey } from "@/lib/detailQueryKeys";
+import { isInMetro } from "@/lib/geo";
+
+type Playground = Database["public"]["Tables"]["playgrounds"]["Row"];
 
 export default function PlaygroundDetails() {
   const { slug } = useParams();
@@ -36,19 +42,13 @@ export default function PlaygroundDetails() {
     isLoading,
     error,
   } = useQuery({
-    queryKey: ["playground", slug],
-    queryFn: async () => {
-      const { data: playgrounds, error } = await supabase
-        .from("playgrounds")
-        .select("*");
-
-      if (error) throw error;
-
-      const foundPlayground = playgrounds?.find(
-        (p) => createSlug(p.name) === slug
-      );
-      return foundPlayground || null;
-    },
+    queryKey: detailQueryKey("playground", slug ?? ""),
+    // One row by slug, not the whole table (WEB-PERF-031). fetchBySlug keeps
+    // the createSlug(name) scan as a fallback for the window between this
+    // deploying and migration 20260919000008 being applied.
+    queryFn: () => fetchBySlug<Playground>("playgrounds", slug ?? ""),
+    enabled: Boolean(slug),
+    staleTime: DETAIL_STALE_TIME,
   });
 
   const { data: relatedPlaygrounds } = useQuery({
@@ -86,7 +86,6 @@ export default function PlaygroundDetails() {
     enabled: !!playground,
   });
 
-  useDocumentTitle(playground?.name || "Playground Details");
 
   if (isLoading) {
     return (
@@ -114,7 +113,15 @@ export default function PlaygroundDetails() {
     );
   }
 
-  if (error || !playground) {
+  // WEB-SEO-037 AC3. 21 of the 69 playground rows are in Oregon, Washington,
+  // Colorado and Missouri (a Google Places import that went wide) and the
+  // detail page resolved every one of them - so a URL the hub never links and
+  // the sitemap no longer submits still rendered a full page for a park a
+  // thousand miles away. Treated as not found, which is also what the
+  // noindex below then says about it.
+  const outsideMetro = Boolean(playground) && !isInMetro(playground?.latitude, playground?.longitude);
+
+  if (error || !playground || outsideMetro) {
     return (
       <>
         <Helmet>
@@ -248,12 +255,12 @@ export default function PlaygroundDetails() {
             {/* Hero Image / Gradient */}
             <div className="relative h-72 md:h-96 overflow-hidden">
               {showImage ? (
-                <img
+                <OptimizedImage
                   src={playground.image_url}
                   alt={`${playground.name} - Playground in ${BRAND.city}, ${BRAND.state}`}
-                  className="absolute inset-0 w-full h-full object-cover"
-                  loading="eager"
-                  decoding="async"
+                  priority
+                  sizes="(max-width: 768px) 100vw, 1024px"
+                  containerClassName="absolute inset-0"
                   onError={() => setImageError(true)}
                 />
               ) : (
@@ -588,17 +595,26 @@ export default function PlaygroundDetails() {
                 {relatedPlaygrounds.map((related) => (
                   <Link
                     key={related.id}
-                    to={`/playgrounds/${createSlug(related.name)}`}
+                    // The stored slug wins where the two disagree: two
+                    // playgrounds sharing a name get one bare slug and one
+                    // numeric suffix (migration 20260919000008), and the
+                    // name-derived link would send both to the first row. The
+                    // fallback covers the window before that migration lands.
+                    // AttractionDetails cannot do this - its related/nearby
+                    // queries use ATTRACTION_LIST_COLUMNS, which does not carry
+                    // slug and must not until the column is live.
+                    to={`/playgrounds/${related.slug || createSlug(related.name)}`}
                     className="block"
                   >
                     <Card className="h-full hover:shadow-lg transition-all duration-300 hover:-translate-y-1 rounded-2xl overflow-hidden">
                       {related.image_url ? (
                         <div className="aspect-video overflow-hidden">
-                          <img
+                          <OptimizedImage
                             src={related.image_url}
                             alt={`${related.name} - Playground in ${BRAND.city}`}
-                            className="w-full h-full object-cover"
-                            loading="lazy"
+                            className="object-cover"
+                            containerClassName="w-full h-full"
+                            sizes="(max-width: 640px) 100vw, (max-width: 1024px) 50vw, 33vw"
                           />
                         </div>
                       ) : (
@@ -640,17 +656,18 @@ export default function PlaygroundDetails() {
                 {nearbyPlaygrounds.map((nearby) => (
                   <Link
                     key={nearby.id}
-                    to={`/playgrounds/${createSlug(nearby.name)}`}
+                    to={`/playgrounds/${nearby.slug || createSlug(nearby.name)}`}
                     className="block"
                   >
                     <Card className="h-full hover:shadow-lg transition-all duration-300 hover:-translate-y-1 rounded-2xl overflow-hidden">
                       {nearby.image_url ? (
                         <div className="aspect-video overflow-hidden">
-                          <img
+                          <OptimizedImage
                             src={nearby.image_url}
                             alt={`${nearby.name} - Playground in ${BRAND.city}`}
-                            className="w-full h-full object-cover"
-                            loading="lazy"
+                            className="object-cover"
+                            containerClassName="w-full h-full"
+                            sizes="(max-width: 640px) 100vw, (max-width: 1024px) 50vw, 33vw"
                           />
                         </div>
                       ) : (

@@ -1,4 +1,4 @@
-import { useState, useRef, useEffect, useMemo, useCallback } from "react";
+import { useState, useRef, useMemo, useCallback } from "react";
 import { fetchPriorityAttr } from '@/lib/fetchPriority';
 import { cn } from "@/lib/utils";
 import { ImageOff } from "lucide-react";
@@ -49,25 +49,34 @@ export interface OptimizedImageProps {
 }
 
 /**
- * Check if browser supports WebP format
+ * Probe a codec by asking a 1x1 canvas to encode it.
+ *
+ * toDataURL is not guaranteed to return a string: a canvas-blocking extension
+ * or privacy mode can return null or throw, and jsdom returns null without the
+ * optional canvas package. An unhandled null here takes the whole image down -
+ * including the hero - for a question whose answer only ever selects a
+ * <source>, so a failed probe reports "unsupported" and the plain <img src>
+ * serves.
  */
-function supportsWebP(): boolean {
+function supportsFormat(mime: string): boolean {
   if (typeof window === "undefined") return false;
-  const canvas = document.createElement("canvas");
-  canvas.width = 1;
-  canvas.height = 1;
-  return canvas.toDataURL("image/webp").startsWith("data:image/webp");
+  try {
+    const canvas = document.createElement("canvas");
+    canvas.width = 1;
+    canvas.height = 1;
+    const url = canvas.toDataURL(mime);
+    return typeof url === "string" && url.startsWith(`data:${mime}`);
+  } catch {
+    return false;
+  }
 }
 
-/**
- * Check if browser supports AVIF format
- */
+function supportsWebP(): boolean {
+  return supportsFormat("image/webp");
+}
+
 function supportsAVIF(): boolean {
-  if (typeof window === "undefined") return false;
-  const canvas = document.createElement("canvas");
-  canvas.width = 1;
-  canvas.height = 1;
-  return canvas.toDataURL("image/avif").startsWith("data:image/avif");
+  return supportsFormat("image/avif");
 }
 
 /**
@@ -226,8 +235,21 @@ export default function OptimizedImage({
 }: OptimizedImageProps) {
   const [isLoaded, setIsLoaded] = useState(false);
   const [error, setError] = useState(false);
-  const [isInView, setIsInView] = useState(priority);
   const containerRef = useRef<HTMLDivElement>(null);
+
+  /**
+   * Reveal an image that finished loading before React attached its handler.
+   *
+   * The fade below is driven by onLoad, and React does not replay a load event
+   * that already fired. On a prerendered route the browser can complete the
+   * request during hydration, so the handler attaches to an image that is
+   * already done and the element stays at opacity-0 forever. Reading
+   * `complete` on attach closes that window; naturalWidth guards the case
+   * where `complete` is true because the request FAILED.
+   */
+  const imgRef = useCallback((node: HTMLImageElement | null) => {
+    if (node && node.complete && node.naturalWidth > 0) setIsLoaded(true);
+  }, []);
 
   // Detect format support
   const webpSupported = useMemo(() => enableWebP && supportsWebP(), [enableWebP]);
@@ -246,29 +268,20 @@ export default function OptimizedImage({
     return generateTransformedSrcSet(src, transformWidths, format, quality);
   }, [src, srcSet, responsive, useTransformApi, transformWidths, avifSupported, webpSupported, quality]);
 
-  // Intersection Observer for lazy loading
-  useEffect(() => {
-    if (priority || isInView) return;
-
-    const observer = new IntersectionObserver(
-      (entries) => {
-        if (entries[0].isIntersecting) {
-          setIsInView(true);
-          observer.disconnect();
-        }
-      },
-      {
-        rootMargin: "100px", // Load images 100px before they enter viewport
-        threshold: 0.01,
-      }
-    );
-
-    if (containerRef.current) {
-      observer.observe(containerRef.current);
-    }
-
-    return () => observer.disconnect();
-  }, [priority, isInView]);
+  // DEFERRING THE <img> ITSELF IS WHAT THIS COMPONENT USED TO DO, AND IT COST
+  // MORE THAN IT SAVED (WEB-PERF-041). An IntersectionObserver gated the
+  // element's existence, so without `priority` there was no img element in the
+  // DOM at all until the observer fired. Anything reading the DOM rather than
+  // scrolling it - the prerender pass, a crawler that does not run JavaScript -
+  // got an empty box, which is why three earlier batches of this story had to
+  // leave card grids on hand-rolled tags, and why a hero needed the flag to be
+  // visible at all rather than merely to be fetched early.
+  //
+  // `loading="lazy"` below already does the deferring, natively, in every
+  // browser this app supports, and the browser picks its own load-in margin
+  // rather than this component's 100px guess. The element is always rendered
+  // now; only the FETCH is deferred. That is the behaviour callers assumed
+  // they were getting.
 
   const handleLoad = useCallback(() => {
     setIsLoaded(true);
@@ -365,33 +378,32 @@ export default function OptimizedImage({
       )}
 
       {/* Actual image with picture element for format support */}
-      {(isInView || priority) && (
-        <picture>
-          {renderPictureSources()}
-          <img
-            src={imageSrc}
-            alt={alt}
-            width={width}
-            height={height}
-            loading={priority ? "eager" : "lazy"}
-            decoding="async"
-            {...fetchPriorityAttr(priority ? "high" : fetchPriority)}
-            onLoad={handleLoad}
-            onError={handleError}
-            srcSet={computedSrcSet}
-            sizes={sizes}
-            className={cn(
-              "w-full h-full transition-opacity duration-300",
-              isLoaded ? "opacity-100" : "opacity-0",
-              className
-            )}
-            style={{
-              objectFit,
-              objectPosition,
-            }}
-          />
-        </picture>
-      )}
+      <picture>
+        {renderPictureSources()}
+        <img
+          ref={imgRef}
+          src={imageSrc}
+          alt={alt}
+          width={width}
+          height={height}
+          loading={priority ? "eager" : "lazy"}
+          decoding="async"
+          {...fetchPriorityAttr(priority ? "high" : fetchPriority)}
+          onLoad={handleLoad}
+          onError={handleError}
+          srcSet={computedSrcSet}
+          sizes={sizes}
+          className={cn(
+            "w-full h-full transition-opacity duration-300",
+            isLoaded ? "opacity-100" : "opacity-0",
+            className
+          )}
+          style={{
+            objectFit,
+            objectPosition,
+          }}
+        />
+      </picture>
     </div>
   );
 }

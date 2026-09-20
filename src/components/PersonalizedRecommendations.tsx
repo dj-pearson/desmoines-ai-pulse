@@ -12,6 +12,7 @@ import { FavoriteButton } from '@/components/FavoriteButton';
 import { createEventSlugWithCentralTime, formatEventDateShort } from '@/lib/timezone';
 import { ChevronRight, Info, Settings, Zap } from "lucide-react";
 import { SpriteIcon } from "@/components/ui/SpriteIcon";
+import { OptimizedImage } from "@/components/OptimizedImage";
 
 interface PersonalizedRecommendationsProps {
   userLocation?: { latitude: number; longitude: number } | null;
@@ -165,16 +166,12 @@ export function PersonalizedRecommendations({
               {/* Event Image */}
               {event.image_url && (
                 <div className="relative h-48 overflow-hidden">
-                  <img
+                  <OptimizedImage
                     src={event.image_url}
                     alt={event.title}
-                    className="w-full h-full object-cover transition-transform duration-300 group-hover:scale-110"
-                    loading="lazy"
-                    decoding="async"
-                    onError={(e) => {
-                      const target = e.target as HTMLImageElement;
-                      target.style.display = 'none';
-                    }}
+                    containerClassName="w-full h-full"
+                    className="object-cover transition-transform duration-300 group-hover:scale-110"
+                    sizes="(max-width: 768px) 100vw, 33vw"
                   />
 
                   {/* Recommendation Badge */}

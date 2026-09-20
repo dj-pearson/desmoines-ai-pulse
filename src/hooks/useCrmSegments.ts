@@ -7,6 +7,7 @@ import type {
   CrmContactSegment,
   CrmContact,
 } from '@/types/crm';
+import { fromUnknownTable } from "@/integrations/supabase/unknownTable";
 
 const CRM_SEGMENTS_KEY = 'crm-segments';
 
@@ -14,8 +15,7 @@ export function useCrmSegments() {
   return useQuery({
     queryKey: [CRM_SEGMENTS_KEY],
     queryFn: async () => {
-      const { data, error } = await supabase
-        .from('crm_segments')
+      const { data, error } = await fromUnknownTable('crm_segments')
         .select('*')
         .order('name', { ascending: true });
 
@@ -31,8 +31,7 @@ export function useCrmSegment(segmentId: string | undefined) {
     queryFn: async () => {
       if (!segmentId) return null;
 
-      const { data, error } = await supabase
-        .from('crm_segments')
+      const { data, error } = await fromUnknownTable('crm_segments')
         .select('*')
         .eq('id', segmentId)
         .single();
@@ -51,8 +50,7 @@ export function useCrmSegmentContacts(segmentId: string | undefined) {
       if (!segmentId) return [];
 
       // First get the segment to check if it's dynamic
-      const { data: segment, error: segmentError } = await supabase
-        .from('crm_segments')
+      const { data: segment, error: segmentError } = await fromUnknownTable('crm_segments')
         .select('segment_type, rules')
         .eq('id', segmentId)
         .single();
@@ -71,8 +69,7 @@ export function useCrmSegmentContacts(segmentId: string | undefined) {
         const contactIds = data?.map((r: { contact_id: string }) => r.contact_id) || [];
         if (contactIds.length === 0) return [];
 
-        const { data: contacts, error: contactsError } = await supabase
-          .from('crm_contacts')
+        const { data: contacts, error: contactsError } = await fromUnknownTable('crm_contacts')
           .select('*')
           .in('id', contactIds);
 
@@ -80,8 +77,7 @@ export function useCrmSegmentContacts(segmentId: string | undefined) {
         return contacts as CrmContact[];
       } else {
         // For static segments, use junction table
-        const { data, error } = await supabase
-          .from('crm_contact_segments')
+        const { data, error } = await fromUnknownTable('crm_contact_segments')
           .select('contact:crm_contacts(*)')
           .eq('segment_id', segmentId);
 
@@ -99,8 +95,7 @@ export function useCrmContactSegments(contactId: string | undefined) {
     queryFn: async () => {
       if (!contactId) return [];
 
-      const { data, error } = await supabase
-        .from('crm_contact_segments')
+      const { data, error } = await fromUnknownTable('crm_contact_segments')
         .select('segment:crm_segments(*)')
         .eq('contact_id', contactId);
 
@@ -117,8 +112,7 @@ export function useCrmSegmentMutations() {
 
   const createSegment = useMutation({
     mutationFn: async (input: CrmSegmentInput) => {
-      const { data, error } = await supabase
-        .from('crm_segments')
+      const { data, error } = await fromUnknownTable('crm_segments')
         .insert(input)
         .select()
         .single();
@@ -144,8 +138,7 @@ export function useCrmSegmentMutations() {
 
   const updateSegment = useMutation({
     mutationFn: async ({ id, ...input }: Partial<CrmSegmentInput> & { id: string }) => {
-      const { data, error } = await supabase
-        .from('crm_segments')
+      const { data, error } = await fromUnknownTable('crm_segments')
         .update(input)
         .eq('id', id)
         .select()
@@ -173,8 +166,7 @@ export function useCrmSegmentMutations() {
 
   const deleteSegment = useMutation({
     mutationFn: async (id: string) => {
-      const { error } = await supabase
-        .from('crm_segments')
+      const { error } = await fromUnknownTable('crm_segments')
         .delete()
         .eq('id', id);
 
@@ -199,8 +191,7 @@ export function useCrmSegmentMutations() {
 
   const addContactToSegment = useMutation({
     mutationFn: async ({ contactId, segmentId }: { contactId: string; segmentId: string }) => {
-      const { data, error } = await supabase
-        .from('crm_contact_segments')
+      const { data, error } = await fromUnknownTable('crm_contact_segments')
         .insert({ contact_id: contactId, segment_id: segmentId })
         .select()
         .single();
@@ -237,8 +228,7 @@ export function useCrmSegmentMutations() {
 
   const removeContactFromSegment = useMutation({
     mutationFn: async ({ contactId, segmentId }: { contactId: string; segmentId: string }) => {
-      const { error } = await supabase
-        .from('crm_contact_segments')
+      const { error } = await fromUnknownTable('crm_contact_segments')
         .delete()
         .eq('contact_id', contactId)
         .eq('segment_id', segmentId);
@@ -280,8 +270,7 @@ export function useCrmSegmentMutations() {
         segment_id: segmentId,
       }));
 
-      const { error } = await supabase
-        .from('crm_contact_segments')
+      const { error } = await fromUnknownTable('crm_contact_segments')
         .upsert(records, { onConflict: 'contact_id,segment_id' });
 
       if (error) throw error;

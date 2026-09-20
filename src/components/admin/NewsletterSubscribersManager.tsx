@@ -48,6 +48,7 @@ import {
 } from "@/components/ui/table";
 import { useDebounce } from "@/hooks/useDebounce";
 import { supabase } from "@/integrations/supabase/client";
+import type { Database } from "@/integrations/supabase/types";
 import { handleError } from "@/lib/errorHandler";
 import { cn } from "@/lib/utils";
 import { toast } from "sonner";
@@ -229,7 +230,11 @@ export default function NewsletterSubscribersManager() {
     if (ids.length === 0) return;
     setBusy(true);
     try {
-      const patch: Record<string, unknown> = { status: next };
+      // Typed as the table's own Update row. Record<string, unknown> is an
+      // index signature, which supabase-js 2.85+ rejects on an update because
+      // it promises nothing about the keys - and a key the table lacks comes
+      // back PGRST204 with the write silently lost.
+      const patch: Database["public"]["Tables"]["newsletter_subscribers"]["Update"] = { status: next };
       if (next === "unsubscribed") {
         patch.unsubscribed_at = new Date().toISOString();
       } else if (next === "active") {

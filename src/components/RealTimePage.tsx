@@ -19,22 +19,13 @@ export default function RealTimePage() {
     "name": "Real-Time Des Moines Business Information",
     "description": "Which Des Moines restaurants are open right now, worked out from their posted hours",
     "url": "https://desmoinesinsider.com/real-time",
-    "mainEntity": {
-      "@type": "ItemList",
-      "name": "Open Now in Des Moines",
-      "itemListElement": [
-        {
-          "@type": "LocalBusiness",
-          "name": "Des Moines Area Restaurants",
-          "description": "Open or closed now, from posted hours"
-        },
-        {
-          "@type": "TouristAttraction",
-          "name": "Des Moines Attractions",
-          "description": "Attraction listings with published hours"
-        }
-      ]
-    },
+    // WEB-SEO-026: an ItemList USED TO SIT HERE whose two members were not
+    // entities at all - a LocalBusiness called "Des Moines Area Restaurants"
+    // and a TouristAttraction called "Des Moines Attractions". Those are
+    // category labels dressed as places. An ItemList is a claim that these
+    // things exist and that this page lists them; a list of two fictions is
+    // worse than no list. The `about: Place` below already says what the page
+    // is about, truthfully.
     "about": {
       "@type": "Place",
       "name": "Des Moines, Iowa",
@@ -95,7 +86,7 @@ export default function RealTimePage() {
               <div className="text-sm text-gray-600">Update Frequency</div>
             </div>
             <div className="text-center">
-              <div className="text-2xl font-bold text-purple-600">24/7</div>
+              <div className="text-2xl font-bold text-primary">24/7</div>
               <div className="text-sm text-gray-600">Community Updates</div>
             </div>
           </div>

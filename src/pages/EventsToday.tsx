@@ -1,4 +1,5 @@
-import React, { useState, useEffect, useMemo } from "react";
+import React, { useMemo } from "react";
+import { useQuery } from "@tanstack/react-query";
 import { createLogger } from '@/lib/logger';
 import { supabase } from "@/integrations/supabase/client";
 import { SpriteIcon } from "@/components/ui/SpriteIcon";
@@ -17,14 +18,15 @@ import { format } from "date-fns";
 import { toZonedTime, fromZonedTime } from "date-fns-tz";
 import { Link } from "react-router-dom";
 import { BRAND, getCanonicalUrl } from "@/lib/brandConfig";
-import { useDocumentTitle } from "@/hooks/useDocumentTitle";
 import { Breadcrumbs } from "@/components/ui/breadcrumbs";
 import { formatCount } from "@/lib/pluralize";
 import { useWeather, reorderForWeather } from "@/hooks/useWeather";
 import { useEventIndoorFlags } from "@/hooks/useEventIndoorFlags";
 import { WeatherNotice } from "@/components/WeatherNotice";
-import { useReloadableFetch } from "@/hooks/useReloadableFetch";
 import { ErrorState } from "@/components/ui/error-state";
+import { SkeletonGroup } from "@/components/ui/skeleton";
+import { queryKeys } from "@/lib/queryKeys";
+import { EVENT_LIST_COLUMNS } from "@/lib/listColumns";
 
 interface EventItem {
   id: string;
@@ -49,49 +51,54 @@ interface EventItem {
 }
 
 export default function EventsToday() {
-  const [events, setEvents] = useState<EventItem[]>([]);
-  const [isLoading, setIsLoading] = useState(true);
-  const { error: loadError, setError: setLoadError, reloadKey, retry } = useReloadableFetch();
-  useDocumentTitle("Events Today");
 
-  useEffect(() => {
-    const fetchEvents = async () => {
-      try {
-        setIsLoading(true);
-        const tz = "America/Chicago";
-        const now = new Date();
-        const nowLocal = toZonedTime(now, tz);
-        const startLocal = new Date(nowLocal.getFullYear(), nowLocal.getMonth(), nowLocal.getDate(), 0, 0, 0, 0);
-        const endLocal = new Date(nowLocal.getFullYear(), nowLocal.getMonth(), nowLocal.getDate(), 23, 59, 59, 999);
-        const startUtc = fromZonedTime(startLocal, tz).toISOString();
-        const endUtc = fromZonedTime(endLocal, tz).toISOString();
-        
-        const { data, error } = await supabase
-          .from("events")
-          .select("id, title, date, location, venue, price, category, enhanced_description, original_description, image_url, event_start_utc, updated_at")
-          .gte("date", startUtc)
-          .lte("date", endUtc)
-          .order("event_start_utc", { ascending: true, nullsFirst: false });
-        
-        if (error) {
-          log.error('fetchEvents', 'Error fetching events', { error });
-          setLoadError(error);
-          setEvents([]);
-        } else {
-          setLoadError(null);
-          setEvents(data || []);
-        }
-      } catch (error) {
-        log.error('fetchEvents', 'Unexpected error in fetchEvents', { error });
-        setLoadError(error);
-        setEvents([]);
-      } finally {
-        setIsLoading(false);
+  /**
+   * WEB-SEO-031 -- THIS WAS A useState/useEffect FETCH, AND THAT IS WHY THE
+   * PRERENDERER SHIPPED A SKELETON.
+   *
+   * PrerenderSignal publishes "the data has arrived" by counting TanStack
+   * queries in flight with useIsFetching. A hand-rolled fetch is invisible to
+   * that count, so `seen` never became true, the GRACE_MS fallback fired at
+   * 1.5s, and the capture was whatever had rendered by then - which for this
+   * page was six pulsing cards. WEB-SEO-006 measured the result in production:
+   * /events/today served 5 h3 where its sibling served 56.
+   *
+   * Using useQuery is the fix; nothing about the query itself is clever. The
+   * projection is EVENT_LIST_COLUMNS rather than a hand-written column list,
+   * which also picks up `updated_at` - the column ListFreshness needs and
+   * whose omission from a projection is exactly the silent-empty failure the
+   * EventItem docstring below records.
+   */
+  const {
+    data: events = [],
+    isLoading,
+    error: loadError,
+    refetch,
+  } = useQuery({
+    queryKey: queryKeys.events.list({ window: "today" }),
+    queryFn: async (): Promise<EventItem[]> => {
+      const tz = "America/Chicago";
+      const now = new Date();
+      const nowLocal = toZonedTime(now, tz);
+      const startLocal = new Date(nowLocal.getFullYear(), nowLocal.getMonth(), nowLocal.getDate(), 0, 0, 0, 0);
+      const endLocal = new Date(nowLocal.getFullYear(), nowLocal.getMonth(), nowLocal.getDate(), 23, 59, 59, 999);
+      const startUtc = fromZonedTime(startLocal, tz).toISOString();
+      const endUtc = fromZonedTime(endLocal, tz).toISOString();
+
+      const { data, error } = await supabase
+        .from("events")
+        .select(EVENT_LIST_COLUMNS)
+        .gte("date", startUtc)
+        .lte("date", endUtc)
+        .order("event_start_utc", { ascending: true, nullsFirst: false });
+
+      if (error) {
+        log.error("fetchEvents", "Error fetching events", { error });
+        throw error;
       }
-    };
-
-    fetchEvents();
-  }, [reloadKey]);
+      return (data ?? []) as unknown as EventItem[];
+    },
+  });
 
   const { weather, hasVerdict } = useWeather();
 
@@ -110,8 +117,23 @@ export default function EventsToday() {
     [events, indoorFlags, weather],
   );
 
-  const pageTitle = `Events Today in Des Moines - ${format(new Date(), "MMMM d, yyyy")} | ${BRAND.name}`;
-  const pageDescription = `Find events happening today, ${format(new Date(), "MMMM d, yyyy")}, in Des Moines and suburbs. See times, locations, and details for today's activities and entertainment.`;
+  /**
+   * WEB-SEO-031: both of these used to interpolate `new Date()`.
+   *
+   * On a client render that is today, which looks right in a browser and is
+   * why it survived. In the PRERENDERED HTML it is the build clock, frozen -
+   * so the file a crawler fetches has said "Events Today in Des Moines -
+   * September 2, 2026" every day since the deploy, and a title asserting the
+   * wrong date on a page whose whole promise is "today" is worse than no date
+   * at all.
+   *
+   * The date is not lost, it moved to where it can be true: <ListFreshness>
+   * below renders it from the newest event's `updated_at`, in the browser,
+   * from data rather than from the clock that happened to run the build.
+   * SEO-009 AC3 asks for the same thing.
+   */
+  const pageTitle = `Events Today in Des Moines | ${BRAND.name}`;
+  const pageDescription = `Find events happening today in Des Moines and suburbs. See times, locations, and details for today's activities and entertainment.`;
 
   const breadcrumbs = [
     { name: "Events", url: "/events" },
@@ -166,7 +188,9 @@ export default function EventsToday() {
       />
       <EventListJsonLd
         events={todaysEvents}
-        listName={`Events Today in Des Moines - ${format(new Date(), "MMMM d, yyyy")}`}
+        /* WEB-SEO-031: was `... - ${format(new Date(), "MMMM d, yyyy")}`, so
+           the JSON-LD list asserted the build date as the day it covers. */
+        listName="Events Today in Des Moines"
         listDescription={pageDescription}
         listUrl={getCanonicalUrl('/events/today')}
       />
@@ -200,11 +224,13 @@ export default function EventsToday() {
               a usable date. */}
           <ListFreshness rows={todaysEvents} className="mb-4" />
 
+          {/* WEB-SEO-031: a `format(new Date())` date USED TO SIT HERE, beside
+              the location. In the prerendered file it is the build date, shown
+              to a crawler and to any visitor without JS as though it were
+              today - the one claim this page cannot afford to get wrong. The
+              <ListFreshness> above already carries a date, and it comes from
+              the newest event's updated_at rather than from a clock. */}
           <div className="flex items-center gap-4 text-muted-foreground mb-4">
-            <div className="flex items-center gap-1">
-              <SpriteIcon name="clock" className="h-4 w-4" />
-              <span>{format(new Date(), "EEEE, MMMM d, yyyy")}</span>
-            </div>
             <div className="flex items-center gap-1">
               <SpriteIcon name="map-pin" className="h-4 w-4" />
               <span>Des Moines Metro Area</span>
@@ -250,9 +276,17 @@ export default function EventsToday() {
 
         {/* Events List */}
         {!isLoading && loadError ? (
-          <ErrorState error={loadError} onRetry={retry} />
+          <ErrorState error={loadError} onRetry={() => void refetch()} />
         ) : isLoading ? (
-          <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
+          /* WEB-SEO-031: the skeleton carried no aria-busy and no loading
+             text, so the prerenderer's strict gate had nothing to recognise
+             and accepted a capture of six pulsing cards as the page.
+             SkeletonGroup supplies role="status", aria-busy and an sr-only
+             label - which the gate reads and a screen reader announces. */
+          <SkeletonGroup
+            label="Loading today's events..."
+            className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6"
+          >
             {[...Array(6)].map((_, i) => (
               <Card key={i} className="animate-pulse">
                 <CardContent className="p-6">
@@ -262,7 +296,7 @@ export default function EventsToday() {
                 </CardContent>
               </Card>
             ))}
-          </div>
+          </SkeletonGroup>
         ) : todaysEvents.length > 0 ? (
           <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6 mb-8">
             {todaysEvents.map((event, index) => (

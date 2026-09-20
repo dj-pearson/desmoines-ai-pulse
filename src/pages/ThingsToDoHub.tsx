@@ -33,6 +33,10 @@ const areas = [
   { slug: 'sherman-hill', name: 'Sherman Hill', description: 'Victorian architecture, historic walks', icon: '🏛️' },
 ];
 
+// Eight audiences, eight surface tints with a matching border. The hue is the
+// only thing telling two otherwise identical cards apart at a glance, so it
+// stays; each tint is a -50 surface in light and a -950/30 in dark, both under
+// body text that keeps its own token (WEB-UX-034 AC2).
 const audiences = [
   { slug: 'families', name: 'For Families', description: 'Kid-friendly picks with stroller & age notes', icon: Baby, color: 'bg-blue-50 dark:bg-blue-950/30 border-blue-200 dark:border-blue-800' },
   { slug: 'date-night', name: 'Date Night', description: 'Complete evening itineraries for couples', icon: Heart, color: 'bg-rose-50 dark:bg-rose-950/30 border-rose-200 dark:border-rose-800' },
@@ -75,7 +79,7 @@ export default function ThingsToDoHub() {
     <>
       <SEOHead
         title="Things to Do in Des Moines, Iowa | Des Moines Insider"
-        description="Discover the best things to do in Des Moines and the surrounding area. Browse by neighborhood, activity type, or occasion — family-friendly, date nights, free events & more."
+        description="The best things to do in Des Moines and around it, by neighborhood, activity or occasion: family-friendly, date nights and free events."
         url={canonicalUrl}
         canonicalUrl={canonicalUrl}
         keywords={['things to do des moines', 'des moines activities', 'des moines attractions', 'what to do in des moines']}

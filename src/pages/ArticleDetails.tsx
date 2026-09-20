@@ -1,4 +1,5 @@
 import React, { useState, useEffect } from 'react';
+import { OptimizedImage } from "@/components/OptimizedImage";
 import { useParams, Link } from 'react-router-dom';
 import { useArticles } from '@/hooks/useArticles';
 import { Article } from '@/hooks/useArticles';
@@ -18,13 +19,18 @@ import SEOHead from '@/components/SEOHead';
 import { ogImageUrl } from '@/lib/ogImage';
 import ShareDialog from '@/components/ShareDialog';
 import { Helmet } from 'react-helmet-async';
-import { BRAND } from '@/lib/brandConfig';
+import { BRAND, getCanonicalUrl } from '@/lib/brandConfig';
 import SpeakableSchema from '@/components/schema/SpeakableSchema';
 import FAQSchema from '@/components/schema/FAQSchema';
 import { SpriteIcon } from "@/components/ui/SpriteIcon";
 
 const ArticleDetails: React.FC = () => {
   const { slug } = useParams();
+  // The canonical URL, not the browser's current address (WEB-BE-056 AC4).
+  // scripts/prerender.mjs captures these pages from a headless browser pointed
+  // at http://127.0.0.1:<port>, so every share link in the prerendered markup
+  // carried a localhost address - a share target nobody can open.
+  const canonicalUrl = getCanonicalUrl(`/articles/${slug ?? ''}`);
   const { getArticleBySlug } = useArticles({ autoLoad: false });
   const [article, setArticle] = useState<Article | null>(null);
   const [loading, setLoading] = useState(true);
@@ -169,10 +175,13 @@ const ArticleDetails: React.FC = () => {
           {/* Featured Image */}
           {article.featured_image_url && (
             <div className="relative h-64 md:h-96 lg:h-[500px] overflow-hidden">
-              <img
+              <OptimizedImage
                 src={article.featured_image_url}
                 alt={article.title}
-                className="w-full h-full object-cover"
+                className="object-cover"
+                containerClassName="absolute inset-0"
+                priority
+                sizes="(max-width: 768px) 100vw, 1024px"
               />
               <div className="absolute inset-0 bg-black/30" />
               
@@ -274,7 +283,7 @@ const ArticleDetails: React.FC = () => {
                   <ShareDialog 
                     title={article.title}
                     description={article.excerpt || article.title}
-                    url={window.location.href}
+                    url={canonicalUrl}
                     trigger={
                       <Button variant="outline" size="sm" className="gap-2">
                         <SpriteIcon name="share-2" className="h-4 w-4" />
@@ -315,6 +324,16 @@ const ArticleDetails: React.FC = () => {
               {/* Main Content */}
               <article className="lg:col-span-8">
                 <Card className="p-6 md:p-8">
+                  {/* prose-blockquote:border-l-4 below is the one side-tab
+                      finding in this file that impeccable counts and that
+                      stays. CLAUDE.md's rule names cards, list items, callouts
+                      and alerts; a rule down the side of a quotation is
+                      typography, and it is what Tailwind Typography ships. It
+                      is left in the ratchet's count rather than ignored,
+                      because the only ignore the detector offers would silence
+                      side-tab for this WHOLE file - and an article page is
+                      where a real one is most likely to appear
+                      (WEB-UX-034 AC2). */}
                   <div className="prose prose-lg max-w-none dark:prose-invert 
                                prose-headings:font-bold prose-headings:text-foreground
                                prose-h2:text-2xl prose-h2:mt-8 prose-h2:mb-4
@@ -357,7 +376,7 @@ const ArticleDetails: React.FC = () => {
                       <ShareDialog 
                         title={article.title}
                         description={article.excerpt || article.title}
-                        url={window.location.href}
+                        url={canonicalUrl}
                         trigger={
                           <Button variant="default" size="sm" className="gap-2">
                             <SpriteIcon name="share-2" className="h-4 w-4" />
@@ -417,7 +436,7 @@ const ArticleDetails: React.FC = () => {
       <ShareDialog 
         title={article.title}
         description={article.excerpt || article.title}
-        url={window.location.href}
+        url={canonicalUrl}
       />
     </>
   );

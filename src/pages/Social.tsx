@@ -18,6 +18,7 @@ import TrendingContent from "@/components/TrendingContent";
 import { UserPlus, Star, Heart, MessageSquare, Camera, Plus } from "lucide-react";
 import { useToast } from "@/hooks/use-toast";
 import { SpriteIcon } from "@/components/ui/SpriteIcon";
+import { ErrorState } from "@/components/ui/error-state";
 
 export default function Social() {
   const { isAuthenticated } = useAuth();
@@ -27,8 +28,14 @@ export default function Social() {
   const [groupName, setGroupName] = useState("");
   const [selectedGroupId, setSelectedGroupId] = useState<string | null>(null);
 
-  const { friends, friendGroups, groupsAvailable, sendFriendRequest } =
-    useSocialFeatures();
+  const {
+    friends,
+    friendGroups,
+    groupsAvailable,
+    sendFriendRequest,
+    error: friendsError,
+    fetchFriends,
+  } = useSocialFeatures();
 
   const handleSendFriendRequest = async () => {
     if (!searchEmail.trim()) return;
@@ -175,6 +182,14 @@ export default function Social() {
                       </div>
                     ))}
                   </div>
+                ) : friendsError ? (
+                  // WEB-QA-031: telling someone with friends to go and make
+                  // some is worse than saying nothing.
+                  <ErrorState
+                    error={friendsError}
+                    compact
+                    onRetry={() => void fetchFriends()}
+                  />
                 ) : (
                   <p className="text-muted-foreground text-center py-8">
                     No friends yet. Start by sending some friend requests!

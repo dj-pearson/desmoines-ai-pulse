@@ -34,7 +34,8 @@ import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { Skeleton } from "@/components/ui/skeleton";
 import { ArrowLeft, Crown, CreditCard, Receipt, FileText, Download, Check, AlertCircle, RefreshCw, Printer, Eye } from "lucide-react";
 import { useAuth } from "@/hooks/useAuth";
-import { usePayments } from "@/hooks/usePayments";
+import { isStoreManaged, usePayments } from "@/hooks/usePayments";
+import { ErrorState } from "@/components/ui/error-state";
 import { useSubscription } from "@/hooks/useSubscription";
 import { SubscriptionPlatformBreakdown } from "@/components/SubscriptionPlatformBreakdown";
 import { format } from "date-fns";
@@ -62,6 +63,14 @@ export default function SubscriptionPortal() {
     printInvoice,
     isCanceling,
     isResuming,
+    // WEB-FEAT-015: set when Apple or Google bills this subscriber, in which
+    // case none of the Stripe actions on this page can act on it.
+    manageAt,
+    manageUrl,
+    paymentsError,
+    invoicesError,
+    refetchPayments,
+    refetchInvoices,
   } = usePayments();
   const { tier, isPremium, subscription, plans, startCheckout, checkoutLoading } =
     useSubscription();
@@ -98,9 +107,21 @@ export default function SubscriptionPortal() {
     return <Badge variant={config.variant}>{config.label}</Badge>;
   };
 
+  // A store-billed subscriber reaching a Stripe action is answered with the
+  // store that owns the billing, not with a failure. The footer below hides
+  // those buttons, so this is the backstop for a stale render.
+  const openStoreBilling = (url: string, message: string) => {
+    toast.info(message);
+    window.open(url, "_blank", "noopener,noreferrer");
+  };
+
   const handleCancelSubscription = async () => {
     try {
-      await cancelSubscription();
+      const result = await cancelSubscription();
+      if (isStoreManaged(result)) {
+        openStoreBilling(result.manageUrl, result.message);
+        return;
+      }
       toast.success("Subscription will be canceled at the end of your billing period");
     } catch {
       toast.error("Failed to cancel subscription");
@@ -109,7 +130,11 @@ export default function SubscriptionPortal() {
 
   const handleResumeSubscription = async () => {
     try {
-      await resumeSubscription();
+      const result = await resumeSubscription();
+      if (isStoreManaged(result)) {
+        openStoreBilling(result.manageUrl, result.message);
+        return;
+      }
       toast.success("Subscription has been resumed");
     } catch {
       toast.error("Failed to resume subscription");
@@ -346,7 +371,29 @@ export default function SubscriptionPortal() {
                   </div>
                 )}
               </CardContent>
-              {isPremium && (
+              {/* WEB-FEAT-015 -- STRIPE CANNOT ACT ON A STORE SUBSCRIPTION.
+                  An iOS or Android subscriber used to be shown "Manage Payment
+                  Method" and "Cancel Subscription" here, both of which failed
+                  against a row with no stripe_customer_id. Apple and Google own
+                  that billing, so the only honest control is a link to it. */}
+              {isPremium && manageAt && manageUrl && (
+                <CardFooter className="flex flex-col items-start gap-3">
+                  <p className="text-sm text-muted-foreground">
+                    {manageAt === "appstore"
+                      ? "Apple bills this subscription. Payment method, renewal and cancellation are handled in your App Store account."
+                      : "Google Play bills this subscription. Payment method, renewal and cancellation are handled in your Play account."}
+                  </p>
+                  <Button asChild variant="outline">
+                    <a href={manageUrl} target="_blank" rel="noopener noreferrer">
+                      <CreditCard className="h-4 w-4 mr-2" />
+                      {manageAt === "appstore"
+                        ? "Manage in the App Store"
+                        : "Manage in Google Play"}
+                    </a>
+                  </Button>
+                </CardFooter>
+              )}
+              {isPremium && !manageAt && (
                 <CardFooter className="flex gap-4 flex-wrap">
                   <Button
                     variant="outline"
@@ -514,7 +561,16 @@ export default function SubscriptionPortal() {
                 </CardDescription>
               </CardHeader>
               <CardContent>
-                {payments.length === 0 ? (
+                {paymentsError ? (
+                  // WEB-QA-031: "No payments yet" is a claim about someone's
+                  // billing history, and it was shown whether the read worked
+                  // or not.
+                  <ErrorState
+                    error={paymentsError}
+                    compact
+                    onRetry={() => void refetchPayments()}
+                  />
+                ) : payments.length === 0 ? (
                   <div className="text-center py-8 text-muted-foreground">
                     <Receipt className="h-12 w-12 mx-auto mb-4 opacity-50" />
                     <p>No payments yet</p>
@@ -596,7 +652,13 @@ export default function SubscriptionPortal() {
                 </CardDescription>
               </CardHeader>
               <CardContent>
-                {invoices.length === 0 ? (
+                {invoicesError ? (
+                  <ErrorState
+                    error={invoicesError}
+                    compact
+                    onRetry={() => void refetchInvoices()}
+                  />
+                ) : invoices.length === 0 ? (
                   <div className="text-center py-8 text-muted-foreground">
                     <FileText className="h-12 w-12 mx-auto mb-4 opacity-50" />
                     <p>No invoices yet</p>

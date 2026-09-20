@@ -1,8 +1,15 @@
 # Security Policy for Des Moines Insider
 # https://securitytxt.org/
+#
+# Every field below pointed at the project's retired domain until 2026-09-19
+# (WEB-QUAL-010). A Canonical that does not match the URL this file is served
+# from is what RFC 9116 section 3.6 says to treat as suspect, and the contact
+# mailbox was on a domain this project does not run, so a reporter following it
+# reached nobody. scripts/check-brand-leak.mjs now scans public/ - which is why
+# the old hostname is not written out here either.
 
-Contact: mailto:security@desmoinespulse.com
+Contact: mailto:security@desmoinesinsider.com
 Expires: 2027-02-11T00:00:00.000Z
 Preferred-Languages: en
-Canonical: https://desmoinespulse.com/.well-known/security.txt
-Policy: https://desmoinespulse.com/privacy-policy
+Canonical: https://desmoinesinsider.com/.well-known/security.txt
+Policy: https://desmoinesinsider.com/privacy-policy

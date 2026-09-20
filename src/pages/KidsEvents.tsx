@@ -1,4 +1,5 @@
-import React, { useState, useEffect, useMemo } from "react";
+import React, { useMemo } from "react";
+import { useQuery } from "@tanstack/react-query";
 import { Link } from "react-router-dom";
 import { createLogger } from '@/lib/logger';
 import { supabase } from "@/integrations/supabase/client";
@@ -16,10 +17,10 @@ import { FAQSection } from "@/components/FAQSection";
 import { Card, CardContent } from "@/components/ui/card";
 import { Baby } from "lucide-react";
 import { getCanonicalUrl } from "@/lib/brandConfig";
-import { useDocumentTitle } from "@/hooks/useDocumentTitle";
 import { Breadcrumbs } from "@/components/ui/breadcrumbs";
-import { useReloadableFetch } from "@/hooks/useReloadableFetch";
 import { ErrorState } from "@/components/ui/error-state";
+import { SkeletonGroup } from "@/components/ui/skeleton";
+import { queryKeys } from "@/lib/queryKeys";
 
 interface EventItem {
   id: string;
@@ -36,53 +37,47 @@ interface EventItem {
 }
 
 export default function KidsEvents() {
-  const [events, setEvents] = useState<EventItem[]>([]);
-  const [isLoading, setIsLoading] = useState(true);
-  const { error: loadError, setError: setLoadError, reloadKey, retry } = useReloadableFetch();
-  useDocumentTitle("Kids Events");
 
-  useEffect(() => {
-    const fetchKidsEvents = async () => {
-      try {
-        setIsLoading(true);
-        const now = new Date().toISOString();
+  /**
+   * WEB-SEO-031 AC5: converted from useState/useEffect for the reason
+   * /events/today was. PrerenderSignal counts TanStack queries in flight, so a
+   * hand-rolled fetch is invisible to it, the 1.5s grace fires, and the
+   * prerenderer captures the skeleton.
+   */
+  const {
+    data: events = [],
+    isLoading,
+    error: loadError,
+    refetch,
+  } = useQuery({
+    queryKey: queryKeys.events.list({ audience: "kids" }),
+    queryFn: async (): Promise<EventItem[]> => {
+      const now = new Date().toISOString();
 
-        // Search for kid-friendly keywords in title, description, or category
-        const { data, error } = await supabase
-          .from("events")
-          .select("id, title, date, location, venue, price, category, enhanced_description, original_description, image_url, event_start_utc")
-          .gte("date", now)
-          .or("title.ilike.%kid%,title.ilike.%child%,title.ilike.%family%,category.ilike.%kid%,category.ilike.%family%,category.ilike.%child%,enhanced_description.ilike.%kid%,enhanced_description.ilike.%child%,enhanced_description.ilike.%family%")
-          .order("date", { ascending: true })
-          .limit(100);
+      // Search for kid-friendly keywords in title, description, or category
+      const { data, error } = await supabase
+        .from("events")
+        .select("id, title, date, location, venue, price, category, enhanced_description, original_description, image_url, event_start_utc")
+        .gte("date", now)
+        .or("title.ilike.%kid%,title.ilike.%child%,title.ilike.%family%,category.ilike.%kid%,category.ilike.%family%,category.ilike.%child%,enhanced_description.ilike.%kid%,enhanced_description.ilike.%child%,enhanced_description.ilike.%family%")
+        .order("date", { ascending: true })
+        .limit(100);
 
-        if (error) {
-          log.error('fetchKidsEvents', 'Error fetching kids events', { error });
-          setLoadError(error);
-          setEvents([]);
-        } else {
-          setLoadError(null);
-          setEvents(data || []);
-        }
-      } catch (error) {
-        log.error('fetchKidsEvents', 'Unexpected error in fetchKidsEvents', { error });
-        setLoadError(error);
-        setEvents([]);
-      } finally {
-        setIsLoading(false);
+      if (error) {
+        log.error("fetchKidsEvents", "Error fetching kids events", { error });
+        throw error;
       }
-    };
-
-    fetchKidsEvents();
-  }, [reloadKey]);
+      return (data ?? []) as unknown as EventItem[];
+    },
+  });
 
   const kidsEvents = events || [];
   const freeKidsEvents = kidsEvents.filter(e =>
     e.price === "Free" || e.price === "0" || e.price?.toLowerCase().includes("free")
   );
 
-  const pageTitle = "Kids & Family Events in Des Moines - Family-Friendly Activities | Des Moines Insider";
-  const pageDescription = `Find ${kidsEvents.length}+ family-friendly events in Des Moines perfect for kids and children. From story times to festivals, discover activities for toddlers, preschoolers, and teens. Indoor and outdoor options available year-round.`;
+  const pageTitle = "Kids & Family Events in Des Moines | Des Moines Insider";
+  const pageDescription = `Find ${kidsEvents.length}+ family-friendly events in Des Moines for kids and teens: story times, festivals, and indoor and outdoor activities, updated daily.`;
 
   const breadcrumbs = [
     { name: "Events", url: "/events" },
@@ -266,9 +261,14 @@ export default function KidsEvents() {
 
         {/* Events List */}
         {!isLoading && loadError ? (
-          <ErrorState error={loadError} onRetry={retry} />
+          <ErrorState error={loadError} onRetry={() => void refetch()} />
         ) : isLoading ? (
-          <div className="grid gap-6 md:grid-cols-2 lg:grid-cols-3">
+          /* WEB-SEO-031 AC5: no aria-busy, so the prerender strict gate had
+             nothing to distinguish this from a rendered page. */
+          <SkeletonGroup
+            label="Loading family events..."
+            className="grid gap-6 md:grid-cols-2 lg:grid-cols-3"
+          >
             {[...Array(6)].map((_, i) => (
               <div key={i} className="animate-pulse">
                 <div className="h-48 bg-muted rounded-lg mb-4"></div>
@@ -276,7 +276,7 @@ export default function KidsEvents() {
                 <div className="h-4 bg-muted rounded w-1/2"></div>
               </div>
             ))}
-          </div>
+          </SkeletonGroup>
         ) : kidsEvents.length > 0 ? (
           <>
             <h2 className="text-2xl font-bold mb-6">

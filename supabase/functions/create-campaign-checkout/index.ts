@@ -172,15 +172,48 @@ serve(async (req) => {
       apiVersion: "2023-10-16",
     });
 
-    // Check for existing customer
-    const customers = await stripe.customers.list({
-      email: user.email!,
-      limit: 1,
-    });
-
+    // WEB-ADS-014 AC6. The profile first, Stripe only as a fallback.
+    //
+    // This used to be stripe.customers.list({ email }) on every checkout, and
+    // `email` is not a unique key in Stripe: a customer created by another flow
+    // or a duplicate left by an earlier race can be the one that comes back
+    // first, attaching a returning advertiser to a different customer record
+    // than the one holding their payment history. It is also a round trip to
+    // Stripe before anything else, on a path a buyer is waiting on.
+    //
+    // WEB-SEC-023: keyed on user_id. profiles.id is the profile row's PK and
+    // matching an auth id against it returns nothing, silently - which here
+    // would mean the lookup never hits and every checkout falls back to the
+    // email search, i.e. exactly the old behaviour with a new query in front
+    // of it. That mistake has been made four times in this codebase.
     let customerId: string | undefined;
-    if (customers.data.length > 0) {
-      customerId = customers.data[0].id;
+    let customerIdOnProfile = false;
+
+    const { data: profileRow, error: profileError } = await supabase
+      .from("profiles")
+      .select("stripe_customer_id")
+      .eq("user_id", user.id)
+      .maybeSingle();
+
+    if (profileError) {
+      // 42703 until 20260920000006 is applied, and any read failure is
+      // survivable: the email lookup below still works. Logged rather than
+      // discarded, because a read that fails EVERY time looks identical to a
+      // profile that has no customer yet.
+      console.warn("[create-campaign-checkout] profile customer lookup failed:", profileError.message);
+    } else if (profileRow?.stripe_customer_id) {
+      customerId = profileRow.stripe_customer_id as string;
+      customerIdOnProfile = true;
+    }
+
+    if (!customerId) {
+      const customers = await stripe.customers.list({
+        email: user.email!,
+        limit: 1,
+      });
+      if (customers.data.length > 0) {
+        customerId = customers.data[0].id;
+      }
     }
 
     // Create line items from placements
@@ -312,8 +345,16 @@ serve(async (req) => {
         userId: user.id,
         campaignName: campaign.name,
       },
-      // Payment intent data for refunds
+      // Payment intent data for refunds, and the receipt address.
+      //
+      // WEB-ADS-005: receipt_email is why an advertiser got nothing after paying.
+      // billing_address_collection below is commented "for receipts" and does not
+      // cause one - Stripe emails a receipt for a one-off payment only when the
+      // PaymentIntent carries an address, and `customer_email` on the session
+      // does not reach it. The success page has been promising this email since
+      // the feature shipped.
       payment_intent_data: {
+        receipt_email: user.email,
         metadata: {
           campaignId,
           userId: user.id,
@@ -325,7 +366,39 @@ serve(async (req) => {
       billing_address_collection: "auto",
       // Expiration (30 minutes)
       expires_at: Math.floor(Date.now() / 1000) + 30 * 60,
+    }, {
+      // WEB-ADS-014 AC6. A retry must not create a SECOND checkout session for
+      // the same campaign at the same price.
+      //
+      // This handler is reachable more than once for one intent - a double
+      // click, a client retry on a timeout that actually succeeded, a Cloudflare
+      // retry. Each extra session is another URL that can be paid, and the
+      // webhook's campaign update is scoped to ONE stripe_session_id, so the
+      // second payment lands on a campaign the first already advanced.
+      //
+      // The key includes the AUTHORITATIVE total, not the stored one: when the
+      // rate card changes, the price genuinely is different and the advertiser
+      // must get a new session rather than Stripe replaying the old amount.
+      // Stripe keys expire after 24 hours, which is well past the 30-minute
+      // expiry above.
+      idempotencyKey: `campaign:${campaignId}:${authoritativeTotal.toFixed(2)}`,
     });
+
+    // Remember the customer so the next checkout does not have to search Stripe
+    // by email. Only ever fills a NULL - never overwrites an id already there,
+    // because that one may be the customer holding their payment history.
+    if (customerId && !customerIdOnProfile) {
+      const { error: customerWriteError } = await supabase
+        .from("profiles")
+        .update({ stripe_customer_id: customerId })
+        .eq("user_id", user.id)
+        .is("stripe_customer_id", null);
+      if (customerWriteError) {
+        // Best-effort by design: the session already exists and the buyer is
+        // mid-checkout. 42703 until 20260920000006 is applied.
+        console.warn("[create-campaign-checkout] could not store the customer id:", customerWriteError.message);
+      }
+    }
 
     // Update campaign with stripe session
     const { error: updateError } = await supabase

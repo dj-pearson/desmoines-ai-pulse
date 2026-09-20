@@ -29,7 +29,7 @@ import sys
 CRAWLER = os.path.join(os.path.dirname(os.path.abspath(__file__)), "catchdesmoines_crawler.py")
 
 PRELUDE = """
-import logging, re
+import json, logging, os, re
 from datetime import datetime, timedelta
 from typing import Optional
 from zoneinfo import ZoneInfo

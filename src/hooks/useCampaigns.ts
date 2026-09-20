@@ -1,6 +1,9 @@
 import { useState, useEffect } from "react";
 import { supabase } from "@/integrations/supabase/client";
 import { useAuth } from "./useAuth";
+import { createLogger } from "@/lib/logger";
+
+const logger = createLogger("useCampaigns");
 
 export interface Campaign {
   id: string;
@@ -246,7 +249,42 @@ export function useCampaigns() {
         .from("campaign_placements")
         .insert(placementInserts);
 
-      if (placementError) throw placementError;
+      if (placementError) {
+        // WEB-ADS-007 AC4. THIS USED TO `throw` AND LEAVE THE CAMPAIGN BEHIND.
+        //
+        // The campaigns row is already written by the time we get here, so a
+        // failed placement insert left a draft campaign with no placements: an
+        // advertiser who saw an error, and a row that can never be checked out
+        // because create-campaign-checkout builds its line items from the
+        // placements. Buying the `sidebar` placement did exactly this on every
+        // attempt, because the value was not in the placement_type enum.
+        //
+        // A compensating delete, not an RPC. A transactional
+        // create_campaign_with_placements() would be stronger and is the right
+        // eventual shape - but it does not exist yet, and a client that calls
+        // an RPC before its migration is applied fails with PGRST202 on every
+        // campaign rather than on the rare one. This is strictly better than
+        // today with no deploy-order hazard.
+        //
+        // The cleanup is best-effort and its own failure is reported alongside
+        // the real error rather than replacing it: the placement error is what
+        // the advertiser needs to see, and swallowing it to report a failed
+        // tidy-up would be the worse trade.
+        const { error: cleanupError } = await supabase
+          .from("campaigns")
+          .delete()
+          .eq("id", campaign.id);
+
+        if (cleanupError) {
+          logger.error("createCampaign", "Placement insert failed AND the draft campaign could not be removed", {
+            campaignId: campaign.id,
+            placementError,
+            cleanupError,
+          });
+        }
+
+        throw placementError;
+      }
 
       await fetchCampaigns();
       return campaign;
@@ -313,6 +351,54 @@ export function useCampaigns() {
     }
   };
 
+  /**
+   * Self-service campaign actions (WEB-ADS-011 AC2).
+   *
+   * ALL THREE ARE RPCs AND NONE OF THEM IS AN UPDATE FROM HERE. Pausing moves
+   * end_date, and end_date is how many days somebody paid for - a browser that
+   * computed the new one could extend a campaign for free by changing a number
+   * in a request, and RLS cannot tell an invented end_date from a legitimate
+   * one, only whose row it is. CLAUDE.md: money is decided on the server.
+   *
+   * `as never` until the types are regenerated with 20260920000002/3 - the
+   * house pattern here. Until they are APPLIED these return PGRST202, which
+   * surfaces as a thrown error the caller reports, not as a silent no-op.
+   */
+  const callCampaignRpc = async <T,>(fn: string, args: Record<string, unknown>): Promise<T> => {
+    const { data, error: rpcError } = await supabase.rpc(fn as never, args as never);
+    if (rpcError) throw new Error(rpcError.message);
+    await fetchCampaigns();
+    return data as T;
+  };
+
+  /** Only draft / pending_payment; the server enforces it, this is not a hint. */
+  const cancelCampaign = (campaignId: string) =>
+    callCampaignRpc<string>('cancel_campaign', { p_campaign_id: campaignId });
+
+  const setCampaignPaused = (campaignId: string, paused: boolean) =>
+    callCampaignRpc<string>('set_campaign_paused', {
+      p_campaign_id: campaignId,
+      p_paused: paused,
+    });
+
+  /**
+   * Clone the campaign as an unpaid draft (WEB-ADS-011 AC3).
+   *
+   * Returns the new campaign's id. The clone carries placement TYPES only -
+   * trg_campaign_placement_pricing prices it from the rate card for the new
+   * dates, so a renewal is charged at today's rates and not at whatever the
+   * original cost.
+   */
+  const renewCampaign = (campaignId: string) =>
+    callCampaignRpc<string>('renew_campaign', { p_campaign_id: campaignId });
+
+  /** Opens a support ticket. It does NOT refund - process-stripe-refund is admin-only. */
+  const requestRefund = (campaignId: string, reason: string) =>
+    callCampaignRpc<string>('request_campaign_refund', {
+      p_campaign_id: campaignId,
+      p_reason: reason,
+    });
+
   return {
     campaigns,
     isLoading,
@@ -323,6 +409,10 @@ export function useCampaigns() {
     updateCreative,
     createCreative,
     getCurrentPricing,
+    cancelCampaign,
+    setCampaignPaused,
+    renewCampaign,
+    requestRefund,
     refetch: fetchCampaigns,
   };
 }

@@ -107,6 +107,50 @@ const PENDING_MIGRATIONS = [
   // whole query on 42703, so a not-yet-applied column in the list SELECT would
   // blank /events/today rather than just skip the reorder.
   { table: 'events', column: 'is_indoor', migration: '20260908000001' },
+  // The article view counter (WEB-BE-056). What it replaces is a client
+  // read-modify-write that RLS rejected for every anonymous reader, so
+  // view_count has never moved; until this is applied the RPC 404s with
+  // PGRST202, which is the same no-op. Fire-and-forget by construction -
+  // recordArticleView attaches a rejection handler and returns, so the pending
+  // window cannot affect the page the way a missing COLUMN in a SELECT would.
+  { rpc: 'increment_article_view', migration: '20260919000010' },
+  // Approval publishes (WEB-ADS-008). publish_submission maps a reviewed
+  // submission into events; unpublish_submission takes the listing down while
+  // an edit is re-reviewed. Both are PGRST202 until applied, and both callers
+  // are built for that window: the admin button reports the failure and leaves
+  // the submission PENDING rather than marking it approved with nothing
+  // published, and the edit path logs and moves on.
+  { rpc: 'publish_submission', migration: '20260920000001' },
+  { rpc: 'unpublish_submission', migration: '20260920000001' },
+  // The link back from a published listing to the submission it came from. Read
+  // in a SEPARATE request from the submissions list, for the same reason
+  // events.is_indoor above is: PostgREST fails the WHOLE query on 42703, so a
+  // not-yet-applied column in the list SELECT would empty an organizer's
+  // dashboard rather than just omit one link.
+  { table: 'events', column: 'submission_id', migration: '20260920000001' },
+  // Self-serve cancel / pause / resume / refund request (WEB-ADS-011 AC2).
+  // NOTE FOR WHOEVER READS THIS LIST: these three are here for the record, not
+  // because the scanner caught them. useCampaigns calls them through a
+  // callCampaignRpc(fn, args) helper, so the name is a variable at the .rpc()
+  // call site and this script cannot see it. The "landed" check below still
+  // earns the entries: once the types carry these functions it will say so and
+  // ask for them to be removed.
+  { rpc: 'cancel_campaign', migration: '20260920000003' },
+  { rpc: 'set_campaign_paused', migration: '20260920000003' },
+  { rpc: 'request_campaign_refund', migration: '20260920000003' },
+  { rpc: 'renew_campaign', migration: '20260920000004' },
+  // Business listing claims (WEB-ADS-009). The table read is cast, so only the
+  // RPC is visible to this scanner; both are listed so the "landed" check asks
+  // for them back once the types carry them. useBusinessClaim treats a 42P01 on
+  // the table as "no claim" rather than throwing, so a detail page still
+  // renders in the pending window.
+  { rpc: 'claim_listing', migration: '20260920000005' },
+  { rpc: 'review_business_claim', migration: '20260920000005' },
+  { table: 'business_claims', migration: '20260920000005' },
+  // The Stripe customer remembered on the profile (WEB-ADS-014 AC6). Until it
+  // exists the read 42703s, which create-campaign-checkout logs and falls back
+  // from to the email lookup - the behaviour that shipped before this.
+  { table: 'profiles', column: 'stripe_customer_id', migration: '20260920000006' },
 ];
 
 const isPending = (table, column) =>
@@ -130,6 +174,13 @@ function parseSchema() {
 
   const tables = new Map(); // name -> Set<column>
   const functions = new Set();
+  // WEB-QA-034. An embed (`author:profiles(name)`) is resolved by PostgREST
+  // through a FOREIGN KEY, and it answers one it cannot resolve with PGRST200
+  // - failing the whole query, not just the embed. The generated types record
+  // every FK the database has, so absence here is absence there.
+  const relationships = new Map(); // table -> Set<referencedRelation>
+  const fkColumns = new Map(); // table -> Set<column that IS a foreign key>
+  const foreignKeyNames = new Set(); // every constraint name an embed may hint
 
   let section = null; // 'Tables' | 'Views' | 'Functions'
   let entity = null;
@@ -174,10 +225,24 @@ function parseSchema() {
       if ((section === 'Tables' || section === 'Views') && !tables.has(entity)) {
         tables.set(entity, new Set());
       }
+      if ((section === 'Tables' || section === 'Views') && !relationships.has(entity)) {
+        relationships.set(entity, new Set());
+        fkColumns.set(entity, new Set());
+      }
       continue;
     }
 
     if (section === 'Tables' || section === 'Views') {
+      const ref = /^\s+referencedRelation: "(\w+)"/.exec(line);
+      if (ref && entity && relationships.has(entity)) relationships.get(entity).add(ref[1]);
+      const fk = /^\s+foreignKeyName: "([\w.]+)"/.exec(line);
+      if (fk) foreignKeyNames.add(fk[1]);
+      // PostgREST also accepts the FK COLUMN as an embed target, so the
+      // columns side of a relationship is as load-bearing as the table side.
+      const cols = /^\s+columns: \[([^\]]*)\]/.exec(line);
+      if (cols && entity && fkColumns.has(entity)) {
+        for (const c of cols[1].matchAll(/"(\w+)"/g)) fkColumns.get(entity).add(c[1]);
+      }
       if (/^ {8}Row: \{/.test(line)) { inRow = true; continue; }
       if (inRow && /^ {8}\}/.test(line)) { inRow = false; continue; }
       if (inRow && entity) {
@@ -187,7 +252,7 @@ function parseSchema() {
     }
   }
 
-  return { tables, functions };
+  return { tables, functions, relationships, fkColumns, foreignKeyNames };
 }
 
 // ---------------------------------------------------------------------------
@@ -273,6 +338,121 @@ function columnOf({ text: entry, embed }) {
   return /^\w+$/.test(bare) ? bare : null;
 }
 
+/**
+ * Top-level keys of the object literal a write call is given, with the offset
+ * of each so a finding can point at the right line.
+ *
+ * WHY THIS EXISTS (WEB-QUAL-015). Everything else in this file reads
+ * `.select()` lists and filter arguments. Nothing read the object passed to
+ * `.insert()` / `.update()` / `.upsert()`, so a write naming a column the table
+ * does not have was invisible here - and PostgREST rejects the WHOLE statement
+ * with PGRST204, not just the offending key, so the real columns beside it are
+ * discarded too. Nine such writes were found by a dependency bump rather than
+ * by this script: articles.review_status took the content queue's entire
+ * publish with it, and event_checkins.check_in_method meant no check-in has
+ * ever been recorded. None of them appeared in schema-baseline.json.
+ *
+ * Conservative in the same way as the rest of the file - it reports only what
+ * it can prove:
+ *   - a non-literal argument (`.insert(payload)`) yields nothing
+ *   - a computed key (`[\`preferred_${c}s\`]:`) yields nothing for that entry
+ *   - a spread (`...rest`) yields nothing for that entry; the literal keys
+ *     beside it are still real claims and are still checked
+ *   - only depth-1 keys count, so a nested `{ preference_confidence: { x: 1 } }`
+ *     contributes `preference_confidence` and not `x`
+ *   - an array of rows (`.insert([{...}, {...}])`) is walked at the object level
+ *
+ * @param {string} segment  the chained call region following one `.from()`
+ * @returns {{key: string, at: number}[]}
+ */
+export function writeKeys(segment) {
+  const out = [];
+  for (const call of segment.matchAll(/\.(insert|update|upsert)\(\s*/g)) {
+    let i = call.index + call[0].length;
+    // An array of rows is unwrapped one level; anything that is not a literal
+    // object or array of objects is skipped entirely.
+    let arrayDepth = 0;
+    if (segment[i] === '[') { arrayDepth = 1; i += 1; while (/\s/.test(segment[i])) i += 1; }
+    if (segment[i] !== '{') continue;
+
+    // Depth counted across ALL bracket kinds so a value like `f({a: 1})` or
+    // `[x]` cannot be mistaken for the end of the row object.
+    let depth = 0;
+    let quote = null;
+    // True only where the next token would be a key: after `{` and after a
+    // depth-1 comma.
+    let expectingKey = false;
+    for (; i < segment.length; i += 1) {
+      const ch = segment[i];
+      if (quote) {
+        if (ch === '\\') { i += 1; continue; }
+        if (ch === quote) quote = null;
+        continue;
+      }
+      // A QUOTED KEY MUST BE READ BEFORE STRING MODE SWALLOWS IT. `{ 'id': x }`
+      // opens with a quote, so entering string mode first loses the key.
+      if (depth === 1 && expectingKey && (ch === "'" || ch === '"')) {
+        const quoted = /^['"](\w+)['"]\s*:/.exec(segment.slice(i));
+        if (quoted) {
+          out.push({ key: quoted[1], at: i });
+          expectingKey = false;
+          i += quoted[0].length - 1;
+          continue;
+        }
+      }
+      if (ch === "'" || ch === '"' || ch === '`') { quote = ch; continue; }
+      if (ch === '{' || ch === '[' || ch === '(') {
+        depth += 1;
+        if (depth === 1 && ch === '{') expectingKey = true;
+        continue;
+      }
+      if (ch === '}' || ch === ']' || ch === ')') {
+        depth -= 1;
+        if (depth === 0) {
+          // End of this row object. Keep going for the next element of an
+          // array of rows; otherwise this write is done.
+          if (arrayDepth === 1) {
+            let j = i + 1;
+            while (/[\s,]/.test(segment[j])) j += 1;
+            if (segment[j] === '{') { i = j - 1; expectingKey = false; continue; }
+          }
+          break;
+        }
+        continue;
+      }
+      if (depth !== 1) continue;
+
+      // A KEY IS ONLY READ WHERE A KEY CAN BE: straight after the opening brace
+      // or after a depth-1 comma. Scanning for `word:` anywhere at depth 1
+      // reads VALUES as keys, which is not a small over-report - the first
+      // draft of this turned 193 findings into 975, because
+      //     .update({ status: "x", stripe_payment_intent_id: y as string })
+      // contributed `string`, and
+      //     .update({ source_url_broken: false, source_url_checked_at: nowIso })
+      // contributed `false` and `nowIso`.
+      if (ch === ',') { expectingKey = true; continue; }
+      if (/\s/.test(ch)) continue;
+      if (!expectingKey) continue;
+      expectingKey = false;
+
+      // `key:`, `'key':` or shorthand `key` followed by , or }
+      const tail = segment.slice(i);
+      const keyed = /^(?:(\w+)|['"](\w+)['"])\s*:/.exec(tail);
+      if (keyed) {
+        out.push({ key: keyed[1] ?? keyed[2], at: i });
+        i += keyed[0].length - 1;
+        continue;
+      }
+      const shorthand = /^(\w+)\s*(?=[,}])/.exec(tail);
+      if (shorthand && !/^\d/.test(shorthand[1])) {
+        out.push({ key: shorthand[1], at: i });
+        i += shorthand[0].length - 1;
+      }
+    }
+  }
+  return out;
+}
+
 function scanFile(file, schema, findings) {
   const raw = readFileSync(file, 'utf8');
   const src = stripComments(raw);
@@ -291,7 +471,13 @@ function scanFile(file, schema, findings) {
   }
 
   // --- Tables and their chained columns ---------------------------------
-  for (const m of src.matchAll(/\.from\(\s*['"`](\w+)['"`]\s*\)/g)) {
+  //
+  // fromUnknownTable() COUNTS AS .from(). It is the untyped builder introduced
+  // by WEB-CI-031 for relations the generated types do not know - which is
+  // precisely the set this script exists to report. Matching only `.from(`
+  // dropped 99 of 193 findings the moment those call sites were rewritten:
+  // the queries did not get less dead, the inventory just stopped seeing them.
+  for (const m of src.matchAll(/(?:\.from|\bfromUnknownTable)\(\s*['"`](\w+)['"`]\s*\)/g)) {
     const table = m[1];
     const line = lineOf(src, m.index);
 
@@ -357,9 +543,92 @@ function scanFile(file, schema, findings) {
     // PostgREST chain never passes the client to itself. Like the `.from(`
     // bound, this only ever shrinks a segment.
     const rest = src.slice(m.index + m[0].length);
-    const stops = [rest.search(/\.from\(/), rest.search(/\b\w+\(\s*supabase\s*,/)].filter((i) => i !== -1);
+    //
+    // fromUnknownTable( ENDS A CHAIN TOO, for the same reason. When the
+    // WEB-CI-031 rewrite turned 106 `.from()` calls into helper calls, the
+    // segment after a KNOWN table stopped terminating at the next query and
+    // absorbed its columns: useCrmDashboard reported status, due_date, name and
+    // contact_count against crm_activities, which is a real table - they belong
+    // to the crm_tasks and crm_segments queries below it.
+    const stops = [
+      rest.search(/\.from\(/),
+      rest.search(/\bfromUnknownTable\(/),
+      rest.search(/\b\w+\(\s*supabase\s*,/),
+    ].filter((i) => i !== -1);
     const cut = stops.length > 0 ? Math.min(...stops) : -1;
     const segment = cut === -1 ? rest.slice(0, 2000) : rest.slice(0, Math.min(cut, 2000));
+
+    /**
+     * An embedded resource resolves through a FOREIGN KEY, and PostgREST
+     * answers one it cannot resolve with PGRST200 - failing the WHOLE query,
+     * not just the embed. So a join written against a relationship that does
+     * not exist does not degrade the result, it empties it.
+     *
+     * Two things are checked and both are exact:
+     *   - an explicit `!constraint_name` hint must name a constraint the
+     *     generated types record
+     *   - otherwise a relationship must exist in ONE of the two directions,
+     *     because PostgREST embeds a child from its parent as readily as the
+     *     reverse
+     *
+     * Conservative, like the rest of this file: an embed whose target is not a
+     * known table is already reported by the table rule, and a self-embed is
+     * skipped.
+     */
+    const reportEmbed = (fromTable, entry, at) => {
+      // `alias:target!hint` -> target, hint
+      const spec = entry.text.includes(':')
+        ? entry.text.slice(entry.text.indexOf(':') + 1)
+        : entry.text;
+      const [targetRaw, hint] = spec.split('!');
+      const target = targetRaw.trim();
+      if (!target || target === fromTable) return;
+
+      // A target that is not a relation may still be legal: PostgREST accepts
+      // the FOREIGN KEY COLUMN as an embed target. So a column is fine when it
+      // is a foreign key and a finding when it is not - which is the shape
+      // `profiles:submitted_by(email)` had on content_queue, where the alias
+      // reads like the table and `submitted_by` references auth.users, a
+      // schema PostgREST does not expose.
+      if (!schema.tables.has(target)) {
+        const isFk = schema.fkColumns.get(fromTable)?.has(target);
+        if (isFk) return;
+        const isColumn = schema.tables.get(fromTable)?.has(target);
+        findings.push({
+          kind: 'embed', file: rel, line: lineOf(src, m.index + m[0].length + at),
+          name: `${fromTable}->${target}`,
+          error: 'PGRST200 (no such relationship, whole query fails)',
+          detail: isColumn
+            ? `.select() embeds through ${fromTable}.${target}, which is not a foreign key in the generated schema`
+            : `.select() embeds '${target}' from ${fromTable}, and there is no such relation`,
+        });
+        return;
+      }
+
+      if (hint) {
+        const name = hint.trim();
+        // `inner` and `left` are join MODIFIERS, not constraint names.
+        if (name === 'inner' || name === 'left') return;
+        if (schema.foreignKeyNames.has(name)) return;
+        findings.push({
+          kind: 'embed', file: rel, line: lineOf(src, m.index + m[0].length + at),
+          name: `${fromTable}!${name}`,
+          error: 'PGRST200 (no such relationship, whole query fails)',
+          detail: `.select() embeds ${target} through '${name}', which is not a foreign key in the generated schema`,
+        });
+        return;
+      }
+
+      const forward = schema.relationships.get(fromTable)?.has(target);
+      const reverse = schema.relationships.get(target)?.has(fromTable);
+      if (forward || reverse) return;
+      findings.push({
+        kind: 'embed', file: rel, line: lineOf(src, m.index + m[0].length + at),
+        name: `${fromTable}->${target}`,
+        error: 'PGRST200 (no such relationship, whole query fails)',
+        detail: `.select() embeds ${target} from ${fromTable}, and no foreign key joins them in either direction`,
+      });
+    };
 
     const report = (col, at, api, error) => {
       if (columns.has(col)) return;
@@ -375,11 +644,20 @@ function scanFile(file, schema, findings) {
       for (const entry of splitSelect(s[2])) {
         const col = columnOf(entry);
         if (col) report(col, s.index, `.select('${entry.text}')`, '42703 (column does not exist)');
+        if (entry.embed) reportEmbed(table, entry, s.index);
       }
     }
 
     for (const f of segment.matchAll(/\.(eq|neq|gt|gte|lt|lte|like|ilike|is|in|contains|order)\(\s*['"`](\w+)['"`]/g)) {
       report(f[2], f.index, `.${f[1]}('${f[2]}')`, '42703 (column does not exist)');
+    }
+
+    // Writes. PGRST204 rather than 42703: PostgREST reports an unknown column
+    // on an insert/update as "column not found in schema cache", and it fails
+    // the whole statement, so every real column in the same object is lost
+    // with it (WEB-QUAL-015).
+    for (const w of writeKeys(segment)) {
+      report(w.key, w.at, `.insert/.update({ ${w.key}: ... })`, 'PGRST204 (column not found, whole write rejected)');
     }
 
     // --- profiles: id is the row PK, user_id is the auth.users FK ----------
@@ -496,7 +774,138 @@ function loadDriftAttribution() {
   return attribution;
 }
 
+
+// ---------------------------------------------------------------------------
+// --probe: ask PostgREST instead of the generated types
+// ---------------------------------------------------------------------------
+
+/**
+ * WHY THIS MODE EXISTS. Everything above compares code against
+ * src/integrations/supabase/types.ts, and CLAUDE.md is explicit that the
+ * generated types are not proof: favorites, ratings, reviews and advertisements
+ * were all listed there and all four answer 42P01 in production. The error runs
+ * in both directions - a table absent from the types can be perfectly real
+ * (playgrounds and attractions are created by no tracked migration either) - so
+ * the static pass can report a missing table that exists and stay silent about
+ * one that does not.
+ *
+ * This mode probes EVERY referenced table and RPC, not just the ones the static
+ * pass suspects, because the reverse error is the one nothing else can catch.
+ *
+ * It is read-only: `select=*&limit=0` returns no rows and still answers 42P01
+ * when the relation is gone, and an RPC is POSTed with no arguments, which
+ * distinguishes PGRST202 (no such function) from a 400 (it exists and wanted
+ * arguments). Neither touches data.
+ *
+ * Needs VITE_SUPABASE_URL and VITE_SUPABASE_ANON_KEY in the environment. The
+ * key is read, never printed.
+ */
+function collectReferences() {
+  const tables = new Map();
+  const rpcs = new Map();
+  const add = (map, name, rel) => {
+    if (!map.has(name)) map.set(name, new Set());
+    map.get(name).add(rel);
+  };
+
+  for (const root of SCAN_ROOTS) {
+    if (!existsSync(root)) continue;
+    for (const file of walk(root)) {
+      const src = stripComments(readFileSync(file, 'utf8'));
+      const rel = relative(ROOT, file).replace(/\\/g, '/');
+      for (const m of src.matchAll(/\.rpc[<(]\s*[<(]?\s*['"`](\w+)['"`]/g)) add(rpcs, m[1], rel);
+      for (const m of src.matchAll(/\.from[<(]\s*[<(]?\s*['"`]([A-Za-z_][\w]*)['"`]/g)) {
+        add(tables, m[1], rel);
+      }
+    }
+  }
+  return { tables, rpcs };
+}
+
+async function probe() {
+  const url = process.env.VITE_SUPABASE_URL;
+  const key = process.env.VITE_SUPABASE_ANON_KEY;
+  if (!url || !key) {
+    console.error(
+      'check-schema-usage --probe needs VITE_SUPABASE_URL and VITE_SUPABASE_ANON_KEY\n' +
+        'in the environment. They are read and never printed. See .env.example.',
+    );
+    process.exit(2);
+  }
+  const base = url.replace(/\/+$/, '');
+  const headers = { apikey: key, Authorization: `Bearer ${key}` };
+  const schema = parseSchema();
+  const { tables, rpcs } = collectReferences();
+
+  const classify = (status, body) => {
+    const code = body && typeof body === 'object' ? body.code : undefined;
+    if (status >= 200 && status < 300) return 'exists';
+    if (code === '42P01' || code === 'PGRST205') return 'MISSING';
+    if (code === 'PGRST202') return 'MISSING';
+    if (code === '42703') return 'exists (a column in the call is missing)';
+    if (status === 401 || status === 403) return 'exists (RLS hid it; not a schema problem)';
+    if (status === 400) return 'exists (rejected the empty call, which means it resolved)';
+    return `unclear (HTTP ${status}${code ? `, ${code}` : ''})`;
+  };
+
+  const rows = [];
+  for (const [table, files] of [...tables].sort()) {
+    const res = await fetch(`${base}/rest/v1/${table}?select=*&limit=0`, { headers });
+    const body = await res.json().catch(() => null);
+    rows.push({
+      kind: 'table',
+      name: table,
+      verdict: classify(res.status, body),
+      inTypes: schema.tables.has(table),
+      files: [...files].slice(0, 3),
+    });
+  }
+  for (const [fn, files] of [...rpcs].sort()) {
+    const res = await fetch(`${base}/rest/v1/rpc/${fn}`, {
+      method: 'POST',
+      headers: { ...headers, 'Content-Type': 'application/json' },
+      body: '{}',
+    });
+    const body = await res.json().catch(() => null);
+    rows.push({
+      kind: 'rpc',
+      name: fn,
+      verdict: classify(res.status, body),
+      inTypes: schema.functions.has(fn),
+      files: [...files].slice(0, 3),
+    });
+  }
+
+  if (process.argv.includes('--json')) {
+    console.log(JSON.stringify({ probed: rows.length, rows }, null, 2));
+    return;
+  }
+
+  const missing = rows.filter((r) => r.verdict === 'MISSING');
+  // THE ROWS THAT MATTER MOST are the ones where the types and production
+  // disagree: a reference the static pass calls fine that production 42P01s is
+  // invisible to every other check in this repo.
+  const lying = rows.filter((r) => r.inTypes && r.verdict === 'MISSING');
+  const surprising = rows.filter((r) => !r.inTypes && r.verdict.startsWith('exists'));
+
+  console.log(`\n[probe] ${rows.length} referenced object(s) against ${base}\n`);
+  for (const r of rows) {
+    const flag = r.verdict === 'MISSING' ? 'X' : ' ';
+    console.log(
+      `${flag} ${r.kind.padEnd(5)} ${r.name.padEnd(38)} ${r.verdict}` +
+        (r.inTypes ? '' : '   [not in types.ts]'),
+    );
+  }
+  console.log(`\n  missing in production      ${missing.length}`);
+  console.log(`  in types.ts but MISSING    ${lying.length}${lying.length ? '  <- nothing else catches these' : ''}`);
+  console.log(`  real but absent from types ${surprising.length}`);
+  console.log('\nRe-generate types.ts before trusting the static pass again.\n');
+}
+
 function main() {
+  if (process.argv.includes('--probe')) {
+    return probe();
+  }
   const asJson = process.argv.includes('--json');
   const showAll = process.argv.includes('--all');
   const update = process.argv.includes('--update');
@@ -609,9 +1018,11 @@ function main() {
   const rpcs = new Set(findings.filter((f) => f.kind === 'rpc').map((f) => f.name));
   const cols = new Set(findings.filter((f) => f.kind === 'column').map((f) => f.name));
   const keys = findings.filter((f) => f.kind === 'profiles-key').length;
+  const embeds = findings.filter((f) => f.kind === 'embed').length;
   console.log(
     `${findings.length} unresolvable reference(s): ` +
     `${tables.size} distinct table(s), ${rpcs.size} function(s), ${cols.size} column(s)` +
+    `${embeds ? `, ${embeds} dead embed(s)` : ''}` +
     `${keys ? `, ${keys} wrong-key query(ies)` : ''}.`
   );
   const attributed = findings.filter((f) => driftOf(f));
@@ -627,4 +1038,9 @@ function main() {
   process.exit(1);
 }
 
-main();
+// Only when run as a script. writeKeys() is imported by
+// scripts/__tests__/schema-write-keys.test.mjs, and without this guard that
+// import would run the whole check and process.exit() out of the test.
+const invokedDirectly =
+  process.argv[1] && resolve(process.argv[1]).endsWith('check-schema-usage.mjs');
+if (invokedDirectly) main();

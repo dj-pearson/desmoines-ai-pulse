@@ -21,6 +21,8 @@
 import { DOMParser } from "https://deno.land/x/deno_dom@v0.1.38/deno-dom-wasm.ts";
 import type { AdapterEvent, AdapterResult, DomainAdapter } from "./types.ts";
 import { scrapeUrl } from "../scraper.ts";
+import { fetchAllowed } from "./adapterFetch.ts";
+import { categoryForEventType } from "./catchdesmoinesCategory.ts";
 
 const SITE_ORIGIN = "https://www.catchdesmoines.com";
 const PAGE_SIZE = 12;
@@ -48,13 +50,9 @@ const EXCLUDED_DOMAINS = [
   "cloudflare.com",
 ];
 
-const BROWSER_HEADERS = {
-  "User-Agent":
-    "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36",
-  Accept:
-    "text/html,application/xhtml+xml,application/xml;q=0.9,*/*;q=0.8",
-  "Accept-Language": "en-US,en;q=0.9",
-};
+// WEB-SEC-024: BROWSER_HEADERS used to be declared here, with its own pasted
+// Chrome/120 User-Agent. adapterHeaders() builds them from getScraperConfig(),
+// so SCRAPER_USER_AGENT reaches this adapter instead of being decoration.
 
 interface SchemaOrgEvent {
   "@type"?: string;
@@ -172,7 +170,11 @@ async function discoverEventUrls(baseUrl: string): Promise<Set<string>> {
 
 async function fetchEventDetail(url: string): Promise<AdapterEvent | null> {
   try {
-    const response = await globalThis.fetch(url, { headers: BROWSER_HEADERS });
+    const response = await fetchAllowed(url);
+    if (!response) {
+      console.log(`  ⛔ [catchdesmoines] detail ${url}: disallowed by robots.txt`);
+      return null;
+    }
     if (!response.ok) {
       console.log(
         `  ❌ [catchdesmoines] detail ${url} → HTTP ${response.status}`,
@@ -297,7 +299,7 @@ function toAdapterEvent(
     date,
     location,
     venue,
-    category: "Community",
+    category: categoryForEventType(ev["@type"]),
     price: "See website",
     source_url: externalUrl ?? detailUrl,
     image_url: image,
@@ -310,9 +312,16 @@ function parseDateTime(raw: string | undefined): string | null {
   const m = raw.match(/^(\d{4}-\d{2}-\d{2})(?:T(\d{2}:\d{2})(?::(\d{2}))?)?/);
   if (!m) return null;
   const date = m[1];
-  const hhmm = m[2] ?? "19:00";
+  // WEB-BE-037. This defaulted an all-day schema.org date to "19:00", which is
+  // indistinguishable from a real 7pm show and disagreed with the three other
+  // ingestion paths (19:31:58, 19:30, 19:00). Returning the DATE ONLY hands the
+  // decision to parseEventDateTime in _shared/eventDateTime.ts, which stamps
+  // NO_TIME_MARKER - the one value that means "the source published no time".
+  // Both consumers of this adapter (ai-crawler, firecrawl-scraper) run that
+  // parser over item.date, so the marker is what lands.
+  if (m[2] === undefined) return date;
   const ss = m[3] ?? "00";
-  return `${date} ${hhmm}:${ss}`;
+  return `${date} ${m[2]}:${ss}`;
 }
 
 // Minimal Element interface — deno-dom's types don't carry through cleanly

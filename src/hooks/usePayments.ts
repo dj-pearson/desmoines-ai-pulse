@@ -3,6 +3,7 @@ import { supabase } from "@/integrations/supabase/client";
 import { createLogger } from "@/lib/logger";
 import { useAuth } from "./useAuth";
 import { useState } from "react";
+import { fromUnknownTable } from "@/integrations/supabase/unknownTable";
 
 const logger = createLogger('usePayments');
 
@@ -80,6 +81,42 @@ export interface SubscriptionDetails {
   currentPeriodEnd: string;
   cancelAtPeriodEnd: boolean;
   trialEnd: string | null;
+  /** Which billing relationship this row belongs to (WEB-FEAT-015). */
+  platform?: SubscriptionPlatform;
+}
+
+/** Where a subscriber manages billing this site does not own. */
+export type ManageAt = "appstore" | "play";
+
+export type SubscriptionPlatform = "web" | "ios" | "android";
+
+/** One entry per platform the user holds a subscription on (WEB-FEAT-015). */
+export interface SubscriptionPlatformRow {
+  platform: SubscriptionPlatform;
+  tier: string;
+  status: string | null;
+  currentPeriodEnd: string | null;
+  cancelAtPeriodEnd: boolean;
+  manageAt: ManageAt | null;
+}
+
+/**
+ * What manage-subscription answers when the billing belongs to a store.
+ *
+ * It is a 200, not an error: the request is answerable, just not by Stripe.
+ * supabase.functions.invoke drops the body of a non-2xx response, so a 4xx
+ * would lose the deep link that is the whole point of the answer.
+ */
+export interface StoreManagedResult {
+  managedExternally: true;
+  manageAt: ManageAt;
+  manageUrl: string;
+  platform: SubscriptionPlatform;
+  message: string;
+}
+
+export function isStoreManaged(value: unknown): value is StoreManagedResult {
+  return !!value && (value as StoreManagedResult).managedExternally === true;
 }
 
 export interface UpcomingInvoice {
@@ -98,13 +135,13 @@ export function usePayments() {
     data: payments = [],
     isLoading: paymentsLoading,
     error: paymentsError,
+    refetch: refetchPayments,
   } = useQuery({
     queryKey: ["payments", user?.id],
     queryFn: async () => {
       if (!user) return [];
 
-      const { data, error } = await supabase
-        .from("payments")
+      const { data, error } = await fromUnknownTable("payments")
         .select("*")
         .eq("user_id", user.id)
         .order("created_at", { ascending: false });
@@ -120,13 +157,13 @@ export function usePayments() {
     data: invoices = [],
     isLoading: invoicesLoading,
     error: invoicesError,
+    refetch: refetchInvoices,
   } = useQuery({
     queryKey: ["invoices", user?.id],
     queryFn: async () => {
       if (!user) return [];
 
-      const { data, error } = await supabase
-        .from("invoices")
+      const { data, error } = await fromUnknownTable("invoices")
         .select("*")
         .eq("user_id", user.id)
         .order("invoice_date", { ascending: false });
@@ -177,6 +214,11 @@ export function usePayments() {
         hasActiveSubscription: boolean;
         payments: Payment[];
         upcomingInvoice: UpcomingInvoice | null;
+        // WEB-FEAT-015. Set only when the user has no web row -- a store-billed
+        // subscriber used to be reported here as tier "free".
+        manageAt: ManageAt | null;
+        manageUrl: string | null;
+        platforms: SubscriptionPlatformRow[];
       };
     },
     enabled: !!user,
@@ -199,6 +241,16 @@ export function usePayments() {
       );
 
       if (error) throw error;
+
+      // WEB-FEAT-015: an iOS/Android subscriber has no Stripe customer, so the
+      // portal answers with the store that does bill them. Open it in a new tab
+      // rather than navigating away -- unlike the Stripe portal, the store page
+      // never comes back here.
+      if (isStoreManaged(data)) {
+        window.open(data.manageUrl, "_blank", "noopener,noreferrer");
+        return data.manageUrl;
+      }
+
       if (data?.url) {
         window.location.href = data.url;
         return data.url;
@@ -315,6 +367,11 @@ export function usePayments() {
     upcomingInvoice: subscriptionDetails?.upcomingInvoice,
     tier: subscriptionDetails?.tier || "free",
     hasActiveSubscription: subscriptionDetails?.hasActiveSubscription || false,
+    // WEB-FEAT-015: non-null means this site cannot manage the billing and the
+    // UI must deep-link to the store instead of offering Stripe actions.
+    manageAt: subscriptionDetails?.manageAt ?? null,
+    manageUrl: subscriptionDetails?.manageUrl ?? null,
+    subscriptionPlatforms: subscriptionDetails?.platforms ?? [],
 
     // Loading states
     isLoading: paymentsLoading || invoicesLoading || subscriptionLoading,
@@ -326,6 +383,11 @@ export function usePayments() {
     // Errors
     paymentsError,
     invoicesError,
+    // WEB-QA-031: the portal rendered "No payments yet" whatever happened, so
+    // a failed read looked like a clean billing history. Both panels need a
+    // way out that is not a page reload.
+    refetchPayments,
+    refetchInvoices,
 
     // Actions
     openCustomerPortal,

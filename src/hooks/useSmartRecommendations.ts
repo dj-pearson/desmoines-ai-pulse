@@ -6,6 +6,10 @@ import { useProfile } from './useProfile';
 import { useFeedback } from './useFeedback';
 import { Event } from '@/lib/types';
 
+/** Every column trending_scores has. */
+const TRENDING_SCORE_COLUMNS =
+  'id, content_type, content_id, score, velocity_score, views_24h, views_7d, searches_24h, searches_7d, rank, date, computed_at';
+
 const logger = createLogger('useSmartRecommendations');
 
 interface SmartRecommendation {
@@ -223,12 +227,16 @@ export function useSmartRecommendations() {
   // Trending recommendations with velocity scoring
   const generateTrendingRecommendations = async (limit: number): Promise<SmartRecommendation[]> => {
     try {
+      // NO `events (*)` EMBED. trending_scores has no foreign key to events -
+      // it carries a polymorphic content_type/content_id pair instead - so
+      // PostgREST answered PGRST200 and failed the WHOLE query, which is why
+      // the code below already says "fallback to getting events separately if
+      // relationship doesn't work". The fallback was the only path that could
+      // ever run, and it could not, because trendingScores was always null.
+      // The trending rail has been empty since this was written (WEB-QA-034).
       const { data: trendingScores, error: trendingScoresError } = await supabase
         .from('trending_scores')
-        .select(`
-          *,
-          events (*)
-        `)
+        .select(TRENDING_SCORE_COLUMNS)
         .eq('content_type', 'event')
         .eq('date', new Date().toISOString().split('T')[0])
         .order('score', { ascending: false })
@@ -241,24 +249,32 @@ export function useSmartRecommendations() {
 
       if (!trendingScores) return [];
 
-      // Fallback to getting events separately if relationship doesn't work
+      // ONE REQUEST FOR THE EVENTS, not one per score. This was a loop doing a
+      // maybeSingle() per trending row; at the default limit that is ten
+      // sequential round trips on a rail nobody waits for.
+      const contentIds = trendingScores.map((t) => t.content_id).filter(Boolean) as string[];
       const eventsToRecommend: SmartRecommendation[] = [];
-      
-      for (const trendingScore of trendingScores) {
-        const { data: event, error: eventError } = await supabase
-          .from('events')
-          .select('*')
-          .eq('id', trendingScore.content_id)
-          .neq('is_hidden', true) // Exclude soft-hidden stale events (WEB-AUTO-006)
-          // WEB-BE-034: archived_at is the other unpublish switch.
-          .is('archived_at', null)
-          .maybeSingle();
-        // A strategy that FAILED contributes nothing, exactly like a strategy
-        // with no matches - and the user just sees fewer recommendations. One
-        // broken strategy must not take the whole rail down, so this logs
-        // rather than throwing; a permanently dead strategy is then visible.
-        if (eventError) logger.error('recommendations', 'A recommendation query failed', { error: eventError });
+      if (contentIds.length === 0) return eventsToRecommend;
 
+      const { data: events, error: eventError } = await supabase
+        .from('events')
+        .select('*')
+        .in('id', contentIds)
+        .neq('is_hidden', true) // Exclude soft-hidden stale events (WEB-AUTO-006)
+        // WEB-BE-034: archived_at is the other unpublish switch.
+        .is('archived_at', null);
+      // A strategy that FAILED contributes nothing, exactly like a strategy
+      // with no matches - and the user just sees fewer recommendations. One
+      // broken strategy must not take the whole rail down, so this logs
+      // rather than throwing; a permanently dead strategy is then visible.
+      if (eventError) logger.error('recommendations', 'A recommendation query failed', { error: eventError });
+
+      const byId = new Map((events ?? []).map((e) => [e.id, e]));
+
+      // Iterated over the SCORES, not the events, so the ordering the
+      // .order('score') above established is preserved.
+      for (const trendingScore of trendingScores) {
+        const event = byId.get(trendingScore.content_id as string);
         if (event) {
           eventsToRecommend.push({
             event: event as Event,

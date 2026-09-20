@@ -137,9 +137,31 @@ Deno.test('the webhook handles trial_will_end and dedupes against the sweep', as
 });
 
 Deno.test('the billing interval is recorded so the amount can be stated', async () => {
-  const src = await read('../stripe-webhook/index.ts');
-  const writes = src.split('billing_interval:').length - 1;
-  assert(writes >= 2, `expected create and update paths to record it, found ${writes}`);
+  // WEB-CI-029 MOVED THIS, and the move is why the assertion is now about the
+  // shared module. It used to count `billing_interval:` in stripe-webhook and
+  // require two - one for the create path, one for update. Both row shapes now
+  // come from _shared/stripeSubscriptionRow.ts so they can be unit-tested, so
+  // the count in the webhook is zero and the file this protects is that one.
+  //
+  // Worth naming the lesson rather than just fixing the path: a source-text
+  // assertion pins WHERE code lives, not what it does, so a refactor that
+  // improves the code breaks the test. It is still the right tool here - there
+  // is no other way to assert "the webhook did not stop recording this" - but
+  // the assertion now names the two builders, which is the behaviour, rather
+  // than a count of occurrences, which was the layout.
+  const row = await read('../_shared/stripeSubscriptionRow.ts');
+  const writes = row.split('billing_interval:').length - 1;
+  assert(writes >= 2, `expected the create and update builders to record it, found ${writes}`);
+  assert(
+    row.includes('export function webSubscriptionRow') &&
+      row.includes('export function subscriptionUpdatePatch'),
+    'both row builders must exist for the create and update paths',
+  );
+
+  // And the webhook must still use them, or recording it in the module is moot.
+  const webhook = await read('../stripe-webhook/index.ts');
+  assert(webhook.includes('webSubscriptionRow('), 'the create path must use the shared builder');
+  assert(webhook.includes('subscriptionUpdatePatch('), 'the update path must use the shared builder');
   const migration = await read('../../migrations/20260817000001_subscription_billing_interval.sql');
   // Assert on the DDL only; the prose explains why it is nullable and would
   // otherwise trip the check below.

@@ -2,6 +2,7 @@ import { Link } from 'react-router-dom';
 import { Card, CardContent } from '@/components/ui/card';
 import { Badge } from '@/components/ui/badge';
 import type { SceneUpdate } from '@/hooks/useSceneUpdates';
+import { OptimizedImage } from "@/components/OptimizedImage";
 
 const TYPE_CONFIG: Record<string, { label: string; color: string }> = {
   new_opening: { label: 'New!', color: 'bg-green-500' },
@@ -41,10 +42,14 @@ export function SceneUpdateCard({ update }: { update: SceneUpdate }) {
     <Card className="hover:shadow-md transition-shadow">
       <CardContent className="p-4 flex gap-4">
         {update.image_url && (
-          <img
+          <OptimizedImage
             src={update.image_url}
             alt=""
-            className="w-20 h-20 rounded object-cover flex-shrink-0"
+            width={80}
+            height={80}
+            containerClassName="w-20 h-20 rounded flex-shrink-0"
+            className="object-cover"
+            sizes="80px"
           />
         )}
         <div className="flex-1 min-w-0">

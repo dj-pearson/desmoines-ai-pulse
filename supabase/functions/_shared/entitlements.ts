@@ -128,3 +128,47 @@ export async function resolveEntitledTier(
     return 'free';
   }
 }
+
+/**
+ * Entitled tier for MANY users in one read (WEB-FEAT-017).
+ *
+ * resolveEntitledTier is one query per user, which is fine for a request
+ * handler and wrong for a nightly job that holds every saved search in memory.
+ * Same rules, same grace window, one round trip.
+ *
+ * THROWS on a failed read, unlike resolveEntitledTier, which returns 'free'.
+ * That default is right for a request handler -- deny one call, move on -- and
+ * wrong for a batch: "nobody is entitled" and "we could not look" would produce
+ * the same empty map, and a nightly job cannot tell a quiet night from a broken
+ * one. An empty map here means exactly one thing: nobody is entitled.
+ */
+export async function resolveEntitledTiers(
+  supabase: SupabaseLike,
+  userIds: string[],
+  now: Date = new Date(),
+): Promise<Map<string, Tier>> {
+  const tiers = new Map<string, Tier>();
+  if (userIds.length === 0) return tiers;
+
+  const { data, error } = await supabase
+    .from('user_subscriptions')
+    .select('user_id, status, current_period_end, plan:subscription_plans(name)')
+    .in('user_id', userIds)
+    .in('status', ['active', 'trialing', 'past_due']);
+
+  if (error) {
+    throw new Error(`user_subscriptions read failed: ${(error as { message?: string }).message ?? error}`);
+  }
+  if (!data) return tiers;
+
+  for (const row of data as (SubRow & { user_id: string })[]) {
+    if (!isSubscriptionRowEntitled(row.status, row.current_period_end, now)) continue;
+    const name = (row.plan?.name ?? '').toLowerCase();
+    const tier: Tier = name === 'vip' ? 'vip' : name === 'insider' ? 'insider' : 'free';
+    const seen = tiers.get(row.user_id) ?? 'free';
+    if (TIER_RANK[tier] > TIER_RANK[seen]) tiers.set(row.user_id, tier);
+    else if (!tiers.has(row.user_id)) tiers.set(row.user_id, seen);
+  }
+
+  return tiers;
+}

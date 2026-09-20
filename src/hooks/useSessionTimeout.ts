@@ -4,6 +4,7 @@ import { useAuth } from '@/hooks/useAuth';
 import { useToast } from '@/hooks/use-toast';
 import { supabase } from '@/integrations/supabase/client';
 import { createLogger } from '@/lib/logger';
+import { fromUnknownTable } from "@/integrations/supabase/unknownTable";
 
 const logger = createLogger('useSessionTimeout');
 
@@ -139,8 +140,7 @@ export function useSessionTimeout(config: SessionTimeoutConfig = {}) {
     queryKey: ['user-sessions', user?.id],
     queryFn: async () => {
       if (!user) return [];
-      const { data, error } = await supabase
-        .from('user_sessions')
+      const { data, error } = await fromUnknownTable('user_sessions')
         .select('*')
         .eq('user_id', user.id)
         .eq('is_active', true)

@@ -27,7 +27,7 @@ export default function BestOf() {
   return (
     <>
       <SEOHead
-        title="Des Best - Vote for the Best of Des Moines"
+        title="Des Best - Vote for Des Moines' Best"
         description="Vote for the best pizza, coffee, brunch, date night spots, and more in Des Moines. Community-powered Best Of voting."
         url={canonicalUrl}
         canonicalUrl={canonicalUrl}

@@ -19,9 +19,14 @@ import { Breadcrumbs } from '@/components/ui/breadcrumbs';
 import { SpriteIcon } from "@/components/ui/SpriteIcon";
 import { useUrlFilters } from '@/hooks/useUrlFilters';
 import NoIndexMeta from '@/components/schema/NoIndexMeta';
+import { OptimizedImage } from "@/components/OptimizedImage";
 
 const Articles: React.FC = () => {
-  const { articles, loading, error, loadArticles } = useArticles();
+  // 'published' rather than the default 'all' (WEB-BE-056 AC3). This page
+  // pulled every article - drafts included, bodies and all - and then filtered
+  // status in the browser, so unpublished work crossed the wire to every
+  // visitor and only a `return false` kept it off the screen.
+  const { articles, loading, error, loadArticles } = useArticles({ status: 'published' });
   // URL-synced filters (WEB-UX-035). These were local React state, so a
   // filtered view could not be shared or bookmarked, and reading an article
   // and pressing Back returned to an unfiltered list. viewMode and showFilters
@@ -103,23 +108,11 @@ const Articles: React.FC = () => {
     loadArticles('all');
   }, []);
 
-  if (loading) {
-    return (
-      <>
-        <Header />
-        <div className="min-h-screen bg-background">
-          <div className="container mx-auto px-4 py-8">
-            {/* WEB-A11Y-002: the loading branch is an early return above the
-                page's own <h1>, so a slow response leaves the document with no
-                main heading. */}
-            <h1 className="sr-only">Des Moines stories and insights</h1>
-            <CardsGridSkeleton count={6} label="Loading articles..." />
-          </div>
-        </div>
-        <Footer />
-      </>
-    );
-  }
+  // No separate loading return. It was an early return above the page's own
+  // <h1>, so a slow response left the document with an sr-only stand-in and no
+  // search box at all - the reader could not start typing until the articles
+  // they were waiting for had arrived. The skeleton moved down into the grid,
+  // which is the only part that has nothing to show yet. WEB-CI-028 AC2.
 
   if (error) {
     return (
@@ -168,16 +161,16 @@ const Articles: React.FC = () => {
               {/* Featured Stats */}
               <div className="grid grid-cols-2 md:grid-cols-3 gap-4 mb-8">
                 <div className="bg-card/50 backdrop-blur-sm rounded-lg p-4 border">
-                  <div className="text-2xl font-bold text-primary">{filteredAndSortedArticles.length}</div>
+                  <div className="text-2xl font-bold text-primary">{loading ? "-" : filteredAndSortedArticles.length}</div>
                   <div className="text-sm text-muted-foreground">Articles</div>
                 </div>
                 <div className="bg-card/50 backdrop-blur-sm rounded-lg p-4 border">
-                  <div className="text-2xl font-bold text-primary">{categories.length}</div>
+                  <div className="text-2xl font-bold text-primary">{loading ? "-" : categories.length}</div>
                   <div className="text-sm text-muted-foreground">Categories</div>
                 </div>
                 <div className="bg-card/50 backdrop-blur-sm rounded-lg p-4 border col-span-2 md:col-span-1">
                   <div className="text-2xl font-bold text-primary">
-                    {Math.round(filteredAndSortedArticles.reduce((acc, article) => acc + (article.view_count || 0), 0) / filteredAndSortedArticles.length) || 0}
+                    {loading ? "-" : Math.round(filteredAndSortedArticles.reduce((acc, article) => acc + (article.view_count || 0), 0) / filteredAndSortedArticles.length) || 0}
                   </div>
                   <div className="text-sm text-muted-foreground">Avg. Views</div>
                 </div>
@@ -321,7 +314,9 @@ const Articles: React.FC = () => {
           </div>
 
           {/* Articles Grid/List */}
-          {filteredAndSortedArticles.length === 0 ? (
+          {loading ? (
+            <CardsGridSkeleton count={6} label="Loading articles..." />
+          ) : filteredAndSortedArticles.length === 0 ? (
             (searchQuery || selectedCategory !== 'all') ? (
               <EmptyState
                 icon={BookOpen}
@@ -364,14 +359,21 @@ const Articles: React.FC = () => {
                       <div className={`overflow-hidden ${
                         viewMode === 'list' ? 'md:w-64 md:flex-shrink-0' : 'aspect-video'
                       }`}>
-                        <img
+                        <OptimizedImage
                           src={article.featured_image_url}
                           alt={article.title}
-                          className={`w-full object-cover transition-transform duration-300 group-hover:scale-105 ${
+                          className="object-cover transition-transform duration-300 group-hover:scale-105"
+                          // The height lived on the img, and in list mode the
+                          // wrapper above sets none (it only fixes a width), so
+                          // both variants move onto the component's container.
+                          containerClassName={`w-full ${
                             viewMode === 'list' ? 'h-48 md:h-full' : 'h-full'
                           }`}
-                          loading="lazy"
-                          decoding="async"
+                          // The first row of a three-column grid. Chrome does not start a lazy
+                          // image's fetch until layout has run, so the LCP candidate on a listing
+                          // page must not be lazy (WEB-SEO-032).
+                          priority={index < 3}
+                          sizes={viewMode === 'list' ? '(max-width: 768px) 100vw, 256px' : '(max-width: 640px) 100vw, (max-width: 1024px) 50vw, 33vw'}
                         />
                       </div>
                     )}
