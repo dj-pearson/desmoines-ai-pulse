@@ -1,8 +1,16 @@
 import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
 import { supabase } from "@/integrations/supabase/client";
+import type { Database } from '@/integrations/supabase/types';
+import { createLogger } from '@/lib/logger';
 import { useAuth } from "./useAuth";
 import { handleError } from "@/lib/errorHandler";
 import { formatInCentralTime, CENTRAL_TIMEZONE, formatEventPart } from "@/lib/timezone";
+
+const log = createLogger('useUserSubmittedEvents');
+
+/** The columns UserSubmittedEvent declares; the table also has triage fields. */
+const SUBMITTED_EVENT_COLUMNS =
+  'id, user_id, title, description, date, start_time, end_time, venue, location, address, price, category, website_url, contact_email, contact_phone, image_url, tags, status, admin_notes, admin_reviewed_by, admin_reviewed_at, submitted_at, created_at, updated_at';
 
 export interface UserSubmittedEvent {
   id: string;
@@ -29,6 +37,12 @@ export interface UserSubmittedEvent {
   submitted_at: string;
   created_at: string;
   updated_at: string;
+  /** Hydrated by useAllSubmittedEvents from a separate profiles query. */
+  profiles?: {
+    first_name: string | null;
+    last_name: string | null;
+    email: string | null;
+  } | null;
 }
 
 /**
@@ -132,7 +146,14 @@ export function useUpdateEvent() {
   const queryClient = useQueryClient();
 
   return useMutation({
-    mutationFn: async ({ id, ...eventData }: Partial<UserSubmittedEvent> & { id: string }) => {
+    // TYPED AS THE TABLE'S OWN Update ROW, not Partial<UserSubmittedEvent>.
+    // That interface now carries `profiles`, which is hydrated from a separate
+    // query and is not a column - passing it here would be PGRST204 and the
+    // whole update would be lost, which is the class WEB-QA-034 is about.
+    mutationFn: async ({
+      id,
+      ...eventData
+    }: Database['public']['Tables']['user_submitted_events']['Update'] & { id: string }) => {
       const { data, error } = await supabase
         .from('user_submitted_events')
         .update(eventData)
@@ -178,16 +199,42 @@ export function useAllSubmittedEvents() {
   return useQuery({
     queryKey: ['all-submitted-events', user?.id ?? 'anonymous'],
     queryFn: async (): Promise<UserSubmittedEvent[]> => {
-      const { data, error } = await (supabase as any)
+      // NO EMBED, AND THE HINT IT USED NAMED A CONSTRAINT THAT DOES NOT EXIST.
+      // `profiles!user_submitted_events_user_id_fkey(...)` asks PostgREST to
+      // join through that foreign key by name; user_submitted_events has no
+      // foreign keys at all in the generated schema, so the answer was PGRST200
+      // and the WHOLE query failed - this admin list has always thrown, and
+      // EventReviewSystem has always rendered its error state (WEB-QA-034).
+      const { data, error } = await supabase
         .from('user_submitted_events')
-        .select(`
-          *,
-          profiles!user_submitted_events_user_id_fkey(first_name, last_name, email)
-        `)
+        .select(SUBMITTED_EVENT_COLUMNS)
         .order('submitted_at', { ascending: false });
 
       if (error) throw error;
-      return (data || []) as UserSubmittedEvent[];
+      const rows = (data || []) as UserSubmittedEvent[];
+
+      // Submitter names in one extra request, keyed on profiles.USER_ID.
+      // user_submitted_events.user_id is an auth user id and profiles.id is the
+      // profile row's own PK; keying by it returns zero rows silently, which is
+      // the WEB-SEC-023 failure this repo has hit four times.
+      const userIds = [...new Set(rows.map((r) => r.user_id).filter(Boolean))];
+      if (userIds.length === 0) return rows;
+
+      // Best-effort by design: a failure costs the submitter names and the
+      // submissions still render, so it is logged rather than thrown.
+      const { data: profiles, error: profileError } = await supabase
+        .from('profiles')
+        .select('user_id, first_name, last_name, email')
+        .in('user_id', userIds);
+      if (profileError) {
+        log.warn('allSubmitted', 'Submitter lookup failed', { error: profileError.message });
+      }
+
+      const byUserId = new Map((profiles ?? []).map((p) => [p.user_id, p]));
+      return rows.map((row) => ({
+        ...row,
+        profiles: byUserId.get(row.user_id) ?? null,
+      }));
     },
   });
 }

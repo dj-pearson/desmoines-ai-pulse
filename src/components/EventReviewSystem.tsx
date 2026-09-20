@@ -219,9 +219,9 @@ export default function EventReviewSystem() {
 
                             <p className="text-sm text-muted-foreground">
                               Submitted {format(new Date(event.submitted_at), "MMM d, yyyy 'at' h:mm a")}
-                              {(event as any).profiles && (
+                              {event.profiles && (
                                 <span className="ml-2">
-                                  by {(event as any).profiles.first_name} {(event as any).profiles.last_name}
+                                  by {event.profiles.first_name} {event.profiles.last_name}
                                 </span>
                               )}
                             </p>

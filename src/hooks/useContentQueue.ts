@@ -5,8 +5,15 @@
 
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
 import { supabase } from '@/integrations/supabase/client';
+import { createLogger } from '@/lib/logger';
 import { toast } from 'sonner';
 import { validateContent, autoFixContent, ContentValidationReport } from '@/lib/contentValidation';
+
+const log = createLogger('useContentQueue');
+
+/** Every column content_queue has; QueueItem below reads all but priority. */
+const CONTENT_QUEUE_COLUMNS =
+  'id, content_type, content_id, content_data, status, confidence_score, validation_results, submitted_by, reviewed_by, submitted_at, reviewed_at, rejection_reason, priority, created_at, updated_at';
 
 export interface QueueItem {
   id: string;
@@ -38,14 +45,17 @@ export function useContentQueue(filters?: {
   const { data: queueItems = [], isLoading, refetch } = useQuery({
     queryKey: ['content-queue', filters],
     queryFn: async () => {
+      // NO EMBED. `profiles:submitted_by(email)` looks like an ordinary
+      // PostgREST join and cannot work: content_queue.submitted_by REFERENCES
+      // auth.users(id) (migration 20251108000001:12), not public.profiles, and
+      // the generated types record content_queue with `Relationships: []` - no
+      // foreign key at all. PostgREST answers an embed it cannot resolve with
+      // PGRST200 and fails the WHOLE query, so this list has always come back
+      // empty and the content queue has always looked like it had nothing in
+      // it (WEB-QA-034). The submitter emails are fetched separately below.
       let query = supabase
         .from('content_queue')
-        .select(`
-          *,
-          profiles:submitted_by (
-            email
-          )
-        `)
+        .select(CONTENT_QUEUE_COLUMNS)
         .order('submitted_at', { ascending: false });
 
       if (filters?.status && filters.status !== 'all') {
@@ -64,10 +74,34 @@ export function useContentQueue(filters?: {
 
       if (error) throw error;
 
-      return (data || []).map(item => ({
+      const rows = data || [];
+
+      // One extra request for the submitters, keyed on profiles.USER_ID.
+      // content_queue.submitted_by holds an auth user id, and profiles.id is
+      // the profile row's own PK - keying by it returns zero rows silently,
+      // which is the WEB-SEC-023 failure this repo has hit four times.
+      const submitterIds = [...new Set(rows.map((r) => r.submitted_by).filter(Boolean))] as string[];
+      const emails = new Map<string, string>();
+      if (submitterIds.length > 0) {
+        // Best-effort by design: a failure here costs the submitter's email
+        // and nothing else, so it is logged rather than thrown - the queue is
+        // still the thing the reviewer came for.
+        const { data: profiles, error: profileError } = await supabase
+          .from('profiles')
+          .select('user_id, email')
+          .in('user_id', submitterIds);
+        if (profileError) {
+          log.warn('queue', 'Submitter lookup failed', { error: profileError.message });
+        }
+        for (const p of profiles ?? []) {
+          if (p.user_id && p.email) emails.set(p.user_id, p.email);
+        }
+      }
+
+      return rows.map(item => ({
         ...item,
-        submitter_email: (item as any).profiles?.email || 'Unknown'
-      })) as QueueItem[];
+        submitter_email: (item.submitted_by && emails.get(item.submitted_by)) || 'Unknown'
+      })) as unknown as QueueItem[];
     },
     staleTime: 1000 * 30 // 30 seconds
   });

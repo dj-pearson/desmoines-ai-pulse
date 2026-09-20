@@ -8,7 +8,7 @@ import { Link } from 'react-router-dom';
 import ArticlesManager from '@/components/ArticlesManager';
 import AIArticleGenerator from '@/components/AIArticleGenerator';
 import { AuthorManager } from '@/components/cms/AuthorManager';
-import { ContentQueue } from '@/components/cms/ContentQueue';
+import { ContentQueue } from '@/components/ContentQueue';
 import { CategoryTagManager } from '@/components/cms/CategoryTagManager';
 import { FileText, ClipboardList, Tags, Plus, LayoutDashboard, Settings, ArrowLeft } from "lucide-react";
 import { SpriteIcon } from "@/components/ui/SpriteIcon";

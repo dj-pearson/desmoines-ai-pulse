@@ -137,6 +137,13 @@ function parseSchema() {
 
   const tables = new Map(); // name -> Set<column>
   const functions = new Set();
+  // WEB-QA-034. An embed (`author:profiles(name)`) is resolved by PostgREST
+  // through a FOREIGN KEY, and it answers one it cannot resolve with PGRST200
+  // - failing the whole query, not just the embed. The generated types record
+  // every FK the database has, so absence here is absence there.
+  const relationships = new Map(); // table -> Set<referencedRelation>
+  const fkColumns = new Map(); // table -> Set<column that IS a foreign key>
+  const foreignKeyNames = new Set(); // every constraint name an embed may hint
 
   let section = null; // 'Tables' | 'Views' | 'Functions'
   let entity = null;
@@ -181,10 +188,24 @@ function parseSchema() {
       if ((section === 'Tables' || section === 'Views') && !tables.has(entity)) {
         tables.set(entity, new Set());
       }
+      if ((section === 'Tables' || section === 'Views') && !relationships.has(entity)) {
+        relationships.set(entity, new Set());
+        fkColumns.set(entity, new Set());
+      }
       continue;
     }
 
     if (section === 'Tables' || section === 'Views') {
+      const ref = /^\s+referencedRelation: "(\w+)"/.exec(line);
+      if (ref && entity && relationships.has(entity)) relationships.get(entity).add(ref[1]);
+      const fk = /^\s+foreignKeyName: "([\w.]+)"/.exec(line);
+      if (fk) foreignKeyNames.add(fk[1]);
+      // PostgREST also accepts the FK COLUMN as an embed target, so the
+      // columns side of a relationship is as load-bearing as the table side.
+      const cols = /^\s+columns: \[([^\]]*)\]/.exec(line);
+      if (cols && entity && fkColumns.has(entity)) {
+        for (const c of cols[1].matchAll(/"(\w+)"/g)) fkColumns.get(entity).add(c[1]);
+      }
       if (/^ {8}Row: \{/.test(line)) { inRow = true; continue; }
       if (inRow && /^ {8}\}/.test(line)) { inRow = false; continue; }
       if (inRow && entity) {
@@ -194,7 +215,7 @@ function parseSchema() {
     }
   }
 
-  return { tables, functions };
+  return { tables, functions, relationships, fkColumns, foreignKeyNames };
 }
 
 // ---------------------------------------------------------------------------
@@ -500,6 +521,78 @@ function scanFile(file, schema, findings) {
     const cut = stops.length > 0 ? Math.min(...stops) : -1;
     const segment = cut === -1 ? rest.slice(0, 2000) : rest.slice(0, Math.min(cut, 2000));
 
+    /**
+     * An embedded resource resolves through a FOREIGN KEY, and PostgREST
+     * answers one it cannot resolve with PGRST200 - failing the WHOLE query,
+     * not just the embed. So a join written against a relationship that does
+     * not exist does not degrade the result, it empties it.
+     *
+     * Two things are checked and both are exact:
+     *   - an explicit `!constraint_name` hint must name a constraint the
+     *     generated types record
+     *   - otherwise a relationship must exist in ONE of the two directions,
+     *     because PostgREST embeds a child from its parent as readily as the
+     *     reverse
+     *
+     * Conservative, like the rest of this file: an embed whose target is not a
+     * known table is already reported by the table rule, and a self-embed is
+     * skipped.
+     */
+    const reportEmbed = (fromTable, entry, at) => {
+      // `alias:target!hint` -> target, hint
+      const spec = entry.text.includes(':')
+        ? entry.text.slice(entry.text.indexOf(':') + 1)
+        : entry.text;
+      const [targetRaw, hint] = spec.split('!');
+      const target = targetRaw.trim();
+      if (!target || target === fromTable) return;
+
+      // A target that is not a relation may still be legal: PostgREST accepts
+      // the FOREIGN KEY COLUMN as an embed target. So a column is fine when it
+      // is a foreign key and a finding when it is not - which is the shape
+      // `profiles:submitted_by(email)` had on content_queue, where the alias
+      // reads like the table and `submitted_by` references auth.users, a
+      // schema PostgREST does not expose.
+      if (!schema.tables.has(target)) {
+        const isFk = schema.fkColumns.get(fromTable)?.has(target);
+        if (isFk) return;
+        const isColumn = schema.tables.get(fromTable)?.has(target);
+        findings.push({
+          kind: 'embed', file: rel, line: lineOf(src, m.index + m[0].length + at),
+          name: `${fromTable}->${target}`,
+          error: 'PGRST200 (no such relationship, whole query fails)',
+          detail: isColumn
+            ? `.select() embeds through ${fromTable}.${target}, which is not a foreign key in the generated schema`
+            : `.select() embeds '${target}' from ${fromTable}, and there is no such relation`,
+        });
+        return;
+      }
+
+      if (hint) {
+        const name = hint.trim();
+        // `inner` and `left` are join MODIFIERS, not constraint names.
+        if (name === 'inner' || name === 'left') return;
+        if (schema.foreignKeyNames.has(name)) return;
+        findings.push({
+          kind: 'embed', file: rel, line: lineOf(src, m.index + m[0].length + at),
+          name: `${fromTable}!${name}`,
+          error: 'PGRST200 (no such relationship, whole query fails)',
+          detail: `.select() embeds ${target} through '${name}', which is not a foreign key in the generated schema`,
+        });
+        return;
+      }
+
+      const forward = schema.relationships.get(fromTable)?.has(target);
+      const reverse = schema.relationships.get(target)?.has(fromTable);
+      if (forward || reverse) return;
+      findings.push({
+        kind: 'embed', file: rel, line: lineOf(src, m.index + m[0].length + at),
+        name: `${fromTable}->${target}`,
+        error: 'PGRST200 (no such relationship, whole query fails)',
+        detail: `.select() embeds ${target} from ${fromTable}, and no foreign key joins them in either direction`,
+      });
+    };
+
     const report = (col, at, api, error) => {
       if (columns.has(col)) return;
       if (isPending(table, col)) return;
@@ -514,6 +607,7 @@ function scanFile(file, schema, findings) {
       for (const entry of splitSelect(s[2])) {
         const col = columnOf(entry);
         if (col) report(col, s.index, `.select('${entry.text}')`, '42703 (column does not exist)');
+        if (entry.embed) reportEmbed(table, entry, s.index);
       }
     }
 
@@ -887,9 +981,11 @@ function main() {
   const rpcs = new Set(findings.filter((f) => f.kind === 'rpc').map((f) => f.name));
   const cols = new Set(findings.filter((f) => f.kind === 'column').map((f) => f.name));
   const keys = findings.filter((f) => f.kind === 'profiles-key').length;
+  const embeds = findings.filter((f) => f.kind === 'embed').length;
   console.log(
     `${findings.length} unresolvable reference(s): ` +
     `${tables.size} distinct table(s), ${rpcs.size} function(s), ${cols.size} column(s)` +
+    `${embeds ? `, ${embeds} dead embed(s)` : ''}` +
     `${keys ? `, ${keys} wrong-key query(ies)` : ''}.`
   );
   const attributed = findings.filter((f) => driftOf(f));

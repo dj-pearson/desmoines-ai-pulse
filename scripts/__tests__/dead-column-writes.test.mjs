@@ -18,7 +18,7 @@
  * a future edit that re-adds a write gets a named failure rather than a silent
  * PGRST204.
  */
-import { readFileSync } from 'node:fs';
+import { readFileSync, existsSync } from 'node:fs';
 
 const types = readFileSync('src/integrations/supabase/types.ts', 'utf8');
 
@@ -49,7 +49,7 @@ const hasColumn = (table, column) => {
 console.log('[dead-column-writes] columns that must stay absent');
 
 // Every table named here must still exist, or the assertions below are vacuous.
-for (const table of ['event_checkins', 'articles', 'user_journeys', 'restaurant_openings', 'playgrounds', 'crm_activities']) {
+for (const table of ['event_checkins', 'articles', 'user_journeys', 'restaurant_openings', 'playgrounds', 'crm_activities', 'content_queue']) {
   check(`${table} is in the generated types`, rowBlock(table) !== null);
 }
 
@@ -87,12 +87,32 @@ check('playgrounds has no website', hasColumn('playgrounds', 'website') === fals
 check('restaurant_openings has no website', hasColumn('restaurant_openings', 'website') === false);
 check('restaurant_openings has source_url', hasColumn('restaurant_openings', 'source_url') === true);
 
-// 6. The source files must not name them again.
+// 6. content_queue is content_type + content_id, NOT article_id. Two
+//    migrations claim the name and the earlier one won; the later declares its
+//    shape under CREATE TABLE IF NOT EXISTS, so it was a no-op then and would
+//    be a no-op again if the drift behind it were fixed.
+check('content_queue has content_type', hasColumn('content_queue', 'content_type') === true);
+check('content_queue has content_id', hasColumn('content_queue', 'content_id') === true);
+check('content_queue has no article_id', hasColumn('content_queue', 'article_id') === false);
+check(
+  'the duplicate cms ContentQueue is gone',
+  !existsSync('src/components/cms/ContentQueue.tsx'),
+);
+
+// 7. The source files must not name them again.
+// src/components/cms/ContentQueue.tsx was deleted by WEB-QA-034: it was a
+// second content-queue UI written against a content_queue that does not exist
+// and cannot, because 20251203000001_cms_features.sql declares its article_id
+// shape under `CREATE TABLE IF NOT EXISTS` and the table already existed.
+// src/components/ContentQueue.tsx is the working one.
 const sources = {
   'src/hooks/useEventSocial.ts': ['check_in_method', 'location_verified'],
-  'src/components/cms/ContentQueue.tsx': ['review_status'],
-  'src/components/cms/EnhancedArticleEditor.tsx': ['review_status'],
+  'src/components/cms/EnhancedArticleEditor.tsx': ['review_status', 'article_id'],
   'src/components/AffiliateManager.tsx': ["'playgrounds'"],
+  'supabase/functions/ai-article-pipeline/index.ts': ['review_status'],
+  'supabase/functions/nlp-search/index.ts': ['nlp_parsed', 'model_used', 'response_time_ms'],
+  'src/hooks/useScraping.ts': ['error_message'],
+  'src/hooks/useExperiment.ts': ['page_path'],
 };
 for (const [file, banned] of Object.entries(sources)) {
   const body = readFileSync(file, 'utf8');

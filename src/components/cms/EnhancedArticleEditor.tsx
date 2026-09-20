@@ -273,13 +273,27 @@ export default function EnhancedArticleEditor() {
       // content_queue row inserted below is what actually records that this
       // article is awaiting review, and it always was.
 
-      // Add to content queue
+      // WRITTEN AGAINST THE REAL content_queue, which is content_type +
+      // content_id + content_data, NOT article_id + priority. Two migrations
+      // claim this table name: 20251108000001 created the shape that is
+      // deployed, and 20251203000001_cms_features.sql declares a different one
+      // with article_id - under `CREATE TABLE IF NOT EXISTS`, so it was a
+      // no-op the moment it ran and would still be a no-op if the migration
+      // drift behind it were fixed. This insert named that unreachable shape,
+      // so submitting an article for review has never created a queue row
+      // (WEB-QA-034). content_data is NOT NULL and is what the reviewer sees.
       const { data: { user } } = await supabase.auth.getUser();
       const { error } = await supabase.from('content_queue').insert({
-        article_id: articleId,
+        content_type: 'article',
+        content_id: articleId,
+        content_data: {
+          title: articleData.title,
+          excerpt: articleData.excerpt,
+          category: articleData.category,
+          priority: articleData.priority,
+        },
         submitted_by: user?.id,
         status: 'pending',
-        priority: articleData.priority,
       });
 
       if (error) throw error;

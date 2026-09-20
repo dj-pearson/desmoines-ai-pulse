@@ -12,8 +12,10 @@ interface ScrapingJobRow {
   next_run: string | null;
   events_found: number | null;
   config: Record<string, unknown>;
-  results: Record<string, unknown> | null;
-  error_message: string | null;
+  // `results` and `error_message` used to be declared here and scraping_jobs
+  // has neither. Nothing read them; what they did was make the writes below
+  // read as correct. Same dead-twin shape as the EventCheckin interface
+  // WEB-QUAL-015 deleted (WEB-QA-034).
   job_type: string;
   created_at: string;
   updated_at: string;

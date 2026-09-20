@@ -3037,3 +3037,66 @@ LEARNINGS FOR FUTURE ITERATIONS
    scraper is dead because jobs sit at running" and WEB-QA-017's "useScraping
    writes a column that does not exist" are one bug described from two ends.
    When a fix explains an open story's symptom, say so in both.
+
+================================================================================
+2026-09-19  WEB-QA-034  (claude/admiring-cori-ukwzcp)
+An embed that cannot resolve does not degrade a query, it empties it
+================================================================================
+
+CLOSED, and bigger than it was filed for. Six queries embedded a relationship
+that does not exist. Each one failed WHOLE, with PGRST200, so: the content
+review queue is always empty, the admin activity log always errors, ratings
+never load for any content, the admin submissions list always throws, and the
+trending rail is always empty. Four of the six shared one idiom.
+
+LEARNINGS FOR FUTURE ITERATIONS
+
+1. `profiles:submitted_by(email)` IS NOT A JOIN TO profiles. PostgREST embed
+   syntax is `alias:relation(cols)`, so that reads as alias `profiles`,
+   relation `submitted_by`. Four call sites in this repo wrote it, all
+   believing they were joining profiles. It happens to be legal when the
+   second name is a foreign key COLUMN - which is why the rule has to check
+   that and not just the table list.
+
+2. AN EMBED IS A FOREIGN KEY, AND THE GENERATED TYPES ALREADY SAY WHICH ONES
+   EXIST. `Relationships: []` on a table means no embed from it can work,
+   ever. That data was sitting in types.ts the whole time and no check read
+   it. 102 `referencedRelation` entries across 270 tables: most tables cannot
+   be embedded from at all.
+
+3. `CREATE TABLE IF NOT EXISTS` MAKES A MIGRATION A NO-OP FOREVER, NOT JUST
+   TODAY. Two migrations declare `content_queue` with incompatible shapes; the
+   earlier one is deployed, the later one is `IF NOT EXISTS`. Fixing the
+   migration drift behind the later one - which WEB-QA-018 is deciding - would
+   change NOTHING, because the table exists. A drift entry is not automatically
+   recoverable by re-running it; check what the migration would actually do.
+
+4. WHEN CODE APOLOGISES FOR A QUERY, THE QUERY IS PROBABLY DEAD. The trending
+   rail's embed was followed by "Fallback to getting events separately if
+   relationship doesn't work". The relationship did not work, the embed failed
+   the whole request, and the fallback - the only path that could have run -
+   never got a chance, because the thing it was falling back from returned
+   null. A comment hedging about a relationship is a report of a bug nobody
+   confirmed.
+
+5. THE SAME BROKEN FEATURE CAN FAIL AT BOTH ENDS WITH DIFFERENT ERROR CODES.
+   content_queue: the submit was PGRST204 (a column that does not exist) and
+   the list was PGRST200 (a relationship that does not exist). Fixing one and
+   declaring the feature repaired would have been wrong.
+
+6. ADDING A HYDRATED FIELD TO A ROW INTERFACE BREAKS THE WRITE PATH, AND
+   supabase-js 2.85+ SAYS SO. `profiles?:` on UserSubmittedEvent immediately
+   failed `useUpdateEvent`, which took `Partial<UserSubmittedEvent>`. Write
+   paths take the table's own Update type; read shapes are a different thing
+   and should not be reused for writes.
+
+7. A FIX THAT TRIPS check-select-star AND check-error-handling IS THE SYSTEM
+   WORKING. Replacing four embeds with `select('*')` plus a second query hit
+   both, correctly: name the columns, and say out loud that a best-effort
+   lookup is best-effort. Two extra rounds, and the result is better than what
+   I first wrote.
+
+8. DELETING THE SECOND IMPLEMENTATION IS USUALLY THE FIX. Two content-queue
+   UIs, one against the deployed schema and one against a schema that cannot
+   exist. The broken one had more features - comments, reviewer assignment,
+   deadlines - every one of them backed by the same dead migration.
