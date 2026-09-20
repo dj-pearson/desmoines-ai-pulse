@@ -239,6 +239,9 @@ const AdminTrending = lazyWithRetry(() => import("./pages/AdminTrending"));
 const AdminEventSubmissions = lazyWithRetry(
   () => import("./pages/AdminEventSubmissions"),
 );
+const AdminBusinessClaims = lazyWithRetry(
+  () => import("./pages/AdminBusinessClaims"),
+);
 const BestOf = lazyWithRetry(() => import("./pages/BestOf"));
 const BestOfCategory = lazyWithRetry(() => import("./pages/BestOfCategory"));
 const WhatsNew = lazyWithRetry(() => import("./pages/WhatsNew"));
@@ -478,6 +481,7 @@ const App = () => (
             <Route path="/admin/feedback" element={<ProtectedRoute requireAdmin><AdminFeedback /></ProtectedRoute>} />
             <Route path="/admin/trending" element={<ProtectedRoute requireAdmin><AdminTrending /></ProtectedRoute>} />
             <Route path="/admin/event-submissions" element={<ProtectedRoute requireAdmin><AdminEventSubmissions /></ProtectedRoute>} />
+            <Route path="/admin/business-claims" element={<ProtectedRoute requireAdmin><AdminBusinessClaims /></ProtectedRoute>} />
             <Route path="/restaurants" element={<Restaurants />} />
             {/* Restaurant SEO hub pages */}
             <Route path="/restaurants/open-now" element={<OpenNowRestaurants />} />

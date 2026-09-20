@@ -154,5 +154,27 @@ console.log('\nthe page offers it');
   check('a failed read renders the page anyway', /return null;/.test(hook));
 }
 
+console.log('\nthe queue somebody has to watch (AC5)');
+{
+  const panel = readFileSync('src/components/admin/BusinessClaimsManager.tsx', 'utf8');
+  check('it lists pending claims', /\.eq\("status", "pending"\)/.test(panel));
+  check('and calls the admin-gated function', /rpc\("review_business_claim" as never/.test(panel));
+  check('  with approve and reject', /p_approve: approve/.test(panel) && /review\(claim, false\)/.test(panel));
+  // The listing's website and the claimant's email ARE the decision. A queue
+  // that shows neither is a button a human presses without evidence.
+  check('the claimant email is shown', /claim\.claimed_email/.test(panel));
+  check('next to the website on the listing', /Website on the listing/.test(panel));
+  // 42P01 before the migration is applied. An empty queue and a missing table
+  // look identical on screen and mean opposite things.
+  check('a failed read is surfaced, not shown as an empty queue', /if \(error\) throw error;/.test(panel));
+
+  const app = readFileSync('src/App.tsx', 'utf8');
+  check('the route exists and is admin-only', /path="\/admin\/business-claims" element=\{<ProtectedRoute requireAdmin>/.test(app));
+  // A screen nothing links to is a screen nobody opens - WEB-ADS-006's whole
+  // subject was a feature that shipped without delivery.
+  const nav = readFileSync('src/components/admin/AdminNav.tsx', 'utf8');
+  check('and the admin nav links to it', /href: "\/admin\/business-claims"/.test(nav));
+}
+
 console.log(`\n${failures} failure(s)`);
 process.exit(failures ? 1 : 0);

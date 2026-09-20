@@ -3942,3 +3942,33 @@ Learnings for future iterations:
    'rejected'" and failed immediately: the open-claim lookup filters on
    `status <> 'rejected'`. Same family as a check firing on its own comment -
    match what the code DOES, not which words appear in it.
+
+================================================================================
+2026-09-20 - WEB-ADS-009 AC5: the queue that makes the claim button real
+================================================================================
+
+Changed:
+  src/components/admin/BusinessClaimsManager.tsx  new
+  src/pages/AdminBusinessClaims.tsx, App.tsx, AdminNav.tsx  route + link
+  scripts/__tests__/business-claims.test.mjs      49 checks now
+
+Learnings for future iterations:
+
+1. WHEN THE FALLBACK PATH IS THE COMMON PATH, IT IS NOT A FALLBACK. Email-domain
+   verification means a business on gmail cannot auto-verify, and most are. The
+   queue is where most claims live, so shipping the claim button without it
+   would have been a form that goes nowhere - the same shape as WEB-ADS-006 and
+   WEB-ADS-008, both in this cluster, both found this week.
+
+2. A REVIEW SCREEN SHOWS THE DECISION, NOT THE ROW. The claimant's email and the
+   listing's website side by side ARE the judgement. A reviewer who has to open
+   another tab to find the website will approve on the business name instead.
+
+3. AN EMPTY QUEUE AND A MISSING TABLE LOOK IDENTICAL. Before the migration is
+   applied the read 42P01s. Catching that into an empty list renders "No claims
+   are waiting", which is a confident false statement; throwing it renders an
+   error, which is true. One negative control each way.
+
+4. A SCREEN NOTHING LINKS TO IS A SCREEN NOBODY OPENS. The nav entry is asserted
+   alongside the route, because a route registered and unlinked is how a
+   finished feature stays undiscovered.

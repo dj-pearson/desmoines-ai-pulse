@@ -145,6 +145,7 @@ const PENDING_MIGRATIONS = [
   // the table as "no claim" rather than throwing, so a detail page still
   // renders in the pending window.
   { rpc: 'claim_listing', migration: '20260920000005' },
+  { rpc: 'review_business_claim', migration: '20260920000005' },
   { table: 'business_claims', migration: '20260920000005' },
 ];
 
