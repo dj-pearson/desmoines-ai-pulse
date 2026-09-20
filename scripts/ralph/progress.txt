@@ -3290,3 +3290,54 @@ LEARNINGS FOR FUTURE ITERATIONS
 5. A CORRECTION GOES WHERE THE CLAIM WAS. The wrong sentence is edited in
    place to point at the correction, rather than being deleted - somebody may
    have already read it.
+
+================================================================================
+2026-09-20  WEB-BE-034  (claude/admiring-cori-ukwzcp)
+Nineteen event queries filtered one unpublish switch and not the other
+================================================================================
+
+AC3 done. `events` has two ways to be off the site - is_hidden (a moderator)
+and archived_at (the agent sweep) - and 19 of 130 queries honoured exactly one.
+Both sitemap generators, the events hub, the weekly digest, saved-search alerts
+and the daily social post let archived events through; every agent surface let
+moderator-hidden ones into a subscriber's inbox.
+
+AC2 is still the only thing open, and needs the cron schedule.
+
+LEARNINGS FOR FUTURE ITERATIONS
+
+1. "FIXED EVERYWHERE" IN A NOTE IS A CLAIM, NOT A STATE. Both this story and a
+   comment in useEvents.ts said both switches were filtered on all 19 event
+   reads. Nineteen queries were asymmetric when I counted. The number even
+   matched, which is the kind of coincidence that makes a stale claim read as
+   current. Count it.
+
+2. PICK THE RULE A REGEX CAN ACTUALLY DECIDE. "Every reader must filter both"
+   needs a judgement about which surfaces are reader-facing, and 94 of the 130
+   queries here filter neither and are right to. "A query that filters one must
+   filter both" needs no judgement, is provable from the text, and catches
+   exactly the defect - because a query that filters one has already declared
+   it cares.
+
+3. A DEFECT WITH TWO HALVES USUALLY HAS TWO POPULATIONS. The web surfaces
+   forgot archived_at; the agent surfaces forgot is_hidden. Each group was
+   internally consistent, which is why neither had ever looked wrong to anyone
+   reading only their own half.
+
+4. EXCLUDE WRITES FROM A READ RULE RATHER THAN BASELINING THEM. The archive
+   sweep's `.update({ archived_at })` filters archived_at because that is its
+   job. Baselining it would have put a write in a file about readers and made
+   the next reader of that file wonder.
+
+5. A BASELINE MUST FAIL ON ITS OWN STALENESS. Keyed by file + switch, so
+   moving a query does not break it - and the check errors on an entry that
+   matches nothing, because otherwise a stale entry silently covers the next
+   real finding under the same key.
+
+6. AND IT MUST REFUSE THE THING IT GUARDS. The test asserts no reader surface
+   (sitemap, digest, alerts, poster, a page) is in the baseline. A check whose
+   escape hatch can excuse its own subject matter is decoration.
+
+7. CHANGE BOTH COPIES OF AN AGENT. Six of the twelve fixes were in
+   _shared/agents/*.ts and six in the deployed agent-*/index.ts twins.
+   check-agent-pair-drift compares 34 pairs and would have caught a miss.

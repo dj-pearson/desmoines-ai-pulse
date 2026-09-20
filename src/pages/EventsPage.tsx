@@ -290,7 +290,10 @@ export default function EventsPage() {
         .select("id, title, date, location, category, image_url, price, venue, is_featured, event_start_utc, event_start_local, city, latitude, longitude, enhanced_description, original_description", { count: 'exact' })
         .gte("date", new Date().toISOString().split("T")[0])
         .neq("is_merged", true)
-        .neq("is_hidden", true);
+        .neq("is_hidden", true)
+        // WEB-BE-034: archived_at is the OTHER unpublish switch, written by the
+        // agent sweep. This hub filtered one and not the other.
+        .is("archived_at", null);
 
       // Push the active sort into the query so it covers the full result set,
       // not just the current page (WEB-UX-018). 'newest' = recently added.

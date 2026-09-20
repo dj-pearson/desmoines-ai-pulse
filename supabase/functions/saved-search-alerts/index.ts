@@ -177,6 +177,9 @@ serve(async (req) => {
       .gte("created_at", new Date(earliest).toISOString())
       .gte("date", today)
       .neq("is_hidden", true)
+      // WEB-BE-034: the other unpublish switch, or an alert mails an event
+      // the sweep has already retired.
+      .is("archived_at", null)
       .order("created_at", { ascending: false })
       .limit(500);
     // Same shape: no events means no alerts, which is indistinguishable from a
