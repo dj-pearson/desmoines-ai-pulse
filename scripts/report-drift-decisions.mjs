@@ -103,6 +103,9 @@ function walk(dir, out = []) {
 // used. Excluded from the textual count for that reason.
 const EXCLUDED_FROM_TEXTUAL = new Set([join('src', 'integrations', 'supabase', 'types.ts')]);
 
+const TYPES_FILE = join('src', 'integrations', 'supabase', 'types.ts');
+const typesSource = existsSync(TYPES_FILE) ? readFileSync(TYPES_FILE, 'utf8') : '';
+
 const files = SCAN_ROOTS.flatMap((root) => walk(root));
 const sources = files
   .filter((f) => !EXCLUDED_FROM_TEXTUAL.has(f))
@@ -129,6 +132,123 @@ const migrationSources = existsSync(MIGRATIONS_DIR)
 function sqlRefs(name, definedIn) {
   const re = wordMatcher(name);
   return migrationSources.filter((m) => m.file !== definedIn && re.test(m.text)).map((m) => m.file);
+}
+
+/**
+ * The columns a table HAS, read from the generated types - the deployed truth.
+ * Null when the table is not in the schema at all.
+ *
+ * WHY NOT THE EARLIEST `CREATE TABLE`: because a column added later by
+ * `ALTER TABLE ... ADD COLUMN` is reachable, and comparing against the first
+ * declaration alone reports it as lost. content_queue.priority is exactly that
+ * - added by 20260823000006_content_queue_priority.sql - and the first version
+ * of this check named it unreachable.
+ */
+export function deployedColumns(typesSource, table) {
+  const start = typesSource.indexOf(`\n      ${table}: {\n        Row: {\n`);
+  if (start < 0) return null;
+  const from = typesSource.indexOf('Row: {', start);
+  const to = typesSource.indexOf('\n        Insert: {', from);
+  if (to < 0) return null;
+  return new Set(
+    [...typesSource.slice(from, to).matchAll(/^\s+(\w+)\??:/gm)]
+      .map((m) => m[1])
+      .filter((c) => c !== 'Row'),
+  );
+}
+
+/**
+ * The columns one `CREATE TABLE` declares, from the SQL. Null when the file
+ * does not declare that table.
+ */
+export function declaredColumns(sql, table) {
+  const re = new RegExp(
+    `CREATE\\s+TABLE\\s+(?:IF\\s+NOT\\s+EXISTS\\s+)?(?:public\\.)?${table}\\s*\\(`,
+    'i',
+  );
+  const m = re.exec(sql);
+  if (!m) return null;
+  let i = m.index + m[0].length;
+  let depth = 1;
+  let body = '';
+  for (; i < sql.length && depth > 0; i += 1) {
+    const c = sql[i];
+    if (c === '(') depth += 1;
+    else if (c === ')') { depth -= 1; if (depth === 0) break; }
+    body += c;
+  }
+  const cols = [];
+  let d = 0;
+  let cur = '';
+  const take = () => {
+    const w = cur.trim().split(/\s+/)[0];
+    if (/^\w+$/.test(w)) cols.push(w);
+    cur = '';
+  };
+  for (const ch of body) {
+    if (ch === '(') d += 1;
+    else if (ch === ')') d -= 1;
+    if (ch === ',' && d === 0) { take(); continue; }
+    cur += ch;
+  }
+  take();
+  const constraints = new Set(['UNIQUE', 'PRIMARY', 'FOREIGN', 'CHECK', 'CONSTRAINT', 'EXCLUDE', 'LIKE']);
+  return cols.filter((c) => !constraints.has(c.toUpperCase()));
+}
+
+/**
+ * Declarations in `file` that RE-APPLYING THE MIGRATION WOULD NOT PRODUCE.
+ *
+ * WHY THIS IS NOT THE SAME QUESTION AS DRIFT (WEB-QA-034). A drifted migration
+ * is recorded as applied and produced nothing, and the obvious remedy is to run
+ * it again. That remedy is empty for a table an EARLIER migration already
+ * created, because every such declaration in this repo is
+ * `CREATE TABLE IF NOT EXISTS`: the table exists, so the statement is a no-op
+ * now and would be a no-op on every future run. The shape the later migration
+ * describes is unreachable by any route except a NEW migration.
+ *
+ * Found live: 20251203000001_cms_features.sql declares content_queue with
+ * article_id, assigned_reviewer, notes and review_deadline, and
+ * 20251108000001_admin_features_phase2.sql had already created it with
+ * content_type/content_id. A whole CMS review UI was written against the
+ * unreachable columns, and this report said REAPPLY.
+ *
+ * Reported per column, because the two shapes usually overlap: what is lost is
+ * the columns the later declaration adds, not the table.
+ *
+ * @returns {{table: string, guarded: boolean, dropsFirst: boolean,
+ *            earlier: string[], unreachableColumns: string[]}[]}
+ */
+export function shadowedDeclarations(file, sources, typesSource = '') {
+  const self = sources.find((m) => m.file === file);
+  if (!self) return [];
+  const out = [];
+  for (const m of self.text.matchAll(/CREATE\s+TABLE\s+(IF\s+NOT\s+EXISTS\s+)?(?:public\.)?(\w+)/gi)) {
+    const table = m[2];
+    const earlier = sources.filter(
+      (o) => o.file < file && new RegExp(`CREATE\\s+TABLE\\s+(?:IF\\s+NOT\\s+EXISTS\\s+)?(?:public\\.)?${table}\\b`, 'i').test(o.text),
+    );
+    if (earlier.length === 0) continue;
+
+    // A DROP before the CREATE makes the recreation real, so it is not shadowed.
+    const dropsFirst = new RegExp(`DROP\\s+TABLE[^;]*\\b${table}\\b`, 'i').test(self.text.slice(0, m.index));
+    if (dropsFirst) continue;
+
+    const wants = declaredColumns(self.text, table) ?? [];
+    // What the table HAS: the generated types when they know it, because a
+    // column added by a later ALTER is reachable and the earliest CREATE does
+    // not know about it. The first declaration is the fallback.
+    const has =
+      deployedColumns(typesSource, table) ?? new Set(declaredColumns(earlier[0].text, table) ?? []);
+    out.push({
+      table,
+      guarded: Boolean(m[1]),
+      dropsFirst,
+      earlier: earlier.map((e) => e.file),
+      unreachableColumns: wants.filter((c) => !has.has(c)),
+    });
+  }
+  return out;
 }
 
 /**
@@ -186,6 +306,7 @@ function main() {
       textualFiles: [...textualFiles].sort(),
       sqlFiles: [...sqlFiles].sort(),
       verdict: verdictFor({ provenTotal, textualFiles: textualFiles.size, sqlFiles: sqlFiles.size }),
+      shadowed: shadowedDeclarations(d.file, migrationSources, typesSource),
     };
   });
 
@@ -232,8 +353,30 @@ function main() {
     console.log(`    ${r.objects.map((o) => `${o.name} (${o.kind})`).join(', ')}`);
   }
 
+  // Printed LAST and separately, because it does not change a verdict - it
+  // changes whether the obvious remedy for that verdict does anything.
+  const shadowed = rows.filter((r) => r.shadowed.some((sd) => sd.unreachableColumns.length));
+  if (shadowed.length) {
+    console.log(
+      `\nRE-APPLYING WILL NOT PRODUCE THESE  (${shadowed.length}) - an earlier migration already ` +
+        'created the table, and every declaration below is CREATE TABLE IF NOT EXISTS.\n' +
+        '  The statement is a no-op now and on every future run. These columns need a NEW ' +
+        'migration, not this one again.',
+    );
+    for (const r of shadowed) {
+      console.log(`  ${r.file}  [${r.verdict}]`);
+      for (const sd of r.shadowed.filter((x) => x.unreachableColumns.length)) {
+        console.log(
+          `    ${sd.table}: ${sd.unreachableColumns.join(', ')}\n` +
+            `      already created by ${sd.earlier[0]}`,
+        );
+      }
+    }
+  }
+
   console.log(
-    `\n[drift-decisions] ${reapply.length} with readers, ${noReaders.length} with none that this script can see. ` +
+    `\n[drift-decisions] ${reapply.length} with readers, ${noReaders.length} with none that this script can see, ` +
+      `${shadowed.length} carrying a declaration re-applying cannot produce. ` +
       'Re-applying is a production write and is not this script\'s to make.',
   );
 }

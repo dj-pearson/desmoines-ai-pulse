@@ -3100,3 +3100,55 @@ LEARNINGS FOR FUTURE ITERATIONS
    UIs, one against the deployed schema and one against a schema that cannot
    exist. The broken one had more features - comments, reviewer assignment,
    deadlines - every one of them backed by the same dead migration.
+
+================================================================================
+2026-09-19  WEB-QA-018  (claude/admiring-cori-ukwzcp)
+"Re-apply the migration" is empty for four of the thirty-one
+================================================================================
+
+STILL OPEN (the per-module decision is the owner's), but AC1's evidence had a
+hole in it that would have sent somebody to re-run a migration that changes
+nothing.
+
+Four drifted migrations declare a table an EARLIER migration already created.
+Every one of those declarations is CREATE TABLE IF NOT EXISTS, so it was a
+no-op the day it ran and will be a no-op on every future run. Eleven columns
+across five tables are unreachable except by a NEW migration. Ten of them have
+no readers; the eleventh set - content_queue's article_id, assigned_reviewer,
+notes, review_deadline - had a whole CMS review UI written against it, which
+WEB-QA-034 deleted yesterday while the drift report still said REAPPLY.
+
+LEARNINGS FOR FUTURE ITERATIONS
+
+1. A DRIFTED MIGRATION IS NOT AUTOMATICALLY A RECOVERABLE ONE. The whole drift
+   story reads as "these were ledgered without running, so run them". For a
+   table that already exists under a different shape, running it is a no-op
+   forever. Before recommending re-apply, ask what the statement would
+   actually do.
+
+2. THE GOOD NEWS IS ALSO THE POINT. Only one of the eleven unreachable columns
+   had a reader, so shadowing has NOT silently broken the CRM, billing, trip
+   planner or push branches. That is worth knowing with certainty rather than
+   assuming, and it could as easily have gone the other way - which is why it
+   is a check now and not a note.
+
+3. COMPARE AGAINST WHAT THE TABLE HAS, NOT AGAINST THE FIRST DECLARATION. My
+   first version diffed the drifted CREATE against the earliest CREATE and
+   called content_queue.priority unreachable. It is not: a later migration
+   adds it by ALTER TABLE. The generated types are the deployed truth; the
+   earliest declaration is only a fallback for a table the types do not know.
+
+4. A NAIVE COLUMN SPLIT BREAKS ON TWO SHAPES AND BOTH ARE IN THIS REPO: a
+   comma inside `CHECK (status IN ('a','b'))`, and a table-level
+   `UNIQUE(a, b)`. Depth-track the parens and drop the constraint keywords, or
+   the report names `b` and `UNIQUE` as columns.
+
+5. A DROP BEFORE THE CREATE MAKES A RECREATION REAL. 20251110000010 does
+   exactly that to event_checkins, which is why that one genuinely replaced the
+   table while cms_features did not. The rule has to look for it or it
+   over-reports.
+
+6. THIS IS NOT A FOURTH VERDICT AND SAYING SO MATTERS. It does not change
+   whether code is waiting on a migration; it changes whether the obvious
+   remedy for that verdict does anything. Printed as its own section after
+   REAPPLY and NO READERS, with the verdict shown alongside.
