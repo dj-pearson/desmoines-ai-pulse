@@ -128,6 +128,16 @@ const PENDING_MIGRATIONS = [
   // not-yet-applied column in the list SELECT would empty an organizer's
   // dashboard rather than just omit one link.
   { table: 'events', column: 'submission_id', migration: '20260920000001' },
+  // Self-serve cancel / pause / resume / refund request (WEB-ADS-011 AC2).
+  // NOTE FOR WHOEVER READS THIS LIST: these three are here for the record, not
+  // because the scanner caught them. useCampaigns calls them through a
+  // callCampaignRpc(fn, args) helper, so the name is a variable at the .rpc()
+  // call site and this script cannot see it. The "landed" check below still
+  // earns the entries: once the types carry these functions it will say so and
+  // ask for them to be removed.
+  { rpc: 'cancel_campaign', migration: '20260920000003' },
+  { rpc: 'set_campaign_paused', migration: '20260920000003' },
+  { rpc: 'request_campaign_refund', migration: '20260920000003' },
 ];
 
 const isPending = (table, column) =>

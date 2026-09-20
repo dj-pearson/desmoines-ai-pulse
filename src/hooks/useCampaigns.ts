@@ -351,6 +351,43 @@ export function useCampaigns() {
     }
   };
 
+  /**
+   * Self-service campaign actions (WEB-ADS-011 AC2).
+   *
+   * ALL THREE ARE RPCs AND NONE OF THEM IS AN UPDATE FROM HERE. Pausing moves
+   * end_date, and end_date is how many days somebody paid for - a browser that
+   * computed the new one could extend a campaign for free by changing a number
+   * in a request, and RLS cannot tell an invented end_date from a legitimate
+   * one, only whose row it is. CLAUDE.md: money is decided on the server.
+   *
+   * `as never` until the types are regenerated with 20260920000002/3 - the
+   * house pattern here. Until they are APPLIED these return PGRST202, which
+   * surfaces as a thrown error the caller reports, not as a silent no-op.
+   */
+  const callCampaignRpc = async <T,>(fn: string, args: Record<string, unknown>): Promise<T> => {
+    const { data, error: rpcError } = await supabase.rpc(fn as never, args as never);
+    if (rpcError) throw new Error(rpcError.message);
+    await fetchCampaigns();
+    return data as T;
+  };
+
+  /** Only draft / pending_payment; the server enforces it, this is not a hint. */
+  const cancelCampaign = (campaignId: string) =>
+    callCampaignRpc<string>('cancel_campaign', { p_campaign_id: campaignId });
+
+  const setCampaignPaused = (campaignId: string, paused: boolean) =>
+    callCampaignRpc<string>('set_campaign_paused', {
+      p_campaign_id: campaignId,
+      p_paused: paused,
+    });
+
+  /** Opens a support ticket. It does NOT refund - process-stripe-refund is admin-only. */
+  const requestRefund = (campaignId: string, reason: string) =>
+    callCampaignRpc<string>('request_campaign_refund', {
+      p_campaign_id: campaignId,
+      p_reason: reason,
+    });
+
   return {
     campaigns,
     isLoading,
@@ -361,6 +398,9 @@ export function useCampaigns() {
     updateCreative,
     createCreative,
     getCurrentPricing,
+    cancelCampaign,
+    setCampaignPaused,
+    requestRefund,
     refetch: fetchCampaigns,
   };
 }

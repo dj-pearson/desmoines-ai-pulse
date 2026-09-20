@@ -3747,3 +3747,57 @@ Learnings for future iterations:
    the linked events row" or "unpublishes until re-approved". Unpublish, because
    the edit is untriaged and the alternative hands a publish button to anyone
    who has had one event approved. Hidden, not deleted, so the URL survives.
+
+================================================================================
+2026-09-20 - WEB-ADS-011: an advertiser had no button at all
+================================================================================
+
+CampaignDashboard rendered Upload / View / Analytics. No cancel, no pause, no
+way to ask for a refund - that was admin-only in process-stripe-refund. AC2 is
+now three SECURITY DEFINER functions and the buttons that call them; AC3
+(renew) still waits on WEB-ADS-004's lifecycle job.
+
+Changed:
+  supabase/migrations/20260920000002_campaign_paused_status.sql   new, enum + 2 cols
+  supabase/migrations/20260920000003_campaign_self_service.sql    new, 3 functions
+  src/hooks/useCampaigns.ts                                       3 actions
+  src/pages/CampaignDashboard.tsx                                 the buttons
+  scripts/check-schema-usage.mjs                                  3 pending entries
+  scripts/__tests__/campaign-self-service.test.mjs                new, 38 checks
+  tests/campaign-self-service.spec.ts                             new, in the lane
+
+Learnings for future iterations:
+
+1. "MONEY IS DECIDED ON THE SERVER" COVERS DATES, NOT JUST PRICES. Pausing moves
+   end_date, and end_date is how many days somebody paid for. RLS can say whose
+   row it is and nothing about whether the new end_date is the one they are
+   owed. The test that protects this is not on the arithmetic - it is on the
+   SIGNATURE: set_campaign_paused takes a uuid and a boolean, and a date
+   parameter appearing there is the client deciding its own run length.
+
+2. greatest(0, ...) WAS NOT DEFENSIVE. An overdue campaign the lifecycle job has
+   not completed yet has a negative day count, so a pause banks a negative and
+   the resume sets end_date in the past. The clamp is the difference between
+   correct and a campaign that silently ends on resume.
+
+3. ALTER TYPE ... ADD VALUE NEEDS ITS OWN MIGRATION FILE. It is allowed in a
+   transaction on PG12+, but the label cannot be USED until that transaction
+   commits, and the Supabase CLI runs one file per transaction. The failure
+   mode is the nasty one: a cast in the same file works on a database where the
+   value already exists and fails on a fresh one.
+
+4. SPLIT "CANCEL" FROM "REFUND" BY WHETHER MONEY MOVED. Cancel is allowed only
+   from draft and pending_payment. Everything else is a REQUEST that opens a
+   ticket, returns the open one on a second press, and moves no money. A single
+   cancel button spanning both is a refund with no record of what was owed.
+
+5. THE REFUSAL PATH DESERVES THE PLAYWRIGHT TEST. Rules living in a SECURITY
+   DEFINER function mean the server can say no to a request the page thought
+   was fine. A UI that swallows that leaves an advertiser pressing a dead
+   button, and no SQL test can see it.
+
+6. check-schema-usage ONLY SEES LITERAL .rpc('name') CALLS. Routing three new
+   RPCs through a callCampaignRpc(fn, args) helper made them invisible to the
+   gate - it passed while nothing resolved. Worth knowing before trusting that
+   check to catch a new function; the PENDING_MIGRATIONS entries were added by
+   hand for the record and for its "landed" reminder.

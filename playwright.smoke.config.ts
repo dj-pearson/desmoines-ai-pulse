@@ -74,7 +74,7 @@ export default defineConfig({
   // builds with placeholder VITE_SUPABASE_* so no row ever arrives. They do not
   // need a backend, they need rows - tests/support/fixtureBackend.ts answers
   // PostgREST from fixtures. 45/45 against the production build.
-  testMatch: /(search-filters|url-filter-state|sticky-filter-chips|route-smoke|cookie-consent|backend-down|touch-targets|page-headings|search-request-loop|request-budget|turnstile-inert|subscription-checkout|advertise-success-receipt|submission-live-link)\.spec\.ts/,
+  testMatch: /(search-filters|url-filter-state|sticky-filter-chips|route-smoke|cookie-consent|backend-down|touch-targets|page-headings|search-request-loop|request-budget|turnstile-inert|subscription-checkout|advertise-success-receipt|submission-live-link|campaign-self-service)\.spec\.ts/,
   fullyParallel: true,
   forbidOnly: !!process.env.CI,
   retries: process.env.CI ? 2 : 0,
