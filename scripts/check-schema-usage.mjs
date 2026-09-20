@@ -114,6 +114,20 @@ const PENDING_MIGRATIONS = [
   // recordArticleView attaches a rejection handler and returns, so the pending
   // window cannot affect the page the way a missing COLUMN in a SELECT would.
   { rpc: 'increment_article_view', migration: '20260919000010' },
+  // Approval publishes (WEB-ADS-008). publish_submission maps a reviewed
+  // submission into events; unpublish_submission takes the listing down while
+  // an edit is re-reviewed. Both are PGRST202 until applied, and both callers
+  // are built for that window: the admin button reports the failure and leaves
+  // the submission PENDING rather than marking it approved with nothing
+  // published, and the edit path logs and moves on.
+  { rpc: 'publish_submission', migration: '20260920000001' },
+  { rpc: 'unpublish_submission', migration: '20260920000001' },
+  // The link back from a published listing to the submission it came from. Read
+  // in a SEPARATE request from the submissions list, for the same reason
+  // events.is_indoor above is: PostgREST fails the WHOLE query on 42703, so a
+  // not-yet-applied column in the list SELECT would empty an organizer's
+  // dashboard rather than just omit one link.
+  { table: 'events', column: 'submission_id', migration: '20260920000001' },
 ];
 
 const isPending = (table, column) =>

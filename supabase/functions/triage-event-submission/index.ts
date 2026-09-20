@@ -183,19 +183,21 @@ Deno.serve(async (req) => {
     };
 
     if (decision === 'approved') {
-      const { error: insErr } = await supabase.from('events').insert({
-        title: submission.title,
-        date: submission.date,
-        location: submission.location || submission.venue || 'Des Moines, IA',
-        category: submission.category || 'Community',
-        venue: submission.venue,
-        original_description: submission.description,
-        price: submission.price,
-        image_url: submission.image_url,
-        source_url: submission.website_url,
-        source: 'user_submission',
+      // WEB-ADS-008: ONE publisher, shared with the human approve button.
+      //
+      // This used to be an inline insert of ten columns, and the six it left
+      // out are ones the form collects and the organizer filled in:
+      // start_time, end_time, address, contact_email, contact_phone and tags.
+      // It also left nothing on the events row pointing back at the submission
+      // or the submitter. Two copies of "what a published submission carries"
+      // is how those six went missing in the first place, so the mapping lives
+      // in publish_submission (20260920000001) and both paths call it.
+      const { error: publishErr } = await supabase.rpc('publish_submission', {
+        p_submission_id: submission.id,
       });
-      if (insErr) throw new Error(`events insert: ${insErr.message}`);
+      if (publishErr) throw new Error(`publish_submission: ${publishErr.message}`);
+      // The function sets status='approved' itself; auto_decided is this
+      // path's own fact and is still written with the rest of the patch.
       patch.status = 'approved';
       patch.auto_decided = true;
     } else if (decision === 'rejected') {

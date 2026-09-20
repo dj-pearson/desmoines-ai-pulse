@@ -3679,3 +3679,71 @@ Learnings for future iterations:
    admin queue. AdminCampaignDetail.tsx has rendered auto_review_reasons since
    WEB-AUTO-010; putting the unavailable items in that same array finished the
    AC with no admin UI change at all.
+
+================================================================================
+2026-09-20 - WEB-ADS-008: approving an event submission published nothing
+================================================================================
+
+The admin approve button set user_submitted_events.status = 'approved' and told
+the admin to "promote them from the existing /admin/content workflow", which has
+no path for user_submitted_events. So every human approval since the queue
+shipped published nothing, while four screens and one email said "approved". The
+AI path did insert, mapping ten of the fifteen columns that carry the
+organizer's own data.
+
+Changed:
+  supabase/migrations/20260920000001_publish_submission.sql  new, 2 functions
+  supabase/functions/triage-event-submission/index.ts        calls the RPC
+  supabase/functions/notify-event-submission/index.ts        conditional claim
+  src/components/admin/EventSubmissionsManager.tsx           approve publishes
+  src/hooks/useUserSubmittedEvents.ts                        live link + unpublish
+  src/pages/UserDashboard.tsx                                "View listing"
+  scripts/check-schema-usage.mjs                             3 pending entries
+  scripts/__tests__/publish-submission-mapping.test.mjs      new, 35 checks
+  tests/submission-live-link.spec.ts                         new, in the lane
+
+Learnings for future iterations:
+
+1. TEST THE COUNT, NOT THE NAMES. The bug was ten columns mapped out of
+   fifteen. A check for the six missing ones passes forever and says nothing
+   about the seventh somebody adds to the form next year. Comparing the two
+   lists - the table's columns against what the INSERT reads - is the check
+   that keeps working, and it needs an explicit exemption list for the columns
+   that are the workflow's rather than the organizer's.
+
+2. A PREVIOUS ITERATION LEFT AN INSTRUCTION AND IT WAS WORTH FOLLOWING TO THE
+   LETTER. "Restore a liveness claim in the same commit that makes it true."
+   The restored claim is conditional on the row lookup succeeding, so the
+   sentence cannot be false the way the original was. Pinning the CONDITION
+   rather than the wording is what makes the test survive a copy edit.
+
+3. NO POSTGRES HERE, BUT THE GRAMMAR IS FREE. check-migrations-parse runs every
+   migration through the real Postgres parser, so a 198-line PL/pgSQL function
+   is syntax-checked even with no database. What that does NOT establish is
+   behaviour, and the notes say so in those words rather than implying a green
+   run.
+
+4. THE REPO'S OWN GATES CAUGHT TWO OF MY MISTAKES. check-event-unpublish-filters
+   (written two iterations ago) failed the new lookup for honouring is_hidden
+   and not archived_at - an archived listing would still have been linked.
+   check-schema-usage failed three references to the unapplied migration, which
+   belong in PENDING_MIGRATIONS with the migration cited, not in
+   schema-baseline.json, whose header says it must only ever shrink.
+
+5. AN UNKNOWN COLUMN IS A COMPILE-TIME COST, NOT JUST A TYPE ERROR. Until the
+   migration is applied, PostgREST's typings resolve the select to a
+   SelectQueryError union and every chained .in()/.eq()/.is() re-instantiates
+   over it until tsc gives up with TS2589. unknownTable.ts measured the same
+   shape at 89s and 7.8M instantiations. Typing the builder at its edges is the
+   fix; the cast carries a note saying to delete it once the types carry the
+   column.
+
+6. A BULK ACTION MUST NOT REPORT WORK IT DID NOT DO. Approving five submissions
+   where two fail to publish marks three approved and says so, with the other
+   two named and left pending. The version that marks all five and shows a
+   success toast is the same class of bug as the one this story is about.
+
+7. WHEN AN AC SAYS "or, decided and documented", DECIDE. AC3 offered "updates
+   the linked events row" or "unpublishes until re-approved". Unpublish, because
+   the edit is untriaged and the alternative hands a publish button to anyone
+   who has had one event approved. Hidden, not deleted, so the URL survives.

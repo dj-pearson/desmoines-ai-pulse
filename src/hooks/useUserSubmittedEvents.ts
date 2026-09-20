@@ -37,6 +37,13 @@ export interface UserSubmittedEvent {
   submitted_at: string;
   created_at: string;
   updated_at: string;
+  /**
+   * The published events row's id, when this submission has a visible listing
+   * (WEB-ADS-008). Hydrated by useUserSubmittedEvents from a second query, not
+   * a column. Null while pending, while hidden pending a re-review, and
+   * everywhere 20260920000001 has not been applied.
+   */
+  live_event_id?: string | null;
   /** Hydrated by useAllSubmittedEvents from a separate profiles query. */
   profiles?: {
     first_name: string | null;
@@ -87,7 +94,71 @@ export function useUserSubmittedEvents() {
         .order('submitted_at', { ascending: false });
 
       if (error) throw error;
-      return (data || []) as UserSubmittedEvent[];
+      const submissions = (data || []) as UserSubmittedEvent[];
+      if (submissions.length === 0) return submissions;
+
+      // WEB-ADS-008 AC5: the live listing, so the dashboard can link an
+      // organizer to their own event instead of telling them it is approved
+      // and leaving them to search a thousand-row list for it.
+      //
+      // A SECOND QUERY RATHER THAN AN EMBED, deliberately. PostgREST embeds
+      // resolve through FOREIGN KEYS and 20260920000001 adds none: a
+      // submission can be deleted while its published listing stays up, which
+      // an FK would either block or cascade. A PGRST200 here would fail the
+      // WHOLE query and take the submissions list with it.
+      //
+      // Best-effort: before the migration is applied submission_id does not
+      // exist and this 42703s, in which case no submission gets a link and the
+      // list renders exactly as it does today.
+      // THE BUILDER IS CAST, AND THE REASON IS COMPILE TIME, not style.
+      // types.ts is generated from the DEPLOYED schema, so until
+      // 20260920000001 is applied `submission_id` is not a column it knows:
+      // PostgREST's typings resolve the select to
+      // SelectQueryError<"column 'submission_id' does not exist on 'events'">,
+      // and the .in()/.eq() after it get re-instantiated over that union until
+      // tsc gives up with TS2589. unknownTable.ts measured the same shape at
+      // 89s and 7.8M instantiations in one file. That helper cannot be used
+      // here - check-unknown-tables fails it for a table types.ts DOES know -
+      // so the chain is typed at its edges instead, which is also the only
+      // place the row shape is worth stating.
+      type LiveRow = { id: string; submission_id: string | null };
+      const eventsBySubmission = supabase.from('events') as unknown as {
+        select(columns: string): {
+          in(column: string, values: string[]): {
+            eq(
+              column: string,
+              value: boolean,
+            ): {
+              is(
+                column: string,
+                value: null,
+              ): PromiseLike<{ data: LiveRow[] | null; error: { message: string } | null }>;
+            };
+          };
+        };
+      };
+
+      const { data: published, error: publishedError } = await eventsBySubmission
+        .select('id, submission_id')
+        .in('submission_id', submissions.map((s) => s.id))
+        .eq('is_hidden', false)
+        // BOTH unpublish switches. A moderator hiding a row and the agent
+        // sweep retiring an expired one are different facts, and a reader that
+        // honours one would link an organizer to a listing that is gone
+        // (check-event-unpublish-filters, which caught exactly this).
+        .is('archived_at', null);
+
+      if (publishedError) {
+        if (import.meta.env.DEV) console.error('published listing lookup failed', publishedError);
+        return submissions;
+      }
+
+      const liveById = new Map(
+        (published ?? [])
+          .filter((row) => row.submission_id)
+          .map((row) => [row.submission_id as string, row.id]),
+      );
+      return submissions.map((s) => ({ ...s, live_event_id: liveById.get(s.id) ?? null }));
     },
     enabled: !!user,
   });
@@ -162,6 +233,31 @@ export function useUpdateEvent() {
         .single();
 
       if (error) throw error;
+
+      // WEB-ADS-008 AC3: an edit after approval UNPUBLISHES until it is
+      // re-approved.
+      //
+      // EventSubmissionForm already sets status back to 'pending' on an edit,
+      // which was the right half. The other half was missing: the published
+      // listing stayed up, unchanged, so an organizer correcting a wrong date
+      // left the wrong date on the site with no way to take it down. Pushing
+      // the edit straight through instead would give anyone who has had one
+      // event approved a publish button for untriaged text.
+      //
+      // Best-effort: the edit itself is committed and must not be rolled back
+      // because a listing could not be hidden. `as never` until the types are
+      // regenerated with 20260920000001; PGRST202 until it is applied, which
+      // this logs and moves past.
+      if (eventData.status === 'pending') {
+        const { error: unpublishError } = await supabase.rpc(
+          'unpublish_submission' as never,
+          { p_submission_id: id } as never,
+        );
+        if (unpublishError && import.meta.env.DEV) {
+          console.error('unpublish_submission failed', unpublishError);
+        }
+      }
+
       return data;
     },
     onSuccess: () => {

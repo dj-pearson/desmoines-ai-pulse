@@ -8,7 +8,7 @@ import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
 import { Alert, AlertDescription } from "@/components/ui/alert";
 import { Progress } from "@/components/ui/progress";
-import { Plus, User, Settings, Eye, Edit, Trash2, CheckCircle, XCircle, AlertTriangle, ArrowLeft, Megaphone, Crown, Heart, Bell, Zap, Upload, BarChart3, DollarSign } from "lucide-react";
+import { Plus, User, Settings, Eye, Edit, Trash2, CheckCircle, XCircle, AlertTriangle, ArrowLeft, Megaphone, Crown, Heart, Bell, Zap, Upload, BarChart3, DollarSign, ExternalLink } from "lucide-react";
 import { useAuth } from "@/hooks/useAuth";
 import { useUserSubmittedEvents, useDeleteEvent } from "@/hooks/useUserSubmittedEvents";
 import { useSubscription } from "@/hooks/useSubscription";
@@ -397,6 +397,22 @@ export default function UserDashboard() {
                               </p>
                             )}
                             <div className="flex gap-1 mt-1">
+                              {/*
+                                WEB-ADS-008 AC5. Approval used to mean a badge
+                                and nothing else - no listing was ever created,
+                                so there was nothing to link to. This appears
+                                only when a visible events row exists, which is
+                                what makes it an answer to "where is my event?"
+                                rather than another claim about it.
+                              */}
+                              {event.live_event_id && (
+                                <Button variant="outline" size="sm" asChild>
+                                  <a href={`/events/${event.live_event_id}`}>
+                                    <ExternalLink className="h-3 w-3 mr-1" />
+                                    View listing
+                                  </a>
+                                </Button>
+                              )}
                               {(event.status === "needs_revision" || event.status === "pending") && (
                                 <Dialog open={editingEventId === event.id} onOpenChange={(open) => setEditingEventId(open ? event.id : null)}>
                                   <DialogTrigger asChild>
