@@ -3617,3 +3617,65 @@ Learnings for future iterations:
 8. ORDER THE BEST-EFFORT WORK SO A KNOWN-BROKEN STEP CANNOT EAT THE REST. The
    `payments` upsert is 42P01 until WEB-QA-018 lands. The email runs after it
    and logs rather than throws, so the advertiser is told either way.
+
+================================================================================
+2026-09-20 - WEB-ADS-006: creative auto-review would have been worse deployed
+================================================================================
+
+The story is about a function that never runs: undeployed, its sweep parked
+after ~4,320 404s a month, no caller in src/. The finding that mattered was in
+the code nobody was running. brandSafe() returned safe:true on three paths that
+moderated nothing, and the verdict was `reasons.length === 0` - so the first
+successful deployment into an environment without ANTHROPIC_API_KEY would have
+auto-approved every ad creative on a public site and logged each one as
+creative_auto_approved.
+
+Changed:
+  supabase/functions/campaign-creative-review/decision.ts   new, the verdict
+  supabase/functions/campaign-creative-review/index.ts      checked + two lists
+  src/lib/creativeReviewVerdict.ts                          new, the four messages
+  src/components/advertising/CreativeUploadForm.tsx         reads the verdict
+  scripts/__tests__/creative-auto-review-decision.test.mjs  new, 31 checks
+  src/lib/__tests__/creativeReviewVerdict.test.ts           new, 10 tests
+
+Learnings for future iterations:
+
+1. READ THE DEAD CODE ANYWAY. A story whose headline is "this never runs" makes
+   it tempting to do only the plumbing and wait for the deploy. The plumbing was
+   the small half. A feature that is broken while switched off is cheap; one
+   that is wrong the moment it is switched on is not, and the only chance to
+   find it is before somebody deploys it.
+
+2. "FAILED OPEN" IN A NOTE IS A CONFESSION NOBODY READS. Two of the three paths
+   literally returned `note: "... (failed open)"` and wrote it into
+   auto_review_checks. The string was there, in the database, for months. What
+   was missing was a caller that treated it differently from "ok" - so add the
+   FIELD the caller can branch on (`checked`), not a better note.
+
+3. `!x.includes("UNSAFE")` IS NOT A SAFETY CHECK. It reads an empty response, a
+   truncated one and an API error page as safe. A verdict parser must require
+   the positive token, not the absence of the negative one. Found only by
+   writing out what the three fail-open paths had in common.
+
+4. A CHECK THAT COULD NOT RUN IS NOT A REJECTION, AND ONE LIST CANNOT SAY BOTH.
+   index.ts fed is_approved and rejection_reason from the same array, so
+   "your ad failed" and "we could not check your ad" were the same message to
+   the advertiser. Two lists, and rejection_reason NULL when nothing actually
+   failed.
+
+5. WHEN AN AC SAYS TO CALL SOMETHING, CHECK WHO IS ALLOWED TO. AC3 said the
+   upload form should invoke the review. An AFTER INSERT trigger already does,
+   and the handler opens with requireAdminOrApiKey because it does cost-bearing
+   AI work. The form READS the verdict instead. Second story running where the
+   obvious route was a locked door - and both times the right move was to say
+   so in the notes rather than widen the lock.
+
+6. BOUND A POLL BY WHAT HAPPENS WHEN THE ANSWER NEVER COMES. Six seconds, then
+   "queued". With the function undeployed the verdict never arrives, so the
+   unbounded version would hold every advertiser on a spinner in what is
+   currently the permanent state.
+
+7. CHECK THE FAR END BEFORE BUILDING IT. AC4 asks for the summary to reach the
+   admin queue. AdminCampaignDetail.tsx has rendered auto_review_reasons since
+   WEB-AUTO-010; putting the unavailable items in that same array finished the
+   AC with no admin UI change at all.

@@ -7,10 +7,21 @@
  *   2. target URL is https and resolves (SSRF-guarded, no disallowed scheme),
  *   3. text passes a brand-safety check (Claude when configured),
  *   4. advertiser/campaign is in good standing.
- * All pass -> is_approved=true (proceeds via the normal status flow). Any fail
- * -> stays unapproved with machine-readable reasons (auto_review_reasons) shown
- * in AdminCampaigns. Every decision is audit-logged; sweep mode records the
- * auto-approval rate via the jobRunner.
+ * THREE outcomes, not two (WEB-ADS-006):
+ *   every check RAN and PASSED  -> is_approved=true, proceeds via the normal
+ *                                  status flow.
+ *   a check FAILED              -> unapproved, rejection_reason set, reasons in
+ *                                  auto_review_reasons for AdminCampaigns.
+ *   a check COULD NOT RUN       -> unapproved, rejection_reason NULL, the admin
+ *                                  queue says what went unchecked.
+ *
+ * That third one is the whole of AC4 and it used to be an approval: brandSafe
+ * returned safe:true with no ANTHROPIC_API_KEY, on an API error and on a throw,
+ * so an unprovisioned environment put every creative live unmoderated. See
+ * ./decision.ts.
+ *
+ * Every decision is audit-logged, with a distinct action for each of the three;
+ * sweep mode records the auto-approval rate via the jobRunner.
  */
 import { createClient } from 'https://esm.sh/@supabase/supabase-js@2';
 import { handleCors, getCorsHeaders } from '../_shared/cors.ts';
@@ -18,6 +29,7 @@ import { requireAdminOrApiKey } from '../_shared/apiKeyAuth.ts';
 import { runJob } from '../_shared/jobRunner.ts';
 import { fetchWithTimeout } from '../_shared/fetchWithTimeout.ts';
 import { getAnthropicApiKey } from '../_shared/aiConfig.ts';
+import { autoReviewOutcome, brandSafetyFinding, type BrandSafetyResult } from './decision.ts';
 
 // Minimum pixel dimensions per placement.
 const MIN_DIMS: Record<string, { w: number; h: number }> = {
@@ -81,11 +93,23 @@ async function imageLoads(rawUrl: string): Promise<boolean> {
   }
 }
 
-/** Claude brand-safety check. Returns true (safe) when no API key is configured. */
-async function brandSafe(text: string): Promise<{ safe: boolean; note: string }> {
+/**
+ * Claude brand-safety check.
+ *
+ * `checked` is the part that matters (WEB-ADS-006). Every path below that
+ * cannot reach the model returns checked:false, and ./decision.ts turns that
+ * into "a human looks at it" rather than into an approval. It used to return
+ * safe:true, so an environment with no ANTHROPIC_API_KEY - which is the default
+ * one - auto-approved every creative on the site.
+ *
+ * Empty copy is `checked: true`: there is genuinely nothing to moderate, and a
+ * creative whose title, description and CTA are all blank fails the checks that
+ * are about having content.
+ */
+async function brandSafe(text: string): Promise<BrandSafetyResult> {
   const key = getAnthropicApiKey();
-  if (!key) return { safe: true, note: 'skipped (no ANTHROPIC_API_KEY)' };
-  if (!text.trim()) return { safe: true, note: 'empty' };
+  if (!key) return { safe: false, checked: false, note: 'skipped (no ANTHROPIC_API_KEY)' };
+  if (!text.trim()) return { safe: true, checked: true, note: 'empty' };
   try {
     const res = await fetchWithTimeout('https://api.anthropic.com/v1/messages', {
       method: 'POST',
@@ -107,12 +131,18 @@ async function brandSafe(text: string): Promise<{ safe: boolean; note: string }>
         ],
       }),
     }, 60_000);
-    if (!res.ok) return { safe: true, note: `claude error ${res.status} (failed open)` };
+    if (!res.ok) return { safe: false, checked: false, note: `claude error ${res.status}` };
     const data = await res.json();
     const verdict = String(data?.content?.[0]?.text || '').toUpperCase();
-    return { safe: !verdict.includes('UNSAFE'), note: verdict.includes('UNSAFE') ? 'flagged by Claude' : 'ok' };
-  } catch {
-    return { safe: true, note: 'claude exception (failed open)' };
+    // A reply that is neither SAFE nor UNSAFE is not a verdict. Reading "not
+    // UNSAFE" as safe made an empty or truncated response an approval.
+    if (!verdict.includes('SAFE') && !verdict.includes('UNSAFE')) {
+      return { safe: false, checked: false, note: `unreadable verdict: ${verdict.slice(0, 40) || '(empty)'}` };
+    }
+    const unsafe = verdict.includes('UNSAFE');
+    return { safe: !unsafe, checked: true, note: unsafe ? 'flagged by Claude' : 'ok' };
+  } catch (err) {
+    return { safe: false, checked: false, note: `claude exception: ${err instanceof Error ? err.message : 'unknown'}` };
   }
 }
 
@@ -142,7 +172,12 @@ async function reviewableImageUrl(supabase: Supa, creative: Record<string, unkno
   return data.signedUrl;
 }
 
-async function reviewOne(supabase: Supa, creative: Record<string, unknown>) {  const reasons: string[] = [];
+async function reviewOne(supabase: Supa, creative: Record<string, unknown>) {
+  // Two lists, not one. `reasons` is what the advertiser can fix and becomes
+  // rejection_reason; `unavailable` is a check that could not run, which blocks
+  // auto-approval without rejecting anything. See ./decision.ts.
+  const reasons: string[] = [];
+  const unavailable: string[] = [];
   const checks: Record<string, unknown> = {};
 
   // 1. Image
@@ -188,7 +223,10 @@ async function reviewOne(supabase: Supa, creative: Record<string, unknown>) {  c
   const text = [creative.title, creative.description, creative.cta_text].filter(Boolean).join('. ');
   const bs = await brandSafe(text);
   checks.brandSafety = bs.note;
-  if (!bs.safe) reasons.push('Ad text failed brand-safety review');
+  checks.brandSafetyChecked = bs.checked;
+  const brand = brandSafetyFinding(bs);
+  if (brand.failure) reasons.push(brand.failure);
+  if (brand.unavailable) unavailable.push(brand.unavailable);
 
   // 4. Advertiser / campaign standing
   let standingOk = true;
@@ -202,21 +240,30 @@ async function reviewOne(supabase: Supa, creative: Record<string, unknown>) {  c
       standingOk = false;
       reasons.push(`Campaign status is ${campaign.status}`);
     }
-  } catch {
-    // feature-tolerant: don't fail the creative on a standing-check error
+  } catch (err) {
+    // Still not a rejection - the advertiser did nothing wrong - but no longer
+    // an approval either. The old comment read "feature-tolerant: don't fail
+    // the creative on a standing-check error", and it was right that this must
+    // not REJECT. It silently approved instead, because there was one list.
+    standingOk = false;
+    checks.standingError = err instanceof Error ? err.message : 'unknown';
+    unavailable.push('Campaign standing could not be checked');
   }
   checks.standing = standingOk;
 
-  const approved = reasons.length === 0;
+  const outcome = autoReviewOutcome(reasons, unavailable);
 
   await supabase
     .from('campaign_creatives')
     .update({
-      is_approved: approved,
+      is_approved: outcome.approved,
       auto_reviewed: true,
-      auto_review_reasons: approved ? null : reasons,
+      auto_review_reasons: outcome.approved ? null : outcome.summary,
       auto_review_checks: checks,
-      rejection_reason: approved ? null : reasons.join('; '),
+      // NULL when nothing actually failed. A creative waiting on a check that
+      // could not run must not carry a rejection message the advertiser reads
+      // as a verdict on their ad.
+      rejection_reason: outcome.failures.length > 0 ? outcome.failures.join('; ') : null,
       reviewed_at: new Date().toISOString(),
     })
     .eq('id', creative.id);
@@ -225,11 +272,11 @@ async function reviewOne(supabase: Supa, creative: Record<string, unknown>) {  c
   try {
     await supabase.from('security_audit_logs').insert({
       event_type: 'automation',
-      action: approved ? 'creative_auto_approved' : 'creative_auto_rejected',
+      action: outcome.auditAction,
       resource: 'campaign_creatives',
       identifier: String(creative.id),
       severity: 'info',
-      details: { checks, reasons },
+      details: { checks, reasons, unavailable },
       user_id: null,
       timestamp: new Date().toISOString(),
     });
@@ -237,7 +284,7 @@ async function reviewOne(supabase: Supa, creative: Record<string, unknown>) {  c
     // ignore audit failures
   }
 
-  return approved;
+  return outcome.approved;
 }
 
 Deno.serve(async (req) => {

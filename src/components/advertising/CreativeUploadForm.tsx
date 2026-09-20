@@ -12,6 +12,7 @@ import { supabase } from "@/integrations/supabase/client";
 import { useToast } from "@/hooks/use-toast";
 import { createLogger } from '@/lib/logger';
 import { notifyAdmins } from "@/hooks/useCampaignNotifications";
+import { describeAutoReview } from "@/lib/creativeReviewVerdict";
 
 const log = createLogger('CreativeUploadForm');
 
@@ -30,6 +31,41 @@ const log = createLogger('CreativeUploadForm');
  * without it.
  */
 const UPLOADABLE_STATUSES = ["pending_creative", "pending_review", "active"] as const;
+
+/**
+ * How long to wait for the auto-review's verdict before saying it is queued
+ * (WEB-ADS-006 AC3).
+ *
+ * The verdict is written by an AFTER INSERT trigger calling
+ * campaign-creative-review, so it arrives out of band and usually within a
+ * couple of seconds. Six seconds is the ceiling on making somebody watch a
+ * spinner for it; past that the honest answer is "queued", which is also the
+ * permanently correct answer while the function is undeployed. Nothing here
+ * fails if the verdict never comes.
+ */
+const REVIEW_POLL_ATTEMPTS = 6;
+const REVIEW_POLL_INTERVAL_MS = 1000;
+
+/** The row's review columns, or null if it cannot be read. Never throws. */
+async function pollAutoReview(creativeId: string) {
+  for (let attempt = 0; attempt < REVIEW_POLL_ATTEMPTS; attempt++) {
+    await new Promise((resolve) => setTimeout(resolve, REVIEW_POLL_INTERVAL_MS));
+    const { data, error } = await supabase
+      .from('campaign_creatives')
+      .select('auto_reviewed, is_approved, auto_review_reasons, rejection_reason')
+      .eq('id', creativeId)
+      .maybeSingle();
+    // Logged rather than swallowed: the upload already succeeded, so this must
+    // not surface as a failure, but a read that is failing every time is not
+    // the same thing as a review that has not finished yet.
+    if (error) {
+      log.warn('autoReview', 'Could not read the review verdict', { data: error });
+      return null;
+    }
+    if (data?.auto_reviewed) return data;
+  }
+  return null;
+}
 
 interface CreativeUploadFormProps {
   campaignId: string;
@@ -184,8 +220,9 @@ export function CreativeUploadForm({
       // admin approves and the object is copied into the public bucket.
       const reviewPath = await uploadToStorage(uploadedFile!);
 
-      // Create creative record
-      const { error: createError } = await supabase
+      // Create creative record. The id comes back so the verdict the AFTER
+      // INSERT trigger's review writes onto this row can be read below.
+      const { data: created, error: createError } = await supabase
         .from('campaign_creatives')
         .insert({
           campaign_id: campaignId,
@@ -201,7 +238,9 @@ export function CreativeUploadForm({
           file_type: uploadedFile!.type,
           dimensions_width: imageMetadata?.width,
           dimensions_height: imageMetadata?.height,
-        });
+        })
+        .select('id')
+        .single();
 
       if (createError) throw createError;
 
@@ -223,9 +262,14 @@ export function CreativeUploadForm({
         { placementType }
       );
 
+      // The seconds-later verdict the upload flow promises. Falls back to
+      // "queued" when the review has not answered, which is the honest message
+      // and the permanent one while campaign-creative-review is undeployed.
+      const verdict = describeAutoReview(created?.id ? await pollAutoReview(created.id) : null);
       toast({
-        title: "Creative uploaded successfully!",
-        description: "Your ad creative has been submitted for review. You'll be notified when it's approved.",
+        title: verdict.title,
+        description: verdict.description,
+        variant: verdict.variant === 'destructive' ? 'destructive' : undefined,
       });
 
       if (onSuccess) {
