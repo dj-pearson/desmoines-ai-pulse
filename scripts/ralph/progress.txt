@@ -3341,3 +3341,53 @@ LEARNINGS FOR FUTURE ITERATIONS
 7. CHANGE BOTH COPIES OF AN AGENT. Six of the twelve fixes were in
    _shared/agents/*.ts and six in the deployed agent-*/index.ts twins.
    check-agent-pair-drift compares 34 pairs and would have caught a miss.
+
+================================================================================
+2026-09-20  WEB-LEGAL-012  (claude/admiring-cori-ukwzcp)
+An invariant in a header is enforced by nothing
+================================================================================
+
+AC6 turned out to be done already, and done well - paired per-agent tests, one
+per family. What was missing is what that test's own header admits it cannot
+catch: a sender added later that never checks consent at all.
+
+sendNurtureEmail says "Callers MUST have already checked consent/unsubscribe".
+Thirteen callers, sixteen calls, all compliant - so the new check is a gate,
+not a ratchet.
+
+LEARNINGS FOR FUTURE ITERATIONS
+
+1. READ THE STORY'S EXISTING TESTS BEFORE WRITING ONE. AC6 asked for a
+   regression test per family; one existed, with paired positive and negative
+   assertions, and a header that stated its own blind spot precisely. The
+   useful work was the blind spot, not the AC.
+
+2. AN INVARIANT WRITTEN IN A HEADER IS A HOPE. "Callers MUST have already
+   checked consent" is the correct design - the helper genuinely cannot decide
+   policy, because the opt-out differs by audience - but a MUST that nothing
+   checks is a comment. The fix is not to move the logic into the helper; it
+   is to check the callers.
+
+3. MEASURE BEFORE CHOOSING GATE OR RATCHET. All thirteen callers complied, so
+   a baseline would have been an empty file and a ceremony. A ratchet on zero
+   is a gate with extra steps.
+
+4. A RULE THAT ACCEPTS ONE CONTROL WOULD HAVE FAILED THE CORRECT CODE.
+   outreach-sequencer mails business contacts from crm_leads; its opt-out is
+   outreach_suppression, not messagingAllowed. Demanding the user-facing gate
+   there would have reported the right implementation as wrong, which is how a
+   check gets disabled.
+
+5. STRIP COMMENTS, TWELFTH OCCURRENCE - and here it is load-bearing rather
+   than cosmetic. These files discuss their gates at length. A check reading
+   the discussion would pass a sender that has neither the gate nor an excuse.
+   There is a test case for exactly that.
+
+6. REFUSE TO PASS ON AN EMPTY SCAN. If sendNurtureEmail is renamed, zero
+   callers found is not "every sender complies". Several checks in this repo
+   have had that failure mode; this one exits 1 and says the helper may have
+   moved.
+
+7. SAY WHAT THE CHECK CANNOT SEE. A file with two marketing sends that gates
+   one of them passes. Writing that down in the header is what stops the next
+   person treating a green check as proof of something it never claimed.
