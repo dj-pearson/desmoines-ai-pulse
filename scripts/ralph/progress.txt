@@ -3196,3 +3196,54 @@ LEARNINGS FOR FUTURE ITERATIONS
 5. AND TEST THE ABSENCES. The real index.html has NO static og:url, on purpose
    (WEB-SEO-002). A rewrite that quietly depended on one being present would
    have passed a fixture that had one.
+
+================================================================================
+2026-09-19  WEB-SEO-006, second pass  (claude/admiring-cori-ukwzcp)
+The two sinks want opposite things
+================================================================================
+
+The entity shell rewrite - the one that gives an un-prerendered entity URL its
+own title, og:*, and a real Event or Restaurant node - had no coverage. Running
+it through lol-html the first time found that every `<title>` on that path has
+been DOUBLE-ESCAPED: "Fong's Pizza & Tiki Lounge" shipped as "Fong's Pizza
+&amp; Tiki Lounge" to every crawler that reached it.
+
+LEARNINGS FOR FUTURE ITERATIONS
+
+1. ESCAPING IS A PROPERTY OF THE SINK, NOT OF THE VALUE. lol-html does NOT
+   escape what setAttribute is given and DOES escape what chunk.replace() is
+   given. One pre-escaped string fed to both is wrong in one of them, always.
+   The code escaped once and used the result in seven places; six were right.
+
+2. AND THE WRONG DIRECTION IS NOT SYMMETRICAL. Double-escaping a title is
+   ugly. Under-escaping an attribute TRUNCATES it - the control output reads
+   `content="Fong's Pizza & Tiki <Lounge` because the raw `<` starts a tag. One
+   is embarrassing, the other loses the value.
+
+3. A NEGATIVE CONTROL THAT FAILS THE SAME ASSERTIONS AS ANOTHER IS ONE
+   CONTROL. Three here, failing 2, 1 and 3 different assertions. That spread is
+   the evidence the suite covers three independent things rather than one thing
+   three times.
+
+4. PARSE THE THING YOU ARE ASSERTING ABOUT. My first "no description key when
+   the row has none" grepped the whole document and passed on the shell's own
+   <meta name="description">. Extracting the injected ld+json block and
+   JSON.parse-ing it made every node assertion mean what it says.
+
+5. A SOURCE-TEXT TEST IS A LIEN ON THE SHAPE OF THE CODE. Extracting
+   entityShellRewrites broke middleware-detail-status.test.mjs, which asserted
+   `class JsonLdInjector` and `.on("head", new JsonLdInjector(node))` by name.
+   That is the cost of asserting on source rather than behaviour, and it is
+   worth paying only for invariants behaviour cannot express - "this path never
+   removes" is one; "this class exists" is not.
+
+6. STRIP COMMENTS, ELEVENTH OCCURRENCE. The repointed assertion slices the
+   source from entityShellRewrites to entityShell and checks it contains no
+   `remove` - and entityShell's doc comment recounts the old branch that
+   "removed every ld+json block". Every single time.
+
+7. TWO NO-OPS FOUND WHILE READING: index.html has no <meta name="robots">, so
+   the 404/410 branch's rewrite of it never fires (the X-Robots-Tag header is
+   what actually carries the noindex), and class TextSetter was already dead.
+   Reading a file closely enough to test it is how you find the parts that do
+   nothing.

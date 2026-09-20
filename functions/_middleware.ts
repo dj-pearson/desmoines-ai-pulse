@@ -206,13 +206,6 @@ class AttrSetter {
   }
 }
 
-class TextSetter {
-  constructor(private value: string) {}
-  element(el: any) {
-    el.setInnerContent(this.value);
-  }
-}
-
 class Remover {
   element(el: any) {
     el.remove();
@@ -324,14 +317,38 @@ async function resolveEntityCached(
  * generic website with no structured data. Here the og:type follows the segment
  * and a real Event or Restaurant node is injected.
  */
-function entityShell(
-  shell: Response,
-  opts: { pageUrl: string; sbBase: string; type: string; entity: Resolved },
-): Response {
+/**
+ * What the entity shell rewrite does, as data (WEB-SEO-006, WEB-SEO-030 AC3).
+ *
+ * SPLIT OUT FOR THE SAME REASON selfCanonicalRewrites IS, and it found a live
+ * defect the moment it could be run: `title` was pre-escaped with escapeHtml
+ * AND THEN handed to a TEXT replacement, which escapes again. A restaurant
+ * called "Fong's Pizza & Tiki Lounge" shipped a `<title>` reading
+ * "Fong's Pizza &amp; Tiki Lounge" to every crawler that reached this path.
+ *
+ * The two sinks need opposite things and that is the whole trap:
+ *   ATTRIBUTES  lol-html does NOT escape what setAttribute is given, so the
+ *               value must arrive escaped or a title containing a quote breaks
+ *               out of the attribute.
+ *   TEXT        chunk.replace() DOES escape, so the value must arrive raw.
+ * Both directions are asserted in middleware-entity-shell.test.mjs.
+ */
+export type EntityShellRewrite =
+  | { selector: string; setAttribute: string; to: string }
+  | { selector: string; setText: string }
+  | { selector: string; appendHtml: string };
+
+export function entityShellRewrites(opts: {
+  pageUrl: string;
+  sbBase: string;
+  type: string;
+  entity: { id: string; title: string; description?: string; startDate?: string };
+}): EntityShellRewrite[] {
   const { pageUrl, sbBase, type, entity } = opts;
   const ogImage = `${sbBase}/functions/v1/og-image/${type}/${entity.id}`;
+  // Escaped for the attribute sinks; the text sink below takes the raw value.
   const title = escapeHtml(entity.title);
-  const desc = escapeHtml(entity.description);
+  const desc = escapeHtml(entity.description ?? "");
 
   const SCHEMA_TYPE: Record<string, string> = {
     event: "Event",
@@ -355,28 +372,58 @@ function entityShell(
   // worse than an Event without one.
   if (type === "event" && entity.startDate) node.startDate = entity.startDate;
 
-  let rewriter = new HTMLRewriter()
-    .on('link[rel="canonical"]', new AttrSetter("href", pageUrl))
-    .on('meta[property="og:url"]', new AttrSetter("content", pageUrl))
-    .on('meta[property="og:type"]', new AttrSetter("content", OG_TYPE[type] || "website"))
-    .on('meta[property="og:image"]', new AttrSetter("content", ogImage))
-    .on('meta[property="og:image:secure_url"]', new AttrSetter("content", ogImage))
-    .on('meta[name="twitter:image"]', new AttrSetter("content", ogImage))
+  const rules: EntityShellRewrite[] = [
+    { selector: 'link[rel="canonical"]', setAttribute: "href", to: pageUrl },
+    { selector: 'meta[property="og:url"]', setAttribute: "content", to: pageUrl },
+    { selector: 'meta[property="og:type"]', setAttribute: "content", to: OG_TYPE[type] || "website" },
+    { selector: 'meta[property="og:image"]', setAttribute: "content", to: ogImage },
+    { selector: 'meta[property="og:image:secure_url"]', setAttribute: "content", to: ogImage },
+    { selector: 'meta[name="twitter:image"]', setAttribute: "content", to: ogImage },
     // The entity's own node goes in the head. Nothing is REMOVED here: the
     // shell's blocks describe the site, and a page may carry both.
-    .on("head", new JsonLdInjector(node));
+    { selector: "head", appendHtml: jsonLdScript(node) },
+  ];
 
-  if (title) {
-    rewriter = rewriter
-      .on("title", new TextReplacer(title))
-      .on('meta[property="og:title"]', new AttrSetter("content", title))
-      .on('meta[name="twitter:title"]', new AttrSetter("content", title));
+  if (entity.title) {
+    rules.push(
+      // RAW, not escaped: this is a text sink. See the header.
+      { selector: "title", setText: entity.title },
+      { selector: 'meta[property="og:title"]', setAttribute: "content", to: title },
+      { selector: 'meta[name="twitter:title"]', setAttribute: "content", to: title },
+    );
   }
-  if (desc) {
-    rewriter = rewriter
-      .on('meta[name="description"]', new AttrSetter("content", desc))
-      .on('meta[property="og:description"]', new AttrSetter("content", desc))
-      .on('meta[name="twitter:description"]', new AttrSetter("content", desc));
+  if (entity.description) {
+    rules.push(
+      { selector: 'meta[name="description"]', setAttribute: "content", to: desc },
+      { selector: 'meta[property="og:description"]', setAttribute: "content", to: desc },
+      { selector: 'meta[name="twitter:description"]', setAttribute: "content", to: desc },
+    );
+  }
+  return rules;
+}
+
+/**
+ * The shell, wearing the entity's identity (WEB-SEO-020 AC4, WEB-SEO-030 AC3).
+ *
+ * This is what a URL gets when it resolves but missed the prerender budget. The
+ * branch this replaces set og:type to "website" for everything except articles
+ * and removed every ld+json block, so an event page announced itself as a
+ * generic website with no structured data. Here the og:type follows the segment
+ * and a real Event or Restaurant node is injected.
+ */
+function entityShell(
+  shell: Response,
+  opts: { pageUrl: string; sbBase: string; type: string; entity: Resolved },
+): Response {
+  let rewriter = new HTMLRewriter();
+  for (const rule of entityShellRewrites(opts)) {
+    if ("appendHtml" in rule) {
+      rewriter = rewriter.on(rule.selector, new HtmlAppender(rule.appendHtml));
+    } else if ("setText" in rule) {
+      rewriter = rewriter.on(rule.selector, new TextReplacer(rule.setText));
+    } else {
+      rewriter = rewriter.on(rule.selector, new AttrSetter(rule.setAttribute, rule.to));
+    }
   }
 
   return new Response(rewriter.transform(shell).body, {
@@ -388,13 +435,18 @@ function entityShell(
   });
 }
 
-class JsonLdInjector {
-  constructor(private node: Record<string, unknown>) {}
+/**
+ * The JSON-LD block, with `<` escaped so a title containing `</script>` cannot
+ * end the block early and inject markup.
+ */
+export function jsonLdScript(node: Record<string, unknown>): string {
+  return `<script type="application/ld+json">${JSON.stringify(node).replace(/</g, "\\u003c")}</script>`;
+}
+
+class HtmlAppender {
+  constructor(private html: string) {}
   element(el: any) {
-    el.append(
-      `<script type="application/ld+json">${JSON.stringify(this.node).replace(/</g, "\\u003c")}</script>`,
-      { html: true },
-    );
+    el.append(this.html, { html: true });
   }
 }
 
