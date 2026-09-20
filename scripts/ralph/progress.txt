@@ -3892,3 +3892,53 @@ Learnings for future iterations:
 5. WEIGHT A REVIEW LIST'S TESTS TOWARD FALSE POSITIVES. Every wrong entry is a
    correct row a human is invited to "fix", so six of the cases are rows that
    must come back OK and two are the ones that must be caught.
+
+================================================================================
+2026-09-20 - WEB-ADS-009: a business can claim its own listing
+================================================================================
+
+grep for claim/business_claims/useClaim across src/ returned deal claims and
+agent-task claims and nothing else. An owner who found a wrong phone number on
+their own listing had no way to tell us and no way to fix it.
+
+Changed:
+  supabase/migrations/20260920000005_business_claims.sql  new, table + 4 fns
+  src/hooks/useBusinessClaim.ts                           new
+  src/components/business/ClaimListingCta.tsx             new
+  src/pages/RestaurantDetails.tsx, AttractionDetails.tsx  the CTA
+  scripts/__tests__/business-claims.test.mjs              new, 41 checks
+
+Learnings for future iterations:
+
+1. RLS RESTRICTS ROWS, NOT COLUMNS, AND THAT DECIDES THE DESIGN. An UPDATE
+   policy scoped to "the listing you verified" reads as exactly what AC4 asks
+   for and would also hand an owner is_featured, is_sponsored, sponsored_until,
+   rating and popularity_score. Two of those are paid placement, so the claim
+   button would have been a free advertising button. No UPDATE policy on the
+   listing tables; a SECURITY DEFINER function with a fixed column list instead.
+
+2. REFUSE AN UNKNOWN FIELD, DO NOT DROP IT. A whitelist that silently ignores
+   what it does not recognise is how somebody spends ten minutes correcting
+   their hours and never finds out the form threw them away.
+
+3. VERIFICATION MUST NEED BOTH SIDES TO EXIST. `site_domain = email_domain` with
+   null-tolerant comparison verifies every listing that has no website. The
+   negative control for it is one line and it is the difference between a
+   verification and a giveaway.
+
+4. WHEN A PARSER CANNOT BE SURE, RETURN NULL. claim_domain_of compares the last
+   two labels and would match two businesses under one co.uk, so a host with
+   fewer than two labels refuses rather than guessing. A false verification
+   hands somebody else's business to a stranger.
+
+5. PENDING IS THE COMMON CASE, SO ITS COPY IS THE IMPORTANT COPY. Most small
+   businesses use a gmail address and cannot auto-verify. The state that says
+   "a person is checking it" is the one most claimants will see, and making it
+   read like success is the same mistake as an approval email that says an
+   event is live when nothing published it.
+
+6. AN ASSERTION THAT CANNOT TELL A READ FROM A WRITE IS NOT AN ASSERTION.
+   "claim_listing never returns rejected" was written as "the body contains no
+   'rejected'" and failed immediately: the open-claim lookup filters on
+   `status <> 'rejected'`. Same family as a check firing on its own comment -
+   match what the code DOES, not which words appear in it.

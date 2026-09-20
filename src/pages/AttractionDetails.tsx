@@ -18,6 +18,7 @@ import { OpenStatusChip } from "@/components/OpenStatusChip";
 import ShareDialog from "@/components/ShareDialog";
 import { FAQSection } from "@/components/FAQSection";
 import { RatingSystem } from "@/components/RatingSystem";
+import { ClaimListingCta } from "@/components/business/ClaimListingCta";
 import { BackToTop } from "@/components/BackToTop";
 import EnhancedAttractionSEO from "@/components/EnhancedAttractionSEO";
 import SEOHead from "@/components/SEOHead";
@@ -620,6 +621,15 @@ export default function AttractionDetails() {
               </section>
             </CardContent>
           </Card>
+
+          {/* Own this business? (WEB-ADS-009) */}
+          <div className="mb-8">
+            <ClaimListingCta
+              listingType="attraction"
+              listingId={attraction.id}
+              listingName={attraction.name}
+            />
+          </div>
 
           {/* Ratings & Reviews (WEB-FEAT-010) */}
           <div id="reviews" className="mb-8">

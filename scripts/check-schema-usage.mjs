@@ -139,6 +139,13 @@ const PENDING_MIGRATIONS = [
   { rpc: 'set_campaign_paused', migration: '20260920000003' },
   { rpc: 'request_campaign_refund', migration: '20260920000003' },
   { rpc: 'renew_campaign', migration: '20260920000004' },
+  // Business listing claims (WEB-ADS-009). The table read is cast, so only the
+  // RPC is visible to this scanner; both are listed so the "landed" check asks
+  // for them back once the types carry them. useBusinessClaim treats a 42P01 on
+  // the table as "no claim" rather than throwing, so a detail page still
+  // renders in the pending window.
+  { rpc: 'claim_listing', migration: '20260920000005' },
+  { table: 'business_claims', migration: '20260920000005' },
 ];
 
 const isPending = (table, column) =>

@@ -41,6 +41,7 @@ import { LastUpdatedBadge } from "@/components/LastUpdatedBadge";
 import { NearbyContent } from "@/components/NearbyContent";
 import { RestaurantMenuSection } from "@/components/RestaurantMenuSection";
 import { RatingSystem } from "@/components/RatingSystem";
+import { ClaimListingCta } from "@/components/business/ClaimListingCta";
 import { CollapsibleSection } from "@/components/CollapsibleSection";
 import { SpriteIcon } from "@/components/ui/SpriteIcon";
 import { DETAIL_STALE_TIME, detailQueryKey } from "@/lib/detailQueryKeys";
@@ -892,6 +893,15 @@ export default function RestaurantDetails() {
               )}
             </CardContent>
           </Card>
+
+          {/* Own this business? (WEB-ADS-009) */}
+          <div className="mb-8">
+            <ClaimListingCta
+              listingType="restaurant"
+              listingId={restaurant.id}
+              listingName={restaurant.name}
+            />
+          </div>
 
           {/* Ratings & Reviews (WEB-FEAT-010) */}
           <div id="reviews" className="mb-8">
