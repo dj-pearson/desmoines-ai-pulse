@@ -147,6 +147,10 @@ const PENDING_MIGRATIONS = [
   { rpc: 'claim_listing', migration: '20260920000005' },
   { rpc: 'review_business_claim', migration: '20260920000005' },
   { table: 'business_claims', migration: '20260920000005' },
+  // The Stripe customer remembered on the profile (WEB-ADS-014 AC6). Until it
+  // exists the read 42703s, which create-campaign-checkout logs and falls back
+  // from to the email lookup - the behaviour that shipped before this.
+  { table: 'profiles', column: 'stripe_customer_id', migration: '20260920000006' },
 ];
 
 const isPending = (table, column) =>

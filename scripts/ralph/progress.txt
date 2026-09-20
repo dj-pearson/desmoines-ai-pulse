@@ -3972,3 +3972,48 @@ Learnings for future iterations:
 4. A SCREEN NOTHING LINKS TO IS A SCREEN NOBODY OPENS. The nav entry is asserted
    alongside the route, because a route registered and unlinked is how a
    finished feature stays undiscovered.
+
+================================================================================
+2026-09-20 - WEB-ADS-014 AC6: one intent, one checkout session, one customer
+================================================================================
+
+create-campaign-checkout could be called twice for one intent and produce two
+payable URLs, and it found the Stripe customer by listing on email - which is
+not a unique key in Stripe.
+
+Changed:
+  supabase/migrations/20260920000006_profiles_stripe_customer_id.sql  new
+  supabase/functions/create-campaign-checkout/index.ts   key + customer
+  scripts/__tests__/checkout-idempotency.test.mjs        new, 16 checks
+
+Learnings for future iterations:
+
+1. AN IDEMPOTENCY KEY IS ONLY AS GOOD AS WHAT IS IN IT. Keying on the STORED
+   total would let Stripe replay a price the rate card no longer agrees with -
+   WEB-ADS-003 from the other direction. The authoritative total is in the key
+   precisely so that a rate change produces a NEW session rather than a
+   replayed old amount.
+
+2. IT GOES IN STRIPE'S SECOND ARGUMENT. `idempotencyKey` inside the session
+   object is an unknown field that does nothing, and nothing fails. There is an
+   assertion on its position for that reason.
+
+3. EMAIL IS NOT A UNIQUE KEY IN STRIPE. customers.list({ email }) returning
+   "the first one" can attach a returning advertiser to a different customer
+   record than the one holding their payment history. Store the id; only ever
+   fill a NULL, because overwriting is how you repoint somebody.
+
+4. NOT EVERY COLUMN WANTS A UNIQUE INDEX. One here would turn a duplicate left
+   by a race into a 23505 on somebody's checkout - failing a payment to protect
+   tidiness. The conditional write is the part that has to be safe.
+
+5. WEB-SEC-023 FOR THE FIFTH TIME: profiles.user_id is the auth id, profiles.id
+   is the row PK. Keyed wrong, the new lookup matches nothing silently and
+   every checkout falls back to the old path - a change that appears to ship
+   and does nothing.
+
+6. DECLINING HALF AN AC IS A DECISION, SO WRITE IT DOWN. "Fold CreativeUploader
+   into the form" moves 370 lines into an already 500-line component, forces an
+   exported type somewhere else, and buys nothing measurable; the duplication
+   it was aimed at does not exist, because both surfaces already read
+   src/lib/placementSpecs.ts.
