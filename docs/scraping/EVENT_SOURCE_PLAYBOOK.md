@@ -386,10 +386,12 @@ changes what the homepage shows.
 - **Wooly's / First Fleet** — First Fleet books several rooms (Wooly's, xBk).
   Events from the all-venues listing must keep their published venue; the
   Wooly's default applies only when the page names none. Covered by a test.
-- **Multi-performance runs** — a Playhouse production or a Symphony weekend has
-  several dated performances. Each is correctly its own row, but the events
-  dedupe key is `title + venue` (`checkForDuplicates`), which collapses them.
-  Verify whether the run's later performances are actually reaching the table.
+- **Multi-performance runs** — *resolved 2026-09-22.* `firecrawl-scraper`
+  deduped on `title + venue` with no date, so nights two onward of a run never
+  reached the table. It now reads the existing rows around the dates it is
+  writing once (`_shared/existingEvents.ts`) and judges every item with the
+  same four tiers as `ingest-events` (`_shared/eventDedup.ts`), then writes in
+  chunks of 50 with `ON CONFLICT (title, venue, event_local_date) DO NOTHING`.
 
 ## 5. Test coverage
 
