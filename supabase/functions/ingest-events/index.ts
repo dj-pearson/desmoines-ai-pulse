@@ -28,6 +28,7 @@ import { createClient } from "https://esm.sh/@supabase/supabase-js@2";
 import { requireAdminOrApiKey } from "../_shared/apiKeyAuth.ts";
 import { parseEventDateTime } from "../_shared/eventDateTime.ts";
 import { dedupWindow, loadExistingEvents } from "../_shared/existingEvents.ts";
+import { findKnownVenue, venueCoordinates } from "../_shared/knownVenues.ts";
 import { planIngest, type IncomingItem, type Provenance } from "./plan.ts";
 import { runJob } from "../_shared/jobRunner.ts";
 
@@ -119,6 +120,17 @@ Deno.serve(async (req: Request) => {
     ? (body as { listingUrl?: string }).listingUrl as string
     : "";
   const plan = planIngest(items, existing, fallbackUrl);
+
+  // COORDINATES AT INGEST (WEB-BE-050). Every hub row reached the table with no
+  // lat/lng, so none of them appeared on the map or in "near me" until one of
+  // the nightly backfills geocoded it. Coordinates only, as knownVenues.ts asks
+  // of a new caller: the venue name the hub sent is kept, and so the dedup
+  // above - which compared that name - still describes what is written.
+  // findKnownVenue caches known_venues per isolate, so this is one query.
+  for (const row of plan.rows) {
+    const venueText = String(row.venue || row.location || "");
+    Object.assign(row, venueCoordinates(await findKnownVenue(supabase, venueText)));
+  }
 
   let inserted = 0;
   let constraintDuplicates = 0;
