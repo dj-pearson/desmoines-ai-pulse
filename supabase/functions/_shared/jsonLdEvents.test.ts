@@ -44,7 +44,9 @@ Deno.test('walks @graph, skips non-events, handles date-only and free price', ()
   const r = extractEventsFromJsonLd(html, 'https://venue.com/');
   assert(r.length === 2, `two events (WebSite skipped), got ${r.length}`);
   assert(r[0].category === 'Music', 'MusicEvent -> Music');
-  assert(r[0].date === '2026-09-01 19:00:00', 'date-only defaults to 19:00');
+  // WEB-BE-037: a date-only value stays date-only, so parseEventDateTime can
+  // stamp NO_TIME_MARKER instead of this module inventing 7pm.
+  assert(r[0].date === '2026-09-01', `date-only stays date-only, got ${r[0].date}`);
   assert(r[0].price === 'Free', 'price 0 -> Free');
   assert(r[1].date === '2026-09-05 20:30:00', 'HH:MM time preserved');
 });
@@ -73,7 +75,7 @@ Deno.test('dedupes events with the same title on the same calendar day', () => {
 });
 
 Deno.test('normalizeJsonLdDate handles the common ISO shapes', () => {
-  assert(normalizeJsonLdDate('2026-08-15') === '2026-08-15 19:00:00', 'date-only');
+  assert(normalizeJsonLdDate('2026-08-15') === '2026-08-15', 'date-only stays date-only (WEB-BE-037)');
   assert(normalizeJsonLdDate('2026-08-15T09:30') === '2026-08-15 09:30:00', 'no seconds');
   assert(normalizeJsonLdDate('2026-08-15T09:30:45-05:00') === '2026-08-15 09:30:45', 'with offset');
   assert(normalizeJsonLdDate('not a date') === null, 'garbage -> null');
