@@ -332,3 +332,55 @@ export function isDuplicateEvent(
 
   return { isDuplicate: false };
 }
+
+/**
+ * isDuplicateEvent over a set bucketed by Central calendar day, for writers
+ * that check hundreds of items against thousands of rows.
+ *
+ * Every tier either compares Central days directly (3, 4) or compares UTC days
+ * (1 via the fingerprint, 2 via toDateString), and a UTC day never straddles
+ * more than two Central days - so only the item's own day and its neighbours
+ * can hold a match, and the verdict is identical to a scan of the whole list.
+ *
+ * `add` exists for the rows a run inserts: the same event reaching one run
+ * twice (JSON-LD and the model both reading one page) must collapse against
+ * the first copy, which is not in the database yet.
+ */
+export interface DedupIndex<T extends ExistingEvent = ExistingEvent> {
+  find(newEvent: DedupEvent): DuplicateVerdict & { existingEvent?: T };
+  add(event: T): void;
+  readonly size: number;
+}
+
+export function createDedupIndex<T extends ExistingEvent>(existing: T[]): DedupIndex<T> {
+  const buckets = new Map<string, T[]>();
+  let size = 0;
+
+  const add = (event: T) => {
+    const day = centralCalendarDate(event.date);
+    const bucket = buckets.get(day);
+    if (bucket) bucket.push(event);
+    else buckets.set(day, [event]);
+    size++;
+  };
+
+  const neighbours = (instant: Date): string[] => {
+    const day = centralCalendarDate(instant);
+    const [y, m, d] = day.split("-").map(Number);
+    const shift = (n: number) => new Date(Date.UTC(y, m - 1, d + n)).toISOString().slice(0, 10);
+    return [shift(-1), day, shift(1)];
+  };
+
+  for (const e of existing) add(e);
+
+  return {
+    find(newEvent) {
+      const candidates = neighbours(newEvent.date).flatMap((d) => buckets.get(d) ?? []);
+      return isDuplicateEvent(newEvent, candidates) as DuplicateVerdict & { existingEvent?: T };
+    },
+    add,
+    get size() {
+      return size;
+    },
+  };
+}

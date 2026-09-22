@@ -26,10 +26,9 @@
  */
 import { createClient } from "https://esm.sh/@supabase/supabase-js@2";
 import { requireAdminOrApiKey } from "../_shared/apiKeyAuth.ts";
-import {
-  generateEventFingerprint,
-  type ExistingEvent,
-} from "../_shared/eventDedup.ts";
+import { parseEventDateTime } from "../_shared/eventDateTime.ts";
+import { dedupWindow, loadExistingEvents } from "../_shared/existingEvents.ts";
+import { findKnownVenue, venueCoordinates } from "../_shared/knownVenues.ts";
 import { planIngest, type IncomingItem, type Provenance } from "./plan.ts";
 import { runJob } from "../_shared/jobRunner.ts";
 
@@ -38,10 +37,6 @@ const corsHeaders = {
   "Access-Control-Allow-Headers":
     "authorization, x-client-info, apikey, content-type, x-api-key",
 };
-
-/** How far back existing rows are loaded for duplicate detection. Matches what
- *  the cloud path uses, so the two producers see the same window. */
-const DEDUP_WINDOW_DAYS = 60;
 
 /** A single request may not write more than this. Not a rate limit — a blast
  *  radius. The hub sends six sources' worth of events; a payload an order of
@@ -98,33 +93,44 @@ Deno.serve(async (req: Request) => {
   }
   const supabase = createClient(supabaseUrl, supabaseKey);
 
-  const since = new Date(Date.now() - DEDUP_WINDOW_DAYS * 24 * 60 * 60 * 1000);
-  const { data: existingRows, error: readError } = await supabase
-    .from("events")
-    .select("id, title, date, venue, source_url")
-    .gte("date", since.toISOString())
-    .order("date", { ascending: false });
-
-  // A FAILED READ REFUSES THE WRITE. Treating an unreadable existing set as an
-  // empty one would make every dedup tier pass and duplicate the whole payload.
-  if (readError) {
-    return json({ error: `could not read existing events for duplicate detection, so nothing was written: ${readError.message}` }, 503);
+  // The existing rows AROUND THE DATES IN THIS PAYLOAD, every one of them.
+  //
+  // This read "the last 60 days" - i.e. rows dated from two months ago up to
+  // whenever - ordered newest first, in one request. PostgREST stops that at
+  // max-rows (1000) without saying so, so once the calendar held more than a
+  // thousand rows from two months back onward, the dedup set was the thousand
+  // furthest-future ones and the near-term events the hub actually sends were
+  // judged against nothing. loadExistingEvents pages through the window the
+  // payload needs, +/- a day, which is all any dedup tier ever compares.
+  const window = dedupWindow(
+    items
+      .map((i) => (i && typeof i.date === "string" ? parseEventDateTime(i.date)?.event_start_utc : null))
+      .filter((d): d is Date => d instanceof Date),
+  );
+  let existing;
+  try {
+    existing = window ? await loadExistingEvents(supabase, window) : [];
+  } catch (readError) {
+    // A FAILED READ REFUSES THE WRITE. Treating an unreadable existing set as an
+    // empty one would make every dedup tier pass and duplicate the whole payload.
+    return json({ error: `could not read existing events for duplicate detection, so nothing was written: ${(readError as Error).message}` }, 503);
   }
-
-  const existing: ExistingEvent[] = (existingRows || []).map((e: ExistingEvent) => ({
-    ...e,
-    fingerprint: generateEventFingerprint({
-      title: e.title,
-      date: new Date(e.date),
-      venue: e.venue,
-      source_url: e.source_url,
-    }),
-  }));
 
   const fallbackUrl = typeof (body as { listingUrl?: string }).listingUrl === "string"
     ? (body as { listingUrl?: string }).listingUrl as string
     : "";
   const plan = planIngest(items, existing, fallbackUrl);
+
+  // COORDINATES AT INGEST (WEB-BE-050). Every hub row reached the table with no
+  // lat/lng, so none of them appeared on the map or in "near me" until one of
+  // the nightly backfills geocoded it. Coordinates only, as knownVenues.ts asks
+  // of a new caller: the venue name the hub sent is kept, and so the dedup
+  // above - which compared that name - still describes what is written.
+  // findKnownVenue caches known_venues per isolate, so this is one query.
+  for (const row of plan.rows) {
+    const venueText = String(row.venue || row.location || "");
+    Object.assign(row, venueCoordinates(await findKnownVenue(supabase, venueText)));
+  }
 
   let inserted = 0;
   let constraintDuplicates = 0;

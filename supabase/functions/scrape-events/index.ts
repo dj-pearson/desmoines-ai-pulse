@@ -111,7 +111,7 @@ function shouldSkipJobScraping(
 async function scrapeJobWithFirecrawl(
   job: ScrapingJob,
   supabase: any
-): Promise<{ success: boolean; eventsFound: number; errors: string[]; counts: SourceCounts }> {
+): Promise<{ success: boolean; eventsFound: number; errors: string[]; counts: SourceCounts; unchanged?: boolean }> {
   // WEB-BE-043. `eventsFound` alone cannot tell a dark source from a quiet one:
   // both are zero. The four counts come straight off firecrawl-scraper's
   // response so the ledger records what the source actually did.
@@ -157,6 +157,9 @@ async function scrapeJobWithFirecrawl(
           duplicates: data.duplicates ?? 0,
           errors: data.errors ?? 0,
         },
+        // The page had not changed since its last clean run, so the model was
+        // not called and nothing could be inserted (pageFingerprint.ts).
+        unchanged: data.modelSkipped === "unchanged",
       };
     } else {
       return {
@@ -891,7 +894,9 @@ serve(async (req) => {
 
       totalEventsFound += scrapeResult.eventsFound;
       totalErrors += scrapeResult.errors.length;
-      sources[job.name] = scrapeResult.counts;
+      // An unchanged page stays out of the per-source counts, as it does in
+      // firecrawl-scraper's own ledger: its zero is not a dark source.
+      if (!scrapeResult.unchanged) sources[job.name] = scrapeResult.counts;
 
       jobResults.push({
         jobName: job.name,

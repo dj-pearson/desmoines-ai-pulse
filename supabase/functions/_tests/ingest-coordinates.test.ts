@@ -80,6 +80,15 @@ Deno.test('ai-crawler sets coordinates at ingest', async () => {
   );
 });
 
+Deno.test('ingest-events sets coordinates at ingest', async () => {
+  const src = codeOnly(await read('supabase/functions/ingest-events/index.ts'));
+  assert.match(
+    src,
+    /venueCoordinates\(await findKnownVenue\(supabase,/,
+    'ingest-events must spread the matched venue coordinates into each row',
+  );
+});
+
 Deno.test('the stub trigger no longer claims to geocode', async () => {
   // auto_geocode_location() only ever RAISE NOTICEd. Its geom half is real, so
   // the function could not simply be dropped - the fix is to say what it does.

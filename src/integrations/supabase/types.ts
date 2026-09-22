@@ -8203,6 +8203,36 @@ export type Database = {
         }
         Relationships: []
       }
+      scrape_page_fingerprints: {
+        Row: {
+          consecutive_skips: number
+          content_changed_at: string
+          content_hash: string
+          items_found: number
+          last_extracted_at: string
+          updated_at: string
+          url: string
+        }
+        Insert: {
+          consecutive_skips?: number
+          content_changed_at?: string
+          content_hash: string
+          items_found?: number
+          last_extracted_at?: string
+          updated_at?: string
+          url: string
+        }
+        Update: {
+          consecutive_skips?: number
+          content_changed_at?: string
+          content_hash?: string
+          items_found?: number
+          last_extracted_at?: string
+          updated_at?: string
+          url?: string
+        }
+        Relationships: []
+      }
       scraping_jobs: {
         Row: {
           config: Json

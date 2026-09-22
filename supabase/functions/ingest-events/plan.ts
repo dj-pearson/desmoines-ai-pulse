@@ -8,8 +8,8 @@
  * rows, call planIngest, write, report.
  */
 import {
+  createDedupIndex,
   generateEventFingerprint,
-  isDuplicateEvent,
   type ExistingEvent,
 } from '../_shared/eventDedup.ts';
 import { parseEventDateTime } from '../_shared/eventDateTime.ts';
@@ -106,7 +106,7 @@ export function planIngest(
   // Rows accepted DURING this request count as existing for the rest of it, or
   // a payload containing the same event twice writes it twice — the dedup would
   // be checking against the database and not against its own batch.
-  const seen: ExistingEvent[] = [...existing];
+  const seen = createDedupIndex<ExistingEvent>(existing);
 
   for (const item of items) {
     const v = validateItem(item, fallbackUrl);
@@ -119,11 +119,11 @@ export function planIngest(
       source_url: String(v.row.source_url),
     };
     const fingerprint = generateEventFingerprint(candidate);
-    const verdict = isDuplicateEvent({ ...candidate, fingerprint }, seen);
+    const verdict = seen.find({ ...candidate, fingerprint });
     if (verdict.isDuplicate) { duplicates++; continue; }
 
     rows.push(v.row);
-    seen.push({
+    seen.add({
       id: `pending-${rows.length}`,
       title: candidate.title,
       date: candidate.date.toISOString(),

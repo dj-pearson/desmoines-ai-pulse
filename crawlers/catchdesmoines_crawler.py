@@ -22,7 +22,7 @@ import logging
 import os
 import re
 import sys
-from datetime import datetime, timedelta
+from datetime import datetime
 from typing import Optional
 from dateutil import parser as date_parser
 from zoneinfo import ZoneInfo
@@ -648,13 +648,16 @@ Return ONLY the JSON array. No other text."""
         return (event.get("venue") or event.get("location") or "TBD")[:100]
 
     def _dedupe_key(self, event: dict, parsed_dt: Optional[datetime]) -> Optional[tuple]:
-        """title + calendar date + venue, the key where a match is genuinely one
-        event stored twice. Title alone collapses a weekly trivia night."""
+        """title + CENTRAL calendar date + venue, the key where a match is
+        genuinely one event stored twice. Title alone collapses a weekly trivia
+        night. Central, not UTC: parsed_dt is UTC, and an evening show is
+        already tomorrow there, while events_title_venue_date_unique and
+        _shared/eventDedup.ts both key on the Des Moines date."""
         if not parsed_dt:
             return None
         return (
             self._record_title(event).strip().lower(),
-            parsed_dt.date().isoformat(),
+            parsed_dt.astimezone(CENTRAL_TZ).date().isoformat(),
             self._record_venue(event).strip().lower(),
         )
 
@@ -677,18 +680,15 @@ Return ONLY the JSON array. No other text."""
             return False
 
         try:
-            # Same calendar day in UTC, matching how `date` is stored.
-            day_start = parsed_dt.replace(hour=0, minute=0, second=0, microsecond=0)
-            day_end = day_start + timedelta(days=1)
-
+            # Same Central calendar day, read from the column the unique index
+            # is built on (event_local_date, generated from `date`). This was a
+            # UTC-day range on `date`, which split one evening across two days.
             result = self.supabase.table("events").select("id").ilike(
                 "title", sanitize_like(self._record_title(event))
             ).ilike(
                 "venue", sanitize_like(self._record_venue(event))
-            ).gte(
-                "date", day_start.isoformat()
-            ).lt(
-                "date", day_end.isoformat()
+            ).eq(
+                "event_local_date", key[1]
             ).execute()
 
             return len(result.data) > 0

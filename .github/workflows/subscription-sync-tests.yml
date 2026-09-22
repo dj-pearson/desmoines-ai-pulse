@@ -313,6 +313,13 @@ jobs:
       - run: deno test --allow-read supabase/functions/_tests/event-unique-key.test.ts
       # eventDedup has had its own suite since DMI-010 and no lane ever ran it.
       - run: deno test supabase/functions/_shared/eventDedup.test.ts
+      # The day-bucketed index both event writers dedup through, and the paged
+      # read that feeds it (a single select stops at max-rows silently).
+      - run: deno test supabase/functions/_shared/existingEvents.test.ts
+      # When an unchanged page may skip the model, and when it may not.
+      - run: deno test supabase/functions/_shared/pageFingerprint.test.ts
+      # DMI-011's own suite: validation, rejections and in-payload dedup.
+      - run: deno test --allow-read supabase/functions/ingest-events/ingestEvents.test.ts
       # WEB-SEC-026. An aal1 token is a valid GoTrue credential, so the browser
       # refusing to render a dashboard stops nobody. This pins the server-side
       # refusal: an admin endpoint must reject a caller who has a verified

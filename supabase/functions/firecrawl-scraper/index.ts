@@ -28,6 +28,26 @@ import {
 import { resolveEventImage } from "../_shared/venueImage.ts";
 import { runJob } from "../_shared/jobRunner.ts";
 import { normalizeCategory } from "../_shared/eventCategories.ts";
+import {
+  centralCalendarDate,
+  createDedupIndex,
+  generateEventFingerprint,
+  type DedupIndex,
+} from "../_shared/eventDedup.ts";
+import { dedupWindow, loadExistingEvents, type ExistingEventRow } from "../_shared/existingEvents.ts";
+import {
+  decideExtraction,
+  hashExtractionWindow,
+  JSONLD_SUFFICIENT,
+  readPageFingerprint,
+  recordExtraction,
+  recordSkip,
+  type PageFingerprint,
+} from "../_shared/pageFingerprint.ts";
+
+/** Rows per insert statement. One statement per event was a round trip each;
+ *  one statement for everything lets a single bad row refuse the rest. */
+const INSERT_CHUNK = 50;
 
 // Marker time for events without specific times (7:31:58 PM Central)
 
@@ -61,6 +81,9 @@ interface ScrapRequest {
   batchSize?: number; // Max events to process per request (default: 5)
   skipEvents?: number; // Number of events to skip (for pagination through large result sets)
   skipVisitWebsite?: boolean; // Skip fetching Visit Website URLs (faster, uses catchdesmoines URLs)
+  /** Run the model even when the page is unchanged since its last clean run
+   *  (see _shared/pageFingerprint.ts). Optional; absent means false. */
+  forceExtract?: boolean;
 }
 
 // NO DEFAULT CAP (WEB-BE-046). This constant was 5, and applying it as a
@@ -173,7 +196,8 @@ serve(async (req) => {
       scraperBackend,
       batchSize,
       skipEvents = 0,
-      skipVisitWebsite = false
+      skipVisitWebsite = false,
+      forceExtract = false,
     }: ScrapRequest = await req.json();
 
     console.log(`📦 Batch settings: size=${batchSize ?? 'all'}, skip=${skipEvents}, skipVisitWebsite=${skipVisitWebsite}`);
@@ -228,6 +252,13 @@ serve(async (req) => {
       timeout: 30000,
     }, 2); // Scrape 2 URLs at a time
 
+    // Why the model was not called, when it was not. Reported in the response
+    // and the run ledger, so the saving is measured rather than asserted.
+    let modelSkipped: 'jsonld' | 'unchanged' | null = null;
+    // Pages the model read this run, recorded after the write only if the write
+    // was clean - a partial write must not teach the next run to skip.
+    const extractedPages: Array<{ url: string; hash: string; previous: PageFingerprint | null; items: number }> = [];
+
     // Process each result
     for (let i = 0; i < scrapeResults.length; i++) {
       const result = scrapeResults[i];
@@ -271,9 +302,11 @@ serve(async (req) => {
       // returned nothing. These items carry exact ISO dates and canonical URLs, so
       // they need no LLM guessing. They flow into the SAME dedupe/insert pipeline
       // as the Claude items; duplicates collapse on (title, venue) downstream.
+      let jsonLdCount = 0;
       if (category === 'events' && result.html) {
         try {
           const jsonLdEvents = extractEventsFromJsonLd(result.html, currentUrl);
+          jsonLdCount = jsonLdEvents.length;
           if (jsonLdEvents.length > 0) {
             console.log(`🧩 JSON-LD structured data yielded ${jsonLdEvents.length} events from ${currentUrl}`);
             allExtractedItems.push(...jsonLdEvents);
@@ -282,6 +315,36 @@ serve(async (req) => {
           console.error(`⚠️ JSON-LD extraction failed for ${currentUrl}:`, jsonLdError);
         }
       }
+
+      // TIER 2 WAS NOT A SHORT-CIRCUIT. A page whose JSON-LD had already given
+      // up every event with an exact ISO date and its own URL was sent to the
+      // model anyway, and the model's fuzzier copies went through dedup
+      // beside the exact ones. Enough structured events now ends it here.
+      let fingerprint: { hash: string; previous: PageFingerprint | null } | null = null;
+      if (category === 'events') {
+        if (jsonLdCount >= JSONLD_SUFFICIENT) {
+          console.log(`🧩 ${jsonLdCount} JSON-LD events on ${currentUrl}; not calling the model`);
+          modelSkipped = 'jsonld';
+          continue;
+        }
+
+        // An unchanged page since the last clean run gets no model call.
+        const hash = await hashExtractionWindow(content);
+        const previous = await readPageFingerprint(supabase, currentUrl);
+        const decision = decideExtraction(previous, hash, new Date(), { force: forceExtract });
+        if (!decision.extract && previous) {
+          console.log(
+            `♻️ ${currentUrl} unchanged since ${previous.last_extracted_at} ` +
+            `(${previous.items_found} item(s) then); not calling the model`,
+          );
+          await recordSkip(supabase, previous, new Date());
+          modelSkipped = 'unchanged';
+          continue;
+        }
+        console.log(`🔎 Extracting ${currentUrl}: ${decision.reason}`);
+        fingerprint = { hash, previous };
+      }
+      const itemsBeforePage = allExtractedItems.length;
 
       // Extract events using Claude AI for this page
       const claudeApiKey = getAnthropicApiKey();
@@ -393,6 +456,14 @@ serve(async (req) => {
         
         console.log(`🤖 AI extracted ${pageItems.length} ${category} items from ${currentUrl}`);
         allExtractedItems.push(...pageItems);
+        if (fingerprint) {
+          extractedPages.push({
+            url: currentUrl,
+            hash: fingerprint.hash,
+            previous: fingerprint.previous,
+            items: allExtractedItems.length - itemsBeforePage + jsonLdCount,
+          });
+        }
         
       } catch (parseError) {
         console.error(`❌ Could not parse AI response JSON for ${currentUrl}:`, parseError);
@@ -402,21 +473,21 @@ serve(async (req) => {
 
     console.log(`🎯 Total ${category} extracted from all pages: ${allExtractedItems.length}`);
 
-    // For events category, filter out past events
+    // For events category, filter out past events.
+    //
+    // By the CENTRAL calendar day, read through the same parser the insert
+    // uses. This did `new Date(item.date).setHours(0)` on a runtime whose zone
+    // is UTC, so "today" began at 7pm the previous evening in Des Moines and a
+    // naive "2026-09-21 20:00:00" was read as UTC. Undated and unparseable
+    // items still pass here; the insert below drops them with a named warning.
     let filteredItems = allExtractedItems;
     if (category === 'events') {
-      const currentDate = new Date();
-      currentDate.setHours(0, 0, 0, 0);
+      const todayCentral = centralCalendarDate(new Date());
       filteredItems = allExtractedItems.filter(item => {
         if (!item.date) return true;
-        try {
-          const itemDate = new Date(item.date);
-          itemDate.setHours(0, 0, 0, 0);
-          return itemDate >= currentDate;
-        } catch (error) {
-          console.log(`⚠️ Could not parse date: ${item.date}`);
-          return true;
-        }
+        const parsed = parseEventDateTime(String(item.date));
+        if (!parsed?.event_start_utc) return true;
+        return centralCalendarDate(parsed.event_start_utc) >= todayCentral;
       });
     }
 
@@ -502,7 +573,7 @@ serve(async (req) => {
     // partition `totalFound`, and nothing downstream assumes they do - the
     // zero-result rule reads `inserted`, the error-rate rule reads `errors`.
     let duplicateCount = 0;
-    const errors = [];
+    const errors: unknown[] = [];
 
     // WEB-BE-043. One ledger row per scrape, keyed by the host being scraped -
     // this function is invoked per URL, so the host IS the source. Without it a
@@ -512,6 +583,31 @@ serve(async (req) => {
       try { return new URL(url).hostname; } catch { return url; }
     })();
     const job = await runJob("firecrawl-scraper", async (ctx) => {
+    // ONE READ, THEN THE SHARED DEDUP (WEB-BE-036, eventDedup.ts).
+    //
+    // This used to ask the database once per item for a row with the same
+    // title and venue - with no date. Night two of a three-night run matched
+    // night one and was never inserted, although the unique key has allowed it
+    // since 20260902000006. It was also the only writer not using
+    // _shared/eventDedup.ts, so a title the hub would have collapsed ("X" vs
+    // "X: The Tour") was inserted twice here. Now the existing rows around the
+    // dates being written are read once, and every item is judged by the same
+    // four tiers ingest-events uses.
+    let dedupIndex: DedupIndex<ExistingEventRow> | null = null;
+    const pendingEventRows: Record<string, unknown>[] = [];
+    const pendingIds = new Set<string>();
+    if (category === 'events' && itemsToWrite.length > 0) {
+      const window = dedupWindow(
+        itemsToWrite
+          .map((item) => (item.date ? parseEventDateTime(String(item.date))?.event_start_utc : null))
+          .filter((d): d is Date => d instanceof Date),
+      );
+      // A failed read refuses the write (it throws, and runJob records the run
+      // as failed). Treating it as "nothing exists" would insert every item.
+      dedupIndex = createDedupIndex(window ? await loadExistingEvents(supabase, window) : []);
+      console.log(`🧮 Dedup index: ${dedupIndex.size} existing event(s) around the dates being written`);
+    }
+
     if (itemsToWrite.length > 0) {
       // How many rows are handled per inner pass. NOT the request's batchSize -
       // this one used to shadow it, which is how a documented request field
@@ -688,14 +784,23 @@ serve(async (req) => {
             // run re-scrapes it, so a skip costs one cycle of latency, while a
             // wrong insert has to be found and cleaned up by hand.
             let dupCheckError: { message?: string } | null = null;
-            if (category === 'events') {
-              const { data, error } = await supabase
-                .from(tableName)
-                .select('*')
-                .eq('title', transformedData.title)
-                .eq('venue', transformedData.venue);
-              existingItems = data || [];
-              dupCheckError = error;
+            if (category === 'events' && dedupIndex) {
+              const verdict = dedupIndex.find({
+                title: transformedData.title,
+                date: new Date(transformedData.date),
+                venue: transformedData.venue,
+                source_url: transformedData.source_url,
+                fingerprint: generateEventFingerprint({
+                  title: transformedData.title,
+                  date: new Date(transformedData.date),
+                  venue: transformedData.venue,
+                  source_url: transformedData.source_url,
+                }),
+              });
+              if (verdict.isDuplicate && verdict.existingEvent) {
+                existingItems = [verdict.existingEvent];
+                console.log(`🔁 Duplicate (${verdict.reason}): ${transformedData.title}`);
+              }
             } else if (category === 'competitor_analysis') {
               const { data, error } = await supabase
                 .from(tableName)
@@ -728,7 +833,13 @@ serve(async (req) => {
               // For events: heal a missing image and/or upgrade to a better
               // source_url on the existing row, folded into a single UPDATE.
               // Non-events categories fall through to the plain duplicate log.
-              if (category === 'events') {
+              //
+              // A match on a row THIS run queued (the page's JSON-LD and the
+              // model both reported it) has nothing to heal: it is not in the
+              // table yet, and the copy already queued is the one that lands.
+              if (category === 'events' && pendingIds.has(existingItem.id)) {
+                console.log(`⚠️ Duplicate within this run: ${transformedData.title}`);
+              } else if (category === 'events') {
                 const updates: Record<string, unknown> = {};
 
                 // Heal a missing image (WEB-AUTO-016): the existing row has no
@@ -809,6 +920,9 @@ serve(async (req) => {
               if (category === 'events') {
                 transformedData.is_featured = false; // WEB-BE-040: never decided at ingest
                 transformedData.created_at = new Date().toISOString();
+                // Every event row carries its id, so a chunk never mixes rows
+                // with and without one (see flushEventRows).
+                transformedData.id = crypto.randomUUID();
               }
 
               // Persist the image the domain adapter already fetched (seatgeek /
@@ -833,7 +947,7 @@ serve(async (req) => {
                 console.log(`\u{1F3DB}\uFE0F Venue image for ${resolvedImage.venueName}: skipped per-event fetch`);
               } else if (resolvedImage.imageUrl && CONTENT_TYPE_MAP[category]) {
                 // Pre-assign the row id so the stored media_asset is keyed to this record.
-                const contentId = crypto.randomUUID();
+                const contentId = transformedData.id ?? crypto.randomUUID();
                 transformedData.id = contentId;
                 transformedData.image_url = await fetchAndStoreImage(
                   supabase,
@@ -841,6 +955,29 @@ serve(async (req) => {
                   category,
                   contentId,
                 );
+              }
+
+              // Events are queued and written in chunks after the loop, and
+              // entered in the index now so a second copy later in this same
+              // run collapses onto this one.
+              if (category === 'events' && dedupIndex) {
+                pendingEventRows.push(transformedData);
+                pendingIds.add(transformedData.id);
+                dedupIndex.add({
+                  id: transformedData.id,
+                  title: transformedData.title,
+                  date: transformedData.date,
+                  venue: transformedData.venue,
+                  source_url: transformedData.source_url,
+                  image_url: transformedData.image_url ?? null,
+                  fingerprint: generateEventFingerprint({
+                    title: transformedData.title,
+                    date: new Date(transformedData.date),
+                    venue: transformedData.venue,
+                    source_url: transformedData.source_url,
+                  }),
+                });
+                continue;
               }
 
               const { error: insertError } = await supabase
@@ -878,12 +1015,39 @@ serve(async (req) => {
       }
     }
 
+      if (pendingEventRows.length > 0) {
+        const flushed = await flushEventRows(pendingEventRows);
+        insertedCount += flushed.inserted;
+        // Refused by events_title_venue_date_unique: a row another writer
+        // inserted between the read above and this write. A duplicate, not an
+        // error - the unique key is doing its job.
+        duplicateCount += flushed.conflicts;
+        errors.push(...flushed.errors);
+        console.log(
+          `✅ Inserted ${flushed.inserted} event(s); ${flushed.conflicts} refused by the unique key; ${flushed.errors.length} error(s)`,
+        );
+      }
+
+      // Only a clean write earns a fingerprint. Recorded inside the job so a
+      // paused run (which never gets here) records nothing either.
+      if (errors.length === 0) {
+        for (const page of extractedPages) {
+          await recordExtraction(supabase, page.previous, page.url, page.hash, page.items, new Date());
+        }
+      }
+
       ctx.processed(insertedCount + updatedCount);
       ctx.failed(errors.length);
       ctx.meta({
         url,
         category,
-        sources: {
+        modelSkipped,
+        // An unchanged page is left OUT of `sources`. It inserted nothing
+        // because nothing changed, and counting it would start the
+        // zero_inserted_streak alert (ingestionHealth.ts) on a healthy source.
+        // The daily forced re-extract (REEXTRACT_AFTER_HOURS) keeps a source
+        // that really went dark in the counts.
+        sources: modelSkipped === 'unchanged' ? {} : {
           [sourceKey]: {
             fetched: allExtractedItems.length,
             // An update is a write. A source whose events all already exist and
@@ -904,6 +1068,8 @@ serve(async (req) => {
       // scraper would be recorded upstream as a source that produced nothing.
       ...(job.status === "skipped" ? { paused: true } : {}),
       totalFound: allExtractedItems.length,
+      // 'jsonld' | 'unchanged' | null - why the model was not called, if it was not.
+      modelSkipped,
       futureEvents: batchInfo.totalEvents,
       inserted: insertedCount,
       updated: updatedCount,
@@ -947,3 +1113,52 @@ serve(async (req) => {
     );
   }
 });
+/**
+ * Write queued event rows in chunks, ON CONFLICT DO NOTHING against
+ * (title, venue, event_local_date) - the same statement ingest-events uses.
+ *
+ * `defaultToNull: false` because a bulk insert's column list is the union of
+ * every row's keys, and a key one row lacks would otherwise be written as NULL
+ * over the column default. A chunk that fails as a whole is retried row by row,
+ * so one bad row costs itself and not the forty-nine beside it.
+ */
+async function flushEventRows(
+  rows: Record<string, unknown>[],
+): Promise<{ inserted: number; conflicts: number; errors: unknown[] }> {
+  let inserted = 0;
+  let conflicts = 0;
+  const errors: unknown[] = [];
+
+  const write = async (chunk: Record<string, unknown>[]) =>
+    await supabase
+      .from('events')
+      .upsert(chunk, {
+        onConflict: 'title,venue,event_local_date',
+        ignoreDuplicates: true,
+        defaultToNull: false,
+      })
+      .select('id');
+
+  for (let i = 0; i < rows.length; i += INSERT_CHUNK) {
+    const chunk = rows.slice(i, i + INSERT_CHUNK);
+    const { data, error } = await write(chunk);
+    if (!error) {
+      inserted += (data || []).length;
+      conflicts += chunk.length - (data || []).length;
+      continue;
+    }
+    console.error(`❌ Chunk insert failed (${error.message}); retrying ${chunk.length} row(s) one at a time`);
+    for (const row of chunk) {
+      const single = await write([row]);
+      if (single.error) {
+        console.error(`❌ Error inserting event "${row.title}":`, single.error);
+        errors.push(single.error);
+      } else if ((single.data || []).length === 1) {
+        inserted++;
+      } else {
+        conflicts++;
+      }
+    }
+  }
+  return { inserted, conflicts, errors };
+}
