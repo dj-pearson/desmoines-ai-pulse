@@ -110,12 +110,27 @@ Deno.test('ingest-events targets the new index in its ON CONFLICT clause', async
   assert(/ignoreDuplicates: true/.test(src), 'a batch insert must not lose every row to one collision');
 });
 
+Deno.test('firecrawl-scraper writes through the same conflict target and the shared dedup', async () => {
+  const src = await read('supabase/functions/firecrawl-scraper/index.ts');
+  assert(/onConflict: 'title,venue,event_local_date'/.test(src), 'the chunked insert must target the new index');
+  assert(/ignoreDuplicates: true/.test(src), 'one collision must not lose the rest of the chunk');
+  assert(/createDedupIndex/.test(src), 'events are judged by _shared/eventDedup.ts, not a local query');
+  // The per-item lookup this replaced had no date in it, so night two of a run
+  // matched night one and was never written.
+  assert(
+    !/\.eq\('title', transformedData\.title\)\s*\.eq\('venue', transformedData\.venue\)/.test(src),
+    'the dateless title + venue lookup must be gone',
+  );
+});
+
 Deno.test('the Python crawler already keys on title + calendar date + venue', async () => {
   const py = await read('crawlers/catchdesmoines_crawler.py');
   const fn = py.slice(py.indexOf('def _dedupe_key'), py.indexOf('async def _check_duplicate'));
   assert(fn.length > 0, '_dedupe_key must exist ahead of _check_duplicate');
   assert(/_record_title\(event\)/.test(fn), 'title is part of the key');
-  assert(/parsed_dt\.date\(\)\.isoformat\(\)/.test(fn), 'the calendar date, not the instant');
+  // The CENTRAL date: parsed_dt is UTC, and parsed_dt.date() put every show
+  // after 7pm CDT on the next day while event_local_date put it on this one.
+  assert(/parsed_dt\.astimezone\(CENTRAL_TZ\)\.date\(\)\.isoformat\(\)/.test(fn), 'the Central calendar date, not the instant or the UTC date');
   assert(/_record_venue\(event\)/.test(fn), 'venue is part of the key');
 });
 

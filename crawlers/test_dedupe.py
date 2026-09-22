@@ -180,6 +180,22 @@ def main():
     check("the date-only and datetime forms of one event agree",
           (inserted, skipped) == (1, 1), f"got {inserted} inserted / {skipped} skipped")
 
+    # The key is the CENTRAL calendar day, as events_title_venue_date_unique
+    # and _shared/eventDedup.ts both use. 6:30pm CDT is 23:30Z on Sep 1 and
+    # 8pm CDT is 01:00Z on Sep 2: keyed by UTC day these were two events, while
+    # the database holds one row per title, venue and Central day.
+    evening = [
+        event("Jazz in July", "2026-09-01 18:30:00", "Wooly's"),
+        event("Jazz in July", "2026-09-01 20:00:00", "Wooly's"),
+    ]
+    inserted, skipped = asyncio.run(batch(evening))
+    check("one Central evening is one day even when it crosses UTC midnight",
+          (inserted, skipped) == (1, 1), f"got {inserted} inserted / {skipped} skipped")
+
+    late = c._dedupe_key(event("X", "2026-09-01 23:00:00"), c._parse_event_datetime("2026-09-01 23:00:00"))
+    check("an 11pm Central show is keyed to its Central date",
+          late is not None and late[1] == "2026-09-01", f"got {late!r}")
+
     print(f"\n{len(failures)} failure(s)")
     return 1 if failures else 0
 
