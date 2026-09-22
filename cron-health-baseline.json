@@ -19,8 +19,6 @@
     "db-health",
     "dispatch-scheduled-newsletters",
     "edge-metrics-monitor",
-    "enhance-events-evening",
-    "enhance-events-morning",
     "error-triage",
     "event-lifecycle-cleanup",
     "fraud-abuse-detector",

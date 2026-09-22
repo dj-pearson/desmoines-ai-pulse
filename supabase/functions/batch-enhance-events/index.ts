@@ -3,6 +3,7 @@ import { serve } from "https://deno.land/std@0.168.0/http/server.ts";
 import { createClient } from 'https://esm.sh/@supabase/supabase-js@2';
 import { fetchWithTimeout } from '../_shared/fetchWithTimeout.ts';
 import { getAnthropicApiKey, extractClaudeText } from '../_shared/aiConfig.ts';
+import { requireAdminOrApiKey } from '../_shared/apiKeyAuth.ts';
 
 const corsHeaders = {
   'Access-Control-Allow-Origin': '*',
@@ -227,6 +228,14 @@ serve(async (req) => {
     return new Response(null, { headers: corsHeaders });
   }
 
+  // Admin or machine callers only. Each event here costs a Claude call and up
+  // to three Google searches, and the function writes whatever the model
+  // returns into the row - venue and source_url included. With no check, the
+  // public anon key was enough to spend both budgets and rewrite any event.
+  // Its one caller, EventDataEnhancer in the admin UI, sends an admin JWT.
+  const authFailure = await requireAdminOrApiKey(req, corsHeaders);
+  if (authFailure) return authFailure;
+
   try {
     const { eventIds, fields, baseQuery } = await req.json();
 
@@ -248,6 +257,12 @@ serve(async (req) => {
     // separate decision, not a bug fix: it spends a Claude call and up to three
     // Google Search calls per event, so "enhance 50 events" is a cost choice
     // somebody has to make deliberately.
+    //
+    // Decided 2026-09-22: no selection mode, and the two crons are unscheduled
+    // (migration 20260922000002). Run unattended, this would let a model
+    // rewrite `venue` from search snippets - replacing the canonical
+    // known_venues name, which is part of the events unique key - and it never
+    // marks an event done, so it would re-pick the same fifty every run.
     if (!Array.isArray(eventIds) || eventIds.length === 0) {
       return new Response(
         JSON.stringify({
