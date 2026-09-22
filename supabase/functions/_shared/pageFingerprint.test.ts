@@ -4,7 +4,7 @@
  *
  * Run: `deno test supabase/functions/_shared/pageFingerprint.test.ts`
  */
-import { assertEquals, assertNotEquals } from "jsr:@std/assert@1";
+import { assert, assertEquals } from "jsr:@std/assert@1";
 import {
   decideExtraction,
   hashExtractionWindow,
@@ -63,6 +63,6 @@ Deno.test("the hash ignores whitespace churn and nothing else", async () => {
   const b = await hashExtractionWindow("  <li>Hamilton Oct 2</li> <li>Wicked Oct 9</li>\t");
   const c = await hashExtractionWindow("<li>Hamilton Oct 3</li> <li>Wicked Oct 9</li>");
   assertEquals(a, b);
-  assertNotEquals(a, c);
+  assert(a !== c);
   assertEquals(a.length, 64);
 });
