@@ -32,8 +32,6 @@
     "ops-digest-daily",
     "regenerate-sitemaps-event-driven",
     "saved-search-alerts-nightly",
-    "scrape-events-evening",
-    "scrape-events-morning",
     "security-anomaly-detector",
     "send-event-reminders-hourly",
     "social-daily-poster-daily",

@@ -3,6 +3,14 @@
  * Reason: Admin data processing function invoked by internal tools, not by end-user browser sessions
  * Alternative measures: Service role key required for database writes, Claude API key validated before AI processing
  * Risk level: HIGH
+ *
+ * DEPRECATED 2026-09-22. Nothing invokes this function: no cron, no workflow,
+ * and the admin "AI Crawler" tab calls firecrawl-scraper (AICrawler.tsx). It is
+ * a second copy of firecrawl-scraper's extraction with a weaker dedup
+ * (case-insensitive title + venue, no date - so it drops recurring events) and
+ * no change detection. Do not add callers; send new work to firecrawl-scraper.
+ * Removal follows the edge-function deprecation flow in CLAUDE.md, a release
+ * after this note ships.
  */
 /// <reference types="https://esm.sh/@supabase/functions-js/src/edge-runtime.d.ts" />
 
