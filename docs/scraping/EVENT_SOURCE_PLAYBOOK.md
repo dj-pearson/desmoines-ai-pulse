@@ -39,6 +39,22 @@ source can only add coverage.
 Dispatch order lives in `_shared/domain-adapters/index.ts`; the loop that walks
 it is `dispatch.ts`.
 
+Two things now keep tier 3 from running when it has nothing to add
+(`_shared/pageFingerprint.ts`, 2026-09-22):
+
+- **Enough JSON-LD ends it.** A page whose `schema.org/Event` blocks yield
+  `JSONLD_SUFFICIENT` (3) or more events is not sent to the model. Below that
+  the page may carry one featured event on a listing of twenty, so the model
+  still reads it.
+- **An unchanged page is not re-read.** The extraction window is hashed and
+  stored in `scrape_page_fingerprints` after a run that wrote cleanly. The next
+  run with the same hash skips the model, unless the last extraction found
+  nothing or is more than `REEXTRACT_AFTER_HOURS` (24) old. `forceExtract: true`
+  on the request bypasses it. The render still happens; the hash needs it.
+
+The response and the run ledger carry `modelSkipped: 'jsonld' | 'unchanged' | null`,
+so the saving can be counted from `automation_job_runs` rather than assumed.
+
 ## 2. Source-by-source
 
 `Owner` is the adapter that handles the host. `Layers` is how deep the events

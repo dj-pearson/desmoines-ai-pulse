@@ -35,6 +35,15 @@ import {
   type DedupIndex,
 } from "../_shared/eventDedup.ts";
 import { dedupWindow, loadExistingEvents, type ExistingEventRow } from "../_shared/existingEvents.ts";
+import {
+  decideExtraction,
+  hashExtractionWindow,
+  JSONLD_SUFFICIENT,
+  readPageFingerprint,
+  recordExtraction,
+  recordSkip,
+  type PageFingerprint,
+} from "../_shared/pageFingerprint.ts";
 
 /** Rows per insert statement. One statement per event was a round trip each;
  *  one statement for everything lets a single bad row refuse the rest. */
@@ -72,6 +81,9 @@ interface ScrapRequest {
   batchSize?: number; // Max events to process per request (default: 5)
   skipEvents?: number; // Number of events to skip (for pagination through large result sets)
   skipVisitWebsite?: boolean; // Skip fetching Visit Website URLs (faster, uses catchdesmoines URLs)
+  /** Run the model even when the page is unchanged since its last clean run
+   *  (see _shared/pageFingerprint.ts). Optional; absent means false. */
+  forceExtract?: boolean;
 }
 
 // NO DEFAULT CAP (WEB-BE-046). This constant was 5, and applying it as a
@@ -184,7 +196,8 @@ serve(async (req) => {
       scraperBackend,
       batchSize,
       skipEvents = 0,
-      skipVisitWebsite = false
+      skipVisitWebsite = false,
+      forceExtract = false,
     }: ScrapRequest = await req.json();
 
     console.log(`📦 Batch settings: size=${batchSize ?? 'all'}, skip=${skipEvents}, skipVisitWebsite=${skipVisitWebsite}`);
@@ -239,6 +252,13 @@ serve(async (req) => {
       timeout: 30000,
     }, 2); // Scrape 2 URLs at a time
 
+    // Why the model was not called, when it was not. Reported in the response
+    // and the run ledger, so the saving is measured rather than asserted.
+    let modelSkipped: 'jsonld' | 'unchanged' | null = null;
+    // Pages the model read this run, recorded after the write only if the write
+    // was clean - a partial write must not teach the next run to skip.
+    const extractedPages: Array<{ url: string; hash: string; previous: PageFingerprint | null; items: number }> = [];
+
     // Process each result
     for (let i = 0; i < scrapeResults.length; i++) {
       const result = scrapeResults[i];
@@ -282,9 +302,11 @@ serve(async (req) => {
       // returned nothing. These items carry exact ISO dates and canonical URLs, so
       // they need no LLM guessing. They flow into the SAME dedupe/insert pipeline
       // as the Claude items; duplicates collapse on (title, venue) downstream.
+      let jsonLdCount = 0;
       if (category === 'events' && result.html) {
         try {
           const jsonLdEvents = extractEventsFromJsonLd(result.html, currentUrl);
+          jsonLdCount = jsonLdEvents.length;
           if (jsonLdEvents.length > 0) {
             console.log(`🧩 JSON-LD structured data yielded ${jsonLdEvents.length} events from ${currentUrl}`);
             allExtractedItems.push(...jsonLdEvents);
@@ -293,6 +315,36 @@ serve(async (req) => {
           console.error(`⚠️ JSON-LD extraction failed for ${currentUrl}:`, jsonLdError);
         }
       }
+
+      // TIER 2 WAS NOT A SHORT-CIRCUIT. A page whose JSON-LD had already given
+      // up every event with an exact ISO date and its own URL was sent to the
+      // model anyway, and the model's fuzzier copies went through dedup
+      // beside the exact ones. Enough structured events now ends it here.
+      let fingerprint: { hash: string; previous: PageFingerprint | null } | null = null;
+      if (category === 'events') {
+        if (jsonLdCount >= JSONLD_SUFFICIENT) {
+          console.log(`🧩 ${jsonLdCount} JSON-LD events on ${currentUrl}; not calling the model`);
+          modelSkipped = 'jsonld';
+          continue;
+        }
+
+        // An unchanged page since the last clean run gets no model call.
+        const hash = await hashExtractionWindow(content);
+        const previous = await readPageFingerprint(supabase, currentUrl);
+        const decision = decideExtraction(previous, hash, new Date(), { force: forceExtract });
+        if (!decision.extract && previous) {
+          console.log(
+            `♻️ ${currentUrl} unchanged since ${previous.last_extracted_at} ` +
+            `(${previous.items_found} item(s) then); not calling the model`,
+          );
+          await recordSkip(supabase, previous, new Date());
+          modelSkipped = 'unchanged';
+          continue;
+        }
+        console.log(`🔎 Extracting ${currentUrl}: ${decision.reason}`);
+        fingerprint = { hash, previous };
+      }
+      const itemsBeforePage = allExtractedItems.length;
 
       // Extract events using Claude AI for this page
       const claudeApiKey = getAnthropicApiKey();
@@ -404,6 +456,14 @@ serve(async (req) => {
         
         console.log(`🤖 AI extracted ${pageItems.length} ${category} items from ${currentUrl}`);
         allExtractedItems.push(...pageItems);
+        if (fingerprint) {
+          extractedPages.push({
+            url: currentUrl,
+            hash: fingerprint.hash,
+            previous: fingerprint.previous,
+            items: allExtractedItems.length - itemsBeforePage + jsonLdCount,
+          });
+        }
         
       } catch (parseError) {
         console.error(`❌ Could not parse AI response JSON for ${currentUrl}:`, parseError);
@@ -968,12 +1028,26 @@ serve(async (req) => {
         );
       }
 
+      // Only a clean write earns a fingerprint. Recorded inside the job so a
+      // paused run (which never gets here) records nothing either.
+      if (errors.length === 0) {
+        for (const page of extractedPages) {
+          await recordExtraction(supabase, page.previous, page.url, page.hash, page.items, new Date());
+        }
+      }
+
       ctx.processed(insertedCount + updatedCount);
       ctx.failed(errors.length);
       ctx.meta({
         url,
         category,
-        sources: {
+        modelSkipped,
+        // An unchanged page is left OUT of `sources`. It inserted nothing
+        // because nothing changed, and counting it would start the
+        // zero_inserted_streak alert (ingestionHealth.ts) on a healthy source.
+        // The daily forced re-extract (REEXTRACT_AFTER_HOURS) keeps a source
+        // that really went dark in the counts.
+        sources: modelSkipped === 'unchanged' ? {} : {
           [sourceKey]: {
             fetched: allExtractedItems.length,
             // An update is a write. A source whose events all already exist and
@@ -994,6 +1068,8 @@ serve(async (req) => {
       // scraper would be recorded upstream as a source that produced nothing.
       ...(job.status === "skipped" ? { paused: true } : {}),
       totalFound: allExtractedItems.length,
+      // 'jsonld' | 'unchanged' | null - why the model was not called, if it was not.
+      modelSkipped,
       futureEvents: batchInfo.totalEvents,
       inserted: insertedCount,
       updated: updatedCount,
