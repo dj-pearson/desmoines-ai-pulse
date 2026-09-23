@@ -1,10 +1,11 @@
 import { Helmet } from "react-helmet-async";
 import { Event } from "@/lib/types";
-import { createEventSlugWithCentralTime, hasSpecificTime, formatEventDate, formatInCentralTime } from "@/lib/timezone";
+import { createEventSlugWithCentralTime, formatInCentralTime } from "@/lib/timezone";
 import { BRAND } from "@/lib/brandConfig";
 import { ogImageUrl } from "@/lib/ogImage";
 import { buildEventOffers, isEventAccessibleForFree } from "@/lib/eventOffers";
 import { buildEventJsonLd } from "@/lib/eventSchema";
+import { eventMetaDescription, eventPageTitle } from "@/lib/eventMeta";
 
 interface EnhancedEventSEOProps {
   event: Event;
@@ -21,34 +22,14 @@ export default function EnhancedEventSEO({
   viewMode = "detail"
 }: EnhancedEventSEOProps) {
 
-  const getOptimizedTitle = () => {
-    const showTime = hasSpecificTime(event);
-    const dateStr = formatInCentralTime(
-      event.event_start_local || event.event_start_utc || event.date,
-      showTime ? "EEEE, MMMM d 'at' h:mm a" : "EEEE, MMMM d, yyyy"
-    );
+  // Both live in src/lib/eventMeta.ts, which records why: the title read the
+  // offset-less event_start_local first and so carried a showtime five hours
+  // early in the UTC prerender, and the description said "Des Moines" and
+  // "Free admission" for rows that were neither.
+  const getOptimizedTitle = () =>
+    viewMode === "list" ? `${event.title} | ${BRAND.city} Events` : eventPageTitle(event);
 
-    if (viewMode === "list") {
-      return `${event.title} - ${dateStr} | ${BRAND.city} Events`;
-    }
-
-    const venue = event.venue ? ` at ${event.venue}` : '';
-    return `${event.title}${venue} - ${dateStr} | ${BRAND.city}, ${BRAND.state} Events`;
-  };
-
-  const getGEODescription = () => {
-    const description = event.enhanced_description || event.original_description || '';
-    const venue = event.venue || event.location || BRAND.city;
-    const dateStr = formatEventDate(event);
-    const price = event.price ? ` Tickets: ${event.price}.` : ' Free admission.';
-    const category = event.category?.toLowerCase() || 'event';
-
-    if (description.length > 50) {
-      return `${event.title} is a ${category} happening ${dateStr} at ${venue} in ${BRAND.city}, ${BRAND.state}. ${description.substring(0, 150).trim()}...${price} Find local ${BRAND.city} events and activities.`;
-    }
-
-    return `Join ${event.title}, a ${category} event happening ${dateStr} at ${venue} in ${BRAND.city}, ${BRAND.state}.${price} Discover what's happening in ${BRAND.city} this week.`;
-  };
+  const getGEODescription = () => eventMetaDescription(event);
 
   const getLocalKeywords = () => {
     const base = [
@@ -81,15 +62,15 @@ export default function EnhancedEventSEO({
     }
 
     const month = formatInCentralTime(
-      event.event_start_local || event.event_start_utc || event.date,
+      event.event_start_utc || event.event_start_local || event.date,
       "MMMM"
     );
     const year = formatInCentralTime(
-      event.event_start_local || event.event_start_utc || event.date,
+      event.event_start_utc || event.event_start_local || event.date,
       "yyyy"
     );
     const dayOfWeek = formatInCentralTime(
-      event.event_start_local || event.event_start_utc || event.date,
+      event.event_start_utc || event.event_start_local || event.date,
       "EEEE"
     );
 
@@ -200,7 +181,11 @@ export default function EnhancedEventSEO({
     "name": getOptimizedTitle(),
     "speakable": {
       "@type": "SpeakableSpecification",
-      "cssSelector": ["article h1", "article [itemprop='description']", "article [itemprop='startDate']", "article [itemprop='location']"]
+      // #event-summary is the one sentence that answers what, when, where and
+      // price. The old selectors named microdata attributes, and one of them
+      // (description) sat outside the <article> it was scoped to, so it
+      // matched nothing.
+      "cssSelector": ["article h1", "#event-summary"]
     },
     "url": eventUrl
   };
@@ -249,7 +234,7 @@ export default function EnhancedEventSEO({
       <meta property="og:image" content={ogImage} />
       <meta property="og:image:width" content="1200" />
       <meta property="og:image:height" content="630" />
-      <meta property="og:image:alt" content={`${event.title} - ${event.category} event in ${BRAND.city}`} />
+      <meta property="og:image:alt" content={`${event.title} - ${event.category} event in ${event.city || BRAND.city}`} />
       <meta property="og:url" content={eventUrl} />
       <meta property="og:site_name" content={BRAND.name} />
 

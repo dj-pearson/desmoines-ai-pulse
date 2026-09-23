@@ -1,5 +1,5 @@
 {
-  "total": 127,
+  "total": 126,
   "files": {
     "src/components/AIConfigurationManager.tsx": 2,
     "src/components/MostSearched.tsx": 19,
@@ -47,7 +47,6 @@
     "src/pages/AdminRefunds.tsx": 3,
     "src/pages/Advertise.tsx": 1,
     "src/pages/AttractionDetails.tsx": 1,
-    "src/pages/EventDetails.tsx": 1,
     "src/pages/EventsNearMe.tsx": 1,
     "src/pages/EventsPage.tsx": 3,
     "src/pages/PlaygroundDetails.tsx": 2,
