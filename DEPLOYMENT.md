@@ -123,7 +123,7 @@ Complete checklist for deploying to production safely and successfully.
      - `VITE_SITE_URL`
      - `VITE_GOOGLE_ANALYTICS_ID` (optional)
      - `VITE_SENTRY_DSN` (optional)
-     - `NODE_VERSION`: 20.0.0
+     - `NODE_VERSION`: leave unset; `.nvmrc` pins 22.20.0 (supabase-js 2.116+ needs Node 22)
 
 4. **Configure Custom Domain**
    - Pages → Custom domains → Add domain

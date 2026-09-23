@@ -413,7 +413,7 @@ Two known gaps: the iOS App Store URL in `version-check/index.ts` is still the `
 
 ## Deployment
 
-**Cloudflare Pages** auto-deploys on push to `main`. Build command `npm run build`, output `dist`, Node 20.
+**Cloudflare Pages** auto-deploys on push to `main`. Build command `npm run build`, output `dist`, Node from `.nvmrc` (22.20.0). supabase-js 2.116+ throws "native WebSocket not found" on Node 20, which failed every Pages build from 2026-09-10 to 2026-09-23 while prod kept serving the old one.
 
 Required env vars: `VITE_SUPABASE_URL`, `VITE_SUPABASE_ANON_KEY`, `VITE_SITE_URL` (see `.env.example`).
 
