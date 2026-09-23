@@ -138,7 +138,11 @@ export function buildEventJsonLd(event: Event, opts: { withContext?: boolean } =
   return {
     ...(opts.withContext ? { '@context': 'https://schema.org' } : {}),
     '@type': 'Event' as const,
-    '@id': url,
+    // A fragment, not the bare URL. The detail page also emits a WebPage whose
+    // @id is the URL (the Speakable node, and this node's own
+    // mainEntityOfPage), and a graph parser merges nodes that share an @id -
+    // so the Event and its page were read as one thing that was both.
+    '@id': `${url}#event`,
     name: event.title,
     description:
       event.enhanced_description ||

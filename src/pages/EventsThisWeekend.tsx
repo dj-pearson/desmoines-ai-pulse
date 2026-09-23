@@ -52,6 +52,33 @@ import { SkeletonGroup } from "@/components/ui/skeleton";
  */
 const VISIBLE_EVENTS = 36;
 
+/**
+ * This weekend, Friday 00:00 to Sunday 23:59 Central, as UTC bounds for the
+ * query and as a label for the page. One function so the dates a reader is
+ * shown are the dates the list was fetched for.
+ */
+function weekendWindow(now: Date = new Date()) {
+  const tz = "America/Chicago";
+  const nowLocal = toZonedTime(now, tz);
+  const day = nowLocal.getDay(); // 0 Sun - 6 Sat
+  const offsetToFriday = day === 0 ? -2 : 5 - day;
+  const fridayStartLocal = new Date(nowLocal.getFullYear(), nowLocal.getMonth(), nowLocal.getDate(), 0, 0, 0, 0);
+  fridayStartLocal.setDate(fridayStartLocal.getDate() + offsetToFriday);
+  const sundayEndLocal = new Date(fridayStartLocal);
+  sundayEndLocal.setDate(fridayStartLocal.getDate() + 2);
+  sundayEndLocal.setHours(23, 59, 59, 999);
+
+  // fridayStartLocal and sundayEndLocal hold Central wall-clock values, so
+  // date-fns' plain format prints them as Central whatever the runtime zone.
+  const label = `${format(fridayStartLocal, "EEEE, MMMM d")} - ${format(sundayEndLocal, "EEEE, MMMM d, yyyy")}`;
+
+  return {
+    startUtc: fromZonedTime(fridayStartLocal, tz).toISOString(),
+    endUtc: fromZonedTime(sundayEndLocal, tz).toISOString(),
+    label,
+  };
+}
+
 export default function EventsThisWeekend() {
   const [selectedCategory, setSelectedCategory] = useState<string>("all");
   const [selectedLocation, setSelectedLocation] = useState<string>("all");
@@ -59,19 +86,7 @@ export default function EventsThisWeekend() {
   const { data: events, isLoading, isError, error, refetch } = useQuery({
     queryKey: ["events-weekend"],
     queryFn: async () => {
-      const tz = "America/Chicago";
-      const now = new Date();
-      const nowLocal = toZonedTime(now, tz);
-      const day = nowLocal.getDay(); // 0 Sun - 6 Sat
-      const offsetToFriday = day === 0 ? -2 : day >= 5 ? 5 - day : 5 - day;
-      const fridayStartLocal = new Date(nowLocal.getFullYear(), nowLocal.getMonth(), nowLocal.getDate(), 0, 0, 0, 0);
-      fridayStartLocal.setDate(fridayStartLocal.getDate() + offsetToFriday);
-      const sundayEndLocal = new Date(fridayStartLocal);
-      sundayEndLocal.setDate(fridayStartLocal.getDate() + 2);
-      sundayEndLocal.setHours(23, 59, 59, 999);
-
-      const startUtc = fromZonedTime(fridayStartLocal, tz).toISOString();
-      const endUtc = fromZonedTime(sundayEndLocal, tz).toISOString();
+      const { startUtc, endUtc } = weekendWindow();
 
       const { data, error } = await supabase
         .from("events")
@@ -244,6 +259,12 @@ export default function EventsThisWeekend() {
             <SpriteIcon name="calendar" className="h-6 w-6 text-primary" />
             <h1 className="text-3xl font-bold">This Weekend in Des Moines</h1>
           </div>
+          {/* WHICH weekend, stated in the body. The title and description
+              stay date-free on purpose (WEB-SEO-031: the prerender froze a
+              build-time date into them). The body is rebuilt with the list,
+              so the dates here always match the events below them - and an
+              answer engine citing this page can say which weekend it means. */}
+          <p className="text-lg text-muted-foreground mb-2">{weekendWindow().label}</p>
 
           {/* SEO-009: a visible, absolute freshness date. These are the pages
               somebody checks again next Friday, and the only freshness claim on

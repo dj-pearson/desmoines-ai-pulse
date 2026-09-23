@@ -39,7 +39,7 @@ import { StickyMobileCTA } from "@/components/StickyMobileCTA";
 import { LastUpdatedBadge } from "@/components/LastUpdatedBadge";
 import { NearbyContent } from "@/components/NearbyContent";
 import { LazyLocationMap } from "@/components/LazyLocationMap";
-import { eventPriceContent } from "@/lib/eventOffers";
+import { eventSummary } from "@/lib/eventMeta";
 import { SpriteIcon } from "@/components/ui/SpriteIcon";
 
 /** Upcoming events fetched to populate the related/nearby rails (3 shown each). */
@@ -256,7 +256,15 @@ export default function EventDetails() {
               {/* Main Content Column */}
               <div className="lg:col-span-2 space-y-6">
                 {/* Event Header Card */}
-                <article className="bg-card rounded-2xl shadow-lg border overflow-hidden" itemScope itemType="https://schema.org/Event">
+                {/* NO MICRODATA HERE. This article used to declare itemScope Event with
+                    name, startDate, location and a bare price, and nothing
+                    else. Google counts that as a SECOND Event beside the
+                    complete JSON-LD one from EnhancedEventSEO, and the Search
+                    Console Events report listed exactly its gaps - endDate,
+                    image, eventStatus, description, offers.availability,
+                    validFrom and url - as warnings. The JSON-LD node is the one
+                    Event on this page. */}
+                <article className="bg-card rounded-2xl shadow-lg border overflow-hidden">
                   <div className="p-6 md:p-8">
                     {/* Badges Row */}
                     <div className="flex flex-wrap items-center gap-2 mb-4">
@@ -281,9 +289,17 @@ export default function EventDetails() {
                     </div>
 
                     {/* Title */}
-                    <h1 className="text-2xl md:text-3xl lg:text-4xl font-extrabold text-foreground mb-4 leading-tight" itemProp="name">
+                    <h1 className="text-2xl md:text-3xl lg:text-4xl font-extrabold text-foreground mb-4 leading-tight">
                       {event.title}
                     </h1>
+
+                    {/* The answer-first sentence: what, when, where, price, from
+                        the row alone (src/lib/eventMeta.ts). It is what an
+                        assistant quotes when asked what is on this weekend, and
+                        the Speakable node points at it by id. */}
+                    <p id="event-summary" className="text-base text-muted-foreground mb-5 max-w-prose">
+                      {eventSummary({ ...event, source_url: ticketUrl ?? undefined })}
+                    </p>
 
                     {/* Key Details Row */}
                     <div className="grid grid-cols-1 sm:grid-cols-2 gap-3 mb-6">
@@ -293,7 +309,7 @@ export default function EventDetails() {
                         </div>
                         <div>
                           <p className="font-semibold text-foreground text-sm">{dayOfWeek}</p>
-                          <p className="text-sm text-muted-foreground" itemProp="startDate" content={event.event_start_utc || (typeof event.date === 'string' ? event.date : event.date.toISOString())}>
+                          <p className="text-sm text-muted-foreground">
                             {monthDay}
                           </p>
                           {timeStr && (
@@ -306,11 +322,11 @@ export default function EventDetails() {
                         <div className="p-2 rounded-lg bg-primary/10">
                           <SpriteIcon name="map-pin" className="h-5 w-5 text-primary" />
                         </div>
-                        <div itemProp="location" itemScope itemType="https://schema.org/Place">
+                        <div>
                           {event.venue && (
-                            <p className="font-semibold text-foreground text-sm" itemProp="name">{event.venue}</p>
+                            <p className="font-semibold text-foreground text-sm">{event.venue}</p>
                           )}
-                          <p className="text-sm text-muted-foreground" itemProp="address">{event.location}</p>
+                          <p className="text-sm text-muted-foreground">{event.location}</p>
                           {event.city && (
                             <p className="text-sm text-muted-foreground">{event.city}, Iowa</p>
                           )}
@@ -324,19 +340,7 @@ export default function EventDetails() {
                           </div>
                           <div>
                             <p className="font-semibold text-foreground text-sm">Admission</p>
-                            {/* WEB-SEO-018: microdata `price` takes one number
-                                only, so a range or an unreadable string drops
-                                the Offer scope and shows the text alone. The
-                                JSON-LD on this page still carries the full
-                                AggregateOffer. */}
-                            {eventPriceContent(event.price) ? (
-                              <p className="text-sm text-muted-foreground" itemProp="offers" itemScope itemType="https://schema.org/Offer">
-                                <span itemProp="price" content={eventPriceContent(event.price)}>{event.price}</span>
-                                <meta itemProp="priceCurrency" content="USD" />
-                              </p>
-                            ) : (
-                              <p className="text-sm text-muted-foreground">{event.price}</p>
-                            )}
+                            <p className="text-sm text-muted-foreground">{event.price}</p>
                           </div>
                         </div>
                       )}
@@ -387,7 +391,7 @@ export default function EventDetails() {
                 {/* About This Event - SEO Rich Content */}
                 <section className="bg-card rounded-2xl shadow-sm border p-6 md:p-8">
                   <h2 className="text-xl font-bold mb-4">About This Event</h2>
-                  <div className="prose prose-slate max-w-none" itemProp="description">
+                  <div className="prose prose-slate max-w-none">
                     <p className="text-muted-foreground leading-relaxed text-base">
                       {event.enhanced_description || event.original_description || `Join us for ${event.title}, a ${event.category.toLowerCase()} event happening in ${event.city || 'Des Moines'}, Iowa.`}
                     </p>
