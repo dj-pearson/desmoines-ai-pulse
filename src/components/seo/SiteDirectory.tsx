@@ -94,6 +94,7 @@ export const DIRECTORY_SECTIONS: DirectorySection[] = [
     title: "Restaurants",
     links: [
       { title: "Des Moines restaurant guide", href: "/restaurants" },
+      { title: "New restaurants", href: "/restaurants/new" },
       { title: "Open now", href: "/restaurants/open-now" },
       { title: "Dietary options", href: "/restaurants/dietary" },
       { title: "Breweries", href: "/breweries" },
