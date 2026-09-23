@@ -754,6 +754,8 @@ export default function AttractionDetails() {
             variant="restaurants-near-attraction"
             city="Des Moines"
             excludeId={attraction.id}
+            latitude={attraction.latitude}
+            longitude={attraction.longitude}
           />
 
           {/* Browse More CTA */}

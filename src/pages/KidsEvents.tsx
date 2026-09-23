@@ -84,26 +84,32 @@ export default function KidsEvents() {
     { name: "Kids & Family", url: "/events/kids" },
   ];
 
+  // SEO-014. These answers quoted "the Des Moines Parks & Recreation
+  // department" and "Des Moines Tourism" for figures (300+ kids events a year,
+  // 100+ library programs a month) that have no source in this repo - the
+  // attributed-statistic pattern WEB-BE-053 removed from the writeup prompt.
+  // FAQPage schema hands each answer to AI search as the site's own claim, so
+  // they now describe the listings and link targets, nothing else.
   const faqData = [
     {
       question: "What are the best kids events in Des Moines?",
-      answer: `We track family-friendly events in Des Moines including library story times, playground programs, Science Center exhibits, Blank Park Zoo events, and seasonal festivals. According to the Des Moines Parks & Recreation department, the metro area hosts 300+ kids events annually.`,
+      answer: "This page lists upcoming family-friendly events across Des Moines and its suburbs - story times, festivals, science and nature programs and seasonal events - with the date, time, venue and price on every listing.",
     },
     {
       question: "Are there free activities for kids in Des Moines?",
-      answer: `Yes - free kids events are listed here alongside paid ones. Des Moines Public Library offers 100+ free children's programs monthly across 6 locations. Parks & Recreation provides free playground programs all summer, and many museums offer free admission days.`,
+      answer: "Yes. Free kids events are listed here alongside paid ones and are marked free on their cards. The Free Events page lists every free event on the calendar, and the playgrounds guide covers parks and play areas across the metro.",
     },
     {
       question: "What age groups do kids events in Des Moines serve?",
-      answer: "Des Moines family events serve all ages: baby/toddler programs (0-2), preschool activities (3-5), elementary programs (6-11), and teen events (12+). Many festivals and outdoor events welcome all ages. Check individual event details for age recommendations.",
+      answer: "It varies by event, from programs for babies and toddlers to teen events, and many festivals welcome all ages. Each listing links to the organizer's page, which is where age guidance is published.",
     },
     {
-      question: "Where are the best indoor kids activities in Des Moines?",
-      answer: "Top indoor kids venues include: Science Center of Iowa (hands-on exhibits), Des Moines Children's Museum, all 6 Des Moines Public Library locations (story times, crafts), Playgrounds indoor play spaces, and Sky Zone trampoline park. Perfect for Iowa winters!",
+      question: "Where can kids play in Des Moines?",
+      answer: "The playgrounds guide maps playgrounds across the Des Moines metro with their features, and each playground has its own page with directions.",
     },
     {
       question: "What's the best time of year for kids events in Des Moines?",
-      answer: "Des Moines offers year-round family activities! Summer features outdoor festivals and park programs. Fall brings pumpkin patches and Halloween events. Winter offers holiday celebrations and indoor programs. Spring has egg hunts and nature programs. According to Des Moines Tourism, attendance peaks during summer (June-August).",
+      answer: "There are family events all year. Summer brings outdoor festivals and park programs, fall brings pumpkin patches and Halloween events, and winter brings holiday events and indoor programs. The month pages show what is scheduled for each month.",
     },
   ];
 
@@ -180,11 +186,11 @@ export default function KidsEvents() {
           </div>
 
           <p className="text-lg text-muted-foreground max-w-3xl mb-4">
-            <strong>Discover {kidsEvents.length}+ family-friendly events in Des Moines perfect for kids of all ages.</strong> According to the Des Moines Parks & Recreation department, the metro area hosts over 300 kids events annually—more family programming than any other Iowa city. From story times to science exhibits, find activities for toddlers, children, and teens.
+            <strong>Upcoming family-friendly events in Des Moines and its suburbs</strong>: story times, festivals, science and nature programs and seasonal events, with dates, times and prices on every listing.
           </p>
 
           <p className="text-base text-muted-foreground max-w-3xl">
-            Our kids events list includes {freeKidsEvents.length} free activities and is updated daily with new programs from libraries, parks, museums, and community centers. All events vetted for family-friendliness.
+            {freeKidsEvents.length} of the events below are listed as free. Looking for somewhere to play instead? See the <Link to="/playgrounds" className="text-primary hover:underline font-semibold">Des Moines playgrounds guide</Link>.
           </p>
         </div>
 
@@ -222,39 +228,32 @@ export default function KidsEvents() {
           </CardContent>
         </Card>
 
-        {/* Top Family Venues - GEO Content */}
+        {/* SEO-014. This card was "Top Family Venues" with visitor counts,
+            founding years, animal counts and quotes credited to the Des Moines
+            Register and the Trust for Public Land, none with a source, and an
+            IMAX theater and a children's museum that may no longer operate.
+            It now points at the pages on this site that answer the same
+            question from data. */}
         <Card className="mb-8">
           <CardContent className="pt-6">
-            <h2 className="text-xl font-semibold mb-4">Top Family Venues in Des Moines</h2>
+            <h2 className="text-xl font-semibold mb-4">More for Families in Des Moines</h2>
             <div className="grid md:grid-cols-2 gap-4">
-              <div className="p-4 bg-muted rounded-lg">
-                <h3 className="font-semibold mb-2">🔬 Science Center of Iowa</h3>
-                <p className="text-sm text-muted-foreground">
-                  Over 200,000 annual visitors. Features hands-on exhibits, planetarium, and IMAX theater.
-                  "Best kids attraction in Iowa" - Des Moines Register. Ages 2-12 recommended.
-                </p>
-              </div>
-              <div className="p-4 bg-muted rounded-lg">
-                <h3 className="font-semibold mb-2">📚 Des Moines Public Library</h3>
-                <p className="text-sm text-muted-foreground">
-                  6 locations offering 100+ free monthly programs: story times, crafts, tech classes.
-                  Established 1866, serving 50,000+ kids annually. All ages welcome.
-                </p>
-              </div>
-              <div className="p-4 bg-muted rounded-lg">
-                <h3 className="font-semibold mb-2">🦁 Blank Park Zoo</h3>
-                <p className="text-sm text-muted-foreground">
-                  Home to 800+ animals, hosts seasonal events like Boo at the Zoo.
-                  Member of Association of Zoos & Aquariums. Open year-round with indoor exhibits.
-                </p>
-              </div>
-              <div className="p-4 bg-muted rounded-lg">
-                <h3 className="font-semibold mb-2">🌳 Des Moines Parks</h3>
-                <p className="text-sm text-muted-foreground">
-                  80+ playgrounds, free summer programs at 20+ parks. Outdoor movies, nature walks,
-                  sports clinics. "One of America's best park systems" - Trust for Public Land.
-                </p>
-              </div>
+              <Link to="/playgrounds" className="p-4 bg-muted rounded-lg hover:bg-muted/70">
+                <h3 className="font-semibold mb-1">Playgrounds guide</h3>
+                <p className="text-sm text-muted-foreground">Playgrounds across the metro, each with its features and directions.</p>
+              </Link>
+              <Link to="/events/free" className="p-4 bg-muted rounded-lg hover:bg-muted/70">
+                <h3 className="font-semibold mb-1">Free events</h3>
+                <p className="text-sm text-muted-foreground">Every event on the calendar whose admission is listed as free.</p>
+              </Link>
+              <Link to="/attractions" className="p-4 bg-muted rounded-lg hover:bg-muted/70">
+                <h3 className="font-semibold mb-1">Attractions</h3>
+                <p className="text-sm text-muted-foreground">Museums, the zoo, gardens and landmarks, with hours and admission from each listing.</p>
+              </Link>
+              <Link to="/events/this-weekend" className="p-4 bg-muted rounded-lg hover:bg-muted/70">
+                <h3 className="font-semibold mb-1">This weekend</h3>
+                <p className="text-sm text-muted-foreground">Everything on the calendar from Friday through Sunday.</p>
+              </Link>
             </div>
           </CardContent>
         </Card>
@@ -307,37 +306,36 @@ export default function KidsEvents() {
           </Card>
         )}
 
-        {/* Tips for Families - GEO Content */}
+        {/* Tips for Families. The old version asserted amenities at named
+            places (nursing rooms, a mall play area, "library programs are
+            always free") that nobody here checked. What is left is advice
+            that holds whatever the venue. */}
         <Card className="mt-8">
           <CardContent className="pt-6">
-            <h2 className="text-xl font-semibold mb-4">Tips for Families Visiting Des Moines Events</h2>
+            <h2 className="text-xl font-semibold mb-4">Tips for Families at Des Moines Events</h2>
             <div className="grid md:grid-cols-2 gap-6">
               <div>
-                <h3 className="font-semibold mb-2">👶 Age-Appropriate Planning</h3>
+                <h3 className="font-semibold mb-2">Check the age range</h3>
                 <p className="text-sm text-muted-foreground">
-                  Story times are perfect for ages 0-5. Science Center suits ages 2-12. Teen programs available at libraries.
-                  Always check age recommendations in event details.
+                  Organizers publish age guidance on their own pages. Each listing here links to it.
                 </p>
               </div>
               <div>
-                <h3 className="font-semibold mb-2">🚼 Family Amenities</h3>
+                <h3 className="font-semibold mb-2">Have an indoor backup</h3>
                 <p className="text-sm text-muted-foreground">
-                  Most Des Moines venues offer: changing tables, nursing rooms (Science Center, libraries),
-                  stroller accessibility, and family restrooms. Jordan Creek Mall has a play area.
+                  Iowa weather changes quickly. On a wet weekend, the <Link to="/events/this-weekend" className="text-primary hover:underline">this weekend</Link> list puts indoor events first.
                 </p>
               </div>
               <div>
-                <h3 className="font-semibold mb-2">🌦️ Indoor Backup Plans</h3>
+                <h3 className="font-semibold mb-2">Stay on budget</h3>
                 <p className="text-sm text-muted-foreground">
-                  Iowa weather changes quickly! Have indoor alternatives ready: libraries, Science Center,
-                  indoor playgrounds, or mall play areas. Check our indoor activities filter.
+                  {freeKidsEvents.length} of the events on this page are listed as free. See all <Link to="/events/free" className="text-primary hover:underline font-semibold">free events in Des Moines</Link>.
                 </p>
               </div>
               <div>
-                <h3 className="font-semibold mb-2">💰 Budget-Friendly Options</h3>
+                <h3 className="font-semibold mb-2">Get outside</h3>
                 <p className="text-sm text-muted-foreground">
-                  Des Moines offers {freeKidsEvents.length}+ free kids events. Library programs are always free.
-                  Museums offer discount days. Pack snacks to save at festivals. See all <Link to="/events/free" className="text-primary hover:underline font-semibold">free events in Des Moines</Link>.
+                  Between events, the <Link to="/playgrounds" className="text-primary hover:underline">playgrounds guide</Link> shows where to play near you.
                 </p>
               </div>
             </div>

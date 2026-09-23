@@ -966,6 +966,8 @@ export default function RestaurantDetails() {
             variant="events-near-restaurant"
             city={restaurant.city || "Des Moines"}
             excludeId={restaurant.id}
+            latitude={restaurant.latitude}
+            longitude={restaurant.longitude}
           />
 
           {/* Browse More CTA */}

@@ -1,7 +1,10 @@
 import { lazy, Suspense } from "react";
 import { Link } from "react-router-dom";
-import { useRestaurants } from "@/hooks/useRestaurants";
-import { useEvents } from "@/hooks/useEvents";
+import { useNearbyListings } from "@/hooks/useNearbyListings";
+import type { Database } from "@/integrations/supabase/types";
+import type { Event } from "@/lib/types";
+
+type Restaurant = Database["public"]["Tables"]["restaurants"]["Row"];
 import { Button } from "@/components/ui/button";
 import { ChevronRight, Utensils, Calendar, Landmark } from "lucide-react";
 
@@ -11,8 +14,12 @@ const EventCard = lazy(() => import("@/components/EventCard"));
 interface NearbyContentProps {
   variant: "restaurants-near-event" | "events-near-restaurant" | "restaurants-near-attraction";
   locationName?: string;
+  /** Kept for call-site compatibility; distance, not city, decides now. */
   city?: string;
   excludeId?: string;
+  /** Where "nearby" is measured from. Without both, nothing renders. */
+  latitude?: number | string | null;
+  longitude?: number | string | null;
 }
 
 function CardSkeleton() {
@@ -27,59 +34,43 @@ function CardSkeleton() {
   );
 }
 
-export function NearbyContent({ variant, city, excludeId }: NearbyContentProps) {
+export function NearbyContent({ variant, excludeId, latitude, longitude }: NearbyContentProps) {
   const showRestaurants = variant === "restaurants-near-event" || variant === "restaurants-near-attraction";
   const showEvents = variant === "events-near-restaurant";
 
-  const { restaurants, isLoading: restaurantsLoading } = useRestaurants(
-    showRestaurants
-      ? { limit: 3, sortBy: "popularity" }
-      : {}
+  // SEO-015: by distance from this page's own coordinates. See useNearbyListings.
+  const { data: rows, isLoading: queryLoading, fetchStatus } = useNearbyListings(
+    showRestaurants ? "restaurants" : "events",
+    latitude,
+    longitude,
+    { excludeId },
   );
-
-  const { events, isLoading: eventsLoading } = useEvents(
-    showEvents
-      ? { limit: 3 }
-      : {}
-  );
-
-  const filteredRestaurants = showRestaurants
-    ? restaurants
-        .filter((r) => r.id !== excludeId)
-        .filter((r) => !city || !r.city || r.city.toLowerCase().includes(city.toLowerCase()) || true)
-        .slice(0, 3)
-    : [];
-
-  const filteredEvents = showEvents
-    ? events
-        .filter((e) => e.id !== excludeId)
-        .filter((e) => new Date(e.date) >= new Date())
-        .slice(0, 3)
-    : [];
-
-  const isLoading = showRestaurants ? restaurantsLoading : eventsLoading;
-  const hasContent = showRestaurants ? filteredRestaurants.length > 0 : filteredEvents.length > 0;
+  // A disabled query (no coordinates) reports isLoading forever; it is idle.
+  const isLoading = queryLoading && fetchStatus !== "idle";
+  const filteredRestaurants = showRestaurants ? ((rows ?? []) as unknown as Restaurant[]) : [];
+  const filteredEvents = showEvents ? ((rows ?? []) as unknown as Event[]) : [];
+  const hasContent = (rows ?? []).length > 0;
 
   if (!isLoading && !hasContent) return null;
 
   const config = {
     "restaurants-near-event": {
       title: "Grab a Bite Nearby",
-      subtitle: "Restaurants to check out before or after the event",
+      subtitle: "Restaurants within two miles, closest first",
       icon: Utensils,
       linkText: "Browse All Restaurants",
       linkHref: "/restaurants",
     },
     "events-near-restaurant": {
       title: "Events Happening Nearby",
-      subtitle: "Upcoming events to pair with your meal",
+      subtitle: "Upcoming events within two miles, closest first",
       icon: Calendar,
       linkText: "Browse All Events",
       linkHref: "/events",
     },
     "restaurants-near-attraction": {
       title: "Dining Nearby",
-      subtitle: "Great restaurants to visit while you're in the area",
+      subtitle: "Restaurants within two miles, closest first",
       icon: Utensils,
       linkText: "Browse All Restaurants",
       linkHref: "/restaurants",
