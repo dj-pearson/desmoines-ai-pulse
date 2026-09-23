@@ -1,3 +1,4 @@
+import { RelatedLinks } from "@/components/seo/InternalLinks";
 import React, { useState, useMemo, useEffect, lazy, Suspense, useRef } from "react";
 import Header from "@/components/Header";
 import Footer from "@/components/Footer";
@@ -227,20 +228,6 @@ export default function Attractions() {
     { name: "Attractions", url: "/attractions" },
   ];
 
-  const faqData = [
-    {
-      question: "What are the top attractions in Des Moines?",
-      answer: `Des Moines features ${filteredAttractions.length}+ attractions including Science Center of Iowa (interactive STEM exhibits), Blank Park Zoo (year-round animal exhibits), Pappajohn Sculpture Park (free outdoor art), Iowa State Capitol (free guided tours), and the Des Moines Art Center (free admission).`,
-    },
-    {
-      question: "Are there free attractions in Des Moines?",
-      answer: "Yes! Many Des Moines attractions offer free admission including Pappajohn Sculpture Park, Des Moines Art Center, Iowa State Capitol tours, State Historical Museum of Iowa, and various neighborhood parks.",
-    },
-    {
-      question: "What are the best family attractions in Des Moines?",
-      answer: "Top family-friendly attractions include Science Center of Iowa (hands-on exhibits), Blank Park Zoo, Adventureland Park (amusement rides), Living History Farms (interactive farm activities), and various splash pads and playgrounds.",
-    },
-  ];
 
   // The rendered set, capped, so every URL here is a link the crawler can
   // also see on the page. createSlug above is the same function the cards
@@ -904,44 +891,55 @@ export default function Attractions() {
         </div>
       </section>
 
+      {/* SEO-011 / SEO-015: the attractions hub linked nowhere outside
+          itself. These are the pages that answer the next question. */}
+      <div className="max-w-4xl mx-auto px-4 sm:px-6 lg:px-8 py-8">
+        <RelatedLinks
+          title="Plan the rest of the day"
+          variant="grid"
+          links={[
+            { title: "Events this weekend", href: "/events/this-weekend" },
+            { title: "Kids and family events", href: "/events/kids" },
+            { title: "Playgrounds", href: "/playgrounds" },
+            { title: "Outdoors and trails", href: "/outdoors" },
+            { title: "Restaurants", href: "/restaurants" },
+            { title: "Things to do", href: "/things-to-do" },
+          ]}
+        />
+      </div>
+
       {/* FAQ Section for SEO and Featured Snippets */}
       <section className="py-16 bg-muted/30">
         <div className="max-w-4xl mx-auto px-4 sm:px-6 lg:px-8">
           <FAQSection
             title="Des Moines Attractions - Frequently Asked Questions"
             description="Common questions about attractions, museums, and things to see in Des Moines, Iowa."
+            // SEO-011. The answers this replaces asserted admission
+            // prices, accessibility, acreage, "over 100 species", "50+
+            // attractions" (the sitemap carries 22) and an IMAX theater -
+            // the fields the story names as the ones a visitor acts on, with
+            // no source in this repo, published as FAQPage schema. The
+            // listings carry hours and admission; the answers point there.
             faqs={[
               {
                 question: "What are the top attractions in Des Moines?",
-                answer: "Des Moines features 50+ attractions including Science Center of Iowa (interactive STEM exhibits and IMAX theater), Blank Park Zoo (year-round animal exhibits with over 100 species), Pappajohn Sculpture Park (free outdoor art gallery with 31 sculptures), Iowa State Capitol (free guided tours of the historic building), Living History Farms (interactive 500-acre farm experience), Des Moines Art Center (free admission to world-class art collections), Greater Des Moines Botanical Garden (indoor and outdoor gardens), and Adventureland Park (major amusement park with rides and water park). Our platform provides current hours, admission prices, and accessibility information for all attractions."
+                answer: "This guide lists the attractions we track across the Des Moines metro, including the Science Center of Iowa, Blank Park Zoo, the Iowa State Capitol, the Des Moines Art Center, the Greater Des Moines Botanical Garden and Pappajohn Sculpture Park. Each has its own page with its location, hours and admission as listed."
               },
               {
                 question: "Are there free attractions in Des Moines?",
-                answer: "Yes! Many Des Moines attractions offer free admission: Pappajohn Sculpture Park (downtown public art), Des Moines Art Center (free permanent collection), Iowa State Capitol tours (free guided tours), State Historical Museum of Iowa (free admission), Salisbury House & Gardens (free grounds access), Western Gateway Park (sculptures and trails), Gray's Lake Park (walking trails and beach), Principal Riverwalk (scenic downtown walking path), and various neighborhood parks. Several museums offer free admission days monthly. Check our Attractions page with the 'Free' filter for current free options."
+                answer: "Yes. Pappajohn Sculpture Park is a public park downtown, and several museums and landmarks are free to visit. Each attraction page shows its admission as listed, so check there before you go."
               },
               {
                 question: "What are the best family attractions in Des Moines?",
-                answer: "Des Moines excels in family-friendly attractions: Science Center of Iowa (hands-on exhibits for all ages), Blank Park Zoo (educational animal experiences), Adventureland Park (amusement rides and water park for all ages), Living History Farms (interactive farm activities), Laser Quest (laser tag arena), Skyzone (trampoline park), various splash pads and playgrounds throughout the metro, Civic Center Broadway shows and family performances, and seasonal activities like pumpkin patches and Christmas displays. Our platform indicates age appropriateness and family amenities for each attraction."
-              },
-              {
-                question: "What museums are in Des Moines?",
-                answer: "Des Moines museums include Des Moines Art Center (modern and contemporary art with free admission), State Historical Museum of Iowa (Iowa history and culture), Science Center of Iowa (STEM exhibits and planetarium), Salisbury House & Gardens (historic mansion and art collection), World Food Prize Hall of Laureates (global food security), Hoyt Sherman Place (art gallery and historic theater), and various specialized museums. Most museums offer educational programs, special exhibitions, and guided tours. Check our Attractions page for current exhibits, hours, and special events at each museum."
-              },
-              {
-                question: "What outdoor attractions are available in Des Moines?",
-                answer: "Des Moines offers extensive outdoor attractions: Gray's Lake Park (177-acre park with trails and beach), Raccoon River Park (1,500 acres with trails and lodge), Pappajohn Sculpture Park (outdoor art), Greater Des Moines Botanical Garden (outdoor gardens), Water Works Park (1,500 acres along Raccoon River), Principal Riverwalk (downtown river trails), Maffitt Lake (fishing and wildlife), Big Creek State Park (nearby with 900-acre lake), and 100+ neighborhood parks and playgrounds. Seasonal activities include kayaking, paddleboarding, biking, hiking, and cross-country skiing."
+                answer: "The Science Center of Iowa and Blank Park Zoo are the obvious starts. For more, the Kids and Family events page lists upcoming family events and the playgrounds guide maps parks across the metro."
               },
               {
                 question: "Do Des Moines attractions require advance tickets?",
-                answer: "Ticket requirements vary by attraction. Popular attractions like Science Center of Iowa and Blank Park Zoo accept walk-ins but recommend online tickets during peak seasons (summer, weekends, holidays) to guarantee entry and skip lines. Adventureland Park offers online discounts for advance purchase. Special events and shows at Civic Center require advance tickets. Most museums and parks accept walk-ins year-round. Our attraction pages include ticketing information, online purchase links, and recommendations for advance booking based on season and day of week."
+                answer: "It depends on the attraction and the day. Each attraction page links to the official site, which is where ticketing and timed-entry rules are published."
               },
               {
-                question: "Are Des Moines attractions accessible for people with disabilities?",
-                answer: "Yes! Des Moines attractions prioritize accessibility. Major attractions like Science Center of Iowa, Blank Park Zoo, Des Moines Art Center, and Iowa State Capitol offer wheelchair accessibility, accessible parking, accessible restrooms, and accommodations for various disabilities. Many attractions provide sensory-friendly hours, assistive listening devices, and trained staff. Our platform indicates specific accessibility features for each attraction including wheelchair access, accessible parking, sensory accommodations, and service animal policies. Contact attractions directly for specific accommodation needs."
-              },
-              {
-                question: "What seasonal attractions are available in Des Moines?",
-                answer: "Des Moines offers seasonal attractions year-round: Spring (tulip displays at botanical gardens, Easter events), Summer (outdoor festivals, farmers markets, water parks, outdoor concerts), Fall (pumpkin patches, corn mazes, Oktoberfest, Iowa State Fair in August), Winter (holiday light displays, ice skating at Brenton Skating Plaza, indoor attractions). The Iowa State Fair in August is the state's largest event attracting 1+ million visitors. Check our Attractions page filtered by current season for relevant activities and special seasonal exhibitions."
+                question: "What is there to do outdoors in Des Moines?",
+                answer: "The outdoors guide covers trails and parks, the playgrounds guide covers play areas, and the attractions here include gardens and sculpture parks."
               }
             ]}
             showSchema={true}

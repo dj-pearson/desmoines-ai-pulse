@@ -13,6 +13,8 @@ import { getCanonicalUrl } from '@/lib/brandConfig';
 import { Users, Heart, DollarSign, TreePine, Music, Utensils, Camera, Baby, Sunset, CalendarDays, Clock, Snowflake, Sun, Leaf, Flower2, ChevronRight } from "lucide-react";
 import { Badge } from '@/components/ui/badge';
 import { SpriteIcon } from "@/components/ui/SpriteIcon";
+import { usePseoPageSlugs } from '@/pseo/hooks/usePseoPage';
+import { resolveHubLink, type HubFallback } from '@/lib/hubLinks';
 
 // ---------------------------------------------------------------------------
 // Data
@@ -20,16 +22,16 @@ import { SpriteIcon } from "@/components/ui/SpriteIcon";
 
 const areas = [
   { slug: 'downtown', name: 'Downtown', description: 'Skywalk dining, Court Ave nightlife, arts & culture', icon: '🏙️' },
-  { slug: 'east-village', name: 'East Village', description: "DSM's trendiest neighborhood — boutiques, brunch & bars", icon: '✨' },
+  { slug: 'east-village', fallback: { href: '/neighborhoods/east-village', description: 'East Village guide: events, dining and attractions' }, name: 'East Village', description: "DSM's trendiest neighborhood — boutiques, brunch & bars", icon: '✨' },
   { slug: 'valley-junction', name: 'Valley Junction', description: 'Walkable historic district, antiques & local dining', icon: '🏘️' },
-  { slug: 'west-des-moines', name: 'West Des Moines', description: 'Jordan Creek, local gems amid the suburbs', icon: '🛍️' },
-  { slug: 'ankeny', name: 'Ankeny', description: "Iowa's fastest-growing city — always something new", icon: '🚀' },
+  { slug: 'west-des-moines', fallback: { href: '/neighborhoods/west-des-moines', description: 'West Des Moines guide: events, dining and attractions' }, name: 'West Des Moines', description: 'Jordan Creek, local gems amid the suburbs', icon: '🛍️' },
+  { slug: 'ankeny', fallback: { href: '/neighborhoods/ankeny', description: 'Ankeny guide: events, dining and attractions' }, name: 'Ankeny', description: "Iowa's fastest-growing city — always something new", icon: '🚀' },
   { slug: 'drake', name: 'Drake', description: 'Diverse dining, campus energy, hidden gems', icon: '🎓' },
   { slug: 'beaverdale', name: 'Beaverdale', description: 'Neighborhood charm, local favorites, fall festival', icon: '🍂' },
   { slug: 'ingersoll', name: 'Ingersoll', description: 'Restaurant row, coffee shops, walkable corridor', icon: '☕' },
-  { slug: 'urbandale', name: 'Urbandale', description: 'Living History Farms, parks & local dining', icon: '🌾' },
-  { slug: 'waukee', name: 'Waukee', description: 'Kettlestone district, Raccoon River Valley Trail', icon: '🌿' },
-  { slug: 'altoona', name: 'Altoona', description: 'Adventureland, Prairie Meadows, local eats', icon: '🎢' },
+  { slug: 'urbandale', fallback: { href: '/neighborhoods/urbandale', description: 'Urbandale guide: events, dining and attractions' }, name: 'Urbandale', description: 'Living History Farms, parks & local dining', icon: '🌾' },
+  { slug: 'waukee', fallback: { href: '/neighborhoods/waukee', description: 'Waukee guide: events, dining and attractions' }, name: 'Waukee', description: 'Kettlestone district, Raccoon River Valley Trail', icon: '🌿' },
+  { slug: 'altoona', fallback: { href: '/neighborhoods/altoona', description: 'Altoona guide: events, dining and attractions' }, name: 'Altoona', description: 'Adventureland, Prairie Meadows, local eats', icon: '🎢' },
   { slug: 'sherman-hill', name: 'Sherman Hill', description: 'Victorian architecture, historic walks', icon: '🏛️' },
 ];
 
@@ -38,34 +40,34 @@ const areas = [
 // stays; each tint is a -50 surface in light and a -950/30 in dark, both under
 // body text that keeps its own token (WEB-UX-034 AC2).
 const audiences = [
-  { slug: 'families', name: 'For Families', description: 'Kid-friendly picks with stroller & age notes', icon: Baby, color: 'bg-blue-50 dark:bg-blue-950/30 border-blue-200 dark:border-blue-800' },
-  { slug: 'date-night', name: 'Date Night', description: 'Complete evening itineraries for couples', icon: Heart, color: 'bg-rose-50 dark:bg-rose-950/30 border-rose-200 dark:border-rose-800' },
-  { slug: 'foodies', name: 'For Foodies', description: 'Dish-specific recs, chef stories, deep cuts', icon: Utensils, color: 'bg-orange-50 dark:bg-orange-950/30 border-orange-200 dark:border-orange-800' },
-  { slug: 'budget', name: 'Budget-Friendly', description: 'Free events, happy hours, cheap eats', icon: DollarSign, color: 'bg-green-50 dark:bg-green-950/30 border-green-200 dark:border-green-800' },
-  { slug: 'tourists', name: 'For Visitors', description: '48-hour itineraries & must-see essentials', icon: Camera, color: 'bg-purple-50 dark:bg-purple-950/30 border-purple-200 dark:border-purple-800' },
+  { slug: 'families', fallback: { href: '/events/kids', description: 'Upcoming kids and family events' }, name: 'For Families', description: 'Kid-friendly picks with stroller & age notes', icon: Baby, color: 'bg-blue-50 dark:bg-blue-950/30 border-blue-200 dark:border-blue-800' },
+  { slug: 'date-night', fallback: { href: '/events/date-night', description: 'Date night events across the metro' }, name: 'Date Night', description: 'Complete evening itineraries for couples', icon: Heart, color: 'bg-rose-50 dark:bg-rose-950/30 border-rose-200 dark:border-rose-800' },
+  { slug: 'foodies', fallback: { href: '/restaurants', description: 'The Des Moines restaurant guide' }, name: 'For Foodies', description: 'Dish-specific recs, chef stories, deep cuts', icon: Utensils, color: 'bg-orange-50 dark:bg-orange-950/30 border-orange-200 dark:border-orange-800' },
+  { slug: 'budget', fallback: { href: '/events/free', description: 'Every free event on the calendar' }, name: 'Budget-Friendly', description: 'Free events, happy hours, cheap eats', icon: DollarSign, color: 'bg-green-50 dark:bg-green-950/30 border-green-200 dark:border-green-800' },
+  { slug: 'tourists', fallback: { href: '/attractions', description: 'Museums, gardens, the zoo and landmarks' }, name: 'For Visitors', description: '48-hour itineraries & must-see essentials', icon: Camera, color: 'bg-purple-50 dark:bg-purple-950/30 border-purple-200 dark:border-purple-800' },
   { slug: 'pet-friendly', name: 'Pet-Friendly', description: 'Dog-friendly patios, parks & hotels', icon: TreePine, color: 'bg-teal-50 dark:bg-teal-950/30 border-teal-200 dark:border-teal-800' },
   { slug: 'groups', name: 'For Groups', description: 'Large groups, team building & party venues', icon: Users, color: 'bg-indigo-50 dark:bg-indigo-950/30 border-indigo-200 dark:border-indigo-800' },
   { slug: 'couples', name: 'For Couples', description: 'Weekend getaways & shared experiences', icon: Sunset, color: 'bg-pink-50 dark:bg-pink-950/30 border-pink-200 dark:border-pink-800' },
 ];
 
 const byTime = [
-  { slug: 'today', name: 'Today', description: "What's happening right now", icon: Clock, badge: 'Live' },
-  { slug: 'this-weekend', name: 'This Weekend', description: 'Friday–Sunday curated picks', icon: CalendarDays, badge: 'Popular' },
-  { slug: 'summer', name: 'This Summer', description: 'Outdoor concerts, State Fair & more', icon: Sun, badge: 'Seasonal' },
-  { slug: 'fall', name: 'Fall', description: 'Apple orchards, pumpkins & foliage', icon: Leaf, badge: 'Seasonal' },
-  { slug: 'winter', name: 'Winter', description: 'Holiday lights, indoor picks & cozy spots', icon: Snowflake, badge: 'Seasonal' },
+  { slug: 'today', fallback: { href: '/events/today', description: 'Everything on the calendar today' }, name: 'Today', description: "What's happening right now", icon: Clock, badge: 'Live' },
+  { slug: 'this-weekend', fallback: { href: '/events/this-weekend', description: 'Friday through Sunday, every event' }, name: 'This Weekend', description: 'Friday–Sunday curated picks', icon: CalendarDays, badge: 'Popular' },
+  { slug: 'summer', fallback: { href: '/guides/summer-2026', description: 'The summer guide' }, name: 'This Summer', description: 'Outdoor concerts, State Fair & more', icon: Sun, badge: 'Seasonal' },
+  { slug: 'fall', fallback: { href: '/guides/fall-festivals', description: 'The fall festivals guide' }, name: 'Fall', description: 'Apple orchards, pumpkins & foliage', icon: Leaf, badge: 'Seasonal' },
+  { slug: 'winter', fallback: { href: '/guides/holiday-lights', description: 'The holiday lights guide' }, name: 'Winter', description: 'Holiday lights, indoor picks & cozy spots', icon: Snowflake, badge: 'Seasonal' },
   { slug: 'spring', name: 'Spring', description: 'Patio season openers & garden blooms', icon: Flower2, badge: 'Seasonal' },
 ];
 
 const byCategory = [
-  { slug: 'live-music', name: 'Live Music', icon: Music },
-  { slug: 'festivals', name: 'Festivals', icon: CalendarDays },
-  { slug: 'arts-culture', name: 'Arts & Culture', icon: Camera },
-  { slug: 'outdoors', name: 'Outdoors', icon: TreePine },
-  { slug: 'brunch', name: 'Brunch', icon: Utensils },
+  { slug: 'live-music', fallback: { href: '/music', description: 'Concerts and live music across the metro' }, name: 'Live Music', icon: Music },
+  { slug: 'festivals', fallback: { href: '/guides', description: 'Seasonal and festival guides' }, name: 'Festivals', icon: CalendarDays },
+  { slug: 'arts-culture', fallback: { href: '/attractions' }, name: 'Arts & Culture', icon: Camera },
+  { slug: 'outdoors', fallback: { href: '/outdoors' }, name: 'Outdoors', icon: TreePine },
+  { slug: 'brunch', fallback: { href: '/restaurants' }, name: 'Brunch', icon: Utensils },
   { slug: 'coffee', name: 'Coffee & Cafes', icon: Utensils },
-  { slug: 'museums', name: 'Museums', icon: Camera },
-  { slug: 'parks', name: 'Parks & Nature', icon: TreePine },
+  { slug: 'museums', fallback: { href: '/attractions' }, name: 'Museums', icon: Camera },
+  { slug: 'parks', fallback: { href: '/playgrounds' }, name: 'Parks & Nature', icon: TreePine },
 ];
 
 // ---------------------------------------------------------------------------
@@ -75,6 +77,41 @@ const byCategory = [
 export default function ThingsToDoHub() {
   const canonicalUrl = getCanonicalUrl('/things-to-do');
 
+  // SEO-012: link a pSEO page only when it is published. See src/lib/hubLinks.ts.
+  const { data: pseoSlugs } = usePseoPageSlugs();
+  const published = new Set((pseoSlugs ?? []).map((r) => r.slug));
+  const resolve = <T extends { slug: string; description?: string; fallback?: HubFallback }>(items: T[]) =>
+    items
+      .map((item) => {
+        const link = resolveHubLink(`/things-to-do/${item.slug}`, published, item.fallback, item.description);
+        return link ? ({ ...item, href: link.href, description: link.description ?? item.description } as T & { href: string }) : null;
+      })
+      .filter((x): x is T & { href: string } => x !== null);
+  const areaLinks = resolve(areas);
+  const audienceLinks = resolve(audiences);
+  const timeLinks = resolve(byTime);
+  const categoryLinks = resolve(byCategory);
+  const popularLinks = [
+    { href: '/things-to-do/downtown/families', label: 'Family-Friendly Downtown' },
+    { href: '/things-to-do/east-village/date-night', label: 'Date Night in East Village' },
+    { href: '/things-to-do/this-weekend', label: 'Things to Do This Weekend' },
+    { href: '/things-to-do/downtown/budget', label: 'Free Things to Do Downtown' },
+    { href: '/things-to-do/ankeny/families', label: 'Family Activities in Ankeny' },
+    { href: '/things-to-do/tourists', label: 'First-Time Visitor Guide' },
+  ].filter((l) => published.has(l.href));
+
+  // A CollectionPage naming only pages that exist (SEO-012 AC4).
+  const collection = {
+    '@context': 'https://schema.org',
+    '@type': 'CollectionPage',
+    '@id': canonicalUrl,
+    name: 'Things to Do in Des Moines',
+    url: canonicalUrl,
+    hasPart: [...new Set([...areaLinks, ...audienceLinks, ...timeLinks, ...categoryLinks].map((l) => l.href))].map(
+      (href) => ({ '@type': 'WebPage', url: getCanonicalUrl(href) }),
+    ),
+  };
+
   return (
     <>
       <SEOHead
@@ -83,6 +120,7 @@ export default function ThingsToDoHub() {
         url={canonicalUrl}
         canonicalUrl={canonicalUrl}
         keywords={['things to do des moines', 'des moines activities', 'des moines attractions', 'what to do in des moines']}
+        structuredData={collection}
         breadcrumbs={[
           { name: 'Home', url: '/' },
           { name: 'Things to Do', url: '/things-to-do' },
@@ -125,10 +163,10 @@ export default function ThingsToDoHub() {
               </div>
             </div>
             <div className="grid grid-cols-2 sm:grid-cols-3 md:grid-cols-4 gap-3">
-              {areas.map((area) => (
+              {areaLinks.map((area) => (
                 <Link
                   key={area.slug}
-                  to={`/things-to-do/${area.slug}`}
+                  to={area.href}
                   className="group flex flex-col gap-1.5 p-4 rounded-xl border border-border bg-card hover:bg-accent hover:border-primary/40 transition-all duration-200"
                 >
                   <div className="flex items-center justify-between">
@@ -153,12 +191,12 @@ export default function ThingsToDoHub() {
               <p className="text-muted-foreground mt-1">Curated picks for every group and occasion</p>
             </div>
             <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4">
-              {audiences.map((audience) => {
+              {audienceLinks.map((audience) => {
                 const Icon = audience.icon;
                 return (
                   <Link
                     key={audience.slug}
-                    to={`/things-to-do/${audience.slug}`}
+                    to={audience.href}
                     className={`group flex flex-col gap-2 p-5 rounded-xl border transition-all duration-200 hover:shadow-md ${audience.color}`}
                   >
                     <div className="flex items-center justify-between">
@@ -180,12 +218,12 @@ export default function ThingsToDoHub() {
               <p className="text-muted-foreground mt-1">Time-based guides for every season and occasion</p>
             </div>
             <div className="grid grid-cols-2 sm:grid-cols-3 md:grid-cols-6 gap-3">
-              {byTime.map((time) => {
+              {timeLinks.map((time) => {
                 const Icon = time.icon;
                 return (
                   <Link
                     key={time.slug}
-                    to={`/things-to-do/${time.slug}`}
+                    to={time.href}
                     className="group relative flex flex-col items-center gap-2 p-5 rounded-xl border border-border bg-card hover:bg-accent hover:border-primary/40 text-center transition-all duration-200"
                   >
                     {time.badge && (
@@ -211,12 +249,12 @@ export default function ThingsToDoHub() {
               <p className="text-muted-foreground mt-1">Dive into specific types of experiences</p>
             </div>
             <div className="flex flex-wrap gap-2">
-              {byCategory.map((cat) => {
+              {categoryLinks.map((cat) => {
                 const Icon = cat.icon;
                 return (
                   <Link
                     key={cat.slug}
-                    to={`/things-to-do/${cat.slug}`}
+                    to={cat.href}
                     className="inline-flex items-center gap-2 px-4 py-2.5 rounded-full border border-border bg-card hover:bg-primary hover:text-primary-foreground hover:border-primary text-sm font-medium transition-all duration-200"
                   >
                     <Icon className="h-4 w-4" aria-hidden="true" />
@@ -227,21 +265,15 @@ export default function ThingsToDoHub() {
             </div>
           </section>
 
-          {/* Popular combos */}
+          {/* Popular combos: published pages only. */}
+          {popularLinks.length > 0 && (
           <section aria-labelledby="popular-heading" className="pb-4">
             <div className="mb-6">
               <h2 id="popular-heading" className="text-2xl font-bold tracking-tight">Popular Searches</h2>
               <p className="text-muted-foreground mt-1">The most searched things to do in DSM</p>
             </div>
             <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-3">
-              {[
-                { href: '/things-to-do/downtown/families', label: 'Family-Friendly Downtown' },
-                { href: '/things-to-do/east-village/date-night', label: 'Date Night in East Village' },
-                { href: '/things-to-do/this-weekend', label: 'Things to Do This Weekend' },
-                { href: '/things-to-do/downtown/budget', label: 'Free Things to Do Downtown' },
-                { href: '/things-to-do/ankeny/families', label: 'Family Activities in Ankeny' },
-                { href: '/things-to-do/tourists', label: 'First-Time Visitor Guide' },
-              ].map(({ href, label }) => (
+              {popularLinks.map(({ href, label }) => (
                 <Link
                   key={href}
                   to={href}
@@ -255,6 +287,7 @@ export default function ThingsToDoHub() {
               ))}
             </div>
           </section>
+          )}
 
         </div>
       </div>
