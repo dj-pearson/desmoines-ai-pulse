@@ -1,3 +1,4 @@
+import { RelatedLinks } from "@/components/seo/InternalLinks";
 import { useParams, Link } from "react-router-dom";
 import { RouteCanonical } from "@/components/RouteCanonical";
 import { createSlug } from "@/lib/slug";
@@ -157,23 +158,34 @@ export default function PlaygroundDetails() {
   const playgroundSlug = createSlug(playground.name);
   const playgroundUrl = `${BRAND.baseUrl}/playgrounds/${playgroundSlug}`;
 
-  // Generate dynamic FAQ
+  // SEO-014. Built from this playground's own row and nothing else. The
+  // previous answers told every one of these pages - suburban parks run by
+  // other cities, and any indoor play space in the table - that it was "a free
+  // public playground in Des Moines", "maintained by the Des Moines Parks &
+  // Recreation Department", open "dawn to dusk" with "free parking". None of
+  // that is a column, and FAQPage schema publishes it as a factual claim.
   const playgroundFaqs = [
-    {
-      question: `What ages is ${playground.name} suitable for?`,
-      answer: playground.age_range
-        ? `${playground.name} is designed for ages ${playground.age_range}. The playground features age-appropriate equipment and safe play areas for children in this age group. Always supervise children during play.`
-        : `${playground.name} welcomes children of various ages. Visit the park to see the specific equipment available and determine if it's suitable for your child's age group.`,
-    },
-    {
-      question: `Where is ${playground.name} located?`,
-      answer: `${playground.name} is located at ${playground.location || BRAND.city + ", " + BRAND.state}. Free parking is typically available at the park. ${playground.latitude ? "You can find directions using the map on this page." : `Visit our playgrounds page for a map of all ${BRAND.city} playgrounds.`}`,
-    },
+    ...(playground.age_range
+      ? [
+          {
+            question: `What ages is ${playground.name} suitable for?`,
+            answer: `${playground.name} is listed for ages ${playground.age_range}. Always supervise children during play.`,
+          },
+        ]
+      : []),
+    ...(playground.location
+      ? [
+          {
+            question: `Where is ${playground.name} located?`,
+            answer: `${playground.name} is at ${playground.location}.${playground.latitude ? " The map on this page gives directions." : ""}`,
+          },
+        ]
+      : []),
     ...(playground.amenities && playground.amenities.length > 0
       ? [
           {
             question: `What amenities does ${playground.name} have?`,
-            answer: `${playground.name} features the following amenities: ${playground.amenities.join(", ")}. The playground is maintained by the ${BRAND.city} Parks & Recreation Department as part of the city's parks system.`,
+            answer: `${playground.name} lists these amenities: ${playground.amenities.join(", ")}.`,
           },
         ]
       : []),
@@ -181,14 +193,10 @@ export default function PlaygroundDetails() {
       ? [
           {
             question: `What is the rating for ${playground.name}?`,
-            answer: `${playground.name} has a rating of ${playground.rating.toFixed(1)} out of 5 stars based on family reviews. ${playground.rating >= 4.5 ? `It's one of the highest-rated playgrounds in ${BRAND.city}.` : playground.rating >= 4.0 ? `It's a highly-rated playground in the ${BRAND.region}.` : `Families appreciate the play experience here.`} ${playground.is_featured ? "It's also featured as an editor's pick on Des Moines Insider." : ""}`,
+            answer: `${playground.name} is rated ${playground.rating.toFixed(1)} out of 5.${playground.is_featured ? " It is also a featured pick on Des Moines Insider." : ""}`,
           },
         ]
       : []),
-    {
-      question: `Is ${playground.name} free?`,
-      answer: `Yes, ${playground.name} is a free public playground in ${BRAND.city}, ${BRAND.state}. It is part of the city's parks system and is open to all visitors during park hours, typically dawn to dusk.`,
-    },
   ];
 
   return (
@@ -695,6 +703,20 @@ export default function PlaygroundDetails() {
               </div>
             </section>
           )}
+
+          {/* SEO-014 / SEO-015: the family cluster, linked in both directions.
+              /events/kids links back here. */}
+          <RelatedLinks
+            title="More for families"
+            variant="inline"
+            className="mb-2 text-center"
+            links={[
+              { title: "Kids and family events", href: "/events/kids" },
+              { title: "Free events", href: "/events/free" },
+              { title: "This weekend", href: "/events/this-weekend" },
+              { title: "Attractions", href: "/attractions" },
+            ]}
+          />
 
           {/* Browse More CTA */}
           <div className="text-center py-8">

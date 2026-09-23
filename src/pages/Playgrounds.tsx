@@ -1,3 +1,4 @@
+import { RelatedLinks } from "@/components/seo/InternalLinks";
 import React, { useEffect, useState, useMemo, lazy } from "react";
 import Header from "@/components/Header";
 import Footer from "@/components/Footer";
@@ -725,44 +726,53 @@ export default function Playgrounds() {
         </div>
       </section>
 
+      <div className="max-w-4xl mx-auto px-4 sm:px-6 lg:px-8 py-8">
+        {/* SEO-014 / SEO-015: the family cluster, linked in both directions.
+            /events/kids links back here. */}
+        <RelatedLinks
+          title="More for families"
+          variant="inline"
+          className=""
+          links={[
+            { title: "Kids and family events", href: "/events/kids" },
+            { title: "Free events", href: "/events/free" },
+            { title: "This weekend", href: "/events/this-weekend" },
+            { title: "Attractions", href: "/attractions" },
+          ]}
+        />
+      </div>
+
       {/* FAQ Section for SEO and Featured Snippets */}
       <section className="py-16 bg-muted/30">
         <div className="max-w-4xl mx-auto px-4 sm:px-6 lg:px-8">
           <FAQSection
             title="Des Moines Playgrounds - Frequently Asked Questions"
             description="Common questions about playgrounds, parks, and family outdoor activities in Des Moines, Iowa."
+            // SEO-014. The answers this replaces named splash pads,
+            // accessibility and shade at specific parks, claimed "100+ mapped
+            // playgrounds" (the sitemap carries about seventy) and "recent
+            // inspection dates" the listings do not have. They now describe
+            // what each listing carries, and the listing carries the facts.
             faqs={[
               {
                 question: "What are the best playgrounds in Des Moines?",
-                answer: "Des Moines features 100+ mapped playgrounds with varying amenities. Top-rated playgrounds include Ashworth Park (large climbing structures and splash pad), Union Park (inclusive playground with accessible equipment), Greenwood Park (nature-themed play areas), Gray's Lake Park (lakeside playground with beach access), Raccoon River Park (extensive play areas near trails), and neighborhood parks throughout the metro. Our platform provides safety information, age appropriateness, amenities, and accessibility details for each playground including swings, slides, climbing structures, splash pads, and shade coverage."
+                answer: "This guide maps playgrounds across the Des Moines metro. Each one has its own page with its location, the amenities it lists, its age range and its rating where one is recorded, so you can compare them on what matters to your family."
               },
               {
-                question: "Are Des Moines playgrounds accessible for children with disabilities?",
-                answer: "Yes! Des Moines prioritizes accessible playgrounds. Many parks feature inclusive playground equipment designed for children of all abilities including wheelchair-accessible ramps and platforms, sensory play elements, adaptive swings, ground-level play components, and rubberized surfaces. Notable inclusive playgrounds include Union Park (fully accessible), Ashworth Park (partial accessibility), and various neighborhood parks with accessible features. Our playground listings indicate specific accessibility features, surface types, and inclusive equipment available at each location."
+                question: "Are there splash pads or accessible playgrounds in Des Moines?",
+                answer: "Yes. Use the amenity filters on this page to show playgrounds that list a splash pad, accessible equipment or other features. Splash pads are seasonal, so check the park operator's schedule before you go."
               },
               {
-                question: "Which playgrounds have splash pads in Des Moines?",
-                answer: "Several Des Moines playgrounds feature splash pads and water play areas. Popular splash pad locations include Ashworth Park (large interactive splash pad), Greenwood Park (neighborhood splash pad), Union Park (accessible water features), and various community parks throughout the metro. Splash pads typically operate May through September, weather permitting. Check our Playgrounds page filtered by 'Splash Pad' amenity for locations, operating hours, and seasonal availability. Most splash pads are free and operate during daylight hours."
+                question: "What ages are Des Moines playgrounds for?",
+                answer: "Each playground page shows the age range recorded for it. Many parks have separate areas for toddlers and older children."
               },
               {
-                question: "What age groups are Des Moines playgrounds designed for?",
-                answer: "Des Moines playgrounds serve all age groups with designated areas and equipment: Toddlers (18 months-3 years) - low slides, small swings, sensory elements; Preschool (3-5 years) - age-appropriate climbing structures, swings, interactive play; Elementary (5-12 years) - climbing walls, monkey bars, larger slides, sports courts; Teens - fitness equipment, sports courts, skateparks. Many parks feature separated play areas for different age groups. Our platform indicates age recommendations and equipment types for each playground to help families choose appropriate locations."
+                question: "Can I reserve a park shelter for a party?",
+                answer: "Shelters and pavilions are reserved through the city that runs the park, which differs between Des Moines and each suburb. Playground equipment itself is first-come, first-served."
               },
               {
-                question: "Are there covered or shaded playgrounds in Des Moines?",
-                answer: "Many Des Moines playgrounds offer shade coverage through natural tree canopy, shade structures, or covered pavilions. Parks with significant shade include Greenwood Park (mature trees), Water Works Park (wooded areas), and various neighborhood parks with pavilions and shelters. Some newer playgrounds feature modern shade sails and covered play structures. Check our playground listings for shade information, covered areas, and nearby pavilions available for family gatherings and protection from sun during summer months."
-              },
-              {
-                question: "What safety features do Des Moines playgrounds have?",
-                answer: "Des Moines playgrounds meet safety standards with features including: impact-absorbing surfaces (rubber mulch, engineered wood fiber, poured rubber), age-appropriate equipment separation, proper spacing between structures, regular maintenance and inspections, fencing around play areas (varies by park), and clearly marked age recommendations. The Parks Department conducts routine safety inspections and maintenance. Our platform notes safety features, surface types, fencing, and recent inspection dates. Always supervise children and report damaged equipment to Des Moines Parks & Recreation."
-              },
-              {
-                question: "Do Des Moines playgrounds have restrooms and amenities?",
-                answer: "Many Des Moines playgrounds offer additional amenities: restrooms (seasonal availability varies), drinking fountains (typically May-October), picnic tables and grills, pavilions for gatherings (some require reservations), parking lots, walking trails, sports fields and courts, and pet-friendly areas (check specific park rules). Larger parks like Gray's Lake and Raccoon River Park offer year-round facilities. Neighborhood parks may have seasonal restrooms or portable facilities. Our playground listings detail available amenities, parking, and facility information for each location."
-              },
-              {
-                question: "Can I reserve playground areas or pavilions in Des Moines parks?",
-                answer: "Yes! Many Des Moines parks allow pavilion and shelter reservations for birthday parties, family gatherings, and events. Reservations can be made through the Des Moines Parks & Recreation Department for parks with reservable facilities. Popular reservation locations include Gray's Lake Park, Raccoon River Park, Ashworth Park, and community parks with pavilions. Playground equipment itself is first-come, first-served and cannot be reserved. Reservation fees, available dates, and online booking information can be found through the city's parks department website."
+                question: "What else is there for kids in Des Moines?",
+                answer: "The Kids and Family events page lists upcoming family events across the metro, and the Free Events page lists everything on the calendar with free admission."
               }
             ]}
             showSchema={true}

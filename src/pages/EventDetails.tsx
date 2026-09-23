@@ -660,6 +660,8 @@ export default function EventDetails() {
               variant="restaurants-near-event"
               city={event.city || "Des Moines"}
               excludeId={event.id}
+              latitude={event.latitude ?? venuePage?.latitude}
+              longitude={event.longitude ?? venuePage?.longitude}
             />
           </div>
 
