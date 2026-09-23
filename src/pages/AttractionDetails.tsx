@@ -1,3 +1,6 @@
+import { matchVenue } from "@/lib/venuePages";
+import { useVenues } from "@/hooks/useVenues";
+import { NearbyHotels } from "@/components/venues/NearbyHotels";
 import { useParams, Link } from "react-router-dom";
 import { Helmet } from "react-helmet-async";
 import { useQuery } from "@tanstack/react-query";
@@ -92,6 +95,8 @@ export default function AttractionDetails() {
 
   // Track page view and content interactions
   const { trackShare, trackClick } = useContentTracking(attraction?.id, 'attraction');
+  // SEO-018: venue rows, to link an attraction that is also a venue.
+  const { data: venueRows } = useVenues();
 
   const { data: relatedAttractions } = useQuery({
     queryKey: ["related-attractions", attraction?.type, attraction?.id],
@@ -195,37 +200,43 @@ export default function AttractionDetails() {
   const attractionSlug = createSlug(attraction.name);
   const attractionUrl = `${BRAND.baseUrl}/attractions/${attractionSlug}`;
 
-  // Generate dynamic FAQ
+  // SEO-011. From this attraction's row only. The previous answers placed
+  // every attraction "in Des Moines, Iowa" (Altoona and Urbandale included),
+  // gave every one the same interstate, parking and DART directions that
+  // WEB-SEO-022 removed from event pages for the same reason, called ratings
+  // "based on visitor reviews" with no source for that, and called each one
+  // "popular among families". FAQPage schema publishes each as a claim.
   const attractionFaqs = [
-    {
-      question: `What is ${attraction.name}?`,
-      answer: `${attraction.name} is a ${attraction.type?.toLowerCase()} attraction located in ${BRAND.city}, ${BRAND.state}. ${attraction.description ? attraction.description.slice(0, 250) : `It's one of the popular ${attraction.type?.toLowerCase()} destinations in the ${BRAND.region}.`}`,
-    },
-    {
-      question: `Where is ${attraction.name} located?`,
-      answer: `${attraction.name} is located at ${attraction.location || BRAND.city + ", " + BRAND.state}. ${attraction.latitude ? "You can find directions using the map on this page." : `Visit our attractions page for a map of all ${BRAND.city} attractions.`}`,
-    },
+    ...(attraction.description
+      ? [
+          {
+            question: `What is ${attraction.name}?`,
+            answer: attraction.description.slice(0, 300),
+          },
+        ]
+      : []),
+    ...(attraction.location
+      ? [
+          {
+            question: `Where is ${attraction.name} located?`,
+            answer: `${attraction.name} is at ${attraction.location}.${attraction.latitude ? " The map on this page gives directions." : ""}`,
+          },
+        ]
+      : []),
     ...(attraction.rating
       ? [
           {
             question: `What is the rating for ${attraction.name}?`,
-            answer: `${attraction.name} has a rating of ${attraction.rating.toFixed(1)} out of 5 stars based on visitor reviews. ${attraction.rating >= 4.5 ? `It's one of the highest-rated attractions in ${BRAND.city}.` : attraction.rating >= 4.0 ? `It's a highly-rated attraction in the ${BRAND.region}.` : `Visitors appreciate its unique ${attraction.type?.toLowerCase()} experience.`} ${attraction.is_featured ? "It's also featured as an editor's pick on Des Moines Insider." : ""}`,
+            answer: `${attraction.name} is rated ${attraction.rating.toFixed(1)} out of 5.${attraction.is_featured ? " It is also a featured pick on Des Moines Insider." : ""}`,
           },
         ]
       : []),
     {
-      question: `How do I get to ${attraction.name}?`,
-      answer: `${attraction.name} is located ${attraction.location ? `at ${attraction.location}` : ""} in ${BRAND.city}, ${BRAND.state}. The area is easily accessible by car via I-235 and I-80/I-35. Downtown parking is available in public garages and street parking. DART public transit routes also serve the area.`,
-    },
-    {
       question: `How long should I spend at ${attraction.name}?`,
-      answer: `We recommend planning ${getEstimatedDuration(attraction.type)} for your visit to ${attraction.name}. This is an estimate based on the typical ${attraction.type?.toLowerCase()} experience. Your actual visit time may vary depending on your interests, group size, and the time of year.`,
-    },
-    {
-      question: `Is ${attraction.name} good for families?`,
-      answer: `${attraction.name} is a ${attraction.type?.toLowerCase()} that welcomes visitors of all ages. ${BRAND.city} is known for its family-friendly attractions and ${attraction.name} is popular among families visiting the area. Check the official website for specific age recommendations and family amenities.`,
+      answer: `Plan on ${getEstimatedDuration(attraction.type)}. That is a rough estimate for a ${attraction.type?.toLowerCase() || "visit like this"}, not a figure from ${attraction.name}; check its official site for anything time-sensitive.`,
     },
   ];
+  const venuePage = matchVenue(attraction.name, venueRows ?? []);
 
   return (
     <>
@@ -748,6 +759,23 @@ export default function AttractionDetails() {
               </div>
             </section>
           )}
+
+          {/* SEO-018: an attraction that is also an event venue links to
+              what is scheduled there. */}
+          {venuePage && (
+            <p className="mt-10 text-lg">
+              <Link to={`/music/venues/${venuePage.slug}`} className="text-primary font-semibold hover:underline">
+                See upcoming events at {venuePage.name}
+              </Link>
+            </p>
+          )}
+
+          <NearbyHotels
+            latitude={attraction.latitude}
+            longitude={attraction.longitude}
+            placeName={attraction.name}
+            limit={3}
+          />
 
           {/* Cross-Content: Nearby Restaurants */}
           <NearbyContent
