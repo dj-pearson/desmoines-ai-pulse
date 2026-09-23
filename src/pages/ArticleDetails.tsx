@@ -1,3 +1,5 @@
+import { RelatedLinks } from "@/components/seo/InternalLinks";
+import { hubsForArticle } from "@/lib/articleHubs";
 import React, { useState, useEffect } from 'react';
 import { OptimizedImage } from "@/components/OptimizedImage";
 import { useParams, Link } from 'react-router-dom';
@@ -392,25 +394,13 @@ const ArticleDetails: React.FC = () => {
               {/* Sidebar */}
               <aside className="lg:col-span-4">
                 <div className="sticky top-8 space-y-6">
-                  {/* Table of Contents (placeholder) */}
+                  {/* SEO-015 / SEO-019. Two placeholder cards used to sit here,
+                      reading "Table of contents will be generated based on
+                      article headings" and "Related articles will be shown
+                      here", on every article and in every crawl. This is the
+                      article half of "every article links into its hub". */}
                   <Card className="p-6">
-                    <h3 className="font-semibold mb-4 flex items-center gap-2">
-                      <BookOpen className="h-4 w-4" />
-                      In This Article
-                    </h3>
-                    <div className="space-y-2 text-sm">
-                      <div className="text-muted-foreground">
-                        Table of contents will be generated based on article headings
-                      </div>
-                    </div>
-                  </Card>
-
-                  {/* Related Articles */}
-                  <Card className="p-6">
-                    <h3 className="font-semibold mb-4">Related Articles</h3>
-                    <div className="text-muted-foreground text-sm">
-                      Related articles will be shown here
-                    </div>
+                    <RelatedLinks title="Keep exploring" variant="list" links={hubsForArticle(article)} />
                   </Card>
 
                   {/* Newsletter Signup */}

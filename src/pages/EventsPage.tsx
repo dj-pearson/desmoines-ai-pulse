@@ -1,3 +1,4 @@
+import { HubArticles } from "@/components/seo/HubArticles";
 import React, { useState, useEffect, useCallback, lazy, Suspense, useRef, useMemo } from "react";
 import { Link, useNavigate } from "react-router-dom";
 import { useQuery } from "@tanstack/react-query";
@@ -1007,6 +1008,10 @@ export default function EventsPage() {
 
             <div className="max-w-4xl mx-auto mb-12">
               <EventsHubDirectory />
+            </div>
+
+            <div className="max-w-4xl mx-auto mb-12">
+              <HubArticles hub="events" />
             </div>
 
             {/* FAQ Section */}
