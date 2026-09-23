@@ -40,6 +40,9 @@ import { LastUpdatedBadge } from "@/components/LastUpdatedBadge";
 import { NearbyContent } from "@/components/NearbyContent";
 import { LazyLocationMap } from "@/components/LazyLocationMap";
 import { eventSummary } from "@/lib/eventMeta";
+import { matchVenue } from "@/lib/venuePages";
+import { useVenues } from "@/hooks/useVenues";
+import { NearbyHotels } from "@/components/venues/NearbyHotels";
 import { SpriteIcon } from "@/components/ui/SpriteIcon";
 
 /** Upcoming events fetched to populate the related/nearby rails (3 shown each). */
@@ -61,6 +64,8 @@ export default function EventDetails() {
   // Only feeds the "related"/"nearby" rails below — bounded on purpose, since
   // those render at most 3 items each and never need the full upcoming set.
   const { events: relatedPool } = useEvents({ limit: RELATED_POOL_SIZE });
+  // SEO-018: the venue page this event links to, when its venue is a known one.
+  const { data: venueRows } = useVenues();
 
   // Track page view and content interactions
   const { trackShare, trackClick } = useContentTracking(event?.id, 'event');
@@ -184,6 +189,7 @@ export default function EventDetails() {
       ? event.source_url
       : null;
   const eventSlug = createEventSlugWithCentralTime(event.title, event);
+  const venuePage = matchVenue(event.venue || event.location, venueRows ?? []);
   const eventUrl = `${BRAND.baseUrl}/events/${eventSlug}`;
   const isFree = !event.price || event.price.toLowerCase().includes('free') || event.price === '$0';
   const showTime = hasSpecificTime(event);
@@ -324,7 +330,23 @@ export default function EventDetails() {
                         </div>
                         <div>
                           {event.venue && (
-                            <p className="font-semibold text-foreground text-sm">{event.venue}</p>
+                            <p className="font-semibold text-foreground text-sm">
+                              {venuePage ? (
+                                <Link to={`/music/venues/${venuePage.slug}`} className="hover:underline">
+                                  {event.venue}
+                                </Link>
+                              ) : (
+                                event.venue
+                              )}
+                            </p>
+                          )}
+                          {venuePage && (
+                            <Link
+                              to={`/music/venues/${venuePage.slug}`}
+                              className="text-xs text-primary hover:underline"
+                            >
+                              More events at {venuePage.name}
+                            </Link>
                           )}
                           <p className="text-sm text-muted-foreground">{event.location}</p>
                           {event.city && (
@@ -496,6 +518,16 @@ export default function EventDetails() {
                       </Button>
                     </CardContent>
                   </Card>
+                )}
+
+                {/* SEO-013: hotels near the event, by stored coordinates. */}
+                {isUpcoming && (
+                  <NearbyHotels
+                    latitude={event.latitude ?? venuePage?.latitude}
+                    longitude={event.longitude ?? venuePage?.longitude}
+                    placeName={event.venue || 'this event'}
+                    limit={3}
+                  />
                 )}
 
                 {/* Event Reminders */}

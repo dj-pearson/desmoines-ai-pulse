@@ -12,6 +12,11 @@ import { Button } from '@/components/ui/button';
 import { Navigation } from "lucide-react";
 import { SpriteIcon } from "@/components/ui/SpriteIcon";
 import { ErrorState } from '@/components/ui/error-state';
+import { NearbyHotels } from '@/components/venues/NearbyHotels';
+import { buildEventItemList } from '@/lib/eventSchema';
+import { buildVenueJsonLd, venueCity, venuePageUrl } from '@/lib/venuePages';
+import { BRAND } from '@/lib/brandConfig';
+import type { Event } from '@/lib/types';
 
 const VENUE_TYPE_LABELS: Record<string, string> = {
   arena: 'Arena',
@@ -87,6 +92,21 @@ export default function VenueDetail() {
       ? `https://www.google.com/maps/dir/?api=1&destination=${encodeURIComponent(venue.address)}`
       : null;
 
+  const city = venueCity(venue.address) || BRAND.city;
+  const upcoming = (events ?? []) as unknown as Event[];
+  const next = upcoming[0];
+  const nextWhen = next ? formatEventPart(next, 'EEEE, MMMM d') : null;
+  // The answer-first sentence, from the row and the list only.
+  const summary = [
+    `${venue.name} is ${venue.address ? `at ${venue.address}` : `in ${city}, ${BRAND.state}`}.`,
+    upcoming.length > 0
+      ? `${upcoming.length === 1 ? 'One upcoming event is' : `${upcoming.length} upcoming events are`} listed here${next && nextWhen ? `, the next on ${nextWhen}: ${next.title}` : ''}.`
+      : null,
+  ].filter(Boolean).join(' ');
+  const metaDescription = upcoming.length > 0
+    ? `${upcoming.length} upcoming event${upcoming.length === 1 ? '' : 's'} at ${venue.name} in ${city}${next && nextWhen ? `, starting with ${next.title} on ${nextWhen}` : ''}. Dates, times, tickets and directions.`
+    : `Events at ${venue.name} in ${city}, ${BRAND.state}: address, directions and upcoming shows as they are announced.`;
+
   return (
     <>
       {/* WEB-SEO-033. RouteCanonical was only in the LOADING branch, so the
@@ -97,9 +117,26 @@ export default function VenueDetail() {
           because it should stop existing once data arrives. It belongs in
           both. */}
       <RouteCanonical path={`/music/venues/${slug}`} />
+      {/* SEO-018. Title and description are built from the row and the
+          event list, so they answer the query this page exists for - "what is
+          on at <venue>" - instead of restating the seed's marketing copy. */}
       <Helmet>
-        <title>{venue.name} — Des Moines Venue Guide | Des Moines Insider</title>
-        <meta name="description" content={venue.description || `${venue.name} — live music and events venue in Des Moines, Iowa.`} />
+        <title>{`Upcoming Events at ${venue.name}, ${city}`}</title>
+        <meta name="description" content={metaDescription} />
+        <meta property="og:title" content={`Upcoming Events at ${venue.name}, ${city}`} />
+        <meta property="og:description" content={metaDescription} />
+        <script type="application/ld+json">{JSON.stringify(buildVenueJsonLd(venue))}</script>
+        {upcoming.length > 0 && (
+          <script type="application/ld+json">
+            {JSON.stringify(
+              buildEventItemList(upcoming, {
+                name: `Upcoming events at ${venue.name}`,
+                description: `Events scheduled at ${venue.name}, ${city}, ${BRAND.state}.`,
+                url: venuePageUrl(venue),
+              }),
+            )}
+          </script>
+        )}
       </Helmet>
       <div className="min-h-screen bg-background">
         <Header />
@@ -108,7 +145,7 @@ export default function VenueDetail() {
           <nav className="text-sm text-muted-foreground mb-6">
             <Link to="/music" className="hover:text-primary">Music</Link>
             <span className="mx-2">/</span>
-            <Link to="/music" className="hover:text-primary">Venues</Link>
+            <Link to="/events" className="hover:text-primary">Events</Link>
             <span className="mx-2">/</span>
             <span>{venue.name}</span>
           </nav>
@@ -120,15 +157,13 @@ export default function VenueDetail() {
               {venue.venue_type && (
                 <Badge variant="secondary">{VENUE_TYPE_LABELS[venue.venue_type] || venue.venue_type}</Badge>
               )}
-              {venue.capacity && (
-                <Badge variant="outline">
-                  <SpriteIcon name="users" className="h-3 w-3 mr-1" />
-                  Capacity: {venue.capacity.toLocaleString()}
-                </Badge>
-              )}
+              {/* NO CAPACITY BADGE (SEO-018). The seed migration hard-codes a
+                  capacity per venue that nobody verified, and seating capacity
+                  is one of the fields the story names as not to assert. */}
             </div>
+            <p id="venue-summary" className="text-lg text-foreground max-w-3xl mb-2">{summary}</p>
             {venue.description && (
-              <p className="text-lg text-muted-foreground max-w-3xl">{venue.description}</p>
+              <p className="text-muted-foreground max-w-3xl">{venue.description}</p>
             )}
           </div>
 
@@ -157,6 +192,7 @@ export default function VenueDetail() {
                 </CardContent>
               </Card>
             )}
+            <NearbyHotels latitude={venue.latitude} longitude={venue.longitude} placeName={venue.name} limit={4} />
           </div>
 
           {/* Upcoming Events */}

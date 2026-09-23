@@ -4,6 +4,7 @@ import { ErrorState } from "@/components/ui/error-state";
 import { Helmet } from "react-helmet-async";
 import { useHotel } from "@/hooks/useHotels";
 import HotelSchema from "@/components/schema/HotelSchema";
+import { NearbyVenues } from "@/components/venues/NearbyVenues";
 import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
@@ -169,6 +170,10 @@ export default function HotelDetails() {
         starRating={hotel.star_rating || undefined}
         checkInTime={hotel.check_in_time || undefined}
         checkOutTime={hotel.check_out_time || undefined}
+        pageUrl={getCanonicalUrl(`/stay/${hotel.slug}`)}
+        latitude={hotel.latitude}
+        longitude={hotel.longitude}
+        amenities={hotel.amenities}
       />
       {/* WEB-SEO-034. These pointed at /hotels and /hotels/<slug>. The routes are
           /stay and /stay/:slug and there is no redirect, so every breadcrumb on
@@ -420,6 +425,10 @@ export default function HotelDetails() {
                       />
                     </div>
                   )}
+
+                  {/* SEO-013: the reciprocal half - which event venues are
+                      close, linking to what is on at each. */}
+                  <NearbyVenues latitude={hotel.latitude} longitude={hotel.longitude} placeName={hotel.name} />
 
                   {/* Phone */}
                   {hotel.phone && (

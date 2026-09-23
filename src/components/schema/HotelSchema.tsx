@@ -16,6 +16,11 @@ interface HotelSchemaProps {
   starRating?: number;
   checkInTime?: string;
   checkOutTime?: string;
+  /** This hotel's page on our site. Used for @id and url (SEO-013). */
+  pageUrl?: string;
+  latitude?: number | null;
+  longitude?: number | null;
+  amenities?: string[] | null;
 }
 
 export default function HotelSchema({
@@ -29,10 +34,18 @@ export default function HotelSchema({
   starRating,
   checkInTime,
   checkOutTime,
+  pageUrl,
+  latitude,
+  longitude,
+  amenities,
 }: HotelSchemaProps) {
   const schema = {
     "@context": "https://schema.org",
     "@type": "Hotel",
+    // SEO-013: this node used to put the hotel's own website in `url` and had
+    // no @id and no coordinates. `url` is the page this markup is on; the
+    // hotel's site is sameAs. geo and amenities come from stored columns.
+    ...(pageUrl && { "@id": `${pageUrl}#hotel`, url: pageUrl }),
     name,
     ...(description && { description }),
     address: {
@@ -44,7 +57,13 @@ export default function HotelSchema({
       addressCountry: "US",
     },
     ...(phone && { telephone: phone }),
-    ...(website && { url: website }),
+    ...(website && (pageUrl ? { sameAs: [website] } : { url: website })),
+    ...(latitude != null && longitude != null && {
+      geo: { "@type": "GeoCoordinates", latitude, longitude },
+    }),
+    ...(amenities && amenities.length > 0 && {
+      amenityFeature: amenities.map((a) => ({ "@type": "LocationFeatureSpecification", name: a, value: true })),
+    }),
     ...(image && { image }),
     ...(priceRange && { priceRange }),
     ...(starRating && {
