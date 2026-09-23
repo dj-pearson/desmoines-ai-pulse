@@ -1,4 +1,4 @@
-import { useNavigate } from "react-router-dom";
+import { Link, useNavigate } from "react-router-dom";
 import Header from "@/components/Header";
 import Footer from "@/components/Footer";
 import { AdBanner } from "@/components/AdBanner";
@@ -647,6 +647,11 @@ export default function Restaurants() {
 
             {/* Restaurant Openings Section */}
             <RestaurantOpenings />
+            <p className="text-center -mt-2 mb-8">
+              <Link to="/restaurants/new" className="text-primary font-semibold hover:underline">
+                See every new and upcoming restaurant in Des Moines
+              </Link>
+            </p>
 
             {/* Open Now Banner */}
             <OpenNowBanner

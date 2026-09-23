@@ -46,6 +46,10 @@ export const PRERENDER_ROUTES = [
   // Restaurants
   '/restaurants',
   '/restaurants/open-now',
+  // SEO-010/026: the hub for "new restaurants des moines". Must be prerendered:
+  // the edge middleware reads /restaurants/<x> as a restaurant slug and 404s the
+  // shell when no restaurant is called "new".
+  '/restaurants/new',
   '/restaurants/dietary',
 
   // Other content hubs

@@ -73,6 +73,7 @@ const Restaurants = lazyWithRetry(() => import("./pages/Restaurants"));
 const Attractions = lazyWithRetry(() => import("./pages/Attractions"));
 const Playgrounds = lazyWithRetry(() => import("./pages/Playgrounds"));
 const EventDetails = lazyWithRetry(() => import("./pages/EventDetails"));
+const NewRestaurants = lazyWithRetry(() => import("./pages/NewRestaurants"));
 const RestaurantDetails = lazyWithRetry(() => import("./pages/RestaurantDetails"));
 const AttractionDetails = lazyWithRetry(() => import("./pages/AttractionDetails"));
 const PlaygroundDetails = lazyWithRetry(() => import("./pages/PlaygroundDetails"));
@@ -485,6 +486,7 @@ const App = () => (
             <Route path="/restaurants" element={<Restaurants />} />
             {/* Restaurant SEO hub pages */}
             <Route path="/restaurants/open-now" element={<OpenNowRestaurants />} />
+            <Route path="/restaurants/new" element={<NewRestaurants />} />
             <Route path="/restaurants/dietary" element={<DietaryRestaurants />} />
             <Route path="/attractions" element={<Attractions />} />
             <Route path="/playgrounds" element={<Playgrounds />} />
