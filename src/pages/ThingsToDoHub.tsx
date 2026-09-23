@@ -141,7 +141,11 @@ export default function ThingsToDoHub() {
                 Des Moines Metro Area
               </div>
               <h1 className="text-4xl font-bold tracking-tight text-foreground sm:text-5xl lg:text-6xl mb-4">
-                Things to Do in<br />
+                {/* The space before the <br> is load-bearing: without it the
+                    heading's text, which is what a crawler and a screen reader
+                    get, is "Things to Do inDes Moines" (the SEO-026 bug on
+                    /restaurants, here too). */}
+                Things to Do in{" "}<br />
                 <span className="text-primary">Des Moines</span>
               </h1>
               <p className="text-lg text-muted-foreground max-w-2xl">
