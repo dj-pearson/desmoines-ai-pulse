@@ -1,3 +1,4 @@
+import { HubArticles } from "@/components/seo/HubArticles";
 import { RelatedLinks } from "@/components/seo/InternalLinks";
 import React, { useState, useMemo, useEffect, lazy, Suspense, useRef } from "react";
 import Header from "@/components/Header";
@@ -906,6 +907,10 @@ export default function Attractions() {
             { title: "Things to do", href: "/things-to-do" },
           ]}
         />
+      </div>
+
+      <div className="max-w-4xl mx-auto px-4 sm:px-6 lg:px-8 pb-8">
+        <HubArticles hub="attractions" />
       </div>
 
       {/* FAQ Section for SEO and Featured Snippets */}

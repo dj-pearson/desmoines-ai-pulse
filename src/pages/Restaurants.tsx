@@ -1,3 +1,4 @@
+import { HubArticles } from "@/components/seo/HubArticles";
 import { Link, useNavigate } from "react-router-dom";
 import Header from "@/components/Header";
 import Footer from "@/components/Footer";
@@ -652,6 +653,8 @@ export default function Restaurants() {
                 See every new and upcoming restaurant in Des Moines
               </Link>
             </p>
+
+            <HubArticles hub="restaurants" className="mb-8" />
 
             {/* Open Now Banner */}
             <OpenNowBanner

@@ -1,3 +1,4 @@
+import { HubArticles } from "@/components/seo/HubArticles";
 import { RelatedLinks } from "@/components/seo/InternalLinks";
 import React, { useEffect, useState, useMemo, lazy } from "react";
 import Header from "@/components/Header";
@@ -740,6 +741,10 @@ export default function Playgrounds() {
             { title: "Attractions", href: "/attractions" },
           ]}
         />
+      </div>
+
+      <div className="max-w-4xl mx-auto px-4 sm:px-6 lg:px-8 pb-8">
+        <HubArticles hub="family" />
       </div>
 
       {/* FAQ Section for SEO and Featured Snippets */}
