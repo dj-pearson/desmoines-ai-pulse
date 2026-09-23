@@ -31,7 +31,7 @@
 DO $do$
 DECLARE
   removed text[] := ARRAY[]::text[];
-  jobname text;
+  v_jobname text;
 BEGIN
   IF NOT EXISTS (SELECT 1 FROM pg_extension WHERE extname = 'pg_cron') THEN
     RAISE NOTICE 'pg_cron is not installed; nothing to unschedule';
@@ -45,11 +45,11 @@ BEGIN
     RAISE EXCEPTION 'WEB-BE-050: data-quality-heal-nightly is not scheduled, so unscheduling the backfills would leave no job geocoding anything. Schedule it (20260612000006) and re-run.';
   END IF;
 
-  FOREACH jobname IN ARRAY ARRAY['nightly-coordinate-backfill', 'backfill-coordinates-nightly']
+  FOREACH v_jobname IN ARRAY ARRAY['nightly-coordinate-backfill', 'backfill-coordinates-nightly']
   LOOP
-    IF EXISTS (SELECT 1 FROM cron.job j WHERE j.jobname = jobname) THEN
-      PERFORM cron.unschedule(jobname);
-      removed := removed || jobname;
+    IF EXISTS (SELECT 1 FROM cron.job j WHERE j.jobname = v_jobname) THEN
+      PERFORM cron.unschedule(v_jobname);
+      removed := removed || v_jobname;
     END IF;
   END LOOP;
 
