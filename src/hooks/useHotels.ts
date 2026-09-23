@@ -378,3 +378,36 @@ export function useHotelFilterOptions() {
     isLoading,
   };
 }
+
+/** The few columns a "hotels nearby" list needs. */
+export interface HotelPin {
+  id: string;
+  name: string;
+  slug: string;
+  city: string;
+  latitude: number | null;
+  longitude: number | null;
+}
+
+/**
+ * Every active hotel's name and coordinates, for the proximity lists on venue,
+ * event and hotel pages (SEO-013). One shared, long-lived query: the table is
+ * about seventy rows, and three page types filtering the same set by distance
+ * should not each fetch it.
+ */
+export function useHotelPins() {
+  return useQuery({
+    queryKey: queryKeys.hotels.list({ pins: true }),
+    queryFn: async (): Promise<HotelPin[]> => {
+      const { data, error } = await supabase
+        .from("hotels")
+        .select("id, name, slug, city, latitude, longitude")
+        .eq("is_active", true)
+        .not("latitude", "is", null);
+      if (error) throw error;
+      return (data ?? []) as HotelPin[];
+    },
+    staleTime: STALE_TIME.REFERENCE,
+    gcTime: GC_TIME,
+  });
+}
