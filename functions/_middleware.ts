@@ -1,4 +1,14 @@
 import { EventContext } from "@cloudflare/workers-types";
+// Relative, alias-free imports only: this file is bundled by Pages Functions,
+// which does not read the app's "@/" alias. Both modules have no imports.
+import {
+  parseIowaAddress,
+  restaurantLocality,
+  restaurantMetaDescription,
+  restaurantPageTitle,
+  isStaleOpeningCopy,
+} from "../src/lib/restaurantMeta";
+import { resolveOpeningHoursSpecification } from "../src/lib/restaurantHours";
 
 /**
  * Cloudflare Pages Functions middleware.
@@ -89,15 +99,34 @@ interface Resolved {
   title: string;
   description: string;
   startDate?: string | null;
+  /**
+   * The row the shell body and JSON-LD are built from. Absent when only the
+   * minimal select succeeded, or on a cache entry written before this existed;
+   * entityShellRewrites then falls back to the identity-only rewrite.
+   */
+  row?: Record<string, any>;
 }
 
-async function sbGet(base: string, anon: string, pathAndQuery: string): Promise<any[]> {
+// What the shell body needs. Named in types.ts, but CLAUDE.md is explicit that
+// types.ts is not proof a column exists - so a failed select falls back to the
+// minimal one below instead of turning a real page into a 404.
+const RESTAURANT_SHELL_COLUMNS =
+  "id,name,slug,city,location,cuisine,price_range,phone,website,menu_url,latitude,longitude,opening,seo_description,description";
+const EVENT_SHELL_COLUMNS =
+  "id,title,date,event_start_utc,end_date,seo_description,geo_summary,location,venue,city,price,enhanced_description,original_description";
+
+/** Rows, or null when PostgREST refused the query (bad column, outage). */
+async function sbGet(base: string, anon: string, pathAndQuery: string): Promise<any[] | null> {
   const res = await fetch(`${base}/rest/v1/${pathAndQuery}`, {
     headers: { apikey: anon, Authorization: `Bearer ${anon}` },
   });
-  if (!res.ok) return [];
+  if (!res.ok) return null;
   const json = await res.json();
   return Array.isArray(json) ? json : [];
+}
+
+async function sbGetRows(base: string, anon: string, pathAndQuery: string): Promise<any[]> {
+  return (await sbGet(base, anon, pathAndQuery)) ?? [];
 }
 
 async function resolveEntity(
@@ -107,18 +136,27 @@ async function resolveEntity(
   slug: string,
 ): Promise<Resolved | null> {
   if (type === "restaurant") {
-    const rows = await sbGet(base, anon, `restaurants?slug=eq.${encodeURIComponent(slug)}&select=id,name,seo_description,description&limit=1`);
+    const bySlug = `restaurants?slug=eq.${encodeURIComponent(slug)}`;
+    const rich = await sbGet(base, anon, `${bySlug}&select=${RESTAURANT_SHELL_COLUMNS}&limit=1`);
+    const rows = rich ?? (await sbGetRows(base, anon, `${bySlug}&select=id,name,seo_description,description&limit=1`));
     const r = rows[0];
-    return r ? { id: r.id, title: r.name, description: truncate(r.seo_description || r.description) } : null;
+    return r
+      ? {
+          id: r.id,
+          title: r.name,
+          description: truncate(r.seo_description || r.description),
+          ...(rich ? { row: r } : {}),
+        }
+      : null;
   }
   if (type === "article") {
-    const rows = await sbGet(base, anon, `articles?slug=eq.${encodeURIComponent(slug)}&select=id,title,seo_description,excerpt&limit=1`);
+    const rows = await sbGetRows(base, anon, `articles?slug=eq.${encodeURIComponent(slug)}&select=id,title,seo_description,excerpt&limit=1`);
     const r = rows[0];
     return r ? { id: r.id, title: r.title, description: truncate(r.seo_description || r.excerpt) } : null;
   }
   if (type === "attraction") {
     // No slug column — the app routes by slugify(name). Match over the (small) active set.
-    const rows = await sbGet(base, anon, `attractions?is_active=eq.true&select=id,name,seo_description,description&limit=1000`);
+    const rows = await sbGetRows(base, anon, `attractions?is_active=eq.true&select=id,name,seo_description,description&limit=1000`);
     const r = rows.find((a: any) => slugify(a.name) === slug);
     return r ? { id: r.id, title: r.name, description: truncate(r.seo_description || r.description) } : null;
   }
@@ -126,18 +164,24 @@ async function resolveEntity(
     // Slug embeds a central-time YYYY-MM-DD suffix; match within a small date window.
     const m = slug.match(/-(\d{4})-(\d{2})-(\d{2})$/);
     let rows: any[] = [];
+    let rich = false;
     if (m) {
       const day = `${m[1]}-${m[2]}-${m[3]}`;
       const start = new Date(`${day}T00:00:00Z`);
       const from = new Date(start.getTime() - 36 * 60 * 60 * 1000).toISOString();
       const to = new Date(start.getTime() + 60 * 60 * 60 * 1000).toISOString();
-      const sel = "id,title,date,event_start_utc,seo_description,geo_summary";
-      const [a, b] = await Promise.all([
-        sbGet(base, anon, `events?event_start_utc=gte.${from}&event_start_utc=lt.${to}&select=${sel}&limit=200`),
-        sbGet(base, anon, `events?date=gte.${from}&date=lt.${to}&select=${sel}&limit=200`),
-      ]);
+      const inWindow = async (sel: string) => {
+        const [a, b] = await Promise.all([
+          sbGet(base, anon, `events?event_start_utc=gte.${from}&event_start_utc=lt.${to}&select=${sel}&limit=200`),
+          sbGet(base, anon, `events?date=gte.${from}&date=lt.${to}&select=${sel}&limit=200`),
+        ]);
+        return a && b ? [...a, ...b] : null;
+      };
+      const richRows = await inWindow(EVENT_SHELL_COLUMNS);
+      rich = !!richRows;
+      const all = richRows ?? (await inWindow("id,title,date,event_start_utc,seo_description,geo_summary")) ?? [];
       const seen = new Set<string>();
-      rows = [...a, ...b].filter((e) => (seen.has(e.id) ? false : (seen.add(e.id), true)));
+      rows = all.filter((e) => (seen.has(e.id) ? false : (seen.add(e.id), true)));
     }
     const r = rows.find((e: any) => eventSlug(e.title, e.event_start_utc || e.date) === slug);
     return r
@@ -146,17 +190,18 @@ async function resolveEntity(
           title: r.title,
           description: truncate(r.seo_description || r.geo_summary),
           startDate: r.event_start_utc || r.date || null,
+          ...(rich ? { row: r } : {}),
         }
       : null;
   }
   if (type === "playground") {
     // Like attractions: no slug column, the app routes by createSlug(name).
-    const rows = await sbGet(base, anon, `playgrounds?select=id,name,description&limit=1000`);
+    const rows = await sbGetRows(base, anon, `playgrounds?select=id,name,description&limit=1000`);
     const r = rows.find((a: any) => slugify(a.name) === slug);
     return r ? { id: r.id, title: r.name, description: truncate(r.description) } : null;
   }
   if (type === "hotel") {
-    const rows = await sbGet(base, anon, `hotels?slug=eq.${encodeURIComponent(slug)}&select=id,name,description&limit=1`);
+    const rows = await sbGetRows(base, anon, `hotels?slug=eq.${encodeURIComponent(slug)}&select=id,name,description&limit=1`);
     const r = rows[0];
     return r ? { id: r.id, title: r.name, description: truncate(r.description) } : null;
   }
@@ -277,7 +322,7 @@ async function resolveEntityCached(
   slug: string,
 ): Promise<Resolved | null> {
   const key = new Request(
-    `https://slug-resolve.internal/${encodeURIComponent(type)}/${encodeURIComponent(slug)}`,
+    `https://slug-resolve.internal/v2/${encodeURIComponent(type)}/${encodeURIComponent(slug)}`,
   );
   // deno-lint-ignore no-explicit-any
   const cache: any = (globalThis as any).caches?.default;
@@ -336,15 +381,243 @@ async function resolveEntityCached(
 export type EntityShellRewrite =
   | { selector: string; setAttribute: string; to: string }
   | { selector: string; setText: string }
-  | { selector: string; appendHtml: string };
+  | { selector: string; appendHtml: string }
+  | { selector: string; setInnerHtml: string }
+  | { selector: string; remove: true };
+
+// The client adds noindex to an event 30 days after it starts
+// (EnhancedEventSEO.tsx); the shell now says the same thing to a crawler that
+// never runs the client. touch-a-truck-2026-05-22 was index,follow in September.
+const LONG_PAST_MS = 30 * 24 * 60 * 60 * 1000;
+
+export function isLongPastEvent(startDate: string | null | undefined, now: Date = new Date()): boolean {
+  const t = startDate ? Date.parse(startDate) : NaN;
+  return Number.isFinite(t) && now.getTime() - t > LONG_PAST_MS;
+}
+
+// Suburbs with an events hub in App.tsx. An event in one links to it.
+const EVENT_SUBURB_HUBS = new Set([
+  "altoona", "ankeny", "clive", "johnston", "urbandale", "west-des-moines", "windsor-heights",
+]);
+
+/**
+ * Format an event's start in Central time. A bare `date` ("2026-09-24") is a
+ * calendar day, not an instant; formatting it in Chicago would land on the day
+ * before, so it is formatted as UTC.
+ */
+function formatEventDay(when: string, opts: Intl.DateTimeFormatOptions): string {
+  const dateOnly = /^\d{4}-\d{2}-\d{2}$/.test(when);
+  try {
+    return new Intl.DateTimeFormat("en-US", { ...opts, timeZone: dateOnly ? "UTC" : "America/Chicago" }).format(
+      new Date(dateOnly ? `${when}T12:00:00Z` : when),
+    );
+  } catch {
+    return "";
+  }
+}
+
+/** "{title} - {Wed, Sep 24} | {venue}", dropping the venue past 60 characters. */
+export function eventShellTitle(row: Record<string, any>): string {
+  const title = String(row.title || "").trim();
+  const when = row.event_start_utc || row.date;
+  const day = when ? formatEventDay(when, { weekday: "short", month: "short", day: "numeric" }) : "";
+  const base = day ? `${title} - ${day}` : title;
+  const venue = String(row.venue || "").trim();
+  const withVenue = venue ? `${base} | ${venue}` : base;
+  return withVenue.length <= 60 ? withVenue : base;
+}
+
+function clipText(s: string | null | undefined, n: number): string {
+  const t = (s || "").replace(/\s+/g, " ").trim();
+  if (t.length <= n) return t;
+  const cut = t.slice(0, n);
+  return `${cut.slice(0, Math.max(cut.lastIndexOf(" "), n / 2))}...`;
+}
+
+function linkList(links: Array<[string, string]>): string {
+  return `<ul>${links.map(([href, label]) => `<li><a href="${href}">${escapeHtml(label)}</a></li>`).join("")}</ul>`;
+}
+
+function breadcrumb(hubHref: string, hubLabel: string, name: string): string {
+  return `<nav aria-label="Breadcrumb"><a href="/">Home</a> / <a href="${hubHref}">${hubLabel}</a> / <span>${escapeHtml(name)}</span></nav>`;
+}
+
+export function restaurantShellNode(row: Record<string, any>, pageUrl: string): Record<string, unknown> {
+  const addr = parseIowaAddress(row.location);
+  const hours = resolveOpeningHoursSpecification(null, row.opening);
+  return {
+    "@context": "https://schema.org",
+    "@type": "Restaurant",
+    "@id": pageUrl,
+    url: pageUrl,
+    name: row.name,
+    description: restaurantMetaDescription(row),
+    ...(row.cuisine ? { servesCuisine: row.cuisine } : {}),
+    address: {
+      "@type": "PostalAddress",
+      streetAddress: addr?.streetAddress || row.location || undefined,
+      addressLocality: restaurantLocality(row) || "Des Moines",
+      addressRegion: "IA",
+      ...(addr?.postalCode ? { postalCode: addr.postalCode } : {}),
+      addressCountry: "US",
+    },
+    ...(row.phone ? { telephone: row.phone } : {}),
+    ...(row.price_range ? { priceRange: row.price_range } : {}),
+    ...(row.latitude != null && row.longitude != null
+      ? { geo: { "@type": "GeoCoordinates", latitude: row.latitude, longitude: row.longitude } }
+      : {}),
+    ...(hours ? { openingHoursSpecification: hours } : {}),
+    ...(row.website ? { sameAs: [row.website] } : {}),
+    ...(row.menu_url ? { hasMenu: row.menu_url } : {}),
+  };
+}
+
+export function restaurantShellBody(row: Record<string, any>): string {
+  const loc = restaurantLocality(row) || "Des Moines";
+  const kind = row.cuisine ? `${row.cuisine} restaurant` : "Restaurant";
+  const facts: string[] = [];
+  if (row.location) facts.push(`<li>Address: ${escapeHtml(row.location)}</li>`);
+  if (row.phone) facts.push(`<li>Phone: <a href="tel:${escapeHtml(String(row.phone).replace(/[^\d+]/g, ""))}">${escapeHtml(row.phone)}</a></li>`);
+  if (row.price_range) facts.push(`<li>Price: ${escapeHtml(row.price_range)}</li>`);
+  if (row.opening) facts.push(`<li>Hours: ${escapeHtml(row.opening)}</li>`);
+  if (row.menu_url) facts.push(`<li><a href="${escapeHtml(row.menu_url)}" rel="nofollow noopener">Menu</a></li>`);
+  if (row.website) facts.push(`<li><a href="${escapeHtml(row.website)}" rel="nofollow noopener">Website</a></li>`);
+  // Pre-opening copy is left out rather than repeated to a crawler as current.
+  const about = [row.description, row.seo_description].find((d) => d && !isStaleOpeningCopy(d));
+  return [
+    "<article>",
+    breadcrumb("/restaurants", "Restaurants", row.name),
+    `<h1>${escapeHtml(row.name)}</h1>`,
+    `<p>${escapeHtml(kind)} in ${escapeHtml(loc)}, Iowa.</p>`,
+    facts.length ? `<ul>${facts.join("")}</ul>` : "",
+    about ? `<p>${escapeHtml(clipText(about, 1200))}</p>` : "",
+    "<h2>More places to eat</h2>",
+    linkList([
+      ["/restaurants", "All Des Moines restaurants"],
+      ["/restaurants/open-now", "Restaurants open now"],
+      ["/restaurants/new", "New restaurants in Des Moines"],
+    ]),
+    "</article>",
+  ].join("");
+}
+
+export function eventShellNode(row: Record<string, any>, pageUrl: string): Record<string, unknown> {
+  const addr = parseIowaAddress(row.location);
+  const place = String(row.venue || row.location || "").trim();
+  return {
+    "@context": "https://schema.org",
+    "@type": "Event",
+    "@id": pageUrl,
+    url: pageUrl,
+    name: row.title,
+    ...(row.seo_description || row.geo_summary ? { description: truncate(row.seo_description || row.geo_summary) } : {}),
+    ...(row.event_start_utc || row.date ? { startDate: row.event_start_utc || row.date } : {}),
+    ...(row.end_date ? { endDate: row.end_date } : {}),
+    eventStatus: "https://schema.org/EventScheduled",
+    eventAttendanceMode: "https://schema.org/OfflineEventAttendanceMode",
+    ...(place
+      ? {
+          location: {
+            "@type": "Place",
+            name: place,
+            address: {
+              "@type": "PostalAddress",
+              streetAddress: addr?.streetAddress || row.location || place,
+              addressLocality: addr?.addressLocality || row.city || "Des Moines",
+              addressRegion: "IA",
+              ...(addr?.postalCode ? { postalCode: addr.postalCode } : {}),
+              addressCountry: "US",
+            },
+          },
+        }
+      : {}),
+  };
+}
+
+export function eventShellBody(row: Record<string, any>, now: Date = new Date()): string {
+  const when = row.event_start_utc || row.date;
+  const whenText = when
+    ? formatEventDay(when, {
+        weekday: "long",
+        month: "long",
+        day: "numeric",
+        year: "numeric",
+        ...(row.event_start_utc ? { hour: "numeric", minute: "2-digit" } : {}),
+      })
+    : "";
+  const where = [row.venue, row.location].filter(Boolean).join(", ");
+  const about = row.enhanced_description || row.original_description || row.geo_summary || row.seo_description;
+  const locality = parseIowaAddress(row.location)?.addressLocality || row.city || "";
+  const suburbSlug = slugify(locality);
+  const past = when ? Date.parse(when) < now.getTime() - 24 * 60 * 60 * 1000 : false;
+
+  const links: Array<[string, string]> = [
+    ["/events/today", "Things to do in Des Moines today"],
+    ["/events/this-weekend", "Des Moines events this weekend"],
+    ["/events", "All Des Moines events"],
+  ];
+  if (EVENT_SUBURB_HUBS.has(suburbSlug)) links.unshift([`/events/${suburbSlug}`, `Events in ${locality}`]);
+
+  return [
+    "<article>",
+    breadcrumb("/events", "Events", row.title),
+    `<h1>${escapeHtml(row.title)}</h1>`,
+    past ? "<p><strong>This event has ended.</strong> Upcoming events are listed below.</p>" : "",
+    "<ul>",
+    whenText ? `<li>When: ${escapeHtml(whenText)}</li>` : "",
+    where ? `<li>Where: ${escapeHtml(where)}</li>` : "",
+    row.price ? `<li>Price: ${escapeHtml(String(row.price))}</li>` : "",
+    "</ul>",
+    about ? `<p>${escapeHtml(clipText(about, 1200))}</p>` : "",
+    "<h2>More to do in Des Moines</h2>",
+    linkList(links),
+    "</article>",
+  ].join("");
+}
+
+function genericShellBody(type: string, entity: { title: string; description?: string }): string {
+  const HUB: Record<string, [string, string]> = {
+    attraction: ["/attractions", "Attractions"],
+    article: ["/articles", "Articles"],
+    playground: ["/playgrounds", "Playgrounds"],
+    hotel: ["/stay", "Hotels"],
+  };
+  const [href, label] = HUB[type] || ["/", "Des Moines Insider"];
+  return [
+    "<article>",
+    breadcrumb(href, label, entity.title),
+    `<h1>${escapeHtml(entity.title)}</h1>`,
+    entity.description ? `<p>${escapeHtml(entity.description)}</p>` : "",
+    linkList([[href, `More ${label.toLowerCase()} in Des Moines`]]),
+    "</article>",
+  ].join("");
+}
 
 export function entityShellRewrites(opts: {
   pageUrl: string;
   sbBase: string;
   type: string;
-  entity: { id: string; title: string; description?: string; startDate?: string };
+  entity: { id: string; title: string; description?: string; startDate?: string; row?: Record<string, any> };
+  now?: Date;
 }): EntityShellRewrite[] {
-  const { pageUrl, sbBase, type, entity } = opts;
+  const { pageUrl, sbBase, type, now = new Date() } = opts;
+  const row = opts.entity.row;
+
+  // With the full row, restaurants and events get the same title and
+  // description the React page renders (restaurantMeta.ts), not the bare name.
+  let entity = opts.entity;
+  if (row && type === "restaurant" && row.name) {
+    entity = { ...entity, title: `${restaurantPageTitle(row)} | Des Moines Insider`, description: restaurantMetaDescription(row) };
+  } else if (row && type === "event" && row.title) {
+    // With neither seo_description nor geo_summary the homepage's description
+    // would stay in place; say when and where instead.
+    const when = row.event_start_utc || row.date;
+    const day = when ? formatEventDay(when, { weekday: "long", month: "long", day: "numeric", year: "numeric" }) : "";
+    const place = [row.venue, row.city || "Des Moines"].filter(Boolean).join(", ");
+    const fallback = `${row.title}${day ? ` on ${day}` : ""} at ${place}, Iowa. Times, tickets, directions and more things to do in Des Moines.`;
+    entity = { ...entity, title: eventShellTitle(row), description: entity.description || truncate(fallback, 155) };
+  }
+
   const ogImage = `${sbBase}/functions/v1/og-image/${type}/${entity.id}`;
   // Escaped for the attribute sinks; the text sink below takes the raw value.
   const title = escapeHtml(entity.title);
@@ -360,7 +633,7 @@ export function entityShellRewrites(opts: {
   };
   const OG_TYPE: Record<string, string> = { event: "article", article: "article" };
 
-  const node: Record<string, unknown> = {
+  let node: Record<string, unknown> = {
     "@context": "https://schema.org",
     "@type": SCHEMA_TYPE[type] || "Thing",
     "@id": pageUrl,
@@ -372,7 +645,26 @@ export function entityShellRewrites(opts: {
   // worse than an Event without one.
   if (type === "event" && entity.startDate) node.startDate = entity.startDate;
 
+  let body = genericShellBody(type, opts.entity);
+  if (row && type === "restaurant" && row.name) {
+    node = restaurantShellNode(row, pageUrl);
+    body = restaurantShellBody(row);
+  } else if (row && type === "event" && row.title) {
+    node = eventShellNode(row, pageUrl);
+    body = eventShellBody(row, now);
+  }
+
   const rules: EntityShellRewrite[] = [
+    // The shell's ld+json is the HOMEPAGE's: FAQPage about Des Moines Insider,
+    // LocalBusiness, the home ItemLists. At an entity URL every one of those is
+    // a claim about the wrong page, and Google read it as that page's markup.
+    // Removed before the entity's own node is appended; lol-html does not run
+    // handlers over content a handler inserted, so the new node survives.
+    { selector: 'script[type="application/ld+json"]', remove: true },
+    // The body was the homepage's too: its H1 ("What's Happening in Des
+    // Moines") and ~15k characters of homepage copy at an event URL. The header
+    // and footer navigation sit outside <main> and are kept.
+    { selector: "main#main-content", setInnerHtml: body },
     { selector: 'link[rel="canonical"]', setAttribute: "href", to: pageUrl },
     { selector: 'meta[property="og:url"]', setAttribute: "content", to: pageUrl },
     { selector: 'meta[property="og:type"]', setAttribute: "content", to: OG_TYPE[type] || "website" },
@@ -385,10 +677,12 @@ export function entityShellRewrites(opts: {
     // what secure_url was for back when og:image could be http.
     // middleware-shell-selectors.test.mjs stops the next one being added.
     { selector: 'meta[name="twitter:image"]', setAttribute: "content", to: ogImage },
-    // The entity's own node goes in the head. Nothing is REMOVED here: the
-    // shell's blocks describe the site, and a page may carry both.
     { selector: "head", appendHtml: jsonLdScript(node) },
   ];
+
+  if (type === "event" && isLongPastEvent(entity.startDate, now)) {
+    rules.push({ selector: 'meta[name="robots"]', setAttribute: "content", to: "noindex, follow" });
+  }
 
   if (entity.title) {
     rules.push(
@@ -425,6 +719,10 @@ function entityShell(
   for (const rule of entityShellRewrites(opts)) {
     if ("appendHtml" in rule) {
       rewriter = rewriter.on(rule.selector, new HtmlAppender(rule.appendHtml));
+    } else if ("setInnerHtml" in rule) {
+      rewriter = rewriter.on(rule.selector, new InnerHtmlSetter(rule.setInnerHtml));
+    } else if ("remove" in rule) {
+      rewriter = rewriter.on(rule.selector, new Remover());
     } else if ("setText" in rule) {
       rewriter = rewriter.on(rule.selector, new TextReplacer(rule.setText));
     } else {
@@ -432,13 +730,15 @@ function entityShell(
     }
   }
 
-  return new Response(rewriter.transform(shell).body, {
-    status: 200,
-    headers: {
-      "Content-Type": "text/html; charset=utf-8",
-      "Cache-Control": "public, max-age=600",
-    },
-  });
+  const headers: Record<string, string> = {
+    "Content-Type": "text/html; charset=utf-8",
+    "Cache-Control": "public, max-age=600",
+  };
+  // The header, not only the meta tag: the prerendered homepage carries a
+  // robots meta, but a shell built without one would otherwise say nothing.
+  if (opts.type === "event" && isLongPastEvent(opts.entity.startDate)) headers["X-Robots-Tag"] = "noindex";
+
+  return new Response(rewriter.transform(shell).body, { status: 200, headers });
 }
 
 /**
@@ -453,6 +753,13 @@ class HtmlAppender {
   constructor(private html: string) {}
   element(el: any) {
     el.append(this.html, { html: true });
+  }
+}
+
+class InnerHtmlSetter {
+  constructor(private html: string) {}
+  element(el: any) {
+    el.setInnerContent(this.html, { html: true });
   }
 }
 

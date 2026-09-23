@@ -113,14 +113,18 @@ test('no user-agent list decides what a requester is shown', () => {
   assert.doesNotMatch(SRC, /const CRAWLER_UA =/, 'and so is its regex');
 });
 
-test('JSON-LD is injected, never stripped, on the fallback path', () => {
+test('the fallback path replaces the homepage JSON-LD with the entity node, never strips without replacing', () => {
   // The BEHAVIOUR is proved in middleware-entity-shell.test.mjs, which runs
-  // these rules through lol-html and reads the document that comes out. What
-  // is worth asserting from the source is the structural invariant: the entity
-  // path appends and never removes.
+  // these rules through lol-html and reads the document that comes out
+  // ("exactly one ld+json block remains"). What is worth asserting from the
+  // source is the structural invariant.
+  //
+  // This test used to say "never stripped". That protected against an older
+  // branch that removed every block and put nothing back. The shell's blocks
+  // are the HOMEPAGE's (FAQPage, LocalBusiness, ItemLists), so at an entity URL
+  // they are claims about the wrong page; they are now removed, and the only
+  // acceptable removal is one paired with the entity's own node.
   assert.match(SRC, /\{ selector: "head", appendHtml: jsonLdScript\(node\) \}/, 'the entity gets its own node');
-  // withSelfCanonical still removes the homepage's blocks on NON-detail shells,
-  // which is correct; what must not happen is stripping on a detail page.
   //
   // COMMENTS STRIPPED BEFORE MATCHING. The slice runs to `function
   // entityShell(`, and that declaration's doc comment - which sits before it -
@@ -133,7 +137,13 @@ test('JSON-LD is injected, never stripped, on the fallback path', () => {
   )
     .replace(/\/\*[\s\S]*?\*\//g, '')
     .replace(/^\s*\/\/.*$/gm, '');
-  assert.doesNotMatch(rules, /remove/i, 'the entity path must not strip ld+json');
+  const removals = [...rules.matchAll(/remove: true/g)].length;
+  assert.equal(removals, 1, 'exactly one removal rule on the entity path');
+  assert.match(
+    rules,
+    /\{ selector: 'script\[type="application\/ld\+json"\]', remove: true \}/,
+    'and it removes only ld+json, not every script',
+  );
 });
 
 test('og:type follows the segment instead of collapsing to website', () => {

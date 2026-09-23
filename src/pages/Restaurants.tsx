@@ -312,7 +312,7 @@ export default function Restaurants() {
     "@type": "ItemList",
     name: "Best Restaurants in Des Moines, Iowa",
     description:
-      "The best restaurants in Des Moines, Iowa: browse 200+ local spots with ratings, reviews, menus and real-time open or closed status.",
+      "The best restaurants in Des Moines, Iowa: browse 450+ local spots with ratings, reviews, menus and real-time open or closed status.",
     // numberOfItems COUNTS THE ITEMS ACTUALLY LISTED, not the collection the
     // page was drawn from. This read `totalCount || restaurants.length` while
     // itemListElement was sliced to 20, so the prerendered page declared an
@@ -370,7 +370,7 @@ export default function Restaurants() {
     <>
       <SEOHead
         title="Best Restaurants in Des Moines, Iowa"
-        description="The best restaurants in Des Moines, Iowa: 200+ local spots with ratings, reviews and photos, filtered by cuisine, price or neighborhood."
+        description="The best restaurants in Des Moines, Iowa: 450+ local spots with ratings, reviews and photos, filtered by cuisine, price or neighborhood."
         type="website"
         keywords={restaurantsKeywords}
         structuredData={restaurantsSchema}
@@ -422,7 +422,7 @@ export default function Restaurants() {
                 </span>
               </h1>
               <p className="text-lg md:text-xl text-white/80 max-w-2xl mx-auto">
-                Discover 200+ restaurants across Des Moines. Search by cuisine, price,
+                Discover 450+ restaurants across Des Moines. Search by cuisine, price,
                 neighborhood, or find what's open right now.
               </p>
             </div>
@@ -1037,7 +1037,7 @@ export default function Restaurants() {
                 <div className="bg-muted/50 p-6 rounded-2xl border border-border">
                   <h4 className="text-lg font-semibold mb-3 text-foreground">Des Moines Food Scene by the Numbers</h4>
                   <ul className="list-disc list-inside space-y-2 text-muted-foreground">
-                    <li><strong>200+ restaurants</strong> in the greater Des Moines metro area</li>
+                    <li><strong>450+ restaurants</strong> in the greater Des Moines metro area</li>
                     <li><strong>30+ cuisine types</strong> from farm-to-table to authentic international</li>
                     <li><strong>Weekly new openings</strong> tracked and verified by local experts</li>
                     <li><strong>Real-time status</strong> showing which restaurants are open right now</li>
@@ -1069,7 +1069,7 @@ export default function Restaurants() {
                 },
                 {
                   question: "What restaurants are open right now in Des Moines?",
-                  answer: "Use our 'Open Now' filter at the top of this page to instantly see all Des Moines restaurants currently serving. We track real-time operating hours for 200+ local restaurants. Most downtown restaurants serve lunch 11 AM-2 PM and dinner 5-10 PM. Late-night options are available in the East Village and Court Avenue districts. For the most up-to-date information, click 'Open Now' above or visit our dedicated Open Now Restaurants page."
+                  answer: "Use our 'Open Now' filter at the top of this page to instantly see all Des Moines restaurants currently serving. We track real-time operating hours for 450+ local restaurants. Most downtown restaurants serve lunch 11 AM-2 PM and dinner 5-10 PM. Late-night options are available in the East Village and Court Avenue districts. For the most up-to-date information, click 'Open Now' above or visit our dedicated Open Now Restaurants page."
                 },
                 {
                   question: "What cuisines are available in Des Moines?",

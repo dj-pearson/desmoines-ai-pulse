@@ -1,13 +1,5 @@
 # Des Moines Insider
 
-<!-- WEB-SEO-015: the counts below are hand-maintained and had drifted in BOTH
-     directions against the generated sitemaps — "50+ attractions" against 22
-     real URLs and "100+ playgrounds" against 69 were overstatements, while
-     "200+ restaurants" understated an actual 480. They are now rounded DOWN
-     from the sitemap counts so every figure is defensible. Generating this file
-     from the database alongside the sitemaps would stop the drift for good;
-     until then, re-check against public/sitemap-*.xml before editing. -->
-
 > The definitive AI-powered local guide for Des Moines, Iowa — events, restaurants, attractions, and family activities with real-time, verified information.
 
 ## About

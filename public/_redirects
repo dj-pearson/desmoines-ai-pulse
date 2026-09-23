@@ -21,6 +21,12 @@
 /restaurants/daves-hot-chicken   /restaurants/daves-hot-chicken-2   301
 /restaurants/outback-steakhouse  /restaurants/outback-steakhouse-2  301
 
+# The other direction: bonchon-2 was the duplicate removed, and it had ranked -
+# 617 impressions at 5.35% CTR in the 12 months to 2026-09-23 - so it 404'd
+# with history behind it. There is one Bonchon in the metro (EP True Pkwy, West
+# Des Moines) and its row is the clean slug.
+/restaurants/bonchon-2           /restaurants/bonchon               301
+
 # SEO-005: NO REDIRECT HERE, DELIBERATELY, and this note is the point of the
 # entry. Both remaining -2 pairs on this site are TWO REAL RESTAURANTS:
 #
