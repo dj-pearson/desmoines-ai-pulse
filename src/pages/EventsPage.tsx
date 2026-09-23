@@ -25,6 +25,7 @@ import Footer from "@/components/Footer";
 import SEOHead from "@/components/SEOHead";
 import { useToast } from "@/hooks/use-toast";
 import { FAQSection } from "@/components/FAQSection";
+import { EventsHubDirectory } from "@/components/seo/EventsHubDirectory";
 import {
   createEventSlugWithCentralTime,
 } from "@/lib/timezone";
@@ -989,40 +990,23 @@ export default function EventsPage() {
             {/* SEO-rich content block - visible to crawlers, helpful to users */}
             <div className="max-w-4xl mx-auto mb-12">
               <h2 className="text-2xl md:text-3xl font-bold mb-4">Things To Do in Des Moines, Iowa</h2>
+              {/* SEO-009. The paragraphs this replaces named venues and a
+                  "comprehensive calendar" of "hundreds" of events in copy no
+                  data stood behind. What is left says what this page is and
+                  how it is kept current, and the links below do the naming,
+                  from the venues table and the routes that exist. */}
               <div className="prose prose-slate max-w-none text-muted-foreground">
                 <p>
-                  Des Moines is the capital and most populous city in Iowa, offering a vibrant mix of cultural events, live music, food festivals, outdoor adventures, and family-friendly activities. From the iconic Iowa State Fair to intimate gallery openings in the East Village, there's always something happening in the Greater Des Moines area.
+                  This calendar lists concerts, theater, festivals, food and drink events, sports, family activities and community events across Des Moines and its suburbs. Every event has its own page with the date, the start time in Central Time, the venue, the price when it is published, and a link to the official listing.
                 </p>
                 <p>
-                  Popular event venues include Hoyt Sherman Place, Wells Fargo Arena, the Iowa Events Center, Des Moines Civic Center, Cowles Commons, and Wooly's. Neighborhoods like Downtown, East Village, Sherman Hill, and the Western Gateway district each host unique community events throughout the year.
-                </p>
-                <p>
-                  Whether you're looking for free events this weekend, live concerts tonight, family activities, or food and drink festivals, our comprehensive events calendar is updated daily with hundreds of local happenings across Des Moines, West Des Moines, Ankeny, Urbandale, and the surrounding metro area.
+                  New events are collected every day from venue and organizer calendars. Narrow the list by day, by suburb, by venue or by month with the links below, or use the filters at the top of the page.
                 </p>
               </div>
             </div>
 
-            {/* Quick Links for SEO */}
             <div className="max-w-4xl mx-auto mb-12">
-              <h3 className="text-lg font-semibold mb-4">Browse Events By</h3>
-              <div className="grid grid-cols-2 md:grid-cols-4 gap-3">
-                <Link to="/events/today" className="flex items-center gap-2 p-3 rounded-lg bg-card border hover:border-primary/50 hover:shadow-sm transition-all text-sm font-medium">
-                  <SpriteIcon name="clock" className="h-4 w-4 text-primary" />
-                  Events Today
-                </Link>
-                <Link to="/events/this-weekend" className="flex items-center gap-2 p-3 rounded-lg bg-card border hover:border-primary/50 hover:shadow-sm transition-all text-sm font-medium">
-                  <Star className="h-4 w-4 text-primary" />
-                  This Weekend
-                </Link>
-                <Link to="/events/free" className="flex items-center gap-2 p-3 rounded-lg bg-card border hover:border-primary/50 hover:shadow-sm transition-all text-sm font-medium">
-                  <SpriteIcon name="ticket" className="h-4 w-4 text-primary" />
-                  Free Events
-                </Link>
-                <Link to="/events/kids" className="flex items-center gap-2 p-3 rounded-lg bg-card border hover:border-primary/50 hover:shadow-sm transition-all text-sm font-medium">
-                  <SpriteIcon name="users" className="h-4 w-4 text-primary" />
-                  Kids & Family
-                </Link>
-              </div>
+              <EventsHubDirectory />
             </div>
 
             {/* FAQ Section */}
@@ -1030,38 +1014,40 @@ export default function EventsPage() {
               <FAQSection
                 title="Des Moines Events - Frequently Asked Questions"
                 description="Find answers to common questions about events in Des Moines, Iowa."
+                // SEO-009. The answers used to assert things nobody had
+                // checked - a farmers market season, a count of "over 50
+                // official sources", venues that may have closed - and
+                // FAQPage schema hands every one of them to AI search as the
+                // site's own factual claim. They now describe what the site
+                // does and name only well-established annual events.
                 faqs={[
                   {
                     question: "What events are happening in Des Moines this weekend?",
-                    answer: "Des Moines offers dozens of weekend events including live music at venues like Hoyt Sherman Place and Wooly's, farmers markets, outdoor festivals, sporting events, and family activities. Use our date filter to see all events this weekend, or browse our 'This Weekend' page for a curated list."
+                    answer: "The This Weekend page lists everything on the calendar from Friday through Sunday, with start times, venues and prices, and states which weekend it covers. The Events Today page does the same for today."
                   },
                   {
                     question: "Where can I find free events in Des Moines?",
-                    answer: "Des Moines has many free events including the Downtown Farmers Market (Saturdays, April-October), outdoor concerts at Cowles Commons, Sculpture Park at Western Gateway, free museum days, library programs, and community festivals. Filter by 'Free' on our events page to see all upcoming free activities."
+                    answer: "The Free Events page lists upcoming events whose admission is published as free. Each event page shows the price its organizer listed, or links to the official listing when no price was published."
                   },
                   {
-                    question: "What are the best live music venues in Des Moines?",
-                    answer: "Top live music venues in Des Moines include Hoyt Sherman Place (major touring acts), Wooly's (indie/alternative), Val Air Ballroom (large concerts), Gas Lamp (intimate shows), Wells Fargo Arena (arena concerts), and Cowles Commons (free outdoor summer concerts). The East Village and Court Avenue districts also feature many bars with live music."
+                    question: "What are the live music venues in Des Moines?",
+                    answer: "Each venue we track has a page listing its upcoming shows, including Wells Fargo Arena, the Des Moines Civic Center, Hoyt Sherman Place, Wooly's and the Val Air Ballroom in West Des Moines. The Live Music page covers concerts across the metro."
                   },
                   {
                     question: "What are the biggest annual events in Des Moines?",
-                    answer: "Major annual events include the Iowa State Fair (August, 1M+ visitors), 80/35 Music Festival, Des Moines Arts Festival, World Food & Music Festival, RAGBRAI (bike ride), Bacon Fest, and the Des Moines Marathon. Holiday events include Jolly Holiday Lights and the Downtown Winter Market."
+                    answer: "The Iowa State Fair in August is the largest. The Des Moines Arts Festival and the World Food and Music Festival also return every year. The month pages show what is scheduled for any month once dates are announced."
                   },
                   {
                     question: "Are there family-friendly events in Des Moines?",
-                    answer: "Des Moines offers extensive family-friendly events including programs at Science Center of Iowa, Blank Park Zoo events, library storytimes, seasonal festivals with kids' zones, outdoor movie nights, and playground meetups. Use our 'Kids & Family' filter to find age-appropriate activities."
+                    answer: "The Kids and Family page lists upcoming events suited to children, and the playgrounds guide covers parks and play areas across the metro."
                   },
                   {
                     question: "How do I find events near me in Des Moines?",
-                    answer: "Use the 'Near Me' button on our events page to find events within 30 miles of your location. You can also filter by specific areas including Downtown Des Moines, West Des Moines, Ankeny, Urbandale, and Clive."
+                    answer: "The Near Me page sorts upcoming events by distance from your location. There are also pages for events in West Des Moines, Ankeny, Urbandale, Johnston, Clive, Altoona and Windsor Heights."
                   },
                   {
-                    question: "What neighborhoods have the most events in Des Moines?",
-                    answer: "Downtown Des Moines has the highest concentration of events with Iowa Events Center, Cowles Commons, and Des Moines Civic Center. The East Village features art walks, live music, and dining events. Other active areas include Gray's Lake, the Drake neighborhood, and Western Gateway near Science Center of Iowa."
-                  },
-                  {
-                    question: "How often is your events calendar updated?",
-                    answer: "Our Des Moines events calendar is updated daily using AI-powered scanning of over 50 official sources including venue websites, event organizers, and municipal calendars. We verify event details and display all times in Central Time (CT). New events are typically listed within 24 hours of announcement."
+                    question: "How often is the events calendar updated?",
+                    answer: "New events are collected every day from venue and organizer calendars, and all times are shown in Central Time. Each list shows the date it was last updated."
                   }
                 ]}
                 showSchema={true}
