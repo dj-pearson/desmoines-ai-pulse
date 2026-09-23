@@ -4,8 +4,9 @@
  * so a crawler that misses the prerender and a browser that runs the app are
  * handed the same <title>.
  *
- * NO IMPORTS, and no "@/" alias, on purpose: the Pages Functions bundle imports
- * this file by relative path, and a module it cannot resolve fails the deploy.
+ * RELATIVE IMPORTS ONLY, and only of modules that have none themselves: the
+ * Pages Functions bundle imports this file by relative path and does not read
+ * the app's "@/" alias, so a module it cannot resolve fails the deploy.
  *
  * Why these templates (GSC, 12 months to 2026-09-23):
  *  - 33 restaurant pages rank better than position 12 with CTR under 1%, 84k
@@ -18,6 +19,8 @@
  *    says "Des Moines" for rows whose address is in West Des Moines, so the
  *    suburb is read from the address first.
  */
+
+import { titleNamesCity } from "./seoTitleLocation";
 
 export interface RestaurantMetaInput {
   name: string;
@@ -83,11 +86,6 @@ export function isStaleOpeningCopy(text: string | null | undefined): boolean {
   );
 }
 
-function namesPlace(title: string, place: string): boolean {
-  const norm = (s: string) => ` ${s.toLowerCase().replace(/[^a-z0-9]+/g, " ").trim()} `;
-  return norm(title).includes(norm(place));
-}
-
 /**
  * "{Name} {Suburb} - Menu, Hours & Reviews", shortened until it fits 60
  * characters. The brand suffix is appended later by SEOHead and may be cut off
@@ -96,7 +94,7 @@ function namesPlace(title: string, place: string): boolean {
 export function restaurantPageTitle(r: RestaurantMetaInput): string {
   const name = r.name.trim();
   const loc = restaurantLocality(r);
-  const where = loc && !namesPlace(name, loc) ? `${name} ${loc}` : name;
+  const where = loc && !titleNamesCity(name, loc) ? `${name} ${loc}` : name;
   const candidates = [
     `${where} - Menu, Hours & Reviews`,
     `${where} - Menu & Hours`,

@@ -24,7 +24,13 @@ import { BackToTop } from "@/components/BackToTop";
 import { BreadcrumbListSchema } from "@/components/schema/BreadcrumbListSchema";
 import SpeakableSchema from "@/components/schema/SpeakableSchema";
 import { getCanonicalUrl } from "@/lib/brandConfig";
-import { qualifyTitleWithCity } from "@/lib/seoTitleLocation";
+import {
+  parseIowaAddress,
+  readGeoFaq,
+  restaurantLocality,
+  restaurantMetaDescription,
+  restaurantPageTitle,
+} from "@/lib/restaurantMeta";
 import { Phone, Star, DollarSign, ArrowLeft, Navigation, Heart, MessageCircle, Award, Utensils, Globe, Check, BookOpen, Info, Map, CalendarCheck } from "lucide-react";
 import { useState, useMemo } from "react";
 import { useContentTracking } from "@/hooks/useContentTracking";
@@ -206,40 +212,21 @@ export default function RestaurantDetails() {
   }
 
   const showImage = restaurant.image_url && !imageError;
-  const cityName = restaurant.city || "Des Moines";
-  const neighborhoodText = restaurant.location
-    ? `${restaurant.location}, ${cityName}`
-    : cityName;
+  // The address's city, not the `city` column: the column says "Des Moines" for
+  // rows whose address is in West Des Moines (Bonchon, Dave's Hot Chicken).
+  const cityName = restaurantLocality(restaurant) || "Des Moines";
+  const parsedAddress = parseIowaAddress(restaurant.location);
+  // `location` is already the full address; appending the city used to print
+  // "..., West Des Moines, IA 50266, USA, Des Moines".
+  const neighborhoodText = restaurant.location || cityName;
 
-  // Comprehensive SEO
-  //
-  // SEO-005: a hand-set seo_title overrides the generated fallback, and the
-  // fallback is the only one of the two that names the city. Texas Roadhouse has
-  // two real Des Moines-area locations - Johnston and Mills Civic Pkwy in West
-  // Des Moines - and BOTH rows carry seo_title "Texas Roadhouse", so two
-  // different restaurants served one identical title and neither told a searcher
-  // which branch they had found.
-  //
-  // qualifyTitleWithCity fills that gap and never overrides an editor: a title
-  // that already names a place is returned untouched, and a row with no city
-  // gets nothing appended rather than an invented one.
-  //
-  // This is worth doing beyond the one collision. The suburb-qualified branded
-  // lookup is one of the most common query shapes this site receives -
-  // "dave's hot chicken west des moines" at 1,184 impressions, "bonchon west
-  // des moines" at 1,391, "atlas cafe west des moines" at 282, plus marvs
-  // norwalk, bubbies bbq pleasant hill and others - and a title with no suburb
-  // in it cannot match any of them well.
-  const seoTitle = qualifyTitleWithCity(
-    restaurant.seo_title ||
-      `${restaurant.name} - ${restaurant.cuisine || "Restaurant"} in ${cityName}, Iowa | Menu, Hours & Reviews`,
-    restaurant.city,
-  );
-
-  const seoDescription = restaurant.seo_description ||
-    (restaurant.description
-      ? `${restaurant.description.slice(0, 140)}... ${restaurant.name} serves ${restaurant.cuisine || "diverse"} cuisine at ${neighborhoodText}. ${restaurant.price_range ? `Price: ${getPriceDescription(restaurant.price_range)}.` : ""} ${restaurant.rating ? `Rated ${restaurant.rating}/5.` : ""}`
-      : `${restaurant.name} is a ${restaurant.cuisine || "local"} restaurant in ${cityName}, Iowa. View menu, hours, ratings, photos, and directions. ${restaurant.price_range ? `Price range: ${getPriceDescription(restaurant.price_range)}.` : ""}`);
+  // One builder for this page and the edge shell (functions/_middleware.ts), so
+  // a crawler that misses the prerender sees the same title. The template
+  // replaces seo_title: those were AI-written, never said "menu" or "hours",
+  // and the 33 listings ranking inside the top 12 at under 1% CTR all used
+  // them. See src/lib/restaurantMeta.ts for the GSC numbers.
+  const seoTitle = restaurantPageTitle(restaurant);
+  const seoDescription = restaurantMetaDescription(restaurant);
 
   const seoKeywords = [
     ...(restaurant.seo_keywords || []),
@@ -280,13 +267,18 @@ export default function RestaurantDetails() {
     servesCuisine: restaurant.cuisine,
     address: {
       "@type": "PostalAddress",
-      streetAddress: restaurant.location,
+      streetAddress: parsedAddress?.streetAddress || restaurant.location,
       addressLocality: cityName,
-      addressRegion: "Iowa",
+      addressRegion: "IA",
+      ...(parsedAddress?.postalCode && { postalCode: parsedAddress.postalCode }),
       addressCountry: "US",
     },
     ...(restaurant.phone && { telephone: restaurant.phone }),
-    ...(restaurant.website && { url: restaurant.website }),
+    // url is this page; the restaurant's own site is sameAs. url used to be the
+    // owner's site, which told Google this node described a page we don't host.
+    url: getCanonicalUrl(`/restaurants/${restaurant.slug || restaurant.id}`),
+    ...(restaurant.website && { sameAs: [restaurant.website] }),
+    ...(restaurant.menu_url && { hasMenu: restaurant.menu_url }),
     priceRange: restaurant.price_range,
     ...(restaurant.image_url && { image: [restaurant.image_url] }),
     // WEB-SEO-024. The fallback was 41.5868,-93.6250 -- the middle of downtown
@@ -372,14 +364,26 @@ export default function RestaurantDetails() {
       answer: `${restaurant.name} is located at ${restaurant.location || cityName + ", Iowa"}. ${restaurant.latitude ? "You can find directions using the map on this page." : "Visit our restaurants page for a map of all Des Moines dining locations."}`,
     },
     {
+      // This answered "Yes, the full menu with prices is on this page" for every
+      // restaurant, including the ones with no menu captured (Atlas Cafe).
       question: `Does ${restaurant.name} have an online menu?`,
-      answer: `Yes, you can view the full ${restaurant.name} menu with prices on this page. Scroll down to the Menu section or click the "Menu" button to see all menu categories and items${restaurant.cuisine ? ` featuring ${restaurant.cuisine} cuisine` : ''}. The menu is regularly updated to reflect current offerings. ${restaurant.website ? `You can also visit ${restaurant.name}'s official website for their latest menu.` : ''}`,
+      answer: restaurant.menu_url
+        ? `Yes. ${restaurant.name}'s menu is online at ${restaurant.menu_url}. Any menu we have captured is in the Menu section on this page.`
+        : restaurant.website
+          ? `Check ${restaurant.name}'s website at ${restaurant.website} for the current menu. Any menu we have captured is in the Menu section on this page.`
+          : `We don't have a menu link for ${restaurant.name} yet.${restaurant.phone ? ` Call ${restaurant.phone} for current offerings and prices.` : ""}`,
     },
     ...(restaurant.rating ? [{
       question: `What is the rating for ${restaurant.name}?`,
       answer: `${restaurant.name} has a rating of ${restaurant.rating.toFixed(1)} out of 5 stars based on local reviews. ${restaurant.rating >= 4.5 ? "It's one of the highest-rated restaurants in the Des Moines area." : restaurant.rating >= 4.0 ? "It's a highly-rated restaurant in Des Moines." : "Diners appreciate its " + (restaurant.cuisine || "diverse") + " cuisine offerings."} ${restaurant.is_featured ? "It's also featured as an editor's pick on Des Moines Insider." : ""}`,
     }] : []),
   ];
+  // geo_faq was generated for every row by generate-seo-content and never
+  // rendered. Questions the templates above already answer are skipped.
+  const askedAlready = new Set(restaurantFaqs.map((f) => f.question.toLowerCase()));
+  restaurantFaqs.push(
+    ...readGeoFaq(restaurant.geo_faq).filter((f) => !askedAlready.has(f.question.toLowerCase())),
+  );
 
   // WEB-FEAT-024. Resolved once and used by both the in-page action bar and the
   // sticky mobile CTA, so the two can never disagree about whether this place
@@ -397,12 +401,9 @@ export default function RestaurantDetails() {
         structuredData={restaurantSchema}
         url={`/restaurants/${restaurant.slug || restaurant.id}`}
         imageUrl={ogImageUrl("restaurant", restaurant.id)}
-        location={{
-          name: restaurant.name,
-          address: restaurant.location || `${cityName}, IA`,
-          latitude: restaurant.latitude,
-          longitude: restaurant.longitude,
-        }}
+        // No `location` prop: it emitted a second, unlinked Place node for the
+        // same business alongside restaurantSchema, which already carries the
+        // address and geo.
         modifiedTime={restaurant.updated_at}
       />
       <BreadcrumbListSchema

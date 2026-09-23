@@ -535,7 +535,7 @@ export default function EventsPage() {
 
   const seoDescription = `Discover ${searchQuery ? `"${searchQuery}" ` : ""}${
     selectedCategory && selectedCategory !== "all" ? selectedCategory.toLowerCase() + " " : ""
-  }events in Des Moines, Iowa. Browse ${events?.length || 'upcoming'} concerts, festivals, food events, family activities, and community gatherings. Updated daily with the best things to do in Des Moines.`;
+  }events in Des Moines, Iowa. Browse upcoming concerts, festivals, food events, family activities, and community gatherings. Updated daily with the best things to do in Des Moines.`;
 
   const eventsSchema = {
     "@context": "https://schema.org",

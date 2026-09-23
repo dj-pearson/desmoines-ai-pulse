@@ -1,6 +1,6 @@
 # Des Moines Insider - Robots.txt
 # Optimized for search engine indexing and AI search crawlers
-# Last updated: 2026-03-16
+# Last updated: 2026-09-23 (named-bot groups now carry the same disallows as *; a named group replaces * for that bot)
 
 # Default rules for all crawlers
 User-agent: *
@@ -45,6 +45,11 @@ Disallow: /admin
 Disallow: /auth
 Disallow: /profile
 Disallow: /dashboard
+Disallow: /api/
+Disallow: /social
+Disallow: /gamification
+Disallow: /subscription
+Disallow: /sw.js
 Disallow: /campaigns
 
 User-agent: ChatGPT-User
@@ -53,6 +58,11 @@ Disallow: /admin
 Disallow: /auth
 Disallow: /profile
 Disallow: /dashboard
+Disallow: /api/
+Disallow: /social
+Disallow: /gamification
+Disallow: /subscription
+Disallow: /sw.js
 
 # OpenAI Search Bot (dedicated search crawler)
 User-agent: OAI-SearchBot
@@ -61,6 +71,11 @@ Disallow: /admin
 Disallow: /auth
 Disallow: /profile
 Disallow: /dashboard
+Disallow: /api/
+Disallow: /social
+Disallow: /gamification
+Disallow: /subscription
+Disallow: /sw.js
 
 # Anthropic - Claude Search
 User-agent: ClaudeBot
@@ -69,6 +84,11 @@ Disallow: /admin
 Disallow: /auth
 Disallow: /profile
 Disallow: /dashboard
+Disallow: /api/
+Disallow: /social
+Disallow: /gamification
+Disallow: /subscription
+Disallow: /sw.js
 
 User-agent: Claude-Web
 Allow: /
@@ -76,6 +96,11 @@ Disallow: /admin
 Disallow: /auth
 Disallow: /profile
 Disallow: /dashboard
+Disallow: /api/
+Disallow: /social
+Disallow: /gamification
+Disallow: /subscription
+Disallow: /sw.js
 
 # Google AI (Gemini, AI Overviews)
 User-agent: Google-Extended
@@ -84,6 +109,11 @@ Disallow: /admin
 Disallow: /auth
 Disallow: /profile
 Disallow: /dashboard
+Disallow: /api/
+Disallow: /social
+Disallow: /gamification
+Disallow: /subscription
+Disallow: /sw.js
 
 User-agent: Googlebot
 Allow: /
@@ -91,6 +121,11 @@ Disallow: /admin
 Disallow: /auth
 Disallow: /profile
 Disallow: /dashboard
+Disallow: /api/
+Disallow: /social
+Disallow: /gamification
+Disallow: /subscription
+Disallow: /sw.js
 
 # Perplexity AI Search
 User-agent: PerplexityBot
@@ -99,6 +134,11 @@ Disallow: /admin
 Disallow: /auth
 Disallow: /profile
 Disallow: /dashboard
+Disallow: /api/
+Disallow: /social
+Disallow: /gamification
+Disallow: /subscription
+Disallow: /sw.js
 
 # Apple Siri/Spotlight
 User-agent: Applebot
@@ -107,6 +147,11 @@ Disallow: /admin
 Disallow: /auth
 Disallow: /profile
 Disallow: /dashboard
+Disallow: /api/
+Disallow: /social
+Disallow: /gamification
+Disallow: /subscription
+Disallow: /sw.js
 
 User-agent: Applebot-Extended
 Allow: /
@@ -114,6 +159,11 @@ Disallow: /admin
 Disallow: /auth
 Disallow: /profile
 Disallow: /dashboard
+Disallow: /api/
+Disallow: /social
+Disallow: /gamification
+Disallow: /subscription
+Disallow: /sw.js
 
 # Microsoft Copilot / Bing
 User-agent: Bingbot
@@ -122,6 +172,11 @@ Disallow: /admin
 Disallow: /auth
 Disallow: /profile
 Disallow: /dashboard
+Disallow: /api/
+Disallow: /social
+Disallow: /gamification
+Disallow: /subscription
+Disallow: /sw.js
 
 # Meta AI
 User-agent: FacebookBot
@@ -130,6 +185,11 @@ Disallow: /admin
 Disallow: /auth
 Disallow: /profile
 Disallow: /dashboard
+Disallow: /api/
+Disallow: /social
+Disallow: /gamification
+Disallow: /subscription
+Disallow: /sw.js
 
 User-agent: meta-externalagent
 Allow: /
@@ -137,6 +197,11 @@ Disallow: /admin
 Disallow: /auth
 Disallow: /profile
 Disallow: /dashboard
+Disallow: /api/
+Disallow: /social
+Disallow: /gamification
+Disallow: /subscription
+Disallow: /sw.js
 
 # Cohere AI Search
 User-agent: cohere-ai
@@ -145,6 +210,11 @@ Disallow: /admin
 Disallow: /auth
 Disallow: /profile
 Disallow: /dashboard
+Disallow: /api/
+Disallow: /social
+Disallow: /gamification
+Disallow: /subscription
+Disallow: /sw.js
 
 # You.com AI Search
 User-agent: YouBot
@@ -153,6 +223,11 @@ Disallow: /admin
 Disallow: /auth
 Disallow: /profile
 Disallow: /dashboard
+Disallow: /api/
+Disallow: /social
+Disallow: /gamification
+Disallow: /subscription
+Disallow: /sw.js
 
 # ============================================
 # AI Training-Only Bots - BLOCK

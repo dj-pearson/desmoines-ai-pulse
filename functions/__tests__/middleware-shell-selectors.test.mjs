@@ -26,6 +26,9 @@ import { dirname, join } from 'node:path';
 const HERE = dirname(fileURLToPath(import.meta.url));
 const SEO_HEAD = readFileSync(join(HERE, '../../src/components/SEOHead.tsx'), 'utf8');
 const MIDDLEWARE = readFileSync(join(HERE, '../_middleware.ts'), 'utf8');
+// The body target is not in the head: App.tsx renders the one <main> every
+// route shares, and the entity shell replaces its contents.
+const APP = readFileSync(join(HERE, '../../src/App.tsx'), 'utf8');
 
 const { selfCanonicalRewrites, entityShellRewrites } = await import('../_middleware.ts');
 
@@ -44,6 +47,7 @@ function shellEmits(selector) {
   if (meta) return new RegExp(`${meta[1]}="${meta[2].replace(/[.*+?^${}()|[\]\\]/g, '\\$&')}"`).test(SEO_HEAD);
   if (selector === 'link[rel="canonical"]') return /rel="canonical"/.test(SEO_HEAD);
   if (selector === 'script[type="application/ld+json"]') return /application\/ld\+json/.test(SEO_HEAD);
+  if (selector === 'main#main-content') return /<main id="main-content"/.test(APP);
   return null; // unrecognised shape - reported rather than silently passed
 }
 

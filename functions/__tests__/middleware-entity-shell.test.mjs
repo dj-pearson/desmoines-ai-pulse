@@ -42,6 +42,10 @@ async function rewrite(html, opts) {
   for (const rule of entityShellRewrites(opts)) {
     if ('appendHtml' in rule) {
       rewriter.on(rule.selector, { element: (el) => el.append(rule.appendHtml, { html: true }) });
+    } else if ('setInnerHtml' in rule) {
+      rewriter.on(rule.selector, { element: (el) => el.setInnerContent(rule.setInnerHtml, { html: true }) });
+    } else if ('remove' in rule) {
+      rewriter.on(rule.selector, { element: (el) => el.remove() });
     } else if ('setText' in rule) {
       let done = false;
       rewriter.on(rule.selector, {
@@ -93,10 +97,12 @@ const SHELL = `<!doctype html>
     <meta data-rh="true" name="twitter:title" content="Des Moines Insider" />
     <meta data-rh="true" name="twitter:image" content="https://desmoinesinsider.com/og.png" />
     <meta data-rh="true" name="twitter:description" content="Home" />
+    <meta data-rh="true" name="robots" content="index, follow" />
     <script type="application/ld+json">{"@type":"WebSite"}</script>
+    <script type="application/ld+json">{"@type":"FAQPage"}</script>
     <script type="module" crossorigin src="/assets/index-abc.js"></script>
   </head>
-  <body><div id="root"></div></body>
+  <body><div id="root"><header><a href="/events">Events</a></header><main id="main-content" tabindex="-1"><h1>What's Happening in Des Moines</h1><p>homepage copy</p></main><footer><a href="/about">About</a></footer></div></body>
 </html>`;
 
 const RESTAURANT = {
@@ -143,7 +149,12 @@ ck('a Restaurant node is injected', injectedNode(out)?.['@type'] === 'Restaurant
 ck('it carries the entity name', injectedNode(out)?.name === "Fong's Pizza & Tiki <Lounge>", JSON.stringify(injectedNode(out)?.name));
 ck('with < escaped in the wire form', out.includes('\\u003cLounge>'), out.match(/"name":"[^"]*"/)?.[0]);
 ck('it is @id-ed and url-ed to the page', out.includes(`"@id":"${PAGE}"`) && out.includes(`"url":"${PAGE}"`));
-ck("the shell's own WebSite node is NOT removed", out.includes('"@type":"WebSite"'));
+// The shell's blocks are the HOMEPAGE's. At an entity URL they are claims about
+// the wrong page, so they go; the entity's node is the only one left.
+ck("the homepage's ld+json is removed", !out.includes('"@type":"WebSite"') && !out.includes('"@type":"FAQPage"'));
+ck('exactly one ld+json block remains', [...out.matchAll(/application\/ld\+json/g)].length === 1);
+ck("the homepage H1 and copy are gone", !out.includes("What's Happening") && !out.includes('homepage copy'));
+ck('the header and footer navigation survive', out.includes('<a href="/events">Events</a>') && out.includes('<a href="/about">About</a>'));
 ck('the application module script survives', out.includes('src="/assets/index-abc.js"'));
 
 // `</script>` inside a title would end the block early and inject markup.
@@ -181,6 +192,89 @@ const unknown = await rewrite(SHELL, {
 });
 ck('an unmapped type falls back to Thing', injectedNode(unknown)?.['@type'] === 'Thing');
 ck('and to og:type website', unknown.includes('property="og:type" content="website"'));
+
+console.log('\na restaurant with its full row');
+const bonchonRow = {
+  id: 'b1',
+  name: 'Bonchon',
+  city: 'Des Moines',
+  location: '6880 EP True Pkwy Unit 104, West Des Moines, IA 50266, USA',
+  cuisine: 'Korean',
+  price_range: '$$',
+  phone: '(515) 555-0100',
+  website: 'https://restaurants.bonchon.com/locations/IA/west-des-moines',
+  latitude: 41.56,
+  longitude: -93.8,
+  opening: null,
+  seo_description: 'Bonchon West Des Moines is opening soon.',
+  description: 'Coming soon!',
+};
+const rich = await rewrite(SHELL, {
+  pageUrl: 'https://desmoinesinsider.com/restaurants/bonchon',
+  sbBase: SB,
+  type: 'restaurant',
+  entity: { id: 'b1', title: 'Bonchon', row: bonchonRow },
+});
+const rn = injectedNode(rich);
+ck('the title names the suburb and the menu', rich.includes('<title>Bonchon West Des Moines - Menu, Hours &amp; Reviews | Des Moines Insider</title>'), /<title>[^<]*/.exec(rich)?.[0]);
+ck('the stale "opening soon" description is not served', !rich.includes('opening soon') && !rich.includes('Coming soon'));
+ck('the H1 is the restaurant', rich.includes('<h1>Bonchon</h1>'));
+ck('addressLocality is the suburb, not the city column', rn?.address?.addressLocality === 'West Des Moines', JSON.stringify(rn?.address));
+ck('with the ZIP', rn?.address?.postalCode === '50266');
+ck('and the street alone', rn?.address?.streetAddress === '6880 EP True Pkwy Unit 104');
+ck('url is our page, the owner site is sameAs', rn?.url === 'https://desmoinesinsider.com/restaurants/bonchon' && rn?.sameAs?.[0] === bonchonRow.website);
+ck('geo is carried', rn?.geo?.latitude === 41.56);
+ck('the body links back into the hubs', rich.includes('href="/restaurants/open-now"') && rich.includes('href="/restaurants"'));
+ck('outbound links are nofollow', /href="https:\/\/restaurants\.bonchon\.com[^"]*" rel="nofollow noopener"/.test(rich));
+
+console.log('\nan event with its full row');
+const eventRow = {
+  id: 'e9',
+  title: 'Red Leather',
+  date: '2026-10-10T01:00:00Z',
+  event_start_utc: '2026-10-10T01:00:00Z',
+  end_date: null,
+  venue: 'Val Air Ballroom',
+  location: '301 Ashworth Rd, West Des Moines, IA 50265',
+  city: 'West Des Moines',
+  price: '$25',
+  enhanced_description: 'A KISS tribute.',
+};
+const NOW = new Date('2026-09-23T12:00:00Z');
+const ev = await rewrite(SHELL, {
+  pageUrl: 'https://desmoinesinsider.com/events/red-leather-2026-10-09',
+  sbBase: SB,
+  type: 'event',
+  entity: { id: 'e9', title: 'Red Leather', startDate: eventRow.event_start_utc, row: eventRow },
+  now: NOW,
+});
+const en = injectedNode(ev);
+// 01:00 UTC on the 10th is 8:00 PM Central on the 9th - the day the slug says.
+ck('the title carries the Central date and venue', ev.includes('<title>Red Leather - Fri, Oct 9 | Val Air Ballroom</title>'), /<title>[^<]*/.exec(ev)?.[0]);
+ck('the body shows the Central time', ev.includes('Friday, October 9, 2026 at 8:00 PM'), ev.match(/When: [^<]*/)?.[0]);
+ck('the Event has a Place with a real address', en?.location?.address?.streetAddress === '301 Ashworth Rd' && en?.location?.address?.addressLocality === 'West Des Moines');
+ck('eventStatus and attendance mode are set', en?.eventStatus === 'https://schema.org/EventScheduled' && !!en?.eventAttendanceMode);
+ck('it links to its suburb hub', ev.includes('href="/events/west-des-moines"'));
+ck('an upcoming event stays indexable', ev.includes('name="robots" content="index, follow"'));
+ck('and does not say it has ended', !ev.includes('This event has ended'));
+
+const past = await rewrite(SHELL, {
+  pageUrl: 'https://desmoinesinsider.com/events/touch-a-truck-2026-05-22',
+  sbBase: SB,
+  type: 'event',
+  entity: { id: 't1', title: 'Touch a Truck', startDate: '2026-05-22T15:00:00Z', row: { ...eventRow, title: 'Touch a Truck', event_start_utc: '2026-05-22T15:00:00Z' } },
+  now: NOW,
+});
+ck('an event four months past is noindex', past.includes('name="robots" content="noindex, follow"'));
+ck('and says it has ended', past.includes('This event has ended'));
+
+const hostile = await rewrite(SHELL, {
+  pageUrl: PAGE,
+  sbBase: SB,
+  type: 'restaurant',
+  entity: { id: 'h', title: 'x', row: { ...bonchonRow, name: '<img src=x onerror=alert(1)>', description: '<script>alert(1)</script>' } },
+});
+ck('row text is escaped in the body', !hostile.includes('<img src=x') && !hostile.includes('<script>alert'), hostile.match(/<h1>[^]*?<\/h1>/)?.[0]);
 
 console.log('\nabsences the shell really has');
 // A title-less entity must not blank the shell's own title.

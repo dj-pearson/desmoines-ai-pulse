@@ -43,6 +43,11 @@ export interface Event {
   ai_writeup?: string | null;
   writeup_generated_at?: string | null;
   writeup_prompt_used?: string | null;
+  // GEO fields written by generate-seo-content. geo_faq is untyped JSON; read
+  // it through readGeoFaq (src/lib/restaurantMeta.ts).
+  geo_summary?: string | null;
+  geo_key_facts?: string[] | null;
+  geo_faq?: unknown;
 }
 
 export interface RestaurantOpening {

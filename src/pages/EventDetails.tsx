@@ -40,6 +40,8 @@ import { LastUpdatedBadge } from "@/components/LastUpdatedBadge";
 import { NearbyContent } from "@/components/NearbyContent";
 import { LazyLocationMap } from "@/components/LazyLocationMap";
 import { eventSummary } from "@/lib/eventMeta";
+import { readGeoFaq } from "@/lib/restaurantMeta";
+import { FAQSection } from "@/components/FAQSection";
 import { matchVenue } from "@/lib/venuePages";
 import { useVenues } from "@/hooks/useVenues";
 import { NearbyHotels } from "@/components/venues/NearbyHotels";
@@ -430,6 +432,36 @@ export default function EventDetails() {
                     </div>
                   )}
                 </section>
+
+                {/* GEO fields: generated for every event by generate-seo-content
+                    and, until now, rendered nowhere. The FAQ is shown AND
+                    marked up, which is the condition EnhancedEventSEO's removed
+                    FAQPage never met (WEB-SEO-022). */}
+                {(event.geo_summary || (event.geo_key_facts?.length ?? 0) > 0) && (
+                  <section className="bg-card rounded-2xl shadow-sm border p-6 md:p-8">
+                    <h2 className="text-xl font-bold mb-4">Quick Facts</h2>
+                    {event.geo_summary && (
+                      <p className="text-muted-foreground leading-relaxed">{event.geo_summary}</p>
+                    )}
+                    {(event.geo_key_facts?.length ?? 0) > 0 && (
+                      <ul className="mt-4 list-disc pl-5 space-y-1 text-muted-foreground">
+                        {event.geo_key_facts.map((fact, i) => (
+                          <li key={i}>{fact}</li>
+                        ))}
+                      </ul>
+                    )}
+                  </section>
+                )}
+                {readGeoFaq(event.geo_faq).length > 0 && (
+                  <section className="bg-card rounded-2xl shadow-sm border overflow-hidden">
+                    <FAQSection
+                      title={`${event.title}: Questions and Answers`}
+                      faqs={readGeoFaq(event.geo_faq)}
+                      showSchema={true}
+                      className="border-0"
+                    />
+                  </section>
+                )}
 
                 {/* Things To Know - Optimized for Featured Snippets */}
                 <section className="bg-card rounded-2xl shadow-sm border p-6 md:p-8">
