@@ -24,6 +24,8 @@ L.Icon.Default.mergeOptions({
 // marker whenever the parent re-rendered.
 const iconCache = new Map<string, L.DivIcon>();
 const HEX_COLOR = /^#[0-9a-fA-F]{3,8}$/;
+/** Pin colour for a map that sets neither markerColor nor colorByCategory. */
+const DEFAULT_MARKER_COLOR = '#2563eb';
 
 function getColorIcon(color: string): L.DivIcon {
   // Only a hex colour reaches the html string, so nothing can inject markup.
@@ -271,10 +273,14 @@ export function InteractiveMap({
   const handleCenter = () => mapRef.current?.setView(mapCenter, zoom);
   const handleFullscreen = () => setIsFullscreen((v) => !v);
 
-  const markerIcon = (location: MapLocation): L.DivIcon | undefined => {
+  // Always an icon. react-leaflet passes `icon: undefined` straight into
+  // L.Marker's options, which overwrites the default and throws "reading
+  // 'createIcon'" on add - that is what took /playgrounds?view=map down to the
+  // route error boundary.
+  const markerIcon = (location: MapLocation): L.DivIcon => {
     if (location.markerColor) return getColorIcon(location.markerColor);
     if (colorByCategory) return getColorIcon(getCategoryHex(location.category));
-    return undefined;
+    return getColorIcon(DEFAULT_MARKER_COLOR);
   };
 
   const markerTitle = (location: MapLocation) =>

@@ -133,7 +133,7 @@ test('390x844: Today and This Weekend are on the first screen', async ({ page })
 test('links every Explore section and no redirect source', async ({ page }) => {
   await installFixtureBackend(page);
   await page.goto('/things-to-do', { waitUntil: 'domcontentloaded' });
-  const body = page.locator('#explore-heading').locator('xpath=..');
+  const body = page.locator('section[aria-labelledby="explore-heading"]');
   await expect(body).toBeVisible({ timeout: 30_000 });
   for (const href of EXPLORE_HREFS) {
     await expect(body.locator(`a[href="${href}"]`), href).toHaveCount(1);

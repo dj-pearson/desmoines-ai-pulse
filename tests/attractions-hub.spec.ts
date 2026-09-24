@@ -128,8 +128,8 @@ test.describe('attractions hub (Explore WP3)', () => {
     const seen = await installAttractions(page);
 
     await page.goto('/attractions?free=1&kids=1');
-    await expect(page.getByRole('button', { name: 'Free' })).toHaveAttribute('aria-pressed', 'true');
-    await expect(page.getByRole('button', { name: 'Kid-friendly' })).toHaveAttribute('aria-pressed', 'true');
+    await expect(page.getByRole('button', { name: 'Free', exact: true })).toHaveAttribute('aria-pressed', 'true');
+    await expect(page.getByRole('button', { name: 'Kid-friendly', exact: true })).toHaveAttribute('aria-pressed', 'true');
 
     await expect
       .poll(() =>
@@ -141,7 +141,7 @@ test.describe('attractions hub (Explore WP3)', () => {
       .toBe(true);
 
     // Toggling Indoors adds its own filter and keeps the other two in the URL.
-    await page.getByRole('button', { name: 'Indoors' }).click();
+    await page.getByRole('button', { name: 'Indoors', exact: true }).click();
     await expect(page).toHaveURL(/indoor=1/);
     await expect(page).toHaveURL(/free=1/);
     await expect(page).toHaveURL(/kids=1/);
@@ -180,7 +180,7 @@ test.describe('attractions hub (Explore WP3)', () => {
     await page.getByRole('button', { name: 'Switch to map view' }).click();
 
     await expect(page).toHaveURL(/view=map/);
-    const skeleton = page.getByTestId('attractions-map-skeleton');
+    const skeleton = page.getByRole('status', { name: 'Loading map' });
     await expect(skeleton).toBeVisible();
     const box = await skeleton.boundingBox();
     expect(box?.height).toBeGreaterThanOrEqual(590);

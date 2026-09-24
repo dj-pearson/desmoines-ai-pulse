@@ -140,7 +140,10 @@
           max-width: 1280px;
         }
       }
-      header {
+      /* The site header only (it carries .sticky). A bare `header` selector
+         also pinned in-page <header>s - the /outdoors intro and every pSEO
+         page's - over the content below them at z-index 50. */
+      header.sticky {
         position: sticky;
         top: 0;
         z-index: 50;

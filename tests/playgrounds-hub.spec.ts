@@ -93,11 +93,24 @@ async function installPlaygrounds(page: Page): Promise<string[]> {
   const seen: string[] = [];
   await page.route('**/rest/v1/playgrounds**', (route: Route) => {
     const req = route.request();
-    const url = decodeURIComponent(req.url());
+    // supabase-js builds the query with URLSearchParams, which writes a space
+    // as '+' (a literal plus is %2B), so '+' is decoded to a space here.
+    const url = decodeURIComponent(req.url().replace(/\+/g, '%20'));
     seen.push(url);
     const wantsObject = (req.headers()['accept'] || '').includes('application/vnd.pgrst.object');
     if (req.method() === 'HEAD') {
       return route.fulfill({ status: 200, headers: { ...CORS, 'content-range': `*/${ROWS.length}` }, body: '' });
+    }
+    // maybeSingle() on a GET asks for a plain JSON array and errors client-side
+    // (PGRST116) when it holds more than one row, so a slug or id lookup must
+    // answer with exactly one.
+    if (/[?&](slug|id)=eq\./.test(url)) {
+      return route.fulfill({
+        status: 200,
+        contentType: 'application/json',
+        headers: { ...CORS, 'content-range': '0-0/1' },
+        body: JSON.stringify([ROWS[1]]),
+      });
     }
     if (wantsObject) {
       // Slug or id lookup for the detail page: the Downtown row.
@@ -155,7 +168,7 @@ test.describe('/playgrounds hub (explore WP4)', () => {
     await installFixtureBackend(page);
     const seen = await installPlaygrounds(page);
     await page.goto('/playgrounds?shade=1');
-    await expect(page.getByTestId('playground-grid')).toBeVisible();
+    await expect(page.locator('[data-playground-grid]')).toBeVisible();
 
     const list = listRequests(seen);
     expect(list.length).toBeGreaterThan(0);
@@ -167,14 +180,14 @@ test.describe('/playgrounds hub (explore WP4)', () => {
     // The toggle reflects the URL.
     await expect(page.locator('[data-filter-toggle="shade"]').first()).toHaveAttribute('aria-pressed', 'true');
     // The card chip renders only for has_shade=true.
-    await expect(page.getByTestId('playground-essentials').filter({ hasText: 'Shade' })).toHaveCount(1);
+    await expect(page.locator('[data-playground-essentials]').filter({ hasText: 'Shade' })).toHaveCount(1);
   });
 
   test('Location lists only suburbs read from the rows, with counts', async ({ page }) => {
     await installFixtureBackend(page);
     const seen = await installPlaygrounds(page);
     await page.goto('/playgrounds');
-    await expect(page.getByTestId('playground-grid')).toBeVisible();
+    await expect(page.locator('[data-playground-grid]')).toBeVisible();
 
     // The facets query is bounded like the list.
     const facets = seen.filter((u) => u.includes('select=age_range,location,amenities'));
@@ -199,7 +212,7 @@ test.describe('/playgrounds hub (explore WP4)', () => {
     await installFixtureBackend(page);
     const seen = await installPlaygrounds(page);
     await page.goto('/playgrounds');
-    const chip = page.getByTestId('amenity-chips').getByRole('button', { name: /Splash Pad/ });
+    const chip = page.locator('[data-amenity-chips]').getByRole('button', { name: /Splash Pad/ });
     await expect(chip).toHaveAttribute('aria-pressed', 'false');
     await chip.click();
     await expect(chip).toHaveAttribute('aria-pressed', 'true');
@@ -213,15 +226,15 @@ test.describe('/playgrounds hub (explore WP4)', () => {
     await installFixtureBackend(page);
     await installPlaygrounds(page);
     await page.goto('/playgrounds');
-    await expect(page.getByTestId('playground-grid')).toBeVisible();
+    await expect(page.locator('[data-playground-grid]')).toBeVisible();
 
     await page.getByRole('button', { name: 'Switch to map view' }).click();
     await expect(page).toHaveURL(/view=map/);
     await expect(page.getByRole('heading', { level: 1, name: /Discover Des Moines Playgrounds/ })).toBeVisible();
-    await expect(page.getByTestId('playground-filters')).toBeVisible();
+    await expect(page.locator('[data-playground-filters]')).toBeVisible();
     // Either the 600px skeleton or the map itself holds the space.
     await expect(
-      page.getByTestId('playgrounds-map-skeleton').or(page.locator('.leaflet-container')).first(),
+      page.locator('[data-playgrounds-map-skeleton]').or(page.locator('.leaflet-container')).first(),
     ).toBeVisible();
   });
 
@@ -230,9 +243,9 @@ test.describe('/playgrounds hub (explore WP4)', () => {
     await installFixtureBackend(page);
     await installPlaygrounds(page);
     await page.goto('/playgrounds');
-    await expect(page.getByTestId('playground-grid')).toBeVisible();
+    await expect(page.locator('[data-playground-grid]')).toBeVisible();
     await page.getByRole('button', { name: /Near me/ }).click();
-    await expect(page.getByTestId('near-me-error')).toContainText('permission denied');
+    await expect(page.locator('[data-near-me-error]')).toContainText('permission denied');
   });
 
   test('Near me granted sorts by distance', async ({ page }) => {
@@ -240,11 +253,11 @@ test.describe('/playgrounds hub (explore WP4)', () => {
     await installFixtureBackend(page);
     await installPlaygrounds(page);
     await page.goto('/playgrounds');
-    await expect(page.getByTestId('playground-grid')).toBeVisible();
+    await expect(page.locator('[data-playground-grid]')).toBeVisible();
     await page.getByRole('button', { name: /Near me/ }).click();
-    const first = page.getByTestId('playground-grid').locator('a').first();
+    const first = page.locator('[data-playground-grid]').locator('a').first();
     await expect(first).toContainText('Fixture Downtown Playground');
-    await expect(first.getByTestId('playground-distance')).toContainText('mi away');
+    await expect(first.locator('[data-playground-distance]')).toContainText('mi away');
   });
 });
 
@@ -256,7 +269,7 @@ test.describe('/playgrounds/:slug (explore WP4)', () => {
     await expect(page.getByRole('heading', { level: 1, name: 'Fixture Downtown Playground' })).toBeVisible();
 
     // Parent essentials read the columns; null says so.
-    const essentials = page.getByTestId('playground-essentials');
+    const essentials = page.locator('[data-playground-essentials]');
     await expect(essentials).toContainText('Rubber');
     await expect(essentials).toContainText('Ramp to the main deck.');
 
@@ -265,7 +278,7 @@ test.describe('/playgrounds/:slug (explore WP4)', () => {
     expect(nearby).toContain('order=rating.desc.nullslast');
     expect(nearby).not.toContain('select=*');
 
-    await expect(page.getByTestId('playground-side-card').first()).toBeVisible();
+    await expect(page.locator('[data-playground-side-card]').first()).toBeVisible();
     await expect(page.getByText('Playground Not Found')).toHaveCount(0);
     await expect(page.getByText(/dawn to dusk/i)).toHaveCount(0);
     await expect(page.getByText('Good For')).toHaveCount(0);

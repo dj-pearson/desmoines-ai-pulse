@@ -209,7 +209,7 @@ function MapSkeleton() {
       className="h-[600px] w-full rounded-xl bg-muted animate-pulse"
       role="status"
       aria-label="Loading map"
-      data-testid="playgrounds-map-skeleton"
+      data-playgrounds-map-skeleton
     />
   );
 }
@@ -596,7 +596,7 @@ export default function Playgrounds() {
 
         {/* Filters Section - Desktop */}
         {!isMobile && showFilters && (
-          <div className="bg-card rounded-2xl p-6 mb-8 border" data-testid="playground-filters">
+          <div className="bg-card rounded-2xl p-6 mb-8 border" data-playground-filters>
             <PlaygroundFilterFields
               idPrefix="pg-desktop"
               layout="grid"
@@ -652,7 +652,7 @@ export default function Playgrounds() {
           </div>
         </div>
         {nearMe && locationError && (
-          <p className="text-sm text-destructive mb-4" role="alert" data-testid="near-me-error">
+          <p className="text-sm text-destructive mb-4" role="alert" data-near-me-error>
             {locationError} The list is in its usual order.
           </p>
         )}
@@ -710,7 +710,7 @@ export default function Playgrounds() {
             />
           </Suspense>
         ) : (
-          <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6" data-testid="playground-grid">
+          <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6" data-playground-grid>
             {displayedPlaygrounds.map((playground, index) => (
               <Link
                 key={playground.id}
@@ -757,7 +757,7 @@ export default function Playgrounds() {
                     </h3>
                     <div className="space-y-2 text-sm text-muted-foreground">
                       {playground.distanceMiles != null && (
-                        <div className="font-medium text-foreground" data-testid="playground-distance">
+                        <div className="font-medium text-foreground" data-playground-distance>
                           {formatMilesAway(playground.distanceMiles)}
                         </div>
                       )}
@@ -782,7 +782,7 @@ export default function Playgrounds() {
                     {/* Shade and restrooms only when the row says true: a
                         null is unknown, not "no" (WP4 item 4). */}
                     {(playground.has_shade || playground.has_restrooms) && (
-                      <div className="flex flex-wrap gap-1 mt-3" data-testid="playground-essentials">
+                      <div className="flex flex-wrap gap-1 mt-3" data-playground-essentials>
                         {playground.has_shade && (
                           <Badge variant="secondary" className="text-xs">Shade</Badge>
                         )}
@@ -868,7 +868,7 @@ export default function Playgrounds() {
                 ?amenity=a,b, applied server-side with contains(). They used to
                 type the amenity into the search box, so two could never be
                 combined and none showed as selected. */}
-            <div className="flex flex-wrap gap-2" data-testid="amenity-chips">
+            <div className="flex flex-wrap gap-2" data-amenity-chips>
               {uniqueAmenities.map((amenity) => {
                 const count = amenityCounts[amenity] ?? 0;
                 const on = selectedAmenities.includes(amenity);

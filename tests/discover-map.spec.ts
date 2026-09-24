@@ -240,7 +240,8 @@ test.describe('/map', () => {
     await search.click();
 
     await expect(search).toBeDisabled();
-    await expect(page).toHaveURL(/[?&]bbox=-?\d+\.\d{4},/);
+    // URLSearchParams writes the commas as %2C; either spelling is the same value.
+    await expect(page).toHaveURL(/[?&]bbox=-?\d+\.\d{4}(,|%2C)-?\d+\.\d{4}(,|%2C)/);
     await expect(container).toHaveAttribute('data-probe', 'mounted-once');
     expect(await pane.evaluate((el) => (el as HTMLElement).style.transform)).toBe(before);
   });
@@ -249,8 +250,10 @@ test.describe('/map', () => {
     await setup(page);
     await page.goto('/map?layers=playground&when=now');
 
-    await expect(page.getByRole('button', { name: /Playgrounds/, pressed: true })).toBeVisible();
-    await expect(page.getByRole('button', { name: /Events/, pressed: false })).toBeVisible();
+    // Scoped to the chip group: the site nav also has an "Events" button.
+    const layers = page.getByRole('group', { name: 'Map layers' });
+    await expect(layers.getByRole('button', { name: /Playgrounds/, pressed: true })).toBeVisible();
+    await expect(layers.getByRole('button', { name: /Events/, pressed: false })).toBeVisible();
     await expect(page.getByRole('button', { name: 'Now', pressed: true })).toBeVisible();
     await expect(marker(page, 'Fixture Park Playground')).toHaveCount(1);
     await expect(marker(page, 'Visible Show')).toHaveCount(0);

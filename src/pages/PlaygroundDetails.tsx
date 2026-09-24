@@ -339,7 +339,7 @@ export default function PlaygroundDetails() {
                   of the four-tile grid, which spent a tile on "N/A" rating and
                   another on "--" featured. Every value is a column; a null
                   says so instead of guessing. */}
-              <section aria-labelledby="essentials-heading" data-testid="playground-essentials">
+              <section aria-labelledby="essentials-heading" data-playground-essentials>
                 <h2 id="essentials-heading" className="text-xl font-bold text-foreground mb-4">
                   Parent essentials
                 </h2>
@@ -662,7 +662,7 @@ interface SideCardProps {
  */
 function PlaygroundSideCard({ item }: SideCardProps) {
   return (
-    <Link to={`/playgrounds/${createSlug(item.name)}`} className="block" data-testid="playground-side-card">
+    <Link to={`/playgrounds/${createSlug(item.name)}`} className="block" data-playground-side-card>
       <Card className="h-full hover:shadow-lg transition-shadow duration-300 rounded-2xl overflow-hidden">
         {item.image_url ? (
           <div className="aspect-video overflow-hidden">
