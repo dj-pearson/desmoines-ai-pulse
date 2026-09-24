@@ -34,12 +34,11 @@ const ROWS: OpenNowRestaurantRow[] = [
 ];
 
 describe("useOpenNowRestaurants derivation", () => {
-  const original = process.env.TZ;
   beforeAll(() => {
-    process.env.TZ = "America/Los_Angeles";
+    vi.stubEnv("TZ", "America/Los_Angeles");
   });
   afterAll(() => {
-    process.env.TZ = original;
+    vi.unstubAllEnvs();
   });
 
   it("drops merged, closed and hour-less rows", () => {

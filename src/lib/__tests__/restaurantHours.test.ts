@@ -1,4 +1,4 @@
-import { afterAll, beforeAll, describe, expect, it } from "vitest";
+import { afterAll, beforeAll, describe, expect, it, vi } from "vitest";
 import { fromZonedTime, toZonedTime } from "date-fns-tz";
 import {
   desMoinesNow,
@@ -34,12 +34,13 @@ const WED_1530 = central("2026-09-30T15:30:00");
 const ZONES = ["UTC", "America/Los_Angeles"] as const;
 
 describe.each(ZONES)("restaurant hours with the process in %s", (zone) => {
-  const previous = process.env.TZ;
+  // vi.stubEnv sets the TZ variable, which Node applies to Date at once;
+  // unstubAllEnvs restores the original zone.
   beforeAll(() => {
-    process.env.TZ = zone;
+    vi.stubEnv("TZ", zone);
   });
   afterAll(() => {
-    process.env.TZ = previous;
+    vi.unstubAllEnvs();
   });
 
   it("really runs in that zone", () => {

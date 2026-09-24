@@ -132,7 +132,7 @@ export function ongoingStartFilter(from: string): string {
  * bounds rather than by a list of ids (the weekend page used to send up to
  * 500 UUIDs in one `in.()` filter).
  *
- * Same degradation contract as useEventIndoorFlags: any error, including the
+ * Same degradation contract as useEventIndoorFlags. Any error, including the
  * column not being deployed yet, yields an empty map, and reorderForWeather
  * then keeps the list's own order. Never a toast, never a thrown error.
  */

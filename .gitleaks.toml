@@ -55,6 +55,8 @@ regexes = [
   # browser storage slot and are visible in devtools to anyone on the page.
   '''guest_favorites_v1''',
   '''dmi-guest-favorites-v1''',
+  # src/lib/userPreferencesStore.ts: the "Tune your picks" dismissal slot.
+  '''dmi_prefs_prompt_dismissed_v1''',
 
   # IndexNow key (supabase/functions/_shared/indexNow.ts). Public by protocol
   # design: it is already served at public/c2d7b3a0ed753ae68b306e25422227ff.txt
