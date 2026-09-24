@@ -6,6 +6,7 @@ import { getAIConfig, buildLightweightClaudeRequest, getClaudeHeaders, getAnthro
 import { sanitizePostgrestPattern } from "../_shared/validation.ts";
 import { getCorsHeaders, handleCors, isOriginAllowed, addCorsHeaders } from "../_shared/cors.ts";
 import { checkRateLimitPersistent } from "../_shared/rateLimit.ts";
+import { centralTodayStartUtc, nlpDateWindow } from "./dateWindow.ts";
 
 /** Environment-aware CORS headers for a given request origin (no wildcard). */
 function corsFor(req: Request): Record<string, string> {
@@ -136,16 +137,16 @@ serve(async (req) => {
 
     console.log(`NLP Search: Parsing query "${query}"`);
 
-    // Get today's date for context
+    // Today's date for context, in Des Moines time (the model resolves
+    // "tonight" and "this weekend" against it).
     const today = new Date();
-    const dayOfWeek = today.toLocaleDateString('en-US', { weekday: 'long' });
-    const todayStr = today.toISOString().split('T')[0];
+    const dayOfWeek = today.toLocaleDateString('en-US', { weekday: 'long', timeZone: 'America/Chicago' });
 
     // Build the NLP parsing prompt
     const nlpPrompt = `You are a search query parser for Des Moines, Iowa local discovery app. Parse the user's natural language query into structured search parameters.
 
 CURRENT CONTEXT:
-- Today is ${dayOfWeek}, ${today.toLocaleDateString('en-US', { month: 'long', day: 'numeric', year: 'numeric' })}
+- Today is ${dayOfWeek}, ${today.toLocaleDateString('en-US', { month: 'long', day: 'numeric', year: 'numeric', timeZone: 'America/Chicago' })}
 - Location: Des Moines, Iowa metro area
 - Available neighborhoods: East Village, Court Avenue, Downtown, Ingersoll, Beaverdale, Highland Park, Drake, Sherman Hill, Valley Junction, West Des Moines, Ankeny, Urbandale, Johnston, Clive, Waukee
 
@@ -249,54 +250,10 @@ Return ONLY the JSON object, no other text.`;
       attractions: [],
     };
 
-    // Calculate date range based on parsed intent
-    let dateStart: string | null = null;
-    let dateEnd: string | null = null;
-
-    if (parsedIntent.dateFilter) {
-      const now = new Date();
-      switch (parsedIntent.dateFilter) {
-        case 'today':
-          dateStart = todayStr;
-          dateEnd = todayStr;
-          break;
-        case 'tomorrow':
-          const tomorrow = new Date(now);
-          tomorrow.setDate(tomorrow.getDate() + 1);
-          dateStart = tomorrow.toISOString().split('T')[0];
-          dateEnd = dateStart;
-          break;
-        case 'this_weekend':
-          const daysUntilSaturday = (6 - now.getDay() + 7) % 7;
-          const saturday = new Date(now);
-          saturday.setDate(saturday.getDate() + daysUntilSaturday);
-          const sunday = new Date(saturday);
-          sunday.setDate(sunday.getDate() + 1);
-          dateStart = saturday.toISOString().split('T')[0];
-          dateEnd = sunday.toISOString().split('T')[0];
-          break;
-        case 'this_week':
-          dateStart = todayStr;
-          const endOfWeek = new Date(now);
-          endOfWeek.setDate(endOfWeek.getDate() + (7 - now.getDay()));
-          dateEnd = endOfWeek.toISOString().split('T')[0];
-          break;
-        case 'next_week':
-          const startNextWeek = new Date(now);
-          startNextWeek.setDate(startNextWeek.getDate() + (7 - now.getDay() + 1));
-          const endNextWeek = new Date(startNextWeek);
-          endNextWeek.setDate(endNextWeek.getDate() + 6);
-          dateStart = startNextWeek.toISOString().split('T')[0];
-          dateEnd = endNextWeek.toISOString().split('T')[0];
-          break;
-        case 'specific':
-          if (parsedIntent.specificDate) {
-            dateStart = parsedIntent.specificDate;
-            dateEnd = parsedIntent.specificDate;
-          }
-          break;
-      }
-    }
+    // Date range in America/Chicago (events.date is TIMESTAMPTZ). This used
+    // to be computed on UTC calendar dates, so evening searches for
+    // "tonight" returned tomorrow's events. See dateWindow.ts.
+    const dateWindow = nlpDateWindow(parsedIntent.dateFilter, new Date(), parsedIntent.specificDate);
 
     // Build search keyword from parsed intent. Sanitize every value that gets
     // interpolated into a PostgREST filter string to prevent filter injection
@@ -315,15 +272,19 @@ Return ONLY the JSON object, no other text.`;
         .order('date', { ascending: true })
         .limit(20);
 
-      // Apply date filters
-      if (dateStart) {
-        eventsQuery = eventsQuery.gte('date', dateStart);
+      // Same visibility predicate as the web app's applyEventVisibility():
+      // this client uses the service-role key, so RLS does not hide merged,
+      // hidden or archived rows here.
+      eventsQuery = eventsQuery
+        .neq('is_merged', true)
+        .neq('is_hidden', true)
+        .is('archived_at', null);
+
+      // Apply date filters (Central day bounds; default is today onward)
+      if (dateWindow) {
+        eventsQuery = eventsQuery.gte('date', dateWindow.start).lte('date', dateWindow.end);
       } else {
-        // Default to today and future
-        eventsQuery = eventsQuery.gte('date', todayStr);
-      }
-      if (dateEnd) {
-        eventsQuery = eventsQuery.lte('date', dateEnd + 'T23:59:59');
+        eventsQuery = eventsQuery.gte('date', centralTodayStartUtc());
       }
 
       // Apply category filter
