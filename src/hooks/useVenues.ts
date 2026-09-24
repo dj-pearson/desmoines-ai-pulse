@@ -79,3 +79,31 @@ export function useVenueEvents(venueName: string) {
     staleTime: 5 * 60 * 1000,
   });
 }
+
+export interface VenueLink {
+  slug: string;
+  name: string;
+}
+
+/**
+ * Just the two columns a link needs, for below-the-fold directories such as the
+ * /events hub (events plan WP7). useVenues() pulls every column for pages that
+ * render venue details; a list of links has no use for descriptions, images or
+ * coordinates. Appended after the other hooks so the select-star baseline's
+ * line numbers above stay put.
+ */
+export function useVenueLinks() {
+  return useQuery({
+    queryKey: ['venues', 'links'],
+    queryFn: async (): Promise<VenueLink[]> => {
+      const { data, error } = await supabase
+        .from('venues')
+        .select('slug, name')
+        .order('name');
+
+      if (error) throw error;
+      return ((data ?? []) as VenueLink[]).filter((v) => Boolean(v.slug && v.name));
+    },
+    staleTime: 10 * 60 * 1000,
+  });
+}

@@ -75,6 +75,8 @@ function bareStringifyInLdJson(src) {
 
 // Must stay converted (WP5 item 7).
 const REQUIRED_CLEAN = [
+  // Event detail prerenders scraped descriptions (events WP8 item 1).
+  'components/EnhancedEventSEO.tsx',
   'components/FAQSection.tsx',
   'components/SEOHead.tsx',
   'components/schema/SpeakableSchema.tsx',
@@ -84,7 +86,6 @@ const REQUIRED_CLEAN = [
 // Still bare as of 2026-09-24. May only shrink.
 const BASELINE = new Set([
   'components/EnhancedAttractionSEO.tsx',
-  'components/EnhancedEventSEO.tsx',
   'components/EnhancedLocalSEO.tsx',
   'components/EnhancedPlaygroundSEO.tsx',
   'components/LocalSEO.tsx',

@@ -57,6 +57,9 @@ export interface SearchResult {
   distance?: number;
   features?: string[];
   relevanceScore?: number;
+  /** Events only: what createEventSlugWithCentralTime needs for the link. */
+  date?: string | null;
+  event_start_utc?: string | null;
 }
 
 const defaultFilters: AdvancedSearchFilters = {
@@ -274,6 +277,8 @@ export function useAdvancedSearch() {
       location: event.location,
       price: event.price,
       imageUrl: event.image_url,
+      date: event.date,
+      event_start_utc: event.event_start_utc,
       features: []
     })) || [];
   };

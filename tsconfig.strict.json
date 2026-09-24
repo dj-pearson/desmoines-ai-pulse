@@ -69,7 +69,8 @@
     "src/hooks/useTripPlanner.ts",
     "src/hooks/useAuth.ts",
     "src/hooks/useEventBySlug.ts",
-    "src/hooks/useActiveAds.ts"
+    "src/hooks/useActiveAds.ts",
+    "src/content/eventsCopy.ts"
   ],
   "exclude": ["node_modules", "dist", "build"]
 }

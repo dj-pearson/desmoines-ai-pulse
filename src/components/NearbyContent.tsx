@@ -3,10 +3,16 @@ import { Link } from "react-router-dom";
 import { useNearbyListings } from "@/hooks/useNearbyListings";
 import type { Database } from "@/integrations/supabase/types";
 import type { Event } from "@/lib/types";
+import { Button } from "@/components/ui/button";
+import { ChevronRight, Utensils, Calendar } from "lucide-react";
+import {
+  DINNER_LEAD_MINUTES,
+  formatCentralTime,
+  formatMiles,
+  type TonightDinner,
+} from "@/lib/tonightPairings";
 
 type Restaurant = Database["public"]["Tables"]["restaurants"]["Row"];
-import { Button } from "@/components/ui/button";
-import { ChevronRight, Utensils, Calendar, Landmark } from "lucide-react";
 
 const RestaurantCard = lazy(() => import("@/components/RestaurantCard"));
 const EventCard = lazy(() => import("@/components/EventCard"));
@@ -135,6 +141,55 @@ export function NearbyContent({ variant, excludeId, latitude, longitude }: Nearb
           </div>
         </Suspense>
       )}
+    </section>
+  );
+}
+
+interface DinnerBeforeShowProps {
+  /** From useDinnerBeforeShow. Nothing renders when empty. */
+  picks: TonightDinner[];
+  /** The event's start, for the heading ("before the 7:30 PM show"). */
+  startsAt: Date | null;
+}
+
+/**
+ * "Before the show" (events plan WP8 item 6, bet 4): up to three restaurants
+ * near the venue that are open when dinner would start. The distance-only
+ * NearbyContent rail is the fallback when this has nothing to say.
+ */
+export function DinnerBeforeShow({ picks, startsAt }: DinnerBeforeShowProps) {
+  if (picks.length === 0) return null;
+  const dinnerAt = picks[0].dinnerAt;
+
+  return (
+    <section aria-labelledby="dinner-before-show" className="mt-6 border-t pt-5">
+      <h2 id="dinner-before-show" className="text-base font-semibold text-foreground">
+        Dinner before the show
+      </h2>
+      <p className="mt-1 text-sm text-muted-foreground">
+        Open at {formatCentralTime(dinnerAt)} CT, {DINNER_LEAD_MINUTES} minutes before the
+        {startsAt ? ` ${formatCentralTime(startsAt)}` : ""} start. Straight-line distance from the venue.
+      </p>
+      <ul className="mt-3 divide-y rounded-xl border">
+        {picks.map(({ restaurant, distanceMiles }) => (
+          <li key={restaurant.id}>
+            <Link
+              to={`/restaurants/${restaurant.slug || restaurant.id}`}
+              className="flex min-h-11 items-center justify-between gap-3 px-4 py-3 text-sm hover:bg-muted/50"
+            >
+              <span className="min-w-0">
+                <span className="block truncate font-medium text-foreground">{restaurant.name}</span>
+                {(restaurant.cuisine || restaurant.price_range) && (
+                  <span className="block truncate text-muted-foreground">
+                    {[restaurant.cuisine, restaurant.price_range].filter(Boolean).join(" - ")}
+                  </span>
+                )}
+              </span>
+              <span className="shrink-0 tabular-nums text-muted-foreground">{formatMiles(distanceMiles)}</span>
+            </Link>
+          </li>
+        ))}
+      </ul>
     </section>
   );
 }

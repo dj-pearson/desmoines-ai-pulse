@@ -13,10 +13,10 @@ import { findSuburb } from "@/lib/suburbs";
  *
  * THE LINK IS CONDITIONAL ON THE TARGET EXISTING, which is the whole reason
  * this is a component rather than two hardcoded lists. The inventories overlap
- * on six slugs: east-village and waukee have a guide and no events page,
- * windsor-heights has an events page and no guide. App.tsx mounts the seven
- * /events/<suburb> paths one at a time with no catch-all, so a link to
- * /events/waukee is a 404, not a thin page.
+ * on seven slugs: east-village has a guide and no events page, windsor-heights
+ * has an events page and no guide. App.tsx mounts the eight /events/<suburb>
+ * paths one at a time with no catch-all, so a link to a slug with no route is
+ * a 404, not a thin page. (Waukee got its events page in the events plan.)
  *
  * SIBLINGS ARE THE OTHER HALF. A neighborhood guide with one outbound link (the
  * hub) is a leaf; the set of eight guides linking to each other is a cluster.

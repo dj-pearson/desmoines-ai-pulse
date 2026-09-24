@@ -309,6 +309,45 @@ export function buildTonightPairings(
   return [...paired, ...alone].slice(0, limit);
 }
 
+/** The detail page's "Before the show" block lists at most this many. */
+export const MAX_DINNER_BEFORE_SHOW = 3;
+
+/**
+ * "Before the show" on event detail (events plan WP8 item 6).
+ *
+ * Up to MAX_DINNER_BEFORE_SHOW restaurants within PAIR_MAX_MILES of the venue
+ * that are open at start minus DINNER_LEAD_MINUTES, nearest first. Empty when
+ * the event has no announced time, no coordinates, or has already started:
+ * a dinner slot computed from a placeholder hour, or one in the past, is not
+ * advice. Same rules as pickDinner, which returns only the nearest one.
+ */
+export function pickDinnerBeforeShow(
+  event: TonightEvent,
+  restaurants: readonly TonightRestaurant[],
+  now: Date,
+  limit: number = MAX_DINNER_BEFORE_SHOW,
+): TonightDinner[] {
+  const startsAt = eventStartInstant(event);
+  if (!startsAt || startsAt.getTime() <= now.getTime() || !hasCoords(event)) return [];
+  const dinnerAt = new Date(startsAt.getTime() - DINNER_LEAD_MINUTES * 60_000);
+  const venue = { latitude: event.latitude as number, longitude: event.longitude as number };
+
+  const seen = new Set<string>();
+  const picks: TonightDinner[] = [];
+  for (const restaurant of restaurants) {
+    if (!restaurant?.id || seen.has(restaurant.id) || !hasCoords(restaurant)) continue;
+    const distanceMiles = haversineDistance(venue, {
+      latitude: restaurant.latitude as number,
+      longitude: restaurant.longitude as number,
+    });
+    if (distanceMiles > PAIR_MAX_MILES) continue;
+    if (!isOpenForDinner(restaurant, dinnerAt, now)) continue;
+    seen.add(restaurant.id);
+    picks.push({ restaurant, distanceMiles, dinnerAt });
+  }
+  return picks.sort((a, b) => a.distanceMiles - b.distanceMiles).slice(0, limit);
+}
+
 /** "0.3 mi", or "under 0.1 mi" so a same-block pair never reads "0.0 mi". */
 export function formatMiles(miles: number): string {
   if (miles < 0.1) return "under 0.1 mi";

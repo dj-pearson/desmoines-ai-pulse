@@ -1,4 +1,5 @@
-import React, { useState, useEffect } from 'react';
+import { useState } from 'react';
+import { useQuery, useQueryClient } from '@tanstack/react-query';
 import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
@@ -12,53 +13,42 @@ interface EventCheckInProps {
   eventTitle: string;
 }
 
+const EMPTY_COUNTS = { going: 0, interested: 0, maybe: 0, not_going: 0, total: 0 };
+
 export function EventCheckIn({ eventId, eventTitle }: EventCheckInProps) {
   const { user } = useAuth();
   const { updateEventCheckIn, getEventCheckIns, getUserEventCheckIn } = useCommunityFeatures();
-  const [userStatus, setUserStatus] = useState<string | null>(null);
-  const [checkInCounts, setCheckInCounts] = useState({
-    going: 0,
-    interested: 0,
-    maybe: 0,
-    not_going: 0,
-    total: 0
-  });
+  const queryClient = useQueryClient();
   const [loading, setLoading] = useState(false);
 
-  const loadCheckInData = async () => {
-    const [userCheckIn, counts] = await Promise.all([
-      getUserEventCheckIn(eventId),
-      getEventCheckIns(eventId)
-    ]);
-    
-    setUserStatus(userCheckIn);
-    setCheckInCounts(counts);
-  };
+  // useQuery instead of a mount effect (events plan WP8 item 9): the tallies
+  // are cached per event, a remount does not refetch, and the counts and the
+  // viewer's own status arrive as one entry keyed by who is asking.
+  const queryKey = ['event-check-in', eventId, user?.id ?? null] as const;
+  const { data } = useQuery({
+    queryKey,
+    queryFn: async () => {
+      const [status, counts] = await Promise.all([
+        getUserEventCheckIn(eventId),
+        getEventCheckIns(eventId),
+      ]);
+      return { status, counts };
+    },
+    enabled: Boolean(user),
+    staleTime: 60 * 1000,
+  });
+  const userStatus = data?.status ?? null;
+  const checkInCounts = data?.counts ?? EMPTY_COUNTS;
 
   const handleCheckIn = async (status: 'interested' | 'going' | 'maybe' | 'not_going') => {
     if (!user) return;
-    
+
     setLoading(true);
     const success = await updateEventCheckIn(eventId, status);
     if (success) {
-      setUserStatus(status);
-      await loadCheckInData(); // Refresh counts
+      await queryClient.invalidateQueries({ queryKey });
     }
     setLoading(false);
-  };
-
-  useEffect(() => {
-    loadCheckInData();
-  }, [eventId]);
-
-  const getStatusIcon = (status: string) => {
-    switch (status) {
-      case 'going': return <Check className="w-4 h-4" />;
-      case 'interested': return <Heart className="w-4 h-4" />;
-      case 'maybe': return <SpriteIcon name="clock" className="w-4 h-4" />;
-      case 'not_going': return <X className="w-4 h-4" />;
-      default: return null;
-    }
   };
 
   const getStatusColor = (status: string) => {
@@ -76,7 +66,7 @@ export function EventCheckIn({ eventId, eventTitle }: EventCheckInProps) {
       <Card>
         <CardContent className="p-6 text-center">
           <SpriteIcon name="users" className="w-8 h-8 mx-auto mb-2 text-muted-foreground" />
-          <p className="text-muted-foreground">Sign in to check in to events</p>
+          <p className="text-muted-foreground">Sign in to say whether you're going to {eventTitle}</p>
         </CardContent>
       </Card>
     );

@@ -37,12 +37,15 @@ describe("PlaceCrossLinks", () => {
   });
 
   it("offers no events link for a guide with no events page", () => {
-    // waukee and east-village have a guide and no /events/<slug> route.
-    for (const slug of ["waukee", "east-village"]) {
-      renderAt(slug, "neighborhood");
-      expect(screen.queryByRole("link", { name: /Upcoming events in/i })).toBeNull();
-      cleanup();
-    }
+    // east-village has a guide and no /events/<slug> route.
+    renderAt("east-village", "neighborhood");
+    expect(screen.queryByRole("link", { name: /Upcoming events in/i })).toBeNull();
+  });
+
+  it("links Waukee's guide to its events page", () => {
+    // /events/waukee was added with the events plan (WP7).
+    renderAt("waukee", "neighborhood");
+    expect(href(/Upcoming events in Waukee/i)).toBe("/events/waukee");
   });
 
   it("offers no guide link for an events page with no guide", () => {
@@ -52,7 +55,7 @@ describe("PlaceCrossLinks", () => {
 
   it("never points at a route App.tsx does not mount", () => {
     // The assertion that actually protects the reader: every events link this
-    // component can emit has to be one of the seven mounted suburb paths.
+    // component can emit has to be one of the mounted suburb paths.
     const mounted = new Set(Object.keys(SUBURBS).map((s) => `/events/${s}`));
     for (const n of NEIGHBORHOODS) {
       renderAt(n.slug, "neighborhood");

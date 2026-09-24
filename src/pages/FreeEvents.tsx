@@ -1,139 +1,116 @@
-import React, { useMemo } from "react";
-import { useQuery } from "@tanstack/react-query";
+import { useMemo } from "react";
 import { Link } from "react-router-dom";
-import { createLogger } from '@/lib/logger';
-import { supabase } from "@/integrations/supabase/client";
-import { SpriteIcon } from "@/components/ui/SpriteIcon";
-import { EVENT_LIST_COLUMNS } from "@/lib/listColumns";
-import { queryKeys } from "@/lib/queryKeys";
-import { STALE_TIME, GC_TIME } from "@/lib/queryConfig";
-
-const log = createLogger('FreeEvents');
+import { Gift } from "lucide-react";
 import Header from "@/components/Header";
 import Footer from "@/components/Footer";
 import { SocialEventCard } from "@/components/SocialEventCard";
-import { useBatchEventSocial } from "@/hooks/useBatchEventSocial";
 import EnhancedLocalSEO from "@/components/EnhancedLocalSEO";
 import { EventListJsonLd } from "@/components/schema/EventListJsonLd";
 import RelatedContent from "@/components/RelatedContent";
 import { FAQSection } from "@/components/FAQSection";
+import { ListFreshness } from "@/components/ListFreshness";
 import { Card, CardContent } from "@/components/ui/card";
-import { DollarSign, Gift } from "lucide-react";
-import { format } from "date-fns";
-import { BRAND, getCanonicalUrl } from "@/lib/brandConfig";
+import { Button } from "@/components/ui/button";
 import { Breadcrumbs } from "@/components/ui/breadcrumbs";
+import { SpriteIcon } from "@/components/ui/SpriteIcon";
 import { ErrorState } from "@/components/ui/error-state";
+import { SkeletonGroup } from "@/components/ui/skeleton";
+import { useBatchEventSocial } from "@/hooks/useBatchEventSocial";
+import {
+  useEventLanding,
+  countLabel,
+  countStartingAfter5pm,
+  type LandingEvent,
+} from "@/hooks/useEventLanding";
+import { BRAND, getCanonicalUrl } from "@/lib/brandConfig";
+import { FREE_PRICE_FILTER } from "@/lib/eventPrice";
+import { formatCount } from "@/lib/pluralize";
+import { EVENTS_UPDATE_ANSWER } from "@/content/eventsCopy";
 
-interface EventItem {
-  id: string;
-  title: string;
-  date: string;
-  location: string;
-  venue: string;
-  price: string;
-  category: string;
-  enhanced_description: string;
-  original_description: string;
-  image_url: string;
-  event_start_utc: string;
-}
+const FETCH_LIMIT = 100;
+/** Same render cap as the other landings (WEB-PERF-023); the rest are a link away. */
+const VISIBLE_EVENTS = 36;
 
-/** Stable empty array; a fresh `[]` per render gives `freeEvents` a new
- *  identity and re-fires any consumer effect that depends on it. */
-const EMPTY_EVENTS: EventItem[] = [];
+/** Stable empty array so memos keyed on the rows don't refire every render. */
+const EMPTY: LandingEvent[] = [];
 
 export default function FreeEvents() {
-
   /*
-   * WEB-PERF-032 / WEB-SEO-031. THIS WAS A useState/useEffect FETCH ON A
-   * PRERENDERED ROUTE, which is the exact defect WEB-SEO-031 fixed on
-   * /events/today and left live here.
+   * WEB-SEO-031: a useQuery (via useEventLanding) so the prerenderer waits for
+   * the rows instead of capturing a skeleton.
    *
-   * PrerenderSignal publishes "the data has arrived" from useIsFetching - a
-   * count of TanStack queries in flight. A hand-rolled fetch is invisible to
-   * that count, so `seen` never became true, the GRACE_MS fallback fired at
-   * 1.5s, and prerender.mjs captured whatever had rendered by then. /events/free
-   * is in PRERENDER_ROUTES, so that capture is what every JS-less crawler gets.
-   *
-   * The key is queryKeys.events.list, so an admin edit now reaches this page's
-   * cache; it was `['events', ...]`-free entirely before, being no query at all.
+   * "Free" is FREE_PRICE_FILTER, which has no `price.is.null`: this page used
+   * to list every event with no price as free, so a reader could turn up to a
+   * $40 door. The floor is the start of today Central (it was `now`, which
+   * dropped an event the minute it started) and the merged / hidden /
+   * archived predicates apply, which this page used to skip.
    */
   const {
-    data: freeEvents = EMPTY_EVENTS,
+    data: freeEvents = EMPTY,
     isLoading,
     error: loadError,
     refetch,
-  } = useQuery<EventItem[]>({
-    queryKey: queryKeys.events.list({ price: "free" }),
-    staleTime: STALE_TIME.CONTENT_LIST,
-    gcTime: GC_TIME,
-    queryFn: async () => {
-      const now = new Date().toISOString();
-      const { data, error } = await supabase
-        .from("events")
-        .select(EVENT_LIST_COLUMNS)
-        .gte("date", now)
-        .or("price.ilike.%free%,price.eq.0,price.is.null")
-        .order("date", { ascending: true })
-        .limit(100);
+  } = useEventLanding({ key: { landing: "free" }, or: FREE_PRICE_FILTER, limit: FETCH_LIMIT });
 
-      if (error) {
-        log.error('fetchFreeEvents', 'Error fetching free events', { error });
-        throw error;
-      }
-      return (data ?? []) as unknown as EventItem[];
-    },
-  });
-  const retry = () => void refetch();
-  const categoryCounts = freeEvents.reduce((acc: any, event) => {
-    const cat = event.category || "Other";
-    acc[cat] = (acc[cat] || 0) + 1;
-    return acc;
-  }, {});
+  const categoryCounts = useMemo(() => {
+    const counts = new Map<string, number>();
+    for (const event of freeEvents) {
+      const cat = event.category || "Other";
+      counts.set(cat, (counts.get(cat) ?? 0) + 1);
+    }
+    return Array.from(counts.entries()).sort(([, a], [, b]) => b - a);
+  }, [freeEvents]);
 
-  // WEB-SEO-002: was 84 chars and used the retired "Des Moines AI Pulse" brand.
+  const visibleEvents = useMemo(() => freeEvents.slice(0, VISIBLE_EVENTS), [freeEvents]);
+
+  // WEB-SEO-002: under 60 characters, current brand.
   const pageTitle = `Free Events in Des Moines | ${BRAND.name}`;
-  const pageDescription = `Discover ${freeEvents.length}+ free events in Des Moines and the suburbs. Family activities, concerts and no-cost entertainment, updated daily with verified free admission.`;
+  const pageDescription =
+    "Upcoming events in Des Moines and the suburbs whose admission is listed as free, with dates, times and venues. Collected daily.";
 
   const breadcrumbs = [
     { name: "Events", url: "/events" },
     { name: "Free Events", url: "/events/free" },
   ];
 
+  // Every answer describes this page or a link on it. The old answers quoted
+  // "Des Moines Parks & Recreation" for a figure with no source in this repo
+  // and promised "verified free admission" that nobody verifies. Static text
+  // on purpose (WEB-SEO-008).
   const faqData = [
     {
       question: "What free events are happening in Des Moines?",
-      answer: `We track free events across Des Moines and surrounding areas. Our listings include community festivals, concerts in the park, farmers markets, art exhibitions, library programs, and family-friendly activities—all with free admission.`,
+      answer:
+        "This page lists upcoming events in Des Moines and nearby suburbs whose listed price says free or $0, with the date, time and venue on each card.",
     },
     {
       question: "Are these events really free?",
-      answer: "Yes! All events listed on this page have verified free admission. While some events may offer optional paid add-ons (food, merchandise), entry is always free. We update this list multiple times daily to ensure accuracy.",
+      answer:
+        "They are listed as free by the venue or organizer. Food, parking and add-ons can still cost money, and organizers do change prices, so check the event's own page before you go. Events with no listed price are left off this page rather than assumed free.",
     },
     {
-      question: "What types of free events are available in Des Moines?",
-      answer: `Des Moines offers diverse free activities including concerts and live music, community festivals, outdoor movies, farmers markets, art gallery openings, library programs, nature walks, fitness classes in parks, and seasonal celebrations. Something for everyone!`,
+      question: "What types of free events are available?",
+      answer:
+        "It depends on the calendar. The category breakdown on this page counts the free events in each category right now.",
     },
     {
       question: "How do I find family-friendly free events?",
-      answer: "Many of our free events are family-friendly! Look for events at libraries, parks, community centers, and festivals. According to Des Moines Parks & Recreation, the metro area hosts 200+ free family events annually.",
+      answer:
+        "The Kids & Family events page lists family events and marks the free ones, and the playgrounds guide covers parks and play areas across the metro.",
     },
     {
       question: "Do I need to register for free events?",
-      answer: "Most free events don't require registration—just show up! However, some workshops or limited-capacity programs may ask for advance sign-up. Check individual event details for specific requirements.",
+      answer:
+        "Some free events ask you to register, especially workshops and anything with limited space. The event's own page says whether it does.",
     },
     {
-      question: "Where are most free events located in Des Moines?",
-      answer: "Free events happen throughout the Des Moines metro area. Popular locations include downtown Des Moines (festivals, concerts), Western Gateway Park (community events), public libraries (programs for all ages), and neighborhood parks (outdoor movies, fitness classes).",
+      question: "How often is this list updated?",
+      answer: EVENTS_UPDATE_ANSWER,
     },
   ];
 
-  // WEB-PERF-030. SocialEventCard falls back to useEventSocial(event.id)
-  // when no batch data is passed, and that fallback ran three queries and
-  // opened three realtime channels PER CARD. This page renders up to
-  // freeEvents.length of them, so one anonymous visit could issue hundreds of
-  // requests and sockets for a preview nobody can interact with. One batch
-  // query per table replaces all of it.
-  const batchSocialIds = useMemo(() => (freeEvents ?? []).map((e) => e.id), [freeEvents]);
+  // WEB-PERF-030: one batch query per table for the rendered cards.
+  const batchSocialIds = useMemo(() => visibleEvents.map((e) => e.id), [visibleEvents]);
   const { data: batchSocialData, isPending: batchSocialPending } =
     useBatchEventSocial(batchSocialIds);
 
@@ -145,12 +122,6 @@ export default function FreeEvents() {
         canonicalUrl={getCanonicalUrl("/events/free")}
         pageType="website"
         breadcrumbs={breadcrumbs}
-        // Withheld until the data lands (WEB-SEO-008). Every answer here
-        // interpolates a live count, so the loading render and the loaded
-        // render produce DIFFERENT FAQPage JSON - and react-helmet-async
-        // appends script children that differ rather than replacing them, so
-        // the prerender captured both. Production served two FAQPage blocks
-        // on this page, one saying "0 events" and one saying "8 events".
         faqData={faqData}
         keywords={[
           "free events Des Moines",
@@ -164,7 +135,8 @@ export default function FreeEvents() {
         ]}
       />
       <EventListJsonLd
-        events={freeEvents}
+        events={visibleEvents}
+        maxItems={VISIBLE_EVENTS}
         listName="Free Events in Des Moines, Iowa"
         listDescription={pageDescription}
         listUrl={getCanonicalUrl('/events/free')}
@@ -181,113 +153,71 @@ export default function FreeEvents() {
             { label: "Free Events" },
           ]}
         />
-        {/* Hero Section - GEO Optimized */}
         <div className="mb-8">
           <div className="flex items-center gap-2 mb-4">
-            <Gift className="h-6 w-6 text-primary" />
+            <Gift className="h-6 w-6 text-primary" aria-hidden="true" />
             <h1 className="text-3xl font-bold">Free Events in Des Moines</h1>
           </div>
 
-          <div className="flex items-center gap-4 text-muted-foreground mb-4">
-            <div className="flex items-center gap-1">
-              <DollarSign className="h-4 w-4" />
-              <span className="line-through">$0.00</span>
-              <span className="font-semibold text-green-700 ml-2">Free Admission</span>
-            </div>
-            <div className="flex items-center gap-1">
-              <SpriteIcon name="map-pin" className="h-4 w-4" />
-              <span>Des Moines Metro Area</span>
-            </div>
-          </div>
+          <ListFreshness rows={freeEvents} className="mb-4" />
 
           <p className="text-lg text-muted-foreground max-w-3xl mb-4">
-            <strong>Discover {freeEvents.length}+ free events in Des Moines with no admission cost.</strong> According to our event database, Des Moines hosts over 500 free events annually—more no-cost activities than any other Iowa city. From outdoor concerts to community festivals, find budget-friendly entertainment for every interest.
+            Upcoming events in Des Moines and the suburbs whose admission is
+            listed as free. An event is only listed here when its price says free
+            or $0; one with no listed price is left out rather than guessed at.
           </p>
 
           <p className="text-base text-muted-foreground max-w-3xl">
-            Our free events list is updated multiple times daily with verified admission information. All events listed guarantee free entry, though some may offer optional paid concessions or activities.
+            Food, parking and extras can still cost money, so check the event's
+            own page before you go.
           </p>
         </div>
 
-        {/* Quick Stats - GEO Optimized with Statistics */}
-        <Card className="mb-8 bg-gradient-to-r from-green-50 to-emerald-50 dark:from-green-950 dark:to-emerald-950">
+        <Card className="mb-8 bg-primary/5 border-primary/15 shadow-none">
           <CardContent className="pt-6">
-            <div className="grid grid-cols-2 md:grid-cols-4 gap-4 text-center">
+            <div className="grid grid-cols-3 gap-4 text-center">
               <div>
                 <div className="text-2xl font-bold text-primary">
-                  {freeEvents.length}+
+                  {countLabel(freeEvents.length, FETCH_LIMIT)}
                 </div>
-                <div className="text-sm text-muted-foreground">
-                  Free Events
-                </div>
+                <div className="text-sm text-muted-foreground">Free Events</div>
               </div>
               <div>
-                <div className="text-2xl font-bold text-primary">
-                  {Object.keys(categoryCounts).length}
-                </div>
+                <div className="text-2xl font-bold text-primary">{categoryCounts.length}</div>
                 <div className="text-sm text-muted-foreground">Categories</div>
               </div>
               <div>
                 <div className="text-2xl font-bold text-primary">
-                  {new Set(freeEvents.map(e => e.location?.split(",")[0])).size}+
+                  {countStartingAfter5pm(freeEvents)}
                 </div>
-                <div className="text-sm text-muted-foreground">Locations</div>
-              </div>
-              <div>
-                <div className="text-2xl font-bold text-green-700">
-                  100%
-                </div>
-                <div className="text-sm text-muted-foreground">Free Admission</div>
+                <div className="text-sm text-muted-foreground">Starting after 5 PM</div>
               </div>
             </div>
           </CardContent>
         </Card>
 
-        {/* Category Breakdown */}
-        {Object.keys(categoryCounts).length > 0 && (
+        {categoryCounts.length > 0 && (
           <Card className="mb-8">
             <CardContent className="pt-6">
               <h2 className="text-xl font-semibold mb-4">Free Events by Category</h2>
               <div className="grid grid-cols-2 md:grid-cols-3 lg:grid-cols-4 gap-3">
-                {Object.entries(categoryCounts)
-                  .sort(([, a], [, b]) => (b as number) - (a as number))
-                  .map(([category, count]) => (
-                    <div key={category} className="flex items-center justify-between p-3 bg-muted rounded-lg">
-                      <span className="text-sm font-medium">{category}</span>
-                      <span className="text-xs bg-primary text-primary-foreground px-2 py-1 rounded-full">
-                        {count as number}
-                      </span>
-                    </div>
-                  ))}
+                {categoryCounts.map(([category, count]) => (
+                  <div key={category} className="flex items-center justify-between p-3 bg-muted rounded-lg">
+                    <span className="text-sm font-medium">{category}</span>
+                    <span className="text-xs bg-primary text-primary-foreground px-2 py-1 rounded-full">
+                      {count}
+                    </span>
+                  </div>
+                ))}
               </div>
             </CardContent>
           </Card>
         )}
 
-        {/* Why Free Events in Des Moines? - GEO Content */}
-        <Card className="mb-8 bg-muted/30">
-          <CardContent className="pt-6">
-            <h2 className="text-xl font-semibold mb-4">Why Des Moines Has Exceptional Free Events</h2>
-            <div className="prose prose-sm dark:prose-invert max-w-none">
-              <p>
-                <strong>Des Moines ranks among the top 10 U.S. cities for free community events per capita.</strong> According to the Greater Des Moines Partnership, the metro area invests over $5 million annually in free public programming—significantly higher than comparable Midwest cities.
-              </p>
-              <ul className="space-y-2 mt-4">
-                <li><strong>Downtown Farmers Market</strong>: Iowa's largest farmers market (established 1975) welcomes 20,000+ visitors weekly with free admission May through October</li>
-                <li><strong>Cityview Music Series</strong>: Free concerts every summer at Western Gateway Park, featuring local and regional artists</li>
-                <li><strong>Des Moines Public Library</strong>: 100+ free programs monthly across 6 locations—story times, tech classes, author talks</li>
-                <li><strong>Parks & Recreation</strong>: 200+ free community events annually including outdoor movies, fitness classes, nature programs</li>
-                <li><strong>Cultural Festivals</strong>: Latino Heritage Festival, Asian Heritage Festival, and 20+ multicultural celebrations (all free admission)</li>
-              </ul>
-            </div>
-          </CardContent>
-        </Card>
-
-        {/* Events List */}
         {!isLoading && loadError ? (
-          <ErrorState error={loadError} onRetry={retry} />
+          <ErrorState error={loadError} onRetry={() => void refetch()} />
         ) : isLoading ? (
-          <div className="grid gap-6 md:grid-cols-2 lg:grid-cols-3">
+          <SkeletonGroup label="Loading free events..." className="grid gap-6 md:grid-cols-2 lg:grid-cols-3">
             {[...Array(6)].map((_, i) => (
               <div key={i} className="animate-pulse">
                 <div className="h-48 bg-muted rounded-lg mb-4"></div>
@@ -295,14 +225,14 @@ export default function FreeEvents() {
                 <div className="h-4 bg-muted rounded w-1/2"></div>
               </div>
             ))}
-          </div>
+          </SkeletonGroup>
         ) : freeEvents.length > 0 ? (
           <>
             <h2 className="text-2xl font-bold mb-6">
-              Upcoming Free Events ({freeEvents.length})
+              Upcoming Free Events ({countLabel(freeEvents.length, FETCH_LIMIT)})
             </h2>
             <div className="grid gap-6 md:grid-cols-2 lg:grid-cols-3">
-              {freeEvents.map((event, index) => (
+              {visibleEvents.map((event, index) => (
                 <SocialEventCard
                   priority={index < 3}
                   key={event.id}
@@ -313,53 +243,66 @@ export default function FreeEvents() {
                 />
               ))}
             </div>
+            {freeEvents.length > visibleEvents.length && (
+              <div className="mt-8 text-center">
+                <p className="text-muted-foreground mb-3">
+                  Showing the {visibleEvents.length} soonest of{" "}
+                  {formatCount(freeEvents.length, "free event")}.
+                </p>
+                <Button asChild variant="outline">
+                  <Link to="/events?price=free">See every free event</Link>
+                </Button>
+              </div>
+            )}
           </>
         ) : (
           <Card>
             <CardContent className="pt-6 text-center">
               <SpriteIcon name="calendar" className="h-12 w-12 mx-auto mb-4 text-muted-foreground" />
-              <h3 className="text-lg font-semibold mb-2">No Free Events Found</h3>
+              <h2 className="text-lg font-semibold mb-2">No Free Events Found</h2>
               <p className="text-muted-foreground mb-4">
-                Check back soon! We add new free events daily as they're announced.
+                Nothing on the calendar is listed as free right now. New events are
+                collected daily.
               </p>
             </CardContent>
           </Card>
         )}
 
-        {/* Local Tips Section - GEO Content */}
+        {/* Advice that holds whatever the event. The old tips promised free
+            street parking after 6 PM and named venues and practices nobody
+            here checked. */}
         <Card className="mt-8">
           <CardContent className="pt-6">
-            <h2 className="text-xl font-semibold mb-4">Tips for Enjoying Free Events in Des Moines</h2>
+            <h2 className="text-xl font-semibold mb-4">Tips for Free Events in Des Moines</h2>
             <div className="grid md:grid-cols-2 gap-6">
               <div>
-                <h3 className="font-semibold mb-2">🚗 Parking & Transportation</h3>
+                <h3 className="font-semibold mb-2">Check the event page first</h3>
                 <p className="text-sm text-muted-foreground">
-                  Most downtown events offer free street parking after 6 PM and on weekends. For major festivals, use DART bus routes (route maps at ridedart.com) or the East Village parking ramps.
+                  Prices and times change. Each card links to the event's own page, which links to the organizer.
                 </p>
               </div>
               <div>
-                <h3 className="font-semibold mb-2">🍔 Food & Concessions</h3>
+                <h3 className="font-semibold mb-2">Plan for parking and food</h3>
                 <p className="text-sm text-muted-foreground">
-                  While admission is free, many events have food vendors. Bring cash as not all accept cards. Farmers markets and festivals typically allow outside food.
+                  Free entry doesn't always mean free parking or free food. The event page usually says what to expect.
                 </p>
               </div>
               <div>
-                <h3 className="font-semibold mb-2">👨‍👩‍👧‍👦 Family-Friendly Features</h3>
+                <h3 className="font-semibold mb-2">Bringing kids?</h3>
                 <p className="text-sm text-muted-foreground">
-                  Look for "family-friendly" tags. Most library and park programs welcome all ages. Stroller accessibility varies—check individual event details. Browse our <Link to="/events/kids" className="text-primary hover:underline font-semibold">kids & family events</Link> page for age-appropriate activities.
+                  The <Link to="/events/kids" className="text-primary hover:underline font-semibold">kids and family events</Link> page lists family events and marks the free ones.
                 </p>
               </div>
               <div>
-                <h3 className="font-semibold mb-2">⏰ Arrive Early</h3>
+                <h3 className="font-semibold mb-2">Arrive early for popular events</h3>
                 <p className="text-sm text-muted-foreground">
-                  Popular free events like the Downtown Farmers Market and outdoor concerts fill up quickly. Arrive 30-60 minutes early for the best experience.
+                  Free events with limited space fill up. If the event page mentions a capacity or registration, plan for it.
                 </p>
               </div>
             </div>
           </CardContent>
         </Card>
 
-        {/* FAQ Section - Visible FAQs for SEO rich results */}
         <FAQSection
           faqs={faqData}
           title="Free Events in Des Moines FAQ"
@@ -367,7 +310,6 @@ export default function FreeEvents() {
           showSchema={false}
         />
 
-        {/* Related Content for Internal Linking */}
         <RelatedContent
           currentPath="/events/free"
           title="Discover More Des Moines Activities"

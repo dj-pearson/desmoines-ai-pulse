@@ -517,6 +517,7 @@ const App = () => (
               path="/events/windsor-heights"
               element={<EventsByLocation />}
             />
+            <Route path="/events/waukee" element={<EventsByLocation />} />
             <Route path="/events/:slug" element={<EventsSegmentHandler />} />
             <Route path="/articles" element={<Articles />} />
             <Route path="/articles/:slug" element={<ArticleDetails />} />

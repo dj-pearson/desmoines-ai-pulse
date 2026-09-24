@@ -15,6 +15,7 @@ import { SpriteIcon } from "@/components/ui/SpriteIcon";
 import { isCapacitor, nativeShare, openExternalUrl } from "@/lib/capacitorUtils";
 import { getDirectionsUrl } from "@/lib/directions";
 import { handleError } from "@/lib/errorHandler";
+import { isFreePrice } from "@/lib/eventPrice";
 import {
   createEventSlugWithCentralTime,
   formatEventDate,
@@ -45,13 +46,6 @@ function eventWhen(event: Event): string {
   return hasSpecificTime(event) && formatted.includes(" at ")
     ? `${formatted} CT`
     : formatted;
-}
-
-/** "Free", "$0", "0" and "0.00" all mean free. */
-function isFreePrice(price: string | undefined): boolean {
-  if (!price) return false;
-  const trimmed = price.trim();
-  return /free/i.test(trimmed) || /^\$?0+(\.0+)?$/.test(trimmed);
 }
 
 function sameText(a: string | undefined, b: string | undefined): boolean {
@@ -123,7 +117,7 @@ export function EventQuickView({ event, open, onOpenChange }: EventQuickViewProp
   if (!event) return null;
 
   const when = eventWhen(event);
-  const free = isFreePrice(event.price);
+  const free = isFreePrice(event.price) === true;
   const showVenue = Boolean(event.venue) && !sameText(event.venue, event.location);
   const hasCoords = event.latitude != null && event.longitude != null;
   const directionsUrl =

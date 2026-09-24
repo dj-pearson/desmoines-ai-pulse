@@ -3,8 +3,8 @@ import { Event } from "@/lib/types";
 import { createEventSlugWithCentralTime, formatInCentralTime } from "@/lib/timezone";
 import { BRAND } from "@/lib/brandConfig";
 import { ogImageUrl } from "@/lib/ogImage";
-import { buildEventOffers, isEventAccessibleForFree } from "@/lib/eventOffers";
 import { buildEventJsonLd } from "@/lib/eventSchema";
+import { toJsonLd } from "@/lib/jsonLd";
 import { eventMetaDescription, eventPageTitle } from "@/lib/eventMeta";
 
 interface EnhancedEventSEOProps {
@@ -89,21 +89,11 @@ export default function EnhancedEventSEO({
   // Branded dynamic OG card (WEB-FEAT-008); falls back to the item photo / default.
   const ogImage = ogImageUrl("event", event.id) || event.image_url || `${BRAND.baseUrl}${BRAND.ogImage}`;
 
-  // Use actual event description for schema (Google penalizes keyword-stuffed descriptions)
-  const schemaDescription = event.enhanced_description || event.original_description || `${event.title} - ${event.category} event in ${event.city || BRAND.city}, ${BRAND.state}`;
-
-  const offers = buildEventOffers(event.price);
-  const accessibleForFree = isEventAccessibleForFree(event.price);
-
-  // Primary Event Schema - Google Events compliant
-  // Required: name, startDate, location
-  // Recommended: endDate, eventStatus, eventAttendanceMode, image, description, offers, organizer, performer
+  // startMs only drives the stale-event robots directive below. The schema's
+  // description, offers and endDate come from buildEventJsonLd; the locals
+  // that used to duplicate them here were never read.
   const startDateISO = event.event_start_utc || (typeof event.date === 'string' ? event.date : event.date.toISOString());
-  // Estimate endDate as startDate + 3 hours if no explicit end_date
   const startMs = new Date(startDateISO).getTime();
-  const endDateISO = event.end_date
-    ? event.end_date
-    : new Date(startMs + 3 * 60 * 60 * 1000).toISOString();
 
   // WEB-SEO-009: retire long-past events from the index instead of accumulating
   // them forever. Previously every event page emitted an unconditional
@@ -246,8 +236,8 @@ export default function EnhancedEventSEO({
       <meta name="twitter:site" content={BRAND.twitter} />
 
       {/* Structured Data - Event Schema (primary for Google Events indexing) */}
-      <script type="application/ld+json">{JSON.stringify(eventSchema)}</script>
-      <script type="application/ld+json">{JSON.stringify(speakableSchema)}</script>
+      <script type="application/ld+json">{toJsonLd(eventSchema)}</script>
+      <script type="application/ld+json">{toJsonLd(speakableSchema)}</script>
     </Helmet>
   );
 }

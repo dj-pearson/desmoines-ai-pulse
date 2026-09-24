@@ -1,5 +1,5 @@
 import { useState } from "react";
-import { useNavigate, useSearchParams } from "react-router-dom";
+import { useLocation, useNavigate, useSearchParams } from "react-router-dom";
 import { BookmarkPlus, Loader2 } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
@@ -16,6 +16,8 @@ import { useAuth } from "@/contexts/AuthContext";
 import { useSubscription } from "@/hooks/useSubscription";
 import { useUpgradeModal } from "@/components/UpgradeModal";
 import { useToast } from "@/hooks/use-toast";
+import { isValidRedirectUrl } from "@/lib/redirectSafety";
+import { cn } from "@/lib/utils";
 import {
   useSavedSearchAlerts,
   SAVED_SEARCH_FILTER_KEYS,
@@ -30,8 +32,29 @@ import {
  * and persists via the tier-limited create RPC (Insider 10 / VIP unlimited,
  * enforced server-side).
  */
-export function SaveSearchButton({ className }: { className?: string }) {
+/**
+ * Where to come back to after signing in: this page with its filters. It was a
+ * hardcoded `/events`, so a visitor who set four filters and tapped Save came
+ * back from sign-in to an unfiltered list with nothing to save. The Auth page
+ * validates `redirect` again; this falls back to the bare path when the query
+ * would fail that check (a literal `%` in a search, for one).
+ */
+function authRedirectTarget(pathname: string, search: string): string {
+  const full = `${pathname}${search}`;
+  if (isValidRedirectUrl(full)) return full;
+  return isValidRedirectUrl(pathname) ? pathname : "/events";
+}
+
+export function SaveSearchButton({
+  className,
+  compact = false,
+}: {
+  className?: string;
+  /** Icon-only below `sm`, for one-row bars on a phone. */
+  compact?: boolean;
+}) {
   const [searchParams] = useSearchParams();
+  const { pathname, search } = useLocation();
   const navigate = useNavigate();
   const { isAuthenticated } = useAuth();
   const { hasFeature } = useSubscription();
@@ -53,7 +76,7 @@ export function SaveSearchButton({ className }: { className?: string }) {
 
   const handleClick = () => {
     if (!isAuthenticated) {
-      navigate("/auth?redirect=/events");
+      navigate(`/auth?redirect=${encodeURIComponent(authRedirectTarget(pathname, search))}`);
       return;
     }
     if (!hasFeature("save_searches")) {
@@ -86,9 +109,15 @@ export function SaveSearchButton({ className }: { className?: string }) {
 
   return (
     <>
-      <Button variant="outline" size="sm" onClick={handleClick} className={className}>
-        <BookmarkPlus className="h-4 w-4" />
-        Save search
+      <Button
+        variant="outline"
+        size="sm"
+        onClick={handleClick}
+        className={cn("h-11", compact && "w-11 px-0 sm:w-auto sm:px-3", className)}
+        aria-label={compact ? "Save search" : undefined}
+      >
+        <BookmarkPlus className="h-4 w-4" aria-hidden="true" />
+        <span className={compact ? "sr-only sm:not-sr-only" : undefined}>Save search</span>
       </Button>
 
       <Dialog open={open} onOpenChange={setOpen}>

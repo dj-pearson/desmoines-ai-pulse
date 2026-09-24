@@ -42,6 +42,7 @@ export const PRERENDER_ROUTES = [
   '/events/altoona',
   '/events/clive',
   '/events/windsor-heights',
+  '/events/waukee',
 
   // Restaurants
   '/restaurants',

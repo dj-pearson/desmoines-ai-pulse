@@ -35,12 +35,22 @@ export function withAdminColumns(columns: string, include?: boolean): string {
 export const RESTAURANT_LIST_COLUMNS =
   "city, created_at, cuisine, data_quality_score, description, enhanced, google_place_id, id, image_url, is_featured, is_merged, is_sponsored, sponsored_until, latitude, location, longitude, merged_at, merged_into, name, opening, opening_date, opening_timeframe, phone, popularity_score, price_range, rating, slug, source_url, status, updated_at, website, writeup_generated_at";
 
-// NOTE: keep every name here in sync with `public.events`. A column that does not
-// exist makes PostgREST reject the whole select with 42703, which surfaces as a
-// blank events surface site-wide (see WEB-QA-003 — `archived_at` lives on
-// `archived_events`/`event_archive`, never on `events`, and took out the homepage).
+// NOTE: keep every name here in sync with `public.events` AS DEPLOYED, not as
+// migrated. A column that does not exist makes PostgREST reject the whole select
+// with 42703, which surfaces as a blank events surface site-wide. WEB-QA-003 was
+// that: `archived_at` was selected here before production had it and took out
+// the homepage. It exists on `events` now (20260823000007_events_archived_at.sql
+// adds it, and every events read filters on it), but it is still not in this
+// projection because no card renders it; filters don't need a column selected.
+//
+// end_date (20260316000002_add_event_end_date.sql) is here so multi-day events
+// can count as "happening now" (docs/page-plans/events.md WP0 item 3).
+//
+// time_tbd is deliberately NOT here yet. It arrives in 20260902000016, after the
+// 2026-08-24 production snapshot; add it only once `npm run check-schema:probe`
+// reports it present, or every events surface goes blank with 42703.
 export const EVENT_LIST_COLUMNS =
-  "category, city, created_at, date, enhanced_description, event_start_local, event_start_utc, event_timezone, id, image_url, is_enhanced, is_featured, is_sponsored, sponsored_until, latitude, location, longitude, original_description, price, source_url, title, updated_at, venue, writeup_generated_at";
+  "category, city, created_at, date, end_date, enhanced_description, event_start_local, event_start_utc, event_timezone, id, image_url, is_enhanced, is_featured, is_sponsored, sponsored_until, latitude, location, longitude, original_description, price, source_url, title, updated_at, venue, writeup_generated_at";
 
 // is_sponsored and sponsored_until are here because Attractions.tsx calls
 // arrangeSponsored() on this list (WEB-FEAT-005) and the cards call

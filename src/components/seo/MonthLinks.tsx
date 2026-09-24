@@ -63,29 +63,50 @@ export function upcomingMonths(from: Date = new Date(), count = 6): MonthLink[] 
   return out;
 }
 
-export function MonthLinks({
-  count = 6,
-  className = "",
-}: {
+/**
+ * Shared pill style for the events directory. min-h-11 is the 44px touch target
+ * (the old py-1.5 pill was about 34px tall and failed touch-targets at 375px).
+ */
+export const DIRECTORY_PILL =
+  "inline-flex min-h-11 items-center rounded-full border border-border px-4 text-sm hover:border-primary hover:text-primary focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring";
+
+interface MonthLinksProps {
   count?: number;
   className?: string;
-}) {
+  /**
+   * Render as a section (h3, no landmark) inside a directory that owns the
+   * <nav>. Standalone use keeps its own nav and h2.
+   */
+  embedded?: boolean;
+}
+
+export function MonthLinks({ count = 6, className = "", embedded = false }: MonthLinksProps) {
   const months = upcomingMonths(new Date(), count);
+  const list = (
+    <ul className="flex flex-wrap gap-2">
+      {months.map((m) => (
+        <li key={m.slug}>
+          <Link to={m.href} className={DIRECTORY_PILL}>
+            {m.label}
+          </Link>
+        </li>
+      ))}
+    </ul>
+  );
+
+  if (embedded) {
+    return (
+      <section className={className}>
+        <h3 className="text-base font-semibold mb-3">Events by month</h3>
+        {list}
+      </section>
+    );
+  }
+
   return (
     <nav aria-label="Events by month" className={className}>
       <h2 className="text-lg font-semibold mb-3">Events by month</h2>
-      <ul className="flex flex-wrap gap-2">
-        {months.map((m) => (
-          <li key={m.slug}>
-            <Link
-              to={m.href}
-              className="inline-block rounded-full border border-border px-3 py-1.5 text-sm hover:border-primary hover:text-primary"
-            >
-              {m.label}
-            </Link>
-          </li>
-        ))}
-      </ul>
+      {list}
     </nav>
   );
 }

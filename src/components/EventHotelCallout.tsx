@@ -1,4 +1,5 @@
-import { useEventHotels, useHotels } from "@/hooks/useHotels";
+import { useEventHotels } from "@/hooks/useHotels";
+import { NearbyHotels } from "@/components/venues/NearbyHotels";
 import { Card, CardContent } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
 import { Star } from "lucide-react";
@@ -11,7 +12,13 @@ type Hotel = Database["public"]["Tables"]["hotels"]["Row"];
 
 interface EventHotelCalloutProps {
   eventId: string;
+  /** Kept for call-site compatibility; the fallback is by distance now. */
   eventArea?: string;
+  /** Venue coordinates for the NearbyHotels fallback. */
+  latitude?: number | string | null;
+  longitude?: number | string | null;
+  /** What NearbyHotels measures from, e.g. "Wells Fargo Arena". */
+  placeName?: string;
 }
 
 function HotelMiniCard({ hotel, distance, notes }: { hotel: Hotel; distance?: number; notes?: string }) {
@@ -83,40 +90,52 @@ function HotelMiniCard({ hotel, distance, notes }: { hotel: Hotel; distance?: nu
   );
 }
 
-export default function EventHotelCallout({ eventId, eventArea }: EventHotelCalloutProps) {
-  const { hotels: linkedHotels, isLoading: linkedLoading } = useEventHotels(eventId);
+/**
+ * The one hotel section on event detail (events plan WP8 item 9).
+ *
+ * Hotels an editor linked to this event come first. Without any, it falls back
+ * to NearbyHotels: real distances from the venue. The old fallback was the
+ * site's featured hotels under "Make It a Weekend", which put the same three
+ * downtown hotels on a Waukee barn dance, and the page also rendered
+ * NearbyHotels in the sidebar, so an event could show two hotel lists.
+ * The caller renders this only while the event is upcoming.
+ */
+export default function EventHotelCallout({
+  eventId,
+  latitude,
+  longitude,
+  placeName = "this event",
+}: EventHotelCalloutProps) {
+  const { hotels: linkedHotels, isLoading } = useEventHotels(eventId);
 
-  // Fallback: fetch featured hotels if no linked hotels
-  const { hotels: featuredHotels, isLoading: featuredLoading } = useHotels({
-    featuredOnly: true,
-    limit: 3,
-  });
-
-  const isLoading = linkedLoading || (linkedHotels.length === 0 && featuredLoading);
-  const hotelsToShow = linkedHotels.length > 0 ? linkedHotels : featuredHotels.slice(0, 3);
-
-  if (isLoading || hotelsToShow.length === 0) return null;
+  if (isLoading) return null;
+  if (linkedHotels.length === 0) {
+    return (
+      <div className="mt-8">
+        <NearbyHotels latitude={latitude} longitude={longitude} placeName={placeName} limit={3} />
+      </div>
+    );
+  }
+  const hotelsToShow = linkedHotels;
 
   return (
     <section className="mt-8">
       <div className="flex items-center gap-2 mb-4">
         <SpriteIcon name="building-2" className="h-5 w-5 text-primary" />
         <h2 className="text-lg font-semibold">
-          {linkedHotels.length > 0 ? "Stay Nearby" : "Make It a Weekend"}
+          Stay Nearby
         </h2>
       </div>
       <p className="text-sm text-muted-foreground mb-4">
-        {linkedHotels.length > 0
-          ? "Hotels near this event venue"
-          : "Featured hotels in the Des Moines area"}
+        Hotels near this event venue
       </p>
       <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
         {hotelsToShow.map((hotel) => (
           <HotelMiniCard
             key={hotel.id}
             hotel={hotel}
-            distance={(hotel as any).distance_miles}
-            notes={(hotel as any).notes}
+            distance={hotel.distance_miles}
+            notes={hotel.notes}
           />
         ))}
       </div>
