@@ -26,6 +26,7 @@ import { ThemeToggle } from "@/components/ThemeToggle";
 import { AdvertiseButton } from "@/components/AdvertiseButton";
 import SubmitEventButton from "@/components/SubmitEventButton";
 import { navigationGroups } from "./navigationConfig";
+import { MemberUpgradeGate } from "./UserMenu";
 
 interface MobileNavProps {
   isOpen: boolean;
@@ -42,8 +43,8 @@ interface MobileNavProps {
     last_name?: string | null;
     email?: string | null;
   } | null;
-  /** useGamification derives these from `reputation?.…`, so they are undefined
-   *  before the query resolves — not null. */
+  /** From useUserLevel: null until the query resolves, and when there is no
+   *  reputation row. Level 0 is a real level, so test with `!= null`. */
   userLevel: number | null | undefined;
   userXP: number | null | undefined;
   onLogout: () => void;
@@ -94,6 +95,7 @@ export function MobileNav({
         className="w-[85vw] sm:w-[350px] flex flex-col max-h-screen safe-area-inset"
         id="mobile-navigation"
         aria-label="Mobile navigation menu"
+        hideClose
       >
         <SheetHeader className="flex-shrink-0 flex flex-row items-center justify-between">
           <SheetTitle className="text-xl">Menu</SheetTitle>
@@ -101,7 +103,7 @@ export function MobileNav({
             variant="ghost"
             size="sm"
             onClick={() => onOpenChange(false)}
-            className="touch-feedback rounded-full h-10 w-10 p-0"
+            className="touch-feedback rounded-full h-11 w-11 p-0"
             aria-label="Close menu"
           >
             <X className="h-5 w-5" />
@@ -136,20 +138,22 @@ export function MobileNav({
           {/* Mobile Submit Event and Advertise Buttons */}
           <div className="border-t border-border pt-4 mt-6 space-y-3">
             {/* Upgrade CTA */}
-            <Link to="/pricing" onClick={handleLinkClick} className="block">
-              <div className="flex items-center justify-between p-4 bg-gradient-to-r from-amber-500/10 to-orange-500/10 border border-amber-500/30 rounded-xl">
-                <div className="flex items-center gap-3">
-                  <div className="w-10 h-10 rounded-full bg-amber-500/20 flex items-center justify-center">
-                    <Crown className="h-5 w-5 text-amber-600 dark:text-amber-400" />
-                  </div>
-                  <div>
-                    <p className="font-semibold text-amber-700 dark:text-amber-400">Upgrade to Premium</p>
-                    <p className="text-xs text-muted-foreground">Unlock all features</p>
-                  </div>
-                </div>
-                <ChevronRight className="h-5 w-5 text-amber-600 dark:text-amber-400" />
-              </div>
-            </Link>
+            <MemberUpgradeGate isAuthenticated={isAuthenticated}>
+              <Link
+                to="/pricing"
+                onClick={handleLinkClick}
+                className="flex items-center justify-between p-4 bg-muted/50 hover:bg-muted rounded-xl min-h-[56px] smooth-transition"
+              >
+                <span className="flex items-center gap-3">
+                  <Crown className="h-5 w-5 text-primary flex-shrink-0" aria-hidden="true" />
+                  <span>
+                    <span className="block font-semibold">Upgrade to Premium</span>
+                    <span className="block text-xs text-muted-foreground">Insider and VIP plans</span>
+                  </span>
+                </span>
+                <ChevronRight className="h-5 w-5 text-muted-foreground" aria-hidden="true" />
+              </Link>
+            </MemberUpgradeGate>
             <div onClick={handleLinkClick} className="w-full">
               <SubmitEventButton />
             </div>
@@ -176,7 +180,7 @@ export function MobileNav({
                   <p className="text-sm text-muted-foreground truncate">
                     {profile?.email}
                   </p>
-                  {userLevel && (
+                  {userLevel != null && (
                     <div className="flex items-center gap-2 mt-1">
                       <div className="flex items-center gap-1 px-2 py-0.5 bg-primary/10 rounded-full">
                         <Trophy className="h-3 w-3 text-primary" />

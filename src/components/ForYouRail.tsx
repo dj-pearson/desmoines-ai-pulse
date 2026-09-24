@@ -1,32 +1,89 @@
+import { lazy, Suspense, useEffect, useState } from "react";
 import { Link } from "react-router-dom";
-import { createEventSlugWithCentralTime } from "@/lib/timezone";
-import { RefreshCw } from "lucide-react";
+import { RefreshCw, X } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { useForYouRail } from "@/hooks/useForYouRail";
+import { useUserPreferences } from "@/hooks/useUserPreferences";
+import { useAuth } from "@/hooks/useAuth";
 import { SpriteIcon } from "@/components/ui/SpriteIcon";
 import { OptimizedImage } from "@/components/OptimizedImage";
+import { RailWeatherLine } from "@/components/WeatherNotice";
+import { createEventSlugWithCentralTime } from "@/lib/timezone";
+import { storage } from "@/lib/safeStorage";
+import { handleError } from "@/lib/errorHandler";
+import { TASTE_CHIPS, togglePick } from "@/lib/forYouRerank";
+import { PREFS_PROMPT_DISMISSED_KEY } from "@/lib/userPreferencesStore";
+import { cn } from "@/lib/utils";
+
+const PreferencesOnboarding = lazy(() =>
+  import("@/components/PreferencesOnboarding").then((m) => ({ default: m.PreferencesOnboarding })),
+);
+
 
 /**
- * Web parity for the iOS HomeView For You rail (IOS-DISCOVER-2026-002).
- * Renders a horizontal scroll of personalized event picks (or "Trending now"
- * fallback for cold-start users with fewer than 5 swipes).
+ * The card strip's height, shared by skeleton, cards and the empty state so
+ * none of the three can change the rail's height when it replaces another
+ * (WP2 item 6). 126px image + two title lines + two reason lines + gaps.
+ */
+const STRIP_MIN_HEIGHT = "min-h-[13.5rem]";
+
+/**
+ * The home For You rail.
+ *
+ * Web parity for the iOS HomeView rail (IOS-DISCOVER-2026-002), plus three
+ * things from the Home plan (WP2):
+ *   - taste chips a guest can use: picks re-order the rows in the browser and
+ *     each moved card says why ("Because you picked Free");
+ *   - an inline "Tune your picks" prompt in place of the modal that used to
+ *     open itself a second after load;
+ *   - a fixed-height layout: the rail no longer collapses to nothing when the
+ *     RPC is empty, and the weather line sits in a slot that never resizes.
  */
 export function ForYouRail() {
-  const { recommendations, source, isLoading, refetch } = useForYouRail(12);
+  const { recommendations, source, picks, isLoading, isError, refetch } = useForYouRail(12);
+  const { preferences, updateInterestTags } = useUserPreferences();
 
-  if (recommendations.length === 0 && !isLoading) {
-    return null;
-  }
+  const [onboardingOpen, setOnboardingOpen] = useState(false);
+  const [promptDismissed, setPromptDismissed] = useState<boolean>(
+    () => storage.get<boolean>(PREFS_PROMPT_DISMISSED_KEY, false) === true,
+  );
+  // Logout clears the flag (clearPersonalStorage); re-read it when the account
+  // changes so the next person on this browser is offered onboarding.
+  const { user } = useAuth();
+  const userId = user?.id;
+  useEffect(() => {
+    setPromptDismissed(storage.get<boolean>(PREFS_PROMPT_DISMISSED_KEY, false) === true);
+  }, [userId]);
 
-  const headerTitle = source === "for-you" ? "For You" : "Trending now";
+  // Null preferences (still loading) counts as "not onboarded", so the prompt
+  // is present from first paint rather than inserted when the read lands.
+  const showPrompt = !promptDismissed && !preferences?.onboardingCompleted;
+
+  const dismissPrompt = () => {
+    storage.set(PREFS_PROMPT_DISMISSED_KEY, true);
+    setPromptDismissed(true);
+  };
+
+  const onChip = async (id: string) => {
+    try {
+      await updateInterestTags(togglePick(preferences?.interests?.tags, id));
+    } catch (error) {
+      handleError(error, { component: "ForYouRail", action: "toggleTasteChip" });
+    }
+  };
+
+  const headerTitle = picks.length > 0 || source === "for-you" ? "For you" : "Trending now";
+  const pickSet = new Set(picks);
+  const showSkeleton = isLoading && recommendations.length === 0;
+  // A failed read is not an empty one (WEB-QA-032): "Nothing trending yet" on a
+  // network failure tells the visitor there is nothing on, which is false.
+  const showError = !isLoading && isError && recommendations.length === 0;
+  const showEmpty = !isLoading && !isError && recommendations.length === 0;
 
   return (
-    <section
-      className="py-6"
-      aria-labelledby="for-you-rail-heading"
-    >
+    <section className="py-6" aria-labelledby="for-you-rail-heading">
       <div className="container mx-auto px-4">
-        <div className="flex items-center justify-between mb-3">
+        <div className="flex items-center justify-between gap-3">
           <h2
             id="for-you-rail-heading"
             className="text-xl font-semibold flex items-center gap-2"
@@ -36,59 +93,162 @@ export function ForYouRail() {
           </h2>
           <Button
             variant="ghost"
-            size="sm"
+            size="icon"
+            className="h-11 w-11"
             onClick={refetch}
             disabled={isLoading}
             aria-label="Refresh recommendations"
           >
-            <RefreshCw className={`h-4 w-4 ${isLoading ? "animate-spin" : ""}`} />
+            <RefreshCw
+              className={cn("h-4 w-4", isLoading && "animate-spin motion-reduce:animate-none")}
+              aria-hidden="true"
+            />
           </Button>
         </div>
 
-        <div className="flex gap-4 overflow-x-auto pb-2 -mx-4 px-4 snap-x snap-mandatory">
-          {isLoading && recommendations.length === 0
-            ? Array.from({ length: 6 }).map((_, i) => (
-                <div key={`skeleton-${i}`} className="snap-start shrink-0 w-56" aria-hidden="true">
-                  <div className="aspect-video w-56 rounded-lg bg-muted animate-pulse motion-reduce:animate-none" />
-                  <div className="mt-2 h-4 w-3/4 rounded bg-muted animate-pulse motion-reduce:animate-none" />
-                  <div className="mt-1 h-3 w-1/2 rounded bg-muted animate-pulse motion-reduce:animate-none" />
-                </div>
-              ))
-            : recommendations.map((rec) => (
-            <Link
-              key={rec.id}
-              to={`/events/${createEventSlugWithCentralTime(rec.title, rec)}`}
-              className="snap-start shrink-0 w-56 group"
-            >
-              <div className="aspect-video w-56 overflow-hidden rounded-lg bg-muted">
-                {rec.image_url ? (
-                  <OptimizedImage
-                    src={rec.image_url}
-                    alt={rec.title ?? "Event"}
-                    width={224}
-                    height={126}
-                    containerClassName="h-full w-full"
-                    className="object-cover group-hover:scale-105 transition-transform duration-200"
-                    sizes="224px"
-                  />
-                ) : (
-                  <div className="h-full w-full flex items-center justify-center text-muted-foreground">
-                    <SpriteIcon name="sparkles" className="h-8 w-8" aria-hidden="true" />
-                  </div>
+        <RailWeatherLine className="mb-3" />
+
+        {showPrompt && (
+          <div className="mb-3 flex flex-wrap items-center gap-x-3 gap-y-1 rounded-xl bg-muted px-4 py-2">
+            <p className="text-sm text-foreground">
+              Tell us what you like and this rail follows.
+            </p>
+            <div className="ml-auto flex items-center gap-1">
+              <Button size="sm" className="h-11" onClick={() => setOnboardingOpen(true)}>
+                Tune your picks
+              </Button>
+              <Button
+                variant="ghost"
+                size="icon"
+                className="h-11 w-11"
+                onClick={dismissPrompt}
+                aria-label="Not now, hide this prompt"
+              >
+                <X className="h-4 w-4" aria-hidden="true" />
+              </Button>
+            </div>
+          </div>
+        )}
+
+        <div
+          className="mb-3 flex gap-2 overflow-x-auto pb-1 -mx-4 px-4"
+          role="group"
+          aria-label="Steer these picks"
+        >
+          {TASTE_CHIPS.map((chip) => {
+            const pressed = pickSet.has(chip.id);
+            return (
+              <button
+                key={chip.id}
+                type="button"
+                aria-pressed={pressed}
+                onClick={() => void onChip(chip.id)}
+                className={cn(
+                  "shrink-0 min-h-11 rounded-full border px-4 text-sm font-medium transition-colors",
+                  "focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2",
+                  pressed
+                    ? "border-primary bg-primary text-primary-foreground"
+                    : "border-border bg-background text-foreground hover:bg-muted",
                 )}
+              >
+                {chip.label}
+              </button>
+            );
+          })}
+        </div>
+
+        <div
+          className={cn("flex gap-4 overflow-x-auto pb-2 -mx-4 px-4 snap-x snap-mandatory", STRIP_MIN_HEIGHT)}
+          aria-busy={showSkeleton}
+        >
+          {showSkeleton &&
+            Array.from({ length: 6 }).map((_, i) => (
+              <div key={`skeleton-${i}`} className="snap-start shrink-0 w-56" aria-hidden="true">
+                <div className="aspect-video w-56 rounded-lg bg-muted animate-pulse motion-reduce:animate-none" />
+                <div className="mt-2 h-4 w-3/4 rounded bg-muted animate-pulse motion-reduce:animate-none" />
+                <div className="mt-1 h-3 w-1/2 rounded bg-muted animate-pulse motion-reduce:animate-none" />
               </div>
-              <p className="mt-2 font-medium text-sm line-clamp-2 group-hover:text-primary">
-                {rec.title}
+            ))}
+
+          {showError && (
+            <div
+              role="alert"
+              className="flex w-full flex-wrap items-center justify-center gap-x-3 gap-y-1 rounded-xl bg-muted px-4 text-center"
+            >
+              <p className="text-sm text-muted-foreground">We couldn't load picks right now.</p>
+              <Button variant="outline" size="sm" className="h-11" onClick={() => refetch()}>
+                Try again
+              </Button>
+            </div>
+          )}
+
+          {showEmpty && (
+            <div className="flex w-full items-center justify-center rounded-xl bg-muted px-4 text-center">
+              <p className="text-sm text-muted-foreground">
+                Nothing trending yet.{" "}
+                <Link
+                  to="/events/today"
+                  className="font-medium text-foreground underline underline-offset-4"
+                >
+                  See what's on today
+                </Link>
               </p>
-              {rec.recommendation_reason && (
-                <p className="mt-1 text-xs text-muted-foreground line-clamp-2">
-                  {rec.recommendation_reason}
+            </div>
+          )}
+
+          {recommendations.map((rec) => {
+            const reason = rec.pickReason ?? rec.recommendation_reason;
+            return (
+              <Link
+                key={rec.id}
+                to={`/events/${createEventSlugWithCentralTime(rec.title, rec)}`}
+                className="snap-start shrink-0 w-56 group"
+              >
+                <div className="aspect-video w-56 overflow-hidden rounded-lg bg-muted">
+                  {rec.image_url ? (
+                    <OptimizedImage
+                      src={rec.image_url}
+                      alt={rec.title ?? "Event"}
+                      width={224}
+                      height={126}
+                      containerClassName="h-full w-full"
+                      className="object-cover group-hover:scale-105 transition-transform duration-200"
+                      sizes="224px"
+                    />
+                  ) : (
+                    <div className="h-full w-full flex items-center justify-center text-muted-foreground">
+                      <SpriteIcon name="sparkles" className="h-8 w-8" aria-hidden="true" />
+                    </div>
+                  )}
+                </div>
+                <p className="mt-2 font-medium text-sm line-clamp-2 group-hover:text-primary">
+                  {rec.title}
                 </p>
-              )}
-            </Link>
-          ))}
+                {reason && (
+                  <p
+                    className={cn(
+                      "mt-1 text-xs line-clamp-2",
+                      rec.pickReason ? "font-medium text-foreground" : "text-muted-foreground",
+                    )}
+                  >
+                    {reason}
+                  </p>
+                )}
+              </Link>
+            );
+          })}
         </div>
       </div>
+
+      {onboardingOpen && (
+        <Suspense fallback={null}>
+          <PreferencesOnboarding
+            open={onboardingOpen}
+            onComplete={() => setOnboardingOpen(false)}
+            onDismiss={() => setOnboardingOpen(false)}
+          />
+        </Suspense>
+      )}
     </section>
   );
 }

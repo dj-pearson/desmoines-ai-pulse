@@ -27,8 +27,10 @@ const LINK_SITES = [
   'src/pages/MusicHub.tsx',
   'src/pages/EventsNearMe.tsx',
   'src/pages/Enhanced404.tsx',
-  'src/components/RecentlyViewed.tsx',
   'src/components/ForYouRail.tsx',
+  'src/components/NLPSearchBar.tsx',
+  'src/components/TonightRail.tsx',
+  'src/lib/dashboardItems.ts',
   'src/components/SmartEventCard.tsx',
 ];
 

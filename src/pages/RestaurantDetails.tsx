@@ -34,6 +34,7 @@ import {
 import { Phone, Star, DollarSign, ArrowLeft, Navigation, Heart, MessageCircle, Award, Utensils, Globe, Check, BookOpen, Info, Map, CalendarCheck } from "lucide-react";
 import { useState, useMemo } from "react";
 import { useContentTracking } from "@/hooks/useContentTracking";
+import { useRecordRecentView } from "@/hooks/useRecentlyViewedFeed";
 import {
   getRestaurantOpenStatus,
   resolveOpeningHoursSpecification,
@@ -52,6 +53,8 @@ import { CollapsibleSection } from "@/components/CollapsibleSection";
 import { SpriteIcon } from "@/components/ui/SpriteIcon";
 import { DETAIL_STALE_TIME, detailQueryKey } from "@/lib/detailQueryKeys";
 
+const UUID_RE = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
+
 export default function RestaurantDetails() {
   const { slug } = useParams();
   const [imageError, setImageError] = useState(false);
@@ -69,7 +72,10 @@ export default function RestaurantDetails() {
         .eq("slug", slug)
         .maybeSingle();
 
-      if (!data && !error) {
+      // Fall back to the id only when the param IS a uuid. Comparing a uuid
+      // column with a slug raises 22P02, which surfaced as the error page for
+      // any unknown slug instead of not-found.
+      if (!data && !error && UUID_RE.test(slug ?? "")) {
         const result = await supabase
           .from("restaurants")
           .select("*")
@@ -87,6 +93,20 @@ export default function RestaurantDetails() {
 
   // Track page view and content interactions
   const { trackShare, trackClick } = useContentTracking(restaurant?.id, 'restaurant');
+  // Record into the unified recently-viewed feed (WEB-FEAT-007). Only
+  // EventDetails used to, so the home rail could never resume a restaurant.
+  useRecordRecentView(
+    restaurant
+      ? {
+          id: restaurant.id,
+          type: "restaurant",
+          title: restaurant.name,
+          href: `/restaurants/${restaurant.slug || restaurant.id}`,
+          image_url: restaurant.image_url ?? undefined,
+          subtitle: restaurant.cuisine ?? undefined,
+        }
+      : null,
+  );
 
   const { data: relatedRestaurants } = useQuery({
     queryKey: ["related-restaurants", restaurant?.cuisine, restaurant?.id],

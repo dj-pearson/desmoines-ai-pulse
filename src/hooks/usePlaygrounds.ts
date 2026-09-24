@@ -6,6 +6,7 @@ import { countOption, type CountMode } from '@/lib/listCount';
 import { Database } from "@/integrations/supabase/types";
 import { queryKeys } from "@/lib/queryKeys";
 import { STALE_TIME, GC_TIME } from "@/lib/queryConfig";
+import { PLAYGROUND_LIST_COLUMNS } from "@/lib/listColumns";
 
 type Playground = Database["public"]["Tables"]["playgrounds"]["Row"];
 type PlaygroundInsert = Database["public"]["Tables"]["playgrounds"]["Insert"];
@@ -33,6 +34,14 @@ interface PlaygroundFilters {
   offset?: number;
   /** How hard to work for `totalCount`; see src/lib/listCount.ts (WEB-PERF-033). */
   countMode?: CountMode;
+  /**
+   * "list" selects PLAYGROUND_LIST_COLUMNS instead of `*` (home plan WP3 item
+   * 5). Opt-in rather than the default because PlaygroundManager reads
+   * manually_curated, which the list projection leaves out on purpose.
+   * Part of the query key via `filters`, so the two shapes never share a
+   * cache entry.
+   */
+  projection?: "all" | "list";
 }
 
 
@@ -48,7 +57,8 @@ export function usePlaygrounds(filters: PlaygroundFilters = {}) {
   }>({
     queryKey: queryKeys.playgrounds.list(filters as Record<string, unknown>),
     queryFn: async () => {
-      let query = supabase.from("playgrounds").select("*", countOption(filters.countMode));
+      const columns = filters.projection === "list" ? PLAYGROUND_LIST_COLUMNS : "*";
+      let query = supabase.from("playgrounds").select(columns, countOption(filters.countMode));
 
       switch (filters.sortBy ?? "newest") {
         case "updated":

@@ -74,7 +74,14 @@ export default defineConfig({
   // builds with placeholder VITE_SUPABASE_* so no row ever arrives. They do not
   // need a backend, they need rows - tests/support/fixtureBackend.ts answers
   // PostgREST from fixtures. 45/45 against the production build.
-  testMatch: /(search-filters|url-filter-state|sticky-filter-chips|route-smoke|cookie-consent|backend-down|touch-targets|page-headings|search-request-loop|request-budget|turnstile-inert|subscription-checkout|advertise-success-receipt|submission-live-link|campaign-self-service)\.spec\.ts/,
+  //
+  // The home-* specs and shell-mobile joined with the Home page plan
+  // (docs/page-plans/home.md). Each runs on fixtureBackend, so none needs a
+  // live backend: search (one input, /search?q=, result hrefs), the first-view
+  // request budget, the For You/recently viewed rails' layout stability, the
+  // Tonight rail, the dashboard's hrefs and contrast, the quick view, and the
+  // mobile shell's BackToTop and menu close target.
+  testMatch: /(search-filters|url-filter-state|sticky-filter-chips|route-smoke|cookie-consent|backend-down|touch-targets|page-headings|search-request-loop|request-budget|turnstile-inert|subscription-checkout|advertise-success-receipt|submission-live-link|campaign-self-service|home-search|home-request-budget|home-rails-cls|home-tonight|home-dashboard|home-quick-view|shell-mobile)\.spec\.ts/,
   fullyParallel: true,
   forbidOnly: !!process.env.CI,
   retries: process.env.CI ? 2 : 0,

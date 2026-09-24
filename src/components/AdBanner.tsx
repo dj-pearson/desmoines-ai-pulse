@@ -7,7 +7,7 @@ import { HouseAd } from "@/components/HouseAd";
 import { Card } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 
-import { openExternalUrl, isCapacitor } from "@/lib/capacitorUtils";
+import { openExternalUrl, toSafeExternalUrl } from "@/lib/capacitorUtils";
 import { SpriteIcon } from "@/components/ui/SpriteIcon";
 
 interface AdBannerProps {
@@ -15,6 +15,33 @@ interface AdBannerProps {
   className?: string;
   /** Optional fallback content when no ads are available */
   fallback?: React.ReactNode;
+}
+
+/**
+ * Height each placement reserves. Used both for the rendered ad and for the
+ * placeholder shown while the subscription and ad queries resolve, so the slot
+ * doesn't grow from 0 to 80-112px under the reader once an ad arrives.
+ */
+const PLACEMENT_SIZE_CLASSES: Record<AdBannerProps['placement'], string> = {
+  top_banner: "h-20 md:h-28",
+  featured_spot: "min-h-[220px] md:min-h-[250px]",
+  below_fold: "h-20 md:h-28",
+};
+
+const PLACEMENT_RESERVE_CLASSES: Record<AdBannerProps['placement'], string> = {
+  top_banner: "min-h-20 md:min-h-28",
+  featured_spot: "min-h-[220px] md:min-h-[250px]",
+  below_fold: "min-h-20 md:min-h-28",
+};
+
+/**
+ * Builds a CSS `url("...")` value. The advertiser controls `image_url`, and an
+ * unquoted `url(${x})` lets a `)` or `;` in it end the value early. Quotes,
+ * backslashes and line breaks are escaped so the string stays one token.
+ */
+function cssUrl(value: string): string {
+  const escaped = value.replace(/[\\"]/g, "\\$&").replace(/[\n\r\f]/g, "");
+  return `url("${escaped}")`;
 }
 
 export function AdBanner({ placement, className = "", fallback }: AdBannerProps) {
@@ -33,13 +60,20 @@ export function AdBanner({ placement, className = "", fallback }: AdBannerProps)
     viewabilityDuration: 1000,
   });
 
-  // Insider and VIP members get an ad-free experience
+  // Insider and VIP members get an ad-free experience: no ad and no empty band.
   if (hasFeature('ad_free')) {
     return fallback ? <>{fallback}</> : null;
   }
 
   if (subscriptionLoading || adLoading) {
-    return null;
+    // Hold the slot's height while we find out what fills it.
+    return (
+      <div
+        aria-hidden="true"
+        data-testid="ad-slot-placeholder"
+        className={`${PLACEMENT_RESERVE_CLASSES[placement]} ${className}`}
+      />
+    );
   }
 
   // Fill chain so a slot never renders empty (WEB-FEAT-004):
@@ -52,34 +86,20 @@ export function AdBanner({ placement, className = "", fallback }: AdBannerProps)
     return fallback ? <>{fallback}</> : <HouseAd placement={placement} className={className} />;
   }
 
-  const handleAdClick = async () => {
-    await trackClick();
-    if (ad.link_url) {
-      if (isCapacitor()) {
-        await openExternalUrl(ad.link_url);
-      } else {
-        window.open(ad.link_url, '_blank', 'noopener,noreferrer');
-      }
-    }
-  };
+  // An advertiser link that isn't http(s) renders as a plain, non-clickable
+  // ad rather than a javascript:/data: link in our origin.
+  const safeLinkUrl = toSafeExternalUrl(ad.link_url);
 
-  const getAdSizeClasses = () => {
-    switch (placement) {
-      case 'top_banner':
-        return "h-20 md:h-28";
-      case 'featured_spot':
-        return "min-h-[220px] md:min-h-[250px]";
-      case 'below_fold':
-        return "h-20 md:h-28";
-      default:
-        return "h-24 md:h-28";
-    }
+  const handleAdClick = async () => {
+    if (!safeLinkUrl) return;
+    await trackClick();
+    await openExternalUrl(safeLinkUrl);
   };
 
   return (
     <Card
       ref={adRef}
-      className={`${getAdSizeClasses()} overflow-hidden cursor-pointer hover:shadow-lg transition-shadow relative group ${className}`}
+      className={`${PLACEMENT_SIZE_CLASSES[placement]} overflow-hidden relative group ${safeLinkUrl ? "cursor-pointer hover:shadow-lg transition-shadow" : ""} ${className}`}
       role="complementary"
       aria-label="Sponsored advertisement"
     >
@@ -91,10 +111,10 @@ export function AdBanner({ placement, className = "", fallback }: AdBannerProps)
       </div>
 
       <div
-        onClick={handleAdClick}
+        onClick={safeLinkUrl ? handleAdClick : undefined}
         className="w-full h-full relative flex items-center"
         style={{
-          backgroundImage: ad.image_url ? `url(${ad.image_url})` : undefined,
+          backgroundImage: ad.image_url ? cssUrl(ad.image_url) : undefined,
           backgroundSize: 'cover',
           backgroundPosition: 'center',
         }}
@@ -124,7 +144,7 @@ export function AdBanner({ placement, className = "", fallback }: AdBannerProps)
             )}
           </div>
 
-          {ad.link_url && (
+          {safeLinkUrl && (
             <Button
               size="sm"
               className="flex-shrink-0 bg-white/90 text-primary hover:bg-white shadow-md group-hover:shadow-lg transition-shadow text-xs md:text-sm h-8 md:h-9 px-2.5 md:px-3"

@@ -1,6 +1,5 @@
 import { Link } from "react-router-dom";
 import { X, Calendar, UtensilsCrossed, Landmark } from "lucide-react";
-import { Button } from "@/components/ui/button";
 import { useRecentlyViewedFeed } from "@/hooks/useRecentlyViewedFeed";
 import type { RecentlyViewedType } from "@/lib/recentlyViewed";
 import { cn } from "@/lib/utils";
@@ -76,17 +75,28 @@ export function RecentlyViewedRail({ limit = 12 }: { limit?: number }) {
                     )}
                   </div>
                 </Link>
-                <Button
-                  variant="secondary"
-                  size="icon"
+                {/* 44px hit area (WP2 item 8) around a 28px visual circle, so
+                    the target is tappable without covering the image. Always
+                    visible where there is no hover (touch); on hover devices it
+                    appears on card hover or keyboard focus. It used to be
+                    opacity-0 everywhere, which hid it on phones entirely. */}
+                <button
+                  type="button"
                   onClick={() => remove(item.id, item.type)}
                   className={cn(
-                    "absolute top-1.5 right-1.5 h-7 w-7 rounded-full opacity-0 group-hover:opacity-100 focus:opacity-100 transition-opacity",
+                    "group/remove absolute top-0 right-0 flex h-11 w-11 items-center justify-center rounded-full",
+                    "focus-visible:outline-none",
+                    "opacity-100 transition-opacity",
+                    "[@media(hover:hover)]:opacity-0",
+                    "[@media(hover:hover)]:group-hover:opacity-100",
+                    "[@media(hover:hover)]:focus-visible:opacity-100",
                   )}
                   aria-label={`Remove ${item.title} from recently viewed`}
                 >
-                  <X className="h-3.5 w-3.5" />
-                </Button>
+                  <span className="flex h-7 w-7 items-center justify-center rounded-full bg-secondary text-secondary-foreground group-focus-visible/remove:ring-2 group-focus-visible/remove:ring-ring">
+                    <X className="h-3.5 w-3.5" aria-hidden="true" />
+                  </span>
+                </button>
               </li>
             );
           })}

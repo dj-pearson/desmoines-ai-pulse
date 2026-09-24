@@ -1,76 +1,37 @@
 import { useState } from "react";
-import { Heart, Mail, Utensils, Map, Crown, Facebook, Twitter, Instagram, PlusCircle, DollarSign } from "lucide-react";
+import { Heart, Utensils, Map, Crown, Facebook, Twitter, Instagram, PlusCircle, DollarSign } from "lucide-react";
 import { Link } from "react-router-dom";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
-import { useToast } from "@/hooks/use-toast";
 import { BRAND } from "@/lib/brandConfig";
-import { supabase } from "@/integrations/supabase/client";
 import { OptimizedLogo } from "@/components/OptimizedLogo";
-import { logConsent } from "@/lib/consentLog";
 import { reopenConsentBanner } from "@/components/CookieConsentBanner";
 import { SiteDirectory } from "@/components/seo/SiteDirectory";
 import { SpriteIcon } from "@/components/ui/SpriteIcon";
+import { useNewsletterSubscription } from "@/hooks/useNewsletterSubscription";
 
 export default function Footer() {
   const [email, setEmail] = useState("");
-  const [isLoading, setIsLoading] = useState(false);
-  const { toast } = useToast();
+  const { subscribe, loading: isLoading } = useNewsletterSubscription();
 
+  // Double opt-in through the newsletter-subscribe edge function (WEB-FEAT-019,
+  // Home plan WP7). This used to insert into newsletter_subscribers from the
+  // browser, which skipped confirmation (the column default is 'active'), told
+  // anyone typing an address whether it was already subscribed (the 23505
+  // branch), and wrote consent_records before the person had confirmed
+  // anything. Consent is now recorded by the confirm RPC when the emailed link
+  // is clicked, and the hook shows the server's one answer for every outcome.
   const handleNewsletterSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
     if (!email) return;
-
-    setIsLoading(true);
-    try {
-      const { error } = await supabase
-        .from('newsletter_subscribers')
-        .insert({
-          email: email.toLowerCase().trim(),
-          source: 'footer',
-        });
-
-      if (error) {
-        if (error.code === '23505') {
-          toast({
-            title: "Already subscribed!",
-            description: "You're already on our list.",
-          });
-          setEmail("");
-          return;
-        }
-        throw error;
-      }
-
-      // Record affirmative marketing-email consent for CAN-SPAM / GDPR proof.
-      void logConsent({
-        type: "newsletter",
-        granted: true,
-        source: "newsletter_form",
-        email: email.toLowerCase().trim(),
-        metadata: { location: "footer" },
-      });
-
-      toast({
-        title: "Subscribed!",
-        description: "Welcome to the Des Moines Insider community. You can unsubscribe any time via the link in every email.",
-      });
-      setEmail("");
-    } catch (error) {
-      toast({
-        title: "Error",
-        description: "Please try again later.",
-        variant: "destructive",
-      });
-    } finally {
-      setIsLoading(false);
-    }
+    const ok = await subscribe({ email, source: "footer" });
+    if (ok) setEmail("");
   };
 
   return (
     <footer className="bg-neutral-900 text-white">
       {/* CTA Banner */}
-      <div className="bg-gradient-to-r from-primary to-primary/80 py-8">
+      <div className="bg-primary py-8">
         <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8">
           <div className="flex flex-col md:flex-row items-center justify-between gap-4">
             <div className="text-center md:text-left">
@@ -81,13 +42,14 @@ export default function Footer() {
                 Get early event access, unlimited favorites & personalized recommendations
               </p>
             </div>
-            <Link to="/pricing">
-              <Button size="lg" variant="secondary" className="font-semibold">
-                <Crown className="h-4 w-4 mr-2" />
+            {/* asChild: one interactive element, not a <button> inside an <a>. */}
+            <Button asChild size="lg" variant="secondary" className="font-semibold">
+              <Link to="/pricing">
+                <Crown className="h-4 w-4 mr-2" aria-hidden="true" />
                 View Plans
-                <SpriteIcon name="arrow-right" className="h-4 w-4 ml-2" />
-              </Button>
-            </Link>
+                <SpriteIcon name="arrow-right" className="h-4 w-4 ml-2" aria-hidden="true" />
+              </Link>
+            </Button>
           </div>
         </div>
       </div>
@@ -150,8 +112,9 @@ export default function Footer() {
                 </Button>
               </form>
 
-              {/* Social Proof + CAN-SPAM disclosure. Submitting the form is an
-                  affirmative opt-in; we log it to consent_records. */}
+              {/* CAN-SPAM disclosure. Submitting starts a double opt-in; the
+                  consent_records row is written when the emailed link is
+                  confirmed, not here. */}
               <p className="text-neutral-400 text-xs mb-1 flex items-center gap-1">
                 <SpriteIcon name="users" className="h-3 w-3" aria-hidden="true" />
                 Free forever, unsubscribe anytime.
@@ -205,11 +168,13 @@ export default function Footer() {
                 target="_blank"
                 rel="noopener noreferrer"
                 aria-label="Download Des Moines Insider on the App Store (opens in new tab)"
-                className="inline-block mt-4 focus:outline-none focus:ring-2 focus:ring-primary focus:ring-offset-2 focus:ring-offset-neutral-900 rounded-lg"
+                className="inline-flex min-h-11 items-center mt-4 focus:outline-none focus:ring-2 focus:ring-primary focus:ring-offset-2 focus:ring-offset-neutral-900 rounded-lg"
               >
                 <img
                   src="https://tools.applemediaservices.com/api/badges/download-on-the-app-store/black/en-us?size=250x83&releaseDate=1700000000"
                   alt="Download on the App Store"
+                  width={120}
+                  height={40}
                   className="h-10 w-auto"
                   loading="lazy"
                 />

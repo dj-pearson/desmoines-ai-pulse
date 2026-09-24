@@ -22,7 +22,7 @@
  *
  * Usage: node scripts/check-event-time-tz.mjs
  */
-import { readFileSync } from 'node:fs';
+import { existsSync, readFileSync } from 'node:fs';
 import { execSync } from 'node:child_process';
 
 const EXCLUDE = /(^|\/)(admin|cms|crm)\/|(Admin|Cms|Crm)[A-Z]|Admin\.tsx$|Manager\.tsx$|Dashboard\.tsx$|Wizard\.tsx$|ContentTable\.tsx$|Scraping|Competitor|EventDataEnhancer|SecurityMonitoring|SEOTools|DomainHighlight|GooglePlaces|WeekendGuide|ApiKeyManager|RecurringEventFields/;
@@ -31,10 +31,16 @@ const EXCLUDE = /(^|\/)(admin|cms|crm)\/|(Admin|Cms|Crm)[A-Z]|Admin\.tsx$|Manage
 const PATTERN =
   /new Date\(\s*[A-Za-z_$][\w$.?\[\]'"-]*\.(date|start_date|end_date|event_start_utc|event_start_local|instance_date)\b[^)]*\)\s*\.\s*(toLocaleDateString|toLocaleTimeString|toLocaleString|getDate|getDay|getMonth|getFullYear|getHours|getMinutes)\b/;
 
+// --others picks up files not yet committed, and existsSync drops files deleted
+// in the working tree but still in the index. Without both, a branch that
+// deletes a component crashes this check with ENOENT, and a new component is
+// not scanned until after it has been committed.
 const files = execSync(
-  "git ls-files 'src/**/*.ts' 'src/**/*.tsx'",
+  "git ls-files --cached --others --exclude-standard 'src/**/*.ts' 'src/**/*.tsx'",
   { encoding: 'utf8' }
-).split('\n').filter(Boolean).filter((f) => !EXCLUDE.test(f) && !f.includes('__tests__'));
+).split('\n').filter(Boolean)
+  .filter((f) => existsSync(f))
+  .filter((f) => !EXCLUDE.test(f) && !f.includes('__tests__'));
 
 const hits = [];
 for (const file of files) {

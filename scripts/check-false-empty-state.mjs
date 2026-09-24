@@ -36,13 +36,15 @@
  *
  * Usage: node scripts/check-false-empty-state.mjs
  */
-import { readFileSync } from 'node:fs';
+import { existsSync, readFileSync } from 'node:fs';
 import { execSync } from 'node:child_process';
 
 const EXCLUDE = /(^|\/)(admin|cms|crm)\/|src\/pages\/Admin|src\/pages\/CMS|src\/pages\/Campaign|Manager\.tsx$|__tests__/;
 
-const files = execSync("git ls-files 'src/pages/*.tsx' 'src/pseo/**/*.tsx'", { encoding: 'utf8' })
-  .split('\n').filter(Boolean).filter((f) => !EXCLUDE.test(f));
+// Same listing rule as check-event-time-tz: include uncommitted files, skip
+// files deleted in the working tree.
+const files = execSync("git ls-files --cached --others --exclude-standard 'src/pages/*.tsx' 'src/pseo/**/*.tsx'", { encoding: 'utf8' })
+  .split('\n').filter(Boolean).filter((f) => existsSync(f)).filter((f) => !EXCLUDE.test(f));
 
 const CLEARS = /^\s*set[A-Z]\w*\(\[\]\);\s*$/;
 const RECORDS_FAILURE = /setLoadError|setError\(|setHasError|ErrorState/;

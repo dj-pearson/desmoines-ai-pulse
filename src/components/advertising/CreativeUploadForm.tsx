@@ -13,6 +13,7 @@ import { useToast } from "@/hooks/use-toast";
 import { createLogger } from '@/lib/logger';
 import { notifyAdmins } from "@/hooks/useCampaignNotifications";
 import { describeAutoReview } from "@/lib/creativeReviewVerdict";
+import { openExternalUrl, toSafeExternalUrl } from "@/lib/capacitorUtils";
 
 const log = createLogger('CreativeUploadForm');
 
@@ -117,15 +118,12 @@ export function CreativeUploadForm({
 
     if (!formData.linkUrl.trim()) {
       newErrors.linkUrl = "Destination URL is required";
-    } else {
-      try {
-        const url = new URL(formData.linkUrl);
-        if (url.protocol !== 'https:' && url.protocol !== 'http:') {
-          newErrors.linkUrl = "URL must use HTTP or HTTPS protocol";
-        }
-      } catch {
-        newErrors.linkUrl = "Please enter a valid URL";
-      }
+    } else if (!toSafeExternalUrl(formData.linkUrl)) {
+      // Same rule AdBanner applies when it renders the creative, so a URL this
+      // form accepts is one the ad will actually open. The server-side CHECK
+      // on campaign_creatives.link_url is still to come; until then this is
+      // the only gate, and AdBanner's render-time guard is the backstop.
+      newErrors.linkUrl = "Enter a full web address starting with https:// or http://";
     }
 
     if (!formData.ctaText.trim()) {
@@ -231,7 +229,8 @@ export function CreativeUploadForm({
           description: formData.description,
           image_url: null,
           review_path: reviewPath,
-          link_url: formData.linkUrl,
+          // validateForm has already refused a non-http(s) value.
+          link_url: formData.linkUrl.trim(),
           cta_text: formData.ctaText,
           is_approved: false,
           file_size: uploadedFile!.size,
@@ -383,7 +382,8 @@ export function CreativeUploadForm({
                   type="button"
                   variant="outline"
                   size="icon"
-                  onClick={() => window.open(formData.linkUrl, '_blank')}
+                  disabled={!toSafeExternalUrl(formData.linkUrl)}
+                  onClick={() => void openExternalUrl(formData.linkUrl)}
                   aria-label="Open link in new tab"
                 >
                   <ExternalLink className="h-4 w-4" />

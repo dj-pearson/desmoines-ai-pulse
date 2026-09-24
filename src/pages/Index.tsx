@@ -1,104 +1,42 @@
-import { useState, useEffect, lazy, Suspense } from "react";
-import { OptimizedImage } from "@/components/OptimizedImage";
-import { Helmet } from "react-helmet-async";
-import { format } from "date-fns";
-import {
-  Dialog,
-  DialogContent,
-  DialogHeader,
-  DialogTitle,
-} from "@/components/ui/dialog";
-import { Button } from "@/components/ui/button";
-import { CalendarPlus, Brain, Zap } from "lucide-react";
-import { AddToCalendarButton } from "@/components/AddToCalendarButton";
-import { createEventSlugWithCentralTime } from "@/lib/timezone";
-import { FavoriteButton } from "@/components/FavoriteButton";
-import { useToast } from "@/hooks/use-toast";
-import { useAuth } from "@/hooks/useAuth";
-import { Event } from "@/lib/types";
-import { BRAND } from "@/lib/brandConfig";
-import { Link, useNavigate } from "react-router-dom";
-import { openExternalUrl } from "@/lib/capacitorUtils";
-import Header from "@/components/Header";
-import { FAQSection } from "@/components/FAQSection";
-import SEOHead from "@/components/SEOHead";
-import SearchSection from "@/components/SearchSection";
-import { NLPSearchBar } from "@/components/NLPSearchBar";
-import { EnhancedHero } from "@/components/EnhancedHero";
-import { ForYouRail } from "@/components/ForYouRail";
-import { HomeWeatherNotice } from "@/components/WeatherNotice";
-import { useUserPreferences } from "@/hooks/useUserPreferences";
-import { useHomepageStats } from "@/hooks/useHomepageStats";
-import { BackToTop } from "@/components/BackToTop";
-import { BreadcrumbListSchema } from "@/components/schema/BreadcrumbListSchema";
-import SpeakableSchema from "@/components/schema/SpeakableSchema";
+import { useState, lazy, Suspense } from "react";
 import { AdBanner } from "@/components/AdBanner";
-import { SpriteIcon } from "@/components/ui/SpriteIcon";
+import { BackToTop } from "@/components/BackToTop";
+import { EnhancedHero } from "@/components/EnhancedHero";
+import { FAQSection } from "@/components/FAQSection";
+import { ForYouRail } from "@/components/ForYouRail";
+import Header from "@/components/Header";
+import { LazySection } from "@/components/LazySection";
+import SEOHead from "@/components/SEOHead";
+import SpeakableSchema from "@/components/schema/SpeakableSchema";
+import { TonightRail } from "@/components/TonightRail";
+import { DashboardGridSkeleton } from "@/components/ui/loading-skeleton";
+import { useHomepageStats } from "@/hooks/useHomepageStats";
+import { BRAND } from "@/lib/brandConfig";
+import type { Event } from "@/lib/types";
+import {
+  HOME_FAQ_DESCRIPTION,
+  HOME_FAQ_TITLE,
+  HOME_FAQS,
+  HOME_PAGE_TITLE,
+  HOME_SPEAKABLE,
+  HOME_STRUCTURED_DATA,
+} from "@/content/homeContent";
 
-// Lazy load below-the-fold and heavy components to improve initial load
+// Lazy chunks for everything below the rails. React.lazy defers the download
+// only; LazySection (below) is what defers the MOUNT, and with it each
+// section's queries, until the visitor is within 400px of it (WP1 item 10).
 const Footer = lazy(() => import("@/components/Footer"));
 const AllInclusiveDashboard = lazy(() => import("@/components/AllInclusiveDashboard"));
-const PersonalizedDashboard = lazy(() => import("@/components/PersonalizedDashboard"));
-const SmartEventNavigation = lazy(() => import("@/components/SmartEventNavigation"));
 const MostSearched = lazy(() => import("@/components/MostSearched"));
 const GEOContent = lazy(() => import("@/components/GEOContent"));
-const Newsletter = lazy(() => import("@/components/Newsletter"));
-const EventSocialHub = lazy(() => import("@/components/EventSocialHub").then(m => ({ default: m.EventSocialHub })));
-// FAQSection imported directly (not lazy) for SEO indexing
-const PreferencesOnboarding = lazy(() => import("@/components/PreferencesOnboarding").then(m => ({ default: m.PreferencesOnboarding })));
-const PersonalizedRecommendations = lazy(() => import("@/components/PersonalizedRecommendations").then(m => ({ default: m.PersonalizedRecommendations })));
-const RecentlyViewed = lazy(() => import("@/components/RecentlyViewed").then(m => ({ default: m.RecentlyViewed })));
+const EventQuickView = lazy(() => import("@/components/EventQuickView").then(m => ({ default: m.EventQuickView })));
 const RecentlyViewedRail = lazy(() => import("@/components/RecentlyViewedRail").then(m => ({ default: m.RecentlyViewedRail })));
 const HomeInterestNav = lazy(() => import("@/components/HomeInterestNav").then(m => ({ default: m.HomeInterestNav })));
 const SocialProof = lazy(() => import("@/components/SocialProof").then(m => ({ default: m.SocialProof })));
 
-// Shape-matched skeleton loaders for lazy-loaded sections
-const SectionLoader = () => (
-  <div className="w-full py-12 flex items-center justify-center">
-    <div className="animate-pulse flex space-x-4">
-      <div className="h-4 w-4 bg-primary/20 rounded-full"></div>
-      <div className="h-4 w-4 bg-primary/30 rounded-full"></div>
-      <div className="h-4 w-4 bg-primary/20 rounded-full"></div>
-    </div>
-  </div>
-);
-
-const CardGridSkeleton = () => (
-  <div className="w-full py-12 px-4">
-    <div className="max-w-7xl mx-auto">
-      <div className="animate-pulse space-y-6">
-        <div className="h-8 bg-muted rounded w-1/3 mx-auto"></div>
-        <div className="h-4 bg-muted/60 rounded w-1/2 mx-auto"></div>
-        <div className="grid grid-cols-1 md:grid-cols-3 gap-6 mt-8">
-          {[...Array(3)].map((_, i) => (
-            <div key={i} className="rounded-lg border border-border p-4 space-y-3">
-              <div className="h-40 bg-muted rounded"></div>
-              <div className="h-5 bg-muted rounded w-3/4"></div>
-              <div className="h-4 bg-muted/60 rounded w-full"></div>
-              <div className="h-4 bg-muted/60 rounded w-2/3"></div>
-            </div>
-          ))}
-        </div>
-      </div>
-    </div>
-  </div>
-);
-
-const DashboardSkeleton = () => (
-  <div className="w-full py-12 px-4">
-    <div className="max-w-7xl mx-auto animate-pulse space-y-6">
-      <div className="h-8 bg-muted rounded w-1/4"></div>
-      <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-4">
-        {[...Array(4)].map((_, i) => (
-          <div key={i} className="rounded-lg border border-border p-4 space-y-3">
-            <div className="h-32 bg-muted rounded"></div>
-            <div className="h-5 bg-muted rounded w-3/4"></div>
-            <div className="h-4 bg-muted/60 rounded w-1/2"></div>
-          </div>
-        ))}
-      </div>
-    </div>
-  </div>
+// A neutral fixed-height box for sections whose own skeleton lives elsewhere.
+const SectionPlaceholder = ({ height }: { height: number }) => (
+  <div className="w-full animate-pulse bg-muted/20" style={{ minHeight: height }} aria-hidden="true" />
 );
 
 // WEB-SEO-012: the page title and description. WEB-SEO-027 collapsed the two
@@ -116,230 +54,24 @@ const DashboardSkeleton = () => (
 // The homepage takes the brand and the city entity, and names the categories
 // without claiming any hub's exact head term. The hubs keep theirs.
 // 60 chars is where Google truncates; this was 69 (WEB-SEO-043).
-const HOME_TITLE = 'Des Moines Insider | Events, Restaurants & Things to Do';
+// The title string is HOME_PAGE_TITLE in src/content/homeContent.ts, so SEOHead
+// and the Speakable node share one constant.
 const HOME_DESCRIPTION =
   "What's on in Des Moines, Iowa right now: live events and festivals, restaurants open tonight, and family plans for the weekend. Updated daily across the metro.";
 
 export default function Index() {
   const [selectedEvent, setSelectedEvent] = useState<Event | null>(null);
   const [showEventDetails, setShowEventDetails] = useState(false);
-  // Consolidated view state: which secondary view is active
-  const [activeView, setActiveView] = useState<
-    | { type: 'default' }
-    | { type: 'socialHub'; eventId: string }
-  >({ type: 'default' });
-  const [searchFilters, setSearchFilters] = useState<{
-    query?: string;
-    category?: string;
-    subcategory?: string;
-    dateFilter?: {
-      start?: Date;
-      end?: Date;
-      mode: "single" | "range" | "preset";
-      preset?: string;
-    } | null;
-    location?: string;
-    priceRange?: string;
-  } | undefined>(undefined);
-  const [showOnboarding, setShowOnboarding] = useState(false);
-  const { toast } = useToast();
-  const { isAuthenticated, user } = useAuth();
-  const navigate = useNavigate();
-  const { preferences, isLoading: preferencesLoading } = useUserPreferences();
   const { eventsToday, restaurantsCount, newThisWeek, isLoading: statsLoading } = useHomepageStats();
 
-  // Check if user should see preferences onboarding
-  useEffect(() => {
-    if (isAuthenticated && user && !preferencesLoading) {
-      // Show preferences onboarding if not completed
-      if (!preferences?.onboardingCompleted) {
-        // Small delay to let page load before showing modal
-        const timer = setTimeout(() => {
-          setShowOnboarding(true);
-        }, 1000);
-        return () => clearTimeout(timer);
-      }
-    }
-  }, [isAuthenticated, user, preferences, preferencesLoading]);
-
-  const handleOnboardingComplete = () => {
-    setShowOnboarding(false);
-  };
-
-  const handleClearFilters = () => {
-    setSearchFilters(undefined);
-    toast({
-      title: "Filters Cleared",
-      description: "Showing all results",
-    });
-  };
-
-  const handleShareEvent = async (event: Event) => {
-    const shareUrl = `${window.location.origin}/events/${createEventSlugWithCentralTime(event.title, event)}`;
-    const shareData = {
-      title: event.title,
-      text: `Check out ${event.title} in Des Moines!`,
-      url: shareUrl,
-    };
-
-    if (navigator.share && navigator.canShare(shareData)) {
-      try {
-        await navigator.share(shareData);
-      } catch (err) {
-        // User cancelled or error
-        if ((err as Error).name !== 'AbortError') {
-          // Fallback to clipboard
-          await navigator.clipboard.writeText(shareUrl);
-          toast({
-            title: "Link Copied!",
-            description: "Event link copied to clipboard",
-          });
-        }
-      }
-    } else {
-      // Fallback: copy to clipboard
-      await navigator.clipboard.writeText(shareUrl);
-      toast({
-        title: "Link Copied!",
-        description: "Event link copied to clipboard",
-      });
-    }
-  };
-
-  const handleAIPlanClick = () => {
-    // Route to the real, shipped AI Trip Planner (no more "coming soon" dead CTA).
-    navigate("/trip-planner");
-  };
-
-
-  // WebSite Schema
-  const structuredData = {
-    "@context": "https://schema.org",
-    "@type": "WebSite",
-    "name": BRAND.name,
-    "alternateName": BRAND.shortName,
-    "url": BRAND.baseUrl,
-    "description": BRAND.description,
-    // NO applicationCategory. It said "City Guide, AI Assistant, Event
-    // Discovery" and was wrong twice over: it is a property of
-    // SoftwareApplication, not WebSite, so it is invalid on this node and
-    // contributes nothing - and it told crawlers this site is an AI assistant.
-    // Ask Pulse ships on iOS and Android and has never been built for web
-    // (XPLAT-009). Structured data is the one place a claim is machine-read.
-    "keywords": `semantic search, multi-channel city guide, predictive analytics, behavioral intelligence, AI trip planner, context-aware recommendations, ${BRAND.city} events`,
-    "publisher": {
-      "@type": "Organization",
-      "name": BRAND.name,
-      "description": "AI-powered city guide platform",
-      "logo": {
-        "@type": "ImageObject",
-        "url": `${BRAND.baseUrl}${BRAND.logo}`
-      }
-    },
-    "potentialAction": [
-      {
-        "@type": "SearchAction",
-        "target": {
-          "@type": "EntryPoint",
-          // WEB-SEO-029: was /events?search=, which nothing reads. EventsPage
-          // takes 'q' and /search is the page built for a free-text query
-          // (SearchResults.tsx reads ?q=), so a granted sitelinks search box
-          // used to drop the visitor on an unfiltered events list.
-          "urlTemplate": `${BRAND.baseUrl}/search?q={search_term_string}`,
-          "actionPlatform": [
-            "http://schema.org/DesktopWebPlatform",
-            "http://schema.org/MobileWebPlatform",
-            "http://schema.org/IOSPlatform",
-            "http://schema.org/AndroidPlatform"
-          ]
-        },
-        "query-input": "required name=search_term_string"
-      }
-      // WEB-SEO-026: TWO MORE InteractActions USED TO SIT HERE - an "SMS
-      // Concierge" and a "Voice Assistant" described as "Alexa and Google
-      // Assistant integration". Neither exists. There is no number to text and
-      // no skill to invoke, and XPLAT-009 records that the assistant is missing
-      // from the web app entirely. potentialAction is a promise about what a
-      // machine can DO with this site; the SearchAction above is the only one
-      // the site can keep.
-    ],
-    // WEB-SEO-023: this asserted Facebook, X and Instagram profiles on the
-    // OLD brand's handle, under the new brand's name. sameAs is a
-    // machine-readable identity claim, so the property is OMITTED rather
-    // than emitted empty until BRAND.social has real URLs in it.
-    ...(BRAND.social.length > 0 ? { sameAs: [...BRAND.social] } : {}),
-  };
-
-  // WEB-SEO-026: A LocalBusiness NODE USED TO BE BUILT HERE and shipped on the
-  // home page. An aggregator is not a local business, and this one said so
-  // itself: telephone "", streetAddress "", a postalCode of 50309 that belongs
-  // to downtown Des Moines rather than to us, and openingHours of 00:00-23:59
-  // seven days a week. Every one of those is a fact a machine can act on, and
-  // none of them was true.
-  //
-  // WHAT REPLACES IT IS NOTHING, deliberately. The site's identity is the
-  // Organization node SEOHead emits on every page, with a stable @id; the
-  // WebSite node above belongs to / alone. A second, contradictory identity
-  // claim in a different type is not extra coverage - it is ambiguity, and
-  // Google resolves ambiguity by using neither.
-  //
-  // WEB-SEO-016 had already removed an aggregateRating of 4.8 from 1,247
-  // reviews from this same object. Nothing produced those numbers either.
-
-  const handleSearch = (
-    filters: {
-      query: string;
-      category: string;
-      subcategory?: string;
-      dateFilter?: {
-        start?: Date;
-        end?: Date;
-        mode: "single" | "range" | "preset";
-        preset?: string;
-      } | null;
-      location?: string;
-      priceRange?: string;
-    },
-    shouldScroll: boolean = true
-  ) => {
-    // Update search filters state
-    setSearchFilters(filters);
-
-    // Scroll to events section if explicitly requested (e.g., user clicked Search button)
-    if (shouldScroll) {
-      // Small delay to ensure content has rendered
-      setTimeout(() => {
-        const dashboardElement = document.querySelector('[data-dashboard="all-inclusive"]');
-        if (dashboardElement) {
-          dashboardElement.scrollIntoView({ behavior: "smooth", block: "start" });
-        }
-      }, 100);
-    }
-
-    // Show feedback for search queries
-    if (filters.query && filters.query.trim() !== "") {
-      toast({
-        title: "Search Applied",
-        description: `Searching for "${filters.query}"`,
-      });
-    }
-  };
+  // No preferences modal on load (WP1 item 9). An effect here opened
+  // PreferencesOnboarding one second after any signed-in visit that had not
+  // finished onboarding. ForYouRail now carries an inline "Tune your picks"
+  // prompt that opens it on request (WP2).
 
   const handleViewEventDetails = (event: Event) => {
     setSelectedEvent(event);
     setShowEventDetails(true);
-  };
-
-  const handleViewSocial = (eventId: string) => {
-    setActiveView({ type: 'socialHub', eventId });
-  };
-
-  const formatEventDate = (date: string | Date) => {
-    try {
-      return format(new Date(date), "EEEE, MMMM d, yyyy 'at' h:mm a");
-    } catch {
-      return "Date and time to be announced";
-    }
   };
 
   return (
@@ -347,7 +79,7 @@ export default function Index() {
       {/* WEB-SEO-012: the homepage used to be titled "Conversational City Guide
           | AI-Powered Event & Restaurant Discovery" and described with
           BRAND.description. That sold the product to itself on our
-          highest-authority page — nobody searches for how we are built.
+          highest-authority page - nobody searches for how we are built.
           Title and description now lead with the query. BRAND.description is
           deliberately left alone: it is the Organization/LocalBusiness
           description in schema, where self-description is correct. */}
@@ -355,540 +87,137 @@ export default function Index() {
           This was <SEOEnhancedHead> followed by <SEOStructure>, and both set
           <title> and <meta name="description">. Helmet resolves last-mount-
           wins, so SEOStructure's DEFAULTS silently overrode whatever the first
-          set - which is why editing the title here once had no effect on the
-          shipped HTML until someone grepped dist/index.html. The mitigation
-          was to pass both components the same values; the fix is to have one.
-
-          The two schema objects ride together in SEOHead's structuredData. A
-          JSON-LD array is one script tag holding two nodes, which is valid and
-          keeps each @type appearing exactly once on the page - so the
-          prerenderer's dedupeJsonLd has nothing to drop. Organization still
-          ships: SEOHead emits its own, with a stable @id. */}
+          set. The fix is to have one. The two schema objects ride together in
+          SEOHead's structuredData: one script tag, two nodes, each @type once
+          on the page. Organization still ships: SEOHead emits its own, with a
+          stable @id. */}
       <SEOHead
-        title={HOME_TITLE}
+        title={HOME_PAGE_TITLE}
         description={HOME_DESCRIPTION}
         url="/"
         canonicalUrl={`${BRAND.baseUrl}/`}
         type="website"
-        structuredData={structuredData}
-      />
-
-      {/* BreadcrumbList Schema - Helps with rich snippets in search results */}
-      <BreadcrumbListSchema
-        items={[
-          { name: "Home", url: BRAND.baseUrl }
-        ]}
+        structuredData={HOME_STRUCTURED_DATA}
       />
 
       {/* Speakable Schema for GEO - enables AI search engine attribution */}
-      <SpeakableSchema
-        name={`${BRAND.name} - AI-Powered City Guide`}
-        description={BRAND.description}
-        url={BRAND.baseUrl}
-      />
+      <SpeakableSchema {...HOME_SPEAKABLE} />
 
-      {/* Main content wrapper with semantic HTML for AI parsing */}
-      <div itemScope itemType="https://schema.org/WebPage">
+      {/* Page order (WP1 item 8): hero and search, Tonight, For You, recently
+          viewed, neighbourhood strip, this week, most searched, snapshot and
+          FAQ, footer. Each kind of content appears once. Removed from here:
+          the AI City Companion grid (claims no code backs), RecentlyViewed
+          (a second copy of the rail), PersonalizedRecommendations,
+          PersonalizedDashboard (ranked sponsored events higher and badged them
+          "NN% match"), SmartEventNavigation (a second 100-event list), the
+          structured SearchSection (a second search), and <Newsletter/> (the
+          footer form is the one signup). */}
+      <div>
         <Header />
 
-        {/* Enhanced Hero with dynamic content and quick actions */}
+        {/* Hero: H1, a one-line live context, the page's one search box, and
+            the quick-pick chips. */}
         <EnhancedHero
           eventsToday={eventsToday}
           restaurantsCount={restaurantsCount}
           newThisWeek={newThisWeek}
           isLoadingStats={statsLoading}
-          onAIPlanClick={handleAIPlanClick}
         />
 
-        {/* Primary: natural-language (NLP) search */}
-        <section className="border-b bg-gradient-to-b from-background to-muted/20 py-8">
-          <div className="mx-auto max-w-3xl px-4">
-            <div className="mb-4 text-center">
-              <h2 className="text-xl font-bold sm:text-2xl">
-                Just describe what you're looking for
-              </h2>
-              <p className="text-sm text-muted-foreground">
-                Try "free things to do this weekend with kids" — our AI understands plain language.
-              </p>
-            </div>
-            <NLPSearchBar
-              placeholder="Search naturally, like 'Family dinner under $50 near downtown Saturday'"
-              showExamples
-              showResults
-            />
-          </div>
-        </section>
+        {/* Current conditions (WEB-FEAT-022) now render in ForYouRail's
+            fixed-height header slot (RailWeatherLine, WP2 item 6), so a late
+            forecast changes text there instead of inserting a block here. */}
 
-        {/* Secondary: structured filter search */}
-        <div className="bg-muted/10 py-2 text-center text-sm text-muted-foreground">
-          Prefer to filter by category, date, and price?
-        </div>
-        <SearchSection onSearch={handleSearch} />
+        {/* Tonight: an event paired with a nearby restaurant open at dinner
+            time. The page's primary content under the hero (WP10). */}
+        <TonightRail />
 
-        {/* Current conditions (WEB-FEAT-022). Informational only here: the
-            homepage renders personalized rails rather than one flat list, and
-            reordering a personalized rail by weather would fight the
-            personalization that produced it. The ranking lives on
-            /events/today and /events/this-weekend, which this links to. */}
-        <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8">
-          <HomeWeatherNotice />
-        </div>
-
-        {/* For You / Trending rail — IOS-DISCOVER-2026-002 web parity */}
+        {/* For You / Trending rail - IOS-DISCOVER-2026-002 web parity */}
         <ForYouRail />
 
-        {/* Data-driven domain ordering + recently-viewed rail (WEB-FEAT-007).
-            Both compute synchronously from the local store, so no layout shift. */}
+        {/* Recently viewed (WEB-FEAT-007). Computes synchronously from the
+            local store, so no layout shift. */}
         <Suspense fallback={null}>
-          <HomeInterestNav />
           <RecentlyViewedRail />
         </Suspense>
 
-        {/* All-Inclusive Dashboard — real content first, before marketing (WEB-UX-015) */}
-        <div data-dashboard="all-inclusive">
-          <Suspense fallback={<DashboardSkeleton />}>
-            <AllInclusiveDashboard
-              onViewEventDetails={handleViewEventDetails}
-              filters={searchFilters}
-              onClearFilters={handleClearFilters}
-            />
+        {/* Everything from here down mounts near the viewport. */}
+        <LazySection minHeight={44}>
+          <Suspense fallback={<SectionPlaceholder height={44} />}>
+            <HomeInterestNav />
           </Suspense>
-        </div>
+        </LazySection>
 
-        {/* Top Banner Ad Placement */}
-        <div className="py-4 bg-muted/10">
-          <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8">
-            <AdBanner placement="top_banner" />
+        {/* AdBanner renders its own sized wrapper (WP4); no py band here. */}
+        <LazySection minHeight={80} className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8">
+          <AdBanner placement="top_banner" />
+        </LazySection>
+
+        {/* Neighbourhood strip (WP5) */}
+        <LazySection minHeight={160}>
+          <Suspense fallback={<SectionPlaceholder height={160} />}>
+            <SocialProof />
+          </Suspense>
+        </LazySection>
+
+        {/* This week in Des Moines (WP3) */}
+        <LazySection minHeight={720} placeholder={<DashboardGridSkeleton />}>
+          <div data-dashboard="all-inclusive">
+            <Suspense fallback={<DashboardGridSkeleton />}>
+              <AllInclusiveDashboard onViewEventDetails={handleViewEventDetails} />
+            </Suspense>
           </div>
-        </div>
+        </LazySection>
 
-        {/* AI Conversational Features Section */}
-        <section className="py-16 bg-muted/30">
-          <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8">
-            <div className="text-center mb-12">
-              <h2 className="text-3xl md:text-4xl font-bold text-foreground mb-4">
-                More Than a Directory—Your AI-Powered City Companion
-              </h2>
-              <p className="text-lg text-muted-foreground max-w-3xl mx-auto">
-                Des Moines Insider goes beyond traditional event listings. We understand context, learn from your behavior, and proactively guide you to the best experiences across every channel.
-              </p>
-            </div>
-
-            {/* One hue per card, carried by the icon medallion only. Everything
-                else on these cards - surface, border, body copy, the accent row
-                and the hover arrow - uses theme tokens, so the six hues read as
-                six subjects rather than as a colour scheme. */}
-            <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-8">
-              {/* Conversational Intelligence */}
-              <Link to="/events" className="group rounded-lg border border-border bg-card p-6 transition-colors hover:border-primary/40">
-                <div className="flex items-center gap-3 mb-4">
-                  <div className="bg-blue-100 dark:bg-blue-900/30 rounded-full p-3">
-                    <Brain className="h-6 w-6 text-blue-600 dark:text-blue-400" />
-                  </div>
-                  <h3 className="text-xl font-semibold text-foreground">Conversational Intelligence</h3>
-                </div>
-                <p className="text-muted-foreground mb-4">
-                  Ask naturally, like you're talking to a local friend. "Find romantic dinner spots with live music tonight" or "Plan a family-friendly Saturday morning."
-                </p>
-                <div className="flex items-center justify-between">
-                  <div className="flex items-center gap-2 text-sm text-primary">
-                    <SpriteIcon name="sparkles" className="h-4 w-4" />
-                    <span>Semantic search understands intent</span>
-                  </div>
-                  <SpriteIcon name="arrow-right" className="h-4 w-4 text-primary opacity-0 group-hover:opacity-100 transition-opacity" />
-                </div>
-              </Link>
-
-              {/* Context-Aware Recommendations */}
-              <Link to="/events" className="group rounded-lg border border-border bg-card p-6 transition-colors hover:border-primary/40">
-                <div className="flex items-center gap-3 mb-4">
-                  <div className="bg-green-100 dark:bg-green-900/30 rounded-full p-3">
-                    <Zap className="h-6 w-6 text-green-600 dark:text-green-400" />
-                  </div>
-                  <h3 className="text-xl font-semibold text-foreground">Context-Aware</h3>
-                </div>
-                <p className="text-muted-foreground mb-4">
-                  We consider time, weather, location, your past preferences, and real-time availability to suggest the perfect experiences for you.
-                </p>
-                <div className="flex items-center justify-between">
-                  <div className="flex items-center gap-2 text-sm text-primary">
-                    <Brain className="h-4 w-4" />
-                    <span>Learns from your behavior</span>
-                  </div>
-                  <SpriteIcon name="arrow-right" className="h-4 w-4 text-primary opacity-0 group-hover:opacity-100 transition-opacity" />
-                </div>
-              </Link>
-
-              {/* Proactive Assistance */}
-              <Link to="/events/today" className="group rounded-lg border border-border bg-card p-6 transition-colors hover:border-primary/40">
-                <div className="flex items-center gap-3 mb-4">
-                  <div className="bg-orange-100 dark:bg-orange-900/30 rounded-full p-3">
-                    <SpriteIcon name="trending-up" className="h-6 w-6 text-orange-600 dark:text-orange-400" />
-                  </div>
-                  <h3 className="text-xl font-semibold text-foreground">Proactive Intelligence</h3>
-                </div>
-                <p className="text-muted-foreground mb-4">
-                  Get alerts for events you'll love, weather changes affecting your plans, and last-minute availability—before you even ask.
-                </p>
-                <div className="flex items-center justify-between">
-                  <div className="flex items-center gap-2 text-sm text-primary">
-                    <SpriteIcon name="sparkles" className="h-4 w-4" />
-                    <span>Smart notifications & alerts</span>
-                  </div>
-                  <SpriteIcon name="arrow-right" className="h-4 w-4 text-primary opacity-0 group-hover:opacity-100 transition-opacity" />
-                </div>
-              </Link>
-
-              {/* Predictive Analytics */}
-              <Link to="/restaurants" className="group rounded-lg border border-border bg-card p-6 transition-colors hover:border-primary/40">
-                <div className="flex items-center gap-3 mb-4">
-                  <div className="bg-red-100 dark:bg-red-900/30 rounded-full p-3">
-                    <SpriteIcon name="trending-up" className="h-6 w-6 text-red-600 dark:text-red-400" />
-                  </div>
-                  <h3 className="text-xl font-semibold text-foreground">Predictive Insights</h3>
-                </div>
-                <p className="text-muted-foreground mb-4">
-                  See demand forecasts, optimal visit times, and sell-out predictions. Make smarter decisions with data-driven intelligence.
-                </p>
-                <div className="flex items-center justify-between">
-                  <div className="flex items-center gap-2 text-sm text-primary">
-                    <SpriteIcon name="trending-up" className="h-4 w-4" />
-                    <span>Real-time demand analytics</span>
-                  </div>
-                  <SpriteIcon name="arrow-right" className="h-4 w-4 text-primary opacity-0 group-hover:opacity-100 transition-opacity" />
-                </div>
-              </Link>
-
-              {/* Automated Trip Planning */}
-              <Link to="/trip-planner" className="group rounded-lg border border-border bg-card p-6 transition-colors hover:border-primary/40">
-                <div className="flex items-center gap-3 mb-4">
-                  <div className="bg-indigo-100 dark:bg-indigo-900/30 rounded-full p-3">
-                    <SpriteIcon name="calendar" className="h-6 w-6 text-indigo-600 dark:text-indigo-400" />
-                  </div>
-                  <h3 className="text-xl font-semibold text-foreground">AI Trip Planner</h3>
-                </div>
-                <p className="text-muted-foreground mb-4">
-                  Generate complete day-by-day itineraries in seconds. Optimized for travel times, variety, and your unique interests.
-                </p>
-                <div className="flex items-center justify-between">
-                  <div className="flex items-center gap-2 text-sm text-primary">
-                    <SpriteIcon name="sparkles" className="h-4 w-4" />
-                    <span>Automated itinerary generation</span>
-                  </div>
-                  <SpriteIcon name="arrow-right" className="h-4 w-4 text-primary opacity-0 group-hover:opacity-100 transition-opacity" />
-                </div>
-              </Link>
-
-              {/* Attractions & Playgrounds */}
-              <Link to="/attractions" className="group rounded-lg border border-border bg-card p-6 transition-colors hover:border-primary/40">
-                <div className="flex items-center gap-3 mb-4">
-                  <div className="bg-purple-100 dark:bg-purple-900/30 rounded-full p-3">
-                    <SpriteIcon name="map-pin" className="h-6 w-6 text-purple-600 dark:text-purple-400" />
-                  </div>
-                  <h3 className="text-xl font-semibold text-foreground">Attractions & More</h3>
-                </div>
-                <p className="text-muted-foreground mb-4">
-                  Discover museums, parks, playgrounds, and landmarks. Find the perfect family-friendly activity or hidden gem in Des Moines.
-                </p>
-                <div className="flex items-center justify-between">
-                  <div className="flex items-center gap-2 text-sm text-primary">
-                    <SpriteIcon name="sparkles" className="h-4 w-4" />
-                    <span>50+ attractions mapped</span>
-                  </div>
-                  <SpriteIcon name="arrow-right" className="h-4 w-4 text-primary opacity-0 group-hover:opacity-100 transition-opacity" />
-                </div>
-              </Link>
-            </div>
-          </div>
-        </section>
-
-        {activeView.type === 'default' && (
-          <Suspense fallback={<CardGridSkeleton />}>
-            {/* Recently Viewed Section */}
-            <section className="py-8 bg-background">
-              <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8">
-                <RecentlyViewed limit={8} />
-              </div>
-            </section>
-
-            {/* Personalized Recommendations Section */}
-            <section className="py-12 bg-muted/30">
-              <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8">
-                <PersonalizedRecommendations limit={6} />
-              </div>
-            </section>
-
-            {isAuthenticated ? (
-              <PersonalizedDashboard
-                onViewEventDetails={handleViewEventDetails}
-              />
-            ) : (
-              <>
-                {/* Smart Event Navigation for General Users */}
-                <section className="py-8">
-                  <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8">
-                    <div className="text-center mb-8">
-                      <h2 className="text-3xl font-bold text-foreground mb-4">
-                        Discover Amazing Events
-                      </h2>
-                      <p className="text-lg text-muted-foreground">
-                        Find exactly what you're looking for with smart
-                        filtering and recommendations
-                      </p>
-                    </div>
-                    <SmartEventNavigation
-                      onViewEventDetails={handleViewEventDetails}
-                    />
-                  </div>
-                </section>
-              </>
-            )}
+        <LazySection minHeight={480}>
+          <Suspense fallback={<SectionPlaceholder height={480} />}>
             <MostSearched />
           </Suspense>
-        )}
+        </LazySection>
 
-        {activeView.type === 'socialHub' && (
-          <Suspense fallback={<SectionLoader />}>
-            <div className="py-8">
-              <div className="max-w-4xl mx-auto px-4 sm:px-6 lg:px-8">
-                <div className="mb-6">
-                  <Button
-                    variant="outline"
-                    onClick={() => setActiveView({ type: 'default' })}
-                  >
-                    ← Back to Events
-                  </Button>
-                </div>
-                <EventSocialHub
-                  eventId={activeView.eventId}
-                  eventTitle={selectedEvent?.title || "Event"}
-                  eventDate={selectedEvent?.date ? new Date(selectedEvent.date).toISOString() : ""}
-                />
-              </div>
-            </div>
+        {/* Dated snapshot (WP5), inside GEOContent */}
+        <LazySection minHeight={240}>
+          <Suspense fallback={<SectionPlaceholder height={240} />}>
+            <section className="py-16 bg-muted/30">
+              <GEOContent />
+            </section>
           </Suspense>
-        )}
+        </LazySection>
 
-
-        {/* GEO-optimized content section */}
-        <Suspense fallback={<SectionLoader />}>
-          <section className="py-16 bg-muted/30">
-            <GEOContent />
-          </section>
-        </Suspense>
-
-        {/* Social Proof Section */}
-        <Suspense fallback={<SectionLoader />}>
-          <SocialProof />
-        </Suspense>
-
-        {/* FAQ Section for Featured Snippets - directly rendered for SEO */}
+        {/* FAQ - rendered directly, NOT in a LazySection: the answers must be
+            in the initial DOM for indexing and the FAQPage schema. */}
         <section className="py-16 bg-background">
           <div className="max-w-4xl mx-auto px-4 sm:px-6 lg:px-8">
-            {/* WEB-SEO-012: these questions used to be about our own product —
-                "What makes Des Moines Insider different from other event
-                directories?", "How does behavioral learning improve my
-                experience?". Eight of eleven described the software rather than
-                the city, on the page with the most authority to spend. They now
-                answer what visitors actually search for. Substantive answers
-                matter more than the markup here: Google retired FAQ rich
-                results for non-gov/health sites in 2023, so the value of this
-                block is on-page relevance plus extraction by AI assistants,
-                and both reward real answers over restated marketing. */}
+            {/* WEB-SEO-012: the questions answer what visitors search for;
+                see HOME_FAQS in src/content/homeContent.ts. */}
             <FAQSection
-                title="Des Moines: Frequently Asked Questions"
-                description="Quick answers about events, dining, and things to do across the Des Moines metro."
-                faqs={[
-                  {
-                    question: "What is there to do in Des Moines this weekend?",
-                    answer: "Des Moines has live events every weekend across music, food, arts, sports and family activities. The Downtown Farmers' Market runs Saturday mornings May through October in the Historic Court District, touring Broadway shows play the Des Moines Civic Center, concerts run at Wells Fargo Arena and smaller venues like xBk Live, and the East Village and Historic Valley Junction host regular gallery and shopping events. See our full this-weekend listing for what is confirmed for the coming Saturday and Sunday, updated daily."
-                  },
-                  {
-                    question: "What free things are there to do in Des Moines?",
-                    answer: "Several of the best-known attractions in Des Moines are free year-round: the Des Moines Art Center, the John and Mary Pappajohn Sculpture Park, the State Historical Museum of Iowa in the East Village, the Iowa State Capitol grounds, and Lauridsen Skatepark — at 88,000 square feet, the largest skatepark in the United States. Free splash pads open across the metro in summer, and Saylorville Lake and the Neal Smith Trail are open for hiking and biking at no cost."
-                  },
-                  {
-                    question: "What events are happening in Des Moines today?",
-                    answer: "Our today listing shows events confirmed for the current date in Central Time across Des Moines and the surrounding suburbs, filterable by category. It is rebuilt daily from event sources across the metro rather than depending on venues submitting their listings to us."
-                  },
-                  {
-                    question: "Where are the best restaurants in Des Moines?",
-                    answer: "Des Moines dining spans fine dining, chef-driven small plates and long-standing local institutions. Well-known names include Harbinger and Alba in the East Village, 801 Chophouse and Proudfoot & Bird downtown, Splash Seafood Bar and Grill, and Latin King — where you can order Steak de Burgo, the dish most associated with the city. Our restaurant directory covers the metro with cuisine, price range, neighborhood and current open/closed status."
-                  },
-                  {
-                    question: "What restaurants in Des Moines are open right now?",
-                    answer: "Our open-now listing checks current hours against the time in Central Time and shows only what is serving at this moment. For late-night specifically, Fong's Pizza serves until midnight with slices until 3 a.m. on weekends, and Zombie Burger and Jethro's run until around 11 p.m."
-                  },
-                  {
-                    question: "What is there to do in Des Moines with kids?",
-                    answer: "The metro has strong family options, many of them free. Blank Park Zoo, the Science Center of Iowa and Adventureland in Altoona are the main paid attractions; the Des Moines Art Center, the State Historical Museum and the Pappajohn Sculpture Park are free and work well with children. We also map playgrounds across the metro with age suitability and accessibility details, and maintain a kids and family events listing."
-                  },
-                  {
-                    question: "Which areas does Des Moines Insider cover?",
-                    answer: "Des Moines proper plus the Greater Des Moines metro: West Des Moines, Ankeny, Urbandale, Clive, Johnston, Waukee, Windsor Heights and Altoona. We also cover Des Moines neighborhoods individually, including Downtown, the East Village, Beaverdale, Highland Park, Historic Valley Junction and the Court Avenue District."
-                  },
-                  {
-                    question: "When is the Iowa State Fair?",
-                    answer: "The Iowa State Fair runs for 11 days each August at the Iowa State Fairgrounds on the east side of Des Moines. It is the largest single event in the state and draws over a million visitors. Our Iowa State Fair guide covers dates, the grandstand concert lineup, parking, admission and food."
-                  },
-                  {
-                    question: "How often are the listings updated?",
-                    answer: "Event listings are refreshed daily. Restaurant details, including hours used for open-now status, are reviewed weekly, and attractions monthly. Event times are stored and displayed in Central Time to avoid the timezone drift common on aggregated calendars."
-                  },
-                ]}
-                showSchema={true}
-              />
+              title={HOME_FAQ_TITLE}
+              description={HOME_FAQ_DESCRIPTION}
+              faqs={HOME_FAQS}
+              showSchema={true}
+            />
           </div>
         </section>
 
-        {/* Below-Fold Ad Placement */}
-        <div className="py-6 bg-muted/20">
-          <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8">
-            <AdBanner placement="below_fold" />
-          </div>
-        </div>
+        <LazySection minHeight={80} className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8">
+          <AdBanner placement="below_fold" />
+        </LazySection>
 
-        <Suspense fallback={<SectionLoader />}>
-          <Newsletter />
-        </Suspense>
-        <Suspense fallback={<SectionLoader />}>
+        {/* The footer holds the page's one newsletter signup (WP7). Not in a
+            LazySection: it makes no queries until submit, and its links are
+            the site's crawl paths. */}
+        <Suspense fallback={<SectionPlaceholder height={400} />}>
           <Footer />
         </Suspense>
       </div>
 
-      {/* Event Details Dialog - full-screen on mobile */}
-      <Dialog open={showEventDetails} onOpenChange={setShowEventDetails}>
-        <DialogContent className="max-w-2xl max-h-[90vh] overflow-y-auto sm:max-h-[85vh]">
-          {selectedEvent && (
-            <>
-              <DialogHeader>
-                <DialogTitle className="text-xl sm:text-2xl font-bold pr-8">
-                  {selectedEvent.title}
-                </DialogTitle>
-              </DialogHeader>
-
-              <div className="space-y-4">
-                {selectedEvent.image_url && (
-                  <div className="overflow-hidden rounded-lg">
-                    {/* WEB-PERF-037. The onError set display:none on the img
-                        itself, leaving an empty rounded box. OptimizedImage
-                        renders its own "Image unavailable" panel in the same
-                        box, which keeps the layout and says why. */}
-                    <OptimizedImage
-                      src={selectedEvent.image_url}
-                      alt={selectedEvent.title}
-                      className="object-cover"
-                      containerClassName="w-full h-48 sm:h-64"
-                      sizes="(max-width: 640px) 100vw, 512px"
-                    />
-                  </div>
-                )}
-
-                <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
-                  <div className="flex items-start text-muted-foreground">
-                    <SpriteIcon name="calendar" className="h-5 w-5 mr-2 mt-0.5 flex-shrink-0" />
-                    <span className="text-sm sm:text-base">{formatEventDate(selectedEvent.date)}</span>
-                  </div>
-
-                  <div className="flex items-start text-muted-foreground">
-                    <SpriteIcon name="map-pin" className="h-5 w-5 mr-2 mt-0.5 flex-shrink-0" />
-                    <span className="text-sm sm:text-base">{selectedEvent.location}</span>
-                  </div>
-                </div>
-
-                {(selectedEvent.venue || selectedEvent.price) && (
-                  <div className="flex flex-wrap gap-4">
-                    {selectedEvent.venue && (
-                      <div>
-                        <h3 className="font-semibold mb-1 text-sm">Venue</h3>
-                        <p className="text-muted-foreground text-sm">{selectedEvent.venue}</p>
-                      </div>
-                    )}
-                    {selectedEvent.price && (
-                      <div>
-                        <h3 className="font-semibold mb-1 text-sm">Price</h3>
-                        <p className="text-muted-foreground text-sm">{selectedEvent.price}</p>
-                      </div>
-                    )}
-                  </div>
-                )}
-
-                <div>
-                  <h3 className="font-semibold mb-2 text-sm">Description</h3>
-                  <p className="text-muted-foreground leading-relaxed text-sm">
-                    {selectedEvent.enhanced_description ||
-                      selectedEvent.original_description}
-                  </p>
-                  {selectedEvent.is_enhanced && (
-                    <p className="text-xs text-accent mt-2 flex items-center">
-                      <SpriteIcon name="sparkles" className="h-3 w-3 mr-1" />
-                      Enhanced with AI
-                    </p>
-                  )}
-                </div>
-
-                <div className="pt-4 border-t space-y-3">
-                  {/* View full event page */}
-                  <Button asChild className="w-full">
-                    <Link
-                      to={`/events/${createEventSlugWithCentralTime(selectedEvent.title, selectedEvent)}`}
-                      onClick={() => setShowEventDetails(false)}
-                    >
-                      View Full Event Details
-                      <SpriteIcon name="arrow-right" className="h-4 w-4 ml-2" />
-                    </Link>
-                  </Button>
-
-                  <div className="grid grid-cols-2 gap-3">
-                    <FavoriteButton
-                      eventId={selectedEvent.id}
-                      size="default"
-                      variant="outline"
-                      className="w-full"
-                      showText
-                    />
-
-                    <Button
-                      variant="outline"
-                      className="w-full"
-                      onClick={() => handleShareEvent(selectedEvent)}
-                    >
-                      <SpriteIcon name="share-2" className="h-4 w-4 mr-2" />
-                      Share
-                    </Button>
-                  </div>
-
-                  {/* WEB-FEAT-026: was a lone .ics download with timestamps
-                      five hours early. Now Google, Outlook or Apple. */}
-                  <AddToCalendarButton
-                    event={selectedEvent}
-                    variant="outline"
-                    fullWidth
-                  />
-
-                  {selectedEvent.source_url && (
-                    <Button
-                      variant="outline"
-                      className="w-full"
-                      onClick={() => openExternalUrl(selectedEvent.source_url!)}
-                    >
-                      <SpriteIcon name="external-link" className="h-4 w-4 mr-2" />
-                      View Original Event
-                    </Button>
-                  )}
-                </div>
-              </div>
-            </>
-          )}
-        </DialogContent>
-      </Dialog>
-
-      {/* First-time User Preferences Onboarding */}
-      {showOnboarding && (
+      {/* Event quick view - lazy, mounted only once a card has been selected */}
+      {selectedEvent && (
         <Suspense fallback={null}>
-          <PreferencesOnboarding
-            open={showOnboarding}
-            onComplete={handleOnboardingComplete}
+          <EventQuickView
+            event={selectedEvent}
+            open={showEventDetails}
+            onOpenChange={setShowEventDetails}
           />
         </Suspense>
       )}

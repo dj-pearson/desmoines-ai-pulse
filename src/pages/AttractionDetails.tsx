@@ -30,6 +30,7 @@ import { BRAND, getCanonicalUrl } from "@/lib/brandConfig";
 import { Star, ArrowLeft, Navigation, Heart, Globe, Info, Camera, Landmark, ChevronRight, TreePine } from "lucide-react";
 import { useState } from "react";
 import { useContentTracking } from "@/hooks/useContentTracking";
+import { useRecordRecentView } from "@/hooks/useRecentlyViewedFeed";
 import { StickyMobileCTA } from "@/components/StickyMobileCTA";
 import { LastUpdatedBadge } from "@/components/LastUpdatedBadge";
 import { NearbyContent } from "@/components/NearbyContent";
@@ -95,6 +96,21 @@ export default function AttractionDetails() {
 
   // Track page view and content interactions
   const { trackShare, trackClick } = useContentTracking(attraction?.id, 'attraction');
+  // Record into the unified recently-viewed feed (WEB-FEAT-007). Only
+  // EventDetails used to, so the home rail could never resume an attraction.
+  // The href is the param that just resolved this row, so it resolves again.
+  useRecordRecentView(
+    attraction && slug
+      ? {
+          id: attraction.id,
+          type: "attraction",
+          title: attraction.name,
+          href: `/attractions/${slug}`,
+          image_url: attraction.image_url ?? undefined,
+          subtitle: attraction.type ?? undefined,
+        }
+      : null,
+  );
   // SEO-018: venue rows, to link an attraction that is also a venue.
   const { data: venueRows } = useVenues();
 

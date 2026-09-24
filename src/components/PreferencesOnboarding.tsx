@@ -1,529 +1,232 @@
-import { useState } from 'react';
-import { Dialog, DialogContent } from '@/components/ui/dialog';
+import { useEffect, useRef, useState, type ReactNode } from 'react';
+import { Check, ChevronLeft, ChevronRight } from 'lucide-react';
+import {
+  Dialog,
+  DialogContent,
+  DialogDescription,
+  DialogHeader,
+  DialogTitle,
+} from '@/components/ui/dialog';
 import { Button } from '@/components/ui/button';
-import { Badge } from '@/components/ui/badge';
-import { Card } from '@/components/ui/card';
-import { ChevronLeft, ChevronRight, Check, Heart, Bell, DollarSign } from "lucide-react";
 import { useUserPreferences } from '@/hooks/useUserPreferences';
+import { handleError } from '@/lib/errorHandler';
+import { NEIGHBORHOODS } from '@/lib/neighborhoods';
+import { cn } from '@/lib/utils';
 import {
   interestCategories,
   onboardingSteps,
-  EventCategory,
-  DietaryRestriction,
+  type CuisinePreferences,
+  type DietaryRestriction,
+  type EventCategory,
 } from '@/types/preferences';
-import { cn } from '@/lib/utils';
-import { SpriteIcon } from "@/components/ui/SpriteIcon";
 
 interface PreferencesOnboardingProps {
   open: boolean;
+  /** Finished, or "Don't ask again". Onboarding is marked complete first. */
   onComplete: () => void;
+  /**
+   * Escape, the close button, or "Later". Onboarding is NOT marked complete,
+   * so the For You rail keeps offering it. Falls back to onComplete when a
+   * caller does not distinguish the two.
+   */
+  onDismiss?: () => void;
 }
 
-export function PreferencesOnboarding({
-  open,
-  onComplete,
-}: PreferencesOnboardingProps) {
+type PriceRange = CuisinePreferences['priceRange'];
+
+const DIETARY_OPTIONS: Array<{ id: DietaryRestriction; label: string }> = [
+  { id: 'vegetarian', label: 'Vegetarian' },
+  { id: 'vegan', label: 'Vegan' },
+  { id: 'gluten-free', label: 'Gluten-free' },
+  { id: 'dairy-free', label: 'Dairy-free' },
+  { id: 'nut-free', label: 'Nut-free' },
+  { id: 'halal', label: 'Halal' },
+  { id: 'kosher', label: 'Kosher' },
+];
+
+const PRICE_OPTIONS: Array<{ id: PriceRange; label: string; description: string }> = [
+  { id: 'any', label: 'Any', description: 'Show everything' },
+  { id: '$', label: '$', description: 'Budget' },
+  { id: '$$', label: '$$', description: 'Moderate' },
+  { id: '$$$', label: '$$$', description: 'Upscale' },
+  { id: '$$$$', label: '$$$$', description: 'Fine dining' },
+];
+
+function toggle<T>(list: T[], item: T): T[] {
+  return list.includes(item) ? list.filter((x) => x !== item) : [...list, item];
+}
+
+/** A pressable choice. `aria-pressed` carries the state for screen readers. */
+function Choice({
+  pressed,
+  onClick,
+  children,
+  className,
+}: {
+  pressed: boolean;
+  onClick: () => void;
+  children: ReactNode;
+  className?: string;
+}) {
+  return (
+    <button
+      type="button"
+      aria-pressed={pressed}
+      onClick={onClick}
+      className={cn(
+        'flex min-h-11 w-full items-start gap-2 rounded-xl border px-3 py-2.5 text-left text-sm transition-colors',
+        'focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2',
+        pressed
+          ? 'border-primary bg-primary text-primary-foreground'
+          : 'border-border bg-background text-foreground hover:bg-muted',
+        className,
+      )}
+    >
+      <span className="min-w-0 flex-1">{children}</span>
+      {pressed && <Check className="mt-0.5 h-4 w-4 shrink-0" aria-hidden="true" />}
+    </button>
+  );
+}
+
+/**
+ * Three-step taste onboarding: interests, food and price, neighbourhoods.
+ *
+ * Every step saves what it shows (Home plan WP2 item 2). Neighbourhoods come
+ * from NEIGHBORHOODS, the inventory that has a page for each entry, and are
+ * saved through updateLocation; they used to be discarded at a TODO.
+ */
+export function PreferencesOnboarding({ open, onComplete, onDismiss }: PreferencesOnboardingProps) {
   const [currentStep, setCurrentStep] = useState(0);
-  const { preferences, updateInterests, updateCuisine, completeOnboarding } =
+  const [isBusy, setIsBusy] = useState(false);
+  const { preferences, updateInterests, updateCuisine, updateLocation, completeOnboarding } =
     useUserPreferences();
 
-  const [selectedInterests, setSelectedInterests] = useState<EventCategory[]>(
-    preferences?.interests.categories || []
-  );
-  const [selectedDietary, setSelectedDietary] = useState<DietaryRestriction[]>(
-    preferences?.cuisine.dietary || []
-  );
-  const [selectedPriceRange, setSelectedPriceRange] = useState<'$' | '$$' | '$$$' | '$$$$' | 'any'>(
-    preferences?.cuisine.priceRange || 'any'
-  );
-  const [selectedNeighborhoods, setSelectedNeighborhoods] = useState<string[]>(
-    preferences?.location.neighborhoods || []
-  );
-  const [calendarConnected, setCalendarConnected] = useState(false);
+  const [selectedInterests, setSelectedInterests] = useState<EventCategory[]>([]);
+  const [selectedDietary, setSelectedDietary] = useState<DietaryRestriction[]>([]);
+  const [selectedPriceRange, setSelectedPriceRange] = useState<PriceRange>('any');
+  const [selectedNeighborhoods, setSelectedNeighborhoods] = useState<string[]>([]);
+
+  // Seed once from saved preferences, which may arrive after the first render
+  // when the dialog is opened before the shared query has resolved.
+  const seeded = useRef(false);
+  useEffect(() => {
+    if (seeded.current || !preferences) return;
+    seeded.current = true;
+    setSelectedInterests(preferences.interests.categories ?? []);
+    setSelectedDietary(preferences.cuisine.dietary ?? []);
+    setSelectedPriceRange(preferences.cuisine.priceRange ?? 'any');
+    setSelectedNeighborhoods(preferences.location.neighborhoods ?? []);
+  }, [preferences]);
+
+  const stepCount = onboardingSteps.length;
+  const step = onboardingSteps[currentStep];
+  const isLastStep = currentStep === stepCount - 1;
+
+  const dismiss = () => (onDismiss ?? onComplete)();
+
+  const saveCurrentStep = async () => {
+    if (step.id === 'interests') await updateInterests(selectedInterests);
+    else if (step.id === 'cuisine') {
+      await updateCuisine({ dietary: selectedDietary, priceRange: selectedPriceRange });
+    } else if (step.id === 'location') {
+      await updateLocation({ neighborhoods: selectedNeighborhoods });
+    }
+  };
 
   const handleNext = async () => {
-    if (currentStep === 1) {
-      // Save interests
-      await updateInterests(selectedInterests);
-    } else if (currentStep === 2) {
-      // Save cuisine preferences (including price range)
-      await updateCuisine({ dietary: selectedDietary, priceRange: selectedPriceRange });
-    } else if (currentStep === 3) {
-      // Save location preferences
-      // TODO: Implement location save
-    } else if (currentStep === 4) {
-      // Calendar integration step - just move forward
-      // User can set this up later if they skip
-    }
-
-    if (currentStep < onboardingSteps.length - 1) {
-      setCurrentStep(currentStep + 1);
-    } else {
+    setIsBusy(true);
+    try {
+      await saveCurrentStep();
+      if (!isLastStep) {
+        setCurrentStep((s) => s + 1);
+        return;
+      }
       await completeOnboarding();
       onComplete();
+    } catch (error) {
+      handleError(error, { component: 'PreferencesOnboarding', action: 'saveStep' });
+    } finally {
+      setIsBusy(false);
     }
   };
 
-  const handlePrevious = () => {
-    if (currentStep > 0) {
-      setCurrentStep(currentStep - 1);
+  const handleDontAskAgain = async () => {
+    setIsBusy(true);
+    try {
+      await completeOnboarding();
+      onComplete();
+    } catch (error) {
+      handleError(error, { component: 'PreferencesOnboarding', action: 'dontAskAgain' });
+    } finally {
+      setIsBusy(false);
     }
   };
 
-  const handleSkip = async () => {
-    await completeOnboarding();
-    onComplete();
-  };
-
-  const toggleInterest = (category: EventCategory) => {
-    setSelectedInterests((prev) =>
-      prev.includes(category)
-        ? prev.filter((c) => c !== category)
-        : [...prev, category]
-    );
-  };
-
-  const toggleDietary = (restriction: DietaryRestriction) => {
-    setSelectedDietary((prev) =>
-      prev.includes(restriction)
-        ? prev.filter((r) => r !== restriction)
-        : [...prev, restriction]
-    );
-  };
-
-  const toggleNeighborhood = (neighborhood: string) => {
-    setSelectedNeighborhoods((prev) =>
-      prev.includes(neighborhood)
-        ? prev.filter((n) => n !== neighborhood)
-        : [...prev, neighborhood]
-    );
-  };
-
-  const currentStepData = onboardingSteps[currentStep];
-  const isLastStep = currentStep === onboardingSteps.length - 1;
-
-  // Step-specific content
-  const renderStepContent = () => {
-    switch (currentStepData.id) {
-      case 'welcome':
-        return (
-          <div className="text-center space-y-4 py-6">
-            <div className="flex justify-center">
-              <div className="rounded-full bg-primary p-6">
-                <SpriteIcon name="sparkles" className="h-16 w-16 text-primary-foreground" />
-              </div>
-            </div>
-            <div className="space-y-2">
-              <h2 className="text-3xl font-bold">{currentStepData.title}</h2>
-              <p className="text-lg text-muted-foreground max-w-md mx-auto">
-                {currentStepData.description}
-              </p>
-            </div>
-            <div className="grid grid-cols-3 gap-4 pt-4 max-w-md mx-auto">
-              <div className="text-center">
-                <div className="text-3xl font-bold text-primary">1000+</div>
-                <div className="text-xs text-muted-foreground">Events</div>
-              </div>
-              <div className="text-center">
-                <div className="text-3xl font-bold text-primary">300+</div>
-                <div className="text-xs text-muted-foreground">Restaurants</div>
-              </div>
-              <div className="text-center">
-                <div className="text-3xl font-bold text-primary">AI</div>
-                <div className="text-xs text-muted-foreground">Powered</div>
-              </div>
-            </div>
-          </div>
-        );
-
+  const renderStep = () => {
+    switch (step.id) {
       case 'interests':
         return (
-          <div className="space-y-4">
-            <div className="text-center space-y-2">
-              <Heart className="h-10 w-10 text-primary mx-auto" />
-              <h2 className="text-2xl font-bold">{currentStepData.title}</h2>
-              <p className="text-muted-foreground">{currentStepData.description}</p>
-              <Badge variant="secondary" className="text-xs">
-                Select 3-5 interests for best results
-              </Badge>
-            </div>
-
-            <div className="grid grid-cols-2 md:grid-cols-3 gap-3 max-h-[400px] overflow-y-auto py-2">
-              {interestCategories.map((category) => {
-                const isSelected = selectedInterests.includes(category.id);
-                return (
-                  <Card
-                    key={category.id}
-                    className={cn(
-                      'p-4 cursor-pointer transition-all duration-200 hover:scale-105',
-                      isSelected
-                        ? 'border-2 border-primary bg-primary/5 shadow-lg'
-                        : 'hover:border-primary/50'
-                    )}
-                    onClick={() => toggleInterest(category.id)}
-                  >
-                    <div className="space-y-2">
-                      <div className="flex items-start justify-between">
-                        <span className="text-2xl">{category.icon}</span>
-                        {isSelected && (
-                          <div className="rounded-full bg-primary p-1">
-                            <Check className="h-3 w-3 text-white" />
-                          </div>
-                        )}
-                      </div>
-                      <div>
-                        <div className="font-semibold text-sm leading-tight">
-                          {category.label}
-                        </div>
-                        <div className="text-xs text-muted-foreground line-clamp-2 mt-1">
-                          {category.description}
-                        </div>
-                      </div>
-                    </div>
-                  </Card>
-                );
-              })}
-            </div>
-
-            <div className="text-center text-sm text-muted-foreground">
-              {selectedInterests.length} selected
-            </div>
+          <div className="grid grid-cols-1 gap-2 sm:grid-cols-2">
+            {interestCategories.map((category) => (
+              <Choice
+                key={category.id}
+                pressed={selectedInterests.includes(category.id)}
+                onClick={() => setSelectedInterests((prev) => toggle(prev, category.id))}
+              >
+                <span className="block font-medium">{category.label}</span>
+                <span className="block text-xs opacity-80">{category.description}</span>
+              </Choice>
+            ))}
           </div>
         );
 
       case 'cuisine':
-        const dietaryOptions: Array<{
-          id: DietaryRestriction;
-          label: string;
-          icon: string;
-        }> = [
-          { id: 'vegetarian', label: 'Vegetarian', icon: '🥗' },
-          { id: 'vegan', label: 'Vegan', icon: '🌱' },
-          { id: 'gluten-free', label: 'Gluten-Free', icon: '🌾' },
-          { id: 'dairy-free', label: 'Dairy-Free', icon: '🥛' },
-          { id: 'nut-free', label: 'Nut-Free', icon: '🥜' },
-          { id: 'halal', label: 'Halal', icon: '☪️' },
-          { id: 'kosher', label: 'Kosher', icon: '✡️' },
-        ];
-
-        const priceRangeOptions: Array<{
-          id: '$' | '$$' | '$$$' | '$$$$' | 'any';
-          label: string;
-          description: string;
-        }> = [
-          { id: 'any', label: 'Any Price', description: 'Show all restaurants' },
-          { id: '$', label: '$', description: 'Budget-friendly' },
-          { id: '$$', label: '$$', description: 'Moderate' },
-          { id: '$$$', label: '$$$', description: 'Upscale' },
-          { id: '$$$$', label: '$$$$', description: 'Fine dining' },
-        ];
-
         return (
-          <div className="space-y-6">
-            <div className="text-center space-y-2">
-              <div className="text-4xl mx-auto">🍽️</div>
-              <h2 className="text-2xl font-bold">{currentStepData.title}</h2>
-              <p className="text-muted-foreground">{currentStepData.description}</p>
-            </div>
-
-            <div className="space-y-3">
-              <h3 className="font-semibold text-sm">Dietary Restrictions</h3>
+          <div className="space-y-5">
+            <fieldset className="space-y-2">
+              <legend className="mb-2 text-sm font-semibold">Dietary needs</legend>
               <div className="grid grid-cols-2 gap-2">
-                {dietaryOptions.map((option) => {
-                  const isSelected = selectedDietary.includes(option.id);
-                  return (
-                    <Button
-                      key={option.id}
-                      variant={isSelected ? 'default' : 'outline'}
-                      className={cn(
-                        'justify-start h-auto py-3',
-                        isSelected && 'bg-primary text-primary-foreground'
-                      )}
-                      onClick={() => toggleDietary(option.id)}
-                    >
-                      <span className="mr-2 text-lg">{option.icon}</span>
-                      <span className="text-sm">{option.label}</span>
-                      {isSelected && <Check className="h-4 w-4 ml-auto" />}
-                    </Button>
-                  );
-                })}
+                {DIETARY_OPTIONS.map((option) => (
+                  <Choice
+                    key={option.id}
+                    pressed={selectedDietary.includes(option.id)}
+                    onClick={() => setSelectedDietary((prev) => toggle(prev, option.id))}
+                  >
+                    {option.label}
+                  </Choice>
+                ))}
               </div>
-            </div>
-
-            <div className="space-y-3">
-              <h3 className="font-semibold text-sm flex items-center gap-2">
-                <DollarSign className="h-4 w-4" />
-                Price Range Preference
-              </h3>
-              <div className="grid grid-cols-3 md:grid-cols-5 gap-2">
-                {priceRangeOptions.map((option) => {
-                  const isSelected = selectedPriceRange === option.id;
-                  return (
-                    <Button
-                      key={option.id}
-                      variant={isSelected ? 'default' : 'outline'}
-                      className={cn(
-                        'flex-col h-auto py-3 gap-1',
-                        isSelected && 'bg-primary text-primary-foreground border-2 border-primary'
-                      )}
-                      onClick={() => setSelectedPriceRange(option.id)}
-                    >
-                      <span className="text-lg font-bold">{option.label}</span>
-                      <span className="text-xs opacity-80">{option.description}</span>
-                    </Button>
-                  );
-                })}
+            </fieldset>
+            <fieldset className="space-y-2">
+              <legend className="mb-2 text-sm font-semibold">Price range</legend>
+              <div className="grid grid-cols-3 gap-2 sm:grid-cols-5">
+                {PRICE_OPTIONS.map((option) => (
+                  <Choice
+                    key={option.id}
+                    pressed={selectedPriceRange === option.id}
+                    onClick={() => setSelectedPriceRange(option.id)}
+                  >
+                    <span className="block font-semibold">{option.label}</span>
+                    <span className="block text-xs opacity-80">{option.description}</span>
+                  </Choice>
+                ))}
               </div>
-            </div>
+            </fieldset>
           </div>
         );
 
       case 'location':
-        const neighborhoods = [
-          'Downtown',
-          'East Village',
-          'Ingersoll',
-          'Beaverdale',
-          'West Des Moines',
-          'Urbandale',
-          'Waukee',
-          'Ankeny',
-        ];
-
         return (
-          <div className="space-y-4">
-            <div className="text-center space-y-2">
-              <SpriteIcon name="map-pin" className="h-10 w-10 text-primary mx-auto" />
-              <h2 className="text-2xl font-bold">{currentStepData.title}</h2>
-              <p className="text-muted-foreground">{currentStepData.description}</p>
-            </div>
-
-            <div className="grid grid-cols-2 gap-2">
-              {neighborhoods.map((neighborhood) => {
-                const isSelected = selectedNeighborhoods.includes(neighborhood);
-                return (
-                  <Button
-                    key={neighborhood}
-                    variant={isSelected ? 'default' : 'outline'}
-                    className="justify-start"
-                    onClick={() => toggleNeighborhood(neighborhood)}
-                  >
-                    <SpriteIcon name="map-pin" className="h-4 w-4 mr-2" />
-                    {neighborhood}
-                    {isSelected && <Check className="h-4 w-4 ml-auto" />}
-                  </Button>
-                );
-              })}
-            </div>
-          </div>
-        );
-
-      case 'calendar':
-        return (
-          <div className="space-y-6 py-4">
-            <div className="text-center space-y-2">
-              <div className="flex justify-center">
-                <div className="rounded-full bg-primary/10 p-4">
-                  <SpriteIcon name="calendar" className="h-12 w-12 text-primary" />
-                </div>
-              </div>
-              <h2 className="text-2xl font-bold">{currentStepData.title}</h2>
-              <p className="text-muted-foreground max-w-md mx-auto">
-                {currentStepData.description}
-              </p>
-            </div>
-
-            <div className="space-y-3 max-w-md mx-auto">
-              <Card className="p-4 bg-gradient-to-br from-primary/5 to-accent/5 border-2 border-primary/20">
-                <div className="space-y-4">
-                  <div className="flex items-start gap-3">
-                    <SpriteIcon name="sparkles" className="h-5 w-5 text-primary mt-0.5" />
-                    <div className="flex-1">
-                      <h3 className="font-semibold text-sm mb-1">Smart Suggestions</h3>
-                      <p className="text-xs text-muted-foreground">
-                        Get event recommendations that fit your schedule and avoid conflicts
-                      </p>
-                    </div>
-                  </div>
-                  <div className="flex items-start gap-3">
-                    <Bell className="h-5 w-5 text-primary mt-0.5" />
-                    <div className="flex-1">
-                      <h3 className="font-semibold text-sm mb-1">Never Double-Book</h3>
-                      <p className="text-xs text-muted-foreground">
-                        We'll only suggest events when you're free
-                      </p>
-                    </div>
-                  </div>
-                  <div className="flex items-start gap-3">
-                    <Check className="h-5 w-5 text-primary mt-0.5" />
-                    <div className="flex-1">
-                      <h3 className="font-semibold text-sm mb-1">One-Click Add</h3>
-                      <p className="text-xs text-muted-foreground">
-                        Add events directly to your calendar with one tap
-                      </p>
-                    </div>
-                  </div>
-                </div>
-              </Card>
-
-              <div className="space-y-2 pt-2">
-                <Button
-                  className="w-full justify-start gap-3 h-auto py-4"
-                  variant={calendarConnected ? 'default' : 'outline'}
-                  onClick={() => setCalendarConnected(!calendarConnected)}
-                >
-                  <div className="flex items-center gap-3 flex-1">
-                    <div className="text-2xl">📅</div>
-                    <div className="text-left flex-1">
-                      <div className="font-semibold">Google Calendar</div>
-                      <div className="text-xs opacity-80">
-                        {calendarConnected ? 'Connected' : 'Connect your Google Calendar'}
-                      </div>
-                    </div>
-                    {calendarConnected ? (
-                      <Check className="h-5 w-5" />
-                    ) : (
-                      <SpriteIcon name="external-link" className="h-4 w-4" />
-                    )}
-                  </div>
-                </Button>
-
-                <Button
-                  className="w-full justify-start gap-3 h-auto py-4"
-                  variant="outline"
-                  disabled
-                >
-                  <div className="flex items-center gap-3 flex-1">
-                    <div className="text-2xl">📆</div>
-                    <div className="text-left flex-1">
-                      <div className="font-semibold">Outlook Calendar</div>
-                      <div className="text-xs opacity-80">Coming soon</div>
-                    </div>
-                  </div>
-                </Button>
-
-                <Button
-                  className="w-full justify-start gap-3 h-auto py-4"
-                  variant="outline"
-                  disabled
-                >
-                  <div className="flex items-center gap-3 flex-1">
-                    <div className="text-2xl">🍎</div>
-                    <div className="text-left flex-1">
-                      <div className="font-semibold">Apple Calendar</div>
-                      <div className="text-xs opacity-80">Coming soon</div>
-                    </div>
-                  </div>
-                </Button>
-              </div>
-
-              <p className="text-xs text-center text-muted-foreground pt-2">
-                You can connect your calendar later from settings
-              </p>
-            </div>
-          </div>
-        );
-
-      case 'notifications':
-        return (
-          <div className="text-center space-y-4 py-6">
-            <div className="flex justify-center">
-              <div className="rounded-full bg-primary/10 p-6">
-                <Bell className="h-12 w-12 text-primary" />
-              </div>
-            </div>
-            <div className="space-y-2">
-              <h2 className="text-2xl font-bold">{currentStepData.title}</h2>
-              <p className="text-muted-foreground max-w-md mx-auto">
-                {currentStepData.description}
-              </p>
-            </div>
-            <div className="space-y-3 max-w-md mx-auto text-left">
-              <div className="flex items-center justify-between p-3 bg-muted/30 rounded-lg">
-                <div className="flex items-center gap-3">
-                  <div className="text-2xl">📧</div>
-                  <div>
-                    <div className="font-medium text-sm">Weekly Digest</div>
-                    <div className="text-xs text-muted-foreground">
-                      Get curated events every Friday
-                    </div>
-                  </div>
-                </div>
-              </div>
-              <div className="flex items-center justify-between p-3 bg-muted/30 rounded-lg">
-                <div className="flex items-center gap-3">
-                  <div className="text-2xl">🔔</div>
-                  <div>
-                    <div className="font-medium text-sm">Event Reminders</div>
-                    <div className="text-xs text-muted-foreground">
-                      Never miss your saved events
-                    </div>
-                  </div>
-                </div>
-              </div>
-            </div>
-            <p className="text-xs text-muted-foreground">
-              You can customize notifications in settings later
-            </p>
-          </div>
-        );
-
-      case 'complete':
-        return (
-          <div className="text-center space-y-6 py-6">
-            <div className="flex justify-center">
-              <div className="rounded-full bg-gradient-to-br from-green-500 to-emerald-500 p-6 animate-scale-in">
-                <Check className="h-16 w-16 text-white" />
-              </div>
-            </div>
-            <div className="space-y-2">
-              <h2 className="text-3xl font-bold">{currentStepData.title}</h2>
-              <p className="text-lg text-muted-foreground max-w-md mx-auto">
-                {currentStepData.description}
-              </p>
-            </div>
-            <div className="space-y-2 max-w-md mx-auto">
-              <div className="flex items-center gap-3 p-3 bg-primary/5 rounded-lg">
-                <Check className="h-5 w-5 text-primary flex-shrink-0" />
-                <span className="text-sm text-left">
-                  {selectedInterests.length} interest{selectedInterests.length !== 1 ? 's' : ''} selected
-                </span>
-              </div>
-              {selectedDietary.length > 0 && (
-                <div className="flex items-center gap-3 p-3 bg-primary/5 rounded-lg">
-                  <Check className="h-5 w-5 text-primary flex-shrink-0" />
-                  <span className="text-sm text-left">
-                    {selectedDietary.length} dietary preference{selectedDietary.length !== 1 ? 's' : ''} set
-                  </span>
-                </div>
-              )}
-              {selectedPriceRange !== 'any' && (
-                <div className="flex items-center gap-3 p-3 bg-primary/5 rounded-lg">
-                  <Check className="h-5 w-5 text-primary flex-shrink-0" />
-                  <span className="text-sm text-left">
-                    Price range: {selectedPriceRange}
-                  </span>
-                </div>
-              )}
-              {selectedNeighborhoods.length > 0 && (
-                <div className="flex items-center gap-3 p-3 bg-primary/5 rounded-lg">
-                  <Check className="h-5 w-5 text-primary flex-shrink-0" />
-                  <span className="text-sm text-left">
-                    {selectedNeighborhoods.length} neighborhood{selectedNeighborhoods.length !== 1 ? 's' : ''} selected
-                  </span>
-                </div>
-              )}
-              {calendarConnected && (
-                <div className="flex items-center gap-3 p-3 bg-primary/5 rounded-lg">
-                  <Check className="h-5 w-5 text-primary flex-shrink-0" />
-                  <span className="text-sm text-left">Calendar connected</span>
-                </div>
-              )}
-              <div className="flex items-center gap-3 p-3 bg-gradient-to-r from-primary/10 to-accent/10 rounded-lg border-2 border-primary/20">
-                <SpriteIcon name="sparkles" className="h-5 w-5 text-primary flex-shrink-0" />
-                <span className="text-sm font-semibold text-left">Ready to explore!</span>
-              </div>
-            </div>
+          <div className="grid grid-cols-2 gap-2">
+            {NEIGHBORHOODS.map((n) => (
+              <Choice
+                key={n.slug}
+                pressed={selectedNeighborhoods.includes(n.name)}
+                onClick={() => setSelectedNeighborhoods((prev) => toggle(prev, n.name))}
+              >
+                {n.name}
+              </Choice>
+            ))}
           </div>
         );
 
@@ -533,61 +236,62 @@ export function PreferencesOnboarding({
   };
 
   return (
-    <Dialog open={open} onOpenChange={() => handleSkip()}>
+    <Dialog
+      open={open}
+      onOpenChange={(next) => {
+        // Escape, the overlay and the close button all mean "later", not
+        // "completed". Only the explicit actions below mark onboarding done.
+        if (!next) dismiss();
+      }}
+    >
       <DialogContent className="sm:max-w-[600px] max-h-[90vh] overflow-y-auto">
-        <div className="space-y-6 py-4">
-          {/* Step Indicator */}
-          <div className="flex items-center justify-center gap-2">
-            {onboardingSteps.map((step, index) => (
-              <div
-                key={step.id}
-                className={cn(
-                  'h-2 rounded-full transition-all duration-300',
-                  index === currentStep
-                    ? 'w-8 bg-primary'
-                    : index < currentStep
-                    ? 'w-2 bg-primary'
-                    : 'w-2 bg-muted'
-                )}
-              />
-            ))}
-          </div>
+        <DialogHeader className="pr-8 text-left">
+          <p className="text-xs font-medium text-muted-foreground">
+            Step {currentStep + 1} of {stepCount}
+          </p>
+          <DialogTitle className="text-xl">{step.title}</DialogTitle>
+          <DialogDescription>{step.description}</DialogDescription>
+        </DialogHeader>
 
-          {/* Step Content */}
-          <div className="min-h-[400px]">{renderStepContent()}</div>
+        <div className="min-h-[16rem]">{renderStep()}</div>
 
-          {/* Navigation */}
-          <div className="flex items-center justify-between gap-3 pt-4 border-t">
+        <div className="flex flex-wrap items-center justify-between gap-2 border-t pt-4">
+          <div className="flex items-center gap-1">
+            <Button variant="ghost" className="h-11" onClick={dismiss} disabled={isBusy}>
+              Later
+            </Button>
             <Button
               variant="ghost"
-              onClick={handleSkip}
-              className="text-muted-foreground"
-              size="sm"
+              className="h-11 text-muted-foreground"
+              onClick={() => void handleDontAskAgain()}
+              disabled={isBusy}
             >
-              Skip
+              Don't ask again
             </Button>
+          </div>
 
-            <div className="flex items-center gap-2">
-              {currentStep > 0 && (
-                <Button variant="outline" onClick={handlePrevious} size="sm">
-                  <ChevronLeft className="h-4 w-4 mr-1" />
-                  Back
-                </Button>
-              )}
-              <Button onClick={handleNext} size="sm" className="min-w-[100px]">
-                {isLastStep ? (
-                  <>
-                    <SpriteIcon name="sparkles" className="h-4 w-4 mr-2" />
-                    Start Exploring
-                  </>
-                ) : (
-                  <>
-                    Next
-                    <ChevronRight className="h-4 w-4 ml-1" />
-                  </>
-                )}
+          <div className="flex items-center gap-2">
+            {currentStep > 0 && (
+              <Button
+                variant="outline"
+                className="h-11"
+                onClick={() => setCurrentStep((s) => s - 1)}
+                disabled={isBusy}
+              >
+                <ChevronLeft className="mr-1 h-4 w-4" aria-hidden="true" />
+                Back
               </Button>
-            </div>
+            )}
+            <Button className="h-11 min-w-[6.5rem]" onClick={() => void handleNext()} disabled={isBusy}>
+              {isLastStep ? (
+                'Save'
+              ) : (
+                <>
+                  Next
+                  <ChevronRight className="ml-1 h-4 w-4" aria-hidden="true" />
+                </>
+              )}
+            </Button>
           </div>
         </div>
       </DialogContent>

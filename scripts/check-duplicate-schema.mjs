@@ -167,7 +167,12 @@ function emitterState(source, emitter) {
  *   2. Any SearchAction target must be a route that honours its own parameter.
  *      /search?q= is honoured by SearchResults.tsx; /events?search= is not.
  */
-const ALLOWED_WEBSITE_OWNERS = new Set(['src/pages/Index.tsx']);
+//
+// The home page's WebSite node moved out of Index.tsx into a plain .ts content
+// module, so this check scans .ts as well as .tsx (walkWebsiteSources below).
+// The owner must actually emit a node: a check whose one allowed owner emits
+// nothing would pass while checking nothing.
+const ALLOWED_WEBSITE_OWNERS = new Set(['src/content/homeContent.ts']);
 
 /**
  * WEB-SEO-027: one head manager per rendered tree.
@@ -390,6 +395,19 @@ function emitsTopLevelWebsite(source) {
   return false;
 }
 
+/** .ts and .tsx under src; the WebSite node can live in a plain data module. */
+function walkWebsiteSources(dir, out = []) {
+  for (const entry of fs.readdirSync(dir, { withFileTypes: true })) {
+    const full = path.join(dir, entry.name);
+    if (entry.isDirectory()) {
+      if (entry.name !== '__tests__') walkWebsiteSources(full, out);
+    } else if (/\.tsx?$/.test(entry.name) && !/\.(test|spec|d)\.tsx?$/.test(entry.name)) {
+      out.push(full);
+    }
+  }
+  return out;
+}
+
 function checkWebsiteNodes(files) {
   const emitters = [];
   const badTargets = [];
@@ -413,9 +431,13 @@ function checkWebsiteNodes(files) {
   const unexpected = emitters.filter(
     (rel) => !ALLOWED_WEBSITE_OWNERS.has(rel) && !UNMOUNTED_WEBSITE_OWNERS.includes(rel),
   );
+  const silentOwners = [...ALLOWED_WEBSITE_OWNERS].filter((rel) => !emitters.includes(rel));
 
-  if (unexpected.length || mountedDeadCode.length || badTargets.length) {
+  if (unexpected.length || mountedDeadCode.length || badTargets.length || silentOwners.length) {
     console.error('\n❌ WebSite / SearchAction problem (WEB-SEO-029)\n');
+    for (const rel of silentOwners) {
+      console.error(`  ${rel} is the allowed WebSite owner but emits no WebSite node; update ALLOWED_WEBSITE_OWNERS.`);
+    }
     for (const rel of unexpected) {
       console.error(`  ${rel} emits a WebSite node. Only ${[...ALLOWED_WEBSITE_OWNERS].join(', ')} may.`);
     }
@@ -443,7 +465,7 @@ function main() {
   checkRatingCountSources(files);
 
   // WEB-SEO-029.
-  checkWebsiteNodes(files);
+  checkWebsiteNodes(walkWebsiteSources(SRC));
 
   // WEB-SEO-027.
   const emitters = discoverHeadEmitters(files);

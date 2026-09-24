@@ -1,6 +1,9 @@
 import { useState } from "react";
 import { supabase } from "@/integrations/supabase/client";
 import { toast } from "sonner";
+import { createLogger } from "@/lib/logger";
+
+const log = createLogger("useNewsletterSubscription");
 
 export interface NewsletterPreferences {
   weekly_digest: boolean;
@@ -71,7 +74,7 @@ export function useNewsletterSubscription() {
       );
       return true;
     } catch (error) {
-      console.error("Failed to subscribe:", error);
+      log.error("subscribe", "Failed to subscribe", { data: error });
       toast.error("Failed to subscribe. Please try again.");
       return false;
     } finally {

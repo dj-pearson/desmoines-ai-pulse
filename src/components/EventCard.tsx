@@ -24,8 +24,8 @@ import { FavoriteButton } from "@/components/FavoriteButton";
 import { SocialProofBadge, ViewCountBadge } from "@/components/SocialProofBadge";
 import { useFeedback } from "@/hooks/useFeedback";
 import { useAuth } from "@/hooks/useAuth";
-import { useRecentlyViewed } from "@/hooks/useRecentlyViewed";
 import { useViewTracking } from "@/hooks/useViewTracking";
+import { recordView } from "@/lib/recentlyViewed";
 import { Event } from "@/lib/types";
 import {
   createEventSlugWithCentralTime,
@@ -65,7 +65,6 @@ interface EventCardProps {
 function EventCardComponent({ event, onViewDetails, priority = false }: EventCardProps) {
   const { isAuthenticated } = useAuth();
   const { trackInteraction } = useFeedback();
-  const { addToRecentlyViewed } = useRecentlyViewed();
   const { viewData, trackView } = useViewTracking(event.id);
   const [isNew, setIsNew] = useState(false);
   const [imageError, setImageError] = useState(false);
@@ -105,14 +104,23 @@ function EventCardComponent({ event, onViewDetails, priority = false }: EventCar
       trackInteraction(event.id, "view");
     }
 
-    // Add to recently viewed
-    addToRecentlyViewed(event);
+    // Opening the quick view counts as a view. It goes into the one unified
+    // store the home rail reads (WEB-FEAT-007); this card used to write the
+    // legacy `desmoines_recently_viewed` key, which nothing on Home showed.
+    recordView({
+      id: event.id,
+      type: "event",
+      title: event.title,
+      href: `/events/${createEventSlugWithCentralTime(event.title, event)}`,
+      image_url: event.image_url ?? undefined,
+      subtitle: event.venue || event.location || event.category || undefined,
+    });
 
     // Track view in analytics
     trackView();
 
     onViewDetails(event);
-  }, [isAuthenticated, trackInteraction, event, addToRecentlyViewed, trackView, onViewDetails, sponsoredActive]);
+  }, [isAuthenticated, trackInteraction, event, trackView, onViewDetails, sponsoredActive]);
 
 
 

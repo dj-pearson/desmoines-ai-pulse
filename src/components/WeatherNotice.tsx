@@ -60,34 +60,44 @@ export function WeatherNotice({ weather, hasVerdict, className }: WeatherNoticeP
 export default WeatherNotice;
 
 /**
- * The homepage variant.
+ * The For You rail's weather slot (Home plan WP2 items 6 and 10).
  *
- * It states conditions and links to the ranked lists. It deliberately does NOT
- * use `reason`, because `reason` says picks were reordered and the homepage
- * does not reorder anything - it renders personalized rails, and re-sorting
- * those by weather would fight the personalization that built them.
+ * It replaced HomeWeatherNotice, which sat in the page flow and rendered
+ * nothing until the forecast landed, so a late weather call inserted a 48px block above the rail
+ * and pushed everything below it down. This version lives in the rail header
+ * in a slot whose height never changes: while the forecast is loading, or when
+ * it has no verdict, the slot is simply empty. A late or failed call changes
+ * text, not layout.
+ *
+ * It states the temperature when the edge function returned one, then links to
+ * /events/today, which is already ranked for the current conditions.
  */
-export function HomeWeatherNotice() {
+export function RailWeatherLine({ className }: { className?: string }) {
   const { weather, hasVerdict } = useWeather();
-  if (!hasVerdict) return null;
-
-  const Icon = noticeIcon(weather);
+  const Icon = hasVerdict ? noticeIcon(weather) : null;
+  const temp =
+    typeof weather.temperatureF === 'number' ? Math.round(weather.temperatureF) : null;
 
   return (
-    <div className="flex flex-wrap items-center gap-x-3 gap-y-1 rounded-xl bg-muted px-4 py-3">
-      <Icon className="h-5 w-5 shrink-0 text-muted-foreground" aria-hidden="true" />
-      <p className="text-sm text-muted-foreground">
-        <span className="font-medium text-foreground">{weather.conditions}</span> in Des Moines
-        right now.
-      </p>
-      {/* One destination either way: /events/today is already ranked for the
-          current conditions, so the link text changes and the target does not. */}
-      <Link
-        to="/events/today"
-        className="text-sm font-medium text-foreground underline underline-offset-4"
-      >
-        {weather.outdoorFriendly ? 'See what is on outside today' : 'See indoor picks for today'}
-      </Link>
-    </div>
+    <p
+      className={`flex h-6 min-w-0 items-center gap-2 text-sm text-muted-foreground ${className ?? ''}`}
+      data-rail-weather-line=""
+    >
+      {hasVerdict && Icon ? (
+        <>
+          <Icon className="h-4 w-4 shrink-0" aria-hidden="true" />
+          <span className="truncate">
+            {temp !== null ? <>{temp}&deg;F, </> : null}
+            {weather.conditions}.{' '}
+            <Link
+              to="/events/today"
+              className="font-medium text-foreground underline underline-offset-4"
+            >
+              {weather.outdoorFriendly ? 'Outside today' : 'Indoor picks today'}
+            </Link>
+          </span>
+        </>
+      ) : null}
+    </p>
   );
 }

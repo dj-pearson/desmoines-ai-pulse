@@ -1,10 +1,10 @@
-import { useState, useEffect } from "react";
+import { useState } from "react";
 import { useAuthFlags, useAuthActions } from "@/contexts/AuthContext";
 import { useProfile } from "@/hooks/useProfile";
-import { useGamification } from "@/hooks/useGamification";
+import { useUserLevel } from "@/hooks/useUserLevel";
 import { useAccessibility } from "@/hooks/useAccessibility";
 import { useSwipe } from "@/hooks/use-swipe";
-import { Link, useLocation, useNavigate } from "react-router-dom";
+import { Link, useNavigate } from "react-router-dom";
 import { OptimizedLogo } from "./OptimizedLogo";
 import { DesktopNav } from "./header/DesktopNav";
 import { MobileNav } from "./header/MobileNav";
@@ -20,20 +20,15 @@ export default function Header() {
   const { isAuthenticated, isAdmin } = useAuthFlags();
   const { logout } = useAuthActions();
   const { profile } = useProfile();
-  const { userLevel, userXP } = useGamification();
+  // One cached user_reputation read instead of useGamification's six-way fetch
+  // on every page mount.
+  const { level: userLevel, xp: userXP } = useUserLevel();
   const { announceToScreenReader, useFocusRestore } = useAccessibility();
   const { saveFocus, restoreFocus } = useFocusRestore();
   const [isMobileMenuOpen, setIsMobileMenuOpen] = useState(false);
-  const location = useLocation();
   const navigate = useNavigate();
-
-  // Announce route changes to screen readers
-  useEffect(() => {
-    const pageTitle = document.title;
-    if (pageTitle) {
-      announceToScreenReader(`Navigated to ${pageTitle}`, "polite");
-    }
-  }, [location.pathname, announceToScreenReader]);
+  // Route changes are announced once, by useFocusOnRouteChange in the App
+  // shell. Header used to announce them too, so every navigation spoke twice.
 
   const handleLogout = async () => {
     try {
@@ -101,6 +96,7 @@ export default function Header() {
               className="h-8 md:h-10 w-auto dark:drop-shadow-[0_0_15px_rgba(255,255,255,0.3)] dark:filter dark:brightness-110"
               width={40}
               height={40}
+              fetchPriority="auto"
             />
           </Link>
 

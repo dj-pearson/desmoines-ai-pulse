@@ -1,8 +1,10 @@
-import { Suspense, lazy, useState, useEffect } from "react";
-import { Brain, MessageSquare, Mic, Sparkles } from "lucide-react";
+import { Suspense, lazy, useState, useEffect, useMemo } from "react";
 import { Link } from "react-router-dom";
-import { QuickActions, QuickActionsMobile } from "./QuickActions";
+import { format } from "date-fns";
+import { QuickActions } from "./QuickActions";
+import { NLPSearchBar } from "./NLPSearchBar";
 import { useMediaQuery } from "@/hooks/use-media-query";
+import { nowInCentralTime } from "@/lib/timezone";
 import { cn } from "@/lib/utils";
 import { isMobileApp } from "@/lib/capacitorUtils";
 
@@ -11,22 +13,44 @@ import { isMobileApp } from "@/lib/capacitorUtils";
 declare const __MOBILE_APP__: boolean | undefined;
 const IS_NATIVE = typeof __MOBILE_APP__ !== 'undefined' && __MOBILE_APP__;
 
-// Lazy load the 3D component – skip entirely in mobile app builds
+// Lazy load the 3D component - skip entirely in mobile app builds
 // AND on mobile-width browsers (Three.js + WebGL is too heavy for mobile)
 const HeroCityLite = IS_NATIVE
   ? null
   : lazy(() => import("./HeroCityLite"));
 
+/**
+ * The hero's one colour. A flat brand navy (the old mobile gradient's start
+ * stop), in both themes: the hero art is intentionally dark whatever the
+ * theme. Desktop uses the 3D scene's own near-black so the idle-time swap to
+ * the canvas is not a colour jump. It replaced a navy-to-purple gradient plus a second purple-to-red
+ * overlay (WP1 item 5, docs/page-plans/home.md).
+ */
+const HERO_BG = "bg-[#071e62] md:bg-[#0a0a1a]";
+
 interface EnhancedHeroProps {
   // null = not known (still loading, or the count query failed). WEB-QA-024:
-  // these must never fall back to 0 — a confident "0 Events Today" is how a
+  // these must never fall back to 0 - a confident "0 Events Today" is how a
   // failed query reached visitors as a plausible number.
   eventsToday?: number | null;
   restaurantsCount?: number | null;
   newThisWeek?: number | null;
   isLoadingStats?: boolean;
-  onAIPlanClick?: () => void;
   className?: string;
+}
+
+function greetingForHour(hour: number): string {
+  if (hour >= 5 && hour < 12) return "Good morning, Des Moines";
+  if (hour >= 12 && hour < 17) return "Good afternoon, Des Moines";
+  if (hour >= 17 && hour < 21) return "Good evening, Des Moines";
+  return "Tonight in Des Moines";
+}
+
+function subheadingForHour(hour: number): string {
+  if (hour >= 5 && hour < 12) return "Brunch spots, morning plans and what's on later today.";
+  if (hour >= 12 && hour < 17) return "Afternoon events and where to eat across the metro.";
+  if (hour >= 17 && hour < 21) return "Dinner and tonight's events, in one place.";
+  return "Late-night food, live music and what's still going.";
 }
 
 export function EnhancedHero({
@@ -34,15 +58,14 @@ export function EnhancedHero({
   restaurantsCount = null,
   newThisWeek = null,
   isLoadingStats = false,
-  onAIPlanClick,
   className,
 }: EnhancedHeroProps) {
   const isMobile = useMediaQuery("(max-width: 768px)");
   const isNativeApp = isMobileApp();
 
   // Defer the heavy 3D scene (three.js) off the critical path until the browser
-  // is idle, so it never rides first paint of `/` (WEB-PERF-003). The static
-  // gradient below fills the exact same space, so the upgrade causes no CLS.
+  // is idle, so it never rides first paint of `/` (WEB-PERF-003). The flat
+  // navy below fills the exact same space, so the upgrade causes no CLS.
   const [show3D, setShow3D] = useState(false);
   useEffect(() => {
     if (isMobile || IS_NATIVE) return;
@@ -57,219 +80,133 @@ export function EnhancedHero({
     const t = window.setTimeout(() => setShow3D(true), 1200);
     return () => clearTimeout(t);
   }, [isMobile]);
-  // Compute greeting synchronously to avoid CLS from empty-to-filled text
-  const hour = new Date().getHours();
-  const greeting = hour < 12
-    ? "Good Morning, Des Moines!"
-    : hour < 17
-      ? "Good Afternoon!"
-      : hour < 21
-        ? "Good Evening!"
-        : "Tonight in Des Moines";
-  const subheading = hour < 12
-    ? "Start your day with the perfect brunch spot or morning activity"
-    : hour < 17
-      ? "Discover afternoon events and dining experiences across the city"
-      : hour < 21
-        ? "Find the perfect dinner reservation or tonight's entertainment"
-        : "Late-night dining, live music, and events happening right now";
 
-  // An em dash, not a zero. The tile keeps its min-h and tabular-nums so the
-  // CLS guard the placeholder existed for still holds, but an unknown count now
-  // reads as unknown instead of as "none" (WEB-QA-024).
-  const statPlaceholder = "—";
+  // Central time, not the visitor's clock: the page is about Des Moines, and a
+  // visitor planning from the coast at 7pm their time should not be told "Good
+  // evening" when it is 9pm here. Computed synchronously so the text is final
+  // on first paint (no CLS).
+  const { hour, weekday } = useMemo(() => {
+    const now = nowInCentralTime();
+    return { hour: now.getHours(), weekday: format(now, "EEEE") };
+  }, []);
+  const greeting = greetingForHour(hour);
+  const subheading = subheadingForHour(hour);
+
+  // An em dash, not a zero. An unknown count reads as unknown instead of as
+  // "none" (WEB-QA-024). Escaped so the source stays ASCII.
+  const statPlaceholder = "\u2014";
   const formatStat = (value: number | null) =>
     isLoadingStats || value === null ? statPlaceholder : value.toLocaleString();
+
+  const todayLabel =
+    !isLoadingStats && eventsToday === 1 ? "event today" : "events today";
 
   return (
     <section
       className={cn(
-        "relative bg-[#0a0a1a] overflow-hidden",
-        isNativeApp ? "min-h-[70vh] py-10 pt-14" : "min-h-[80vh] md:min-h-screen py-10 md:py-16",
+        "relative",
+        HERO_BG,
+        // No min-height anywhere (WP1 item 5). It was min-h-[80vh] on phones
+        // and min-h-screen on desktop, so the first screen was all brand and
+        // the search input started below it. Native keeps its status-bar gap.
+        isNativeApp ? "pb-8 pt-14" : "py-8 md:py-12",
         className
       )}
     >
-      {/* 3D City Background – skip on mobile web (saves 800KB Three.js) and native
-          apps, and defer to idle on desktop so it's off the critical path. */}
-      {HeroCityLite && !isMobile && show3D ? (
-        <Suspense fallback={<div className="absolute inset-0 bg-gradient-to-br from-[#0a0a1a] via-[#1a1a2e] to-[#2D1B69]" />}>
-          <HeroCityLite />
-        </Suspense>
-      ) : HeroCityLite && !isMobile ? (
-        // Desktop, pre-idle: identical static gradient so the 3D swap is CLS-free.
-        <div className="absolute inset-0 bg-gradient-to-br from-[#0a0a1a] via-[#1a1a2e] to-[#2D1B69]" />
-      ) : (
-        <div className="absolute inset-0 bg-gradient-to-br from-[#071e62] via-[#1a1a2e] to-[#2D1B69]">
-          {/* Subtle grid pattern */}
-          <div className="absolute inset-0 opacity-20" style={{
-            backgroundImage: 'linear-gradient(rgba(255,255,255,.05) 1px, transparent 1px), linear-gradient(90deg, rgba(255,255,255,.05) 1px, transparent 1px)',
-            backgroundSize: '40px 40px',
-          }} />
-          {/* Glow accent — use smaller blur on mobile to reduce GPU overhead */}
-          <div className={cn(
-            "absolute top-1/3 left-1/2 -translate-x-1/2 rounded-full bg-[#DC143C]/15",
-            isMobile ? "w-[200px] h-[200px] blur-[60px]" : "w-[300px] h-[300px] blur-[100px]"
-          )} />
-        </div>
-      )}
+      {/* Background layers sit in their own clipped box, so the section itself
+          does not clip: the search panel has to be able to hang below the
+          hero. */}
+      <div className="pointer-events-none absolute inset-0 overflow-hidden" aria-hidden="true">
+        {/* 3D City Background - skip on mobile web (saves 800KB Three.js) and
+            native apps, and defer to idle on desktop so it's off the critical
+            path. */}
+        {HeroCityLite && !isMobile && show3D ? (
+          <Suspense fallback={null}>
+            <HeroCityLite />
+          </Suspense>
+        ) : (
+          <div
+            className="absolute inset-0 opacity-20"
+            style={{
+              backgroundImage:
+                "linear-gradient(rgba(255,255,255,.05) 1px, transparent 1px), linear-gradient(90deg, rgba(255,255,255,.05) 1px, transparent 1px)",
+              backgroundSize: "40px 40px",
+            }}
+          />
+        )}
 
-      {/* Animated background gradient overlay for extra depth */}
-      <div className="absolute inset-0 bg-gradient-to-br from-[#2D1B69]/10 via-transparent to-[#8B0000]/10 pointer-events-none" />
+        {/* Light-mode seam softener (WEB-QA-006). The hero is dark in both
+            themes but the nav above it follows the theme; in light mode the
+            near-white header met this navy in a hard line. This fades the top
+            edge toward the page background. Dark mode is zeroed out. */}
+        <div className="absolute inset-x-0 top-0 h-12 bg-gradient-to-b from-background/70 to-transparent dark:hidden" />
+      </div>
 
-      {/* Light-mode seam softener (WEB-QA-006).
-          The hero art is intentionally dark in BOTH themes, but the nav above it
-          follows the theme. In dark mode the header (rgba(6,10,19,.6)) sits flush
-          against this hero and the edge is invisible; in light mode the header is
-          near-white and produced a hard white-to-navy line directly under the nav.
-          This fades the top edge of the hero toward the page background so the
-          transition reads as intentional depth instead of a clipping artifact.
-          Dark-mode is explicitly zeroed out so the existing (already correct)
-          appearance is untouched. */}
-      <div
-        aria-hidden="true"
-        className="pointer-events-none absolute inset-x-0 top-0 h-12 bg-gradient-to-b from-background/70 to-transparent dark:hidden"
-      />
+      <div className="relative z-10 mx-auto max-w-3xl px-4 sm:px-6 lg:px-8">
+        {/* SEO-008: the greeting is NOT inside the <h1>. It is clock state, not
+            content, and it was the first thing in the page's only H1, so the
+            homepage's heading read "Good Afternoon!What's Happening..." to
+            anything parsing the document - and with entity prerendering off
+            that was the H1 of ~1,070 URLs (SEO-001).
 
-      {/* Content */}
-      <div className="relative z-10 max-w-7xl mx-auto px-4 sm:px-6 lg:px-8">
-        {/* Top badge */}
-        <div className="flex justify-center mb-6">
-          <div className={cn(
-            "inline-flex items-center gap-2 bg-[#FFD700]/20 border border-[#FFD700]/30 rounded-full px-4 py-2 animate-fade-in",
-            !isMobile && "backdrop-blur-sm"
-          )}>
-            <Brain className="h-4 w-4 text-[#FFD700]" aria-hidden="true" />
-            <span className="text-sm text-[#FFD700] font-semibold">
-              First AI-Powered Conversational City Guide
-            </span>
-          </div>
-        </div>
-
-        {/* Main headline.
-
-            SEO-008: THE GREETING IS NO LONGER INSIDE THE <h1>. It is clock
-            state, not content, and it was the first thing in the page's only
-            H1 - so the homepage's heading read "Good Afternoon!Find things to
-            do in Des Moines, right now" to anything parsing the document.
-
-            It reached far beyond the homepage. With entity prerendering off,
-            every one of ~1,070 restaurant, event, attraction and playground
-            URLs served the homepage shell, so THAT string was the H1 of the
-            entire site to any crawler that does not run JavaScript (SEO-001).
-
-            It still renders, immediately above, where a person reads it and no
-            parser mistakes it for the page's subject. The visual result is the
-            same; the document outline is not. */}
-        <div className="text-center mb-8 animate-slide-in">
-          <p className="text-lg md:text-2xl font-semibold text-[#FFD700] mb-2">{greeting}</p>
-          {/* Deliberately NOT "Things to Do in Des Moines". That is
-              /things-to-do's head term, and the homepage already competed with
-              two of its own pages - its title targeted "things to do in des
-              moines this weekend", which is what /events/this-weekend and
-              /weekend are for. The homepage takes the broad "what is on right
-              now" intent; the hubs keep their own terms. */}
-          <h1 className="text-4xl md:text-6xl font-bold text-white mb-4 md:drop-shadow-lg">
+            No entrance animation on this block. createRoot discards the
+            prerendered DOM, so an animate-fade-in here started the LCP text
+            from opacity 0 on every load. */}
+        <div className="text-center">
+          <p className="mb-1 text-base font-semibold text-[#FFD700] md:text-lg">{greeting}</p>
+          {/* Deliberately NOT "Things to Do in Des Moines": that is
+              /things-to-do's head term. The homepage takes the broad "what is
+              on right now" intent; the hubs keep their own terms. */}
+          <h1 className="mb-2 text-3xl font-bold text-white md:text-5xl">
             What's Happening in Des Moines
           </h1>
-          <p className="text-xl md:text-2xl text-white/90 mb-4 max-w-3xl mx-auto md:drop-shadow-md">
-            {subheading}
+          <p className="mb-5 text-sm text-white/85 md:text-lg">
+            <span className="font-medium text-white">{weekday}</span>
+            {": "}
+            <Link to="/events/today" className="underline-offset-4 hover:underline">
+              <span className="tabular-nums">{formatStat(eventsToday)}</span> {todayLabel}
+            </Link>
+            <span className="hidden md:inline">. {subheading}</span>
           </p>
-
-          {/* WEB-SEO-016: a trust bar sat here claiming "15,000+ locals trust
-              us", "4.8/5 user rating" and "500+ events weekly". Removed at the
-              owner's request — there is no review system to produce a rating,
-              nothing measures the user count, and the events figure was false
-              rather than merely unverifiable (284 upcoming events in total).
-              The database-driven tiles immediately below already carry real
-              numbers, so nothing of substance is lost. */}
         </div>
 
-        {/* Live Stats - Database-driven
-             CLS fix: min-h on each tile + tabular-nums ensures numbers occupy
-             consistent space regardless of loading state. */}
-        <div className="grid grid-cols-2 md:grid-cols-4 gap-4 mb-12 max-w-4xl mx-auto">
+        {/* The page's one free-text search (WP1 item 4). Enter goes to
+            /search?q=. */}
+        <NLPSearchBar
+          className="mb-4"
+          inputClassName="bg-background text-foreground"
+          placeholder="Search events, restaurants, places..."
+          showExamples
+          showResults
+        />
+
+        <QuickActions />
+
+        {/* Live stats, desktop only (WP1 item 5): on a phone they pushed the
+            search and the first real card below the fold, and the context
+            line above already carries today's count.
+            CLS: min-h on each tile + tabular-nums keeps the loading and loaded
+            states the same size. */}
+        <div className="mx-auto mt-6 hidden max-w-2xl grid-cols-3 gap-3 md:grid">
           {([
-            { to: "/events/today", value: formatStat(eventsToday), label: "Events Today" },
-            { to: "/restaurants/open-now", value: formatStat(restaurantsCount), label: "Restaurants" },
-            { to: "/events", value: formatStat(newThisWeek), label: "New This Week" },
-            // NOT "24/7 / AI Assistant". Two things were wrong with it and the
-            // tile sits among three LIVE COUNTS, so a reader takes it for a
-            // measured figure like the others (WEB-QA-005 AC2, XPLAT-009 AC4).
-            //
-            //   web has no AI assistant at all. Ask Pulse (discover-chat) ships
-            //   on iOS and Android and has never been built here - XPLAT-009 AC1
-            //   is the open decision about whether it comes to web.
-            //   the tile links to /trip-planner, which is a different feature
-            //   and is gated behind <PremiumGate requiredTier="insider">.
-            //
-            // So it now names the thing it actually opens. The Insider
-            // requirement is carried by the AI Plan My Night CTA below rather
-            // than repeated on a four-word tile.
-            { to: "/trip-planner", value: "AI", label: "Trip Planner" },
+            { to: "/events/today", value: formatStat(eventsToday), label: "Events today" },
+            // The count is every restaurant, so the tile goes to the page that
+            // lists every restaurant. It used to go to /restaurants/open-now,
+            // a subset, so the number and the page never matched (WP1 item 11).
+            { to: "/restaurants", value: formatStat(restaurantsCount), label: "Restaurants" },
+            { to: "/events", value: formatStat(newThisWeek), label: "New this week" },
           ] as const).map((stat) => (
             <Link
               key={stat.to}
               to={stat.to}
-              className={cn(
-                "bg-white/10 rounded-lg p-4 border border-white/20 hover:bg-white/15 transition-colors duration-200 min-h-[76px]",
-                !isMobile && "backdrop-blur-sm hover:scale-105 transition-all duration-200"
-              )}
+              className="min-h-[76px] rounded-xl border border-white/20 bg-white/10 p-3 transition-colors duration-200 hover:bg-white/15"
             >
-              <div className="text-3xl font-bold text-[#FFD700] mb-1 min-h-[36px] tabular-nums">
+              <div className="mb-1 min-h-[32px] text-2xl font-bold tabular-nums text-[#FFD700]">
                 {stat.value}
               </div>
               <p className="text-sm text-white/80">{stat.label}</p>
             </Link>
           ))}
-        </div>
-
-        {/* Quick Actions */}
-        <div className="mb-12">
-          {isMobile ? (
-            <QuickActionsMobile onAIPlanClick={onAIPlanClick} />
-          ) : (
-            <QuickActions onAIPlanClick={onAIPlanClick} />
-          )}
-        </div>
-
-        {/* Multi-channel badges */}
-        <div className="flex flex-wrap items-center justify-center gap-3 mb-8" role="list" aria-label="Available access channels">
-          {([
-            { icon: MessageSquare, label: "SMS Concierge" },
-            { icon: Mic, label: "Voice Assistant" },
-            { icon: Sparkles, label: "ChatGPT Plugin" },
-            { icon: Brain, label: "Web Intelligence" },
-          ] as const).map((badge) => (
-            <div
-              key={badge.label}
-              className={cn(
-                "flex items-center gap-2 bg-white/10 rounded-full px-4 py-2 border border-white/20 hover:bg-white/15 transition-colors",
-                !isMobile && "backdrop-blur-sm"
-              )}
-              role="listitem"
-            >
-              <badge.icon className="h-4 w-4 text-[#FFD700]" aria-hidden="true" />
-              <span className="text-sm text-white/90">{badge.label}</span>
-            </div>
-          ))}
-        </div>
-
-        {/* Scroll indicator */}
-        <div className="flex justify-center pt-8">
-          <div className="animate-float" role="presentation" aria-hidden="true">
-            <svg
-              className="w-6 h-6 text-white/60"
-              fill="none"
-              strokeLinecap="round"
-              strokeLinejoin="round"
-              strokeWidth="2"
-              viewBox="0 0 24 24"
-              stroke="currentColor"
-              aria-hidden="true"
-            >
-              <path d="M19 14l-7 7m0 0l-7-7m7 7V3"></path>
-            </svg>
-          </div>
         </div>
       </div>
     </section>

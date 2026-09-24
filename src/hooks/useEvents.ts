@@ -5,6 +5,8 @@ import { createLogger } from "@/lib/logger";
 import { STALE_TIME, GC_TIME, shouldRetry } from "@/lib/queryConfig";
 import { Database } from "@/integrations/supabase/types";
 import { queryKeys } from "@/lib/queryKeys";
+import { countOption, type CountMode } from "@/lib/listCount";
+import { centralDayStartUtcISO } from "@/lib/timezone";
 
 const logger = createLogger("useEvents");
 
@@ -44,6 +46,28 @@ interface EventFilters {
    * public cache entry and its tick column would be blank.
    */
   includeAdminFields?: boolean;
+  /**
+   * How hard to work for `totalCount`; see src/lib/listCount.ts. Defaults to
+   * "exact" here, unlike the other list hooks, so every existing caller keeps
+   * the count it had. The home dashboard renders no total and passes "none"
+   * (home plan WP3), which drops the `Prefer: count=exact` second scan.
+   */
+  countMode?: CountMode;
+}
+
+/**
+ * Lower bound for "upcoming" event lists: midnight at the start of today's
+ * CENTRAL calendar day, as a UTC instant.
+ *
+ * This bounded on `new Date().toISOString().split('T')[0]` - the UTC date -
+ * against `events.date`, a timestamptz. Des Moines is UTC-5/-6, so until 7pm
+ * CDT the bound was still yesterday's UTC midnight (last night's 8pm show was
+ * listed as upcoming) and from 7pm on it jumped to tomorrow (tonight's 6pm
+ * event, still in progress, vanished). Central midnight keeps every event on
+ * today's Des Moines date and drops yesterday's (home plan WP3 item 3).
+ */
+export function eventsLowerBoundISO(): string {
+  return centralDayStartUtcISO();
 }
 
 /**
@@ -56,7 +80,7 @@ interface EventFilters {
  * response from the previous filters to land last and win.
  */
 async function fetchEvents(filters: EventFilters): Promise<EventsResult> {
-  const today = new Date().toISOString().split('T')[0];
+  const today = eventsLowerBoundISO();
   logger.info('fetchEvents', 'Fetching events', { from: today });
 
   // Apply sort. "soonest" is the legacy default (date ASC); "featured"
@@ -66,8 +90,11 @@ async function fetchEvents(filters: EventFilters): Promise<EventsResult> {
   const sortBy: EventSortBy = filters.sortBy ?? "soonest";
   let query = supabase
     .from("events")
-    .select(withAdminColumns(EVENT_LIST_COLUMNS, filters.includeAdminFields), { count: "exact" })
-    .gte("date", today) // Only today and future events
+    .select(
+      withAdminColumns(EVENT_LIST_COLUMNS, filters.includeAdminFields),
+      countOption(filters.countMode ?? "exact")
+    )
+    .gte("date", today) // Today (Central) and later
     .neq("is_merged", true) // Hide rows merged into a duplicate (WEB-AUTO-005)
     .neq("is_hidden", true) // Hide soft-hidden stale events (WEB-AUTO-006)
     // WEB-BE-034. THERE ARE TWO UNPUBLISH SWITCHES ON `events` AND THIS SURFACE
@@ -216,6 +243,7 @@ export function eventsQueryKey(filters: EventFilters) {
     offset: filters.offset ?? null,
     sortBy: filters.sortBy ?? "soonest",
     includeAdminFields: filters.includeAdminFields ?? false,
+    countMode: filters.countMode ?? "exact",
   });
 }
 

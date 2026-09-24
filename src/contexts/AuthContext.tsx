@@ -9,6 +9,7 @@ import { User, Session, AuthChangeEvent } from "@supabase/supabase-js";
 // dompurify onto the critical path (WEB-PERF-020).
 import { isValidRedirectUrl } from "@/lib/redirectSafety";
 import { createLogger } from '@/lib/logger';
+import { clearPersonalStorage } from '@/lib/userPreferencesStore';
 import { DEFAULT_ROLE, highestRole, isFullAdmin, isUserRole, type UserRole } from '@/lib/roles';
 
 const log = createLogger('AuthContext');
@@ -206,6 +207,14 @@ export function AuthProvider({ children }: { children: ReactNode }) {
     isPasswordRecovery: false,
   });
 
+  // Id of the signed-in user, readable from callbacks whose closures predate
+  // the sign-in. Logout needs it to remove that account's scoped preferences
+  // (Home plan WP2 item 1) after setAuthState has already nulled the user.
+  const currentUserIdRef = useRef<string | null>(null);
+  useEffect(() => {
+    if (authState.user?.id) currentUserIdRef.current = authState.user.id;
+  }, [authState.user?.id]);
+
   // Track if we're in the middle of a logout to prevent race conditions
   const isLoggingOutRef = useRef(false);
   // Track subscription for cleanup
@@ -384,6 +393,8 @@ export function AuthProvider({ children }: { children: ReactNode }) {
     if (event === 'SIGNED_OUT') {
       log.info('handleAuthChange', 'User signed out via event');
       clearQueryCache();
+      clearPersonalStorage(currentUserIdRef.current);
+      currentUserIdRef.current = null;
       roleCache.clear();
       resolvedAdminForUserRef.current = null;
       setAuthState({
@@ -796,6 +807,11 @@ export function AuthProvider({ children }: { children: ReactNode }) {
     // Before the await below, not after: signOut can time out (there is a 3s
     // race here) and the cached rows must be gone either way.
     clearQueryCache();
+    // Same reasoning for what the account left in local storage: its taste
+    // preferences and the recently viewed list. Without this the next person
+    // to sign in on this browser inherited both (Home plan WP2 item 1).
+    clearPersonalStorage(currentUserIdRef.current);
+    currentUserIdRef.current = null;
 
     // Clear admin cache first
     roleCache.clear();
