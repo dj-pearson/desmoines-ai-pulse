@@ -1,5 +1,5 @@
-import React, { useState, useEffect, useMemo } from "react";
-import { useParams, useLocation as useRouterLocation } from "react-router-dom";
+import { useMemo } from "react";
+import { Link, useParams, useLocation as useRouterLocation } from "react-router-dom";
 import { useQuery } from "@tanstack/react-query";
 import { createLogger } from '@/lib/logger';
 import { supabase } from "@/integrations/supabase/client";
@@ -13,16 +13,29 @@ import { SocialEventCard } from "@/components/SocialEventCard";
 import { useBatchEventSocial } from "@/hooks/useBatchEventSocial";
 import EnhancedLocalSEO from "@/components/EnhancedLocalSEO";
 import { EventListJsonLd } from "@/components/schema/EventListJsonLd";
-import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
-import { Star } from "lucide-react";
-import { format, parseISO, isAfter } from "date-fns";
+import { Card, CardContent } from "@/components/ui/card";
+import { parseISO, isAfter } from "date-fns";
 import { BRAND } from "@/lib/brandConfig";
 import { Breadcrumbs } from "@/components/ui/breadcrumbs";
 import { RESTAURANT_LIST_COLUMNS } from "@/lib/listColumns";
-import { useReloadableFetch } from "@/hooks/useReloadableFetch";
 import { ErrorState } from "@/components/ui/error-state";
 import { SUBURBS } from "@/lib/suburbs";
 import { PlaceCrossLinks } from "@/components/PlaceCrossLinks";
+import { applyEventVisibility } from "@/lib/eventQuery";
+import { isFreePrice } from "@/lib/eventPrice";
+import { upcomingFloorUtc } from "@/lib/timezone";
+
+/** Rows fetched for one suburb. The page renders 24; the rest feed the counts. */
+const MAX_EVENTS = 500;
+
+/**
+ * A PostgREST `or` over each column for each search term, as a case-insensitive
+ * substring match. The terms come from SUBURBS, a fixed list with no commas,
+ * parentheses or wildcards in it, so nothing needs quoting.
+ */
+function searchTermFilter(terms: readonly string[], columns: readonly string[]): string {
+  return terms.flatMap((term) => columns.map((col) => `${col}.ilike.%${term}%`)).join(",");
+}
 
 export default function EventsByLocation() {
   // WEB-SEO-002: this read `useParams().location`, but App.tsx mounts this
@@ -63,83 +76,59 @@ export default function EventsByLocation() {
     city?: string;
   }
 
-  const [events, setEvents] = useState<EventItem[]>([]);
-  const [isLoading, setIsLoading] = useState(true);
-  const { error: loadError, setError: setLoadError, reloadKey, retry } = useReloadableFetch();
-
-  useEffect(() => {
-    const fetchEvents = async () => {
-      try {
-        setIsLoading(true);
-        const today = new Date().toISOString().split("T")[0];
-        
-        const { data, error } = await supabase
+  // Filtered in the query, not in the browser (events plan WP6 item 8). This
+  // downloaded every upcoming event in the metro and substring-matched in JS,
+  // with no visibility predicates, so hidden and merged rows showed up here.
+  const {
+    data: events = [],
+    isLoading,
+    error: loadError,
+    refetch: refetchEvents,
+  } = useQuery({
+    queryKey: ["events-by-location", slug],
+    enabled: !!suburbInfo,
+    queryFn: async (): Promise<EventItem[]> => {
+      if (!suburbInfo) return [];
+      const { data, error } = await applyEventVisibility(
+        supabase
           .from("events")
           // NOTE: `time` and `status` are not columns on public.events (see the
           // warning on EVENT_LIST_COLUMNS in src/lib/listColumns.ts). Naming them
           // made PostgREST reject the whole projection with 42703, so this page
           // rendered zero events on every load. Neither field was read downstream.
           .select("id, title, date, location, venue, price, category, enhanced_description, original_description, image_url, event_start_utc, city")
-          .gte("date", today)
-          .order("date", { ascending: true });
-        
-        if (error) {
-          log.error('fetchEvents', 'Error fetching events', { error });
-          setLoadError(error);
-          setEvents([]);
-        } else {
-          // Filter events that match the suburb
-          const filteredData = (data || []).filter((event) => {
-            const eventLocation = (
-              event.location ||
-              event.venue ||
-              ""
-            ).toLowerCase();
-            return suburbInfo.searchTerms.some((term: string) =>
-              eventLocation.includes(term.toLowerCase())
-            );
-          });
-          setLoadError(null);
-          setEvents(filteredData);
-        }
-      } catch (error) {
-        log.error('fetchEvents', 'Unexpected error in fetchEvents', { error });
-        setLoadError(error);
-        setEvents([]);
-      } finally {
-        setIsLoading(false);
+      )
+        .or(searchTermFilter(suburbInfo.searchTerms, ["city", "location", "venue"]))
+        // Start of today in Central, not the UTC date, which dropped tonight's
+        // events after 7pm.
+        .gte("date", upcomingFloorUtc())
+        .order("date", { ascending: true })
+        .limit(MAX_EVENTS);
+      if (error) {
+        log.error("fetchEvents", "Error fetching events", { error });
+        throw error;
       }
-    };
-
-    if (suburbInfo) {
-      fetchEvents();
-    }
-  }, [suburbInfo, reloadKey]);
+      return (data ?? []) as EventItem[];
+    },
+  });
 
   const { data: restaurants } = useQuery({
     queryKey: ["restaurants-by-location", slug],
     queryFn: async () => {
       if (!suburbInfo) return [];
 
+      // Match first, then limit. `.limit(5)` ran before the JS filter, so the
+      // section showed whichever of the first five active restaurants happened
+      // to be in this suburb - usually none.
       const { data, error } = await supabase
         .from("restaurants")
         .select(RESTAURANT_LIST_COLUMNS)
         .eq("status", "active")
-        .limit(5);
+        .or(searchTermFilter(suburbInfo.searchTerms, ["location", "city"]))
+        .limit(6);
 
       if (error) throw error;
-
-      // Filter restaurants that match the suburb
-      return (data || []).filter((restaurant) => {
-        const restaurantLocation = (
-          restaurant.location ||
-          restaurant.city ||
-          ""
-        ).toLowerCase();
-        return suburbInfo.searchTerms.some((term) =>
-          restaurantLocation.includes(term.toLowerCase())
-        );
-      });
+      return data ?? [];
     },
     enabled: !!suburbInfo,
   });
@@ -188,9 +177,9 @@ export default function EventsByLocation() {
               <h1 className="text-2xl font-bold mb-4">Location Not Found</h1>
               <p className="text-muted-foreground">
                 The location you're looking for doesn't exist.
-                <a href="/events" className="text-primary hover:underline ml-1">
+                <Link to="/events" className="text-primary hover:underline ml-1">
                   Browse all events
-                </a>
+                </Link>
               </p>
             </CardContent>
           </Card>
@@ -307,7 +296,7 @@ export default function EventsByLocation() {
                   <div className="text-2xl font-bold text-primary">
                     {
                       upcomingEvents.filter(
-                        (e) => e.price === "Free" || e.price === "0"
+                        (e) => isFreePrice(e.price) === true
                       ).length
                     }
                   </div>
@@ -330,7 +319,7 @@ export default function EventsByLocation() {
 
         {/* Events List */}
         {!isLoading && loadError ? (
-          <ErrorState error={loadError} onRetry={retry} />
+          <ErrorState error={loadError} onRetry={() => void refetchEvents()} />
         ) : isLoading ? (
           <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6 mb-8">
             {[...Array(6)].map((_, i) => (
@@ -381,15 +370,15 @@ export default function EventsByLocation() {
                 back later or browse events in nearby areas.
               </p>
               <div className="flex justify-center gap-4">
-                <a href="/events" className="text-primary hover:underline">
+                <Link to="/events" className="text-primary hover:underline">
                   All Des Moines Events
-                </a>
-                <a
-                  href="/events/this-weekend"
+                </Link>
+                <Link
+                  to="/events/this-weekend"
                   className="text-primary hover:underline"
                 >
                   This Weekend's Events
-                </a>
+                </Link>
               </div>
             </CardContent>
           </Card>
@@ -416,17 +405,13 @@ export default function EventsByLocation() {
                     <p className="text-sm text-muted-foreground">
                       {restaurant.location || restaurant.city}
                     </p>
-                    <div className="flex justify-between items-center mt-3">
-                      <div className="flex items-center gap-1">
-                        <Star className="h-4 w-4 fill-yellow-400 text-yellow-400" />
-                        <span className="text-sm">Local Favorite</span>
-                      </div>
-                      <a
-                        href={`/restaurants/${restaurant.id}`}
+                    <div className="mt-3">
+                      <Link
+                        to={`/restaurants/${restaurant.id}`}
                         className="text-primary hover:underline text-sm"
                       >
                         View Details
-                      </a>
+                      </Link>
                     </div>
                   </CardContent>
                 </Card>

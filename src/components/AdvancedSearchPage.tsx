@@ -12,6 +12,7 @@ import Footer from "./Footer";
 import SEOHead from "./SEOHead";
 import { Search, Star, DollarSign, Heart, Filter, Grid, List, Navigation2 } from "lucide-react";
 import { Link } from "react-router-dom";
+import { createEventSlugWithCentralTime } from "@/lib/timezone";
 import { SpriteIcon } from "@/components/ui/SpriteIcon";
 
 export default function AdvancedSearchPage() {
@@ -53,8 +54,14 @@ export default function AdvancedSearchPage() {
   // Link by id to match the app's :id routes (no slug-based 404s) — WEB-UX-018.
   const getResultLink = (result: any) => {
     switch (result.type) {
-      case 'event':
-        return `/events/${result.id}`;
+      case 'event': {
+        // Events link by title + Central date slug (events plan WP9). A row
+        // with no date falls back to the id, which useEventBySlug resolves.
+        const dated = result as { title?: string | null; date?: string | null; event_start_utc?: string | null };
+        return dated.event_start_utc || dated.date
+          ? `/events/${createEventSlugWithCentralTime(dated.title, dated)}`
+          : `/events/${encodeURIComponent(result.id)}`;
+      }
       case 'restaurant':
         return `/restaurants/${result.id}`;
       case 'attraction':

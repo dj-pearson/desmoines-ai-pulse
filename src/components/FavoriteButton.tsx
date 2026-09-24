@@ -116,14 +116,11 @@ function EventFavoriteButton({
         favorited={favorited}
         isToggling={isToggling}
         onToggle={() => {
-          const wasFavorited = favorited;
+          // No toast here. useFavorites toasts from the mutation's onSuccess
+          // and onError, after the write resolves; a success toast here fired
+          // before the insert and doubled up with it (and lied on failure).
           const result = toggleFavorite(eventId);
-          if (result.success) {
-            toast.success(
-              wasFavorited ? "Removed from favorites" : "Added to favorites",
-              { id: `fav-${eventId}` }
-            );
-          } else if (result.needsUpgrade) {
+          if (result.needsUpgrade) {
             setShowUpgrade(true);
           }
         }}

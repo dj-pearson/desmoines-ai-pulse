@@ -31,10 +31,16 @@
  * not the list - which check-prerender-content.mjs now gates on. Do not read
  * the sentence above as a current measurement; re-measure before quoting it.
  *
- * THE LOCATION LIST IS READ FROM THE PAGE COMPONENT, not restated here. Its
- * searchTerms are what the route filters on, so a location added to
- * EventsByLocation.tsx is covered without a second edit - the hand-maintained
- * list problem this repo keeps rediscovering.
+ * THE LOCATION LIST IS READ FROM src/lib/suburbs.ts, not restated here. Its
+ * searchTerms are what EventsByLocation filters on, so a suburb added there is
+ * covered without a second edit - the hand-maintained list problem this repo
+ * keeps rediscovering. (It used to parse EventsByLocation.tsx, which stopped
+ * holding the map when SUBURBS moved to suburbs.ts.)
+ *
+ * THE PREDICATES MIRROR THE PAGES: the three visibility filters from
+ * applyEventVisibility, the start of today in Central time as the floor
+ * (upcomingFloorUtc), and for /events/free the terms of FREE_PRICE_FILTER,
+ * which has no price.is.null.
  *
  * REPORTS, DOES NOT GATE. Each entry needs the per-URL decision AC5 describes -
  * 301 to the parent, unpublish, or accept - and the counts move with live data,
@@ -49,7 +55,7 @@ import { readFileSync, existsSync } from 'node:fs';
 
 /** Straight from WEB-SEO-013 AC5. */
 const FLOOR = 8;
-const PAGE_SOURCE = 'src/pages/EventsByLocation.tsx';
+const PAGE_SOURCE = 'src/lib/suburbs.ts';
 
 function loadEnvFile(path) {
   if (!existsSync(path)) return;
@@ -76,7 +82,7 @@ if (!BASE || !KEY) {
 const HEADERS = { apikey: KEY, Authorization: `Bearer ${KEY}` };
 
 /**
- * Slug -> searchTerms, parsed out of the page component's SUBURBS map so the two
+ * Slug -> searchTerms, parsed out of suburbs.ts's SUBURBS map so the two
  * cannot disagree. Throws rather than returning an empty set: a regex that stops
  * matching would otherwise report a clean surface.
  */
@@ -104,21 +110,50 @@ async function countUpcoming(params) {
   return Number.isFinite(total) ? total : 0;
 }
 
-const today = new Date().toISOString().split('T')[0];
+/**
+ * Start of today in America/Chicago as a UTC ISO string: upcomingFloorUtc()
+ * from src/lib/timezone.ts, restated because this is a plain .mjs script.
+ * Central midnight is 05:00Z (CDT) or 06:00Z (CST); pick whichever reads 00
+ * on the Chicago clock.
+ */
+function centralTodayFloor(now = new Date()) {
+  const day = new Intl.DateTimeFormat('en-CA', {
+    timeZone: 'America/Chicago', year: 'numeric', month: '2-digit', day: '2-digit',
+  }).format(now);
+  const [y, m, d] = day.split('-').map(Number);
+  const hourIn = (ms) =>
+    Number(new Intl.DateTimeFormat('en-US', { timeZone: 'America/Chicago', hour: '2-digit', hourCycle: 'h23' }).format(ms));
+  for (const utcHour of [5, 6]) {
+    const ms = Date.UTC(y, m - 1, d, utcHour);
+    if (hourIn(ms) === 0) return { day, floor: new Date(ms).toISOString() };
+  }
+  throw new Error(`could not place Central midnight for ${day}`);
+}
+
+const { day: today, floor } = centralTodayFloor();
 const rows = [];
+
+/** Upcoming and visible: the predicates every events page applies. */
+function upcomingParams() {
+  const params = new URLSearchParams({ select: 'id', date: `gte.${floor}` });
+  params.set('is_merged', 'neq.true');
+  params.set('is_hidden', 'neq.true');
+  params.set('archived_at', 'is.null');
+  return params;
+}
 
 for (const { slug, terms } of readLocations()) {
   // Mirrors EventsByLocation's own filter: any of city, location or venue.
   const or = terms.flatMap((t) => [`city.ilike.*${t}*`, `location.ilike.*${t}*`, `venue.ilike.*${t}*`]).join(',');
-  const params = new URLSearchParams({ select: 'id', date: `gte.${today}` });
+  const params = upcomingParams();
   params.set('or', `(${or})`);
   rows.push({ route: `/events/${slug}`, count: await countUpcoming(params) });
 }
 
 // /events/free is not a location and its filter is the one in FreeEvents.tsx.
 {
-  const params = new URLSearchParams({ select: 'id', date: `gte.${today}` });
-  params.set('or', '(price.ilike.*free*,price.eq.0,price.is.null)');
+  const params = upcomingParams();
+  params.set('or', '(price.ilike.*free*,price.eq.$0,price.eq.0)');
   rows.push({ route: '/events/free', count: await countUpcoming(params) });
 }
 

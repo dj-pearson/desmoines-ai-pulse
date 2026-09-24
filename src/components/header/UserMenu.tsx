@@ -13,17 +13,16 @@ import {
   LogOut,
   Settings,
   Shield,
-  Calendar,
   CalendarCheck,
   Users,
   Trophy,
   Building2,
   Crown,
-  Sparkles,
+  Plus,
+  Megaphone,
 } from "lucide-react";
 import { ThemeToggle } from "@/components/ThemeToggle";
-import { AdvertiseButton } from "@/components/AdvertiseButton";
-import SubmitEventButton from "@/components/SubmitEventButton";
+import { useSubscription } from "@/hooks/useSubscription";
 
 interface UserMenuProps {
   isAuthenticated: boolean;
@@ -37,8 +36,8 @@ interface UserMenuProps {
     last_name?: string | null;
     email?: string | null;
   } | null;
-  /** useGamification derives these from `reputation?.…`, so they are undefined
-   *  before the query resolves — not null. */
+  /** From useUserLevel: null until the query resolves, and when there is no
+   *  reputation row. Level 0 is a real level, so test with `!= null`. */
   userLevel: number | null | undefined;
   userXP: number | null | undefined;
   onLogout: () => void;
@@ -59,25 +58,21 @@ export function UserMenu({
       <ThemeToggle />
       {isAuthenticated ? (
         <>
-          {/* Upgrade CTA for logged-in users */}
-          <Link to="/pricing" className="hidden xl:block">
-            <Button
-              variant="outline"
-              size="sm"
-              className="bg-gradient-to-r from-amber-500/10 to-orange-500/10 border-amber-500/30 hover:border-amber-500/50 text-amber-700 dark:text-amber-400 hover:bg-amber-500/20"
-            >
-              <Crown className="h-3.5 w-3.5 mr-1.5" />
-              Upgrade
-            </Button>
-          </Link>
+          {/* Upgrade CTA, only for members who are not already paying */}
+          <MemberUpgradeGate isAuthenticated={isAuthenticated}>
+            <Link to="/pricing" className="hidden xl:block">
+              <Button variant="secondary" size="sm" className="font-semibold">
+                <Crown className="h-3.5 w-3.5 mr-1.5 text-primary" aria-hidden="true" />
+                Upgrade
+              </Button>
+            </Link>
+          </MemberUpgradeGate>
           <DropdownMenu>
             <DropdownMenuTrigger asChild>
               <Button
                 variant="ghost"
                 className="relative touch-target rounded-full"
                 aria-label={`Account menu for ${profile?.first_name || "User"}`}
-                aria-expanded="false"
-                aria-haspopup="menu"
               >
                 <Avatar className="h-8 w-8">
                   <AvatarFallback className="bg-primary text-primary-foreground text-sm">
@@ -89,9 +84,7 @@ export function UserMenu({
             <DropdownMenuContent
               className="w-56 bg-background border border-border shadow-lg z-50"
               align="end"
-              forceMount
               sideOffset={8}
-              role="menu"
               aria-label="Account menu"
             >
               <div className="flex items-center justify-start gap-2 p-2">
@@ -104,7 +97,7 @@ export function UserMenu({
                   <p className="w-[200px] truncate text-sm text-muted-foreground">
                     {profile?.email}
                   </p>
-                  {userLevel && (
+                  {userLevel != null && (
                     <div className="flex items-center gap-2 mt-1">
                       <div className="flex items-center gap-1 px-2 py-0.5 bg-primary/10 rounded-full">
                         <Trophy className="h-3 w-3 text-primary" />
@@ -122,30 +115,18 @@ export function UserMenu({
               <MenuLink href="/gamification" icon={Trophy} label="Level Up" />
               <MenuLink href="/social" icon={Users} label="Social" />
               <DropdownMenuSeparator />
-              {/* Submit Event and Advertise with Us now in dropdown */}
-              <DropdownMenuItem asChild role="none">
-                <SubmitEventButton />
-              </DropdownMenuItem>
-              <DropdownMenuItem asChild role="none">
-                <AdvertiseButton />
-              </DropdownMenuItem>
+              {/* Plain menu items rather than buttons wrapped in an item, so
+                  arrow keys reach them like every other entry. */}
+              <MenuLink href="/submit-event" icon={Plus} label="Submit Event" />
+              <MenuLink href="/advertise" icon={Megaphone} label="Advertise with Us" />
               <DropdownMenuSeparator />
-              <DropdownMenuItem asChild role="none">
-                <Link
-                  to="/pricing"
-                  className="flex items-center text-amber-600 dark:text-amber-400"
-                  role="menuitem"
-                  aria-label="View premium plans"
-                >
-                  <Crown className="mr-2 h-4 w-4" aria-hidden="true" />
-                  Upgrade to Premium
-                  <Sparkles className="ml-auto h-3 w-3" aria-hidden="true" />
-                </Link>
-              </DropdownMenuItem>
+              <MemberUpgradeGate isAuthenticated={isAuthenticated}>
+                <MenuLink href="/pricing" icon={Crown} label="Upgrade to Premium" />
+              </MemberUpgradeGate>
               <MenuLink href="/business" icon={Building2} label="Business Portal" />
               {isAdmin && <MenuLink href="/admin" icon={Shield} label="Admin" />}
               <DropdownMenuSeparator />
-              <DropdownMenuItem onClick={onLogout} role="menuitem" aria-label="Sign out of your account">
+              <DropdownMenuItem onClick={onLogout} aria-label="Sign out of your account">
                 <LogOut className="mr-2 h-4 w-4" aria-hidden="true" />
                 Sign out
               </DropdownMenuItem>
@@ -169,11 +150,10 @@ interface MenuLinkProps {
 
 function MenuLink({ href, icon: Icon, label }: MenuLinkProps) {
   return (
-    <DropdownMenuItem asChild role="none">
+    <DropdownMenuItem asChild>
       <Link
         to={href}
         className="flex items-center"
-        role="menuitem"
         aria-label={`Go to ${label.toLowerCase()} page`}
       >
         <Icon className="mr-2 h-4 w-4" aria-hidden="true" />
@@ -181,4 +161,27 @@ function MenuLink({ href, icon: Icon, label }: MenuLinkProps) {
       </Link>
     </DropdownMenuItem>
   );
+}
+
+interface MemberUpgradeGateProps {
+  isAuthenticated: boolean;
+  children: React.ReactNode;
+}
+
+/**
+ * Renders an upgrade prompt only to people who could act on it. Anonymous
+ * visitors always see it; a signed-in member sees it once their subscription
+ * has loaded and it is free tier. Insider and VIP members used to be asked to
+ * upgrade on every page.
+ */
+export function MemberUpgradeGate({ isAuthenticated, children }: MemberUpgradeGateProps) {
+  if (!isAuthenticated) return <>{children}</>;
+  return <PaidTierCheck>{children}</PaidTierCheck>;
+}
+
+/** Split out so useSubscription only runs for signed-in visitors. */
+function PaidTierCheck({ children }: { children: React.ReactNode }) {
+  const { isPremium, subscriptionLoading } = useSubscription();
+  if (subscriptionLoading || isPremium) return null;
+  return <>{children}</>;
 }

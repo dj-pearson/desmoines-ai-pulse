@@ -1,5 +1,6 @@
 import { Helmet } from "react-helmet-async";
 import { BRAND } from "@/lib/brandConfig";
+import { toJsonLd } from "@/lib/jsonLd";
 
 export interface BreadcrumbItem {
   name: string;
@@ -45,7 +46,7 @@ export const BreadcrumbListSchema = ({ items }: BreadcrumbListSchemaProps) => {
   return (
     <Helmet>
       <script type="application/ld+json">
-        {JSON.stringify(breadcrumbSchema)}
+        {toJsonLd(breadcrumbSchema)}
       </script>
     </Helmet>
   );

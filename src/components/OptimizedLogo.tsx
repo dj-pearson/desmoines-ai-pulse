@@ -28,6 +28,14 @@ const LOGO_ASPECT_RATIOS: Record<string, { width: number; height: number }> = {
 };
 
 /**
+ * Pre-generated width variants (public/<file>-<w>w.{webp,png}). Regenerate
+ * them from the source PNG with sharp if the logo changes.
+ */
+const RESPONSIVE_WIDTHS: Partial<Record<string, readonly number[]>> = {
+  logo2: [40, 80, 120],
+};
+
+/**
  * Optimized logo component that uses WebP format with PNG fallback
  * This provides 95%+ smaller file sizes compared to original PNGs
  *
@@ -79,11 +87,26 @@ export function OptimizedLogo({
   const displayWidth = width ?? aspectRatio?.width;
   const displayHeight = height ?? aspectRatio?.height;
 
+  // Width-described variants exist only where they have been generated. The
+  // full-size DMI-Logo2.webp is 78KB (bigger than its own PNG) for an image the
+  // header draws at 40px, so without these the browser fetched ~50KB it could
+  // not use on every page.
+  const widths = RESPONSIVE_WIDTHS[variant];
+  const sizes = widths && displayWidth ? `${displayWidth}px` : undefined;
+  const webpSrcSet = widths
+    ? widths.map((w) => `/${fileName}-${w}w.webp ${w}w`).join(', ')
+    : `/${fileName}.webp`;
+  const pngSrcSet = widths
+    ? widths.map((w) => `/${fileName}-${w}w.png ${w}w`).join(', ')
+    : undefined;
+
   return (
     <picture>
-      <source srcSet={`/${fileName}.webp`} type="image/webp" />
+      <source srcSet={webpSrcSet} sizes={sizes} type="image/webp" />
       <img
         src={`/${fileName}.png`}
+        srcSet={pngSrcSet}
+        sizes={sizes}
         alt={alt}
         className={className}
         width={displayWidth}

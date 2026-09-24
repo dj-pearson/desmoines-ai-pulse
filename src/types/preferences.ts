@@ -177,43 +177,28 @@ export const defaultPreferences: Omit<UserPreferences, 'userId'> = {
 };
 
 /**
- * Onboarding steps configuration
+ * Onboarding steps configuration.
+ *
+ * Three steps, each of which saves something (Home plan WP2 item 2). The
+ * welcome, calendar, notifications and "all set" steps are gone: the calendar
+ * step showed "Connected" without connecting anything, and the notifications
+ * step had no controls.
  */
 export const onboardingSteps = [
   {
-    id: 'welcome',
-    title: 'Welcome to Des Moines Insider',
-    description: 'Let\'s personalize your experience',
-  },
-  {
     id: 'interests',
-    title: 'What are you interested in?',
-    description: 'Select all that apply',
+    title: 'What are you into?',
+    description: 'Pick as many as you like. These steer the picks on the home page.',
   },
   {
     id: 'cuisine',
-    title: 'Food preferences',
-    description: 'Help us recommend great dining',
+    title: 'Food and price',
+    description: 'Used to rank restaurants for you.',
   },
   {
     id: 'location',
-    title: 'Where do you like to go?',
-    description: 'Tell us about your favorite areas',
-  },
-  {
-    id: 'calendar',
-    title: 'Connect your calendar',
-    description: 'Get smart event suggestions based on your schedule',
-  },
-  {
-    id: 'notifications',
-    title: 'Stay updated',
-    description: 'Choose how you want to hear from us',
-  },
-  {
-    id: 'complete',
-    title: 'All set!',
-    description: 'Your personalized experience awaits',
+    title: 'Which neighbourhoods?',
+    description: 'Where you like to go out. You can change this any time.',
   },
 ] as const;
 

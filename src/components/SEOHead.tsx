@@ -1,5 +1,6 @@
 import { Helmet } from "react-helmet-async";
 import { BRAND, getCanonicalUrl } from "@/lib/brandConfig";
+import { toJsonLd } from "@/lib/jsonLd";
 
 interface SEOHeadProps {
   title: string;
@@ -21,7 +22,24 @@ interface SEOHeadProps {
     longitude?: number;
   };
   breadcrumbs?: Array<{ name: string; url: string }>;
+  /** Emit robots noindex, nofollow instead of the default index directive. */
+  noindex?: boolean;
+  /**
+   * Explicit robots directive; wins over `noindex` when set. For a thin or
+   * filtered listing that should stay out of the index while its links are
+   * still followed, pass "noindex, follow". Existing `noindex` callers keep
+   * "noindex, nofollow".
+   */
+  robots?: SEORobotsDirective;
 }
+
+export type SEORobotsDirective =
+  | "noindex, follow"
+  | "noindex, nofollow"
+  | "index, follow";
+
+const DEFAULT_ROBOTS =
+  "index, follow, max-image-preview:large, max-snippet:-1, max-video-preview:-1";
 
 export default function SEOHead({
   title,
@@ -38,6 +56,8 @@ export default function SEOHead({
   modifiedTime,
   location,
   breadcrumbs,
+  noindex = false,
+  robots,
 }: SEOHeadProps) {
   const baseUrl = BRAND.baseUrl;
 
@@ -125,7 +145,11 @@ export default function SEOHead({
       <meta name="author" content={author} />
       <meta
         name="robots"
-        content="index, follow, max-image-preview:large, max-snippet:-1, max-video-preview:-1"
+        content={
+          robots === "index, follow"
+            ? DEFAULT_ROBOTS
+            : robots ?? (noindex ? "noindex, nofollow" : DEFAULT_ROBOTS)
+        }
       />
 
       {/* Canonical URL */}
@@ -175,19 +199,14 @@ export default function SEOHead({
       <meta name="geo.position" content="41.5868;-93.6250" />
       <meta name="ICBM" content="41.5868, -93.6250" />
 
-      {/* Mobile Optimization */}
-      <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+      {/* Mobile Optimization. NO viewport meta and NO font preconnects here
+          (WP5 item 9, docs/page-plans/home.md): index.html owns both. Helmet
+          appends, so a second viewport meta without viewport-fit=cover could
+          win and push content under the notch, and the preconnects were
+          duplicates of the ones index.html already caps at four. */}
       <meta name="format-detection" content="telephone=yes" />
       <meta name="format-detection" content="address=yes" />
       <meta name="mobile-web-app-capable" content="yes" />
-
-      {/* Preconnect for Performance */}
-      <link rel="preconnect" href="https://fonts.googleapis.com" />
-      <link
-        rel="preconnect"
-        href="https://fonts.gstatic.com"
-        crossOrigin="anonymous"
-      />
 
       {/* Alternate URLs for different languages/regions */}
       {alternateUrls &&
@@ -198,25 +217,25 @@ export default function SEOHead({
       {/* Structured Data */}
       {breadcrumbSchema && (
         <script type="application/ld+json">
-          {JSON.stringify(breadcrumbSchema)}
+          {toJsonLd(breadcrumbSchema)}
         </script>
       )}
 
       {locationSchema && (
         <script type="application/ld+json">
-          {JSON.stringify(locationSchema)}
+          {toJsonLd(locationSchema)}
         </script>
       )}
 
       {structuredData && (
         <script type="application/ld+json">
-          {JSON.stringify(structuredData)}
+          {toJsonLd(structuredData)}
         </script>
       )}
 
       {/* Default Organization Structured Data */}
       <script type="application/ld+json">
-        {JSON.stringify({
+        {toJsonLd({
           "@context": "https://schema.org",
           "@type": "Organization",
           "@id": `${baseUrl}/#organization`,

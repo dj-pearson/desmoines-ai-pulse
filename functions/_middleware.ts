@@ -1,6 +1,7 @@
 import { EventContext } from "@cloudflare/workers-types";
 // Relative, alias-free imports only: this file is bundled by Pages Functions,
-// which does not read the app's "@/" alias. Both modules have no imports.
+// which does not read the app's "@/" alias. restaurantMeta has no imports;
+// restaurantHours imports date-fns-tz, which the Pages bundler resolves.
 import {
   parseIowaAddress,
   restaurantLocality,

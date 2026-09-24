@@ -1,8 +1,8 @@
-import { useState, useEffect, useCallback, useRef } from 'react';
+import { useCallback, useState } from 'react';
+import { useQuery, useQueryClient } from '@tanstack/react-query';
 import { supabase } from '@/integrations/supabase/client';
 import type { Json } from '@/integrations/supabase/types';
 import { useAuth } from '@/hooks/useAuth';
-import { storage } from '@/lib/safeStorage';
 import { createLogger } from '@/lib/logger';
 import {
   UserPreferences,
@@ -10,10 +10,15 @@ import {
   EventCategory,
   DietaryRestriction,
 } from '@/types/preferences';
+import {
+  ANONYMOUS_USER_ID,
+  forgetGuestPreferences,
+  readLocalPreferences,
+  writeLocalPreferences,
+} from '@/lib/userPreferencesStore';
 
 const log = createLogger('useUserPreferences');
 
-const STORAGE_KEY = 'desmoines_user_preferences';
 
 /**
  * The JSONB sub-key inside `profiles.communication_preferences` that carries
@@ -68,126 +73,170 @@ async function writeToServer(userId: string, prefs: UserPreferences): Promise<vo
   }
 }
 
+/** Query key shared by every instance of the hook, so a save reaches them all. */
+export function userPreferencesQueryKey(userId: string | null | undefined) {
+  return ['user-preferences', userId || ANONYMOUS_USER_ID] as const;
+}
+
+function freshDefaults(userId: string): UserPreferences {
+  return { ...defaultPreferences, userId, lastUpdated: new Date().toISOString() };
+}
+
+/**
+ * Resolve the preferences for `userId` (empty = guest).
+ *
+ * Local first, always: it is the offline copy and the guest copy. For a
+ * signed-in account the server value wins when there is one. When there is
+ * none, a local copy is uploaded only if `canAdoptLocal` allowed it into
+ * `readLocalPreferences` - that is, it is the guest's own copy or already this
+ * account's. A copy written by a different account is never read here, which
+ * is what stopped A's interests landing in B's profile.
+ */
+async function loadPreferences(userId: string | null | undefined): Promise<UserPreferences> {
+  const local = readLocalPreferences(userId);
+
+  if (!userId) {
+    if (local.prefs) return local.prefs;
+    const fresh = freshDefaults(ANONYMOUS_USER_ID);
+    writeLocalPreferences(null, fresh);
+    return fresh;
+  }
+
+  const own = local.source === 'own' ? local.prefs : null;
+
+  const { data, error } = await supabase
+    .from('profiles')
+    .select('communication_preferences')
+    .eq('user_id', userId)
+    .single();
+
+  if (error) {
+    // Keep the local copy rather than falling back to defaults. A read failure
+    // must not look like "this user has no preferences", which is how a sync
+    // feature ends up wiping the thing it was added to protect. A guest copy
+    // is NOT adopted on this branch: without the server answer there is no way
+    // to know the account does not already have its own.
+    log.warn('loadPreferences', 'Server read failed; keeping local copy', {
+      error: error.message,
+    });
+    return own ?? freshDefaults(userId);
+  }
+
+  const bag = (data?.communication_preferences as Record<string, unknown> | null) ?? {};
+  const remote = bag[SERVER_KEY] as Partial<UserPreferences> | undefined;
+
+  if (remote) {
+    // Server wins, merged over defaults so a field added since the value was
+    // written is present rather than undefined.
+    const merged: UserPreferences = { ...defaultPreferences, ...remote, userId };
+    writeLocalPreferences(userId, merged);
+    return merged;
+  }
+
+  if (local.prefs) {
+    // AC3: first authenticated load for someone who already had settings on
+    // this browser, either as a guest or under this account. Push them up
+    // rather than losing them, then take the guest copy out of reach of the
+    // next account.
+    const adopted: UserPreferences = { ...local.prefs, userId };
+    writeLocalPreferences(userId, adopted);
+    await writeToServer(userId, adopted);
+    if (local.source === 'guest') forgetGuestPreferences();
+    return adopted;
+  }
+
+  const fresh = freshDefaults(userId);
+  writeLocalPreferences(userId, fresh);
+  return fresh;
+}
+
 /**
  * Hook for managing user preferences across the application.
  *
- * SYNCED for signed-in users, local-only for guests. localStorage via
- * @/lib/safeStorage remains the immediate store, so a guest keeps working and
- * a signed-in user sees no write latency; the value is mirrored into
- * `profiles.communication_preferences.taste_preferences` so it follows the
- * account to another browser and survives clearing site data (WEB-QA-015).
+ * SYNCED for signed-in users, local-only for guests. Local storage (scoped per
+ * account, see @/lib/userPreferencesStore) is the immediate store, so a guest
+ * keeps working and a signed-in user sees no write latency; the value is
+ * mirrored into `profiles.communication_preferences.taste_preferences` so it
+ * follows the account to another browser (WEB-QA-015).
  *
- * NO NEW TABLE. The story asked to decide a storage shape and add a table for
- * it; the shape was already decided and working in this repo on an existing
- * JSONB column, so this converges onto it rather than adding a second answer.
- * The `user_preferences` table the hook originally read has never existed, and
- * `user_preference_profiles` is inferred behavioural data - session counts and
- * confidence scores - not user-set settings.
+ * ONE SHARED QUERY. Every instance reads `['user-preferences', userId]`, so a
+ * save in onboarding reaches the For You rail in the same render instead of on
+ * the next reload, and four mounted instances make one profiles read, not
+ * four. The local copy is `initialData`, so a returning user never sees the
+ * defaults flash before their real settings arrive.
+ *
+ * NO NEW TABLE. The `user_preferences` table the hook originally read has never
+ * existed, and `user_preference_profiles` is inferred behavioural data, not
+ * user-set settings.
  */
 export function useUserPreferences() {
   const { user } = useAuth();
-  const [preferences, setPreferences] = useState<UserPreferences | null>(null);
-  const [isLoading, setIsLoading] = useState(true);
+  const userId = user?.id ?? null;
+  const queryClient = useQueryClient();
+  const queryKey = userPreferencesQueryKey(userId);
   const [isSaving, setIsSaving] = useState(false);
 
-  /// The signed-in user whose server value has already been merged in, so a
-  /// re-render does not re-fetch and a sign-out followed by a different
-  /// sign-in does.
-  const loadedForUser = useRef<string | null>(null);
-
-  // Load preferences on mount
-  useEffect(() => {
-    loadPreferences();
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [user]);
-
-  const loadPreferences = async () => {
-    try {
-      setIsLoading(true);
-
-      // Local first, always. It is the offline copy and the guest copy, and
-      // reading it before the network means a signed-in user never sees the
-      // defaults flash before their real settings arrive.
-      const stored = storage.get<UserPreferences>(STORAGE_KEY);
-      const local: UserPreferences = stored ?? {
-        ...defaultPreferences,
-        userId: user?.id || 'anonymous',
-      };
-      setPreferences(local);
-      if (!stored) storage.set(STORAGE_KEY, local);
-
-      if (!user?.id) {
-        loadedForUser.current = null;
-        return;
+  const query = useQuery({
+    queryKey,
+    queryFn: async () => {
+      try {
+        return await loadPreferences(userId);
+      } catch (error) {
+        log.error('loadPreferences', 'Failed to load preferences', { error: String(error) });
+        const local = readLocalPreferences(userId);
+        return local.source === 'own' && local.prefs
+          ? local.prefs
+          : freshDefaults(userId ?? ANONYMOUS_USER_ID);
       }
-      if (loadedForUser.current === user.id) return;
+    },
+    initialData: () => {
+      const local = readLocalPreferences(userId);
+      return local.source === 'own' ? local.prefs ?? undefined : undefined;
+    },
+    // The local copy is shown at once but is not the last word for an account:
+    // marking it as old makes the server read run on mount.
+    initialDataUpdatedAt: 0,
+    staleTime: 5 * 60 * 1000,
+  });
 
-      const { data, error } = await supabase
-        .from('profiles')
-        .select('communication_preferences')
-        .eq('user_id', user.id)
-        .single();
+  const preferences = query.data ?? null;
 
-      if (error) {
-        // Keep the local copy rather than falling back to defaults. A read
-        // failure must not look like "this user has no preferences", which is
-        // how a sync feature ends up wiping the thing it was added to protect.
-        log.warn('loadPreferences', 'Server read failed; keeping local copy', {
-          error: error.message,
-        });
-        return;
-      }
-
-      const bag = (data?.communication_preferences as Record<string, unknown> | null) ?? {};
-      const remote = bag[SERVER_KEY] as Partial<UserPreferences> | undefined;
-
-      if (remote) {
-        // Server wins, merged over defaults so a field added since the value
-        // was written is present rather than undefined.
-        const merged: UserPreferences = { ...defaultPreferences, ...remote, userId: user.id };
-        setPreferences(merged);
-        storage.set(STORAGE_KEY, merged);
-      } else if (stored) {
-        // AC3: first authenticated load for someone who already had local
-        // settings. Push them up rather than losing them.
-        await writeToServer(user.id, { ...local, userId: user.id });
-      }
-
-      loadedForUser.current = user.id;
-    } catch (error) {
-      log.error('loadPreferences', 'Failed to load preferences', { error: String(error) });
-      // Use defaults on error
-      const newPreferences: UserPreferences = {
-        ...defaultPreferences,
-        userId: user?.id || 'anonymous',
-      };
-      setPreferences(newPreferences);
-    } finally {
-      setIsLoading(false);
-    }
-  };
-
-  // Save preferences
+  // Save preferences. Reads the current value from the cache rather than from
+  // a render closure, so two quick saves (interests, then food) do not undo
+  // each other.
   const savePreferences = useCallback(
     async (updates: Partial<UserPreferences>) => {
       try {
         setIsSaving(true);
+        // With a value in the cache, a load still in flight (the mount read,
+        // which initialDataUpdatedAt: 0 always starts) would land after this
+        // save and put the pre-save server value back, so the next save would
+        // build on that and drop this one. Cancel it. With nothing cached yet,
+        // wait for that load instead: saving over bare defaults would write
+        // them over the account's real preferences on the server.
+        const cached = queryClient.getQueryData<UserPreferences>(queryKey);
+        if (cached) await queryClient.cancelQueries({ queryKey });
+        const loaded =
+          cached ??
+          (await queryClient
+            .fetchQuery({ queryKey, queryFn: () => loadPreferences(userId) })
+            .catch(() => undefined));
+        const current = loaded ?? freshDefaults(userId ?? ANONYMOUS_USER_ID);
 
         const updated: UserPreferences = {
-          ...preferences!,
+          ...current,
           ...updates,
+          userId: userId ?? ANONYMOUS_USER_ID,
           lastUpdated: new Date().toISOString(),
         };
 
-        setPreferences(updated);
-
-        // Save to safeStorage immediately
-        storage.set(STORAGE_KEY, updated);
+        queryClient.setQueryData(queryKey, updated);
+        writeLocalPreferences(userId, updated);
 
         // Then mirror to the account. A failed write leaves the local copy in
         // place and is logged, not thrown: losing a sync is worth far less
         // than blocking a settings change on the network.
-        if (user?.id) await writeToServer(user.id, updated);
+        if (userId) await writeToServer(userId, updated);
 
         return updated;
       } catch (error) {
@@ -197,48 +246,61 @@ export function useUserPreferences() {
         setIsSaving(false);
       }
     },
-    [preferences, user]
+    // queryKey is derived from userId; listing userId covers it.
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+    [queryClient, userId]
+  );
+
+  const currentPrefs = useCallback(
+    () => queryClient.getQueryData<UserPreferences>(queryKey) ?? null,
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+    [queryClient, userId]
   );
 
   // Update specific preference sections
   const updateInterests = useCallback(
     (categories: EventCategory[]) => {
-      if (!preferences) return;
-      return savePreferences({
-        interests: { ...preferences.interests, categories },
-      });
+      const prefs = currentPrefs();
+      if (!prefs) return;
+      return savePreferences({ interests: { ...prefs.interests, categories } });
     },
-    [preferences, savePreferences]
+    [currentPrefs, savePreferences]
+  );
+
+  const updateInterestTags = useCallback(
+    (tags: string[]) => {
+      const prefs = currentPrefs();
+      if (!prefs) return;
+      return savePreferences({ interests: { ...prefs.interests, tags } });
+    },
+    [currentPrefs, savePreferences]
   );
 
   const updateCuisine = useCallback(
     (updates: Partial<UserPreferences['cuisine']>) => {
-      if (!preferences) return;
-      return savePreferences({
-        cuisine: { ...preferences.cuisine, ...updates },
-      });
+      const prefs = currentPrefs();
+      if (!prefs) return;
+      return savePreferences({ cuisine: { ...prefs.cuisine, ...updates } });
     },
-    [preferences, savePreferences]
+    [currentPrefs, savePreferences]
   );
 
   const updateLocation = useCallback(
     (updates: Partial<UserPreferences['location']>) => {
-      if (!preferences) return;
-      return savePreferences({
-        location: { ...preferences.location, ...updates },
-      });
+      const prefs = currentPrefs();
+      if (!prefs) return;
+      return savePreferences({ location: { ...prefs.location, ...updates } });
     },
-    [preferences, savePreferences]
+    [currentPrefs, savePreferences]
   );
 
   const updateNotifications = useCallback(
     (updates: Partial<UserPreferences['notifications']>) => {
-      if (!preferences) return;
-      return savePreferences({
-        notifications: { ...preferences.notifications, ...updates },
-      });
+      const prefs = currentPrefs();
+      if (!prefs) return;
+      return savePreferences({ notifications: { ...prefs.notifications, ...updates } });
     },
-    [preferences, savePreferences]
+    [currentPrefs, savePreferences]
   );
 
   const completeOnboarding = useCallback(() => {
@@ -247,39 +309,40 @@ export function useUserPreferences() {
 
   // Helper to check if user has specific interest
   const hasInterest = useCallback(
-    (category: EventCategory) => {
-      return preferences?.interests.categories.includes(category) || false;
-    },
+    (category: EventCategory) => preferences?.interests.categories.includes(category) || false,
     [preferences]
   );
 
   // Helper to check if user has dietary restriction
   const hasDietaryRestriction = useCallback(
-    (restriction: DietaryRestriction) => {
-      return preferences?.cuisine.dietary.includes(restriction) || false;
-    },
+    (restriction: DietaryRestriction) => preferences?.cuisine.dietary.includes(restriction) || false,
     [preferences]
   );
 
   // Reset to defaults
   const resetPreferences = useCallback(async () => {
-    const newPreferences: UserPreferences = {
-      ...defaultPreferences,
-      userId: user?.id || 'anonymous',
-    };
-    setPreferences(newPreferences);
-    storage.set(STORAGE_KEY, newPreferences);
+    const fresh = freshDefaults(userId ?? ANONYMOUS_USER_ID);
+    queryClient.setQueryData(userPreferencesQueryKey(userId), fresh);
+    writeLocalPreferences(userId, fresh);
     // A reset that only cleared the local copy would come straight back on the
     // next load from the server, which reads as the reset button not working.
-    if (user?.id) await writeToServer(user.id, newPreferences);
-  }, [user]);
+    if (userId) await writeToServer(userId, fresh);
+  }, [queryClient, userId]);
+
+  const { refetch } = query;
+  const reload = useCallback(async () => {
+    await refetch();
+  }, [refetch]);
 
   return {
     preferences,
-    isLoading,
+    // Pending only while there is nothing to show; a background refetch over
+    // the local copy is not "loading".
+    isLoading: query.isPending,
     isSaving,
     savePreferences,
     updateInterests,
+    updateInterestTags,
     updateCuisine,
     updateLocation,
     updateNotifications,
@@ -287,6 +350,6 @@ export function useUserPreferences() {
     hasInterest,
     hasDietaryRestriction,
     resetPreferences,
-    reload: loadPreferences,
+    reload,
   };
 }

@@ -44,7 +44,18 @@
 import { Event } from '@/lib/types';
 import { createEventSlugWithCentralTime } from '@/lib/timezone';
 import { BRAND } from '@/lib/brandConfig';
+import { isHttpUrl } from '@/lib/dashboardItems';
 import { buildEventOffers, isEventAccessibleForFree } from '@/lib/eventOffers';
+
+/**
+ * The event's outbound source link, or null when it is missing, not http(s)
+ * (a scraped `javascript:` URL), or flagged broken by the link checker. The
+ * detail page and the JSON-LD offer both read this, so they cannot disagree.
+ */
+export function eventTicketUrl(event: { source_url?: string | null; source_url_broken?: boolean | null }): string | null {
+  if (event.source_url_broken) return null;
+  return isHttpUrl(event.source_url) ? event.source_url : null;
+}
 
 /** Assumed run time when an event has no explicit end. */
 const DEFAULT_EVENT_HOURS = 3;
@@ -161,7 +172,9 @@ export function buildEventJsonLd(event: Event, opts: { withContext?: boolean } =
       ? {
           offers: {
             ...offers,
-            url: event.source_url || url,
+            // A source_url the link checker flagged, or one that is not
+            // http(s), is not a ticket page (events plan WP8 item 5).
+            url: eventTicketUrl(event) ?? url,
             validFrom: event.created_at || new Date().toISOString(),
           },
         }

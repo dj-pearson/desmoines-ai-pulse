@@ -318,6 +318,30 @@ test.describe('Search Results', () => {
 
 test.describe('Filter Functionality', () => {
   test('events page filters should work correctly', async ({ page }) => {
+    // /events searches SERVER-side (textSearch on search_vector), and the
+    // fixture backend returns the same rows whatever the query says. This
+    // passed on the old page only because its Featured block (two fixture
+    // rows) hid itself while any filter was active; the events plan removed
+    // that block. So the backend's answer for this one term is stated here:
+    // a search_vector query naming it matches nothing. What the test then
+    // checks is that typing reaches the query and the list renders the answer.
+    const searchedFor: string[] = [];
+    await page.route('**/rest/v1/events?**', (route) => {
+      const url = decodeURIComponent(route.request().url());
+      if (!/search_vector=[^&]*zzzznonexistentquery/i.test(url)) return route.fallback();
+      searchedFor.push(url);
+      return route.fulfill({
+        status: 200,
+        contentType: 'application/json',
+        headers: {
+          'access-control-allow-origin': '*',
+          'access-control-expose-headers': 'content-range',
+          'content-range': '*/0',
+        },
+        body: route.request().method() === 'HEAD' ? '' : '[]',
+      });
+    });
+
     await page.goto('/events', { waitUntil: 'networkidle' });
 
     // This test was broken three separate ways and could not fail on the
@@ -368,6 +392,7 @@ test.describe('Filter Functionality', () => {
 
     const afterCount = await cards().count();
 
+    expect(searchedFor.length, 'the search term never reached the events query').toBeGreaterThan(0);
     expect(
       afterCount,
       `Filtering by a non-matching term should reduce the rendered results. ` +

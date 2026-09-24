@@ -1,4 +1,5 @@
-import { useEventHotels, useHotels } from "@/hooks/useHotels";
+import { useEventHotels } from "@/hooks/useHotels";
+import { NearbyHotels } from "@/components/venues/NearbyHotels";
 import { Card, CardContent } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
 import { Star } from "lucide-react";
@@ -6,16 +7,33 @@ import { Link } from "react-router-dom";
 import { Database } from "@/integrations/supabase/types";
 import AffiliateDisclosureBanner from "@/components/AffiliateDisclosureBanner";
 import { SpriteIcon } from "@/components/ui/SpriteIcon";
+import { hotelRateLabel, resolveBooking } from "@/lib/hotelBooking";
 
 type Hotel = Database["public"]["Tables"]["hotels"]["Row"];
 
 interface EventHotelCalloutProps {
   eventId: string;
+  /** Kept for call-site compatibility; the fallback is by distance now. */
   eventArea?: string;
+  /** Venue coordinates for the NearbyHotels fallback. */
+  latitude?: number | string | null;
+  longitude?: number | string | null;
+  /** What NearbyHotels measures from, e.g. "Wells Fargo Arena". */
+  placeName?: string;
+  /**
+   * The venue slug /stay?near= understands (a `venues` slug). When given,
+   * both the linked-hotels list and the NearbyHotels fallback end with
+   * "See all hotels near X" (plan-stay WP2 item 7 / hand-off).
+   */
+  nearSlug?: string | null;
 }
 
 function HotelMiniCard({ hotel, distance, notes }: { hotel: Hotel; distance?: number; notes?: string }) {
-  const bookUrl = hotel.affiliate_url || hotel.website;
+  // resolveBooking puts both URLs through safeWebUrl, so a javascript: or
+  // relative value in either column renders no link, and only an affiliate
+  // link is marked sponsored.
+  const booking = resolveBooking(hotel);
+  const rateLabel = hotelRateLabel(hotel.avg_nightly_rate);
   const fullStars = hotel.star_rating ? Math.floor(hotel.star_rating) : 0;
 
   return (
@@ -27,8 +45,8 @@ function HotelMiniCard({ hotel, distance, notes }: { hotel: Hotel; distance?: nu
             {hotel.image_url ? (
               <img src={hotel.image_url} alt={hotel.name} width={80} height={80} className="w-full h-full object-cover" loading="lazy" decoding="async" />
             ) : (
-              <div className="w-full h-full bg-gradient-to-br from-[#2D1B69] to-[#DC143C] flex items-center justify-center" role="img" aria-label={`No image available for ${hotel.name}`}>
-                <SpriteIcon name="building-2" className="h-6 w-6 text-white/70" />
+              <div className="w-full h-full bg-muted flex items-center justify-center" role="img" aria-label={`No image available for ${hotel.name}`}>
+                <SpriteIcon name="building-2" className="h-6 w-6 text-muted-foreground" />
               </div>
             )}
           </div>
@@ -55,24 +73,26 @@ function HotelMiniCard({ hotel, distance, notes }: { hotel: Hotel; distance?: nu
               </p>
             )}
 
-            {/* Price and book */}
-            <div className="flex items-center justify-between">
-              <div className="flex items-center gap-2">
-                {hotel.price_range && (
-                  <Badge variant="outline" className="text-[10px] px-1.5 py-0">{hotel.price_range}</Badge>
-                )}
-                {hotel.avg_nightly_rate && (
-                  <span className="text-xs text-muted-foreground">~${hotel.avg_nightly_rate}/night</span>
-                )}
-              </div>
-              {bookUrl && (
+            {/* Rate is a seeded, typical figure: worded as one, never summed. */}
+            {rateLabel && <p className="text-xs text-muted-foreground">{rateLabel}</p>}
+
+            {/* Price band and booking link */}
+            <div className="flex flex-wrap items-center justify-between gap-x-2">
+              {hotel.price_range ? (
+                <Badge variant="outline" className="text-[10px] px-1.5 py-0">{hotel.price_range}</Badge>
+              ) : (
+                <span />
+              )}
+              {booking && (
                 <a
-                  href={bookUrl}
+                  href={booking.href}
                   target="_blank"
-                  rel="noopener noreferrer sponsored"
-                  className="inline-flex items-center gap-1 text-xs font-medium text-primary hover:text-primary/80"
+                  rel={booking.rel}
+                  data-affiliate={booking.isAffiliate ? "true" : "false"}
+                  className="inline-flex min-h-11 items-center gap-1 px-1 text-xs font-medium text-primary hover:text-primary/80"
                 >
-                  Book <SpriteIcon name="external-link" className="h-3 w-3" />
+                  {booking.label} <SpriteIcon name="external-link" className="h-3 w-3" />
+                  <span className="sr-only"> (opens in a new tab)</span>
                 </a>
               )}
             </div>
@@ -83,51 +103,80 @@ function HotelMiniCard({ hotel, distance, notes }: { hotel: Hotel; distance?: nu
   );
 }
 
-export default function EventHotelCallout({ eventId, eventArea }: EventHotelCalloutProps) {
-  const { hotels: linkedHotels, isLoading: linkedLoading } = useEventHotels(eventId);
+/**
+ * The one hotel section on event detail (events plan WP8 item 9).
+ *
+ * Hotels an editor linked to this event come first. Without any, it falls back
+ * to NearbyHotels: real distances from the venue. The old fallback was the
+ * site's featured hotels under "Make It a Weekend", which put the same three
+ * downtown hotels on a Waukee barn dance, and the page also rendered
+ * NearbyHotels in the sidebar, so an event could show two hotel lists.
+ * The caller renders this only while the event is upcoming.
+ */
+export default function EventHotelCallout({
+  eventId,
+  latitude,
+  longitude,
+  placeName = "this event",
+  nearSlug = null,
+}: EventHotelCalloutProps) {
+  const { hotels: linkedHotels, isLoading } = useEventHotels(eventId);
 
-  // Fallback: fetch featured hotels if no linked hotels
-  const { hotels: featuredHotels, isLoading: featuredLoading } = useHotels({
-    featuredOnly: true,
-    limit: 3,
-  });
-
-  const isLoading = linkedLoading || (linkedHotels.length === 0 && featuredLoading);
-  const hotelsToShow = linkedHotels.length > 0 ? linkedHotels : featuredHotels.slice(0, 3);
-
-  if (isLoading || hotelsToShow.length === 0) return null;
+  if (isLoading) return null;
+  if (linkedHotels.length === 0) {
+    return (
+      <div className="mt-8">
+        <NearbyHotels
+          latitude={latitude}
+          longitude={longitude}
+          placeName={placeName}
+          limit={3}
+          nearSlug={nearSlug}
+        />
+      </div>
+    );
+  }
+  const hotelsToShow = linkedHotels;
+  const anyAffiliate = hotelsToShow.some((hotel) => resolveBooking(hotel)?.isAffiliate === true);
 
   return (
     <section className="mt-8">
       <div className="flex items-center gap-2 mb-4">
         <SpriteIcon name="building-2" className="h-5 w-5 text-primary" />
         <h2 className="text-lg font-semibold">
-          {linkedHotels.length > 0 ? "Stay Nearby" : "Make It a Weekend"}
+          Stay Nearby
         </h2>
       </div>
       <p className="text-sm text-muted-foreground mb-4">
-        {linkedHotels.length > 0
-          ? "Hotels near this event venue"
-          : "Featured hotels in the Des Moines area"}
+        Hotels near this event venue
       </p>
       <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
         {hotelsToShow.map((hotel) => (
           <HotelMiniCard
             key={hotel.id}
             hotel={hotel}
-            distance={(hotel as any).distance_miles}
-            notes={(hotel as any).notes}
+            distance={hotel.distance_miles}
+            notes={hotel.notes}
           />
         ))}
       </div>
       <div className="mt-3 flex flex-col items-center gap-2">
-        <Link
-          to="/stay"
-          className="text-sm text-primary hover:text-primary/80 font-medium"
-        >
-          View all hotels &rarr;
-        </Link>
-        <AffiliateDisclosureBanner variant="inline" />
+        {nearSlug ? (
+          <Link
+            to={`/stay?near=${encodeURIComponent(nearSlug)}`}
+            className="inline-flex min-h-11 items-center text-sm text-primary hover:text-primary/80 font-medium"
+          >
+            See all hotels near {placeName} &rarr;
+          </Link>
+        ) : (
+          <Link
+            to="/stay"
+            className="inline-flex min-h-11 items-center text-sm text-primary hover:text-primary/80 font-medium"
+          >
+            View all hotels &rarr;
+          </Link>
+        )}
+        {anyAffiliate && <AffiliateDisclosureBanner variant="inline" />}
       </div>
     </section>
   );

@@ -3,6 +3,7 @@ import { supabase } from '@/integrations/supabase/client';
 import { EVENT_LIST_COLUMNS } from '@/lib/listColumns';
 import { queryKeys } from '@/lib/queryKeys';
 import { sanitizePostgrestPattern } from '@/lib/postgrestPattern';
+import { applyEventVisibility } from '@/lib/eventQuery';
 
 export interface Team {
   id: string;
@@ -65,9 +66,10 @@ export function useTeamGames(teamName: string) {
     queryKey: queryKeys.events.list({ team: teamName }),
     queryFn: async () => {
       const safeTeam = sanitizePostgrestPattern(teamName);
-      const { data, error } = await supabase
-        .from('events')
-        .select(EVENT_LIST_COLUMNS)
+      // Explore plan WP5 item 1: same visibility rule as every other reader.
+      const { data, error } = await applyEventVisibility(
+        supabase.from('events').select(EVENT_LIST_COLUMNS)
+      )
         .or(`title.ilike.%${safeTeam}%,venue.ilike.%${safeTeam}%`)
         .gte('date', new Date().toISOString())
         .order('date', { ascending: true })

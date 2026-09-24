@@ -1,7 +1,10 @@
+import { useMemo } from "react";
 import { useQuery } from "@tanstack/react-query";
 import { supabase } from "@/integrations/supabase/client";
 import { useAuth } from "./useAuth";
 import { createLogger } from "@/lib/logger";
+import { useUserPreferences } from "./useUserPreferences";
+import { knownPicks, rerankByPicks, type Reranked } from "@/lib/forYouRerank";
 
 const log = createLogger("useForYouRail");
 
@@ -26,16 +29,27 @@ export interface ForYouRecommendation {
 export type ForYouSource = "for-you" | "trending";
 
 export interface UseForYouRailResult {
-  recommendations: ForYouRecommendation[];
+  /**
+   * RPC rows, re-ordered by the visitor's taste chips when they have picked
+   * any. `pickReason` is set on each row a pick matched (WP2 item 7).
+   */
+  recommendations: Reranked<ForYouRecommendation>[];
   source: ForYouSource;
+  /** The chip ids the visitor has picked, in chip order. */
+  picks: string[];
   isLoading: boolean;
+  isError: boolean;
   refetch: () => void;
 }
 
 export function useForYouRail(limit = 12): UseForYouRailResult {
   const { user } = useAuth();
+  const { preferences } = useUserPreferences();
+  const tags = preferences?.interests?.tags;
+  // Joined so the memo below keys on the picks' content, not the array identity.
+  const picksKey = knownPicks(tags).join(",");
 
-  const { data, isLoading, refetch } = useQuery({
+  const { data, isLoading, isError, refetch } = useQuery({
     queryKey: ["for-you-rail", user?.id, limit],
     queryFn: async (): Promise<{ rows: ForYouRecommendation[]; source: ForYouSource }> => {
       // Cold-start probe: count recent swipes within the last 90 days
@@ -78,10 +92,18 @@ export function useForYouRail(limit = 12): UseForYouRailResult {
     staleTime: 5 * 60 * 1000,
   });
 
+  const rows = data?.rows;
+  const recommendations = useMemo(() => {
+    const picks = picksKey ? picksKey.split(",") : [];
+    return rerankByPicks(rows ?? [], picks);
+  }, [rows, picksKey]);
+
   return {
-    recommendations: data?.rows ?? [],
+    recommendations,
     source: data?.source ?? "trending",
+    picks: picksKey ? picksKey.split(",") : [],
     isLoading,
+    isError,
     refetch: () => {
       refetch();
     },

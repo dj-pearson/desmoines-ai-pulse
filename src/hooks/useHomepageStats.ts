@@ -70,10 +70,10 @@ export async function fetchHomepageCounts(): Promise<HomepageCounts> {
       // WEB-BE-034: archived_at is the other unpublish switch.
       .is('archived_at', null),
 
-    // All restaurants. NOTE: this tile links to /restaurants/open-now, which
-    // shows a subset — the number and the destination have never matched. Left
-    // as a total deliberately; changing what the number MEANS is a product
-    // decision, not a bug fix (tracked separately).
+    // All restaurants. The tile this feeds links to /restaurants, the page
+    // that lists all of them. It used to link to /restaurants/open-now, a
+    // subset, so the number and the destination never matched; the link moved
+    // rather than the number (WP1 item 11, docs/page-plans/home.md).
     supabase
       .from('restaurants')
       .select('*', { count: 'exact', head: true }),

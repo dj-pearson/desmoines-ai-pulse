@@ -1,13 +1,19 @@
 import { HubArticles } from "@/components/seo/HubArticles";
 import { RelatedLinks } from "@/components/seo/InternalLinks";
-import React, { useEffect, useState, useMemo, lazy } from "react";
+import { useEffect, useState, useMemo, lazy, Suspense } from "react";
 import Header from "@/components/Header";
 import Footer from "@/components/Footer";
 import EnhancedLocalSEO from "@/components/EnhancedLocalSEO";
 import ItemListSchema from "@/components/schema/ItemListSchema";
 import { Breadcrumbs } from "@/components/ui/breadcrumbs";
 import { FAQSection } from "@/components/FAQSection";
-import { usePlaygroundFacets, usePlaygrounds } from "@/hooks/usePlaygrounds";
+import {
+  formatMilesAway,
+  sortByDistanceFrom,
+  usePlaygroundFacets,
+  usePlaygrounds,
+} from "@/hooks/usePlaygrounds";
+import { useGeolocation } from "@/hooks/useProximitySearch";
 import { useToast } from "@/hooks/use-toast";
 import { BackToTop } from "@/components/BackToTop";
 import { getCanonicalUrl } from "@/lib/brandConfig";
@@ -33,7 +39,7 @@ import {
   SheetTitle,
   SheetTrigger,
 } from "@/components/ui/sheet";
-import { Star, Filter, List, Map, TreePine, SlidersHorizontal, ChevronRight } from "lucide-react";
+import { Star, Filter, List, Map, TreePine, SlidersHorizontal, ChevronRight, LocateFixed } from "lucide-react";
 // map-pin and users render once per card. Both are multi-shape lucide icons, so
 // the sprite costs 2 nodes where inline costs 3 and 5 - see the membership rules
 // in scripts/generate-icon-sprite.mjs. Measured saving on this route: 154 of
@@ -42,16 +48,180 @@ import { SpriteIcon } from "@/components/ui/SpriteIcon";
 import { Link } from "react-router-dom";
 import { useUrlFilters } from "@/hooks/useUrlFilters";
 import { OptimizedImage } from "@/components/OptimizedImage";
+import { createSlug } from "@/lib/slug";
 
 // Lazy load map to prevent react-leaflet bundling issues
 const PlaygroundsMap = lazy(() => import("@/components/PlaygroundsMap"));
 
-const createSlug = (name: string): string => {
-  return name
-    .toLowerCase()
-    .replace(/[^a-z0-9]+/g, "-")
-    .replace(/^-+|-+$/g, "");
-};
+
+/** One boolean URL filter, rendered as a pressed/unpressed toggle. */
+interface FacilityToggle {
+  key: string;
+  label: string;
+  on: boolean;
+  onToggle: () => void;
+}
+
+interface PlaygroundFilterFieldsProps {
+  /** Distinct per render site so the label/trigger ids never collide. */
+  idPrefix: string;
+  layout: "stack" | "grid";
+  ageRanges: string[];
+  ageValue: string;
+  onAgeChange: (v: string) => void;
+  locations: string[];
+  locationCounts: Record<string, number>;
+  locationValue: string;
+  onLocationChange: (v: string) => void;
+  featuredValue: string;
+  onFeaturedChange: (v: string) => void;
+  toggles: FacilityToggle[];
+  selectedAmenities: string[];
+  onClearAmenities: () => void;
+}
+
+/**
+ * The filter controls, once. The mobile sheet and the desktop panel rendered
+ * two hand-kept copies, which is how the mobile triggers ended up with no
+ * accessible name and both ended up with the same five dead Location options
+ * (explore plan WP4 items 1 and 8).
+ */
+function PlaygroundFilterFields({
+  idPrefix,
+  layout,
+  ageRanges,
+  ageValue,
+  onAgeChange,
+  locations,
+  locationCounts,
+  locationValue,
+  onLocationChange,
+  featuredValue,
+  onFeaturedChange,
+  toggles,
+  selectedAmenities,
+  onClearAmenities,
+}: PlaygroundFilterFieldsProps) {
+  const labelClass = layout === "stack" ? "text-base font-medium" : "text-sm font-medium text-foreground";
+  const triggerClass = layout === "stack" ? "input-mobile" : undefined;
+  return (
+    <div
+      className={
+        layout === "stack"
+          ? "space-y-6"
+          : "grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-4"
+      }
+    >
+      <div className="space-y-2">
+        <label htmlFor={`${idPrefix}-age`} className={labelClass}>
+          Age Range
+        </label>
+        <Select value={ageValue} onValueChange={onAgeChange}>
+          <SelectTrigger id={`${idPrefix}-age`} className={triggerClass}>
+            <SelectValue />
+          </SelectTrigger>
+          <SelectContent>
+            <SelectItem value="all">All Ages</SelectItem>
+            {ageRanges.map((range) => (
+              <SelectItem key={range} value={range}>
+                {range}
+              </SelectItem>
+            ))}
+          </SelectContent>
+        </Select>
+      </div>
+
+      <div className="space-y-2">
+        <label htmlFor={`${idPrefix}-location`} className={labelClass}>
+          Location
+        </label>
+        <Select value={locationValue} onValueChange={onLocationChange}>
+          <SelectTrigger id={`${idPrefix}-location`} className={triggerClass}>
+            <SelectValue />
+          </SelectTrigger>
+          <SelectContent>
+            <SelectItem value="any-location">Any location</SelectItem>
+            {/* Only suburbs read from metro rows, each with the number of
+                playgrounds the filter will return for it. */}
+            {locations.map((loc) => (
+              <SelectItem key={loc} value={loc}>
+                {loc} ({locationCounts[loc] ?? 0})
+              </SelectItem>
+            ))}
+          </SelectContent>
+        </Select>
+      </div>
+
+      <div className="space-y-2">
+        <label htmlFor={`${idPrefix}-featured`} className={labelClass}>
+          Featured
+        </label>
+        <Select value={featuredValue} onValueChange={onFeaturedChange}>
+          <SelectTrigger id={`${idPrefix}-featured`} className={triggerClass}>
+            <SelectValue />
+          </SelectTrigger>
+          <SelectContent>
+            <SelectItem value="all">All Playgrounds</SelectItem>
+            <SelectItem value="featured">Featured Only</SelectItem>
+          </SelectContent>
+        </Select>
+      </div>
+
+      <fieldset className="space-y-2">
+        <legend className={labelClass}>Must have</legend>
+        <div className="flex flex-wrap gap-2 pt-2">
+          {toggles.map((t) => (
+            <Button
+              key={t.key}
+              type="button"
+              variant={t.on ? "default" : "outline"}
+              size="sm"
+              className="h-11"
+              aria-pressed={t.on}
+              onClick={t.onToggle}
+              data-filter-toggle={t.key}
+            >
+              {t.label}
+            </Button>
+          ))}
+        </div>
+        {selectedAmenities.length > 0 && (
+          <p className="text-sm text-muted-foreground pt-1">
+            Amenities: {selectedAmenities.join(", ")}{" "}
+            <button
+              type="button"
+              onClick={onClearAmenities}
+              className="underline underline-offset-4 text-foreground min-h-11 px-1"
+            >
+              clear
+            </button>
+          </p>
+        )}
+      </fieldset>
+    </div>
+  );
+}
+
+/** A 600px block the map chunk swaps into, so pressing Map shifts nothing. */
+function MapSkeleton() {
+  return (
+    <div
+      className="h-[600px] w-full rounded-xl bg-muted animate-pulse"
+      role="status"
+      aria-label="Loading map"
+      data-playgrounds-map-skeleton
+    />
+  );
+}
+
+/**
+ * Pre-plan links carried `location=west-des-moines`, a value the ilike could
+ * never match against "West Des Moines". A hyphenated value with no spaces is
+ * read as that old slug form.
+ */
+function normalizeLocationParam(value: string): string {
+  return !value.includes(" ") && value.includes("-") ? value.replace(/-/g, " ") : value;
+}
 
 export default function Playgrounds() {
   const { toast } = useToast();
@@ -62,26 +232,51 @@ export default function Playgrounds() {
   // tapping into a playground and pressing Back came back to an unfiltered
   // list. useUrlFilters is the same hook /events and /attractions already use.
   //
-  // showFilters, showMobileFilters and viewMode stay local on purpose: they
-  // are chrome, not a description of what is being shown, so they do not
-  // belong in a link someone shares.
-  const { getStr, setParam, clearParams } = useUrlFilters();
+  // showFilters and showMobileFilters stay local on purpose: they are chrome,
+  // not a description of what is being shown.
+  const { getStr, getList, setParam, clearParams } = useUrlFilters();
 
   const urlSearch = getStr("q", "");
   const selectedAgeRange = getStr("age", "all");
   const location = getStr("location", "any-location");
   const featuredOnly = getStr("featured", "all");
+  const shadeOnly = getStr("shade", "") === "1";
+  const restroomsOnly = getStr("restrooms", "") === "1";
+  const accessibleOnly = getStr("accessible", "") === "1";
+  const selectedAmenities = getList("amenity");
+  // Map vs list is in the URL (explore plan WP4 item 7) so "show me the map of
+  // playgrounds with shade" is a link someone can send.
+  const viewMode = getStr("view", "list") === "map" ? "map" : "list";
 
   const setSelectedAgeRange = (v: string) => setParam("age", v, { def: "all" });
   const setLocation = (v: string) => setParam("location", v, { def: "any-location" });
   const setFeaturedOnly = (v: string) => setParam("featured", v, { def: "all" });
+  const setViewMode = (v: "list" | "map") => setParam("view", v, { def: "list" });
+  const toggleFlag = (key: string, on: boolean) => setParam(key, on ? null : "1");
+  const toggleAmenity = (amenity: string) =>
+    setParam(
+      "amenity",
+      selectedAmenities.includes(amenity)
+        ? selectedAmenities.filter((a) => a !== amenity)
+        : [...selectedAmenities, amenity],
+    );
+
+  const locationFilter =
+    location !== "any-location" ? normalizeLocationParam(location) : undefined;
 
   // Local immediate search input; mirrored to the URL debounced with replace,
   // so typing does not stack a history entry per keystroke.
   const [searchQuery, setSearchQuery] = useState(() => urlSearch);
   const [showFilters, setShowFilters] = useState(true);
   const [showMobileFilters, setShowMobileFilters] = useState(false);
-  const [viewMode, setViewMode] = useState('list');
+  // "Near me" is per-visit: the position never goes in the URL.
+  const [nearMe, setNearMe] = useState(false);
+  const {
+    location: userLocation,
+    error: locationError,
+    isLoading: locating,
+    requestLocation,
+  } = useGeolocation();
 
   useEffect(() => {
     if (searchQuery === urlSearch) return;
@@ -107,12 +302,21 @@ export default function Playgrounds() {
   // not apply to arrays. Pushing search to the server would quietly drop every
   // amenity hit. It is also the only control here with no debounce, so a
   // request per keystroke would be the wrong trade even if it were expressible.
+  //
+  // Shade, restrooms, accessibility and amenities are server-side too (WP4
+  // items 4 and 6): each is a whole-value match PostgREST can express.
   const { playgrounds: allPlaygrounds, isLoading, error } = usePlaygrounds({
     // This page renders no total, so it does not pay for one (WEB-PERF-033).
     countMode: "none",
+    // No select=* from a public page (WP4 item 5).
+    projection: "list",
     age_range: selectedAgeRange !== "all" ? selectedAgeRange : undefined,
-    location: location !== "any-location" ? location : undefined,
+    location: locationFilter,
     featuredOnly: featuredOnly === "featured" || undefined,
+    shade: shadeOnly || undefined,
+    restrooms: restroomsOnly || undefined,
+    accessible: accessibleOnly || undefined,
+    amenities: selectedAmenities.length > 0 ? selectedAmenities : undefined,
   });
 
   // The filter controls and the two "Browse By" grids describe the whole
@@ -124,7 +328,15 @@ export default function Playgrounds() {
     amenities: uniqueAmenities,
     ageRangeCounts,
     amenityCounts,
+    locationCounts,
   } = usePlaygroundFacets();
+
+  // The Select needs the facet's own spelling to show the current value; an
+  // old lowercase or slug-form link is matched to it case-insensitively.
+  const locationSelectValue =
+    locationFilter === undefined
+      ? "any-location"
+      : locations.find((l) => l.toLowerCase() === locationFilter.toLowerCase()) ?? location;
 
   // Age range, suburb and featured are gone from here -- Postgres applied them.
   // What is left is the amenity-aware search described above.
@@ -142,12 +354,45 @@ export default function Playgrounds() {
     );
   }, [allPlaygrounds, searchQuery]);
 
+  // Near me (WP4 item 7): once a position arrives, sort by distance and show
+  // it on each card. Rows without coordinates go last.
+  const displayedPlaygrounds = useMemo(() => {
+    if (!nearMe || !userLocation) {
+      return filteredPlaygrounds.map((p) => ({ ...p, distanceMiles: null as number | null }));
+    }
+    return sortByDistanceFrom(filteredPlaygrounds, userLocation);
+  }, [filteredPlaygrounds, nearMe, userLocation]);
+
+  const handleNearMe = () => {
+    if (nearMe) {
+      setNearMe(false);
+      return;
+    }
+    setNearMe(true);
+    if (!userLocation) requestLocation();
+  };
+
+  const facilityToggles: FacilityToggle[] = [
+    { key: "shade", label: "Shade", on: shadeOnly, onToggle: () => toggleFlag("shade", shadeOnly) },
+    { key: "restrooms", label: "Restrooms", on: restroomsOnly, onToggle: () => toggleFlag("restrooms", restroomsOnly) },
+    {
+      key: "accessible",
+      label: "Accessibility info",
+      on: accessibleOnly,
+      onToggle: () => toggleFlag("accessible", accessibleOnly),
+    },
+  ];
+
   const getActiveFiltersCount = () => {
     let count = 0;
     if (searchQuery) count++;
     if (selectedAgeRange !== "all") count++;
     if (location !== "any-location") count++;
     if (featuredOnly !== "all") count++;
+    if (shadeOnly) count++;
+    if (restroomsOnly) count++;
+    if (accessibleOnly) count++;
+    count += selectedAmenities.length;
     return count;
   };
 
@@ -155,7 +400,7 @@ export default function Playgrounds() {
 
   const handleClearFilters = () => {
     setSearchQuery("");
-    clearParams(["q", "age", "location", "featured"]);
+    clearParams(["q", "age", "location", "featured", "shade", "restrooms", "accessible", "amenity"]);
     toast({
       title: "Filters Cleared",
       description: "All filters have been reset",
@@ -224,9 +469,9 @@ export default function Playgrounds() {
 
       <Header />
 
-      {/* Hero Section with DMI Brand Colors */}
-      <section className="relative bg-gradient-to-br from-[#2D1B69] via-emerald-800 to-[#DC143C] overflow-hidden min-h-[400px]">
-        <div className="absolute inset-0 bg-black/20"></div>
+      {/* Flat brand hero (WP4 item 9): the purple/emerald/crimson gradient
+          was decoration carrying nothing. */}
+      <section className="relative bg-[#2D1B69] overflow-hidden min-h-[400px]">
         <div className="relative container mx-auto px-4 py-16 md:py-24 text-center">
           <h1 className="text-4xl md:text-5xl lg:text-6xl font-bold text-white mb-4 tracking-tight">
             Discover Des Moines Playgrounds
@@ -273,59 +518,22 @@ export default function Playgrounds() {
                         <SheetTitle className="text-xl">Filter Playgrounds</SheetTitle>
                       </SheetHeader>
                       <div className="mt-6 space-y-6 overflow-y-auto max-h-[calc(85vh-120px)]">
-                        <div className="space-y-6">
-                          <div className="space-y-2">
-                            <label className="text-base font-medium">Age Range</label>
-                            <Select value={selectedAgeRange} onValueChange={setSelectedAgeRange}>
-                              <SelectTrigger className="input-mobile">
-                                <SelectValue />
-                              </SelectTrigger>
-                              <SelectContent>
-                                <SelectItem value="all">All Ages</SelectItem>
-                                {ageRanges?.map((range) => (
-                                  <SelectItem key={range} value={range}>
-                                    {range}
-                                  </SelectItem>
-                                ))}
-                              </SelectContent>
-                            </Select>
-                          </div>
-
-                          <div className="space-y-2">
-                            <label className="text-base font-medium">Location</label>
-                            <Select value={location} onValueChange={setLocation}>
-                              <SelectTrigger className="input-mobile">
-                                <SelectValue />
-                              </SelectTrigger>
-                              <SelectContent>
-                                <SelectItem value="any-location">Any location</SelectItem>
-                                <SelectItem value="downtown">Downtown</SelectItem>
-                                <SelectItem value="west-des-moines">West Des Moines</SelectItem>
-                                <SelectItem value="ankeny">Ankeny</SelectItem>
-                                <SelectItem value="urbandale">Urbandale</SelectItem>
-                                <SelectItem value="clive">Clive</SelectItem>
-                                {locations?.map((loc) => (
-                                  <SelectItem key={loc} value={loc.toLowerCase()}>
-                                    {loc}
-                                  </SelectItem>
-                                ))}
-                              </SelectContent>
-                            </Select>
-                          </div>
-
-                          <div className="space-y-2">
-                            <label className="text-base font-medium">Featured</label>
-                            <Select value={featuredOnly} onValueChange={setFeaturedOnly}>
-                              <SelectTrigger className="input-mobile">
-                                <SelectValue />
-                              </SelectTrigger>
-                              <SelectContent>
-                                <SelectItem value="all">All Playgrounds</SelectItem>
-                                <SelectItem value="featured">Featured Only</SelectItem>
-                              </SelectContent>
-                            </Select>
-                          </div>
-                        </div>
+                        <PlaygroundFilterFields
+                          idPrefix="pg-mobile"
+                          layout="stack"
+                          ageRanges={ageRanges}
+                          ageValue={selectedAgeRange}
+                          onAgeChange={setSelectedAgeRange}
+                          locations={locations}
+                          locationCounts={locationCounts}
+                          locationValue={locationSelectValue}
+                          onLocationChange={setLocation}
+                          featuredValue={featuredOnly}
+                          onFeaturedChange={setFeaturedOnly}
+                          toggles={facilityToggles}
+                          selectedAmenities={selectedAmenities}
+                          onClearAmenities={() => clearParams(["amenity"])}
+                        />
                         <div className="flex gap-3 pt-4">
                           <Button variant="outline" onClick={handleClearFilters} className="flex-1">
                             Clear All
@@ -350,6 +558,7 @@ export default function Playgrounds() {
                 <div className="flex items-center rounded-md bg-white/20 p-0.5">
                   <Button
                     onClick={() => setViewMode('list')}
+                    aria-pressed={viewMode === 'list'}
                     variant={viewMode === 'list' ? 'secondary' : 'ghost'}
                     size="icon"
                     className={viewMode === 'list' ? 'bg-white/30 text-white h-11' : 'text-white/70 hover:bg-white/30 hover:text-white h-11'}
@@ -360,6 +569,7 @@ export default function Playgrounds() {
                   </Button>
                   <Button
                     onClick={() => setViewMode('map')}
+                    aria-pressed={viewMode === 'map'}
                     variant={viewMode === 'map' ? 'secondary' : 'ghost'}
                     size="icon"
                     className={viewMode === 'map' ? 'bg-white/30 text-white h-11' : 'text-white/70 hover:bg-white/30 hover:text-white h-11'}
@@ -375,7 +585,7 @@ export default function Playgrounds() {
         </div>
       </section>
 
-      <div className="container mx-auto px-4 py-8">
+      <div id="playground-results" className="container mx-auto px-4 py-8 scroll-mt-20">
         <Breadcrumbs
           className="mb-4"
           items={[
@@ -386,85 +596,37 @@ export default function Playgrounds() {
 
         {/* Filters Section - Desktop */}
         {!isMobile && showFilters && (
-          <div className="bg-white rounded-2xl shadow-lg p-6 mb-8 border">
-            <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-4">
-              <div className="space-y-2">
-                <label className="text-sm font-medium text-gray-700">
-                  Age Range
-                </label>
-                <Select
-                  value={selectedAgeRange}
-                  onValueChange={setSelectedAgeRange}
-                >
-                  <SelectTrigger aria-label="Age Range">
-                    <SelectValue />
-                  </SelectTrigger>
-                  <SelectContent>
-                    <SelectItem value="all">All Ages</SelectItem>
-                    {ageRanges?.map((range) => (
-                      <SelectItem key={range} value={range}>
-                        {range}
-                      </SelectItem>
-                    ))}
-                  </SelectContent>
-                </Select>
-              </div>
-
-              <div className="space-y-2">
-                <label className="text-sm font-medium text-gray-700">
-                  Location
-                </label>
-                <Select value={location} onValueChange={setLocation}>
-                  <SelectTrigger aria-label="Location">
-                    <SelectValue />
-                  </SelectTrigger>
-                  <SelectContent>
-                    <SelectItem value="any-location">Any location</SelectItem>
-                    <SelectItem value="downtown">Downtown</SelectItem>
-                    <SelectItem value="west-des-moines">
-                      West Des Moines
-                    </SelectItem>
-                    <SelectItem value="ankeny">Ankeny</SelectItem>
-                    <SelectItem value="urbandale">Urbandale</SelectItem>
-                    <SelectItem value="clive">Clive</SelectItem>
-                    {locations?.map((loc) => (
-                      <SelectItem key={loc} value={loc.toLowerCase()}>
-                        {loc}
-                      </SelectItem>
-                    ))}
-                  </SelectContent>
-                </Select>
-              </div>
-
-              <div className="space-y-2">
-                <label className="text-sm font-medium text-gray-700">
-                  Featured
-                </label>
-                <Select value={featuredOnly} onValueChange={setFeaturedOnly}>
-                  <SelectTrigger aria-label="Featured">
-                    <SelectValue />
-                  </SelectTrigger>
-                  <SelectContent>
-                    <SelectItem value="all">All Playgrounds</SelectItem>
-                    <SelectItem value="featured">Featured Only</SelectItem>
-                  </SelectContent>
-                </Select>
-              </div>
-            </div>
+          <div className="bg-card rounded-2xl p-6 mb-8 border" data-playground-filters>
+            <PlaygroundFilterFields
+              idPrefix="pg-desktop"
+              layout="grid"
+              ageRanges={ageRanges}
+              ageValue={selectedAgeRange}
+              onAgeChange={setSelectedAgeRange}
+              locations={locations}
+              locationCounts={locationCounts}
+              locationValue={locationSelectValue}
+              onLocationChange={setLocation}
+              featuredValue={featuredOnly}
+              onFeaturedChange={setFeaturedOnly}
+              toggles={facilityToggles}
+              selectedAmenities={selectedAmenities}
+              onClearAmenities={() => clearParams(["amenity"])}
+            />
 
             <div className="flex justify-between mt-6">
               <Button variant="outline" onClick={handleClearFilters}>
                 Clear Filters
               </Button>
-              <div className="text-sm text-gray-500">
-                {filteredPlaygrounds?.length || 0} playgrounds found
+              <div className="text-sm text-muted-foreground">
+                {filteredPlaygrounds.length} playgrounds found
               </div>
             </div>
           </div>
         )}
 
         {/* Results Header */}
-        <div className="flex items-center justify-between mb-6">
+        <div className="flex flex-wrap items-center justify-between gap-3 mb-6">
           <h2 className="text-2xl font-bold">
             {searchQuery
               ? `Search results for "${searchQuery}"`
@@ -472,29 +634,52 @@ export default function Playgrounds() {
               ? `Playgrounds for Ages ${selectedAgeRange}`
               : "Des Moines Playgrounds"}
           </h2>
-          <div className="text-sm text-gray-500">
-            {filteredPlaygrounds?.length || 0} playgrounds
+          <div className="flex items-center gap-3">
+            <div className="text-sm text-muted-foreground" aria-live="polite" data-testid="playground-count">
+              {isLoading ? "Loading..." : `${filteredPlaygrounds.length} playgrounds`}
+            </div>
+            <Button
+              type="button"
+              variant={nearMe && userLocation ? "default" : "outline"}
+              className="h-11"
+              aria-pressed={nearMe}
+              onClick={handleNearMe}
+              disabled={locating}
+            >
+              <LocateFixed className="h-4 w-4 mr-2" aria-hidden="true" />
+              {locating ? "Locating..." : "Near me"}
+            </Button>
           </div>
         </div>
+        {nearMe && locationError && (
+          <p className="text-sm text-destructive mb-4" role="alert" data-near-me-error>
+            {locationError} The list is in its usual order.
+          </p>
+        )}
 
-        {viewMode === 'map' ? (
-          <PlaygroundsMap playgrounds={filteredPlaygrounds} />
-        ) : isLoading ? (
-          <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
-            {[...Array(6)].map((_, i) => (
-              <div key={i} className="animate-pulse rounded-2xl overflow-hidden border">
-                <div className="aspect-video bg-gray-200" />
-                <div className="p-5 space-y-3">
-                  <div className="h-4 bg-gray-200 rounded w-3/4" />
-                  <div className="h-3 bg-gray-200 rounded w-1/2" />
-                  <div className="h-3 bg-gray-200 rounded w-full" />
+        {/* Map and list share the loading, error and empty states (WP4 item
+            7). The map used to render first, so a failed query drew an empty
+            map with no explanation. */}
+        {isLoading ? (
+          viewMode === 'map' ? (
+            <MapSkeleton />
+          ) : (
+            <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
+              {[...Array(6)].map((_, i) => (
+                <div key={i} className="animate-pulse rounded-2xl overflow-hidden border">
+                  <div className="aspect-video bg-muted" />
+                  <div className="p-5 space-y-3">
+                    <div className="h-4 bg-muted rounded w-3/4" />
+                    <div className="h-3 bg-muted rounded w-1/2" />
+                    <div className="h-3 bg-muted rounded w-full" />
+                  </div>
                 </div>
-              </div>
-            ))}
-          </div>
+              ))}
+            </div>
+          )
         ) : error ? (
           <div className="text-center py-16">
-            <TreePine className="h-16 w-16 text-gray-500 mx-auto mb-4" />
+            <TreePine className="h-16 w-16 text-muted-foreground mx-auto mb-4" />
             <h3 className="text-xl font-medium mb-2">Error Loading Playgrounds</h3>
             <p className="text-muted-foreground">
               Please try again later.
@@ -502,7 +687,7 @@ export default function Playgrounds() {
           </div>
         ) : filteredPlaygrounds.length === 0 ? (
           <div className="text-center py-16">
-            <TreePine className="h-16 w-16 text-gray-500 mx-auto mb-4" />
+            <TreePine className="h-16 w-16 text-muted-foreground mx-auto mb-4" />
             <h3 className="text-xl font-medium mb-2">No playgrounds found</h3>
             <p className="text-muted-foreground mb-6">
               {hasActiveFilters
@@ -515,15 +700,24 @@ export default function Playgrounds() {
               </Button>
             )}
           </div>
+        ) : viewMode === 'map' ? (
+          // Local boundary: without it the lazy chunk suspended to the route
+          // fallback and took the hero and filters off screen.
+          <Suspense fallback={<MapSkeleton />}>
+            <PlaygroundsMap
+              playgrounds={displayedPlaygrounds}
+              userLocation={nearMe && userLocation ? userLocation : null}
+            />
+          </Suspense>
         ) : (
-          <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
-            {filteredPlaygrounds.map((playground, index) => (
+          <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6" data-playground-grid>
+            {displayedPlaygrounds.map((playground, index) => (
               <Link
                 key={playground.id}
                 to={`/playgrounds/${createSlug(playground.name)}`}
                 className="block"
               >
-                <Card className="h-full hover:shadow-lg transition-all duration-300 hover:-translate-y-1 rounded-2xl overflow-hidden">
+                <Card className="h-full hover:shadow-lg transition-shadow duration-300 rounded-2xl overflow-hidden">
                   {playground.image_url ? (
                     <div className="aspect-video overflow-hidden">
                       <OptimizedImage
@@ -539,8 +733,8 @@ export default function Playgrounds() {
                       />
                     </div>
                   ) : (
-                    <div className="aspect-video bg-gradient-to-br from-[#2D1B69] to-emerald-600 flex items-center justify-center">
-                      <TreePine className="h-12 w-12 text-white/40" />
+                    <div className="aspect-video bg-muted flex items-center justify-center">
+                      <TreePine className="h-12 w-12 text-muted-foreground/50" />
                     </div>
                   )}
                   <CardContent className="p-5">
@@ -562,6 +756,11 @@ export default function Playgrounds() {
                       {playground.name}
                     </h3>
                     <div className="space-y-2 text-sm text-muted-foreground">
+                      {playground.distanceMiles != null && (
+                        <div className="font-medium text-foreground" data-playground-distance>
+                          {formatMilesAway(playground.distanceMiles)}
+                        </div>
+                      )}
                       {playground.rating && (
                         <div className="flex items-center gap-2">
                           <Star className="h-4 w-4 fill-yellow-400 text-yellow-400" />
@@ -579,6 +778,18 @@ export default function Playgrounds() {
                       <p className="text-sm text-muted-foreground line-clamp-2 mt-2">
                         {playground.description}
                       </p>
+                    )}
+                    {/* Shade and restrooms only when the row says true: a
+                        null is unknown, not "no" (WP4 item 4). */}
+                    {(playground.has_shade || playground.has_restrooms) && (
+                      <div className="flex flex-wrap gap-1 mt-3" data-playground-essentials>
+                        {playground.has_shade && (
+                          <Badge variant="secondary" className="text-xs">Shade</Badge>
+                        )}
+                        {playground.has_restrooms && (
+                          <Badge variant="secondary" className="text-xs">Restrooms</Badge>
+                        )}
+                      </div>
                     )}
                     {playground.amenities && playground.amenities.length > 0 && (
                       <div className="flex flex-wrap gap-1 mt-3">
@@ -608,7 +819,7 @@ export default function Playgrounds() {
 
       {/* Browse by Age Range - Internal Linking for SEO */}
       {ageRanges.length > 0 && (
-        <section className="py-12 bg-white border-t">
+        <section className="py-12 bg-card border-t">
           <div className="container mx-auto px-4">
             <h2 className="text-2xl font-bold text-gray-900 mb-2">
               Browse Playgrounds By Age Group
@@ -653,37 +864,48 @@ export default function Playgrounds() {
             <p className="text-gray-600 mb-6">
               Find playgrounds with specific features and amenities in Des Moines
             </p>
-            <div className="flex flex-wrap gap-2">
+            {/* A real multi-select now (WP4 item 6): each chip toggles
+                ?amenity=a,b, applied server-side with contains(). They used to
+                type the amenity into the search box, so two could never be
+                combined and none showed as selected. */}
+            <div className="flex flex-wrap gap-2" data-amenity-chips>
               {uniqueAmenities.map((amenity) => {
                 const count = amenityCounts[amenity] ?? 0;
+                const on = selectedAmenities.includes(amenity);
                 return (
                   <button
                     key={amenity}
-                    onClick={() => {
-                      setSearchQuery(amenity);
-                      window.scrollTo({ top: 0, behavior: 'smooth' });
-                    }}
-                    className="inline-flex items-center gap-1.5 px-3 py-2 rounded-full border hover:border-emerald-500 hover:bg-emerald-50 transition-colors text-sm group"
+                    type="button"
+                    aria-pressed={on}
+                    onClick={() => toggleAmenity(amenity)}
+                    className={
+                      on
+                        ? "inline-flex items-center gap-1.5 px-3 min-h-11 rounded-full border border-emerald-600 bg-emerald-600 text-white transition-colors text-sm"
+                        : "inline-flex items-center gap-1.5 px-3 min-h-11 rounded-full border hover:border-emerald-500 hover:bg-emerald-50 transition-colors text-sm group"
+                    }
                   >
-                    {/* No check icon here either, and this one was not merely
-                        decorative - it was wrong. These chips have NO selected
-                        state: clicking one sets the search query. A check mark
-                        is the universal "this is on" affordance, so 99 of them
-                        told the visitor every amenity filter was already
-                        applied. Removing it fixes the affordance and takes 198
-                        nodes off the prerendered page. WEB-PERF-023. */}
-                    <span className="text-gray-700 group-hover:text-emerald-700">{amenity}</span>
-                    <span className="text-xs text-gray-500">({count})</span>
+                    <span className={on ? "" : "text-foreground group-hover:text-emerald-700"}>{amenity}</span>
+                    <span className={on ? "text-xs text-white/90" : "text-xs text-muted-foreground"}>({count})</span>
                   </button>
                 );
               })}
             </div>
+            {selectedAmenities.length > 0 && (
+              <p className="mt-4 text-sm text-muted-foreground" aria-live="polite">
+                {isLoading
+                  ? "Updating..."
+                  : `${filteredPlaygrounds.length} playgrounds have ${selectedAmenities.join(" + ")}.`}{" "}
+                <a href="#playground-results" className="underline underline-offset-4 text-foreground">
+                  See the list
+                </a>
+              </p>
+            )}
           </div>
         </section>
       )}
 
       {/* SEO Content Section */}
-      <section className="py-12 bg-white border-t">
+      <section className="py-12 bg-card border-t">
         <div className="container mx-auto px-4 max-w-4xl">
           <h2 className="text-2xl font-bold text-gray-900 mb-4">
             Playgrounds & Parks in Des Moines, Iowa
@@ -693,21 +915,21 @@ export default function Playgrounds() {
               Des Moines and the surrounding metro area offer an extensive network of public
               playgrounds and parks designed for children of all ages. From splash pads and climbing
               structures to accessible equipment and nature play areas, there's something for every
-              family in the Greater Des Moines Area. Our comprehensive guide covers {allPlaygrounds.length}+
-              playgrounds to help you find the perfect outdoor play spot.
+              family in the Greater Des Moines Area.
+            </p>
+            {/* WP4 item 3. This paragraph asserted hours and amenities for
+                every park; neither is a column for most rows. */}
+            <p>
+              Each park is run by the city it sits in, so hours, seasonal closures and shelter
+              bookings come from that city's parks department. Where we have them, listings say
+              whether a playground has shade, restrooms, what the surface is and any accessibility
+              notes, and they say &quot;not yet confirmed&quot; where we don't.
             </p>
             <p>
-              The Des Moines Parks & Recreation Department maintains playgrounds across the city,
-              ensuring safe, well-maintained play spaces in every neighborhood. Many parks feature
-              separate areas for toddlers and older children, rubberized safety surfaces, shade
-              structures, and nearby amenities like restrooms, picnic areas, and walking trails. All
-              public playgrounds are free to visit and open from dawn to dusk year-round.
-            </p>
-            <p>
-              Use the search and filters above to find playgrounds by age range, location, or specific
-              amenities like splash pads, swings, or climbing walls. Switch to map view to discover
-              playgrounds nearest to you. Each playground page includes detailed amenity lists,
-              directions, age recommendations, and family tips.
+              Use the search and filters above to find playgrounds by age range, location, shade,
+              restrooms or amenities like splash pads and swings. Press Near me to sort the list by
+              distance from where you are, or switch to the map. Each playground page has its
+              amenity list, directions and the playgrounds closest to it.
             </p>
             {/* SEO-024. The other half of the /outdoors cross-link. The two
                 modules share an audience - a family looking for a playground is

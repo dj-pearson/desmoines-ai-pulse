@@ -1,13 +1,28 @@
 import { useCallback, useEffect, useState } from 'react';
-import { useQuery, useQueryClient } from '@tanstack/react-query';
+import { useInfiniteQuery, useQuery, useQueryClient } from '@tanstack/react-query';
 import { supabase } from '@/integrations/supabase/client';
 import { useToast } from '@/hooks/use-toast';
 import { createLogger } from '@/lib/logger';
 import { queryKeys } from '@/lib/queryKeys';
 import { STALE_TIME, GC_TIME } from '@/lib/queryConfig';
 import { recordArticleView } from "@/lib/recordArticleView";
+import { sanitizePostgrestPattern } from '@/lib/postgrestPattern';
+import { applyEventVisibility } from '@/lib/eventQuery';
+import { attractionHref, eventHref, restaurantHref } from '@/lib/dashboardItems';
+import { formatEventDateShort } from '@/lib/timezone';
+import type { HubKey } from '@/lib/articleHubs';
+import { KIDS_EVENTS_FILTER } from '@/hooks/useEventLanding';
 
 const log = createLogger('useArticles');
+
+function errorMessage(err: unknown): string {
+  // PostgREST errors are plain objects with a message on some supabase-js
+  // versions, so check the shape rather than the prototype.
+  if (err && typeof err === 'object' && 'message' in err && typeof err.message === 'string') {
+    return err.message;
+  }
+  return String(err);
+}
 
 export interface Article {
   id: string;
@@ -130,26 +145,6 @@ export const useArticles = (options?: { autoLoad?: boolean; status?: string; lim
     });
   }, [queryError, toast]);
 
-  const getArticleBySlug = async (slug: string): Promise<Article | null> => {
-    try {
-      const { data, error } = await supabase
-        .from('articles')
-        .select('*')
-        .eq('slug', slug)
-        .single();
-
-      if (error) throw error;
-
-      if (data) recordArticleView(slug);
-
-      return data;
-    } catch (err: any) {
-      log.error('getArticleBySlug', 'Error getting article by slug', { error: err });
-      setMutationError(err.message);
-      return null;
-    }
-  };
-
   const createArticle = async (articleData: CreateArticleData): Promise<Article | null> => {
     try {
       const { data: { user } } = await supabase.auth.getUser();
@@ -185,12 +180,12 @@ export const useArticles = (options?: { autoLoad?: boolean; status?: string; lim
       await loadArticles();
 
       return data;
-    } catch (err: any) {
+    } catch (err: unknown) {
       log.error('createArticle', 'Error creating article', { error: err });
-      setMutationError(err.message);
+      setMutationError(errorMessage(err));
       toast({
         title: 'Error creating article',
-        description: err.message,
+        description: errorMessage(err),
         variant: 'destructive',
       });
       return null;
@@ -219,12 +214,12 @@ export const useArticles = (options?: { autoLoad?: boolean; status?: string; lim
       await loadArticles();
 
       return data;
-    } catch (err: any) {
+    } catch (err: unknown) {
       log.error('updateArticle', 'Error updating article', { error: err });
-      setMutationError(err.message);
+      setMutationError(errorMessage(err));
       toast({
         title: 'Error updating article',
-        description: err.message,
+        description: errorMessage(err),
         variant: 'destructive',
       });
       return null;
@@ -249,12 +244,12 @@ export const useArticles = (options?: { autoLoad?: boolean; status?: string; lim
       await loadArticles();
 
       return true;
-    } catch (err: any) {
+    } catch (err: unknown) {
       log.error('deleteArticle', 'Error deleting article', { error: err });
-      setMutationError(err.message);
+      setMutationError(errorMessage(err));
       toast({
         title: 'Error deleting article',
-        description: err.message,
+        description: errorMessage(err),
         variant: 'destructive',
       });
       return false;
@@ -280,12 +275,12 @@ export const useArticles = (options?: { autoLoad?: boolean; status?: string; lim
 
       await loadArticles();
       return true;
-    } catch (err: any) {
+    } catch (err: unknown) {
       log.error('publishArticle', 'Error publishing article', { error: err });
-      setMutationError(err.message);
+      setMutationError(errorMessage(err));
       toast({
         title: 'Error publishing article',
-        description: err.message,
+        description: errorMessage(err),
         variant: 'destructive',
       });
       return false;
@@ -313,12 +308,12 @@ export const useArticles = (options?: { autoLoad?: boolean; status?: string; lim
       } else {
         throw new Error(data.error || 'Failed to generate article');
       }
-    } catch (err: any) {
+    } catch (err: unknown) {
       log.error('generateArticle', 'Error generating article', { error: err });
-      setMutationError(err.message);
+      setMutationError(errorMessage(err));
       toast({
         title: 'Error generating article',
-        description: err.message,
+        description: errorMessage(err),
         variant: 'destructive',
       });
       return null;
@@ -339,7 +334,6 @@ export const useArticles = (options?: { autoLoad?: boolean; status?: string; lim
       mutationError ??
       (queryError ? (queryError instanceof Error ? queryError.message : 'Failed to load articles') : null),
     loadArticles,
-    getArticleBySlug,
     createArticle,
     updateArticle,
     deleteArticle,
@@ -347,3 +341,241 @@ export const useArticles = (options?: { autoLoad?: boolean; status?: string; lim
     generateArticleFromSuggestion,
   };
 };
+// ---------------------------------------------------------------------------
+// Public reads (Plan & Stay WP4). Everything below is what /articles and
+// /articles/:slug use; the useArticles() hook above stays the admin surface,
+// which needs drafts and bodies.
+// ---------------------------------------------------------------------------
+
+/** Cards per "Load more". */
+export const ARTICLE_PAGE_SIZE = 12;
+
+/**
+ * The list projection. No `content`: the list rendered the body only to count
+ * words for a read-time label. `word_count` (20260919000010) would bring that
+ * label back, but it is not in the 2026-08-24 production snapshot, and a
+ * missing column 42703s the whole select - so it waits for a schema probe.
+ */
+export const ARTICLE_LIST_COLUMNS =
+  'id, slug, title, excerpt, category, tags, featured_image_url, published_at, created_at, updated_at, view_count, is_auto_published, generated_from_suggestion_id';
+
+/** The detail projection: everything the page and its head render, nothing else. */
+export const ARTICLE_DETAIL_COLUMNS =
+  'id, slug, title, content, excerpt, category, tags, featured_image_url, seo_title, seo_description, seo_keywords, view_count, published_at, created_at, updated_at, is_auto_published, generated_from_suggestion_id';
+
+export type ArticleListItem = Pick<
+  Article,
+  | 'id'
+  | 'slug'
+  | 'title'
+  | 'excerpt'
+  | 'category'
+  | 'tags'
+  | 'featured_image_url'
+  | 'published_at'
+  | 'created_at'
+  | 'updated_at'
+  | 'view_count'
+  | 'is_auto_published'
+  | 'generated_from_suggestion_id'
+>;
+
+export type ArticleDetail = ArticleListItem &
+  Pick<Article, 'content' | 'seo_title' | 'seo_description' | 'seo_keywords'>;
+
+export type ArticleSort = 'newest' | 'oldest' | 'popular' | 'title';
+
+export interface PublishedArticleFilters {
+  search?: string;
+  category?: string;
+  sort?: ArticleSort | string;
+}
+
+/** The or() clause for a typed search, sanitized for PostgREST, or null. */
+export function articleSearchFilter(search: string | null | undefined): string | null {
+  const q = search ? sanitizePostgrestPattern(search) : '';
+  if (!q) return null;
+  return `title.ilike.%${q}%,excerpt.ilike.%${q}%,category.ilike.%${q}%`;
+}
+
+interface ArticlePage {
+  rows: ArticleListItem[];
+  total: number | null;
+  offset: number;
+}
+
+/**
+ * Published articles, 12 at a time, filtered and sorted on the server.
+ *
+ * One request per page, always `status=eq.published`, never the body. The old
+ * list fetched every article (drafts included, for authors and admins) and
+ * filtered in the browser, then a mount effect flipped the key to 'all' and
+ * fetched it all again.
+ */
+export function usePublishedArticles(filters: PublishedArticleFilters = {}) {
+  const search = (filters.search ?? '').trim();
+  const category = filters.category && filters.category !== 'all' ? filters.category : '';
+  const sort = (filters.sort ?? 'newest') as ArticleSort;
+
+  return useInfiniteQuery({
+    queryKey: queryKeys.articles.list({ status: 'published', search, category, sort, pageSize: ARTICLE_PAGE_SIZE }),
+    initialPageParam: 0,
+    queryFn: async ({ pageParam }): Promise<ArticlePage> => {
+      const offset = typeof pageParam === 'number' ? pageParam : 0;
+      let query = supabase
+        .from('articles')
+        .select(ARTICLE_LIST_COLUMNS, { count: 'exact' })
+        .eq('status', 'published');
+
+      const or = articleSearchFilter(search);
+      if (or) query = query.or(or);
+      if (category) query = query.eq('category', category);
+
+      switch (sort) {
+        case 'oldest':
+          query = query.order('published_at', { ascending: true, nullsFirst: false });
+          break;
+        case 'popular':
+          query = query.order('view_count', { ascending: false, nullsFirst: false });
+          break;
+        case 'title':
+          query = query.order('title', { ascending: true });
+          break;
+        default:
+          query = query.order('published_at', { ascending: false, nullsFirst: false });
+      }
+      // A unique tiebreak, so a page boundary never repeats or skips a row.
+      query = query.order('id', { ascending: true });
+
+      const { data, error, count } = await query.range(offset, offset + ARTICLE_PAGE_SIZE - 1);
+      if (error) throw error;
+      return { rows: (data ?? []) as unknown as ArticleListItem[], total: count ?? null, offset };
+    },
+    getNextPageParam: (last) => {
+      const next = last.offset + last.rows.length;
+      if (last.total !== null) return next < last.total ? next : undefined;
+      return last.rows.length === ARTICLE_PAGE_SIZE ? next : undefined;
+    },
+    staleTime: STALE_TIME.CONTENT_LIST,
+    gcTime: GC_TIME,
+  });
+}
+
+/**
+ * One published article by slug.
+ *
+ * `maybeSingle` so a missing row is `null` (not found, noindex) and only a real
+ * failure is an error. The imperative fetch this replaces turned a network
+ * error into "Article Not Found" plus noindex, which told crawlers a live
+ * article was gone.
+ */
+export function useArticleBySlug(slug: string | undefined) {
+  const query = useQuery<ArticleDetail | null>({
+    queryKey: queryKeys.articles.detail(slug ?? ''),
+    enabled: Boolean(slug),
+    retry: 1,
+    queryFn: async () => {
+      const { data, error } = await supabase
+        .from('articles')
+        .select(ARTICLE_DETAIL_COLUMNS)
+        .eq('slug', slug as string)
+        .eq('status', 'published')
+        .maybeSingle();
+      if (error) throw error;
+      return (data ?? null) as unknown as ArticleDetail | null;
+    },
+    staleTime: STALE_TIME.CONTENT_LIST,
+    gcTime: GC_TIME,
+  });
+
+  // One view per page visit. In the queryFn it also counted every background
+  // refetch (window refocus after staleTime, the retry), which inflates the
+  // "popular" sort.
+  const foundId = query.data?.id ?? null;
+  useEffect(() => {
+    if (foundId && slug) recordArticleView(slug);
+    // eslint-disable-next-line react-hooks/exhaustive-deps -- once per article found, not per slug keystroke
+  }, [foundId]);
+
+  return query;
+}
+
+export interface HubListing {
+  id: string;
+  label: string;
+  href: string;
+  meta?: string;
+}
+
+/** Statuses a visitor cannot go and eat at today (same set useRestaurants sinks). */
+const UNVISITABLE_RESTAURANT_STATUSES = new Set(['opening_soon', 'closed']);
+
+const HUB_LISTING_COUNT = 4;
+
+interface ListingEventRow {
+  id: string;
+  title: string | null;
+  date: string | null;
+  event_start_utc: string | null;
+}
+
+async function upcomingEvents(kidsOnly: boolean): Promise<HubListing[]> {
+  let query = applyEventVisibility(
+    supabase.from('events').select('id, title, date, event_start_utc'),
+  ).gte('date', new Date().toISOString());
+  if (kidsOnly) query = query.or(KIDS_EVENTS_FILTER);
+  const { data, error } = await query.order('date', { ascending: true }).limit(HUB_LISTING_COUNT);
+  if (error) throw error;
+  return ((data ?? []) as unknown as ListingEventRow[])
+    .filter((e) => e.title)
+    .map((e) => ({ id: e.id, label: e.title as string, href: eventHref(e), meta: formatEventDateShort(e) }));
+}
+
+/**
+ * Three or four current listings from an article's primary hub, as plain
+ * links: upcoming events (kids-filtered for the family hub), visitable
+ * restaurants, or active attractions. The outdoors hub has no cheap listing
+ * query of its own yet, so it returns none and the block stays hidden.
+ */
+export function useArticleHubListings(hub: HubKey | null) {
+  return useQuery<HubListing[]>({
+    queryKey: ['articles', 'hub-listings', hub],
+    enabled: hub !== null,
+    staleTime: STALE_TIME.CONTENT_LIST,
+    queryFn: async () => {
+      switch (hub) {
+        case 'events':
+          return upcomingEvents(false);
+        case 'family':
+          return upcomingEvents(true);
+        case 'restaurants': {
+          const { data, error } = await supabase
+            .from('restaurants')
+            .select('id, slug, name, status')
+            .neq('is_merged', true)
+            .order('popularity_score', { ascending: false, nullsFirst: false })
+            .limit(HUB_LISTING_COUNT * 2);
+          if (error) throw error;
+          return (data ?? [])
+            .filter((r) => r.name && !UNVISITABLE_RESTAURANT_STATUSES.has(r.status ?? ''))
+            .slice(0, HUB_LISTING_COUNT)
+            .map((r) => ({ id: r.id, label: r.name, href: restaurantHref(r) }));
+        }
+        case 'attractions': {
+          const { data, error } = await supabase
+            .from('attractions')
+            .select('id, name')
+            .eq('is_active', true)
+            .order('rating', { ascending: false, nullsFirst: false })
+            .limit(HUB_LISTING_COUNT);
+          if (error) throw error;
+          return (data ?? [])
+            .filter((a) => a.name)
+            .map((a) => ({ id: a.id, label: a.name, href: attractionHref(a) }));
+        }
+        default:
+          return [];
+      }
+    },
+  });
+}

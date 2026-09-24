@@ -1,5 +1,6 @@
 import { Helmet } from "react-helmet-async";
 import { BRAND } from "@/lib/brandConfig";
+import { toJsonLd } from "@/lib/jsonLd";
 
 interface BreadcrumbItem {
   name: string;
@@ -356,30 +357,30 @@ export default function EnhancedLocalSEO({
 
       {/* Schema.org Structured Data */}
       <script type="application/ld+json">
-        {JSON.stringify(organizationSchema)}
+        {toJsonLd(organizationSchema)}
       </script>
 
       {breadcrumbSchema && (
         <script type="application/ld+json">
-          {JSON.stringify(breadcrumbSchema)}
+          {toJsonLd(breadcrumbSchema)}
         </script>
       )}
 
       {eventSchema && (
         <script type="application/ld+json">
-          {JSON.stringify(eventSchema)}
+          {toJsonLd(eventSchema)}
         </script>
       )}
 
       {restaurantSchema && (
         <script type="application/ld+json">
-          {JSON.stringify(restaurantSchema)}
+          {toJsonLd(restaurantSchema)}
         </script>
       )}
 
       {attractionSchema && (
         <script type="application/ld+json">
-          {JSON.stringify(attractionSchema)}
+          {toJsonLd(attractionSchema)}
         </script>
       )}
 

@@ -121,27 +121,58 @@ const logger = createLogger('capacitorUtils');
 /* ------------------------------------------------------------------ */
 
 /**
+ * Returns the URL normalised by the URL parser when its scheme is http: or
+ * https:, otherwise null.
+ *
+ * Every external link on the site ultimately comes from a scraper
+ * (`events.source_url`) or an advertiser (`campaign_creatives.link_url`), so
+ * neither can be trusted to hold a web URL. `javascript:`, `data:`, `file:`,
+ * `intent:` and friends are refused here, in one place, rather than at each
+ * call site. Relative URLs are refused too: an "external" link that resolves
+ * against our own origin is a data error, not a link.
+ */
+export function toSafeExternalUrl(url: unknown): string | null {
+  if (typeof url !== 'string') return null;
+  const trimmed = url.trim();
+  if (!trimmed) return null;
+  let parsed: URL;
+  try {
+    parsed = new URL(trimmed);
+  } catch {
+    return null;
+  }
+  if (parsed.protocol !== 'http:' && parsed.protocol !== 'https:') return null;
+  return parsed.href;
+}
+
+/**
  * Opens a URL externally.
  *
- * - In Capacitor → uses the Browser plugin to open the system browser
- * - On web → uses window.open (standard _blank behaviour)
+ * - In Capacitor -> uses the Browser plugin to open the system browser
+ * - On web -> uses window.open (standard _blank behaviour)
  *
- * Returns a boolean indicating whether the open was attempted.
+ * Refuses anything that is not an absolute http(s) URL (see
+ * `toSafeExternalUrl`) and returns false without opening anything.
+ * Otherwise returns true to say the open was attempted.
  */
 export async function openExternalUrl(url: string): Promise<boolean> {
-  if (!url) return false;
+  const safeUrl = toSafeExternalUrl(url);
+  if (!safeUrl) {
+    logger.warn('openExternalUrl', 'Refused non-http(s) URL');
+    return false;
+  }
 
   try {
     if (isCapacitor() && window.Capacitor?.Plugins?.Browser) {
-      await window.Capacitor.Plugins.Browser.open({ url });
+      await window.Capacitor.Plugins.Browser.open({ url: safeUrl });
       return true;
     }
   } catch (err) {
     logger.warn('openExternalUrl', 'Browser.open failed, falling back', { error: String(err) });
   }
 
-  // Fallback – works everywhere
-  window.open(url, '_blank', 'noopener,noreferrer');
+  // Fallback - works everywhere
+  window.open(safeUrl, '_blank', 'noopener,noreferrer');
   return true;
 }
 

@@ -91,6 +91,79 @@ export function scanSource(src, file = '') {
 }
 
 /**
+ * THE SECOND RULE (explore plan WP5 item 1): a reader that filters NEITHER.
+ *
+ * The asymmetry rule above cannot see a hub query that never mentions either
+ * switch, and /music, /sports, the venue pages and the team pages were all in
+ * that state - an archived or moderator-hidden show stayed on every one of
+ * them. Which surfaces are reader-facing still cannot be decided from a regex
+ * in general, but src/pages and src/hooks are where the reader surfaces live,
+ * so there the rule is: an `events` read must go through applyEventVisibility
+ * (or applyHubFilters, which calls it), or filter both switches by hand.
+ *
+ * A read counts as wrapped when applyEventVisibility( / applyHubFilters( opens
+ * in the same statement before `.from('events')`, or when the builder is
+ * assigned to a variable that is later passed to one of them. Admin screens
+ * are excluded by path, as check-false-empty-state excludes them.
+ *
+ * Existing sites are ratcheted in UNFILTERED_READERS below (file -> count):
+ * a file may not gain one, and when a file loses one the script says so.
+ */
+const READER_ROOTS = /^src\/(pages|hooks)\//;
+const ADMIN_PATH = /(^|\/)(admin|cms|crm)\/|src\/pages\/(Admin|CMS|Campaign)|src\/hooks\/useAdmin|Manager\.(ts|tsx)$|__tests__/;
+const WRAPPERS = /\b(applyEventVisibility|applyHubFilters)\s*\(/;
+
+export function isReaderPath(file) {
+  return READER_ROOTS.test(file) && !ADMIN_PATH.test(file);
+}
+
+/**
+ * Every `events` read in `src` that filters neither switch and is not wrapped.
+ * Exported so the rule has a test rather than a reading.
+ */
+export function scanUnfiltered(src, file = '') {
+  const found = [];
+  for (const m of src.matchAll(/\.from\(\s*['"`]events['"`]\s*\)/g)) {
+    const rest = src.slice(m.index + m[0].length);
+    const stop = rest.search(/\.from\(|\bfromUnknownTable\(/);
+    const segment = stop === -1 ? rest.slice(0, 1500) : rest.slice(0, Math.min(stop, 1500));
+    if (/^\s*\.(update|insert|upsert|delete)\s*\(/.test(segment)) continue;
+    if (/is_hidden/.test(segment) || /archived_at/.test(segment)) continue; // the asymmetry rule's business
+
+    // The statement this read belongs to, back to the previous ; { or }.
+    const before = src.slice(Math.max(0, m.index - 400), m.index);
+    const cut = Math.max(before.lastIndexOf(';'), before.lastIndexOf('{'), before.lastIndexOf('}'));
+    const statement = before.slice(cut + 1);
+    if (WRAPPERS.test(statement)) continue;
+
+    const assigned = /\b(?:const|let|var)\s+([A-Za-z_$][\w$]*)\s*=\s*(?:await\s+)?[\w$.\s]*$/.exec(statement);
+    if (assigned) {
+      const name = assigned[1].replace(/\$/g, '\\$');
+      const later = src.slice(m.index);
+      if (new RegExp(`\\b(?:applyEventVisibility|applyHubFilters)\\s*\\(\\s*${name}\\b`).test(later)) continue;
+    }
+
+    found.push({ file, line: src.slice(0, m.index).split('\n').length });
+  }
+  return found;
+}
+
+/**
+ * Reader reads that filtered neither switch when the second rule landed
+ * (2026-09-24). A ratchet, not a pardon: each is a surface that can still show
+ * a taken-down event. Lower a count when you fix one; never raise it.
+ */
+const UNFILTERED_READERS = {
+  // Lookups by id or per-user reads; each still shows a row a moderator took down.
+  'src/hooks/useEventIndoorFlags.ts': 1,
+  'src/hooks/useNeighborhoodContent.ts': 1,
+  'src/hooks/usePushNotifications.ts': 1,
+  'src/hooks/useSupabase.ts': 2,
+  'src/hooks/useSystemMonitoring.ts': 1,
+  'src/pages/ProfilePage.tsx': 1,
+};
+
+/**
  * Only when run as a script. scanSource() is imported by
  * scripts/__tests__/event-unpublish-filters.test.mjs, and without this guard
  * that import would run the whole check - and process.exit(1) out of the test
@@ -139,6 +212,49 @@ function main() {
   }
 
   console.log('OK Every events query filters both unpublish switches, or neither.');
+
+  // Second rule: reader surfaces that filter neither switch.
+  const perFile = new Map();
+  for (const root of ['src/pages', 'src/hooks']) {
+    for (const file of walk(join(ROOT, root))) {
+      const rel = relative(ROOT, file).split('\\').join('/');
+      if (!isReaderPath(rel)) continue;
+      const hits = scanUnfiltered(readFileSync(file, 'utf8'), rel);
+      if (hits.length) perFile.set(rel, hits);
+    }
+  }
+  const total = [...perFile.values()].reduce((n, h) => n + h.length, 0);
+  const allowedTotal = Object.values(UNFILTERED_READERS).reduce((n, c) => n + c, 0);
+  console.log(`[event-unpublish] ${total} reader query(ies) filter neither switch; ${allowedTotal} ratcheted.`);
+
+  const over = [];
+  for (const [file, hits] of perFile) {
+    const allowedCount = UNFILTERED_READERS[file] ?? 0;
+    if (hits.length > allowedCount) over.push({ file, hits, allowedCount });
+  }
+  const fixed = Object.entries(UNFILTERED_READERS).filter(
+    ([file, count]) => (perFile.get(file)?.length ?? 0) < count,
+  );
+
+  if (over.length) {
+    console.error('\nX These reader queries on `events` filter neither unpublish switch:\n');
+    for (const { file, hits, allowedCount } of over) {
+      console.error(`  ${file}: ${hits.length} (ratchet allows ${allowedCount})`);
+      for (const h of hits) console.error(`    line ${h.line}`);
+    }
+    console.error(
+      '\nWrap the query in applyEventVisibility() from @/lib/eventQuery so merged, hidden\n' +
+        'and archived events stay off the page. An admin screen belongs under an admin path.',
+    );
+    process.exit(1);
+  }
+  if (fixed.length) {
+    // Not fatal: several work packages land in parallel, and one fixing a read
+    // must not fail another's check. Lower the count so it cannot come back.
+    console.log('\nNote: fewer unfiltered reads than ratcheted in UNFILTERED_READERS; lower these:');
+    for (const [file, count] of fixed) console.log(`  ${file}: ${count} -> ${perFile.get(file)?.length ?? 0}`);
+  }
+  console.log('OK No reader surface gained an events query that ignores visibility.');
 }
 
 const invokedDirectly =

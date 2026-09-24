@@ -249,6 +249,45 @@ export function DashboardSkeleton() {
   );
 }
 
+/**
+ * Placeholder for the home "This week in Des Moines" block (home plan WP3
+ * item 8): heading, tab row and a 3x3 card grid, laid out on the same
+ * section/container/grid classes as AllInclusiveDashboard so the swap to
+ * real content does not move the page. Also the Suspense fallback on Index.
+ */
+export function DashboardGridSkeleton() {
+  return (
+    <section className="py-8 md:py-16 bg-muted/30">
+      <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8">
+        <SkeletonGroup label="Loading this week in Des Moines..." className="space-y-6 md:space-y-8">
+          <div className="space-y-3">
+            <Skeleton className="h-8 w-64 md:h-9 md:w-80" />
+            <Skeleton className="h-5 w-full max-w-md" />
+          </div>
+          <div className="flex gap-2 overflow-hidden">
+            {Array.from({ length: 6 }).map((_, i) => (
+              <Skeleton key={i} className="h-10 w-24 flex-shrink-0 rounded-md" />
+            ))}
+          </div>
+          <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
+            {Array.from({ length: 9 }).map((_, i) => (
+              <div key={i} className="overflow-hidden rounded-xl border border-border bg-card">
+                <Skeleton className="aspect-video w-full rounded-none" />
+                <div className="space-y-3 p-4">
+                  <Skeleton className="h-5 w-20 rounded-full" />
+                  <Skeleton className="h-4 w-2/3" />
+                  <Skeleton className="h-6 w-5/6" />
+                  <Skeleton className="h-4 w-full" />
+                </div>
+              </div>
+            ))}
+          </div>
+        </SkeletonGroup>
+      </div>
+    </section>
+  );
+}
+
 // Form skeleton
 export function FormSkeleton({ fields = 4 }: { fields?: number }) {
   return (

@@ -1,4 +1,16 @@
 import { storage } from "@/lib/safeStorage";
+import { createEventSlugWithCentralTime } from "@/lib/timezone";
+import { LEGACY_EVENTS_KEY, LEGACY_RESTAURANTS_KEY, RECENTLY_VIEWED_KEY } from "@/lib/recentlyViewedKeys";
+
+// Re-exported so existing importers keep one entry point. The constants live in
+// recentlyViewedKeys.ts, which has no imports, so AuthContext can reach them
+// without pulling timezone.ts (and date-fns) into the entry chunk.
+export {
+  LEGACY_EVENTS_KEY,
+  LEGACY_RESTAURANTS_KEY,
+  LEGACY_RECENTLY_VIEWED_KEYS,
+  RECENTLY_VIEWED_KEY,
+} from "@/lib/recentlyViewedKeys";
 
 /**
  * Unified recently-viewed store (WEB-FEAT-007).
@@ -6,7 +18,7 @@ import { storage } from "@/lib/safeStorage";
  * One list across content types (events, restaurants, attractions) so the
  * homepage "Recently viewed" rail and the dashboard list can resume any item.
  * The guest store lives in safeStorage; signed-in users additionally sync to a
- * server table (see useRecentlyViewed / the recently_viewed migration) — this
+ * server table (see useRecentlyViewedFeed / the recently_viewed migration) — this
  * module is the local source of truth and pure enough to unit-test.
  *
  * Invariants: newest first, deduped by (type,id), capped at MAX_ITEMS, and
@@ -26,9 +38,106 @@ export interface RecentlyViewedEntry {
   viewedAt: number;
 }
 
-export const RECENTLY_VIEWED_KEY = "dmi_recently_viewed_v1";
 export const MAX_ITEMS = 20;
 export const MAX_AGE_MS = 30 * 24 * 60 * 60 * 1000; // 30 days
+
+interface LegacyEventItem {
+  id?: unknown;
+  title?: unknown;
+  image_url?: unknown;
+  date?: unknown;
+  venue?: unknown;
+  location?: unknown;
+  category?: unknown;
+  viewedAt?: unknown;
+}
+
+interface LegacyRestaurantItem {
+  id?: unknown;
+  name?: unknown;
+  image_url?: unknown;
+  cuisine?: unknown;
+  viewedAt?: unknown;
+}
+
+const str = (v: unknown): string | undefined => (typeof v === "string" && v ? v : undefined);
+
+/** Convert one legacy event row. Returns null for anything unusable. */
+export function legacyEventToEntry(item: LegacyEventItem): RecentlyViewedEntry | null {
+  const id = str(item.id);
+  const title = str(item.title);
+  if (!id || !title || typeof item.viewedAt !== "number") return null;
+  return {
+    id,
+    type: "event",
+    title,
+    href: `/events/${createEventSlugWithCentralTime(title, { date: str(item.date) })}`,
+    image_url: str(item.image_url),
+    subtitle: str(item.venue) ?? str(item.location) ?? str(item.category),
+    viewedAt: item.viewedAt,
+  };
+}
+
+/** Convert one legacy restaurant row. The restaurant route resolves an id. */
+export function legacyRestaurantToEntry(item: LegacyRestaurantItem): RecentlyViewedEntry | null {
+  const id = str(item.id);
+  const title = str(item.name);
+  if (!id || !title || typeof item.viewedAt !== "number") return null;
+  return {
+    id,
+    type: "restaurant",
+    title,
+    href: `/restaurants/${id}`,
+    image_url: str(item.image_url),
+    subtitle: str(item.cuisine),
+    viewedAt: item.viewedAt,
+  };
+}
+
+/**
+ * Merge `legacy` into `current`, newest wins on a (type,id) clash. Pure; the
+ * storage half lives in readRecentlyViewed.
+ */
+export function mergeEntries(
+  current: RecentlyViewedEntry[],
+  legacy: RecentlyViewedEntry[],
+  now: number = Date.now(),
+): RecentlyViewedEntry[] {
+  const byKey = new Map<string, RecentlyViewedEntry>();
+  for (const e of [...current, ...legacy]) {
+    const key = `${e.type}:${e.id}`;
+    const existing = byKey.get(key);
+    if (!existing || e.viewedAt > existing.viewedAt) byKey.set(key, e);
+  }
+  return normalizeEntries([...byKey.values()], now);
+}
+
+/** Read and delete the legacy keys. Returns the converted entries. */
+function takeLegacyEntries(): RecentlyViewedEntry[] {
+  const out: RecentlyViewedEntry[] = [];
+  const events = storage.get<unknown>(LEGACY_EVENTS_KEY);
+  if (events !== null) {
+    if (Array.isArray(events)) {
+      for (const item of events) {
+        const entry = item && typeof item === "object" ? legacyEventToEntry(item as LegacyEventItem) : null;
+        if (entry) out.push(entry);
+      }
+    }
+    storage.remove(LEGACY_EVENTS_KEY);
+  }
+  const restaurants = storage.get<unknown>(LEGACY_RESTAURANTS_KEY);
+  if (restaurants !== null) {
+    if (Array.isArray(restaurants)) {
+      for (const item of restaurants) {
+        const entry =
+          item && typeof item === "object" ? legacyRestaurantToEntry(item as LegacyRestaurantItem) : null;
+        if (entry) out.push(entry);
+      }
+    }
+    storage.remove(LEGACY_RESTAURANTS_KEY);
+  }
+  return out;
+}
 
 function sameItem(a: { id: string; type: RecentlyViewedType }, b: { id: string; type: RecentlyViewedType }) {
   return a.id === b.id && a.type === b.type;
@@ -47,11 +156,14 @@ export function normalizeEntries(
 }
 
 export function readRecentlyViewed(now: number = Date.now()): RecentlyViewedEntry[] {
-  const raw = storage.get<RecentlyViewedEntry[]>(RECENTLY_VIEWED_KEY) ?? [];
-  if (!Array.isArray(raw)) return [];
-  const normalized = normalizeEntries(raw, now);
-  // Persist the pruned list so stale entries don't linger across sessions.
-  if (normalized.length !== raw.length) storage.set(RECENTLY_VIEWED_KEY, normalized);
+  const stored = storage.get<RecentlyViewedEntry[]>(RECENTLY_VIEWED_KEY) ?? [];
+  const raw = Array.isArray(stored) ? stored : [];
+  const legacy = takeLegacyEntries();
+  const normalized = legacy.length > 0 ? mergeEntries(raw, legacy, now) : normalizeEntries(raw, now);
+  // Persist the pruned (or folded) list so stale entries don't linger.
+  if (legacy.length > 0 || normalized.length !== raw.length) {
+    storage.set(RECENTLY_VIEWED_KEY, normalized);
+  }
   return normalized;
 }
 

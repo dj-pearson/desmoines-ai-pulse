@@ -30,6 +30,9 @@ import fs from 'node:fs';
 const FILES = [
   'src/components/GEOContent.tsx',
   'src/components/GEOContentSection.tsx',
+  // The home FAQ answers, extracted from Index.tsx (WP0 of
+  // docs/page-plans/home.md). Same audience, same rules.
+  'src/content/homeContent.ts',
 ];
 
 let failures = 0;
@@ -43,8 +46,20 @@ const check = (name, cond, detail = '') => {
 
 /** Comments explain what was removed and necessarily quote it. Strip them. */
 function code(source) {
-  return source.replace(/\{\/\*[\s\S]*?\*\/\}/g, '').replace(/\/\*[\s\S]*?\*\//g, '');
+  return source
+    .replace(/\{\/\*[\s\S]*?\*\/\}/g, '')
+    .replace(/\/\*[\s\S]*?\*\//g, '')
+    // Whole-line // comments too. Only whole lines, so a URL's "//" inside a
+    // string is never mistaken for one.
+    .replace(/^\s*\/\/.*$/gm, '');
 }
+
+/**
+ * WP5 item 1: "Personalized users see 40% more relevant suggestions",
+ * "reduce search time by an average of 60%", "attend 35% more events". A
+ * percentage improvement needs a measured baseline, and none of these had one.
+ */
+const INVENTED_PERCENT = /\b\d{1,3}%\s+(more|less|fewer|higher|increase|faster)/i;
 
 console.log('\nAI-facing content claims');
 
@@ -76,10 +91,57 @@ for (const file of FILES) {
     'the platform sells a sponsored_listing placement',
   );
   check(
+    `${name}: no percentage-improvement claim`,
+    !INVENTED_PERCENT.test(source),
+    (source.match(INVENTED_PERCENT) ?? [''])[0],
+  );
+  check(
+    `${name}: no last-minute ticket availability promise`,
+    !/last-minute ticket/i.test(source),
+    'nothing sends ticket-availability alerts',
+  );
+  check(
+    `${name}: no "multiple times daily" cadence`,
+    !/multiple times (a |per )?day|multiple times daily/i.test(source),
+    'the event crawler runs once a day (.github/workflows/event-crawler.yml)',
+  );
+  check(
+    `${name}: no ranking by review scores`,
+    !/review scores/i.test(source),
+    'there is no reviews table (42P01 in production)',
+  );
+  check(
     `${name}: no hardcoded catalogue counts`,
     !/\b\d{2,3},?\d*\+\s*(events|restaurants|venues|playgrounds|attractions)/i.test(source),
     'useHomepageStats reads the real numbers; a hardcoded one drifts and contradicts',
   );
+}
+
+console.log('\nthe detectors are not vacuous');
+check('percentage detector fires on the removed sentence', INVENTED_PERCENT.test('Notification users attend 35% more events on average.'));
+check('percentage detector ignores a plain percentage', !INVENTED_PERCENT.test('a 100% free event'));
+check(
+  'comment stripping removes a // line comment',
+  !/removed/.test(code('// removed: 40% more\nconst a = 1;')),
+);
+
+console.log('\nhome FAQ coverage answer');
+// WP5 item 2: the coverage answer named areas with no page. It must be built
+// from the neighborhood inventory, not typed.
+{
+  const home = fs.readFileSync('src/content/homeContent.ts', 'utf8');
+  check(
+    'homeContent.ts imports NEIGHBORHOODS',
+    /import\s*\{[^}]*\bNEIGHBORHOODS\b[^}]*\}\s*from\s*["']@\/lib\/neighborhoods["']/.test(home),
+  );
+  check(
+    'the coverage answer interpolates the inventory',
+    /Which areas does[\s\S]{0,200}answer:\s*`[^`]*\$\{COVERED_AREAS\}/.test(home),
+  );
+  const code2 = code(home);
+  for (const area of ['Beaverdale', 'Highland Park', 'Court Avenue District', 'Windsor Heights']) {
+    check(`the coverage answer does not hand-name ${area}`, !new RegExp(`cover[^"\`]*${area}`).test(code2));
+  }
 }
 
 console.log(

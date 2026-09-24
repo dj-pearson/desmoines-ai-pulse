@@ -1,4 +1,3 @@
-import { Link } from "react-router-dom";
 import { useQuery } from "@tanstack/react-query";
 import { Helmet } from "react-helmet-async";
 import Header from "@/components/Header";
@@ -13,7 +12,8 @@ import { supabase } from "@/integrations/supabase/client";
 import { BRAND, getCanonicalUrl } from "@/lib/brandConfig";
 import { RESTAURANT_LIST_COLUMNS } from "@/lib/listColumns";
 import { STALE_TIME } from "@/lib/queryConfig";
-import { groupOpenings, RECENT_WINDOW_DAYS, type OpeningRow } from "@/lib/restaurantOpenings";
+import { toJsonLd } from "@/lib/jsonLd";
+import { groupOpenings, openingLabel, RECENT_WINDOW_DAYS, type OpeningRow } from "@/lib/restaurantOpenings";
 
 type Row = OpeningRow & { slug?: string | null; [key: string]: unknown };
 
@@ -37,13 +37,17 @@ export default function NewRestaurants() {
         .select(RESTAURANT_LIST_COLUMNS)
         .neq("is_merged", true)
         .or(`status.in.(newly_opened,opening_soon,announced),opening_date.gte.${since}`)
+        // Without an order the 120-row cap cut an arbitrary slice. Newest date
+        // first keeps the recent openings; undated rows go last.
+        .order("opening_date", { ascending: false, nullsFirst: false })
         .limit(120);
       if (error) throw error;
       return (data ?? []) as unknown as Row[];
     },
   });
 
-  const { recent, upcoming } = groupOpenings(data ?? []);
+  const now = new Date();
+  const { recent, upcoming } = groupOpenings(data ?? [], now);
   const year = new Date().getFullYear();
   const canonicalUrl = getCanonicalUrl("/restaurants/new");
   const pageTitle = `New Restaurants in Des Moines ${year}: Openings and Coming Soon`;
@@ -75,7 +79,7 @@ export default function NewRestaurants() {
       {!isLoading && itemList.length > 0 && (
         <Helmet>
           <script type="application/ld+json">
-            {JSON.stringify({
+            {toJsonLd({
               "@context": "https://schema.org",
               "@type": "ItemList",
               name: `New restaurants in ${BRAND.city}`,
@@ -117,7 +121,12 @@ export default function NewRestaurants() {
               {recent.length > 0 ? (
                 <div className="grid gap-6 md:grid-cols-2 lg:grid-cols-3">
                   {recent.map((r, i) => (
-                    <RestaurantCard key={r.id} restaurant={r as never} priority={i < 3} />
+                    <RestaurantCard
+                      key={r.id}
+                      restaurant={r as never}
+                      priority={i < 3}
+                      openingLabel={openingLabel(r, now) ?? undefined}
+                    />
                   ))}
                 </div>
               ) : (
@@ -132,7 +141,7 @@ export default function NewRestaurants() {
               {upcoming.length > 0 ? (
                 <div className="grid gap-6 md:grid-cols-2 lg:grid-cols-3">
                   {upcoming.map((r) => (
-                    <RestaurantCard key={r.id} restaurant={r as never} />
+                    <RestaurantCard key={r.id} restaurant={r as never} openingLabel={openingLabel(r, now) ?? undefined} />
                   ))}
                 </div>
               ) : (

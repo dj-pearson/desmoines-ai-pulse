@@ -75,7 +75,11 @@ function events(n = 12) {
  * the projection asks for, not the shape the assertions read.
  */
 function restaurants(n = 12) {
-  return Array.from({ length: n }, (_, i) => ({
+  return Array.from({ length: n }, (_, i) => restaurantRow(i));
+}
+
+function restaurantRow(i: number) {
+  return {
     id: `10000000-0000-0000-0000-${String(i).padStart(12, '0')}`,
     name: i === 0 ? `${MATCH} Kitchen` : `Fixture Restaurant ${i}`,
     description: 'A restaurant supplied by tests/support/fixtureBackend.',
@@ -110,7 +114,7 @@ function restaurants(n = 12) {
     status: 'active',
     website: 'https://example.com/fixture',
     writeup_generated_at: null,
-  }));
+  };
 }
 
 function attractions(n = 12) {
@@ -195,6 +199,50 @@ function fulfil(route: Route, body: unknown, total: number) {
   });
 }
 
+export interface FixtureBackendOptions {
+  /**
+   * Pretend the restaurants collection has this many rows (restaurants-hub
+   * spec: 478, so the hub has 16 pages). Rows are generated on demand and the
+   * request's own window is honoured - `limit_count`/`offset_count` in the
+   * get_rotated_restaurants body, `limit`/`offset` on a table read - so page 2
+   * really is rows 31-60 and every id on a page is distinct. This is paging,
+   * not filtering: the header above still holds, and a cuisine or search
+   * parameter changes nothing about which rows come back.
+   */
+  restaurantTotal?: number;
+}
+
+/** Rows [offset, offset + limit) of a collection of `total`, generated on demand. */
+function restaurantWindow(total: number, offset: number, limit: number) {
+  const start = Math.max(0, Math.min(offset, total));
+  const end = Math.max(start, Math.min(start + Math.max(0, limit), total));
+  return Array.from({ length: end - start }, (_, k) => restaurantRow(start + k));
+}
+
+function numberOr(value: unknown, fallback: number): number {
+  const n = typeof value === 'string' ? Number(value) : typeof value === 'number' ? value : NaN;
+  return Number.isFinite(n) ? n : fallback;
+}
+
+/** The limit/offset window a PostgREST table read asked for. */
+function tableWindow(url: string, total: number): { offset: number; limit: number } {
+  const params = new URL(url).searchParams;
+  const offset = numberOr(params.get('offset'), 0);
+  return { offset, limit: numberOr(params.get('limit'), total - offset) };
+}
+
+/** The window an RPC POST body asked for (get_rotated_restaurants' argument names). */
+function rpcWindow(route: Route, total: number): { offset: number; limit: number } {
+  let body: Record<string, unknown> = {};
+  try {
+    body = (route.request().postDataJSON() as Record<string, unknown>) ?? {};
+  } catch {
+    body = {};
+  }
+  const offset = numberOr(body.offset_count, 0);
+  return { offset, limit: numberOr(body.limit_count, total - offset) };
+}
+
 /**
  * Answer this page's Supabase traffic from fixtures. Call it BEFORE goto.
  *
@@ -203,7 +251,12 @@ function fulfil(route: Route, body: unknown, total: number) {
  * route AFTER this. Learned the hard way in subscription-checkout.spec.ts,
  * where a catch-all added last swallowed the specific handler before it.
  */
-export async function installFixtureBackend(page: Page): Promise<void> {
+export async function installFixtureBackend(
+  page: Page,
+  options: FixtureBackendOptions = {},
+): Promise<void> {
+  const { restaurantTotal } = options;
+
   await page.route('**/rest/v1/**', (route) => {
     const url = route.request().url();
 
@@ -215,6 +268,12 @@ export async function installFixtureBackend(page: Page): Promise<void> {
     );
 
     const table = tableOf(url);
+
+    if (table === 'restaurants' && restaurantTotal !== undefined && !wantsObject) {
+      const { offset, limit } = tableWindow(url, restaurantTotal);
+      return fulfil(route, restaurantWindow(restaurantTotal, offset, limit), restaurantTotal);
+    }
+
     const rows = table && TABLES[table] ? TABLES[table]() : [];
 
     if (wantsObject) {
@@ -239,6 +298,12 @@ export async function installFixtureBackend(page: Page): Promise<void> {
   await page.route('**/rest/v1/rpc/**', (route) => {
     const fn = /\/rest\/v1\/rpc\/([a-z0-9_]+)/i.exec(route.request().url())?.[1] ?? '';
     const spec = RPC_TABLES[fn];
+    if (spec?.table === 'restaurants' && restaurantTotal !== undefined) {
+      const { offset, limit } = rpcWindow(route, restaurantTotal);
+      const rows = restaurantWindow(restaurantTotal, offset, limit);
+      const body = spec.wrap ? rows.map((row) => spec.wrap!(row, restaurantTotal)) : rows;
+      return fulfil(route, body, restaurantTotal);
+    }
     const rows = spec ? TABLES[spec.table]() : [];
     const body = spec?.wrap ? rows.map((row) => spec.wrap!(row, rows.length)) : rows;
     return fulfil(route, body, rows.length);

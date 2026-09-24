@@ -4,48 +4,75 @@ import { FAQSection } from "@/components/FAQSection";
 import SEOHead from '@/components/SEOHead';
 import { getCanonicalUrl } from '@/lib/brandConfig';
 import { Card, CardContent } from '@/components/ui/card';
-import { Badge } from '@/components/ui/badge';
 import { Button } from '@/components/ui/button';
-import { Car, Building, Bike, Plane, Bus, Navigation, Footprints } from "lucide-react";
+import { Link } from 'react-router-dom';
+import { Car, Building, Bike, Plane, Bus, Navigation, Footprints, Hotel } from "lucide-react";
 import { SpriteIcon } from "@/components/ui/SpriteIcon";
-import { DART_FARES, verificationLine } from "@/lib/transitFacts";
+import {
+  AIRPORT_TO_DOWNTOWN,
+  BCYCLE,
+  DART_FARES,
+  SKYWALK,
+  airportFaqAnswer,
+  verificationLine,
+} from "@/lib/transitFacts";
 
-const PARKING_GARAGES = [
-  { name: 'Capital Square Garage', address: '400 Locust St', rate: '$1/hr, $10 max', hours: '24/7', lat: 41.5867, lng: -93.6250 },
-  { name: 'City Parking Ramp', address: '300 SW 5th St', rate: '$1/hr, $8 max', hours: '24/7', lat: 41.5839, lng: -93.6310 },
-  { name: 'Civic Center Garage', address: '221 Walnut St', rate: '$2/hr, $12 max', hours: '6am–12am', lat: 41.5851, lng: -93.6271 },
-  { name: 'Wells Fargo Arena Lots', address: '730 3rd St', rate: '$5–$15 event', hours: 'Event days', lat: 41.5908, lng: -93.6208 },
-  { name: 'Court Avenue Garage', address: '309 Court Ave', rate: '$1/hr, $8 max', hours: '24/7', lat: 41.5844, lng: -93.6213 },
+/*
+ * plan-stay WP3 item 7. This list used to carry rates ("$1/hr, $10 max") and
+ * hours ("24/7") with no source; the page itself admitted they were a rough
+ * guide. The figures are gone. What stays is where each garage is, with a
+ * one-tap directions link from the coordinates, and a pointer to ParkDSM and
+ * the posted signs for what it costs today.
+ */
+interface ParkingGarage {
+  name: string;
+  address: string;
+  lat: number;
+  lng: number;
+}
+
+const PARKING_GARAGES: readonly ParkingGarage[] = [
+  { name: 'Capital Square Garage', address: '400 Locust St', lat: 41.5867, lng: -93.625 },
+  { name: 'City Parking Ramp', address: '300 SW 5th St', lat: 41.5839, lng: -93.631 },
+  { name: 'Civic Center Garage', address: '221 Walnut St', lat: 41.5851, lng: -93.6271 },
+  { name: 'Iowa Events Center lots', address: '730 3rd St', lat: 41.5908, lng: -93.6208 },
+  { name: 'Court Avenue Garage', address: '309 Court Ave', lat: 41.5844, lng: -93.6213 },
 ];
+
+function directionsUrl(lat: number, lng: number): string {
+  return `https://www.google.com/maps/dir/?api=1&destination=${lat},${lng}`;
+}
 
 const DISTANCE_TABLE = [
   { destination: 'East Village', drive: '3 min', transit: '5 min walk', distance: '0.3 mi' },
   { destination: 'Gray\'s Lake', drive: '5 min', transit: '15 min bike', distance: '2.1 mi' },
-  { destination: 'Valley Junction', drive: '10 min', transit: '25 min DART', distance: '5.2 mi' },
-  { destination: 'Jordan Creek Mall', drive: '15 min', transit: '30 min DART', distance: '10.5 mi' },
+  { destination: 'Valley Junction', drive: '10 min', transit: 'DART bus', distance: '5.2 mi' },
+  { destination: 'Jordan Creek Mall', drive: '15 min', transit: 'DART bus', distance: '10.5 mi' },
   { destination: 'Adventureland', drive: '20 min', transit: 'N/A', distance: '14.2 mi' },
   { destination: 'Ames (Iowa State)', drive: '35 min', transit: 'N/A', distance: '30 mi' },
-  { destination: 'DSM Airport (DSM)', drive: '10 min', transit: '20 min DART', distance: '5.1 mi' },
+  { destination: 'DSM Airport (DSM)', drive: '10 min', transit: 'DART bus', distance: '5.1 mi' },
 ];
 
+// The airport and skywalk answers are built from the same constants the page
+// body renders (plan-stay WP3 item 2), so the two cannot disagree again.
 const FAQ_ITEMS = [
   { question: 'Is there Uber in Des Moines?', answer: 'Yes. Both Uber and Lyft operate throughout the Des Moines metro area. Waits are usually shortest downtown and longer in the suburbs; check the app for a live estimate.' },
   { question: 'Where should I park downtown?', answer: 'Downtown Des Moines has multiple parking garages, and the ParkDSM app lets you pay from your phone. Rates and street-parking hours change, so confirm posted signage or the app before you leave the car.' },
   { question: 'Does Des Moines have a subway?', answer: 'No, Des Moines does not have a subway or light rail system. The city is served by DART (Des Moines Area Regional Transit) buses. Check ridedart.com for current routes and schedules.' },
-  { question: 'How do I get from the airport to downtown?', answer: 'Des Moines International Airport (DSM) is about 5 miles from downtown, roughly 10 minutes by car. Options include Uber and Lyft, taxis, hotel shuttles, and DART bus service - check ridedart.com for the route that currently serves the airport.' },
-  { question: 'What is the Des Moines Skywalk?', answer: 'The Des Moines Skywalk is a 4+ mile system of enclosed, climate-controlled walkways connecting buildings throughout downtown. It is free to use and open during business hours — essential during Iowa winters!' },
+  { question: 'How do I get from the airport to downtown?', answer: airportFaqAnswer() },
+  { question: 'What is the Des Moines Skywalk?', answer: `${SKYWALK.summary} ${SKYWALK.hours}` },
 ];
 
 export default function GettingAround() {
   return (
     <>
       {/* SEO-022. The page's own schema is the FAQPage that FAQSection emits
-          from FAQ_ITEMS below — the queries this page wins are questions, and
+          from FAQ_ITEMS below - the queries this page wins are questions, and
           FAQPage is the type that matches. SEOHead is here for the canonical,
           which the bare Helmet never supplied. */}
       <SEOHead
         title="Des Moines Parking & Transit"
-        description="How to get around Des Moines: downtown parking map, skywalk system guide, BCycle bike share, DART transit, airport info, and rideshare tips."
+        description="How to get around Des Moines: downtown parking garages, skywalk system guide, BCycle bike share, DART transit, airport info, and rideshare tips."
         url={getCanonicalUrl('/getting-around')}
         canonicalUrl={getCanonicalUrl('/getting-around')}
         keywords={[
@@ -61,10 +88,10 @@ export default function GettingAround() {
       />
       <div className="min-h-screen bg-background">
         <Header />
-        <div className="container mx-auto px-4 py-8">
+        <div className="container mx-auto px-4 py-8" data-page-body="getting-around">
           {/* Hero */}
           <div className="text-center mb-10">
-            <div className="inline-flex items-center gap-2 bg-blue-500/10 text-blue-600 dark:text-blue-400 px-4 py-2 rounded-full mb-4">
+            <div className="inline-flex items-center gap-2 bg-primary/10 text-primary px-4 py-2 rounded-full mb-4">
               <Navigation className="h-5 w-5" />
               <span className="font-semibold">Visitor Transportation Guide</span>
             </div>
@@ -72,7 +99,7 @@ export default function GettingAround() {
               Getting Around Des Moines
             </h1>
             <p className="text-lg text-muted-foreground max-w-2xl mx-auto">
-              Everything you need to navigate Des Moines — parking, the famous skywalk system, bike share, transit, and more.
+              Parking, the skywalk, bike share, DART and the airport, with where each figure came from.
             </p>
           </div>
 
@@ -82,15 +109,10 @@ export default function GettingAround() {
               <Car className="h-5 w-5 text-primary" />
               <h2 className="text-2xl font-bold">Parking &amp; ParkDSM</h2>
             </div>
-            {/* WEB-FEAT-023: the rates below are a hardcoded array with no
-                source and no verification date, unlike the DART fares further
-                down. Labelled as indicative rather than quietly presented as
-                current, until there is a parking data source to check them
-                against. */}
-            <p className="text-muted-foreground mb-4">
-              Download the <strong>ParkDSM</strong> app to pay from your phone. Garage
-              rates and street-parking hours change, so treat the figures below as a
-              rough guide and confirm posted signage or the app.
+            <p className="text-muted-foreground mb-4 max-w-prose">
+              Download the <strong>ParkDSM</strong> app to pay from your phone. We list
+              where the main garages are, not what they charge: rates and hours change,
+              so check the app or the sign at the entrance.
             </p>
             <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-4 mb-4">
               {PARKING_GARAGES.map((garage) => (
@@ -100,10 +122,16 @@ export default function GettingAround() {
                     <p className="text-sm text-muted-foreground flex items-center gap-1 mt-1">
                       <SpriteIcon name="map-pin" className="h-3 w-3" /> {garage.address}
                     </p>
-                    <div className="flex gap-2 mt-2 flex-wrap">
-                      <Badge variant="outline">{garage.rate}</Badge>
-                      <Badge variant="secondary">{garage.hours}</Badge>
-                    </div>
+                    <Button asChild variant="outline" size="sm" className="min-h-11 mt-3">
+                      <a
+                        href={directionsUrl(garage.lat, garage.lng)}
+                        target="_blank"
+                        rel="noopener noreferrer"
+                        aria-label={`Directions to ${garage.name}`}
+                      >
+                        <SpriteIcon name="external-link" className="h-4 w-4 mr-1" /> Directions
+                      </a>
+                    </Button>
                   </CardContent>
                 </Card>
               ))}
@@ -116,21 +144,16 @@ export default function GettingAround() {
               <Building className="h-5 w-5 text-primary" />
               <h2 className="text-2xl font-bold">Skywalk System</h2>
             </div>
-            <Card className="border-blue-500/20">
+            <Card>
               <CardContent className="p-6">
-                <div className="flex flex-col md:flex-row gap-6">
-                  <div className="flex-1">
-                    <p className="text-muted-foreground mb-3">
-                      The Des Moines Skywalk is a <strong>4+ mile network of enclosed, climate-controlled walkways</strong> connecting over 40 buildings throughout downtown. It&apos;s free to use and <strong>essential during Iowa winters</strong> when temperatures can drop below zero.
-                    </p>
-                    <ul className="space-y-2 text-sm text-muted-foreground">
-                      <li className="flex items-start gap-2"><span className="text-primary font-bold">Hours:</span> Generally 6am–9pm weekdays, varies on weekends</li>
-                      <li className="flex items-start gap-2"><span className="text-primary font-bold">Cost:</span> Free — open to the public</li>
-                      <li className="flex items-start gap-2"><span className="text-primary font-bold">Connects:</span> Hotels, parking garages, restaurants, offices, Iowa Events Center, Des Moines Civic Center</li>
-                      <li className="flex items-start gap-2"><span className="text-primary font-bold">Pro Tip:</span> Look for blue &ldquo;Skywalk&rdquo; signs at building entrances to access the system from street level</li>
-                    </ul>
-                  </div>
-                </div>
+                <p className="text-muted-foreground mb-3 max-w-prose">
+                  {SKYWALK.summary} It matters most in an Iowa winter.
+                </p>
+                <ul className="space-y-2 text-sm text-muted-foreground">
+                  <li><strong className="text-foreground">Hours:</strong> {SKYWALK.hours}</li>
+                  <li><strong className="text-foreground">Connects:</strong> hotels, parking garages, restaurants, offices, the Iowa Events Center and the Des Moines Civic Center</li>
+                  <li><strong className="text-foreground">Getting in:</strong> look for the &ldquo;Skywalk&rdquo; signs at building entrances</li>
+                </ul>
               </CardContent>
             </Card>
           </section>
@@ -143,20 +166,13 @@ export default function GettingAround() {
             </div>
             <Card>
               <CardContent className="p-6">
-                <p className="text-muted-foreground mb-3">
-                  Des Moines BCycle offers bike share stations throughout downtown and surrounding neighborhoods. Grab a bike for quick trips or leisurely rides along the trail system.
-                </p>
-                <ul className="space-y-2 text-sm text-muted-foreground mb-4">
-                  <li><strong>Single Ride:</strong> $1 to unlock + $0.20/min</li>
-                  <li><strong>Day Pass:</strong> $15 for unlimited 60-minute rides</li>
-                  <li><strong>Monthly:</strong> $20/month for unlimited 60-minute rides</li>
-                  <li><strong>Stations:</strong> 20+ stations from downtown to Gray&apos;s Lake to the East Village</li>
-                </ul>
-                <a href="https://desmoines.bcycle.com" target="_blank" rel="noopener noreferrer">
-                  <Button variant="outline" size="sm">
-                    <SpriteIcon name="external-link" className="h-4 w-4 mr-1" /> BCycle Website
-                  </Button>
-                </a>
+                <p className="text-muted-foreground mb-3 max-w-prose">{BCYCLE.summary}</p>
+                <p className="text-sm text-muted-foreground mb-4 max-w-prose">{BCYCLE.pricing}</p>
+                <Button asChild variant="outline" size="sm" className="min-h-11">
+                  <a href={BCYCLE.siteUrl} target="_blank" rel="noopener noreferrer">
+                    <SpriteIcon name="external-link" className="h-4 w-4 mr-1" /> BCycle website
+                  </a>
+                </Button>
               </CardContent>
             </Card>
           </section>
@@ -184,32 +200,22 @@ export default function GettingAround() {
             </div>
             <Card>
               <CardContent className="p-6">
-                <p className="text-muted-foreground mb-4">
-                  DSM is a convenient, easy-to-navigate airport located just <strong>5 miles from downtown</strong> (10 minute drive).
+                <p className="text-muted-foreground mb-4 max-w-prose">{AIRPORT_TO_DOWNTOWN.summary}</p>
+                <h3 className="font-semibold mb-2">Getting downtown</h3>
+                <ul className="text-sm text-muted-foreground space-y-1 max-w-prose">
+                  {AIRPORT_TO_DOWNTOWN.options.map((option) => (
+                    <li key={option.label}>
+                      <strong className="text-foreground">{option.label}:</strong> {option.detail}
+                    </li>
+                  ))}
+                  <li>
+                    <strong className="text-foreground">DART bus:</strong> {AIRPORT_TO_DOWNTOWN.bus}
+                  </li>
+                </ul>
+                <p className="text-sm text-muted-foreground mt-3">
+                  For airlines and nonstop destinations, see{' '}
+                  <a href="https://www.flydsm.com" target="_blank" rel="noopener noreferrer" className="underline">flydsm.com</a>.
                 </p>
-                <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-                  <div>
-                    <h3 className="font-semibold mb-2">Airlines Serving DSM</h3>
-                    <ul className="text-sm text-muted-foreground space-y-1">
-                      <li>Allegiant Air</li>
-                      <li>American Airlines</li>
-                      <li>Delta Air Lines</li>
-                      <li>Frontier Airlines</li>
-                      <li>Southwest Airlines (hub cities)</li>
-                      <li>United Airlines</li>
-                    </ul>
-                  </div>
-                  <div>
-                    <h3 className="font-semibold mb-2">Ground Transportation</h3>
-                    <ul className="text-sm text-muted-foreground space-y-1">
-                      <li><strong>Uber/Lyft:</strong> Pick up at the arrivals curb; check the app for a fare quote</li>
-                      <li><strong>Taxi:</strong> Available at taxi stand ($18-22 to downtown)</li>
-                      <li><strong>DART Route 8:</strong> Bus to downtown ($1.75, ~20 min)</li>
-                      <li><strong>Hotel Shuttles:</strong> Many downtown hotels offer complimentary airport shuttle</li>
-                      <li><strong>Rental Cars:</strong> All major companies in the terminal</li>
-                    </ul>
-                  </div>
-                </div>
               </CardContent>
             </Card>
           </section>
@@ -232,22 +238,26 @@ export default function GettingAround() {
                   DART (Des Moines Area Regional Transit) operates bus routes across the
                   metro, with real-time tracking and mobile fare payment in the MyDART app.
                 </p>
-                <ul className="text-sm text-muted-foreground space-y-1 mb-2">
-                  {DART_FARES.facts.map((fact) => (
-                    <li key={fact.label}>
-                      <strong>{fact.label}:</strong> {fact.value}
-                      {fact.note ? ` (${fact.note})` : ""}
-                    </li>
-                  ))}
-                </ul>
-                <p className="text-xs text-muted-foreground mb-4">
-                  {verificationLine(DART_FARES)}
-                </p>
-                <a href="https://www.ridedart.com" target="_blank" rel="noopener noreferrer">
-                  <Button variant="outline" size="sm">
-                    <SpriteIcon name="external-link" className="h-4 w-4 mr-1" /> DART Website
-                  </Button>
-                </a>
+                <div data-fact-set={DART_FARES.id}>
+                  <ul className="text-sm text-muted-foreground space-y-1 mb-2">
+                    {DART_FARES.facts.map((fact) => (
+                      <li key={fact.label}>
+                        <strong>{fact.label}:</strong> {fact.value}
+                        {fact.note ? ` (${fact.note})` : ""}
+                      </li>
+                    ))}
+                  </ul>
+                  <p className="text-xs text-muted-foreground mb-4">
+                    <a href={DART_FARES.sourceUrl} target="_blank" rel="noopener noreferrer" className="underline">
+                      {verificationLine(DART_FARES)}
+                    </a>
+                  </p>
+                </div>
+                <Button asChild variant="outline" size="sm" className="min-h-11">
+                  <a href="https://www.ridedart.com" target="_blank" rel="noopener noreferrer">
+                    <SpriteIcon name="external-link" className="h-4 w-4 mr-1" /> DART website
+                  </a>
+                </Button>
               </CardContent>
             </Card>
           </section>
@@ -259,7 +269,7 @@ export default function GettingAround() {
               <h2 className="text-2xl font-bold">Distances From Downtown</h2>
             </div>
             <p className="text-muted-foreground mb-4">
-              Approximate, from the edge of downtown in normal traffic.
+              Approximate, from the edge of downtown in normal traffic. Bus times depend on the route and the hour; ridedart.com has the trip planner.
             </p>
             <Card>
               <CardContent className="p-0">
@@ -287,6 +297,32 @@ export default function GettingAround() {
                 </div>
               </CardContent>
             </Card>
+          </section>
+
+          {/* plan-stay WP3 item 9: from "how do I get there" to our own listings. */}
+          <section className="mb-12" aria-labelledby="plan-around-heading">
+            <div className="flex items-center gap-2 mb-4">
+              <Hotel className="h-5 w-5 text-primary" />
+              <h2 id="plan-around-heading" className="text-2xl font-bold">Plan around where you&apos;re going</h2>
+            </div>
+            <ul className="space-y-2 text-muted-foreground max-w-prose">
+              <li>
+                <Link to="/events/today" className="underline font-medium text-foreground">Parking for tonight&apos;s events</Link>: see what&apos;s on
+                tonight, then pick the nearest garage above.
+              </li>
+              <li>
+                <Link to="/stay?near=wells-fargo-arena" className="underline font-medium text-foreground">Hotels near Wells Fargo Arena and the Iowa Events Center</Link>, nearest first.
+              </li>
+              <li>
+                <Link to="/events?q=Iowa%20Events%20Center" className="underline font-medium text-foreground">Events at the Iowa Events Center</Link>
+              </li>
+              <li>
+                <Link to="/events?q=Civic%20Center" className="underline font-medium text-foreground">Events at the Des Moines Civic Center</Link>
+              </li>
+              <li>
+                <Link to="/stay" className="underline font-medium text-foreground">All Des Moines hotels</Link>
+              </li>
+            </ul>
           </section>
 
           {/* SEO-003: FAQSection renders these AND emits the single FAQPage

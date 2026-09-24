@@ -1,199 +1,193 @@
-import { useState, useEffect } from 'react';
+import { useQuery } from '@tanstack/react-query';
 import { supabase } from '@/integrations/supabase/client';
+import { STALE_TIME, GC_TIME, shouldRetry } from '@/lib/queryConfig';
+import { createLogger } from '@/lib/logger';
 
-interface PopularSearch {
+const logger = createLogger('useSearchInsights');
+
+/**
+ * A search people ran, or one we suggest.
+ *
+ * `count` and `trending` are OPTIONAL BECAUSE THEY ARE ONLY KNOWN FROM REAL
+ * DATA. search_analytics SELECT is admin-only, so an anonymous visitor always
+ * got the fallback list - and the fallback carried invented counts ("45
+ * searches") and `trending: true` flags, which rendered as green arrows. A
+ * suggestion has neither; undefined renders as nothing (WP9 of
+ * docs/page-plans/home.md).
+ */
+export interface PopularSearch {
   query: string;
-  count: number;
+  count?: number;
   category?: string;
-  trending: boolean; // Is it trending upward?
+  trending?: boolean;
 }
 
-interface SearchInsights {
+export interface SearchInsights {
   popularSearches: PopularSearch[];
   trendingQueries: PopularSearch[];
-  categoryBreakdown: { [key: string]: number };
+  categoryBreakdown: Record<string, number>;
   recentSearches: string[];
 }
 
-export function useSearchInsights() {
-  const [insights, setInsights] = useState<SearchInsights>({
-    popularSearches: [],
-    trendingQueries: [],
-    categoryBreakdown: {},
-    recentSearches: []
-  });
-  const [isLoading, setIsLoading] = useState(true);
-  const [hasRealData, setHasRealData] = useState(false);
+interface SearchInsightsResult {
+  insights: SearchInsights;
+  hasRealData: boolean;
+}
 
-  useEffect(() => {
-    fetchSearchInsights();
-  }, []);
+interface SearchAnalyticsRow {
+  search_query: string | null;
+  search_filters: unknown;
+  created_at: string | null;
+}
 
-  const fetchSearchInsights = async () => {
-    try {
-      setIsLoading(true);
+const EMPTY_INSIGHTS: SearchInsights = {
+  popularSearches: [],
+  trendingQueries: [],
+  categoryBreakdown: {},
+  recentSearches: [],
+};
 
-      // Try to get real search data from the last 7 days
-      const sevenDaysAgo = new Date();
-      sevenDaysAgo.setDate(sevenDaysAgo.getDate() - 7);
+/**
+ * Suggestions shown when there is no measured search data. Query text and a
+ * category only: no counts, no trend flags, no "recent searches" nobody ran.
+ */
+const SUGGESTED_SEARCHES: PopularSearch[] = [
+  { query: 'farmers market', category: 'Events' },
+  { query: 'free activities', category: 'Events' },
+  { query: 'live music', category: 'Events' },
+  { query: 'brunch', category: 'Restaurants' },
+  { query: 'craft beer', category: 'Restaurants' },
+  { query: 'playgrounds', category: 'Playgrounds' },
+  { query: 'art galleries', category: 'Attractions' },
+  { query: 'family activities', category: 'Events' },
+];
 
-      const { data: searchData, error } = await supabase
-        .from('search_analytics')
-        // `query`/`category` are not columns; the text is `search_query` and the
-        // facets live inside the `search_filters` JSON (WEB-QA-012).
-        .select('search_query, search_filters, created_at')
-        .gte('created_at', sevenDaysAgo.toISOString())
-        .not('search_query', 'is', null)
-        .order('created_at', { ascending: false });
+function fallbackInsights(): SearchInsights {
+  return { ...EMPTY_INSIGHTS, popularSearches: SUGGESTED_SEARCHES };
+}
 
-      if (error) {
-        console.error('Error fetching search data:', error);
-        setInsights(generateFallbackInsights());
-        setHasRealData(false);
-        return;
-      }
+/** The category lives inside the search_filters JSON (WEB-QA-012). */
+function categoryOf(filters: unknown): string | undefined {
+  if (filters && typeof filters === 'object' && 'category' in filters) {
+    const value = (filters as { category?: unknown }).category;
+    if (typeof value === 'string' && value && value !== 'all') return value;
+  }
+  return undefined;
+}
 
-      if (searchData && searchData.length >= 10) {
-        // We have enough real data
-        const realInsights = processRealSearchData(searchData);
-        setInsights(realInsights);
-        setHasRealData(true);
-      } else {
-        // Not enough data, use fallback
-        setInsights(generateFallbackInsights());
-        setHasRealData(false);
-      }
+function processRealSearchData(searchData: SearchAnalyticsRow[]): SearchInsights {
+  const queryCount: Record<string, { count: number; category?: string }> = {};
+  const trending: Record<string, number> = {};
+  const now = Date.now();
 
-    } catch (error) {
-      console.error('Error fetching search insights:', error);
-      setInsights(generateFallbackInsights());
-      setHasRealData(false);
-    } finally {
-      setIsLoading(false);
+  for (const search of searchData) {
+    const query = String(search.search_query ?? '').toLowerCase().trim();
+    if (query.length < 2) continue;
+
+    if (!queryCount[query]) {
+      queryCount[query] = { count: 0, category: categoryOf(search.search_filters) };
     }
-  };
+    queryCount[query].count++;
 
-  const processRealSearchData = (searchData: any[]): SearchInsights => {
-    // Count query frequency
-    const queryCount: { [key: string]: { count: number; category?: string; recent: boolean } } = {};
-    
-    searchData.forEach((search, index) => {
-      const query = String(search.search_query ?? '').toLowerCase().trim();
-      if (query.length < 2) return; // Skip very short queries
-      
-      if (!queryCount[query]) {
-        queryCount[query] = { count: 0, category: search.category, recent: index < 20 };
-      }
-      queryCount[query].count++;
-    });
+    // Simple velocity: searches in the last 24h score higher.
+    const ageHours = search.created_at
+      ? (now - new Date(search.created_at).getTime()) / (1000 * 60 * 60)
+      : Infinity;
+    trending[query] = (trending[query] || 0) + Math.max(0, 24 - ageHours) / 24;
+  }
 
-    // Calculate trending (simple velocity based on recency)
-    const now = new Date();
-    const trending: { [key: string]: number } = {};
-    
-    searchData.forEach((search) => {
-      const query = String(search.search_query ?? '').toLowerCase().trim();
-      const age = (now.getTime() - new Date(search.created_at).getTime()) / (1000 * 60 * 60); // hours
-      const recencyScore = Math.max(0, 24 - age) / 24; // Higher score for more recent
-      trending[query] = (trending[query] || 0) + recencyScore;
-    });
+  const popularSearches = Object.entries(queryCount)
+    .filter(([, data]) => data.count >= 2)
+    .sort(([, a], [, b]) => b.count - a.count)
+    .slice(0, 10)
+    .map(([query, data]) => ({
+      query,
+      count: data.count,
+      category: data.category,
+      trending: (trending[query] || 0) > 2,
+    }));
 
-    // Create popular searches
-    const popularSearches = Object.entries(queryCount)
-      .filter(([_, data]) => data.count >= 2) // Minimum threshold
-      .sort(([, a], [, b]) => b.count - a.count)
-      .slice(0, 10)
-      .map(([query, data]) => ({
-        query,
-        count: data.count,
-        category: data.category,
-        trending: (trending[query] || 0) > 2 // Has recent activity
-      }));
+  const trendingQueries = Object.entries(trending)
+    .filter(([query]) => (queryCount[query]?.count ?? 0) >= 2)
+    .sort(([, a], [, b]) => b - a)
+    .slice(0, 8)
+    .map(([query]) => ({
+      query,
+      count: queryCount[query].count,
+      category: queryCount[query].category,
+      trending: true,
+    }));
 
-    // Create trending queries (high velocity)
-    const trendingQueries = Object.entries(trending)
-      .filter(([query]) => queryCount[query]?.count >= 2)
-      .sort(([, a], [, b]) => b - a)
-      .slice(0, 8)
-      .map(([query]) => ({
-        query,
-        count: queryCount[query].count,
-        category: queryCount[query].category,
-        trending: true
-      }));
+  const categoryBreakdown: Record<string, number> = {};
+  for (const search of searchData) {
+    const category = categoryOf(search.search_filters);
+    if (category) categoryBreakdown[category] = (categoryBreakdown[category] || 0) + 1;
+  }
 
-    // Category breakdown
-    const categoryBreakdown: { [key: string]: number } = {};
-    searchData.forEach((search) => {
-      if (search.category) {
-        categoryBreakdown[search.category] = (categoryBreakdown[search.category] || 0) + 1;
-      }
-    });
+  const recentSearches = Array.from(
+    new Set(
+      searchData
+        .slice(0, 50)
+        .map((s) => s.search_query)
+        .filter((q): q is string => Boolean(q)),
+    ),
+  ).slice(0, 10);
 
-    // Recent unique searches
-    const recentSearches = Array.from(new Set(
-      searchData.slice(0, 50).map(s => s.search_query)
-    )).slice(0, 10);
+  return { popularSearches, trendingQueries, categoryBreakdown, recentSearches };
+}
 
-    return {
-      popularSearches,
-      trendingQueries,
-      categoryBreakdown,
-      recentSearches
-    };
-  };
+async function fetchSearchInsights(): Promise<SearchInsightsResult> {
+  try {
+    return await readSearchInsights();
+  } catch (error) {
+    // A network failure should still leave the suggestions on screen.
+    logger.warn('fetchSearchInsights', 'search_analytics read threw', { error: String(error) });
+    return { insights: fallbackInsights(), hasRealData: false };
+  }
+}
 
-  const generateFallbackInsights = (): SearchInsights => {
-    // Generate realistic fallback data based on Des Moines interests
-    const fallbackPopular: PopularSearch[] = [
-      { query: 'farmers market', count: 45, category: 'Events', trending: true },
-      { query: 'downtown events', count: 38, category: 'Events', trending: false },
-      { query: 'free activities', count: 35, category: 'Events', trending: true },
-      { query: 'pizza', count: 32, category: 'Restaurants', trending: false },
-      { query: 'craft beer', count: 28, category: 'Restaurants', trending: true },
-      { query: 'playgrounds', count: 25, category: 'Playgrounds', trending: false },
-      { query: 'art galleries', count: 22, category: 'Attractions', trending: true },
-      { query: 'music venues', count: 20, category: 'Events', trending: false },
-      { query: 'family activities', count: 18, category: 'Events', trending: true },
-      { query: 'brunch', count: 16, category: 'Restaurants', trending: false }
-    ];
+async function readSearchInsights(): Promise<SearchInsightsResult> {
+  const sevenDaysAgo = new Date(Date.now() - 7 * 24 * 60 * 60 * 1000);
 
-    const fallbackTrending: PopularSearch[] = [
-      { query: 'summer festivals', count: 15, category: 'Events', trending: true },
-      { query: 'outdoor dining', count: 12, category: 'Restaurants', trending: true },
-      { query: 'bike trails', count: 10, category: 'Attractions', trending: true },
-      { query: 'food trucks', count: 9, category: 'Restaurants', trending: true },
-      { query: 'live music', count: 8, category: 'Events', trending: true },
-      { query: 'splash pads', count: 7, category: 'Playgrounds', trending: true }
-    ];
+  const { data, error } = await supabase
+    .from('search_analytics')
+    // `query`/`category` are not columns; the text is `search_query` and the
+    // facets live inside the `search_filters` JSON (WEB-QA-012).
+    .select('search_query, search_filters, created_at')
+    .gte('created_at', sevenDaysAgo.toISOString())
+    .not('search_query', 'is', null)
+    .order('created_at', { ascending: false })
+    .limit(500);
 
-    const fallbackCategories = {
-      'Events': 156,
-      'Restaurants': 89,
-      'Attractions': 43,
-      'Playgrounds': 27
-    };
+  if (error) {
+    // Expected for everyone but admins (RLS), so a warning, not an error.
+    logger.warn('fetchSearchInsights', 'Could not read search_analytics', { error: error.message });
+    return { insights: fallbackInsights(), hasRealData: false };
+  }
 
-    const fallbackRecent = [
-      'coffee shops near me',
-      'weekend events',
-      'kids activities',
-      'date night restaurants',
-      'free parking downtown'
-    ];
+  const rows = (data ?? []) as SearchAnalyticsRow[];
+  if (rows.length >= 10) {
+    const insights = processRealSearchData(rows);
+    if (insights.popularSearches.length > 0) {
+      return { insights, hasRealData: true };
+    }
+  }
+  return { insights: fallbackInsights(), hasRealData: false };
+}
 
-    return {
-      popularSearches: fallbackPopular,
-      trendingQueries: fallbackTrending,
-      categoryBreakdown: fallbackCategories,
-      recentSearches: fallbackRecent
-    };
-  };
+export function useSearchInsights() {
+  const { data, isLoading, refetch } = useQuery({
+    queryKey: ['search-insights'],
+    queryFn: fetchSearchInsights,
+    staleTime: STALE_TIME.SHORT,
+    gcTime: GC_TIME,
+    retry: shouldRetry,
+  });
 
   return {
-    insights,
+    insights: data?.insights ?? EMPTY_INSIGHTS,
     isLoading,
-    hasRealData,
-    refetch: fetchSearchInsights
+    hasRealData: data?.hasRealData ?? false,
+    refetch,
   };
 }

@@ -1,78 +1,151 @@
-import { useState, useEffect, lazy, Suspense } from 'react';
-import { createEventSlugWithCentralTime } from "@/lib/timezone";
+import { useState, useEffect, useMemo, lazy, Suspense } from 'react';
+import { Link, useSearchParams } from 'react-router-dom';
+import * as SliderPrimitive from '@radix-ui/react-slider';
+import { Navigation, DollarSign, List, Map as MapIcon, Loader2 } from 'lucide-react';
 import Header from '@/components/Header';
 import Footer from '@/components/Footer';
 import SEOHead from '@/components/SEOHead';
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
 import { Badge } from '@/components/ui/badge';
-import { Slider } from '@/components/ui/slider';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
 import { LoadingSpinner } from '@/components/ui/loading-skeleton';
-import { Navigation, DollarSign, List, Map as MapIcon, Loader2 } from "lucide-react";
-import { Link } from 'react-router-dom';
-import { useEventsNearby, useGeolocation, getDistanceDisplay } from '@/hooks/useProximitySearch';
-import type { MapLocation } from '@/components/InteractiveMap';
-import { useToast } from '@/hooks/use-toast';
-import { format } from 'date-fns';
-import { formatCount } from "@/lib/pluralize";
-import { SpriteIcon } from "@/components/ui/SpriteIcon";
+import { SpriteIcon } from '@/components/ui/SpriteIcon';
 import { ErrorState } from '@/components/ui/error-state';
-import { OptimizedImage } from "@/components/OptimizedImage";
+import { OptimizedImage } from '@/components/OptimizedImage';
+import type { MapLocation } from '@/components/InteractiveMap';
+import { useEventsNearby, useGeolocation, NEARBY_EVENTS_LIMIT } from '@/hooks/useProximitySearch';
+import { createEventSlugWithCentralTime, formatEventDateShort } from '@/lib/timezone';
+import { EVENT_CATEGORIES } from '@/lib/eventCategories';
+import { formatCount } from '@/lib/pluralize';
+import { storage } from '@/lib/safeStorage';
+import {
+  DEFAULT_NEAR_ME_ORIGIN,
+  DEFAULT_NEAR_ME_WINDOW,
+  NEAR_ME_ORIGINS,
+  NEAR_ME_ORIGIN_STORAGE_KEY,
+  NEAR_ME_WINDOWS,
+  findNearMeOrigin,
+  formatNearMeDistance,
+  nearMeWindowBounds,
+  parseNearMeWindow,
+  type NearMeWindow,
+} from '@/lib/nearMeOrigins';
 
 // Lazy load map component
 const EventsMap = lazy(() => import('@/components/InteractiveMap').then(mod => ({ default: mod.InteractiveMap })));
 
+/** Select value for "measure from where I am". Not an origin slug. */
+const CURRENT_LOCATION = 'current';
+
+const DEFAULT_RADIUS = 25;
+
+function readStoredOrigin(): string {
+  const stored = storage.get<string>(NEAR_ME_ORIGIN_STORAGE_KEY);
+  return findNearMeOrigin(stored)?.slug ?? DEFAULT_NEAR_ME_ORIGIN;
+}
+
 export default function EventsNearMe() {
-  const { toast } = useToast();
+  const [searchParams, setSearchParams] = useSearchParams();
+  const when = parseNearMeWindow(searchParams.get('when'));
+
   const [viewMode, setViewMode] = useState<'list' | 'map'>('list');
-  const [radiusMiles, setRadiusMiles] = useState(25);
+  // The slider shows radiusDraft while dragging; the query only sees
+  // radiusMiles, which changes on release (onValueCommit). Firing the RPC per
+  // tick sent up to 50 requests per drag and raced their answers.
+  const [radiusMiles, setRadiusMiles] = useState(DEFAULT_RADIUS);
+  const [radiusDraft, setRadiusDraft] = useState(DEFAULT_RADIUS);
   const [category, setCategory] = useState('all');
+  const [originSlug, setOriginSlug] = useState<string>(readStoredOrigin);
+  const [useCurrentLocation, setUseCurrentLocation] = useState(false);
 
   const { location, requestLocation, isLoading: locationLoading, error: locationError } = useGeolocation();
 
+  // A fix that arrives after the tap becomes the origin. The coordinates stay
+  // in memory; only a picked place name is ever stored.
+  useEffect(() => {
+    if (location) setUseCurrentLocation(true);
+  }, [location]);
+
+  const origin = findNearMeOrigin(originSlug) ?? NEAR_ME_ORIGINS[0];
+  const fromCurrent = useCurrentLocation && !!location;
+  const center = fromCurrent
+    ? { latitude: location.latitude, longitude: location.longitude }
+    : { latitude: origin.latitude, longitude: origin.longitude };
+  const originLabel = fromCurrent ? undefined : origin.label;
+
+  // Recomputed when `when` changes, not per render, so the query key is stable.
+  const timeWindow = useMemo(() => nearMeWindowBounds(when), [when]);
+
   const {
     items: events,
+    limitHit,
     isLoading,
+    isFetching,
+    isFetched,
     error,
     refetch,
     searchCenter,
   } = useEventsNearby({
-    latitude: location?.latitude || 41.5868, // Default to Des Moines
-    longitude: location?.longitude || -93.625,
+    latitude: center.latitude,
+    longitude: center.longitude,
     radiusMiles,
     category: category !== 'all' ? category : undefined,
-    sortBy: 'distance',
+    window: timeWindow,
   });
 
-  const handleRequestLocation = () => {
-    requestLocation();
+  const setWhen = (next: NearMeWindow) => {
+    setSearchParams(
+      (prev) => {
+        const params = new URLSearchParams(prev);
+        if (next === DEFAULT_NEAR_ME_WINDOW) params.delete('when');
+        else params.set('when', next);
+        return params;
+      },
+      { replace: true }
+    );
   };
 
-  // Surface geolocation failures once they resolve (getCurrentPosition is async,
-  // so we can't read locationError synchronously after requestLocation()).
-  useEffect(() => {
-    if (locationError) {
-      toast({
-        title: 'Location unavailable',
-        description: `${locationError} Showing events across Des Moines instead.`,
-        variant: 'destructive',
-      });
+  const handleOriginChange = (value: string) => {
+    if (value === CURRENT_LOCATION) {
+      if (location) setUseCurrentLocation(true);
+      else requestLocation();
+      return;
     }
-  }, [locationError, toast]);
+    setUseCurrentLocation(false);
+    setOriginSlug(value);
+    storage.set(NEAR_ME_ORIGIN_STORAGE_KEY, value);
+  };
 
-  const mapLocations: MapLocation[] = events.map(event => ({
-    id: event.id,
-    name: event.title,
-    latitude: event.latitude!,
-    longitude: event.longitude!,
-    category: event.category || 'General',
-    image_url: event.image_url || undefined,
-    description: event.enhanced_description || event.description || undefined,
-    distance_miles: event.distance_miles,
-    price: event.price || undefined,
-    slug: event.id,
-  }));
+  const setRadius = (miles: number) => {
+    setRadiusDraft(miles);
+    setRadiusMiles(miles);
+  };
+
+  const eventHref = (event: (typeof events)[number]) =>
+    `/events/${createEventSlugWithCentralTime(event.title, event)}`;
+
+  // Pins and cards share one href builder, so a popup can never point at a
+  // different URL than the card for the same event (a bare id 404s).
+  const mapLocations: MapLocation[] = events
+    .filter((event) => event.latitude != null && event.longitude != null)
+    .map((event) => ({
+      id: event.id,
+      name: event.title,
+      latitude: event.latitude,
+      longitude: event.longitude,
+      category: event.category || 'General',
+      image_url: event.image_url || undefined,
+      // The RPC returns enhanced_description only; there is no `description` column.
+      description: event.enhanced_description || undefined,
+      distance_miles: event.distance_miles,
+      price: event.price || undefined,
+      slug: createEventSlugWithCentralTime(event.title, event),
+    }));
+
+  const whenLabel = NEAR_ME_WINDOWS.find((w) => w.value === when)?.label ?? '';
+  const placeText = fromCurrent ? 'your location' : origin.label;
+  const showEmpty = isFetched && !isFetching && !error && events.length === 0;
 
   return (
     <>
@@ -84,60 +157,75 @@ export default function EventsNearMe() {
       <div className="min-h-screen flex flex-col">
         <Header />
         <div className="flex-1 container mx-auto px-4 py-8">
-          {/* Header */}
           <div className="mb-8">
             <h1 className="text-2xl sm:text-3xl md:text-4xl font-bold mb-4">Events Near Me</h1>
-            <p className="text-lg text-muted-foreground">
-              Discover events happening around you. Adjust the radius to find events within your preferred distance.
+            <p className="text-lg text-muted-foreground max-w-prose">
+              What's on close by, from where you are or from a part of town you pick.
             </p>
           </div>
 
-          {/* Location Controls */}
+          {/* Starting point */}
           <Card className="mb-6">
             <CardHeader>
               <CardTitle className="flex items-center gap-2">
                 <SpriteIcon name="map-pin" className="h-5 w-5" />
-                Your Location
+                Starting point
               </CardTitle>
               <CardDescription>
-                {location
-                  ? `Showing events near ${location.latitude.toFixed(4)}, ${location.longitude.toFixed(4)}`
-                  : 'Using Des Moines, IA as default location'}
+                {fromCurrent ? 'Near your current location' : `Near ${origin.label}`}
               </CardDescription>
             </CardHeader>
             <CardContent className="space-y-4">
-              <Button
-                onClick={handleRequestLocation}
-                disabled={locationLoading}
-                variant="outline"
-                className="w-full sm:w-auto"
-              >
-                {locationLoading ? (
-                  <Loader2 className="h-4 w-4 animate-spin mr-2" />
-                ) : (
-                  <Navigation className="h-4 w-4 mr-2" />
-                )}
-                Use My Current Location
-              </Button>
-
-              {location && (
-                <Badge variant="secondary" className="ml-2">
-                  Accuracy: ±{location.accuracy.toFixed(0)} meters
-                </Badge>
-              )}
-
-              {locationError && (
-                <div className="rounded-md border border-destructive/40 bg-destructive/5 p-3 text-sm">
-                  <p className="text-destructive font-medium">{locationError}</p>
-                  <p className="text-muted-foreground mt-1">
-                    We're showing events across Des Moines as a fallback. You can
-                    also{' '}
-                    <Link to="/events" className="underline font-medium">
-                      browse all events
-                    </Link>
-                    .
-                  </p>
+              <div className="flex flex-col sm:flex-row gap-3 sm:items-end">
+                <div className="space-y-2 sm:w-64">
+                  <label htmlFor="near-me-origin" className="text-sm font-medium">
+                    Measure distance from
+                  </label>
+                  <Select
+                    value={fromCurrent ? CURRENT_LOCATION : origin.slug}
+                    onValueChange={handleOriginChange}
+                  >
+                    <SelectTrigger id="near-me-origin">
+                      <SelectValue />
+                    </SelectTrigger>
+                    <SelectContent>
+                      {location && (
+                        <SelectItem value={CURRENT_LOCATION}>My current location</SelectItem>
+                      )}
+                      {NEAR_ME_ORIGINS.map((o) => (
+                        <SelectItem key={o.slug} value={o.slug}>
+                          {o.label}
+                        </SelectItem>
+                      ))}
+                    </SelectContent>
+                  </Select>
                 </div>
+                <Button
+                  onClick={() => (location ? setUseCurrentLocation(true) : requestLocation())}
+                  disabled={locationLoading || fromCurrent}
+                  variant="outline"
+                  className="w-full sm:w-auto min-h-11"
+                >
+                  {locationLoading ? (
+                    <Loader2 className="h-4 w-4 animate-spin mr-2" />
+                  ) : (
+                    <Navigation className="h-4 w-4 mr-2" />
+                  )}
+                  Use my current location
+                </Button>
+              </div>
+
+              <p className="text-xs text-muted-foreground">
+                Your location is rounded to about half a mile before it's used, and it isn't saved.
+              </p>
+
+              {locationError && !fromCurrent && (
+                <p className="text-sm" role="alert">
+                  <span className="font-medium">{locationError}</span>{' '}
+                  <span className="text-muted-foreground">
+                    Distances are measured from {origin.label}; pick another starting point above.
+                  </span>
+                </p>
               )}
             </CardContent>
           </Card>
@@ -148,162 +236,201 @@ export default function EventsNearMe() {
               <CardTitle>Filters</CardTitle>
             </CardHeader>
             <CardContent className="space-y-6">
-              {/* Radius Slider */}
+              <fieldset className="space-y-2">
+                <legend className="text-sm font-medium mb-2">When</legend>
+                <div className="flex flex-wrap gap-2">
+                  {NEAR_ME_WINDOWS.map((w) => (
+                    <Button
+                      key={w.value}
+                      type="button"
+                      size="sm"
+                      variant={when === w.value ? 'default' : 'outline'}
+                      aria-pressed={when === w.value}
+                      onClick={() => setWhen(w.value)}
+                      className="min-h-11"
+                    >
+                      {w.label}
+                    </Button>
+                  ))}
+                </div>
+              </fieldset>
+
               <div className="space-y-2">
                 <div className="flex justify-between items-center">
-                  <label className="text-sm font-medium">Search Radius</label>
-                  <span className="text-sm text-muted-foreground">{radiusMiles} miles</span>
+                  <span id="near-me-radius-label" className="text-sm font-medium">
+                    Search radius
+                  </span>
+                  <span className="text-sm text-muted-foreground" aria-hidden="true">
+                    {radiusDraft} miles
+                  </span>
                 </div>
-                <Slider
-                  value={[radiusMiles]}
-                  onValueChange={(value) => setRadiusMiles(value[0])}
+                <SliderPrimitive.Root
+                  value={[radiusDraft]}
+                  onValueChange={(value) => setRadiusDraft(value[0])}
+                  onValueCommit={(value) => setRadiusMiles(value[0])}
                   min={1}
                   max={50}
                   step={1}
-                  className="w-full"
-                />
-                <div className="flex justify-between text-xs text-muted-foreground">
+                  className="relative flex w-full touch-none select-none items-center py-3"
+                >
+                  <SliderPrimitive.Track className="relative h-2 w-full grow overflow-hidden rounded-full bg-secondary">
+                    <SliderPrimitive.Range className="absolute h-full bg-primary" />
+                  </SliderPrimitive.Track>
+                  <SliderPrimitive.Thumb
+                    aria-label="Search radius"
+                    aria-valuetext={formatCount(radiusDraft, 'mile')}
+                    className="block h-5 w-5 rounded-full border-2 border-primary bg-background ring-offset-background transition-colors focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2"
+                  />
+                </SliderPrimitive.Root>
+                <div className="flex justify-between text-xs text-muted-foreground" aria-hidden="true">
                   <span>1 mi</span>
                   <span>50 mi</span>
                 </div>
               </div>
 
-              {/* Category Filter */}
               <div className="space-y-2">
-                <label className="text-sm font-medium">Category</label>
+                <label htmlFor="near-me-category" className="text-sm font-medium">
+                  Category
+                </label>
                 <Select value={category} onValueChange={setCategory}>
-                  <SelectTrigger>
-                    <SelectValue placeholder="All Categories" />
+                  <SelectTrigger id="near-me-category">
+                    <SelectValue placeholder="All categories" />
                   </SelectTrigger>
                   <SelectContent>
-                    <SelectItem value="all">All Categories</SelectItem>
-                    <SelectItem value="Music">Music</SelectItem>
-                    <SelectItem value="Food">Food & Drink</SelectItem>
-                    <SelectItem value="Arts & Culture">Arts & Culture</SelectItem>
-                    <SelectItem value="Sports">Sports</SelectItem>
-                    <SelectItem value="Community">Community</SelectItem>
-                    <SelectItem value="Family">Family</SelectItem>
+                    <SelectItem value="all">All categories</SelectItem>
+                    {EVENT_CATEGORIES.map((c) => (
+                      <SelectItem key={c} value={c}>
+                        {c}
+                      </SelectItem>
+                    ))}
                   </SelectContent>
                 </Select>
               </div>
 
-              {/* View Toggle */}
               <div className="flex gap-2">
                 <Button
                   variant={viewMode === 'list' ? 'default' : 'outline'}
+                  aria-pressed={viewMode === 'list'}
                   onClick={() => setViewMode('list')}
-                  className="flex-1"
+                  className="flex-1 min-h-11"
                 >
                   <List className="h-4 w-4 mr-2" />
-                  List View
+                  List
                 </Button>
                 <Button
                   variant={viewMode === 'map' ? 'default' : 'outline'}
+                  aria-pressed={viewMode === 'map'}
                   onClick={() => setViewMode('map')}
-                  className="flex-1"
+                  className="flex-1 min-h-11"
                 >
                   <MapIcon className="h-4 w-4 mr-2" />
-                  Map View
+                  Map
                 </Button>
               </div>
             </CardContent>
           </Card>
 
-          {/* Results Count */}
           <div className="mb-4">
-            <p className="text-sm text-muted-foreground">
-              Found {formatCount(events.length, 'event')} within {formatCount(radiusMiles, 'mile')}
-              {location && ' of your location'}
+            <p className="text-sm text-muted-foreground" role="status" aria-live="polite">
+              {!isFetched || (isFetching && events.length === 0)
+                ? 'Searching...'
+                : `${formatCount(events.length, 'event')} within ${formatCount(radiusMiles, 'mile')} of ${placeText}, ${whenLabel.toLowerCase()}.`}
+              {isFetched && limitHit && (
+                <>
+                  {' '}
+                  The search checks the first {NEARBY_EVENTS_LIMIT} events in this radius; a smaller
+                  radius makes sure nothing closer is left out.
+                </>
+              )}
             </p>
           </div>
 
-          {/* Loading State */}
           {isLoading && (
             <div className="flex justify-center py-12">
               <LoadingSpinner />
             </div>
           )}
 
-          {/* WEB-QA-031: this page already kept the failure and the empty
-              state apart - the empty branch below is gated on !error - so what
-              was missing was a way out. The raw message in a red card left the
-              visitor with nothing to do but reload the page. */}
           {error && <ErrorState error={error} onRetry={() => void refetch()} />}
 
-          {/* List View */}
-          {!isLoading && !error && viewMode === 'list' && (
-            <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
-              {events.map((event, index) => (
-                <Card key={event.id} className="hover:shadow-lg transition-shadow">
-                  <Link to={`/events/${createEventSlugWithCentralTime(event.title, event)}`}>
-                    {event.image_url && (
-                      <div className="overflow-hidden rounded-t-lg">
-                        <OptimizedImage
-                          src={event.image_url}
-                          alt={event.title}
-                          className="object-cover"
-                          // h-48 was on the img, and the wrapper div above it
-                          // sets no height - so the height moves ONTO the
-                          // component's own container or the box collapses.
-                          containerClassName="w-full h-48"
-                          // The first row of a three-column grid. Chrome does not start a lazy
-                          // image's fetch until layout has run, so the LCP candidate on a listing
-                          // page must not be lazy (WEB-SEO-032).
-                          priority={index < 3}
-                          sizes="(max-width: 640px) 100vw, (max-width: 1024px) 50vw, 33vw"
-                        />
-                      </div>
-                    )}
-                    <CardHeader>
-                      <div className="flex justify-between items-start mb-2">
-                        <CardTitle className="text-lg line-clamp-2">{event.title}</CardTitle>
-                        {event.is_featured && (
-                          <Badge variant="secondary" className="ml-2">Featured</Badge>
-                        )}
-                      </div>
-                      {event.category && (
-                        <Badge variant="outline" className="w-fit">
-                          {event.category}
-                        </Badge>
+          {!isLoading && !error && viewMode === 'list' && events.length > 0 && (
+            <div
+              className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6"
+              aria-busy={isFetching}
+            >
+              {events.map((event, index) => {
+                const distance = formatNearMeDistance(event.distance_miles, originLabel);
+                return (
+                  <Card key={event.id} className="hover:shadow-lg transition-shadow">
+                    <Link to={eventHref(event)}>
+                      {event.image_url && (
+                        <div className="overflow-hidden rounded-t-lg">
+                          <OptimizedImage
+                            src={event.image_url}
+                            alt={event.title}
+                            className="object-cover"
+                            // h-48 was on the img, and the wrapper div above it
+                            // sets no height - so the height moves ONTO the
+                            // component's own container or the box collapses.
+                            containerClassName="w-full h-48"
+                            // The first row of a three-column grid. Chrome does not start a lazy
+                            // image's fetch until layout has run, so the LCP candidate on a listing
+                            // page must not be lazy (WEB-SEO-032).
+                            priority={index < 3}
+                            sizes="(max-width: 640px) 100vw, (max-width: 1024px) 50vw, 33vw"
+                          />
+                        </div>
                       )}
-                    </CardHeader>
-                    <CardContent>
-                      <div className="space-y-2 text-sm">
-                        {event.date && (
-                          <div className="flex items-center gap-2 text-muted-foreground">
-                            <SpriteIcon name="calendar" className="h-4 w-4" />
-                            {format(new Date(event.date), 'MMM d, yyyy')}
+                      <CardHeader>
+                        <div className="flex justify-between items-start mb-2">
+                          <CardTitle className="text-lg line-clamp-2">{event.title}</CardTitle>
+                          {event.is_featured && (
+                            <Badge variant="secondary" className="ml-2">Featured</Badge>
+                          )}
+                        </div>
+                        {event.category && (
+                          <Badge variant="outline" className="w-fit">
+                            {event.category}
+                          </Badge>
+                        )}
+                      </CardHeader>
+                      <CardContent>
+                        <div className="space-y-2 text-sm">
+                          <div className="flex flex-wrap items-center gap-x-3 gap-y-1 text-muted-foreground">
+                            <span className="flex items-center gap-2">
+                              <SpriteIcon name="calendar" className="h-4 w-4" />
+                              {formatEventDateShort(event)}
+                            </span>
+                            {distance && (
+                              <span className="flex items-center gap-2">
+                                <SpriteIcon name="map-pin" className="h-4 w-4" />
+                                {distance}
+                              </span>
+                            )}
                           </div>
-                        )}
-                        {event.distance_miles !== undefined && (
-                          <div className="flex items-center gap-2 text-muted-foreground">
-                            <SpriteIcon name="map-pin" className="h-4 w-4" />
-                            {getDistanceDisplay(event.distance_miles)}
-                          </div>
-                        )}
-                        {event.venue && (
-                          <p className="text-muted-foreground line-clamp-1">{event.venue}</p>
-                        )}
-                        {event.price && (
-                          <div className="flex items-center gap-2 text-muted-foreground">
-                            <DollarSign className="h-4 w-4" />
-                            {event.price}
-                          </div>
-                        )}
-                      </div>
-                    </CardContent>
-                  </Link>
-                </Card>
-              ))}
+                          {event.venue && (
+                            <p className="text-muted-foreground line-clamp-1">{event.venue}</p>
+                          )}
+                          {event.price && (
+                            <div className="flex items-center gap-2 text-muted-foreground">
+                              <DollarSign className="h-4 w-4" />
+                              {event.price}
+                            </div>
+                          )}
+                        </div>
+                      </CardContent>
+                    </Link>
+                  </Card>
+                );
+              })}
             </div>
           )}
 
-          {/* Map View */}
           {!isLoading && !error && viewMode === 'map' && (
             <Suspense fallback={<LoadingSpinner />}>
               <EventsMap
                 locations={mapLocations}
-                showUserLocation={!!location}
+                showUserLocation={fromCurrent}
                 userLocation={searchCenter}
                 showRadius={true}
                 radiusMiles={radiusMiles}
@@ -314,16 +441,30 @@ export default function EventsNearMe() {
             </Suspense>
           )}
 
-          {/* Empty State */}
-          {!isLoading && !error && events.length === 0 && (
+          {showEmpty && (
             <Card>
               <CardContent className="py-12 text-center">
                 <SpriteIcon name="map-pin" className="h-12 w-12 mx-auto mb-4 text-muted-foreground" />
-                <h3 className="text-lg font-semibold mb-2">No events found</h3>
+                <h2 className="text-lg font-semibold mb-2">No events found</h2>
                 <p className="text-muted-foreground mb-4">
-                  Try increasing the search radius or changing the category filter.
+                  Nothing within {formatCount(radiusMiles, 'mile')} of {placeText} for{' '}
+                  {whenLabel.toLowerCase()}.
                 </p>
-                <Button onClick={() => setRadiusMiles(50)}>Expand Search to 50 Miles</Button>
+                <div className="flex flex-wrap justify-center gap-2">
+                  {radiusMiles < 50 && (
+                    <Button onClick={() => setRadius(50)} className="min-h-11">
+                      Expand to 50 miles
+                    </Button>
+                  )}
+                  {when !== 'anytime' && (
+                    <Button variant="outline" onClick={() => setWhen('anytime')} className="min-h-11">
+                      Show any date
+                    </Button>
+                  )}
+                  <Button asChild variant="ghost" className="min-h-11">
+                    <Link to="/events">Browse all events</Link>
+                  </Button>
+                </div>
               </CardContent>
             </Card>
           )}

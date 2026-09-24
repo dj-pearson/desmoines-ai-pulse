@@ -1,83 +1,62 @@
-import React, { useMemo } from "react";
-import { useQuery } from "@tanstack/react-query";
+import { useMemo } from "react";
 import { Link } from "react-router-dom";
-import { createLogger } from '@/lib/logger';
-import { supabase } from "@/integrations/supabase/client";
-import { SpriteIcon } from "@/components/ui/SpriteIcon";
-
-const log = createLogger('KidsEvents');
+import { Baby } from "lucide-react";
 import Header from "@/components/Header";
 import Footer from "@/components/Footer";
 import { SocialEventCard } from "@/components/SocialEventCard";
-import { useBatchEventSocial } from "@/hooks/useBatchEventSocial";
 import EnhancedLocalSEO from "@/components/EnhancedLocalSEO";
 import { EventListJsonLd } from "@/components/schema/EventListJsonLd";
 import RelatedContent from "@/components/RelatedContent";
 import { FAQSection } from "@/components/FAQSection";
+import { ListFreshness } from "@/components/ListFreshness";
 import { Card, CardContent } from "@/components/ui/card";
-import { Baby } from "lucide-react";
-import { getCanonicalUrl } from "@/lib/brandConfig";
+import { Button } from "@/components/ui/button";
 import { Breadcrumbs } from "@/components/ui/breadcrumbs";
+import { SpriteIcon } from "@/components/ui/SpriteIcon";
 import { ErrorState } from "@/components/ui/error-state";
 import { SkeletonGroup } from "@/components/ui/skeleton";
-import { queryKeys } from "@/lib/queryKeys";
+import { useBatchEventSocial } from "@/hooks/useBatchEventSocial";
+import {
+  useEventLanding,
+  countFree,
+  countLabel,
+  KIDS_EVENTS_FILTER,
+  type LandingEvent,
+} from "@/hooks/useEventLanding";
+import { BRAND, getCanonicalUrl } from "@/lib/brandConfig";
+import { formatCount } from "@/lib/pluralize";
+import { EVENTS_UPDATE_ANSWER } from "@/content/eventsCopy";
 
-interface EventItem {
-  id: string;
-  title: string;
-  date: string;
-  location: string;
-  venue: string;
-  price: string;
-  category: string;
-  enhanced_description: string;
-  original_description: string;
-  image_url: string;
-  event_start_utc: string;
-}
+const FETCH_LIMIT = 100;
+/** Same render cap as the other landings (WEB-PERF-023). */
+const VISIBLE_EVENTS = 36;
+const EMPTY: LandingEvent[] = [];
 
 export default function KidsEvents() {
-
   /**
-   * WEB-SEO-031 AC5: converted from useState/useEffect for the reason
-   * /events/today was. PrerenderSignal counts TanStack queries in flight, so a
-   * hand-rolled fetch is invisible to it, the 1.5s grace fires, and the
-   * prerenderer captures the skeleton.
+   * WEB-SEO-031 AC5: a TanStack query, so the prerenderer waits for rows.
+   *
+   * Matching is KIDS_EVENTS_FILTER: word-boundary regex on title and category,
+   * and only explicit child words in the description. The old filter took
+   * `%family%` from descriptions ("family-owned brewery") and a bare `%kid%`
+   * ("kidney"). The durable fix is an audience column set at ingest (plan D4).
+   * The floor is the start of today Central, not `now`.
    */
   const {
-    data: events = [],
+    data: kidsEvents = EMPTY,
     isLoading,
     error: loadError,
     refetch,
-  } = useQuery({
-    queryKey: queryKeys.events.list({ audience: "kids" }),
-    queryFn: async (): Promise<EventItem[]> => {
-      const now = new Date().toISOString();
+  } = useEventLanding({ key: { landing: "kids" }, or: KIDS_EVENTS_FILTER, limit: FETCH_LIMIT });
 
-      // Search for kid-friendly keywords in title, description, or category
-      const { data, error } = await supabase
-        .from("events")
-        .select("id, title, date, location, venue, price, category, enhanced_description, original_description, image_url, event_start_utc")
-        .gte("date", now)
-        .or("title.ilike.%kid%,title.ilike.%child%,title.ilike.%family%,category.ilike.%kid%,category.ilike.%family%,category.ilike.%child%,enhanced_description.ilike.%kid%,enhanced_description.ilike.%child%,enhanced_description.ilike.%family%")
-        .order("date", { ascending: true })
-        .limit(100);
+  const visibleEvents = useMemo(() => kidsEvents.slice(0, VISIBLE_EVENTS), [kidsEvents]);
+  // isFreePrice, the same count every landing uses. Unknown price is not free.
+  const freeKidsCount = countFree(kidsEvents);
+  const categoryCount = new Set(kidsEvents.map((e) => e.category).filter(Boolean)).size;
 
-      if (error) {
-        log.error("fetchKidsEvents", "Error fetching kids events", { error });
-        throw error;
-      }
-      return (data ?? []) as unknown as EventItem[];
-    },
-  });
-
-  const kidsEvents = events || [];
-  const freeKidsEvents = kidsEvents.filter(e =>
-    e.price === "Free" || e.price === "0" || e.price?.toLowerCase().includes("free")
-  );
-
-  const pageTitle = "Kids & Family Events in Des Moines | Des Moines Insider";
-  const pageDescription = `Find ${kidsEvents.length}+ family-friendly events in Des Moines for kids and teens: story times, festivals, and indoor and outdoor activities, updated daily.`;
+  const pageTitle = `Kids & Family Events in Des Moines | ${BRAND.name}`;
+  const pageDescription =
+    "Family-friendly events in Des Moines for kids and teens: story times, festivals, and indoor and outdoor activities. Collected daily.";
 
   const breadcrumbs = [
     { name: "Events", url: "/events" },
@@ -109,7 +88,11 @@ export default function KidsEvents() {
     },
     {
       question: "What's the best time of year for kids events in Des Moines?",
-      answer: "There are family events all year. Summer brings outdoor festivals and park programs, fall brings pumpkin patches and Halloween events, and winter brings holiday events and indoor programs. The month pages show what is scheduled for each month.",
+      answer: "There are family events all year. The month pages show what is scheduled for each month.",
+    },
+    {
+      question: "How often is this list updated?",
+      answer: EVENTS_UPDATE_ANSWER,
     },
   ];
 
@@ -119,7 +102,7 @@ export default function KidsEvents() {
   // kidsEvents.length of them, so one anonymous visit could issue hundreds of
   // requests and sockets for a preview nobody can interact with. One batch
   // query per table replaces all of it.
-  const batchSocialIds = useMemo(() => (kidsEvents ?? []).map((e) => e.id), [kidsEvents]);
+  const batchSocialIds = useMemo(() => visibleEvents.map((e) => e.id), [visibleEvents]);
   const { data: batchSocialData, isPending: batchSocialPending } =
     useBatchEventSocial(batchSocialIds);
 
@@ -131,12 +114,6 @@ export default function KidsEvents() {
         canonicalUrl={getCanonicalUrl("/events/kids")}
         pageType="website"
         breadcrumbs={breadcrumbs}
-        // Withheld until the data lands (WEB-SEO-008). Every answer here
-        // interpolates a live count, so the loading render and the loaded
-        // render produce DIFFERENT FAQPage JSON - and react-helmet-async
-        // appends script children that differ rather than replacing them, so
-        // the prerender captured both. Production served two FAQPage blocks
-        // on this page, one saying "0 events" and one saying "8 events".
         faqData={faqData}
         keywords={[
           "kids events Des Moines",
@@ -150,7 +127,8 @@ export default function KidsEvents() {
         ]}
       />
       <EventListJsonLd
-        events={kidsEvents}
+        events={visibleEvents}
+        maxItems={VISIBLE_EVENTS}
         listName="Kids & Family Events in Des Moines, Iowa"
         listDescription={pageDescription}
         listUrl={getCanonicalUrl('/events/kids')}
@@ -170,9 +148,11 @@ export default function KidsEvents() {
         {/* Hero Section - GEO Optimized */}
         <div className="mb-8">
           <div className="flex items-center gap-2 mb-4">
-            <Baby className="h-6 w-6 text-primary" />
+            <Baby className="h-6 w-6 text-primary" aria-hidden="true" />
             <h1 className="text-3xl font-bold">Kids & Family Events in Des Moines</h1>
           </div>
+
+          <ListFreshness rows={kidsEvents} className="mb-4" />
 
           <div className="flex items-center gap-4 text-muted-foreground mb-4">
             <div className="flex items-center gap-1">
@@ -190,39 +170,26 @@ export default function KidsEvents() {
           </p>
 
           <p className="text-base text-muted-foreground max-w-3xl">
-            {freeKidsEvents.length} of the events below are listed as free. Looking for somewhere to play instead? See the <Link to="/playgrounds" className="text-primary hover:underline font-semibold">Des Moines playgrounds guide</Link>.
+            {freeKidsCount} of the events below are listed as free. Looking for somewhere to play instead? See the <Link to="/playgrounds" className="text-primary hover:underline font-semibold">Des Moines playgrounds guide</Link>.
           </p>
         </div>
 
-        {/* Quick Stats - GEO Optimized */}
-        <Card className="mb-8 bg-gradient-to-r from-blue-50 to-purple-50 dark:from-blue-950 dark:to-purple-950">
+        <Card className="mb-8 bg-primary/5 border-primary/15 shadow-none">
           <CardContent className="pt-6">
-            <div className="grid grid-cols-2 md:grid-cols-4 gap-4 text-center">
+            <div className="grid grid-cols-3 gap-4 text-center">
               <div>
                 <div className="text-2xl font-bold text-primary">
-                  {kidsEvents.length}+
+                  {countLabel(kidsEvents.length, FETCH_LIMIT)}
                 </div>
-                <div className="text-sm text-muted-foreground">
-                  Kids Events
-                </div>
+                <div className="text-sm text-muted-foreground">Family Events</div>
               </div>
               <div>
-                <div className="text-2xl font-bold text-primary">
-                  {freeKidsEvents.length}
-                </div>
-                <div className="text-sm text-muted-foreground">Free Events</div>
+                <div className="text-2xl font-bold text-primary">{freeKidsCount}</div>
+                <div className="text-sm text-muted-foreground">Listed as Free</div>
               </div>
               <div>
-                <div className="text-2xl font-bold text-primary">
-                  All Ages
-                </div>
-                <div className="text-sm text-muted-foreground">0-18 Years</div>
-              </div>
-              <div>
-                <div className="text-2xl font-bold text-primary">
-                  Daily
-                </div>
-                <div className="text-sm text-muted-foreground">New Events</div>
+                <div className="text-2xl font-bold text-primary">{categoryCount}</div>
+                <div className="text-sm text-muted-foreground">Categories</div>
               </div>
             </div>
           </CardContent>
@@ -279,10 +246,10 @@ export default function KidsEvents() {
         ) : kidsEvents.length > 0 ? (
           <>
             <h2 className="text-2xl font-bold mb-6">
-              Upcoming Family Events ({kidsEvents.length})
+              Upcoming Family Events ({countLabel(kidsEvents.length, FETCH_LIMIT)})
             </h2>
             <div className="grid gap-6 md:grid-cols-2 lg:grid-cols-3">
-              {kidsEvents.map((event, index) => (
+              {visibleEvents.map((event, index) => (
                 <SocialEventCard
                   priority={index < 3}
                   key={event.id}
@@ -293,14 +260,25 @@ export default function KidsEvents() {
                 />
               ))}
             </div>
+            {kidsEvents.length > visibleEvents.length && (
+              <div className="mt-8 text-center">
+                <p className="text-muted-foreground mb-3">
+                  Showing the {visibleEvents.length} soonest of{" "}
+                  {formatCount(kidsEvents.length, "family event")}.
+                </p>
+                <Button asChild variant="outline">
+                  <Link to="/events?category=Family">See every Family event</Link>
+                </Button>
+              </div>
+            )}
           </>
         ) : (
           <Card>
             <CardContent className="pt-6 text-center">
               <SpriteIcon name="calendar" className="h-12 w-12 mx-auto mb-4 text-muted-foreground" />
-              <h3 className="text-lg font-semibold mb-2">No Kids Events Found</h3>
+              <h2 className="text-lg font-semibold mb-2">No Kids Events Found</h2>
               <p className="text-muted-foreground mb-4">
-                Check back soon! We add new family events daily.
+                Nothing family-focused is on the calendar right now. New events are collected daily.
               </p>
             </CardContent>
           </Card>
@@ -329,7 +307,7 @@ export default function KidsEvents() {
               <div>
                 <h3 className="font-semibold mb-2">Stay on budget</h3>
                 <p className="text-sm text-muted-foreground">
-                  {freeKidsEvents.length} of the events on this page are listed as free. See all <Link to="/events/free" className="text-primary hover:underline font-semibold">free events in Des Moines</Link>.
+                  {freeKidsCount} of the events on this page are listed as free. See all <Link to="/events/free" className="text-primary hover:underline font-semibold">free events in Des Moines</Link>.
                 </p>
               </div>
               <div>

@@ -9,6 +9,7 @@ import { format } from "date-fns";
 import { useFavorites } from "@/hooks/useFavorites";
 import { Badge } from "@/components/ui/badge";
 import { createSlug } from "@/lib/slug";
+import { createEventSlugWithCentralTime } from "@/lib/timezone";
 import { useFavoritedRows } from "@/hooks/useFavoritedRows";
 import {
   EVENT_LIST_COLUMNS,
@@ -207,9 +208,17 @@ export function FavoritesView() {
 
                   <div className="flex gap-2">
                     <Button asChild size="sm" className="flex-1">
-                      {/* The id: events have no slug column, so the fallback
-                          was always what ran. */}
-                      <a href={`/events/${event.id}`}>
+                      {/* Events have no slug column; the slug is derived
+                          from title + Central date, which EVENT_LIST_COLUMNS
+                          carries. An undated row keeps the id, which
+                          useEventBySlug resolves (events plan WP9). */}
+                      <a
+                        href={`/events/${
+                          event.event_start_utc || event.date
+                            ? createEventSlugWithCentralTime(event.title, event)
+                            : encodeURIComponent(event.id)
+                        }`}
+                      >
                         View Details
                       </a>
                     </Button>

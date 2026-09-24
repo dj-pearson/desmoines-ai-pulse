@@ -1,166 +1,167 @@
-import { useState, useEffect } from 'react';
-import { CheckCircle, XCircle, AlertCircle, Phone, Globe } from "lucide-react";
-import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
-import { Badge } from '@/components/ui/badge';
-import { Button } from '@/components/ui/button';
-import { getRestaurantOpenStatus, type OpenStatus } from '@/lib/restaurantHours';
-import { SpriteIcon } from "@/components/ui/SpriteIcon";
+import {
+  desMoinesNow,
+  formatClockLabel,
+  resolveOpeningHoursSpecification,
+  type RestaurantOpenResult,
+  type StoredOpeningHours,
+} from "@/lib/restaurantHours";
+import { cn } from "@/lib/utils";
 
 interface RestaurantStatusProps {
-  restaurant: {
-    name: string;
-    phone?: string;
-    website?: string;
-    hours?: string;
-  };
+  /** The free-text `opening` column. */
+  hours?: string | null;
+  /** restaurants.hours_json when the row carries it (select("*") does once the column exists). */
+  hoursJson?: StoredOpeningHours | null;
+  /**
+   * From the page's useRestaurantOpenStatus, so this block and the hero badge
+   * read one evaluation. Null when the place is closed for good or not open
+   * yet: the page shows a notice instead and no open/closed claim is made.
+   */
+  openStatus: RestaurantOpenResult | null;
+  /** The minute clock the status was evaluated at, for "today". */
+  now: Date;
+}
+
+/** Display order, Monday first. Values are getDay() numbers. */
+const WEEK: Array<{ day: number; label: string; schema: string }> = [
+  { day: 1, label: "Monday", schema: "Monday" },
+  { day: 2, label: "Tuesday", schema: "Tuesday" },
+  { day: 3, label: "Wednesday", schema: "Wednesday" },
+  { day: 4, label: "Thursday", schema: "Thursday" },
+  { day: 5, label: "Friday", schema: "Friday" },
+  { day: 6, label: "Saturday", schema: "Saturday" },
+  { day: 0, label: "Sunday", schema: "Sunday" },
+];
+
+function clockMinutes(hhmm: string): number | null {
+  const m = /^(\d{1,2}):(\d{2})$/.exec(hhmm);
+  if (!m) return null;
+  const minutes = Number(m[1]) * 60 + Number(m[2]);
+  // The schema builders clamp a midnight close to 23:59; print it as midnight.
+  return minutes === 23 * 60 + 59 ? 24 * 60 : minutes;
+}
+
+function rangeLabel(opens: string, closes: string): string | null {
+  const o = clockMinutes(opens);
+  const c = clockMinutes(closes);
+  if (o === null || c === null) return null;
+  if (o === 0 && c === 24 * 60) return "Open 24 hours";
+  return `${formatClockLabel(o)} - ${formatClockLabel(c)}`;
 }
 
 /**
- * Displays real-time business status for a restaurant.
- * Uses the restaurant's actual hours data from the `opening` field.
- * Updates every minute.
+ * One row per weekday from the same parsed hours the schema publishes, or null
+ * when nothing parses. A day with no range reads "Closed", which is what the
+ * open/closed evaluator says for that day too.
  */
-export default function RestaurantStatus({ restaurant }: RestaurantStatusProps) {
-  const [currentStatus, setCurrentStatus] = useState<OpenStatus>('unknown');
-  const [lastUpdated, setLastUpdated] = useState<Date>(new Date());
+function weekRows(
+  hoursJson: StoredOpeningHours | null | undefined,
+  hours: string | null | undefined,
+): Array<{ day: number; label: string; text: string }> | null {
+  const specs = resolveOpeningHoursSpecification(hoursJson, hours);
+  if (!specs) return null;
+  return WEEK.map(({ day, label, schema }) => {
+    const ranges = specs
+      .filter((s) => s.dayOfWeek.includes(schema))
+      .map((s) => ({ key: clockMinutes(s.opens) ?? 0, text: rangeLabel(s.opens, s.closes) }))
+      .filter((r): r is { key: number; text: string } => r.text !== null)
+      .sort((a, b) => a.key - b.key)
+      .map((r) => r.text);
+    return { day, label, text: ranges.length > 0 ? ranges.join(", ") : "Closed" };
+  });
+}
 
-  useEffect(() => {
-    const checkStatus = () => {
-      const result = getRestaurantOpenStatus(restaurant.hours);
-      setCurrentStatus(result.status);
-      setLastUpdated(new Date());
-    };
+/** "Open until 10 PM CT", "Opens tomorrow 11 AM CT", or null when unknown. */
+function statusSentence(result: RestaurantOpenResult | null): string | null {
+  if (!result) return null;
+  switch (result.status) {
+    case "open":
+      return result.closesAt ? `Open until ${result.closesAt} CT` : "Open 24 hours";
+    case "closing-soon":
+      return result.closesAt ? `Closing soon, at ${result.closesAt} CT` : "Closing soon";
+    case "closed":
+      return result.nextOpensAt ? `Closed now. Opens ${result.nextOpensAt} CT` : "Closed now";
+    default:
+      return null;
+  }
+}
 
-    checkStatus();
-    const interval = setInterval(checkStatus, 60000);
-    return () => clearInterval(interval);
-  }, [restaurant.hours]);
+const TONE: Record<string, string> = {
+  open: "text-emerald-700 dark:text-emerald-400",
+  "closing-soon": "text-amber-700 dark:text-amber-400",
+  closed: "text-red-700 dark:text-red-400",
+};
 
-  const getStatusIcon = () => {
-    switch (currentStatus) {
-      case 'open':
-        return <CheckCircle className="h-5 w-5 text-green-500" />;
-      case 'closing-soon':
-        return <AlertCircle className="h-5 w-5 text-yellow-500" />;
-      case 'closed':
-        return <XCircle className="h-5 w-5 text-red-500" />;
-      default:
-        return <SpriteIcon name="clock" className="h-5 w-5 text-gray-500" />;
-    }
-  };
+/**
+ * Hours for the detail page: today's status in Des Moines time, then the
+ * week, with today marked. The one hours block on the page; the page used to
+ * print the raw text twice and add a second Call/Website pair and a
+ * "Last updated" clock here (restaurants plan WP8 item 9).
+ */
+export function RestaurantStatus({ hours, hoursJson, openStatus, now }: RestaurantStatusProps) {
+  const rows = weekRows(hoursJson, hours);
+  const today = desMoinesNow(now).getDay();
+  const sentence = statusSentence(openStatus);
+  const rawText = typeof hours === "string" && hours.trim() ? hours.trim() : null;
 
-  const getStatusText = () => {
-    switch (currentStatus) {
-      case 'open':
-        return 'Open Now';
-      case 'closing-soon':
-        return 'Closing Soon';
-      case 'closed':
-        return 'Closed';
-      default:
-        return 'Hours Unknown';
-    }
-  };
-
-  const getStatusColor = () => {
-    switch (currentStatus) {
-      case 'open':
-        return 'bg-green-50 border-green-200';
-      case 'closing-soon':
-        return 'bg-yellow-50 border-yellow-200';
-      case 'closed':
-        return 'bg-red-50 border-red-200';
-      default:
-        return 'bg-gray-50 border-gray-200';
-    }
-  };
+  if (!rows && !rawText) {
+    return (
+      <section aria-labelledby="hours-heading" id="hours">
+        <h2 id="hours-heading" className="text-xl font-bold text-foreground">
+          Hours
+        </h2>
+        <p className="mt-2 text-muted-foreground">
+          We don't have hours for this place yet. Call ahead before you go.
+        </p>
+      </section>
+    );
+  }
 
   return (
-    <Card className={`border-2 ${getStatusColor()} transition-colors`}>
-      <CardHeader className="pb-3">
-        <div className="flex items-center justify-between">
-          <CardTitle className="text-lg flex items-center gap-2">
-            <SpriteIcon name="clock" className="h-5 w-5 text-primary" />
-            Hours & Status
-          </CardTitle>
-          <Badge
-            variant="outline"
-            className={`${
-              currentStatus === 'open' ? 'bg-green-100 text-green-800 border-green-300' :
-              currentStatus === 'closing-soon' ? 'bg-yellow-100 text-yellow-800 border-yellow-300' :
-              currentStatus === 'closed' ? 'bg-red-100 text-red-800 border-red-300' :
-              'bg-gray-100 text-gray-800 border-gray-300'
-            } font-semibold`}
-          >
-            {getStatusIcon()}
-            <span className="ml-1.5">{getStatusText()}</span>
-          </Badge>
-        </div>
-      </CardHeader>
-      <CardContent className="space-y-4">
-        {restaurant.hours && (
-          <div className="flex items-center justify-between p-3 bg-white/50 rounded-lg">
-            <div className="flex items-center gap-2">
-              <SpriteIcon name="clock" className="h-4 w-4 text-muted-foreground" />
-              <span className="font-medium">Hours:</span>
-            </div>
-            <span className="font-semibold text-primary text-sm text-right max-w-[60%]">
-              {restaurant.hours}
-            </span>
-          </div>
-        )}
-
-        {currentStatus === 'closing-soon' && (
-          <div className="p-3 bg-yellow-50 border border-yellow-200 rounded-lg">
-            <div className="flex items-start gap-2">
-              <AlertCircle className="h-4 w-4 text-yellow-600 mt-0.5" />
-              <div>
-                <p className="font-medium text-yellow-900">Closing Soon</p>
-                <p className="text-sm text-yellow-700">
-                  This restaurant will be closing within the hour
-                </p>
-              </div>
-            </div>
-          </div>
-        )}
-
-        {currentStatus === 'closed' && restaurant.hours && (
-          <div className="p-3 bg-blue-50 border border-blue-200 rounded-lg">
-            <div className="flex items-start gap-2">
-              <SpriteIcon name="clock" className="h-4 w-4 text-blue-600 mt-0.5" />
-              <div>
-                <p className="font-medium text-blue-900">Currently Closed</p>
-                <p className="text-sm text-blue-700">
-                  Check hours above for when this restaurant opens next
-                </p>
-              </div>
-            </div>
-          </div>
-        )}
-
-        <div className="flex gap-2 pt-2">
-          {restaurant.phone && (
-            <Button asChild variant="outline" size="sm" className="flex-1">
-              <a href={`tel:${restaurant.phone}`}>
-                <Phone className="h-4 w-4 mr-2" />
-                Call
-              </a>
-            </Button>
-          )}
-          {restaurant.website && (
-            <Button asChild variant="outline" size="sm" className="flex-1">
-              <a href={restaurant.website} target="_blank" rel="noopener noreferrer">
-                <Globe className="h-4 w-4 mr-2" />
-                Website
-              </a>
-            </Button>
-          )}
-        </div>
-
-        <p className="text-xs text-muted-foreground text-center pt-2">
-          Last updated: {lastUpdated.toLocaleTimeString()}
+    <section aria-labelledby="hours-heading" id="hours">
+      <h2 id="hours-heading" className="text-xl font-bold text-foreground">
+        Hours
+      </h2>
+      {sentence && openStatus && (
+        <p className={cn("mt-2 text-lg font-semibold", TONE[openStatus.status] ?? "text-foreground")}>
+          {sentence}
         </p>
-      </CardContent>
-    </Card>
+      )}
+
+      {rows ? (
+        <table className="mt-4 w-full max-w-md text-sm">
+          <caption className="sr-only">Opening hours by day, Central time</caption>
+          <tbody>
+            {rows.map((row) => {
+              const isToday = row.day === today;
+              return (
+                <tr
+                  key={row.day}
+                  className={cn("border-b last:border-0", isToday && "bg-muted font-semibold")}
+                  aria-current={isToday ? "date" : undefined}
+                >
+                  <th scope="row" className="py-2 pl-2 pr-4 text-left font-medium text-foreground">
+                    {row.label}
+                    {isToday && <span className="ml-2 text-xs font-normal text-muted-foreground">today</span>}
+                  </th>
+                  <td className="py-2 pr-2 text-right tabular-nums text-foreground">{row.text}</td>
+                </tr>
+              );
+            })}
+          </tbody>
+        </table>
+      ) : (
+        <p className="mt-3 text-foreground">{rawText}</p>
+      )}
+
+      {rows && rawText && (
+        <p className="mt-3 text-xs text-muted-foreground">Listed as: {rawText}</p>
+      )}
+      <p className="mt-1 text-xs text-muted-foreground">
+        Holiday hours can differ. Call ahead if it matters.
+      </p>
+    </section>
   );
 }
+
+export default RestaurantStatus;

@@ -1,13 +1,26 @@
 import { Helmet } from "react-helmet-async";
-import { ChevronDown, ChevronUp } from "lucide-react";
-import { useState } from "react";
-import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
-import { Button } from "@/components/ui/button";
+import { ChevronDown } from "lucide-react";
+import { Link } from "react-router-dom";
+import { Card, CardContent, CardHeader } from "@/components/ui/card";
+import { toJsonLd } from "@/lib/jsonLd";
 
-interface FAQItem {
+export interface FAQLink {
+  label: string;
+  /** An internal route, rendered as a router <Link>. */
+  to: string;
+}
+
+export interface FAQItem {
   question: string;
   answer: string;
+  /**
+   * Hubs the answer describes. Rendered as links under the answer only;
+   * acceptedAnswer.text stays the plain answer, so the JSON-LD is unchanged.
+   */
+  links?: FAQLink[];
 }
+
+type FAQHeadingLevel = "h2" | "h3" | "h4";
 
 interface FAQSectionProps {
   faqs: FAQItem[];
@@ -15,28 +28,23 @@ interface FAQSectionProps {
   description?: string;
   showSchema?: boolean;
   className?: string;
+  /** Level of the section title. Defaults to h2; pass h3 when nested under one. */
+  headingLevel?: FAQHeadingLevel;
 }
 
-export function FAQSection({ 
-  faqs, 
+export function FAQSection({
+  faqs,
   title = "Frequently Asked Questions",
   description,
   showSchema = true,
-  className = ""
+  className = "",
+  headingLevel = "h2",
 }: FAQSectionProps) {
-  const [openItems, setOpenItems] = useState<Set<number>>(new Set());
+  const Heading = headingLevel;
 
-  const toggleItem = (index: number) => {
-    const newOpenItems = new Set(openItems);
-    if (newOpenItems.has(index)) {
-      newOpenItems.delete(index);
-    } else {
-      newOpenItems.add(index);
-    }
-    setOpenItems(newOpenItems);
-  };
-
-  // FAQ Schema for SEO
+  // FAQ Schema for SEO. toJsonLd, not JSON.stringify: event pages pass
+  // AI-written geo_faq rows through here, and a "</script>" inside one would
+  // end the script element early (WP5 item 7, docs/page-plans/home.md).
   const faqSchema = {
     "@context": "https://schema.org",
     "@type": "FAQPage",
@@ -54,53 +62,59 @@ export function FAQSection({
     <>
       {showSchema && (
         <Helmet>
-          <script type="application/ld+json">
-            {JSON.stringify(faqSchema)}
-          </script>
+          <script type="application/ld+json">{toJsonLd(faqSchema)}</script>
         </Helmet>
       )}
-      
+
       <Card className={className}>
         <CardHeader>
-          <CardTitle className="text-2xl">{title}</CardTitle>
+          <Heading className="text-2xl font-semibold leading-tight">{title}</Heading>
           {description && (
             <p className="text-muted-foreground">{description}</p>
           )}
         </CardHeader>
-        <CardContent className="space-y-4">
-          {faqs.map((faq, index) => (
-            <div key={index} className="border border-border rounded-lg">
-              {/* `whitespace-normal` overrides the Button base style, which sets
-                  `whitespace-nowrap` (see components/ui/button.tsx). Without it a
-                  long FAQ question cannot wrap, so it ran past the viewport and
-                  gave the whole page horizontal scroll on phones — up to 215px of
-                  overflow at 320px wide. `min-w-0` lets the span shrink below its
-                  content size, which a flex child does not do by default.
-                  (WEB-QA-008) */}
-              <Button
-                variant="ghost"
-                className="w-full justify-between p-4 h-auto text-left whitespace-normal"
-                onClick={() => toggleItem(index)}
-              >
-                <span className="font-semibold pr-4 min-w-0 break-words">{faq.question}</span>
-                {openItems.has(index) ? (
-                  <ChevronUp className="h-5 w-5 text-muted-foreground flex-shrink-0" />
-                ) : (
-                  <ChevronDown className="h-5 w-5 text-muted-foreground flex-shrink-0" />
-                )}
-              </Button>
-              
-              {openItems.has(index) && (
-                <div className="px-4 pb-4">
-                  <div className="pt-2 border-t border-border">
-                    <p className="text-muted-foreground leading-relaxed">
+        <CardContent>
+          {/* <details>, not a stateful accordion (WP5 item 6). The old version
+              mounted an answer only while it was open, so the prerendered HTML
+              carried the questions and none of the answers, which is what the
+              FAQPage block claims is on the page. A closed <details> keeps its
+              content in the DOM; the browser handles the toggle and keyboard. */}
+          <ul className="divide-y divide-border">
+            {faqs.map((faq, index) => (
+              <li key={index}>
+                <details className="group">
+                  {/* min-w-0 + break-words: a long question has to wrap rather
+                      than widen the page on a 320px phone (WEB-QA-008). */}
+                  <summary className="flex min-h-11 cursor-pointer list-none items-center justify-between gap-4 rounded-md py-4 text-left font-semibold focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring [&::-webkit-details-marker]:hidden">
+                    <span className="min-w-0 break-words">{faq.question}</span>
+                    <ChevronDown
+                      className="h-5 w-5 flex-shrink-0 text-muted-foreground transition-transform duration-200 group-open:rotate-180 motion-reduce:transition-none"
+                      aria-hidden="true"
+                    />
+                  </summary>
+                  <div className="pb-4">
+                    <p className="max-w-prose leading-relaxed text-muted-foreground">
                       {faq.answer}
                     </p>
+                    {faq.links && faq.links.length > 0 && (
+                      <ul className="mt-3 flex flex-wrap gap-x-4 gap-y-1">
+                        {faq.links.map((link) => (
+                          <li key={link.to}>
+                            <Link
+                              to={link.to}
+                              className="inline-flex min-h-11 items-center font-medium text-primary underline underline-offset-4 hover:no-underline"
+                            >
+                              {link.label}
+                            </Link>
+                          </li>
+                        ))}
+                      </ul>
+                    )}
                   </div>
-                </div>
-              )}
-            </div>
-          ))}
+                </details>
+              </li>
+            ))}
+          </ul>
         </CardContent>
       </Card>
     </>

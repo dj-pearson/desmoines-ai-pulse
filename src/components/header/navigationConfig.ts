@@ -90,8 +90,11 @@ export const navigationGroups: Record<string, NavGroup> = {
     icon: Navigation,
     href: "/trip-planner",
     items: [
-      { href: "/trip-planner", label: "AI Trip Planner", icon: Sparkles, featured: true, priority: true },
-      { href: "/weekend", label: "Weekend Guide", icon: CalendarDays },
+      // "Plan a trip", not "AI Trip Planner": the free date-window planner is
+      // what everyone gets; the AI itinerary is the paused upgrade on top.
+      { href: "/trip-planner", label: "Plan a trip", icon: Sparkles, featured: true, priority: true },
+      // No weekend entry here. /weekend only 301s to /events/this-weekend,
+      // which the Events group already lists as "This Weekend".
       { href: "/stay", label: "Hotels & Stay", icon: Building2 },
       { href: "/visitors-guide", label: "Visitor Guide", icon: BookOpen },
       { href: "/getting-around", label: "Getting Around", icon: Navigation },
@@ -123,8 +126,7 @@ export const navigationLinks: NavItem[] = [
   { href: "/sports", label: "Sports", icon: Trophy },
   { href: "/outdoors", label: "Trails & Outdoors", icon: TreePine },
   { href: "/deals", label: "Deals & Coupons", icon: DollarSign },
-  { href: "/trip-planner", label: "AI Trip Planner", icon: Sparkles, priority: true },
-  { href: "/weekend", label: "Weekend Guide", icon: CalendarDays },
+  { href: "/trip-planner", label: "Plan a trip", icon: Sparkles, priority: true },
   { href: "/stay", label: "Hotels & Stay", icon: Building2 },
   { href: "/visitors-guide", label: "Visitor Guide", icon: BookOpen },
   { href: "/getting-around", label: "Getting Around", icon: Navigation },

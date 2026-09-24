@@ -1,211 +1,273 @@
-import { useQuery } from "@tanstack/react-query";
-import { supabase } from "@/integrations/supabase/client";
+import { useMemo, useState } from "react";
+import { Link } from "react-router-dom";
+import { Filter } from "lucide-react";
 import Header from "@/components/Header";
 import Footer from "@/components/Footer";
 import { ListFreshness } from "@/components/ListFreshness";
 import { MonthLinks } from "@/components/seo/MonthLinks";
 import { FAQSection } from "@/components/FAQSection";
 import { SocialEventCard } from "@/components/SocialEventCard";
-import { useBatchEventSocial } from "@/hooks/useBatchEventSocial";
 import EnhancedLocalSEO from "@/components/EnhancedLocalSEO";
 import { EventListJsonLd } from "@/components/schema/EventListJsonLd";
-import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
-import { Filter } from "lucide-react";
-import {
-  format,
-  isWeekend,
-  parseISO,
-  startOfWeek,
-  endOfWeek,
-  isWithinInterval,
-} from "date-fns";
-import { useState, useMemo } from "react";
-import { Button } from "@/components/ui/button";
-import { Link } from "react-router-dom";
-import { toZonedTime, fromZonedTime } from "date-fns-tz";
-import { BRAND, getCanonicalUrl } from "@/lib/brandConfig";
-import { Breadcrumbs } from "@/components/ui/breadcrumbs";
-import { EVENT_LIST_COLUMNS } from "@/lib/listColumns";
-import { formatCount } from "@/lib/pluralize";
-import { SpriteIcon } from "@/components/ui/SpriteIcon";
-import { useWeather, reorderForWeather } from "@/hooks/useWeather";
-import { useEventIndoorFlags } from "@/hooks/useEventIndoorFlags";
 import { WeatherNotice } from "@/components/WeatherNotice";
+import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
+import { Button } from "@/components/ui/button";
+import { Breadcrumbs } from "@/components/ui/breadcrumbs";
+import { SpriteIcon } from "@/components/ui/SpriteIcon";
 import { ErrorState } from "@/components/ui/error-state";
 import { SkeletonGroup } from "@/components/ui/skeleton";
+import { useBatchEventSocial } from "@/hooks/useBatchEventSocial";
+import { useWeather, reorderForWeather } from "@/hooks/useWeather";
+import { useUrlFilters } from "@/hooks/useUrlFilters";
+import {
+  useEventLanding,
+  useWindowIndoorFlags,
+  groupByCentralDay,
+  countFree,
+  countStartingAfter5pm,
+  dayPhase,
+  formatCentralDate,
+  landingPicks,
+  type LandingEvent,
+} from "@/hooks/useEventLanding";
+import { BRAND, getCanonicalUrl } from "@/lib/brandConfig";
+import {
+  centralDateOf,
+  centralWindow,
+  createEventSlugWithCentralTime,
+  formatEventDateShort,
+} from "@/lib/timezone";
+import { formatCount } from "@/lib/pluralize";
+import { EVENTS_UPDATE_ANSWER } from "@/content/eventsCopy";
 
 /**
- * WEB-PERF-023. The grid rendered every event in the weekend window and this
- * page measured 4,374 DOM elements inside #root - the worst route on the site
- * once the four month pages were capped, against a 1,139 median and a ~1,500
- * Lighthouse flag. 85 events are in the window today.
- *
- * 36 is twelve full rows of the lg:grid-cols-3 grid, the same cap as
- * MonthlyEventsPage and DietaryRestaurants. The cap applies AFTER the category
- * and location filters, so a filtered view still shows its first 36 matches
- * rather than 36 of the unfiltered set.
- *
- * Same trade-off as the month pages and it is the owner's: this is a landing
- * page and it now lists 36 of 85. Every event stays reachable through /events
- * and its own detail page. If the whole window must render, the fix is a
- * cheaper card rather than a bigger cap.
+ * WEB-PERF-023. Rendering the whole weekend measured 4,374 DOM elements. The
+ * cap is now per day, 12 cards each (36 in all, twelve full rows of the
+ * lg:grid-cols-3 grid, as before), so a packed Saturday cannot push Sunday off
+ * the page. Each day that overflows links to the hub's weekend view, where
+ * every event is reachable.
  */
-const VISIBLE_EVENTS = 36;
+const VISIBLE_PER_DAY = 12;
+
+const EMPTY: LandingEvent[] = [];
+const ALL = "all";
 
 /**
- * This weekend, Friday 00:00 to Sunday 23:59 Central, as UTC bounds for the
- * query and as a label for the page. One function so the dates a reader is
- * shown are the dates the list was fetched for.
+ * The city an event is in, for the Location chips. It was the first part of
+ * the venue string, which gave one chip per venue ("Wooly's", "Wooly's Des
+ * Moines", "Woolys") and no way to say "just West Des Moines".
  */
-function weekendWindow(now: Date = new Date()) {
-  const tz = "America/Chicago";
-  const nowLocal = toZonedTime(now, tz);
-  const day = nowLocal.getDay(); // 0 Sun - 6 Sat
-  const offsetToFriday = day === 0 ? -2 : 5 - day;
-  const fridayStartLocal = new Date(nowLocal.getFullYear(), nowLocal.getMonth(), nowLocal.getDate(), 0, 0, 0, 0);
-  fridayStartLocal.setDate(fridayStartLocal.getDate() + offsetToFriday);
-  const sundayEndLocal = new Date(fridayStartLocal);
-  sundayEndLocal.setDate(fridayStartLocal.getDate() + 2);
-  sundayEndLocal.setHours(23, 59, 59, 999);
+function placeOf(event: LandingEvent): string {
+  return (event.city ?? "").trim();
+}
 
-  // fridayStartLocal and sundayEndLocal hold Central wall-clock values, so
-  // date-fns' plain format prints them as Central whatever the runtime zone.
-  const label = `${format(fridayStartLocal, "EEEE, MMMM d")} - ${format(sundayEndLocal, "EEEE, MMMM d, yyyy")}`;
+interface ChipGroupProps {
+  label: string;
+  allLabel: string;
+  options: string[];
+  selected: string;
+  onSelect: (value: string) => void;
+}
 
-  return {
-    startUtc: fromZonedTime(fridayStartLocal, tz).toISOString(),
-    endUtc: fromZonedTime(sundayEndLocal, tz).toISOString(),
-    label,
-  };
+/** A single-choice chip row. role="group" plus aria-pressed, 44px targets. */
+function ChipGroup({ label, allLabel, options, selected, onSelect }: ChipGroupProps) {
+  const labelId = `weekend-filter-${label.toLowerCase()}`;
+  return (
+    <div>
+      <p id={labelId} className="text-sm font-medium mb-2">
+        {label}
+      </p>
+      <div role="group" aria-labelledby={labelId} className="flex flex-wrap gap-2">
+        {[ALL, ...options].map((value) => (
+          <Button
+            key={value}
+            type="button"
+            variant={selected === value ? "default" : "outline"}
+            size="sm"
+            className="min-h-11"
+            aria-pressed={selected === value}
+            onClick={() => onSelect(value)}
+          >
+            {value === ALL ? allLabel : value}
+          </Button>
+        ))}
+      </div>
+    </div>
+  );
 }
 
 export default function EventsThisWeekend() {
-  const [selectedCategory, setSelectedCategory] = useState<string>("all");
-  const [selectedLocation, setSelectedLocation] = useState<string>("all");
+  // Filters live in the URL (WEB-UX-001), so a filtered weekend is shareable
+  // and survives Back.
+  const { getStr, setParam, setMany } = useUrlFilters();
+  const selectedCategory = getStr("category", ALL);
+  const selectedLocation = getStr("location", ALL);
 
-  const { data: events, isLoading, isError, error, refetch } = useQuery({
-    queryKey: ["events-weekend"],
-    queryFn: async () => {
-      const { startUtc, endUtc } = weekendWindow();
-
-      const { data, error } = await supabase
-        .from("events")
-        .select(EVENT_LIST_COLUMNS)
-        .gte("date", startUtc)
-        .lte("date", endUtc)
-        .order("event_start_utc", { ascending: true, nullsFirst: false })
-        .order("date", { ascending: true });
-
-      if (error) throw error;
-      return data || [];
-    },
-    staleTime: 10 * 60 * 1000, // Refetch every 10 minutes
+  /**
+   * Friday 00:00 to Sunday 23:59 Central, from centralWindow - the same set the
+   * hub's "This weekend" preset returns. The key sits under
+   * queryKeys.events.list, so an admin edit reaches this page (it was
+   * ['events-weekend'], outside the events prefix).
+   */
+  const {
+    data: events = EMPTY,
+    isLoading,
+    isError,
+    error,
+    refetch,
+    window: weekend,
+  } = useEventLanding({
+    key: { landing: "this-weekend" },
+    window: "this-weekend",
+    limit: 500,
+    includeOngoing: true,
   });
 
-  const weekendEvents = events || [];
+  // Friday to Sunday, today is one of the weekend days; Monday to Thursday
+  // the window is the coming weekend and no day is "today".
+  const today = centralDateOf(new Date());
+  const todayInWeekend = !!weekend && today >= weekend.startDay && today <= weekend.endDay;
 
-  // Filter events based on selected filters. Memoized because orderedEvents
-  // below derives from it and feeds a memo of its own.
-  const filteredEvents = useMemo(() => weekendEvents.filter((event) => {
-    const categoryMatch =
-      selectedCategory === "all" ||
-      event.category?.toLowerCase().includes(selectedCategory.toLowerCase()) ||
-      event.category?.toLowerCase().includes(selectedCategory.toLowerCase());
-
-    const locationMatch =
-      selectedLocation === "all" ||
-      event.location?.toLowerCase().includes(selectedLocation.toLowerCase()) ||
-      event.venue?.toLowerCase().includes(selectedLocation.toLowerCase());
-
-    return categoryMatch && locationMatch;
-  }), [events, selectedCategory, selectedLocation]);  // `events`, not weekendEvents: `events || []` reallocates when nullish
+  const filteredEvents = useMemo(
+    () =>
+      events.filter((event) => {
+        const categoryMatch = selectedCategory === ALL || event.category === selectedCategory;
+        const locationMatch = selectedLocation === ALL || placeOf(event) === selectedLocation;
+        return categoryMatch && locationMatch;
+      }),
+    [events, selectedCategory, selectedLocation]
+  );
 
   const { weather, hasVerdict } = useWeather();
-  // Separate request on purpose - see the header of useEventIndoorFlags.
-  const indoorFlags = useEventIndoorFlags(
-    filteredEvents.map((event) => event.id),
-    hasVerdict,
-  );
-
   /**
-   * Weather-aware ordering, applied BEFORE the VISIBLE_EVENTS cap so that on a
-   * wet weekend the indoor options are the ones inside the visible 36 rather
-   * than ranked below the cut. Nothing is filtered: the ordering changes which
-   * events surface first, and every event stays reachable through /events and
-   * its own detail page, exactly as the cap comment above describes.
+   * The weather verdict is the current NWS hour. It says nothing about
+   * Sunday when it is Friday, so it reorders today's group only, and only
+   * while today is a weekend day (plan-stay hand-off; per-day weather is D8).
+   * The flags come by today's bounds, not as a list of up to 500 ids.
    */
-  // Memoized: orderedEvents feeds the batchSocialIds memo below, and a fresh
-  // array every render would invalidate it on every render - which is the
-  // per-card query storm WEB-PERF-030 removed.
-  const orderedEvents = useMemo(
-    () => reorderForWeather(filteredEvents, (event) => indoorFlags[event.id], weather),
-    [filteredEvents, indoorFlags, weather],
+  const todayWindow = useMemo(
+    () => (todayInWeekend ? centralWindow({ kind: "single", date: today }) : null),
+    [todayInWeekend, today]
   );
-
-  // Get unique categories and locations for filters
-  const categories = [
-    ...new Set(weekendEvents.map((e) => e.category).filter(Boolean)),
-  ];
-  const locations = [
-    ...new Set(
-      weekendEvents
-        .map((e) => {
-          const location = e.location || e.venue || "";
-          return location.split(",")[0].trim();
-        })
-        .filter(Boolean)
-    ),
-  ];
+  const indoorFlags = useWindowIndoorFlags(todayWindow, hasVerdict);
 
   /**
-   * WEB-SEO-031 (AC5, the same audit applied here): both of these interpolated
-   * `new Date()`, so the PRERENDERED title and description froze the build date
-   * and told a crawler which weekend this page covers - wrongly, every day
-   * after the deploy. The date is carried by the body instead, from data.
+   * One group per day, capped at 12. Today's group is weather-ordered before
+   * the cap, so on a wet afternoon the indoor options are the ones inside
+   * today's 12. Reordering never filters. Days already over are collapsed.
+   */
+  const days = useMemo(() => {
+    if (!weekend) return [];
+    const carryTo = todayInWeekend ? today : weekend.startDay;
+    return groupByCentralDay(filteredEvents, weekend.startDay, weekend.endDay, carryTo).map(
+      (day) => {
+        const phase = dayPhase(day.id, today);
+        const ordered =
+          phase === "today"
+            ? reorderForWeather(day.events, (event) => indoorFlags[event.id], weather)
+            : day.events;
+        return {
+          ...day,
+          phase,
+          anchor: `weekend-${formatCentralDate(day.id, "EEEE").toLowerCase()}`,
+          shortLabel: formatCentralDate(day.id, "EEEE"),
+          total: ordered.length,
+          events: ordered.slice(0, VISIBLE_PER_DAY),
+        };
+      }
+    );
+  }, [filteredEvents, weekend, today, todayInWeekend, indoorFlags, weather]);
+
+  const picks = useMemo(() => landingPicks(events), [events]);
+
+  /** Past days the reader opened. Closed ones render no cards at all. */
+  const [openPast, setOpenPast] = useState<ReadonlySet<string>>(() => new Set());
+  const togglePast = (dayId: string, open: boolean) =>
+    setOpenPast((prev) => {
+      if (prev.has(dayId) === open) return prev;
+      const next = new Set(prev);
+      if (open) next.add(dayId);
+      else next.delete(dayId);
+      return next;
+    });
+
+  // Past days are collapsed, so their cards are not rendered (or put in the
+  // schema) until someone opens them.
+  const visibleEvents = useMemo(
+    () => days.filter((day) => day.phase !== "past").flatMap((day) => day.events),
+    [days]
+  );
+  const renderedEvents = useMemo(
+    () =>
+      days
+        .filter((day) => day.phase !== "past" || openPast.has(day.id))
+        .flatMap((day) => day.events),
+    [days, openPast]
+  );
+
+  const categories = useMemo(
+    () => [...new Set(events.map((e) => e.category).filter(Boolean))].sort(),
+    [events]
+  );
+  const locations = useMemo(
+    () => [...new Set(events.map(placeOf).filter(Boolean))].sort(),
+    [events]
+  );
+  const familyCount = events.filter((e) => e.category === "Family").length;
+
+  const hubLink =
+    selectedCategory === ALL
+      ? "/events?preset=this-weekend"
+      : `/events?preset=this-weekend&category=${encodeURIComponent(selectedCategory)}`;
+
+  /**
+   * WEB-SEO-031: the title and description stay date-free; the prerender froze
+   * a build-time date into them. The weekend's dates are in the body, from the
+   * same window the rows were fetched for, and only once those rows are here.
    */
   const pageTitle = `Des Moines Events This Weekend | ${BRAND.name}`;
   const pageDescription = `Find the best events happening this weekend in Des Moines and suburbs. See dates, times, maps and tips for the weekend's activities.`;
+  const weekendLabel =
+    weekend && !isLoading && !isError
+      ? `${formatCentralDate(weekend.startDay, "EEEE, MMMM d")} - ${formatCentralDate(weekend.endDay, "EEEE, MMMM d, yyyy")}`
+      : null;
 
   const breadcrumbs = [
     { name: "Events", url: "/events" },
     { name: "This Weekend", url: "/events/this-weekend" },
   ];
 
+  // Static answers (WEB-SEO-008: an interpolated count makes the loading and
+  // loaded renders emit different FAQPage JSON, and the prerender kept both).
   const faqData = [
     {
       question: "What's happening this weekend in Des Moines?",
-      answer: `See everything happening this weekend in Des Moines and surrounding areas, with dates, times and maps on one page. The list is rebuilt daily as events are announced.`,
+      answer:
+        "This page lists every event on our calendar from Friday 12:00 AM through Sunday 11:59 PM, Central time, in Des Moines and the surrounding suburbs, grouped by day.",
     },
     {
       question: "Are there kid-friendly events this weekend?",
       answer:
-        "Yes! We mark family-friendly events and include details about parking, bathrooms, and play areas when available.",
+        "Events in the Family category are counted above and can be picked with the category filter. The Kids & Family page lists family events for every date.",
     },
     {
       question: "How do I find free events?",
       answer:
-        "Use our filters to show only free events, or look for the 'Free' tag on event cards. We list both free and paid activities.",
+        "Events whose listed price says free carry a Free tag on their cards, and the Free Events page lists them all. An event with no listed price is not counted as free.",
     },
     {
-      question: "When is this list updated?",
-      answer:
-        "This weekend events list is updated daily, typically on Thursday and Friday, to include the latest additions and changes.",
+      question: "How often is this list updated?",
+      answer: EVENTS_UPDATE_ANSWER,
     },
   ];
 
-  // WEB-PERF-030. SocialEventCard falls back to useEventSocial(event.id)
-  // when no batch data is passed, and that fallback ran three queries and
-  // opened three realtime channels PER CARD. This page renders up to
-  // filteredEvents.length of them, so one anonymous visit could issue hundreds of
-  // requests and sockets for a preview nobody can interact with. One batch
-  // query per table replaces all of it.
-  // Keyed on orderedEvents, not filteredEvents: the weather reorder changes
-  // WHICH events land inside the visible cap, and batching the wrong ids would
-  // put every rendered card back on the per-card fallback this exists to kill.
-  // The cost is one extra batch query on the load where the forecast resolves.
-  const batchSocialIds = useMemo(() => (orderedEvents.slice(0, VISIBLE_EVENTS) ?? []).map((e) => e.id), [orderedEvents]);
+  // WEB-PERF-030: one batch query per table for the cards actually rendered.
+  const batchSocialIds = useMemo(() => renderedEvents.map((e) => e.id), [renderedEvents]);
   const { data: batchSocialData, isPending: batchSocialPending } =
     useBatchEventSocial(batchSocialIds);
+
+  const hasFilters = selectedCategory !== ALL || selectedLocation !== ALL;
+  let cardIndex = 0;
 
   return (
     <div className="min-h-screen bg-background">
@@ -215,28 +277,15 @@ export default function EventsThisWeekend() {
         canonicalUrl={getCanonicalUrl('/events/this-weekend')}
         pageType="website"
         breadcrumbs={breadcrumbs}
-        // SEO-003: this prop no longer emits anything. EnhancedLocalSEO stopped
-        // emitting FAQPage - <FAQSection> below is the single emitter, and it
-        // renders the questions too, so the schema cannot describe content that
-        // is not on the page. Kept as a signal that this page has an FAQ.
-        //
-        // The WEB-SEO-008 hazard this comment used to describe is still real and
-        // is worth keeping written down: react-helmet-async APPENDS script
-        // children that differ rather than replacing them, so an FAQ answer
-        // interpolating a live count produces different JSON on the loading
-        // render and the loaded render, and the prerender captures BOTH.
-        // Production once served two FAQPage blocks here, one saying "0 events"
-        // and one saying "8 events". The answers below are static for that
-        // reason. Do not interpolate a count into them.
+        // SEO-003: FAQSection below is the single FAQPage emitter; this prop
+        // only records that the page has an FAQ.
         faqData={faqData}
         isTimeSensitive={true}
       />
-      {/* The schema must describe what the page SHOWS: the grid is capped at
-          VISIBLE_EVENTS and EventListJsonLd defaults maxItems to 50, so the
-          full list here would advertise events a reader cannot see. */}
+      {/* The schema describes what the page shows: the capped days. */}
       <EventListJsonLd
-        events={orderedEvents.slice(0, VISIBLE_EVENTS)}
-        maxItems={VISIBLE_EVENTS}
+        events={visibleEvents}
+        maxItems={VISIBLE_PER_DAY * 3}
         listName="Des Moines Weekend Events"
         listDescription={pageDescription}
         listUrl={getCanonicalUrl('/events/this-weekend')}
@@ -253,190 +302,85 @@ export default function EventsThisWeekend() {
             { label: "This Weekend" },
           ]}
         />
-        {/* Hero Section */}
         <div className="mb-8">
           <div className="flex items-center gap-2 mb-4">
             <SpriteIcon name="calendar" className="h-6 w-6 text-primary" />
             <h1 className="text-3xl font-bold">This Weekend in Des Moines</h1>
           </div>
-          {/* WHICH weekend, stated in the body. The title and description
-              stay date-free on purpose (WEB-SEO-031: the prerender froze a
-              build-time date into them). The body is rebuilt with the list,
-              so the dates here always match the events below them - and an
-              answer engine citing this page can say which weekend it means. */}
-          <p className="text-lg text-muted-foreground mb-2">{weekendWindow().label}</p>
+          {weekendLabel && <p className="text-lg text-muted-foreground mb-2">{weekendLabel}</p>}
 
-          {/* SEO-009: a visible, absolute freshness date. These are the pages
-              somebody checks again next Friday, and the only freshness claim on
-              them lived in the meta description ("Updated daily"), where the
-              reader it is aimed at cannot check it. Absolute rather than
-              relative on purpose - these pages are prerendered, so a relative
-              string is computed once at build time and frozen, and would still
-              read "2 hours ago" days later. Renders nothing when no row carries
-              a usable date. */}
-          <ListFreshness rows={weekendEvents} className="mb-4" />
+          {/* SEO-009: a visible, absolute freshness date from the rows. */}
+          <ListFreshness rows={events} className="mb-4" />
 
-          {/* SEO-016: the month index pages existed, worked, and were linked
-              from nowhere on the whole site. Crawlers follow links; a URL that
-              appears only in a sitemap is a weak signal. */}
+          {/* SEO-016: the month pages are linked from here so crawlers find them. */}
           <MonthLinks className="mb-6" />
 
-          <div className="flex items-center gap-4 text-muted-foreground mb-4">
-            <div className="flex items-center gap-1">
-              <SpriteIcon name="clock" className="h-4 w-4" />
-              {/* WEB-SEO-031: "Weekend of <build date>" in the prerendered
-                  file, shown to a crawler and to any no-JS visitor. */}
-              <span>This weekend in the Des Moines metro</span>
-            </div>
-            <div className="flex items-center gap-1">
-              <SpriteIcon name="map-pin" className="h-4 w-4" />
-              <span>Des Moines Metro Area</span>
-            </div>
-          </div>
-
           <p className="text-lg text-muted-foreground max-w-3xl">
-            See events in Des Moines and suburbs for this weekend. Dates, times,
-            maps, and quick tips all in one place.
+            Friday through Sunday in Des Moines and the suburbs, a day at a time.
+            All times are Central.
           </p>
         </div>
 
-        {/* Quick Stats */}
         <Card className="mb-8">
           <CardContent className="pt-6">
-            <div className="grid grid-cols-1 md:grid-cols-4 gap-4 text-center">
+            <div className="grid grid-cols-2 md:grid-cols-4 gap-4 text-center">
               <div>
-                <div className="text-2xl font-bold text-primary">
-                  {weekendEvents.length}
-                </div>
-                <div className="text-sm text-muted-foreground">
-                  Weekend Events
-                </div>
+                <div className="text-2xl font-bold text-primary">{events.length}</div>
+                <div className="text-sm text-muted-foreground">Weekend Events</div>
               </div>
               <div>
-                <div className="text-2xl font-bold text-primary">
-                  {
-                    weekendEvents.filter(
-                      (e) => e.price === "Free" || e.price === "0"
-                    ).length
-                  }
-                </div>
+                <div className="text-2xl font-bold text-primary">{countFree(events)}</div>
                 <div className="text-sm text-muted-foreground">Free Events</div>
               </div>
               <div>
-                <div className="text-2xl font-bold text-primary">
-                  {
-                    weekendEvents.filter(
-                      (e) =>
-                        e.category?.toLowerCase().includes("family") ||
-                        e.category?.toLowerCase().includes("family") ||
-                        e.enhanced_description?.toLowerCase().includes("kid")
-                    ).length
-                  }
-                </div>
-                <div className="text-sm text-muted-foreground">
-                  Family Events
-                </div>
+                <div className="text-2xl font-bold text-primary">{familyCount}</div>
+                <div className="text-sm text-muted-foreground">Family Events</div>
               </div>
               <div>
                 <div className="text-2xl font-bold text-primary">
-                  {
-                    new Set(weekendEvents.map((e) => e.location?.split(",")[0]))
-                      .size
-                  }
+                  {countStartingAfter5pm(events)}
                 </div>
-                <div className="text-sm text-muted-foreground">Locations</div>
+                <div className="text-sm text-muted-foreground">Starting after 5 PM</div>
               </div>
             </div>
           </CardContent>
         </Card>
 
-        {/* Filters */}
         {(categories.length > 0 || locations.length > 0) && (
           <Card className="mb-8">
             <CardHeader>
               <CardTitle className="flex items-center gap-2">
-                <Filter className="h-5 w-5" />
+                <Filter className="h-5 w-5" aria-hidden="true" />
                 Filter Events
               </CardTitle>
             </CardHeader>
             <CardContent>
-              <div className="flex flex-wrap gap-4">
-                {/* Category Filter */}
+              <div className="flex flex-col gap-4">
                 {categories.length > 0 && (
-                  <div>
-                    <label className="text-sm font-medium mb-2 block">
-                      Category
-                    </label>
-                    <div className="flex flex-wrap gap-2">
-                      <Button
-                        variant={
-                          selectedCategory === "all" ? "default" : "outline"
-                        }
-                        size="sm"
-                        onClick={() => setSelectedCategory("all")}
-                      >
-                        All
-                      </Button>
-                      {categories.map((category) => (
-                        <Button
-                          key={category}
-                          variant={
-                            selectedCategory === category
-                              ? "default"
-                              : "outline"
-                          }
-                          size="sm"
-                          onClick={() => setSelectedCategory(category)}
-                        >
-                          {category}
-                        </Button>
-                      ))}
-                    </div>
-                  </div>
+                  <ChipGroup
+                    label="Category"
+                    allLabel="All"
+                    options={categories}
+                    selected={selectedCategory}
+                    onSelect={(value) => setParam("category", value, { def: ALL })}
+                  />
                 )}
-
-                {/* Location Filter */}
                 {locations.length > 0 && (
-                  <div>
-                    <label className="text-sm font-medium mb-2 block">
-                      Location
-                    </label>
-                    <div className="flex flex-wrap gap-2">
-                      <Button
-                        variant={
-                          selectedLocation === "all" ? "default" : "outline"
-                        }
-                        size="sm"
-                        onClick={() => setSelectedLocation("all")}
-                      >
-                        All Areas
-                      </Button>
-                      {locations.map((location) => (
-                        <Button
-                          key={location}
-                          variant={
-                            selectedLocation === location
-                              ? "default"
-                              : "outline"
-                          }
-                          size="sm"
-                          onClick={() => setSelectedLocation(location)}
-                        >
-                          {location}
-                        </Button>
-                      ))}
-                    </div>
-                  </div>
+                  <ChipGroup
+                    label="Location"
+                    allLabel="All Areas"
+                    options={locations}
+                    selected={selectedLocation}
+                    onSelect={(value) => setParam("location", value, { def: ALL })}
+                  />
                 )}
               </div>
             </CardContent>
           </Card>
         )}
 
-        {/* Events List */}
         {isLoading ? (
-          /* WEB-SEO-031: no aria-busy and no loading text, so the prerender
-             strict gate could not tell a skeleton from a rendered page. */
+          /* WEB-SEO-031: SkeletonGroup carries aria-busy for the prerender gate. */
           <SkeletonGroup
             label="Loading this weekend's events..."
             className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6"
@@ -451,34 +395,139 @@ export default function EventsThisWeekend() {
               </Card>
             ))}
           </SkeletonGroup>
-        ) : orderedEvents.length > 0 ? (
+        ) : filteredEvents.length > 0 ? (
           <>
-            <WeatherNotice weather={weather} hasVerdict={hasVerdict} className="mb-6" />
-            <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6 mb-8">
-              {orderedEvents.slice(0, VISIBLE_EVENTS).map((event, index) => (
-                <SocialEventCard
-                  priority={index < 3}
-                  key={event.id}
-                  event={event}
-                  socialData={batchSocialData?.[event.id]}
-                  socialDataPending={batchSocialPending}
-                  onViewDetails={() => {}}
-                />
-              ))}
-            </div>
-
-            {orderedEvents.length > VISIBLE_EVENTS && (
-              <div className="mb-8 text-center">
-                <p className="text-muted-foreground mb-3">
-                  Showing {VISIBLE_EVENTS} of {formatCount(orderedEvents.length, 'event')} this weekend.
+            {picks.length > 0 && weekend && (
+              <section aria-labelledby="weekend-picks" className="mb-8">
+                <h2 id="weekend-picks" className="text-2xl font-bold mb-3">
+                  Our weekend picks
+                </h2>
+                <ul className="divide-y rounded-xl border">
+                  {picks.map((event) => (
+                    <li key={event.id} className="p-4">
+                      <Link
+                        to={`/events/${createEventSlugWithCentralTime(event.title, event)}`}
+                        className="font-semibold text-primary hover:underline"
+                      >
+                        {event.title}
+                      </Link>
+                      <p className="text-sm text-muted-foreground">
+                        {[formatEventDateShort(event), event.venue || event.location]
+                          .filter(Boolean)
+                          .join(" - ")}
+                      </p>
+                    </li>
+                  ))}
+                </ul>
+                <p className="mt-3 text-sm">
+                  Visiting?{" "}
+                  <Link
+                    to={`/trip-planner?from=${weekend.startDay < today ? today : weekend.startDay}&to=${weekend.endDay}`}
+                    className="text-primary hover:underline font-medium"
+                  >
+                    Plan this weekend
+                  </Link>{" "}
+                  with events by day and hotels near them.
                 </p>
-                <Button asChild variant="outline">
-                  <Link to="/events">Browse all events</Link>
-                </Button>
-              </div>
+              </section>
             )}
 
-            {/* Related Links */}
+            <nav aria-label="Jump to a day" className="mb-6 flex flex-wrap gap-2">
+              {days.map((day) => (
+                <Button key={day.id} asChild variant="outline" size="sm" className="min-h-11">
+                  <a href={`#${day.anchor}`}>
+                    {day.shortLabel} ({day.total})
+                  </a>
+                </Button>
+              ))}
+            </nav>
+
+            {days.map((day) => {
+              const heading = (
+                <h2 id={day.anchor} className="text-2xl font-bold">
+                  {day.label}{" "}
+                  <span className="text-base font-normal text-muted-foreground">
+                    ({formatCount(day.total, "event")})
+                  </span>
+                </h2>
+              );
+              if (day.phase === "past") {
+                // Already over: one line, open on demand.
+                return (
+                  <section key={day.id} aria-labelledby={day.anchor} className="mb-6 scroll-mt-24">
+                    <details
+                      data-weekend-day={day.id}
+                      data-day-phase="past"
+                      onToggle={(e) => togglePast(day.id, e.currentTarget.open)}
+                    >
+                      <summary className="flex min-h-11 cursor-pointer flex-wrap items-center gap-x-2">
+                        {heading}
+                        <span className="text-sm text-muted-foreground">already over</span>
+                      </summary>
+                      {openPast.has(day.id) && day.events.length > 0 && (
+                        <div className="mt-4 grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
+                          {day.events.map((event) => (
+                            <SocialEventCard
+                              key={event.id}
+                              event={event}
+                              socialData={batchSocialData?.[event.id]}
+                              socialDataPending={batchSocialPending}
+                              onViewDetails={() => {}}
+                            />
+                          ))}
+                        </div>
+                      )}
+                    </details>
+                  </section>
+                );
+              }
+              return (
+              <section
+                key={day.id}
+                aria-labelledby={day.anchor}
+                data-weekend-day={day.id}
+                data-day-phase={day.phase}
+                className="mb-10 scroll-mt-24"
+              >
+                <div className="mb-4">{heading}</div>
+                {day.phase === "today" && (
+                  <WeatherNotice weather={weather} hasVerdict={hasVerdict} className="mb-4" />
+                )}
+                {day.events.length === 0 ? (
+                  <p className="text-muted-foreground">
+                    Nothing on our calendar for {day.shortLabel}
+                    {hasFilters ? " with these filters" : ""} yet.
+                  </p>
+                ) : (
+                  <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
+                    {day.events.map((event) => {
+                      const index = cardIndex++;
+                      return (
+                        <SocialEventCard
+                          priority={index < 3}
+                          key={event.id}
+                          event={event}
+                          socialData={batchSocialData?.[event.id]}
+                          socialDataPending={batchSocialPending}
+                          onViewDetails={() => {}}
+                        />
+                      );
+                    })}
+                  </div>
+                )}
+                {day.total > day.events.length && (
+                  <p className="mt-4 text-muted-foreground">
+                    Showing {day.events.length} of {formatCount(day.total, "event")} on{" "}
+                    {day.shortLabel}.{" "}
+                    <Link to={hubLink} className="text-primary hover:underline font-medium">
+                      See the whole weekend on the events page
+                    </Link>
+                  </p>
+                )}
+              </section>
+              );
+            })}
+
             <Card className="mb-8">
               <CardHeader>
                 <CardTitle>More Weekend Ideas</CardTitle>
@@ -491,8 +540,7 @@ export default function EventsThisWeekend() {
                   >
                     <h3 className="font-semibold mb-2">Weekend Dining</h3>
                     <p className="text-sm text-muted-foreground">
-                      Best restaurants for weekend brunch, dinner, and late
-                      night eats
+                      Restaurants across the metro, with hours and menus
                     </p>
                   </Link>
                   <Link
@@ -501,8 +549,7 @@ export default function EventsThisWeekend() {
                   >
                     <h3 className="font-semibold mb-2">Places to Visit</h3>
                     <p className="text-sm text-muted-foreground">
-                      Parks, museums, and attractions perfect for weekend
-                      exploring
+                      Parks, museums, and attractions
                     </p>
                   </Link>
                   <Link
@@ -511,51 +558,43 @@ export default function EventsThisWeekend() {
                   >
                     <h3 className="font-semibold mb-2">Family Fun</h3>
                     <p className="text-sm text-muted-foreground">
-                      Playgrounds and family activities for weekend adventures
+                      Playgrounds across the metro
                     </p>
                   </Link>
                 </div>
               </CardContent>
             </Card>
 
-            {/* SEO-003: FAQSection renders the questions AND emits the single
-                FAQPage block. It used to be hand-rolled markup here with the
-                schema emitted separately by EnhancedLocalSEO, which is how the
-                two could disagree — and on this page the markup sits inside a
-                conditional, so there were states that shipped FAQ schema for an
-                FAQ nobody could see. One component owning both makes "schema
-                only when the content is visible" true by construction. */}
+            {/* SEO-003: FAQSection renders the questions and emits the single
+                FAQPage block, so schema only ships with a visible FAQ. */}
             <FAQSection faqs={faqData} />
           </>
         ) : isError ? (
-          // WEB-QA-031: "No Weekend Events Found" is a heading that answers
-          // the visitor's question. A failed fetch has not answered it.
+          // WEB-QA-031: a failed fetch has not answered "what's on".
           <ErrorState error={error} onRetry={() => void refetch()} />
         ) : (
           <Card>
             <CardContent className="pt-6 text-center">
               <SpriteIcon name="calendar" className="h-12 w-12 text-muted-foreground mx-auto mb-4" />
-              <h2 className="text-xl font-semibold mb-2">
-                No Weekend Events Found
-              </h2>
+              <h2 className="text-xl font-semibold mb-2">No Weekend Events Found</h2>
               <p className="text-muted-foreground mb-4">
-                {selectedCategory !== "all" || selectedLocation !== "all"
+                {hasFilters
                   ? "Try adjusting your filters to see more events."
                   : "No events are scheduled for this weekend. Check back later or browse upcoming events."}
               </p>
               <div className="flex justify-center gap-4">
-                {(selectedCategory !== "all" || selectedLocation !== "all") && (
+                {hasFilters && (
                   <Button
                     variant="outline"
-                    onClick={() => {
-                      setSelectedCategory("all");
-                      setSelectedLocation("all");
-                    }}
+                    className="min-h-11"
+                    onClick={() =>
+                      setMany({ category: null, location: null }, { replace: false })
+                    }
                   >
                     Clear Filters
                   </Button>
                 )}
-                <Link to="/events" className="text-primary hover:underline">
+                <Link to="/events" className="text-primary hover:underline self-center">
                   Browse All Events
                 </Link>
               </div>

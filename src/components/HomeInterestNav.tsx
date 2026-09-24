@@ -1,6 +1,5 @@
 import { useMemo, useEffect } from "react";
 import { Link } from "react-router-dom";
-import { Calendar, UtensilsCrossed, Landmark } from "lucide-react";
 import { readRecentlyViewed, engagementByType, type RecentlyViewedType } from "@/lib/recentlyViewed";
 import { computeHomeSectionOrder, type HomeSectionKey } from "@/lib/homeSectionOrder";
 import { storage } from "@/lib/safeStorage";
@@ -11,10 +10,10 @@ import { SpriteIcon } from "@/components/ui/SpriteIcon";
 
 const log = createLogger("HomeInterestNav");
 
-const DOMAINS: Record<HomeSectionKey, { label: string; blurb: string; href: string; icon: typeof Calendar }> = {
-  event: { label: "Events", blurb: "Concerts, festivals & things to do", href: "/events", icon: Calendar },
-  restaurant: { label: "Restaurants", blurb: "Where to eat across the metro", href: "/restaurants", icon: UtensilsCrossed },
-  attraction: { label: "Attractions", blurb: "Museums, parks & landmarks", href: "/attractions", icon: Landmark },
+const DOMAINS: Record<HomeSectionKey, { label: string; blurb: string; href: string }> = {
+  event: { label: "Events", blurb: "Concerts, festivals & things to do", href: "/events" },
+  restaurant: { label: "Restaurants", blurb: "Where to eat across the metro", href: "/restaurants" },
+  attraction: { label: "Attractions", blurb: "Museums, parks & landmarks", href: "/attractions" },
 };
 
 const COHORT_KEY = "dmi_home_cohort_logged_v1";
@@ -62,32 +61,29 @@ export function HomeInterestNav() {
       }, () => undefined);
   }, [cohort]);
 
+  // A one-line text row (WP1 item 8). It was three icon-tile cards, which the
+  // UI craft floor refuses as page structure and which repeated the hero's
+  // chips at three times the height. The engagement-driven order is kept.
   return (
-    <section className="py-6 bg-background" aria-label="Browse by interest">
-      <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8">
-        <div className="grid grid-cols-1 sm:grid-cols-3 gap-3">
-          {order.map((key) => {
-            const d = DOMAINS[key];
-            const Icon = d.icon;
-            return (
+    <nav aria-label="Browse by interest" className="mx-auto max-w-7xl px-4 sm:px-6 lg:px-8">
+      <ul className="flex flex-wrap items-center gap-x-5 text-sm">
+        <li className="text-muted-foreground">Browse</li>
+        {order.map((key) => {
+          const d = DOMAINS[key];
+          return (
+            <li key={key}>
               <Link
-                key={key}
                 to={d.href}
-                className="group flex items-center gap-3 rounded-xl border bg-card p-4 hover:border-primary/50 hover:shadow-sm transition-all"
+                title={d.blurb}
+                className="inline-flex min-h-11 items-center gap-1 font-medium text-foreground underline-offset-4 hover:underline"
               >
-                <span className="flex h-10 w-10 items-center justify-center rounded-lg bg-primary/10 text-primary">
-                  <Icon className="h-5 w-5" aria-hidden="true" />
-                </span>
-                <span className="min-w-0 flex-1">
-                  <span className="block font-semibold">{d.label}</span>
-                  <span className="block text-xs text-muted-foreground truncate">{d.blurb}</span>
-                </span>
-                <SpriteIcon name="arrow-right" className="h-4 w-4 text-muted-foreground transition-transform group-hover:translate-x-0.5" aria-hidden="true" />
+                {d.label}
+                <SpriteIcon name="arrow-right" className="h-3.5 w-3.5 text-muted-foreground" aria-hidden="true" />
               </Link>
-            );
-          })}
-        </div>
-      </div>
-    </section>
+            </li>
+          );
+        })}
+      </ul>
+    </nav>
   );
 }

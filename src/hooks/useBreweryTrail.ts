@@ -1,7 +1,11 @@
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
 import { supabase } from '@/integrations/supabase/client';
 import { useAuth } from '@/contexts/AuthContext';
-import { RESTAURANT_LIST_COLUMNS } from '@/lib/listColumns';
+import { EVENT_LIST_COLUMNS, RESTAURANT_LIST_COLUMNS } from '@/lib/listColumns';
+import { applyEventVisibility } from '@/lib/eventQuery';
+import { sanitizePostgrestPattern } from '@/lib/postgrestPattern';
+import { STALE_TIME } from '@/lib/queryConfig';
+import { centralWindow } from '@/lib/timezone';
 
 export interface BreweryCheckin {
   id: string;
@@ -49,13 +53,82 @@ export function useBreweries() {
       const { data, error } = await supabase
         .from('restaurants')
         .select(RESTAURANT_LIST_COLUMNS)
-        .or(BREWERY_NAMES.map(n => `name.ilike.%${n}%`).join(',') + ',cuisine.ilike.%Brewery%,cuisine.ilike.%Craft Beer%')
+        // Merged duplicates and closed places are not on the trail, and must
+        // not count toward the passport's "N of M" denominator either.
+        // status is nullable and neq('status', 'closed') would also drop the
+        // NULL rows, so "not closed" is an OR that keeps them, nested with the
+        // name match in one `or=` param.
+        .neq('is_merged', true)
+        .or(
+          `and(or(status.is.null,status.neq.closed),or(${
+            BREWERY_NAMES.map(n => `name.ilike.%${n}%`).join(',') + ',cuisine.ilike.%Brewery%,cuisine.ilike.%Craft Beer%'
+          }))`,
+        )
         .order('name');
 
       if (error) throw error;
       return data ?? [];
     },
     staleTime: 10 * 60 * 1000,
+  });
+}
+
+/** Most taproom events the strip shows. */
+export const BREWERY_EVENTS_LIMIT = 12;
+
+/**
+ * The `or` clause matching an event's venue against any brewery name.
+ *
+ * Names come from restaurant rows, which are scraped, so each one goes through
+ * sanitizePostgrestPattern: a comma or parenthesis in a name would otherwise
+ * end the clause and 400 the request. Names that sanitise to nothing are
+ * dropped, and duplicates collapse. Returns null when no name is left, and the
+ * caller makes no request.
+ */
+export function breweryVenueClause(names: readonly string[]): string | null {
+  const patterns = Array.from(
+    new Set(names.map((n) => sanitizePostgrestPattern(n ?? '')).filter((p) => p.length >= 3)),
+  ).sort();
+  if (patterns.length === 0) return null;
+  return patterns.map((p) => `venue.ilike.%${p}%`).join(',');
+}
+
+export interface BreweryEvent {
+  id: string;
+  title: string;
+  date: string;
+  venue: string | null;
+  event_start_utc?: string | null;
+  event_start_local?: string | null;
+  [key: string]: unknown;
+}
+
+/**
+ * This week's events at the trail's breweries: ONE request for every brewery,
+ * not one per card. The next seven Central days, with the same visibility
+ * predicates every events read uses (merged, hidden, archived).
+ */
+export function useBreweryEvents(names: readonly string[]) {
+  const clause = breweryVenueClause(names);
+  return useQuery({
+    queryKey: ['brewery-events', clause],
+    enabled: clause !== null,
+    staleTime: STALE_TIME.CONTENT_LIST,
+    queryFn: async (): Promise<BreweryEvent[]> => {
+      if (!clause) return [];
+      const range = centralWindow('next-7-days');
+      const query = supabase
+        .from('events')
+        .select(EVENT_LIST_COLUMNS)
+        .gte('date', range.start)
+        .lte('date', range.end);
+      const { data, error } = await applyEventVisibility(query)
+        .or(clause)
+        .order('date', { ascending: true })
+        .limit(BREWERY_EVENTS_LIMIT);
+      if (error) throw error;
+      return (data ?? []) as unknown as BreweryEvent[];
+    },
   });
 }
 

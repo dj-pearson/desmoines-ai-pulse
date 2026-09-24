@@ -4,6 +4,23 @@ import { isCapacitor, getPlatform } from '@/lib/capacitorUtils';
 import { supabase } from '@/integrations/supabase/client';
 import { storage } from '@/lib/safeStorage';
 import { fromUnknownTable } from "@/integrations/supabase/unknownTable";
+import { EVENT_SLUG_COLUMNS } from '@/lib/listColumns';
+import { createEventSlugWithCentralTime } from '@/lib/timezone';
+
+async function resolveEventPath(eventId: string): Promise<string> {
+  const fallback = `/events/${encodeURIComponent(eventId)}`;
+  try {
+    const { data, error } = await supabase
+      .from('events')
+      .select(EVENT_SLUG_COLUMNS)
+      .eq('id', eventId)
+      .maybeSingle();
+    if (error || !data || !(data.event_start_utc || data.date)) return fallback;
+    return `/events/${createEventSlugWithCentralTime(data.title, data)}`;
+  } catch {
+    return fallback;
+  }
+}
 
 const PUSH_TOKEN_KEY = 'push_notification_token';
 const PUSH_ENABLED_KEY = 'push_notifications_enabled';
@@ -63,7 +80,11 @@ export function usePushNotifications() {
         navigate(data.url);
       }
     } else if (data?.type === 'event' && data?.id) {
-      navigate(`/events/${data.id}`);
+      // Payloads carry only the id. Look up the slug columns and land on the
+      // canonical /events/<title>-<date> URL (events plan WP9); on any failure
+      // go to the id, which useEventBySlug resolves.
+      const eventId = data.id;
+      void resolveEventPath(eventId).then((path) => navigate(path));
     } else if (data?.type === 'restaurant' && data?.id) {
       navigate(`/restaurants/${data.id}`);
     }

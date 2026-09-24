@@ -1,5 +1,6 @@
 import { Link } from 'react-router-dom';
-import { ExternalLink } from 'lucide-react';
+import { ExternalLink, Navigation } from 'lucide-react';
+import { getDirectionsUrl } from '@/lib/directions';
 import type { OutdoorsDestination } from '@/data/outdoorsGuide';
 import type { NearbyPlace } from '@/hooks/useOutdoorsNearby';
 
@@ -7,6 +8,19 @@ interface OutdoorsDestinationSectionProps {
   destination: OutdoorsDestination;
   /** Playgrounds within a few miles, from usePlaygroundsNearDestinations(). */
   nearbyPlaygrounds?: NearbyPlace[];
+}
+
+/**
+ * "2026-08-31" -> "August 31, 2026". Read as UTC so the day can't shift by
+ * one in a browser west of Greenwich, and so a prerender and a hydrate agree.
+ */
+function formatCheckedOn(iso: string): string {
+  const date = new Date(`${iso}T00:00:00Z`);
+  if (Number.isNaN(date.getTime())) return iso;
+  return new Intl.DateTimeFormat('en-US', {
+    dateStyle: 'long',
+    timeZone: 'UTC',
+  }).format(date);
 }
 
 /**
@@ -55,6 +69,10 @@ export default function OutdoorsDestinationSection({
           </div>
         ))}
       </dl>
+      <p className="mt-3 text-xs text-muted-foreground">
+        Details checked{' '}
+        <time dateTime={logistics.checkedOn}>{formatCheckedOn(logistics.checkedOn)}</time>
+      </p>
 
       <p className="mt-5 text-sm text-muted-foreground">
         {destination.address.street ? `${destination.address.street}, ` : ''}
@@ -71,6 +89,15 @@ export default function OutdoorsDestinationSection({
             {destination.name} trail details
           </Link>
         )}
+        <a
+          href={getDirectionsUrl(destination.geo)}
+          target="_blank"
+          rel="noopener noreferrer"
+          className="inline-flex items-center gap-1 font-medium text-primary underline underline-offset-4"
+        >
+          <Navigation className="h-3.5 w-3.5" aria-hidden="true" />
+          Directions to {destination.name}
+        </a>
         <a
           href={destination.officialUrl}
           target="_blank"

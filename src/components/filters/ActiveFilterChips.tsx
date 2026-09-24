@@ -1,6 +1,4 @@
 import { X } from "lucide-react";
-import { Badge } from "@/components/ui/badge";
-import { Button } from "@/components/ui/button";
 import { cn } from "@/lib/utils";
 
 export interface FilterChip {
@@ -17,41 +15,55 @@ export interface FilterChip {
  * viewports; each chip removes one filter, paired with URL-synced filter state
  * (WEB-UX-001) so removal updates the shareable URL. Renders nothing when there
  * are no active filters.
+ *
+ * The whole chip is the remove button. The old X inside a Badge was a 16px
+ * target (docs/page-plans/events.md WP2 item 5); the chip now meets 44px.
+ *
+ * `layout="scroll"` keeps the chips on one line that scrolls sideways, for
+ * the events sticky bar where a wrapped second row would push results down.
  */
 export function ActiveFilterChips({
   chips,
   onClearAll,
   className,
+  layout = "wrap",
+  showLabel = true,
 }: {
   chips: FilterChip[];
   onClearAll: () => void;
   className?: string;
+  layout?: "wrap" | "scroll";
+  showLabel?: boolean;
 }) {
   if (chips.length === 0) return null;
   return (
-    <div className={cn("flex flex-wrap items-center gap-2", className)}>
-      <span className="text-sm text-muted-foreground">Active filters:</span>
+    <div
+      className={cn(
+        "flex items-center gap-2",
+        layout === "wrap" ? "flex-wrap" : "flex-nowrap overflow-x-auto scrollbar-hide",
+        className
+      )}
+    >
+      {showLabel && <span className="shrink-0 text-sm text-muted-foreground">Active filters:</span>}
       {chips.map((chip) => (
-        <Badge key={chip.key} variant="secondary" className="gap-1 pr-1">
+        <button
+          key={chip.key}
+          type="button"
+          onClick={chip.onRemove}
+          aria-label={`Remove ${chip.label}`}
+          className="inline-flex shrink-0 items-center gap-1.5 min-h-[44px] rounded-full bg-secondary px-3 text-sm font-medium text-secondary-foreground transition-colors hover:bg-accent hover:text-accent-foreground focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring whitespace-nowrap"
+        >
           {chip.label}
-          <button
-            type="button"
-            onClick={chip.onRemove}
-            className="ml-1 hover:bg-accent rounded-full p-0.5"
-            aria-label={`Remove ${chip.label}`}
-          >
-            <X className="h-3 w-3" />
-          </button>
-        </Badge>
+          <X className="h-3.5 w-3.5" aria-hidden="true" />
+        </button>
       ))}
-      <Button
-        variant="ghost"
-        size="sm"
+      <button
+        type="button"
         onClick={onClearAll}
-        className="h-7 text-xs text-muted-foreground"
+        className="inline-flex shrink-0 items-center min-h-[44px] rounded-full px-3 text-sm font-medium text-foreground underline-offset-2 hover:underline focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring whitespace-nowrap"
       >
         Clear all
-      </Button>
+      </button>
     </div>
   );
 }

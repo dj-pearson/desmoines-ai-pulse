@@ -3,11 +3,11 @@ import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { Badge } from '@/components/ui/badge';
 import { Button } from '@/components/ui/button';
 import { Separator } from '@/components/ui/separator';
-import { Utensils, ChevronDown, ChevronUp, Flame, Leaf, WheatOff, Star, History, Search } from "lucide-react";
+import { Utensils, ChevronDown, ChevronUp, Flame, Leaf, WheatOff, Star, History } from "lucide-react";
 import { useRestaurantMenu, MenuSection } from '@/hooks/useRestaurantMenu';
-import { CollapsibleSection } from '@/components/CollapsibleSection';
 import { MenuSchema } from '@/components/schema/MenuSchema';
 import { SpriteIcon } from "@/components/ui/SpriteIcon";
+import { safeWebUrl } from '@/lib/reservations';
 
 interface RestaurantMenuSectionProps {
   restaurantId: string;
@@ -16,6 +16,11 @@ interface RestaurantMenuSectionProps {
   restaurantDescription?: string;
   city?: string;
   cuisine?: string;
+  /**
+   * restaurants.menu_url. When no menu has been captured, a card linking to it
+   * stands in, so the page's Menu link never lands on nothing.
+   */
+  menuUrl?: string | null;
 }
 
 const LARGE_MENU_THRESHOLD = 30;
@@ -151,6 +156,7 @@ export function RestaurantMenuSection({
   restaurantDescription,
   city,
   cuisine,
+  menuUrl,
 }: RestaurantMenuSectionProps) {
   const { data, isLoading } = useRestaurantMenu(restaurantId);
   const [showVersions, setShowVersions] = useState(false);
@@ -179,8 +185,29 @@ export function RestaurantMenuSection({
   }
 
   if (!data?.menu || data.sections.length === 0) {
-    return null;
+    const externalMenu = safeWebUrl(menuUrl);
+    if (!externalMenu) return null;
+    return (
+      <section id="menu" aria-labelledby="menu-heading" className="scroll-mt-20">
+        <h2 id="menu-heading" className="flex items-center gap-2 text-xl font-bold text-foreground">
+          <Utensils className="h-5 w-5" aria-hidden="true" />
+          Menu
+        </h2>
+        <p className="mt-2 text-muted-foreground">
+          We haven't captured {restaurantName}'s menu. They publish one on their own site.
+        </p>
+        <Button asChild variant="outline" className="mt-3 min-h-11">
+          <a href={externalMenu} target="_blank" rel="noopener noreferrer">
+            Menu (on their site)
+            <SpriteIcon name="external-link" className="ml-2 h-4 w-4" />
+            <span className="sr-only"> (opens in a new tab)</span>
+          </a>
+        </Button>
+      </section>
+    );
   }
+
+  const menuSource = safeWebUrl(data.menu.source_url);
 
   const isLargeMenu = data.totalItems >= LARGE_MENU_THRESHOLD;
 
@@ -218,9 +245,9 @@ export function RestaurantMenuSection({
                   {data.versions.length} versions
                 </Button>
               )}
-              {data.menu.source_url && (
+              {menuSource && (
                 <a
-                  href={data.menu.source_url}
+                  href={menuSource}
                   target="_blank"
                   rel="noopener noreferrer"
                   className="text-xs text-muted-foreground hover:text-foreground transition-colors"

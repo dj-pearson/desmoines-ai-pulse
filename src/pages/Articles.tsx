@@ -1,12 +1,12 @@
-import React, { useState, useEffect } from 'react';
+import React, { useState, useEffect, useMemo } from 'react';
 import { Link } from 'react-router-dom';
-import { useArticles } from '@/hooks/useArticles';
-import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card';
+import { usePublishedArticles } from '@/hooks/useArticles';
+import { Card, CardDescription, CardTitle } from '@/components/ui/card';
 import { Badge } from '@/components/ui/badge';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
-import { Eye, Search, Filter, User, Tag, BookOpen, Grid, List } from "lucide-react";
+import { Eye, Search, Filter, Tag, BookOpen, Grid, List } from "lucide-react";
 import { CardsGridSkeleton } from '@/components/ui/loading-skeleton';
 import { EmptyState } from '@/components/ui/empty-state';
 import { ErrorState } from '@/components/ui/error-state';
@@ -20,13 +20,13 @@ import { SpriteIcon } from "@/components/ui/SpriteIcon";
 import { useUrlFilters } from '@/hooks/useUrlFilters';
 import NoIndexMeta from '@/components/schema/NoIndexMeta';
 import { OptimizedImage } from "@/components/OptimizedImage";
+import { AIDisclosureBadge } from '@/components/AIDisclosureBadge';
+import { aiDisclosureText, isAiArticle } from '@/lib/articleHubs';
+
+/** Cards that get the entrance animation; the rest appear without a delay. */
+const STAGGERED_CARDS = 6;
 
 const Articles: React.FC = () => {
-  // 'published' rather than the default 'all' (WEB-BE-056 AC3). This page
-  // pulled every article - drafts included, bodies and all - and then filtered
-  // status in the browser, so unpublished work crossed the wire to every
-  // visitor and only a `return false` kept it off the screen.
-  const { articles, loading, error, loadArticles } = useArticles({ status: 'published' });
   // URL-synced filters (WEB-UX-035). These were local React state, so a
   // filtered view could not be shared or bookmarked, and reading an article
   // and pressing Back returned to an unfiltered list. viewMode and showFilters
@@ -58,35 +58,30 @@ const Articles: React.FC = () => {
     setSearchQuery(urlSearch);
   }, [urlSearch]);
 
-  // Get unique categories from published articles
-  const categories = Array.from(new Set(articles.filter(article => article.status === 'published').map(article => article.category)));
+  // One request per page of 12, published only, filtered and sorted on the
+  // server, and never the article body (Plan & Stay WP4 items 2 and 3). The
+  // mount effect that called loadArticles('all') is gone: it flipped the query
+  // key and refetched every article, drafts included, with its full content.
+  const {
+    data,
+    isLoading: loading,
+    error,
+    refetch,
+    fetchNextPage,
+    hasNextPage,
+    isFetchingNextPage,
+  } = usePublishedArticles({ search: urlSearch, category: selectedCategory, sort: sortBy });
 
-  // Filter and sort articles - only show published articles
-  const filteredAndSortedArticles = articles
-    .filter(article => {
-      if (article.status !== 'published') return false;
-      
-      const matchesSearch = article.title.toLowerCase().includes(searchQuery.toLowerCase()) ||
-                           article.excerpt?.toLowerCase().includes(searchQuery.toLowerCase()) ||
-                           (article.tags && article.tags.some(tag => tag.toLowerCase().includes(searchQuery.toLowerCase())));
-      const matchesCategory = selectedCategory === 'all' || article.category === selectedCategory;
-      
-      return matchesSearch && matchesCategory;
-    })
-    .sort((a, b) => {
-      switch (sortBy) {
-        case 'newest':
-          return new Date(b.published_at || b.created_at).getTime() - new Date(a.published_at || a.created_at).getTime();
-        case 'oldest':
-          return new Date(a.published_at || a.created_at).getTime() - new Date(b.published_at || b.created_at).getTime();
-        case 'popular':
-          return (b.view_count || 0) - (a.view_count || 0);
-        case 'title':
-          return a.title.localeCompare(b.title);
-        default:
-          return 0;
-      }
-    });
+  const articles = useMemo(() => data?.pages.flatMap((p) => p.rows) ?? [], [data]);
+  const total = data?.pages[0]?.total ?? articles.length;
+
+  // Categories come from the rows loaded so far, plus the selected one so an
+  // active filter never disappears from its own dropdown.
+  const categories = useMemo(() => {
+    const set = new Set(articles.map((a) => a.category).filter(Boolean));
+    if (selectedCategory !== 'all') set.add(selectedCategory);
+    return Array.from(set).sort((x, y) => x.localeCompare(y));
+  }, [articles, selectedCategory]);
 
   const formatDate = (dateString: string) => {
     return new Date(dateString).toLocaleDateString('en-US', {
@@ -96,25 +91,15 @@ const Articles: React.FC = () => {
     });
   };
 
-  const formatReadTime = (content: string) => {
-    const wordsPerMinute = 200;
-    const wordCount = content.split(/\s+/).length;
-    const readTime = Math.max(1, Math.ceil(wordCount / wordsPerMinute));
-    return `${readTime} min read`;
-  };
-
-  useEffect(() => {
-    // Load all articles but we'll filter to published in the component
-    loadArticles('all');
-  }, []);
-
   // No separate loading return. It was an early return above the page's own
   // <h1>, so a slow response left the document with an sr-only stand-in and no
   // search box at all - the reader could not start typing until the articles
   // they were waiting for had arrived. The skeleton moved down into the grid,
   // which is the only part that has nothing to show yet. WEB-CI-028 AC2.
 
-  if (error) {
+  // Only a failed first page replaces the page. A failed "Load more" keeps
+  // the rows already on screen (TanStack keeps `data` and sets `error`).
+  if (error && articles.length === 0) {
     return (
       <>
         {/* WEB-A11Y-002: same as EventsPage - this early return drops the
@@ -124,7 +109,7 @@ const Articles: React.FC = () => {
         <div className="min-h-screen bg-background">
           <div className="container mx-auto px-4 py-8">
             <h1 className="sr-only">Des Moines stories and insights</h1>
-            <ErrorState error={error} onRetry={loadArticles} />
+            <ErrorState error={error} onRetry={() => { void refetch(); }} />
           </div>
         </div>
         <Footer />
@@ -141,40 +126,17 @@ const Articles: React.FC = () => {
       />
       <Header />
       <div className="min-h-screen bg-background">
-        {/* Hero Section */}
-        <div className="bg-gradient-to-br from-primary/5 via-primary/10 to-background border-b">
-          <div className="container mx-auto px-4 py-12 md:py-16">
-            <div className="max-w-4xl mx-auto text-center">
-              <div className="flex items-center justify-center gap-2 mb-4">
-                <BookOpen className="h-8 w-8 text-primary" />
-                <Badge variant="secondary" className="px-3 py-1">
-                  Latest Articles
-                </Badge>
-              </div>
-              <h1 className="text-4xl md:text-5xl font-bold text-foreground mb-4 animate-fade-in">
+        {/* Plain header: the gradient band and the three stat tiles (article
+            count, category count, average views) are gone (WP4 item 9). */}
+        <div className="border-b">
+          <div className="container mx-auto px-4 py-10 md:py-12">
+            <div className="max-w-3xl">
+              <h1 className="text-4xl md:text-5xl font-bold text-foreground mb-4">
                 Des Moines Stories & Insights
               </h1>
-              <p className="text-xl text-muted-foreground mb-8 max-w-2xl mx-auto">
-                Discover the best of Des Moines through in-depth guides, local stories, and insider tips from our community
+              <p className="text-lg text-muted-foreground">
+                Guides and local stories about events, food and places to go in Des Moines. Each one links to what's on now.
               </p>
-              
-              {/* Featured Stats */}
-              <div className="grid grid-cols-2 md:grid-cols-3 gap-4 mb-8">
-                <div className="bg-card/50 backdrop-blur-sm rounded-lg p-4 border">
-                  <div className="text-2xl font-bold text-primary">{loading ? "-" : filteredAndSortedArticles.length}</div>
-                  <div className="text-sm text-muted-foreground">Articles</div>
-                </div>
-                <div className="bg-card/50 backdrop-blur-sm rounded-lg p-4 border">
-                  <div className="text-2xl font-bold text-primary">{loading ? "-" : categories.length}</div>
-                  <div className="text-sm text-muted-foreground">Categories</div>
-                </div>
-                <div className="bg-card/50 backdrop-blur-sm rounded-lg p-4 border col-span-2 md:col-span-1">
-                  <div className="text-2xl font-bold text-primary">
-                    {loading ? "-" : Math.round(filteredAndSortedArticles.reduce((acc, article) => acc + (article.view_count || 0), 0) / filteredAndSortedArticles.length) || 0}
-                  </div>
-                  <div className="text-sm text-muted-foreground">Avg. Views</div>
-                </div>
-              </div>
             </div>
           </div>
         </div>
@@ -248,9 +210,9 @@ const Articles: React.FC = () => {
               <div className="mt-4 p-4 bg-muted/30 rounded-lg border animate-fade-in">
                 <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
                   <div>
-                    <label className="text-sm font-medium mb-2 block">Category</label>
+                    <label htmlFor="articles-category" className="text-sm font-medium mb-2 block">Category</label>
                     <Select value={selectedCategory} onValueChange={setSelectedCategory}>
-                      <SelectTrigger aria-label="Filter articles by category">
+                      <SelectTrigger id="articles-category">
                         <SelectValue placeholder="All Categories" />
                       </SelectTrigger>
                       <SelectContent>
@@ -265,9 +227,9 @@ const Articles: React.FC = () => {
                   </div>
 
                   <div>
-                    <label className="text-sm font-medium mb-2 block">Sort By</label>
+                    <label htmlFor="articles-sort" className="text-sm font-medium mb-2 block">Sort By</label>
                     <Select value={sortBy} onValueChange={setSortBy}>
-                      <SelectTrigger aria-label="Sort articles">
+                      <SelectTrigger id="articles-sort">
                         <SelectValue />
                       </SelectTrigger>
                       <SelectContent>
@@ -297,13 +259,18 @@ const Articles: React.FC = () => {
             )}
           </div>
 
+          <h2 className="text-2xl font-semibold mb-2">
+            {selectedCategory !== 'all' ? selectedCategory : 'All articles'}
+          </h2>
+
           {/* Results Info */}
           <div className="mb-6 flex items-center justify-between text-sm text-muted-foreground">
-            <span>
-              {searchQuery || selectedCategory !== 'all' 
-                ? `Found ${filteredAndSortedArticles.length} article${filteredAndSortedArticles.length !== 1 ? 's' : ''}${searchQuery ? ` for "${searchQuery}"` : ''}`
-                : `${filteredAndSortedArticles.length} article${filteredAndSortedArticles.length !== 1 ? 's' : ''} published`
-              }
+            <span aria-live="polite">
+              {loading
+                ? 'Loading articles...'
+                : urlSearch || selectedCategory !== 'all'
+                  ? `Found ${total} article${total !== 1 ? 's' : ''}${urlSearch ? ` for "${urlSearch}"` : ''}`
+                  : `${total} article${total !== 1 ? 's' : ''} published`}
             </span>
             {selectedCategory !== 'all' && (
               <Badge variant="outline" className="gap-1">
@@ -316,8 +283,8 @@ const Articles: React.FC = () => {
           {/* Articles Grid/List */}
           {loading ? (
             <CardsGridSkeleton count={6} label="Loading articles..." />
-          ) : filteredAndSortedArticles.length === 0 ? (
-            (searchQuery || selectedCategory !== 'all') ? (
+          ) : articles.length === 0 ? (
+            (urlSearch || selectedCategory !== 'all') ? (
               <EmptyState
                 icon={BookOpen}
                 title="No articles found"
@@ -346,13 +313,18 @@ const Articles: React.FC = () => {
                 ? "grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6" 
                 : "space-y-6"
             }>
-              {filteredAndSortedArticles.map((article, index) => (
-                <Card 
-                  key={article.id} 
-                  className={`group hover:shadow-lg transition-all duration-300 hover-scale animate-fade-in ${
+              {articles.map((article, index) => (
+                <Card
+                  key={article.id}
+                  // Only the first six animate in; a stagger across a page of
+                  // 12 (and every "Load more" after it) left later cards
+                  // invisible for over half a second.
+                  className={`group hover:shadow-lg transition-all duration-300 hover-scale ${
+                    index < STAGGERED_CARDS ? 'animate-fade-in' : ''
+                  } ${
                     viewMode === 'list' ? 'flex flex-col md:flex-row overflow-hidden' : 'overflow-hidden'
                   }`}
-                  style={{ animationDelay: `${index * 50}ms` }}
+                  style={index < STAGGERED_CARDS ? { animationDelay: `${index * 50}ms` } : undefined}
                 >
                   <Link to={`/articles/${article.slug}`} className="block h-full">
                     {article.featured_image_url && (
@@ -379,15 +351,20 @@ const Articles: React.FC = () => {
                     )}
                     
                     <div className="p-6 flex-1">
-                      {/* Category and Read Time */}
-                      <div className="flex items-center gap-2 mb-3">
+                      {/* Category and AI disclosure. Read time is gone from the
+                          card until articles.word_count is confirmed in
+                          production: the only way to compute it was to ship
+                          every article body to the list. */}
+                      <div className="flex flex-wrap items-center gap-2 mb-3">
                         <Badge variant="secondary" className="text-xs">
                           {article.category}
                         </Badge>
-                        <span className="text-xs text-muted-foreground flex items-center gap-1">
-                          <SpriteIcon name="clock" className="h-3 w-3" />
-                          {formatReadTime(article.content)}
-                        </span>
+                        {isAiArticle(article) && (
+                          <AIDisclosureBadge
+                            label={article.is_auto_published ? "AI-written" : "AI-assisted"}
+                            tooltip={aiDisclosureText(article) ?? undefined}
+                          />
+                        )}
                         <span className="text-xs text-muted-foreground flex items-center gap-1">
                           <Eye className="h-3 w-3" />
                           {article.view_count || 0}
@@ -440,13 +417,23 @@ const Articles: React.FC = () => {
             </div>
           )}
 
-          {/* Load More Button (if we implement pagination later) */}
-          {filteredAndSortedArticles.length > 0 && (
+          {/* "Explore More Topics" was here with no handler. This one loads
+              the next 12. */}
+          {hasNextPage && articles.length > 0 && (
             <div className="text-center mt-12">
-              <Button variant="outline" size="lg" className="gap-2">
-                <SpriteIcon name="trending-up" className="h-4 w-4" />
-                Explore More Topics
+              <Button
+                variant="outline"
+                size="lg"
+                onClick={() => { void fetchNextPage(); }}
+                disabled={isFetchingNextPage}
+              >
+                {isFetchingNextPage ? 'Loading...' : `Load more (${articles.length} of ${total})`}
               </Button>
+              {error && !isFetchingNextPage && (
+                <p role="alert" className="mt-3 text-sm text-destructive">
+                  Couldn't load more articles. Try again.
+                </p>
+              )}
             </div>
           )}
         </div>
@@ -458,38 +445,25 @@ const Articles: React.FC = () => {
           <FAQSection
             title="Des Moines Articles & Blog - Frequently Asked Questions"
             description="Common questions about Des Moines Insider articles, local news, and community content."
+            // Four answers the page can back up (WP4 item 6). The old eight
+            // were emitted as FAQPage schema and claimed fixed categories, AI
+            // related-article suggestions, maps, video and fact-checking.
             faqs={[
               {
-                question: "What topics do Des Moines Insider articles cover?",
-                answer: "Des Moines Insider publishes articles covering local events previews and recaps, restaurant reviews and new opening announcements, attraction guides and recommendations, neighborhood spotlights and community features, family activity ideas and seasonal guides, business news and economic development, cultural events and arts scene coverage, sports and entertainment updates, and local lifestyle and living tips. All content focuses exclusively on the Des Moines metropolitan area to provide relevant, hyperlocal information for residents and visitors."
+                question: "What do Des Moines Insider articles cover?",
+                answer: "Guides and local stories about Des Moines events, restaurants, attractions and things to do. Each article links to the matching listings on this site, so a guide leads to what's on now."
               },
               {
-                question: "How often are new articles published?",
-                answer: "Des Moines Insider publishes new articles weekly with increased frequency during peak seasons like summer festivals and Iowa State Fair. Major event previews publish 1-2 weeks in advance, restaurant reviews post within days of new openings, breaking local news updates publish as events occur, and seasonal guides release at the start of each season. Subscribe to our newsletter or follow our social media channels for notifications when new articles publish. All articles undergo editorial review and AI enhancement for clarity and local relevance."
+                question: "Are the articles free to read?",
+                answer: "Yes. Every published article is free to read, with no account and no paywall."
               },
               {
-                question: "Can I submit article ideas or contribute content?",
-                answer: "Yes! Des Moines Insider welcomes community contributions and article suggestions. Submit ideas for local business features, event coverage suggestions, neighborhood stories, restaurant recommendations, hidden gems in Des Moines, and community interest pieces. Contact us through the Business Partnership application or reach out via our contact form with 'Article Submission' in the subject line. Include detailed information about your proposed topic and why it would interest Des Moines residents. We prioritize authentic local stories with community value over promotional content."
+                question: "Is AI used to write the articles?",
+                answer: "Some of them. Articles written by AI and published automatically after quality checks carry an \"AI-written\" label and a note saying no editor reviewed them. Articles drafted with AI and edited by our team before publishing carry an \"AI-assisted\" label. Either way, check dates, prices and hours with the venue before you rely on them."
               },
               {
-                question: "Are Des Moines Insider articles free to read?",
-                answer: "Yes! All Des Moines Insider articles are completely free to read without subscriptions, paywalls, or registration requirements. Our mission is providing accessible local information to the entire Des Moines community. We generate revenue through business partnerships, advertising, and premium services for venues and event organizers rather than charging readers. Simply visit our Articles page to browse and read all published content. Create a free account for personalized article recommendations based on your interests, but it's not required for reading."
-              },
-              {
-                question: "How do I find articles about specific neighborhoods or topics?",
-                answer: "Navigate articles by category using filters on the Articles page including Events, Restaurants, Attractions, Neighborhoods, Family, Business, and more. Use the search bar to find articles by keyword, neighborhood name, venue, or topic. Browse by neighborhood through our Neighborhoods section for area-specific content. Sort articles by newest, most popular, or alphabetically. Each article includes relevant tags for easy discovery of related content. Our AI-powered recommendations also suggest related articles based on what you're currently reading."
-              },
-              {
-                question: "Do Des Moines Insider articles include photos and multimedia?",
-                answer: "Yes! Most Des Moines Insider articles feature high-quality photography including featured images showcasing subjects, venue and event photos, neighborhood imagery, food photography for restaurant reviews, and attraction visuals. Some articles include embedded maps for location context, embedded videos when relevant, image galleries for comprehensive coverage, and interactive elements for enhanced engagement. All images are optimized for fast loading on mobile and desktop devices. Photo credits are provided when images are sourced from venues or photographers."
-              },
-              {
-                question: "Can businesses be featured in Des Moines Insider articles?",
-                answer: "Absolutely! Des Moines Insider regularly features local businesses through new restaurant opening announcements, business spotlight articles, event venue profiles, neighborhood business roundups, seasonal business features (holiday shopping, summer activities, etc.), and partnership content opportunities. Businesses interested in editorial coverage should contact us through the Business Partnership application. We prioritize authentic, newsworthy stories over pure promotion. Features focus on what makes businesses unique, their community impact, and value to Des Moines residents. Premium partnership opportunities are available for enhanced visibility."
-              },
-              {
-                question: "How accurate and current is information in articles?",
-                answer: "Des Moines Insider maintains high editorial standards for accuracy. All articles undergo fact-checking and verification before publication. Information sources include direct venue contact, official announcements, municipal sources, and firsthand visits. Articles display publication dates and last update timestamps. Time-sensitive information (event dates, business hours, prices) is verified at publication time but may change after publishing. We update articles when significant changes occur and encourage readers to verify critical details directly with venues. Report inaccuracies through our contact form for prompt correction. Our AI enhancement system improves clarity while preserving factual accuracy."
+                question: "How current is the information in an article?",
+                answer: "Each article shows the date it was published, and the date it was updated when that was more than a day later. Articles older than six months carry a note pointing to the current listings, because hours, prices and dates change."
               }
             ]}
             showSchema={true}

@@ -2,6 +2,9 @@ import { useState, useCallback } from 'react';
 import { useMutation, useQueryClient } from '@tanstack/react-query';
 import { supabase } from '@/integrations/supabase/client';
 import { Event, Restaurant, Attraction } from '@/lib/types';
+import { createLogger } from '@/lib/logger';
+
+const log = createLogger('useNLPSearch');
 
 /**
  * Parsed search intent from NLP processing
@@ -74,6 +77,88 @@ export const NLP_SEARCH_EXAMPLES = [
   "Events this week under $20",
 ];
 
+type Daypart = 'morning' | 'afternoon' | 'evening' | 'late';
+
+/** When each example is worth offering first. Untagged examples keep their place after the tagged ones. */
+const EXAMPLE_DAYPARTS: Record<string, Daypart[]> = {
+  "Best brunch spots with outdoor seating": ['morning'],
+  "Free things to do this weekend with kids": ['morning', 'afternoon'],
+  "Kid-friendly attractions": ['morning', 'afternoon'],
+  "Dog-friendly restaurants": ['afternoon'],
+  "Family dinner under $50 near downtown Saturday": ['afternoon', 'evening'],
+  "Italian food near me": ['afternoon', 'evening'],
+  "Live music events tonight": ['evening', 'late'],
+  "Romantic dinner date in East Village": ['evening'],
+  "Things to do tomorrow afternoon": ['late'],
+};
+
+export function daypartForHour(hour: number): Daypart {
+  if (hour >= 5 && hour < 11) return 'morning';
+  if (hour >= 11 && hour < 16) return 'afternoon';
+  if (hour >= 16 && hour < 21) return 'evening';
+  return 'late';
+}
+
+/**
+ * Example chips ordered for the hour (WP1 item 7). "Best brunch spots" at 9pm
+ * and "Live music tonight" at 8am both read as a page that is not paying
+ * attention. Pass the CENTRAL hour: the examples describe Des Moines time, not
+ * the visitor's clock. Stable: ties keep the list's own order.
+ */
+export function orderExamplesForHour(
+  hour: number,
+  examples: readonly string[] = NLP_SEARCH_EXAMPLES,
+): string[] {
+  const part = daypartForHour(hour);
+  const rank = (example: string) => (EXAMPLE_DAYPARTS[example]?.includes(part) ? 0 : 1);
+  return examples
+    .map((example, index) => ({ example, index }))
+    .sort((a, b) => rank(a.example) - rank(b.example) || a.index - b.index)
+    .map(({ example }) => example);
+}
+
+/** Phrases that narrow a query without changing what it is about. */
+const NARROWING = [
+  /\bunder\s+\$?\d+\b/gi,
+  /\$\d+/g,
+  /\b(this|next)\s+(weekend|week)\b/gi,
+  /\b(tonight|today|tomorrow|weekend)\b/gi,
+  /\b(mon|tues|wednes|thurs|fri|satur|sun)day\b/gi,
+  /\b(morning|afternoon|evening)\b/gi,
+  /\bnear\s+(me|downtown)\b/gi,
+  /\bwith\s+(kids|outdoor\s+seating)\b/gi,
+  // "in East Village", "near Valley Junction": a capitalised place name.
+  /\b(in|near|around)\s+[A-Z][\w'-]*(\s+[A-Z][\w'-]*)*/g,
+];
+
+const TRAILING_FILLER = /\s+(in|at|near|for|with|the|a|an|and|on|around)$/i;
+
+/**
+ * One broader query to offer when a search comes back empty (WP1 item 7), or
+ * null when there is nothing sensible to loosen. Strips dates, budgets and
+ * place qualifiers first; failing that, drops the last word.
+ */
+export function loosenQuery(query: string): string | null {
+  const original = query.trim().replace(/\s+/g, ' ');
+  if (!original) return null;
+
+  const tidy = (s: string) => {
+    let out = s.replace(/\s+/g, ' ').trim();
+    while (TRAILING_FILLER.test(out)) out = out.replace(TRAILING_FILLER, '');
+    return out;
+  };
+
+  let loosened = tidy(NARROWING.reduce((s, re) => s.replace(re, ' '), original));
+  if (loosened.toLowerCase() === original.toLowerCase() || loosened.length < 3) {
+    const words = original.split(' ');
+    if (words.length < 2) return null;
+    loosened = tidy(words.slice(0, -1).join(' '));
+  }
+
+  if (loosened.length < 3 || loosened.toLowerCase() === original.toLowerCase()) return null;
+  return loosened;
+}
+
 /**
  * Hook for natural language search powered by Claude Haiku
  *
@@ -125,7 +210,7 @@ export function useNLPSearch() {
       queryClient.invalidateQueries({ queryKey: ['search-suggestions'] });
     },
     onError: (error) => {
-      console.error('NLP Search error:', error);
+      log.warn('search', 'nlp-search failed', { error: String(error) });
       setParsedIntent(null);
       setResults({ events: [], restaurants: [], attractions: [] });
     },

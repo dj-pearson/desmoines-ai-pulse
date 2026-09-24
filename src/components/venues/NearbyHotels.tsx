@@ -9,6 +9,12 @@ interface NearbyHotelsProps {
   /** What the distances are measured from, e.g. "Wells Fargo Arena". */
   placeName: string;
   limit?: number;
+  /**
+   * The venue slug /stay?near= understands (a `venues` slug, or
+   * iowa-state-fairgrounds). When given, the card ends with a "See all hotels
+   * near X" link to the full distance-sorted list (plan-stay WP2 item 7).
+   */
+  nearSlug?: string | null;
 }
 
 /**
@@ -19,7 +25,7 @@ interface NearbyHotelsProps {
  * walkable. Renders nothing when there is no origin or no hotel in range,
  * so an empty card never ships to a crawler.
  */
-export function NearbyHotels({ latitude, longitude, placeName, limit = 5 }: NearbyHotelsProps) {
+export function NearbyHotels({ latitude, longitude, placeName, limit = 5, nearSlug }: NearbyHotelsProps) {
   const { data: hotels } = useHotelPins();
   const near = nearby({ latitude, longitude }, hotels ?? [], { limit });
   if (near.length === 0) return null;
@@ -46,6 +52,14 @@ export function NearbyHotels({ latitude, longitude, placeName, limit = 5 }: Near
         <p className="mt-2 text-xs text-muted-foreground">
           Straight-line distance, within {NEARBY_MILES} miles. Check the route before you walk it.
         </p>
+        {nearSlug && (
+          <Link
+            to={`/stay?near=${encodeURIComponent(nearSlug)}`}
+            className="mt-1 inline-flex min-h-11 items-center text-sm font-medium text-primary hover:underline"
+          >
+            See all hotels near {placeName}
+          </Link>
+        )}
       </CardContent>
     </Card>
   );

@@ -1,148 +1,128 @@
-import React, { useState, useEffect, useMemo } from "react";
+import { useMemo } from "react";
 import { Link } from "react-router-dom";
-import { createLogger } from '@/lib/logger';
-import { supabase } from "@/integrations/supabase/client";
-import { SpriteIcon } from "@/components/ui/SpriteIcon";
-
-const log = createLogger('DateNightEvents');
+import { Heart } from "lucide-react";
 import Header from "@/components/Header";
 import Footer from "@/components/Footer";
 import { FAQSection } from "@/components/FAQSection";
 import { SocialEventCard } from "@/components/SocialEventCard";
-import { useBatchEventSocial } from "@/hooks/useBatchEventSocial";
 import EnhancedLocalSEO from "@/components/EnhancedLocalSEO";
 import { EventListJsonLd } from "@/components/schema/EventListJsonLd";
 import RelatedContent from "@/components/RelatedContent";
+import { ListFreshness } from "@/components/ListFreshness";
 import { Card, CardContent } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
-import { Heart } from "lucide-react";
-import { getCanonicalUrl } from "@/lib/brandConfig";
 import { Breadcrumbs } from "@/components/ui/breadcrumbs";
-import { useReloadableFetch } from "@/hooks/useReloadableFetch";
+import { SpriteIcon } from "@/components/ui/SpriteIcon";
 import { ErrorState } from "@/components/ui/error-state";
+import { SkeletonGroup } from "@/components/ui/skeleton";
+import { useBatchEventSocial } from "@/hooks/useBatchEventSocial";
+import { useUrlFilters } from "@/hooks/useUrlFilters";
+import {
+  useEventLanding,
+  countFree,
+  countLabel,
+  isEveningStart,
+  DATE_NIGHT_FILTER,
+  type LandingEvent,
+} from "@/hooks/useEventLanding";
+import { BRAND, getCanonicalUrl } from "@/lib/brandConfig";
+import { formatCount } from "@/lib/pluralize";
+import { EVENTS_UPDATE_ANSWER } from "@/content/eventsCopy";
 
-interface EventItem {
-  id: string;
-  title: string;
-  date: string;
-  location: string;
-  venue: string;
-  price: string;
-  category: string;
-  enhanced_description: string;
-  original_description: string;
-  image_url: string;
-  event_start_utc: string;
-}
+const FETCH_LIMIT = 100;
+
+/**
+ * WEB-PERF-027. Uncapped, this page filled its limit(100) and weighed 756 KB
+ * of prerendered HTML with 734 inline SVGs, 8x the main hub; it was also the
+ * page that most often lost the prerenderer's Helmet-commit race. Capped to
+ * match /events.
+ */
+const VISIBLE_EVENT_LIMIT = 40;
+
+const EMPTY: LandingEvent[] = [];
+
+/** `?time=all` shows every time; the default (no param) is evening only. */
+const TIME_PARAM = "time";
+const EVENING = "evening";
+const ALL_TIMES = "all";
 
 export default function DateNightEvents() {
-  const [events, setEvents] = useState<EventItem[]>([]);
-  const [isLoading, setIsLoading] = useState(true);
-  const { error: loadError, setError: setLoadError, reloadKey, retry } = useReloadableFetch();
-  const [eveningOnly, setEveningOnly] = useState(true);
+  const { getStr, setParam } = useUrlFilters();
+  const eveningOnly = getStr(TIME_PARAM, EVENING) !== ALL_TIMES;
 
-  useEffect(() => {
-    const fetchDateNightEvents = async () => {
-      try {
-        setIsLoading(true);
-        const now = new Date().toISOString();
+  /**
+   * WEB-SEO-031: this was a useState/useEffect fetch, which PrerenderSignal
+   * cannot see, so the prerendered page was a skeleton. It is a TanStack query
+   * now. The filter is DATE_NIGHT_FILTER: canonical categories plus
+   * word-boundary title matches, with the bare "night" match removed.
+   */
+  const {
+    data: events = EMPTY,
+    isLoading,
+    error: loadError,
+    refetch,
+  } = useEventLanding({ key: { landing: "date-night" }, or: DATE_NIGHT_FILTER, limit: FETCH_LIMIT });
 
-        // Filter for date-night-friendly categories
-        const { data, error } = await supabase
-          .from("events")
-          .select("id, title, date, location, venue, price, category, enhanced_description, original_description, image_url, event_start_utc")
-          .gte("date", now)
-          .or("category.in.(Music,Performing Arts,Nightlife,Food & Drink,Arts & Culture),title.ilike.%concert%,title.ilike.%wine%,title.ilike.%dinner%,title.ilike.%night%,title.ilike.%live music%,title.ilike.%comedy%")
-          .order("date", { ascending: true })
-          .limit(100);
-
-        if (error) {
-          log.error('fetchDateNightEvents', 'Error fetching date night events', { error });
-          setLoadError(error);
-          setEvents([]);
-        } else {
-          setLoadError(null);
-          setEvents(data || []);
-        }
-      } catch (error) {
-        log.error('fetchDateNightEvents', 'Unexpected error in fetchDateNightEvents', { error });
-        setLoadError(error);
-        setEvents([]);
-      } finally {
-        setIsLoading(false);
-      }
-    };
-
-    fetchDateNightEvents();
-  }, [reloadKey]);
-
-  // WEB-PERF-027. This page has no render cap, and unlike its siblings it
-  // actually fills the query's limit(100): the .or() filter above spans five
-  // categories plus six title patterns, where /events/free and /events/kids
-  // match ~10 rows each. Measured on a clean build, dist/**/index.html:
-  //
-  //   /events/date-night  756,150 bytes  734 inline <svg>
-  //   /events             378,718        317   <- the MAIN hub, 40 cards
-  //   /events/free         91,283         53
-  //
-  // 8x the main hub, for a landing page. It is also the page that most reliably
-  // loses the prerenderer's Helmet-commit race, which fits that file's own note
-  // that the heaviest page loses first — so the weight was costing this page
-  // its canonical and its JSON-LD, not just bytes.
-  //
-  // Capped to match /events rather than to match the thin siblings: they are
-  // small because they have less inventory, not because they are better built,
-  // so their byte counts are the wrong target.
-  const matchingEvents = eveningOnly
-    ? (events || []).filter(event => {
-        const eventDate = new Date(event.event_start_utc || event.date);
-        const hour = eventDate.getHours();
-        return hour >= 17 || hour < 2; // 5 PM to 2 AM
-      })
-    : (events || []);
-
-  const VISIBLE_EVENT_LIMIT = 40;
-  const dateEvents = matchingEvents.slice(0, VISIBLE_EVENT_LIMIT);
+  /**
+   * "Evening" is read in Central (isEveningStart), not in the browser's zone:
+   * getHours() put a 7:30 PM show at 5:30 PM for a reader in Los Angeles and
+   * the prerenderer ran in UTC. Rows with no start time are not evening rows.
+   */
+  const matchingEvents = useMemo(
+    () => (eveningOnly ? events.filter(isEveningStart) : events),
+    [events, eveningOnly]
+  );
+  const dateEvents = useMemo(() => matchingEvents.slice(0, VISIBLE_EVENT_LIMIT), [matchingEvents]);
   const hiddenEventCount = matchingEvents.length - dateEvents.length;
 
-  const pageTitle = "Date Night Events in Des Moines | Des Moines Insider";
-  const pageDescription = `Find ${matchingEvents.length}+ date night events in Des Moines: live music, wine tastings, dinner shows and evening entertainment for two.`;
+  const eveningCount = useMemo(() => events.filter(isEveningStart).length, [events]);
+  const venueCount = useMemo(
+    () => new Set(events.map((e) => (e.venue || "").trim()).filter(Boolean)).size,
+    [events]
+  );
+
+  const pageTitle = `Date Night Events in Des Moines | ${BRAND.name}`;
+  const pageDescription =
+    "Date night events in Des Moines: live music, comedy, wine tastings, dinner events and other evenings out, with times in Central and venues on every listing.";
 
   const breadcrumbs = [
     { name: "Events", url: "/events" },
     { name: "Date Night", url: "/events/date-night" },
   ];
 
+  // Every answer describes this page. The old answers credited "Des Moines
+  // Tourism" and "Des Moines Cityview" with figures that have no source here,
+  // and quoted budgets and venue details nobody checked. Static on purpose
+  // (WEB-SEO-008).
   const faqData = [
     {
-      question: "What are the best date night activities in Des Moines?",
-      answer: `Des Moines offers date-worthy events including live music at venues like Wooly's and Hoyt Sherman Place, wine tastings, comedy shows, and dinner theaters. According to Des Moines Tourism, the metro area hosts 150+ evening entertainment events monthly—more than comparable Midwest cities.`,
+      question: "What counts as a date night event here?",
+      answer:
+        "Music, comedy and arts events, plus events whose titles mention concerts, live music, wine, tastings, dinner, comedy or jazz.",
     },
     {
-      question: "Where can couples go for romantic dates in Des Moines?",
-      answer: "Top romantic spots include: East Village (walkable dining and wine bars), Western Gateway Park (sunset concerts), Des Moines Social Club (rooftop events), Court Avenue (nightlife district), and Valley Junction (boutiques and bistros). For special occasions, try Orchestral concerts at the Des Moines Civic Center.",
+      question: "What does Evening only show?",
+      answer:
+        "Events that start between 5 PM and 2 AM, Central time. Events without a listed start time are left out of that view; switch to All times to see them.",
     },
     {
-      question: "What's a good budget for date night in Des Moines?",
-      answer: "Date nights in Des Moines range from free (outdoor concerts, art walks) to premium ($150+ for dinner and show). Typical dates: dinner + movie ($60-80), concert + drinks ($50-100), comedy show + appetizers ($40-60). Many venues offer happy hour specials and discount nights.",
+      question: "Are there free date night events?",
+      answer:
+        "Some. Events whose listed price says free are marked Free on their cards. An event with no listed price says so rather than being counted as free.",
     },
     {
-      question: "Are there unique date ideas in Des Moines?",
-      answer: "Unique Des Moines dates include: Food truck tours at the Downtown Farmers Market, kayaking on the Des Moines River, mixology classes at local distilleries, painting classes with wine, escape rooms downtown, and seasonal activities like ice skating at Brenton Skating Plaza or outdoor movie nights.",
+      question: "Where can we eat before the show?",
+      answer:
+        "The Restaurants Open Now page shows which restaurants are open at the moment, and each event page names its venue.",
     },
     {
-      question: "What time do date night events start in Des Moines?",
-      answer: "Most evening events start between 5-8 PM. Happy hours run 4-6 PM. Live music typically starts 7-9 PM. Comedy shows often have 7 PM and 9:30 PM sets. Dinner theaters begin around 6:30 PM. Check specific event times for planning.",
+      question: "How often is this list updated?",
+      answer: EVENTS_UPDATE_ANSWER,
     },
   ];
 
-  // WEB-PERF-030. SocialEventCard falls back to useEventSocial(event.id)
-  // when no batch data is passed, and that fallback ran three queries and
-  // opened three realtime channels PER CARD. This page renders up to
-  // dateEvents.length of them, so one anonymous visit could issue hundreds of
-  // requests and sockets for a preview nobody can interact with. One batch
-  // query per table replaces all of it.
-  const batchSocialIds = useMemo(() => (dateEvents ?? []).map((e) => e.id), [dateEvents]);
+  // WEB-PERF-030: one batch query per table for the rendered cards.
+  const batchSocialIds = useMemo(() => dateEvents.map((e) => e.id), [dateEvents]);
   const { data: batchSocialData, isPending: batchSocialPending } =
     useBatchEventSocial(batchSocialIds);
 
@@ -154,12 +134,6 @@ export default function DateNightEvents() {
         canonicalUrl={getCanonicalUrl("/events/date-night")}
         pageType="website"
         breadcrumbs={breadcrumbs}
-        // Withheld until the data lands (WEB-SEO-008). Every answer here
-        // interpolates a live count, so the loading render and the loaded
-        // render produce DIFFERENT FAQPage JSON - and react-helmet-async
-        // appends script children that differ rather than replacing them, so
-        // the prerender captured both. Production served two FAQPage blocks
-        // on this page, one saying "0 events" and one saying "8 events".
         faqData={faqData}
         keywords={[
           "date night Des Moines",
@@ -174,6 +148,7 @@ export default function DateNightEvents() {
       />
       <EventListJsonLd
         events={dateEvents}
+        maxItems={VISIBLE_EVENT_LIMIT}
         listName="Date Night Events in Des Moines, Iowa"
         listDescription={pageDescription}
         listUrl={getCanonicalUrl('/events/date-night')}
@@ -190,128 +165,102 @@ export default function DateNightEvents() {
             { label: "Date Night" },
           ]}
         />
-        {/* Hero Section - GEO Optimized */}
         <div className="mb-8">
           <div className="flex items-center gap-2 mb-4">
-            <Heart className="h-6 w-6 text-primary" />
+            <Heart className="h-6 w-6 text-primary" aria-hidden="true" />
             <h1 className="text-3xl font-bold">Date Night Events in Des Moines</h1>
           </div>
 
-          <div className="flex items-center gap-4 text-muted-foreground mb-4">
-            <div className="flex items-center gap-1">
-              <SpriteIcon name="sparkles" className="h-4 w-4" />
-              <span>Romantic Couples Activities</span>
-            </div>
-            <div className="flex items-center gap-1">
-              <SpriteIcon name="map-pin" className="h-4 w-4" />
-              <span>Des Moines Metro Area</span>
-            </div>
-          </div>
+          <ListFreshness rows={events} className="mb-4" />
 
           <p className="text-lg text-muted-foreground max-w-3xl mb-4">
-            <strong>Discover {matchingEvents.length}+ romantic date night events in Des Moines perfect for couples.</strong> According to Des Moines Cityview, the metro area offers more evening entertainment options per capita than comparable Midwest cities, with 150+ monthly events ideal for dates. From intimate concerts to wine tastings, find the perfect couples activity.
-          </p>
-
-          <p className="text-base text-muted-foreground max-w-3xl">
-            Our date night guide is curated specifically for couples, featuring evening events (5 PM and later), romantic venues, and adult-oriented entertainment. Updated daily with new concerts, shows, and special experiences.
+            Live music, comedy, arts, wine and dinner events in Des Moines and the
+            suburbs. The list starts with evening events, 5 PM or later Central
+            time; switch to All times for matinees and daytime tastings.
           </p>
         </div>
 
-        {/* Quick Stats */}
-        <Card className="mb-8 bg-gradient-to-r from-rose-50 to-pink-50 dark:from-rose-950 dark:to-pink-950">
+        <Card className="mb-8 bg-primary/5 border-primary/15 shadow-none">
           <CardContent className="pt-6">
             <div className="grid grid-cols-2 md:grid-cols-4 gap-4 text-center">
               <div>
                 <div className="text-2xl font-bold text-primary">
-                  {matchingEvents.length}+
+                  {countLabel(events.length, FETCH_LIMIT)}
                 </div>
-                <div className="text-sm text-muted-foreground">
-                  Date Events
-                </div>
+                <div className="text-sm text-muted-foreground">Date Night Events</div>
               </div>
               <div>
-                <div className="text-2xl font-bold text-primary">
-                  Evening
-                </div>
-                <div className="text-sm text-muted-foreground">5 PM+ Start</div>
+                <div className="text-2xl font-bold text-primary">{eveningCount}</div>
+                <div className="text-sm text-muted-foreground">Evening Starts</div>
               </div>
               <div>
-                <div className="text-2xl font-bold text-primary">
-                  30+
-                </div>
+                <div className="text-2xl font-bold text-primary">{venueCount}</div>
                 <div className="text-sm text-muted-foreground">Venues</div>
               </div>
               <div>
-                <div className="text-2xl font-bold text-primary">
-                  All Budgets
-                </div>
-                <div className="text-sm text-muted-foreground">$20-$150+</div>
+                <div className="text-2xl font-bold text-primary">{countFree(events)}</div>
+                <div className="text-sm text-muted-foreground">Listed as Free</div>
               </div>
             </div>
           </CardContent>
         </Card>
 
-        {/* Date Night Venues - GEO Content */}
+        {/* Links to pages that answer "what else tonight" from data. This was
+            a "Top Date Night Venues" card with capacities, founding years and
+            quotes credited to the Register and Cityview, none sourced. */}
         <Card className="mb-8">
           <CardContent className="pt-6">
-            <h2 className="text-xl font-semibold mb-4">Top Date Night Venues in Des Moines</h2>
+            <h2 className="text-xl font-semibold mb-4">Plan the Rest of the Night</h2>
             <div className="grid md:grid-cols-2 gap-4">
-              <div className="p-4 bg-muted rounded-lg">
-                <h3 className="font-semibold mb-2">🎭 Des Moines Civic Center</h3>
-                <p className="text-sm text-muted-foreground">
-                  Broadway shows, concerts, ballet. Opened 1979, hosts 200+ annual performances.
-                  Capacity 2,744. "Premier performing arts venue in Iowa" - Des Moines Register. Pre-show dining nearby.
-                </p>
-              </div>
-              <div className="p-4 bg-muted rounded-lg">
-                <h3 className="font-semibold mb-2">🎵 Hoyt Sherman Place</h3>
-                <p className="text-sm text-muted-foreground">
-                  Historic theater (built 1877) hosting concerts and comedy. Intimate 1,200-seat venue.
-                  Located in Sherman Hill neighborhood. Full bar, vintage ambiance perfect for dates.
-                </p>
-              </div>
-              <div className="p-4 bg-muted rounded-lg">
-                <h3 className="font-semibold mb-2">🍷 East Village Wine Bars</h3>
-                <p className="text-sm text-muted-foreground">
-                  Concentrated wine bar district: Proof, Django, bubba. Walkable area with 10+ restaurants.
-                  "Best date night neighborhood" - Cityview. Live jazz on weekends.
-                </p>
-              </div>
-              <div className="p-4 bg-muted rounded-lg">
-                <h3 className="font-semibold mb-2">🌃 Des Moines Social Club</h3>
-                <p className="text-sm text-muted-foreground">
-                  Rooftop venue, art galleries, live music. Located in historic Firehouse No. 1 (1907).
-                  Hosts First Friday art walks. Full restaurant and bar, unique atmosphere.
-                </p>
-              </div>
+              <Link to="/restaurants/open-now" className="p-4 bg-muted rounded-lg hover:bg-muted/70">
+                <h3 className="font-semibold mb-1">Restaurants open now</h3>
+                <p className="text-sm text-muted-foreground">Somewhere for dinner before the show or a drink after.</p>
+              </Link>
+              <Link to="/events/this-weekend" className="p-4 bg-muted rounded-lg hover:bg-muted/70">
+                <h3 className="font-semibold mb-1">This weekend</h3>
+                <p className="text-sm text-muted-foreground">Everything on the calendar from Friday through Sunday.</p>
+              </Link>
+              <Link to="/events/free" className="p-4 bg-muted rounded-lg hover:bg-muted/70">
+                <h3 className="font-semibold mb-1">Free events</h3>
+                <p className="text-sm text-muted-foreground">Events whose admission is listed as free.</p>
+              </Link>
+              <Link to="/attractions" className="p-4 bg-muted rounded-lg hover:bg-muted/70">
+                <h3 className="font-semibold mb-1">Attractions</h3>
+                <p className="text-sm text-muted-foreground">Museums, gardens and landmarks, with hours from each listing.</p>
+              </Link>
             </div>
           </CardContent>
         </Card>
 
-        {/* Time Filter Toggle */}
-        <div className="flex items-center gap-3 mb-6">
+        {/* Backed by the URL so the choice survives Back and can be shared. */}
+        <div role="group" aria-label="Start time" className="flex flex-wrap items-center gap-3 mb-6">
           <Button
+            type="button"
             variant={eveningOnly ? "default" : "outline"}
             size="sm"
-            onClick={() => setEveningOnly(true)}
+            className="min-h-11"
+            aria-pressed={eveningOnly}
+            onClick={() => setParam(TIME_PARAM, EVENING, { def: EVENING })}
           >
             <SpriteIcon name="clock" className="h-4 w-4 mr-1" />
-            Evening Only (5 PM+)
+            Evening only (5 PM+)
           </Button>
           <Button
+            type="button"
             variant={!eveningOnly ? "default" : "outline"}
             size="sm"
-            onClick={() => setEveningOnly(false)}
+            className="min-h-11"
+            aria-pressed={!eveningOnly}
+            onClick={() => setParam(TIME_PARAM, ALL_TIMES, { def: EVENING })}
           >
-            All Times
+            All times
           </Button>
         </div>
 
-        {/* Events List */}
         {!isLoading && loadError ? (
-          <ErrorState error={loadError} onRetry={retry} />
+          <ErrorState error={loadError} onRetry={() => void refetch()} />
         ) : isLoading ? (
-          <div className="grid gap-6 md:grid-cols-2 lg:grid-cols-3">
+          <SkeletonGroup label="Loading date night events..." className="grid gap-6 md:grid-cols-2 lg:grid-cols-3">
             {[...Array(6)].map((_, i) => (
               <div key={i} className="animate-pulse">
                 <div className="h-48 bg-muted rounded-lg mb-4"></div>
@@ -319,7 +268,7 @@ export default function DateNightEvents() {
                 <div className="h-4 bg-muted rounded w-1/2"></div>
               </div>
             ))}
-          </div>
+          </SkeletonGroup>
         ) : matchingEvents.length > 0 ? (
           <>
             <h2 className="text-2xl font-bold mb-6">
@@ -342,11 +291,11 @@ export default function DateNightEvents() {
               // "we only have 40 date-night events" becomes received wisdom.
               <div className="mt-8 text-center">
                 <p className="text-muted-foreground mb-3">
-                  Showing the {VISIBLE_EVENT_LIMIT} soonest of {matchingEvents.length} date night
-                  events.
+                  Showing the {VISIBLE_EVENT_LIMIT} soonest of{" "}
+                  {formatCount(matchingEvents.length, "date night event")}.
                 </p>
                 <Button asChild variant="outline">
-                  <Link to="/events?category=Music">Browse all events</Link>
+                  <Link to="/events?category=Music">Browse all music events</Link>
                 </Button>
               </div>
             )}
@@ -355,59 +304,54 @@ export default function DateNightEvents() {
           <Card>
             <CardContent className="pt-6 text-center">
               <SpriteIcon name="calendar" className="h-12 w-12 mx-auto mb-4 text-muted-foreground" />
-              <h3 className="text-lg font-semibold mb-2">No Date Night Events Found</h3>
+              <h2 className="text-lg font-semibold mb-2">No Date Night Events Found</h2>
               <p className="text-muted-foreground mb-4">
-                Check back soon! We add new romantic events daily.
+                {eveningOnly && events.length > 0
+                  ? "Nothing with a listed evening start right now. Try All times."
+                  : "Nothing matches right now. New events are collected daily."}
               </p>
             </CardContent>
           </Card>
         )}
 
-        {/* Date Night Tips - GEO Content */}
+        {/* Advice that holds whatever the venue. The old tips named specific
+            classes, ramps and rates nobody here checked. */}
         <Card className="mt-8">
           <CardContent className="pt-6">
-            <h2 className="text-xl font-semibold mb-4">Planning the Perfect Date Night in Des Moines</h2>
+            <h2 className="text-xl font-semibold mb-4">Planning a Date Night in Des Moines</h2>
             <div className="grid md:grid-cols-2 gap-6">
               <div>
-                <h3 className="font-semibold mb-2">🚗 Parking & Transportation</h3>
+                <h3 className="font-semibold mb-2">Work back from the start time</h3>
                 <p className="text-sm text-muted-foreground">
-                  Downtown parking ramps offer evening rates ($5-10). Valet available at upscale restaurants.
-                  Consider rideshare for wine tastings. Court Avenue has street parking free after 6 PM weekends.
+                  Every card shows the start time in Central. Leave time for dinner and parking; <Link to="/restaurants/open-now" className="text-primary hover:underline font-semibold">restaurants open now</Link> shows what is serving.
                 </p>
               </div>
               <div>
-                <h3 className="font-semibold mb-2">🍽️ Dinner + Show Combos</h3>
+                <h3 className="font-semibold mb-2">Check the event page</h3>
                 <p className="text-sm text-muted-foreground">
-                  Popular pairings: Dinner at Centro + Civic Center show, East Village wine + live music at Django,
-                  Court Avenue bistro + comedy at Funny Bone. Book dinner 6-6:30 PM for 8 PM shows. Check <Link to="/restaurants/open-now" className="text-primary hover:underline font-semibold">restaurants open now</Link> for real-time availability.
+                  Prices, age limits and door times are on the organizer's page, which each event links to.
                 </p>
               </div>
               <div>
-                <h3 className="font-semibold mb-2">💡 Unique Date Ideas</h3>
+                <h3 className="font-semibold mb-2">Think past Saturday</h3>
                 <p className="text-sm text-muted-foreground">
-                  Try: Cocktail class at Buzzard Billy's, First Friday art walk (free), rooftop yoga at Social Club,
-                  kayaking on Des Moines River, escape room downtown, or ghost tour in Sherman Hill.
+                  The <Link to="/events/this-weekend" className="text-primary hover:underline">this weekend</Link> list runs Friday through Sunday, and the full <Link to="/events" className="text-primary hover:underline">events calendar</Link> covers weeknights.
                 </p>
               </div>
               <div>
-                <h3 className="font-semibold mb-2">📅 Best Days for Dates</h3>
+                <h3 className="font-semibold mb-2">Keep it free</h3>
                 <p className="text-sm text-muted-foreground">
-                  Friday/Saturday have most events but larger crowds. Thursdays offer happy hour deals and smaller
-                  crowds. First Fridays feature art walks. Sunday brunches popular for daytime dates.
+                  See <Link to="/events/free" className="text-primary hover:underline">free events</Link> for evenings that cost nothing to get in.
                 </p>
               </div>
             </div>
           </CardContent>
         </Card>
 
-        {/* SEO-003: the FAQ is rendered here, not only declared in the head.
-            This page used to pass faqData to EnhancedLocalSEO, which emitted a
-            FAQPage block into <Helmet> and nothing else - so it declared an FAQ
-            that no visitor could see, which Google's FAQPage guidance does not
-            allow. FAQSection renders the questions and emits the single block. */}
+        {/* SEO-003: FAQSection renders the questions and emits the single
+            FAQPage block. */}
         <FAQSection faqs={faqData} />
 
-        {/* Related Content for Internal Linking */}
         <RelatedContent
           currentPath="/events/date-night"
           title="More Des Moines Experiences"

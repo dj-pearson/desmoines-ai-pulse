@@ -184,6 +184,7 @@ const CARD_IMAGE_ROUTES = new Set([
   '/events/altoona',
   '/events/clive',
   '/events/windsor-heights',
+  '/events/waukee',
   '/restaurants',
   '/restaurants/open-now',
   '/restaurants/dietary',

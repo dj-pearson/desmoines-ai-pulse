@@ -74,7 +74,42 @@ export default defineConfig({
   // builds with placeholder VITE_SUPABASE_* so no row ever arrives. They do not
   // need a backend, they need rows - tests/support/fixtureBackend.ts answers
   // PostgREST from fixtures. 45/45 against the production build.
-  testMatch: /(search-filters|url-filter-state|sticky-filter-chips|route-smoke|cookie-consent|backend-down|touch-targets|page-headings|search-request-loop|request-budget|turnstile-inert|subscription-checkout|advertise-success-receipt|submission-live-link|campaign-self-service)\.spec\.ts/,
+  //
+  // The home-* specs and shell-mobile joined with the Home page plan
+  // (docs/page-plans/home.md). Each runs on fixtureBackend, so none needs a
+  // live backend: search (one input, /search?q=, result hrefs), the first-view
+  // request budget, the For You/recently viewed rails' layout stability, the
+  // Tonight rail, the dashboard's hrefs and contrast, the quick view, and the
+  // mobile shell's BackToTop and menu close target.
+  //
+  // The events-* specs and event-detail joined with the Events page plan
+  // (docs/page-plans/events.md), also on fixtureBackend: the hub's Central-time
+  // request bounds and free filter, paging and sponsored order, the near-me
+  // slugs and visibility, and the event page's retry state and UUID redirect.
+  //
+  // restaurants-hub, restaurants-open-now and restaurant-detail joined with the
+  // Eat & Drink plan (docs/page-plans/eat-drink.md), on fixtureBackend: hub
+  // paging hrefs and counts, the sponsored query carrying the visitor's
+  // filters, ItemList urls; open-now read in Central time from any browser
+  // zone; and the detail page's unsafe-link, closed, merged and retry states.
+  //
+  // The Explore specs joined with the Explore plan (docs/page-plans/explore.md),
+  // on fixtureBackend plus per-spec page.route overrides: the things-to-do hub's
+  // pSEO fallbacks and error reporting (log-error fires only in a PROD build),
+  // the map's Leaflet CSS, visibility filters and URL state, the attractions
+  // hub's search sanitising and hours, playground facets and nearby, one events
+  // request per music/sports hub, the outdoors metro count and filters, and the
+  // deals window, schedule and claim failure.
+  //
+  // The Plan & Stay specs joined with that plan (docs/page-plans/plan-stay.md),
+  // on fixtureBackend plus per-spec page.route overrides: /stay's three empty
+  // states, paging, ?near= ordering and unsafe booking links; the trip
+  // planner's date window with the AI section paused; the visitor guide,
+  // group travel and getting-around pages with no unsourced prices; articles
+  // paging and AI disclosure; Best Of voting as one upsert; What's New chips
+  // and future rows; and the weekend page's per-day groups. getting-around
+  // was a lane orphan before this and leaves the baseline with it.
+  testMatch: /(search-filters|url-filter-state|sticky-filter-chips|route-smoke|cookie-consent|backend-down|touch-targets|page-headings|search-request-loop|request-budget|turnstile-inert|subscription-checkout|advertise-success-receipt|submission-live-link|campaign-self-service|home-search|home-request-budget|home-rails-cls|home-tonight|home-dashboard|home-quick-view|shell-mobile|events-hub-dates|events-hub-list|events-near-me|event-detail|restaurants-hub|restaurants-open-now|restaurant-detail|things-to-do-hub|discover-map|attractions-hub|playgrounds-hub|music-sports-hubs|outdoors-hub|deals|stay|trip-planner-window|visitors-guide|getting-around|articles|best-of-voting|whats-new|events-weekend-days)\.spec\.ts/,
   fullyParallel: true,
   forbidOnly: !!process.env.CI,
   retries: process.env.CI ? 2 : 0,

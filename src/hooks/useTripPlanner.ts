@@ -4,6 +4,7 @@ import { supabase } from '@/integrations/supabase/client';
 import { useAuth } from './useAuth';
 import { toast } from 'sonner';
 import { createLogger } from '@/lib/logger';
+import { handleError } from '@/lib/errorHandler';
 import { fromUnknownTable } from "@/integrations/supabase/unknownTable";
 
 const log = createLogger('useTripPlanner');
@@ -217,8 +218,11 @@ export function useTripPlanner() {
     // @ts-ignore -- RPC function not in generated types yet
     const { data: itemsData, error: itemsError } = await supabase.rpc('get_trip_itinerary', { p_trip_id: tripId });
 
+    // plan-stay WP1 item 4: an items error used to come back as `items: []`,
+    // which the page then rendered as "No itinerary items found" for a trip
+    // whose stops simply failed to load. Let the caller show the error.
     if (itemsError) {
-      log.error('fetchTripDetails', 'Error fetching trip items', { error: itemsError.message });
+      throw new Error(`Couldn't load this trip's stops: ${itemsError.message}`);
     }
 
     return {
@@ -403,11 +407,18 @@ export function useTripPlanner() {
       if (error) throw error;
       return (data as unknown as { share_code: string }).share_code;
     },
-    onSuccess: (shareCode) => {
+    onSuccess: async (shareCode) => {
       const shareUrl = `${window.location.origin}/trips/shared/${shareCode}`;
-      navigator.clipboard.writeText(shareUrl);
-      toast.success('Share link copied to clipboard!');
       queryClient.invalidateQueries({ queryKey: ['trip-plans', user?.id] });
+      // writeText rejects without focus or permission; the old un-awaited call
+      // toasted "copied" either way (plan-stay WP1 item 4).
+      try {
+        await navigator.clipboard.writeText(shareUrl);
+        toast.success('Share link copied to clipboard!');
+      } catch (error) {
+        handleError(error, { component: 'useTripPlanner', action: 'copyShareLink' });
+        toast.message(`Share link: ${shareUrl}`);
+      }
     },
     onError: (error: Error) => {
       toast.error(`Failed to share trip: ${error.message}`);

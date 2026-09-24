@@ -48,7 +48,7 @@ export function DesktopNav() {
                             to={item.href}
                             className={cn(
                               "block select-none rounded-md p-3 leading-none no-underline outline-none transition-colors hover:bg-accent hover:text-accent-foreground focus:bg-accent focus:text-accent-foreground",
-                              item.featured && "bg-primary/5 border-l-2 border-primary",
+                              item.featured && "bg-primary/5",
                               isActivePath(item.href) && "bg-accent/50"
                             )}
                             onMouseEnter={() => prefetchRoute(item.href)}
@@ -56,7 +56,7 @@ export function DesktopNav() {
                           >
                             <div className="flex items-center gap-2">
                               <ItemIcon className="h-4 w-4" aria-hidden="true" />
-                              <div className="text-sm font-medium leading-none">
+                              <div className={cn("text-sm leading-none", item.featured ? "font-semibold" : "font-medium")}>
                                 {item.label}
                               </div>
                               {item.priority && (

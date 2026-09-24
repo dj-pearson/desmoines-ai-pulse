@@ -1,116 +1,211 @@
 /**
- * ThingsToDoHub — Hub page for /things-to-do
+ * ThingsToDoHub - the /things-to-do Explore landing.
  *
- * Serves as the entry point for the entire pSEO "things-to-do" content tree.
- * Lets readers narrow down by area, activity type, audience, or time.
+ * Answers "what should I do today or this weekend" on the first phone screen,
+ * links every Explore section, and does not change shape after load: every
+ * card above "More guides" has a fixed destination, and the published-pSEO
+ * query can only upgrade an href (see src/lib/hubLinks.ts).
  */
 
+import { lazy, Suspense, useEffect } from 'react';
 import { Link } from 'react-router-dom';
+import { CalendarDays, ChevronRight, Clock, Leaf, Snowflake, Sun, Flower2, FerrisWheel } from 'lucide-react';
 import Header from '@/components/Header';
 import Footer from '@/components/Footer';
 import SEOHead from '@/components/SEOHead';
-import { getCanonicalUrl } from '@/lib/brandConfig';
-import { Users, Heart, DollarSign, TreePine, Music, Utensils, Camera, Baby, Sunset, CalendarDays, Clock, Snowflake, Sun, Leaf, Flower2, ChevronRight } from "lucide-react";
-import { Badge } from '@/components/ui/badge';
-import { SpriteIcon } from "@/components/ui/SpriteIcon";
+import { useEventLanding, countFree, countLabel } from '@/hooks/useEventLanding';
+import { useSeasonalGuides } from '@/hooks/useSeasonalGuides';
+import { useWeather } from '@/hooks/useWeather';
 import { usePseoPageSlugs } from '@/pseo/hooks/usePseoPage';
-import { resolveHubLink, type HubFallback } from '@/lib/hubLinks';
+import { getCanonicalUrl } from '@/lib/brandConfig';
+import { handleError, ErrorSeverity } from '@/lib/errorHandler';
+import {
+  HUB_ACTIVITIES,
+  HUB_AREAS,
+  HUB_AUDIENCES,
+  HUB_EXPLORE_LINKS,
+  HUB_MORE_GUIDES,
+  HUB_PLAYGROUND_MAP_HREF,
+  HUB_WHEN_FIXED,
+  resolveFixedItem,
+  type FixedHubItem,
+} from '@/lib/hubLinks';
+import { currentSeason, isInLeadWindow, nextSeason, seasonHref, SEASON_LABEL, type Season } from '@/lib/hubSeason';
+import { getAnnualEvent } from '@/lib/annualEvents';
+import { centralDateOf } from '@/lib/timezone';
+import type { LucideIcon } from 'lucide-react';
 
-// ---------------------------------------------------------------------------
-// Data
-// ---------------------------------------------------------------------------
+// TonightRail is the same fixed-height strip the homepage uses. Loaded lazily
+// so the hub's own chunk stays a link directory; the fallback reserves the
+// rail's full height (py-6 + 44px heading row + mb-3 + 11.5rem strip = 18rem).
+const TonightRail = lazy(() => import('@/components/TonightRail').then((m) => ({ default: m.TonightRail })));
 
-const areas = [
-  { slug: 'downtown', name: 'Downtown', description: 'Skywalk dining, Court Ave nightlife, arts & culture', icon: '🏙️' },
-  { slug: 'east-village', fallback: { href: '/neighborhoods/east-village', description: 'East Village guide: events, dining and attractions' }, name: 'East Village', description: "DSM's trendiest neighborhood — boutiques, brunch & bars", icon: '✨' },
-  { slug: 'valley-junction', name: 'Valley Junction', description: 'Walkable historic district, antiques & local dining', icon: '🏘️' },
-  { slug: 'west-des-moines', fallback: { href: '/neighborhoods/west-des-moines', description: 'West Des Moines guide: events, dining and attractions' }, name: 'West Des Moines', description: 'Jordan Creek, local gems amid the suburbs', icon: '🛍️' },
-  { slug: 'ankeny', fallback: { href: '/neighborhoods/ankeny', description: 'Ankeny guide: events, dining and attractions' }, name: 'Ankeny', description: "Iowa's fastest-growing city — always something new", icon: '🚀' },
-  { slug: 'drake', name: 'Drake', description: 'Diverse dining, campus energy, hidden gems', icon: '🎓' },
-  { slug: 'beaverdale', name: 'Beaverdale', description: 'Neighborhood charm, local favorites, fall festival', icon: '🍂' },
-  { slug: 'ingersoll', name: 'Ingersoll', description: 'Restaurant row, coffee shops, walkable corridor', icon: '☕' },
-  { slug: 'urbandale', fallback: { href: '/neighborhoods/urbandale', description: 'Urbandale guide: events, dining and attractions' }, name: 'Urbandale', description: 'Living History Farms, parks & local dining', icon: '🌾' },
-  { slug: 'waukee', fallback: { href: '/neighborhoods/waukee', description: 'Waukee guide: events, dining and attractions' }, name: 'Waukee', description: 'Kettlestone district, Raccoon River Valley Trail', icon: '🌿' },
-  { slug: 'altoona', fallback: { href: '/neighborhoods/altoona', description: 'Altoona guide: events, dining and attractions' }, name: 'Altoona', description: 'Adventureland, Prairie Meadows, local eats', icon: '🎢' },
-  { slug: 'sherman-hill', name: 'Sherman Hill', description: 'Victorian architecture, historic walks', icon: '🏛️' },
-];
+/** Same key and cap as /events/this-weekend, so the two share one cache entry. */
+const WEEKEND_LIMIT = 500;
 
-// Eight audiences, eight surface tints with a matching border. The hue is the
-// only thing telling two otherwise identical cards apart at a glance, so it
-// stays; each tint is a -50 surface in light and a -950/30 in dark, both under
-// body text that keeps its own token (WEB-UX-034 AC2).
-const audiences = [
-  { slug: 'families', fallback: { href: '/events/kids', description: 'Upcoming kids and family events' }, name: 'For Families', description: 'Kid-friendly picks with stroller & age notes', icon: Baby, color: 'bg-blue-50 dark:bg-blue-950/30 border-blue-200 dark:border-blue-800' },
-  { slug: 'date-night', fallback: { href: '/events/date-night', description: 'Date night events across the metro' }, name: 'Date Night', description: 'Complete evening itineraries for couples', icon: Heart, color: 'bg-rose-50 dark:bg-rose-950/30 border-rose-200 dark:border-rose-800' },
-  { slug: 'foodies', fallback: { href: '/restaurants', description: 'The Des Moines restaurant guide' }, name: 'For Foodies', description: 'Dish-specific recs, chef stories, deep cuts', icon: Utensils, color: 'bg-orange-50 dark:bg-orange-950/30 border-orange-200 dark:border-orange-800' },
-  { slug: 'budget', fallback: { href: '/events/free', description: 'Every free event on the calendar' }, name: 'Budget-Friendly', description: 'Free events, happy hours, cheap eats', icon: DollarSign, color: 'bg-green-50 dark:bg-green-950/30 border-green-200 dark:border-green-800' },
-  { slug: 'tourists', fallback: { href: '/attractions', description: 'Museums, gardens, the zoo and landmarks' }, name: 'For Visitors', description: '48-hour itineraries & must-see essentials', icon: Camera, color: 'bg-purple-50 dark:bg-purple-950/30 border-purple-200 dark:border-purple-800' },
-  { slug: 'pet-friendly', name: 'Pet-Friendly', description: 'Dog-friendly patios, parks & hotels', icon: TreePine, color: 'bg-teal-50 dark:bg-teal-950/30 border-teal-200 dark:border-teal-800' },
-  { slug: 'groups', name: 'For Groups', description: 'Large groups, team building & party venues', icon: Users, color: 'bg-indigo-50 dark:bg-indigo-950/30 border-indigo-200 dark:border-indigo-800' },
-  { slug: 'couples', name: 'For Couples', description: 'Weekend getaways & shared experiences', icon: Sunset, color: 'bg-pink-50 dark:bg-pink-950/30 border-pink-200 dark:border-pink-800' },
-];
+const SEASON_ICON: Record<Season, LucideIcon> = {
+  spring: Flower2,
+  summer: Sun,
+  fall: Leaf,
+  winter: Snowflake,
+};
 
-const byTime = [
-  { slug: 'today', fallback: { href: '/events/today', description: 'Everything on the calendar today' }, name: 'Today', description: "What's happening right now", icon: Clock, badge: 'Live' },
-  { slug: 'this-weekend', fallback: { href: '/events/this-weekend', description: 'Friday through Sunday, every event' }, name: 'This Weekend', description: 'Friday–Sunday curated picks', icon: CalendarDays, badge: 'Popular' },
-  { slug: 'summer', fallback: { href: '/guides/summer-2026', description: 'The summer guide' }, name: 'This Summer', description: 'Outdoor concerts, State Fair & more', icon: Sun, badge: 'Seasonal' },
-  { slug: 'fall', fallback: { href: '/guides/fall-festivals', description: 'The fall festivals guide' }, name: 'Fall', description: 'Apple orchards, pumpkins & foliage', icon: Leaf, badge: 'Seasonal' },
-  { slug: 'winter', fallback: { href: '/guides/holiday-lights', description: 'The holiday lights guide' }, name: 'Winter', description: 'Holiday lights, indoor picks & cozy spots', icon: Snowflake, badge: 'Seasonal' },
-  { slug: 'spring', name: 'Spring', description: 'Patio season openers & garden blooms', icon: Flower2, badge: 'Seasonal' },
-];
+const SEASON_BLURB: Record<Season, string> = {
+  spring: 'Patio openers and garden blooms',
+  summer: 'Outdoor concerts, festivals and the pool',
+  fall: 'Orchards, pumpkins and foliage',
+  winter: 'Holiday lights and indoor picks',
+};
 
-const byCategory = [
-  { slug: 'live-music', fallback: { href: '/music', description: 'Concerts and live music across the metro' }, name: 'Live Music', icon: Music },
-  { slug: 'festivals', fallback: { href: '/guides', description: 'Seasonal and festival guides' }, name: 'Festivals', icon: CalendarDays },
-  { slug: 'arts-culture', fallback: { href: '/attractions' }, name: 'Arts & Culture', icon: Camera },
-  { slug: 'outdoors', fallback: { href: '/outdoors' }, name: 'Outdoors', icon: TreePine },
-  { slug: 'brunch', fallback: { href: '/restaurants' }, name: 'Brunch', icon: Utensils },
-  { slug: 'coffee', name: 'Coffee & Cafes', icon: Utensils },
-  { slug: 'museums', fallback: { href: '/attractions' }, name: 'Museums', icon: Camera },
-  { slug: 'parks', fallback: { href: '/playgrounds' }, name: 'Parks & Nature', icon: TreePine },
-];
+interface ResolvedCard {
+  key: string;
+  name: string;
+  href: string;
+  description?: string;
+}
 
-// ---------------------------------------------------------------------------
-// Component
-// ---------------------------------------------------------------------------
+function resolveAll(items: readonly FixedHubItem[], published: ReadonlySet<string>): ResolvedCard[] {
+  return items.map((item) => {
+    const link = resolveFixedItem(item, published);
+    return { key: item.key, name: item.name, href: link.href, description: link.description };
+  });
+}
+
+interface WhenCard extends ResolvedCard {
+  icon: LucideIcon;
+}
+
+const chipClass =
+  'inline-flex min-h-11 items-center gap-2 rounded-full border border-border bg-card px-4 text-sm font-medium text-foreground hover:bg-accent transition-colors';
+
+function SectionHeading({ id, title, sub }: { id: string; title: string; sub?: string }) {
+  return (
+    <div className="mb-4">
+      <h2 id={id} className="text-2xl font-bold tracking-tight">{title}</h2>
+      {sub && <p className="text-muted-foreground mt-1">{sub}</p>}
+    </div>
+  );
+}
+
+function WeekendLine() {
+  const { data, isLoading, isError } = useEventLanding({
+    key: { landing: 'this-weekend' },
+    window: 'this-weekend',
+    limit: WEEKEND_LIMIT,
+  });
+  const { weather, hasVerdict } = useWeather();
+
+  const events = data ?? [];
+  const free = countFree(events);
+
+  // Both lines have a fixed height so the counts arriving shift nothing.
+  return (
+    <div className="container mx-auto px-4 pb-2">
+      <p className="flex min-h-11 flex-wrap items-center gap-x-1 text-base text-foreground" aria-live="polite">
+        {isLoading ? (
+          <span className="h-4 w-56 rounded bg-muted animate-pulse motion-reduce:animate-none" aria-hidden="true" />
+        ) : isError || events.length === 0 ? (
+          <Link to="/events/this-weekend" className="font-medium underline underline-offset-4">
+            See what's on this weekend
+          </Link>
+        ) : (
+          <>
+            <Link to="/events/this-weekend" className="font-medium underline underline-offset-4">
+              {countLabel(events.length, WEEKEND_LIMIT)} events this weekend
+            </Link>
+            {free > 0 && (
+              <>
+                <span aria-hidden="true">,</span>
+                <Link to="/events/free" className="font-medium underline underline-offset-4">
+                  {free} free
+                </Link>
+              </>
+            )}
+          </>
+        )}
+      </p>
+      <p className="h-6 truncate text-sm text-muted-foreground">{hasVerdict ? weather.conditions : ''}</p>
+    </div>
+  );
+}
 
 export default function ThingsToDoHub() {
   const canonicalUrl = getCanonicalUrl('/things-to-do');
 
-  // SEO-012: link a pSEO page only when it is published. See src/lib/hubLinks.ts.
-  const { data: pseoSlugs } = usePseoPageSlugs();
+  // SEO-012: a pSEO page is linked only when it is published. The query can
+  // upgrade an href; it cannot add or remove a card above "More guides".
+  const { data: pseoSlugs, isSuccess, isError, error } = usePseoPageSlugs();
+  useEffect(() => {
+    // WARNING severity: reported, no toast. The page is whole without it.
+    if (isError) handleError(error, { component: 'ThingsToDoHub', action: 'pseo-slugs' }, ErrorSeverity.WARNING);
+  }, [isError, error]);
   const published = new Set((pseoSlugs ?? []).map((r) => r.slug));
-  const resolve = <T extends { slug: string; description?: string; fallback?: HubFallback }>(items: T[]) =>
-    items
-      .map((item) => {
-        const link = resolveHubLink(`/things-to-do/${item.slug}`, published, item.fallback, item.description);
-        return link ? ({ ...item, href: link.href, description: link.description ?? item.description } as T & { href: string }) : null;
-      })
-      .filter((x): x is T & { href: string } => x !== null);
-  const areaLinks = resolve(areas);
-  const audienceLinks = resolve(audiences);
-  const timeLinks = resolve(byTime);
-  const categoryLinks = resolve(byCategory);
-  const popularLinks = [
-    { href: '/things-to-do/downtown/families', label: 'Family-Friendly Downtown' },
-    { href: '/things-to-do/east-village/date-night', label: 'Date Night in East Village' },
-    { href: '/things-to-do/this-weekend', label: 'Things to Do This Weekend' },
-    { href: '/things-to-do/downtown/budget', label: 'Free Things to Do Downtown' },
-    { href: '/things-to-do/ankeny/families', label: 'Family Activities in Ankeny' },
-    { href: '/things-to-do/tourists', label: 'First-Time Visitor Guide' },
-  ].filter((l) => published.has(l.href));
 
-  // A CollectionPage naming only pages that exist (SEO-012 AC4).
+  const { data: seasonalGuides } = useSeasonalGuides();
+
+  const today = centralDateOf();
+  const season = currentSeason(today);
+  const upcoming = nextSeason(season);
+  const fair = getAnnualEvent('iowa-state-fair');
+  const showFair = fair ? isInLeadWindow(fair, today) : false;
+
+  const [todayCard, weekendCard] = resolveAll(HUB_WHEN_FIXED, published);
+  const seasonCard = (s: Season): WhenCard => {
+    const pseoPath = `/things-to-do/${s}`;
+    return {
+      key: s,
+      name: SEASON_LABEL[s],
+      href: published.has(pseoPath) ? pseoPath : seasonHref(s, seasonalGuides),
+      description: SEASON_BLURB[s],
+      icon: SEASON_ICON[s],
+    };
+  };
+  const whenCards: WhenCard[] = [
+    ...(showFair && fair
+      ? [{ key: fair.id, name: fair.name, href: fair.route, description: fair.rangeLabel, icon: FerrisWheel }]
+      : []),
+    { ...todayCard, icon: Clock },
+    { ...weekendCard, icon: CalendarDays },
+    seasonCard(season),
+    seasonCard(upcoming),
+  ];
+
+  const areaLinks = resolveAll(HUB_AREAS, published);
+  const audienceLinks = resolveAll(HUB_AUDIENCES, published);
+  const activityLinks = resolveAll(HUB_ACTIVITIES, published);
+
+  const topHrefs = new Set(
+    [...whenCards, ...areaLinks, ...audienceLinks, ...activityLinks].map((l) => l.href),
+  );
+  const moreGuides = HUB_MORE_GUIDES.filter((l) => published.has(l.href) && !topHrefs.has(l.href));
+
+  // hasPart as an ItemList naming each linked page (SEO-012 AC4: only pages
+  // that exist, which every href above now does).
+  const partLinks = [
+    ...HUB_EXPLORE_LINKS.map((l) => ({ name: l.label, href: l.href })),
+    ...[...whenCards, ...audienceLinks, ...areaLinks, ...activityLinks].map((l) => ({ name: l.name, href: l.href })),
+  ];
+  const seenParts = new Set<string>();
+  const uniqueParts = partLinks.filter((l) => (seenParts.has(l.href) ? false : (seenParts.add(l.href), true)));
   const collection = {
     '@context': 'https://schema.org',
     '@type': 'CollectionPage',
     '@id': canonicalUrl,
     name: 'Things to Do in Des Moines',
     url: canonicalUrl,
-    hasPart: [...new Set([...areaLinks, ...audienceLinks, ...timeLinks, ...categoryLinks].map((l) => l.href))].map(
-      (href) => ({ '@type': 'WebPage', url: getCanonicalUrl(href) }),
-    ),
+    hasPart: {
+      '@type': 'ItemList',
+      itemListElement: uniqueParts.map((l, i) => ({
+        '@type': 'ListItem',
+        position: i + 1,
+        name: l.name,
+        url: getCanonicalUrl(l.href),
+      })),
+    },
   };
+
+  const SeasonIcon = SEASON_ICON[season];
+  const seasonChip = seasonCard(season);
 
   return (
     <>
@@ -132,167 +227,173 @@ export default function ThingsToDoHub() {
       {/* Plain <div>, not <main>: App.tsx already provides the single
           top-level <main id="main-content"> landmark (WCAG 1.3.1). */}
       <div className="min-h-screen bg-background">
-        {/* Hero */}
-        <section className="bg-gradient-to-br from-primary/10 via-background to-secondary/10 border-b border-border">
-          <div className="container mx-auto px-4 py-14 md:py-20">
-            <div className="max-w-3xl">
-              <div className="flex items-center gap-2 text-sm text-primary font-medium mb-3">
-                <SpriteIcon name="map-pin" className="h-4 w-4" aria-hidden="true" />
-                Des Moines Metro Area
-              </div>
-              <h1 className="text-4xl font-bold tracking-tight text-foreground sm:text-5xl lg:text-6xl mb-4">
-                {/* The space before the <br> is load-bearing: without it the
-                    heading's text, which is what a crawler and a screen reader
-                    get, is "Things to Do inDes Moines" (the SEO-026 bug on
-                    /restaurants, here too). */}
-                Things to Do in{" "}<br />
-                <span className="text-primary">Des Moines</span>
-              </h1>
-              <p className="text-lg text-muted-foreground max-w-2xl">
-                Local-first guides to events, restaurants, attractions, and hidden gems across the
-                Des Moines metro. Narrow it down by neighborhood, who you're with, or when you're going.
-              </p>
-            </div>
+        {/* Hero: one line of copy, then the actions people come here for. */}
+        <section className="border-b border-border bg-muted/40" aria-labelledby="hub-heading">
+          <div className="container mx-auto px-4 py-6 md:py-12">
+            <h1 id="hub-heading" className="text-3xl font-bold tracking-tight text-foreground sm:text-5xl">
+              Things to Do in Des Moines
+            </h1>
+            <p className="mt-2 text-base text-muted-foreground max-w-prose">
+              What's on across the metro, by day, neighborhood and who you're with.
+            </p>
+            <nav aria-label="When" className="mt-4 flex flex-wrap gap-2">
+              <Link to="/events/today" className={chipClass}>
+                <Clock className="h-4 w-4" aria-hidden="true" />
+                Today
+              </Link>
+              <a href="#tonight-rail-heading" className={chipClass}>
+                Tonight
+              </a>
+              <Link to="/events/this-weekend" className={chipClass}>
+                <CalendarDays className="h-4 w-4" aria-hidden="true" />
+                This Weekend
+              </Link>
+              <Link to={seasonChip.href} className={chipClass}>
+                <SeasonIcon className="h-4 w-4" aria-hidden="true" />
+                {seasonChip.name}
+              </Link>
+            </nav>
           </div>
         </section>
 
-        <div className="container mx-auto px-4 py-12 space-y-16">
+        {/* Right now */}
+        <Suspense fallback={<div className="h-[18rem]" aria-hidden="true" />}>
+          <TonightRail />
+        </Suspense>
+        <WeekendLine />
 
-          {/* By Area */}
-          <section aria-labelledby="by-area-heading">
-            <div className="flex items-center justify-between mb-6">
-              <div>
-                <h2 id="by-area-heading" className="text-2xl font-bold tracking-tight">Browse by Area</h2>
-                <p className="text-muted-foreground mt-1">Pick your neighborhood or suburb</p>
-              </div>
-            </div>
-            <div className="grid grid-cols-2 sm:grid-cols-3 md:grid-cols-4 gap-3">
-              {areaLinks.map((area) => (
-                <Link
-                  key={area.slug}
-                  to={area.href}
-                  className="group flex flex-col gap-1.5 p-4 rounded-xl border border-border bg-card hover:bg-accent hover:border-primary/40 transition-all duration-200"
-                >
-                  <div className="flex items-center justify-between">
-                    <span className="text-2xl" aria-hidden="true">{area.icon}</span>
-                    <ChevronRight className="h-4 w-4 text-muted-foreground group-hover:text-primary transition-colors" />
-                  </div>
-                  <div className="font-semibold text-sm text-foreground group-hover:text-primary transition-colors">
-                    {area.name}
-                  </div>
-                  <div className="text-xs text-muted-foreground leading-snug line-clamp-2">
-                    {area.description}
-                  </div>
-                </Link>
+        <div className="container mx-auto px-4 py-10 space-y-12">
+          {/* Explore Des Moines: every Explore section, as plain links. */}
+          <section aria-labelledby="explore-heading">
+            <SectionHeading id="explore-heading" title="Explore Des Moines" />
+            <ul className="flex flex-wrap gap-x-6 gap-y-1">
+              {HUB_EXPLORE_LINKS.map((l) => (
+                <li key={l.href}>
+                  <Link
+                    to={l.href}
+                    className="inline-flex min-h-11 items-center font-medium text-foreground underline underline-offset-4 hover:text-primary"
+                  >
+                    {l.label}
+                  </Link>
+                </li>
               ))}
-            </div>
+            </ul>
+            <p className="mt-2 text-sm text-muted-foreground">
+              <Link
+                to={HUB_PLAYGROUND_MAP_HREF}
+                className="inline-flex min-h-11 items-center font-medium text-foreground underline underline-offset-4"
+              >
+                Playgrounds near you on the map
+              </Link>
+            </p>
           </section>
 
-          {/* By Audience / Who */}
-          <section aria-labelledby="by-audience-heading">
-            <div className="mb-6">
-              <h2 id="by-audience-heading" className="text-2xl font-bold tracking-tight">Browse by Who's Going</h2>
-              <p className="text-muted-foreground mt-1">Curated picks for every group and occasion</p>
-            </div>
-            <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4">
-              {audienceLinks.map((audience) => {
-                const Icon = audience.icon;
-                return (
-                  <Link
-                    key={audience.slug}
-                    to={audience.href}
-                    className={`group flex flex-col gap-2 p-5 rounded-xl border transition-all duration-200 hover:shadow-md ${audience.color}`}
-                  >
-                    <div className="flex items-center justify-between">
-                      <Icon className="h-5 w-5 text-foreground/70" aria-hidden="true" />
-                      <ChevronRight className="h-4 w-4 text-muted-foreground group-hover:translate-x-0.5 transition-transform" />
-                    </div>
-                    <div className="font-semibold text-foreground">{audience.name}</div>
-                    <div className="text-sm text-muted-foreground leading-snug">{audience.description}</div>
-                  </Link>
-                );
-              })}
-            </div>
-          </section>
-
-          {/* By Time / When */}
+          {/* When */}
           <section aria-labelledby="by-time-heading">
-            <div className="mb-6">
-              <h2 id="by-time-heading" className="text-2xl font-bold tracking-tight">Browse by When</h2>
-              <p className="text-muted-foreground mt-1">Time-based guides for every season and occasion</p>
-            </div>
-            <div className="grid grid-cols-2 sm:grid-cols-3 md:grid-cols-6 gap-3">
-              {timeLinks.map((time) => {
-                const Icon = time.icon;
+            <SectionHeading id="by-time-heading" title="When are you going?" />
+            <ul className="grid grid-cols-2 md:grid-cols-5 gap-3" data-hub-section="when">
+              {whenCards.map((card) => {
+                const Icon = card.icon;
                 return (
-                  <Link
-                    key={time.slug}
-                    to={time.href}
-                    className="group relative flex flex-col items-center gap-2 p-5 rounded-xl border border-border bg-card hover:bg-accent hover:border-primary/40 text-center transition-all duration-200"
-                  >
-                    {time.badge && (
-                      <Badge variant="secondary" className="absolute top-2 right-2 text-[10px] px-1.5 py-0">
-                        {time.badge}
-                      </Badge>
-                    )}
-                    <Icon className="h-6 w-6 text-primary" aria-hidden="true" />
-                    <div className="font-semibold text-sm text-foreground group-hover:text-primary transition-colors">
-                      {time.name}
-                    </div>
-                    <div className="text-xs text-muted-foreground leading-snug">{time.description}</div>
-                  </Link>
+                  <li key={card.key}>
+                    <Link
+                      to={card.href}
+                      className="group flex h-full flex-col gap-1.5 rounded-xl border border-border bg-card p-4 hover:bg-accent transition-colors"
+                    >
+                      <Icon className="h-5 w-5 text-primary" aria-hidden="true" />
+                      <span className="font-semibold text-sm text-foreground">{card.name}</span>
+                      {card.description && (
+                        <span className="text-xs text-muted-foreground leading-snug">{card.description}</span>
+                      )}
+                    </Link>
+                  </li>
                 );
               })}
-            </div>
+            </ul>
           </section>
 
-          {/* By Category */}
-          <section aria-labelledby="by-category-heading">
-            <div className="mb-6">
-              <h2 id="by-category-heading" className="text-2xl font-bold tracking-tight">Browse by Activity</h2>
-              <p className="text-muted-foreground mt-1">Dive into specific types of experiences</p>
-            </div>
-            <div className="flex flex-wrap gap-2">
-              {categoryLinks.map((cat) => {
-                const Icon = cat.icon;
-                return (
+          {/* Who's going */}
+          <section aria-labelledby="by-audience-heading">
+            <SectionHeading id="by-audience-heading" title="Who's going?" />
+            <ul
+              className="grid grid-cols-1 sm:grid-cols-2 rounded-xl border border-border bg-card divide-y divide-border sm:divide-y-0"
+              data-hub-section="audiences"
+            >
+              {audienceLinks.map((a) => (
+                <li key={a.key}>
+                  <Link to={a.href} className="group flex min-h-11 items-center justify-between gap-3 px-4 py-3 hover:bg-accent">
+                    <span>
+                      <span className="block font-semibold text-foreground">{a.name}</span>
+                      {a.description && <span className="block text-sm text-muted-foreground">{a.description}</span>}
+                    </span>
+                    <ChevronRight className="h-4 w-4 shrink-0 text-muted-foreground" aria-hidden="true" />
+                  </Link>
+                </li>
+              ))}
+            </ul>
+          </section>
+
+          {/* Areas: a chip row on phones, a grid from sm up. */}
+          <section aria-labelledby="by-area-heading">
+            <SectionHeading id="by-area-heading" title="By area" />
+            <ul
+              className="-mx-4 flex gap-2 overflow-x-auto px-4 pb-1 sm:mx-0 sm:grid sm:grid-cols-3 sm:gap-3 sm:overflow-visible sm:px-0 lg:grid-cols-6"
+              data-hub-section="areas"
+            >
+              {areaLinks.map((area) => (
+                <li key={area.key} className="shrink-0">
                   <Link
-                    key={cat.slug}
-                    to={cat.href}
-                    className="inline-flex items-center gap-2 px-4 py-2.5 rounded-full border border-border bg-card hover:bg-primary hover:text-primary-foreground hover:border-primary text-sm font-medium transition-all duration-200"
+                    to={area.href}
+                    className="flex min-h-11 flex-col justify-center rounded-full border border-border bg-card px-4 hover:bg-accent sm:h-full sm:rounded-xl sm:p-4"
                   >
-                    <Icon className="h-4 w-4" aria-hidden="true" />
+                    <span className="font-semibold text-sm text-foreground whitespace-nowrap">{area.name}</span>
+                    {area.description && (
+                      <span className="hidden sm:block text-xs text-muted-foreground leading-snug">{area.description}</span>
+                    )}
+                  </Link>
+                </li>
+              ))}
+            </ul>
+          </section>
+
+          {/* Activities */}
+          <section aria-labelledby="by-category-heading">
+            <SectionHeading id="by-category-heading" title="By activity" />
+            <ul className="flex flex-wrap gap-2" data-hub-section="activities">
+              {activityLinks.map((cat) => (
+                <li key={cat.key}>
+                  <Link to={cat.href} className={chipClass}>
                     {cat.name}
                   </Link>
-                );
-              })}
-            </div>
-          </section>
-
-          {/* Popular combos: published pages only. */}
-          {popularLinks.length > 0 && (
-          <section aria-labelledby="popular-heading" className="pb-4">
-            <div className="mb-6">
-              <h2 id="popular-heading" className="text-2xl font-bold tracking-tight">Popular Searches</h2>
-              <p className="text-muted-foreground mt-1">The most searched things to do in DSM</p>
-            </div>
-            <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-3">
-              {popularLinks.map(({ href, label }) => (
-                <Link
-                  key={href}
-                  to={href}
-                  className="flex items-center justify-between px-4 py-3.5 rounded-lg border border-border bg-card hover:bg-accent hover:border-primary/40 transition-all duration-200 group"
-                >
-                  <span className="text-sm font-medium text-foreground group-hover:text-primary transition-colors">
-                    {label}
-                  </span>
-                  <ChevronRight className="h-4 w-4 text-muted-foreground group-hover:text-primary group-hover:translate-x-0.5 transition-all" />
-                </Link>
+                </li>
               ))}
-            </div>
+            </ul>
           </section>
-          )}
 
+          {/* More guides: pSEO pages with no other destination. Rendered only
+              after the slug query succeeds, at the bottom, so its arrival moves
+              nothing above it. */}
+          {isSuccess && moreGuides.length > 0 && (
+            <section aria-labelledby="more-guides-heading" className="pb-4">
+              <SectionHeading
+                id="more-guides-heading"
+                title="More guides"
+                sub="Neighborhood and occasion guides from our editors."
+              />
+              <ul className="flex flex-wrap gap-x-6 gap-y-1" data-hub-section="more-guides">
+                {moreGuides.map(({ href, label }) => (
+                  <li key={href}>
+                    <Link
+                      to={href}
+                      className="inline-flex min-h-11 items-center text-sm font-medium text-foreground underline underline-offset-4 hover:text-primary"
+                    >
+                      {label}
+                    </Link>
+                  </li>
+                ))}
+              </ul>
+            </section>
+          )}
         </div>
       </div>
 

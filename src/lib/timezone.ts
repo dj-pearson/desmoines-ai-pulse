@@ -286,3 +286,176 @@ export function centralDayStartUtcISO(offsetDays = 0): string {
 export function centralDayOfWeek(): number {
   return Number(formatInTimeZone(new Date(), CENTRAL_TIMEZONE, "i")) % 7;
 }
+
+// ---------------------------------------------------------------------------
+// Central-time windows (docs/page-plans/events.md WP0 item 1).
+//
+// Before this, "today", "this weekend" and "this month" had four definitions:
+// the hub compared a TIMESTAMPTZ to a UTC calendar date, /events/today built
+// its own Central day, /events/this-weekend had a private weekendWindow(), and
+// the monthly pages had a fourth. Every surface now asks centralWindow() and
+// gets the same set.
+//
+// All arithmetic is done on Central calendar dates (yyyy-MM-dd strings) and
+// each boundary is converted to UTC on its own, so a DST day comes out 23h or
+// 25h long instead of drifting by an hour.
+// ---------------------------------------------------------------------------
+
+/** A Central calendar date, `yyyy-MM-dd`. */
+export type CentralDate = string;
+
+export type CentralWindowPreset =
+  | "today"
+  | "tomorrow"
+  | "this-weekend"
+  | "this-week"
+  | "next-week"
+  | "next-7-days"
+  | { kind: "single"; date: CentralDate }
+  | { kind: "range"; from: CentralDate; to: CentralDate }
+  | { kind: "month"; year: number; month: number };
+
+export interface CentralWindow {
+  /** UTC ISO instant of the first millisecond of the window. Use with `.gte`. */
+  start: string;
+  /** UTC ISO instant of the last millisecond of the window. Use with `.lte`. */
+  end: string;
+  /** First Central calendar day in the window, for labels. */
+  startDay: CentralDate;
+  /** Last Central calendar day in the window, for labels. */
+  endDay: CentralDate;
+}
+
+const CENTRAL_DATE_RE = /^\d{4}-\d{2}-\d{2}$/;
+
+/** The Central calendar date an instant falls on. */
+export function centralDateOf(instant: Date | string = new Date()): CentralDate {
+  const d = typeof instant === "string" ? parseISO(instant) : instant;
+  return formatInTimeZone(d, CENTRAL_TIMEZONE, "yyyy-MM-dd");
+}
+
+/** Add whole calendar days to a Central date. Pure date arithmetic, no zone. */
+export function addCentralDays(day: CentralDate, days: number): CentralDate {
+  const noonUtc = new Date(`${day}T12:00:00Z`);
+  noonUtc.setUTCDate(noonUtc.getUTCDate() + days);
+  return noonUtc.toISOString().slice(0, 10);
+}
+
+/** Day of week of a Central date, 0 = Sunday through 6 = Saturday. */
+export function centralWeekday(day: CentralDate): number {
+  return new Date(`${day}T12:00:00Z`).getUTCDay();
+}
+
+/** UTC instant at which a Central calendar day begins. */
+function centralDayStart(day: CentralDate): Date {
+  return fromZonedTime(`${day}T00:00:00`, CENTRAL_TIMEZONE);
+}
+
+/** Window covering the Central days `from` through `to`, both inclusive. */
+function daysWindow(from: CentralDate, to: CentralDate): CentralWindow {
+  const [first, last] = from <= to ? [from, to] : [to, from];
+  const start = centralDayStart(first);
+  // One millisecond before the next day starts, so the window is inclusive for
+  // `.lte` and the DST-change days keep their true 23h or 25h length.
+  const end = new Date(centralDayStart(addCentralDays(last, 1)).getTime() - 1);
+  return {
+    start: start.toISOString(),
+    end: end.toISOString(),
+    startDay: first,
+    endDay: last,
+  };
+}
+
+function assertCentralDate(day: string, what: string): void {
+  if (!CENTRAL_DATE_RE.test(day) || Number.isNaN(new Date(`${day}T12:00:00Z`).getTime())) {
+    throw new RangeError(`centralWindow: ${what} must be yyyy-MM-dd, got "${day}"`);
+  }
+}
+
+/**
+ * The UTC bounds of a Central-time window.
+ *
+ * - `today` / `tomorrow`: one Central calendar day.
+ * - `this-weekend`: Friday 00:00 to Sunday 23:59:59.999 Central. On Friday,
+ *   Saturday and Sunday it is the weekend in progress, never next week's.
+ *   This is what /events/this-weekend has always shipped and what its FAQ
+ *   promises; the hub now returns the same set.
+ * - `this-week`: today through the coming Sunday (on a Sunday, just today).
+ * - `next-week`: the following Monday through Sunday.
+ * - `next-7-days`: today and the six days after it.
+ * - `single`, `range`: explicit Central dates, inclusive.
+ * - `month`: `month` is 1-12.
+ */
+export function centralWindow(
+  preset: CentralWindowPreset,
+  now: Date = new Date()
+): CentralWindow {
+  const today = centralDateOf(now);
+
+  if (typeof preset === "string") {
+    const weekday = centralWeekday(today);
+    switch (preset) {
+      case "today":
+        return daysWindow(today, today);
+      case "tomorrow": {
+        const tomorrow = addCentralDays(today, 1);
+        return daysWindow(tomorrow, tomorrow);
+      }
+      case "this-weekend": {
+        // Sun -> back 2 to Friday, Sat -> back 1, Fri -> 0, Mon-Thu -> ahead.
+        const toFriday = weekday === 0 ? -2 : 5 - weekday;
+        const friday = addCentralDays(today, toFriday);
+        return daysWindow(friday, addCentralDays(friday, 2));
+      }
+      case "this-week": {
+        const toSunday = weekday === 0 ? 0 : 7 - weekday;
+        return daysWindow(today, addCentralDays(today, toSunday));
+      }
+      case "next-week": {
+        const toMonday = weekday === 0 ? 1 : 8 - weekday;
+        const monday = addCentralDays(today, toMonday);
+        return daysWindow(monday, addCentralDays(monday, 6));
+      }
+      case "next-7-days":
+        return daysWindow(today, addCentralDays(today, 6));
+    }
+  }
+
+  switch (preset.kind) {
+    case "single":
+      assertCentralDate(preset.date, "date");
+      return daysWindow(preset.date, preset.date);
+    case "range":
+      assertCentralDate(preset.from, "from");
+      assertCentralDate(preset.to, "to");
+      return daysWindow(preset.from, preset.to);
+    case "month": {
+      if (!Number.isInteger(preset.month) || preset.month < 1 || preset.month > 12) {
+        throw new RangeError(`centralWindow: month must be 1-12, got ${preset.month}`);
+      }
+      const first = `${String(preset.year).padStart(4, "0")}-${String(preset.month).padStart(2, "0")}-01`;
+      assertCentralDate(first, "month");
+      const nextMonthFirst =
+        preset.month === 12
+          ? `${String(preset.year + 1).padStart(4, "0")}-01-01`
+          : `${String(preset.year).padStart(4, "0")}-${String(preset.month + 1).padStart(2, "0")}-01`;
+      return daysWindow(first, addCentralDays(nextMonthFirst, -1));
+    }
+  }
+}
+
+/** The hour (0-23) an instant falls on in Central time. */
+export function centralHour(instant: Date | string = new Date()): number {
+  const d = typeof instant === "string" ? parseISO(instant) : instant;
+  return Number(formatInTimeZone(d, CENTRAL_TIMEZONE, "H"));
+}
+
+/**
+ * The floor for "upcoming" lists: the start of today in Central, as a UTC ISO
+ * instant. An event that started at 10am today is still on today's list at
+ * 9pm; `new Date().toISOString().split("T")[0]` is a UTC date and drops
+ * evening events after 7pm Central.
+ */
+export function upcomingFloorUtc(now: Date = new Date()): string {
+  return centralDayStart(centralDateOf(now)).toISOString();
+}

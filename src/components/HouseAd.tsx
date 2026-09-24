@@ -7,10 +7,13 @@ import { logAdImpression, logAdClick } from "@/lib/adAnalytics";
 import { SpriteIcon } from "@/components/ui/SpriteIcon";
 
 /**
- * House ad — fills an ad slot when no paid campaign or affiliate creative is
+ * House ad - fills an ad slot when no paid campaign or affiliate creative is
  * available, so a slot never renders empty (WEB-FEAT-004). Rotates 3 messages
  * and opens the contextual paywall (ad-free upsell) on click. Tracked under the
  * 'house' inventory class so fill rate is measurable.
+ *
+ * The CTA button carries the click (not the Card), so the target is a real
+ * focusable control of at least 44px rather than a div with an onClick.
  */
 const HOUSE_MESSAGES = [
   {
@@ -63,18 +66,16 @@ export function HouseAd({ placement, className = "" }: HouseAdProps) {
         ref={ref}
         role="complementary"
         aria-label="Des Moines Insider promotion"
-        className={`${sizeClasses} overflow-hidden cursor-pointer relative group bg-gradient-to-r from-amber-500/15 via-orange-500/10 to-transparent hover:shadow-lg transition-shadow ${className}`}
-        onClick={() => {
-          logAdClick("house", placement);
-          setShowUpgrade(true);
-        }}
+        className={`${sizeClasses} overflow-hidden relative bg-muted/60 ${className}`}
       >
         <div className="absolute top-1.5 left-1.5 z-20">
           <span className="text-[10px] font-medium bg-black/50 text-white/90 px-1.5 py-0.5 rounded tracking-wide uppercase">
             Ad
           </span>
         </div>
-        <div className="relative z-10 flex items-center justify-between w-full h-full p-3 md:p-4">
+        {/* Left padding clears the absolutely-positioned "Ad" badge, the same
+            clearance AdBanner got for WEB-QA-006. */}
+        <div className="relative z-10 flex items-center justify-between w-full h-full py-3 pr-3 pl-12 md:py-4 md:pr-4 md:pl-14">
           <div className="flex-1 min-w-0 mr-3">
             <h3 className="font-semibold text-sm md:text-base line-clamp-1 flex items-center gap-1.5">
               <SpriteIcon name="sparkles" className="h-4 w-4 text-amber-500 flex-shrink-0" />
@@ -85,9 +86,13 @@ export function HouseAd({ placement, className = "" }: HouseAdProps) {
             </p>
           </div>
           <Button
-            size="sm"
-            className="flex-shrink-0 bg-gradient-to-r from-amber-500 to-orange-500 hover:from-amber-600 hover:to-orange-600 text-white text-xs md:text-sm h-8 md:h-9"
-            aria-label={`${message.cta} — ${message.title}`}
+            type="button"
+            className="flex-shrink-0 h-11 px-4 text-sm"
+            aria-label={`${message.cta} - ${message.title}`}
+            onClick={() => {
+              logAdClick("house", placement);
+              setShowUpgrade(true);
+            }}
           >
             {message.cta}
           </Button>

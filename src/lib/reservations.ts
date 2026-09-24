@@ -21,7 +21,48 @@
  * NULL IS NOT FALSE. `reservable` is a tristate. Unknown must fall back to the
  * neutral "call the restaurant" wording rather than either claiming or denying
  * that reservations are taken.
+ *
+ * EVERY URL HERE IS SCRAPED OR CURATED TEXT, not a link we built. `website`,
+ * `reservation_url` and `google_maps_uri` all pass through safeWebUrl before
+ * they reach an href, so a `javascript:` value renders no link at all rather
+ * than a clickable one (restaurants plan WP8 item 1).
  */
+import { toSafeExternalUrl } from '@/lib/capacitorUtils';
+
+/** A scheme at the start of the string: "https:", "javascript:", "tel:". */
+const HAS_SCHEME = /^[a-z][a-z0-9+.-]*:/i;
+/** A bare hostname with at least one dot, optionally followed by a path. */
+const BARE_HOST = /^[a-z0-9-]+(\.[a-z0-9-]+)+(?::\d+)?(?:[/?#]|$)/i;
+
+/**
+ * An absolute http(s) URL, or null.
+ *
+ * Rows often hold a bare "www.x.com". That is prefixed with https:// before
+ * validating, so it becomes a working link instead of a relative one that
+ * resolves against our own origin. Anything with a scheme other than http(s)
+ * is refused by toSafeExternalUrl.
+ */
+export function safeWebUrl(raw: unknown): string | null {
+  if (typeof raw !== 'string') return null;
+  const trimmed = raw.trim();
+  if (!trimmed) return null;
+  if (!HAS_SCHEME.test(trimmed) && BARE_HOST.test(trimmed)) {
+    return toSafeExternalUrl(`https://${trimmed}`);
+  }
+  return toSafeExternalUrl(trimmed);
+}
+
+/**
+ * A tel: href, or null when the value holds too few digits to dial. Only
+ * digits and the usual phone punctuation survive, so the href cannot carry
+ * anything else.
+ */
+export function telHref(phone: unknown): string | null {
+  if (typeof phone !== 'string') return null;
+  const cleaned = phone.replace(/[^0-9+().-]/g, '');
+  if (cleaned.replace(/\D/g, '').length < 7) return null;
+  return `tel:${cleaned}`;
+}
 
 export interface ReservationSource {
   name?: string | null;
@@ -70,18 +111,23 @@ export function providerLabel(provider?: string | null): string | undefined {
 
 /** True when we can say, on evidence, that the place takes reservations. */
 export function takesReservations(restaurant: ReservationSource): boolean {
-  return restaurant.reservable === true || Boolean(restaurant.reservation_url);
+  return restaurant.reservable === true || safeWebUrl(restaurant.reservation_url) !== null;
 }
 
 export function resolveReservation(restaurant: ReservationSource): ReservationAction {
+  const reservationUrl = safeWebUrl(restaurant.reservation_url);
+  const mapsUrl = safeWebUrl(restaurant.google_maps_uri);
+  const website = safeWebUrl(restaurant.website);
+  const tel = telHref(restaurant.phone);
+
   // 1. A curated link goes straight to the restaurant's own booking page and
   //    beats everything else.
-  if (restaurant.reservation_url) {
+  if (reservationUrl) {
     const label = providerLabel(restaurant.reservation_provider);
     return {
       kind: 'booking',
       label: 'Reserve a table',
-      href: restaurant.reservation_url,
+      href: reservationUrl,
       external: true,
       detail: label ? `Booking through ${label}` : undefined,
     };
@@ -91,22 +137,22 @@ export function resolveReservation(restaurant: ReservationSource): ReservationAc
   //    offered when `reservable` is actually true - sending someone to a Google
   //    listing that has no reserve button would be a dead end dressed up as a
   //    booking link.
-  if (restaurant.reservable === true && restaurant.google_maps_uri) {
+  if (restaurant.reservable === true && mapsUrl) {
     return {
       kind: 'booking',
       label: 'Reserve a table',
-      href: restaurant.google_maps_uri,
+      href: mapsUrl,
       external: true,
       detail: 'Booking through the Google listing',
     };
   }
 
   // 3. Known to take reservations, but we have no link for it.
-  if (restaurant.reservable === true && restaurant.phone) {
+  if (restaurant.reservable === true && tel) {
     return {
       kind: 'call_to_reserve',
       label: 'Call to reserve',
-      href: `tel:${restaurant.phone}`,
+      href: tel,
       external: false,
       detail: 'This restaurant takes reservations by phone',
     };
@@ -115,11 +161,11 @@ export function resolveReservation(restaurant: ReservationSource): ReservationAc
   // 4. Unknown, or known NOT to take reservations. Offer the phone without
   //    claiming anything about reservations - the old copy claimed it for
   //    every restaurant that had a number.
-  if (restaurant.phone) {
+  if (tel) {
     return {
       kind: 'call',
       label: 'Call the restaurant',
-      href: `tel:${restaurant.phone}`,
+      href: tel,
       external: false,
       detail:
         restaurant.reservable === false
@@ -128,11 +174,11 @@ export function resolveReservation(restaurant: ReservationSource): ReservationAc
     };
   }
 
-  if (restaurant.website) {
+  if (website) {
     return {
       kind: 'website',
       label: 'Visit website',
-      href: restaurant.website,
+      href: website,
       external: true,
     };
   }

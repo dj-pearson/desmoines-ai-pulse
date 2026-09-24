@@ -1,5 +1,6 @@
 import { useQuery, useMutation } from '@tanstack/react-query';
 import { supabase } from '@/integrations/supabase/client';
+import { handleError } from '@/lib/errorHandler';
 
 export interface MeetingVenue {
   id: string;
@@ -58,14 +59,100 @@ export function useMeetingVenues(filters?: { venueType?: string; minCapacity?: n
   });
 }
 
+/**
+ * The RFP form as typed, before it is turned into a row. Every field is a
+ * string because that is what an input holds; toRfpSubmission converts.
+ */
+export type RfpFormValues = Record<keyof RfpSubmission, string>;
+
+export const EMPTY_RFP_FORM: RfpFormValues = {
+  event_name: '',
+  event_dates: '',
+  expected_attendance: '',
+  venue_requirements: '',
+  budget_range: '',
+  contact_name: '',
+  contact_email: '',
+  contact_phone: '',
+  organization: '',
+  notes: '',
+};
+
+/**
+ * Longest value each field accepts, rendered as maxLength on the input and
+ * checked again in validateRfp (plan-stay WP3 item 3). CLIENT-SIDE ONLY: the
+ * anon INSERT on rfp_submissions is still open to anyone who skips this page,
+ * and closing it is D6 (a submit-group-rfp edge function), not this file.
+ */
+export const RFP_MAX_LENGTH: Record<keyof RfpSubmission, number> = {
+  event_name: 200,
+  event_dates: 120,
+  expected_attendance: 6,
+  venue_requirements: 2000,
+  budget_range: 120,
+  contact_name: 120,
+  contact_email: 254,
+  contact_phone: 40,
+  organization: 200,
+  notes: 2000,
+};
+
+export const RFP_REQUIRED: ReadonlyArray<keyof RfpSubmission> = ['event_name', 'contact_name', 'contact_email'];
+
+/** Deliberately loose: one @, something on each side, a dot in the domain. */
+const EMAIL_PATTERN = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
+
+/** Largest attendance figure accepted. Wells Fargo Arena seats about 17,000. */
+export const RFP_MAX_ATTENDANCE = 100000;
+
+export type RfpErrors = Partial<Record<keyof RfpSubmission, string>>;
+
+/** Field-level errors for the RFP form; an empty object means it can be sent. */
+export function validateRfp(values: RfpFormValues): RfpErrors {
+  const errors: RfpErrors = {};
+  for (const field of RFP_REQUIRED) {
+    if (!values[field].trim()) errors[field] = 'Required';
+  }
+  (Object.keys(RFP_MAX_LENGTH) as Array<keyof RfpSubmission>).forEach((field) => {
+    if (!errors[field] && values[field].length > RFP_MAX_LENGTH[field]) {
+      errors[field] = `Keep this under ${RFP_MAX_LENGTH[field]} characters`;
+    }
+  });
+  const email = values.contact_email.trim();
+  if (!errors.contact_email && email && !EMAIL_PATTERN.test(email)) {
+    errors.contact_email = 'Enter an email address like name@example.com';
+  }
+  const attendance = values.expected_attendance.trim();
+  if (!errors.expected_attendance && attendance) {
+    const n = Number(attendance);
+    if (!Number.isInteger(n) || n < 1 || n > RFP_MAX_ATTENDANCE) {
+      errors.expected_attendance = `Enter a whole number from 1 to ${RFP_MAX_ATTENDANCE.toLocaleString('en-US')}`;
+    }
+  }
+  return errors;
+}
+
+/** Trimmed row for the insert. Call only after validateRfp returned no errors. */
+export function toRfpSubmission(values: RfpFormValues): RfpSubmission {
+  const trimmed = Object.fromEntries(
+    Object.entries(values).map(([key, value]) => [key, value.trim()]),
+  ) as RfpFormValues;
+  return { ...trimmed, expected_attendance: Number(trimmed.expected_attendance) || 0 };
+}
+
 export function useSubmitRfp() {
   return useMutation({
     mutationFn: async (rfp: RfpSubmission) => {
+      // supabase-js resolves with { error } rather than throwing, so the error
+      // has to be read here for the caller's catch (and onError) to see it.
       const { error } = await supabase
         .from('rfp_submissions')
-        .insert(rfp as Record<string, unknown>);
+        .insert(rfp);
 
       if (error) throw error;
+    },
+    onError: (error) => {
+      handleError(error, { component: 'GroupTravel', action: 'submitRfp' });
     },
   });
 }

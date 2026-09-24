@@ -11,7 +11,9 @@ import { describe, it, expect } from 'vitest';
 import {
   providerLabel,
   resolveReservation,
+  safeWebUrl,
   takesReservations,
+  telHref,
 } from '../reservations';
 
 const PHONE = '515-555-0100';
@@ -134,5 +136,78 @@ describe('external link flags', () => {
     expect(resolveReservation({ website: 'https://x.com' }).external).toBe(true);
     expect(resolveReservation({ phone: PHONE }).external).toBe(false);
     expect(resolveReservation({ phone: PHONE, reservable: true }).external).toBe(false);
+  });
+});
+
+/**
+ * Restaurants plan WP8 item 1. Every URL on the detail page is scraped or
+ * curated text; a `javascript:` value must produce no link, not a live one.
+ */
+describe('safeWebUrl', () => {
+  it('refuses javascript:, data: and other non-web schemes', () => {
+    expect(safeWebUrl('javascript:alert(1)')).toBeNull();
+    expect(safeWebUrl('  JavaScript:alert(1)')).toBeNull();
+    expect(safeWebUrl('data:text/html,<script>alert(1)</script>')).toBeNull();
+    expect(safeWebUrl('file:///etc/passwd')).toBeNull();
+  });
+
+  it('prefixes https:// on a bare hostname', () => {
+    expect(safeWebUrl('www.x.com')).toBe('https://www.x.com/');
+    expect(safeWebUrl('nocedsm.com/menu')).toBe('https://nocedsm.com/menu');
+  });
+
+  it('keeps http(s) URLs', () => {
+    expect(safeWebUrl('https://nocedsm.com')).toBe('https://nocedsm.com/');
+    expect(safeWebUrl('http://example.com/a?b=1')).toBe('http://example.com/a?b=1');
+  });
+
+  it('is null for empty, relative or non-string values', () => {
+    expect(safeWebUrl('')).toBeNull();
+    expect(safeWebUrl('   ')).toBeNull();
+    expect(safeWebUrl('/restaurants')).toBeNull();
+    expect(safeWebUrl('not a url')).toBeNull();
+    expect(safeWebUrl(null)).toBeNull();
+    expect(safeWebUrl(42)).toBeNull();
+  });
+});
+
+describe('telHref', () => {
+  it('keeps digits and phone punctuation', () => {
+    expect(telHref(PHONE)).toBe(`tel:${PHONE}`);
+    expect(telHref('(515) 555-0100')).toBe('tel:(515)555-0100');
+  });
+
+  it('is null when there is nothing to dial', () => {
+    expect(telHref('call us')).toBeNull();
+    expect(telHref('')).toBeNull();
+    expect(telHref(undefined)).toBeNull();
+  });
+});
+
+describe('unsafe URLs never become links', () => {
+  it('drops a javascript: reservation_url and falls through to the phone', () => {
+    const action = resolveReservation({ phone: PHONE, reservation_url: 'javascript:alert(1)' });
+    expect(action.kind).toBe('call');
+    expect(action.href).toBe(`tel:${PHONE}`);
+  });
+
+  it('drops a javascript: Google listing even for a reservable place', () => {
+    const action = resolveReservation({ reservable: true, google_maps_uri: 'javascript:alert(1)' });
+    expect(action.href).toBeUndefined();
+    expect(action.kind).toBe('none');
+  });
+
+  it('drops a javascript: website', () => {
+    const action = resolveReservation({ website: 'javascript:alert(1)' });
+    expect(action.kind).toBe('none');
+    expect(action.href).toBeUndefined();
+  });
+
+  it('turns a bare website hostname into an https link', () => {
+    expect(resolveReservation({ website: 'www.x.com' }).href).toBe('https://www.x.com/');
+  });
+
+  it('does not count an unsafe reservation_url as evidence', () => {
+    expect(takesReservations({ reservation_url: 'javascript:alert(1)' })).toBe(false);
   });
 });

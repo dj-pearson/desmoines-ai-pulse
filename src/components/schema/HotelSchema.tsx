@@ -1,4 +1,6 @@
 import { Helmet } from "react-helmet-async";
+import { toJsonLd } from "@/lib/jsonLd";
+import { safeWebUrl } from "@/lib/reservations";
 
 interface HotelSchemaProps {
   name: string;
@@ -39,6 +41,9 @@ export default function HotelSchema({
   longitude,
   amenities,
 }: HotelSchemaProps) {
+  // plan-stay WP2 item 3: `website` is row text, so only an http(s) URL is
+  // emitted as sameAs/url.
+  const safeWebsite = safeWebUrl(website);
   const schema = {
     "@context": "https://schema.org",
     "@type": "Hotel",
@@ -57,7 +62,7 @@ export default function HotelSchema({
       addressCountry: "US",
     },
     ...(phone && { telephone: phone }),
-    ...(website && (pageUrl ? { sameAs: [website] } : { url: website })),
+    ...(safeWebsite && (pageUrl ? { sameAs: [safeWebsite] } : { url: safeWebsite })),
     ...(latitude != null && longitude != null && {
       geo: { "@type": "GeoCoordinates", latitude, longitude },
     }),
@@ -78,7 +83,9 @@ export default function HotelSchema({
 
   return (
     <Helmet>
-      <script type="application/ld+json">{JSON.stringify(schema)}</script>
+      {/* plan-stay WP2 item 2: hotel rows are editable text on a prerendered
+          route, so a "</script>" in a description must not end this element. */}
+      <script type="application/ld+json">{toJsonLd(schema)}</script>
     </Helmet>
   );
 }

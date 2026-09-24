@@ -2,7 +2,6 @@ import React from 'react';
 import { OptimizedImage } from '@/components/OptimizedImage';
 import { Card, CardContent } from '@/components/ui/card';
 import { Badge } from '@/components/ui/badge';
-import { Button } from '@/components/ui/button';
 import { FavoriteButton } from '@/components/FavoriteButton';
 import { AddToCalendarButton } from '@/components/AddToCalendarButton';
 import ShareDialog from '@/components/ShareDialog';
@@ -21,6 +20,8 @@ import { SponsoredBadge } from '@/components/SponsoredBadge';
 import { isSponsoredActive, logSponsoredClick } from '@/lib/sponsored';
 import { useSponsoredImpression } from '@/hooks/useSponsoredImpression';
 import { useRef, useState } from 'react';
+import { isFreePrice } from '@/lib/eventPrice';
+import { EVENT_AREAS, isInBBox } from '@/lib/eventAreas';
 
 interface SocialEventCardProps {
   event: Event;
@@ -53,24 +54,49 @@ interface SocialEventCardProps {
    */
   priority?: boolean;
   featured?: boolean;
+  /**
+   * Optional lead line such as "Starts in 40 min" or "Happening now", for the
+   * hub's Tonight strip (docs/page-plans/events.md WP3 item 3). Printed above
+   * the time line; the card computes nothing from it.
+   */
+  relativeStart?: string;
+}
+
+type CardEvent = Event & { distance_meters?: number | null };
+
+/**
+ * The district a card names after the venue: a bbox area from eventAreas.ts
+ * when the coordinates fall inside one, else the suburb when it isn't Des
+ * Moines, else nothing.
+ */
+function placeLabel(event: CardEvent): string | null {
+  const district = EVENT_AREAS.find(
+    (area) => area.kind === 'bbox' && isInBBox(event.latitude, event.longitude, area.bbox),
+  );
+  if (district) return district.label;
+  const city = event.city?.trim();
+  if (city && city.toLowerCase() !== 'des moines') return city;
+  return null;
 }
 
 function SocialEventCardComponent({
   event,
-  onViewDetails,
-  onViewSocial,
   showSocialPreview = true,
   socialData,
   socialDataPending = false,
   featured = false,
   priority = false,
+  relativeStart,
 }: SocialEventCardProps) {
   // Passing '' disables the hook (it early-returns on a falsy id). Skip the
   // individual fetch both when batch data has arrived AND while it is pending.
   const individualFetch = useEventSocial(socialData || socialDataPending ? '' : event.id);
 
-  const liveStats = socialData?.liveStats ?? individualFetch.liveStats;
-  const attendees = socialData?.attendees ?? individualFetch.attendees;
+  const liveStats = socialData ? socialData.liveStats : individualFetch.liveStats;
+  const attendeeCount =
+    (socialData ? socialData.attendeeCount : individualFetch.attendees.length) ||
+    liveStats?.current_attendees ||
+    0;
 
   // WEB-PERF-023. The imageless panel below used to render on EVERY card and be
   // hidden with a class, because the img's onError reached for its next sibling
@@ -96,7 +122,7 @@ function SocialEventCardComponent({
       const weekday = formatInCentralTime(dateSource, 'EEE');
       const showTime = hasSpecificTime(event);
       const time = showTime ? formatInCentralTime(dateSource, 'h:mm a') : null;
-      // Always provide an explicit time label — never leave the slot blank.
+      // Always provide an explicit time label - never leave the slot blank.
       const timeLabel = time ? `${time} CT` : 'All day';
       return { month, day, weekday, time, timeLabel };
     } catch {
@@ -108,9 +134,14 @@ function SocialEventCardComponent({
   const eventSlug = createEventSlugWithCentralTime(event.title, event);
   const eventUrl = `/events/${eventSlug}`;
 
-  const isFree = !event.price || event.price.toLowerCase().includes('free') || event.price === '$0';
+  // Unknown price is unknown, not free (WP3 item 1). A row with no price used
+  // to get the green Free badge here and in the hub's filter.
+  const free = isFreePrice(event.price);
   const isLive = (liveStats?.total_checkins ?? 0) > 0;
-  const attendeeCount = attendees?.length || liveStats?.current_attendees || 0;
+  const cardEvent = event as CardEvent;
+  const distanceMeters = cardEvent.distance_meters;
+  const venueName = event.venue || event.location;
+  const place = placeLabel(cardEvent);
 
   // Sponsored listing (WEB-FEAT-005): active only while not expired.
   const sponsoredActive = isSponsoredActive(event);
@@ -119,112 +150,90 @@ function SocialEventCardComponent({
   // Mirrors the four conditions inside the stack below. Kept adjacent to them
   // so a fifth badge cannot be added without this going false for it.
   const hasTopRightBadge = Boolean(
-    sponsoredActive ||
-      isLive ||
-      (!sponsoredActive && event.is_featured) ||
-      (event as any).distance_meters,
+    sponsoredActive || isLive || (!sponsoredActive && event.is_featured) || distanceMeters,
   );
   useSponsoredImpression(cardRef, 'event', event.id, sponsoredActive);
 
+  // STRETCHED LINK (WP3 item 2). The whole card used to be one <a> with the
+  // Favorite, Calendar and Share buttons inside it, which is nested
+  // interactive content, and an aria-label that replaced everything the card
+  // says. Now the link is the title; its ::after covers the card so the whole
+  // surface still clicks through, and the buttons sit above it (z-20) as
+  // siblings. Decorative overlays are pointer-events-none so they don't eat
+  // clicks meant for the link underneath. `isolate` keeps those z-indexes
+  // inside the card; without it the z-20 buttons painted over the hub's
+  // sticky z-20 day headers as the list scrolled under them.
   return (
     <Card
       ref={cardRef}
-      className={`group relative overflow-hidden border-0 shadow-md hover:shadow-xl transition-all duration-300 hover:-translate-y-1 bg-card ${
+      className={`group relative isolate overflow-hidden border-0 shadow-md hover:shadow-xl transition-all duration-300 hover:-translate-y-1 bg-card ${
         featured ? 'md:col-span-2 md:row-span-2' : ''
-      } ${sponsoredActive ? 'ring-2 ring-amber-400 shadow-lg' : ''}`}
+      } ${sponsoredActive ? 'ring-2 ring-amber-400' : ''}`}
     >
-      <Link
-        to={eventUrl}
-        className="block focus:outline-none focus-visible:ring-2 focus-visible:ring-primary focus-visible:ring-offset-2 rounded-xl"
-        aria-label={`${sponsoredActive ? 'Sponsored: ' : ''}View details for ${event.title}`}
-        onClick={() => {
-          if (sponsoredActive) logSponsoredClick('event', event.id);
-        }}
-      >
-        <CardContent className="p-0">
-          {/* Image Section with Overlay */}
-          <div className={`relative overflow-hidden ${featured ? 'h-64 md:h-80' : 'h-52'}`}>
-            {showImage && imageUrl ? (
-              // Converted to OptimizedImage in WEB-PERF-041 once the component
-              // stopped gating the img element on an IntersectionObserver.
-              // Before that, converting this one card would have dropped every
-              // event past the first three out of the prerendered HTML - it
-              // renders every event listing on the site - which the raw tag it
-              // replaced did not do. Now the element always renders and only
-              // the fetch is deferred, so the srcset comes for free.
-              //
-              // onError still drives the designed category fallback below
-              // rather than OptimizedImage's own "Image unavailable" panel:
-              // setImageFailed flips showImage, which unmounts this in the same
-              // render, so that panel is never painted.
-              <OptimizedImage
-                src={imageUrl}
-                alt={`${event.title} - ${event.category} event in ${event.city || 'Des Moines'}, Iowa`}
-                className="object-cover transition-transform duration-500 group-hover:scale-110"
-                containerClassName="w-full h-full"
-                priority={priority}
-                sizes="(max-width: 640px) 100vw, (max-width: 1024px) 50vw, 33vw"
-                onError={() => setImageFailed(true)}
-              />
-            ) : null}
-            {/* Designed fallback when the event has no image (WEB-QA-006).
-                Previously a flat grey box with a lone calendar glyph, which read
-                as a broken/missing image rather than a deliberate treatment.
-                Now it is a category-tinted panel — reusing the same WEB-UX-006
-                category tokens the date badge uses — with a soft dot texture and
-                the category set as a typographic element, so an imageless card
-                looks intentional next to cards that do have art. */}
-            {!showImage && (
+      <CardContent className="p-0">
+        {/* Image Section with Overlay */}
+        <div className={`relative overflow-hidden ${featured ? 'h-64 md:h-80' : 'h-52'}`}>
+          {showImage && imageUrl ? (
+            // Converted to OptimizedImage in WEB-PERF-041 once the component
+            // stopped gating the img element on an IntersectionObserver. The
+            // element always renders and only the fetch is deferred.
+            //
+            // onError drives the designed category fallback below rather than
+            // OptimizedImage's own "Image unavailable" panel.
+            <OptimizedImage
+              src={imageUrl}
+              alt={`${event.title} - ${event.category} event in ${event.city || 'Des Moines'}, Iowa`}
+              className="object-cover transition-transform duration-500 group-hover:scale-110"
+              containerClassName="w-full h-full"
+              priority={priority}
+              sizes="(max-width: 640px) 100vw, (max-width: 1024px) 50vw, 33vw"
+              onError={() => setImageFailed(true)}
+            />
+          ) : null}
+          {/* Designed fallback when the event has no image (WEB-QA-006): a
+              category-tinted panel with a dot texture and the category set as
+              type, so an imageless card looks intentional. */}
+          {!showImage && (
             <div
               className={`relative w-full h-full overflow-hidden items-center justify-center flex-col gap-3 flex ${categoryStyle.icon}`}
             >
-              {/* Subtle dot texture so the panel isn't a flat wash of colour */}
               <div
                 aria-hidden="true"
                 className="absolute inset-0 opacity-[0.18]"
                 style={{
-                  backgroundImage:
-                    'radial-gradient(currentColor 1px, transparent 1px)',
+                  backgroundImage: 'radial-gradient(currentColor 1px, transparent 1px)',
                   backgroundSize: '14px 14px',
                 }}
               />
-              <div
-                className={`relative rounded-2xl px-3 py-3 ${categoryStyle.bg} shadow-sm`}
-              >
+              <div className={`relative rounded-2xl px-3 py-3 ${categoryStyle.bg} shadow-sm`}>
                 <SpriteIcon name="calendar" className="h-7 w-7 text-white" />
               </div>
-              <span
-                className={`relative text-sm font-semibold uppercase tracking-wider ${categoryStyle.text}`}
-              >
+              <span className={`relative text-sm font-semibold ${categoryStyle.text}`}>
                 {event.category}
               </span>
             </div>
-            )}
+          )}
 
-            {/* Bottom gradient for text readability */}
-            <div className="absolute inset-0 bg-gradient-to-t from-black/70 via-black/20 to-transparent" />
+          {/* Bottom scrim so the badges stay readable over any poster */}
+          <div className="pointer-events-none absolute inset-0 bg-gradient-to-t from-black/60 via-black/10 to-transparent" />
 
-            {/* Date Badge - Calendar Style */}
-            {/* The positioning wrapper and the badge were two divs describing the
-                same box (WEB-PERF-023). */}
-            <div className="absolute top-3 left-3 z-10 bg-white dark:bg-slate-900 rounded-lg shadow-lg overflow-hidden text-center w-14">
-              <div className={`${categoryStyle.bg} text-white text-[10px] font-bold py-0.5 tracking-wider`}>
-                {dateParts.month}
-              </div>
-              <div className="py-1">
-                <div className="text-xl font-bold leading-none text-foreground">{dateParts.day}</div>
-                <div className="text-[10px] text-muted-foreground">{dateParts.weekday}</div>
-              </div>
+          {/* Date Badge - Calendar Style */}
+          <div className="pointer-events-none absolute top-3 left-3 z-10 bg-white dark:bg-slate-900 rounded-lg shadow-lg overflow-hidden text-center w-14">
+            <div className={`${categoryStyle.bg} text-white text-[10px] font-bold py-0.5 tracking-wider`}>
+              {dateParts.month}
             </div>
+            <div className="py-1">
+              <div className="text-xl font-bold leading-none text-foreground">{dateParts.day}</div>
+              <div className="text-[10px] text-muted-foreground">{dateParts.weekday}</div>
+            </div>
+          </div>
 
-            {/* Top Right Badges. The container shipped empty on 38 of 38 cards on
-                /events/today and 40 of 40 on /events/date-night - most events
-                are neither sponsored, live, featured nor distance-tagged. */}
-            {hasTopRightBadge && (
-            <div className="absolute top-3 right-3 z-10 flex flex-col gap-1.5 items-end">
+          {/* Top Right Badges, rendered only when one applies. */}
+          {hasTopRightBadge && (
+            <div className="pointer-events-none absolute top-3 right-3 z-10 flex flex-col gap-1.5 items-end">
               {sponsoredActive && <SponsoredBadge className="shadow-lg" />}
               {isLive && (
-                <Badge className="bg-green-500 text-white border-0 shadow-lg text-[10px] px-2 animate-pulse">
+                <Badge className="bg-green-700 text-white border-0 shadow-lg text-[10px] px-2">
                   <SpriteIcon name="trending-up" className="h-3 w-3 mr-1" />
                   LIVE
                 </Badge>
@@ -235,111 +244,111 @@ function SocialEventCardComponent({
                   Featured
                 </Badge>
               )}
-              {(event as any).distance_meters && (
+              {distanceMeters ? (
                 <Badge className="bg-white/90 text-slate-800 border-0 shadow-lg text-[10px] px-2">
                   <SpriteIcon name="map-pin" className="h-3 w-3 mr-1" />
-                  {((event as any).distance_meters * 0.000621371).toFixed(1)} mi
+                  {(distanceMeters * 0.000621371).toFixed(1)} mi
                 </Badge>
-              )}
+              ) : null}
             </div>
-            )}
+          )}
 
-            {/* Bottom Info Overlay */}
-            <div className="absolute bottom-0 left-0 right-0 p-4 z-10">
-              <div className="flex items-center gap-2 mb-2">
-                <Badge className={`${categoryStyle.bg} text-white border-0 text-[11px] font-medium`}>
-                  {event.category}
+          {/* Category and price over the poster */}
+          <div className="pointer-events-none absolute bottom-0 left-0 right-0 p-4 z-10">
+            <div className="flex items-center gap-2">
+              <Badge className={`${categoryStyle.bg} text-white border-0 text-[11px] font-medium`}>
+                {event.category}
+              </Badge>
+              {free === true ? (
+                <Badge className={`${STATUS_BADGE.free} border-0 text-[11px] font-medium`}>Free</Badge>
+              ) : free === false ? (
+                <Badge className="bg-black/60 text-white border-0 text-[11px]">
+                  <SpriteIcon name="ticket" className="h-3 w-3 mr-1" />
+                  {event.price}
                 </Badge>
-                {isFree ? (
-                  <Badge className={`${STATUS_BADGE.free} border-0 text-[11px] font-medium`}>
-                    Free
-                  </Badge>
-                ) : event.price ? (
-                  <Badge className="bg-white/20 text-white border-0 backdrop-blur-sm text-[11px]">
-                    <SpriteIcon name="ticket" className="h-3 w-3 mr-1" />
-                    {event.price}
-                  </Badge>
-                ) : null}
-              </div>
-              <h3 className="text-white font-bold text-lg leading-tight line-clamp-2 drop-shadow-md">
-                {event.title}
-              </h3>
+              ) : null}
             </div>
           </div>
+        </div>
 
-          {/* Content Section */}
-          <div className="p-4 space-y-3">
-            {/* Event Meta Info */}
-            <div className="space-y-1.5">
-              <div className="flex items-center text-sm text-muted-foreground">
-                <SpriteIcon name="clock" className="h-3.5 w-3.5 mr-2 flex-shrink-0" />
-                <span>{dateParts.timeLabel}</span>
-              </div>
-              {(event.venue || event.location) && (
-                <div className="flex items-center text-sm text-muted-foreground">
-                  <SpriteIcon name="map-pin" className="h-3.5 w-3.5 mr-2 flex-shrink-0" />
-                  <span className="truncate">{event.venue || event.location}</span>
-                  {event.city && event.city !== 'Des Moines' && (
-                    <span className="ml-1 text-xs text-muted-foreground/70">
-                      &middot; {event.city}
-                    </span>
-                  )}
-                </div>
-              )}
-            </div>
+        {/* Content Section */}
+        <div className="p-4 space-y-2">
+          {relativeStart && (
+            <p className="text-sm font-semibold text-foreground">{relativeStart}</p>
+          )}
 
-            {/* Description Preview */}
-            {(event.enhanced_description || event.original_description) && (
-              <p className="text-sm text-muted-foreground line-clamp-2 leading-relaxed">
-                {event.enhanced_description || event.original_description}
-              </p>
+          {/* Time and place first, the way a local reads a listing:
+              "7:30 PM CT - Wooly's - East Village" (WP3 item 3). */}
+          <p className="flex min-w-0 items-center text-sm text-muted-foreground">
+            <SpriteIcon name="clock" className="h-3.5 w-3.5 mr-2 flex-shrink-0" />
+            <span className="flex-shrink-0 font-medium text-foreground">{dateParts.timeLabel}</span>
+            {venueName && (
+              <>
+                <span aria-hidden="true" className="mx-1.5 flex-shrink-0">&middot;</span>
+                <span className="truncate">{venueName}</span>
+              </>
             )}
+            {place && (
+              <>
+                <span aria-hidden="true" className="mx-1.5 flex-shrink-0">&middot;</span>
+                <span className="flex-shrink-0">{place}</span>
+              </>
+            )}
+          </p>
 
-            {/* Social Proof Bar */}
-            {showSocialPreview && attendeeCount > 0 && (
-              <div className="flex items-center gap-3 text-xs text-muted-foreground pt-1 border-t">
+          <h3 className="text-lg font-bold leading-tight text-foreground line-clamp-2">
+            <Link
+              to={eventUrl}
+              className="rounded-sm after:absolute after:inset-0 after:z-[1] after:rounded-xl after:content-[''] focus:outline-none focus-visible:after:ring-2 focus-visible:after:ring-primary focus-visible:after:ring-offset-2"
+              onClick={() => {
+                if (sponsoredActive) logSponsoredClick('event', event.id);
+              }}
+            >
+              {sponsoredActive && <span className="sr-only">Sponsored: </span>}
+              {event.title}
+            </Link>
+          </h3>
+
+          {/* Description Preview */}
+          {(event.enhanced_description || event.original_description) && (
+            <p className="text-sm text-muted-foreground line-clamp-2 leading-relaxed">
+              {event.enhanced_description || event.original_description}
+            </p>
+          )}
+
+          {/* Social Proof Bar */}
+          {showSocialPreview && attendeeCount > 0 && (
+            <div className="flex items-center gap-3 text-xs text-muted-foreground pt-2 border-t">
+              <div className="flex items-center gap-1">
+                <SpriteIcon name="users" className="h-3.5 w-3.5" />
+                <span className="font-medium">{attendeeCount}</span>
+                <span>interested</span>
+              </div>
+              {(liveStats?.total_checkins ?? 0) > 0 && (
                 <div className="flex items-center gap-1">
-                  <SpriteIcon name="users" className="h-3.5 w-3.5" />
-                  <span className="font-medium">{attendeeCount}</span>
-                  <span>interested</span>
+                  <span aria-hidden="true" className="w-1.5 h-1.5 rounded-full bg-green-600" />
+                  <span>{liveStats?.total_checkins} checked in</span>
                 </div>
-                {(liveStats?.total_checkins ?? 0) > 0 && (
-                  <div className="flex items-center gap-1">
-                    <span className="w-1.5 h-1.5 rounded-full bg-green-500 animate-pulse" />
-                    <span>{liveStats?.total_checkins} checked in</span>
-                  </div>
-                )}
-              </div>
-            )}
-
-            {/* Action Row */}
-            <div className="flex items-center justify-between pt-1">
-              <span
-                className={`inline-flex items-center text-sm font-semibold ${categoryStyle.text} group-hover:gap-2 transition-all`}
-              >
-                View Details
-                <SpriteIcon name="arrow-right" className="h-4 w-4 ml-1 transition-transform group-hover:translate-x-1" />
-              </span>
-              <div className="flex items-center gap-1" onClick={(e) => e.preventDefault()}>
-                <FavoriteButton eventId={event.id} itemName={event.title} variant="ghost" size="icon" />
-                {/* WEB-FEAT-026: saving an event was previously possible only
-                    after opening it. The wrapper above already preventDefaults
-                    the card's Link, so this does not navigate. */}
-                <AddToCalendarButton event={event} variant="ghost" iconOnly />
-                <ShareDialog
-                  title={event.title}
-                  description={
-                    event.enhanced_description ||
-                    event.original_description ||
-                    `Check out ${event.title} in Des Moines`
-                  }
-                  url={`${window.location.origin}${eventUrl}`}
-                />
-              </div>
+              )}
             </div>
+          )}
+
+          {/* Actions sit above the stretched link, outside it. */}
+          <div className="relative z-20 flex items-center justify-end gap-1 pt-1">
+            <FavoriteButton eventId={event.id} itemName={event.title} variant="ghost" size="icon" />
+            <AddToCalendarButton event={event} variant="ghost" iconOnly />
+            <ShareDialog
+              title={event.title}
+              description={
+                event.enhanced_description ||
+                event.original_description ||
+                `Check out ${event.title} in Des Moines`
+              }
+              url={`${window.location.origin}${eventUrl}`}
+            />
           </div>
-        </CardContent>
-      </Link>
+        </div>
+      </CardContent>
     </Card>
   );
 }

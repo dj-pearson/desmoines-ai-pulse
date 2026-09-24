@@ -1,17 +1,24 @@
 import { useQuery } from '@tanstack/react-query';
 import { supabase } from '@/integrations/supabase/client';
-import { useAuth } from './useAuth';
-import { EventLiveStats, EventAttendee, EventDiscussion } from './useEventSocial';
+import type { EventLiveStats } from './useEventSocial';
 import { createLogger } from '@/lib/logger';
 
 const log = createLogger('useBatchEventSocial');
 
+/** The live-stats columns a card reads, and nothing else. */
+export type BatchLiveStats = Pick<EventLiveStats, 'event_id' | 'total_checkins' | 'current_attendees'>;
+
+/**
+ * What a list card needs to show social proof: a count and the live stats.
+ *
+ * Counts only (docs/page-plans/events.md WP3 item 4). This used to carry every
+ * public attendee row, user_id included, and up to 50 discussion messages per
+ * event, for a card that prints "12 interested" and never reads a message.
+ * A server-side counts RPC (deferred D3) replaces the attendee select later.
+ */
 export interface BatchEventSocialData {
-  attendees: EventAttendee[];
-  discussions: EventDiscussion[];
-  liveStats: EventLiveStats | null;
-  discussionCount: number;
   attendeeCount: number;
+  liveStats: BatchLiveStats | null;
 }
 
 export interface BatchEventSocialResult {
@@ -19,129 +26,77 @@ export interface BatchEventSocialResult {
 }
 
 /**
- * Optimized hook that batches social data fetching for multiple events
- * Instead of N×5 queries (where N = number of events), this makes only 3 queries total
+ * An entry for every id. A card that finds its entry trusts it and does NOT
+ * fall back to its own per-event fetch, so the map must be complete even when
+ * the batch failed; `{}` on error reinstated the N+1 this hook removes
+ * (WEB-PERF-024).
+ */
+export function emptyBatchResult(eventIds: readonly string[]): BatchEventSocialResult {
+  const result: BatchEventSocialResult = {};
+  for (const id of eventIds) {
+    result[id] = { attendeeCount: 0, liveStats: null };
+  }
+  return result;
+}
+
+export async function fetchBatchEventSocial(eventIds: readonly string[]): Promise<BatchEventSocialResult> {
+  const result = emptyBatchResult(eventIds);
+  if (eventIds.length === 0) return result;
+  const ids = [...eventIds];
+
+  try {
+    // Both requests start together; they don't depend on each other.
+    const [attendeesRes, statsRes] = await Promise.all([
+      supabase
+        .from('event_attendees')
+        .select('event_id')
+        .in('event_id', ids)
+        .eq('visibility', 'public'),
+      supabase
+        .from('event_live_stats')
+        .select('event_id,total_checkins,current_attendees')
+        .in('event_id', ids),
+    ]);
+
+    // A failed batch is logged, not thrown: the page still renders its cards,
+    // just without counts, and each card keeps its initialized entry.
+    const batchErrors = [
+      attendeesRes.error && `attendees: ${attendeesRes.error.message}`,
+      statsRes.error && `live stats: ${statsRes.error.message}`,
+    ].filter(Boolean);
+    if (batchErrors.length > 0) {
+      log.error('useBatchEventSocial', 'Batch social query failed', { eventCount: ids.length, batchErrors });
+    }
+
+    for (const row of attendeesRes.data ?? []) {
+      const entry = result[row.event_id];
+      if (entry) entry.attendeeCount += 1;
+    }
+    for (const row of statsRes.data ?? []) {
+      const entry = result[row.event_id];
+      if (entry) entry.liveStats = row;
+    }
+    return result;
+  } catch (error) {
+    log.error('fetchBatch', 'Error fetching batch event social data', { error });
+    return emptyBatchResult(eventIds);
+  }
+}
+
+/**
+ * Social counts for a list of events in two parallel requests, instead of
+ * several per card.
  *
- * Performance improvement: For 20 events, reduces from 100 queries to 3 queries
+ * The key has no user id: nothing fetched here depends on who is signed in,
+ * and keying on it refetched every list on login.
  */
 export function useBatchEventSocial(eventIds: string[]) {
-  const { user } = useAuth();
+  // Sorted copy: sorting the caller's array in place reordered a memoized list.
+  const key = [...eventIds].sort().join(',');
 
   return useQuery({
-    queryKey: ['batch-event-social', eventIds.sort().join(','), user?.id],
-    queryFn: async (): Promise<BatchEventSocialResult> => {
-      if (eventIds.length === 0) {
-        return {};
-      }
-
-      try {
-        // Batch Query 1: Fetch all attendees for all events in one query
-        const { data: attendeesData, error: attendeesDataError } = await supabase
-          .from('event_attendees')
-          .select('*')
-          .in('event_id', eventIds)
-          .eq('visibility', 'public')
-          .order('created_at', { ascending: false });
-
-        // Batch Query 2: Fetch all discussions for all events in one query
-        const { data: discussionsData, error: discussionsDataError } = await supabase
-          .from('event_discussions')
-          .select('*')
-          .in('event_id', eventIds)
-          .order('created_at', { ascending: false });
-
-        // Batch Query 3: Fetch all live stats for all events in one query
-        const { data: statsData, error: statsDataError } = await supabase
-          .from('event_live_stats')
-          .select('*')
-          .in('event_id', eventIds);
-
-        // A BATCH THAT FAILED IS NOT A BATCH WITH NOTHING IN IT, and here the
-        // difference is measurable. SocialEventCard takes socialData from this
-        // hook and falls back to its own per-event fetch when the batch has
-        // nothing for an event - which on /events meant 40 cards issuing 113
-        // REST requests (WEB-PERF-024). So a silently failed batch does not
-        // just lose the social counts, it reinstates the N+1 the batch exists
-        // to remove, and looks identical to a quiet page.
-        const batchErrors = [
-          attendeesDataError && `attendees: ${attendeesDataError.message}`,
-          discussionsDataError && `discussions: ${discussionsDataError.message}`,
-          statsDataError && `live stats: ${statsDataError.message}`,
-        ].filter(Boolean);
-        if (batchErrors.length > 0) {
-          log.error('useBatchEventSocial', 'Batch social query failed', { eventCount: eventIds.length, batchErrors });
-        }
-
-        // Group data by event_id for efficient lookup
-        const result: BatchEventSocialResult = {};
-
-        // Initialize all events with empty data
-        eventIds.forEach(eventId => {
-          result[eventId] = {
-            attendees: [],
-            discussions: [],
-            liveStats: null,
-            discussionCount: 0,
-            attendeeCount: 0,
-          };
-        });
-
-        // Group attendees by event_id
-        attendeesData?.forEach(attendee => {
-          const eventId = attendee.event_id;
-          if (result[eventId]) {
-            result[eventId].attendees.push({
-              id: attendee.id,
-              user_id: attendee.user_id,
-              status: attendee.status as 'going' | 'interested' | 'maybe',
-              visibility: attendee.visibility as 'public' | 'friends_only' | 'private',
-              created_at: attendee.created_at,
-            });
-          }
-        });
-
-        // Group discussions by event_id (limit to 50 per event for performance)
-        discussionsData?.forEach(discussion => {
-          const eventId = discussion.event_id;
-          if (result[eventId]) {
-            // Only keep the first 50 discussions per event
-            if (result[eventId].discussions.length < 50) {
-              result[eventId].discussions.push({
-                id: discussion.id,
-                event_id: discussion.event_id,
-                user_id: discussion.user_id,
-                message: discussion.message,
-                message_type: discussion.message_type as 'comment' | 'photo' | 'video' | 'tip',
-                media_url: discussion.media_url,
-                parent_id: discussion.parent_id,
-                likes_count: discussion.likes_count,
-                created_at: discussion.created_at,
-                updated_at: discussion.updated_at,
-              });
-            }
-          }
-        });
-
-        // Map stats by event_id
-        statsData?.forEach(stats => {
-          const eventId = stats.event_id;
-          if (result[eventId]) {
-            result[eventId].liveStats = stats as EventLiveStats;
-          }
-        });
-
-        // Calculate counts for each event
-        Object.keys(result).forEach(eventId => {
-          result[eventId].attendeeCount = result[eventId].attendees.length;
-          result[eventId].discussionCount = result[eventId].discussions.length;
-        });
-
-        return result;
-      } catch (error) {
-        log.error('fetchBatch', 'Error fetching batch event social data', { error });
-        return {};
-      }
-    },
+    queryKey: ['batch-event-social', key],
+    queryFn: () => fetchBatchEventSocial(eventIds),
     staleTime: 2 * 60 * 1000, // 2 minutes - social data changes frequently
     gcTime: 5 * 60 * 1000, // 5 minutes
     enabled: eventIds.length > 0,

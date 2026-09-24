@@ -6,7 +6,7 @@ import { Star, DollarSign } from "lucide-react";
 import { usePersonalizedRecommendations } from '@/hooks/usePersonalizedRecommendations';
 import { Link } from 'react-router-dom';
 import { SpriteIcon } from "@/components/ui/SpriteIcon";
-import { formatEventPart } from "@/lib/timezone";
+import { createEventSlugWithCentralTime, formatEventPart } from "@/lib/timezone";
 
 interface PersonalizedContentProps {
   type?: 'events' | 'restaurants' | 'attractions' | 'trending' | 'all';
@@ -34,7 +34,11 @@ export default function PersonalizedContent({
   const formatContentUrl = (contentType: string, content: any) => {
     switch (contentType) {
       case 'event':
-        return `/events/${content.id}`;
+        // Title + Central date slug (events plan WP9); the row is select('*')
+        // so both are present. An undated row keeps the id.
+        return content.event_start_utc || content.date
+          ? `/events/${createEventSlugWithCentralTime(content.title, content)}`
+          : `/events/${encodeURIComponent(content.id)}`;
       case 'restaurant':
         return `/restaurants/${content.id}`;
       case 'attraction':

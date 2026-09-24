@@ -131,5 +131,7 @@ export const queryKeys = {
     profile: (userId: string) => [...queryKeys.user.all, 'profile', userId] as const,
     preferences: (userId: string) => [...queryKeys.user.all, 'preferences', userId] as const,
     subscription: (userId: string) => [...queryKeys.user.all, 'subscription', userId] as const,
+    /** Header level badge: current_level + experience_points only (useUserLevel). */
+    level: (userId: string) => [...queryKeys.user.all, 'level', userId] as const,
   },
 } as const;

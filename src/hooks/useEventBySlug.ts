@@ -1,9 +1,10 @@
 import { useQuery } from "@tanstack/react-query";
 import { supabase } from "@/integrations/supabase/client";
 import { createLogger } from "@/lib/logger";
-import { createEventSlugWithCentralTime } from "@/lib/timezone";
+import { createEventSlugWithCentralTime, upcomingFloorUtc } from "@/lib/timezone";
 import { EVENT_SLUG_COLUMNS } from "@/lib/listColumns";
-import { slugToTitlePattern } from "@/lib/slug";
+import { createSlug, slugToTitlePattern } from "@/lib/slug";
+import { applyEventVisibility } from "@/lib/eventQuery";
 import type { Database } from "@/integrations/supabase/types";
 
 const log = createLogger("useEventBySlug");
@@ -45,7 +46,87 @@ export function parseSlugDate(slug: string): string | null {
   return `${year}-${month}-${day}`;
 }
 
+const UUID_RE = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
+
+/** True for a bare row id, which push payloads, favorites and emails still build. */
+export function isEventIdSlug(slug: string): boolean {
+  return UUID_RE.test(slug);
+}
+
+export interface SlugCandidate {
+  id: string;
+  title: string | null;
+  date: string | null;
+  event_start_utc?: string | null;
+}
+
+/** Words of three or more characters, for the stale-slug overlap guard. */
+function significantWords(titleSlug: string): Set<string> {
+  return new Set(titleSlug.split("-").filter((w) => w.length >= 3));
+}
+
+/**
+ * Which candidate a slug names (events plan WP8 item 2).
+ *
+ *   1. The exact slug.
+ *   2. A stale slug: the title part matches exactly one candidate in the
+ *      window (the event moved a day), or the date part matches exactly one
+ *      candidate whose title shares a word with the slug (the scraper retitled
+ *      it). More than one candidate is ambiguous and returns null, a 404,
+ *      rather than a guess.
+ *
+ * The caller redirects to the canonical slug whenever it differs.
+ */
+export function pickSlugCandidate<C extends SlugCandidate>(slug: string, candidates: readonly C[]): C | null {
+  const exact = candidates.find((e) => createEventSlugWithCentralTime(e.title, e) === slug);
+  if (exact) return exact;
+
+  const slugDate = parseSlugDate(slug);
+  if (!slugDate) return null;
+  const titlePart = slug.slice(0, -"-yyyy-mm-dd".length);
+
+  const sameTitle = candidates.filter((e) => createSlug(e.title ?? "") === titlePart);
+  if (sameTitle.length === 1) return sameTitle[0];
+  if (sameTitle.length > 1) return null;
+
+  const wanted = significantWords(titlePart);
+  if (wanted.size === 0) return null;
+  const sameDay = candidates.filter(
+    (e) => createEventSlugWithCentralTime(e.title, e).endsWith(`-${slugDate}`)
+  );
+  const overlapping = sameDay.filter((e) =>
+    [...significantWords(createSlug(e.title ?? ""))].some((w) => wanted.has(w))
+  );
+  return sameDay.length === 1 && overlapping.length === 1 ? overlapping[0] : null;
+}
+
+async function fetchFullEvent(slug: string, id: string): Promise<Event | null> {
+  // select("*") is right here: EventDetail renders seo_*, geo_* and the
+  // enhanced description.
+  const { data: full, error: fullError } = await applyEventVisibility(
+    supabase.from("events").select("*")
+  )
+    .eq("id", id)
+    .maybeSingle();
+
+  if (fullError) {
+    log.error("fetchEventBySlug", "Could not load the matched event", {
+      slug,
+      id,
+      message: fullError.message,
+      code: fullError.code,
+    });
+    throw fullError;
+  }
+
+  return (full as Event) ?? null;
+}
+
 async function fetchEventBySlug(slug: string): Promise<Event | null> {
+  // A bare UUID (WP8 item 2, D9): look the row up by id with the same
+  // visibility predicates. EventDetails then redirects to the canonical slug.
+  if (isEventIdSlug(slug)) return fetchFullEvent(slug, slug);
+
   const slugDate = parseSlugDate(slug);
 
   // The candidate scan asks for the four columns the slug is DERIVED from, not
@@ -81,7 +162,8 @@ async function fetchEventBySlug(slug: string): Promise<Event | null> {
     if (!pattern) return null;
     query = query
       .ilike("title", pattern)
-      .gte("date", new Date().toISOString().split("T")[0])
+      // Start of today in Central: a UTC date drops tonight's events after 7pm.
+      .gte("date", upcomingFloorUtc())
       .order("date", { ascending: true })
       .limit(20);
   }
@@ -99,41 +181,23 @@ async function fetchEventBySlug(slug: string): Promise<Event | null> {
     throw error;
   }
 
-  const match = (data ?? []).find(
-    (e) => createEventSlugWithCentralTime(e.title, e) === slug
-  );
-
+  const match = pickSlugCandidate(slug, (data ?? []) as SlugCandidate[]);
   if (!match) return null;
 
   // Second round trip, only on a cache miss and only for the one row that
-  // matched. select("*") is right here: EventDetail renders seo_*, geo_* and
-  // the enhanced description.
-  const { data: full, error: fullError } = await supabase
-    .from("events")
-    .select("*")
-    .eq("id", match.id)
-    .maybeSingle();
-
-  if (fullError) {
-    log.error("fetchEventBySlug", "Could not load the matched event", {
-      slug,
-      id: match.id,
-      message: fullError.message,
-      code: fullError.code,
-    });
-    throw fullError;
-  }
-
-  return (full as Event) ?? null;
+  // matched.
+  return fetchFullEvent(slug, match.id);
 }
 
 export function useEventBySlug(slug: string | undefined) {
-  const { data, isLoading, error } = useQuery({
+  const { data, isLoading, error, refetch, isFetching } = useQuery({
     queryKey: ["event-by-slug", slug],
     enabled: Boolean(slug),
     queryFn: () => fetchEventBySlug(slug as string),
     staleTime: 5 * 60 * 1000,
   });
 
-  return { event: data ?? null, isLoading, error };
+  // error and refetch are read by EventDetails so a failed request renders
+  // Retry instead of "Event Not Found" plus noindex (WP8 item 3).
+  return { event: data ?? null, isLoading, error, refetch, isFetching };
 }

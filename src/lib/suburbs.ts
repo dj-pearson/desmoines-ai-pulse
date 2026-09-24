@@ -1,3 +1,5 @@
+import { findNeighborhood } from "@/lib/neighborhoods";
+
 /**
  * The suburb inventory behind /events/<slug> (WEB-SEO-036 AC5).
  *
@@ -7,13 +9,16 @@
  * existed, and so /neighborhoods/ankeny and /events/ankeny never linked to each
  * other despite being the two pages about Ankeny on this site.
  *
- * THE TWO LISTS DO NOT MATCH, AND THAT IS NOT A BUG TO FIX HERE. Six slugs are
- * in both. `east-village` and `waukee` have a neighborhood guide and no events
- * page; `windsor-heights` has an events page and no guide. So a cross-link is
+ * THE TWO LISTS DO NOT MATCH, AND THAT IS NOT A BUG TO FIX HERE. Seven slugs
+ * are in both. `east-village` has a neighborhood guide and no events page;
+ * `windsor-heights` has an events page and no guide. So a cross-link is
  * conditional on the other side existing, which is why hasSuburbPage() and
  * hasNeighborhoodGuide() exist rather than a hardcoded pair of link lists.
- * Linking to /events/waukee would 404 - App.tsx mounts these seven paths one by
- * one, and there is no catch-all behind them.
+ * App.tsx mounts each /events/<suburb> path one by one with no catch-all behind
+ * them, so a slug added here without its route links to a 404.
+ *
+ * Waukee joined in the events plan (WP7): it already had a guide and was the
+ * one western suburb with no events page.
  *
  * scripts/check-neighborhood-inventory.mjs asserts this list and App.tsx's
  * routes stay in step.
@@ -69,6 +74,13 @@ export const SUBURBS = {
       "Windsor Heights hosts intimate community events and local gatherings in a charming suburban setting.",
     neighborhoods: ["Downtown Windsor Heights"],
   },
+  waukee: {
+    name: "Waukee",
+    searchTerms: ["Waukee"],
+    description:
+      "Waukee's calendar runs through Centennial Park, Triumph Park and the Waukee Family YMCA, with youth sports and community festivals on the west edge of the metro.",
+    neighborhoods: ["Downtown Waukee", "Centennial Park", "Triumph Park"],
+  },
 };
 
 export type SuburbSlug = keyof typeof SUBURBS;
@@ -77,6 +89,16 @@ export type SuburbSlug = keyof typeof SUBURBS;
 export function hasSuburbPage(slug: string): slug is SuburbSlug {
   return Object.prototype.hasOwnProperty.call(SUBURBS, slug);
 }
+
+/** Does /neighborhoods/<slug> exist? Pairs a suburb events pill with its guide. */
+export function hasNeighborhoodGuide(slug: string): boolean {
+  return findNeighborhood(slug)?.prerender === true;
+}
+
+/** Suburb event pages in inventory order, for directories that list them all. */
+export const SUBURB_EVENT_PAGES: Array<{ slug: SuburbSlug; name: string; href: string }> = (
+  Object.keys(SUBURBS) as SuburbSlug[]
+).map((slug) => ({ slug, name: SUBURBS[slug].name, href: `/events/${slug}` }));
 
 export function findSuburb(slug: string | null | undefined) {
   if (!slug || !hasSuburbPage(slug)) return null;
