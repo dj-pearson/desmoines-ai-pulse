@@ -5,7 +5,6 @@ import { createSlug } from "@/lib/slug";
 import { fetchBySlug } from "@/lib/resolveBySlug";
 import type { Database } from "@/integrations/supabase/types";
 import { useQuery } from "@tanstack/react-query";
-import { supabase } from "@/integrations/supabase/client";
 import { Card, CardContent } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
@@ -25,14 +24,29 @@ import EnhancedPlaygroundSEO from "@/components/EnhancedPlaygroundSEO";
 import { BreadcrumbListSchema } from "@/components/schema/BreadcrumbListSchema";
 import { BRAND, getCanonicalUrl } from "@/lib/brandConfig";
 import { Helmet } from "react-helmet-async";
-import { Star, ArrowLeft, Navigation, Heart, Check, Info, Zap, ChevronRight, TreePine, Baby, Shield } from "lucide-react";
+import { Star, ArrowLeft, Navigation, Check, Info, Zap, TreePine } from "lucide-react";
 import { useState } from "react";
 import { SpriteIcon } from "@/components/ui/SpriteIcon";
 import { OptimizedImage } from "@/components/OptimizedImage";
 import { DETAIL_STALE_TIME, detailQueryKey } from "@/lib/detailQueryKeys";
 import { isInMetro } from "@/lib/geo";
+import {
+  formatMilesAway,
+  useNearbyPlaygrounds,
+  useSameAgePlaygrounds,
+  type PlaygroundCard,
+} from "@/hooks/usePlaygrounds";
 
 type Playground = Database["public"]["Tables"]["playgrounds"]["Row"];
+
+const NOT_CONFIRMED = "Not yet confirmed";
+
+/** A nullable boolean column, read without guessing: null is unknown. */
+function yesNo(value: boolean | null | undefined): string {
+  if (value === true) return "Yes";
+  if (value === false) return "No";
+  return NOT_CONFIRMED;
+}
 
 export default function PlaygroundDetails() {
   const { slug } = useParams();
@@ -52,41 +66,17 @@ export default function PlaygroundDetails() {
     staleTime: DETAIL_STALE_TIME,
   });
 
-  const { data: relatedPlaygrounds } = useQuery({
-    queryKey: ["related-playgrounds", playground?.age_range, playground?.id],
-    queryFn: async () => {
-      if (!playground) return [];
-      const { data, error } = await supabase
-        .from("playgrounds")
-        .select("*")
-        .eq("age_range", playground.age_range)
-        .neq("id", playground.id)
-        .limit(4);
-
-      if (error) throw error;
-      return data || [];
-    },
-    enabled: !!playground?.age_range,
-  });
-
-  const { data: nearbyPlaygrounds } = useQuery({
-    queryKey: ["nearby-playgrounds", playground?.age_range, playground?.id],
-    queryFn: async () => {
-      if (!playground) return [];
-      const { data, error } = await supabase
-        .from("playgrounds")
-        .select("*")
-        .neq("id", playground.id)
-        .neq("age_range", playground.age_range || "")
-        .order("rating", { ascending: false })
-        .limit(4);
-
-      if (error) throw error;
-      return data || [];
-    },
-    enabled: !!playground,
-  });
-
+  // Explore plan WP4 item 2. Both side lists were unbounded select=* queries;
+  // "nearby" was really "other age ranges, NULL ratings first", and its
+  // out-of-state rows linked to Not Found. Both are metro-bounded now, and
+  // nearby is a box around this playground sorted by distance.
+  const { data: relatedPlaygrounds } = useSameAgePlaygrounds(playground);
+  const { data: nearbyCandidates } = useNearbyPlaygrounds(playground);
+  // One card per playground across the two sections.
+  const relatedIds = new Set((relatedPlaygrounds ?? []).map((p) => p.id));
+  const nearbyPlaygrounds = (nearbyCandidates ?? [])
+    .filter((p) => !relatedIds.has(p.id))
+    .slice(0, 4);
 
   if (isLoading) {
     return (
@@ -140,12 +130,12 @@ export default function PlaygroundDetails() {
               <p className="text-gray-600 mb-6">
                 The playground you're looking for doesn't exist or has been removed.
               </p>
-              <Link to="/playgrounds">
-                <Button className="bg-[#2D1B69] hover:bg-[#2D1B69]/90">
+              <Button asChild className="bg-[#2D1B69] hover:bg-[#2D1B69]/90">
+                <Link to="/playgrounds">
                   <ArrowLeft className="h-4 w-4 mr-2" />
                   Back to Playgrounds
-                </Button>
-              </Link>
+                </Link>
+              </Button>
             </CardContent>
           </Card>
         </div>
@@ -162,7 +152,7 @@ export default function PlaygroundDetails() {
   // previous answers told every one of these pages - suburban parks run by
   // other cities, and any indoor play space in the table - that it was "a free
   // public playground in Des Moines", "maintained by the Des Moines Parks &
-  // Recreation Department", open "dawn to dusk" with "free parking". None of
+  // Recreation Department", open all day with "free parking". None of
   // that is a column, and FAQPage schema publishes it as a factual claim.
   const playgroundFaqs = [
     ...(playground.age_range
@@ -228,12 +218,12 @@ export default function PlaygroundDetails() {
 
           {/* Top Actions Bar */}
           <div className="flex items-center justify-between mb-6">
-            <Link to="/playgrounds">
-              <Button variant="ghost" size="sm" className="text-gray-600 hover:text-gray-900 -ml-2">
+            <Button asChild variant="ghost" size="sm" className="text-muted-foreground hover:text-foreground -ml-2">
+              <Link to="/playgrounds">
                 <ArrowLeft className="h-4 w-4 mr-1" />
                 All Playgrounds
-              </Button>
-            </Link>
+              </Link>
+            </Button>
             <div className="flex gap-2">
               <ShareDialog
                 title={playground.name}
@@ -272,12 +262,7 @@ export default function PlaygroundDetails() {
                   onError={() => setImageError(true)}
                 />
               ) : (
-                <div className="absolute inset-0 bg-gradient-to-br from-[#2D1B69] via-emerald-700 to-[#DC143C]">
-                  <div className="absolute inset-0 opacity-10">
-                    <div className="absolute top-10 right-10 w-40 h-40 border-2 border-white/30 rounded-full" />
-                    <div className="absolute bottom-10 left-10 w-64 h-64 border border-white/20 rounded-full" />
-                  </div>
-                </div>
+                <div className="absolute inset-0 bg-[#2D1B69]" />
               )}
 
               {/* Overlay */}
@@ -335,62 +320,60 @@ export default function PlaygroundDetails() {
             {/* Quick Actions Bar */}
             <div className="flex flex-wrap gap-3 p-4 md:p-6 bg-gray-50 border-b">
               {playground.location && (
-                <a
-                  href={getDirectionsUrl({ latitude: playground.latitude, longitude: playground.longitude, address: `${playground.name} ${playground.location}` })}
-                  target="_blank"
-                  rel="noopener noreferrer"
-                >
-                  <Button className="bg-[#2D1B69] hover:bg-[#2D1B69]/90 text-white rounded-xl">
+                <Button asChild className="bg-[#2D1B69] hover:bg-[#2D1B69]/90 text-white rounded-xl">
+                  <a
+                    href={getDirectionsUrl({ latitude: playground.latitude, longitude: playground.longitude, address: `${playground.name} ${playground.location}` })}
+                    target="_blank"
+                    rel="noopener noreferrer"
+                  >
                     <Navigation className="h-4 w-4 mr-2" />
                     Get Directions
-                  </Button>
-                </a>
+                  </a>
+                </Button>
               )}
-              <ShareDialog
-                title={playground.name}
-                description={playground.description || `Discover ${playground.name} playground in Des Moines`}
-                url={typeof window !== "undefined" ? window.location.href : ""}
-              />
+              {/* One Share (WP4 item 9): the top bar already has it. */}
             </div>
 
             <CardContent className="p-6 md:p-10">
-              {/* Key Stats Grid */}
-              <div className="grid grid-cols-2 md:grid-cols-4 gap-4 mb-8">
-                <div className="text-center p-4 bg-amber-50 rounded-2xl border border-amber-100">
-                  <Star className="h-6 w-6 text-amber-500 mx-auto mb-2" />
-                  <div className="text-2xl font-bold text-gray-900">
-                    {playground.rating ? playground.rating.toFixed(1) : "N/A"}
+              {/* Parent essentials (WP4 items 4 and 9). One facts row in place
+                  of the four-tile grid, which spent a tile on "N/A" rating and
+                  another on "--" featured. Every value is a column; a null
+                  says so instead of guessing. */}
+              <section aria-labelledby="essentials-heading" data-testid="playground-essentials">
+                <h2 id="essentials-heading" className="text-xl font-bold text-foreground mb-4">
+                  Parent essentials
+                </h2>
+                <dl className="grid grid-cols-2 md:grid-cols-5 gap-x-6 gap-y-4">
+                  <div>
+                    <dt className="text-sm text-muted-foreground">Ages</dt>
+                    <dd className="font-semibold text-foreground">{playground.age_range || NOT_CONFIRMED}</dd>
                   </div>
-                  <div className="text-sm text-gray-600">Rating</div>
-                </div>
-                <div className="text-center p-4 bg-purple-50 rounded-2xl border border-purple-100">
-                  <Baby className="h-6 w-6 text-purple-500 mx-auto mb-2" />
-                  <div className="text-lg font-bold text-gray-900 line-clamp-1">
-                    {playground.age_range || "All Ages"}
+                  <div>
+                    <dt className="text-sm text-muted-foreground">Shade</dt>
+                    <dd className="font-semibold text-foreground">{yesNo(playground.has_shade)}</dd>
                   </div>
-                  <div className="text-sm text-gray-600">Age Range</div>
-                </div>
-                <div className="text-center p-4 bg-emerald-50 rounded-2xl border border-emerald-100">
-                  <Zap className="h-6 w-6 text-emerald-500 mx-auto mb-2" />
-                  <div className="text-2xl font-bold text-gray-900">
-                    {playground.amenities?.length || 0}
+                  <div>
+                    <dt className="text-sm text-muted-foreground">Restrooms</dt>
+                    <dd className="font-semibold text-foreground">{yesNo(playground.has_restrooms)}</dd>
                   </div>
-                  <div className="text-sm text-gray-600">Amenities</div>
-                </div>
-                <div className="text-center p-4 bg-blue-50 rounded-2xl border border-blue-100">
-                  <Shield className="h-6 w-6 text-blue-500 mx-auto mb-2" />
-                  <div className="text-2xl font-bold text-gray-900">
-                    {playground.is_featured ? (
-                      <Check className="h-7 w-7 text-blue-500 mx-auto" />
-                    ) : (
-                      "--"
-                    )}
+                  <div>
+                    <dt className="text-sm text-muted-foreground">Surface</dt>
+                    <dd className="font-semibold text-foreground">
+                      {playground.surface_type?.trim() || NOT_CONFIRMED}
+                    </dd>
                   </div>
-                  <div className="text-sm text-gray-600">
-                    {playground.is_featured ? "Editor's Pick" : "Featured"}
+                  <div>
+                    <dt className="text-sm text-muted-foreground">Admission</dt>
+                    <dd className="font-semibold text-foreground">Free</dd>
                   </div>
-                </div>
-              </div>
+                  <div className="col-span-2 md:col-span-5">
+                    <dt className="text-sm text-muted-foreground">Accessibility</dt>
+                    <dd className="text-foreground">
+                      {playground.accessibility_notes?.trim() || NOT_CONFIRMED}
+                    </dd>
+                  </div>
+                </dl>
+              </section>
 
               <Separator className="my-8" />
 
@@ -459,15 +442,17 @@ export default function PlaygroundDetails() {
                         </Badge>
                       </div>
                     )}
-                    <div className="flex items-center justify-between p-4 bg-gray-50 rounded-xl">
-                      <span className="text-gray-600">Rating</span>
-                      <div className="flex items-center gap-1.5">
-                        <Star className="h-4 w-4 fill-amber-400 text-amber-400" />
-                        <span className="text-gray-900 font-semibold">
-                          {playground.rating ? playground.rating.toFixed(1) : "N/A"}
-                        </span>
+                    {playground.rating ? (
+                      <div className="flex items-center justify-between p-4 bg-gray-50 rounded-xl">
+                        <span className="text-gray-600">Rating</span>
+                        <div className="flex items-center gap-1.5">
+                          <Star className="h-4 w-4 fill-amber-400 text-amber-400" />
+                          <span className="text-gray-900 font-semibold">
+                            {playground.rating.toFixed(1)}
+                          </span>
+                        </div>
                       </div>
-                    </div>
+                    ) : null}
                     <div className="flex items-center justify-between p-4 bg-gray-50 rounded-xl">
                       <span className="text-gray-600">Area</span>
                       <span className="text-gray-900 text-sm font-medium">{BRAND.region}</span>
@@ -503,10 +488,10 @@ export default function PlaygroundDetails() {
                         <strong>{playground.name}</strong> is a public playground
                         located {playground.location ? `at ${playground.location} in` : "in"} {BRAND.city}, {BRAND.state}.
                         {playground.age_range ? ` Designed for ages ${playground.age_range}.` : ""}
-                        {playground.rating ? ` Rated ${playground.rating.toFixed(1)} out of 5 stars by families.` : ""}
+                        {playground.rating ? ` Rated ${playground.rating.toFixed(1)} out of 5.` : ""}
                         {playground.amenities && playground.amenities.length > 0 ? ` Amenities include ${playground.amenities.join(", ")}.` : ""}
                         {playground.is_featured ? ` This playground is an editor's pick on ${BRAND.name}.` : ""}
-                        {` Free admission. Open dawn to dusk.`}
+                        {` Free admission.`}
                       </p>
                     </div>
                   </div>
@@ -569,10 +554,6 @@ export default function PlaygroundDetails() {
                       <h3 className="font-semibold text-sm text-gray-900">Area</h3>
                       <p className="text-sm text-gray-600">{BRAND.region}</p>
                     </div>
-                    <div>
-                      <h3 className="font-semibold text-sm text-gray-900">Good For</h3>
-                      <p className="text-sm text-gray-600">Families, Children, Toddlers, Outdoor Play</p>
-                    </div>
                   </div>
                 </div>
               </section>
@@ -601,104 +582,24 @@ export default function PlaygroundDetails() {
               </p>
               <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-5">
                 {relatedPlaygrounds.map((related) => (
-                  <Link
-                    key={related.id}
-                    // The stored slug wins where the two disagree: two
-                    // playgrounds sharing a name get one bare slug and one
-                    // numeric suffix (migration 20260919000008), and the
-                    // name-derived link would send both to the first row. The
-                    // fallback covers the window before that migration lands.
-                    // AttractionDetails cannot do this - its related/nearby
-                    // queries use ATTRACTION_LIST_COLUMNS, which does not carry
-                    // slug and must not until the column is live.
-                    to={`/playgrounds/${related.slug || createSlug(related.name)}`}
-                    className="block"
-                  >
-                    <Card className="h-full hover:shadow-lg transition-all duration-300 hover:-translate-y-1 rounded-2xl overflow-hidden">
-                      {related.image_url ? (
-                        <div className="aspect-video overflow-hidden">
-                          <OptimizedImage
-                            src={related.image_url}
-                            alt={`${related.name} - Playground in ${BRAND.city}`}
-                            className="object-cover"
-                            containerClassName="w-full h-full"
-                            sizes="(max-width: 640px) 100vw, (max-width: 1024px) 50vw, 33vw"
-                          />
-                        </div>
-                      ) : (
-                        <div className="aspect-video bg-gradient-to-br from-[#2D1B69] to-emerald-600 flex items-center justify-center">
-                          <TreePine className="h-10 w-10 text-white/50" />
-                        </div>
-                      )}
-                      <CardContent className="p-4">
-                        <h3 className="font-semibold text-base line-clamp-1 mb-1">{related.name}</h3>
-                        <div className="flex items-center gap-2 text-sm text-gray-500">
-                          {related.age_range && (
-                            <Badge variant="outline" className="text-xs">Ages {related.age_range}</Badge>
-                          )}
-                          {related.rating && (
-                            <div className="flex items-center gap-1">
-                              <Star className="h-3 w-3 fill-amber-400 text-amber-400" />
-                              <span>{related.rating.toFixed(1)}</span>
-                            </div>
-                          )}
-                        </div>
-                      </CardContent>
-                    </Card>
-                  </Link>
+                  <PlaygroundSideCard key={related.id} item={related} />
                 ))}
               </div>
             </section>
           )}
 
-          {/* Nearby Playgrounds - Different Age Range */}
-          {nearbyPlaygrounds && nearbyPlaygrounds.length > 0 && (
+          {/* Nearby Playgrounds - by distance from this one */}
+          {nearbyPlaygrounds.length > 0 && (
             <section className="mb-8" aria-labelledby="nearby-heading">
-              <h2 id="nearby-heading" className="text-2xl font-bold text-gray-900 mb-2">
-                Other Popular Playgrounds in {BRAND.city}
+              <h2 id="nearby-heading" className="text-2xl font-bold text-foreground mb-2">
+                Playgrounds Near {playground.name}
               </h2>
-              <p className="text-gray-600 mb-6">
-                Discover more playgrounds in the {BRAND.region}
+              <p className="text-muted-foreground mb-6">
+                Closest first, by straight-line distance.
               </p>
               <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-5">
                 {nearbyPlaygrounds.map((nearby) => (
-                  <Link
-                    key={nearby.id}
-                    to={`/playgrounds/${nearby.slug || createSlug(nearby.name)}`}
-                    className="block"
-                  >
-                    <Card className="h-full hover:shadow-lg transition-all duration-300 hover:-translate-y-1 rounded-2xl overflow-hidden">
-                      {nearby.image_url ? (
-                        <div className="aspect-video overflow-hidden">
-                          <OptimizedImage
-                            src={nearby.image_url}
-                            alt={`${nearby.name} - Playground in ${BRAND.city}`}
-                            className="object-cover"
-                            containerClassName="w-full h-full"
-                            sizes="(max-width: 640px) 100vw, (max-width: 1024px) 50vw, 33vw"
-                          />
-                        </div>
-                      ) : (
-                        <div className="aspect-video bg-gradient-to-br from-[#2D1B69] to-emerald-600 flex items-center justify-center">
-                          <TreePine className="h-10 w-10 text-white/50" />
-                        </div>
-                      )}
-                      <CardContent className="p-4">
-                        <h3 className="font-semibold text-base line-clamp-1 mb-1">{nearby.name}</h3>
-                        <div className="flex items-center gap-2 text-sm text-gray-500">
-                          {nearby.age_range && (
-                            <Badge variant="outline" className="text-xs">Ages {nearby.age_range}</Badge>
-                          )}
-                          {nearby.rating && (
-                            <div className="flex items-center gap-1">
-                              <Star className="h-3 w-3 fill-amber-400 text-amber-400" />
-                              <span>{nearby.rating.toFixed(1)}</span>
-                            </div>
-                          )}
-                        </div>
-                      </CardContent>
-                    </Card>
-                  </Link>
+                  <PlaygroundSideCard key={nearby.id} item={nearby} />
                 ))}
               </div>
             </section>
@@ -720,12 +621,12 @@ export default function PlaygroundDetails() {
 
           {/* Browse More CTA */}
           <div className="text-center py-8">
-            <Link to="/playgrounds">
-              <Button size="lg" className="bg-[#2D1B69] hover:bg-[#2D1B69]/90 text-white rounded-xl px-8">
+            <Button asChild size="lg" className="bg-[#2D1B69] hover:bg-[#2D1B69]/90 text-white rounded-xl px-8">
+              <Link to="/playgrounds">
                 <TreePine className="h-5 w-5 mr-2" />
                 Browse All Des Moines Playgrounds
-              </Button>
-            </Link>
+              </Link>
+            </Button>
           </div>
         </div>
       </div>
@@ -745,5 +646,59 @@ export default function PlaygroundDetails() {
         }}
       />
     </>
+  );
+}
+
+// Below the default export so the page hero is the first OptimizedImage
+// in the file, which is what scripts/check-lcp-priority.mjs reads.
+interface SideCardProps {
+  item: PlaygroundCard;
+}
+
+/**
+ * A related/nearby card. Linked by name-derived slug: the list columns carry
+ * no `slug` until plan D2's column is live, and fetchBySlug resolves the
+ * name form.
+ */
+function PlaygroundSideCard({ item }: SideCardProps) {
+  return (
+    <Link to={`/playgrounds/${createSlug(item.name)}`} className="block" data-testid="playground-side-card">
+      <Card className="h-full hover:shadow-lg transition-shadow duration-300 rounded-2xl overflow-hidden">
+        {item.image_url ? (
+          <div className="aspect-video overflow-hidden">
+            <OptimizedImage
+              src={item.image_url}
+              alt={`${item.name} - Playground in ${BRAND.city}`}
+              className="object-cover"
+              containerClassName="w-full h-full"
+              sizes="(max-width: 640px) 100vw, (max-width: 1024px) 50vw, 33vw"
+            />
+          </div>
+        ) : (
+          <div className="aspect-video bg-muted flex items-center justify-center">
+            <TreePine className="h-10 w-10 text-muted-foreground/50" />
+          </div>
+        )}
+        <CardContent className="p-4">
+          <h3 className="font-semibold text-base line-clamp-1 mb-1">{item.name}</h3>
+          {item.distanceMiles != null && (
+            <p className="text-sm font-medium text-foreground mb-1">{formatMilesAway(item.distanceMiles)}</p>
+          )}
+          <div className="flex flex-wrap items-center gap-2 text-sm text-muted-foreground">
+            {item.age_range && (
+              <Badge variant="outline" className="text-xs">Ages {item.age_range}</Badge>
+            )}
+            {item.has_shade && <Badge variant="secondary" className="text-xs">Shade</Badge>}
+            {item.has_restrooms && <Badge variant="secondary" className="text-xs">Restrooms</Badge>}
+            {item.rating ? (
+              <div className="flex items-center gap-1">
+                <Star className="h-3 w-3 fill-amber-400 text-amber-400" />
+                <span>{item.rating.toFixed(1)}</span>
+              </div>
+            ) : null}
+          </div>
+        </CardContent>
+      </Card>
+    </Link>
   );
 }

@@ -1,6 +1,6 @@
-import { useState } from 'react';
+import { useId } from 'react';
 import { OptimizedImage } from "@/components/OptimizedImage";
-import { Link } from 'react-router-dom';
+import { Link, useSearchParams } from 'react-router-dom';
 import Header from '@/components/Header';
 import Footer from '@/components/Footer';
 import SEOHead from '@/components/SEOHead';
@@ -19,11 +19,13 @@ import {
   useOutdoorAttractions,
 } from '@/hooks/useOutdoorsNearby';
 import { useTrails, getDifficultyLabel, getSurfaceLabel } from '@/hooks/useTrails';
+import { useWeather } from '@/hooks/useWeather';
+import { getDirectionsUrl } from '@/lib/directions';
 import { Card, CardContent } from '@/components/ui/card';
 import { Badge } from '@/components/ui/badge';
 import { Skeleton } from '@/components/ui/skeleton';
 import { Button } from '@/components/ui/button';
-import { Ruler, Mountain, Bike, Footprints, Route } from 'lucide-react';
+import { Ruler, Mountain, Bike, Footprints, Route, Navigation } from 'lucide-react';
 import { ErrorState } from '@/components/ui/error-state';
 
 const DIFFICULTY_COLORS: Record<string, string> = {
@@ -46,8 +48,41 @@ const ACTIVITY_ICONS: Record<string, typeof Bike> = {
  */
 const SCHEMA_LIMIT = 50;
 
-const DIFFICULTY_FILTERS = ['All', 'Easy', 'Moderate', 'Difficult'];
-const ACTIVITY_FILTERS = ['All', 'Biking', 'Hiking', 'Running', 'Walking'];
+/**
+ * Filter options. `value` is what the URL carries and what the trails table
+ * stores (lowercase); `label` is what the button says. 'all' never reaches the
+ * URL, so a bare /outdoors and /outdoors?difficulty=all read the same.
+ */
+const DIFFICULTY_FILTERS = [
+  { value: 'all', label: 'All' },
+  { value: 'easy', label: 'Easy' },
+  { value: 'moderate', label: 'Moderate' },
+  { value: 'difficult', label: 'Difficult' },
+] as const;
+const ACTIVITY_FILTERS = [
+  { value: 'all', label: 'All' },
+  { value: 'biking', label: 'Biking' },
+  { value: 'hiking', label: 'Hiking' },
+  { value: 'running', label: 'Running' },
+  { value: 'walking', label: 'Walking' },
+] as const;
+
+type FilterKey = 'difficulty' | 'activity';
+
+/** A URL value that isn't one of the options reads as 'all', not as an empty list. */
+function readFilter(
+  params: URLSearchParams,
+  key: FilterKey,
+  options: ReadonlyArray<{ value: string }>,
+): string {
+  const raw = params.get(key)?.toLowerCase() ?? 'all';
+  return options.some((option) => option.value === raw) ? raw : 'all';
+}
+
+/** Below this effective temperature the weather line points at the winter notes. */
+const WINTER_LINK_BELOW_F = 32;
+/** At or above this chance of precipitation, warn about unpaved trails. */
+const MUDDY_TRAILS_AT_PCT = 50;
 
 /**
  * Pages elsewhere on the site that an outdoors reader has a reason to open.
@@ -58,7 +93,9 @@ const RELATED_GUIDES: Array<{ to: string; label: string; note: string }> = [
   {
     to: '/playgrounds',
     label: 'Des Moines playgrounds',
-    note: '69 mapped play spaces, filterable by age, splash pad and shade.',
+    // The count is appended from usePlaygroundsNearDestinations when it
+    // loads; see playgroundsNote below. No number is written here.
+    note: 'Filterable by age, splash pad and shade.',
   },
   {
     to: '/attractions',
@@ -99,16 +136,55 @@ const RELATED_GUIDES: Array<{ to: string; label: string; note: string }> = [
 
 export default function OutdoorsHub() {
   const { data: allTrails, isLoading, isError, error, refetch } = useTrails();
-  const { data: playgroundsByDestination } = usePlaygroundsNearDestinations();
+  const { data: nearbyPlaygrounds } = usePlaygroundsNearDestinations();
   const { data: outdoorAttractions } = useOutdoorAttractions();
-  const [difficultyFilter, setDifficultyFilter] = useState('All');
-  const [activityFilter, setActivityFilter] = useState('All');
+  const { weather, hasVerdict } = useWeather();
+  const [searchParams, setSearchParams] = useSearchParams();
+  const difficultyLabelId = useId();
+  const activityLabelId = useId();
+
+  // Filters live in the URL so /outdoors?difficulty=moderate is shareable and
+  // Back undoes the last filter change. Each change pushes a history entry.
+  const difficultyFilter = readFilter(searchParams, 'difficulty', DIFFICULTY_FILTERS);
+  const activityFilter = readFilter(searchParams, 'activity', ACTIVITY_FILTERS);
+  const hasActiveFilter = difficultyFilter !== 'all' || activityFilter !== 'all';
+
+  const setFilter = (key: FilterKey, value: string) => {
+    const next = new URLSearchParams(searchParams);
+    if (value === 'all') next.delete(key);
+    else next.set(key, value);
+    setSearchParams(next);
+  };
+
+  const clearFilters = () => {
+    const next = new URLSearchParams(searchParams);
+    next.delete('difficulty');
+    next.delete('activity');
+    setSearchParams(next);
+  };
 
   const filteredTrails = allTrails?.filter((trail) => {
-    if (difficultyFilter !== 'All' && trail.difficulty !== difficultyFilter.toLowerCase()) return false;
-    if (activityFilter !== 'All' && !trail.activities?.includes(activityFilter.toLowerCase())) return false;
+    if (difficultyFilter !== 'all' && trail.difficulty !== difficultyFilter) return false;
+    if (activityFilter !== 'all' && !trail.activities?.includes(activityFilter)) return false;
     return true;
   });
+
+  // Honest by construction: the page states a playground count only when the
+  // query that computes it has answered. Loading and error both render no
+  // number at all.
+  const metroPlaygroundCount = nearbyPlaygrounds?.metroCount;
+  const hasPlaygroundCount = metroPlaygroundCount != null && metroPlaygroundCount > 0;
+  const relatedGuides = RELATED_GUIDES.map((guide) =>
+    guide.to === '/playgrounds' && hasPlaygroundCount
+      ? { ...guide, note: `${metroPlaygroundCount} play spaces in the metro. ${guide.note}` }
+      : guide,
+  );
+
+  const effectiveTempF = weather.effectiveTemperatureF ?? weather.temperatureF;
+  const showWinterLink = effectiveTempF != null && effectiveTempF < WINTER_LINK_BELOW_F;
+  const showMudNote =
+    weather.precipitationProbabilityPct != null &&
+    weather.precipitationProbabilityPct >= MUDDY_TRAILS_AT_PCT;
 
   const canonicalUrl = getCanonicalUrl('/outdoors');
 
@@ -254,6 +330,25 @@ export default function OutdoorsHub() {
                 still open in February.
               </p>
             </div>
+            {/* Below the intro so its absence moves nothing: when there's no
+                verdict the line isn't rendered and nothing sits under it yet. */}
+            {hasVerdict && (
+              <p className="mt-4 text-base text-foreground/90">
+                <span className="font-medium">Today in Des Moines:</span> {weather.conditions}.
+                {showMudNote && ' Unpaved trails are likely to be muddy.'}
+                {showWinterLink && (
+                  <>
+                    {' '}
+                    <a
+                      href="#winter"
+                      className="font-medium text-primary underline underline-offset-4"
+                    >
+                      What is open in winter
+                    </a>
+                  </>
+                )}
+              </p>
+            )}
           </header>
 
           <nav aria-label="Jump to a destination" className="mt-8 max-w-4xl">
@@ -287,7 +382,7 @@ export default function OutdoorsHub() {
                 <OutdoorsDestinationSection
                   key={destination.id}
                   destination={destination}
-                  nearbyPlaygrounds={playgroundsByDestination?.[destination.id]}
+                  nearbyPlaygrounds={nearbyPlaygrounds?.byDestination[destination.id]}
                 />
               ))}
             </div>
@@ -306,45 +401,61 @@ export default function OutdoorsHub() {
 
           <section className="mt-16" aria-labelledby="trails-heading">
             <h2 id="trails-heading" className="text-3xl font-bold mb-2">
-              Every trail we have mapped
+              The trail list
             </h2>
             <p className="text-muted-foreground max-w-[70ch] mb-6">
               Length, difficulty, surface and what each one is good for. Filter by how
               hard you want it to be or by what you are bringing.
             </p>
 
-            <div className="flex flex-wrap gap-6 mb-6">
-              <div>
-                <p className="text-sm font-medium mb-2">Difficulty</p>
+            <div className="flex flex-wrap gap-6 mb-4">
+              <div role="group" aria-labelledby={difficultyLabelId}>
+                <p id={difficultyLabelId} className="text-sm font-medium mb-2">
+                  Difficulty
+                </p>
                 <div className="flex gap-2 flex-wrap">
-                  {DIFFICULTY_FILTERS.map((f) => (
+                  {DIFFICULTY_FILTERS.map((option) => (
                     <Button
-                      key={f}
-                      variant={difficultyFilter === f ? 'default' : 'outline'}
+                      key={option.value}
+                      type="button"
+                      variant={difficultyFilter === option.value ? 'default' : 'outline'}
                       size="sm"
-                      onClick={() => setDifficultyFilter(f)}
+                      aria-pressed={difficultyFilter === option.value}
+                      onClick={() => setFilter('difficulty', option.value)}
                     >
-                      {f}
+                      {option.label}
                     </Button>
                   ))}
                 </div>
               </div>
-              <div>
-                <p className="text-sm font-medium mb-2">Activity</p>
+              <div role="group" aria-labelledby={activityLabelId}>
+                <p id={activityLabelId} className="text-sm font-medium mb-2">
+                  Activity
+                </p>
                 <div className="flex gap-2 flex-wrap">
-                  {ACTIVITY_FILTERS.map((f) => (
+                  {ACTIVITY_FILTERS.map((option) => (
                     <Button
-                      key={f}
-                      variant={activityFilter === f ? 'default' : 'outline'}
+                      key={option.value}
+                      type="button"
+                      variant={activityFilter === option.value ? 'default' : 'outline'}
                       size="sm"
-                      onClick={() => setActivityFilter(f)}
+                      aria-pressed={activityFilter === option.value}
+                      onClick={() => setFilter('activity', option.value)}
                     >
-                      {f}
+                      {option.label}
                     </Button>
                   ))}
                 </div>
               </div>
             </div>
+
+            {/* Always mounted so the live region exists before its text changes;
+                screen readers skip a region that appears with content already in it. */}
+            <p aria-live="polite" className="text-sm text-muted-foreground mb-6 min-h-5">
+              {filteredTrails && allTrails && allTrails.length > 0
+                ? `${filteredTrails.length} ${filteredTrails.length === 1 ? 'trail' : 'trails'}`
+                : ''}
+            </p>
 
             {isLoading ? (
               <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-6">
@@ -352,24 +463,49 @@ export default function OutdoorsHub() {
                   <Skeleton key={i} className="h-48 rounded-lg" />
                 ))}
               </div>
+            ) : isError ? (
+              // WEB-QA-031: "No trails match the selected filters" blames the
+              // filters for a failure that had nothing to do with them.
+              <ErrorState error={error} compact onRetry={() => void refetch()} />
+            ) : !allTrails || allTrails.length === 0 ? (
+              // The query answered with nothing. That's not the filters either.
+              <p className="text-muted-foreground">
+                The trail list isn&apos;t available right now. The eight destinations above
+                cover the main trails.
+              </p>
             ) : filteredTrails && filteredTrails.length > 0 ? (
               <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-6">
-                {filteredTrails.map((trail) => (
-                  <Link key={trail.id} to={`/outdoors/${trail.slug}`}>
-                    <Card className="hover:border-primary transition-colors h-full">
+                {filteredTrails.map((trail) => {
+                  const hasCoordinates = trail.latitude != null && trail.longitude != null;
+                  return (
+                    // The title link is stretched over the card with an ::after
+                    // overlay, so the whole card still opens the trail, and the
+                    // directions anchor sits outside it (z-10) instead of being
+                    // an <a> nested in an <a>.
+                    <Card
+                      key={trail.id}
+                      className="relative hover:border-primary focus-within:border-primary transition-colors h-full flex flex-col"
+                    >
                       {trail.image_url && (
                         <div className="h-40 overflow-hidden rounded-t-lg">
                           <OptimizedImage
                             src={trail.image_url}
-                            alt={trail.name}
+                            alt=""
                             className="object-cover"
                             containerClassName="w-full h-full"
                             sizes="(max-width: 640px) 100vw, (max-width: 1024px) 50vw, 33vw"
                           />
                         </div>
                       )}
-                      <CardContent className="p-5">
-                        <h3 className="text-lg font-semibold mb-2">{trail.name}</h3>
+                      <CardContent className="p-5 flex flex-col flex-1">
+                        <h3 className="text-lg font-semibold mb-2">
+                          <Link
+                            to={`/outdoors/${trail.slug}`}
+                            className="after:absolute after:inset-0 after:rounded-lg focus-visible:outline-none focus-visible:after:ring-2 focus-visible:after:ring-ring"
+                          >
+                            {trail.name}
+                          </Link>
+                        </h3>
                         {trail.description && (
                           <p className="text-sm text-muted-foreground mb-3 line-clamp-2">{trail.description}</p>
                         )}
@@ -381,7 +517,7 @@ export default function OutdoorsHub() {
                           )}
                           {trail.length_miles && (
                             <Badge variant="outline">
-                              <Ruler className="h-3 w-3 mr-1" />
+                              <Ruler className="h-3 w-3 mr-1" aria-hidden="true" />
                               {trail.length_miles} mi
                             </Badge>
                           )}
@@ -395,23 +531,41 @@ export default function OutdoorsHub() {
                               const Icon = ACTIVITY_ICONS[activity] || Footprints;
                               return (
                                 <span key={activity} className="text-xs text-muted-foreground flex items-center gap-1">
-                                  <Icon className="h-3 w-3" /> {activity}
+                                  <Icon className="h-3 w-3" aria-hidden="true" /> {activity}
                                 </span>
                               );
                             })}
                           </div>
                         )}
+                        {hasCoordinates && (
+                          <a
+                            href={getDirectionsUrl({
+                              latitude: trail.latitude,
+                              longitude: trail.longitude,
+                            })}
+                            target="_blank"
+                            rel="noopener noreferrer"
+                            aria-label={`Directions to ${trail.name} trailhead`}
+                            className="relative z-10 mt-auto pt-4 inline-flex min-h-11 items-center gap-1 self-start text-sm font-medium text-primary underline underline-offset-4"
+                          >
+                            <Navigation className="h-3.5 w-3.5" aria-hidden="true" />
+                            Directions
+                          </a>
+                        )}
                       </CardContent>
                     </Card>
-                  </Link>
-                ))}
+                  );
+                })}
               </div>
-            ) : isError ? (
-              // WEB-QA-031: "No trails match the selected filters" blames the
-              // filters for a failure that had nothing to do with them.
-              <ErrorState error={error} compact onRetry={() => void refetch()} />
             ) : (
-              <p className="text-muted-foreground">No trails match the selected filters.</p>
+              <div className="flex flex-wrap items-center gap-3">
+                <p className="text-muted-foreground">No trails match these filters.</p>
+                {hasActiveFilter && (
+                  <Button type="button" variant="outline" size="sm" onClick={clearFilters}>
+                    Clear filters
+                  </Button>
+                )}
+              </div>
             )}
           </section>
 
@@ -451,9 +605,9 @@ export default function OutdoorsHub() {
                 to do both in one trip.
               </p>
               <p>
-                The full metro list runs to 69 mapped play spaces with age ranges, splash
-                pads, shade and accessibility on each, and it is the best-ranking part of
-                this site for a reason.
+                {hasPlaygroundCount
+                  ? `The full metro list has ${metroPlaygroundCount} play spaces within about 30 miles of downtown, with age ranges, splash pads, shade and accessibility where we have them.`
+                  : 'The full metro list has age ranges, splash pads, shade and accessibility where we have them.'}
               </p>
             </div>
             <p className="mt-4">
@@ -471,7 +625,7 @@ export default function OutdoorsHub() {
               Keep going
             </h2>
             <ul className="grid gap-x-8 gap-y-4 sm:grid-cols-2">
-              {RELATED_GUIDES.map((guide) => (
+              {relatedGuides.map((guide) => (
                 <li key={guide.to}>
                   <Link
                     to={guide.to}
@@ -485,10 +639,9 @@ export default function OutdoorsHub() {
             </ul>
           </section>
 
-          <section className="mt-16 max-w-4xl" aria-labelledby="faq-heading">
-            <h2 id="faq-heading" className="sr-only">
-              Frequently asked questions about the outdoors in Des Moines
-            </h2>
+          {/* FAQSection renders its own h2 from `title`; a second, sr-only h2
+              here announced the same section twice. */}
+          <section className="mt-16 max-w-4xl">
             <FAQSection
               title="Outdoors in Des Moines: common questions"
               description="Parking, dogs, fees and winter access, answered for the places people search for most."

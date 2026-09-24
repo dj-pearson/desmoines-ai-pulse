@@ -3,6 +3,7 @@ import { supabase } from '@/integrations/supabase/client';
 import { EVENT_LIST_COLUMNS } from '@/lib/listColumns';
 import { queryKeys } from '@/lib/queryKeys';
 import { escapeLikePattern } from '@/lib/postgrestPattern';
+import { applyEventVisibility } from '@/lib/eventQuery';
 
 export interface Venue {
   id: string;
@@ -64,9 +65,11 @@ export function useVenueEvents(venueName: string) {
     // wildcards - an unescaped one silently widens the match.
     queryKey: queryKeys.events.list({ venue: venueName }),
     queryFn: async () => {
-      const { data, error } = await supabase
-        .from('events')
-        .select(EVENT_LIST_COLUMNS)
+      // Explore plan WP5 item 1: merged, hidden and archived rows stay off
+      // the venue page, the same rule every other reader applies.
+      const { data, error } = await applyEventVisibility(
+        supabase.from('events').select(EVENT_LIST_COLUMNS)
+      )
         .ilike('venue', `%${escapeLikePattern(venueName)}%`)
         .gte('date', new Date().toISOString())
         .order('date', { ascending: true })

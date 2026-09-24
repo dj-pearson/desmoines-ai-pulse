@@ -11,7 +11,7 @@
  * the check: too strict and 94 legitimate queries fail, too loose and it
  * reports nothing.
  */
-import { scanSource } from '../check-event-unpublish-filters.mjs';
+import { scanSource, scanUnfiltered, isReaderPath } from '../check-event-unpublish-filters.mjs';
 
 let failures = 0;
 const check = (name, cond, detail = '') => {
@@ -86,6 +86,45 @@ check(
   );
   check('no reader surface is baselined', readers.length === 0, JSON.stringify(readers.map((r) => r.site)));
 }
+
+// 7. The second rule: a reader read must be wrapped or filter both switches.
+console.log('[event-unpublish] reader reads go through applyEventVisibility');
+check(
+  'a bare events read is flagged',
+  scanUnfiltered(`const { data } = await supabase.from('events').select('id').gte('date', today);`, 'src/hooks/x.ts').length === 1,
+);
+check(
+  'an inline applyEventVisibility read is clean',
+  scanUnfiltered(`const { data } = await applyEventVisibility(supabase.from('events').select('id')).limit(5);`).length === 0,
+);
+check(
+  'an applyHubFilters read is clean',
+  scanUnfiltered(`return applyHubFilters(supabase.from('events').select('id'), filters);`).length === 0,
+);
+check(
+  'assign-then-wrap is clean',
+  scanUnfiltered(`const q = supabase.from('events').select('id').limit(10);\nconst { data } = await applyEventVisibility(q);`).length === 0,
+);
+check(
+  'an assigned builder that is never wrapped is flagged',
+  scanUnfiltered(`const q = supabase.from('events').select('id').limit(10);\nconst { data } = await q;`).length === 1,
+);
+check(
+  'a read filtering both switches by hand is clean',
+  scanUnfiltered(`supabase.from('events').select('id').neq('is_hidden', true).is('archived_at', null)`).length === 0,
+);
+check(
+  'update, insert and delete are skipped',
+  scanUnfiltered(
+    `supabase.from('events').update({ x: 1 }).eq('id', id);\n` +
+      `supabase.from('events').insert({ x: 1 });\n` +
+      `supabase.from('events').delete().eq('id', id);`,
+  ).length === 0,
+);
+check('a reader hook is a reader path', isReaderPath('src/hooks/useVenues.ts'));
+check('a reader page is a reader path', isReaderPath('src/pages/MusicHub.tsx'));
+check('an admin page is not a reader path', !isReaderPath('src/pages/AdminEvents.tsx'));
+check('a component is not a reader path', !isReaderPath('src/components/EventCard.tsx'));
 
 if (failures > 0) {
   console.error(`[event-unpublish] ${failures} failure(s)`);

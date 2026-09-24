@@ -1,5 +1,5 @@
 import { useCallback } from "react";
-import { DES_MOINES_METRO_BOUNDS } from "@/lib/geo";
+import { DES_MOINES_METRO_BOUNDS, haversineDistance } from "@/lib/geo";
 import { useQuery, useQueryClient } from "@tanstack/react-query";
 import { supabase } from "@/integrations/supabase/client";
 import { countOption, type CountMode } from '@/lib/listCount';
@@ -7,17 +7,126 @@ import { Database } from "@/integrations/supabase/types";
 import { queryKeys } from "@/lib/queryKeys";
 import { STALE_TIME, GC_TIME } from "@/lib/queryConfig";
 import { PLAYGROUND_LIST_COLUMNS } from "@/lib/listColumns";
+import { handleError } from "@/lib/errorHandler";
 
 type Playground = Database["public"]["Tables"]["playgrounds"]["Row"];
+
+/**
+ * The PostgREST or() that keeps a playground query inside the Des Moines metro
+ * (WEB-SEO-037 AC3). Shared by the list, the facets and the detail page's side
+ * queries so the Location dropdown can never offer a suburb the list refuses:
+ * that mismatch is how "Portland" and friends reached the filter.
+ *
+ * Expressed as "in the box OR has no coordinates" because a row we cannot
+ * place should not be dropped for missing data (see isInMetro). PostgREST has
+ * no "coalesce to true" and a .gte on a null column excludes the row silently.
+ */
+export const PLAYGROUND_METRO_FILTER =
+  `and(latitude.gte.${DES_MOINES_METRO_BOUNDS.minLatitude},latitude.lte.${DES_MOINES_METRO_BOUNDS.maxLatitude},` +
+  `longitude.gte.${DES_MOINES_METRO_BOUNDS.minLongitude},longitude.lte.${DES_MOINES_METRO_BOUNDS.maxLongitude}),` +
+  `latitude.is.null,longitude.is.null`;
+
+/**
+ * What a related/nearby card on the detail page renders, and nothing else
+ * (explore plan WP4 item 2). No `slug`: the column is not live yet (plan D2)
+ * and naming a missing column fails the whole query with 42703.
+ */
+export const PLAYGROUND_CARD_COLUMNS =
+  "id, name, image_url, age_range, rating, location, latitude, longitude, has_shade, has_restrooms";
+
+export type PlaygroundCard = Pick<
+  Playground,
+  | "id"
+  | "name"
+  | "image_url"
+  | "age_range"
+  | "rating"
+  | "location"
+  | "latitude"
+  | "longitude"
+  | "has_shade"
+  | "has_restrooms"
+> & { distanceMiles: number | null };
+
+/**
+ * The suburb a `location` string names, or null when it names none we can
+ * read.
+ *
+ * The old rule took the second-to-last comma segment, which is right for
+ * "123 Main St, Ankeny" and wrong for the Places shape
+ * "123 Main St, Ankeny, IA 50023, USA", where it yields "IA 50023". This walks
+ * back from the end past country, state and ZIP segments and takes the first
+ * segment that looks like a place name. A segment that starts with a digit is
+ * a street address, never a suburb.
+ *
+ * Whatever it returns is a substring of `location`, so the ilike filter the
+ * dropdown drives always matches at least the row it came from.
+ */
+export function suburbFromLocation(location: string | null | undefined): string | null {
+  if (!location) return null;
+  const parts = location
+    .split(",")
+    .map((p) => p.trim())
+    .filter(Boolean);
+  const isTail = (seg: string) =>
+    /^(usa|us|united states)$/i.test(seg) ||
+    /^(ia|iowa)(\s+\d{5}(-\d{4})?)?$/i.test(seg) ||
+    /^\d{5}(-\d{4})?$/.test(seg);
+  let end = parts.length - 1;
+  while (end >= 0 && isTail(parts[end])) end--;
+  if (end < 0) return null;
+  // A lone segment with no state after it ("Gray's Lake Park") could be a
+  // place or a suburb and nothing in the string says which. "Ankeny, IA" is
+  // fine: the state segment says what precedes it is a city.
+  if (end === 0 && parts.length === 1) return null;
+  const candidate = parts[end]
+    .replace(/\s+(ia|iowa)(\s+\d{5}(-\d{4})?)?$/i, "")
+    .replace(/\s+\d{5}(-\d{4})?$/, "")
+    .trim();
+  if (!candidate || /^\d/.test(candidate)) return null;
+  return candidate;
+}
+
+/**
+ * Escape a value for a PostgREST array literal: `{"Splash Pad","Swings"}`.
+ * supabase-js's `.contains(col, string[])` joins with commas and quotes
+ * nothing, so an amenity with a comma or quote would split or break the
+ * filter. Passing the literal as a string skips that.
+ */
+export function pgArrayLiteral(values: string[]): string {
+  return `{${values.map((v) => `"${v.replace(/\\/g, "\\\\").replace(/"/g, '\\"')}"`).join(",")}}`;
+}
+
+/** Escape `%`, `_` and `\` so a URL value is matched literally by ilike. */
+export function escapeLike(value: string): string {
+  return value.replace(/[\\%_]/g, (c) => `\\${c}`);
+}
+
+/**
+ * Distance-sorted nearby list, computed client-side from the bounding-box
+ * query below. Rows without coordinates go last with a null distance.
+ */
+export function sortByDistanceFrom<T extends { latitude: number | null; longitude: number | null }>(
+  rows: T[],
+  from: { latitude: number; longitude: number },
+): (T & { distanceMiles: number | null })[] {
+  return rows
+    .map((r) => ({
+      ...r,
+      distanceMiles:
+        r.latitude != null && r.longitude != null
+          ? haversineDistance(from, { latitude: r.latitude, longitude: r.longitude })
+          : null,
+    }))
+    .sort((a, b) => (a.distanceMiles ?? Infinity) - (b.distanceMiles ?? Infinity));
+}
+
+/** "0.4 mi away", "12 mi away". */
+export function formatMilesAway(miles: number): string {
+  return `${miles < 10 ? miles.toFixed(1) : Math.round(miles)} mi away`;
+}
 type PlaygroundInsert = Database["public"]["Tables"]["playgrounds"]["Insert"];
 type PlaygroundUpdate = Database["public"]["Tables"]["playgrounds"]["Update"];
-
-interface PlaygroundsState {
-  playgrounds: Playground[];
-  isLoading: boolean;
-  error: string | null;
-  totalCount: number;
-}
 
 interface PlaygroundFilters {
   search?: string;
@@ -28,6 +137,14 @@ interface PlaygroundFilters {
   manuallyCuratedOnly?: boolean;
   /** Substring match on `location`, matching how the suburb chips are derived. */
   location?: string;
+  /** Only rows with has_shade = true. */
+  shade?: boolean;
+  /** Only rows with has_restrooms = true. */
+  restrooms?: boolean;
+  /** Only rows that carry accessibility notes. */
+  accessible?: boolean;
+  /** Rows whose amenities array contains every one of these. */
+  amenities?: string[];
   featuredOnly?: boolean;
   sortBy?: "newest" | "updated" | "alphabetical" | "name";
   limit?: number;
@@ -88,25 +205,31 @@ export function usePlaygrounds(filters: PlaygroundFilters = {}) {
       // /playgrounds are derived by splitting the `location` string, so "Ankeny"
       // has to match "1234 Main St, Ankeny, IA".
       if (filters.location) {
-        query = query.ilike("location", `%${filters.location}%`);
+        query = query.ilike("location", `%${escapeLike(filters.location)}%`);
+      }
+
+      if (filters.shade) {
+        query = query.eq("has_shade", true);
+      }
+
+      if (filters.restrooms) {
+        query = query.eq("has_restrooms", true);
+      }
+
+      // accessibility_notes is free text, so "accessible" can only mean "we
+      // have something to tell you about access" - the page labels it that way.
+      if (filters.accessible) {
+        query = query.not("accessibility_notes", "is", null).neq("accessibility_notes", "");
+      }
+
+      if (filters.amenities && filters.amenities.length > 0) {
+        query = query.contains("amenities", pgArrayLiteral(filters.amenities));
       }
 
       // WEB-SEO-037 AC3. 21 of the 69 rows are in Oregon, Washington, Colorado
-      // and Missouri - a Google Places import that went wide - and nothing on
-      // this hub, its detail page or its sitemap filtered them, on what
-      // SEO-014 records as the site's best-performing module.
-      //
-      // SERVER-SIDE, and expressed as "in the box OR has no coordinates"
-      // because a row we cannot place should not be dropped for missing data
-      // (see isInMetro). The or() carries the null arms explicitly; PostgREST
-      // has no "coalesce to true" and a .gte on a null column excludes the row
-      // silently, which is the failure this shape exists to avoid.
-      const b = DES_MOINES_METRO_BOUNDS;
-      query = query.or(
-        `and(latitude.gte.${b.minLatitude},latitude.lte.${b.maxLatitude},` +
-          `longitude.gte.${b.minLongitude},longitude.lte.${b.maxLongitude}),` +
-          `latitude.is.null,longitude.is.null`,
-      );
+      // and Missouri - a Google Places import that went wide. Server-side, and
+      // shared with the facets query so the filters describe the same set.
+      query = query.or(PLAYGROUND_METRO_FILTER);
 
       if (filters.featuredOnly) {
         query = query.eq("is_featured", true);
@@ -165,7 +288,7 @@ export function usePlaygrounds(filters: PlaygroundFilters = {}) {
       fetchPlaygrounds();
       return data;
     } catch (error) {
-      console.error("Error creating playground:", error);
+      handleError(error, { component: "usePlaygrounds", action: "create" });
       throw error;
     }
   };
@@ -184,7 +307,7 @@ export function usePlaygrounds(filters: PlaygroundFilters = {}) {
       fetchPlaygrounds();
       return data;
     } catch (error) {
-      console.error("Error updating playground:", error);
+      handleError(error, { component: "usePlaygrounds", action: "update" });
       throw error;
     }
   };
@@ -197,7 +320,7 @@ export function usePlaygrounds(filters: PlaygroundFilters = {}) {
 
       fetchPlaygrounds();
     } catch (error) {
-      console.error("Error deleting playground:", error);
+      handleError(error, { component: "usePlaygrounds", action: "delete" });
       throw error;
     }
   };
@@ -225,9 +348,10 @@ export function usePlaygrounds(filters: PlaygroundFilters = {}) {
  * filter the list and the dropdowns lose their other options. Three columns
  * answer all of it, against 40-odd on the rows themselves.
  *
- * The suburb list is built the same way the page built it -- second-to-last
- * comma-separated segment of `location`, falling back to the first -- because
- * that value is what the filter then substring-matches against.
+ * Metro-bounded with the same or() as the list (explore plan WP4 item 1), so
+ * no out-of-state city is offered and every suburb offered matches at least
+ * one row the list will return. Suburbs come from suburbFromLocation, whose
+ * output is a substring of the location it came from.
  */
 export function usePlaygroundFacets() {
   const { data, isLoading } = useQuery<{
@@ -236,17 +360,19 @@ export function usePlaygroundFacets() {
     amenities: string[];
     ageRangeCounts: Record<string, number>;
     amenityCounts: Record<string, number>;
+    locationCounts: Record<string, number>;
   }>({
-    queryKey: [...queryKeys.playgrounds.all, "facets"] as const,
+    queryKey: [...queryKeys.playgrounds.all, "facets", "metro"] as const,
     staleTime: STALE_TIME.REFERENCE,
     gcTime: GC_TIME,
     queryFn: async () => {
       const { data, error } = await supabase
         .from("playgrounds")
-        .select("age_range,location,amenities");
+        .select("age_range,location,amenities")
+        .or(PLAYGROUND_METRO_FILTER);
 
       if (error) {
-        console.error("Error fetching playground facets:", error);
+        handleError(error, { component: "usePlaygroundFacets", action: "fetch" });
         throw error;
       }
 
@@ -258,28 +384,39 @@ export function usePlaygroundFacets() {
 
       const ageRangeCounts: Record<string, number> = {};
       const amenityCounts: Record<string, number> = {};
-      const suburbs = new Set<string>();
+      const locationCounts: Record<string, number> = {};
 
       for (const row of rows) {
         if (row.age_range) {
           ageRangeCounts[row.age_range] = (ageRangeCounts[row.age_range] || 0) + 1;
         }
-        if (row.location) {
-          const parts = row.location.split(",");
-          const suburb = parts[parts.length - 2]?.trim() || parts[0]?.trim() || row.location;
-          suburbs.add(suburb);
+        const suburb = suburbFromLocation(row.location);
+        if (suburb) {
+          locationCounts[suburb] = (locationCounts[suburb] || 0) + 1;
         }
         for (const a of row.amenities || []) {
           amenityCounts[a] = (amenityCounts[a] || 0) + 1;
         }
       }
 
+      // A suburb's count is rows whose location CONTAINS it, since that is
+      // what the filter will return: "Des Moines" also matches every
+      // "West Des Moines" row, and the number beside it should say so.
+      const suburbs = Object.keys(locationCounts);
+      for (const suburb of suburbs) {
+        const needle = suburb.toLowerCase();
+        locationCounts[suburb] = rows.filter((r) =>
+          (r.location || "").toLowerCase().includes(needle),
+        ).length;
+      }
+
       return {
         ageRanges: Object.keys(ageRangeCounts).sort(),
-        locations: Array.from(suburbs).sort(),
+        locations: suburbs.sort(),
         amenities: Object.keys(amenityCounts).sort(),
         ageRangeCounts,
         amenityCounts,
+        locationCounts,
       };
     },
   });
@@ -290,6 +427,103 @@ export function usePlaygroundFacets() {
     amenities: data?.amenities ?? [],
     ageRangeCounts: data?.ageRangeCounts ?? {},
     amenityCounts: data?.amenityCounts ?? {},
+    locationCounts: data?.locationCounts ?? {},
     isLoading,
   };
+}
+
+/** Roughly 12 miles each way at Des Moines' latitude. */
+const NEARBY_BOX_DEGREES = { lat: 0.18, lng: 0.24 } as const;
+const NEARBY_CANDIDATES = 40;
+const SIDE_LIST_SIZE = 4;
+
+interface SideQueryTarget {
+  id: string;
+  age_range: string | null;
+  latitude: number | null;
+  longitude: number | null;
+}
+
+/**
+ * Playgrounds near this one (explore plan WP4 item 2).
+ *
+ * The old query was "any playground with a different age range, best rated
+ * first": `rating.desc` sorts NULLs first in Postgres, so unrated rows led,
+ * and with no bounds the out-of-state rows it returned linked to Not Found.
+ * Now: a box around this playground, clipped to the metro, distance-sorted
+ * here. With no coordinates there is nothing to be near, so it returns [].
+ */
+export function useNearbyPlaygrounds(target: SideQueryTarget | null | undefined) {
+  const hasCoords = target?.latitude != null && target?.longitude != null;
+  return useQuery<PlaygroundCard[]>({
+    queryKey: [...queryKeys.playgrounds.all, "nearby", target?.id] as const,
+    enabled: Boolean(target) && hasCoords,
+    staleTime: STALE_TIME.CONTENT_LIST,
+    gcTime: GC_TIME,
+    queryFn: async () => {
+      if (!target || target.latitude == null || target.longitude == null) return [];
+      const b = DES_MOINES_METRO_BOUNDS;
+      const { data, error } = await supabase
+        .from("playgrounds")
+        .select(PLAYGROUND_CARD_COLUMNS)
+        .neq("id", target.id)
+        .gte("latitude", Math.max(b.minLatitude, target.latitude - NEARBY_BOX_DEGREES.lat))
+        .lte("latitude", Math.min(b.maxLatitude, target.latitude + NEARBY_BOX_DEGREES.lat))
+        .gte("longitude", Math.max(b.minLongitude, target.longitude - NEARBY_BOX_DEGREES.lng))
+        .lte("longitude", Math.min(b.maxLongitude, target.longitude + NEARBY_BOX_DEGREES.lng))
+        .order("rating", { ascending: false, nullsFirst: false })
+        .limit(NEARBY_CANDIDATES);
+
+      if (error) {
+        handleError(error, { component: "useNearbyPlaygrounds", action: "fetch" });
+        throw error;
+      }
+      const rows = (data || []) as unknown as Omit<PlaygroundCard, "distanceMiles">[];
+      return sortByDistanceFrom(rows, {
+        latitude: target.latitude,
+        longitude: target.longitude,
+      }).slice(0, SIDE_LIST_SIZE + SIDE_LIST_SIZE);
+    },
+  });
+}
+
+/**
+ * Other metro playgrounds for the same age range, best rated first with
+ * unrated rows last. Distance is attached when both ends have coordinates.
+ */
+export function useSameAgePlaygrounds(target: SideQueryTarget | null | undefined) {
+  return useQuery<PlaygroundCard[]>({
+    queryKey: [...queryKeys.playgrounds.all, "same-age", target?.id, target?.age_range] as const,
+    enabled: Boolean(target?.age_range),
+    staleTime: STALE_TIME.CONTENT_LIST,
+    gcTime: GC_TIME,
+    queryFn: async () => {
+      if (!target?.age_range) return [];
+      const { data, error } = await supabase
+        .from("playgrounds")
+        .select(PLAYGROUND_CARD_COLUMNS)
+        .eq("age_range", target.age_range)
+        .neq("id", target.id)
+        .or(PLAYGROUND_METRO_FILTER)
+        .order("rating", { ascending: false, nullsFirst: false })
+        .limit(SIDE_LIST_SIZE);
+
+      if (error) {
+        handleError(error, { component: "useSameAgePlaygrounds", action: "fetch" });
+        throw error;
+      }
+      const rows = (data || []) as unknown as Omit<PlaygroundCard, "distanceMiles">[];
+      if (target.latitude == null || target.longitude == null) {
+        return rows.map((r) => ({ ...r, distanceMiles: null }));
+      }
+      const from = { latitude: target.latitude, longitude: target.longitude };
+      return rows.map((r) => ({
+        ...r,
+        distanceMiles:
+          r.latitude != null && r.longitude != null
+            ? haversineDistance(from, { latitude: r.latitude, longitude: r.longitude })
+            : null,
+      }));
+    },
+  });
 }

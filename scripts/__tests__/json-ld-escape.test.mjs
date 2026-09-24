@@ -85,11 +85,12 @@ const REQUIRED_CLEAN = [
   'components/schema/MenuSchema.tsx',
   'components/schema/ItemListSchema.tsx',
   'components/EnhancedLocalSEO.tsx',
+  // Explore WP3: attraction descriptions and geo_summary are AI-written.
+  'components/EnhancedAttractionSEO.tsx',
 ];
 
 // Still bare as of 2026-09-24. May only shrink.
 const BASELINE = new Set([
-  'components/EnhancedAttractionSEO.tsx',
   'components/EnhancedPlaygroundSEO.tsx',
   'components/LocalSEO.tsx',
   // Builds a copy-paste snippet in a template string for the admin SEO tool,

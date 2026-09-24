@@ -1,6 +1,6 @@
 import { useQuery } from '@tanstack/react-query';
 import { supabase } from '@/integrations/supabase/client';
-import { haversineDistance } from '@/lib/geo';
+import { DES_MOINES_CENTER, haversineDistance } from '@/lib/geo';
 import { createSlug } from '@/lib/slug';
 import { OUTDOORS_DESTINATIONS } from '@/data/outdoorsGuide';
 
@@ -31,6 +31,13 @@ import { OUTDOORS_DESTINATIONS } from '@/data/outdoorsGuide';
 const PLAYGROUND_RADIUS_MILES = 6;
 /** Playgrounds linked per destination. Enough to be useful, short of a dump. */
 const PLAYGROUNDS_PER_DESTINATION = 6;
+/**
+ * How far from downtown a playground counts toward the metro total the page
+ * states. Thirty miles reaches Ankeny, Waukee and Indianola and stops well
+ * short of the out-of-state rows, so the number is one a reader can check
+ * against /playgrounds rather than the raw table size.
+ */
+export const METRO_RADIUS_MILES = 30;
 
 // A restaurants-near-trailhead section was scaffolded here and is not built.
 // Nothing consumes it and SEO-024 does not ask for it, so the constants are
@@ -41,7 +48,7 @@ const PLAYGROUNDS_PER_DESTINATION = 6;
 // Ledges; eight reaches into different towns.
 
 /** Attraction `type` values that belong on an outdoors page. */
-const OUTDOOR_ATTRACTION_TYPES = new Set([
+const OUTDOOR_ATTRACTION_TYPE_LIST = [
   'Park',
   'Park/Art',
   'Trail',
@@ -50,7 +57,8 @@ const OUTDOOR_ATTRACTION_TYPES = new Set([
   'Zoo',
   'Water Park',
   'Amusement Park',
-]);
+];
+const OUTDOOR_ATTRACTION_TYPES = new Set(OUTDOOR_ATTRACTION_TYPE_LIST);
 
 export interface NearbyPlace {
   name: string;
@@ -66,6 +74,17 @@ export interface OutdoorAttractionLink {
   path: string;
   type: string;
   location: string | null;
+}
+
+export interface PlaygroundsNearDestinations {
+  /** Nearby playgrounds keyed by destination id. */
+  byDestination: Record<string, NearbyPlace[]>;
+  /**
+   * Playgrounds with coordinates within {@link METRO_RADIUS_MILES} of downtown.
+   * This is the number the page may state; the table size is not, because 21
+   * of its rows are out of state.
+   */
+  metroCount: number;
 }
 
 interface PlaygroundRow {
@@ -87,8 +106,8 @@ interface AttractionRow {
  */
 export function usePlaygroundsNearDestinations() {
   return useQuery({
-    queryKey: ['outdoors', 'playgrounds-nearby'],
-    queryFn: async (): Promise<Record<string, NearbyPlace[]>> => {
+    queryKey: ['outdoors', 'playgrounds-nearby', 'with-metro-count'],
+    queryFn: async (): Promise<PlaygroundsNearDestinations> => {
       const { data, error } = await supabase
         .from('playgrounds')
         .select('name, latitude, longitude')
@@ -96,12 +115,21 @@ export function usePlaygroundsNearDestinations() {
 
       if (error) throw error;
 
-      const rows = (data ?? []) as unknown as PlaygroundRow[];
+      const rows = ((data ?? []) as unknown as PlaygroundRow[]).filter(
+        (row) => row.latitude != null && row.longitude != null,
+      );
       const byDestination: Record<string, NearbyPlace[]> = {};
+
+      const metroCount = rows.filter(
+        (row) =>
+          haversineDistance(DES_MOINES_CENTER, {
+            latitude: row.latitude as number,
+            longitude: row.longitude as number,
+          }) <= METRO_RADIUS_MILES,
+      ).length;
 
       for (const destination of OUTDOORS_DESTINATIONS) {
         byDestination[destination.id] = rows
-          .filter((row) => row.latitude != null && row.longitude != null)
           .map((row) => ({
             name: row.name,
             path: `/playgrounds/${createSlug(row.name)}`,
@@ -118,7 +146,7 @@ export function usePlaygroundsNearDestinations() {
           .slice(0, PLAYGROUNDS_PER_DESTINATION);
       }
 
-      return byDestination;
+      return { byDestination, metroCount };
     },
     staleTime: 10 * 60 * 1000,
   });
@@ -137,6 +165,10 @@ export function useOutdoorAttractions() {
         .from('attractions')
         .select('name, type, location')
         .eq('is_active', true)
+        // Narrowed on the server so the page downloads only outdoor rows. The
+        // client-side Set check below stays as a guard, since it is what the
+        // links are actually built from.
+        .in('type', OUTDOOR_ATTRACTION_TYPE_LIST)
         .order('name');
 
       if (error) throw error;

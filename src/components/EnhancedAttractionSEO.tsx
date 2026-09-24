@@ -1,5 +1,6 @@
 import { Helmet } from "react-helmet-async";
 import { BRAND } from "@/lib/brandConfig";
+import { toJsonLd } from "@/lib/jsonLd";
 
 interface AttractionData {
   id?: string | null;
@@ -22,6 +23,8 @@ interface AttractionData {
    * absent rather than guessing.
    */
   is_free?: boolean | null;
+  /** When present, AttractionDetails renders it as .attraction-summary. */
+  geo_summary?: string | null;
 }
 
 interface EnhancedAttractionSEOProps {
@@ -43,18 +46,21 @@ export default function EnhancedAttractionSEO({
     return `${parts.join(" - ")} | Things to Do`;
   };
 
+  // Explore WP3 item 4: no "by visitors" (no reviews table backs the rating,
+  // WEB-SEO-016), no "popular", and no "Plan your visit today" sales line.
   const getGEODescription = () => {
     const desc = attraction.description || "";
-    const location = attraction.location || `${BRAND.city}, ${BRAND.state}`;
+    const typeText = attraction.type ? attraction.type.toLowerCase() : "attraction";
     const ratingText = attraction.rating
-      ? ` Rated ${attraction.rating.toFixed(1)}/5 by visitors.`
+      ? ` Rated ${attraction.rating.toFixed(1)}/5.`
       : "";
+    const locationText = attraction.location ? ` Located at ${attraction.location}.` : "";
 
     if (desc.length > 50) {
-      return `${attraction.name} is a ${attraction.type?.toLowerCase()} in ${BRAND.city}, ${BRAND.state}. ${desc.substring(0, 150).trim()}...${ratingText} Located at ${location}. Plan your visit today.`;
+      return `${attraction.name} is a ${typeText} in the ${BRAND.city} area. ${desc.substring(0, 150).trim()}...${ratingText}${locationText}`;
     }
 
-    return `Visit ${attraction.name}, a popular ${attraction.type?.toLowerCase()} attraction in ${BRAND.city}, ${BRAND.state}.${ratingText} Find hours, directions, and visitor information. Located at ${location}.`;
+    return `${attraction.name}, a ${typeText} in the ${BRAND.city} area.${ratingText} Hours, directions and visitor information.${locationText}`;
   };
 
   const getLocalKeywords = () => {
@@ -156,11 +162,10 @@ export default function EnhancedAttractionSEO({
     name: getOptimizedTitle(),
     speakable: {
       "@type": "SpeakableSpecification",
-      cssSelector: [
-        "article h1",
-        "article [itemprop='description']",
-        ".attraction-summary",
-      ],
+      // Only selectors that match something on AttractionDetails: the page
+      // has no <article>, and the summary paragraph renders only when the
+      // row has a geo_summary (Explore plan WP3 item 4).
+      cssSelector: ["h1", ...(attraction.geo_summary ? [".attraction-summary"] : [])],
     },
     url: attractionUrl,
   };
@@ -213,10 +218,10 @@ export default function EnhancedAttractionSEO({
 
       {/* Structured Data */}
       <script type="application/ld+json">
-        {JSON.stringify(attractionSchema)}
+        {toJsonLd(attractionSchema)}
       </script>
       <script type="application/ld+json">
-        {JSON.stringify(speakableSchema)}
+        {toJsonLd(speakableSchema)}
       </script>
     </Helmet>
   );

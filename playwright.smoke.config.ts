@@ -92,7 +92,15 @@ export default defineConfig({
   // paging hrefs and counts, the sponsored query carrying the visitor's
   // filters, ItemList urls; open-now read in Central time from any browser
   // zone; and the detail page's unsafe-link, closed, merged and retry states.
-  testMatch: /(search-filters|url-filter-state|sticky-filter-chips|route-smoke|cookie-consent|backend-down|touch-targets|page-headings|search-request-loop|request-budget|turnstile-inert|subscription-checkout|advertise-success-receipt|submission-live-link|campaign-self-service|home-search|home-request-budget|home-rails-cls|home-tonight|home-dashboard|home-quick-view|shell-mobile|events-hub-dates|events-hub-list|events-near-me|event-detail|restaurants-hub|restaurants-open-now|restaurant-detail)\.spec\.ts/,
+  //
+  // The Explore specs joined with the Explore plan (docs/page-plans/explore.md),
+  // on fixtureBackend plus per-spec page.route overrides: the things-to-do hub's
+  // pSEO fallbacks and error reporting (log-error fires only in a PROD build),
+  // the map's Leaflet CSS, visibility filters and URL state, the attractions
+  // hub's search sanitising and hours, playground facets and nearby, one events
+  // request per music/sports hub, the outdoors metro count and filters, and the
+  // deals window, schedule and claim failure.
+  testMatch: /(search-filters|url-filter-state|sticky-filter-chips|route-smoke|cookie-consent|backend-down|touch-targets|page-headings|search-request-loop|request-budget|turnstile-inert|subscription-checkout|advertise-success-receipt|submission-live-link|campaign-self-service|home-search|home-request-budget|home-rails-cls|home-tonight|home-dashboard|home-quick-view|shell-mobile|events-hub-dates|events-hub-list|events-near-me|event-detail|restaurants-hub|restaurants-open-now|restaurant-detail|things-to-do-hub|discover-map|attractions-hub|playgrounds-hub|music-sports-hubs|outdoors-hub|deals)\.spec\.ts/,
   fullyParallel: true,
   forbidOnly: !!process.env.CI,
   retries: process.env.CI ? 2 : 0,

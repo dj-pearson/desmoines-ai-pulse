@@ -6,6 +6,7 @@ import { ATTRACTION_LIST_COLUMNS } from "@/lib/listColumns";
 import { Database } from "@/integrations/supabase/types";
 import { createLogger } from '@/lib/logger';
 import { queryKeys } from "@/lib/queryKeys";
+import { sanitizePostgrestPattern } from "@/lib/postgrestPattern";
 import { STALE_TIME, GC_TIME } from "@/lib/queryConfig";
 
 const log = createLogger('useAttractions');
@@ -19,11 +20,11 @@ interface AttractionFilters {
   type?: string;
   minRating?: number;
   featuredOnly?: boolean;
-  /** Admin-only: true = indoor-only, false = outdoor-only, undefined = both */
+  /** true = indoor-only, false = outdoor-only, undefined = both */
   indoorOnly?: boolean;
-  /** Admin-only: true = kid-friendly only, false = not-kid-friendly only */
+  /** true = kid-friendly only; false and undefined apply no filter */
   kidFriendlyOnly?: boolean;
-  /** Admin-only: true = free admission only */
+  /** true = free admission only */
   freeOnly?: boolean;
   /** Admin-only: when false, includes is_active=false rows. Defaults to true (active only) for back-compat. */
   activeOnly?: boolean;
@@ -34,6 +35,25 @@ interface AttractionFilters {
   countMode?: CountMode;
 }
 
+
+/**
+ * The PostgREST or(...) expression for the hub's search box, or null for no
+ * search filter.
+ *
+ * A comma ends a clause inside or(...), so "Ankeny, IA" used to 400 the whole
+ * list into ErrorState (Explore plan WP3 item 1). The sanitizer removes the
+ * structural characters and escapes the LIKE wildcards; a search that is all
+ * punctuation sanitizes to "" and filters nothing rather than matching "%%".
+ *
+ * `description` is in the list because Attractions.tsx matched it client-side
+ * (WEB-PERF-028 AC4). Moving the filter to the server without it would have
+ * silently narrowed every search on that page.
+ */
+export function attractionSearchFilter(search: string | null | undefined): string | null {
+  const q = search ? sanitizePostgrestPattern(search) : "";
+  if (!q) return null;
+  return `name.ilike.%${q}%,type.ilike.%${q}%,location.ilike.%${q}%,description.ilike.%${q}%`;
+}
 
 export function useAttractions(filters: AttractionFilters = {}) {
   const queryClient = useQueryClient();
@@ -62,13 +82,9 @@ export function useAttractions(filters: AttractionFilters = {}) {
         query = query.eq("is_active", true);
       }
 
-      if (filters.search) {
-        // `description` is in this list because Attractions.tsx matched it
-        // client-side (WEB-PERF-028 AC4). Moving the filter to the server
-        // without it would have silently narrowed every search on that page.
-        query = query.or(
-          `name.ilike.%${filters.search}%,type.ilike.%${filters.search}%,location.ilike.%${filters.search}%,description.ilike.%${filters.search}%`
-        );
+      const searchFilter = attractionSearchFilter(filters.search);
+      if (searchFilter) {
+        query = query.or(searchFilter);
       }
 
       if (filters.type && filters.type !== "all") {
