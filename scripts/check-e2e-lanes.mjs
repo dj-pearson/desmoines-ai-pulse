@@ -71,7 +71,12 @@ const orphans = specs.filter((name) => {
   // somewhere in these files, which is deliberately loose: a false NEGATIVE
   // here means a spec looks wired when it is not, and that is the failure this
   // check exists to prevent, so the bar for "wired" stays low and honest.
-  return !new RegExp(`\\b${name.replace(/[-]/g, '\\-')}\\b`).test(laneText);
+  //
+  // The name is bounded by anything but a word character OR a hyphen. \b alone
+  // treats "-" as a boundary, so `restaurants-hub` counted as wired because a
+  // workflow names restaurants-hub-payload.test.ts - a Deno test, not the spec.
+  const escaped = name.replace(/[-]/g, '\\-');
+  return !new RegExp(`(?<![\\w-])${escaped}(?![\\w-])`).test(laneText);
 });
 
 if (WRITE) {

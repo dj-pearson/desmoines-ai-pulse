@@ -1,5 +1,5 @@
 import { useCallback } from "react";
-import { useQuery, useQueryClient } from "@tanstack/react-query";
+import { useQuery, useQueryClient, type Query } from "@tanstack/react-query";
 import { supabase } from "@/integrations/supabase/client";
 import { Database } from "@/integrations/supabase/types";
 import { getRestaurantRotationSeed } from "@/lib/restaurantRotation";
@@ -105,6 +105,72 @@ function deprioritizeUnvisitable(list: Restaurant[]): Restaurant[] {
   return [...visitable, ...unvisitable];
 }
 
+/** A restaurant the fuzzy matcher thinks the visitor meant. */
+export interface RestaurantSuggestion {
+  id: string;
+  name: string;
+  slug: string | null;
+}
+
+interface RestaurantListResult {
+  restaurants: Restaurant[];
+  totalCount: number;
+  /** Did-you-mean names, only when a search matched nothing. Never swapped in as results. */
+  suggestions: RestaurantSuggestion[];
+}
+
+const SUGGESTION_LIMIT = 5;
+
+/**
+ * True when two list queries differ only in which page they ask for
+ * (limit/offset). Those are the only transitions that keep the previous rows
+ * on screen: mobile Load More grows the limit, and blanking thirty cards to a
+ * skeleton to append thirty more loses the visitor's place. A changed filter
+ * is a different result set, so it still shows the loading state rather than
+ * the old rows under the new chips.
+ */
+export function isSameListExceptPaging(
+  a: Record<string, unknown> | undefined,
+  b: Record<string, unknown> | undefined
+): boolean {
+  if (!a || !b) return false;
+  const strip = (f: Record<string, unknown>) => {
+    const rest = { ...f };
+    delete rest.limit;
+    delete rest.offset;
+    return rest;
+  };
+  const x = strip(a);
+  const y = strip(b);
+  const keys = new Set([...Object.keys(x), ...Object.keys(y)]);
+  for (const key of keys) {
+    if (JSON.stringify(x[key]) !== JSON.stringify(y[key])) return false;
+  }
+  return true;
+}
+
+/**
+ * Did-you-mean for a search that matched nothing on the rotation path. Uses
+ * the same fuzzy_search_restaurants RPC the legacy path already calls. Any
+ * failure is an empty list: suggestions are a nicety, not a result.
+ */
+async function fetchFuzzySuggestions(search: string): Promise<RestaurantSuggestion[]> {
+  try {
+    const { data, error } = await supabase.rpc("fuzzy_search_restaurants", {
+      search_query: search,
+      search_limit: SUGGESTION_LIMIT,
+    });
+    if (error || !Array.isArray(data)) return [];
+    return (data as unknown as Array<Partial<Restaurant>>)
+      .filter((r): r is Partial<Restaurant> & { id: string; name: string } => !!r?.id && !!r?.name)
+      .slice(0, SUGGESTION_LIMIT)
+      .map((r) => ({ id: r.id, name: r.name, slug: r.slug ?? null }));
+  } catch (err) {
+    logger.debug("fetchFuzzySuggestions", "fuzzy suggestions unavailable", { error: err });
+    return [];
+  }
+}
+
 export function useRestaurants(filters: RestaurantFilters = {}) {
   const queryClient = useQueryClient();
 
@@ -120,13 +186,20 @@ export function useRestaurants(filters: RestaurantFilters = {}) {
   // narrow `restaurants` to whatever the last branch produced rather than the
   // table Row, and every caller that reads a column the projection omits would
   // stop compiling.
-  const { data, isLoading, error } = useQuery<{
-    restaurants: Restaurant[];
-    totalCount: number;
-  }>({
+  const { data, isLoading, isFetching, isPlaceholderData, error } = useQuery<RestaurantListResult>({
     queryKey: queryKeys.restaurants.list(filters as Record<string, unknown>),
     staleTime: STALE_TIME.CONTENT_LIST,
     gcTime: GC_TIME,
+    // Keep the loaded rows while the next page loads (plan WP2 item 8), but
+    // only across a page change; see isSameListExceptPaging.
+    placeholderData: (previous: RestaurantListResult | undefined, previousQuery?: Query<RestaurantListResult>) =>
+      previous &&
+      isSameListExceptPaging(
+        previousQuery?.queryKey?.[2] as Record<string, unknown> | undefined,
+        filters as Record<string, unknown>
+      )
+        ? previous
+        : undefined,
     queryFn: async () => {
     try {
       // Default popularity sort goes through the rotation RPC so the top of
@@ -186,7 +259,12 @@ export function useRestaurants(filters: RestaurantFilters = {}) {
         });
 
         if (!rpcError && rpcData) {
+          const suggestions =
+            rpcData.length === 0 && filters.search?.trim()
+              ? await fetchFuzzySuggestions(filters.search.trim())
+              : [];
           return {
+            suggestions,
             restaurants: deprioritizeUnvisitable(
               // .filter(Boolean) because the cast below is a promise, not a
               // check. A row whose restaurant_data is absent maps to undefined
@@ -351,8 +429,13 @@ export function useRestaurants(filters: RestaurantFilters = {}) {
         throw error;
       }
 
-      // Fallback to fuzzy search if no results found with full-text search
-      if (filters.search && (!data || data.length === 0)) {
+      // Fallback to fuzzy search if no results found with full-text search.
+      // Never for sponsoredOnly: fuzzy_search_restaurants knows nothing of
+      // sponsorship or the other filters, so a search that matched no paid
+      // row would hand back ordinary rows, and the hub boosts whatever this
+      // query returns to the top of page 1 (it carries the visitor's search
+      // since eat-drink WP1 item 3).
+      if (filters.search && !filters.sponsoredOnly && (!data || data.length === 0)) {
         logger.debug('fetchRestaurants', 'No results with full-text search, trying fuzzy search', { search: filters.search });
         try {
           const { data: fuzzyData, error: fuzzyError } = await supabase
@@ -375,6 +458,8 @@ export function useRestaurants(filters: RestaurantFilters = {}) {
       return {
         restaurants: (data || []) as unknown as Restaurant[],
         totalCount: count || 0,
+        // This path already swaps fuzzy rows in as results above.
+        suggestions: [],
       };
     } catch (error) {
       logger.error('fetchRestaurants', 'Error fetching restaurants', { error });
@@ -450,7 +535,12 @@ export function useRestaurants(filters: RestaurantFilters = {}) {
   return {
     restaurants: data?.restaurants ?? [],
     totalCount: data?.totalCount ?? 0,
+    suggestions: data?.suggestions ?? [],
     isLoading,
+    /** True while any request for this list is in flight, including a Load More behind kept rows. */
+    isFetching,
+    /** True while the rows shown are the previous page's, kept during a page change. */
+    isPlaceholderData,
     error: error
       ? error instanceof Error
         ? error.message
@@ -570,25 +660,29 @@ export async function fetchRestaurantFilterFacets(): Promise<FilterOptionsResult
   return getRestaurantFilterOptions();
 }
 
+/**
+ * The one cached facet query. Every consumer (hub, presets, filter popover,
+ * search suggestions) shares this key, so the RPC runs once per hour at most.
+ */
+export const restaurantFilterOptionsQuery = {
+  queryKey: ["restaurant-filter-options"] as const,
+  queryFn: getRestaurantFilterOptions,
+  staleTime: STALE_TIME.REFERENCE,
+};
+
 // Hook to get cuisine counts for "Browse by Cuisine" section
 export function useCuisineCounts() {
-  const { data, isLoading } = useQuery({
-    queryKey: ["restaurant-filter-options"],
-    queryFn: getRestaurantFilterOptions,
-    staleTime: STALE_TIME.REFERENCE,
-  });
+  const { data, isLoading } = useQuery(restaurantFilterOptionsQuery);
   return { cuisineCounts: data?.cuisines ?? [], isLoading };
 }
 
 // Utility hook to get available filter options
 export function useRestaurantFilterOptions() {
-  const { data, isLoading } = useQuery({
-    queryKey: ["restaurant-filter-options"],
-    queryFn: getRestaurantFilterOptions,
-    staleTime: STALE_TIME.REFERENCE,
-  });
+  const { data, isLoading } = useQuery(restaurantFilterOptionsQuery);
   return {
     cuisines: (data?.cuisines ?? []).map((c) => c.cuisine),
+    /** Cuisines with their row counts, most common first (plan WP2 item 5). */
+    cuisineCounts: data?.cuisines ?? [],
     locations: data?.locations ?? [],
     tags: RESTAURANT_TAGS,
     isLoading,

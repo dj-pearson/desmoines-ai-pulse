@@ -3,13 +3,15 @@ import { useQuery } from '@tanstack/react-query';
 import { useNavigate } from 'react-router-dom';
 import { supabase } from '@/integrations/supabase/client';
 import { storage } from '@/lib/safeStorage';
-import { MapPin, Search, X } from "lucide-react";
+import { ChefHat, MapPin, Search, X } from "lucide-react";
 import { cn } from '@/lib/utils';
 import { createLogger } from '@/lib/logger';
 import { applyEventVisibility } from '@/lib/eventQuery';
 import { escapeLikePattern } from '@/lib/postgrestPattern';
 import { createEventSlugWithCentralTime, upcomingFloorUtc } from '@/lib/timezone';
 import { SpriteIcon } from "@/components/ui/SpriteIcon";
+import { restaurantFilterOptionsQuery } from '@/hooks/useRestaurants';
+import { matchCuisines } from '@/lib/restaurantPresets';
 
 const log = createLogger('SearchAutocomplete');
 
@@ -21,6 +23,12 @@ interface SearchAutocompleteProps {
   onSelect: (value: string) => void;
   inputRef?: React.RefObject<HTMLInputElement>;
   className?: string;
+  /**
+   * Restaurants only: apply a cuisine filter picked from the Cuisines group.
+   * Without it, picking a cuisine opens /restaurants?cuisine=<name>, which
+   * replaces every other filter.
+   */
+  onSelectCuisine?: (cuisine: string) => void;
 }
 
 interface Suggestion {
@@ -80,6 +88,7 @@ export function SearchAutocomplete({
   onSelect,
   inputRef,
   className,
+  onSelectCuisine,
 }: SearchAutocompleteProps) {
   const [isOpen, setIsOpen] = useState(false);
   const [activeIndex, setActiveIndex] = useState(-1);
@@ -110,6 +119,13 @@ export function SearchAutocomplete({
     },
     enabled: contentType === 'events' && debouncedValue.length >= 3,
     staleTime: 30 * 1000,
+  });
+
+  // Shares the hub's cached facet query; disabled off the restaurants page so
+  // events and attractions never pay for it.
+  const { data: facet } = useQuery({
+    ...restaurantFilterOptionsQuery,
+    enabled: contentType === 'restaurants',
   });
 
   const { data: suggestions = [] } = useQuery({
@@ -152,17 +168,23 @@ export function SearchAutocomplete({
       if (contentType === 'restaurants') {
         const { data, error } = await supabase
           .from('restaurants')
-          .select('id, name, cuisine')
+          .select('id, name, cuisine, slug')
           .ilike('name', searchTerm)
+          // Same rule as every restaurant list (WEB-AUTO-005): a row merged
+          // into its duplicate is not a place to send anyone.
+          .neq('is_merged', true)
           .limit(5);
         // A search that FAILED and a search with no matches both render as
         // "no suggestions", so a user typing a restaurant that exists is told it
         // is not listed. The empty result is still the right UI; the silence was not.
         if (error) log.error('suggestions', 'Suggestion query failed', { contentType, error });
+        // A restaurant suggestion is a specific place, so it opens that
+        // restaurant rather than running a text search for its name.
         return (data || []).map((r) => ({
           id: r.id,
           title: r.name,
           subtitle: r.cuisine || undefined,
+          href: `/restaurants/${r.slug || r.id}`,
         }));
       }
 
@@ -196,14 +218,17 @@ export function SearchAutocomplete({
     : recentSearches;
 
   const venues = contentType === 'events' && debouncedValue.length >= 3 ? venueSuggestions : [];
+  const cuisineMatches =
+    contentType === 'restaurants' ? matchCuisines(facet?.cuisines ?? [], value) : [];
 
   const showRecent = filteredRecent.length > 0;
   const showSuggestions = suggestions.length > 0;
   const showVenues = venues.length > 0;
-  const hasContent = showRecent || showSuggestions || showVenues;
+  const showCuisines = cuisineMatches.length > 0;
+  const hasContent = showRecent || showSuggestions || showVenues || showCuisines;
 
   // Build flat list of all selectable items for keyboard nav, in render order.
-  const allItems: { type: 'recent' | 'suggestion' | 'venue'; value: string; href?: string }[] = [];
+  const allItems: { type: 'recent' | 'suggestion' | 'venue' | 'cuisine'; value: string; href?: string }[] = [];
   if (showRecent) {
     filteredRecent.slice(0, 5).forEach((s) =>
       allItems.push({ type: 'recent', value: s })
@@ -216,6 +241,9 @@ export function SearchAutocomplete({
   }
   if (showVenues) {
     venues.forEach((v) => allItems.push({ type: 'venue', value: v }));
+  }
+  if (showCuisines) {
+    cuisineMatches.forEach((c) => allItems.push({ type: 'cuisine', value: c }));
   }
 
   // Open on focus or typing only. This used to open whenever there was
@@ -267,6 +295,22 @@ export function SearchAutocomplete({
     [contentType, onSelect, navigate]
   );
 
+  const handleSelectCuisine = useCallback(
+    (cuisine: string) => {
+      setIsOpen(false);
+      if (onSelectCuisine) {
+        // The caller clears the search box when it applies the cuisine. That
+        // value change is not typing, so it must not reopen the list (the
+        // input still has focus after a keyboard pick).
+        lastValueRef.current = '';
+        onSelectCuisine(cuisine);
+        return;
+      }
+      navigate(`/restaurants?cuisine=${encodeURIComponent(cuisine)}`);
+    },
+    [onSelectCuisine, navigate]
+  );
+
   const handleKeyDown = useCallback(
     (e: KeyboardEvent) => {
       if (!isOpen || allItems.length === 0) return;
@@ -283,7 +327,9 @@ export function SearchAutocomplete({
         );
       } else if (e.key === 'Enter' && activeIndex >= 0) {
         e.preventDefault();
-        handleSelect(allItems[activeIndex].value, allItems[activeIndex].href);
+        const item = allItems[activeIndex];
+        if (item.type === 'cuisine') handleSelectCuisine(item.value);
+        else handleSelect(item.value, item.href);
       } else if (e.key === 'Escape') {
         // Claim this Esc so the page's shortcut (useFilterKeyboardShortcuts)
         // does not also clear the search text: one Esc closes the list.
@@ -291,7 +337,7 @@ export function SearchAutocomplete({
         setIsOpen(false);
       }
     },
-    [isOpen, allItems, activeIndex, handleSelect]
+    [isOpen, allItems, activeIndex, handleSelect, handleSelectCuisine]
   );
 
   // Attach keyboard handler to input
@@ -368,8 +414,9 @@ export function SearchAutocomplete({
               Recent Searches
             </span>
             <button
+              type="button"
               onClick={handleClearRecent}
-              className="text-xs text-gray-500 hover:text-gray-600 flex items-center gap-0.5"
+              className="min-h-[44px] px-2 text-xs text-gray-500 hover:text-gray-600 flex items-center gap-0.5"
               aria-label="Clear recent searches"
             >
               <X className="h-3 w-3" />
@@ -386,7 +433,7 @@ export function SearchAutocomplete({
                 role="option"
                 aria-selected={activeIndex === idx}
                 className={cn(
-                  'w-full text-left px-3 py-2 text-sm rounded-lg flex items-center gap-2 transition-colors',
+                  'w-full text-left px-3 py-2 min-h-[44px] text-sm rounded-lg flex items-center gap-2 transition-colors',
                   activeIndex === idx
                     ? 'bg-gray-100 text-gray-900'
                     : 'text-gray-700 hover:bg-gray-50'
@@ -424,7 +471,7 @@ export function SearchAutocomplete({
                 role="option"
                 aria-selected={activeIndex === idx}
                 className={cn(
-                  'w-full text-left px-3 py-2 text-sm rounded-lg flex items-center gap-2 transition-colors',
+                  'w-full text-left px-3 py-2 min-h-[44px] text-sm rounded-lg flex items-center gap-2 transition-colors',
                   activeIndex === idx
                     ? 'bg-gray-100 text-gray-900'
                     : 'text-gray-700 hover:bg-gray-50'
@@ -479,6 +526,44 @@ export function SearchAutocomplete({
               >
                 <MapPin className="h-3.5 w-3.5 text-gray-500 flex-shrink-0" aria-hidden="true" />
                 <span className="truncate">{venue}</span>
+              </button>
+            );
+          })}
+        </div>
+      )}
+
+      {showCuisines && (showRecent || showSuggestions || showVenues) && (
+        <div className="border-t border-gray-100" />
+      )}
+
+      {showCuisines && (
+        <div className="p-2" role="group" aria-label="Cuisines">
+          <div className="px-2 py-1">
+            <span className="text-xs font-medium text-gray-500 flex items-center gap-1">
+              <ChefHat className="h-3 w-3" aria-hidden="true" />
+              Cuisines
+            </span>
+          </div>
+          {cuisineMatches.map((cuisine) => {
+            itemIndex++;
+            const idx = itemIndex;
+            return (
+              <button
+                key={`cuisine-${cuisine}`}
+                id={optionId(idx)}
+                role="option"
+                aria-selected={activeIndex === idx}
+                className={cn(
+                  'w-full text-left px-3 py-2 min-h-[44px] text-sm rounded-lg flex items-center gap-2 transition-colors',
+                  activeIndex === idx
+                    ? 'bg-gray-100 text-gray-900'
+                    : 'text-gray-700 hover:bg-gray-50'
+                )}
+                onClick={() => handleSelectCuisine(cuisine)}
+                onMouseEnter={() => setActiveIndex(idx)}
+              >
+                <ChefHat className="h-3.5 w-3.5 text-gray-500 flex-shrink-0" aria-hidden="true" />
+                <span className="truncate">{cuisine} restaurants</span>
               </button>
             );
           })}

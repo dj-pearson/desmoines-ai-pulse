@@ -86,7 +86,13 @@ export default defineConfig({
   // (docs/page-plans/events.md), also on fixtureBackend: the hub's Central-time
   // request bounds and free filter, paging and sponsored order, the near-me
   // slugs and visibility, and the event page's retry state and UUID redirect.
-  testMatch: /(search-filters|url-filter-state|sticky-filter-chips|route-smoke|cookie-consent|backend-down|touch-targets|page-headings|search-request-loop|request-budget|turnstile-inert|subscription-checkout|advertise-success-receipt|submission-live-link|campaign-self-service|home-search|home-request-budget|home-rails-cls|home-tonight|home-dashboard|home-quick-view|shell-mobile|events-hub-dates|events-hub-list|events-near-me|event-detail)\.spec\.ts/,
+  //
+  // restaurants-hub, restaurants-open-now and restaurant-detail joined with the
+  // Eat & Drink plan (docs/page-plans/eat-drink.md), on fixtureBackend: hub
+  // paging hrefs and counts, the sponsored query carrying the visitor's
+  // filters, ItemList urls; open-now read in Central time from any browser
+  // zone; and the detail page's unsafe-link, closed, merged and retry states.
+  testMatch: /(search-filters|url-filter-state|sticky-filter-chips|route-smoke|cookie-consent|backend-down|touch-targets|page-headings|search-request-loop|request-budget|turnstile-inert|subscription-checkout|advertise-success-receipt|submission-live-link|campaign-self-service|home-search|home-request-budget|home-rails-cls|home-tonight|home-dashboard|home-quick-view|shell-mobile|events-hub-dates|events-hub-list|events-near-me|event-detail|restaurants-hub|restaurants-open-now|restaurant-detail)\.spec\.ts/,
   fullyParallel: true,
   forbidOnly: !!process.env.CI,
   retries: process.env.CI ? 2 : 0,

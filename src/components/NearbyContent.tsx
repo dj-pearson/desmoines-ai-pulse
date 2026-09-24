@@ -1,5 +1,5 @@
 import { lazy, Suspense } from "react";
-import { Link } from "react-router-dom";
+import { Link, useNavigate } from "react-router-dom";
 import { useNearbyListings } from "@/hooks/useNearbyListings";
 import type { Database } from "@/integrations/supabase/types";
 import type { Event } from "@/lib/types";
@@ -7,10 +7,13 @@ import { Button } from "@/components/ui/button";
 import { ChevronRight, Utensils, Calendar } from "lucide-react";
 import {
   DINNER_LEAD_MINUTES,
+  PAIR_MAX_MILES,
   formatCentralTime,
   formatMiles,
   type TonightDinner,
 } from "@/lib/tonightPairings";
+import { createEventSlugWithCentralTime } from "@/lib/timezone";
+import type { TonightNearbyEvent } from "@/hooks/useTonightNearRestaurant";
 
 type Restaurant = Database["public"]["Tables"]["restaurants"]["Row"];
 
@@ -40,7 +43,13 @@ function CardSkeleton() {
   );
 }
 
+/** The event detail path, built the same way as every other event link. */
+function eventHref(event: { title?: string | null }): string {
+  return `/events/${createEventSlugWithCentralTime(event.title, event)}`;
+}
+
 export function NearbyContent({ variant, excludeId, latitude, longitude }: NearbyContentProps) {
+  const navigate = useNavigate();
   const showRestaurants = variant === "restaurants-near-event" || variant === "restaurants-near-attraction";
   const showEvents = variant === "events-near-restaurant";
 
@@ -97,12 +106,12 @@ export function NearbyContent({ variant, excludeId, latitude, longitude }: Nearb
             <p className="text-sm text-muted-foreground mt-1">{config.subtitle}</p>
           </div>
         </div>
-        <Link to={config.linkHref}>
-          <Button variant="outline" size="sm">
+        <Button asChild variant="outline" size="sm" className="min-h-11">
+          <Link to={config.linkHref}>
             {config.linkText}
             <ChevronRight className="h-4 w-4 ml-1" />
-          </Button>
-        </Link>
+          </Link>
+        </Button>
       </div>
 
       {isLoading ? (
@@ -135,7 +144,8 @@ export function NearbyContent({ variant, excludeId, latitude, longitude }: Nearb
                 <EventCard
                   key={event.id}
                   event={event}
-                  onViewDetails={() => {}}
+                  // Was a no-op, so "View details" on a nearby event did nothing.
+                  onViewDetails={(e) => navigate(eventHref(e))}
                 />
               ))}
           </div>
@@ -190,6 +200,63 @@ export function DinnerBeforeShow({ picks, startsAt }: DinnerBeforeShowProps) {
           </li>
         ))}
       </ul>
+    </section>
+  );
+}
+
+interface TonightNearRestaurantProps {
+  /** From useTonightNearRestaurant. Nothing renders when empty. */
+  events: TonightNearbyEvent[];
+}
+
+/**
+ * "After dinner, nearby tonight" (restaurants plan WP8 item 6): tonight's
+ * events within PAIR_MAX_MILES of the restaurant, in start order. The mirror
+ * of DinnerBeforeShow on the event page. The distance-only NearbyContent rail
+ * is the fallback when nothing is on tonight.
+ */
+export function TonightNearRestaurant({ events }: TonightNearRestaurantProps) {
+  if (events.length === 0) return null;
+
+  return (
+    <section aria-labelledby="tonight-nearby" className="mt-12 border-t pt-8 pb-8">
+      <h2 id="tonight-nearby" className="text-2xl font-bold text-foreground">
+        After dinner, nearby tonight
+      </h2>
+      <p className="mt-1 text-sm text-muted-foreground">
+        Events starting later today within {PAIR_MAX_MILES} miles. Straight-line distance from the
+        restaurant.
+      </p>
+      <ul className="mt-4 divide-y rounded-xl border bg-card">
+        {events.map(({ event, startsAt, distanceMiles, walkable }) => (
+          <li key={event.id}>
+            <Link
+              to={eventHref(event)}
+              className="flex min-h-11 items-center justify-between gap-3 px-4 py-3 text-sm hover:bg-muted/50"
+            >
+              <span className="min-w-0">
+                <span className="block truncate font-medium text-foreground">
+                  {event.title || "Untitled event"}
+                </span>
+                <span className="block truncate text-muted-foreground">
+                  {[startsAt ? `${formatCentralTime(startsAt)} CT` : "Time not listed", event.venue]
+                    .filter(Boolean)
+                    .join(" - ")}
+                </span>
+              </span>
+              <span className="shrink-0 text-right tabular-nums text-muted-foreground">
+                <span className="block">{formatMiles(distanceMiles)}</span>
+                {walkable && <span className="block text-xs">walkable</span>}
+              </span>
+            </Link>
+          </li>
+        ))}
+      </ul>
+      <p className="mt-3 text-sm">
+        <Link to="/events/today" className="inline-flex min-h-11 items-center font-medium text-primary hover:underline">
+          Everything on today
+        </Link>
+      </p>
     </section>
   );
 }

@@ -39,16 +39,34 @@ export function useNearbyListings(
     enabled: located,
     staleTime: STALE_TIME.CONTENT_LIST,
     queryFn: async () => {
-      const base =
+      const { data, error } =
         kind === "restaurants"
-          ? supabase.from("restaurants").select(RESTAURANT_LIST_COLUMNS).neq("is_merged", true)
-          : supabase.from("events").select(EVENT_LIST_COLUMNS).gte("date", new Date().toISOString());
-      const { data, error } = await base
-        .gte("latitude", lat - LAT_PAD)
-        .lte("latitude", lat + LAT_PAD)
-        .gte("longitude", lng - LNG_PAD)
-        .lte("longitude", lng + LNG_PAD)
-        .limit(60);
+          ? await supabase
+              .from("restaurants")
+              .select(RESTAURANT_LIST_COLUMNS)
+              .neq("is_merged", true)
+              .gte("latitude", lat - LAT_PAD)
+              .lte("latitude", lat + LAT_PAD)
+              .gte("longitude", lng - LNG_PAD)
+              .lte("longitude", lng + LNG_PAD)
+              .limit(60)
+          : await supabase
+              .from("events")
+              .select(EVENT_LIST_COLUMNS)
+              .gte("date", new Date().toISOString())
+              // The same three unpublish switches as useEvents. Without them a
+              // merged duplicate, a hidden row or an archived event rendered
+              // as "happening nearby" on every restaurant and attraction page.
+              .neq("is_merged", true)
+              .neq("is_hidden", true)
+              .is("archived_at", null)
+              .gte("latitude", lat - LAT_PAD)
+              .lte("latitude", lat + LAT_PAD)
+              .gte("longitude", lng - LNG_PAD)
+              .lte("longitude", lng + LNG_PAD)
+              // Soonest first, so the 60-row cap drops next year, not next week.
+              .order("date", { ascending: true })
+              .limit(60);
       if (error) throw error;
       return (data ?? []) as unknown as Array<{ id: string; latitude: number | null; longitude: number | null }>;
     },

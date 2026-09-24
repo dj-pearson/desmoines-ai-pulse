@@ -4,7 +4,7 @@ import { DIETARY_KEYWORDS, resolveDietarySelections } from '../useRestaurants';
 /**
  * WEB-FEAT-032. The dietary filter on /restaurants did nothing.
  *
- * RestaurantInlineFilters writes its selections into `filters.tags`, because
+ * RestaurantInlineFilters (options from src/lib/restaurantPresets.ts) writes its selections into `filters.tags`, because
  * the URL parameter is `tags`. useRestaurants only ever read `filters.dietary`,
  * which no caller populates. Two consequences, and the second is why the bug
  * was invisible rather than merely wrong:
@@ -32,7 +32,7 @@ describe('resolveDietarySelections', () => {
   });
 
   it('accepts every option the filter UI offers', () => {
-    // These are the DIETARY_OPTIONS values in RestaurantInlineFilters. If the
+    // These are the DIETARY_OPTIONS values in src/lib/restaurantPresets.ts. If the
     // two lists drift, the filter silently stops matching again.
     const uiValues = ['vegan', 'vegetarian', 'gluten-free', 'keto', 'halal'];
     expect(resolveDietarySelections({ tags: uiValues }).sort()).toEqual([...uiValues].sort());

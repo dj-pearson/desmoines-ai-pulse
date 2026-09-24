@@ -1,5 +1,5 @@
 import { HubArticles } from "@/components/seo/HubArticles";
-import { Link, useNavigate } from "react-router-dom";
+import { Link, useLocation, useNavigate } from "react-router-dom";
 import Header from "@/components/Header";
 import Footer from "@/components/Footer";
 import { AdBanner } from "@/components/AdBanner";
@@ -10,6 +10,9 @@ import {
 } from "@/components/RestaurantFilters";
 import { RestaurantSmartPresets } from "@/components/RestaurantSmartPresets";
 import { RestaurantInlineFilters } from "@/components/RestaurantInlineFilters";
+import { RestaurantsTonightStrip } from "@/components/RestaurantsTonightStrip";
+import { RestaurantsHubDirectory } from "@/components/seo/RestaurantsHubDirectory";
+import { RestaurantsHubFaq, RestaurantsHubGuide } from "@/components/RestaurantsHubGuide";
 import {
   useRestaurants,
   useRestaurantFilterOptions,
@@ -18,15 +21,13 @@ import {
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { CardsGridSkeleton, LoadingSpinner } from "@/components/ui/loading-skeleton";
-import { Star, DollarSign, Search, SearchX, Utensils, X, Sparkles, Clock, List, Map, SlidersHorizontal, TrendingUp, Leaf, ChevronDown, Shuffle } from "lucide-react";
-import { useState, lazy, Suspense, useMemo, useCallback, useRef, useEffect } from "react";
+import { Star, DollarSign, Search, SearchX, Utensils, X, Sparkles, Clock, List, Map, SlidersHorizontal, TrendingUp, ChevronDown, Shuffle, Loader2 } from "lucide-react";
+import { useState, lazy, Suspense, useMemo, useCallback, useRef, useEffect, type MouseEvent } from "react";
 import { useToast } from "@/hooks/use-toast";
 import { EmptyState } from "@/components/ui/empty-state";
 import { ErrorState } from "@/components/ui/error-state";
-import { FAQSection } from "@/components/FAQSection";
 import { BackToTop } from "@/components/BackToTop";
 import { useAnnounce } from "@/hooks/use-announce";
-import { OpenNowBanner } from "@/components/OpenNowBanner";
 import { Breadcrumbs } from "@/components/ui/breadcrumbs";
 import { useIsMobile } from "@/hooks/use-mobile";
 import RestaurantCard from "@/components/RestaurantCard";
@@ -34,6 +35,8 @@ import { SPONSORED_CAP, arrangeSponsored } from "@/lib/sponsored";
 import { useUrlFilters } from "@/hooks/useUrlFilters";
 import { ActiveFilterChips } from "@/components/filters/ActiveFilterChips";
 import { SearchAutocomplete, addRecentSearch } from "@/components/SearchAutocomplete";
+import { DIETARY_OPTIONS } from "@/lib/restaurantPresets";
+import { BRAND } from "@/lib/brandConfig";
 import {
   Pagination,
   PaginationContent,
@@ -71,22 +74,63 @@ const sortOptions = [
   { value: "price_high", label: "Price: High-Low", icon: DollarSign },
 ];
 
+const ITEMS_PER_PAGE = 30;
+
+/**
+ * Cards before the openings strip, guides and the featured_spot ad. Nine is
+ * three rows on desktop, so the first thing under the filters is results
+ * (eat-drink plan WP1 item 6).
+ */
+const RESULTS_BEFORE_INTERSTITIAL = 9;
+
+/** How many restaurants go into the ItemList. Both fields must use it. */
+const RESTAURANT_SCHEMA_LIMIT = 20;
+
+/** Rows Surprise Me must not pick: nobody can eat there tonight. */
+const NOT_VISITABLE = new Set(["closed", "opening_soon", "permanently_closed", "temporarily_closed"]);
+
+const FILTER_KEYS = ["q", "cuisine", "price", "rmin", "rmax", "location", "sort", "featured", "open", "tags"];
+
+const DIETARY_LABELS: Record<string, string> = Object.fromEntries(
+  DIETARY_OPTIONS.map((d) => [d.value, d.label])
+);
+
+/** A plain left click, which the router should handle; anything else is the browser's. */
+function isPlainClick(e: MouseEvent<HTMLAnchorElement>): boolean {
+  return e.button === 0 && !e.metaKey && !e.ctrlKey && !e.shiftKey && !e.altKey;
+}
+
+function scrollToResults() {
+  document.getElementById("all-restaurants-heading")?.scrollIntoView({ behavior: "smooth" });
+}
+
 export default function Restaurants() {
   const navigate = useNavigate();
+  const location = useLocation();
   const isMobile = useIsMobile();
   const searchInputRef = useRef<HTMLInputElement>(null);
   // Filters are URL-synced (WEB-UX-001): shareable + survive back/forward.
   const { getStr, getNum, getList, setParam, setMany, clearParams } = useUrlFilters();
+
+  // OPEN NOW IS NOT A FILTER HERE (eat-drink plan WP1 item 2). `?open=1` was a
+  // flag nothing downstream read, while the banner reported the full total as
+  // the open count. The hub no longer writes it, and a shared link that still
+  // carries it gets a one-line pointer to /restaurants/open-now instead of a
+  // chip that claims a filter is applied. Plan D2 brings a real one back.
+  const legacyOpenNow = getStr("open", "") === "1";
+
   const filters: RestaurantFilterOptions = useMemo(
     () => ({
       search: getStr("q", ""),
       cuisine: getList("cuisine"),
       priceRange: getList("price"),
       rating: [getNum("rmin", 0), getNum("rmax", 5)],
+      // Still read so old ?location= links keep filtering for one release
+      // (URL rule in CLAUDE.md). Nothing on the hub writes a new value.
       location: getList("location"),
       sortBy: getStr("sort", "popularity") as RestaurantFilterOptions["sortBy"],
       featuredOnly: getStr("featured", "") === "1",
-      openNow: getStr("open", "") === "1",
+      openNow: false,
       tags: getList("tags"),
     }),
     [getStr, getNum, getList]
@@ -110,12 +154,15 @@ export default function Restaurants() {
         location: next.location,
         sort: next.sortBy !== "popularity" ? next.sortBy : "",
         featured: next.featuredOnly ? "1" : "",
-        open: next.openNow ? "1" : "",
+        // Never written, and any filter change drops a legacy ?open=1.
+        open: "",
         tags: next.tags,
       });
     },
     [filters, setMany]
   );
+
+  const [searchInput, setSearchInput] = useState(() => getStr("q", ""));
 
   // Active-filter chips (WEB-UX-003) — each removal updates the URL via setFilters.
   const restaurantChips = useMemo(() => {
@@ -128,24 +175,32 @@ export default function Restaurants() {
     filters.priceRange.forEach((c) =>
       chips.push({ key: `price-${c}`, label: c, onRemove: () => setFilters((p) => ({ ...p, priceRange: p.priceRange.filter((x) => x !== c) })) })
     );
-    filters.location.forEach((c) =>
-      chips.push({ key: `loc-${c}`, label: c, onRemove: () => setFilters((p) => ({ ...p, location: p.location.filter((x) => x !== c) })) })
+    filters.tags.forEach((t) =>
+      chips.push({ key: `tag-${t}`, label: DIETARY_LABELS[t] ?? t, onRemove: () => setFilters((p) => ({ ...p, tags: p.tags.filter((x) => x !== t) })) })
     );
+    // ONE chip for the whole legacy ?location= value, never one per value.
+    // The old Area pill wrote street addresses, and useUrlFilters splits list
+    // params on commas, so "123 Grand Ave, Des Moines, IA" came back as three
+    // meaningless chips. The filter is still applied, so it still needs a way
+    // to be seen and removed.
+    if (filters.location.length > 0)
+      chips.push({ key: "location", label: "Area (from an old link)", onRemove: () => setFilters((p) => ({ ...p, location: [] })) });
     if (filters.featuredOnly)
       chips.push({ key: "featured", label: "Featured only", onRemove: () => setFilters((p) => ({ ...p, featuredOnly: false })) });
-    if (filters.openNow)
-      chips.push({ key: "open", label: "Open now", onRemove: () => setFilters((p) => ({ ...p, openNow: false })) });
     if (filters.rating[0] !== 0 || filters.rating[1] !== 5)
-      chips.push({ key: "rating", label: `Rating ${filters.rating[0]}–${filters.rating[1]}`, onRemove: () => setFilters((p) => ({ ...p, rating: [0, 5] })) });
+      chips.push({ key: "rating", label: `Rating ${filters.rating[0]}-${filters.rating[1]}`, onRemove: () => setFilters((p) => ({ ...p, rating: [0, 5] })) });
     return chips;
   }, [filters, setFilters, setParam]);
 
-  const [viewMode, setViewMode] = useState<"list" | "map">("list");
-  const [searchInput, setSearchInput] = useState(() => getStr("q", ""));
+  // View is in the URL (item 11), so a shared map link opens on the map.
+  const viewMode: "list" | "map" = getStr("view", "list") === "map" ? "map" : "list";
+  const setViewMode = (mode: "list" | "map") => {
+    setParam("view", mode, { def: "list" });
+    if (mode === "map") requestAnimationFrame(scrollToResults);
+  };
   const { toast } = useToast();
 
-  const ITEMS_PER_PAGE = 30;
-  const page = getNum("page", 1);
+  const page = Math.max(1, Math.floor(getNum("page", 1)));
   /** Accepts a number OR a React-style updater. Three call sites below pass an
    *  updater (Load More / Previous / Next), and before this signature existed
    *  that function was handed straight to setParam, which does String(value) —
@@ -174,7 +229,16 @@ export default function Restaurants() {
     [filters, page, isMobile]
   );
 
-  const { restaurants, isLoading, error, totalCount, refetch } = useRestaurants(restaurantQuery);
+  const {
+    restaurants,
+    isLoading,
+    isFetching,
+    isPlaceholderData,
+    error,
+    totalCount,
+    refetch,
+    suggestions,
+  } = useRestaurants(restaurantQuery);
 
   // PAID PLACEMENT CANNOT COME FROM A PAGE OF THIRTY.
   //
@@ -184,10 +248,15 @@ export default function Restaurants() {
   // onto page 1. Bounding the fetch without this would have quietly ended that,
   // which is a contract question and not a performance decision. Two rows,
   // fetched on their own, and only on the first page.
+  //
+  // THE SPONSORED QUERY CARRIES THE VISITOR'S FILTERS (eat-drink plan WP1 item
+  // 3). It used to ask for any two sponsored rows, so a Mexican search led with
+  // whatever was paid for, Mexican or not. Boosting in place is the paid
+  // contract; relevance is what makes it worth anything.
   const { restaurants: sponsoredRestaurants } = useRestaurants(
     useMemo(
-      () => ({ sponsoredOnly: true, limit: SPONSORED_CAP, offset: 0 }),
-      []
+      () => ({ ...filters, sponsoredOnly: true, limit: SPONSORED_CAP, offset: 0 }),
+      [filters]
     )
   );
   const filterOptions = useRestaurantFilterOptions();
@@ -195,31 +264,46 @@ export default function Restaurants() {
   const { announce, announcement, regionProps } = useAnnounce();
 
   const handleSurpriseMe = useCallback(() => {
-    if (!restaurants || restaurants.length === 0) return;
-    const random = restaurants[Math.floor(Math.random() * restaurants.length)];
+    const candidates = restaurants.filter((r) => !NOT_VISITABLE.has((r as { status?: string | null }).status ?? ""));
+    if (candidates.length === 0) {
+      toast({
+        title: "Nothing to pick from",
+        description: "None of the restaurants on this page are open for business yet. Try another page or clear a filter.",
+      });
+      return;
+    }
+    const random = candidates[Math.floor(Math.random() * candidates.length)];
     navigate(`/restaurants/${random.slug || random.id}`);
-  }, [restaurants, navigate]);
+  }, [restaurants, navigate, toast]);
+
+  // Mobile's list always starts at row 0, so it boosts on every "page".
+  const boostsSponsored = isMobile || page === 1;
 
   // Boost up to 2 active sponsored listings to the top (WEB-FEAT-005), organic
   // order otherwise.
   const arrangedRestaurants = useMemo(() => {
-    if (page !== 1 || sponsoredRestaurants.length === 0) return restaurants;
+    if (!boostsSponsored || sponsoredRestaurants.length === 0) return restaurants;
     // De-duplicate: a sponsored restaurant that is also in this page's rotation
     // must appear once, at the top, not twice.
     const boosted = sponsoredRestaurants.slice(0, SPONSORED_CAP);
     const boostedIds = new Set(boosted.map((r) => r.id));
     return arrangeSponsored([...boosted, ...restaurants.filter((r) => !boostedIds.has(r.id))]);
-  }, [restaurants, sponsoredRestaurants, page]);
+  }, [restaurants, sponsoredRestaurants, boostsSponsored]);
 
   // The slicing is gone: the query returned this page. totalCount is the
   // unpaginated match count the RPC computes with a window function, so the
   // result counter and the page controls read the same numbers as before.
-  const totalPages = Math.ceil((totalCount || 0) / ITEMS_PER_PAGE);
+  const total = totalCount || 0;
+  const totalPages = Math.ceil(total / ITEMS_PER_PAGE);
   const paginatedRestaurants = arrangedRestaurants;
 
   const hasMorePages = isMobile
-    ? page * ITEMS_PER_PAGE < (totalCount || 0)
+    ? page * ITEMS_PER_PAGE < total
     : page < totalPages;
+
+  // A Load More in flight: the kept rows are the previous page's (WP2's
+  // placeholderData), so the grid stays mounted and only the button spins.
+  const isLoadingMore = isMobile && isFetching && isPlaceholderData;
 
   // Page reset on filter change is handled by setMany/setParam (resetsPage).
 
@@ -236,7 +320,6 @@ export default function Restaurants() {
   // Back/forward & shared links: pull URL search back into the input.
   useEffect(() => {
     setSearchInput(filters.search);
-    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [filters.search]);
 
   // Announce result count to screen readers
@@ -252,7 +335,7 @@ export default function Restaurants() {
   }, [totalCount, isLoading, filters.search, announce, restaurants]);
 
   const handleClearFilters = useCallback(() => {
-    clearParams(["q", "cuisine", "price", "rmin", "rmax", "location", "sort", "featured", "open", "tags"]);
+    clearParams(FILTER_KEYS);
     setSearchInput("");
     toast({
       title: "Filters Cleared",
@@ -260,26 +343,45 @@ export default function Restaurants() {
     });
   }, [toast, clearParams]);
 
-  const getActiveFiltersCount = useMemo(() => {
+  const activeFiltersCount = useMemo(() => {
     let count = 0;
     if (filters.search) count++;
     count += filters.cuisine.length;
     count += filters.priceRange.length;
-    count += filters.location.length;
+    if (filters.location.length > 0) count++;
     count += filters.tags.length;
     if (filters.featuredOnly) count++;
-    if (filters.openNow) count++;
     if (filters.rating[0] !== 0 || filters.rating[1] !== 5) count++;
     return count;
   }, [filters]);
 
-  const hasActiveFilters = getActiveFiltersCount > 0;
+  const hasActiveFilters = activeFiltersCount > 0;
 
-  // Split restaurants for featured section
-  const featuredRestaurants = useMemo(
-    () => restaurants.filter((r) => r.is_featured).slice(0, 3),
-    [restaurants]
+  // THE COUNT IN THE COPY IS THE UNFILTERED TOTAL (item 5). Remembered from
+  // the last unfiltered load, so filtering does not turn the guide's "470+"
+  // into "12+", and null until one has loaded, so nothing is guessed.
+  const [hubTotal, setHubTotal] = useState<number | null>(null);
+  useEffect(() => {
+    if (!hasActiveFilters && !isLoading && !error && totalCount > 0) setHubTotal(totalCount);
+  }, [hasActiveFilters, isLoading, error, totalCount]);
+
+  /** `?page=N` on top of whatever else is in the URL, so a page link is crawlable and shareable. */
+  const pageHref = useCallback(
+    (n: number) => {
+      const params = new URLSearchParams(location.search);
+      params.set("page", String(n));
+      return `${location.pathname}?${params.toString()}`;
+    },
+    [location.pathname, location.search]
   );
+
+  /** Router navigation for a plain click; a modified click opens the real href. */
+  const goToPage = (n: number) => (e: MouseEvent<HTMLAnchorElement>) => {
+    if (!isPlainClick(e)) return;
+    e.preventDefault();
+    setPage(n);
+    scrollToResults();
+  };
 
   // SEO data
   const restaurantsKeywords = [
@@ -304,77 +406,123 @@ export default function Restaurants() {
     "late night food Des Moines",
   ];
 
-  /** How many restaurants go into the ItemList. Both fields must use it. */
-  const RESTAURANT_SCHEMA_LIMIT = 20;
+  // ONLY THE CANONICAL LIST GETS AN ItemList (item 12): page 1 with no
+  // filters, which is the one URL a crawler should treat as this collection.
+  // A filtered or paged view is a different list under the same canonical.
+  const emitItemList = !hasActiveFilters && page === 1 && restaurants.length > 0;
+  const schemaRows = restaurants.slice(0, RESTAURANT_SCHEMA_LIMIT);
 
-  const restaurantsSchema = {
-    "@context": "https://schema.org",
-    "@type": "ItemList",
-    name: "Best Restaurants in Des Moines, Iowa",
-    description:
-      "The best restaurants in Des Moines, Iowa: browse 450+ local spots with ratings, reviews, menus and real-time open or closed status.",
-    // numberOfItems COUNTS THE ITEMS ACTUALLY LISTED, not the collection the
-    // page was drawn from. This read `totalCount || restaurants.length` while
-    // itemListElement was sliced to 20, so the prerendered page declared an
-    // ItemList of 478 and then supplied 20 - the only route of the ten emitting
-    // an ItemList where the two numbers disagreed. Structured data that
-    // contradicts itself is worse than none: it is a claim a crawler can check.
-    numberOfItems: Math.min(restaurants.length, RESTAURANT_SCHEMA_LIMIT),
-    itemListElement: restaurants.slice(0, RESTAURANT_SCHEMA_LIMIT).map((restaurant, index) => ({
-      "@type": "ListItem",
-      position: index + 1,
-      item: {
-        "@type": "Restaurant",
-        name: restaurant.name,
-        description: restaurant.description,
-        servesCuisine: restaurant.cuisine,
-        priceRange: restaurant.price_range,
-        address: {
-          "@type": "PostalAddress",
-          streetAddress: restaurant.location,
-          addressLocality: restaurant.city || "Des Moines",
-          addressRegion: "Iowa",
-          addressCountry: "US",
-        },
-        ...(restaurant.image_url && { image: restaurant.image_url }),
-        // WEB-SEO-025: no aggregateRating is emitted here.
-        //
-        // This block asserted a review count of Math.round(popularity_score * 2)
-        // for the first 20 restaurants on the site's highest-impression page.
-        // Google requires ratingCount to reflect real reviews; deriving one from
-        // a popularity score is a review-snippet policy breach. WEB-SEO-016
-        // removed the same invention from the detail page and left the reason in
-        // RestaurantDetails.tsx; the hub kept doing it.
-        //
-        // aggregateRating may only come from content_rating_aggregates, and only
-        // when total_ratings > 0. That table is not read here because the hub
-        // renders 20 cards and would need a second query on the heaviest page in
-        // the app (WEB-PERF-029) to publish a rating snippet nobody asked for.
-        // Emitting nothing is correct until real counts are worth that cost;
-        // emitting an invented one never was. scripts/check-duplicate-schema.mjs
-        // fails the build if a computed ratingCount comes back.
-        ...(restaurant.phone && { telephone: restaurant.phone }),
-        ...(restaurant.website && { url: restaurant.website }),
-        geo: restaurant.latitude
-          ? {
-              "@type": "GeoCoordinates",
-              latitude: restaurant.latitude,
-              longitude: restaurant.longitude,
-            }
-          : undefined,
-      },
-    })),
-  };
+  const restaurantsSchema = emitItemList
+    ? {
+        "@context": "https://schema.org",
+        "@type": "ItemList",
+        name: "Restaurants in Des Moines, Iowa",
+        description:
+          "Restaurants in Des Moines, Iowa, with menus, hours, prices and photos.",
+        // numberOfItems COUNTS THE ITEMS ACTUALLY LISTED, not the collection the
+        // page was drawn from. This read `totalCount || restaurants.length` while
+        // itemListElement was sliced to 20, so the prerendered page declared an
+        // ItemList of 478 and then supplied 20 - the only route of the ten emitting
+        // an ItemList where the two numbers disagreed. Structured data that
+        // contradicts itself is worse than none: it is a claim a crawler can check.
+        numberOfItems: schemaRows.length,
+        itemListElement: schemaRows.map((restaurant, index) => {
+          // Each entry points at OUR page for the restaurant. It pointed at
+          // the restaurant's own website, which told a crawler this list was
+          // a list of other people's sites; the website is sameAs now.
+          const pageUrl = `${BRAND.baseUrl}/restaurants/${restaurant.slug || restaurant.id}`;
+          return {
+            "@type": "ListItem",
+            position: index + 1,
+            url: pageUrl,
+            item: {
+              "@type": "Restaurant",
+              "@id": pageUrl,
+              url: pageUrl,
+              name: restaurant.name,
+              description: restaurant.description,
+              servesCuisine: restaurant.cuisine,
+              priceRange: restaurant.price_range,
+              address: {
+                "@type": "PostalAddress",
+                streetAddress: restaurant.location,
+                addressLocality: restaurant.city || "Des Moines",
+                addressRegion: "Iowa",
+                addressCountry: "US",
+              },
+              ...(restaurant.image_url && { image: restaurant.image_url }),
+              // WEB-SEO-025: no aggregateRating is emitted here.
+              //
+              // This block asserted a review count of Math.round(popularity_score * 2)
+              // for the first 20 restaurants on the site's highest-impression page.
+              // Google requires ratingCount to reflect real reviews; deriving one from
+              // a popularity score is a review-snippet policy breach. WEB-SEO-016
+              // removed the same invention from the detail page and left the reason in
+              // RestaurantDetails.tsx; the hub kept doing it.
+              //
+              // aggregateRating may only come from content_rating_aggregates, and only
+              // when total_ratings > 0. That table is not read here because the hub
+              // renders 20 cards and would need a second query on the heaviest page in
+              // the app (WEB-PERF-029) to publish a rating snippet nobody asked for.
+              // Emitting nothing is correct until real counts are worth that cost;
+              // emitting an invented one never was. scripts/check-duplicate-schema.mjs
+              // fails the build if a computed ratingCount comes back.
+              ...(restaurant.phone && { telephone: restaurant.phone }),
+              ...(restaurant.website && { sameAs: restaurant.website }),
+              geo: restaurant.latitude
+                ? {
+                    "@type": "GeoCoordinates",
+                    latitude: restaurant.latitude,
+                    longitude: restaurant.longitude,
+                  }
+                : undefined,
+            },
+          };
+        }),
+      }
+    : undefined;
+
+  // THE COUNTER COUNTS THE CARDS ON SCREEN (item 3). Boosted sponsored rows
+  // are extra cards on top of the page's thirty, so they are named rather
+  // than folded into a range that would then be off by two.
+  const organicShown = restaurants.length;
+  const sponsoredExtra = Math.max(0, paginatedRestaurants.length - organicShown);
+  const firstShown = isMobile ? 1 : (page - 1) * ITEMS_PER_PAGE + 1;
+  const lastShown = firstShown + organicShown - 1;
+  const counterText =
+    isLoading
+      ? "Searching..."
+      : organicShown === 0
+        ? `0 of ${total} restaurants`
+        : `Showing ${isMobile ? organicShown : `${firstShown}-${lastShown}`} of ${total} restaurants${
+            sponsoredExtra > 0 ? `, plus ${sponsoredExtra} sponsored` : ""
+          }`;
+
+  // Openings, guides and the featured_spot ad sit AFTER the first results,
+  // and only on the unfiltered hub: a visitor who searched wants results.
+  const showInterstitial = !hasActiveFilters && viewMode === "list";
+  const firstCards = paginatedRestaurants.slice(0, RESULTS_BEFORE_INTERSTITIAL);
+  const restCards = paginatedRestaurants.slice(RESULTS_BEFORE_INTERSTITIAL);
+
+  const heroPill =
+    "rounded-full text-sm min-h-11 sm:min-h-9 bg-white/15 hover:bg-white/25 text-white border-white/20";
 
   return (
     <>
       <SEOHead
         title="Best Restaurants in Des Moines, Iowa"
-        description="The best restaurants in Des Moines, Iowa: 450+ local spots with ratings, reviews and photos, filtered by cuisine, price or neighborhood."
+        description="Des Moines restaurants with menus, hours, prices and photos. Filter by cuisine, price or dietary need, or see what's open now."
         type="website"
         keywords={restaurantsKeywords}
         structuredData={restaurantsSchema}
+        breadcrumbs={[
+          { name: "Home", url: "/" },
+          { name: "Restaurants", url: "/restaurants" },
+        ]}
         url="/restaurants"
+        // A search results page is thin and endless; keep it out of the index
+        // but let crawlers follow through to the restaurants it lists.
+        robots={filters.search ? "noindex, follow" : undefined}
       />
       {/* WEB-UX-030: bg-gray-50 had no dark counterpart, so in dark mode the
           dark:text-gray-100 section headings below rendered near-white on
@@ -382,18 +530,13 @@ export default function Restaurants() {
       <div className="min-h-screen bg-gray-50 dark:bg-background">
         <Header />
 
-        {/* Hero Section */}
-        <section className="relative bg-gradient-to-br from-[#1a0f3c] via-[#2D1B69] to-[#DC143C] overflow-hidden">
-          {/* Animated background elements */}
-          <div className="absolute inset-0 overflow-hidden">
-            <div className="absolute -top-20 -right-20 w-96 h-96 bg-white/5 rounded-full blur-3xl" />
-            <div className="absolute -bottom-32 -left-32 w-[500px] h-[500px] bg-[#DC143C]/20 rounded-full blur-3xl" />
-            <div className="absolute top-1/2 left-1/2 -translate-x-1/2 -translate-y-1/2 w-[600px] h-[600px] bg-[#2D1B69]/30 rounded-full blur-3xl" />
-          </div>
-
-          <div className="relative container mx-auto px-4 pt-16 pb-20 md:pt-20 md:pb-28">
+        {/* Hero. One flat brand surface (WP1 item 13): the gradient and three
+            blurred orbs cost paint time and said nothing. Compact on a phone
+            so the first card is in the first viewport (item 6). */}
+        <section className="relative bg-[#2D1B69]">
+          <div className="relative container mx-auto px-4 pt-5 pb-6 sm:pt-8 sm:pb-10 md:pt-12 md:pb-16">
             {/* Title */}
-            <div className="text-center mb-10">
+            <div className="text-center mb-3 sm:mb-5 md:mb-10">
               {/*
                 SEO-026. Two things were wrong here and both were only visible
                 from outside the component.
@@ -411,19 +554,19 @@ export default function Restaurants() {
                 competition index 11, against 87 for the things-to-do terms -
                 this is the head term worth agreeing on.
               */}
-              <h1 className="text-4xl md:text-5xl lg:text-6xl font-extrabold text-white mb-4 tracking-tight">
+              <h1 className="text-3xl leading-[1.1] sm:leading-9 md:leading-none md:text-5xl lg:text-6xl font-extrabold text-white sm:mb-4 tracking-tight">
                 Best Restaurants in{' '}
                 {/* WEB-UX-034: was a bg-clip-text gradient. Gradient text is
                     decorative rather than meaningful, and on an h1 it costs
                     legibility for nothing - emphasis here comes from the block
                     break and the weight the heading already carries. */}
-                <span className="block text-amber-300">
+                <span className="sm:block text-amber-300">
                   Des Moines
                 </span>
               </h1>
-              <p className="text-lg md:text-xl text-white/80 max-w-2xl mx-auto">
-                Discover 450+ restaurants across Des Moines. Search by cuisine, price,
-                neighborhood, or find what's open right now.
+              <p className="hidden sm:block text-lg md:text-xl text-white/80 max-w-2xl mx-auto">
+                Search by cuisine, price or dietary need, see what opened this month, and find
+                dinner near tonight's show.
               </p>
             </div>
 
@@ -434,7 +577,7 @@ export default function Restaurants() {
                 <Input
                   ref={searchInputRef}
                   type="text"
-                  placeholder={isMobile ? "Search restaurants..." : "Search restaurants, cuisines, neighborhoods..."}
+                  placeholder={isMobile ? "Search restaurants..." : "Search restaurants or cuisines..."}
                   value={searchInput}
                   onChange={(e) => setSearchInput(e.target.value)}
                   onKeyDown={(e) => {
@@ -442,7 +585,7 @@ export default function Restaurants() {
                       addRecentSearch('restaurants', searchInput);
                     }
                   }}
-                  className="w-full h-14 pl-14 pr-36 text-base md:text-lg bg-white border-0 rounded-2xl shadow-2xl shadow-black/20 focus-visible:ring-2 focus-visible:ring-amber-400 focus-visible:ring-offset-0 placeholder:text-slate-500"
+                  className="w-full h-12 sm:h-14 pl-14 pr-36 text-base md:text-lg bg-white border-0 rounded-2xl focus-visible:ring-2 focus-visible:ring-amber-400 focus-visible:ring-offset-0 placeholder:text-slate-500"
                   aria-label="Search restaurants"
                 />
                 <div className="absolute right-2 top-1/2 -translate-y-1/2 flex items-center gap-2">
@@ -462,7 +605,7 @@ export default function Restaurants() {
                     </Button>
                   )}
                   <Button
-                    className="h-10 bg-gradient-to-r from-[#2D1B69] to-[#DC143C] hover:opacity-90 text-white rounded-xl px-5 font-semibold"
+                    className="h-10 bg-primary text-primary-foreground hover:bg-primary/90 rounded-xl px-5 font-semibold"
                     onClick={() => {
                       if (searchInput.trim()) addRecentSearch('restaurants', searchInput);
                       setFilters((prev) => ({ ...prev, search: searchInput }));
@@ -479,6 +622,10 @@ export default function Restaurants() {
                     setSearchInput(val);
                     setFilters((prev) => ({ ...prev, search: val }));
                   }}
+                  onSelectCuisine={(c) => {
+                    setSearchInput("");
+                    setFilters((prev) => ({ ...prev, search: "", cuisine: [c] }));
+                  }}
                   inputRef={searchInputRef}
                 />
               </div>
@@ -489,49 +636,48 @@ export default function Restaurants() {
                   variant="secondary"
                   size="sm"
                   onClick={handleSurpriseMe}
-                  disabled={!restaurants || restaurants.length === 0}
-                  className="rounded-full text-sm bg-white/15 hover:bg-white/25 text-white border-white/20"
+                  disabled={restaurants.length === 0}
+                  className={`${heroPill} min-w-11`}
                 >
-                  <Shuffle className="h-3.5 w-3.5 mr-1.5" />
-                  Surprise Me
+                  <Shuffle className="h-3.5 w-3.5 sm:mr-1.5" aria-hidden="true" />
+                  {/* Icon-only on a phone, so the whole row fits on one line
+                      and the first card stays in the first viewport. */}
+                  <span className="sr-only sm:not-sr-only">Surprise Me</span>
                 </Button>
-                <Button
-                  variant={filters.openNow ? "default" : "secondary"}
-                  size="sm"
-                  onClick={() => setFilters((prev) => ({ ...prev, openNow: !prev.openNow }))}
-                  className={`rounded-full text-sm ${
-                    filters.openNow
-                      ? "bg-white text-slate-900 hover:bg-white/90"
-                      : "bg-white/15 hover:bg-white/25 text-white border-white/20"
-                  }`}
-                >
-                  <SpriteIcon name="clock" className="h-3.5 w-3.5 mr-1.5" />
-                  Open Now
+                {/* A link, not a toggle (item 2): the open-now page is the one
+                    place that checks hours against the clock. */}
+                <Button asChild variant="secondary" size="sm" className={heroPill}>
+                  <Link to="/restaurants/open-now">
+                    <SpriteIcon name="clock" className="hidden sm:inline h-3.5 w-3.5 mr-1.5" />
+                    Open Now
+                  </Link>
                 </Button>
                 <Button
                   variant={filters.featuredOnly ? "default" : "secondary"}
                   size="sm"
+                  aria-pressed={filters.featuredOnly}
                   onClick={() => setFilters((prev) => ({ ...prev, featuredOnly: !prev.featuredOnly }))}
-                  className={`rounded-full text-sm ${
+                  className={
                     filters.featuredOnly
-                      ? "bg-white text-slate-900 hover:bg-white/90"
-                      : "bg-white/15 hover:bg-white/25 text-white border-white/20"
-                  }`}
+                      ? "rounded-full text-sm min-h-11 sm:min-h-9 bg-white text-slate-900 hover:bg-white/90"
+                      : heroPill
+                  }
                 >
-                  <SpriteIcon name="sparkles" className="h-3.5 w-3.5 mr-1.5" />
+                  <SpriteIcon name="sparkles" className="hidden sm:inline h-3.5 w-3.5 mr-1.5" />
                   Featured
                 </Button>
 
-                {/* View Mode Toggle */}
-                <div className="flex items-center rounded-full bg-white/15 p-0.5 ml-2">
+                {/* View Mode Toggle - 44px at every breakpoint (item 11) */}
+                <div className="flex items-center rounded-full bg-white/15 p-0.5" role="group" aria-label="Results view">
                   <Button
                     onClick={() => setViewMode("list")}
                     variant="ghost"
                     size="icon"
-                    className={`h-11 w-11 sm:h-8 sm:w-8 rounded-full ${
+                    aria-pressed={viewMode === "list"}
+                    className={`h-11 w-11 rounded-full ${
                       viewMode === "list"
                         ? "bg-white/30 text-white"
-                        : "text-white/60 hover:text-white hover:bg-white/10"
+                        : "text-white/70 hover:text-white hover:bg-white/10"
                     }`}
                     aria-label="List view"
                   >
@@ -541,10 +687,11 @@ export default function Restaurants() {
                     onClick={() => setViewMode("map")}
                     variant="ghost"
                     size="icon"
-                    className={`h-11 w-11 sm:h-8 sm:w-8 rounded-full ${
+                    aria-pressed={viewMode === "map"}
+                    className={`h-11 w-11 rounded-full ${
                       viewMode === "map"
                         ? "bg-white/30 text-white"
-                        : "text-white/60 hover:text-white hover:bg-white/10"
+                        : "text-white/70 hover:text-white hover:bg-white/10"
                     }`}
                     aria-label="Map view"
                   >
@@ -555,61 +702,48 @@ export default function Restaurants() {
             </div>
           </div>
 
-          {/* Curved bottom edge */}
-          <div className="absolute bottom-0 left-0 right-0">
-            <svg viewBox="0 0 1440 60" fill="none" xmlns="http://www.w3.org/2000/svg" className="w-full">
-              <path d="M0 60L1440 60L1440 0C1440 0 1080 60 720 60C360 60 0 0 0 0L0 60Z" fill="#f9fafb" />
+          {/* Curved bottom edge. currentColor, so it matches the page in both
+              themes; a literal #f9fafb left a pale band in dark mode. */}
+          <div className="absolute bottom-0 left-0 right-0 text-gray-50 dark:text-background" aria-hidden="true">
+            <svg viewBox="0 0 1440 60" fill="none" xmlns="http://www.w3.org/2000/svg" className="w-full block">
+              <path d="M0 60L1440 60L1440 0C1440 0 1080 60 720 60C360 60 0 0 0 0L0 60Z" fill="currentColor" />
             </svg>
           </div>
         </section>
 
-        <div className="container mx-auto px-4 py-6 md:py-8">
+        <div className="container mx-auto px-4 pt-3 pb-4 md:py-8">
           <Breadcrumbs
             items={[
               { label: "Home", href: "/" },
               { label: "Restaurants" },
             ]}
-            className="mb-4"
+            className="hidden sm:flex mb-4"
           />
-          <div className="flex gap-8">
-          <div className="flex-1 min-w-0 space-y-6">
+          <div className="space-y-2 sm:space-y-6">
             {/* Smart Preset Filters - one-tap scenarios */}
-            <RestaurantSmartPresets
-              onApplyPreset={setFilters}
-              defaultFilters={{
-                search: "",
-                cuisine: [],
-                priceRange: [],
-                rating: [0, 5],
-                location: [],
-                sortBy: "popularity",
-                featuredOnly: false,
-                openNow: false,
-                tags: [],
-              }}
-            />
+            <RestaurantSmartPresets onApplyPreset={setFilters} filters={filters} />
 
-            {/* Inline Filter Pills - always visible, no hidden panel */}
-            <div className="flex items-center justify-between gap-3 flex-wrap">
-              <div className="flex-1 min-w-0">
-                <RestaurantInlineFilters
-                  filters={filters}
-                  onFiltersChange={setFilters}
-                  availableCuisines={filterOptions.cuisines}
-                  availableLocations={filterOptions.locations}
-                  totalResults={totalCount}
-                  isLoading={isLoading}
-                />
-              </div>
-              <div className="flex items-center gap-2 flex-shrink-0">
-                {/* Sort dropdown */}
+            {/* ONE sticky bar (item 6): filter pills, sort, the count and the
+                removable chips, in list and map view alike. */}
+            <div className="sticky top-16 z-30 -mx-4 px-4 py-1.5 sm:py-2 space-y-1.5 bg-gray-50/95 dark:bg-background/95 backdrop-blur supports-[backdrop-filter]:bg-gray-50/80 dark:supports-[backdrop-filter]:bg-background/80">
+              {/* Pills and sort share one row at every width; the pills
+                  scroll inside their own box, so the bar is two short lines
+                  on a phone rather than three. */}
+              <div className="flex items-center gap-3">
+                <div className="flex-1 min-w-0">
+                  <RestaurantInlineFilters
+                    filters={filters}
+                    onFiltersChange={setFilters}
+                    availableCuisines={filterOptions.cuisines}
+                  />
+                </div>
                 <Select
                   value={filters.sortBy}
                   onValueChange={(value) =>
                     setFilters((prev) => ({ ...prev, sortBy: value as RestaurantFilterOptions["sortBy"] }))
                   }
                 >
-                  <SelectTrigger aria-label="Sort restaurants" className="w-40 bg-white dark:bg-card rounded-xl shadow-sm text-sm">
+                  <SelectTrigger aria-label="Sort restaurants" className="w-36 sm:w-40 min-h-11 shrink-0 bg-white dark:bg-card rounded-xl text-sm">
                     <SelectValue placeholder="Sort by" />
                   </SelectTrigger>
                   <SelectContent>
@@ -626,100 +760,40 @@ export default function Restaurants() {
                     })}
                   </SelectContent>
                 </Select>
-
-                {/* Results count — visible at all viewports (WEB-UX-003) */}
-                <p className="text-sm text-muted-foreground whitespace-nowrap">
-                  {isLoading ? (
-                    "Searching..."
-                  ) : (
-                    <span>
-                      {/* Never render a bare "found" with no number (WEB-QA-004):
-                          PostgREST can return a null count, so fall back to the
-                          number of rows actually on screen. */}
-                      <strong className="text-foreground">
-                        {totalCount ?? 0}
-                      </strong>{" "}
-                      found
-                    </span>
-                  )}
-                </p>
               </div>
+
+              {/* Results count — visible at all viewports (WEB-UX-003).
+                  WEB-PERF-029: the "of N" is totalCount, not the length of
+                  the fetched array, which is one page. */}
+              <p className="text-sm text-muted-foreground" data-results-count="">
+                {counterText}
+              </p>
+              {restaurantChips.length > 0 && (
+                <ActiveFilterChips onClearAll={handleClearFilters} chips={restaurantChips} />
+              )}
             </div>
 
-            {/* Restaurant Openings Section */}
-            <RestaurantOpenings />
-            <p className="text-center -mt-2 mb-8">
-              <Link to="/restaurants/new" className="text-primary font-semibold hover:underline">
-                See every new and upcoming restaurant in Des Moines
-              </Link>
-            </p>
-
-            <HubArticles hub="restaurants" className="mb-8" />
-
-            {/* Open Now Banner */}
-            <OpenNowBanner
-              isActive={filters.openNow}
-              onToggle={() =>
-                setFilters((prev) => ({ ...prev, openNow: !prev.openNow }))
-              }
-              /* openCount is the TOTAL, not this page's length: the filter is
-                 applied by the query, so the array would cap it at 30
-                 (WEB-PERF-029). */
-              openCount={filters.openNow ? totalCount || 0 : undefined}
-              totalCount={totalCount}
-            />
-
-            {/* Featured Restaurants Row */}
-            {!hasActiveFilters && featuredRestaurants.length > 0 && (
-              <section aria-labelledby="featured-heading">
-                <div className="flex items-center justify-between mb-4">
-                  <h2 id="featured-heading" className="text-2xl font-bold text-foreground flex items-center gap-2">
-                    <SpriteIcon name="sparkles" className="h-6 w-6 text-amber-500" />
-                    Featured Restaurants
-                  </h2>
-                  <Button
-                    variant="ghost"
-                    size="sm"
-                    onClick={() => setFilters((prev) => ({ ...prev, featuredOnly: true }))}
-                    // WEB-UX-030: was the brand navy hardcoded past the theme,
-                    // which is 1.4:1 on the dark background. text-primary is
-                    // 15.23:1 light / 5.92:1 dark because both ends move.
-                    className="text-primary hover:text-primary/80"
-                  >
-                    View All
-                    <SpriteIcon name="arrow-right" className="h-4 w-4 ml-1" />
-                  </Button>
-                </div>
-                <div className="grid grid-cols-1 md:grid-cols-3 gap-6">
-                  {featuredRestaurants.map((restaurant, index) => (
-                    <RestaurantCard
-                      priority={index < 3}
-                      key={restaurant.id}
-                      restaurant={restaurant}
-                      variant="featured"
-                    />
-                  ))}
-                </div>
-              </section>
+            {legacyOpenNow && (
+              <p className="rounded-xl border border-border bg-card px-4 py-3 text-sm text-foreground" role="status">
+                This list doesn't filter by hours.{" "}
+                <Link to="/restaurants/open-now" className="font-semibold text-primary underline-offset-4 hover:underline">
+                  See restaurants open now
+                </Link>
+              </p>
             )}
 
-            {/* Featured Spot Ad */}
-            <div className="my-6">
-              <AdBanner placement="featured_spot" />
-            </div>
-
-            {/* Screen reader announcement for result count changes */}
-            <div {...regionProps}>{announcement}</div>
+            {!hasActiveFilters && <RestaurantsTonightStrip />}
 
             {/* Main Restaurant Grid */}
             <section aria-labelledby="all-restaurants-heading">
-              <div className="flex items-center justify-between mb-4">
-                <h2 id="all-restaurants-heading" className="text-2xl font-bold text-foreground">
-                  {hasActiveFilters ? "Search Results" : "All Restaurants"}
-                </h2>
-              </div>
+              <h2
+                id="all-restaurants-heading"
+                className="sr-only sm:not-sr-only sm:mb-4 text-2xl font-bold text-foreground scroll-mt-40"
+              >
+                {hasActiveFilters ? "Search Results" : "All Restaurants"}
+              </h2>
 
-              {isLoading ? (
+              {isLoading && paginatedRestaurants.length === 0 ? (
                 <CardsGridSkeleton
                   count={9}
                   variant="restaurant"
@@ -761,32 +835,33 @@ export default function Restaurants() {
                         ]
                       : undefined
                   }
-                />
+                >
+                  {filters.search && suggestions.length > 0 && (
+                    <p className="mt-2 text-sm text-muted-foreground">
+                      Did you mean{" "}
+                      {suggestions.map((s, i) => (
+                        <span key={s.id}>
+                          {i > 0 && ", "}
+                          <Link
+                            to={`/restaurants/${s.slug || s.id}`}
+                            className="font-semibold text-primary underline-offset-4 hover:underline"
+                          >
+                            {s.name}
+                          </Link>
+                        </span>
+                      ))}
+                      ?
+                    </p>
+                  )}
+                </EmptyState>
               ) : viewMode === "map" ? (
                 <Suspense fallback={<LoadingSpinner label="Loading map..." />}>
-                  <RestaurantsMap restaurants={restaurants || []} />
+                  <RestaurantsMap restaurants={restaurants} filters={filters} />
                 </Suspense>
               ) : (
                 <>
-                  {/* Sticky filter bar: removable chips (WEB-UX-003) */}
-                  {restaurantChips.length > 0 && (
-                    <div className="sticky top-16 z-30 py-2 mb-2 bg-background/95 backdrop-blur supports-[backdrop-filter]:bg-background/80">
-                      <ActiveFilterChips onClearAll={handleClearFilters} chips={restaurantChips} />
-                    </div>
-                  )}
-                  {/* Results count */}
-                  {/* WEB-PERF-029: the "of N" is totalCount, not the length of
-                      the fetched array. The query returns one page now, so
-                      reading the array would say "Showing 1-30 of 30" on a set
-                      of 480. */}
-                  <p className="text-sm text-muted-foreground mb-4" aria-live="polite">
-                    {isMobile
-                      ? `Showing ${paginatedRestaurants.length} of ${totalCount || 0} restaurants`
-                      : `Showing ${Math.min((page - 1) * ITEMS_PER_PAGE + 1, totalCount || 0)}-${Math.min(page * ITEMS_PER_PAGE, totalCount || 0)} of ${totalCount || 0} restaurants`}
-                  </p>
-
                   <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-6">
-                    {paginatedRestaurants.map((restaurant, index) => (
+                    {firstCards.map((restaurant, index) => (
                       <RestaurantCard
                         priority={index < 3}
                         key={restaurant.id}
@@ -795,31 +870,57 @@ export default function Restaurants() {
                     ))}
                   </div>
 
-                  {/* Pagination controls */}
-                  {restaurants.length > ITEMS_PER_PAGE && (
-                    <div className="mt-8">
-                      {isMobile ? (
-                        hasMorePages && (
-                          <Button
-                            variant="outline"
-                            className="w-full"
-                            onClick={() => setPage((p) => p + 1)}
-                          >
-                            <ChevronDown className="h-4 w-4 mr-2" />
-                            Load More Restaurants
-                          </Button>
-                        )
-                      ) : (
+                  {showInterstitial && (
+                    <div className="my-10 space-y-8">
+                      <div>
+                        {/* Renders its own heading and /restaurants/new link. */}
+                        <RestaurantOpenings />
+                      </div>
+                      <HubArticles hub="restaurants" />
+                      <AdBanner placement="featured_spot" />
+                    </div>
+                  )}
+
+                  {restCards.length > 0 && (
+                    <div className={`grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-6 ${showInterstitial ? "" : "mt-6"}`}>
+                      {restCards.map((restaurant) => (
+                        <RestaurantCard key={restaurant.id} restaurant={restaurant} />
+                      ))}
+                    </div>
+                  )}
+
+                  {/* Pagination controls. Gated on the TOTAL: the old gate
+                      compared a 30-row page against 30, so it never showed and
+                      447 of 477 restaurants were unreachable (item 1). */}
+                  {isMobile ? (
+                    hasMorePages && (
+                      <div className="mt-8">
+                        <Button
+                          variant="outline"
+                          className="w-full min-h-11"
+                          disabled={isLoadingMore}
+                          aria-busy={isLoadingMore}
+                          onClick={() => setPage((p) => p + 1)}
+                        >
+                          {isLoadingMore ? (
+                            <Loader2 className="h-4 w-4 mr-2 animate-spin motion-reduce:animate-none" aria-hidden="true" />
+                          ) : (
+                            <ChevronDown className="h-4 w-4 mr-2" aria-hidden="true" />
+                          )}
+                          {isLoadingMore ? "Loading more restaurants..." : "Load More Restaurants"}
+                        </Button>
+                      </div>
+                    )
+                  ) : (
+                    totalPages > 1 && (
+                      <div className="mt-8">
                         <Pagination>
                           <PaginationContent>
                             {page > 1 && (
                               <PaginationItem>
                                 <PaginationPrevious
-                                  onClick={() => {
-                                    setPage((p) => Math.max(1, p - 1));
-                                    document.getElementById('all-restaurants-heading')?.scrollIntoView({ behavior: 'smooth' });
-                                  }}
-                                  className="cursor-pointer"
+                                  href={pageHref(page - 1)}
+                                  onClick={goToPage(page - 1)}
                                 />
                               </PaginationItem>
                             )}
@@ -837,12 +938,9 @@ export default function Restaurants() {
                               return (
                                 <PaginationItem key={pageNum}>
                                   <PaginationLink
+                                    href={pageHref(pageNum)}
                                     isActive={pageNum === page}
-                                    onClick={() => {
-                                      setPage(pageNum);
-                                      document.getElementById('all-restaurants-heading')?.scrollIntoView({ behavior: 'smooth' });
-                                    }}
-                                    className="cursor-pointer"
+                                    onClick={goToPage(pageNum)}
                                   >
                                     {pageNum}
                                   </PaginationLink>
@@ -857,18 +955,15 @@ export default function Restaurants() {
                             {page < totalPages && (
                               <PaginationItem>
                                 <PaginationNext
-                                  onClick={() => {
-                                    setPage((p) => Math.min(totalPages, p + 1));
-                                    document.getElementById('all-restaurants-heading')?.scrollIntoView({ behavior: 'smooth' });
-                                  }}
-                                  className="cursor-pointer"
+                                  href={pageHref(page + 1)}
+                                  onClick={goToPage(page + 1)}
                                 />
                               </PaginationItem>
                             )}
                           </PaginationContent>
                         </Pagination>
-                      )}
-                    </div>
+                      </div>
+                    )
                   )}
                 </>
               )}
@@ -879,228 +974,23 @@ export default function Restaurants() {
               <AdBanner placement="below_fold" />
             </div>
 
-            {/* Browse by Cuisine Section */}
-            {cuisineCounts.length > 0 && (
-              <section className="py-8" aria-labelledby="browse-cuisine-heading">
-                <h2
-                  id="browse-cuisine-heading"
-                  className="text-2xl font-bold text-foreground mb-2"
-                >
-                  Browse by Cuisine
-                </h2>
-                <p className="text-muted-foreground mb-6">
-                  Explore Des Moines restaurants by cuisine type
-                </p>
-                <div className="flex flex-wrap gap-2">
-                  {cuisineCounts.map(({ cuisine, count }) => (
-                    <button
-                      key={cuisine}
-                      onClick={() => {
-                        setFilters((prev) => ({ ...prev, cuisine: [cuisine] }));
-                        // A setActiveCuisineQuick('') call sat here referencing
-                        // removed state; it threw before the scroll below could
-                        // run (WEB-QA-017).
-                        document.getElementById('all-restaurants-heading')?.scrollIntoView({ behavior: 'smooth' });
-                      }}
-                      className="inline-flex items-center gap-1.5 px-4 py-2 min-h-[44px] rounded-full text-sm font-medium border border-border bg-card text-foreground hover:border-primary hover:bg-primary/5 transition-colors duration-200"
-                    >
-                      <SpriteIcon name="chef-hat" className="h-3.5 w-3.5 text-muted-foreground" />
-                      {cuisine}
-                      <span className="text-xs text-muted-foreground ml-0.5">({count})</span>
-                    </button>
-                  ))}
-                </div>
-              </section>
-            )}
+            {/* Every way in: open now, new, dietary, breweries, neighborhoods
+                and cuisines, as crawlable links (item 8). */}
+            <RestaurantsHubDirectory
+              cuisineCounts={cuisineCounts}
+              onCuisineClick={scrollToResults}
+              className="py-8"
+            />
 
-            {/* SEO Content Section */}
-            <section className="max-w-4xl mx-auto space-y-12 mt-16" aria-labelledby="guide-heading">
-              <div className="prose prose-lg max-w-none">
-                <h2 id="guide-heading" className="text-3xl font-bold mb-6 text-center text-foreground">
-                  Des Moines Restaurant Guide: Your Complete Local Dining Directory
-                </h2>
-
-                <div className="bg-muted/50 p-6 rounded-2xl mb-8 border border-border">
-                  <h3 className="text-xl font-semibold mb-3 flex items-center gap-2 text-foreground">
-                    <SpriteIcon name="chef-hat" className="h-5 w-5 text-primary" />
-                    Des Moines Dining at a Glance
-                  </h3>
-                  <p className="text-lg leading-relaxed text-muted-foreground">
-                    Des Moines, Iowa offers over 200 diverse restaurants spanning 30+ cuisines across downtown,
-                    East Village, West Des Moines, and Ankeny. From James Beard-nominated fine dining establishments
-                    to beloved neighborhood diners, the capital city's food scene rivals cities twice its size.
-                    New restaurant openings happen monthly, making Des Moines one of the Midwest's most exciting
-                    dining destinations.
-                  </p>
-                </div>
-
-                <h3 className="text-2xl font-semibold mb-4 text-foreground">Best Neighborhoods for Dining in Des Moines</h3>
-
-                <div className="grid md:grid-cols-2 gap-6 mb-8 not-prose">
-                  <div className="bg-card p-6 rounded-2xl border border-border">
-                    <h4 className="text-xl font-semibold mb-3 text-foreground">East Village & Downtown</h4>
-                    <p className="mb-3 text-muted-foreground">
-                      The epicenter of Des Moines dining. Farm-to-table restaurants, craft cocktail bars,
-                      and critically acclaimed fine dining. Home to Harbinger, Alba, and other nationally
-                      recognized establishments. Best area for date nights and special occasions.
-                    </p>
-                    <p className="text-sm text-muted-foreground">
-                      <strong>Best for:</strong> Fine dining, date nights, craft cocktails, farm-to-table
-                    </p>
-                  </div>
-
-                  <div className="bg-card p-6 rounded-2xl border border-border">
-                    <h4 className="text-xl font-semibold mb-3 text-foreground">West Des Moines & Jordan Creek</h4>
-                    <p className="mb-3 text-muted-foreground">
-                      The fastest-growing dining corridor in the metro. Family-friendly restaurants near
-                      Jordan Creek Town Center plus diverse ethnic eateries along University Avenue.
-                      Particularly strong in Asian and Latin American cuisines.
-                    </p>
-                    <p className="text-sm text-muted-foreground">
-                      <strong>Best for:</strong> Family dining, international cuisine, suburban convenience
-                    </p>
-                  </div>
-
-                  <div className="bg-card p-6 rounded-2xl border border-border">
-                    <h4 className="text-xl font-semibold mb-3 text-foreground">Ingersoll & Grand Avenue</h4>
-                    <p className="mb-3 text-muted-foreground">
-                      Classic Des Moines neighborhood dining. Locally-owned institutions serving the community
-                      for decades alongside trendy newcomers. Known for brunch spots, neighborhood bars,
-                      and casual American dining.
-                    </p>
-                    <p className="text-sm text-muted-foreground">
-                      <strong>Best for:</strong> Brunch, neighborhood favorites, casual dining
-                    </p>
-                  </div>
-
-                  <div className="bg-card p-6 rounded-2xl border border-border">
-                    <h4 className="text-xl font-semibold mb-3 text-foreground">Ankeny & Altoona</h4>
-                    <p className="mb-3 text-muted-foreground">
-                      Rapidly expanding suburban dining with new openings monthly. Excellent value,
-                      family-friendly atmospheres, and convenient access. Growing selection of
-                      independent restaurants alongside popular chains.
-                    </p>
-                    <p className="text-sm text-muted-foreground">
-                      <strong>Best for:</strong> Value dining, families, new restaurant openings
-                    </p>
-                  </div>
-                </div>
-
-                <h3 className="text-2xl font-semibold mb-4 text-foreground">Dining Tips for Des Moines</h3>
-
-                <div className="space-y-4 mb-8 not-prose">
-                  <div className="bg-card p-5 rounded-xl border border-border flex gap-4 items-start">
-                    <div className="bg-amber-100 rounded-full p-2 shrink-0 mt-0.5">
-                      <SpriteIcon name="clock" className="h-5 w-5 text-amber-600" />
-                    </div>
-                    <div>
-                      <h4 className="font-semibold text-foreground mb-1">Peak Hours & Reservations</h4>
-                      <p className="text-muted-foreground text-sm">
-                        Friday and Saturday evenings (6-8 PM) are busiest. Make reservations for fine dining
-                        and popular spots. Most casual restaurants accommodate walk-ins even during peak hours.
-                        Sunday brunch is popular from 9-11 AM at East Village and Ingersoll restaurants.
-                      </p>
-                    </div>
-                  </div>
-
-                  <div className="bg-card p-5 rounded-xl border border-border flex gap-4 items-start">
-                    <div className="bg-emerald-100 rounded-full p-2 shrink-0 mt-0.5">
-                      <DollarSign className="h-5 w-5 text-emerald-600" />
-                    </div>
-                    <div>
-                      <h4 className="font-semibold text-foreground mb-1">Best Value Dining</h4>
-                      <p className="text-muted-foreground text-sm">
-                        Des Moines offers exceptional dining value compared to larger metros. Many top-rated
-                        restaurants fall in the $15-30 per person range. Plenty of downtown bars and
-                        restaurants run happy hours, though times and offers vary by venue - check with the
-                        restaurant before you go.
-                      </p>
-                    </div>
-                  </div>
-
-                  <div className="bg-card p-5 rounded-xl border border-border flex gap-4 items-start">
-                    <div className="bg-purple-100 rounded-full p-2 shrink-0 mt-0.5">
-                      <Leaf className="h-5 w-5 text-purple-600" />
-                    </div>
-                    <div>
-                      <h4 className="font-semibold text-foreground mb-1">Dietary Accommodations</h4>
-                      <p className="text-muted-foreground text-sm">
-                        The Des Moines dining scene increasingly caters to dietary needs. Vegetarian and
-                        vegan options are available at most restaurants. Gluten-free menus are common at
-                        upscale establishments. Asian and Mediterranean restaurants naturally offer many
-                        plant-based options.
-                      </p>
-                    </div>
-                  </div>
-                </div>
-
-                <div className="bg-muted/50 p-6 rounded-2xl border border-border">
-                  <h4 className="text-lg font-semibold mb-3 text-foreground">Des Moines Food Scene by the Numbers</h4>
-                  <ul className="list-disc list-inside space-y-2 text-muted-foreground">
-                    <li><strong>450+ restaurants</strong> in the greater Des Moines metro area</li>
-                    <li><strong>30+ cuisine types</strong> from farm-to-table to authentic international</li>
-                    <li><strong>Weekly new openings</strong> tracked and verified by local experts</li>
-                    <li><strong>Real-time status</strong> showing which restaurants are open right now</li>
-                    <li><strong>Free, unbiased reviews</strong> from the Des Moines community</li>
-                  </ul>
-                </div>
-              </div>
-            </section>
-          </div>
-
-          {/* Sidebar Ad - Desktop Only */}
-          <aside className="hidden lg:block w-[160px] flex-shrink-0" aria-label="Sidebar advertisement">
-            <div className="sticky top-24">
-            </div>
-          </aside>
+            <RestaurantsHubGuide restaurantCount={hubTotal} cuisineCount={cuisineCounts.length} />
           </div>
         </div>
 
-        {/* FAQ Section */}
-        <section className="py-16 bg-white dark:bg-background" aria-labelledby="faq-heading">
-          <div className="max-w-4xl mx-auto px-4 sm:px-6 lg:px-8">
-            <FAQSection
-              title="Des Moines Restaurants - Frequently Asked Questions"
-              description="Common questions about dining, restaurants, and the food scene in Des Moines, Iowa."
-              faqs={[
-                {
-                  question: "What are the best restaurants in Des Moines in 2026?",
-                  answer: "Des Moines features over 200 diverse restaurants. Top-rated establishments include Harbinger for Asian-inspired fine dining, Alba for innovative American cuisine, Centro for authentic Italian, Django for French-inspired dishes, and Bubba for Southern fusion. The East Village neighborhood offers trendy farm-to-table options, while Ingersoll Avenue features beloved local institutions. Use our search filters to find restaurants by cuisine, price, rating, and neighborhood to discover your perfect Des Moines dining experience."
-                },
-                {
-                  question: "What restaurants are open right now in Des Moines?",
-                  answer: "Use our 'Open Now' filter at the top of this page to instantly see all Des Moines restaurants currently serving. We track real-time operating hours for 450+ local restaurants. Most downtown restaurants serve lunch 11 AM-2 PM and dinner 5-10 PM. Late-night options are available in the East Village and Court Avenue districts. For the most up-to-date information, click 'Open Now' above or visit our dedicated Open Now Restaurants page."
-                },
-                {
-                  question: "What cuisines are available in Des Moines?",
-                  answer: "Des Moines offers 30+ cuisine types including American (farm-to-table and classic), Italian, Mexican, Chinese, Japanese, Thai, Vietnamese, Korean, Indian, Mediterranean, French, BBQ, seafood, and more. The metro area has seen significant growth in authentic ethnic restaurants, particularly along University Avenue in West Des Moines. Use our cuisine filter to browse restaurants by food type."
-                },
-                {
-                  question: "Where can I find new restaurant openings in Des Moines?",
-                  answer: "Our 'New Openings' section at the top of this page tracks every new restaurant opening in the Des Moines metro within 48 hours of announcement. Recent growth areas include West Des Moines (particularly near Jordan Creek), Ankeny, and the East Village. We monitor social media, building permits, and local news sources to bring you the most current restaurant opening information."
-                },
-                {
-                  question: "What are the best cheap eats in Des Moines?",
-                  answer: "Des Moines offers excellent budget-friendly dining. Filter by '$' price range to find meals under $15 per person. Popular affordable options include food trucks downtown during lunch, family-style restaurants in Ankeny, taco shops on the east side, and weekday lunch specials at downtown establishments. Many downtown restaurants and bars run happy hours, though the times and the offers vary by venue, so check with the restaurant directly."
-                },
-                {
-                  question: "Are there vegan and vegetarian restaurants in Des Moines?",
-                  answer: "Yes, Des Moines has expanding plant-based dining options. Several restaurants offer dedicated vegetarian and vegan menus, and most upscale restaurants accommodate dietary restrictions. Asian restaurants, Mediterranean eateries, and farm-to-table establishments offer naturally plant-forward options. Visit our Dietary Restaurants page for a complete guide to vegan, vegetarian, gluten-free, and allergen-friendly dining in Des Moines."
-                },
-                {
-                  question: "What neighborhoods have the best restaurant scenes in Des Moines?",
-                  answer: "Des Moines has several distinct dining districts: East Village (trendy farm-to-table, craft cocktails), Downtown (business dining, fine dining), Ingersoll Avenue (neighborhood favorites, brunch spots), Court Avenue (nightlife, casual dining), Valley Junction in West Des Moines (unique concepts), and Drake neighborhood (diverse, student-friendly options). Each area reflects its unique neighborhood character through its restaurants."
-                },
-                {
-                  question: "Do Des Moines restaurants require reservations?",
-                  answer: "Reservation policies vary. Fine dining restaurants (Harbinger, Django, Alba) typically require reservations, especially on weekends. Mid-range restaurants accept reservations but often accommodate walk-ins. Casual dining operates first-come, first-served. We recommend calling ahead for groups of 6 or more, and for Friday-Saturday dinner service at popular restaurants. Check individual restaurant pages for contact details."
-                },
-              ]}
-              showSchema={true}
-              className="border-0 shadow-lg rounded-2xl"
-            />
-          </div>
-        </section>
+        {/* Screen reader announcement for result count changes. Outside the
+            spaced column, where an empty live region still took a gap. */}
+        <div {...regionProps}>{announcement}</div>
+
+        <RestaurantsHubFaq restaurantCount={hubTotal} cuisineCount={cuisineCounts.length} />
 
         <Footer />
         <BackToTop />

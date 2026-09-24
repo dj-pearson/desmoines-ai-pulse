@@ -1,5 +1,6 @@
 import { Helmet } from 'react-helmet-async';
 import { getCanonicalUrl } from '@/lib/brandConfig';
+import { toJsonLd } from '@/lib/jsonLd';
 import { MenuSection } from '@/hooks/useRestaurantMenu';
 
 interface MenuSchemaProps {
@@ -102,11 +103,13 @@ export function MenuSchema({
     })),
   } : null;
 
+  // item_name and item_description are scraped or AI-extracted. toJsonLd
+  // escapes "<", so a closing script tag in a description cannot end the block.
   return (
     <Helmet>
-      <script type="application/ld+json">{JSON.stringify(menuSchema)}</script>
+      <script type="application/ld+json">{toJsonLd(menuSchema)}</script>
       {itemListSchema && (
-        <script type="application/ld+json">{JSON.stringify(itemListSchema)}</script>
+        <script type="application/ld+json">{toJsonLd(itemListSchema)}</script>
       )}
     </Helmet>
   );

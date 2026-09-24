@@ -81,12 +81,15 @@ const REQUIRED_CLEAN = [
   'components/SEOHead.tsx',
   'components/schema/SpeakableSchema.tsx',
   'components/schema/BreadcrumbListSchema.tsx',
+  // Eat & Drink WP9: scraped menu text, brewery names, restaurant details.
+  'components/schema/MenuSchema.tsx',
+  'components/schema/ItemListSchema.tsx',
+  'components/EnhancedLocalSEO.tsx',
 ];
 
 // Still bare as of 2026-09-24. May only shrink.
 const BASELINE = new Set([
   'components/EnhancedAttractionSEO.tsx',
-  'components/EnhancedLocalSEO.tsx',
   'components/EnhancedPlaygroundSEO.tsx',
   'components/LocalSEO.tsx',
   // Builds a copy-paste snippet in a template string for the admin SEO tool,
@@ -95,11 +98,8 @@ const BASELINE = new Set([
   'components/schema/EventListJsonLd.tsx',
   'components/schema/FAQSchema.tsx',
   'components/schema/HotelSchema.tsx',
-  'components/schema/ItemListSchema.tsx',
-  'components/schema/MenuSchema.tsx',
   'components/schema/TouristTripSchema.tsx',
   'pages/ArticleDetails.tsx',
-  'pages/NewRestaurants.tsx',
   'pages/SeasonalGuide.tsx',
   'pages/TeamDetail.tsx',
   'pages/VenueDetail.tsx',

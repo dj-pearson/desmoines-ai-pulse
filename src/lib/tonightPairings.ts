@@ -9,13 +9,13 @@
  *
  * THE CLOCK IS CENTRAL, NOT THE READER'S. "Tonight" is the rest of today's
  * America/Chicago calendar day, and a restaurant's hours are checked against
- * Central wall time. getRestaurantOpenStatus reads getDay()/getHours() off the
- * Date it is given, which is the browser's zone, so it is handed a
- * toZonedTime() Date whose local fields ARE Central wall time. Without that a
- * reader in London would be told a place is open at 1am.
+ * Central wall time. getRestaurantOpenStatus takes the instant and does the
+ * Central conversion itself, so it is handed `at` unconverted. Passing a
+ * toZonedTime() Date here as well would convert twice and put the check
+ * five or six hours off.
  */
 import { addDays, parseISO } from "date-fns";
-import { formatInTimeZone, fromZonedTime, toZonedTime } from "date-fns-tz";
+import { formatInTimeZone, fromZonedTime } from "date-fns-tz";
 import { haversineDistance } from "@/lib/geo";
 import { getRestaurantOpenStatus } from "@/lib/restaurantHours";
 import { reorderForWeather, type WeatherSnapshot } from "@/hooks/useWeather";
@@ -245,8 +245,7 @@ export function isOpenForDinner(restaurant: TonightRestaurant, at: Date, now: Da
     if (Number.isFinite(opens) && opens > now.getTime()) return false;
   }
   if (typeof restaurant.opening !== "string") return false;
-  const wallClock = toZonedTime(at, CENTRAL);
-  return getRestaurantOpenStatus(restaurant.opening, wallClock).status === "open";
+  return getRestaurantOpenStatus(restaurant.opening, at).status === "open";
 }
 
 /**

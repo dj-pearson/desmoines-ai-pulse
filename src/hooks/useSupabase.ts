@@ -4,6 +4,8 @@ import { Event, Restaurant } from "@/lib/types";
 import { EVENT_LIST_COLUMNS, RESTAURANT_LIST_COLUMNS } from "@/lib/listColumns";
 import { createLogger } from "@/lib/logger";
 import { queryKeys } from "@/lib/queryKeys";
+import { JUST_OPENED_WINDOW_DAYS } from "@/lib/restaurantOpenings";
+import { addCentralDays, centralDateOf } from "@/lib/timezone";
 
 const logger = createLogger("useSupabase");
 
@@ -134,32 +136,54 @@ export function useFeaturedEvents() {
 }
 
 /**
- * A restaurant as the transform returns it, plus the stored `slug`.
+ * A restaurant as the transform returns it, plus the stored `slug` and `city`.
  *
  * `slug` is selected by RESTAURANT_LIST_COLUMNS and was dropped here, so the
  * home dashboard rebuilt one from the name and linked "Proof's" to proof-s
  * where the row says proofs (home plan WP3 item 1). It is a new key, so the
- * callers that read `Restaurant` are unaffected.
+ * callers that read `Restaurant` are unaffected. `city` is the same case: the
+ * openings watch prints it next to the cuisine.
  */
-export type RestaurantWithSlug = Restaurant & { slug?: string };
+export type RestaurantWithSlug = Restaurant & { slug?: string; city?: string };
 
 interface RestaurantOpeningsOptions {
-  /** Row cap. Omitted = every opening, which is what RestaurantOpenings.tsx shows. */
+  /** Row cap. Omitted = every opening. */
   limit?: number;
+  /**
+   * Also return places marked newly_opened whose opening_date falls in the
+   * last JUST_OPENED_WINDOW_DAYS. The hub's openings watch wants them; the
+   * home dashboard prints "Opens <date>" for every row, so it leaves this off.
+   */
+  includeRecentlyOpened?: boolean;
 }
 
 export function useRestaurantOpenings(options: RestaurantOpeningsOptions = {}) {
-  const { limit } = options;
+  const { limit, includeRecentlyOpened = false } = options;
+  // A Central calendar date, so the key changes once a day, not every render.
+  const since = includeRecentlyOpened
+    ? addCentralDays(centralDateOf(), -JUST_OPENED_WINDOW_DAYS)
+    : null;
   return useQuery<RestaurantWithSlug[]>({
     // The unbounded caller keeps the key it always had, so an invalidation of
     // ['restaurant-openings'] still reaches every variant by prefix.
-    queryKey: limit ? ['restaurant-openings', { limit }] : ['restaurant-openings'],
+    queryKey:
+      limit || since
+        ? ['restaurant-openings', { limit: limit ?? null, since }]
+        : ['restaurant-openings'],
     queryFn: async () => {
       let query = supabase
         .from('restaurants')
         .select(RESTAURANT_LIST_COLUMNS)
-        .in('status', ['opening_soon', 'announced'])
-        .order('opening_date', { ascending: true, nullsFirst: false });
+        // Hide rows merged into a duplicate (WEB-AUTO-005).
+        .neq('is_merged', true);
+      query = since
+        ? query.or(
+            `status.in.(opening_soon,announced),and(status.eq.newly_opened,opening_date.gte.${since})`,
+          )
+        : query.in('status', ['opening_soon', 'announced']);
+      // Oldest first: the places that just opened lead, then the soonest
+      // upcoming date, then the undated announcements.
+      query = query.order('opening_date', { ascending: true, nullsFirst: false });
       if (limit) {
         query = query.limit(limit);
       }
@@ -206,6 +230,7 @@ function transformRestaurant(restaurant: Record<string, unknown>): RestaurantWit
   return {
     id: restaurant.id as string,
     slug: (restaurant.slug as string | null) ?? undefined,
+    city: (restaurant.city as string | null) ?? undefined,
     name: restaurant.name as string,
     cuisine: restaurant.cuisine as string,
     location: restaurant.location as string,

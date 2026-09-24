@@ -296,11 +296,16 @@ test.describe('Sponsored listings render on the restaurants hub (WEB-ADS-001)', 
     await page.goto('/restaurants');
     await expectNoErrorBoundary(page);
 
-    // RestaurantCard prefixes the accessible name with "Sponsored: " and
-    // renders SponsoredBadge (aria-label "Sponsored content") inside the card.
-    const card = page.getByRole('link', { name: /^Sponsored: View Smoke Test Sponsored Bistro/ }).first();
+    // RestaurantCard is an <article> whose only link is the name in its <h3>
+    // (stretched-link pattern, eat-drink plan WP3 item 7). The label is plain
+    // visible text - SponsoredBadge carries no aria-label - so a screen reader
+    // and a sighted reader get the same "Sponsored" disclosure.
+    const card = page
+      .locator('article')
+      .filter({ has: page.getByRole('link', { name: 'Smoke Test Sponsored Bistro', exact: true }) })
+      .first();
     await expect(card).toBeVisible({ timeout: 30_000 });
-    await expect(card.getByLabel('Sponsored content')).toBeVisible();
+    await expect(card.getByText('Sponsored', { exact: true }).first()).toBeVisible();
   });
 });
 

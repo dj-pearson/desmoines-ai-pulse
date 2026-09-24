@@ -1,183 +1,105 @@
-import { useState } from "react";
-import { Badge } from "@/components/ui/badge";
-import { Heart, Moon, Users, Zap, Coffee, Baby, Leaf } from "lucide-react";
+import { useMemo, useState } from "react";
+import { Coffee, Heart, Leaf, Users } from "lucide-react";
 import type { RestaurantFilterOptions } from "@/components/RestaurantFilters";
-import { SpriteIcon } from "@/components/ui/SpriteIcon";
+import { useCuisineCounts } from "@/hooks/useRestaurants";
+import {
+  DEFAULT_RESTAURANT_FILTERS,
+  activeRestaurantPresetId,
+  availableRestaurantPresets,
+  presetFilters,
+  type RestaurantPreset,
+  type RestaurantPresetIcon,
+} from "@/lib/restaurantPresets";
+import { cn } from "@/lib/utils";
 
-interface SmartPreset {
-  id: string;
-  label: string;
-  icon: React.ComponentType<{ className?: string }>;
-  description: string;
-  filters: Partial<RestaurantFilterOptions>;
-  gradient: string;
-}
-
-// One hue pair per preset, chosen so eight chips are told apart at a glance.
-// `impeccable detect` counts the violet and indigo members as ai-color-palette
-// findings; they stay. The hue is doing identifying work, and swapping one
-// member of a distinguishing set to dodge a rule makes the set arbitrary
-// without making it less gradient. Decided as a set (WEB-UX-034 AC2).
-const SMART_PRESETS: SmartPreset[] = [
-  {
-    id: "date-night",
-    label: "Date Night",
-    icon: Heart,
-    description: "Upscale & romantic",
-    filters: {
-      priceRange: ["$$$", "$$$$"],
-      rating: [4, 5],
-      sortBy: "rating",
-      tags: ["Date Night"],
-    },
-    gradient: "from-rose-500 to-pink-600",
-  },
-  {
-    id: "quick-lunch",
-    label: "Quick Lunch",
-    icon: Zap,
-    description: "Fast & affordable",
-    filters: {
-      priceRange: ["$", "$$"],
-      openNow: true,
-      sortBy: "popularity",
-    },
-    gradient: "from-amber-500 to-orange-500",
-  },
-  {
-    id: "family-dinner",
-    label: "Family Friendly",
-    icon: Users,
-    description: "Great for kids",
-    filters: {
-      priceRange: ["$", "$$", "$$$"],
-      tags: ["Family Friendly"],
-      sortBy: "popularity",
-    },
-    gradient: "from-blue-500 to-cyan-500",
-  },
-  {
-    id: "late-night",
-    label: "Late Night",
-    icon: Moon,
-    description: "Open late",
-    filters: {
-      openNow: true,
-      sortBy: "popularity",
-    },
-    gradient: "from-indigo-600 to-purple-600",
-  },
-  {
-    id: "brunch",
-    label: "Brunch",
-    icon: Coffee,
-    description: "Weekend vibes",
-    filters: {
-      cuisine: ["Cafe", "Brunch", "Breakfast", "American"],
-      sortBy: "rating",
-    },
-    gradient: "from-yellow-500 to-amber-500",
-  },
-  {
-    id: "healthy",
-    label: "Healthy",
-    icon: Leaf,
-    description: "Vegan & fresh",
-    filters: {
-      cuisine: ["Vegetarian", "Vegan", "Health Food", "Salad"],
-      sortBy: "rating",
-    },
-    gradient: "from-emerald-500 to-green-600",
-  },
-  {
-    id: "kids",
-    label: "With Kids",
-    icon: Baby,
-    description: "Kid-approved",
-    filters: {
-      priceRange: ["$", "$$"],
-      tags: ["Family Friendly"],
-      sortBy: "popularity",
-    },
-    gradient: "from-sky-500 to-blue-500",
-  },
-];
+const PRESET_ICONS: Record<RestaurantPresetIcon, React.ComponentType<{ className?: string }>> = {
+  heart: Heart,
+  users: Users,
+  coffee: Coffee,
+  leaf: Leaf,
+};
 
 interface RestaurantSmartPresetsProps {
   onApplyPreset: (filters: RestaurantFilterOptions) => void;
-  defaultFilters: RestaurantFilterOptions;
+  /**
+   * The current filters (from the URL). The active preset is derived from
+   * these, so a reloaded preset URL shows as active and any later edit clears
+   * it. When omitted the chip row falls back to remembering the last preset it
+   * applied, which cannot see edits made elsewhere.
+   */
+  filters?: RestaurantFilterOptions;
+  defaultFilters?: RestaurantFilterOptions;
 }
 
 export function RestaurantSmartPresets({
   onApplyPreset,
-  defaultFilters,
+  filters,
+  defaultFilters = DEFAULT_RESTAURANT_FILTERS,
 }: RestaurantSmartPresetsProps) {
-  const [activePreset, setActivePreset] = useState<string | null>(null);
+  // Shares the cached facet query the hub already runs; no extra request.
+  const { cuisineCounts, isLoading } = useCuisineCounts();
+  const [lastApplied, setLastApplied] = useState<RestaurantFilterOptions | null>(null);
 
-  const handlePresetClick = (preset: SmartPreset) => {
-    if (activePreset === preset.id) {
-      // Deactivate - reset to defaults
-      setActivePreset(null);
-      onApplyPreset(defaultFilters);
-    } else {
-      setActivePreset(preset.id);
-      onApplyPreset({
-        ...defaultFilters,
-        ...preset.filters,
-      });
-    }
+  const presets = useMemo(
+    () => availableRestaurantPresets(isLoading ? undefined : cuisineCounts),
+    [cuisineCounts, isLoading]
+  );
+
+  const current = filters ?? lastApplied;
+  const activePreset = current ? activeRestaurantPresetId(current, presets) : null;
+
+  const handlePresetClick = (preset: RestaurantPreset) => {
+    const next = activePreset === preset.id ? defaultFilters : presetFilters(preset);
+    setLastApplied(next);
+    onApplyPreset(next);
   };
+
+  if (presets.length === 0) return null;
 
   return (
     <div className="space-y-2">
-      <div className="flex items-center gap-2 text-sm font-medium text-muted-foreground px-1">
-        <SpriteIcon name="sparkles" className="h-3.5 w-3.5" />
-        <span>Quick picks</span>
-      </div>
-      <div className="flex gap-2 overflow-x-auto pb-2 -mx-4 px-4 scrollbar-hide snap-x snap-mandatory">
-        {SMART_PRESETS.map((preset) => {
-          const Icon = preset.icon;
+      <p id="restaurant-presets-heading" className="text-sm font-medium text-muted-foreground px-1">
+        Quick picks
+      </p>
+      <div
+        role="group"
+        aria-labelledby="restaurant-presets-heading"
+        className="flex gap-2 overflow-x-auto pb-2 -mx-4 px-4 scrollbar-hide snap-x snap-mandatory"
+      >
+        {presets.map((preset) => {
+          const Icon = PRESET_ICONS[preset.icon];
           const isActive = activePreset === preset.id;
           return (
             <button
               key={preset.id}
+              type="button"
               onClick={() => handlePresetClick(preset)}
-              className={`flex-shrink-0 snap-start flex items-center gap-2.5 px-4 py-2.5 rounded-2xl transition-all duration-200 border ${
-                isActive
-                  ? `bg-gradient-to-r ${preset.gradient} text-white border-transparent shadow-lg scale-[1.02]`
-                  : "bg-white dark:bg-card text-gray-700 dark:text-gray-300 border-gray-200 dark:border-gray-700 hover:border-gray-300 dark:hover:border-gray-600 shadow-sm hover:shadow-md"
-              }`}
               aria-pressed={isActive}
+              className={cn(
+                "flex-shrink-0 snap-start flex items-center gap-2.5 min-h-[44px] px-3.5 py-2 rounded-xl border transition-colors",
+                "focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2",
+                isActive
+                  ? "bg-primary text-primary-foreground border-primary"
+                  : "bg-card text-foreground border-border hover:bg-muted"
+              )}
             >
-              <div
-                className={`flex items-center justify-center w-8 h-8 rounded-xl ${
-                  isActive
-                    ? "bg-white/20"
-                    : `bg-gradient-to-br ${preset.gradient} text-white`
-                }`}
-              >
-                <Icon className="h-4 w-4" />
-              </div>
-              <div className="text-left">
-                <div className="text-sm font-semibold whitespace-nowrap leading-tight">
+              <Icon
+                className={cn("h-4 w-4 shrink-0", isActive ? "text-primary-foreground" : "text-muted-foreground")}
+                aria-hidden="true"
+              />
+              <span className="text-left">
+                <span className="block text-sm font-semibold whitespace-nowrap leading-tight">
                   {preset.label}
-                </div>
-                <div
-                  className={`text-[11px] whitespace-nowrap leading-tight ${
-                    isActive ? "text-white/80" : "text-muted-foreground"
-                  }`}
+                </span>
+                <span
+                  className={cn(
+                    "block text-xs whitespace-nowrap leading-tight",
+                    isActive ? "text-primary-foreground/85" : "text-muted-foreground"
+                  )}
                 >
                   {preset.description}
-                </div>
-              </div>
-              {isActive && (
-                <Badge
-                  variant="secondary"
-                  className="ml-1 bg-white/20 text-white border-0 text-[10px] px-1.5 py-0"
-                >
-                  ON
-                </Badge>
-              )}
+                </span>
+              </span>
             </button>
           );
         })}

@@ -45,16 +45,16 @@ export function HubArticles({ hub, title = "Guides from Des Moines Insider", lim
   return (
     <nav aria-label={title} className={className}>
       <h2 className="text-lg font-semibold mb-3">{title}</h2>
-      <ul className="space-y-2">
+      <ul>
         {matches.map((a) => (
           <li key={a.id}>
-            <Link to={`/articles/${a.slug}`} className="text-primary hover:underline">
+            <Link to={`/articles/${a.slug}`} className="inline-flex min-h-11 items-center text-primary hover:underline">
               {a.title}
             </Link>
           </li>
         ))}
       </ul>
-      <Link to="/articles" className="mt-3 inline-block text-sm text-muted-foreground hover:text-primary">
+      <Link to="/articles" className="mt-3 inline-flex min-h-11 items-center text-sm text-muted-foreground hover:text-primary">
         All articles
       </Link>
     </nav>

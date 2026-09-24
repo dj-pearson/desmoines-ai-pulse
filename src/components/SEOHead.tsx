@@ -24,7 +24,22 @@ interface SEOHeadProps {
   breadcrumbs?: Array<{ name: string; url: string }>;
   /** Emit robots noindex, nofollow instead of the default index directive. */
   noindex?: boolean;
+  /**
+   * Explicit robots directive; wins over `noindex` when set. For a thin or
+   * filtered listing that should stay out of the index while its links are
+   * still followed, pass "noindex, follow". Existing `noindex` callers keep
+   * "noindex, nofollow".
+   */
+  robots?: SEORobotsDirective;
 }
+
+export type SEORobotsDirective =
+  | "noindex, follow"
+  | "noindex, nofollow"
+  | "index, follow";
+
+const DEFAULT_ROBOTS =
+  "index, follow, max-image-preview:large, max-snippet:-1, max-video-preview:-1";
 
 export default function SEOHead({
   title,
@@ -42,6 +57,7 @@ export default function SEOHead({
   location,
   breadcrumbs,
   noindex = false,
+  robots,
 }: SEOHeadProps) {
   const baseUrl = BRAND.baseUrl;
 
@@ -130,9 +146,9 @@ export default function SEOHead({
       <meta
         name="robots"
         content={
-          noindex
-            ? "noindex, nofollow"
-            : "index, follow, max-image-preview:large, max-snippet:-1, max-video-preview:-1"
+          robots === "index, follow"
+            ? DEFAULT_ROBOTS
+            : robots ?? (noindex ? "noindex, nofollow" : DEFAULT_ROBOTS)
         }
       />
 

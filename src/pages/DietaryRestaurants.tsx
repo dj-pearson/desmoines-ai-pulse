@@ -1,187 +1,163 @@
-import React, { useState, useEffect } from "react";
-import { createLogger } from '@/lib/logger';
-import { supabase } from "@/integrations/supabase/client";
 import { useSearchParams, Link } from "react-router-dom";
-import { SpriteIcon } from "@/components/ui/SpriteIcon";
-
-const log = createLogger('DietaryRestaurants');
+import { Leaf, Wheat, Beef, UtensilsCrossed, type LucideIcon } from "lucide-react";
 import Header from "@/components/Header";
 import Footer from "@/components/Footer";
-import { FAQSection } from "@/components/FAQSection";
+import { FAQSection, type FAQItem } from "@/components/FAQSection";
 import RestaurantCard from "@/components/RestaurantCard";
 import EnhancedLocalSEO from "@/components/EnhancedLocalSEO";
 import RelatedContent from "@/components/RelatedContent";
 import { Card, CardContent } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
-import { Leaf, Wheat, Beef, FilterX } from "lucide-react";
-import { getCanonicalUrl } from "@/lib/brandConfig";
 import { Breadcrumbs } from "@/components/ui/breadcrumbs";
-import { RESTAURANT_LIST_COLUMNS } from "@/lib/listColumns";
-import { useReloadableFetch } from "@/hooks/useReloadableFetch";
 import { ErrorState } from "@/components/ui/error-state";
+import { SpriteIcon } from "@/components/ui/SpriteIcon";
+import {
+  DIETS,
+  DIETARY_FETCH_LIMIT,
+  dietFromParam,
+  useDietaryRestaurants,
+  type Diet,
+  type DietId,
+} from "@/hooks/useDietaryRestaurants";
+import { getCanonicalUrl } from "@/lib/brandConfig";
 
 /**
  * WEB-PERF-023. The query fetches 100 and the grid rendered all of them, which
- * measured 4,985 DOM elements inside #root — the second-worst route on the
- * site, against a 481 median and a ~1,500 Lighthouse flag. 36 is three full
- * rows of the lg:grid-cols-3 grid. Counts in the copy still report the true
- * total; only the grid is capped.
+ * measured 4,985 DOM elements inside #root. 36 is three full rows of the
+ * lg:grid-cols-3 grid. The heading still reports the true count.
  */
 const VISIBLE_RESTAURANTS = 36;
 
-const dietaryOptions = [
-  { id: "vegan", label: "Vegan", icon: Leaf, color: "text-green-600", keywords: ["vegan"] },
-  { id: "vegetarian", label: "Vegetarian", icon: Leaf, color: "text-green-500", keywords: ["vegetarian", "veggie"] },
-  { id: "gluten-free", label: "Gluten-Free", icon: Wheat, color: "text-amber-600", keywords: ["gluten free", "gluten-free", "gf", "celiac"] },
-  { id: "keto", label: "Keto", icon: Beef, color: "text-red-600", keywords: ["keto", "low carb", "ketogenic"] },
-  { id: "halal", label: "Halal", icon: Beef, color: "text-blue-600", keywords: ["halal"] },
-  { id: "kosher", label: "Kosher", icon: Beef, color: "text-purple-600", keywords: ["kosher"] },
-];
+/**
+ * One icon per diet, all drawn in the text colour. Halal and kosher used to get
+ * a steak (Beef) in blue and purple, which says nothing about either.
+ */
+const DIET_ICON: Record<DietId, LucideIcon> = {
+  vegan: Leaf,
+  vegetarian: Leaf,
+  "gluten-free": Wheat,
+  keto: Beef,
+  halal: UtensilsCrossed,
+  kosher: UtensilsCrossed,
+};
 
-interface Restaurant {
-  id: string;
-  name: string;
-  cuisine: string;
-  location: string;
-  rating?: number;
-  price_range?: string;
-  description?: string;
-  phone?: string;
-  website?: string;
-  image_url?: string;
-  dietary_options?: string[];
+/**
+ * The FAQ. It ships as FAQPage JSON-LD, so every answer says only what this
+ * page can back: it matches words in a listing and checks nothing else. The
+ * statistics, certifications and named "verified" lists that used to be here
+ * had no source in the data.
+ */
+function buildFaqs(diet: Diet | null): FAQItem[] {
+  const noun = diet ? diet.label.toLowerCase() : "dietary-friendly";
+  return [
+    {
+      question: `How does this page choose ${noun} restaurants in Des Moines?`,
+      answer:
+        "It lists Des Moines-area restaurants whose name, cuisine or description mentions the diet, for example \"vegan\" or \"gluten-free\". That is a keyword match on the listing, not a check of the menu or the kitchen, so call ahead before you go.",
+      links: [{ label: "All Des Moines restaurants", to: "/restaurants" }],
+    },
+    {
+      question: "Is the gluten-free food on this list safe for celiac disease?",
+      answer:
+        "A listing can't tell you that. Call ahead, say it's celiac disease rather than a preference, and ask about shared fryers and prep surfaces.",
+      links: [{ label: "Gluten-free mentions", to: "/restaurants/dietary?diet=gluten-free" }],
+    },
+    {
+      question: "Where can I find halal food in Des Moines?",
+      answer:
+        "Start with the halal list on this page, which shows places that mention halal in their listing. Call ahead to ask how the meat is sourced and whether it shares fryers and prep surfaces with other dishes.",
+      links: [{ label: "Halal mentions", to: "/restaurants/dietary?diet=halal" }],
+    },
+    {
+      question: "Where can I find kosher food in Des Moines?",
+      answer:
+        "Start with the kosher list on this page, which shows places that mention kosher in their listing. Call ahead to ask about supervision and whether dishes share fryers and prep surfaces.",
+      links: [{ label: "Kosher mentions", to: "/restaurants/dietary?diet=kosher" }],
+    },
+  ];
+}
+
+function ListSkeleton() {
+  return (
+    <div className="grid gap-6 md:grid-cols-2 lg:grid-cols-3" aria-busy="true" aria-label="Loading restaurants">
+      {Array.from({ length: 6 }, (_, i) => (
+        <div key={i} className="animate-pulse">
+          <div className="h-48 bg-muted rounded-xl mb-4" />
+          <div className="h-4 bg-muted rounded w-3/4 mb-2" />
+          <div className="h-4 bg-muted rounded w-1/2" />
+        </div>
+      ))}
+    </div>
+  );
+}
+
+/** The six diets as plain links, shown when no diet is chosen. */
+function DietEntryPoints() {
+  return (
+    <section aria-labelledby="diet-entry-heading" className="mb-10">
+      <h2 id="diet-entry-heading" className="text-2xl font-bold mb-4">
+        Choose a diet
+      </h2>
+      <ul className="divide-y rounded-xl border max-w-2xl">
+        {DIETS.map((diet) => {
+          const Icon = DIET_ICON[diet.id];
+          return (
+            <li key={diet.id} className="relative flex items-center gap-3 px-4 py-3 hover:bg-muted/50 focus-within:bg-muted/50">
+              <Icon className="h-5 w-5 flex-shrink-0 text-muted-foreground" aria-hidden="true" />
+              <span className="flex-1 min-w-0">
+                <Link
+                  to={`/restaurants/dietary?diet=${diet.id}`}
+                  className="font-semibold after:absolute after:inset-0 after:content-[''] focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring rounded-sm"
+                >
+                  {diet.label}
+                </Link>
+                <span className="block text-sm text-muted-foreground">
+                  Places whose listing mentions {diet.keywords.map((k) => `"${k}"`).join(" or ")}
+                </span>
+              </span>
+            </li>
+          );
+        })}
+      </ul>
+    </section>
+  );
 }
 
 export default function DietaryRestaurants() {
   const [searchParams, setSearchParams] = useSearchParams();
-  const [restaurants, setRestaurants] = useState<Restaurant[]>([]);
-  const [isLoading, setIsLoading] = useState(true);
-  const { error: loadError, setError: setLoadError, reloadKey, retry } = useReloadableFetch();
-  const [selectedDiet, setSelectedDiet] = useState<string>(searchParams.get("diet") || "");
+  // Derived from the URL on every render, so Back and Forward move the list
+  // and the h1 together. An unknown slug is "no diet", never "undefined".
+  const selected = dietFromParam(searchParams.get("diet"));
+  const { data: restaurants = [], isLoading, isError, error, refetch } = useDietaryRestaurants(selected);
 
-  useEffect(() => {
-    const fetchRestaurants = async () => {
-      try {
-        setIsLoading(true);
+  // A push, not a replace: each choice is a history entry.
+  const chooseDiet = (id: DietId) => setSearchParams({ diet: id });
+  const clearDiet = () => setSearchParams({});
 
-        if (!selectedDiet) {
-          // No filter selected, show all restaurants
-          const { data, error } = await supabase
-            .from("restaurants")
-            .select(RESTAURANT_LIST_COLUMNS)
-            .order("name")
-            .limit(100);
-
-          if (error) throw error;
-          setLoadError(null);
-          setRestaurants(data || []);
-        } else {
-          // Filter by dietary keywords in description or name
-          const dietOption = dietaryOptions.find(d => d.id === selectedDiet);
-          if (!dietOption) {
-            // An unrecognised diet slug is a genuine empty result, not a failure.
-            setRestaurants([]);
-            return;
-          }
-
-          // Build OR query for all keywords
-          const orConditions = dietOption.keywords.map(keyword =>
-            `description.ilike.%${keyword}%,name.ilike.%${keyword}%,cuisine.ilike.%${keyword}%`
-          ).join(',');
-
-          const { data, error } = await supabase
-            .from("restaurants")
-            .select(RESTAURANT_LIST_COLUMNS)
-            .or(orConditions)
-            .order("name")
-            .limit(100);
-
-          if (error) throw error;
-          setLoadError(null);
-          setRestaurants(data || []);
-        }
-      } catch (error) {
-        log.error('fetchRestaurants', 'Error fetching restaurants', { error });
-        setLoadError(error);
-        setRestaurants([]);
-      } finally {
-        setIsLoading(false);
-      }
-    };
-
-    fetchRestaurants();
-  }, [selectedDiet, reloadKey]);
-
-  const handleDietFilter = (dietId: string) => {
-    setSelectedDiet(dietId);
-    setSearchParams({ diet: dietId });
-  };
-
-  const clearFilter = () => {
-    setSelectedDiet("");
-    setSearchParams({});
-  };
-
-  const selectedOption = dietaryOptions.find(d => d.id === selectedDiet);
-  // Both arms are under 60 with the longest label ("Dairy-Free", 10 chars):
-  // 10 + 39 = 49. The untitled arm was 72 and only looked fine because
-  // useDocumentTitle("Dietary-Friendly Restaurants") raced it and usually won
-  // (WEB-SEO-045).
-  const pageTitle = selectedDiet
-    ? `${selectedOption?.label} Restaurants in Des Moines | Des Moines Insider`
+  const label = selected?.label;
+  const pageTitle = selected
+    ? `${label} Restaurants in Des Moines | Des Moines Insider`
     : "Dietary-Friendly Restaurants | Des Moines Insider";
-
-  const pageDescription = selectedDiet
-    ? `Find ${restaurants.length}+ ${selectedOption?.label.toLowerCase()} restaurants in Des Moines, with verified menu options and dedicated kitchens. Updated daily.`
-    : `Dietary-friendly restaurants in Des Moines: vegan, vegetarian, gluten-free, keto, halal and kosher options, with verified menu items.`;
+  const pageDescription = selected
+    ? `Des Moines restaurants whose listing mentions ${label.toLowerCase()} options. We match the words, so call ahead to confirm.`
+    : "Des Moines restaurants whose listing mentions vegan, vegetarian, gluten-free, keto, halal or kosher options.";
 
   const breadcrumbs = [
     { name: "Restaurants", url: "/restaurants" },
-    { name: selectedDiet ? `${selectedOption?.label}` : "Dietary Options", url: "/restaurants/dietary" },
+    { name: selected ? label : "Dietary Options", url: "/restaurants/dietary" },
   ];
-
-  const faqData = [
-    {
-      question: `What are the best ${selectedDiet || "dietary-friendly"} restaurants in Des Moines?`,
-      answer: selectedDiet === "vegan"
-        ? "Top vegan spots include: Ritual Cafe (100% vegan), Flying Mango (extensive vegan menu), Freshii (build-your-own bowls), Gateway Market (vegan deli section). According to Happy Cow, Des Moines has 15+ vegan-friendly restaurants, significantly more than in 2015."
-        : selectedDiet === "gluten-free"
-        ? "Gluten-free leaders: Tavern Pizza + Bowl (dedicated GF menu), Proof (GF options marked), Crispy Leaf (GF base options). Many restaurants now use separate prep areas. According to the Gluten Intolerance Group, 30% of Des Moines restaurants offer verified GF options—up from 10% in 2018."
-        : `Des Moines has many restaurants accommodating dietary restrictions. Look for menus marked with dietary symbols, ask servers about preparation methods, and call ahead for complex restrictions. Most restaurants willing to modify dishes.`,
-    },
-    {
-      question: "Do Des Moines restaurants have dedicated prep areas for dietary restrictions?",
-      answer: "Higher-end and health-focused restaurants typically have dedicated prep areas to prevent cross-contamination. Chains often follow corporate protocols. For severe allergies or celiac disease, call ahead to verify procedures. According to Iowa Restaurant Association, 60% of Des Moines restaurants now train staff on allergen awareness.",
-    },
-    {
-      question: "Are there fully vegan or vegetarian restaurants in Des Moines?",
-      answer: "Yes! Ritual Cafe is 100% vegan. Flying Mango offers extensive vegetarian/vegan options. Freshii specializes in plant-based bowls. Gateway Market has dedicated vegan deli. While Des Moines lacks the vegan density of larger cities, options have grown 300% since 2015, according to local food bloggers.",
-    },
-    {
-      question: "How do I know if a restaurant's gluten-free food is safe for celiac disease?",
-      answer: "Look for: 1) Dedicated GF menu items, 2) Separate prep areas mentioned, 3) Staff training certification, 4) GFCO (Gluten-Free Certification Organization) certification. Always inform servers of celiac disease vs. preference. Call ahead for severe reactions. Des Moines Celiac Support Group maintains a list of verified-safe restaurants.",
-    },
-    {
-      question: "Where can I find halal or kosher food in Des Moines?",
-      answer: "Halal: Several Middle Eastern restaurants (Tasty Tacos halal meat option, various gyro shops, ethnic grocers). Kosher: Limited options—check Ingersoll Kosher Meat Market for takeout. According to Des Moines International Community, halal availability has increased with growing Muslim population, now 20+ halal-certified restaurants.",
-    },
-  ];
+  const faqs = buildFaqs(selected);
+  const shown = restaurants.slice(0, VISIBLE_RESTAURANTS);
+  const countLabel = restaurants.length >= DIETARY_FETCH_LIMIT ? `first ${DIETARY_FETCH_LIMIT}` : String(restaurants.length);
 
   return (
     <div className="min-h-screen bg-background">
       <EnhancedLocalSEO
         pageTitle={pageTitle}
         pageDescription={pageDescription}
-        canonicalUrl={getCanonicalUrl(`/restaurants/dietary${selectedDiet ? `?diet=${selectedDiet}` : ''}`)}
+        canonicalUrl={getCanonicalUrl(`/restaurants/dietary${selected ? `?diet=${selected.id}` : ""}`)}
         pageType="website"
         breadcrumbs={breadcrumbs}
-        // Withheld until the data lands (WEB-SEO-008). Every answer here
-        // interpolates a live count, so the loading render and the loaded
-        // render produce DIFFERENT FAQPage JSON - and react-helmet-async
-        // appends script children that differ rather than replacing them, so
-        // the prerender captured both. Production served two FAQPage blocks
-        // on this page, one saying "0 events" and one saying "8 events".
-        faqData={faqData}
         keywords={[
           "vegan restaurants Des Moines",
           "vegetarian Des Moines",
@@ -190,7 +166,6 @@ export default function DietaryRestaurants() {
           "halal food Des Moines",
           "kosher Des Moines",
           "dietary restrictions Des Moines",
-          "allergy friendly restaurants Iowa",
         ]}
       />
 
@@ -205,269 +180,145 @@ export default function DietaryRestaurants() {
           ]}
           className="mb-4"
         />
-        {/* Hero Section - GEO Optimized */}
+
         <div className="mb-8">
-          <div className="flex items-center gap-2 mb-4">
-            <Leaf className="h-6 w-6 text-primary" />
-            <h1 className="text-3xl font-bold">
-              {selectedDiet ? `${selectedOption?.label} Restaurants in Des Moines` : "Dietary-Friendly Restaurants in Des Moines"}
-            </h1>
-          </div>
-
-          <div className="flex items-center gap-4 text-muted-foreground mb-4">
-            <div className="flex items-center gap-1">
-              <SpriteIcon name="map-pin" className="h-4 w-4" />
-              <span>Des Moines Metro Area</span>
-            </div>
-            {selectedDiet && (
-              <div className="flex items-center gap-1">
-                {React.createElement(selectedOption?.icon || Leaf, {
-                  className: `h-4 w-4 ${selectedOption?.color}`
-                })}
-                <span className={`font-semibold ${selectedOption?.color}`}>
-                  {selectedOption?.label} Options
-                </span>
-              </div>
-            )}
-          </div>
-
-          {selectedDiet ? (
-            <p className="text-lg text-muted-foreground max-w-3xl mb-4">
-              <strong>Find {restaurants.length}+ {selectedOption?.label.toLowerCase()} restaurants in Des Moines with verified menu options.</strong> According to the National Restaurant Association, dietary-specific dining has grown 200% nationwide since 2015. Des Moines reflects this trend with expanding {selectedOption?.label.toLowerCase()} options across all neighborhoods and price points.
-            </p>
-          ) : (
-            <p className="text-lg text-muted-foreground max-w-3xl mb-4">
-              <strong>Discover 100+ dietary-friendly restaurants in Des Moines accommodating special diets and restrictions.</strong> Whether you're vegan, vegetarian, gluten-free, keto, halal, or kosher, Des Moines offers diverse dining options. According to Iowa Restaurant Association, 60% of local restaurants now train staff on allergen awareness—up from 30% in 2018. Check <Link to="/restaurants/open-now" className="text-primary hover:underline font-semibold">restaurants open now</Link> for real-time availability.
-            </p>
-          )}
+          <h1 className="text-3xl font-bold mb-3">
+            {selected ? `${label} Restaurants in Des Moines` : "Dietary-Friendly Restaurants in Des Moines"}
+          </h1>
+          <p className="flex items-center gap-1 text-muted-foreground mb-4">
+            <SpriteIcon name="map-pin" className="h-4 w-4" aria-hidden="true" />
+            <span>Des Moines metro</span>
+          </p>
+          <p className="text-lg text-muted-foreground max-w-prose">
+            {selected
+              ? `Restaurants whose name, cuisine or description mentions ${label.toLowerCase()}. We match the words in the listing and don't check menus, so call ahead, especially for an allergy.`
+              : "Pick a diet to see Des Moines restaurants whose listing mentions it. We match the words in the listing and don't check menus, so call ahead, especially for an allergy."}{" "}
+            Hungry now? See{" "}
+            <Link to="/restaurants/open-now" className="text-primary hover:underline font-semibold">
+              restaurants open now
+            </Link>
+            .
+          </p>
         </div>
 
-        {/* Filter Buttons */}
-        <Card className="mb-8">
-          <CardContent className="pt-6">
-            <h2 className="text-lg font-semibold mb-4">Filter by Dietary Preference</h2>
-            <div className="flex flex-wrap gap-3">
-              {dietaryOptions.map((option) => {
-                const Icon = option.icon;
-                const isSelected = selectedDiet === option.id;
-                return (
-                  <Button
-                    key={option.id}
-                    onClick={() => handleDietFilter(option.id)}
-                    variant={isSelected ? "default" : "outline"}
-                    className={isSelected ? "" : "hover:border-primary"}
-                  >
-                    <Icon className={`h-4 w-4 mr-2 ${isSelected ? '' : option.color}`} />
-                    {option.label}
-                  </Button>
-                );
-              })}
-              {selectedDiet && (
-                <Button onClick={clearFilter} variant="ghost">
-                  <FilterX className="h-4 w-4 mr-2" />
-                  Clear Filter
-                </Button>
-              )}
-            </div>
-          </CardContent>
-        </Card>
-
-        {/* Stats Card */}
-        <Card className="mb-8 bg-gradient-to-r from-green-50 to-emerald-50 dark:from-green-950 dark:to-emerald-950">
-          <CardContent className="pt-6">
-            <div className="grid grid-cols-2 md:grid-cols-4 gap-4 text-center">
-              <div>
-                <div className="text-2xl font-bold text-primary">
-                  {restaurants.length}+
-                </div>
-                <div className="text-sm text-muted-foreground">
-                  {selectedDiet ? `${selectedOption?.label} Options` : "Dietary-Friendly"}
-                </div>
-              </div>
-              <div>
-                <div className="text-2xl font-bold text-primary">
-                  60%
-                </div>
-                <div className="text-sm text-muted-foreground">Staff Trained</div>
-              </div>
-              <div>
-                <div className="text-2xl font-bold text-primary">
-                  200%
-                </div>
-                <div className="text-sm text-muted-foreground">Growth Since 2015</div>
-              </div>
-              <div>
-                <div className="text-2xl font-bold text-primary">
-                  All Areas
-                </div>
-                <div className="text-sm text-muted-foreground">Metro Coverage</div>
-              </div>
-            </div>
-          </CardContent>
-        </Card>
-
-        {/* Dietary Guide - GEO Content */}
-        <Card className="mb-8">
-          <CardContent className="pt-6">
-            <h2 className="text-xl font-semibold mb-4">Dining with Dietary Restrictions in Des Moines</h2>
-            <div className="grid md:grid-cols-2 gap-6">
-              <div>
-                <h3 className="font-semibold mb-2 flex items-center gap-2">
-                  <Leaf className="h-4 w-4 text-green-600" />
-                  Plant-Based Dining
-                </h3>
-                <p className="text-sm text-muted-foreground mb-2">
-                  <strong>Vegan growth in Des Moines:</strong> From 3 vegan-friendly restaurants in 2015 to 15+ today.
-                  Ritual Cafe (100% vegan), Flying Mango, and Freshii lead the category. Even steakhouses now offer plant-based options.
-                </p>
-                <p className="text-sm text-muted-foreground">
-                  According to Happy Cow, Des Moines ranks in top 50 U.S. cities for vegan dining growth rate.
-                </p>
-              </div>
-              <div>
-                <h3 className="font-semibold mb-2 flex items-center gap-2">
-                  <Wheat className="h-4 w-4 text-amber-600" />
-                  Gluten-Free Options
-                </h3>
-                <p className="text-sm text-muted-foreground mb-2">
-                  <strong>Celiac-safe dining:</strong> 30%+ of Des Moines restaurants offer dedicated GF menus with separate prep areas.
-                  Tavern Pizza + Bowl, Proof, and many chains have GFCO training.
-                </p>
-                <p className="text-sm text-muted-foreground">
-                  Des Moines Celiac Support Group verifies restaurant safety protocols and publishes trusted lists.
-                </p>
-              </div>
-              <div>
-                <h3 className="font-semibold mb-2 flex items-center gap-2">
-                  <Beef className="h-4 w-4 text-red-600" />
-                  Keto & Low-Carb
-                </h3>
-                <p className="text-sm text-muted-foreground mb-2">
-                  <strong>Keto-friendly surge:</strong> Most Des Moines restaurants now accommodate low-carb requests.
-                  Bunless burgers, lettuce wraps, and cauliflower alternatives standard. Steakhouses naturally keto-friendly.
-                </p>
-                <p className="text-sm text-muted-foreground">
-                  Look for protein-heavy menus at Texas Roadhouse, Rodizio Grill, and local Brazilian steakhouses.
-                </p>
-              </div>
-              <div>
-                <h3 className="font-semibold mb-2 flex items-center gap-2">
-                  <Beef className="h-4 w-4 text-blue-600" />
-                  Halal & Kosher
-                </h3>
-                <p className="text-sm text-muted-foreground mb-2">
-                  <strong>Growing halal availability:</strong> 20+ halal-certified restaurants serve Des Moines' Muslim community.
-                  Middle Eastern restaurants (gyros, shawarma) and some grocery stores offer halal meat.
-                </p>
-                <p className="text-sm text-muted-foreground">
-                  Kosher options limited—Ingersoll Kosher Meat Market provides takeout. Nearest full kosher dining in Omaha or Kansas City.
-                </p>
-              </div>
-            </div>
-          </CardContent>
-        </Card>
-
-        {/* Restaurants List */}
-        {!isLoading && loadError ? (
-          <ErrorState error={loadError} onRetry={retry} />
-        ) : isLoading ? (
-          <div className="grid gap-6 md:grid-cols-2 lg:grid-cols-3">
-            {[...Array(6)].map((_, i) => (
-              <div key={i} className="animate-pulse">
-                <div className="h-48 bg-muted rounded-lg mb-4"></div>
-                <div className="h-4 bg-muted rounded w-3/4 mb-2"></div>
-                <div className="h-4 bg-muted rounded w-1/2"></div>
-              </div>
-            ))}
-          </div>
-        ) : restaurants.length > 0 ? (
+        {selected ? (
           <>
-            <h2 className="text-2xl font-bold mb-6">
-              {selectedDiet
-                ? `${selectedOption?.label} Restaurants (${restaurants.length})`
-                : `Dietary-Friendly Restaurants (${restaurants.length})`
-              }
-            </h2>
-            {/* WEB-PERF-023: this rendered all 100 fetched restaurants, and
-                measured 4,985 elements inside #root against a 481 median —
-                Lighthouse flags above ~1,500. Only the grid is capped; the
-                heading above and every count in the copy still read
-                restaurants.length, so no displayed number changes. */}
-            <div className="grid gap-6 md:grid-cols-2 lg:grid-cols-3">
-              {restaurants.slice(0, VISIBLE_RESTAURANTS).map((restaurant, index) => (
-                <div key={restaurant.id} className="content-auto">
-                  <RestaurantCard restaurant={restaurant} priority={index < 3} />
-                </div>
-              ))}
-            </div>
-            {restaurants.length > VISIBLE_RESTAURANTS && (
-              <div className="mt-8 text-center">
-                <p className="text-muted-foreground mb-3">
-                  Showing {VISIBLE_RESTAURANTS} of {restaurants.length}{' '}
-                  {selectedOption?.label.toLowerCase() ?? 'dietary-friendly'} restaurants.
-                </p>
-                <Button asChild variant="outline">
-                  <Link to="/restaurants">Browse all restaurants</Link>
+            <div className="mb-8">
+              <h2 className="sr-only">Change diet</h2>
+              <div className="flex flex-wrap gap-2" role="group" aria-label="Diet">
+                {DIETS.map((diet) => {
+                  const Icon = DIET_ICON[diet.id];
+                  const pressed = diet.id === selected.id;
+                  return (
+                    <Button
+                      key={diet.id}
+                      type="button"
+                      onClick={() => chooseDiet(diet.id)}
+                      variant={pressed ? "default" : "outline"}
+                      aria-pressed={pressed}
+                      className="min-h-11"
+                    >
+                      <Icon className="h-4 w-4 mr-2" aria-hidden="true" />
+                      {diet.label}
+                    </Button>
+                  );
+                })}
+                <Button type="button" onClick={clearDiet} variant="ghost" className="min-h-11">
+                  All diets
                 </Button>
               </div>
-            )}
+            </div>
+
+            <section aria-label={`Restaurants that mention ${label.toLowerCase()}`}>
+              {isError ? (
+                <ErrorState error={error} onRetry={() => void refetch()} />
+              ) : isLoading ? (
+                <ListSkeleton />
+              ) : restaurants.length > 0 ? (
+                <>
+                  <h2 className="text-2xl font-bold mb-2">
+                    Mentions {label.toLowerCase()} ({countLabel})
+                  </h2>
+                  <p className="text-sm text-muted-foreground mb-6">
+                    Mentioned in the name, cuisine or description. Not a menu check.
+                  </p>
+                  <div className="grid gap-6 md:grid-cols-2 lg:grid-cols-3">
+                    {shown.map((restaurant, index) => (
+                      <div key={restaurant.id} className="content-auto">
+                        <RestaurantCard restaurant={restaurant} priority={index < 3} />
+                      </div>
+                    ))}
+                  </div>
+                  {restaurants.length > VISIBLE_RESTAURANTS && (
+                    <div className="mt-8 text-center">
+                      <p className="text-muted-foreground mb-3">
+                        Showing {VISIBLE_RESTAURANTS} of {countLabel} that mention {label.toLowerCase()}.
+                      </p>
+                      <Button asChild variant="outline">
+                        <Link to="/restaurants">Browse all restaurants</Link>
+                      </Button>
+                    </div>
+                  )}
+                </>
+              ) : (
+                <Card>
+                  <CardContent className="pt-6 text-center">
+                    <h2 className="text-lg font-semibold mb-2">
+                      No listing mentions {label.toLowerCase()} yet
+                    </h2>
+                    <p className="text-muted-foreground mb-4">
+                      That's about our listings, not Des Moines. Places often serve more than their description says.
+                    </p>
+                    <Button asChild variant="outline">
+                      <Link to="/restaurants">Browse all restaurants</Link>
+                    </Button>
+                  </CardContent>
+                </Card>
+              )}
+            </section>
           </>
         ) : (
-          <Card>
-            <CardContent className="pt-6 text-center">
-              <Leaf className="h-12 w-12 mx-auto mb-4 text-muted-foreground" />
-              <h3 className="text-lg font-semibold mb-2">
-                {selectedDiet ? `Loading ${selectedOption?.label} Restaurants` : "Select a Dietary Filter"}
-              </h3>
-              <p className="text-muted-foreground mb-4">
-                {selectedDiet ? "Finding restaurants with your dietary preferences..." : "Choose a dietary option above to see restaurants."}
-              </p>
-            </CardContent>
-          </Card>
+          <DietEntryPoints />
         )}
 
-        {/* Tips Section */}
-        <Card className="mt-8">
-          <CardContent className="pt-6">
-            <h2 className="text-xl font-semibold mb-4">Tips for Dining with Dietary Restrictions</h2>
-            <div className="grid md:grid-cols-3 gap-6">
-              <div>
-                <h3 className="font-semibold mb-2">☎️ Call Ahead</h3>
-                <p className="text-sm text-muted-foreground">
-                  For severe allergies or complex restrictions, call restaurants before visiting. Ask about prep areas,
-                  cross-contamination protocols, and ingredient sourcing. Most willing to accommodate with advance notice. Browse <Link to="/restaurants" className="text-primary hover:underline font-semibold">all Des Moines restaurants</Link> to explore options.
-                </p>
-              </div>
-              <div>
-                <h3 className="font-semibold mb-2">🗣️ Communicate Clearly</h3>
-                <p className="text-sm text-muted-foreground">
-                  Distinguish between preference and medical need. "I have celiac disease" gets different response than
-                  "I'm avoiding gluten." Be specific about severity and what you can/cannot consume.
-                </p>
-              </div>
-              <div>
-                <h3 className="font-semibold mb-2">📱 Use Apps & Communities</h3>
-                <p className="text-sm text-muted-foreground">
-                  Happy Cow (vegan), Find Me Gluten Free, and local Facebook groups share updated restaurant info.
-                  Des Moines Celiac Support Group and local vegan communities maintain verified safe lists.
-                </p>
-              </div>
+        <section aria-labelledby="dietary-tips-heading" className="mt-10">
+          <h2 id="dietary-tips-heading" className="text-xl font-semibold mb-4">
+            Before you go
+          </h2>
+          <div className="grid md:grid-cols-3 gap-6 max-w-5xl">
+            <div>
+              <h3 className="font-semibold mb-2">Call ahead</h3>
+              <p className="text-sm text-muted-foreground">
+                For an allergy or a strict diet, call before you visit and ask about shared fryers, prep surfaces and
+                ingredients. Browse{" "}
+                <Link to="/restaurants" className="text-primary hover:underline font-semibold">
+                  all Des Moines restaurants
+                </Link>{" "}
+                for phone numbers.
+              </p>
             </div>
-          </CardContent>
-        </Card>
+            <div>
+              <h3 className="font-semibold mb-2">Say what you need</h3>
+              <p className="text-sm text-muted-foreground">
+                "I have celiac disease" gets a different answer from "I'm avoiding gluten". Be specific about what you
+                can't eat and how serious it is.
+              </p>
+            </div>
+            <div>
+              <h3 className="font-semibold mb-2">Read the menu</h3>
+              <p className="text-sm text-muted-foreground">
+                This list is built from words in each listing. A place's own menu is the better source for what it
+                serves today.
+              </p>
+            </div>
+          </div>
+        </section>
 
-        {/* SEO-003: the FAQ is rendered here, not only declared in the head.
-            This page used to pass faqData to EnhancedLocalSEO, which emitted a
-            FAQPage block into <Helmet> and nothing else - so it declared an FAQ
-            that no visitor could see, which Google's FAQPage guidance does not
-            allow. FAQSection renders the questions and emits the single block. */}
-        <FAQSection faqs={faqData} />
+        {/* SEO-003: the FAQ is rendered here, and FAQSection emits the one
+            FAQPage block. EnhancedLocalSEO no longer emits one. */}
+        <FAQSection faqs={faqs} />
 
-        {/* Related Content for Internal Linking */}
-        <RelatedContent
-          currentPath="/restaurants/dietary"
-          title="Explore More Des Moines Dining"
-        />
+        <RelatedContent currentPath="/restaurants/dietary" title="Explore More Des Moines Dining" />
       </div>
 
       <Footer />

@@ -70,6 +70,7 @@
     "src/hooks/useAuth.ts",
     "src/hooks/useEventBySlug.ts",
     "src/hooks/useActiveAds.ts",
+    "src/hooks/useMinuteClock.ts",
     "src/content/eventsCopy.ts"
   ],
   "exclude": ["node_modules", "dist", "build"]

@@ -1,155 +1,144 @@
-import React, { useState, useEffect } from "react";
+import { useMemo } from "react";
 import { Link } from "react-router-dom";
-import { createLogger } from '@/lib/logger';
-import { supabase } from "@/integrations/supabase/client";
-import { getRestaurantOpenStatus } from "@/lib/restaurantHours";
-import { SpriteIcon } from "@/components/ui/SpriteIcon";
-
-const log = createLogger('OpenNowRestaurants');
+import { formatInTimeZone } from "date-fns-tz";
 import Header from "@/components/Header";
 import Footer from "@/components/Footer";
 import { FAQSection } from "@/components/FAQSection";
-import RestaurantCard from "@/components/RestaurantCard";
+import { RestaurantCard } from "@/components/RestaurantCard";
 import EnhancedLocalSEO from "@/components/EnhancedLocalSEO";
 import RelatedContent from "@/components/RelatedContent";
 import { Card, CardContent } from "@/components/ui/card";
-import { Utensils } from "lucide-react";
-import { format } from "date-fns";
-import { BRAND, getCanonicalUrl } from "@/lib/brandConfig";
+import { SpriteIcon } from "@/components/ui/SpriteIcon";
 import { Breadcrumbs } from "@/components/ui/breadcrumbs";
-import { RESTAURANT_LIST_COLUMNS } from "@/lib/listColumns";
-import { useReloadableFetch } from "@/hooks/useReloadableFetch";
 import { ErrorState } from "@/components/ui/error-state";
+import {
+  deriveOpenNow,
+  OPEN_NOW_ROW_LIMIT,
+  useOpenNowRestaurants,
+  type EvaluatedRestaurant,
+} from "@/hooks/useOpenNowRestaurants";
+import { useMinuteClock } from "@/hooks/useMinuteClock";
+import { DES_MOINES_TIME_ZONE, formatOpenStatusLine } from "@/lib/restaurantHours";
+import { BRAND, getCanonicalUrl } from "@/lib/brandConfig";
 
-interface Restaurant {
-  id: string;
-  name: string;
-  cuisine: string;
-  location: string;
-  rating?: number;
-  price_range?: string;
-  description?: string;
-  phone?: string;
-  website?: string;
-  image_url?: string;
-  opening?: string;
+/**
+ * /restaurants/open-now (eat-drink plan WP5).
+ *
+ * Every restaurant with listed hours is fetched once; which of them is open
+ * is re-derived each minute on the Central clock, so a place leaves the list
+ * at its close without a refetch. The copy claims no more than the data
+ * backs: the hours are listing text, and the page says so.
+ */
+
+const PAGE_TITLE = `Restaurants Open Now in Des Moines | ${BRAND.name}`;
+// Static on purpose: a count here would be whatever the prerender saw.
+const PAGE_DESCRIPTION =
+  "Which Des Moines restaurants are open right now, checked against each place's listed hours in Central time. Call ahead on holidays.";
+
+const BREADCRUMBS = [
+  { name: "Restaurants", url: "/restaurants" },
+  { name: "Open Now", url: "/restaurants/open-now" },
+];
+
+const FAQ_DATA = [
+  {
+    question: "Which restaurants in Des Moines are open right now?",
+    answer:
+      "This page checks the listed hours of every restaurant we track against the current time in Des Moines (Central time) and shows the ones that are open. Listed hours can be out of date, especially around holidays, so call ahead if you're cutting it close.",
+  },
+  {
+    question: "What restaurants are open late in Des Moines?",
+    answer:
+      "Late in the evening this page lists every place whose listed hours run past midnight tonight. Weekend hours usually run later than weekday hours, and fast food drive-thrus tend to stay open latest. Check individual hours, as they vary.",
+  },
+  {
+    question: "Are restaurants open on Sundays in Des Moines?",
+    answer:
+      "Most Des Moines restaurants open on Sundays, though hours often differ from weekdays and brunch (roughly 10 AM - 2 PM) is common. Some locally owned restaurants close Sundays or Mondays. On a Sunday, this page shows which places with listed hours are open.",
+  },
+  {
+    question: "What time do most Des Moines restaurants close?",
+    answer:
+      "Lunch spots often close by 2-3 PM. Casual dining usually closes 9-10 PM on weekdays and 10-11 PM on weekends, and bars and late-night spots close between midnight and 2 AM. Des Moines has fewer 24-hour options than larger cities.",
+  },
+  {
+    question: "Can I order delivery from restaurants open now?",
+    answer:
+      "Many open restaurants deliver through DoorDash, Uber Eats or Grubhub, and some run their own delivery. Delivery hours can end 30-60 minutes before the kitchen closes, so check the restaurant's website or delivery app.",
+  },
+  {
+    question: "Do restaurant hours change seasonally in Des Moines?",
+    answer:
+      "Yes. Many restaurants cut hours in winter (November-March), some extend hours during the Iowa State Fair in August, and most close or shorten hours on Thanksgiving, Christmas and New Year's Day. Holiday hours aren't in our listings, so call ahead.",
+  },
+];
+
+function centralHour(now: Date): number {
+  return Number(formatInTimeZone(now, DES_MOINES_TIME_ZONE, "H"));
+}
+
+function timeOfDayHeading(hour: number): string {
+  if (hour >= 5 && hour < 11) return "Breakfast and brunch spots open now";
+  if (hour >= 11 && hour < 16) return "Lunch spots open now";
+  if (hour >= 16 && hour < 21) return "Dinner options open now";
+  return "Late-night food open now";
+}
+
+function RestaurantGrid({ items }: { items: readonly EvaluatedRestaurant[] }) {
+  return (
+    <ul className="grid gap-6 md:grid-cols-2 lg:grid-cols-3" role="list">
+      {items.map(({ restaurant }, index) => (
+        <li key={restaurant.id} className="content-auto">
+          <RestaurantCard restaurant={restaurant} priority={index < 3} />
+        </li>
+      ))}
+    </ul>
+  );
+}
+
+function RestaurantLinkList({ items }: { items: readonly EvaluatedRestaurant[] }) {
+  return (
+    <ul className="divide-y divide-border rounded-xl border">
+      {items.map(({ restaurant, status }) => (
+        <li key={restaurant.id} className="flex flex-wrap items-baseline justify-between gap-x-4 gap-y-1 px-4 py-3">
+          <Link
+            to={`/restaurants/${restaurant.slug || restaurant.id}`}
+            className="font-semibold text-foreground hover:text-primary hover:underline"
+          >
+            {restaurant.name}
+          </Link>
+          <span className="text-sm text-muted-foreground">{formatOpenStatusLine(status)}</span>
+        </li>
+      ))}
+    </ul>
+  );
 }
 
 export default function OpenNowRestaurants() {
-  const [restaurants, setRestaurants] = useState<Restaurant[]>([]);
-  const [isLoading, setIsLoading] = useState(true);
-  const { error: loadError, setError: setLoadError, reloadKey, retry } = useReloadableFetch();
-  const [currentTime, setCurrentTime] = useState(new Date());
+  const now = useMinuteClock();
+  const { data: rows, isLoading, error, refetch } = useOpenNowRestaurants();
 
-  useEffect(() => {
-    // Update current time every minute
-    const timer = setInterval(() => {
-      setCurrentTime(new Date());
-    }, 60000);
+  const view = useMemo(() => (rows ? deriveOpenNow(rows, now) : null), [rows, now]);
 
-    return () => clearInterval(timer);
-  }, []);
+  const hour = centralHour(now);
+  const isLateNight = hour >= 21 || hour < 6;
+  const showPastMidnight = hour >= 18 || hour < 6;
+  const clockLabel = `${formatInTimeZone(now, DES_MOINES_TIME_ZONE, "h:mm a")} CT`;
+  const dateLabel = formatInTimeZone(now, DES_MOINES_TIME_ZONE, "EEEE, MMMM d, yyyy");
 
-  useEffect(() => {
-    const fetchOpenRestaurants = async () => {
-      try {
-        setIsLoading(true);
-
-        // Fetch all restaurants - we'll filter client-side for "open now"
-        // In production, this would use actual hours data from the database
-        const { data, error } = await supabase
-          .from("restaurants")
-          .select(RESTAURANT_LIST_COLUMNS)
-          .order("name")
-          .limit(100);
-
-        if (error) {
-          log.error('fetchOpenRestaurants', 'Error fetching restaurants', { error });
-          setLoadError(error);
-          setRestaurants([]);
-        } else {
-          // Filter restaurants to only show those with hours data that are currently open
-          const filtered = (data || []).filter(restaurant => {
-            const result = getRestaurantOpenStatus(restaurant.opening);
-            return result.isOpen;
-          });
-          setLoadError(null);
-          setRestaurants(filtered);
-        }
-      } catch (error) {
-        log.error('fetchOpenRestaurants', 'Unexpected error in fetchOpenRestaurants', { error });
-        setLoadError(error);
-        setRestaurants([]);
-      } finally {
-        setIsLoading(false);
-      }
-    };
-
-    fetchOpenRestaurants();
-  }, [reloadKey]);
-
-  const openRestaurants = restaurants || [];
-  const currentHour = currentTime.getHours();
-  const isLateNight = currentHour >= 21 || currentHour < 6;
-
-  // WEB-SEO-002: was 74 chars and used the retired "Des Moines AI Pulse" brand.
-  const pageTitle = `Restaurants Open Now in Des Moines | ${BRAND.name}`;
-  const pageDescription = `Find ${openRestaurants.length}+ restaurants open right now in Des Moines, with hours updated continuously. ${isLateNight ? 'Late-night dining options.' : 'Lunch and dinner options.'}`;
-
-  const breadcrumbs = [
-    { name: "Restaurants", url: "/restaurants" },
-    { name: "Open Now", url: "/restaurants/open-now" },
-  ];
-
-  const faqData = [
-    {
-      question: "Which restaurants in Des Moines are open right now?",
-      answer: `We track real-time operating hours for Des Moines restaurants. Our database updates continuously to show which restaurants are currently accepting orders. According to the Des Moines Restaurant Association, over 300 restaurants operate in the metro area, with varying hours by day and season.`,
-    },
-    {
-      question: "What restaurants are open late in Des Moines?",
-      answer: "Popular late-night options (open past 10 PM) include: Zombie Burger (until 2 AM weekends), The Pourhouse (until midnight), Fong's Pizza (until 2 AM), and multiple 24-hour locations like Village Inn and Perkins. Fast casual chains like Taco Bell and McDonald's offer late-night drive-thru. Check individual hours as they vary.",
-    },
-    {
-      question: "Are restaurants open on Sundays in Des Moines?",
-      answer: "Yes! Most Des Moines restaurants open on Sundays, though hours may differ from weekdays. Brunch is especially popular (10 AM - 2 PM) at spots like Lucca, Django, and Bubba. Some locally-owned restaurants close Sundays or Mondays. Our real-time tracker shows current Sunday availability.",
-    },
-    {
-      question: "What time do most Des Moines restaurants close?",
-      answer: "Typical closing times: Lunch spots close 2-3 PM. Casual dining closes 9-10 PM weekdays, 10-11 PM weekends. Fine dining closes 9-10 PM. Bars and late-night spots close midnight-2 AM. According to Cityview, Des Moines has fewer 24-hour options than comparable Midwest cities, making late-night dining more limited.",
-    },
-    {
-      question: "Can I order delivery from restaurants open now?",
-      answer: "Most open restaurants offer delivery through DoorDash, Uber Eats, or Grubhub. Some restaurants have in-house delivery. Delivery hours may differ from dine-in hours—typically ending 30-60 minutes before kitchen closes. Check the restaurant's website or delivery app for current availability.",
-    },
-    {
-      question: "Do restaurant hours change seasonally in Des Moines?",
-      answer: "Yes. Many restaurants reduce hours in winter months (November-March). Tourist-area restaurants near the Capitol or Science Center may extend hours during Iowa State Fair (August). Holiday hours vary—most restaurants close or reduce hours on Thanksgiving, Christmas, New Year's Day. Our tracker reflects current seasonal hours.",
-    },
-  ];
-
-  const timeOfDayMessage = () => {
-    if (currentHour < 11) return "Breakfast & Brunch Open Now";
-    if (currentHour < 16) return "Lunch Spots Open Now";
-    if (currentHour < 21) return "Dinner Options Open Now";
-    return "Late-Night Dining Open Now";
-  };
+  const openCount = view ? view.open.length + view.closingSoon.length : 0;
+  const listedCount = view ? view.withListedHours : 0;
+  const atLimit = (rows?.length ?? 0) >= OPEN_NOW_ROW_LIMIT;
 
   return (
     <div className="min-h-screen bg-background">
       <EnhancedLocalSEO
-        pageTitle={pageTitle}
-        pageDescription={pageDescription}
+        pageTitle={PAGE_TITLE}
+        pageDescription={PAGE_DESCRIPTION}
         canonicalUrl={getCanonicalUrl("/restaurants/open-now")}
         pageType="website"
-        breadcrumbs={breadcrumbs}
-        // Withheld until the data lands (WEB-SEO-008). Every answer here
-        // interpolates a live count, so the loading render and the loaded
-        // render produce DIFFERENT FAQPage JSON - and react-helmet-async
-        // appends script children that differ rather than replacing them, so
-        // the prerender captured both. Production served two FAQPage blocks
-        // on this page, one saying "0 events" and one saying "8 events".
-        faqData={faqData}
+        breadcrumbs={BREADCRUMBS}
+        faqData={FAQ_DATA}
         isTimeSensitive={true}
         keywords={[
           "restaurants open now Des Moines",
@@ -174,216 +163,191 @@ export default function OpenNowRestaurants() {
           ]}
           className="mb-4"
         />
-        {/* Hero Section - GEO Optimized */}
+
         <div className="mb-8">
-          <div className="flex items-center gap-2 mb-4">
-            <SpriteIcon name="clock" className="h-6 w-6 text-primary animate-pulse" />
+          <div className="mb-4 flex items-center gap-2">
+            <SpriteIcon name="clock" className="h-6 w-6 text-primary animate-pulse motion-reduce:animate-none" />
             <h1 className="text-3xl font-bold">Restaurants Open Now in Des Moines</h1>
           </div>
 
-          <div className="flex items-center gap-4 text-muted-foreground mb-4">
-            <div className="flex items-center gap-1">
+          <div className="mb-4 flex flex-wrap items-center gap-x-4 gap-y-1 text-muted-foreground">
+            <span className="flex items-center gap-1">
               <SpriteIcon name="calendar" className="h-4 w-4" />
-              <span>{format(currentTime, "EEEE, MMMM d, yyyy")}</span>
-            </div>
-            <div className="flex items-center gap-1">
+              {dateLabel}
+            </span>
+            <span className="flex items-center gap-1">
               <SpriteIcon name="clock" className="h-4 w-4" />
-              <span className="font-semibold text-green-700">{format(currentTime, "h:mm a")}</span>
-            </div>
-            <div className="flex items-center gap-1">
+              <time className="font-semibold text-green-700 dark:text-green-400" data-open-now-clock>
+                {clockLabel}
+              </time>
+            </span>
+            <span className="flex items-center gap-1">
               <SpriteIcon name="map-pin" className="h-4 w-4" />
-              <span>Des Moines Metro</span>
-            </div>
+              Des Moines Metro
+            </span>
           </div>
 
-          <p className="text-lg text-muted-foreground max-w-3xl mb-4">
-            <strong>Find {openRestaurants.length}+ restaurants likely open now in Des Moines.</strong> The metro area has 300+ restaurants with varying operating hours. We filter based on typical operating hours for each restaurant. Planning a <Link to="/events/date-night" className="text-primary hover:underline font-semibold">date night</Link>? Check restaurant hours before your event.
+          <p className="mb-2 max-w-[70ch] text-lg text-muted-foreground" data-open-now-summary>
+            {view ? (
+              <strong className="text-foreground">
+                {openCount} of {listedCount}
+                {atLimit ? "+" : ""} restaurants with listed hours are open right now.
+              </strong>
+            ) : (
+              <strong className="text-foreground">Checking listed hours against the time in Des Moines.</strong>
+            )}{" "}
+            Planning a <Link to="/events/date-night" className="font-semibold text-primary hover:underline">date night</Link>? Check hours before your event.
           </p>
-          <p className="text-sm text-muted-foreground max-w-3xl">
-            Hours are estimated based on available data. We recommend calling ahead to confirm current hours, especially on holidays.
-          </p>
-
-          <p className="text-base text-muted-foreground max-w-3xl">
-            <span className="font-semibold text-primary">{timeOfDayMessage()}</span> — Hours verified in real-time. Includes dine-in, takeout, and delivery options.
+          <p className="max-w-[70ch] text-sm text-muted-foreground">
+            Hours come from each restaurant's listing and can be out of date. Call ahead to confirm, especially on holidays.
           </p>
         </div>
 
-        {/* Quick Stats - Real-Time */}
-        <Card className="mb-8 bg-gradient-to-r from-green-50 to-teal-50 dark:from-green-950 dark:to-teal-950">
-          <CardContent className="pt-6">
-            <div className="grid grid-cols-2 md:grid-cols-4 gap-4 text-center">
-              <div>
-                <div className="text-2xl font-bold text-green-700">
-                  {openRestaurants.length}+
-                </div>
-                <div className="text-sm text-muted-foreground">
-                  Open Now
-                </div>
-              </div>
-              <div>
-                <div className="text-2xl font-bold text-primary">
-                  {format(currentTime, "h:mm a")}
-                </div>
-                <div className="text-sm text-muted-foreground">Current Time</div>
-              </div>
-              <div>
-                <div className="text-2xl font-bold text-primary">
-                  {isLateNight ? "Late Night" : currentHour < 11 ? "Breakfast" : currentHour < 16 ? "Lunch" : "Dinner"}
-                </div>
-                <div className="text-sm text-muted-foreground">Time of Day</div>
-              </div>
-              <div>
-                <div className="text-2xl font-bold text-primary">
-                  Real-Time
-                </div>
-                <div className="text-sm text-muted-foreground">Hour Updates</div>
-              </div>
+        {view && (
+          <dl className="mb-8 grid grid-cols-2 gap-4 rounded-xl bg-muted/60 px-4 py-5 text-center">
+            <div>
+              <dt className="text-sm text-muted-foreground">Open now</dt>
+              <dd className="text-2xl font-bold text-green-700 dark:text-green-400">{openCount}</dd>
             </div>
-          </CardContent>
-        </Card>
-
-        {/* Late-Night Spotlight - Conditional */}
-        {isLateNight && (
-          <Card className="mb-8 bg-blue-50 dark:bg-blue-950 border-blue-200 dark:border-blue-800">
-            <CardContent className="pt-6">
-              <h2 className="text-xl font-semibold mb-4 flex items-center gap-2">
-                🌙 Late-Night Dining in Des Moines
-              </h2>
-              <div className="prose prose-sm dark:prose-invert max-w-none">
-                <p>
-                  <strong>Looking for late-night food after {format(currentTime, "h a")}?</strong> Des Moines offers fewer 24-hour options than comparable cities, but several spots stay open late:
-                </p>
-                <ul className="mt-2 space-y-1">
-                  <li><strong>Zombie Burger</strong> (East Village) - Open until 2 AM Fri/Sat, midnight other nights</li>
-                  <li><strong>Fong's Pizza</strong> (Downtown) - Open until 2 AM weekends</li>
-                  <li><strong>The Pourhouse</strong> (Ingersoll) - Kitchen open until midnight</li>
-                  <li><strong>Village Inn</strong> (Multiple locations) - 24 hours</li>
-                  <li><strong>Perkins</strong> (Multiple locations) - 24 hours</li>
-                  <li><strong>Taco Bell</strong> (Various) - Drive-thru until 2-4 AM</li>
-                </ul>
-              </div>
-            </CardContent>
-          </Card>
+            <div>
+              <dt className="text-sm text-muted-foreground">With listed hours</dt>
+              <dd className="text-2xl font-bold text-foreground">
+                {listedCount}
+                {atLimit ? "+" : ""}
+              </dd>
+            </div>
+          </dl>
         )}
 
-        {/* Time-Based Tips - GEO Content */}
-        <Card className="mb-8">
-          <CardContent className="pt-6">
-            <h2 className="text-xl font-semibold mb-4">Des Moines Restaurant Hours Guide</h2>
-            <div className="grid md:grid-cols-2 gap-6">
-              <div>
-                <h3 className="font-semibold mb-2">☀️ Breakfast & Brunch (6 AM - 11 AM)</h3>
-                <p className="text-sm text-muted-foreground">
-                  Popular morning spots: Jethro's (opens 6 AM), Perkins (24 hours), Scenic Route Bakery (7 AM),
-                  Lucca (weekend brunch 10 AM-2 PM). According to Des Moines Tourism, Sunday brunch peaks 10 AM-noon—arrive early or make reservations.
-                </p>
-              </div>
-              <div>
-                <h3 className="font-semibold mb-2">🍽️ Lunch Hours (11 AM - 2 PM)</h3>
-                <p className="text-sm text-muted-foreground">
-                  Downtown lunch rush: 11:30 AM - 1 PM. Many restaurants offer lunch specials. Food trucks gather
-                  at Principal Park and Western Gateway Park. Suburban spots less crowded. Typical lunch service ends 2-3 PM.
-                </p>
-              </div>
-              <div>
-                <h3 className="font-semibold mb-2">🍷 Dinner Service (5 PM - 10 PM)</h3>
-                <p className="text-sm text-muted-foreground">
-                  Prime dinner hours: 6-8 PM. Reservations recommended for upscale dining (Centro, Alba, Django).
-                  Most casual restaurants accept walk-ins. Last seating typically 30-60 minutes before close. Kitchen closes before dining room.
-                </p>
-              </div>
-              <div>
-                <h3 className="font-semibold mb-2">🌙 Late-Night Options (After 10 PM)</h3>
-                <p className="text-sm text-muted-foreground">
-                  Limited late-night dining in Des Moines compared to larger cities. Court Avenue district (Zombie Burger,
-                  Fong's) offers latest hours. Multiple 24-hour diners in suburbs. Fast food drive-thrus open latest.
-                </p>
-              </div>
-            </div>
-          </CardContent>
-        </Card>
-
-        {/* Restaurants List */}
-        {!isLoading && loadError ? (
-          <ErrorState error={loadError} onRetry={retry} />
-        ) : isLoading ? (
-          <div className="grid gap-6 md:grid-cols-2 lg:grid-cols-3">
+        {error && !isLoading ? (
+          <ErrorState error={error} onRetry={() => void refetch()} />
+        ) : isLoading || !view ? (
+          <div className="grid gap-6 md:grid-cols-2 lg:grid-cols-3" aria-busy="true">
             {[...Array(6)].map((_, i) => (
-              <div key={i} className="animate-pulse">
-                <div className="h-48 bg-muted rounded-lg mb-4"></div>
-                <div className="h-4 bg-muted rounded w-3/4 mb-2"></div>
-                <div className="h-4 bg-muted rounded w-1/2"></div>
+              <div key={i} className="animate-pulse motion-reduce:animate-none">
+                <div className="mb-4 h-48 rounded-lg bg-muted"></div>
+                <div className="mb-2 h-4 w-3/4 rounded bg-muted"></div>
+                <div className="h-4 w-1/2 rounded bg-muted"></div>
               </div>
             ))}
           </div>
-        ) : openRestaurants.length > 0 ? (
+        ) : openCount > 0 ? (
           <>
-            <h2 className="text-2xl font-bold mb-6 flex items-center gap-2">
-              <Utensils className="h-6 w-6 text-primary" />
-              Restaurants Open Now ({openRestaurants.length})
-            </h2>
-            <div className="grid gap-6 md:grid-cols-2 lg:grid-cols-3">
-              {openRestaurants.map((restaurant, index) => (
-                <div key={restaurant.id} className="content-auto">
-                  <RestaurantCard restaurant={restaurant} priority={index < 3} />
-                </div>
-              ))}
-            </div>
+            {view.open.length > 0 && (
+              <section aria-labelledby="open-now-heading" className="mb-10">
+                <h2 id="open-now-heading" className="mb-6 text-2xl font-bold">
+                  {timeOfDayHeading(hour)} ({view.open.length})
+                </h2>
+                <RestaurantGrid items={view.open} />
+              </section>
+            )}
+            {view.closingSoon.length > 0 && (
+              <section aria-labelledby="closing-soon-heading" className="mb-10">
+                <h2 id="closing-soon-heading" className="mb-6 text-2xl font-bold">
+                  Closing within the hour ({view.closingSoon.length})
+                </h2>
+                <RestaurantGrid items={view.closingSoon} />
+              </section>
+            )}
           </>
         ) : (
-          <Card>
-            <CardContent className="pt-6 text-center">
-              <SpriteIcon name="clock" className="h-12 w-12 mx-auto mb-4 text-muted-foreground" />
-              <h3 className="text-lg font-semibold mb-2">Loading Restaurant Hours</h3>
-              <p className="text-muted-foreground mb-4">
-                Checking real-time operating hours...
+          <section aria-labelledby="none-open-heading" className="mb-10" data-open-now-empty>
+            <h2 id="none-open-heading" className="mb-4 text-2xl font-bold">
+              Nothing we have hours for is open right now ({clockLabel})
+            </h2>
+            {view.nextToOpen.length > 0 ? (
+              <>
+                <p className="mb-4 text-muted-foreground">Next to open:</p>
+                <RestaurantLinkList items={view.nextToOpen} />
+              </>
+            ) : (
+              <p className="text-muted-foreground">
+                Browse <Link to="/restaurants" className="font-semibold text-primary hover:underline">all restaurants</Link> instead.
               </p>
-            </CardContent>
-          </Card>
+            )}
+          </section>
         )}
 
-        {/* Delivery & Ordering Info */}
-        <Card className="mt-8">
+        {view && showPastMidnight && view.openPastMidnight.length > 0 && (
+          <section aria-labelledby="past-midnight-heading" className="mb-10">
+            <h2 id="past-midnight-heading" className="mb-2 text-xl font-semibold">
+              Open past midnight tonight ({view.openPastMidnight.length})
+            </h2>
+            <p className="mb-4 text-sm text-muted-foreground">
+              Places whose listed hours have them open at 12:30 AM.
+            </p>
+            <RestaurantLinkList items={view.openPastMidnight} />
+          </section>
+        )}
+
+        <Card className="mb-8">
           <CardContent className="pt-6">
-            <h2 className="text-xl font-semibold mb-4">Ordering from Restaurants Open Now</h2>
-            <div className="grid md:grid-cols-3 gap-6">
+            <h2 className="mb-4 text-xl font-semibold">Des Moines Restaurant Hours Guide</h2>
+            <div className="grid gap-6 md:grid-cols-2">
               <div>
-                <h3 className="font-semibold mb-2">📱 Delivery Apps</h3>
+                <h3 className="mb-2 font-semibold">Breakfast and brunch (6 AM - 11 AM)</h3>
                 <p className="text-sm text-muted-foreground">
-                  DoorDash, Uber Eats, and Grubhub serve Des Moines. Delivery fees typically $2-5. Most restaurants
-                  available on multiple platforms. Compare prices—restaurant direct ordering often cheaper.
+                  Diners and bakeries open earliest. Sunday brunch is busiest from 10 AM to noon, so arrive early or reserve.
                 </p>
               </div>
               <div>
-                <h3 className="font-semibold mb-2">🚗 Pickup & Takeout</h3>
+                <h3 className="mb-2 font-semibold">Lunch (11 AM - 2 PM)</h3>
                 <p className="text-sm text-muted-foreground">
-                  Call ahead for faster service. Many restaurants offer curbside pickup. Downtown parking free after
-                  6 PM weekdays and all day Sunday. Suburban locations have ample parking. Browse our <Link to="/restaurants/dietary" className="text-primary hover:underline font-semibold">dietary-friendly restaurants</Link> for specialized options.
+                  The downtown lunch rush runs 11:30 AM - 1 PM. Suburban spots are less crowded. Lunch service usually ends 2-3 PM.
                 </p>
               </div>
               <div>
-                <h3 className="font-semibold mb-2">⏰ Kitchen Close Times</h3>
+                <h3 className="mb-2 font-semibold">Dinner (5 PM - 10 PM)</h3>
                 <p className="text-sm text-muted-foreground">
-                  Kitchen typically closes 30-60 minutes before restaurant. Last orders accepted 15-30 minutes before
-                  kitchen close. Delivery orders may be refused final 30 minutes. Call to confirm if near closing.
+                  Prime dinner hours are 6-8 PM. Reserve for upscale dining; most casual restaurants take walk-ins. Last seating is often 30-60 minutes before close.
+                </p>
+              </div>
+              <div>
+                <h3 className="mb-2 font-semibold">Late night (after 10 PM)</h3>
+                <p className="text-sm text-muted-foreground">
+                  {isLateNight
+                    ? "It's late. The list above only shows places whose listed hours run this late."
+                    : "Late-night dining is limited compared to larger cities. Court Avenue and the East Village stay open latest, and fast food drive-thrus later still."}
                 </p>
               </div>
             </div>
           </CardContent>
         </Card>
 
-        {/* SEO-003: the FAQ is rendered here, not only declared in the head.
-            This page used to pass faqData to EnhancedLocalSEO, which emitted a
-            FAQPage block into <Helmet> and nothing else - so it declared an FAQ
-            that no visitor could see, which Google's FAQPage guidance does not
-            allow. FAQSection renders the questions and emits the single block. */}
-        <FAQSection faqs={faqData} />
+        <Card className="mt-8">
+          <CardContent className="pt-6">
+            <h2 className="mb-4 text-xl font-semibold">Ordering from Restaurants Open Now</h2>
+            <div className="grid gap-6 md:grid-cols-3">
+              <div>
+                <h3 className="mb-2 font-semibold">Delivery apps</h3>
+                <p className="text-sm text-muted-foreground">
+                  DoorDash, Uber Eats and Grubhub serve Des Moines. Ordering direct from the restaurant is often cheaper.
+                </p>
+              </div>
+              <div>
+                <h3 className="mb-2 font-semibold">Pickup and takeout</h3>
+                <p className="text-sm text-muted-foreground">
+                  Call ahead for faster service; many restaurants offer curbside pickup. Browse our{" "}
+                  <Link to="/restaurants/dietary" className="font-semibold text-primary hover:underline">dietary-friendly restaurants</Link>{" "}
+                  for specialized options.
+                </p>
+              </div>
+              <div>
+                <h3 className="mb-2 font-semibold">Kitchen close times</h3>
+                <p className="text-sm text-muted-foreground">
+                  Kitchens often close 30-60 minutes before the dining room, and delivery orders may be refused near close. Call if you're cutting it close.
+                </p>
+              </div>
+            </div>
+          </CardContent>
+        </Card>
 
-        {/* Related Content for Internal Linking */}
-        <RelatedContent
-          currentPath="/restaurants/open-now"
-          title="More Des Moines Dining & Activities"
-        />
+        {/* SEO-003: the FAQ is rendered here, so the FAQPage block FAQSection
+            emits matches what visitors see. The answers are static text, so
+            the prerender and the live render emit the same block. */}
+        <FAQSection faqs={FAQ_DATA} />
+
+        <RelatedContent currentPath="/restaurants/open-now" title="More Des Moines Dining & Activities" />
       </div>
 
       <Footer />
