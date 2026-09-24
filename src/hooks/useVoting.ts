@@ -423,22 +423,12 @@ export function useCastVote() {
         custom_entry: customEntry || null,
         user_id: user.id,
       };
-      let { error } = await supabase
+      // If that policy is not live, RLS rejects the change with 42501 and the
+      // old vote stays; there is deliberately no delete-then-insert fallback,
+      // since a failed insert after the delete loses the ballot.
+      const { error } = await supabase
         .from('votes')
         .upsert(ballot, { onConflict: 'category_id,user_id' });
-
-      // 42501 = RLS denied the ON CONFLICT DO UPDATE: that policy is not live
-      // in this database yet. Fall back to the old delete-then-insert so a
-      // changed vote still saves, but stop if the delete itself fails.
-      if (error?.code === '42501') {
-        const del = await supabase
-          .from('votes')
-          .delete()
-          .eq('category_id', categoryId)
-          .eq('user_id', user.id);
-        if (del.error) throw new Error(del.error.message);
-        ({ error } = await supabase.from('votes').insert(ballot));
-      }
 
       // PostgrestError is a plain object, not an Error; wrap it so the
       // server's message survives to the toast and to handleError.
