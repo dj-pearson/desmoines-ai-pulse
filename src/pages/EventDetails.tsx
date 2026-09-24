@@ -687,6 +687,7 @@ export default function EventDetails() {
                 latitude={latitude}
                 longitude={longitude}
                 placeName={event.venue || "this event"}
+                nearSlug={venuePage?.slug ?? null}
               />
             )}
 

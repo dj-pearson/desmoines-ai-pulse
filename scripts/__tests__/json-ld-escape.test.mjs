@@ -87,6 +87,9 @@ const REQUIRED_CLEAN = [
   'components/EnhancedLocalSEO.tsx',
   // Explore WP3: attraction descriptions and geo_summary are AI-written.
   'components/EnhancedAttractionSEO.tsx',
+  // Plan & Stay WP2: hotel descriptions come from a table any signed-in user
+  // could write until D2 lands.
+  'components/schema/HotelSchema.tsx',
 ];
 
 // Still bare as of 2026-09-24. May only shrink.
@@ -98,13 +101,11 @@ const BASELINE = new Set([
   'components/SEOTools.tsx',
   'components/schema/EventListJsonLd.tsx',
   'components/schema/FAQSchema.tsx',
-  'components/schema/HotelSchema.tsx',
   'components/schema/TouristTripSchema.tsx',
   'pages/ArticleDetails.tsx',
   'pages/SeasonalGuide.tsx',
   'pages/TeamDetail.tsx',
   'pages/VenueDetail.tsx',
-  'pages/VisitorsGuide.tsx',
 ]);
 
 const offenders = walk(SRC)

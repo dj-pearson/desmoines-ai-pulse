@@ -100,7 +100,16 @@ export default defineConfig({
   // hub's search sanitising and hours, playground facets and nearby, one events
   // request per music/sports hub, the outdoors metro count and filters, and the
   // deals window, schedule and claim failure.
-  testMatch: /(search-filters|url-filter-state|sticky-filter-chips|route-smoke|cookie-consent|backend-down|touch-targets|page-headings|search-request-loop|request-budget|turnstile-inert|subscription-checkout|advertise-success-receipt|submission-live-link|campaign-self-service|home-search|home-request-budget|home-rails-cls|home-tonight|home-dashboard|home-quick-view|shell-mobile|events-hub-dates|events-hub-list|events-near-me|event-detail|restaurants-hub|restaurants-open-now|restaurant-detail|things-to-do-hub|discover-map|attractions-hub|playgrounds-hub|music-sports-hubs|outdoors-hub|deals)\.spec\.ts/,
+  //
+  // The Plan & Stay specs joined with that plan (docs/page-plans/plan-stay.md),
+  // on fixtureBackend plus per-spec page.route overrides: /stay's three empty
+  // states, paging, ?near= ordering and unsafe booking links; the trip
+  // planner's date window with the AI section paused; the visitor guide,
+  // group travel and getting-around pages with no unsourced prices; articles
+  // paging and AI disclosure; Best Of voting as one upsert; What's New chips
+  // and future rows; and the weekend page's per-day groups. getting-around
+  // was a lane orphan before this and leaves the baseline with it.
+  testMatch: /(search-filters|url-filter-state|sticky-filter-chips|route-smoke|cookie-consent|backend-down|touch-targets|page-headings|search-request-loop|request-budget|turnstile-inert|subscription-checkout|advertise-success-receipt|submission-live-link|campaign-self-service|home-search|home-request-budget|home-rails-cls|home-tonight|home-dashboard|home-quick-view|shell-mobile|events-hub-dates|events-hub-list|events-near-me|event-detail|restaurants-hub|restaurants-open-now|restaurant-detail|things-to-do-hub|discover-map|attractions-hub|playgrounds-hub|music-sports-hubs|outdoors-hub|deals|stay|trip-planner-window|visitors-guide|getting-around|articles|best-of-voting|whats-new|events-weekend-days)\.spec\.ts/,
   fullyParallel: true,
   forbidOnly: !!process.env.CI,
   retries: process.env.CI ? 2 : 0,

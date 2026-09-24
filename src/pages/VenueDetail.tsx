@@ -192,7 +192,7 @@ export default function VenueDetail() {
                 </CardContent>
               </Card>
             )}
-            <NearbyHotels latitude={venue.latitude} longitude={venue.longitude} placeName={venue.name} limit={4} />
+            <NearbyHotels latitude={venue.latitude} longitude={venue.longitude} placeName={venue.name} limit={4} nearSlug={venue.slug} />
           </div>
 
           {/* Upcoming Events */}

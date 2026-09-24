@@ -202,7 +202,7 @@ export default function Footer() {
                 </li>
                 <li>
                   <Link to="/trip-planner" className="footer-link">
-                    AI Trip Planner
+                    Plan a trip
                   </Link>
                 </li>
                 <li>

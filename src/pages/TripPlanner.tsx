@@ -1,79 +1,601 @@
-import React, { useState, lazy, Suspense } from 'react';
-import { useQuery } from '@tanstack/react-query';
-import { supabase } from '@/integrations/supabase/client';
-import { STALE_TIME } from '@/lib/queryConfig';
-import type { MapEntity } from '@/components/map/DiscoverMapCanvas';
-import { SpriteIcon } from "@/components/ui/SpriteIcon";
-
-const DiscoverMapCanvas = lazy(() => import('@/components/map/DiscoverMapCanvas'));
-import { createLogger } from '@/lib/logger';
-import { Card, CardContent, CardDescription, CardHeader, CardTitle, CardFooter } from "@/components/ui/card";
-
-const log = createLogger('TripPlanner');
+import { useEffect, useMemo, useRef, useState, lazy, Suspense, type ReactNode, type RefObject } from "react";
+import { Link, useNavigate, useSearchParams } from "react-router-dom";
+import { useQuery } from "@tanstack/react-query";
+import { format } from "date-fns";
+import { toast } from "sonner";
+import { Baby, Check, DollarSign, Download, Lightbulb, Loader2, Music, Palette, Trash2, TreePine, Utensils, CalendarPlus } from "lucide-react";
+import Header from "@/components/Header";
+import Footer from "@/components/Footer";
+import SEOHead from "@/components/SEOHead";
+import { FAQSection, type FAQItem } from "@/components/FAQSection";
+import { UpgradeModal } from "@/components/UpgradeModal";
+import { AIDisclosureNotice } from "@/components/AIDisclosureBadge";
+import { DateWindowPlanner } from "@/components/trip/DateWindowPlanner";
+import { TripItineraryDays } from "@/components/trip/TripItineraryDays";
+import type { MapEntity } from "@/components/map/DiscoverMapCanvas";
+import { Breadcrumbs } from "@/components/ui/breadcrumbs";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { Badge } from "@/components/ui/badge";
+import { Checkbox } from "@/components/ui/checkbox";
+import { Skeleton } from "@/components/ui/skeleton";
+import { SpriteIcon } from "@/components/ui/SpriteIcon";
+import { ErrorState } from "@/components/ui/error-state";
+import { RadioGroup, RadioGroupItem } from "@/components/ui/radio-group";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
-import { Checkbox } from "@/components/ui/checkbox";
-import { Separator } from "@/components/ui/separator";
-import { ScrollArea } from "@/components/ui/scroll-area";
-import { Alert, AlertDescription } from "@/components/ui/alert";
-import { Skeleton } from "@/components/ui/skeleton";
-import Header from "@/components/Header";
-import Footer from "@/components/Footer";
-import SEOHead from "@/components/SEOHead";
-import { Breadcrumbs } from "@/components/ui/breadcrumbs";
-import { useTripPlanner, TripPlan, TripPlanItem, TripPreferences } from "@/hooks/useTripPlanner";
+import {
+  AlertDialog,
+  AlertDialogAction,
+  AlertDialogCancel,
+  AlertDialogContent,
+  AlertDialogDescription,
+  AlertDialogFooter,
+  AlertDialogHeader,
+  AlertDialogTitle,
+  AlertDialogTrigger,
+} from "@/components/ui/alert-dialog";
 import { useAuth } from "@/hooks/useAuth";
-import { Link, useNavigate } from "react-router-dom";
-import { format, addDays, differenceInDays } from "date-fns";
-import { EmailCaptureModal } from "@/components/EmailCaptureModal";
-import { FAQSection } from "@/components/FAQSection";
 import { useSubscription } from "@/hooks/useSubscription";
-import { toast } from "sonner";
-import { buildTripICS, downloadICS, googleCalendarUrl } from "@/lib/tripCalendar";
-import { UpgradeModal } from "@/components/UpgradeModal";
-import { PremiumGate } from "@/components/PremiumGate";
-import { AIDisclosureNotice } from "@/components/AIDisclosureBadge";
-import { DollarSign, ChevronDown, ChevronRight, Trash2, Edit2, Copy, Check, Plus, Lightbulb, Utensils, Music, TreePine, Palette, Baby, Car, Coffee, Loader2, AlertCircle, Download, ArrowUp, ArrowDown, CalendarPlus } from "lucide-react";
-import { ErrorState } from "@/components/ui/error-state";
+import { useTripPlanner, type TripPlan, type TripPlanItem, type TripPreferences } from "@/hooks/useTripPlanner";
+import { supabase } from "@/integrations/supabase/client";
+import { getCanonicalUrl } from "@/lib/brandConfig";
+import { dateOnlySpanDays, parseDateOnly, tripWindowProblem } from "@/lib/dateOnly";
+import { handleError } from "@/lib/errorHandler";
+import { STALE_TIME } from "@/lib/queryConfig";
+import { addCentralDays, centralDateOf, centralWindow } from "@/lib/timezone";
+import { buildTripICS, downloadICS } from "@/lib/tripCalendar";
+import { AI_PLANNER_AVAILABLE, AI_PLANNER_PAUSED_MESSAGE } from "@/lib/tripPlannerStatus";
+
+const DiscoverMapCanvas = lazy(() => import("@/components/map/DiscoverMapCanvas"));
+
+type Budget = NonNullable<TripPreferences["budget"]>;
+type Pace = NonNullable<TripPreferences["pace"]>;
+type PlannerTab = "plan" | "itinerary" | "my-trips";
+
+const BUDGETS: readonly Budget[] = ["budget", "moderate", "splurge", "any"];
+const PACES: readonly Pace[] = ["relaxed", "moderate", "packed"];
+
+function isBudget(v: string): v is Budget {
+  return (BUDGETS as readonly string[]).includes(v);
+}
+function isPace(v: string): v is Pace {
+  return (PACES as readonly string[]).includes(v);
+}
+
+/**
+ * The window shown before anyone picks dates: this weekend, Friday to Sunday
+ * Central, starting no earlier than today.
+ */
+function defaultWindow(): { from: string; to: string } {
+  const today = centralDateOf();
+  const weekend = centralWindow("this-weekend");
+  const from = weekend.startDay < today ? today : weekend.startDay;
+  return { from, to: weekend.endDay < from ? addCentralDays(from, 2) : weekend.endDay };
+}
+
+/** "Oct 2 - Oct 4, 2026", read as calendar days (plan-stay WP1 item 1). */
+function tripRangeLabel(trip: TripPlan, withYear: boolean): string {
+  const a = format(parseDateOnly(trip.start_date), "MMM d");
+  const b = format(parseDateOnly(trip.end_date), withYear ? "MMM d, yyyy" : "MMM d");
+  return `${a} - ${b}`;
+}
+
+const PAGE_PATH = "/trip-planner";
+
+function faqItems(): FAQItem[] {
+  return [
+    {
+      question: "How does the trip planner work?",
+      answer:
+        "Pick the dates you're in Des Moines. The planner lists the events we have on each of those days, the hotels closest to where those events are, and how to get around. It's free and you don't need an account." +
+        (AI_PLANNER_AVAILABLE
+          ? " Insider and VIP members can also turn those dates into an AI-written day-by-day itinerary."
+          : " AI-written itineraries are paused while we fix saving them."),
+      links: [{ label: "Getting around Des Moines", to: "/getting-around" }],
+    },
+    {
+      question: "Is the trip planner free?",
+      answer:
+        "The date planner is free for everyone. AI itineraries are part of the Insider and VIP plans; current prices and limits are on the pricing page, and new subscribers may be eligible for a free trial.",
+      links: [{ label: "See pricing", to: "/pricing" }],
+    },
+    {
+      question: "What is the best time to visit Des Moines?",
+      answer:
+        "Des Moines is good year-round. Summer brings the Iowa State Fair in August, outdoor festivals and the Downtown Farmers' Market. Fall has harvest festivals and foliage. Spring has the Drake Relays in April. Winter has holiday markets, indoor attractions and a long list of restaurants.",
+    },
+    {
+      question: "How many days should I plan for a Des Moines trip?",
+      answer:
+        "Two or three days cover downtown dining, the Pappajohn Sculpture Park, the Science Center of Iowa and the East Village. Plan four or five if you want day trips such as Adventureland or the Bridges of Madison County.",
+    },
+    // Emitted as FAQPage schema, so it only describes the AI itinerary while
+    // a visitor can actually make one (AI_PLANNER_AVAILABLE).
+    ...(AI_PLANNER_AVAILABLE
+      ? [
+          {
+            question: "Can I change an AI itinerary after it's made?",
+            answer:
+              "You can reorder the stops within a day, download the whole trip or a single day as a calendar file (.ics), add a stop to Google Calendar, and delete the trip. Swapping in new stops or adding your own isn't available yet.",
+          },
+        ]
+      : []),
+  ];
+}
 
 export default function TripPlanner() {
+  const [searchParams, setSearchParams] = useSearchParams();
+  const fallback = useMemo(defaultWindow, []);
+  const urlFrom = searchParams.get("from") ?? "";
+  const urlTo = searchParams.get("to") ?? "";
+  const urlValid = tripWindowProblem(urlFrom, urlTo) === null;
+  const from = urlValid ? urlFrom : fallback.from;
+  const to = urlValid ? urlTo : fallback.to;
+
+  const applyWindow = (nextFrom: string, nextTo: string) => {
+    setSearchParams((prev) => {
+      const next = new URLSearchParams(prev);
+      next.set("from", nextFrom);
+      next.set("to", nextTo);
+      return next;
+    });
+  };
+
+  const canonical = getCanonicalUrl(PAGE_PATH);
+
+  return (
+    <>
+      <SEOHead
+        title="Des Moines Trip Planner"
+        description="Pick your dates and see what's on in Des Moines each day, the hotels closest to those events, and how to get around. Free, no account needed."
+        url={canonical}
+        canonicalUrl={canonical}
+        keywords={["Des Moines trip planner", "Des Moines events by date", "hotels near Des Moines events", "Iowa trip planning"]}
+        breadcrumbs={[
+          { name: "Home", url: "/" },
+          { name: "Trip Planner", url: PAGE_PATH },
+        ]}
+      />
+
+      <div className="min-h-screen bg-background">
+        <Header />
+
+        <div className="container mx-auto max-w-4xl px-4 py-6 sm:py-8" data-page-body="trip-planner">
+          <Breadcrumbs
+            className="mb-3"
+            items={[
+              { label: "Home", href: "/" },
+              { label: "Trip Planner" },
+            ]}
+          />
+
+          <h1 className="text-3xl font-bold tracking-tight md:text-4xl">Plan your Des Moines trip</h1>
+          <p className="mt-2 max-w-prose text-muted-foreground">
+            Tell us when you're here. We'll show what's on each day and where to stay near it.
+          </p>
+          {!AI_PLANNER_AVAILABLE && (
+            <p className="mt-2 text-sm text-muted-foreground" data-ai-planner="paused">
+              {AI_PLANNER_PAUSED_MESSAGE}
+            </p>
+          )}
+
+          <div className="mt-6">
+            <DateWindowPlanner from={from} to={to} onApply={applyWindow}>
+              {AI_PLANNER_AVAILABLE && <AiTripPlanner startDate={from} endDate={to} />}
+            </DateWindowPlanner>
+          </div>
+        </div>
+
+        <section className="bg-muted/30 py-12" aria-label="Trip planner questions">
+          <div className="mx-auto max-w-4xl px-4 sm:px-6 lg:px-8">
+            <FAQSection
+              title="Trip Planner - Frequently Asked Questions"
+              description="What the planner does today, and what it doesn't."
+              faqs={faqItems()}
+              showSchema={true}
+            />
+          </div>
+        </section>
+
+        <Footer />
+      </div>
+    </>
+  );
+}
+
+// ---------------------------------------------------------------------------
+// AI itinerary: the upgrade on top of the date planner. Mounted only while
+// AI_PLANNER_AVAILABLE, so a paused planner makes no subscription or trip
+// requests at all.
+// ---------------------------------------------------------------------------
+
+interface AiTripPlannerProps {
+  startDate: string;
+  endDate: string;
+}
+
+function AiTripPlanner({ startDate, endDate }: AiTripPlannerProps) {
   const { user } = useAuth();
   const navigate = useNavigate();
-  const {
-    tripPlans,
-    isLoadingTrips,
-    tripsError,
-    refetchTrips,
-    selectedTrip,
-    setSelectedTrip,
-    fetchTripDetails,
-    generateItinerary,
-    isGenerating,
-    updateTrip,
-    deleteTrip,
-    shareTrip,
-    reorderItems,
-    getItemsByDay,
-    interests,
-    budgetOptions,
-    paceOptions,
-  } = useTripPlanner();
+  const planner = useTripPlanner();
+  const { selectedTrip, setSelectedTrip, fetchTripDetails, generateItinerary, isGenerating } = planner;
   const { tier, hasFeature } = useSubscription();
   const canUseTripPlanner = hasFeature("trip_planner");
   const [showPaywall, setShowPaywall] = useState(false);
+  const [tab, setTab] = useState<PlannerTab>("plan");
+  const [focusItinerary, setFocusItinerary] = useState(false);
+  const itineraryHeadingRef = useRef<HTMLHeadingElement>(null);
 
-  // Map preview of stops (WEB-FEAT-011): trip items don't carry coordinates, so
-  // batch-fetch lat/lng for content-linked stops (events/restaurants/attractions).
-  const { data: tripStops = [] } = useQuery({
-    queryKey: ["trip-stops", selectedTrip?.id],
-    enabled: !!selectedTrip?.items?.length,
+  const [selectedInterests, setSelectedInterests] = useState<string[]>([]);
+  const [budget, setBudget] = useState<Budget>("moderate");
+  const [pace, setPace] = useState<Pace>("moderate");
+  const [groupSize, setGroupSize] = useState(2);
+  const [hasChildren, setHasChildren] = useState(false);
+  const [childAges, setChildAges] = useState("");
+
+  const numDays = dateOnlySpanDays(startDate, endDate);
+
+  // Move focus to the itinerary heading once its tab has rendered.
+  useEffect(() => {
+    if (focusItinerary && tab === "itinerary") {
+      itineraryHeadingRef.current?.focus();
+      setFocusItinerary(false);
+    }
+  }, [focusItinerary, tab, selectedTrip]);
+
+  const showItinerary = () => {
+    setTab("itinerary");
+    setFocusItinerary(true);
+  };
+
+  const handleGenerate = async () => {
+    if (!user) {
+      navigate(`/auth?redirect=${encodeURIComponent(`${PAGE_PATH}?from=${startDate}&to=${endDate}`)}`);
+      return;
+    }
+    // Free users get the contextual paywall instead of a failed request
+    // (WEB-FEAT-011 / WEB-FEAT-001). The server enforces the tier regardless.
+    if (!canUseTripPlanner) {
+      setShowPaywall(true);
+      return;
+    }
+    const preferences: TripPreferences = {
+      interests: selectedInterests,
+      budget,
+      pace,
+      groupSize,
+      hasChildren,
+      childAges: hasChildren && childAges
+        ? childAges.split(",").map((a) => parseInt(a.trim(), 10)).filter((a) => !Number.isNaN(a))
+        : [],
+    };
+    try {
+      await generateItinerary({ startDate, endDate, preferences });
+      showItinerary();
+    } catch (error) {
+      handleError(error, { component: "TripPlanner", action: "generateItinerary" });
+      const code = (error as { code?: string })?.code;
+      if (code === "quota_exceeded" || code === "upgrade_required") setShowPaywall(true);
+    }
+  };
+
+  const handleViewTrip = async (trip: TripPlan) => {
+    try {
+      const fullTrip = await fetchTripDetails(trip.id);
+      if (fullTrip) {
+        setSelectedTrip(fullTrip);
+        showItinerary();
+      } else {
+        toast.error("Couldn't open that trip. Please try again.");
+      }
+    } catch (error) {
+      handleError(error, { component: "TripPlanner", action: "viewTrip" });
+      toast.error("Couldn't load that trip's stops. Please try again.");
+    }
+  };
+
+  const toggleInterest = (value: string) =>
+    setSelectedInterests((prev) => (prev.includes(value) ? prev.filter((i) => i !== value) : [...prev, value]));
+
+  return (
+    <section aria-labelledby="ai-trip-heading" className="space-y-4 border-t pt-8">
+      <div>
+        <h2 id="ai-trip-heading" className="text-xl font-semibold">
+          Turn this into an itinerary
+        </h2>
+        <p className="mt-1 max-w-prose text-sm text-muted-foreground">
+          An AI-written plan for these {numDays} day{numDays === 1 ? "" : "s"}, built from the same listings. Part of the Insider and VIP plans.
+        </p>
+      </div>
+
+      <Tabs value={tab} onValueChange={(v) => setTab(v as PlannerTab)} className="space-y-6">
+        <TabsList className="grid w-full max-w-md grid-cols-3">
+          <TabsTrigger value="plan">Preferences</TabsTrigger>
+          <TabsTrigger value="itinerary" disabled={!selectedTrip}>
+            Itinerary
+          </TabsTrigger>
+          <TabsTrigger value="my-trips">My Trips</TabsTrigger>
+        </TabsList>
+
+        <TabsContent value="plan" className="space-y-6">
+          <PreferencesForm
+            groupSize={groupSize}
+            setGroupSize={setGroupSize}
+            hasChildren={hasChildren}
+            setHasChildren={setHasChildren}
+            childAges={childAges}
+            setChildAges={setChildAges}
+            selectedInterests={selectedInterests}
+            toggleInterest={toggleInterest}
+            budget={budget}
+            setBudget={setBudget}
+            pace={pace}
+            setPace={setPace}
+            interests={planner.interests}
+            budgetOptions={planner.budgetOptions}
+            paceOptions={planner.paceOptions}
+          />
+
+          <div className="space-y-4 rounded-xl border p-4 sm:p-6">
+            <div className="flex flex-col gap-4 md:flex-row md:items-center md:justify-between">
+              <div>
+                <p className="font-semibold">Ready for the itinerary?</p>
+                <p className="text-sm text-muted-foreground">
+                  {tier === "vip"
+                    ? "VIP: unlimited AI trips."
+                    : tier === "insider"
+                      ? "Insider: 5 AI trips per month."
+                      : "AI itineraries are an Insider feature."}
+                </p>
+              </div>
+              <Button size="lg" onClick={handleGenerate} disabled={isGenerating || numDays < 1} className="min-h-11 gap-2">
+                {isGenerating ? (
+                  <>
+                    <Loader2 className="h-5 w-5 animate-spin" aria-hidden="true" />
+                    Generating...
+                  </>
+                ) : (
+                  "Generate itinerary"
+                )}
+              </Button>
+            </div>
+            {/* AI transparency notice (EU AI Act Art. 50, Colorado AI Act, CA AB 2013) */}
+            <AIDisclosureNotice title="How your itinerary is generated">
+              <p className="leading-snug text-muted-foreground">
+                Your itinerary is generated by an AI model using public information about Des Moines events,
+                restaurants and attractions plus the preferences you share above. AI output may be inaccurate or
+                incomplete, so confirm hours, prices and reservations with each venue before you go. Nothing here
+                is a paid endorsement unless clearly labeled as such.
+              </p>
+            </AIDisclosureNotice>
+          </div>
+        </TabsContent>
+
+        <TabsContent value="itinerary">
+          {selectedTrip ? (
+            <ItineraryView trip={selectedTrip} headingRef={itineraryHeadingRef} planner={planner} />
+          ) : (
+            <EmptyPanel
+              title="No itinerary selected"
+              body="Generate a new itinerary or open one from My Trips."
+              action={<Button onClick={() => setTab("plan")}>Plan a trip</Button>}
+            />
+          )}
+        </TabsContent>
+
+        <TabsContent value="my-trips">
+          {!user ? (
+            <EmptyPanel
+              title="Sign in to see your trips"
+              body="Your saved itineraries live with your account."
+              action={
+                <Button asChild>
+                  <Link to={`/auth?redirect=${encodeURIComponent(PAGE_PATH)}`}>Sign in</Link>
+                </Button>
+              }
+            />
+          ) : (
+            <MyTrips planner={planner} onPlan={() => setTab("plan")} onOpen={handleViewTrip} />
+          )}
+        </TabsContent>
+      </Tabs>
+
+      <UpgradeModal open={showPaywall} onOpenChange={setShowPaywall} feature="trip_planner" />
+    </section>
+  );
+}
+
+function EmptyPanel({ title, body, action }: { title: string; body: string; action: ReactNode }) {
+  return (
+    <div className="rounded-xl border px-4 py-10 text-center">
+      <h3 className="mb-2 text-lg font-medium">{title}</h3>
+      <p className="mb-4 text-muted-foreground">{body}</p>
+      {action}
+    </div>
+  );
+}
+
+// ---------------------------------------------------------------------------
+
+const INTEREST_ICONS: Record<string, ReactNode> = {
+  music: <Music className="h-4 w-4" aria-hidden="true" />,
+  food: <Utensils className="h-4 w-4" aria-hidden="true" />,
+  outdoors: <TreePine className="h-4 w-4" aria-hidden="true" />,
+  arts: <Palette className="h-4 w-4" aria-hidden="true" />,
+  family: <Baby className="h-4 w-4" aria-hidden="true" />,
+};
+
+interface OptionRow {
+  value: string;
+  label: string;
+  description?: string;
+}
+
+interface PreferencesFormProps {
+  groupSize: number;
+  setGroupSize: (n: number) => void;
+  hasChildren: boolean;
+  setHasChildren: (b: boolean) => void;
+  childAges: string;
+  setChildAges: (s: string) => void;
+  selectedInterests: string[];
+  toggleInterest: (v: string) => void;
+  budget: Budget;
+  setBudget: (b: Budget) => void;
+  pace: Pace;
+  setPace: (p: Pace) => void;
+  interests: OptionRow[];
+  budgetOptions: OptionRow[];
+  paceOptions: OptionRow[];
+}
+
+function OptionRadios({
+  name,
+  legend,
+  value,
+  options,
+  onChange,
+}: {
+  name: string;
+  legend: string;
+  value: string;
+  options: OptionRow[];
+  onChange: (v: string) => void;
+}) {
+  return (
+    <fieldset className="space-y-3">
+      <legend className="mb-3 font-semibold">{legend}</legend>
+      <RadioGroup value={value} onValueChange={onChange} className="gap-2">
+        {options.map((option) => {
+          const id = `${name}-${option.value}`;
+          return (
+            <Label
+              key={option.value}
+              htmlFor={id}
+              className={`flex min-h-11 cursor-pointer items-start gap-3 rounded-lg border p-3 font-normal ${
+                value === option.value ? "border-primary bg-primary/5" : "hover:border-primary/50"
+              }`}
+            >
+              <RadioGroupItem id={id} value={option.value} className="mt-0.5" />
+              <span>
+                <span className="block font-medium">{option.label}</span>
+                {option.description && <span className="block text-sm text-muted-foreground">{option.description}</span>}
+              </span>
+            </Label>
+          );
+        })}
+      </RadioGroup>
+    </fieldset>
+  );
+}
+
+function PreferencesForm(props: PreferencesFormProps) {
+  return (
+    <div className="grid gap-6 md:grid-cols-2">
+      <fieldset className="space-y-4 rounded-xl border p-4">
+        <legend className="px-1 font-semibold">Who's going?</legend>
+        <div className="space-y-2">
+          <Label htmlFor="group-size">Group size</Label>
+          <Select value={props.groupSize.toString()} onValueChange={(v) => props.setGroupSize(parseInt(v, 10))}>
+            <SelectTrigger id="group-size" className="min-h-11">
+              <SelectValue />
+            </SelectTrigger>
+            <SelectContent>
+              {[1, 2, 3, 4, 5, 6, 7, 8, 10, 15, 20].map((n) => (
+                <SelectItem key={n} value={n.toString()}>
+                  {n} {n === 1 ? "person" : "people"}
+                </SelectItem>
+              ))}
+            </SelectContent>
+          </Select>
+        </div>
+        <div className="flex min-h-11 items-center space-x-2">
+          <Checkbox
+            id="has-children"
+            checked={props.hasChildren}
+            onCheckedChange={(checked) => props.setHasChildren(checked === true)}
+          />
+          <Label htmlFor="has-children">Traveling with children</Label>
+        </div>
+        {props.hasChildren && (
+          <div className="space-y-2">
+            <Label htmlFor="child-ages">Children's ages (comma-separated)</Label>
+            <Input
+              id="child-ages"
+              placeholder="e.g., 5, 8, 12"
+              value={props.childAges}
+              onChange={(e) => props.setChildAges(e.target.value)}
+            />
+          </div>
+        )}
+      </fieldset>
+
+      <fieldset className="rounded-xl border p-4">
+        <legend className="px-1 font-semibold">Your interests</legend>
+        <div className="flex flex-wrap gap-2">
+          {props.interests.map((interest) => {
+            const on = props.selectedInterests.includes(interest.value);
+            return (
+              <Button
+                key={interest.value}
+                type="button"
+                variant={on ? "default" : "outline"}
+                size="sm"
+                aria-pressed={on}
+                onClick={() => props.toggleInterest(interest.value)}
+                className="min-h-11 gap-2"
+              >
+                {INTEREST_ICONS[interest.value] ?? null}
+                {interest.label}
+              </Button>
+            );
+          })}
+        </div>
+      </fieldset>
+
+      <div className="rounded-xl border p-4">
+        <OptionRadios
+          name="budget"
+          legend="Budget"
+          value={props.budget}
+          options={props.budgetOptions}
+          onChange={(v) => {
+            if (isBudget(v)) props.setBudget(v);
+          }}
+        />
+      </div>
+      <div className="rounded-xl border p-4">
+        <OptionRadios
+          name="pace"
+          legend="Trip pace"
+          value={props.pace}
+          options={props.paceOptions}
+          onChange={(v) => {
+            if (isPace(v)) props.setPace(v);
+          }}
+        />
+      </div>
+    </div>
+  );
+}
+
+// ---------------------------------------------------------------------------
+
+type Planner = ReturnType<typeof useTripPlanner>;
+
+/**
+ * Batch-fetch lat/lng for content-linked stops (WEB-FEAT-011): trip items
+ * don't carry coordinates.
+ */
+function useTripStops(trip: TripPlan) {
+  return useQuery({
+    queryKey: ["trip-stops", trip.id],
+    enabled: !!trip.items?.length,
     staleTime: STALE_TIME.CONTENT_DETAIL,
     queryFn: async (): Promise<MapEntity[]> => {
-      const items = (selectedTrip?.items || []).filter((i) => i.content_details);
+      const items = (trip.items || []).filter((i) => i.content_details);
       const titleById = new Map<string, string>();
       const idsByType: Record<string, string[]> = {};
       for (const i of items) {
@@ -81,11 +603,7 @@ export default function TripPlanner() {
         (idsByType[cd.type] ||= []).push(cd.id);
         titleById.set(cd.id, i.title);
       }
-      const tables: Record<string, string> = {
-        event: "events",
-        restaurant: "restaurants",
-        attraction: "attractions",
-      };
+      const tables: Record<string, string> = { event: "events", restaurant: "restaurants", attraction: "attractions" };
       const out: MapEntity[] = [];
       await Promise.all(
         Object.entries(idsByType).map(async ([type, ids]) => {
@@ -104,79 +622,27 @@ export default function TripPlanner() {
               });
             }
           });
-        })
+        }),
       );
       return out;
     },
   });
+}
 
-  // Form state
-  const [startDate, setStartDate] = useState(format(addDays(new Date(), 7), 'yyyy-MM-dd'));
-  const [endDate, setEndDate] = useState(format(addDays(new Date(), 9), 'yyyy-MM-dd'));
-  const [selectedInterests, setSelectedInterests] = useState<string[]>([]);
-  const [budget, setBudget] = useState<'budget' | 'moderate' | 'splurge' | 'any'>('moderate');
-  const [pace, setPace] = useState<'relaxed' | 'moderate' | 'packed'>('moderate');
-  const [groupSize, setGroupSize] = useState(2);
-  const [hasChildren, setHasChildren] = useState(false);
-  const [childAges, setChildAges] = useState<string>('');
-  const [dietaryRestrictions, setDietaryRestrictions] = useState<string[]>([]);
-  const [accessibilityNeeds, setAccessibilityNeeds] = useState<string[]>([]);
-  const [expandedDays, setExpandedDays] = useState<Record<number, boolean>>({});
-  const [showEmailCapture, setShowEmailCapture] = useState(false);
+function ItineraryView({
+  trip,
+  headingRef,
+  planner,
+}: {
+  trip: TripPlan;
+  headingRef: RefObject<HTMLHeadingElement>;
+  planner: Planner;
+}) {
+  const { deleteTrip, setSelectedTrip, shareTrip, reorderItems } = planner;
+  const { data: tripStops = [] } = useTripStops(trip);
+  const items = trip.items ?? [];
 
-  const numDays = differenceInDays(new Date(endDate), new Date(startDate)) + 1;
-
-  const handleGenerateItinerary = async () => {
-    if (!user) {
-      navigate('/auth?redirect=/trip-planner');
-      return;
-    }
-
-    // Free users get the contextual paywall instead of a failed request
-    // (WEB-FEAT-011 / WEB-FEAT-001).
-    if (!canUseTripPlanner) {
-      setShowPaywall(true);
-      return;
-    }
-
-    const preferences: TripPreferences = {
-      interests: selectedInterests,
-      budget,
-      pace,
-      groupSize,
-      hasChildren,
-      childAges: hasChildren && childAges ? childAges.split(',').map(a => parseInt(a.trim())).filter(a => !isNaN(a)) : [],
-      dietaryRestrictions,
-      accessibilityNeeds,
-    };
-
-    try {
-      await generateItinerary({ startDate, endDate, preferences });
-      // Show email capture after successful generation
-      setShowEmailCapture(true);
-    } catch (error) {
-      log.error('generateItinerary', 'Error generating itinerary', { error });
-      // Server-enforced quota/entitlement -> show the contextual paywall.
-      const code = (error as { code?: string })?.code;
-      if (code === 'quota_exceeded' || code === 'upgrade_required') {
-        setShowPaywall(true);
-      }
-    }
-  };
-
-  const handleViewTrip = async (trip: TripPlan) => {
-    const fullTrip = await fetchTripDetails(trip.id);
-    if (fullTrip) {
-      setSelectedTrip(fullTrip);
-    }
-  };
-
-  // Reorder an item up/down within its day, persisting the swap (WEB-FEAT-011).
-  const handleMoveItem = (
-    dayItems: TripPlanItem[],
-    idx: number,
-    dir: -1 | 1
-  ) => {
+  const handleMoveItem = (dayItems: TripPlanItem[], idx: number, dir: -1 | 1) => {
     const a = dayItems[idx];
     const b = dayItems[idx + dir];
     if (!a || !b) return;
@@ -186,818 +652,225 @@ export default function TripPlanner() {
     ]);
   };
 
-  // Export the whole trip to an .ics file (WEB-FEAT-011).
-  const handleAddToCalendar = (trip: TripPlan) => {
-    if (!trip.items || trip.items.length === 0) return;
-    downloadICS(`${trip.title || "des-moines-trip"}.ics`, buildTripICS(trip, trip.items));
+  const handleAddToCalendar = () => {
+    if (items.length === 0) return;
+    downloadICS(`${trip.title || "des-moines-trip"}.ics`, buildTripICS(trip, items));
     toast.success("Calendar file (.ics) downloaded");
   };
 
-  // Export a single day to an .ics file (WEB-FEAT-011).
-  const handleAddDayToCalendar = (trip: TripPlan, items: TripPlanItem[], dayNum: number) => {
-    if (items.length === 0) return;
-    downloadICS(`${trip.title || "trip"}-day-${dayNum}.ics`, buildTripICS(trip, items));
+  const handleAddDayToCalendar = (dayItems: TripPlanItem[], dayNum: number) => {
+    if (dayItems.length === 0) return;
+    downloadICS(`${trip.title || "trip"}-day-${dayNum}.ics`, buildTripICS(trip, dayItems));
     toast.success(`Day ${dayNum} downloaded (.ics)`);
   };
 
-  // Share: publish + copy link (hook), then offer the native share sheet.
-  const handleShareTrip = async (trip: TripPlan) => {
-    const code = await shareTrip(trip.id);
-    if (code && typeof navigator !== "undefined" && navigator.share) {
-      try {
-        await navigator.share({
-          title: trip.title || "My Des Moines trip",
-          url: `${window.location.origin}/trips/shared/${code}`,
-        });
-      } catch {
-        // user dismissed the share sheet — link is already copied
+  const handleShare = async () => {
+    try {
+      const code = await shareTrip(trip.id);
+      if (code && typeof navigator !== "undefined" && navigator.share) {
+        try {
+          await navigator.share({
+            title: trip.title || "My Des Moines trip",
+            url: `${window.location.origin}/trips/shared/${code}`,
+          });
+        } catch {
+          // Dismissed share sheet: the link is already copied or shown.
+        }
       }
+    } catch (error) {
+      handleError(error, { component: "TripPlanner", action: "shareTrip" });
     }
   };
 
-  const toggleDay = (day: number) => {
-    setExpandedDays(prev => ({ ...prev, [day]: !prev[day] }));
-  };
-
-  const toggleInterest = (interest: string) => {
-    setSelectedInterests(prev =>
-      prev.includes(interest)
-        ? prev.filter(i => i !== interest)
-        : [...prev, interest]
-    );
-  };
-
-  const getItemIcon = (itemType: string) => {
-    switch (itemType) {
-      case 'event': return <Music className="h-4 w-4" />;
-      case 'restaurant': return <Utensils className="h-4 w-4" />;
-      case 'attraction': return <SpriteIcon name="map-pin" className="h-4 w-4" />;
-      case 'transport': return <Car className="h-4 w-4" />;
-      case 'break': return <Coffee className="h-4 w-4" />;
-      default: return <SpriteIcon name="calendar" className="h-4 w-4" />;
+  const handleDelete = async () => {
+    try {
+      await deleteTrip(trip.id);
+      setSelectedTrip(null);
+    } catch (error) {
+      handleError(error, { component: "TripPlanner", action: "deleteTrip" });
     }
-  };
-
-  const getItemTypeColor = (itemType: string) => {
-    switch (itemType) {
-      case 'event': return 'bg-purple-100 text-purple-800 dark:bg-purple-900 dark:text-purple-200';
-      case 'restaurant': return 'bg-orange-100 text-orange-800 dark:bg-orange-900 dark:text-orange-200';
-      case 'attraction': return 'bg-blue-100 text-blue-800 dark:bg-blue-900 dark:text-blue-200';
-      case 'transport': return 'bg-gray-100 text-gray-800 dark:bg-gray-900 dark:text-gray-200';
-      case 'break': return 'bg-green-100 text-green-800 dark:bg-green-900 dark:text-green-200';
-      default: return 'bg-gray-100 text-gray-800';
-    }
-  };
-
-  const interestIcons: Record<string, React.ReactNode> = {
-    music: <Music className="h-4 w-4" />,
-    food: <Utensils className="h-4 w-4" />,
-    outdoors: <TreePine className="h-4 w-4" />,
-    arts: <Palette className="h-4 w-4" />,
-    family: <Baby className="h-4 w-4" />,
   };
 
   return (
-    <>
-      <SEOHead
-        title="AI Trip Planner - Des Moines Insider"
-        description="Plan your perfect Des Moines trip with our AI-powered itinerary builder. Get personalized multi-day plans based on your interests, budget, and pace."
-        keywords={["Des Moines trip planner", "itinerary builder", "AI travel planner", "Des Moines vacation", "Iowa trip planning"]}
-      />
-
-      <div className="min-h-screen bg-background">
-        <Header />
-
-        <div className="container mx-auto px-4 py-8">
-          <Breadcrumbs
-            className="mb-4"
-            items={[
-              { label: "Home", href: "/" },
-              { label: "Trip Planner" },
-            ]}
-          />
-
-          {/* Page Header */}
-          <div className="text-center space-y-4 mb-8">
-            <div className="flex items-center justify-center gap-2">
-              <SpriteIcon name="sparkles" className="h-8 w-8 text-primary" />
-              <h1 className="text-3xl md:text-4xl font-bold">AI Trip Planner</h1>
-            </div>
-            <p className="text-muted-foreground max-w-2xl mx-auto">
-              Let our AI create a personalized Des Moines itinerary just for you. Tell us your dates,
-              interests, and preferences, and we'll plan the perfect trip.
-            </p>
+    <div className="space-y-6">
+      <div className="flex flex-col gap-4 rounded-xl border p-4 sm:p-6 md:flex-row md:items-start md:justify-between">
+        <div>
+          <h3 ref={headingRef} tabIndex={-1} className="text-2xl font-semibold outline-none">
+            {trip.title}
+          </h3>
+          {trip.description && <p className="mt-2 text-muted-foreground">{trip.description}</p>}
+          <div className="mt-4 flex flex-wrap gap-2">
+            <Badge variant="outline">{tripRangeLabel(trip, true)}</Badge>
+            {trip.total_estimated_cost && (
+              <Badge variant="outline">
+                <DollarSign className="mr-1 h-3 w-3" aria-hidden="true" />
+                {trip.total_estimated_cost}
+              </Badge>
+            )}
+            {trip.ai_generated && <Badge>AI generated</Badge>}
           </div>
-
-          {/* AI transparency notice (EU AI Act Art. 50, Colorado AI Act, CA AB 2013) */}
-          <div className="max-w-3xl mx-auto mb-6">
-            <AIDisclosureNotice title="How your itinerary is generated">
-              <p className="text-muted-foreground leading-snug">
-                Your itinerary is generated by an AI model using public information
-                about Des Moines events, restaurants, and attractions plus the
-                preferences you share below. AI output may be inaccurate or
-                incomplete — please confirm hours, prices, and reservations with
-                each venue before you go. Nothing here is a paid endorsement
-                unless clearly labeled as such.
-              </p>
-            </AIDisclosureNotice>
-          </div>
-
-          <PremiumGate
-            feature="trip_planner"
-            requiredTier="insider"
-            mode="lock"
-            title="AI Trip Planner"
-            description="Plan your perfect Des Moines trip with AI-powered itineraries. Insider members get 5 trips/month, VIP gets unlimited."
-          >
-          <Tabs defaultValue={selectedTrip ? "itinerary" : "plan"} className="space-y-6">
-            <TabsList className="grid w-full grid-cols-3 max-w-md mx-auto">
-              <TabsTrigger value="plan">Plan Trip</TabsTrigger>
-              <TabsTrigger value="itinerary" disabled={!selectedTrip}>
-                Itinerary
-              </TabsTrigger>
-              <TabsTrigger value="my-trips">My Trips</TabsTrigger>
-            </TabsList>
-
-            {/* Plan Trip Tab */}
-            <TabsContent value="plan" className="space-y-6">
-              <div className="grid md:grid-cols-2 gap-6">
-                {/* Date Selection */}
-                <Card>
-                  <CardHeader>
-                    <CardTitle className="flex items-center gap-2">
-                      <SpriteIcon name="calendar" className="h-5 w-5" />
-                      Trip Dates
-                    </CardTitle>
-                    <CardDescription>When are you visiting Des Moines?</CardDescription>
-                  </CardHeader>
-                  <CardContent className="space-y-4">
-                    <div className="grid grid-cols-2 gap-4">
-                      <div className="space-y-2">
-                        <Label htmlFor="start-date">Start Date</Label>
-                        <Input
-                          id="start-date"
-                          type="date"
-                          value={startDate}
-                          onChange={(e) => setStartDate(e.target.value)}
-                          min={format(new Date(), 'yyyy-MM-dd')}
-                        />
-                      </div>
-                      <div className="space-y-2">
-                        <Label htmlFor="end-date">End Date</Label>
-                        <Input
-                          id="end-date"
-                          type="date"
-                          value={endDate}
-                          onChange={(e) => setEndDate(e.target.value)}
-                          min={startDate}
-                        />
-                      </div>
-                    </div>
-                    {numDays > 0 && (
-                      <p className="text-sm text-muted-foreground">
-                        {numDays} day{numDays !== 1 ? 's' : ''} trip
-                      </p>
-                    )}
-                  </CardContent>
-                </Card>
-
-                {/* Group Info */}
-                <Card>
-                  <CardHeader>
-                    <CardTitle className="flex items-center gap-2">
-                      <SpriteIcon name="users" className="h-5 w-5" />
-                      Who's Going?
-                    </CardTitle>
-                    <CardDescription>Tell us about your group</CardDescription>
-                  </CardHeader>
-                  <CardContent className="space-y-4">
-                    <div className="space-y-2">
-                      <Label htmlFor="group-size">Group Size</Label>
-                      <Select value={groupSize.toString()} onValueChange={(v) => setGroupSize(parseInt(v))}>
-                        <SelectTrigger>
-                          <SelectValue />
-                        </SelectTrigger>
-                        <SelectContent>
-                          {[1, 2, 3, 4, 5, 6, 7, 8, 10, 15, 20].map(n => (
-                            <SelectItem key={n} value={n.toString()}>
-                              {n} {n === 1 ? 'person' : 'people'}
-                            </SelectItem>
-                          ))}
-                        </SelectContent>
-                      </Select>
-                    </div>
-
-                    <div className="flex items-center space-x-2">
-                      <Checkbox
-                        id="has-children"
-                        checked={hasChildren}
-                        onCheckedChange={(checked) => setHasChildren(checked === true)}
-                      />
-                      <Label htmlFor="has-children">Traveling with children</Label>
-                    </div>
-
-                    {hasChildren && (
-                      <div className="space-y-2">
-                        <Label htmlFor="child-ages">Children's ages (comma-separated)</Label>
-                        <Input
-                          id="child-ages"
-                          placeholder="e.g., 5, 8, 12"
-                          value={childAges}
-                          onChange={(e) => setChildAges(e.target.value)}
-                        />
-                      </div>
-                    )}
-                  </CardContent>
-                </Card>
-
-                {/* Interests */}
-                <Card className="md:col-span-2">
-                  <CardHeader>
-                    <CardTitle className="flex items-center gap-2">
-                      <Lightbulb className="h-5 w-5" />
-                      Your Interests
-                    </CardTitle>
-                    <CardDescription>What kind of activities do you enjoy?</CardDescription>
-                  </CardHeader>
-                  <CardContent>
-                    <div className="flex flex-wrap gap-2">
-                      {interests.map((interest) => (
-                        <Button
-                          key={interest.value}
-                          variant={selectedInterests.includes(interest.value) ? "default" : "outline"}
-                          size="sm"
-                          onClick={() => toggleInterest(interest.value)}
-                          className="gap-2"
-                        >
-                          {interestIcons[interest.value] || <SpriteIcon name="sparkles" className="h-4 w-4" />}
-                          {interest.label}
-                        </Button>
-                      ))}
-                    </div>
-                  </CardContent>
-                </Card>
-
-                {/* Budget */}
-                <Card>
-                  <CardHeader>
-                    <CardTitle className="flex items-center gap-2">
-                      <DollarSign className="h-5 w-5" />
-                      Budget
-                    </CardTitle>
-                    <CardDescription>What's your spending comfort level?</CardDescription>
-                  </CardHeader>
-                  <CardContent className="space-y-3">
-                    {budgetOptions.map((option) => (
-                      <div
-                        key={option.value}
-                        className={`p-3 rounded-lg border cursor-pointer transition-colors ${
-                          budget === option.value
-                            ? 'border-primary bg-primary/5'
-                            : 'border-border hover:border-primary/50'
-                        }`}
-                        onClick={() => setBudget(option.value as any)}
-                      >
-                        <div className="flex items-center justify-between">
-                          <span className="font-medium">{option.label}</span>
-                          {budget === option.value && <Check className="h-4 w-4 text-primary" />}
-                        </div>
-                        <p className="text-sm text-muted-foreground">{option.description}</p>
-                      </div>
-                    ))}
-                  </CardContent>
-                </Card>
-
-                {/* Pace */}
-                <Card>
-                  <CardHeader>
-                    <CardTitle className="flex items-center gap-2">
-                      <SpriteIcon name="clock" className="h-5 w-5" />
-                      Trip Pace
-                    </CardTitle>
-                    <CardDescription>How packed do you want your days?</CardDescription>
-                  </CardHeader>
-                  <CardContent className="space-y-3">
-                    {paceOptions.map((option) => (
-                      <div
-                        key={option.value}
-                        className={`p-3 rounded-lg border cursor-pointer transition-colors ${
-                          pace === option.value
-                            ? 'border-primary bg-primary/5'
-                            : 'border-border hover:border-primary/50'
-                        }`}
-                        onClick={() => setPace(option.value as any)}
-                      >
-                        <div className="flex items-center justify-between">
-                          <span className="font-medium">{option.label}</span>
-                          {pace === option.value && <Check className="h-4 w-4 text-primary" />}
-                        </div>
-                        <p className="text-sm text-muted-foreground">{option.description}</p>
-                      </div>
-                    ))}
-                  </CardContent>
-                </Card>
-              </div>
-
-              {/* Generate Button */}
-              <Card className="border-primary/50 bg-gradient-to-r from-primary/5 to-primary/10">
-                <CardContent className="pt-6">
-                  <div className="flex flex-col md:flex-row items-center justify-between gap-4">
-                    <div className="text-center md:text-left">
-                      <h3 className="text-lg font-semibold">Ready to plan your trip?</h3>
-                      <p className="text-sm text-muted-foreground">
-                        Our AI will create a personalized {numDays}-day itinerary based on your preferences.
-                      </p>
-                      {/* Quota meter (WEB-FEAT-011) */}
-                      <p className="text-xs mt-1 font-medium">
-                        {tier === "vip" ? (
-                          <span className="text-purple-500">VIP · Unlimited AI trips</span>
-                        ) : tier === "insider" ? (
-                          <span className="text-amber-600 dark:text-amber-400">Insider · 5 AI trips per month</span>
-                        ) : (
-                          <span className="text-muted-foreground">Free · AI Trip Planner is an Insider feature</span>
-                        )}
-                      </p>
-                    </div>
-                    <Button
-                      size="lg"
-                      onClick={handleGenerateItinerary}
-                      disabled={isGenerating || numDays < 1}
-                      className="gap-2 min-w-[200px]"
-                    >
-                      {isGenerating ? (
-                        <>
-                          <Loader2 className="h-5 w-5 animate-spin" />
-                          Generating...
-                        </>
-                      ) : (
-                        <>
-                          <SpriteIcon name="sparkles" className="h-5 w-5" />
-                          Generate Itinerary
-                        </>
-                      )}
-                    </Button>
-                  </div>
-                  {!user && (
-                    <Alert className="mt-4">
-                      <AlertCircle className="h-4 w-4" />
-                      <AlertDescription>
-                        <Link to="/auth?redirect=/trip-planner" className="underline">
-                          Sign in
-                        </Link>{' '}
-                        to save your itinerary and access it later.
-                      </AlertDescription>
-                    </Alert>
-                  )}
-                </CardContent>
-              </Card>
-            </TabsContent>
-
-            {/* Itinerary Tab */}
-            <TabsContent value="itinerary">
-              {selectedTrip ? (
-                <div className="space-y-6">
-                  {/* Trip Header */}
-                  <Card>
-                    <CardHeader>
-                      <div className="flex flex-col md:flex-row md:items-start md:justify-between gap-4">
-                        <div>
-                          <CardTitle className="text-2xl">{selectedTrip.title}</CardTitle>
-                          <CardDescription className="mt-2">
-                            {selectedTrip.description}
-                          </CardDescription>
-                          <div className="flex flex-wrap gap-2 mt-4">
-                            <Badge variant="outline">
-                              <SpriteIcon name="calendar" className="h-3 w-3 mr-1" />
-                              {format(new Date(selectedTrip.start_date), 'MMM d')} -{' '}
-                              {format(new Date(selectedTrip.end_date), 'MMM d, yyyy')}
-                            </Badge>
-                            {selectedTrip.total_estimated_cost && (
-                              <Badge variant="outline">
-                                <DollarSign className="h-3 w-3 mr-1" />
-                                {selectedTrip.total_estimated_cost}
-                              </Badge>
-                            )}
-                            {selectedTrip.ai_generated && (
-                              <Badge>
-                                <SpriteIcon name="sparkles" className="h-3 w-3 mr-1" />
-                                AI Generated
-                              </Badge>
-                            )}
-                          </div>
-                        </div>
-                        <div className="flex gap-2 flex-wrap">
-                          <Button variant="outline" size="sm" onClick={() => handleShareTrip(selectedTrip)}>
-                            <SpriteIcon name="share-2" className="h-4 w-4 mr-1" />
-                            Share
-                          </Button>
-                          <Button
-                            variant="outline"
-                            size="sm"
-                            onClick={() => handleAddToCalendar(selectedTrip)}
-                            disabled={!selectedTrip.items || selectedTrip.items.length === 0}
-                          >
-                            <CalendarPlus className="h-4 w-4 mr-1" />
-                            Add to Calendar
-                          </Button>
-                          <Button
-                            variant="outline"
-                            size="sm"
-                            onClick={() => deleteTrip(selectedTrip.id).then(() => setSelectedTrip(null))}
-                          >
-                            <Trash2 className="h-4 w-4 mr-1" />
-                            Delete
-                          </Button>
-                        </div>
-                      </div>
-                    </CardHeader>
-                  </Card>
-
-                  {/* Map preview of stops (WEB-FEAT-011), lazy Leaflet */}
-                  {tripStops.length > 0 && (
-                    <div className="relative h-72 rounded-lg overflow-hidden border">
-                      <Suspense fallback={<div className="absolute inset-0 bg-muted animate-pulse" />}>
-                        <DiscoverMapCanvas
-                          entities={tripStops}
-                          selectedId={null}
-                          onSelect={() => {}}
-                          onBoundsChange={() => {}}
-                          flyTo={null}
-                        />
-                      </Suspense>
-                    </div>
-                  )}
-
-                  {/* Itinerary Days */}
-                  {selectedTrip.items && selectedTrip.items.length > 0 ? (
-                    <div className="space-y-4">
-                      {Object.entries(getItemsByDay(selectedTrip.items)).map(([day, items]) => {
-                        const dayNum = parseInt(day);
-                        const dayDate = addDays(new Date(selectedTrip.start_date), dayNum - 1);
-                        const isExpanded = expandedDays[dayNum] !== false;
-
-                        return (
-                          <Card key={day}>
-                            <CardHeader
-                              className="cursor-pointer"
-                              onClick={() => toggleDay(dayNum)}
-                            >
-                              <div className="flex items-center justify-between">
-                                <CardTitle className="text-lg flex items-center gap-2">
-                                  {isExpanded ? (
-                                    <ChevronDown className="h-5 w-5" />
-                                  ) : (
-                                    <ChevronRight className="h-5 w-5" />
-                                  )}
-                                  Day {day}: {format(dayDate, 'EEEE, MMMM d')}
-                                </CardTitle>
-                                <div className="flex items-center gap-2">
-                                  <Badge variant="secondary">
-                                    {items.length} {items.length === 1 ? 'activity' : 'activities'}
-                                  </Badge>
-                                  <Button
-                                    variant="ghost"
-                                    size="icon"
-                                    className="h-7 w-7"
-                                    aria-label={`Add Day ${day} to calendar`}
-                                    title="Download this day (.ics)"
-                                    onClick={(e) => {
-                                      e.stopPropagation();
-                                      handleAddDayToCalendar(selectedTrip, items, dayNum);
-                                    }}
-                                  >
-                                    <CalendarPlus className="h-4 w-4" />
-                                  </Button>
-                                </div>
-                              </div>
-                            </CardHeader>
-                            {isExpanded && (
-                              <CardContent>
-                                <div className="space-y-4">
-                                  {[...items]
-                                    .sort((a, b) => a.order_index - b.order_index)
-                                    .map((item, idx, sortedItems) => (
-                                      <div
-                                        key={item.item_id}
-                                        className="flex gap-4 p-4 rounded-lg border bg-card"
-                                      >
-                                        <div className="flex flex-col items-center">
-                                          <div className={`p-2 rounded-full ${getItemTypeColor(item.item_type)}`}>
-                                            {getItemIcon(item.item_type)}
-                                          </div>
-                                          {idx < items.length - 1 && (
-                                            <div className="w-px h-full bg-border mt-2" />
-                                          )}
-                                        </div>
-                                        <div className="flex-1 space-y-2">
-                                          <div className="flex items-start justify-between">
-                                            <div>
-                                              <h4 className="font-medium">{item.title}</h4>
-                                              {item.start_time && (
-                                                <p className="text-sm text-muted-foreground flex items-center gap-1">
-                                                  <SpriteIcon name="clock" className="h-3 w-3" />
-                                                  {item.start_time}
-                                                  {item.end_time && ` - ${item.end_time}`}
-                                                  {item.duration_minutes && (
-                                                    <span className="text-xs">
-                                                      ({item.duration_minutes} min)
-                                                    </span>
-                                                  )}
-                                                </p>
-                                              )}
-                                            </div>
-                                            {item.estimated_cost && (
-                                              <Badge variant="outline">
-                                                {item.estimated_cost}
-                                              </Badge>
-                                            )}
-                                          </div>
-                                          {item.location && (
-                                            <p className="text-sm text-muted-foreground flex items-center gap-1">
-                                              <SpriteIcon name="map-pin" className="h-3 w-3" />
-                                              {item.location}
-                                            </p>
-                                          )}
-                                          {item.description && (
-                                            <p className="text-sm">{item.description}</p>
-                                          )}
-                                          {item.ai_reason && (
-                                            <p className="text-sm text-primary/80 italic flex items-start gap-1">
-                                              <Lightbulb className="h-3 w-3 mt-0.5 shrink-0" />
-                                              {item.ai_reason}
-                                            </p>
-                                          )}
-                                          {item.notes && (
-                                            <p className="text-sm text-muted-foreground bg-muted p-2 rounded">
-                                              {item.notes}
-                                            </p>
-                                          )}
-                                          {item.content_details && (
-                                            <Link
-                                              to={`/${item.content_details.type}s/${item.content_details.id}`}
-                                              className="inline-flex items-center gap-1 text-sm text-primary hover:underline"
-                                            >
-                                              View details
-                                              <SpriteIcon name="external-link" className="h-3 w-3" />
-                                            </Link>
-                                          )}
-                                        </div>
-                                        {/* Reorder + per-stop calendar (WEB-FEAT-011) */}
-                                        <div className="flex flex-col gap-1 shrink-0">
-                                          <Button
-                                            variant="ghost"
-                                            size="icon"
-                                            className="h-7 w-7"
-                                            disabled={idx === 0}
-                                            onClick={() => handleMoveItem(sortedItems, idx, -1)}
-                                            aria-label={`Move ${item.title} earlier`}
-                                          >
-                                            <ArrowUp className="h-4 w-4" />
-                                          </Button>
-                                          <Button
-                                            variant="ghost"
-                                            size="icon"
-                                            className="h-7 w-7"
-                                            disabled={idx === sortedItems.length - 1}
-                                            onClick={() => handleMoveItem(sortedItems, idx, 1)}
-                                            aria-label={`Move ${item.title} later`}
-                                          >
-                                            <ArrowDown className="h-4 w-4" />
-                                          </Button>
-                                          <a
-                                            href={googleCalendarUrl(selectedTrip, item)}
-                                            target="_blank"
-                                            rel="noopener noreferrer"
-                                            className="h-7 w-7 inline-flex items-center justify-center rounded-md text-muted-foreground hover:bg-accent"
-                                            aria-label={`Add ${item.title} to Google Calendar`}
-                                            title="Add to Google Calendar"
-                                          >
-                                            <CalendarPlus className="h-4 w-4" />
-                                          </a>
-                                        </div>
-                                      </div>
-                                    ))}
-                                </div>
-                              </CardContent>
-                            )}
-                          </Card>
-                        );
-                      })}
-                    </div>
-                  ) : (
-                    <Alert>
-                      <AlertCircle className="h-4 w-4" />
-                      <AlertDescription>
-                        No itinerary items found. Try generating a new itinerary.
-                      </AlertDescription>
-                    </Alert>
-                  )}
-
-                  {/* Tips and Packing List */}
-                  {(selectedTrip.tips || selectedTrip.packingList) && (
-                    <div className="grid md:grid-cols-2 gap-6">
-                      {selectedTrip.tips && selectedTrip.tips.length > 0 && (
-                        <Card>
-                          <CardHeader>
-                            <CardTitle className="text-lg flex items-center gap-2">
-                              <Lightbulb className="h-5 w-5" />
-                              Trip Tips
-                            </CardTitle>
-                          </CardHeader>
-                          <CardContent>
-                            <ul className="space-y-2">
-                              {selectedTrip.tips.map((tip, idx) => (
-                                <li key={idx} className="flex items-start gap-2 text-sm">
-                                  <Check className="h-4 w-4 text-green-500 mt-0.5 shrink-0" />
-                                  {tip}
-                                </li>
-                              ))}
-                            </ul>
-                          </CardContent>
-                        </Card>
-                      )}
-                      {selectedTrip.packingList && selectedTrip.packingList.length > 0 && (
-                        <Card>
-                          <CardHeader>
-                            <CardTitle className="text-lg flex items-center gap-2">
-                              <Download className="h-5 w-5" />
-                              Packing List
-                            </CardTitle>
-                          </CardHeader>
-                          <CardContent>
-                            <ul className="space-y-2">
-                              {selectedTrip.packingList.map((item, idx) => (
-                                <li key={idx} className="flex items-center gap-2 text-sm">
-                                  <Checkbox id={`pack-${idx}`} />
-                                  <label htmlFor={`pack-${idx}`}>{item}</label>
-                                </li>
-                              ))}
-                            </ul>
-                          </CardContent>
-                        </Card>
-                      )}
-                    </div>
-                  )}
-                </div>
-              ) : (
-                <Card className="text-center py-12">
-                  <CardContent>
-                    <SpriteIcon name="sparkles" className="h-12 w-12 mx-auto text-muted-foreground mb-4" />
-                    <h3 className="text-lg font-medium mb-2">No itinerary selected</h3>
-                    <p className="text-muted-foreground mb-4">
-                      Generate a new itinerary or select one from your saved trips.
-                    </p>
-                    <Button onClick={() => (document.querySelector('[value="plan"]') as HTMLElement | null)?.click()}>
-                      Plan a Trip
-                    </Button>
-                  </CardContent>
-                </Card>
-              )}
-            </TabsContent>
-
-            {/* My Trips Tab */}
-            <TabsContent value="my-trips">
-              {!user ? (
-                <Card className="text-center py-12">
-                  <CardContent>
-                    <SpriteIcon name="users" className="h-12 w-12 mx-auto text-muted-foreground mb-4" />
-                    <h3 className="text-lg font-medium mb-2">Sign in to see your trips</h3>
-                    <p className="text-muted-foreground mb-4">
-                      Create an account to save and manage your itineraries.
-                    </p>
-                    <Button asChild>
-                      <Link to="/auth?redirect=/trip-planner">Sign In</Link>
-                    </Button>
-                  </CardContent>
-                </Card>
-              ) : isLoadingTrips ? (
-                <div className="space-y-4">
-                  {[1, 2, 3].map(i => (
-                    <Card key={i}>
-                      <CardContent className="p-6">
-                        <Skeleton className="h-6 w-48 mb-2" />
-                        <Skeleton className="h-4 w-full mb-4" />
-                        <Skeleton className="h-4 w-32" />
-                      </CardContent>
-                    </Card>
-                  ))}
-                </div>
-              ) : tripsError ? (
-                // WEB-QA-031: "No trips yet" with a Plan Your First Trip
-                // button is told to someone whose saved itineraries simply
-                // failed to load - the flagship AI feature reporting that
-                // their work does not exist.
-                <ErrorState error={tripsError} onRetry={() => void refetchTrips()} />
-              ) : tripPlans.length === 0 ? (
-                <Card className="text-center py-12">
-                  <CardContent>
-                    <SpriteIcon name="calendar" className="h-12 w-12 mx-auto text-muted-foreground mb-4" />
-                    <h3 className="text-lg font-medium mb-2">No trips yet</h3>
-                    <p className="text-muted-foreground mb-4">
-                      Start planning your first Des Moines adventure!
-                    </p>
-                    <Button onClick={() => (document.querySelector('[value="plan"]') as HTMLElement | null)?.click()}>
-                      Plan Your First Trip
-                    </Button>
-                  </CardContent>
-                </Card>
-              ) : (
-                <div className="grid md:grid-cols-2 lg:grid-cols-3 gap-4">
-                  {tripPlans.map(trip => (
-                    <Card
-                      key={trip.id}
-                      className="cursor-pointer hover:shadow-lg transition-shadow"
-                      onClick={() => handleViewTrip(trip)}
-                    >
-                      <CardHeader>
-                        <div className="flex items-start justify-between">
-                          <CardTitle className="text-lg line-clamp-1">{trip.title}</CardTitle>
-                          {trip.ai_generated && (
-                            <Badge className="shrink-0">
-                              <SpriteIcon name="sparkles" className="h-3 w-3" />
-                            </Badge>
-                          )}
-                        </div>
-                        <CardDescription className="line-clamp-2">
-                          {trip.description}
-                        </CardDescription>
-                      </CardHeader>
-                      <CardContent>
-                        <div className="flex flex-wrap gap-2 text-sm text-muted-foreground">
-                          <span className="flex items-center gap-1">
-                            <SpriteIcon name="calendar" className="h-3 w-3" />
-                            {format(new Date(trip.start_date), 'MMM d')} -{' '}
-                            {format(new Date(trip.end_date), 'MMM d')}
-                          </span>
-                          {trip.total_estimated_cost && (
-                            <span className="flex items-center gap-1">
-                              <DollarSign className="h-3 w-3" />
-                              {trip.total_estimated_cost}
-                            </span>
-                          )}
-                        </div>
-                      </CardContent>
-                      <CardFooter className="flex justify-between">
-                        <Badge variant="secondary">{trip.status}</Badge>
-                        <Button size="sm" variant="ghost">
-                          View <SpriteIcon name="arrow-right" className="h-4 w-4 ml-1" />
-                        </Button>
-                      </CardFooter>
-                    </Card>
-                  ))}
-                </div>
-              )}
-            </TabsContent>
-          </Tabs>
-          </PremiumGate>
         </div>
-
-        {/* FAQ Section */}
-        <section className="py-16 bg-muted/30" aria-labelledby="trip-faq-heading">
-          <div className="max-w-4xl mx-auto px-4 sm:px-6 lg:px-8">
-            <FAQSection
-              title="AI Trip Planner - Frequently Asked Questions"
-              description="Common questions about planning your Des Moines trip with our AI assistant."
-              faqs={[
-                {
-                  question: "How does the AI Trip Planner work?",
-                  answer: "Our AI Trip Planner uses advanced AI to create personalized Des Moines itineraries based on your preferences, travel dates, group size, and interests. Simply tell us what you enjoy and we'll suggest the best restaurants, events, attractions, and activities for your visit."
-                },
-                {
-                  question: "Is the AI Trip Planner free to use?",
-                  answer: "The AI Trip Planner is available to Insider subscribers ($4.99/month) with 5 trips per month, and VIP subscribers ($12.99/month) with unlimited trips. Start with a 7-day free trial to try it out! Premium subscribers also get detailed time-block scheduling and restaurant reservation suggestions."
-                },
-                {
-                  question: "What is the best time to visit Des Moines?",
-                  answer: "Des Moines is great year-round! Summer (June-August) offers the Iowa State Fair, outdoor festivals, and farmers markets. Fall (September-October) features beautiful foliage and harvest festivals. Spring brings the Drake Relays and blooming botanical gardens. Winter has holiday markets, indoor attractions, and cozy dining experiences."
-                },
-                {
-                  question: "How many days should I plan for a Des Moines trip?",
-                  answer: "A 2-3 day trip covers the highlights: downtown dining, Pappajohn Sculpture Park, Science Center of Iowa, and the East Village. For a deeper experience including day trips to nearby attractions like Adventureland or the Bridges of Madison County, plan 4-5 days."
-                },
-                {
-                  question: "Can I customize my AI-generated itinerary?",
-                  answer: "Absolutely! After the AI generates your itinerary, you can swap activities, adjust timing, add your own stops, and save multiple versions. The itinerary is fully editable and can be exported to your calendar or printed as a checklist."
-                }
-              ]}
-              showSchema={true}
-              className="border-0 shadow-lg"
-            />
-          </div>
-        </section>
-
-        <Footer />
-        <EmailCaptureModal
-          open={showEmailCapture}
-          onOpenChange={setShowEmailCapture}
-          source="trip_planner"
-        />
-        <UpgradeModal
-          open={showPaywall}
-          onOpenChange={setShowPaywall}
-          feature="trip_planner"
-        />
+        <div className="flex flex-wrap gap-2">
+          {/* Share publishes to /trips/shared/:code, which doesn't exist yet
+              (plan-stay D10), and trip storage is itself behind D1. */}
+          {AI_PLANNER_AVAILABLE && (
+            <Button variant="outline" className="min-h-11" onClick={() => void handleShare()}>
+              <SpriteIcon name="share-2" className="mr-1 h-4 w-4" />
+              Share
+            </Button>
+          )}
+          <Button variant="outline" className="min-h-11" onClick={handleAddToCalendar} disabled={items.length === 0}>
+            <CalendarPlus className="mr-1 h-4 w-4" aria-hidden="true" />
+            Add to calendar
+          </Button>
+          <AlertDialog>
+            <AlertDialogTrigger asChild>
+              <Button variant="outline" className="min-h-11">
+                <Trash2 className="mr-1 h-4 w-4" aria-hidden="true" />
+                Delete
+              </Button>
+            </AlertDialogTrigger>
+            <AlertDialogContent>
+              <AlertDialogHeader>
+                <AlertDialogTitle>Delete this trip?</AlertDialogTitle>
+                <AlertDialogDescription>
+                  "{trip.title}" and all its stops will be removed. This can't be undone.
+                </AlertDialogDescription>
+              </AlertDialogHeader>
+              <AlertDialogFooter>
+                <AlertDialogCancel>Keep it</AlertDialogCancel>
+                <AlertDialogAction onClick={() => void handleDelete()}>Delete trip</AlertDialogAction>
+              </AlertDialogFooter>
+            </AlertDialogContent>
+          </AlertDialog>
+        </div>
       </div>
-    </>
+
+      {tripStops.length > 0 && (
+        <div className="relative h-72 overflow-hidden rounded-xl border">
+          <Suspense fallback={<div className="absolute inset-0 animate-pulse bg-muted" />}>
+            <DiscoverMapCanvas
+              entities={tripStops}
+              selectedId={null}
+              onSelect={() => {}}
+              onBoundsChange={() => {}}
+              flyTo={null}
+            />
+          </Suspense>
+        </div>
+      )}
+
+      {items.length > 0 ? (
+        <TripItineraryDays
+          trip={trip}
+          items={items}
+          onMoveItem={handleMoveItem}
+          onAddDayToCalendar={handleAddDayToCalendar}
+        />
+      ) : (
+        <p className="rounded-xl border p-4 text-sm text-muted-foreground">
+          This trip has no stops. Try generating a new itinerary.
+        </p>
+      )}
+
+      {(trip.tips?.length || trip.packingList?.length) ? (
+        <div className="grid gap-6 md:grid-cols-2">
+          {trip.tips && trip.tips.length > 0 && (
+            <section className="rounded-xl border p-4">
+              <h4 className="mb-3 flex items-center gap-2 text-lg font-semibold">
+                <Lightbulb className="h-5 w-5" aria-hidden="true" />
+                Trip tips
+              </h4>
+              <ul className="space-y-2">
+                {trip.tips.map((tip, idx) => (
+                  <li key={idx} className="flex items-start gap-2 text-sm">
+                    <Check className="mt-0.5 h-4 w-4 shrink-0 text-primary" aria-hidden="true" />
+                    {tip}
+                  </li>
+                ))}
+              </ul>
+            </section>
+          )}
+          {trip.packingList && trip.packingList.length > 0 && (
+            <section className="rounded-xl border p-4">
+              <h4 className="mb-3 flex items-center gap-2 text-lg font-semibold">
+                <Download className="h-5 w-5" aria-hidden="true" />
+                Packing list
+              </h4>
+              <ul className="space-y-2">
+                {trip.packingList.map((entry, idx) => (
+                  <li key={idx} className="flex min-h-11 items-center gap-2 text-sm">
+                    <Checkbox id={`pack-${idx}`} />
+                    <label htmlFor={`pack-${idx}`}>{entry}</label>
+                  </li>
+                ))}
+              </ul>
+            </section>
+          )}
+        </div>
+      ) : null}
+    </div>
+  );
+}
+
+function MyTrips({
+  planner,
+  onPlan,
+  onOpen,
+}: {
+  planner: Planner;
+  onPlan: () => void;
+  onOpen: (trip: TripPlan) => void;
+}) {
+  const { tripPlans, isLoadingTrips, tripsError, refetchTrips } = planner;
+
+  if (isLoadingTrips) {
+    return (
+      <div className="space-y-4" aria-busy="true">
+        {[1, 2, 3].map((i) => (
+          <div key={i} className="rounded-xl border p-6">
+            <Skeleton className="mb-2 h-6 w-48" />
+            <Skeleton className="mb-4 h-4 w-full" />
+            <Skeleton className="h-4 w-32" />
+          </div>
+        ))}
+      </div>
+    );
+  }
+  if (tripsError) {
+    // WEB-QA-031: a failed load is not "No trips yet".
+    return <ErrorState error={tripsError} onRetry={() => void refetchTrips()} />;
+  }
+  if (tripPlans.length === 0) {
+    return (
+      <EmptyPanel
+        title="No trips yet"
+        body="Your AI itineraries will be saved here."
+        action={<Button onClick={onPlan}>Plan your first trip</Button>}
+      />
+    );
+  }
+  return (
+    <ul className="grid gap-4 md:grid-cols-2 lg:grid-cols-3">
+      {tripPlans.map((trip) => (
+        <li key={trip.id}>
+          <button
+            type="button"
+            onClick={() => onOpen(trip)}
+            className="flex h-full w-full flex-col gap-2 rounded-xl border p-4 text-left transition-colors hover:bg-muted/50 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring"
+          >
+            <span className="line-clamp-1 text-lg font-semibold">{trip.title}</span>
+            {trip.description && (
+              <span className="line-clamp-2 text-sm text-muted-foreground">{trip.description}</span>
+            )}
+            <span className="text-sm text-muted-foreground">{tripRangeLabel(trip, false)}</span>
+            <span className="mt-auto flex items-center justify-between pt-2">
+              <Badge variant="secondary">{trip.status}</Badge>
+              <span className="text-sm font-medium text-primary">View</span>
+            </span>
+          </button>
+        </li>
+      ))}
+    </ul>
   );
 }

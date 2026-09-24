@@ -18,6 +18,7 @@ import {
   type CentralWindowPreset,
 } from "@/lib/timezone";
 import type { Event } from "@/lib/types";
+import type { IndoorFlagMap } from "@/hooks/useEventIndoorFlags";
 
 /**
  * One query path for the date and audience landings (docs/page-plans/events.md
@@ -51,6 +52,12 @@ export interface EventLandingOptions {
   /** Row cap for the request. */
   limit?: number;
   enabled?: boolean;
+  /**
+   * Also return events that started before the window and are still running
+   * at its start (end_date on or after it). Only meaningful with `window`.
+   * A three-day festival that opened Thursday is part of the weekend.
+   */
+  includeOngoing?: boolean;
 }
 
 const DEFAULT_LIMIT = 100;
@@ -61,7 +68,14 @@ const DEFAULT_LIMIT = 100;
  * from the same bounds the rows came from.
  */
 export function useEventLanding(options: EventLandingOptions) {
-  const { key, window: preset, or, limit = DEFAULT_LIMIT, enabled = true } = options;
+  const {
+    key,
+    window: preset,
+    or,
+    limit = DEFAULT_LIMIT,
+    enabled = true,
+    includeOngoing = false,
+  } = options;
   const now = new Date();
   const window: CentralWindow | null = preset ? centralWindow(preset, now) : null;
   const from = window ? window.start : upcomingFloorUtc(now);
@@ -70,13 +84,26 @@ export function useEventLanding(options: EventLandingOptions) {
   const query = useQuery({
     // Under queryKeys.events.list so invalidateEvents reaches every landing.
     // The bounds are in the key, so crossing midnight Central refetches.
-    queryKey: queryKeys.events.list({ ...key, from, to, or: or ?? null, limit }),
+    queryKey: queryKeys.events.list({
+      ...key,
+      from,
+      to,
+      or: or ?? null,
+      limit,
+      ongoing: includeOngoing && to ? true : null,
+    }),
     queryFn: async (): Promise<LandingEvent[]> => {
-      let request = applyEventVisibility(
-        supabase.from("events").select(EVENT_LIST_COLUMNS)
-      ).gte("date", from);
+      let request = applyEventVisibility(supabase.from("events").select(EVENT_LIST_COLUMNS));
+      const ongoing = includeOngoing && to ? ongoingStartFilter(from) : null;
+      if (ongoing) {
+        // One or() for both, because a second .or() is a second `or` query
+        // param and PostgREST does not promise to AND duplicates.
+        request = request.or(or ? `and(or(${ongoing}),or(${or}))` : ongoing);
+      } else {
+        request = request.gte("date", from);
+        if (or) request = request.or(or);
+      }
       if (to) request = request.lte("date", to);
-      if (or) request = request.or(or);
       const { data, error } = await request
         .order("date", { ascending: true })
         .limit(limit);
@@ -89,6 +116,62 @@ export function useEventLanding(options: EventLandingOptions) {
 
   return { ...query, window };
 }
+
+/**
+ * The PostgREST or() body for "starts at or after `from`, or started earlier
+ * and is still running at `from`". The instant is double-quoted because it
+ * holds ":" and ".", which or() otherwise reads as syntax.
+ */
+export function ongoingStartFilter(from: string): string {
+  const at = `"${from}"`;
+  return `date.gte.${at},and(date.lt.${at},end_date.gte.${at})`;
+}
+
+/**
+ * is_indoor for the events in one Central window, fetched by the window's
+ * bounds rather than by a list of ids (the weekend page used to send up to
+ * 500 UUIDs in one `in.()` filter).
+ *
+ * Same degradation contract as useEventIndoorFlags: any error, including the
+ * column not being deployed yet, yields an empty map, and reorderForWeather
+ * then keeps the list's own order. Never a toast, never a thrown error.
+ */
+export function useWindowIndoorFlags(
+  window: CentralWindow | null,
+  enabled: boolean,
+): IndoorFlagMap {
+  const query = useQuery<IndoorFlagMap>({
+    queryKey: ["event-indoor-flags", "window", window?.start ?? null, window?.end ?? null],
+    enabled: enabled && window !== null,
+    staleTime: 30 * 60 * 1000,
+    gcTime: 60 * 60 * 1000,
+    retry: false,
+    refetchOnWindowFocus: false,
+    queryFn: async (): Promise<IndoorFlagMap> => {
+      if (!window) return EMPTY_FLAGS;
+      const { data, error } = await applyEventVisibility(
+        supabase.from("events").select("id, is_indoor")
+      )
+        .or(ongoingStartFilter(window.start))
+        .lte("date", window.end)
+        .limit(INDOOR_FLAG_LIMIT);
+      // Expected until the is_indoor migration is applied; a designed
+      // degradation, so no handleError and no toast.
+      if (error) return EMPTY_FLAGS;
+      const map: Record<string, boolean | null> = {};
+      // Through `unknown`: until the is_indoor migration is in the generated
+      // types, the select resolves to a SelectQueryError type.
+      for (const row of (data ?? []) as unknown as { id: string; is_indoor: boolean | null }[]) {
+        map[row.id] = row.is_indoor ?? null;
+      }
+      return map;
+    },
+  });
+  return query.data ?? EMPTY_FLAGS;
+}
+
+const EMPTY_FLAGS: IndoorFlagMap = Object.freeze({});
+const INDOOR_FLAG_LIMIT = 500;
 
 // ---------------------------------------------------------------------------
 // Pure helpers the landings share. Exported for tests.
@@ -202,15 +285,30 @@ export function groupTodayEvents(
   return groups.filter((g) => g.events.length > 0);
 }
 
+/** The Central calendar day an event ends on, or null without a usable end_date. */
+export function landingEndDay(event: LandingEvent): CentralDate | null {
+  if (!event.end_date) return null;
+  const parsed = new Date(event.end_date);
+  return Number.isNaN(parsed.getTime()) ? null : centralDateOf(parsed);
+}
+
 /**
  * One group per Central day from `from` to `to`, empty days included, so a
  * weekend page always shows Friday, Saturday and Sunday and says when one of
  * them has nothing on.
+ *
+ * `carryTo` (default `from`) is the day a still-running event is listed on
+ * when it started earlier: a festival that opened Thursday and runs through
+ * Sunday shows on Friday, and on Saturday the page passes Saturday so it is
+ * not tucked under a day that has already passed. An event that started
+ * before `carryTo` and ended before it stays on its own day, or is dropped
+ * when that day is outside the window.
  */
 export function groupByCentralDay(
   events: readonly LandingEvent[],
   from: CentralDate,
-  to: CentralDate
+  to: CentralDate,
+  carryTo: CentralDate = from
 ): LandingGroup[] {
   const groups: LandingGroup[] = [];
   for (let day = from; day <= to; day = addCentralDays(day, 1)) {
@@ -218,10 +316,47 @@ export function groupByCentralDay(
   }
   const byDay = new Map(groups.map((g) => [g.id, g]));
   for (const event of events) {
-    const day = landingDay(event);
-    if (day) byDay.get(day)?.events.push(event);
+    let day = landingDay(event);
+    if (!day) continue;
+    if (day < carryTo) {
+      const endDay = landingEndDay(event);
+      if (endDay && endDay >= carryTo) day = carryTo;
+    }
+    byDay.get(day)?.events.push(event);
   }
   return groups;
+}
+
+export type DayPhase = "past" | "today" | "upcoming";
+
+/** Where a Central day sits against today's Central date. */
+export function dayPhase(day: CentralDate, today: CentralDate): DayPhase {
+  if (day < today) return "past";
+  return day === today ? "today" : "upcoming";
+}
+
+/**
+ * Editor picks for a date window: featured events first, then events with a
+ * generated write-up, each in list order (the query orders by date),
+ * skipping anything already over.
+ * `now` decides "over": an event counts until its end_date, or until the end
+ * of its Central day when it has none.
+ */
+export function landingPicks(
+  events: readonly LandingEvent[],
+  now: Date = new Date(),
+  max = 3
+): LandingEvent[] {
+  const today = centralDateOf(now);
+  const notOver = (event: LandingEvent): boolean => {
+    const end = landingEndDay(event) ?? landingDay(event);
+    return end !== null && end >= today;
+  };
+  const featured = events.filter((e) => e.is_featured === true && notOver(e));
+  const written = events.filter(
+    (e) => e.is_featured !== true && !!e.writeup_generated_at && notOver(e)
+  );
+  return [...featured, ...written].slice(0, max);
 }
 
 /**

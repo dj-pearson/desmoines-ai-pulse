@@ -1,9 +1,10 @@
 import { Link } from "react-router-dom";
 import { Card, CardContent } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
-import { Star, Wifi, Car, Coffee, Dumbbell, PawPrint } from "lucide-react";
+import { Star } from "lucide-react";
 import { Database } from "@/integrations/supabase/types";
-import { getHotelTypeGradient, STATUS_BADGE } from "@/lib/categoryStyles";
+import { STATUS_BADGE } from "@/lib/categoryStyles";
+import { hotelRateLabel, resolveBooking } from "@/lib/hotelBooking";
 import { SpriteIcon } from "@/components/ui/SpriteIcon";
 
 type Hotel = Database["public"]["Tables"]["hotels"]["Row"];
@@ -12,15 +13,12 @@ interface HotelCardProps {
   hotel: Hotel;
   variant?: "default" | "compact" | "featured";
   showBookButton?: boolean;
+  /**
+   * "1.2 mi from Wells Fargo Arena (straight line)" when the list is sorted by
+   * distance to a place (plan-stay WP2 item 7). Omitted otherwise.
+   */
+  distanceLabel?: string;
 }
-
-const amenityIcons: Record<string, React.ElementType> = {
-  "Pool": Wifi,
-  "Fitness Center": Dumbbell,
-  "Free Breakfast": Coffee,
-  "Free Parking": Car,
-  "Pet Friendly": PawPrint,
-};
 
 function renderStars(rating: number | null) {
   if (!rating) return null;
@@ -34,59 +32,65 @@ function renderStars(rating: number | null) {
   if (hasHalf) {
     stars.push(<Star key="half" className="h-3.5 w-3.5 fill-yellow-400/50 text-yellow-400" />);
   }
-  return <div className="flex items-center gap-0.5">{stars}</div>;
+  return (
+    <div className="flex items-center gap-0.5" role="img" aria-label={`${rating} stars`}>
+      {stars}
+    </div>
+  );
 }
 
-export default function HotelCard({ hotel, variant = "default", showBookButton = true }: HotelCardProps) {
+export default function HotelCard({
+  hotel,
+  variant = "default",
+  showBookButton = true,
+  distanceLabel,
+}: HotelCardProps) {
   const imageHeight = variant === "compact" ? "h-36" : variant === "featured" ? "h-56" : "h-48";
-  const bookUrl = hotel.affiliate_url || hotel.website;
+  // One booking truth (plan-stay WP2 item 4): only an http(s) URL renders, an
+  // affiliate link says whose it is, and a plain website is not "sponsored".
+  const booking = resolveBooking(hotel);
+  const rateLabel = hotelRateLabel(hotel.avg_nightly_rate);
 
   return (
-    <Card className="group overflow-hidden hover:shadow-lg transition-all duration-200 hover:-translate-y-1">
+    <Card className="group overflow-hidden transition-shadow duration-200 hover:shadow-md">
       <Link to={`/stay/${hotel.slug}`} className="block">
-        <div className={`relative ${imageHeight} overflow-hidden`}>
+        <div className={`relative ${imageHeight} overflow-hidden bg-muted`}>
           {hotel.image_url ? (
             <img
               src={hotel.image_url}
               alt={hotel.name}
               width={640}
               height={192}
-              className="w-full h-full object-cover group-hover:scale-105 transition-transform duration-200"
+              className="w-full h-full object-cover"
               loading="lazy"
               decoding="async"
             />
           ) : (
-            <div className={`w-full h-full bg-gradient-to-br ${getHotelTypeGradient(hotel.hotel_type)} flex items-center justify-center`} role="img" aria-label={`No image available for ${hotel.name}`}>
-              <SpriteIcon name="building-2" className="h-12 w-12 text-white/70" />
+            <div
+              className="w-full h-full flex items-center justify-center"
+              role="img"
+              aria-label={`No image available for ${hotel.name}`}
+            >
+              <SpriteIcon name="building-2" className="h-12 w-12 text-muted-foreground" />
             </div>
           )}
 
-          {/* Price range badge */}
           {hotel.price_range && (
             <Badge className="absolute top-3 right-3 bg-black/70 text-white border-0 text-xs">
               {hotel.price_range}
             </Badge>
           )}
 
-          {/* Featured badge */}
           {hotel.is_featured && (
             <Badge className={`absolute top-3 left-3 ${STATUS_BADGE.featured} border-0 text-xs`}>
               Featured
             </Badge>
           )}
-
-          {/* Hover CTA */}
-          <div className="absolute inset-0 bg-black/0 group-hover:bg-black/20 transition-colors duration-200 flex items-end justify-center pb-4">
-            <span className="text-white text-sm font-medium opacity-0 group-hover:opacity-100 translate-y-2 group-hover:translate-y-0 transition-all duration-200 bg-black/60 px-4 py-1.5 rounded-full">
-              View Hotel Details
-            </span>
-          </div>
         </div>
       </Link>
 
       <CardContent className="p-4">
         <div className="space-y-2">
-          {/* Name and star rating */}
           <div className="flex items-start justify-between gap-2">
             <Link to={`/stay/${hotel.slug}`} className="hover:underline">
               <h3 className="font-semibold text-sm line-clamp-1">{hotel.name}</h3>
@@ -94,17 +98,15 @@ export default function HotelCard({ hotel, variant = "default", showBookButton =
             {renderStars(hotel.star_rating)}
           </div>
 
-          {/* Brand info */}
           {(hotel.chain_name || hotel.brand_parent) && (
             <p className="text-xs text-muted-foreground">
               {hotel.chain_name || hotel.brand_parent}
               {hotel.chain_name && hotel.brand_parent && hotel.chain_name !== hotel.brand_parent && (
-                <span className="text-muted-foreground/60"> by {hotel.brand_parent}</span>
+                <span> by {hotel.brand_parent}</span>
               )}
             </p>
           )}
 
-          {/* Area / location */}
           {hotel.area && (
             <div className="flex items-center gap-1 text-xs text-muted-foreground">
               <SpriteIcon name="map-pin" className="h-3 w-3 flex-shrink-0" />
@@ -112,12 +114,16 @@ export default function HotelCard({ hotel, variant = "default", showBookButton =
             </div>
           )}
 
-          {/* Short description */}
+          {distanceLabel && (
+            <p className="text-xs font-medium">
+              {distanceLabel}
+            </p>
+          )}
+
           {hotel.short_description && (
             <p className="text-xs text-muted-foreground line-clamp-2">{hotel.short_description}</p>
           )}
 
-          {/* Amenities preview */}
           {hotel.amenities && hotel.amenities.length > 0 && (
             <div className="flex flex-wrap gap-1">
               {hotel.amenities.slice(0, 4).map((amenity) => (
@@ -133,27 +139,29 @@ export default function HotelCard({ hotel, variant = "default", showBookButton =
             </div>
           )}
 
-          {/* Price and book button */}
-          <div className="flex items-center justify-between pt-2 border-t">
-            {hotel.avg_nightly_rate ? (
-              <span className="text-sm font-semibold">
-                From ${hotel.avg_nightly_rate}<span className="text-xs font-normal text-muted-foreground">/night</span>
-              </span>
-            ) : (
-              <span className="text-xs text-muted-foreground">Contact for rates</span>
-            )}
+          {/* Rate and booking. The rate is a seeded, unrefreshed figure, so it
+              is worded as typical rather than as a price (WP2 item 5). */}
+          <div className="pt-2 border-t space-y-1">
+            <p className="text-xs text-muted-foreground">
+              {rateLabel ?? "Check the hotel for current rates"}
+            </p>
 
-            {showBookButton && bookUrl && (
-              <a
-                href={bookUrl}
-                target="_blank"
-                rel="noopener noreferrer sponsored"
-                className="inline-flex items-center gap-1 text-xs font-medium text-primary hover:text-primary/80 transition-colors"
-                onClick={(e) => e.stopPropagation()}
-              >
-                Book Now
-                <SpriteIcon name="external-link" className="h-3 w-3" />
-              </a>
+            {showBookButton && booking && (
+              <div className="flex flex-wrap items-center justify-between gap-x-3">
+                <a
+                  href={booking.href}
+                  target="_blank"
+                  rel={booking.rel}
+                  className="-ml-3 inline-flex min-h-11 items-center gap-1 rounded-md px-3 text-xs font-medium text-primary hover:text-primary/80 hover:underline"
+                >
+                  {booking.label}
+                  <SpriteIcon name="external-link" className="h-3 w-3" />
+                  <span className="sr-only"> (opens in a new tab)</span>
+                </a>
+                {booking.isAffiliate && (
+                  <span className="text-[11px] text-muted-foreground">Affiliate link</span>
+                )}
+              </div>
             )}
           </div>
         </div>

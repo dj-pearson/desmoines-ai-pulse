@@ -88,6 +88,7 @@ export function NewsletterSignup({
         <Input
           type="email"
           placeholder="Enter your email"
+          aria-label="Email address"
           value={email}
           onChange={(e) => setEmail(e.target.value)}
           required

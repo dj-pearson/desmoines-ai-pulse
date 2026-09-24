@@ -22,6 +22,8 @@ import { BreadcrumbListSchema } from "@/components/schema/BreadcrumbListSchema";
 import { BRAND, getCanonicalUrl } from "@/lib/brandConfig";
 import { SpriteIcon } from "@/components/ui/SpriteIcon";
 import { OptimizedImage } from "@/components/OptimizedImage";
+import { AFFILIATE_DISCLOSURE, hotelRateLabel, resolveBooking, safeWebUrl } from "@/lib/hotelBooking";
+import { telHref } from "@/lib/reservations";
 
 function StarRating({ rating }: { rating: number }) {
   const stars = [];
@@ -45,15 +47,12 @@ export default function HotelDetails() {
   const { slug } = useParams<{ slug: string }>();
   const { hotel, isLoading, error, refetch } = useHotel(slug);
 
-  // WEB-FEAT-012. Three call sites below read hotel.source_url, a column
-  // public.hotels does not have — confirmed live, the REST API returns 42703
-  // "column hotels.source_url does not exist". So it was always undefined, the
-  // "Book Now" ternary was always falsy, and the monetized booking CTA never
-  // rendered on any hotel page. Resolve it once here so the three uses cannot
-  // drift apart again. affiliate_url first because that is the monetized link
-  // (it sits next to affiliate_provider and affiliate_url_updated_at); website
-  // is the fallback, and today it is the one that is actually populated.
-  const bookingUrl = hotel?.affiliate_url ?? hotel?.website ?? undefined;
+  // WEB-FEAT-012 resolved the booking link once so its call sites could not
+  // drift; it then drifted anyway (`??` here, `||` further down). plan-stay
+  // WP2 item 4 moves the decision into resolveBooking(): http(s) only, the
+  // affiliate link first and labelled with its provider, the website second
+  // and not marked sponsored. Every link below reads this one value.
+  const booking = resolveBooking(hotel);
 
 
   if (isLoading) {
@@ -124,7 +123,11 @@ export default function HotelDetails() {
     );
   }
 
-  const bookUrl = hotel.affiliate_url || hotel.website;
+  // Row text is not trusted as an href (WP2 item 3). The hotel's own site is
+  // what OpenStatusChip links to, never the affiliate URL.
+  const websiteUrl = safeWebUrl(hotel.website);
+  const phoneHref = telHref(hotel.phone);
+  const rateLabel = hotelRateLabel(hotel.avg_nightly_rate);
   const fullAddress = [hotel.address, hotel.city, hotel.state, hotel.zip]
     .filter(Boolean)
     .join(", ");
@@ -229,8 +232,8 @@ export default function HotelDetails() {
                 containerClassName="absolute inset-0"
               />
             ) : (
-              <div className="w-full h-full bg-gradient-to-br from-[#1a0f3c] via-[#2D1B69] to-[#DC143C] flex items-center justify-center">
-                <SpriteIcon name="building-2" className="h-20 w-20 text-white/50" />
+              <div className="w-full h-full bg-muted flex items-center justify-center">
+                <SpriteIcon name="building-2" className="h-20 w-20 text-muted-foreground" />
               </div>
             )}
             {hotel.is_featured && (
@@ -346,30 +349,26 @@ export default function HotelDetails() {
               {/* Book Now card */}
               <Card className="border-primary/20">
                 <CardContent className="p-6">
-                  {hotel.avg_nightly_rate && (
-                    <div className="mb-4">
-                      <span className="text-3xl font-bold">${hotel.avg_nightly_rate}</span>
-                      <span className="text-muted-foreground">/night</span>
-                      <p className="text-xs text-muted-foreground mt-1">Average nightly rate</p>
-                    </div>
-                  )}
-                  {bookUrl && (
-                    <a
-                      href={bookUrl}
-                      target="_blank"
-                      rel="noopener noreferrer sponsored"
-                      className="block"
-                    >
-                      <Button className="w-full h-12 text-base" size="lg">
-                        Book Now
+                  {/* WP2 item 5: a seeded figure nothing refreshes, worded as
+                      typical. Display only; the booking site sets the price. */}
+                  <p className="mb-4 text-sm text-muted-foreground">
+                    {rateLabel ?? "Check the hotel for current rates"}
+                  </p>
+                  {booking && (
+                    <Button asChild className="w-full h-12 text-base" size="lg">
+                      <a
+                        href={booking.href}
+                        target="_blank"
+                        rel={booking.rel}
+                      >
+                        {booking.label}
                         <SpriteIcon name="external-link" className="h-4 w-4 ml-2" />
-                      </Button>
-                    </a>
+                        <span className="sr-only"> (opens in a new tab)</span>
+                      </a>
+                    </Button>
                   )}
-                  {hotel.affiliate_provider && (
-                    <p className="text-xs text-muted-foreground text-center mt-2">
-                      via {hotel.affiliate_provider}
-                    </p>
+                  {booking?.isAffiliate && (
+                    <p className="text-xs text-muted-foreground mt-2">{AFFILIATE_DISCLOSURE}</p>
                   )}
                 </CardContent>
               </Card>
@@ -407,7 +406,7 @@ export default function HotelDetails() {
                       <div className="mt-2">
                         <OpenStatusChip
                           hours={null}
-                          website={bookingUrl}
+                          website={websiteUrl}
                           fallbackLabel="Check hotel site for hours & check-in"
                         />
                       </div>
@@ -431,9 +430,9 @@ export default function HotelDetails() {
                   <NearbyVenues latitude={hotel.latitude} longitude={hotel.longitude} placeName={hotel.name} />
 
                   {/* Phone */}
-                  {hotel.phone && (
+                  {hotel.phone && phoneHref && (
                     <a
-                      href={`tel:${hotel.phone}`}
+                      href={phoneHref}
                       className="flex items-center gap-3 text-sm hover:text-primary transition-colors"
                     >
                       <Phone className="h-5 w-5 text-primary flex-shrink-0" />
@@ -453,9 +452,9 @@ export default function HotelDetails() {
                   )}
 
                   {/* Website */}
-                  {hotel.website && (
+                  {websiteUrl && (
                     <a
-                      href={hotel.website}
+                      href={websiteUrl}
                       target="_blank"
                       rel="noopener noreferrer"
                       className="flex items-center gap-3 text-sm hover:text-primary transition-colors"
@@ -495,17 +494,18 @@ export default function HotelDetails() {
       <StickyMobileCTA
         variant="hotel"
         primaryAction={
-          bookingUrl
+          booking
             ? {
-                label: "Book Now",
-                href: bookingUrl,
+                label: booking.label,
+                href: booking.href,
                 icon: "external",
                 isExternal: true,
+                rel: booking.rel,
               }
-            : hotel.phone
+            : phoneHref
             ? {
                 label: "Call to Book",
-                href: `tel:${hotel.phone}`,
+                href: phoneHref,
                 icon: "phone",
               }
             : {
@@ -530,8 +530,8 @@ export default function HotelDetails() {
                 icon: "directions",
                 isExternal: true,
               }
-            : hotel.phone
-            ? { label: "Call", href: `tel:${hotel.phone}`, icon: "phone" }
+            : phoneHref
+            ? { label: "Call", href: phoneHref, icon: "phone" }
             : undefined
         }
       />

@@ -22,6 +22,8 @@ interface CTAAction {
   onClick?: () => void;
   icon: CTAIcon;
   isExternal?: boolean;
+  /** Overrides the default rel, e.g. "sponsored noopener noreferrer" for an affiliate link. */
+  rel?: string;
 }
 
 interface StickyMobileCTAProps {
@@ -59,7 +61,7 @@ export function StickyMobileCTA({
         <a
           href={action.href}
           target={action.isExternal ? "_blank" : undefined}
-          rel={action.isExternal ? "noopener noreferrer" : undefined}
+          rel={action.rel ?? (action.isExternal ? "noopener noreferrer" : undefined)}
           className={isPrimary ? "flex-1" : "flex-1"}
         >
           <Button

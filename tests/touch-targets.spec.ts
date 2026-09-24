@@ -39,7 +39,7 @@ test.use({
  */
 const INLINE_EXEMPT = ['Privacy Policy', 'hello@desmoinesinsider.com'];
 
-for (const route of ['/', '/events', '/contact']) {
+for (const route of ['/', '/events', '/contact', '/trip-planner']) {
   test(`${route} footer links are tappable at 375px`, async ({ page }) => {
     await page.goto(route, { waitUntil: 'domcontentloaded' });
     await expect(page.locator('footer')).toBeVisible({ timeout: 30_000 });

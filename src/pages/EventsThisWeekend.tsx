@@ -1,4 +1,4 @@
-import { useMemo } from "react";
+import { useMemo, useState } from "react";
 import { Link } from "react-router-dom";
 import { Filter } from "lucide-react";
 import Header from "@/components/Header";
@@ -18,17 +18,25 @@ import { ErrorState } from "@/components/ui/error-state";
 import { SkeletonGroup } from "@/components/ui/skeleton";
 import { useBatchEventSocial } from "@/hooks/useBatchEventSocial";
 import { useWeather, reorderForWeather } from "@/hooks/useWeather";
-import { useEventIndoorFlags } from "@/hooks/useEventIndoorFlags";
 import { useUrlFilters } from "@/hooks/useUrlFilters";
 import {
   useEventLanding,
+  useWindowIndoorFlags,
   groupByCentralDay,
   countFree,
   countStartingAfter5pm,
+  dayPhase,
   formatCentralDate,
+  landingPicks,
   type LandingEvent,
 } from "@/hooks/useEventLanding";
 import { BRAND, getCanonicalUrl } from "@/lib/brandConfig";
+import {
+  centralDateOf,
+  centralWindow,
+  createEventSlugWithCentralTime,
+  formatEventDateShort,
+} from "@/lib/timezone";
 import { formatCount } from "@/lib/pluralize";
 import { EVENTS_UPDATE_ANSWER } from "@/content/eventsCopy";
 
@@ -44,9 +52,13 @@ const VISIBLE_PER_DAY = 12;
 const EMPTY: LandingEvent[] = [];
 const ALL = "all";
 
-/** The first part of an address, "Wooly's, 504 E Locust" -> "Wooly's". */
+/**
+ * The city an event is in, for the Location chips. It was the first part of
+ * the venue string, which gave one chip per venue ("Wooly's", "Wooly's Des
+ * Moines", "Woolys") and no way to say "just West Des Moines".
+ */
 function placeOf(event: LandingEvent): string {
-  return (event.location || event.venue || "").split(",")[0].trim();
+  return (event.city ?? "").trim();
 }
 
 interface ChipGroupProps {
@@ -104,7 +116,17 @@ export default function EventsThisWeekend() {
     error,
     refetch,
     window: weekend,
-  } = useEventLanding({ key: { landing: "this-weekend" }, window: "this-weekend", limit: 500 });
+  } = useEventLanding({
+    key: { landing: "this-weekend" },
+    window: "this-weekend",
+    limit: 500,
+    includeOngoing: true,
+  });
+
+  // Friday to Sunday, today is one of the weekend days; Monday to Thursday
+  // the window is the coming weekend and no day is "today".
+  const today = centralDateOf(new Date());
+  const todayInWeekend = !!weekend && today >= weekend.startDay && today <= weekend.endDay;
 
   const filteredEvents = useMemo(
     () =>
@@ -117,30 +139,71 @@ export default function EventsThisWeekend() {
   );
 
   const { weather, hasVerdict } = useWeather();
-  // Separate request on purpose - see the header of useEventIndoorFlags.
-  const filteredIds = useMemo(() => filteredEvents.map((event) => event.id), [filteredEvents]);
-  const indoorFlags = useEventIndoorFlags(filteredIds, hasVerdict);
+  /**
+   * The weather verdict is the current NWS hour. It says nothing about
+   * Sunday when it is Friday, so it reorders today's group only, and only
+   * while today is a weekend day (plan-stay hand-off; per-day weather is D8).
+   * The flags come by today's bounds, not as a list of up to 500 ids.
+   */
+  const todayWindow = useMemo(
+    () => (todayInWeekend ? centralWindow({ kind: "single", date: today }) : null),
+    [todayInWeekend, today]
+  );
+  const indoorFlags = useWindowIndoorFlags(todayWindow, hasVerdict);
 
   /**
-   * One group per day, weather-ordered inside the day and then capped, so on a
-   * wet weekend the indoor options are the ones inside each day's 12.
-   * Reordering never filters.
+   * One group per day, capped at 12. Today's group is weather-ordered before
+   * the cap, so on a wet afternoon the indoor options are the ones inside
+   * today's 12. Reordering never filters. Days already over are collapsed.
    */
   const days = useMemo(() => {
     if (!weekend) return [];
-    return groupByCentralDay(filteredEvents, weekend.startDay, weekend.endDay).map((day) => {
-      const ordered = reorderForWeather(day.events, (event) => indoorFlags[event.id], weather);
-      return {
-        ...day,
-        anchor: `weekend-${formatCentralDate(day.id, "EEEE").toLowerCase()}`,
-        shortLabel: formatCentralDate(day.id, "EEEE"),
-        total: ordered.length,
-        events: ordered.slice(0, VISIBLE_PER_DAY),
-      };
-    });
-  }, [filteredEvents, weekend, indoorFlags, weather]);
+    const carryTo = todayInWeekend ? today : weekend.startDay;
+    return groupByCentralDay(filteredEvents, weekend.startDay, weekend.endDay, carryTo).map(
+      (day) => {
+        const phase = dayPhase(day.id, today);
+        const ordered =
+          phase === "today"
+            ? reorderForWeather(day.events, (event) => indoorFlags[event.id], weather)
+            : day.events;
+        return {
+          ...day,
+          phase,
+          anchor: `weekend-${formatCentralDate(day.id, "EEEE").toLowerCase()}`,
+          shortLabel: formatCentralDate(day.id, "EEEE"),
+          total: ordered.length,
+          events: ordered.slice(0, VISIBLE_PER_DAY),
+        };
+      }
+    );
+  }, [filteredEvents, weekend, today, todayInWeekend, indoorFlags, weather]);
 
-  const visibleEvents = useMemo(() => days.flatMap((day) => day.events), [days]);
+  const picks = useMemo(() => landingPicks(events), [events]);
+
+  /** Past days the reader opened. Closed ones render no cards at all. */
+  const [openPast, setOpenPast] = useState<ReadonlySet<string>>(() => new Set());
+  const togglePast = (dayId: string, open: boolean) =>
+    setOpenPast((prev) => {
+      if (prev.has(dayId) === open) return prev;
+      const next = new Set(prev);
+      if (open) next.add(dayId);
+      else next.delete(dayId);
+      return next;
+    });
+
+  // Past days are collapsed, so their cards are not rendered (or put in the
+  // schema) until someone opens them.
+  const visibleEvents = useMemo(
+    () => days.filter((day) => day.phase !== "past").flatMap((day) => day.events),
+    [days]
+  );
+  const renderedEvents = useMemo(
+    () =>
+      days
+        .filter((day) => day.phase !== "past" || openPast.has(day.id))
+        .flatMap((day) => day.events),
+    [days, openPast]
+  );
 
   const categories = useMemo(
     () => [...new Set(events.map((e) => e.category).filter(Boolean))].sort(),
@@ -199,7 +262,7 @@ export default function EventsThisWeekend() {
   ];
 
   // WEB-PERF-030: one batch query per table for the cards actually rendered.
-  const batchSocialIds = useMemo(() => visibleEvents.map((e) => e.id), [visibleEvents]);
+  const batchSocialIds = useMemo(() => renderedEvents.map((e) => e.id), [renderedEvents]);
   const { data: batchSocialData, isPending: batchSocialPending } =
     useBatchEventSocial(batchSocialIds);
 
@@ -334,7 +397,40 @@ export default function EventsThisWeekend() {
           </SkeletonGroup>
         ) : filteredEvents.length > 0 ? (
           <>
-            <WeatherNotice weather={weather} hasVerdict={hasVerdict} className="mb-6" />
+            {picks.length > 0 && weekend && (
+              <section aria-labelledby="weekend-picks" className="mb-8">
+                <h2 id="weekend-picks" className="text-2xl font-bold mb-3">
+                  Our weekend picks
+                </h2>
+                <ul className="divide-y rounded-xl border">
+                  {picks.map((event) => (
+                    <li key={event.id} className="p-4">
+                      <Link
+                        to={`/events/${createEventSlugWithCentralTime(event.title, event)}`}
+                        className="font-semibold text-primary hover:underline"
+                      >
+                        {event.title}
+                      </Link>
+                      <p className="text-sm text-muted-foreground">
+                        {[formatEventDateShort(event), event.venue || event.location]
+                          .filter(Boolean)
+                          .join(" - ")}
+                      </p>
+                    </li>
+                  ))}
+                </ul>
+                <p className="mt-3 text-sm">
+                  Visiting?{" "}
+                  <Link
+                    to={`/trip-planner?from=${weekend.startDay < today ? today : weekend.startDay}&to=${weekend.endDay}`}
+                    className="text-primary hover:underline font-medium"
+                  >
+                    Plan this weekend
+                  </Link>{" "}
+                  with events by day and hotels near them.
+                </p>
+              </section>
+            )}
 
             <nav aria-label="Jump to a day" className="mb-6 flex flex-wrap gap-2">
               {days.map((day) => (
@@ -346,14 +442,57 @@ export default function EventsThisWeekend() {
               ))}
             </nav>
 
-            {days.map((day) => (
-              <section key={day.id} aria-labelledby={day.anchor} className="mb-10 scroll-mt-24">
-                <h2 id={day.anchor} className="text-2xl font-bold mb-4">
+            {days.map((day) => {
+              const heading = (
+                <h2 id={day.anchor} className="text-2xl font-bold">
                   {day.label}{" "}
                   <span className="text-base font-normal text-muted-foreground">
                     ({formatCount(day.total, "event")})
                   </span>
                 </h2>
+              );
+              if (day.phase === "past") {
+                // Already over: one line, open on demand.
+                return (
+                  <section key={day.id} aria-labelledby={day.anchor} className="mb-6 scroll-mt-24">
+                    <details
+                      data-weekend-day={day.id}
+                      data-day-phase="past"
+                      onToggle={(e) => togglePast(day.id, e.currentTarget.open)}
+                    >
+                      <summary className="flex min-h-11 cursor-pointer flex-wrap items-center gap-x-2">
+                        {heading}
+                        <span className="text-sm text-muted-foreground">already over</span>
+                      </summary>
+                      {openPast.has(day.id) && day.events.length > 0 && (
+                        <div className="mt-4 grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
+                          {day.events.map((event) => (
+                            <SocialEventCard
+                              key={event.id}
+                              event={event}
+                              socialData={batchSocialData?.[event.id]}
+                              socialDataPending={batchSocialPending}
+                              onViewDetails={() => {}}
+                            />
+                          ))}
+                        </div>
+                      )}
+                    </details>
+                  </section>
+                );
+              }
+              return (
+              <section
+                key={day.id}
+                aria-labelledby={day.anchor}
+                data-weekend-day={day.id}
+                data-day-phase={day.phase}
+                className="mb-10 scroll-mt-24"
+              >
+                <div className="mb-4">{heading}</div>
+                {day.phase === "today" && (
+                  <WeatherNotice weather={weather} hasVerdict={hasVerdict} className="mb-4" />
+                )}
                 {day.events.length === 0 ? (
                   <p className="text-muted-foreground">
                     Nothing on our calendar for {day.shortLabel}
@@ -386,7 +525,8 @@ export default function EventsThisWeekend() {
                   </p>
                 )}
               </section>
-            ))}
+              );
+            })}
 
             <Card className="mb-8">
               <CardHeader>

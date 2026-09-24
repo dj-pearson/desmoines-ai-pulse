@@ -114,3 +114,60 @@ export function verificationLine(set: TransitFactSet, now: Date = new Date()): s
     ? `Last checked ${formatted}. Fares may have changed since - confirm with ${set.sourceName}.`
     : `Checked against ${set.sourceName} on ${formatted}.`;
 }
+
+/*
+ * UNSOURCED GUIDANCE, KEPT AS WORDS (plan-stay WP3 item 2).
+ *
+ * /getting-around also printed a taxi fare ("$18-22 to downtown"), a named
+ * airport bus ("DART Route 8, $1.75, ~20 min"), BCycle prices and skywalk
+ * hours ("6am-9pm weekdays" in the body, "business hours" in the FAQ). None
+ * had a source or a check date, and the body and FAQ disagreed about the
+ * skywalk and about naming the route. They could not be re-checked when this
+ * was written (no access to ridedart.com, flydsm.com or bcycle.com from the
+ * build machine), so the numbers are gone rather than given a verifiedAt
+ * nobody earned. What is left below carries no figure that could drift, and
+ * the page body and the FAQ both read from these constants, so the two can
+ * no longer disagree.
+ *
+ * To bring a figure back: confirm it at the source, add a TransitFactSet with
+ * sourceUrl and verifiedAt, and render verificationLine() next to it.
+ */
+
+export interface TravelOption {
+  label: string;
+  detail: string;
+}
+
+/** Airport to downtown. Distance and drive time match DISTANCE_TABLE on the page. */
+export const AIRPORT_TO_DOWNTOWN = {
+  summary:
+    'Des Moines International Airport (DSM) is about 5 miles from downtown, roughly 10 minutes by car.',
+  bus: 'DART buses serve the airport. Check ridedart.com for the route that runs there now; it costs the regular DART one-trip fare.',
+  options: [
+    { label: 'Uber and Lyft', detail: 'Pick up at the arrivals curb. The app quotes the fare before you book.' },
+    { label: 'Taxi', detail: 'Ask for the fare to your hotel before you set off; it is not a flat rate.' },
+    { label: 'Hotel shuttles', detail: 'Some hotels run one. Ask when you book rather than assuming.' },
+    { label: 'Rental cars', detail: 'Counters are at the airport.' },
+  ] as readonly TravelOption[],
+} as const;
+
+/** The FAQ answer, built from the same text the page body renders. */
+export function airportFaqAnswer(): string {
+  const labels = AIRPORT_TO_DOWNTOWN.options.map((o) => o.label).join(', ');
+  return `${AIRPORT_TO_DOWNTOWN.summary} Options include ${labels}, and the bus. ${AIRPORT_TO_DOWNTOWN.bus}`;
+}
+
+export const SKYWALK = {
+  summary:
+    'The Des Moines Skywalk is a network of enclosed, climate-controlled walkways, more than 4 miles of it, connecting buildings across downtown. It is free and open to the public.',
+  hours:
+    'There is no single schedule: each building sets its own hours, so some segments close in the evening and on weekends. If a door is locked, the street is the way through.',
+} as const;
+
+export const BCYCLE = {
+  siteUrl: 'https://desmoines.bcycle.com',
+  summary:
+    'Des Moines BCycle runs bike share stations downtown and in nearby neighborhoods, handy for short trips and the trail system.',
+  pricing:
+    'Pricing and passes are set by BCycle and change; the BCycle site and app show current rates before you unlock a bike.',
+} as const;

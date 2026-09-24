@@ -60,12 +60,29 @@ test.describe('/events Central-time windows (WP1)', () => {
   test('the hub weekend matches /events/this-weekend', async ({ page }) => {
     const hub = dateBounds(await listParams(page, '/events?preset=this-weekend'));
 
+    // The landing keeps multi-day events that started before Friday
+    // (plan-stay, Events hand-off), so its lower bound is the start of an
+    // or() - `date.gte."<from>",and(date.lt."<from>",end_date.gte."<from>")` -
+    // rather than a `date=gte.` param. The upper bound is still `date=lte.`.
+    // The is_indoor lookup sends the same shape for today only; skip it.
     const landing = page.waitForRequest(
-      (req) => req.url().includes('/rest/v1/events?') && /[?&]date=gte\./.test(req.url()),
+      (req) => {
+        if (!req.url().includes('/rest/v1/events?')) return false;
+        const params = new URL(req.url()).searchParams;
+        return (
+          /^lte\./.test(params.get('date') ?? '') &&
+          (params.get('or') ?? '').includes('date.gte.') &&
+          params.get('select') !== 'id,is_indoor'
+        );
+      },
       { timeout: 30_000 }
     );
     await page.goto('/events/this-weekend');
-    const landingBounds = dateBounds(new URL((await landing).url()).searchParams);
+    const params = new URL((await landing).url()).searchParams;
+    const or = params.get('or') ?? '';
+    const from = /date\.gte\."?([^",)]+)"?/.exec(or)?.[1];
+    expect(or).toContain(`end_date.gte.`);
+    const landingBounds = [`gte.${from}`, ...params.getAll('date')].sort();
     expect(landingBounds).toEqual(hub);
   });
 

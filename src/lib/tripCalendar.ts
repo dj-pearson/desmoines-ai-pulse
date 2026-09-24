@@ -3,7 +3,7 @@
  * or per-day) and a Google Calendar deep-link. Pure string builders + a small
  * browser download helper.
  */
-import { addDays } from "date-fns";
+import { centralWallClock, clockMinutes } from "@/lib/dateOnly";
 import type { TripPlan, TripPlanItem } from "@/hooks/useTripPlanner";
 
 function pad(n: number): string {
@@ -26,25 +26,30 @@ function escapeICS(text: string): string {
     .replace(/\n/g, "\\n");
 }
 
-/** Resolve an item's start/end Date from the trip start + day + HH:mm times. */
+/** Default start for a stop with no time: 9 AM Des Moines time. */
+const DEFAULT_START = "09:00";
+
+/**
+ * Resolve an item's start/end instants from the trip start + day + HH:mm
+ * times, read as America/Chicago wall-clock (plan-stay WP1 item 1). The old
+ * `new Date(start_date)` was UTC midnight, a day early in Central, and
+ * `setHours` then applied the visitor's own zone on top.
+ */
 function itemDates(
   trip: TripPlan,
   item: TripPlanItem
 ): { start: Date; end: Date } {
-  const base = addDays(new Date(trip.start_date), (item.day_number || 1) - 1);
-  const start = new Date(base);
-  if (item.start_time) {
-    const [h, m] = item.start_time.split(":").map(Number);
-    if (!Number.isNaN(h)) start.setHours(h, m || 0, 0, 0);
-  } else {
-    start.setHours(9, 0, 0, 0); // sensible default
-  }
-  let end = new Date(start);
-  if (item.end_time) {
-    const [h, m] = item.end_time.split(":").map(Number);
-    if (!Number.isNaN(h)) {
-      end = new Date(start);
-      end.setHours(h, m || 0, 0, 0);
+  const dayOffset = (item.day_number || 1) - 1;
+  const startClock = clockMinutes(item.start_time) != null ? item.start_time! : DEFAULT_START;
+  const start = centralWallClock(trip.start_date, dayOffset, startClock);
+
+  let end: Date;
+  const endMinutes = clockMinutes(item.end_time);
+  if (endMinutes != null) {
+    end = centralWallClock(trip.start_date, dayOffset, item.end_time!);
+    // "22:00 - 01:00" ends the next day.
+    if (end.getTime() <= start.getTime()) {
+      end = centralWallClock(trip.start_date, dayOffset + 1, item.end_time!);
     }
   } else if (item.duration_minutes) {
     end = new Date(start.getTime() + item.duration_minutes * 60_000);
@@ -68,7 +73,7 @@ function buildEvent(trip: TripPlan, item: TripPlanItem): string {
     `DTEND:${toICSDate(end)}`,
     `SUMMARY:${escapeICS(item.title || "Activity")}`,
     item.location ? `LOCATION:${escapeICS(item.location)}` : "",
-    descParts.length ? `DESCRIPTION:${escapeICS(descParts.join(" — "))}` : "",
+    descParts.length ? `DESCRIPTION:${escapeICS(descParts.join(" - "))}` : "",
     "END:VEVENT",
   ]
     .filter(Boolean)
@@ -114,7 +119,7 @@ export function googleCalendarUrl(trip: TripPlan, item: TripPlanItem): string {
     action: "TEMPLATE",
     text: item.title || "Activity",
     dates: `${toICSDate(start)}/${toICSDate(end)}`,
-    details: [item.description, item.ai_reason].filter(Boolean).join(" — "),
+    details: [item.description, item.ai_reason].filter(Boolean).join(" - "),
     location: item.location || "",
   });
   return `https://calendar.google.com/calendar/render?${params.toString()}`;

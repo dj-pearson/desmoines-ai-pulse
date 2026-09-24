@@ -136,11 +136,14 @@ test.describe('restaurant detail', () => {
     }
 
     const viewDetails = page.getByRole('button', { name: 'View Details' }).first();
+    const tonightLink = page.locator('section[aria-labelledby="tonight-nearby"] a[href^="/events/"]').first();
+    // Wait for one rail to render before choosing: a bare count() right after
+    // the queries fire raced the rail and fell through to the wrong branch.
+    await expect(viewDetails.or(tonightLink).first()).toBeVisible();
     if (await viewDetails.count()) {
       await viewDetails.click();
       await expect(page).toHaveURL(/\/events\//);
     } else {
-      const tonightLink = page.locator('section[aria-labelledby="tonight-nearby"] a[href^="/events/"]').first();
       await expect(tonightLink).toBeVisible();
     }
   });

@@ -7,6 +7,7 @@ import { Link } from "react-router-dom";
 import { Database } from "@/integrations/supabase/types";
 import AffiliateDisclosureBanner from "@/components/AffiliateDisclosureBanner";
 import { SpriteIcon } from "@/components/ui/SpriteIcon";
+import { hotelRateLabel, resolveBooking } from "@/lib/hotelBooking";
 
 type Hotel = Database["public"]["Tables"]["hotels"]["Row"];
 
@@ -19,10 +20,20 @@ interface EventHotelCalloutProps {
   longitude?: number | string | null;
   /** What NearbyHotels measures from, e.g. "Wells Fargo Arena". */
   placeName?: string;
+  /**
+   * The venue slug /stay?near= understands (a `venues` slug). When given,
+   * both the linked-hotels list and the NearbyHotels fallback end with
+   * "See all hotels near X" (plan-stay WP2 item 7 / hand-off).
+   */
+  nearSlug?: string | null;
 }
 
 function HotelMiniCard({ hotel, distance, notes }: { hotel: Hotel; distance?: number; notes?: string }) {
-  const bookUrl = hotel.affiliate_url || hotel.website;
+  // resolveBooking puts both URLs through safeWebUrl, so a javascript: or
+  // relative value in either column renders no link, and only an affiliate
+  // link is marked sponsored.
+  const booking = resolveBooking(hotel);
+  const rateLabel = hotelRateLabel(hotel.avg_nightly_rate);
   const fullStars = hotel.star_rating ? Math.floor(hotel.star_rating) : 0;
 
   return (
@@ -34,8 +45,8 @@ function HotelMiniCard({ hotel, distance, notes }: { hotel: Hotel; distance?: nu
             {hotel.image_url ? (
               <img src={hotel.image_url} alt={hotel.name} width={80} height={80} className="w-full h-full object-cover" loading="lazy" decoding="async" />
             ) : (
-              <div className="w-full h-full bg-gradient-to-br from-[#2D1B69] to-[#DC143C] flex items-center justify-center" role="img" aria-label={`No image available for ${hotel.name}`}>
-                <SpriteIcon name="building-2" className="h-6 w-6 text-white/70" />
+              <div className="w-full h-full bg-muted flex items-center justify-center" role="img" aria-label={`No image available for ${hotel.name}`}>
+                <SpriteIcon name="building-2" className="h-6 w-6 text-muted-foreground" />
               </div>
             )}
           </div>
@@ -62,24 +73,26 @@ function HotelMiniCard({ hotel, distance, notes }: { hotel: Hotel; distance?: nu
               </p>
             )}
 
-            {/* Price and book */}
-            <div className="flex items-center justify-between">
-              <div className="flex items-center gap-2">
-                {hotel.price_range && (
-                  <Badge variant="outline" className="text-[10px] px-1.5 py-0">{hotel.price_range}</Badge>
-                )}
-                {hotel.avg_nightly_rate && (
-                  <span className="text-xs text-muted-foreground">~${hotel.avg_nightly_rate}/night</span>
-                )}
-              </div>
-              {bookUrl && (
+            {/* Rate is a seeded, typical figure: worded as one, never summed. */}
+            {rateLabel && <p className="text-xs text-muted-foreground">{rateLabel}</p>}
+
+            {/* Price band and booking link */}
+            <div className="flex flex-wrap items-center justify-between gap-x-2">
+              {hotel.price_range ? (
+                <Badge variant="outline" className="text-[10px] px-1.5 py-0">{hotel.price_range}</Badge>
+              ) : (
+                <span />
+              )}
+              {booking && (
                 <a
-                  href={bookUrl}
+                  href={booking.href}
                   target="_blank"
-                  rel="noopener noreferrer sponsored"
-                  className="inline-flex items-center gap-1 text-xs font-medium text-primary hover:text-primary/80"
+                  rel={booking.rel}
+                  data-affiliate={booking.isAffiliate ? "true" : "false"}
+                  className="inline-flex min-h-11 items-center gap-1 px-1 text-xs font-medium text-primary hover:text-primary/80"
                 >
-                  Book <SpriteIcon name="external-link" className="h-3 w-3" />
+                  {booking.label} <SpriteIcon name="external-link" className="h-3 w-3" />
+                  <span className="sr-only"> (opens in a new tab)</span>
                 </a>
               )}
             </div>
@@ -105,6 +118,7 @@ export default function EventHotelCallout({
   latitude,
   longitude,
   placeName = "this event",
+  nearSlug = null,
 }: EventHotelCalloutProps) {
   const { hotels: linkedHotels, isLoading } = useEventHotels(eventId);
 
@@ -112,11 +126,18 @@ export default function EventHotelCallout({
   if (linkedHotels.length === 0) {
     return (
       <div className="mt-8">
-        <NearbyHotels latitude={latitude} longitude={longitude} placeName={placeName} limit={3} />
+        <NearbyHotels
+          latitude={latitude}
+          longitude={longitude}
+          placeName={placeName}
+          limit={3}
+          nearSlug={nearSlug}
+        />
       </div>
     );
   }
   const hotelsToShow = linkedHotels;
+  const anyAffiliate = hotelsToShow.some((hotel) => resolveBooking(hotel)?.isAffiliate === true);
 
   return (
     <section className="mt-8">
@@ -140,13 +161,22 @@ export default function EventHotelCallout({
         ))}
       </div>
       <div className="mt-3 flex flex-col items-center gap-2">
-        <Link
-          to="/stay"
-          className="text-sm text-primary hover:text-primary/80 font-medium"
-        >
-          View all hotels &rarr;
-        </Link>
-        <AffiliateDisclosureBanner variant="inline" />
+        {nearSlug ? (
+          <Link
+            to={`/stay?near=${encodeURIComponent(nearSlug)}`}
+            className="inline-flex min-h-11 items-center text-sm text-primary hover:text-primary/80 font-medium"
+          >
+            See all hotels near {placeName} &rarr;
+          </Link>
+        ) : (
+          <Link
+            to="/stay"
+            className="inline-flex min-h-11 items-center text-sm text-primary hover:text-primary/80 font-medium"
+          >
+            View all hotels &rarr;
+          </Link>
+        )}
+        {anyAffiliate && <AffiliateDisclosureBanner variant="inline" />}
       </div>
     </section>
   );
