@@ -30,9 +30,20 @@ function allowedOrigin(req: Request): string | undefined {
 const supabaseUrl = Deno.env.get("SUPABASE_URL") ?? "";
 const supabaseServiceKey = Deno.env.get("SUPABASE_SERVICE_ROLE_KEY") ?? "";
 
-// The real client satisfies SearchClient structurally at runtime; the cast is
-// only because supabase-js's generics are far wider than the slice we use.
-const client = createClient(supabaseUrl, supabaseServiceKey) as unknown as SearchClient;
+const serviceClient = createClient(supabaseUrl, supabaseServiceKey);
+
+// The caller check lives here, next to the service-role client, so it is in
+// the file scripts/check-edge-auth.mjs reads. search.ts calls it to key the
+// rate limit by user; an anon or invalid token falls back to the IP.
+// The casts are only because supabase-js's generics are far wider than the
+// slice SearchClient uses.
+const client: SearchClient = {
+  from: (table) => serviceClient.from(table) as unknown as ReturnType<SearchClient["from"]>,
+  auth: {
+    getUser: (jwt) =>
+      serviceClient.auth.getUser(jwt) as unknown as ReturnType<SearchClient["auth"]["getUser"]>,
+  },
+};
 
 const edgeRuntime = (globalThis as { EdgeRuntime?: { waitUntil(p: Promise<unknown>): void } }).EdgeRuntime;
 
