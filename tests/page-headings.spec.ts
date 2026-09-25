@@ -21,6 +21,10 @@ const ROUTES = [
   // their no-token branch, reset-password its expired-link branch, and every
   // branch has to keep a single h1.
   '/auth/verified', '/auth/reset-password', '/auth/callback',
+  // Where businesses and organizers pay or contribute
+  // (docs/page-plans/business.md WP5 item 2). Signed out, /submit-event shows
+  // its sign-in branch, which must keep the page's h1 like the form does.
+  '/advertise', '/business-partnership', '/submit-event',
 ];
 
 async function headings(page: Page) {

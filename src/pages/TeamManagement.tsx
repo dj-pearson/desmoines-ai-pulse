@@ -1,45 +1,90 @@
 import { useState } from "react";
-import { useNavigate } from "react-router-dom";
-import { useTeamManagement } from "@/hooks/useTeamManagement";
-import { useAuth } from "@/hooks/useAuth";
-import { useDocumentTitle } from "@/hooks/useDocumentTitle";
+import { Link } from "react-router-dom";
+import { format } from "date-fns";
+import { ArrowLeft, MoreVertical, RefreshCw, Shield, Trash2, UserPlus } from "lucide-react";
+import { BusinessLayout } from "@/components/business/BusinessLayout";
+import SEOHead from "@/components/SEOHead";
+import {
+  AlertDialog,
+  AlertDialogAction,
+  AlertDialogCancel,
+  AlertDialogContent,
+  AlertDialogDescription,
+  AlertDialogFooter,
+  AlertDialogHeader,
+  AlertDialogTitle,
+} from "@/components/ui/alert-dialog";
+import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
+import {
+  Dialog,
+  DialogContent,
+  DialogDescription,
+  DialogFooter,
+  DialogHeader,
+  DialogTitle,
+} from "@/components/ui/dialog";
+import { DropdownMenu, DropdownMenuContent, DropdownMenuItem, DropdownMenuTrigger } from "@/components/ui/dropdown-menu";
+import { ErrorState } from "@/components/ui/error-state";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
-import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table";
-import { Badge } from "@/components/ui/badge";
-import { Dialog, DialogContent, DialogDescription, DialogFooter, DialogHeader, DialogTitle } from "@/components/ui/dialog";
-import { AlertDialog, AlertDialogAction, AlertDialogCancel, AlertDialogContent, AlertDialogDescription, AlertDialogFooter, AlertDialogHeader, AlertDialogTitle } from "@/components/ui/alert-dialog";
-import { ArrowLeft, UserPlus, Mail, MoreVertical, Shield, Edit, Trash2, RefreshCw } from "lucide-react";
-import {
-  DropdownMenu,
-  DropdownMenuContent,
-  DropdownMenuItem,
-  DropdownMenuTrigger,
-} from "@/components/ui/dropdown-menu";
-import { ErrorState } from "@/components/ui/error-state";
+import { useAuth } from "@/hooks/useAuth";
+import { useTeamManagement, type TeamMember } from "@/hooks/useTeamManagement";
+import { BUSINESS_CONTACT_EMAIL, BUSINESS_CONTACT_HREF } from "@/lib/businessCopy";
+
+type InviteRole = "admin" | "editor" | "viewer";
+
+const ROLE_LABELS: Record<TeamMember["role"], string> = {
+  owner: "Owner",
+  admin: "Admin",
+  editor: "Editor",
+  viewer: "Viewer",
+};
+
+const STATUS_LABELS: Record<TeamMember["invitationStatus"], string> = {
+  pending: "Not accepted",
+  accepted: "Accepted",
+  declined: "Declined",
+  expired: "Expired",
+};
+
+/** Badge variants built on theme token pairs, so the text keeps 4.5:1 in both themes. */
+const STATUS_VARIANT: Record<TeamMember["invitationStatus"], "default" | "secondary" | "outline" | "destructive"> = {
+  pending: "outline",
+  accepted: "default",
+  declined: "secondary",
+  expired: "secondary",
+};
+
+function isInviteRole(value: string): value is InviteRole {
+  return value === "admin" || value === "editor" || value === "viewer";
+}
+
+function formatDay(value: string | null): string {
+  if (!value) return "-";
+  const d = new Date(value);
+  return Number.isNaN(d.getTime()) ? "-" : format(d, "MMM d, yyyy");
+}
 
 export default function TeamManagement() {
-  const navigate = useNavigate();
   const { user } = useAuth();
-  useDocumentTitle("Team Management");
-  const { teamMembers, isLoading, error, refetch, inviteTeamMember, resendInvitation, updateMemberRole, removeMember } = useTeamManagement(user?.id);
+  const { teamMembers, isLoading, error, refetch, inviteTeamMember, resendInvitation, updateMemberRole, removeMember } =
+    useTeamManagement(user?.id);
 
   const [inviteDialogOpen, setInviteDialogOpen] = useState(false);
   const [inviteEmail, setInviteEmail] = useState("");
-  const [inviteRole, setInviteRole] = useState<"admin" | "editor" | "viewer">("viewer");
+  const [inviteRole, setInviteRole] = useState<InviteRole>("viewer");
+  const [selectedMember, setSelectedMember] = useState<TeamMember | null>(null);
   const [roleDialogOpen, setRoleDialogOpen] = useState(false);
-  const [selectedMember, setSelectedMember] = useState<any>(null);
-  const [newRole, setNewRole] = useState<"admin" | "editor" | "viewer">("viewer");
+  const [newRole, setNewRole] = useState<InviteRole>("viewer");
   const [removeDialogOpen, setRemoveDialogOpen] = useState(false);
 
   const handleInvite = async () => {
     if (!inviteEmail.trim()) return;
-
-    const success = await inviteTeamMember(inviteEmail, inviteRole);
-    if (success) {
+    const ok = await inviteTeamMember(inviteEmail.trim(), inviteRole);
+    if (ok) {
       setInviteDialogOpen(false);
       setInviteEmail("");
       setInviteRole("viewer");
@@ -48,9 +93,8 @@ export default function TeamManagement() {
 
   const handleUpdateRole = async () => {
     if (!selectedMember) return;
-
-    const success = await updateMemberRole(selectedMember.id, newRole);
-    if (success) {
+    const ok = await updateMemberRole(selectedMember.id, newRole);
+    if (ok) {
       setRoleDialogOpen(false);
       setSelectedMember(null);
     }
@@ -58,236 +102,164 @@ export default function TeamManagement() {
 
   const handleRemove = async () => {
     if (!selectedMember) return;
-
-    const success = await removeMember(selectedMember.id);
-    if (success) {
+    const ok = await removeMember(selectedMember.id);
+    if (ok) {
       setRemoveDialogOpen(false);
       setSelectedMember(null);
     }
   };
 
-  const getRoleBadge = (role: string) => {
-    const colors: Record<string, string> = {
-      owner: "bg-purple-500",
-      admin: "bg-blue-500",
-      editor: "bg-green-500",
-      viewer: "bg-gray-500",
-    };
-    return colors[role] || "bg-gray-500";
-  };
-
-  const getStatusBadge = (status: string) => {
-    const colors: Record<string, string> = {
-      pending: "bg-yellow-500",
-      accepted: "bg-green-500",
-      declined: "bg-red-500",
-      expired: "bg-gray-500",
-    };
-    return colors[status] || "bg-gray-500";
-  };
-
-  const formatDate = (dateString: string) => {
-    return new Date(dateString).toLocaleDateString("en-US", {
-      year: "numeric",
-      month: "short",
-      day: "numeric",
-    });
-  };
+  let body;
+  if (isLoading && teamMembers.length === 0 && !error) {
+    body = (
+      <p role="status" className="py-8 text-muted-foreground">
+        Loading...
+      </p>
+    );
+  } else if (error) {
+    // WEB-QA-031: "No team members yet" is a wrong answer when the list simply failed to load.
+    body = <ErrorState error={error} onRetry={() => void refetch()} />;
+  } else if (teamMembers.length === 0) {
+    body = <p className="py-8 text-muted-foreground">No one is on your list yet.</p>;
+  } else {
+    body = (
+      <Table>
+        <TableHeader>
+          <TableRow>
+            <TableHead>Email</TableHead>
+            <TableHead>Role</TableHead>
+            <TableHead>Status</TableHead>
+            <TableHead>Added</TableHead>
+            <TableHead>
+              <span className="sr-only">Actions</span>
+            </TableHead>
+          </TableRow>
+        </TableHeader>
+        <TableBody>
+          {teamMembers.map((member) => (
+            <TableRow key={member.id}>
+              <TableCell className="break-all">{member.teamMemberEmail}</TableCell>
+              <TableCell>
+                <Badge variant="secondary">{ROLE_LABELS[member.role] ?? member.role}</Badge>
+              </TableCell>
+              <TableCell>
+                <Badge variant={STATUS_VARIANT[member.invitationStatus] ?? "outline"}>
+                  {STATUS_LABELS[member.invitationStatus] ?? member.invitationStatus}
+                </Badge>
+              </TableCell>
+              <TableCell className="text-sm text-muted-foreground">{formatDay(member.invitedAt)}</TableCell>
+              <TableCell>
+                <DropdownMenu>
+                  <DropdownMenuTrigger asChild>
+                    <Button variant="ghost" size="icon" aria-label={`Options for ${member.teamMemberEmail}`}>
+                      <MoreVertical className="h-4 w-4" aria-hidden="true" />
+                    </Button>
+                  </DropdownMenuTrigger>
+                  <DropdownMenuContent align="end">
+                    {member.invitationStatus !== "accepted" && (
+                      <DropdownMenuItem onClick={() => void resendInvitation(member.id)}>
+                        <RefreshCw className="mr-2 h-4 w-4" aria-hidden="true" />
+                        Renew for 7 days
+                      </DropdownMenuItem>
+                    )}
+                    {member.invitationStatus === "accepted" && (
+                      <DropdownMenuItem
+                        onClick={() => {
+                          setSelectedMember(member);
+                          setNewRole(isInviteRole(member.role) ? member.role : "viewer");
+                          setRoleDialogOpen(true);
+                        }}
+                      >
+                        <Shield className="mr-2 h-4 w-4" aria-hidden="true" />
+                        Change role
+                      </DropdownMenuItem>
+                    )}
+                    <DropdownMenuItem
+                      onClick={() => {
+                        setSelectedMember(member);
+                        setRemoveDialogOpen(true);
+                      }}
+                      className="text-destructive"
+                    >
+                      <Trash2 className="mr-2 h-4 w-4" aria-hidden="true" />
+                      Remove
+                    </DropdownMenuItem>
+                  </DropdownMenuContent>
+                </DropdownMenu>
+              </TableCell>
+            </TableRow>
+          ))}
+        </TableBody>
+      </Table>
+    );
+  }
 
   return (
-    <div className="container mx-auto py-8 px-4 max-w-6xl">
-      {/* Header */}
-      <div className="mb-6">
-        <Button variant="ghost" onClick={() => navigate("/campaigns")} className="mb-4">
-          <ArrowLeft className="mr-2 h-4 w-4" />
-          Back to Campaigns
+    <BusinessLayout>
+      <SEOHead title="Campaign team" description="People you've added to your campaigns." robots="noindex, follow" />
+      <div className="container mx-auto max-w-4xl px-4 py-8">
+        <Button asChild variant="ghost" className="mb-4 -ml-3">
+          <Link to="/campaigns">
+            <ArrowLeft className="mr-2 h-4 w-4" aria-hidden="true" />
+            Your campaigns
+          </Link>
         </Button>
 
-        <div className="flex items-start justify-between">
-          <div>
-            <h1 className="text-3xl font-bold mb-2">Team Management</h1>
-            <p className="text-muted-foreground">
-              Invite team members to collaborate on your campaigns
-            </p>
-          </div>
-
+        <div className="flex flex-wrap items-end justify-between gap-4">
+          <h1 className="text-2xl font-bold sm:text-3xl text-foreground">Campaign team</h1>
           <Button onClick={() => setInviteDialogOpen(true)}>
-            <UserPlus className="mr-2 h-4 w-4" />
-            Invite Member
+            <UserPlus className="mr-2 h-4 w-4" aria-hidden="true" />
+            Add someone
           </Button>
         </div>
+
+        <div className="mt-4 max-w-prose space-y-2 rounded-xl border p-4 text-sm">
+          <p>
+            <strong>Team access isn't switched on yet.</strong> You can keep a list of the people you'll work with,
+            but we don't email them, and adding someone doesn't let them see or change your campaigns.
+          </p>
+          <p className="text-muted-foreground">
+            Need a colleague to manage a campaign now? Email{" "}
+            <a href={BUSINESS_CONTACT_HREF} className="underline underline-offset-4">
+              {BUSINESS_CONTACT_EMAIL}
+            </a>
+            .
+          </p>
+        </div>
+
+        <section aria-labelledby="members-heading" className="mt-8">
+          <h2 id="members-heading" className="text-lg font-semibold">
+            People{teamMembers.length > 0 ? ` (${teamMembers.length})` : ""}
+          </h2>
+          <div className="mt-2">{body}</div>
+        </section>
       </div>
 
-      {/* Role Info */}
-      <Card className="mb-6">
-        <CardHeader>
-          <CardTitle className="text-lg">Team Roles</CardTitle>
-        </CardHeader>
-        <CardContent>
-          <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-4">
-            <div>
-              <Badge className="mb-2 bg-purple-500">Owner</Badge>
-              <p className="text-sm text-muted-foreground">
-                Full control, manage team and billing
-              </p>
-            </div>
-            <div>
-              <Badge className="mb-2 bg-blue-500">Admin</Badge>
-              <p className="text-sm text-muted-foreground">
-                Edit campaigns, upload creatives, view analytics
-              </p>
-            </div>
-            <div>
-              <Badge className="mb-2 bg-green-500">Editor</Badge>
-              <p className="text-sm text-muted-foreground">
-                Upload creatives, edit content, limited settings
-              </p>
-            </div>
-            <div>
-              <Badge className="mb-2 bg-gray-500">Viewer</Badge>
-              <p className="text-sm text-muted-foreground">
-                Read-only access to campaigns and analytics
-              </p>
-            </div>
-          </div>
-        </CardContent>
-      </Card>
-
-      {/* Team Members Table */}
-      <Card>
-        <CardHeader>
-          <CardTitle>Team Members</CardTitle>
-          <CardDescription>
-            {teamMembers.length} member{teamMembers.length !== 1 ? "s" : ""}
-          </CardDescription>
-        </CardHeader>
-        <CardContent>
-          {error ? (
-            // WEB-QA-031: "No team members yet" with an Invite button is a
-            // wrong instruction when the list simply failed to load.
-            <ErrorState error={error} onRetry={() => void refetch()} />
-          ) : teamMembers.length === 0 ? (
-            <div className="text-center py-12">
-              <UserPlus className="h-12 w-12 mx-auto text-muted-foreground mb-4" />
-              <h3 className="text-lg font-semibold mb-2">No team members yet</h3>
-              <p className="text-muted-foreground mb-4">
-                Invite team members to collaborate on your campaigns
-              </p>
-              <Button onClick={() => setInviteDialogOpen(true)}>
-                <UserPlus className="mr-2 h-4 w-4" />
-                Invite First Member
-              </Button>
-            </div>
-          ) : (
-            <Table>
-              <TableHeader>
-                <TableRow>
-                  <TableHead>Email</TableHead>
-                  <TableHead>Role</TableHead>
-                  <TableHead>Status</TableHead>
-                  <TableHead>Invited</TableHead>
-                  <TableHead>Accepted</TableHead>
-                  <TableHead>Actions</TableHead>
-                </TableRow>
-              </TableHeader>
-              <TableBody>
-                {teamMembers.map((member) => (
-                  <TableRow key={member.id}>
-                    <TableCell>
-                      <div className="flex items-center gap-2">
-                        <Mail className="h-4 w-4 text-muted-foreground" />
-                        {member.teamMemberEmail}
-                      </div>
-                    </TableCell>
-                    <TableCell>
-                      <Badge className={getRoleBadge(member.role)}>
-                        {member.role}
-                      </Badge>
-                    </TableCell>
-                    <TableCell>
-                      <Badge className={getStatusBadge(member.invitationStatus)}>
-                        {member.invitationStatus}
-                      </Badge>
-                    </TableCell>
-                    <TableCell className="text-sm text-muted-foreground">
-                      {formatDate(member.invitedAt)}
-                    </TableCell>
-                    <TableCell className="text-sm text-muted-foreground">
-                      {member.acceptedAt ? formatDate(member.acceptedAt) : "—"}
-                    </TableCell>
-                    <TableCell>
-                      <DropdownMenu>
-                        <DropdownMenuTrigger asChild>
-                          <Button variant="ghost" size="icon" aria-label="Member options">
-                            <MoreVertical className="h-4 w-4" />
-                          </Button>
-                        </DropdownMenuTrigger>
-                        <DropdownMenuContent align="end">
-                          {member.invitationStatus === "pending" && (
-                            <DropdownMenuItem onClick={() => resendInvitation(member.id)}>
-                              <RefreshCw className="mr-2 h-4 w-4" />
-                              Resend Invitation
-                            </DropdownMenuItem>
-                          )}
-                          {member.invitationStatus === "accepted" && (
-                            <DropdownMenuItem
-                              onClick={() => {
-                                setSelectedMember(member);
-                                setNewRole(member.role as any);
-                                setRoleDialogOpen(true);
-                              }}
-                            >
-                              <Shield className="mr-2 h-4 w-4" />
-                              Change Role
-                            </DropdownMenuItem>
-                          )}
-                          <DropdownMenuItem
-                            onClick={() => {
-                              setSelectedMember(member);
-                              setRemoveDialogOpen(true);
-                            }}
-                            className="text-destructive"
-                          >
-                            <Trash2 className="mr-2 h-4 w-4" />
-                            Remove
-                          </DropdownMenuItem>
-                        </DropdownMenuContent>
-                      </DropdownMenu>
-                    </TableCell>
-                  </TableRow>
-                ))}
-              </TableBody>
-            </Table>
-          )}
-        </CardContent>
-      </Card>
-
-      {/* Invite Dialog */}
       <Dialog open={inviteDialogOpen} onOpenChange={setInviteDialogOpen}>
         <DialogContent>
           <DialogHeader>
-            <DialogTitle>Invite Team Member</DialogTitle>
+            <DialogTitle>Add someone</DialogTitle>
             <DialogDescription>
-              Send an invitation to collaborate on your campaigns
+              They're added to your list only. No email goes out, and they get no access until team access is
+              switched on.
             </DialogDescription>
           </DialogHeader>
-
           <div className="space-y-4">
-            <div>
-              <Label htmlFor="email">Email Address</Label>
+            <div className="space-y-2">
+              <Label htmlFor="team-email">Email address</Label>
               <Input
-                id="email"
+                id="team-email"
                 type="email"
+                autoComplete="email"
                 placeholder="colleague@example.com"
                 value={inviteEmail}
                 onChange={(e) => setInviteEmail(e.target.value)}
               />
             </div>
-
-            <div>
-              <Label htmlFor="role">Role</Label>
-              <Select value={inviteRole} onValueChange={(val: any) => setInviteRole(val)}>
-                <SelectTrigger>
+            <div className="space-y-2">
+              <Label htmlFor="team-role">Role</Label>
+              <Select value={inviteRole} onValueChange={(val) => isInviteRole(val) && setInviteRole(val)}>
+                <SelectTrigger id="team-role">
                   <SelectValue />
                 </SelectTrigger>
                 <SelectContent>
@@ -298,32 +270,27 @@ export default function TeamManagement() {
               </Select>
             </div>
           </div>
-
           <DialogFooter>
             <Button variant="outline" onClick={() => setInviteDialogOpen(false)}>
-              Cancel
+              Close
             </Button>
-            <Button onClick={handleInvite} disabled={!inviteEmail.trim()}>
-              Send Invitation
+            <Button onClick={() => void handleInvite()} disabled={!inviteEmail.trim()}>
+              Add to list
             </Button>
           </DialogFooter>
         </DialogContent>
       </Dialog>
 
-      {/* Role Update Dialog */}
       <Dialog open={roleDialogOpen} onOpenChange={setRoleDialogOpen}>
         <DialogContent>
           <DialogHeader>
-            <DialogTitle>Change Role</DialogTitle>
-            <DialogDescription>
-              Update the role for {selectedMember?.teamMemberEmail}
-            </DialogDescription>
+            <DialogTitle>Change role</DialogTitle>
+            <DialogDescription>For {selectedMember?.teamMemberEmail}</DialogDescription>
           </DialogHeader>
-
-          <div>
-            <Label htmlFor="new-role">New Role</Label>
-            <Select value={newRole} onValueChange={(val: any) => setNewRole(val)}>
-              <SelectTrigger>
+          <div className="space-y-2">
+            <Label htmlFor="team-new-role">Role</Label>
+            <Select value={newRole} onValueChange={(val) => isInviteRole(val) && setNewRole(val)}>
+              <SelectTrigger id="team-new-role">
                 <SelectValue />
               </SelectTrigger>
               <SelectContent>
@@ -333,34 +300,29 @@ export default function TeamManagement() {
               </SelectContent>
             </Select>
           </div>
-
           <DialogFooter>
             <Button variant="outline" onClick={() => setRoleDialogOpen(false)}>
-              Cancel
+              Close
             </Button>
-            <Button onClick={handleUpdateRole}>Update Role</Button>
+            <Button onClick={() => void handleUpdateRole()}>Save role</Button>
           </DialogFooter>
         </DialogContent>
       </Dialog>
 
-      {/* Remove Dialog */}
       <AlertDialog open={removeDialogOpen} onOpenChange={setRemoveDialogOpen}>
         <AlertDialogContent>
           <AlertDialogHeader>
-            <AlertDialogTitle>Remove Team Member</AlertDialogTitle>
-            <AlertDialogDescription>
-              Are you sure you want to remove {selectedMember?.teamMemberEmail} from your team?
-              This action cannot be undone.
-            </AlertDialogDescription>
+            <AlertDialogTitle>Remove {selectedMember?.teamMemberEmail}?</AlertDialogTitle>
+            <AlertDialogDescription>They come off your list. You can add them again later.</AlertDialogDescription>
           </AlertDialogHeader>
           <AlertDialogFooter>
-            <AlertDialogCancel>Cancel</AlertDialogCancel>
-            <AlertDialogAction onClick={handleRemove} className="bg-destructive text-destructive-foreground">
+            <AlertDialogCancel>Keep</AlertDialogCancel>
+            <AlertDialogAction onClick={() => void handleRemove()} className="bg-destructive text-destructive-foreground">
               Remove
             </AlertDialogAction>
           </AlertDialogFooter>
         </AlertDialogContent>
       </AlertDialog>
-    </div>
+    </BusinessLayout>
   );
 }

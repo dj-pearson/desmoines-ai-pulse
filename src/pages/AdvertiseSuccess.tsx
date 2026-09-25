@@ -1,300 +1,259 @@
-import { useEffect, useState } from "react";
-import { useNavigate, useSearchParams } from "react-router-dom";
-import { useDocumentTitle } from "@/hooks/useDocumentTitle";
-import { createLogger } from '@/lib/logger';
-import { SpriteIcon } from "@/components/ui/SpriteIcon";
-
-const log = createLogger('AdvertiseSuccess');
-import { CheckCircle, Upload, BarChart3 } from "lucide-react";
+import { Link, useSearchParams } from "react-router-dom";
+import { useQuery } from "@tanstack/react-query";
+import { BarChart3, CheckCircle, Upload } from "lucide-react";
+import { BusinessLayout } from "@/components/business/BusinessLayout";
+import SEOHead from "@/components/SEOHead";
 import { Button } from "@/components/ui/button";
-import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
-import { Alert, AlertDescription } from "@/components/ui/alert";
 import { Skeleton } from "@/components/ui/skeleton";
 import { supabase } from "@/integrations/supabase/client";
-import { useToast } from "@/hooks/use-toast";
+import { handleError, ErrorSeverity } from "@/lib/errorHandler";
+import { formatCampaignDate, formatUSD } from "@/lib/campaignDisplay";
+import { BUSINESS_CONTACT_EMAIL, BUSINESS_CONTACT_HREF, CREATIVE_REVIEW_COPY } from "@/lib/businessCopy";
+import { PLACEMENT_SPECS, type PlacementType } from "@/lib/placementSpecs";
 
-interface Campaign {
+interface PaidCampaign {
   id: string;
   name: string;
-  total_cost: number;
-  start_date: string;
-  end_date: string;
-  stripe_payment_intent_id: string;
+  total_cost: number | null;
+  start_date: string | null;
+  end_date: string | null;
+  campaign_placements?: Array<{ placement_type: string }> | null;
 }
+
+interface SponsoredLink {
+  listing_type: string;
+  listing_id: string;
+}
+
+type Receipt =
+  | { state: "paid"; campaign: PaidCampaign; link: SponsoredLink | null; amountPaid: number | null }
+  | { state: "unconfirmed" };
+
+const LISTING_PATHS: Record<string, string> = {
+  event: "/events/",
+  restaurant: "/restaurants/",
+};
+
+async function loadReceipt(campaignId: string): Promise<Receipt> {
+  const { data, error } = await supabase.functions.invoke("verify-campaign-payment", { body: { campaignId } });
+  if (error || !data?.paid) {
+    if (error) {
+      handleError(error, { component: "AdvertiseSuccess", action: "verify-payment" }, ErrorSeverity.WARNING);
+    }
+    return { state: "unconfirmed" };
+  }
+
+  const { data: campaign, error: campaignError } = await supabase
+    .from("campaigns")
+    .select("id, name, total_cost, start_date, end_date, campaign_placements (placement_type)")
+    .eq("id", campaignId)
+    .single();
+  if (campaignError || !campaign) {
+    handleError(campaignError ?? new Error("campaign missing after payment"), {
+      component: "AdvertiseSuccess",
+      action: "read-campaign",
+    });
+    return { state: "unconfirmed" };
+  }
+
+  // Best effort: the link only exists for a sponsored listing, and a failed
+  // read costs the advertiser a shortcut, not information.
+  let link: SponsoredLink | null = null;
+  const { data: links, error: linkError } = await supabase
+    .from("sponsored_listing_links")
+    .select("listing_type, listing_id")
+    .eq("campaign_id", campaignId)
+    .limit(1);
+  if (!linkError && Array.isArray(links) && links.length > 0) link = links[0] as SponsoredLink;
+
+  // What Stripe charged, after any promotion code. Absent from an older
+  // verify-campaign-payment, in which case the page shows the campaign total
+  // under that name rather than calling it the amount paid.
+  const amountPaid = typeof data.amountPaid === "number" && Number.isFinite(data.amountPaid) ? data.amountPaid : null;
+
+  return { state: "paid", campaign: campaign as unknown as PaidCampaign, link, amountPaid };
+}
+
+const SEO = (
+  <SEOHead
+    title="Payment received"
+    description="Your Des Moines Insider ad campaign payment."
+    robots="noindex, follow"
+  />
+);
 
 export default function AdvertiseSuccess() {
   const [searchParams] = useSearchParams();
-  const navigate = useNavigate();
-  const { toast } = useToast();
-  useDocumentTitle("Advertising Success");
-  const [campaign, setCampaign] = useState<Campaign | null>(null);
-  const [isLoading, setIsLoading] = useState(true);
-  const [error, setError] = useState<string | null>(null);
+  const campaignId = searchParams.get("campaign_id");
 
-  const campaignId = searchParams.get('campaign_id');
+  const receipt = useQuery({
+    queryKey: ["advertise-success", campaignId],
+    queryFn: () => loadReceipt(campaignId as string),
+    enabled: !!campaignId,
+    retry: false,
+    staleTime: Infinity,
+  });
 
-  useEffect(() => {
-    if (campaignId) {
-      verifyPayment();
-    } else {
-      setError("No campaign ID found in the URL. Please check your email for campaign details.");
-      setIsLoading(false);
-    }
-  }, [campaignId]);
-
-  const verifyPayment = async () => {
-    try {
-      setIsLoading(true);
-
-      // Call the verify-campaign-payment function to confirm payment
-      const { data, error: verifyError } = await supabase.functions.invoke(
-        "verify-campaign-payment",
-        {
-          body: { campaignId },
-        }
-      );
-
-      if (verifyError) throw verifyError;
-
-      if (!data?.paid) {
-        throw new Error("Payment has not been confirmed yet. Please try refreshing the page.");
-      }
-
-      // Fetch the full campaign details
-      const { data: campaignData, error: campaignError } = await supabase
-        .from("campaigns")
-        .select("id, name, total_cost, start_date, end_date, stripe_payment_intent_id")
-        .eq("id", campaignId)
-        .single();
-
-      if (campaignError || !campaignData) {
-        throw new Error("Campaign not found");
-      }
-
-      setCampaign(campaignData);
-
-      toast({
-        title: "Payment successful!",
-        description: "Your campaign is ready for creative uploads.",
-      });
-    } catch (err) {
-      log.error('verifyPayment', 'Payment verification error', { error: err });
-      setError(err instanceof Error ? err.message : "Failed to verify payment");
-      toast({
-        variant: "destructive",
-        title: "Verification failed",
-        description: "We couldn't verify your payment. Please contact support.",
-      });
-    } finally {
-      setIsLoading(false);
-    }
-  };
-
-  const formatCurrency = (amount: number) => {
-    return new Intl.NumberFormat('en-US', {
-      style: 'currency',
-      currency: 'USD',
-    }).format(amount);
-  };
-
-  const formatDate = (dateString: string) => {
-    return new Date(dateString).toLocaleDateString('en-US', {
-      year: 'numeric',
-      month: 'long',
-      day: 'numeric',
-    });
-  };
-
-  if (isLoading) {
+  if (!campaignId) {
     return (
-      <div className="container mx-auto py-12 px-4 max-w-3xl">
-        <div className="text-center mb-8">
-          <Skeleton className="h-12 w-12 rounded-full mx-auto mb-4" />
-          <Skeleton className="h-8 w-64 mx-auto mb-2" />
-          <Skeleton className="h-4 w-96 mx-auto" />
-        </div>
-        <Skeleton className="h-64 w-full" />
-      </div>
-    );
-  }
-
-  if (error || !campaign) {
-    return (
-      <div className="container mx-auto py-12 px-4 max-w-3xl">
-        <Alert variant="destructive" className="mb-6">
-          <AlertDescription>
-            {error || "Campaign not found. Please contact support if you believe this is an error."}
-          </AlertDescription>
-        </Alert>
-        <div className="text-center">
-          <Button onClick={() => navigate('/campaigns')}>
-            Go to Campaigns
+      <BusinessLayout>
+        {SEO}
+        <div className="container mx-auto max-w-2xl px-4 py-12">
+          <h1 className="text-2xl font-bold text-foreground">We couldn't tell which campaign this is</h1>
+          <p className="mt-2 text-muted-foreground">
+            This link is missing its campaign. Your campaigns page shows every campaign and whether it's paid.
+          </p>
+          <Button asChild className="mt-6">
+            <Link to="/campaigns">Go to your campaigns</Link>
           </Button>
         </div>
-      </div>
+      </BusinessLayout>
     );
   }
 
-  return (
-    <div className="container mx-auto py-12 px-4 max-w-3xl">
-      {/* Success Header */}
-      <div className="text-center mb-8">
-        <div className="inline-flex items-center justify-center w-16 h-16 rounded-full bg-green-100 mb-4">
-          <CheckCircle className="h-8 w-8 text-green-600" />
+  if (receipt.isLoading) {
+    return (
+      <BusinessLayout>
+        {SEO}
+        <div className="container mx-auto max-w-2xl px-4 py-12" role="status" aria-label="Checking your payment">
+          <Skeleton className="mb-4 h-8 w-64" />
+          <Skeleton className="h-48 w-full" />
         </div>
-        <h1 className="text-3xl font-bold mb-2">Payment Successful!</h1>
-        <p className="text-lg text-muted-foreground">
-          Your campaign has been created and payment processed
+      </BusinessLayout>
+    );
+  }
+
+  const result = receipt.data;
+  if (!result || result.state === "unconfirmed") {
+    return (
+      <BusinessLayout>
+        {SEO}
+        <div className="container mx-auto max-w-2xl px-4 py-12">
+          <h1 className="text-2xl font-bold text-foreground">We haven't seen the payment yet</h1>
+          <p className="mt-2 max-w-prose">
+            Nothing is lost. Some payments take a few minutes to confirm. The campaign page shows whether it went
+            through, and lets you pay if it didn't.
+          </p>
+          <div className="mt-6 flex flex-wrap gap-3">
+            <Button asChild>
+              <Link to={`/campaigns/${campaignId}`}>Open the campaign</Link>
+            </Button>
+            <Button variant="outline" onClick={() => void receipt.refetch()}>
+              Check again
+            </Button>
+          </div>
+          <p className="mt-6 text-sm text-muted-foreground">
+            Charged but still seeing this? Email{" "}
+            <a href={BUSINESS_CONTACT_HREF} className="underline underline-offset-4">
+              {BUSINESS_CONTACT_EMAIL}
+            </a>
+            .
+          </p>
+        </div>
+      </BusinessLayout>
+    );
+  }
+
+  const { campaign, link, amountPaid } = result;
+  const placements = campaign.campaign_placements ?? [];
+  const listingOnly =
+    placements.length > 0 &&
+    placements.every((p) => PLACEMENT_SPECS[p.placement_type as PlacementType]?.noCreativeRequired);
+  const startText = campaign.start_date ? formatCampaignDate(campaign.start_date) : "the start date";
+  const listingHref = link && LISTING_PATHS[link.listing_type] ? `${LISTING_PATHS[link.listing_type]}${link.listing_id}` : null;
+
+  return (
+    <BusinessLayout>
+      {SEO}
+      <div className="container mx-auto max-w-2xl px-4 py-12">
+        <div className="flex items-center gap-3">
+          <CheckCircle className="h-8 w-8 text-primary" aria-hidden="true" />
+          <h1 className="text-2xl font-bold sm:text-3xl text-foreground">Payment received</h1>
+        </div>
+        <p className="mt-2 text-lg">{campaign.name}</p>
+
+        <dl className="mt-6 grid grid-cols-2 gap-x-6 gap-y-4 border-y py-4">
+          <div>
+            <dt className="text-sm text-muted-foreground">{amountPaid !== null ? "Amount paid" : "Campaign total"}</dt>
+            <dd className="text-lg font-semibold tabular-nums">{formatUSD(amountPaid ?? campaign.total_cost)}</dd>
+          </div>
+          <div>
+            <dt className="text-sm text-muted-foreground">Reference</dt>
+            <dd className="font-mono text-sm">{campaign.id.slice(0, 8).toUpperCase()}</dd>
+          </div>
+          <div>
+            <dt className="text-sm text-muted-foreground">Starts</dt>
+            <dd className="font-medium">{campaign.start_date ? formatCampaignDate(campaign.start_date) : "-"}</dd>
+          </div>
+          <div>
+            <dt className="text-sm text-muted-foreground">Ends</dt>
+            <dd className="font-medium">{campaign.end_date ? formatCampaignDate(campaign.end_date) : "-"}</dd>
+          </div>
+        </dl>
+
+        <p className="mt-4 max-w-prose text-sm text-muted-foreground">
+          Stripe emails the payment receipt to the address on your account. Campaign details stay on this page and in{" "}
+          <Link to="/campaigns" className="underline underline-offset-4">
+            your campaigns
+          </Link>
+          .
+        </p>
+
+        <section aria-labelledby="next-heading" className="mt-10">
+          <h2 id="next-heading" className="text-lg font-semibold">
+            What happens next
+          </h2>
+          {listingOnly ? (
+            <p className="mt-2 max-w-prose">
+              Nothing to upload. Your listing gets the Sponsored label from {startText} until the campaign ends.
+              {listingHref && (
+                <>
+                  {" "}
+                  <Link to={listingHref} className="underline underline-offset-4">
+                    See your listing
+                  </Link>
+                  .
+                </>
+              )}
+            </p>
+          ) : (
+            <ol className="mt-2 max-w-prose list-decimal space-y-2 pl-5">
+              <li>Upload your artwork for each placement.</li>
+              <li>{CREATIVE_REVIEW_COPY}</li>
+              <li>Approved ads start showing on {startText}.</li>
+            </ol>
+          )}
+        </section>
+
+        <div className="mt-8 flex flex-col gap-3 sm:flex-row">
+          {!listingOnly && (
+            <Button asChild className="min-h-11">
+              <Link to={`/campaigns/${campaign.id}/creatives`}>
+                <Upload className="mr-2 h-4 w-4" aria-hidden="true" />
+                Upload creatives
+              </Link>
+            </Button>
+          )}
+          <Button asChild variant="outline" className="min-h-11">
+            <Link to={`/campaigns/${campaign.id}`}>
+              <BarChart3 className="mr-2 h-4 w-4" aria-hidden="true" />
+              Open the campaign
+            </Link>
+          </Button>
+        </div>
+
+        <p className="mt-10 text-sm text-muted-foreground">
+          Questions about this campaign? Email{" "}
+          <a href={BUSINESS_CONTACT_HREF} className="underline underline-offset-4">
+            {BUSINESS_CONTACT_EMAIL}
+          </a>{" "}
+          or read the{" "}
+          <Link to="/advertising-policies" className="underline underline-offset-4">
+            advertising policies
+          </Link>
+          .
         </p>
       </div>
-
-      {/* Order Details */}
-      <Card className="mb-6">
-        <CardHeader>
-          <CardTitle>Order Confirmation</CardTitle>
-          <CardDescription>
-            Campaign: <span className="font-semibold text-foreground">{campaign.name}</span>
-          </CardDescription>
-        </CardHeader>
-        <CardContent className="space-y-4">
-          <div className="grid grid-cols-2 gap-4">
-            <div>
-              <p className="text-sm text-muted-foreground">Order ID</p>
-              <p className="font-mono text-sm">{campaign.id.slice(0, 8).toUpperCase()}</p>
-            </div>
-            <div>
-              <p className="text-sm text-muted-foreground">Amount Paid</p>
-              <p className="font-semibold text-lg">{formatCurrency(campaign.total_cost)}</p>
-            </div>
-            <div>
-              <p className="text-sm text-muted-foreground">Start Date</p>
-              <p className="font-medium">{formatDate(campaign.start_date)}</p>
-            </div>
-            <div>
-              <p className="text-sm text-muted-foreground">End Date</p>
-              <p className="font-medium">{formatDate(campaign.end_date)}</p>
-            </div>
-          </div>
-
-          <Alert>
-            <AlertDescription>
-              Stripe emails the payment receipt to the address on your account. Campaign
-              details stay on this page and in{" "}
-              <a href="/campaigns" className="underline underline-offset-4">
-                your campaigns
-              </a>
-              .
-            </AlertDescription>
-          </Alert>
-        </CardContent>
-      </Card>
-
-      {/* Next Steps */}
-      <Card className="mb-6">
-        <CardHeader>
-          <CardTitle>What's Next?</CardTitle>
-          <CardDescription>Complete these steps to get your campaign live</CardDescription>
-        </CardHeader>
-        <CardContent className="space-y-4">
-          <div className="space-y-4">
-            <div className="flex gap-4">
-              <div className="flex-shrink-0 w-8 h-8 rounded-full bg-primary/10 flex items-center justify-center">
-                <span className="text-sm font-semibold text-primary">1</span>
-              </div>
-              <div className="flex-grow">
-                <h3 className="font-semibold mb-1">Upload Your Ad Creatives</h3>
-                <p className="text-sm text-muted-foreground mb-2">
-                  Upload images and provide details for each placement in your campaign. Make sure
-                  your creatives meet our size and format requirements.
-                </p>
-                <Button
-                  onClick={() => navigate(`/campaigns/${campaign.id}/creatives`)}
-                  size="sm"
-                >
-                  <Upload className="mr-2 h-4 w-4" />
-                  Upload Creatives Now
-                </Button>
-              </div>
-            </div>
-
-            <div className="flex gap-4">
-              <div className="flex-shrink-0 w-8 h-8 rounded-full bg-primary/10 flex items-center justify-center">
-                <span className="text-sm font-semibold text-primary">2</span>
-              </div>
-              <div className="flex-grow">
-                <h3 className="font-semibold mb-1">Wait for Review</h3>
-                <p className="text-sm text-muted-foreground">
-                  Our team will review your creatives within 1-2 business days to ensure they meet
-                  our advertising policies. You'll receive an email notification once approved.
-                </p>
-              </div>
-            </div>
-
-            <div className="flex gap-4">
-              <div className="flex-shrink-0 w-8 h-8 rounded-full bg-primary/10 flex items-center justify-center">
-                <span className="text-sm font-semibold text-primary">3</span>
-              </div>
-              <div className="flex-grow">
-                <h3 className="font-semibold mb-1">Campaign Goes Live</h3>
-                <p className="text-sm text-muted-foreground">
-                  Your ads will automatically start displaying on {formatDate(campaign.start_date)}.
-                  Track performance in your campaign dashboard.
-                </p>
-              </div>
-            </div>
-          </div>
-        </CardContent>
-      </Card>
-
-      {/* Quick Actions */}
-      <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-        <Card className="hover:shadow-lg transition-shadow cursor-pointer" onClick={() => navigate(`/campaigns/${campaign.id}/creatives`)}>
-          <CardHeader>
-            <Upload className="h-8 w-8 text-primary mb-2" />
-            <CardTitle className="text-lg">Upload Creatives</CardTitle>
-            <CardDescription>Add your ad images and details</CardDescription>
-          </CardHeader>
-          <CardContent>
-            <Button variant="outline" className="w-full">
-              Get Started
-              <SpriteIcon name="arrow-right" className="ml-2 h-4 w-4" />
-            </Button>
-          </CardContent>
-        </Card>
-
-        <Card className="hover:shadow-lg transition-shadow cursor-pointer" onClick={() => navigate('/campaigns')}>
-          <CardHeader>
-            <BarChart3 className="h-8 w-8 text-primary mb-2" />
-            <CardTitle className="text-lg">Campaign Dashboard</CardTitle>
-            <CardDescription>View all your campaigns</CardDescription>
-          </CardHeader>
-          <CardContent>
-            <Button variant="outline" className="w-full">
-              Go to Dashboard
-              <SpriteIcon name="arrow-right" className="ml-2 h-4 w-4" />
-            </Button>
-          </CardContent>
-        </Card>
-      </div>
-
-      {/* Support */}
-      <Card className="mt-6 bg-muted/50">
-        <CardContent className="pt-6">
-          <h3 className="font-semibold mb-2">Need Help?</h3>
-          <p className="text-sm text-muted-foreground mb-3">
-            Our support team is here to assist you with your campaign setup and any questions you
-            may have.
-          </p>
-          <div className="flex flex-col sm:flex-row gap-2">
-            <Button variant="outline" size="sm" asChild>
-              <a href="mailto:support@desmoinesinsider.com">Email Support</a>
-            </Button>
-            <Button variant="outline" size="sm" onClick={() => navigate('/advertising-policies')}>
-              View Ad Policies
-            </Button>
-          </div>
-        </CardContent>
-      </Card>
-    </div>
+    </BusinessLayout>
   );
 }

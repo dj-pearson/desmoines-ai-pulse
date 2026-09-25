@@ -354,6 +354,13 @@ jobs:
       # cent. Pins the trigger, the server-side recompute and the displayed total
       # to one rate card.
       - run: deno test --allow-read supabase/functions/_tests/campaign-pricing-authority.test.ts
+      # Business plan WP4. Campaign and creative write guards (a buyer cannot
+      # set their own status, money or approval), the notification relay built
+      # from the campaign row rather than the request body, and triage leaving a
+      # submission pending when publish_submission is unavailable.
+      - run: deno test --allow-read supabase/functions/_tests/campaign-write-guards.test.ts
+      - run: deno test --allow-read supabase/functions/send-campaign-notification/decision.test.ts
+      - run: deno test --allow-read supabase/functions/triage-event-submission/logic.test.ts
       # WEB-ADS-002. Impressions and clicks were inserted from the browser into
       # tables with no INSERT policy, so RLS refused every write and every
       # advertiser dashboard read zero. Pins the server-side write path, the bot

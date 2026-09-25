@@ -120,6 +120,10 @@ export const PRERENDER_ROUTES = [
 export const SITEMAP_ONLY_ROUTES = [
   '/advertise',
   '/business-partnership',
+  // Where organizers send events (docs/page-plans/business.md WP5 item 4).
+  // Indexable so "submit an event Des Moines" finds it; signed out it is a
+  // short explanation and a sign-in link, not worth a Chromium render.
+  '/submit-event',
   '/privacy-policy',
   '/terms',
 ];

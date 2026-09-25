@@ -1,127 +1,98 @@
-import { useEffect } from "react";
-import { useNavigate } from "react-router-dom";
-import { useAuth } from "@/hooks/useAuth";
-import { useDocumentTitle } from "@/hooks/useDocumentTitle";
-import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
+import { lazy, Suspense } from "react";
+import { Link, useNavigate } from "react-router-dom";
 import { Button } from "@/components/ui/button";
-import { Alert, AlertDescription } from "@/components/ui/alert";
-import { ArrowLeft, LogIn } from "lucide-react";
+import { Skeleton } from "@/components/ui/skeleton";
 import { Breadcrumbs } from "@/components/ui/breadcrumbs";
-import EventSubmissionForm from "@/components/EventSubmissionForm";
-import { toast } from "sonner";
-import { SpriteIcon } from "@/components/ui/SpriteIcon";
+import SEOHead from "@/components/SEOHead";
+import { BusinessLayout } from "@/components/business/BusinessLayout";
+import { useAuth } from "@/hooks/useAuth";
+import { getCanonicalUrl } from "@/lib/brandConfig";
+import { SUBMISSION_REVIEW_COPY } from "@/lib/businessCopy";
+
+// Only the signed-in branch renders the form, so a signed-out visitor doesn't
+// download it.
+const EventSubmissionForm = lazy(() => import("@/components/EventSubmissionForm"));
+
+const TITLE = "Submit an Event";
+const DESCRIPTION =
+  "Add your Des Moines event to the Des Moines Insider calendar. Sign in, fill in the details and follow its status from your dashboard.";
+
+function SubmitEventHead() {
+  // SEOHead is the one title source here (WEB-SEO-028); useDocumentTitle would
+  // be a second.
+  return <SEOHead title={TITLE} description={DESCRIPTION} canonicalUrl={getCanonicalUrl("/submit-event")} url="/submit-event" />;
+}
+
+function FormSkeleton() {
+  return (
+    <div className="space-y-4" role="status" aria-label="Loading the form">
+      <Skeleton className="h-10 w-full" />
+      <Skeleton className="h-10 w-full" />
+      <Skeleton className="h-32 w-full" />
+    </div>
+  );
+}
 
 export default function SubmitEvent() {
   const { user, isLoading: authLoading } = useAuth();
   const navigate = useNavigate();
-  // The hook appends " | Des Moines Insider" itself, so passing it here
-  // rendered "Submit an Event | Des Moines Insider | Des Moines Insider" in
-  // the tab (WEB-SEO-028).
-  useDocumentTitle("Submit an Event");
 
+  // EventSubmissionForm shows its own success toast; a second one here said
+  // a review deadline that nothing guarantees.
   const handleEventSubmitted = () => {
-    toast.success("Event submitted successfully! We'll review it within 48 hours.");
     navigate("/dashboard?tab=events");
   };
 
-  if (authLoading) {
-    return (
-      <div className="min-h-screen bg-background flex items-center justify-center" role="status" aria-live="polite">
-        <div className="animate-pulse space-y-4 text-center">
-          <div className="h-8 bg-muted rounded w-48 mx-auto" />
-          <div className="h-4 bg-muted rounded w-32 mx-auto" />
-          <span className="sr-only">Loading...</span>
-        </div>
-      </div>
-    );
-  }
-
-  if (!user) {
-    return (
-      <div className="min-h-screen bg-background">
-        <div className="container mx-auto px-4 py-8 max-w-2xl">
-          <Breadcrumbs
-            className="mb-6"
-            items={[
-              { label: "Home", href: "/" },
-              { label: "Submit an Event" },
-            ]}
-          />
-          <Card className="text-center">
-            <CardHeader>
-              <div className="mx-auto mb-4 p-4 rounded-full bg-primary/10">
-                <SpriteIcon name="calendar" className="h-10 w-10 text-primary" />
-              </div>
-              <CardTitle className="text-2xl">Submit Your Event</CardTitle>
-              <CardDescription className="text-base">
-                Share your upcoming event with the Des Moines community. Sign in or create a free account to get started.
-              </CardDescription>
-            </CardHeader>
-            <CardContent className="space-y-4">
-              <Alert>
-                <AlertDescription>
-                  All event submissions are reviewed by our team within 48 hours. Once approved, your event will appear on the site for thousands of local visitors to discover.
-                </AlertDescription>
-              </Alert>
-              <div className="flex flex-col sm:flex-row gap-3 justify-center">
-                <Button onClick={() => navigate("/auth?redirect=/submit-event")} size="lg">
-                  <LogIn className="h-4 w-4 mr-2" />
-                  Sign In to Submit
-                </Button>
-                <Button variant="outline" onClick={() => navigate("/auth?redirect=/submit-event")} size="lg">
-                  Create Free Account
-                </Button>
-              </div>
-            </CardContent>
-          </Card>
-        </div>
-      </div>
-    );
-  }
-
   return (
-    <div className="min-h-screen bg-background">
-      <div className="bg-card border-b px-4 py-4 sticky top-0 z-40 backdrop-blur supports-[backdrop-filter]:bg-card/95">
-        <div className="container mx-auto max-w-3xl">
-          <div className="flex items-center justify-between">
-            <Button
-              variant="ghost"
-              size="sm"
-              onClick={() => navigate(-1)}
-              className="text-muted-foreground hover:text-foreground"
-            >
-              <ArrowLeft className="h-4 w-4 mr-2" />
-              Back
-            </Button>
-            <div className="flex items-center gap-2">
-              <SpriteIcon name="calendar" className="h-5 w-5 text-primary" />
-              <h1 className="text-xl font-bold">Submit an Event</h1>
-            </div>
-            <div className="w-20" />
-          </div>
-        </div>
-      </div>
-
-      <div className="container mx-auto px-4 py-6 max-w-3xl">
+    <BusinessLayout>
+      <SubmitEventHead />
+      <div className="container mx-auto max-w-3xl px-4 py-8">
         <Breadcrumbs
-          className="mb-4"
+          className="mb-6"
           items={[
             { label: "Home", href: "/" },
-            { label: "Submit an Event" },
+            { label: "Submit an event" },
           ]}
         />
-        <Card>
-          <CardHeader>
-            <CardTitle>Submit Your Event</CardTitle>
-            <CardDescription>
-              Share your event with the Des Moines community. All submissions are reviewed within 48 hours.
-            </CardDescription>
-          </CardHeader>
-          <CardContent>
-            <EventSubmissionForm onSuccess={handleEventSubmitted} />
-          </CardContent>
-        </Card>
+
+        <header className="mb-8 space-y-3">
+          <h1 className="text-3xl font-bold tracking-tight text-foreground">Submit an event</h1>
+          <p className="max-w-prose text-muted-foreground">
+            Send us an event happening in the Des Moines area. {SUBMISSION_REVIEW_COPY} You can follow where it
+            stands from your dashboard.
+          </p>
+        </header>
+
+        {authLoading ? (
+          <FormSkeleton />
+        ) : user ? (
+          <section aria-labelledby="submit-form-heading">
+            <h2 id="submit-form-heading" className="mb-4 text-xl font-semibold">
+              Event details
+            </h2>
+            <Suspense fallback={<FormSkeleton />}>
+              <EventSubmissionForm onSuccess={handleEventSubmitted} />
+            </Suspense>
+          </section>
+        ) : (
+          <section aria-labelledby="submit-signin-heading" className="space-y-4">
+            <h2 id="submit-signin-heading" className="text-xl font-semibold">
+              Sign in to submit
+            </h2>
+            <p className="max-w-prose text-muted-foreground">
+              Your account is where you'll see whether your event was approved and when it's live.
+            </p>
+            <div className="flex flex-wrap gap-3">
+              <Button asChild size="lg" className="min-h-11">
+                <Link to="/auth?redirect=/submit-event">Sign in</Link>
+              </Button>
+              <Button asChild size="lg" variant="outline" className="min-h-11">
+                <Link to="/auth?mode=signup&redirect=/submit-event">Create free account</Link>
+              </Button>
+            </div>
+          </section>
+        )}
       </div>
-    </div>
+    </BusinessLayout>
   );
 }

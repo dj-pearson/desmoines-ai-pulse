@@ -1,8 +1,5 @@
 import { useEffect, useState } from "react";
 import { supabase } from "@/integrations/supabase/client";
-import { Card, CardContent } from "@/components/ui/card";
-import { Skeleton } from "@/components/ui/skeleton";
-import { TrendingUp, MousePointerClick, BarChart3 } from "lucide-react";
 
 /**
  * Search performance on /advertise (WEB-ADS-012).
@@ -56,42 +53,28 @@ export function formatMetricNumber(n: number): string {
   return n.toLocaleString();
 }
 
-interface StatCardProps {
-  icon: React.ElementType;
+interface StatProps {
   label: string;
   value: string;
   sub: string;
-  loading: boolean;
 }
 
-function StatCard({ icon: Icon, label, value, sub, loading }: StatCardProps) {
+function Stat({ label, value, sub }: StatProps) {
   return (
-    <Card className="border-border/50">
-      <CardContent className="pt-5 pb-4">
-        <div className="flex items-start gap-3">
-          <div className="mt-0.5 rounded-md bg-primary/10 p-2">
-            <Icon className="h-4 w-4 text-primary" />
-          </div>
-          <div className="min-w-0 flex-1">
-            <p className="text-xs font-medium text-muted-foreground uppercase tracking-wide">{label}</p>
-            {loading ? (
-              <>
-                <Skeleton className="mt-1 h-7 w-24" />
-                <Skeleton className="mt-1 h-3 w-32" />
-              </>
-            ) : (
-              <>
-                <p className="mt-0.5 text-2xl font-bold text-foreground">{value}</p>
-                <p className="text-xs text-muted-foreground">{sub}</p>
-              </>
-            )}
-          </div>
-        </div>
-      </CardContent>
-    </Card>
+    <div className="min-w-0">
+      <dt className="text-sm text-muted-foreground">{label}</dt>
+      <dd className="mt-0.5 text-2xl font-semibold tabular-nums text-foreground">{value}</dd>
+      <dd className="text-xs text-muted-foreground">{sub}</dd>
+    </div>
   );
 }
 
+/**
+ * Renders NOTHING until the read resolves, and nothing after it unless there
+ * is a reportable sample (business plan WP1 item 10). It used to draw three
+ * skeleton cards that then vanished on every visit, because the sample is
+ * almost never there: that was layout shift for a block that didn't appear.
+ */
 export function PlatformMetrics() {
   const [data, setData] = useState<PlatformMetricsData | null>(null);
   const [loading, setLoading] = useState(true);
@@ -101,12 +84,11 @@ export function PlatformMetrics() {
 
     async function load() {
       try {
-        const { data: result, error } = await supabase
-          .rpc("get_platform_advertising_metrics" as any);
+        const { data: result, error } = await supabase.rpc("get_platform_advertising_metrics" as never);
 
         if (!cancelled) {
           if (!error && result) {
-            setData(result as PlatformMetricsData);
+            setData(result as unknown as PlatformMetricsData);
           }
           setLoading(false);
         }
@@ -121,60 +103,48 @@ export function PlatformMetrics() {
 
   // No fallback values. A number here is one an advertiser plans a budget
   // against, so the only honest options are a measured one or none at all.
-  const hasSample = hasReportableSample(data);
-
-  if (!loading && !hasSample) return null;
-
-  const impressions = data?.monthly_impressions ?? 0;
-  const clicks = data?.monthly_clicks ?? 0;
-  const ctr = data?.avg_ctr ?? 0;
+  if (loading || !data || !hasReportableSample(data)) return null;
 
   return (
-    <div className="space-y-3">
-      <div className="flex items-center justify-between">
+    <section aria-labelledby="search-performance-heading" className="space-y-3">
+      <div className="flex flex-wrap items-baseline justify-between gap-2">
         <div>
-          <h3 className="text-base font-semibold">Search Performance</h3>
+          <h2 id="search-performance-heading" className="text-lg font-semibold">
+            Search Performance
+          </h2>
           <p className="text-sm text-muted-foreground">
             How often our pages appear in Google results, last 30 days
           </p>
         </div>
-        {!loading && hasSample && (
-          <span className="text-xs text-muted-foreground">
-            Based on {data!.data_days} days of data
-          </span>
-        )}
+        <span className="text-xs text-muted-foreground">
+          Based on {data.data_days} days of data
+        </span>
       </div>
 
-      <div className="grid grid-cols-1 gap-3 sm:grid-cols-3">
-        <StatCard
-          icon={TrendingUp}
+      <dl className="grid grid-cols-1 gap-4 sm:grid-cols-3">
+        <Stat
           label="Search Impressions"
-          value={formatMetricNumber(impressions)}
+          value={formatMetricNumber(data.monthly_impressions)}
           sub="Times our pages appeared in Google results"
-          loading={loading}
         />
-        <StatCard
-          icon={MousePointerClick}
+        <Stat
           label="Search Clicks"
-          value={formatMetricNumber(clicks)}
+          value={formatMetricNumber(data.monthly_clicks)}
           sub="Visits that started from a Google result"
-          loading={loading}
         />
-        <StatCard
-          icon={BarChart3}
+        <Stat
           label="Avg. Search CTR"
-          value={loading ? "-" : `${ctr}%`}
+          value={`${data.avg_ctr}%`}
           sub="Click-through rate from impressions"
-          loading={loading}
         />
-      </div>
+      </dl>
 
-      <p className="text-xs text-muted-foreground">
+      <p className="max-w-prose text-xs text-muted-foreground">
         Google Search Console, last 30 days. These are search impressions, not ad
         impressions: they show how often our pages surface in results, which is
         how most readers arrive. Your campaign is served to people already
         browsing Des Moines events, restaurants and attractions.
       </p>
-    </div>
+    </section>
   );
 }

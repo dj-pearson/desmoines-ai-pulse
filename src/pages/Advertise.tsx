@@ -1,807 +1,757 @@
-import React, { useState, useEffect } from "react";
-import { useNavigate, useSearchParams } from "react-router-dom";
-import { Helmet } from "react-helmet-async";
-import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
+import { useCallback, useEffect, useMemo, useRef, useState } from "react";
+import { Link, useLocation, useNavigate, useSearchParams } from "react-router-dom";
+import { useQueryClient } from "@tanstack/react-query";
+import { format } from "date-fns";
+import { CalendarIcon } from "lucide-react";
+import SEOHead from "@/components/SEOHead";
+import { BusinessLayout } from "@/components/business/BusinessLayout";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
-import { Checkbox } from "@/components/ui/checkbox";
-import { Badge } from "@/components/ui/badge";
 import { Calendar } from "@/components/ui/calendar";
 import { Popover, PopoverContent, PopoverTrigger } from "@/components/ui/popover";
-import { CalendarIcon, Star, Eye, Target, Megaphone, Zap, PanelRight } from "lucide-react";
-import { format, addDays, differenceInDays } from "date-fns";
-import { cn } from "@/lib/utils";
-import { useCampaigns, fetchRateCard, placementTotalPrice } from "@/hooks/useCampaigns";
-import type { RateCardEntry } from "@/hooks/useCampaigns";
+import { ListingPicker, fetchListingById } from "@/components/advertising/ListingPicker";
+import type { LinkedListing, SponsorableListingType } from "@/components/advertising/ListingPicker";
+import { PlatformMetrics } from "@/components/advertising/PlatformMetrics";
+import { PlacementRow } from "@/components/advertising/PlacementRow";
+import { AdvertiseSummaryBar } from "@/components/advertising/AdvertiseSummaryBar";
+import type { SummaryQuoteState } from "@/components/advertising/AdvertiseSummaryBar";
+import { useCampaigns, useRateCard, lowestDailyRate } from "@/hooks/useCampaigns";
+import { useCampaignQuote } from "@/hooks/useCampaignQuote";
 import { useToast } from "@/hooks/use-toast";
 import { useAuth } from "@/hooks/useAuth";
+import { supabase } from "@/integrations/supabase/client";
+import { cn } from "@/lib/utils";
+import { handleError } from "@/lib/errorHandler";
 import { PLACEMENT_SPECS } from "@/lib/placementSpecs";
 import type { PlacementType } from "@/lib/placementSpecs";
-import { Alert, AlertDescription } from "@/components/ui/alert";
-import { supabase } from "@/integrations/supabase/client";
-import { ListingPicker } from "@/components/advertising/ListingPicker";
-import type { LinkedListing } from "@/components/advertising/ListingPicker";
-import { PlatformMetrics } from "@/components/advertising/PlatformMetrics";
-import { SpriteIcon } from "@/components/ui/SpriteIcon";
+import { campaignDays, formatCampaignDate, formatUSD } from "@/lib/campaignDisplay";
+import { readCheckoutFailure } from "@/lib/campaignCheckout";
+import {
+  BUSINESS_CONTACT_EMAIL,
+  BUSINESS_CONTACT_HREF,
+  CREATIVE_REVIEW_COPY,
+  MIN_LEAD_TIME_DAYS,
+} from "@/lib/businessCopy";
+import { getCanonicalUrl, BRAND } from "@/lib/brandConfig";
+import { parseDateOnly } from "@/lib/dateOnly";
+import { addCentralDays, centralDateOf } from "@/lib/timezone";
+import {
+  clearAdvertiseDraft,
+  readAdvertiseDraft,
+  saveAdvertiseDraft,
+} from "@/lib/advertiseDraft";
+import type { AdvertiseDraftListing } from "@/lib/advertiseDraft";
 
-/** Minimum number of days from today before a campaign can start.
- *  Gives time for creative upload + admin review. */
-const MIN_LEAD_TIME_DAYS = 3;
+const PLACEMENTS = Object.values(PLACEMENT_SPECS);
 
-const ICON_MAP: Record<PlacementType, React.ElementType> = {
-  top_banner: Star,
-  featured_spot: Eye,
-  below_fold: Target,
-  sidebar: PanelRight,
-  sponsored_listing: Megaphone,
-};
+const UUID_RE = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
 
-const PLACEMENT_OPTIONS = (Object.values(PLACEMENT_SPECS) as typeof PLACEMENT_SPECS[PlacementType][]).map(spec => ({
-  type: spec.type,
-  name: spec.name,
-  description: spec.description,
-  // Fallback keeps a future unmapped placement from rendering `undefined` as a
-  // component, which throws React #130 and takes down the whole page (WEB-QA-001).
-  icon: ICON_MAP[spec.type] ?? Star,
-  features: spec.features,
-  noCreativeRequired: spec.noCreativeRequired ?? false,
-  assetRequirements: {
-    dimensions: spec.dimensions.map(d => d.label).join(', '),
-    formats: spec.formats,
-    maxFileSize: spec.maxSizeLabel,
-    animationType: spec.animationType,
-  },
-  specifications: spec.specifications,
-}));
+/** The listing a deep link asks for. Both spellings are live: the app sends
+ *  camelCase (IOS-ADS-016), ClaimListingCta sends snake_case. */
+function deepLinkListing(params: URLSearchParams): { type: string; id: string } | null {
+  const type = params.get("listingType") ?? params.get("listing_type");
+  const id = params.get("listingId") ?? params.get("listing_id");
+  if (!type || !id || !UUID_RE.test(id)) return null;
+  return { type, id };
+}
+
+function isSponsorable(type: string): type is SponsorableListingType {
+  return type === "event" || type === "restaurant";
+}
+
+/** yyyy-MM-dd for a Calendar pick. The picker hands back local midnight. */
+function dayOf(date: Date): string {
+  return format(date, "yyyy-MM-dd");
+}
+
+type CheckoutProblem =
+  | { kind: "save" }
+  | { kind: "link" }
+  | { kind: "verify_email" }
+  | { kind: "price_changed"; campaignId: string; currentTotal: number };
+
+interface SavedCampaign {
+  id: string;
+  signature: string;
+}
 
 export default function Advertise() {
   const navigate = useNavigate();
+  const location = useLocation();
   const [searchParams] = useSearchParams();
+  const queryClient = useQueryClient();
   const { toast } = useToast();
-  const { user } = useAuth();
-  const { createCampaign, createCheckoutSession, isLoading } = useCampaigns();
-  
-  const [campaignName, setCampaignName] = useState("");
-  const [selectedPlacements, setSelectedPlacements] = useState<
-    Array<{ type: string; days: number }>
-  >([]);
-  const [startDate, setStartDate] = useState<Date>();
-  const [endDate, setEndDate] = useState<Date>();
+  const { user, resendVerification } = useAuth();
+  // The list isn't shown here; only the mutations are used (WP1 item 10).
+  const { createCampaign, createCheckoutSession, cancelCampaign } = useCampaigns({ enabled: false });
+  const { data: rateCard = [] } = useRateCard();
+
+  // Restored once, synchronously, so a returning buyer never sees an empty
+  // form flash before their choices come back.
+  const [initialDraft] = useState(() => readAdvertiseDraft());
+  const [campaignName, setCampaignName] = useState(initialDraft?.name ?? "");
+  const [startDay, setStartDay] = useState<string | null>(initialDraft?.startDate ?? null);
+  const [endDay, setEndDay] = useState<string | null>(initialDraft?.endDate ?? null);
+  const [placements, setPlacements] = useState<PlacementType[]>(initialDraft?.placements ?? []);
+  // What's saved is the reference; the name shown is always re-read.
+  const [listingRef, setListingRef] = useState<AdvertiseDraftListing | null>(initialDraft?.listing ?? null);
   const [linkedListing, setLinkedListing] = useState<LinkedListing | null>(null);
-  const [rateCard, setRateCard] = useState<RateCardEntry[]>([]);
+  const [listingNotice, setListingNotice] = useState<string | null>(null);
+  const [endCapNotice, setEndCapNotice] = useState<string | null>(null);
 
-  useEffect(() => {
-    fetchRateCard().then(setRateCard);
-  }, []);
+  const [submitting, setSubmitting] = useState(false);
+  const submittingRef = useRef(false);
+  const [savedCampaign, setSavedCampaign] = useState<SavedCampaign | null>(null);
+  const [problem, setProblem] = useState<CheckoutProblem | null>(null);
+  const [resendState, setResendState] = useState<"idle" | "sending" | "sent" | "failed">("idle");
 
-  // Pre-fill the linked listing when arriving from the in-app "Promote this
-  // listing" entry (IOS-ADS-016): /advertise?listingType=event&listingId=…&listingName=…
+  const hasSponsoredListing = placements.includes("sponsored_listing");
+  const fromRate = lowestDailyRate(rateCard);
+
+  // ---- Deep link and draft listing -------------------------------------------------
   useEffect(() => {
-    const listingType = searchParams.get("listingType");
-    const listingId = searchParams.get("listingId");
-    const listingName = searchParams.get("listingName");
-    if (
-      (listingType === "event" || listingType === "restaurant") &&
-      listingId &&
-      listingName
-    ) {
-      setLinkedListing({ type: listingType, id: listingId, name: listingName });
+    const link = deepLinkListing(searchParams);
+    let cancelled = false;
+
+    if (link && !isSponsorable(link.type)) {
+      setListingNotice(
+        `Sponsored listings cover events and restaurants for now, so this ${link.type === "venue" ? "venue" : "attraction"} can't be sponsored yet. A banner placement works for any business.`,
+      );
+      return;
     }
+
+    const target = link && isSponsorable(link.type) ? { type: link.type, id: link.id } : listingRef;
+    if (!target) return;
+
+    if (link) {
+      setListingRef(target);
+      setPlacements((current) => (current.includes("sponsored_listing") ? current : [...current, "sponsored_listing"]));
+    }
+
+    fetchListingById(target.type, target.id).then((listing) => {
+      if (cancelled) return;
+      if (listing) {
+        setLinkedListing(listing);
+        setListingNotice(null);
+      } else {
+        setListingRef(null);
+        setListingNotice("We couldn't find that listing. Search for it below.");
+      }
+    });
+    return () => {
+      cancelled = true;
+    };
+    // Resolve once per deep link; listingRef changes from the picker don't refetch.
+    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [searchParams]);
 
-  const hasSponsoredListing = selectedPlacements.some(p => p.type === 'sponsored_listing');
+  // ---- Save the draft on every change ----------------------------------------------
+  useEffect(() => {
+    saveAdvertiseDraft({
+      name: campaignName,
+      startDate: startDay,
+      endDate: endDay,
+      placements,
+      listing: listingRef,
+    });
+  }, [campaignName, startDay, endDay, placements, listingRef]);
 
-  // Allow viewing the page without login - only require login at checkout
-  const handlePlacementToggle = (type: string, checked: boolean) => {
-    if (checked) {
-      setSelectedPlacements([...selectedPlacements, { type, days: 7 }]);
-    } else {
-      setSelectedPlacements(selectedPlacements.filter(p => p.type !== type));
+  // ---- Dates -----------------------------------------------------------------------
+  // Central calendar days. The old check compared against `new Date()` with
+  // its time of day, so the earliest selectable day was today+4 while the
+  // hint said today+3.
+  const earliestStartDay = addCentralDays(centralDateOf(), MIN_LEAD_TIME_DAYS);
+  const earliestStart = parseDateOnly(earliestStartDay);
+  const eventEndDay = hasSponsoredListing && linkedListing?.type === "event" ? linkedListing.endsOn ?? null : null;
+
+  // Cap the end at the sponsored event's last day: a sponsorship can't
+  // outlive its event.
+  useEffect(() => {
+    if (!eventEndDay || !linkedListing) {
+      setEndCapNotice(null);
+      return;
     }
+    if (endDay && endDay > eventEndDay) {
+      setEndDay(eventEndDay);
+    }
+    setEndCapNotice(
+      `Ends by ${formatCampaignDate(eventEndDay)} at the latest, because ${linkedListing.name} ends then.`,
+    );
+  }, [eventEndDay, endDay, linkedListing]);
+
+  const dateProblem = useMemo(() => {
+    if (eventEndDay && eventEndDay < earliestStartDay) {
+      return "This event ends before the earliest start date, so it can't be sponsored.";
+    }
+    if (startDay && startDay < earliestStartDay) {
+      return `Campaigns start ${MIN_LEAD_TIME_DAYS} days out at the soonest. Pick ${formatCampaignDate(earliestStartDay)} or later.`;
+    }
+    if (startDay && endDay && endDay < startDay) {
+      return "The end date is before the start date.";
+    }
+    return null;
+  }, [startDay, endDay, earliestStartDay, eventEndDay]);
+
+  const days = dateProblem ? null : campaignDays(startDay, endDay);
+
+  const [startOpen, setStartOpen] = useState(false);
+  const [endOpen, setEndOpen] = useState(false);
+
+  const handleStartSelect = (date: Date | undefined) => {
+    if (!date) return;
+    const day = dayOf(date);
+    setStartDay(day);
+    // A start past the end clears the end rather than leaving a backwards range.
+    if (endDay && endDay < day) setEndDay(null);
+    setStartOpen(false);
   };
 
-  const handleDaysChange = (type: string, days: number) => {
-    setSelectedPlacements(
-      selectedPlacements.map(p =>
-        p.type === type ? { ...p, days } : p
-      )
+  const handleEndSelect = (date: Date | undefined) => {
+    if (!date) return;
+    setEndDay(dayOf(date));
+    setEndOpen(false);
+  };
+
+  // ---- Price -----------------------------------------------------------------------
+  const quote = useCampaignQuote(placements, days);
+
+  const quoteState: SummaryQuoteState = useMemo(() => {
+    if (placements.length === 0) return { status: "no_placements" };
+    if (!days) return { status: "no_dates", fromRate };
+    if (quote.isError) return { status: "error" };
+    if (!quote.data) return { status: "loading" };
+    return { status: "ready", total: quote.data.total, days: quote.data.days };
+  }, [placements.length, days, fromRate, quote.isError, quote.data]);
+
+  const lineTotals = useMemo(() => {
+    const map = new Map<PlacementType, number>();
+    for (const line of quote.data?.lines ?? []) map.set(line.placement_type, line.total_price);
+    return map;
+  }, [quote.data]);
+
+  const togglePlacement = (type: PlacementType, checked: boolean) => {
+    setProblem(null);
+    setPlacements((current) =>
+      checked ? (current.includes(type) ? current : [...current, type]) : current.filter((p) => p !== type),
     );
   };
 
-  // WEB-ADS-003. This totalled a hardcoded daily rate and ignored the volume
-  // discount, so the summary said $70 where the stored campaign said $66.50.
-  // It now mirrors calculate_campaign_pricing() exactly: the discount tier for
-  // the length, applied to the rate-card rate, rounded once at the end the way
-  // the SQL rounds it. The number the buyer sees and the number the server
-  // charges come from the same rate card.
-  const calculateTotalCost = () => {
-    return selectedPlacements.reduce((total, placement) => {
-      const rate = rateCard.find(r => r.placement_type === placement.type);
-      if (!rate) return total;
-      return total + placementTotalPrice(rate, placement.days);
-    }, 0);
+  const handlePickListing = (listing: LinkedListing | null) => {
+    setLinkedListing(listing);
+    setListingRef(listing ? { type: listing.type, id: listing.id } : null);
+    setListingNotice(null);
   };
 
-  const handleCreateCampaign = async () => {
-    // Check if user is logged in first
+  // ---- Checkout --------------------------------------------------------------------
+  const signature = JSON.stringify({
+    name: campaignName.trim(),
+    startDay,
+    endDay,
+    placements: [...placements].sort(),
+    listing: hasSponsoredListing ? linkedListing?.id ?? null : null,
+  });
+
+  const release = useCallback(() => {
+    submittingRef.current = false;
+    setSubmitting(false);
+  }, []);
+
+  const startCheckout = useCallback(
+    async (campaignId: string, retried = false) => {
+      try {
+        const checkoutUrl = await createCheckoutSession(campaignId);
+        // The campaign is on the server now; the local copy has done its job.
+        clearAdvertiseDraft();
+        window.location.href = checkoutUrl;
+        // Stay busy until the browser leaves, so a second click can't start
+        // a second session.
+      } catch (error) {
+        handleError(error, { component: "Advertise", action: "checkout" });
+        const failure = await readCheckoutFailure(error);
+        if (failure.kind === "verify_email") {
+          setProblem({ kind: "verify_email" });
+        } else if (failure.kind === "price_changed" && !retried) {
+          await queryClient.invalidateQueries({ queryKey: ["campaign-quote"] });
+          setProblem({ kind: "price_changed", campaignId, currentTotal: failure.currentTotal });
+        } else {
+          clearAdvertiseDraft();
+          toast({
+            title: "Your campaign is saved; payment didn't start",
+            description: "You can pay for it from the campaign page.",
+          });
+          navigate(`/campaigns/${campaignId}`);
+        }
+        release();
+      }
+    },
+    [createCheckoutSession, navigate, queryClient, release, toast],
+  );
+
+  /**
+   * Save the campaign (unless the saved draft still matches) and open checkout.
+   *
+   * `replaceCampaignId` is the price-changed path. create-campaign-checkout
+   * answers 409 when the stored placement totals disagree with the rate card,
+   * and nothing on the server rewrites those totals afterwards, so retrying
+   * checkout on the same campaign would get the same 409 forever. A fresh
+   * campaign is priced by the placement trigger at today's rate card, which is
+   * the total the 409 reported. The old draft is cancelled, best effort.
+   */
+  const submitCampaign = async (replaceCampaignId: string | null) => {
+    if (submittingRef.current) return;
+
     if (!user) {
-      toast({
-        title: "Login Required",
-        description: "Please log in or create an account to continue.",
-        variant: "destructive",
-      });
-      // Redirect to auth page with return URL
-      navigate("/auth?redirect=/advertise");
+      // The draft is already saved; bring the whole query string back so a
+      // deep-linked listing survives the trip too.
+      const back = `${location.pathname}${location.search}`;
+      navigate(`/auth?redirect=${encodeURIComponent(back)}`);
       return;
     }
 
-    if (!campaignName || selectedPlacements.length === 0 || !startDate || !endDate) {
+    if (!campaignName.trim() || placements.length === 0 || !startDay || !endDay) {
       toast({
-        title: "Missing Information",
-        description: "Please fill in all required fields.",
+        title: "A few things are missing",
+        description: "Name the campaign, pick dates and choose at least one placement.",
         variant: "destructive",
       });
       return;
     }
-
+    if (dateProblem || !days) return;
     if (hasSponsoredListing && !linkedListing) {
       toast({
-        title: "Listing Required",
-        description: "Please select the event or restaurant you want to sponsor.",
+        title: "Pick the listing to sponsor",
+        description: "Choose the event or restaurant under Listing to sponsor.",
         variant: "destructive",
       });
       return;
     }
+    if (!quote.data) return;
 
-    try {
-      const campaign = await createCampaign({
-        name: campaignName,
-        placements: selectedPlacements.map(p => ({
-          placement_type: p.type as any,
-          days_count: p.days,
-        })),
-        start_date: format(startDate, "yyyy-MM-dd"),
-        end_date: format(endDate, "yyyy-MM-dd"),
-      });
+    submittingRef.current = true;
+    setSubmitting(true);
+    setProblem(null);
 
-      // If a sponsored listing was selected, link it to the campaign
+    let campaignId = !replaceCampaignId && savedCampaign?.signature === signature ? savedCampaign.id : null;
+
+    if (!campaignId) {
+      const staleId = replaceCampaignId ?? savedCampaign?.id ?? null;
+      if (staleId) {
+        // The buyer changed their choices after an unpaid draft was saved, or
+        // the saved draft was priced before a rate-card change. Cancel it
+        // rather than leave it lying around; best effort.
+        cancelCampaign(staleId).catch((error) =>
+          handleError(error, { component: "Advertise", action: "cancelStaleDraft" }),
+        );
+        setSavedCampaign(null);
+      }
+
+      try {
+        const campaign = await createCampaign({
+          name: campaignName.trim(),
+          // One length for every placement, from the dates: the pricing
+          // trigger and create-campaign-checkout both count it this way.
+          placements: placements.map((placement_type) => ({ placement_type, days_count: days })),
+          start_date: startDay,
+          end_date: endDay,
+        });
+        campaignId = campaign.id as string;
+      } catch (error) {
+        handleError(error, { component: "Advertise", action: "createCampaign" });
+        setProblem({ kind: "save" });
+        release();
+        return;
+      }
+
       if (hasSponsoredListing && linkedListing) {
-        await supabase.from('sponsored_listing_links').insert({
-          campaign_id: campaign.id,
+        const { error: linkError } = await supabase.from("sponsored_listing_links").insert({
+          campaign_id: campaignId,
           listing_type: linkedListing.type,
           listing_id: linkedListing.id,
         });
+        if (linkError) {
+          // A paid sponsored campaign with no link never activates, so stop
+          // here and take the draft back out.
+          handleError(linkError, { component: "Advertise", action: "linkSponsoredListing" });
+          try {
+            await cancelCampaign(campaignId);
+          } catch (error) {
+            handleError(error, { component: "Advertise", action: "cancelUnlinkedDraft" });
+          }
+          setProblem({ kind: "link" });
+          release();
+          return;
+        }
       }
 
-      // No admin ping here (WEB-ADS-013 AC3). This fired on campaign_created,
-      // which is BEFORE the advertiser has been sent to Stripe - so every
-      // abandoned draft notified every admin about a campaign that was never
-      // paid for and never ran. stripe-webhook notifies admins on
-      // payment_received, from the event that means money arrived.
-
-      toast({
-        title: "Campaign Created!",
-        description: "Redirecting to secure payment...",
-      });
-
-      // Navigate to Stripe checkout in same tab (better UX, no popup blockers)
-      const checkoutUrl = await createCheckoutSession(campaign.id);
-      window.location.href = checkoutUrl;
-    } catch (error) {
-      toast({
-        title: "Error",
-        description: "Failed to create campaign. Please try again.",
-        variant: "destructive",
-      });
+      setSavedCampaign({ id: campaignId, signature });
     }
+
+    // A replacement that 409s too is not offered a third try: it goes to the
+    // campaign page like any other checkout failure.
+    await startCheckout(campaignId, replaceCampaignId !== null);
   };
 
+  const handleCreateCampaign = () => {
+    void submitCampaign(null);
+  };
+
+  const handlePayChangedPrice = (campaignId: string) => {
+    void submitCampaign(campaignId);
+  };
+
+  const handleResend = async () => {
+    if (!user?.email) return;
+    setResendState("sending");
+    const result = await resendVerification(user.email);
+    setResendState(result.success ? "sent" : "failed");
+  };
+
+  const ctaLabel = !user
+    ? "Sign in to continue"
+    : savedCampaign?.signature === signature
+      ? "Go to payment"
+      : "Continue to payment";
+
+  const ctaDisabled =
+    submitting ||
+    placements.length === 0 ||
+    (!!user && (quoteState.status !== "ready" || (hasSponsoredListing && !linkedListing)));
+
+  const summaryNote = !user
+    ? "Sign in or create a free account to pay. Your choices are kept."
+    : hasSponsoredListing && !linkedListing
+      ? "Pick the listing to sponsor first."
+      : null;
+
+  const startLabel = startDay ? formatCampaignDate(startDay) : "not set";
+  const endLabel = endDay ? formatCampaignDate(endDay) : "not set";
+
   return (
-    <div className="min-h-screen bg-background">
-      {/* SEO Headers */}
-      <Helmet>
-        <title>Advertise with Des Moines Insider - Reach Local Audiences</title>
-        <meta name="description" content="Advertise your business with Des Moines Insider. Reach thousands of locals looking for events, restaurants, and attractions in Des Moines, Iowa." />
-        <meta name="keywords" content="Des Moines advertising, local marketing, Iowa business promotion, event advertising" />
-        <meta property="og:title" content="Advertise with Des Moines Insider" />
-        <meta property="og:description" content="Reach thousands of locals looking for events, restaurants, and attractions in Des Moines" />
-        <meta property="og:type" content="website" />
-        <meta property="og:url" content="https://desmoinesinsider.com/advertise" />
-        <meta name="twitter:card" content="summary_large_image" />
-        <meta name="twitter:title" content="Advertise with Des Moines Insider" />
-        <meta name="twitter:description" content="Reach thousands of locals looking for events, restaurants, and attractions in Des Moines" />
-      </Helmet>
+    <BusinessLayout footerClearanceClassName="h-40 lg:hidden">
+      <SEOHead
+        title="Advertise on Des Moines Insider"
+        description="Buy a banner or a sponsored listing on Des Moines Insider's event, restaurant and attraction pages. Pick your dates, see the exact total, pay by card."
+        canonicalUrl={getCanonicalUrl("/advertise")}
+        url={getCanonicalUrl("/advertise")}
+        imageUrl={getCanonicalUrl(BRAND.ogImage)}
+      />
 
-      {/* Hero Section */}
-      <section className="bg-gradient-to-br from-primary/10 via-background to-secondary/10 py-16">
-        <div className="container mx-auto px-4">
-          <div className="max-w-4xl mx-auto text-center">
-            <h1 className="text-2xl sm:text-3xl md:text-4xl lg:text-5xl font-bold mb-6 text-foreground">
-              Advertise with Des Moines Insider
+      <div className="pb-48 lg:pb-16">
+        <header className="border-b">
+          <div className="container mx-auto max-w-5xl px-4 py-8 lg:py-12">
+            <h1 className="text-3xl font-bold tracking-tight text-foreground md:text-4xl">
+              Advertise on Des Moines Insider
             </h1>
-            <p className="text-muted-foreground text-xl md:text-2xl mb-8 leading-relaxed">
-              Reach thousands of locals looking for events, restaurants, and attractions in Des Moines
+            <p className="mt-3 max-w-prose text-lg text-muted-foreground">
+              Put your business in front of people planning what to do in Des Moines. You see the
+              exact total before you pay.
             </p>
-            <div className="grid grid-cols-1 md:grid-cols-3 gap-6 mb-8">
-              <div className="bg-card p-6 rounded-lg border">
-                <div className="text-3xl font-bold text-primary mb-2">50K+</div>
-                <div className="text-sm text-muted-foreground">Monthly Visitors</div>
-              </div>
-              <div className="bg-card p-6 rounded-lg border">
-                <div className="text-3xl font-bold text-primary mb-2">15K+</div>
-                <div className="text-sm text-muted-foreground">Newsletter Subscribers</div>
-              </div>
-              <div className="bg-card p-6 rounded-lg border">
-                <div className="text-3xl font-bold text-primary mb-2">95%</div>
-                <div className="text-sm text-muted-foreground">Local Audience</div>
-              </div>
-            </div>
-          </div>
-        </div>
-      </section>
-
-      {/* Real Platform Metrics — data from GSC, shown to advertisers for transparency */}
-      <section className="py-8 border-b">
-        <div className="container mx-auto px-4">
-          <div className="max-w-4xl mx-auto">
-            <PlatformMetrics />
-          </div>
-        </div>
-      </section>
-
-      {/* Main Content */}
-      <section className="py-12">
-        <div className="container mx-auto px-4">
-          <div className="max-w-4xl mx-auto">
-            <div className="grid md:grid-cols-2 gap-8">
-          <div className="space-y-6">
-            <Card>
-              <CardHeader>
-                <CardTitle>Campaign Details</CardTitle>
-              </CardHeader>
-              <CardContent className="space-y-4">
-                <div>
-                  <Label htmlFor="campaign-name">Campaign Name</Label>
-                  <Input
-                    id="campaign-name"
-                    value={campaignName}
-                    onChange={(e) => setCampaignName(e.target.value)}
-                    placeholder="My Awesome Campaign"
-                  />
-                </div>
-
-                <div className="grid grid-cols-2 gap-4">
-                  <div>
-                    <Label>Start Date</Label>
-                    <Popover>
-                      <PopoverTrigger asChild>
-                        <Button
-                          variant="outline"
-                          className={cn(
-                            "w-full justify-start text-left font-normal",
-                            !startDate && "text-muted-foreground"
-                          )}
-                        >
-                          <CalendarIcon className="mr-2 h-4 w-4" />
-                          {startDate ? format(startDate, "PPP") : "Pick a date"}
-                        </Button>
-                      </PopoverTrigger>
-                      <PopoverContent className="w-auto p-0" align="start">
-                        <Calendar
-                          mode="single"
-                          selected={startDate}
-                          onSelect={setStartDate}
-                          disabled={(date) => date < addDays(new Date(), MIN_LEAD_TIME_DAYS)}
-                          initialFocus
-                        />
-                      </PopoverContent>
-                    </Popover>
-                    <p className="text-xs text-muted-foreground mt-1">
-                      Earliest start: {format(addDays(new Date(), MIN_LEAD_TIME_DAYS), "MMM dd")} ({MIN_LEAD_TIME_DAYS}-day lead time for creative review)
-                    </p>
-                  </div>
-
-                  <div>
-                    <Label>End Date</Label>
-                    <Popover>
-                      <PopoverTrigger asChild>
-                        <Button
-                          variant="outline"
-                          className={cn(
-                            "w-full justify-start text-left font-normal",
-                            !endDate && "text-muted-foreground"
-                          )}
-                        >
-                          <CalendarIcon className="mr-2 h-4 w-4" />
-                          {endDate ? format(endDate, "PPP") : "Pick a date"}
-                        </Button>
-                      </PopoverTrigger>
-                      <PopoverContent className="w-auto p-0" align="start">
-                        <Calendar
-                          mode="single"
-                          selected={endDate}
-                          onSelect={setEndDate}
-                          disabled={(date) => date < (startDate || addDays(new Date(), MIN_LEAD_TIME_DAYS))}
-                          initialFocus
-                        />
-                      </PopoverContent>
-                    </Popover>
-                  </div>
-                </div>
-
-                {startDate && endDate && (
-                  <Alert>
-                    <AlertDescription className="text-sm">
-                      Campaign duration: <strong>{differenceInDays(endDate, startDate) + 1} days</strong>.
-                      Please upload your creatives by <strong>{format(addDays(startDate, -1), "MMM dd, yyyy")}</strong> to ensure
-                      review is completed before launch.
-                    </AlertDescription>
-                  </Alert>
-                )}
-              </CardContent>
-            </Card>
-
-            <Card>
-              <CardHeader>
-                <CardTitle>Ad Placements</CardTitle>
-                <CardDescription>
-                  Choose where you want your ads to appear
-                </CardDescription>
-              </CardHeader>
-              <CardContent className="space-y-4">
-                {PLACEMENT_OPTIONS.map((option) => {
-                  const Icon = option.icon;
-                  const isSelected = selectedPlacements.some(p => p.type === option.type);
-                  const selectedPlacement = selectedPlacements.find(p => p.type === option.type);
-
-                  return (
-                    <div key={option.type} className="border rounded-lg p-4">
-                      <div className="flex items-start space-x-3">
-                        {/*
-                          Radix renders Checkbox as a <button role="checkbox">
-                          whose only child is an icon, so without an explicit
-                          label it has NO accessible name — a screen reader
-                          announced all five of these as just "checkbox,
-                          unchecked", with no way to tell which ad placement
-                          was being selected. The visible name lives in the
-                          sibling <h3>, which is not programmatically
-                          associated. Labelling by id keeps the visual layout
-                          untouched. WCAG 4.1.2.
-                        */}
-                        <Checkbox
-                          id={`placement-${option.type}`}
-                          aria-labelledby={`placement-label-${option.type}`}
-                          checked={isSelected}
-                          onCheckedChange={(checked) =>
-                            handlePlacementToggle(option.type, checked as boolean)
-                          }
-                        />
-                        <div className="flex-1">
-                          <div className="flex items-center space-x-2 mb-2">
-                            <Icon className="h-5 w-5 text-primary" aria-hidden="true" />
-                            <h3 className="font-semibold" id={`placement-label-${option.type}`}>
-                              {option.name}
-                            </h3>
-                            <span className="text-sm text-muted-foreground">
-                              {rateCard.find(r => r.placement_type === option.type)
-                                ? `$${rateCard.find(r => r.placement_type === option.type)!.base_daily_rate}/day`
-                                : "\u2014"}
-                            </span>
-                          </div>
-                          <p className="text-sm text-muted-foreground mb-2">
-                            {option.description}
-                          </p>
-                          <div className="flex flex-wrap gap-1 mb-3">
-                            {option.features.map((feature) => (
-                              <span
-                                key={feature}
-                                className="text-xs bg-muted px-2 py-1 rounded"
-                              >
-                                {feature}
-                              </span>
-                            ))}
-                           </div>
-                           
-                           {/* Asset Requirements */}
-                           {option.noCreativeRequired ? (
-                             <div className="bg-amber-50 dark:bg-amber-950/20 border border-amber-200 dark:border-amber-800 p-3 rounded-md mb-3 text-xs">
-                               <h4 className="font-semibold text-sm mb-1 text-amber-700 dark:text-amber-400">No Creative Upload Needed</h4>
-                               <p className="text-muted-foreground">Your existing listing image, name, and details will be used automatically. Simply select the listing you want to promote below.</p>
-                             </div>
-                           ) : (
-                             <div className="bg-muted/50 p-3 rounded-md mb-3 text-xs space-y-1">
-                               <h4 className="font-semibold text-sm mb-2">Asset Requirements:</h4>
-                               <div>
-                                 <span className="font-medium">Accepted Sizes:</span> {option.assetRequirements.dimensions}
-                               </div>
-                               <div>
-                                 <span className="font-medium">Formats:</span> {option.assetRequirements.formats.join(", ")}
-                               </div>
-                               <div>
-                                 <span className="font-medium">Max Size:</span> {option.assetRequirements.maxFileSize}
-                               </div>
-                               <div>
-                                 <span className="font-medium">Animation:</span> {option.assetRequirements.animationType}
-                               </div>
-                             </div>
-                           )}
-
-                           {/* Design Specifications */}
-                           <div className="space-y-1">
-                             <h4 className="font-semibold text-xs">Design Guidelines:</h4>
-                             <ul className="text-xs text-muted-foreground space-y-0.5">
-                               {option.specifications.map((spec, index) => (
-                                 <li key={index} className="flex items-start">
-                                   <span className="text-primary mr-1">•</span>
-                                   {spec}
-                                 </li>
-                               ))}
-                             </ul>
-                           </div>
-                          {isSelected && (() => {
-                            const days = selectedPlacement?.days || 7;
-                            const rateEntry = rateCard.find(r => r.placement_type === option.type);
-                            const cpmRate = rateEntry?.cpm_rate ?? 10;
-                            // WEB-ADS-003: every number below comes from the
-                            // rate card now. It used to come from a constant in
-                            // the bundle, which stopped matching the moment an
-                            // admin edited a rate in AdRateManager.
-                            const dailyRate = rateEntry?.base_daily_rate ?? 0;
-                            const isCpmTier = dailyRate > 5;
-                            const estDailyImpressions = isCpmTier
-                              ? Math.round((dailyRate / cpmRate) * 1000)
-                              : null;
-                            const estTotalImpressions = estDailyImpressions
-                              ? estDailyImpressions * days
-                              : null;
-
-                            return (
-                              <div className="mt-3 space-y-2">
-                                <div className="flex items-center space-x-2">
-                                  <Label htmlFor={`days-${option.type}`} className="text-sm">
-                                    Days:
-                                  </Label>
-                                  <Input
-                                    id={`days-${option.type}`}
-                                    type="number"
-                                    min="1"
-                                    max="365"
-                                    value={days}
-                                    onChange={(e) =>
-                                      handleDaysChange(option.type, parseInt(e.target.value) || 1)
-                                    }
-                                    className="w-20"
-                                  />
-                                  <span className="text-sm font-semibold">
-                                    = ${rateEntry ? placementTotalPrice(rateEntry, days) : 0}
-                                  </span>
-                                </div>
-
-                                {isCpmTier ? (
-                                  <div className="rounded-md border border-primary/20 bg-primary/5 p-3 text-xs space-y-1">
-                                    <div className="flex items-center gap-1.5 font-semibold text-primary">
-                                      <Zap className="h-3.5 w-3.5" />
-                                      CPM Pricing Active
-                                    </div>
-                                    <p className="text-muted-foreground">
-                                      Est.{" "}
-                                      <span className="font-semibold text-foreground">
-                                        ~{estDailyImpressions?.toLocaleString()} impressions/day
-                                      </span>{" "}
-                                      · {estTotalImpressions?.toLocaleString()} total over {days} {days === 1 ? "day" : "days"}
-                                    </p>
-                                    <p className="text-muted-foreground">
-                                      Based on ${cpmRate} CPM — adjust CPM in Admin → Advertising
-                                    </p>
-                                  </div>
-                                ) : (
-                                  <div className="rounded-md border border-border bg-muted/30 p-3 text-xs flex items-center gap-1.5 text-muted-foreground">
-                                    <SpriteIcon name="trending-up" className="h-3.5 w-3.5 shrink-0" />
-                                    <span>
-                                      <span className="font-medium text-foreground">Flat Rate</span>
-                                      {" "}— Standard visibility. Upgrade to a higher-tier placement for CPM-based impression estimates.
-                                    </span>
-                                  </div>
-                                )}
-                              </div>
-                            );
-                          })()}
-                        </div>
-                      </div>
-                    </div>
-                  );
-                })}
-              </CardContent>
-            </Card>
-
-            {/* Listing Picker — shown only when sponsored_listing is selected */}
-            {hasSponsoredListing && (
-              <Card className="border-amber-300 dark:border-amber-700">
-                <CardHeader>
-                  <CardTitle className="flex items-center gap-2">
-                    <Megaphone className="h-5 w-5 text-amber-500" />
-                    Select Your Listing to Sponsor
-                  </CardTitle>
-                  <CardDescription>
-                    Choose the specific event or restaurant you want to promote as a sponsored featured item. A <strong>Sponsored</strong> badge will be displayed per FTC guidelines.
-                  </CardDescription>
-                </CardHeader>
-                <CardContent>
-                  <ListingPicker value={linkedListing} onChange={setLinkedListing} />
-                </CardContent>
-              </Card>
+            {fromRate !== null && (
+              <p className="mt-2 font-medium tabular-nums">From {formatUSD(fromRate)}/day</p>
             )}
           </div>
+        </header>
 
-          <div>
-            <Card className="sticky top-8">
-              <CardHeader>
-                <CardTitle>Campaign Summary</CardTitle>
-              </CardHeader>
-              <CardContent className="space-y-4">
-                <div className="space-y-2">
-                  <div className="flex justify-between text-sm">
-                    <span>Campaign Name:</span>
-                    <span>{campaignName || "Not set"}</span>
-                  </div>
-                  <div className="flex justify-between text-sm">
-                    <span>Start Date:</span>
-                    <span>{startDate ? format(startDate, "MMM dd, yyyy") : "Not set"}</span>
-                  </div>
-                  <div className="flex justify-between text-sm">
-                    <span>End Date:</span>
-                    <span>{endDate ? format(endDate, "MMM dd, yyyy") : "Not set"}</span>
-                  </div>
-                </div>
+        <div className="container mx-auto max-w-5xl px-4">
+          <div className="py-6 empty:hidden">
+            <PlatformMetrics />
+          </div>
 
-                {hasSponsoredListing && (
-                  <div className="border-t pt-4">
-                    <h4 className="font-semibold mb-2">Sponsored Listing:</h4>
-                    {linkedListing ? (
-                      <div className="flex items-center gap-2 text-sm">
-                        <span className="text-amber-600 capitalize">{linkedListing.type}:</span>
-                        <span className="truncate">{linkedListing.name}</span>
-                      </div>
-                    ) : (
-                      <p className="text-sm text-destructive">No listing selected yet</p>
-                    )}
+          <div className="grid gap-8 py-8 lg:grid-cols-[minmax(0,1fr)_320px]">
+            <div className="space-y-10">
+              <section aria-labelledby="dates-heading" className="space-y-4">
+                <h2 id="dates-heading" className="text-xl font-semibold">
+                  Dates
+                </h2>
+                <div className="grid gap-4 sm:grid-cols-2">
+                  <div className="space-y-1.5">
+                    <Label id="start-date-label">Start date</Label>
+                    <Popover open={startOpen} onOpenChange={setStartOpen}>
+                      <PopoverTrigger asChild>
+                        <Button
+                          variant="outline"
+                          aria-label={`Start date, ${startLabel}`}
+                          className={cn("w-full justify-start text-left font-normal", !startDay && "text-muted-foreground")}
+                        >
+                          <CalendarIcon className="mr-2 h-4 w-4" aria-hidden="true" />
+                          {startDay ? formatCampaignDate(startDay, "MMM d, yyyy") : "Pick a date"}
+                        </Button>
+                      </PopoverTrigger>
+                      <PopoverContent className="w-auto p-0" align="start">
+                        <Calendar
+                          mode="single"
+                          selected={startDay ? parseDateOnly(startDay) : undefined}
+                          defaultMonth={startDay ? parseDateOnly(startDay) : earliestStart}
+                          onSelect={handleStartSelect}
+                          disabled={(date) =>
+                            date < earliestStart || (!!eventEndDay && dayOf(date) > eventEndDay)
+                          }
+                          initialFocus
+                        />
+                      </PopoverContent>
+                    </Popover>
                   </div>
-                )}
 
-                <div className="border-t pt-4">
-                  <h4 className="font-semibold mb-2">Selected Placements:</h4>
-                  {selectedPlacements.length === 0 ? (
-                    <p className="text-sm text-muted-foreground">No placements selected</p>
-                  ) : (
-                    <div className="space-y-3">
-                      {selectedPlacements.map((placement) => {
-                        const option = PLACEMENT_OPTIONS.find(opt => opt.type === placement.type);
-                        const rateEntry = rateCard.find(r => r.placement_type === placement.type);
-                        const cpmRate = rateEntry?.cpm_rate ?? 10;
-                        // WEB-ADS-003: the rate card, not a constant in the bundle.
-                        const dailyCost = rateEntry?.base_daily_rate ?? 0;
-                        const isCpmTier = dailyCost > 5;
-                        const estDailyImpressions = isCpmTier
-                          ? Math.round((dailyCost / cpmRate) * 1000)
-                          : null;
-                        return (
-                          <div key={placement.type} className="space-y-0.5">
-                            <div className="flex justify-between text-sm">
-                              <span>{option?.name} ({placement.days} days)</span>
-                              <span className="font-semibold">
-                                ${rateEntry ? placementTotalPrice(rateEntry, placement.days) : 0}
-                              </span>
-                            </div>
-                            {isCpmTier && estDailyImpressions && (
-                              <p className="text-xs text-muted-foreground flex items-center gap-1">
-                                <Zap className="h-3 w-3 text-primary" />
-                                ~{(estDailyImpressions * placement.days).toLocaleString()} est. impressions
-                              </p>
-                            )}
-                          </div>
-                        );
-                      })}
-                    </div>
-                  )}
-                </div>
-
-                <div className="border-t pt-4">
-                  <div className="flex justify-between font-semibold text-lg">
-                    <span>Total Cost:</span>
-                    <span>${calculateTotalCost()}</span>
+                  <div className="space-y-1.5">
+                    <Label id="end-date-label">End date</Label>
+                    <Popover open={endOpen} onOpenChange={setEndOpen}>
+                      <PopoverTrigger asChild>
+                        <Button
+                          variant="outline"
+                          aria-label={`End date, ${endLabel}`}
+                          className={cn("w-full justify-start text-left font-normal", !endDay && "text-muted-foreground")}
+                        >
+                          <CalendarIcon className="mr-2 h-4 w-4" aria-hidden="true" />
+                          {endDay ? formatCampaignDate(endDay, "MMM d, yyyy") : "Pick a date"}
+                        </Button>
+                      </PopoverTrigger>
+                      <PopoverContent className="w-auto p-0" align="start">
+                        <Calendar
+                          mode="single"
+                          selected={endDay ? parseDateOnly(endDay) : undefined}
+                          defaultMonth={
+                            endDay ? parseDateOnly(endDay) : startDay ? parseDateOnly(startDay) : earliestStart
+                          }
+                          onSelect={handleEndSelect}
+                          disabled={(date) => {
+                            const day = dayOf(date);
+                            if (day < (startDay ?? earliestStartDay)) return true;
+                            return !!eventEndDay && day > eventEndDay;
+                          }}
+                          initialFocus
+                        />
+                      </PopoverContent>
+                    </Popover>
                   </div>
                 </div>
 
-                {!user && (
-                  <div className="bg-blue-50 border border-blue-200 rounded-lg p-3 mb-4">
-                    <p className="text-sm text-blue-900">
-                      <strong>Note:</strong> You'll need to log in or create a free account to complete your purchase.
-                    </p>
-                  </div>
-                )}
-
-                <Button
-                  onClick={handleCreateCampaign}
-                  disabled={isLoading || selectedPlacements.length === 0}
-                  className="w-full"
-                  size="lg"
-                >
-                  {isLoading ? "Creating..." : user ? "Create Campaign & Pay" : "Continue to Login"}
-                </Button>
-
-                <p className="text-xs text-muted-foreground text-center">
-                  {user ? "After payment, you'll be able to upload your creative assets and manage your campaign." : "Creating an account is free and takes less than 2 minutes."}
+                <p className="text-sm text-muted-foreground">
+                  Earliest start is {formatCampaignDate(earliestStartDay, "MMM d")}. {MIN_LEAD_TIME_DAYS} days
+                  leaves time to upload your creative and have it reviewed.
                 </p>
-              </CardContent>
-            </Card>
-          </div>
-        </div>
-          </div>
-        </div>
-      </section>
-
-      {/* Additional Information Sections */}
-      <section className="py-12 bg-muted/20">
-        <div className="container mx-auto px-4">
-          <div className="max-w-4xl mx-auto space-y-8">
-            
-            {/* Asset Upload Process */}
-            <Card>
-              <CardHeader>
-                <CardTitle>Asset Upload & Approval Process</CardTitle>
-                <CardDescription>What happens after you create your campaign</CardDescription>
-              </CardHeader>
-              <CardContent className="space-y-4">
-                <div className="grid md:grid-cols-3 gap-4">
-                  <div className="text-center p-4">
-                    <div className="w-12 h-12 bg-primary/10 rounded-full flex items-center justify-center mx-auto mb-3">
-                      <span className="text-primary font-bold">1</span>
-                    </div>
-                    <h4 className="font-semibold mb-2">Payment & Setup</h4>
-                    <p className="text-sm text-muted-foreground">Complete payment and receive campaign dashboard access within 5 minutes.</p>
-                  </div>
-                  <div className="text-center p-4">
-                    <div className="w-12 h-12 bg-primary/10 rounded-full flex items-center justify-center mx-auto mb-3">
-                      <span className="text-primary font-bold">2</span>
-                    </div>
-                    <h4 className="font-semibold mb-2">Upload Assets</h4>
-                    <p className="text-sm text-muted-foreground">Upload your creative assets and provide ad copy, URLs, and targeting preferences.</p>
-                  </div>
-                  <div className="text-center p-4">
-                    <div className="w-12 h-12 bg-primary/10 rounded-full flex items-center justify-center mx-auto mb-3">
-                      <span className="text-primary font-bold">3</span>
-                    </div>
-                    <h4 className="font-semibold mb-2">Review & Launch</h4>
-                    <p className="text-sm text-muted-foreground">Our team reviews (24 hours) and launches your campaign on the scheduled start date.</p>
-                  </div>
-                </div>
-              </CardContent>
-            </Card>
-
-            {/* Technical Requirements */}
-            <Card>
-              <CardHeader>
-                <CardTitle>Technical Requirements & Best Practices</CardTitle>
-              </CardHeader>
-              <CardContent>
-                <div className="grid md:grid-cols-2 gap-6">
-                  <div>
-                    <h4 className="font-semibold mb-3">File Requirements:</h4>
-                    <ul className="text-sm space-y-2">
-                      <li className="flex items-start">
-                        <span className="text-primary mr-2">•</span>
-                        RGB color space (not CMYK)
-                      </li>
-                      <li className="flex items-start">
-                        <span className="text-primary mr-2">•</span>
-                        72 DPI for web (300 DPI for print-quality assets)
-                      </li>
-                      <li className="flex items-start">
-                        <span className="text-primary mr-2">•</span>
-                        No embedded fonts or special effects
-                      </li>
-                      <li className="flex items-start">
-                        <span className="text-primary mr-2">•</span>
-                        All text must be readable at actual display size
-                      </li>
-                    </ul>
-                  </div>
-                  <div>
-                    <h4 className="font-semibold mb-3">Content Guidelines:</h4>
-                    <ul className="text-sm space-y-2">
-                      <li className="flex items-start">
-                        <span className="text-primary mr-2">•</span>
-                        Family-friendly content only
-                      </li>
-                      <li className="flex items-start">
-                        <span className="text-primary mr-2">•</span>
-                        Des Moines area businesses preferred
-                      </li>
-                      <li className="flex items-start">
-                        <span className="text-primary mr-2">•</span>
-                        Clear, honest messaging (no misleading claims)
-                      </li>
-                      <li className="flex items-start">
-                        <span className="text-primary mr-2">•</span>
-                        Include valid landing page URL
-                      </li>
-                    </ul>
-                  </div>
-                </div>
-              </CardContent>
-            </Card>
-
-            {/* Performance Tracking */}
-            <Card>
-              <CardHeader>
-                <CardTitle>Campaign Performance & Analytics</CardTitle>
-                <CardDescription>Track your advertising success</CardDescription>
-              </CardHeader>
-              <CardContent>
-                <div className="grid md:grid-cols-4 gap-4 text-center">
-                  <div className="p-3">
-                    <h4 className="font-semibold text-primary mb-1">Impressions</h4>
-                    <p className="text-xs text-muted-foreground">Total ad views</p>
-                  </div>
-                  <div className="p-3">
-                    <h4 className="font-semibold text-primary mb-1">Clicks</h4>
-                    <p className="text-xs text-muted-foreground">Ad interactions</p>
-                  </div>
-                  <div className="p-3">
-                    <h4 className="font-semibold text-primary mb-1">CTR</h4>
-                    <p className="text-xs text-muted-foreground">Click-through rate</p>
-                  </div>
-                  <div className="p-3">
-                    <h4 className="font-semibold text-primary mb-1">Demographics</h4>
-                    <p className="text-xs text-muted-foreground">Audience insights</p>
-                  </div>
-                </div>
-                <div className="mt-4 p-4 bg-muted/50 rounded-lg">
+                {endCapNotice && <p className="text-sm">{endCapNotice}</p>}
+                {dateProblem && (
+                  <p role="alert" className="text-sm font-medium text-destructive">
+                    {dateProblem}
+                  </p>
+                )}
+                {days && startDay && !placements.every((p) => PLACEMENT_SPECS[p].noCreativeRequired) && (
                   <p className="text-sm">
-                    <strong>Real-time Dashboard:</strong> Access detailed analytics 24/7 through your campaign dashboard. 
-                    Reports are updated every hour and include geographic data, device types, and engagement metrics.
+                    {days} {days === 1 ? "day" : "days"}. Upload your creative by{" "}
+                    {formatCampaignDate(addCentralDays(startDay, -1), "MMM d")} so review can finish before it starts.
+                  </p>
+                )}
+              </section>
+
+              <section aria-labelledby="placements-heading" className="space-y-4">
+                <div>
+                  <h2 id="placements-heading" className="text-xl font-semibold">
+                    Placements
+                  </h2>
+                  <p className="mt-1 text-sm text-muted-foreground">
+                    Where each one shows on the site. Longer runs cost less per day.
                   </p>
                 </div>
-              </CardContent>
-            </Card>
+                <ul className="space-y-3">
+                  {PLACEMENTS.map((spec) => {
+                    const rate = rateCard.find((r) => r.placement_type === spec.type);
+                    return (
+                      <PlacementRow
+                        key={spec.type}
+                        spec={spec}
+                        dailyRate={rate ? Number(rate.base_daily_rate) : null}
+                        checked={placements.includes(spec.type)}
+                        onCheckedChange={(checked) => togglePlacement(spec.type, checked)}
+                        lineTotal={lineTotals.get(spec.type) ?? null}
+                        days={quote.data?.days ?? null}
+                      />
+                    );
+                  })}
+                </ul>
+                {listingNotice && !hasSponsoredListing && (
+                  <p className="text-sm" role="status">
+                    {listingNotice}
+                  </p>
+                )}
+              </section>
 
-            {/* Contact & Support */}
-            <Card>
-              <CardHeader>
-                <CardTitle>Support & Contact</CardTitle>
-                <CardDescription>Questions about advertising with Des Moines Insider?</CardDescription>
-              </CardHeader>
-              <CardContent>
-                <div className="grid md:grid-cols-2 gap-6">
+              {hasSponsoredListing && (
+                <section aria-labelledby="listing-heading" className="space-y-4">
                   <div>
-                    <h4 className="font-semibold mb-3">Campaign Support:</h4>
-                    <div className="space-y-2 text-sm">
-                      <p><strong>Response Time:</strong> Within 4 business hours</p>
-                      <p><strong>Phone:</strong> (515) 555-0123</p>
-                      <p><strong>Email:</strong> advertising@desmoinesinsider.com</p>
-                      <p><strong>Hours:</strong> Mon-Fri 8AM-6PM CST</p>
-                    </div>
+                    <h2 id="listing-heading" className="text-xl font-semibold">
+                      Listing to sponsor
+                    </h2>
+                    <p className="mt-1 text-sm text-muted-foreground">
+                      The event or restaurant that moves up, labelled Sponsored.
+                    </p>
                   </div>
-                  <div>
-                    <h4 className="font-semibold mb-3">Custom Solutions:</h4>
-                    <div className="space-y-2 text-sm text-muted-foreground">
-                      <p>Need a larger campaign or custom placement? Our team can create specialized advertising packages for:</p>
-                      <ul className="mt-2 space-y-1">
-                        <li>• Event sponsorships</li>
-                        <li>• Newsletter placements</li>
-                        <li>• Social media packages</li>
-                        <li>• Multi-month campaigns</li>
-                      </ul>
-                    </div>
-                  </div>
-                </div>
-              </CardContent>
-            </Card>
+                  {listingNotice && (
+                    <p className="text-sm" role="status">
+                      {listingNotice}
+                    </p>
+                  )}
+                  <ListingPicker value={linkedListing} onChange={handlePickListing} />
+                </section>
+              )}
 
+              <section aria-labelledby="name-heading" className="space-y-2">
+                <h2 id="name-heading" className="text-xl font-semibold">
+                  Campaign name
+                </h2>
+                <Label htmlFor="campaign-name" className="text-sm text-muted-foreground">
+                  Only you and our reviewers see it.
+                </Label>
+                <Input
+                  id="campaign-name"
+                  value={campaignName}
+                  maxLength={200}
+                  onChange={(e) => setCampaignName(e.target.value)}
+                  placeholder="Fall patio season"
+                />
+              </section>
+
+              {problem && (
+                <CheckoutProblemNotice
+                  problem={problem}
+                  email={user?.email ?? null}
+                  resendState={resendState}
+                  onResend={handleResend}
+                  onPay={handlePayChangedPrice}
+                  busy={submitting}
+                />
+              )}
+            </div>
+
+            <aside className="lg:sticky lg:top-24 lg:self-start">
+              <AdvertiseSummaryBar
+                quote={quoteState}
+                ctaLabel={ctaLabel}
+                onSubmit={handleCreateCampaign}
+                disabled={ctaDisabled}
+                busy={submitting}
+                onRetryQuote={() => quote.refetch()}
+                note={summaryNote}
+              />
+            </aside>
+          </div>
+
+          <div className="max-w-prose space-y-10 border-t py-10">
+            <section aria-labelledby="after-heading">
+              <h2 id="after-heading" className="text-xl font-semibold">
+                After you pay
+              </h2>
+              <ol className="mt-3 list-decimal space-y-2 pl-5">
+                <li>
+                  Stripe takes the payment. Your campaign then shows under{" "}
+                  <Link to="/campaigns" className="underline underline-offset-4">
+                    Campaigns
+                  </Link>
+                  .
+                </li>
+                <li>
+                  Upload a creative for each banner placement. A sponsored listing uses your listing as it
+                  is.
+                </li>
+                <li>{CREATIVE_REVIEW_COPY} Approved campaigns start on your start date.</li>
+              </ol>
+            </section>
+
+            <section aria-labelledby="report-heading">
+              <h2 id="report-heading" className="text-xl font-semibold">
+                What you can track
+              </h2>
+              <p className="mt-3">
+                Your campaign&apos;s analytics page shows impressions (times your ad was on screen), clicks and
+                click-through rate.
+              </p>
+            </section>
+
+            <section aria-labelledby="rules-heading">
+              <h2 id="rules-heading" className="text-xl font-semibold">
+                Creative rules
+              </h2>
+              <ul className="mt-3 list-disc space-y-1 pl-5">
+                <li>RGB color, at the exact pixel size listed for the placement. DPI is ignored on screen.</li>
+                <li>Text readable at the size it&apos;s shown.</li>
+                <li>Family-friendly, honest claims, and a working landing page.</li>
+                <li>Des Moines area businesses first.</li>
+              </ul>
+            </section>
+
+            <section aria-labelledby="contact-heading">
+              <h2 id="contact-heading" className="text-xl font-semibold">
+                Questions
+              </h2>
+              <p className="mt-3">
+                Email{" "}
+                <a href={BUSINESS_CONTACT_HREF} className="underline underline-offset-4">
+                  {BUSINESS_CONTACT_EMAIL}
+                </a>
+                . That&apos;s also the place to ask about something the builder doesn&apos;t cover, like a
+                multi-month run or an event sponsorship.
+              </p>
+            </section>
           </div>
         </div>
-      </section>
+      </div>
+    </BusinessLayout>
+  );
+}
+
+interface CheckoutProblemNoticeProps {
+  problem: CheckoutProblem;
+  email: string | null;
+  resendState: "idle" | "sending" | "sent" | "failed";
+  onResend: () => void;
+  onPay: (campaignId: string) => void;
+  busy: boolean;
+}
+
+function CheckoutProblemNotice({ problem, email, resendState, onResend, onPay, busy }: CheckoutProblemNoticeProps) {
+  return (
+    <div role="alert" className="rounded-xl border border-destructive/40 p-4 text-sm">
+      {problem.kind === "save" && (
+        <p>We couldn&apos;t save your campaign. Nothing was charged. Try again in a minute.</p>
+      )}
+      {problem.kind === "link" && (
+        <p>
+          We couldn&apos;t attach your listing, so we took the draft back out. Nothing was charged. Try again,
+          or email{" "}
+          <a href={BUSINESS_CONTACT_HREF} className="underline underline-offset-4">
+            {BUSINESS_CONTACT_EMAIL}
+          </a>
+          .
+        </p>
+      )}
+      {problem.kind === "verify_email" && (
+        <div className="space-y-2">
+          <p>
+            Confirm your email address before paying. The link is in the email we sent
+            {email ? ` to ${email}` : ""}. Your campaign is saved; come back here and continue once you&apos;ve
+            confirmed.
+          </p>
+          <Button variant="outline" size="sm" onClick={onResend} disabled={resendState === "sending" || !email}>
+            {resendState === "sending" ? "Sending..." : "Send the email again"}
+          </Button>
+          {resendState === "sent" && <p>Sent. Check your inbox.</p>}
+          {resendState === "failed" && <p>That didn&apos;t send. Try again in a minute.</p>}
+        </div>
+      )}
+      {problem.kind === "price_changed" && (
+        <div className="space-y-2">
+          <p>
+            The price changed since you started: it&apos;s now{" "}
+            <strong className="tabular-nums" id="changed-total">
+              {formatUSD(problem.currentTotal)}
+            </strong>
+            . Your campaign is saved.
+          </p>
+          <Button size="sm" onClick={() => onPay(problem.campaignId)} disabled={busy} aria-busy={busy}>
+            Pay {formatUSD(problem.currentTotal)}
+          </Button>
+        </div>
+      )}
     </div>
   );
 }

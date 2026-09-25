@@ -15,6 +15,37 @@ import { handleCors, getCorsHeaders, isOriginAllowed } from "../_shared/cors.ts"
 import { escapeHtml } from "../_shared/escapeHtml.ts";
 import { fetchWithTimeout } from "../_shared/fetchWithTimeout.ts";
 import { checkRateLimit } from "../_shared/rateLimit.ts";
+import { isAdminUserId } from "../_shared/apiKeyAuth.ts";
+
+const NOTIFICATION_TYPES = [
+  "event_submitted",
+  "event_approved",
+  "event_rejected",
+  "event_needs_revision",
+] as const;
+
+/**
+ * A subject line is a header, not HTML: escaping it put "&amp;" and "&#39;"
+ * in front of every organizer whose title had an ampersand or apostrophe.
+ * What a header does need is no line breaks (a CR/LF in a subject is header
+ * injection with some providers) and a length a mail client will show.
+ */
+function plainSubject(subject: string): string {
+  return subject.replace(/[\r\n]+/g, " ").replace(/\s{2,}/g, " ").trim().slice(0, 150);
+}
+
+/** The event date as Des Moines reads it, or undefined when there is none. */
+function formatSubmissionDate(value: string | null | undefined): string | undefined {
+  if (!value) return undefined;
+  const d = new Date(value);
+  if (Number.isNaN(d.getTime())) return undefined;
+  return d.toLocaleDateString("en-US", {
+    timeZone: "America/Chicago",
+    year: "numeric",
+    month: "long",
+    day: "numeric",
+  });
+}
 
 serve(async (req) => {
   const corsResponse = handleCors(req);
@@ -52,18 +83,15 @@ serve(async (req) => {
       Deno.env.get("SUPABASE_SERVICE_ROLE_KEY") ?? ""
     );
 
-    const body = await req.json();
-    const {
-      notificationType,
-      eventId,
-      eventTitle,
-      eventDate,
-      eventVenue,
-      eventCategory,
-      submitterEmail,
-      submitterName,
-      adminNotes,
-    } = body;
+    let body: Record<string, unknown>;
+    try {
+      const parsed = await req.json();
+      body = parsed && typeof parsed === "object" && !Array.isArray(parsed) ? parsed : {};
+    } catch {
+      body = {};
+    }
+    const notificationType = typeof body.notificationType === "string" ? body.notificationType : null;
+    const eventId = typeof body.eventId === "string" ? body.eventId : null;
 
     if (!notificationType || !eventId) {
       return new Response(
@@ -74,29 +102,71 @@ serve(async (req) => {
         }
       );
     }
+    if (!(NOTIFICATION_TYPES as readonly string[]).includes(notificationType)) {
+      return new Response(
+        JSON.stringify({ error: `Unknown notification type: ${notificationType}` }),
+        { status: 400, headers: { ...corsHeaders, "Content-Type": "application/json" } }
+      );
+    }
+
+    // WHO IS CALLING (business plan WP4 item 8).
+    //
+    // The recipient and the words were already taken from the row (below), but
+    // anyone with the anon key could still trigger "your event was approved"
+    // or "rejected" mail to a real submitter for a submission they had nothing
+    // to do with, and put their own text in it through adminNotes. Now:
+    //   event_submitted  - the submission's owner (the submit flow), or a
+    //                      trusted caller. It mails the env-configured admin.
+    //   everything else  - the service role (triage-event-submission) or an
+    //                      admin (EventSubmissionsManager). The notes come from
+    //                      the row the admin or triage just wrote.
+    const serviceKey = Deno.env.get("SUPABASE_SERVICE_ROLE_KEY") ?? "";
+    const bearer = (req.headers.get("Authorization") || "").replace(/^Bearer\s+/i, "").trim();
+    const apiKey = req.headers.get("X-API-Key") || req.headers.get("x-api-key");
+    const edgeApiKey = Deno.env.get("EDGE_FUNCTION_API_KEY");
+    const isService =
+      (!!serviceKey && bearer === serviceKey) ||
+      (!!edgeApiKey && !!apiKey && apiKey === edgeApiKey);
+
+    let callerId: string | null = null;
+    let callerIsAdmin = false;
+    if (!isService) {
+      if (!bearer) {
+        return new Response(
+          JSON.stringify({ error: "Authentication required" }),
+          { status: 401, headers: { ...corsHeaders, "Content-Type": "application/json" } }
+        );
+      }
+      const { data: userRes, error: userError } = await supabase.auth.getUser(bearer);
+      callerId = userRes?.user?.id ?? null;
+      if (userError || !callerId) {
+        // An expired or forged token and an auth outage both land here; either
+        // way the caller is not identified, so nothing is sent.
+        if (userError) console.warn("[notify-event-submission] getUser failed:", userError.message);
+        return new Response(
+          JSON.stringify({ error: "Invalid authentication" }),
+          { status: 401, headers: { ...corsHeaders, "Content-Type": "application/json" } }
+        );
+      }
+      callerIsAdmin = await isAdminUserId(supabase, callerId, "notify-event-submission");
+    }
 
     // THE RECIPIENT AND THE TITLE COME FROM THE DATABASE, NOT THE CALLER.
     //
     // submitterEmail used to be taken straight off the request body and used as
-    // the `to:` address. This function is deployed, has no caller check, and
-    // verify_jwt only requires a valid Supabase JWT - which the publishable anon
-    // key is, in every client bundle. So anyone who had loaded the site could
-    // POST {notificationType:"event_approved", eventId:"anything",
-    // submitterEmail:"<victim>", eventTitle:"<their text>"} and this would send
+    // the `to:` address, which made this an open relay: POST
+    // {notificationType:"event_approved", eventId:"anything",
+    // submitterEmail:"<victim>", eventTitle:"<their text>"} and it would send
     // mail FROM the site's domain TO an arbitrary address with their wording in
-    // the subject. That is an open relay, and eventId was required but never
-    // used to look anything up.
+    // the subject. Nothing the body says decides who is mailed or what the mail
+    // says any more: the submission row does.
     //
-    // It cannot be fixed with an auth guard: the real caller is
-    // useUserSubmittedEvents, i.e. a member of the public submitting an event.
-    // The fix is to stop trusting the body for anything that decides WHO is
-    // mailed or WHAT the subject says.
-    //
-    // Safe on ordering: useUserSubmittedEvents.ts inserts the row (:92) and only
-    // then invokes this with eventId: data.id (:104-106).
+    // Safe on ordering: useUserSubmittedEvents.ts inserts the row and only then
+    // invokes this with eventId: data.id; triage and the admin screen write
+    // status and admin_notes before they call.
     const { data: submission, error: submissionError } = await supabase
       .from("user_submitted_events")
-      .select("id, title, contact_email")
+      .select("id, user_id, title, contact_email, date, venue, category, admin_notes")
       .eq("id", eventId)
       .maybeSingle();
 
@@ -116,11 +186,35 @@ serve(async (req) => {
       );
     }
 
-    // Authoritative values. The body may still carry eventDate/eventVenue/
-    // eventCategory, which appear only in the admin mail whose recipient is the
-    // env-configured ADMIN_NOTIFICATION_EMAIL.
-    const submitterAddress: string | null = submission.contact_email ?? null;
+    const trusted = isService || callerIsAdmin;
+    const allowed = notificationType === "event_submitted"
+      ? trusted || callerId === submission.user_id
+      : trusted;
+    if (!allowed) {
+      return new Response(
+        JSON.stringify({ error: "Not authorized for this notification" }),
+        { status: 403, headers: { ...corsHeaders, "Content-Type": "application/json" } }
+      );
+    }
+
+    // Authoritative values, all from the row.
     const verifiedTitle: string = submission.title ?? "";
+    const adminNotes: string | undefined = submission.admin_notes?.trim() || undefined;
+    const eventDate = formatSubmissionDate(submission.date);
+    const eventVenue: string | undefined = submission.venue ?? undefined;
+    const eventCategory: string | undefined = submission.category ?? undefined;
+
+    // contact_email is optional on the form, and it is the address printed on
+    // the public listing. When it is empty, status mail goes to the account
+    // that submitted, which is the address EventSubmissionForm says it uses.
+    let submitterAddress: string | null = submission.contact_email?.trim() || null;
+    if (!submitterAddress && submission.user_id) {
+      const { data: owner, error: ownerError } = await supabase.auth.admin.getUserById(submission.user_id);
+      if (ownerError) {
+        console.error("[notify-event-submission] owner email lookup failed:", ownerError.message);
+      }
+      submitterAddress = owner?.user?.email ?? null;
+    }
 
     const resendApiKey = Deno.env.get("RESEND_API_KEY");
     const sendgridApiKey = Deno.env.get("SENDGRID_API_KEY");
@@ -138,14 +232,13 @@ serve(async (req) => {
         // Recipient is the env-configured admin, so the risk here is not who
         // gets mailed but what they are told. Title and submitter address come
         // from the row so a caller cannot show the admin a false submitter.
-        emailSubject = `New Event Submission: ${escapeHtml(verifiedTitle)}`;
+        emailSubject = plainSubject(`New event submission: ${verifiedTitle}`);
         emailHtml = buildAdminNotificationEmail({
           eventTitle: verifiedTitle,
           eventDate,
           eventVenue,
           eventCategory,
-          submitterEmail: submitterAddress ?? submitterEmail,
-          submitterName,
+          submitterEmail: submitterAddress ?? undefined,
           siteUrl,
         });
         break;
@@ -153,7 +246,7 @@ serve(async (req) => {
 
       case "event_approved": {
         recipientEmail = submitterAddress ?? "";
-        emailSubject = `Your event "${escapeHtml(verifiedTitle)}" has been approved`;
+        emailSubject = plainSubject(`Your event "${verifiedTitle}" has been approved`);
 
         // WEB-ADS-008 AC4: the live URL, resolved from the events row
         // publish_submission linked back to this submission.
@@ -202,7 +295,7 @@ serve(async (req) => {
 
       case "event_rejected": {
         recipientEmail = submitterAddress ?? "";
-        emailSubject = `Update on your event "${escapeHtml(verifiedTitle)}`;
+        emailSubject = plainSubject(`Update on your event "${verifiedTitle}"`);
         emailHtml = buildSubmitterEmail({
           eventTitle: verifiedTitle,
           status: "rejected",
@@ -215,7 +308,7 @@ serve(async (req) => {
 
       case "event_needs_revision": {
         recipientEmail = submitterAddress ?? "";
-        emailSubject = `Action needed: Your event "${escapeHtml(verifiedTitle)}" needs changes`;
+        emailSubject = plainSubject(`Action needed: your event "${verifiedTitle}" needs changes`);
         emailHtml = buildSubmitterEmail({
           eventTitle: verifiedTitle,
           status: "needs_revision",
@@ -295,7 +388,7 @@ serve(async (req) => {
   } catch (error) {
     console.error("Notification error:", error);
     return new Response(
-      JSON.stringify({ error: error.message || "Failed to send notification" }),
+      JSON.stringify({ error: error instanceof Error ? error.message : "Failed to send notification" }),
       {
         status: 500,
         headers: { ...corsHeaders, "Content-Type": "application/json" },

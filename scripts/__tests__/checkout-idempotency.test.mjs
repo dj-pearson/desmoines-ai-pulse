@@ -54,8 +54,34 @@ console.log('\none intent, one session');
   // one would let a stale price be replayed.
   check(
     '  and on the AUTHORITATIVE total, not the stored one',
-    /idempotencyKey: `campaign:\$\{campaignId\}:\$\{authoritativeTotal\.toFixed\(2\)\}`/.test(code),
+    /idempotencyKey: `campaign:\$\{campaignId\}:\$\{authoritativeTotal\.toFixed\(2\)\}:\$\{attempt\}`/.test(code),
     'keying on storedTotal replays a price the rate card no longer agrees with',
+  );
+  // Business plan WP4 item 7: the key carries a per-attempt nonce, because
+  // expires_at differs per call and a retry inside Stripe's 24h window failed
+  // as a parameter mismatch. With a nonce the key no longer collapses a double
+  // click, so that job moved to two places this file has to see: an open
+  // session at the same amount is handed back, and a new session is recorded
+  // only if the row still holds the one this request read.
+  check(
+    '  the nonce is fresh per attempt',
+    /const attempt = crypto\.randomUUID\(\)/.test(code),
+    'a key derived from anything stable is the parameter-mismatch bug again',
+  );
+  check(
+    '  an open session at the same amount is handed back',
+    /previous\.status === "open"[\s\S]{0,200}previous\.amount_total === authoritativeCents/.test(code),
+    'without it every retry opens another payable URL',
+  );
+  check(
+    '  the session is recorded only over the one this request saw',
+    /claim\.eq\("stripe_session_id", previousSessionId\)[\s\S]{0,80}claim\.is\("stripe_session_id", null\)/.test(code),
+    'an unconditional write lets a double click leave two open sessions',
+  );
+  check(
+    '  and the loser withdraws its own session',
+    /claimed\.length === 0\)[\s\S]{0,400}sessions\.expire\(session\.id\)/.test(code),
+    'the losing session would stay payable',
   );
   // The key is Stripe's second argument, not a body field - a field named
   // idempotencyKey inside the session object does nothing at all.

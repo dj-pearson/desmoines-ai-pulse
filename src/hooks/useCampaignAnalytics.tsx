@@ -1,272 +1,269 @@
-import { useState } from "react";
+import { useQuery } from "@tanstack/react-query";
 import { supabase } from "@/integrations/supabase/client";
-import { useToast } from "./use-toast";
-import { createLogger } from '@/lib/logger';
+import { handleError } from "@/lib/errorHandler";
+import { addCentralDays, centralDateOf } from "@/lib/timezone";
+import { STALE_TIME } from "@/lib/queryConfig";
 
-const log = createLogger('useCampaignAnalytics');
+/**
+ * Delivery for one campaign, counted by the database.
+ *
+ * TOTALS ARE HEAD COUNTS. The old hook downloaded every ad_impressions row and
+ * took `.length`, so a campaign past PostgREST's row cap (1000) reported 1000
+ * impressions however many it had served: an under-count of the one thing the
+ * advertiser paid for. `count: 'exact', head: true` returns the number in the
+ * Content-Range header and no rows at all.
+ *
+ * THE DAILY SERIES pages `date, creative_id` in 1000-row pages up to the exact
+ * count (capped, see MAX_SERIES_ROWS), and says so when it stopped early.
+ * session_id no longer leaves the database. When get_campaign_analytics_summary
+ * (business plan D7) is applied, the series should move to that owner-checked
+ * RPC.
+ *
+ * Nothing here is money. The page shows the stored amount paid; there is no
+ * per-day or per-click cost, because nothing charges per day or per click.
+ */
 
-export interface CampaignAnalyticsSummary {
-  totalImpressions: number;
-  totalClicks: number;
-  avgCtr: number;
-  uniqueViewers: number;
-  totalCost: number;
+export type AnalyticsRange = "all" | "7days" | "30days" | "90days";
+
+const RANGE_DAYS: Record<Exclude<AnalyticsRange, "all">, number> = {
+  "7days": 7,
+  "30days": 30,
+  "90days": 90,
+};
+
+const PAGE_SIZE = 1000;
+/** Stop paging the series here; the totals stay exact regardless. */
+export const MAX_SERIES_ROWS = 50_000;
+
+export interface AnalyticsCampaign {
+  id: string;
+  start_date: string | null;
+  end_date: string | null;
 }
 
-export interface DailyAnalytics {
+export interface DailyDelivery {
   date: string;
   impressions: number;
   clicks: number;
-  ctr: number;
-  cost: number;
 }
 
-export interface CreativePerformance {
+export interface CreativeDelivery {
   creativeId: string;
   title: string;
-  imageUrl: string;
   placementType: string;
   impressions: number;
   clicks: number;
-  ctr: number;
-  cost: number;
 }
 
-export function useCampaignAnalytics(campaignId: string) {
-  const [summary, setSummary] = useState<CampaignAnalyticsSummary | null>(null);
-  const [dailyData, setDailyData] = useState<DailyAnalytics[]>([]);
-  const [creativePerformance, setCreativePerformance] = useState<CreativePerformance[]>([]);
-  const [isLoading, setIsLoading] = useState(false);
-  const { toast } = useToast();
+export interface CampaignDelivery {
+  /** yyyy-MM-dd bounds actually counted, or null when the range is empty. */
+  from: string | null;
+  to: string | null;
+  impressions: number;
+  clicks: number;
+  /** Distinct dates with at least one impression, from the series. */
+  daysServed: number;
+  daily: DailyDelivery[];
+  creatives: CreativeDelivery[];
+  /** False when the series stopped at MAX_SERIES_ROWS before the exact count. */
+  seriesComplete: boolean;
+}
 
-  const fetchAnalytics = async (startDate?: string, endDate?: string) => {
-    if (!campaignId) return;
+/** The yyyy-MM-dd window for a range: inside the campaign's dates and never past today. */
+export function deliveryWindow(
+  campaign: AnalyticsCampaign,
+  range: AnalyticsRange,
+  today: string = centralDateOf(),
+): { from: string; to: string } | null {
+  const start = campaign.start_date?.slice(0, 10) ?? null;
+  const end = campaign.end_date?.slice(0, 10) ?? null;
+  if (!start) return null;
+  let to = end && end < today ? end : today;
+  let from = start;
+  if (range !== "all") {
+    const floor = addCentralDays(today, -(RANGE_DAYS[range] - 1));
+    if (floor > from) from = floor;
+  }
+  if (to < from) return null;
+  if (end && to > end) to = end;
+  return { from, to };
+}
 
-    try {
-      setIsLoading(true);
+/** Every yyyy-MM-dd from `from` to `to`, inclusive. */
+export function eachDate(from: string, to: string): string[] {
+  const out: string[] = [];
+  let day = from;
+  // 400 is a guard against a malformed pair, not a real campaign length.
+  for (let i = 0; day <= to && i < 400; i += 1) {
+    out.push(day);
+    day = addCentralDays(day, 1);
+  }
+  return out;
+}
 
-      // Fetch impressions
-      let impressionQuery = supabase
-        .from("ad_impressions")
-        .select("id, campaign_id, creative_id, placement_type, session_id, date, timestamp")
-        .eq("campaign_id", campaignId);
+type EventTable = "ad_impressions" | "ad_clicks";
 
-      if (startDate) {
-        impressionQuery = impressionQuery.gte("date", startDate);
-      }
-      if (endDate) {
-        impressionQuery = impressionQuery.lte("date", endDate);
-      }
+async function exactCount(
+  table: EventTable,
+  campaignId: string,
+  from: string,
+  to: string,
+  creativeId?: string,
+): Promise<number> {
+  let query = supabase
+    .from(table)
+    .select("id", { count: "exact", head: true })
+    .eq("campaign_id", campaignId)
+    .gte("date", from)
+    .lte("date", to);
+  if (creativeId) query = query.eq("creative_id", creativeId);
+  const { count, error } = await query;
+  if (error) throw error;
+  return count ?? 0;
+}
 
-      // Fetch clicks separately from the ad_clicks table
-      let clickQuery = supabase
-        .from("ad_clicks")
-        .select("id, campaign_id, creative_id, date, timestamp")
-        .eq("campaign_id", campaignId);
+async function seriesRows(
+  table: EventTable,
+  campaignId: string,
+  from: string,
+  to: string,
+  total: number,
+): Promise<{ rows: Array<{ date: string | null }>; complete: boolean }> {
+  const rows: Array<{ date: string | null }> = [];
+  const limit = Math.min(total, MAX_SERIES_ROWS);
+  for (let offset = 0; offset < limit; offset += PAGE_SIZE) {
+    const { data, error } = await supabase
+      .from(table)
+      .select("date")
+      .eq("campaign_id", campaignId)
+      .gte("date", from)
+      .lte("date", to)
+      .order("id", { ascending: true })
+      .range(offset, Math.min(offset + PAGE_SIZE, limit) - 1);
+    if (error) throw error;
+    const page = (data ?? []) as Array<{ date: string | null }>;
+    rows.push(...page);
+    if (page.length < PAGE_SIZE) break;
+  }
+  return { rows, complete: total <= MAX_SERIES_ROWS };
+}
 
-      if (startDate) {
-        clickQuery = clickQuery.gte("date", startDate);
-      }
-      if (endDate) {
-        clickQuery = clickQuery.lte("date", endDate);
-      }
+async function fetchDelivery(campaign: AnalyticsCampaign, range: AnalyticsRange): Promise<CampaignDelivery> {
+  const span = deliveryWindow(campaign, range);
+  if (!span) {
+    return { from: null, to: null, impressions: 0, clicks: 0, daysServed: 0, daily: [], creatives: [], seriesComplete: true };
+  }
+  const { from, to } = span;
 
-      // Fetch campaign cost and creatives info
-      const campaignQuery = supabase
-        .from("campaigns")
-        .select("total_cost")
-        .eq("id", campaignId)
-        .single();
+  const [impressions, clicks, creativesResult] = await Promise.all([
+    exactCount("ad_impressions", campaign.id, from, to),
+    exactCount("ad_clicks", campaign.id, from, to),
+    supabase
+      .from("campaign_creatives")
+      .select("id, title, placement_type")
+      .eq("campaign_id", campaign.id),
+  ]);
+  if (creativesResult.error) throw creativesResult.error;
 
-      const creativesQuery = supabase
-        .from("campaign_creatives")
-        .select("id, title, image_url, placement_type")
-        .eq("campaign_id", campaignId);
+  const [impressionSeries, clickSeries] = await Promise.all([
+    seriesRows("ad_impressions", campaign.id, from, to, impressions),
+    seriesRows("ad_clicks", campaign.id, from, to, clicks),
+  ]);
 
-      // Execute all queries in parallel
-      const [impressionResult, clickResult, campaignResult, creativesResult] = await Promise.all([
-        impressionQuery,
-        clickQuery,
-        campaignQuery,
-        creativesQuery,
-      ]);
+  const perDay = new Map<string, DailyDelivery>(
+    eachDate(from, to).map((date) => [date, { date, impressions: 0, clicks: 0 }]),
+  );
+  for (const row of impressionSeries.rows) {
+    const day = row.date ? perDay.get(row.date.slice(0, 10)) : undefined;
+    if (day) day.impressions += 1;
+  }
+  for (const row of clickSeries.rows) {
+    const day = row.date ? perDay.get(row.date.slice(0, 10)) : undefined;
+    if (day) day.clicks += 1;
+  }
+  const daily = Array.from(perDay.values());
 
-      if (impressionResult.error) throw impressionResult.error;
-      if (clickResult.error) throw clickResult.error;
-
-      const impressions = impressionResult.data || [];
-      const clicks = clickResult.data || [];
-      const totalCost = campaignResult.data?.total_cost || 0;
-      const creatives = creativesResult.data || [];
-
-      // Build creative lookup
-      const creativeLookup: Record<string, { title: string; imageUrl: string; placementType: string }> = {};
-      creatives.forEach((c) => {
-        creativeLookup[c.id] = {
-          title: c.title || 'Untitled',
-          imageUrl: c.image_url || '',
-          placementType: c.placement_type || 'unknown',
-        };
-      });
-
-      // Calculate summary
-      const totalImpressions = impressions.length;
-      const totalClicks = clicks.length;
-      const avgCtr = totalImpressions > 0 ? (totalClicks / totalImpressions) * 100 : 0;
-      const uniqueViewers = new Set(impressions.map((i) => i.session_id)).size;
-
-      setSummary({
-        totalImpressions,
-        totalClicks,
-        avgCtr,
-        uniqueViewers,
-        totalCost,
-      });
-
-      // Build daily data by combining impressions and clicks
-      const dailyImpressions: Record<string, number> = {};
-      const dailyClicks: Record<string, number> = {};
-
-      impressions.forEach((imp) => {
-        const date = imp.date || (imp.timestamp ? new Date(imp.timestamp).toISOString().split("T")[0] : 'unknown');
-        dailyImpressions[date] = (dailyImpressions[date] || 0) + 1;
-      });
-
-      clicks.forEach((click) => {
-        const date = click.date || (click.timestamp ? new Date(click.timestamp).toISOString().split("T")[0] : 'unknown');
-        dailyClicks[date] = (dailyClicks[date] || 0) + 1;
-      });
-
-      // Merge dates from both impressions and clicks
-      const allDates = new Set([
-        ...Object.keys(dailyImpressions),
-        ...Object.keys(dailyClicks),
-      ]);
-      const numDays = allDates.size || 1;
-
-      const dailyAnalytics: DailyAnalytics[] = Array.from(allDates).map((date) => {
-        const imps = dailyImpressions[date] || 0;
-        const clks = dailyClicks[date] || 0;
-        return {
-          date,
-          impressions: imps,
-          clicks: clks,
-          ctr: imps > 0 ? (clks / imps) * 100 : 0,
-          cost: totalCost / numDays,
-        };
-      });
-
-      dailyAnalytics.sort((a, b) => a.date.localeCompare(b.date));
-      setDailyData(dailyAnalytics);
-
-      // Calculate creative performance
-      const creativeImpressions: Record<string, number> = {};
-      const creativeClicks: Record<string, number> = {};
-
-      impressions.forEach((imp) => {
-        if (imp.creative_id) {
-          creativeImpressions[imp.creative_id] = (creativeImpressions[imp.creative_id] || 0) + 1;
-        }
-      });
-
-      clicks.forEach((click) => {
-        if (click.creative_id) {
-          creativeClicks[click.creative_id] = (creativeClicks[click.creative_id] || 0) + 1;
-        }
-      });
-
-      const creativePerf: CreativePerformance[] = Object.keys(creativeLookup).map((creativeId) => {
-        const imps = creativeImpressions[creativeId] || 0;
-        const clks = creativeClicks[creativeId] || 0;
-        const info = creativeLookup[creativeId];
-        return {
-          creativeId,
-          title: info.title,
-          imageUrl: info.imageUrl,
-          placementType: info.placementType,
-          impressions: imps,
-          clicks: clks,
-          ctr: imps > 0 ? (clks / imps) * 100 : 0,
-          cost: totalImpressions > 0 ? totalCost * (imps / totalImpressions) : 0,
-        };
-      });
-
-      creativePerf.sort((a, b) => b.impressions - a.impressions);
-      setCreativePerformance(creativePerf);
-    } catch (err) {
-      log.error('fetchAnalytics', 'Error fetching campaign analytics', { error: err });
-      toast({
-        variant: "destructive",
-        title: "Failed to load analytics",
-        description: err instanceof Error ? err.message : "An error occurred",
-      });
-    } finally {
-      setIsLoading(false);
-    }
-  };
-
-  const exportToCSV = () => {
-    if (!summary || dailyData.length === 0) {
-      toast({
-        variant: "destructive",
-        title: "No data to export",
-        description: "Please wait for analytics data to load.",
-      });
-      return;
-    }
-
-    try {
-      const headers = ["Date", "Impressions", "Clicks", "CTR (%)", "Cost ($)"];
-      const rows = dailyData.map((day) => [
-        day.date,
-        day.impressions,
-        day.clicks,
-        day.ctr.toFixed(2),
-        day.cost.toFixed(2),
-      ]);
-
-      const csvContent = [
-        headers.join(","),
-        ...rows.map((row) => row.join(",")),
-        "",
-        "Summary",
-        `Total Impressions,${summary.totalImpressions}`,
-        `Total Clicks,${summary.totalClicks}`,
-        `Average CTR,${summary.avgCtr.toFixed(2)}%`,
-        `Unique Viewers,${summary.uniqueViewers}`,
-        `Total Cost,$${summary.totalCost.toFixed(2)}`,
-      ].join("\n");
-
-      const blob = new Blob([csvContent], { type: "text/csv" });
-      const url = window.URL.createObjectURL(blob);
-      const a = document.createElement("a");
-      a.href = url;
-      a.download = `campaign-analytics-${campaignId}-${new Date().toISOString().split("T")[0]}.csv`;
-      document.body.appendChild(a);
-      a.click();
-      document.body.removeChild(a);
-      window.URL.revokeObjectURL(url);
-
-      toast({
-        title: "Export successful",
-        description: "Analytics data has been exported to CSV.",
-      });
-    } catch (err) {
-      log.error('exportCSV', 'Error exporting CSV', { error: err });
-      toast({
-        variant: "destructive",
-        title: "Export failed",
-        description: "Failed to export analytics data.",
-      });
-    }
-  };
+  // Per-creative totals are HEAD counts too, so they're exact even when the
+  // series stopped early. A campaign has a handful of creatives at most.
+  const creativeRows = (creativesResult.data ?? []) as Array<{ id: string; title: string | null; placement_type: string | null }>;
+  const creatives = await Promise.all(
+    creativeRows.map(async (c) => ({
+      creativeId: c.id,
+      title: c.title || "Untitled",
+      placementType: c.placement_type ?? "",
+      impressions: await exactCount("ad_impressions", campaign.id, from, to, c.id),
+      clicks: await exactCount("ad_clicks", campaign.id, from, to, c.id),
+    })),
+  );
+  creatives.sort((a, b) => b.impressions - a.impressions);
 
   return {
-    summary,
-    dailyData,
-    creativePerformance,
-    isLoading,
-    fetchAnalytics,
-    exportToCSV,
+    from,
+    to,
+    impressions,
+    clicks,
+    daysServed: daily.filter((d) => d.impressions > 0).length,
+    daily,
+    creatives,
+    seriesComplete: impressionSeries.complete && clickSeries.complete,
   };
+}
+
+export function useCampaignAnalytics(campaign: AnalyticsCampaign | null | undefined, range: AnalyticsRange) {
+  return useQuery({
+    queryKey: ["campaign-analytics", campaign?.id, campaign?.start_date, campaign?.end_date, range],
+    queryFn: async () => {
+      try {
+        return await fetchDelivery(campaign as AnalyticsCampaign, range);
+      } catch (err) {
+        handleError(err, { component: "useCampaignAnalytics", action: "fetch", metadata: { campaignId: campaign?.id, range } });
+        throw err;
+      }
+    },
+    enabled: !!campaign?.id,
+    staleTime: STALE_TIME.SHORT,
+  });
+}
+
+/** CTR as a percentage, or null when nothing was served (0/0 isn't 0%). */
+export function clickThroughRate(impressions: number, clicks: number): number | null {
+  return impressions > 0 ? (clicks / impressions) * 100 : null;
+}
+
+function csvCell(value: string | number): string {
+  const text = String(value);
+  return /[",\n]/.test(text) ? `"${text.replace(/"/g, '""')}"` : text;
+}
+
+/** The delivery as CSV text: one row per day, then the totals. */
+export function deliveryCsv(delivery: CampaignDelivery, amountPaid: number | null | undefined): string {
+  const lines = [
+    ["Date", "Impressions", "Clicks", "CTR (%)"].join(","),
+    ...delivery.daily.map((d) => {
+      const ctr = clickThroughRate(d.impressions, d.clicks);
+      return [d.date, d.impressions, d.clicks, ctr === null ? "" : ctr.toFixed(2)].map(csvCell).join(",");
+    }),
+    "",
+    `Total impressions,${delivery.impressions}`,
+    `Total clicks,${delivery.clicks}`,
+    `Days served,${delivery.daysServed}`,
+    `Amount paid (USD),${typeof amountPaid === "number" ? amountPaid.toFixed(2) : ""}`,
+  ];
+  if (!delivery.seriesComplete) {
+    lines.push(`Note,Daily rows cover the first ${MAX_SERIES_ROWS} events; totals are exact`);
+  }
+  return lines.join("\n");
+}
+
+/** Save the delivery as a CSV file in the browser. */
+export function downloadDeliveryCsv(campaignId: string, delivery: CampaignDelivery, amountPaid: number | null | undefined) {
+  const blob = new Blob([deliveryCsv(delivery, amountPaid)], { type: "text/csv" });
+  const url = window.URL.createObjectURL(blob);
+  const a = document.createElement("a");
+  a.href = url;
+  a.download = `campaign-${campaignId.slice(0, 8)}-${delivery.from ?? "none"}-to-${delivery.to ?? "none"}.csv`;
+  document.body.appendChild(a);
+  a.click();
+  document.body.removeChild(a);
+  window.URL.revokeObjectURL(url);
 }

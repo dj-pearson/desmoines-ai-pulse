@@ -1,361 +1,145 @@
-import { useState } from "react";
-import { useNavigate } from "react-router-dom";
-import { useTabState } from "@/hooks/useTabState";
+import { Link } from "react-router-dom";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
-import { Card, CardContent, CardHeader, CardTitle, CardDescription } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
-import { Badge } from "@/components/ui/badge";
-import { Alert, AlertDescription } from "@/components/ui/alert";
-import Header from "@/components/Header";
-import Footer from "@/components/Footer";
-import SEOHead from "@/components/SEOHead";
+import { Skeleton } from "@/components/ui/skeleton";
 import { Breadcrumbs } from "@/components/ui/breadcrumbs";
+import SEOHead from "@/components/SEOHead";
+import { BusinessLayout } from "@/components/business/BusinessLayout";
 import { BusinessDashboard } from "@/components/BusinessDashboard";
 import { BusinessPartnershipApplication } from "@/components/BusinessPartnershipApplication";
 import { useAuth } from "@/hooks/useAuth";
-import { useBusinessPartnership } from "@/hooks/useBusinessPartnership";
-import { BarChart3, Megaphone, Star, Rocket, CheckCircle, Shield, Award, Target } from "lucide-react";
-import { SpriteIcon } from "@/components/ui/SpriteIcon";
+import { useTabState } from "@/hooks/useTabState";
+import { getCanonicalUrl } from "@/lib/brandConfig";
+
+const TABS = ["workspace", "partnership"] as const;
+
+/**
+ * Deliberately out of the index in BOTH branches: it's a sign-in wall for
+ * visitors and a private workspace for owners (prerender-routes.mjs excludes
+ * it). /business-partnership is the public page.
+ */
+function HubHead() {
+  return (
+    <SEOHead
+      title="Business Workspace"
+      description="Manage the Des Moines Insider listings you've claimed, the events you've submitted and the ad campaigns you've bought."
+      canonicalUrl={getCanonicalUrl("/business")}
+      url="/business"
+      robots="noindex, follow"
+    />
+  );
+}
+
+function HubBreadcrumbs() {
+  return (
+    <Breadcrumbs
+      className="mb-6"
+      items={[
+        { label: "Home", href: "/" },
+        { label: "Business workspace" },
+      ]}
+    />
+  );
+}
 
 export default function BusinessHub() {
   const { user, isLoading: authLoading } = useAuth();
-  const { businessProfile, loading: profileLoading } = useBusinessPartnership();
-  const navigate = useNavigate();
-  const [activeTab, setActiveTab] = useTabState("dashboard");
+  const [activeTab, setActiveTab] = useTabState("workspace", { validTabs: TABS });
 
-  // Redirect to auth if not logged in
-  if (!authLoading && !user) {
+  if (authLoading) {
     return (
-      <>
-        <Header />
-        <div className="min-h-screen bg-gradient-to-br from-blue-50 to-indigo-100 p-6">
-          <div className="container mx-auto">
-            <Breadcrumbs
-              className="mb-4"
-              items={[
-                { label: "Home", href: "/" },
-                { label: "Business Hub" },
-              ]}
-            />
-          </div>
-          <div className="flex items-center justify-center">
-            <Card className="max-w-md text-center">
-              <CardHeader>
-                {/* WEB-SEO-004: the only h1 on this page lived in the
-                    AUTHENTICATED branch, so a signed-out visitor — and, while
-                    /business was still prerendered, every crawler — got a page
-                    with no h1 at all. That is a WCAG 1.3.1 heading-hierarchy
-                    failure independent of indexing, so it still needs fixing
-                    now that the route is out of the sitemap and prerender list.
-                    Plain <h1> rather than <CardTitle>, which renders an h3 and
-                    has no asChild escape hatch; classes copied from it so the
-                    visual result is identical. */}
-                <h1 className="text-2xl font-semibold leading-none tracking-tight">
-                  Business Hub
-                </h1>
-                <CardDescription>Sign in to access your business dashboard</CardDescription>
-              </CardHeader>
-              <CardContent>
-                <p className="text-muted-foreground mb-6">
-                  Join Des Moines Insider to grow your business with powerful tools and local visibility.
-                </p>
-                <div className="flex flex-col gap-3">
-                  <Button onClick={() => navigate("/auth")} size="lg">
-                    Sign In
-                  </Button>
-                  <Button onClick={() => navigate("/auth")} variant="outline">
-                    Create Business Account
-                  </Button>
-                </div>
-              </CardContent>
-            </Card>
-          </div>
+      <BusinessLayout>
+        <HubHead />
+        <div className="container mx-auto max-w-5xl px-4 py-8" role="status" aria-label="Loading">
+          <Skeleton className="mb-4 h-9 w-2/3" />
+          <Skeleton className="h-5 w-1/2" />
         </div>
-        <Footer />
-      </>
+      </BusinessLayout>
     );
   }
 
-  const features = [
-    {
-      icon: <BarChart3 className="h-5 w-5" />,
-      title: "Analytics Dashboard",
-      description: "Track views, clicks, and engagement"
-    },
-    {
-      icon: <Star className="h-5 w-5" />,
-      title: "Partnership Tiers",
-      description: "Choose the plan that fits your needs"
-    },
-    {
-      icon: <Megaphone className="h-5 w-5" />,
-      title: "Advertising Campaigns",
-      description: "Promote your business effectively"
-    },
-    {
-      icon: <SpriteIcon name="calendar" className="h-5 w-5" />,
-      title: "Event Submissions",
-      description: "Share your events with the community"
-    }
-  ];
+  if (!user) {
+    return (
+      <BusinessLayout>
+        <HubHead />
+        <div className="container mx-auto max-w-2xl px-4 py-8">
+          <HubBreadcrumbs />
+          <h1 className="text-3xl font-bold tracking-tight text-foreground">Business workspace</h1>
+          <p className="mt-3 max-w-prose text-muted-foreground">
+            Sign in to manage the listings you've claimed, the events you've submitted and your ad campaigns.
+          </p>
+          <div className="mt-6 flex flex-wrap gap-3">
+            <Button asChild size="lg" className="min-h-11">
+              <Link to="/auth?redirect=/business">Sign in</Link>
+            </Button>
+            <Button asChild size="lg" variant="outline" className="min-h-11">
+              <Link to="/auth?mode=signup&redirect=/business">Create a free account</Link>
+            </Button>
+          </div>
+          <p className="mt-6 text-sm text-muted-foreground">
+            New here?{" "}
+            <Link to="/business-partnership" className="font-medium text-primary underline-offset-4 hover:underline">
+              See what a business can do on Des Moines Insider
+            </Link>
+            .
+          </p>
+        </div>
+      </BusinessLayout>
+    );
+  }
 
   return (
-    <>
-      <SEOHead
-        title="Business Hub - Des Moines Insider"
-        description="Manage your business presence on Des Moines Insider. Access analytics, create campaigns, and grow your local reach."
-        keywords={["business hub", "Des Moines business", "local marketing", "business dashboard"]}
-      />
+    <BusinessLayout>
+      <HubHead />
+      <div className="container mx-auto max-w-5xl px-4 py-8">
+        <HubBreadcrumbs />
+        <header className="mb-8">
+          <h1 className="text-3xl font-bold tracking-tight text-foreground">Business workspace</h1>
+          <p className="mt-2 max-w-prose text-muted-foreground">
+            Your listings, your events and your campaigns, in one place.
+          </p>
+        </header>
 
-      <div className="min-h-screen bg-background">
-        <Header />
+        <Tabs value={activeTab} onValueChange={setActiveTab} className="w-full">
+          <TabsList className="grid h-auto w-full grid-cols-2 sm:w-auto sm:inline-grid">
+            <TabsTrigger value="workspace" className="min-h-11 px-4">
+              Workspace
+            </TabsTrigger>
+            <TabsTrigger value="partnership" className="min-h-11 px-4">
+              Partnership
+            </TabsTrigger>
+          </TabsList>
 
-        <div className="container mx-auto px-4 py-8 max-w-7xl">
-          <Breadcrumbs
-            className="mb-4"
-            items={[
-              { label: "Home", href: "/" },
-              { label: "Business Hub" },
-            ]}
-          />
+          <TabsContent value="workspace" className="mt-8">
+            <BusinessDashboard />
+          </TabsContent>
 
-          {/* Hero Section */}
-          <div className="text-center space-y-4 mb-8">
-            <div className="flex items-center justify-center gap-2">
-              <SpriteIcon name="building-2" className="h-10 w-10 text-primary" />
-              <h1 className="text-2xl sm:text-3xl md:text-4xl font-bold">Business Hub</h1>
-            </div>
-            <p className="text-xl text-muted-foreground max-w-2xl mx-auto">
-              Your central command center for growing your business on Des Moines Insider
+          <TabsContent value="partnership" className="mt-8 space-y-4">
+            <h2 className="text-xl font-semibold">Partnership</h2>
+            <p className="max-w-prose text-sm text-muted-foreground">
+              Want to work with us beyond a listing and ads? Send an application and we'll reply by email.
             </p>
-            {businessProfile && (
-              <Badge variant="outline" className="text-sm">
-                <Shield className="h-3 w-3 mr-1" />
-                Status: {businessProfile.verification_status || "Active"}
-              </Badge>
-            )}
+            <BusinessPartnershipApplication />
+          </TabsContent>
+        </Tabs>
+
+        <section aria-labelledby="hub-help-heading" className="mt-12 border-t pt-8">
+          <h2 id="hub-help-heading" className="text-lg font-semibold">
+            Need a hand?
+          </h2>
+          <p className="mt-1 max-w-prose text-sm text-muted-foreground">
+            Something wrong on your listing that you can't edit here, or a question about a campaign.
+          </p>
+          <div className="mt-4 flex flex-wrap gap-3">
+            <Button asChild variant="outline" className="min-h-11">
+              <Link to="/contact">Contact us</Link>
+            </Button>
+            <Button asChild variant="ghost" className="min-h-11">
+              <Link to="/business-partnership">How it works</Link>
+            </Button>
           </div>
-
-          {/* Quick Stats Row */}
-          {businessProfile && (
-            <div className="grid grid-cols-2 md:grid-cols-4 gap-4 mb-8">
-              {features.map((feature, index) => (
-                <Card key={index} className="text-center hover:shadow-md transition-shadow">
-                  <CardContent className="pt-6 pb-4">
-                    <div className="flex justify-center mb-2 text-primary">
-                      {feature.icon}
-                    </div>
-                    <h3 className="font-semibold text-sm mb-1">{feature.title}</h3>
-                    <p className="text-xs text-muted-foreground">{feature.description}</p>
-                  </CardContent>
-                </Card>
-              ))}
-            </div>
-          )}
-
-          {/* Main Tabs */}
-          <Tabs value={activeTab} onValueChange={setActiveTab} className="space-y-6">
-            <TabsList className="grid w-full grid-cols-4 h-auto gap-0.5 sm:gap-1">
-              <TabsTrigger value="dashboard" className="flex items-center gap-1 sm:gap-2 px-2 sm:px-3 py-2">
-                <BarChart3 className="h-4 w-4 flex-shrink-0" />
-                <span className="hidden sm:inline text-xs sm:text-sm">Dashboard</span>
-              </TabsTrigger>
-              <TabsTrigger value="partnership" className="flex items-center gap-1 sm:gap-2 px-2 sm:px-3 py-2">
-                <Star className="h-4 w-4 flex-shrink-0" />
-                <span className="hidden sm:inline text-xs sm:text-sm">Partner</span>
-              </TabsTrigger>
-              <TabsTrigger value="advertising" className="flex items-center gap-1 sm:gap-2 px-2 sm:px-3 py-2">
-                <Megaphone className="h-4 w-4 flex-shrink-0" />
-                <span className="hidden sm:inline text-xs sm:text-sm">Ads</span>
-              </TabsTrigger>
-              <TabsTrigger value="events" className="flex items-center gap-1 sm:gap-2 px-2 sm:px-3 py-2">
-                <SpriteIcon name="calendar" className="h-4 w-4 flex-shrink-0" />
-                <span className="hidden sm:inline text-xs sm:text-sm">Events</span>
-              </TabsTrigger>
-            </TabsList>
-
-            {/* Dashboard Tab */}
-            <TabsContent value="dashboard" className="space-y-6">
-              {businessProfile ? (
-                <BusinessDashboard />
-              ) : (
-                <Card>
-                  <CardHeader>
-                    <CardTitle>Welcome to Your Business Hub</CardTitle>
-                    <CardDescription>
-                      Get started by completing your business profile
-                    </CardDescription>
-                  </CardHeader>
-                  <CardContent>
-                    <Alert className="mb-6">
-                      <Rocket className="h-4 w-4" />
-                      <AlertDescription>
-                        Create your business profile to unlock analytics, advertising tools, and more!
-                      </AlertDescription>
-                    </Alert>
-                    <Button onClick={() => setActiveTab("partnership")}>
-                      <SpriteIcon name="building-2" className="h-4 w-4 mr-2" />
-                      Complete Business Profile
-                    </Button>
-                  </CardContent>
-                </Card>
-              )}
-            </TabsContent>
-
-            {/* Partnership Tab */}
-            <TabsContent value="partnership" className="space-y-6">
-              <Card>
-                <CardHeader>
-                  <CardTitle className="flex items-center gap-2">
-                    <Star className="h-5 w-5 text-yellow-500" />
-                    Partnership Plans
-                  </CardTitle>
-                  <CardDescription>
-                    Choose the plan that best fits your business needs
-                  </CardDescription>
-                </CardHeader>
-                <CardContent>
-                  <BusinessPartnershipApplication />
-                </CardContent>
-              </Card>
-            </TabsContent>
-
-            {/* Advertising Tab */}
-            <TabsContent value="advertising" className="space-y-6">
-              <Card>
-                <CardHeader>
-                  <CardTitle className="flex items-center gap-2">
-                    <Megaphone className="h-5 w-5 text-primary" />
-                    Advertising Campaigns
-                  </CardTitle>
-                  <CardDescription>
-                    Reach thousands of local customers with targeted campaigns
-                  </CardDescription>
-                </CardHeader>
-                <CardContent>
-                  <div className="space-y-6">
-                    <div className="grid md:grid-cols-3 gap-6">
-                      <div className="border rounded-lg p-4">
-                        <Target className="h-8 w-8 text-blue-500 mb-3" />
-                        <h3 className="font-semibold mb-2">Targeted Reach</h3>
-                        <p className="text-sm text-muted-foreground mb-4">
-                          Reach customers based on location, interests, and behavior
-                        </p>
-                      </div>
-                      <div className="border rounded-lg p-4">
-                        <SpriteIcon name="trending-up" className="h-8 w-8 text-green-500 mb-3" />
-                        <h3 className="font-semibold mb-2">Performance Tracking</h3>
-                        <p className="text-sm text-muted-foreground mb-4">
-                          Monitor clicks, impressions, and conversions in real-time
-                        </p>
-                      </div>
-                      <div className="border rounded-lg p-4">
-                        <Award className="h-8 w-8 text-purple-500 mb-3" />
-                        <h3 className="font-semibold mb-2">Premium Placement</h3>
-                        <p className="text-sm text-muted-foreground mb-4">
-                          Featured spots on homepage and category pages
-                        </p>
-                      </div>
-                    </div>
-
-                    <div className="flex flex-col sm:flex-row gap-3">
-                      <Button onClick={() => navigate("/advertise")} size="lg">
-                        <Rocket className="h-4 w-4 mr-2" />
-                        Create Campaign
-                      </Button>
-                      <Button onClick={() => navigate("/campaigns")} variant="outline" size="lg">
-                        View My Campaigns
-                      </Button>
-                    </div>
-
-                    <Alert>
-                      <CheckCircle className="h-4 w-4" />
-                      <AlertDescription>
-                        <strong>Pro Tip:</strong> Campaigns typically see 30% higher engagement when paired with our partnership plans
-                      </AlertDescription>
-                    </Alert>
-                  </div>
-                </CardContent>
-              </Card>
-            </TabsContent>
-
-            {/* Events Tab */}
-            <TabsContent value="events" className="space-y-6">
-              <Card>
-                <CardHeader>
-                  <CardTitle className="flex items-center gap-2">
-                    <SpriteIcon name="calendar" className="h-5 w-5 text-primary" />
-                    Event Management
-                  </CardTitle>
-                  <CardDescription>
-                    Submit and manage your business events
-                  </CardDescription>
-                </CardHeader>
-                <CardContent>
-                  <div className="space-y-6">
-                    <div className="grid md:grid-cols-2 gap-6">
-                      <div className="border-2 border-dashed rounded-lg p-6 text-center">
-                        <SpriteIcon name="calendar" className="h-12 w-12 text-muted-foreground mx-auto mb-3" />
-                        <h3 className="font-semibold mb-2">Submit New Event</h3>
-                        <p className="text-sm text-muted-foreground mb-4">
-                          Share your upcoming events with the Des Moines community
-                        </p>
-                        <Button onClick={() => navigate("/dashboard?tab=submit-event")}>
-                          <SpriteIcon name="calendar" className="h-4 w-4 mr-2" />
-                          Submit Event
-                        </Button>
-                      </div>
-
-                      <div className="border-2 border-dashed rounded-lg p-6 text-center">
-                        <SpriteIcon name="users" className="h-12 w-12 text-muted-foreground mx-auto mb-3" />
-                        <h3 className="font-semibold mb-2">Track Submissions</h3>
-                        <p className="text-sm text-muted-foreground mb-4">
-                          View status and analytics for your submitted events
-                        </p>
-                        <Button onClick={() => navigate("/profile?tab=events")} variant="outline">
-                          <SpriteIcon name="arrow-right" className="h-4 w-4 mr-2" />
-                          View My Events
-                        </Button>
-                      </div>
-                    </div>
-
-                    <Alert>
-                      <CheckCircle className="h-4 w-4" />
-                      <AlertDescription>
-                        Events are typically reviewed and approved within 24-48 hours
-                      </AlertDescription>
-                    </Alert>
-                  </div>
-                </CardContent>
-              </Card>
-            </TabsContent>
-          </Tabs>
-
-          {/* CTA Footer */}
-          <Card className="mt-8 bg-gradient-to-r from-blue-50 to-indigo-50 border-2 border-primary/20">
-            <CardContent className="p-6">
-              <div className="flex flex-col md:flex-row items-center justify-between gap-4">
-                <div>
-                  <h3 className="text-lg font-semibold mb-1">Need Help Getting Started?</h3>
-                  <p className="text-sm text-muted-foreground">
-                    Our team is here to help you maximize your business presence
-                  </p>
-                </div>
-                <div className="flex gap-2">
-                  <Button variant="outline">
-                    Contact Support
-                  </Button>
-                  <Button onClick={() => navigate("/business-partnership")} aria-label="Learn more about business partnership">
-                    Learn More
-                  </Button>
-                </div>
-              </div>
-            </CardContent>
-          </Card>
-        </div>
-
-        <Footer />
+        </section>
       </div>
-    </>
+    </BusinessLayout>
   );
 }

@@ -36,7 +36,21 @@ async function expectNoErrorBoundary(page: Page) {
 test.describe('Route smoke: monetization / B2B pages mount (WEB-QA-001)', () => {
   // React error #130 (undefined component) took /advertise down entirely. Audit
   // the sibling revenue routes reachable from the footer at the same time.
-  const routes = ['/advertise', '/business-partnership'];
+  // The Business plan (docs/page-plans/business.md WP5 item 2) adds the rest of
+  // the way businesses and organizers pay or contribute: event supply comes in
+  // through /submit-event, a paid campaign lands on /advertise/success (here
+  // with no session_id, the state a refresh or a shared link produces), and
+  // /business is the claimed-listing workspace. /campaigns is behind
+  // ProtectedRoute, so for a signed-out visitor this proves the redirect to
+  // /auth mounts; the block at the end of this file checks where it lands.
+  const routes = [
+    '/advertise',
+    '/business-partnership',
+    '/submit-event',
+    '/campaigns',
+    '/business',
+    '/advertise/success',
+  ];
 
   for (const route of routes) {
     test(`${route} mounts without hitting the error boundary`, async ({ page }) => {
@@ -499,6 +513,9 @@ test.describe('Account routes send a signed-out visitor to /auth and remember wh
     { from: '/dashboard', redirect: '/dashboard' },
     { from: '/dashboard?tab=events', redirect: '/dashboard?tab=events' },
     { from: '/my-events', redirect: '/my-events' },
+    // docs/page-plans/business.md WP5 item 2: an advertiser who follows a
+    // campaign email while signed out must come back to their campaigns.
+    { from: '/campaigns', redirect: '/campaigns' },
   ];
 
   for (const { from, redirect } of CASES) {

@@ -327,6 +327,72 @@ serve(async (req) => {
       quantity: 1,
     }));
 
+    // RETRY WITHOUT A SECOND PAYABLE URL (business plan WP4 item 7).
+    //
+    // A campaign that already has a session is either mid-checkout, abandoned
+    // or paid-but-not-yet-webhooked. Each gets a different answer:
+    //   open, same amount -> hand back the same URL; nothing new is created.
+    //   open, other amount -> expire it first, so the old price cannot be paid
+    //                         alongside the new one.
+    //   complete           -> refuse. Stripe has the money; the webhook or
+    //                         verify-campaign-payment will move the campaign on.
+    //   expired / unreadable -> start a new attempt.
+    const authoritativeCents = Math.round(authoritativeTotal * 100);
+    const previousSessionId: string | null = campaign.stripe_session_id ?? null;
+    if (previousSessionId) {
+      let previous: {
+        id: string;
+        status: string | null;
+        url: string | null;
+        amount_total: number | null;
+        metadata: Record<string, string> | null;
+      } | null = null;
+      try {
+        previous = await stripe.checkout.sessions.retrieve(previousSessionId);
+      } catch (retrieveError) {
+        console.warn("[create-campaign-checkout] previous session unreadable:", previousSessionId, retrieveError);
+      }
+
+      if (previous && previous.metadata?.campaignId === campaignId) {
+        if (previous.status === "complete") {
+          return new Response(
+            JSON.stringify({ error: "Campaign is not in a payable state", code: "ALREADY_PAID" }),
+            { status: 400, headers: { ...corsHeaders, "Content-Type": "application/json" } },
+          );
+        }
+        if (previous.status === "open" && previous.url) {
+          if (previous.amount_total === authoritativeCents) {
+            const reused = new Response(
+              JSON.stringify({ url: previous.url, sessionId: previous.id }),
+              { status: 200, headers: { ...corsHeaders, "Content-Type": "application/json" } },
+            );
+            return addRateLimitHeaders(reused, rateLimit);
+          }
+          try {
+            await stripe.checkout.sessions.expire(previous.id);
+          } catch (expireError) {
+            // If it cannot be expired it may still be paid; do not open a
+            // second one next to it.
+            console.error("[create-campaign-checkout] could not expire previous session:", previous.id, expireError);
+            return new Response(
+              JSON.stringify({ error: "Could not replace the previous checkout. Please try again." }),
+              { status: 503, headers: { ...corsHeaders, "Content-Type": "application/json" } },
+            );
+          }
+        }
+      }
+    }
+
+    // The per-attempt part of the idempotency key. Stripe replays a key for 24
+    // hours and refuses it when the parameters differ, and expires_at differed
+    // on every call while the key did not, so any retry after the first
+    // session lapsed failed as a parameter mismatch. A fresh nonce per attempt
+    // fixes that. It cannot be derived from the previous session id: the
+    // webhook nulls stripe_session_id when a session expires. Two concurrent
+    // requests (a double click) are instead settled by the compare-and-set on
+    // stripe_session_id after the session is created, below.
+    const attempt = crypto.randomUUID();
+
     // Build success and cancel URLs
     const siteUrl = Deno.env.get("VITE_SITE_URL") || req.headers.get("origin") || "";
     const successUrl = `${siteUrl}/advertise/success?campaign_id=${campaignId}`;
@@ -381,7 +447,10 @@ serve(async (req) => {
       // must get a new session rather than Stripe replaying the old amount.
       // Stripe keys expire after 24 hours, which is well past the 30-minute
       // expiry above.
-      idempotencyKey: `campaign:${campaignId}:${authoritativeTotal.toFixed(2)}`,
+      //
+      // The attempt suffix is what lets a retry after the first session
+      // expired succeed; see `attempt` above.
+      idempotencyKey: `campaign:${campaignId}:${authoritativeTotal.toFixed(2)}:${attempt}`,
     });
 
     // Remember the customer so the next checkout does not have to search Stripe
@@ -400,18 +469,41 @@ serve(async (req) => {
       }
     }
 
-    // Update campaign with stripe session
-    const { error: updateError } = await supabase
+    // Record the session, but only if no other attempt got there first: the
+    // row must still hold the session this request saw (or none). Otherwise a
+    // double click would leave two open, payable sessions and the webhook,
+    // which matches on stripe_session_id, would only know about one of them.
+    let claim = supabase
       .from("campaigns")
       .update({
         stripe_session_id: session.id,
         status: "pending_payment",
       })
       .eq("id", campaignId);
+    claim = previousSessionId
+      ? claim.eq("stripe_session_id", previousSessionId)
+      : claim.is("stripe_session_id", null);
+    const { data: claimed, error: updateError } = await claim.select("id");
 
     if (updateError) {
       console.error("Failed to update campaign:", updateError);
       // Continue anyway - the checkout session was created
+    } else if (!claimed || claimed.length === 0) {
+      // Another request recorded its session first. Withdraw this one so
+      // only one URL can be paid, and let the caller retry, which will hand
+      // back the winner's open session.
+      try {
+        await stripe.checkout.sessions.expire(session.id);
+      } catch (expireError) {
+        console.error("[create-campaign-checkout] could not expire a duplicate session:", session.id, expireError);
+      }
+      return new Response(
+        JSON.stringify({
+          error: "A checkout for this campaign was just started. Please try again.",
+          code: "CHECKOUT_IN_PROGRESS",
+        }),
+        { status: 409, headers: { ...corsHeaders, "Content-Type": "application/json" } },
+      );
     }
 
     const response = new Response(
