@@ -8,6 +8,7 @@ import {
   restaurantMetaDescription,
   restaurantPageTitle,
   isStaleOpeningCopy,
+  type RestaurantMetaInput,
 } from "../src/lib/restaurantMeta";
 import { resolveOpeningHoursSpecification } from "../src/lib/restaurantHours";
 
@@ -452,7 +453,7 @@ export function restaurantShellNode(row: Record<string, any>, pageUrl: string): 
     "@id": pageUrl,
     url: pageUrl,
     name: row.name,
-    description: restaurantMetaDescription(row),
+    description: restaurantMetaDescription(row as RestaurantMetaInput),
     ...(row.cuisine ? { servesCuisine: row.cuisine } : {}),
     address: {
       "@type": "PostalAddress",
@@ -608,7 +609,7 @@ export function entityShellRewrites(opts: {
   // description the React page renders (restaurantMeta.ts), not the bare name.
   let entity = opts.entity;
   if (row && type === "restaurant" && row.name) {
-    entity = { ...entity, title: `${restaurantPageTitle(row)} | Des Moines Insider`, description: restaurantMetaDescription(row) };
+    entity = { ...entity, title: `${restaurantPageTitle(row as RestaurantMetaInput)} | Des Moines Insider`, description: restaurantMetaDescription(row as RestaurantMetaInput) };
   } else if (row && type === "event" && row.title) {
     // With neither seo_description nor geo_summary the homepage's description
     // would stay in place; say when and where instead.
