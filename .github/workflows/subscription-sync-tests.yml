@@ -46,6 +46,12 @@ on:
       - 'src/lib/eventCategories.*'
       - 'src/components/EventSubmissionForm.tsx'
       - '.github/workflows/subscription-sync-tests.yml'
+      # Search plan WP6: nlp-search/search.test.ts compares against the free
+      # filter string and the example list, and savedSearchMatch.test.ts against
+      # the area list, so a change to any of the three has to run this suite.
+      - 'src/lib/eventPrice.ts'
+      - 'src/hooks/useNLPSearch.ts'
+      - 'src/lib/eventAreas.ts'
 
 concurrency:
   group: subscription-sync-${{ github.head_ref }}
@@ -425,3 +431,13 @@ jobs:
       - run: deno test supabase/functions/_shared/menu/menuDiscovery.test.ts
       - run: deno test supabase/functions/_shared/menu/menuJson.test.ts
       - run: deno test supabase/functions/_shared/menu/menuUrls.test.ts
+      # Search plan WP6 (docs/page-plans/search.md). nlp-search had no suite in
+      # any workflow, dateWindow.test.ts included, which is how a .catch on a
+      # thenable with no catch turned every search into a 500. All offline:
+      # handler.test.ts stubs the Supabase client and the Claude fetch.
+      # --allow-read is for the src/ files the suites compare against.
+      - run: deno test supabase/functions/nlp-search/dateWindow.test.ts
+      - run: deno test --allow-read supabase/functions/nlp-search/search.test.ts
+      - run: deno test supabase/functions/nlp-search/handler.test.ts
+      # Saved-search alert matching and the email it builds (WP5).
+      - run: deno test --allow-read supabase/functions/_shared/savedSearchMatch.test.ts

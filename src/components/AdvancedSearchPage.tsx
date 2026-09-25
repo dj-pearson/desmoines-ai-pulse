@@ -1,109 +1,132 @@
-import React, { useState } from 'react';
-import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
+import { useEffect, useRef, useState, type FormEvent } from 'react';
+import { Link, useNavigate, useSearchParams } from "react-router-dom";
+import { Card, CardContent } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
-import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
+import { Input } from "@/components/ui/input";
 import { Badge } from "@/components/ui/badge";
+import { Search, Star, DollarSign, Grid, List, Navigation2 } from "lucide-react";
+import { SpriteIcon } from "@/components/ui/SpriteIcon";
 import { AdvancedSearchFilters } from "./AdvancedSearchFilters";
 import { SavedSearches } from "./SavedSearches";
-import { useAdvancedSearch } from "@/hooks/useAdvancedSearch";
-import { useAuth } from "@/hooks/useAuth";
 import Header from "./Header";
 import Footer from "./Footer";
 import SEOHead from "./SEOHead";
-import { Search, Star, DollarSign, Heart, Filter, Grid, List, Navigation2 } from "lucide-react";
-import { Link } from "react-router-dom";
+import { useAdvancedSearch, type SavedSearch, type SearchResult } from "@/hooks/useAdvancedSearch";
+import { useAuth } from "@/hooks/useAuth";
 import { createEventSlugWithCentralTime } from "@/lib/timezone";
-import { SpriteIcon } from "@/components/ui/SpriteIcon";
+import { createSlug } from "@/lib/slug";
+
+function contentTypeIcon(type: SearchResult['type']) {
+  switch (type) {
+    case 'event':
+      return <SpriteIcon name="calendar" className="h-4 w-4" />;
+    case 'restaurant':
+      return <DollarSign className="h-4 w-4" aria-hidden="true" />;
+    case 'attraction':
+      return <SpriteIcon name="map-pin" className="h-4 w-4" />;
+    case 'playground':
+      return <Navigation2 className="h-4 w-4" aria-hidden="true" />;
+  }
+}
+
+/**
+ * Each type links the way its own detail route resolves. Attractions and
+ * playgrounds resolve by slug or createSlug(name), never by id
+ * (src/lib/resolveBySlug.ts), so an id link opened Not Found.
+ */
+function resultLink(result: SearchResult): string {
+  switch (result.type) {
+    case 'event':
+      // A row with no date falls back to the id, which useEventBySlug resolves.
+      return result.event_start_utc || result.date
+        ? `/events/${createEventSlugWithCentralTime(result.title, result)}`
+        : `/events/${encodeURIComponent(result.id)}`;
+    case 'restaurant':
+      return `/restaurants/${result.slug || result.id}`;
+    case 'attraction': {
+      const slug = createSlug(result.title ?? '');
+      return slug ? `/attractions/${slug}` : '/attractions';
+    }
+    case 'playground': {
+      const slug = createSlug(result.title ?? '');
+      return slug ? `/playgrounds/${slug}` : '/playgrounds';
+    }
+  }
+}
+
+function formatPrice(price: string | undefined) {
+  if (!price) return 'Price not listed';
+  if (price.toLowerCase() === 'free') return 'Free';
+  return price;
+}
 
 export default function AdvancedSearchPage() {
   const { user } = useAuth();
+  const navigate = useNavigate();
+  const [searchParams] = useSearchParams();
+  const initialQuery = (searchParams.get('q') ?? '').trim();
+
   const {
     filters,
     setFilters,
     results,
     savedSearches,
     loading,
+    hasSearched,
     performSearch,
     saveSearch,
     loadSearch,
     deleteSearch,
     resetFilters
-  } = useAdvancedSearch();
+  } = useAdvancedSearch({ initialQuery });
 
   const [viewMode, setViewMode] = useState<'grid' | 'list'>('grid');
 
-  const handleSearch = () => {
-    performSearch(filters);
+  // Arriving with ?q= means someone already asked; run it once.
+  const ranInitial = useRef(false);
+  useEffect(() => {
+    if (ranInitial.current || !initialQuery) return;
+    ranInitial.current = true;
+    void performSearch(filters);
+  }, [initialQuery, filters, performSearch]);
+
+  const handleSubmit = (event: FormEvent<HTMLFormElement>) => {
+    event.preventDefault();
+    void performSearch(filters);
   };
 
-  const getContentTypeIcon = (type: string) => {
-    switch (type) {
-      case 'event':
-        return <SpriteIcon name="calendar" className="h-4 w-4" />;
-      case 'restaurant':
-        return <DollarSign className="h-4 w-4" />;
-      case 'attraction':
-        return <SpriteIcon name="map-pin" className="h-4 w-4" />;
-      case 'playground':
-        return <Navigation2 className="h-4 w-4" />;
-      default:
-        return <Search className="h-4 w-4" />;
+  /** Rows /events or the iOS app wrote can't fill these controls; /search can read their words. */
+  const handleUseSearch = (search: SavedSearch) => {
+    if (search.restorable) {
+      void loadSearch(search);
+      return;
     }
-  };
-
-  // Link by id to match the app's :id routes (no slug-based 404s) — WEB-UX-018.
-  const getResultLink = (result: any) => {
-    switch (result.type) {
-      case 'event': {
-        // Events link by title + Central date slug (events plan WP9). A row
-        // with no date falls back to the id, which useEventBySlug resolves.
-        const dated = result as { title?: string | null; date?: string | null; event_start_utc?: string | null };
-        return dated.event_start_utc || dated.date
-          ? `/events/${createEventSlugWithCentralTime(dated.title, dated)}`
-          : `/events/${encodeURIComponent(result.id)}`;
-      }
-      case 'restaurant':
-        return `/restaurants/${result.id}`;
-      case 'attraction':
-        return `/attractions/${result.id}`;
-      case 'playground':
-        return `/playgrounds/${result.id}`;
-      default:
-        return '#';
-    }
-  };
-
-  const formatPrice = (price: string | undefined) => {
-    if (!price) return 'Price not listed';
-    if (price.toLowerCase() === 'free') return 'Free';
-    return price;
+    navigate(search.query ? `/search?q=${encodeURIComponent(search.query)}` : '/search');
   };
 
   return (
     <>
       <SEOHead
         title="Advanced Search - Des Moines Insider"
-        description="Search and discover events, restaurants, attractions, and playgrounds in Des Moines with advanced filters and personalized recommendations."
-        keywords={["Des Moines search", "events near me", "restaurants search", "attractions finder", "playground locator"]}
+        description="Search Des Moines events, restaurants, attractions and playgrounds by name, area, rating and date."
+        keywords={["Des Moines search", "Des Moines events search", "Des Moines restaurants search"]}
+        robots="noindex, follow"
       />
 
       <div className="min-h-screen bg-background">
         <Header />
 
         <div className="container mx-auto px-4 py-8 space-y-8">
-          {/* Page Header */}
-          <div className="text-center space-y-4">
-            <h1 className="text-4xl md:text-6xl font-bold">
-              <span className="text-primary">Advanced Search</span>
-            </h1>
-            <p className="text-xl text-muted-foreground max-w-3xl mx-auto">
-              Find exactly what you're looking for with intelligent filters, location-based discovery, and personalized recommendations.
+          <div className="space-y-3 max-w-3xl">
+            <h1 className="text-3xl md:text-5xl font-bold tracking-tight text-foreground">Advanced search</h1>
+            <p className="text-lg text-muted-foreground">
+              Search events, restaurants, attractions and playgrounds by name, then narrow by area, rating and date.
             </p>
           </div>
 
           <div className="grid grid-cols-1 lg:grid-cols-4 gap-8">
             {/* Search Filters Sidebar */}
-            <div className="lg:col-span-1 space-y-6">
+            <aside aria-label="Search filters" className="lg:col-span-1 space-y-6 order-2 lg:order-1">
               <AdvancedSearchFilters
                 filters={filters}
                 onFiltersChange={setFilters}
@@ -114,44 +137,61 @@ export default function AdvancedSearchPage() {
               {user && (
                 <SavedSearches
                   savedSearches={savedSearches}
-                  onLoadSearch={loadSearch}
+                  onLoadSearch={handleUseSearch}
                   onDeleteSearch={deleteSearch}
                 />
               )}
-            </div>
+            </aside>
 
             {/* Search Results */}
-            <div className="lg:col-span-3 space-y-6">
-              {/* Search Actions */}
+            <div className="lg:col-span-3 space-y-6 order-1 lg:order-2">
               <Card>
-                <CardContent className="p-4">
-                  <div className="flex flex-col sm:flex-row gap-4 items-start sm:items-center justify-between">
-                    <div className="flex items-center gap-4">
-                      <Button onClick={handleSearch} disabled={loading} size="lg">
-                        <Search className="h-4 w-4 mr-2" />
-                        {loading ? 'Searching...' : 'Search'}
-                      </Button>
-                      <div className="text-sm text-muted-foreground">
-                        {results.length > 0 && !loading && (
-                          <span>{results.length} results found</span>
-                        )}
-                      </div>
-                    </div>
+                <CardContent className="p-4 space-y-4">
+                  <form role="search" onSubmit={handleSubmit} className="flex flex-col sm:flex-row gap-3">
+                    <label htmlFor="advanced-search-query" className="sr-only">
+                      Search
+                    </label>
+                    <Input
+                      id="advanced-search-query"
+                      type="search"
+                      name="q"
+                      value={filters.query}
+                      onChange={(e) => setFilters({ ...filters, query: e.target.value })}
+                      placeholder="Jazz, tacos, Ankeny..."
+                      autoComplete="off"
+                      enterKeyHint="search"
+                      className="flex-1 h-11"
+                    />
+                    <Button type="submit" disabled={loading} size="lg" className="h-11">
+                      <Search className="h-4 w-4 mr-2" aria-hidden="true" />
+                      {loading ? 'Searching...' : 'Search'}
+                    </Button>
+                  </form>
 
+                  <div className="flex items-center justify-between gap-4">
+                    <p className="text-sm text-muted-foreground" aria-live="polite">
+                      {hasSearched && !loading && results.length > 0
+                        ? `Showing ${results.length} ${results.length === 1 ? 'result' : 'results'}`
+                        : ''}
+                    </p>
                     <div className="flex items-center gap-2">
                       <Button
                         variant={viewMode === 'grid' ? 'default' : 'outline'}
                         size="sm"
+                        aria-label="Grid view"
+                        aria-pressed={viewMode === 'grid'}
                         onClick={() => setViewMode('grid')}
                       >
-                        <Grid className="h-4 w-4" />
+                        <Grid className="h-4 w-4" aria-hidden="true" />
                       </Button>
                       <Button
                         variant={viewMode === 'list' ? 'default' : 'outline'}
                         size="sm"
+                        aria-label="List view"
+                        aria-pressed={viewMode === 'list'}
                         onClick={() => setViewMode('list')}
                       >
-                        <List className="h-4 w-4" />
+                        <List className="h-4 w-4" aria-hidden="true" />
                       </Button>
                     </div>
                   </div>
@@ -160,7 +200,7 @@ export default function AdvancedSearchPage() {
 
               {/* Results */}
               {loading ? (
-                <div className="grid grid-cols-1 md:grid-cols-2 xl:grid-cols-3 gap-6">
+                <div className="grid grid-cols-1 md:grid-cols-2 xl:grid-cols-3 gap-6" aria-busy="true">
                   {Array.from({ length: 6 }).map((_, i) => (
                     <Card key={i} className="animate-pulse">
                       <div className="h-48 bg-muted rounded-t-lg" />
@@ -172,35 +212,45 @@ export default function AdvancedSearchPage() {
                     </Card>
                   ))}
                 </div>
+              ) : !hasSearched ? (
+                <Card>
+                  <CardContent className="py-12 text-center space-y-2">
+                    <h2 className="text-lg font-semibold">Start with a word or two</h2>
+                    <p className="text-muted-foreground max-w-prose mx-auto">
+                      Type a name, a venue or a kind of food above and press Search. Leave it blank to browse everything the filters allow.
+                    </p>
+                  </CardContent>
+                </Card>
               ) : results.length > 0 ? (
                 <div className={
-                  viewMode === 'grid' 
+                  viewMode === 'grid'
                     ? "grid grid-cols-1 md:grid-cols-2 xl:grid-cols-3 gap-6"
                     : "space-y-4"
                 }>
                   {results.map((result) => (
-                    <Card key={result.id} className="group hover:shadow-lg transition-shadow">
+                    <Card key={`${result.type}-${result.id}`} className="group">
                       {viewMode === 'grid' ? (
                         <>
                           {result.imageUrl && (
                             <div className="relative h-48 overflow-hidden rounded-t-lg">
                               <img
                                 src={result.imageUrl}
-                                alt={result.title}
-                                className="w-full h-full object-cover group-hover:scale-105 transition-transform duration-300"
+                                alt=""
+                                loading="lazy"
+                                className="w-full h-full object-cover"
                               />
-                              <div className="absolute top-2 left-2">
-                                <Badge variant="secondary" className="flex items-center gap-1">
-                                  {getContentTypeIcon(result.type)}
-                                  {result.type}
-                                </Badge>
-                              </div>
                             </div>
                           )}
                           <CardContent className="p-4 space-y-3">
                             <div className="space-y-2">
-                              <h3 className="font-semibold text-lg line-clamp-2 group-hover:text-primary transition-colors">
-                                {result.title}
+                              <Badge variant="secondary" className="flex w-fit items-center gap-1 capitalize">
+                                {contentTypeIcon(result.type)}
+                                {result.type}
+                              </Badge>
+                              <h3 className="font-semibold text-lg line-clamp-2">
+                                <Link to={resultLink(result)} className="hover:text-primary focus-visible:underline">
+                                  {result.title}
+                                </Link>
                               </h3>
                               {result.description && (
                                 <p className="text-muted-foreground text-sm line-clamp-2">
@@ -210,50 +260,27 @@ export default function AdvancedSearchPage() {
                             </div>
 
                             <div className="space-y-2 text-sm">
-                              <div className="flex items-center gap-1 text-muted-foreground">
-                                <SpriteIcon name="map-pin" className="h-3 w-3" />
-                                <span className="truncate">{result.location}</span>
-                                {result.distance && (
-                                  <span className="text-xs">({result.distance.toFixed(1)} mi)</span>
-                                )}
-                              </div>
-
-                              {result.rating && (
-                                <div className="flex items-center gap-1">
-                                  <Star className="h-3 w-3 fill-yellow-400 text-yellow-400" />
-                                  <span>{result.rating}</span>
+                              {result.location && (
+                                <div className="flex items-center gap-1 text-muted-foreground">
+                                  <SpriteIcon name="map-pin" className="h-3 w-3" />
+                                  <span className="truncate">{result.location}</span>
                                 </div>
                               )}
 
+                              {result.rating ? (
+                                <div className="flex items-center gap-1">
+                                  <Star className="h-3 w-3 fill-yellow-400 text-yellow-400" aria-hidden="true" />
+                                  <span>{result.rating}</span>
+                                </div>
+                              ) : null}
+
                               {result.price && (
                                 <div className="flex items-center gap-1 text-muted-foreground">
-                                  <DollarSign className="h-3 w-3" />
+                                  <DollarSign className="h-3 w-3" aria-hidden="true" />
                                   <span>{formatPrice(result.price)}</span>
                                 </div>
                               )}
                             </div>
-
-                            {result.features && result.features.length > 0 && (
-                              <div className="flex flex-wrap gap-1">
-                                {result.features.slice(0, 3).map((feature) => (
-                                  <Badge key={feature} variant="outline" className="text-xs">
-                                    {feature}
-                                  </Badge>
-                                ))}
-                                {result.features.length > 3 && (
-                                  <Badge variant="outline" className="text-xs">
-                                    +{result.features.length - 3} more
-                                  </Badge>
-                                )}
-                              </div>
-                            )}
-
-                            <Link to={getResultLink(result)} className="block">
-                              <Button className="w-full mt-4 group">
-                                View Details
-                                <SpriteIcon name="external-link" className="h-4 w-4 ml-2 group-hover:translate-x-1 transition-transform" />
-                              </Button>
-                            </Link>
                           </CardContent>
                         </>
                       ) : (
@@ -263,18 +290,21 @@ export default function AdvancedSearchPage() {
                               <div className="w-24 h-24 rounded-lg overflow-hidden flex-shrink-0">
                                 <img
                                   src={result.imageUrl}
-                                  alt={result.title}
+                                  alt=""
+                                  loading="lazy"
                                   className="w-full h-full object-cover"
                                 />
                               </div>
                             )}
-                            <div className="flex-1 space-y-2">
-                              <div className="flex items-start justify-between">
-                                <h3 className="font-semibold text-lg line-clamp-1 group-hover:text-primary transition-colors">
-                                  {result.title}
+                            <div className="flex-1 min-w-0 space-y-2">
+                              <div className="flex items-start justify-between gap-2">
+                                <h3 className="font-semibold text-lg line-clamp-1">
+                                  <Link to={resultLink(result)} className="hover:text-primary focus-visible:underline">
+                                    {result.title}
+                                  </Link>
                                 </h3>
-                                <Badge variant="secondary" className="flex items-center gap-1 ml-2">
-                                  {getContentTypeIcon(result.type)}
+                                <Badge variant="secondary" className="flex items-center gap-1 capitalize shrink-0">
+                                  {contentTypeIcon(result.type)}
                                   {result.type}
                                 </Badge>
                               </div>
@@ -286,51 +316,26 @@ export default function AdvancedSearchPage() {
                               )}
 
                               <div className="flex flex-wrap gap-4 text-sm text-muted-foreground">
-                                <div className="flex items-center gap-1">
-                                  <SpriteIcon name="map-pin" className="h-3 w-3" />
-                                  <span>{result.location}</span>
-                                  {result.distance && (
-                                    <span>({result.distance.toFixed(1)} mi)</span>
-                                  )}
-                                </div>
-
-                                {result.rating && (
+                                {result.location && (
                                   <div className="flex items-center gap-1">
-                                    <Star className="h-3 w-3 fill-yellow-400 text-yellow-400" />
-                                    <span>{result.rating}</span>
+                                    <SpriteIcon name="map-pin" className="h-3 w-3" />
+                                    <span>{result.location}</span>
                                   </div>
                                 )}
+
+                                {result.rating ? (
+                                  <div className="flex items-center gap-1">
+                                    <Star className="h-3 w-3 fill-yellow-400 text-yellow-400" aria-hidden="true" />
+                                    <span>{result.rating}</span>
+                                  </div>
+                                ) : null}
 
                                 {result.price && (
                                   <div className="flex items-center gap-1">
-                                    <DollarSign className="h-3 w-3" />
+                                    <DollarSign className="h-3 w-3" aria-hidden="true" />
                                     <span>{formatPrice(result.price)}</span>
                                   </div>
                                 )}
-                              </div>
-
-                              <div className="flex items-center justify-between">
-                                {result.features && result.features.length > 0 && (
-                                  <div className="flex flex-wrap gap-1">
-                                    {result.features.slice(0, 2).map((feature) => (
-                                      <Badge key={feature} variant="outline" className="text-xs">
-                                        {feature}
-                                      </Badge>
-                                    ))}
-                                    {result.features.length > 2 && (
-                                      <Badge variant="outline" className="text-xs">
-                                        +{result.features.length - 2}
-                                      </Badge>
-                                    )}
-                                  </div>
-                                )}
-
-                                <Link to={getResultLink(result)}>
-                                  <Button variant="outline" size="sm" className="group">
-                                    View Details
-                                    <SpriteIcon name="external-link" className="h-3 w-3 ml-1 group-hover:translate-x-1 transition-transform" />
-                                  </Button>
-                                </Link>
                               </div>
                             </div>
                           </div>
@@ -341,15 +346,13 @@ export default function AdvancedSearchPage() {
                 </div>
               ) : (
                 <Card>
-                  <CardContent className="py-12 text-center">
-                    <Search className="h-12 w-12 mx-auto text-muted-foreground mb-4" />
-                    <h3 className="text-lg font-semibold mb-2">No Results Found</h3>
-                    <p className="text-muted-foreground mb-6">
-                      Try adjusting your search criteria or filters to find what you're looking for.
+                  <CardContent className="py-12 text-center space-y-4">
+                    <h2 className="text-lg font-semibold">Nothing matched</h2>
+                    <p className="text-muted-foreground max-w-prose mx-auto">
+                      Try fewer words, or clear a filter.
                     </p>
                     <Button onClick={resetFilters} variant="outline">
-                      <Filter className="h-4 w-4 mr-2" />
-                      Clear All Filters
+                      Clear all filters
                     </Button>
                   </CardContent>
                 </Card>

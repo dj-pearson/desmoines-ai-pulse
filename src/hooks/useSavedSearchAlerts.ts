@@ -3,33 +3,27 @@ import { supabase } from "@/integrations/supabase/client";
 import { useAuth } from "@/contexts/AuthContext";
 import type { Database } from "@/integrations/supabase/types";
 import { isPlanLimitError } from "@/lib/planLimitError";
+import {
+  normalizeSavedSearch,
+  type NormalizedSavedSearch,
+  type SavedSearchFilters,
+} from "@/lib/savedSearchFilters";
 
 export type SavedSearchRow = Database["public"]["Tables"]["saved_searches"]["Row"];
 
-/** The list-page filter keys we persist + deep-link back to (WEB-UX-001). */
-export const SAVED_SEARCH_FILTER_KEYS = ["q", "category", "location", "price", "preset", "sort"] as const;
-export type SavedSearchFilters = Partial<Record<(typeof SAVED_SEARCH_FILTER_KEYS)[number], string>>;
+// The filter shape and its readers live in src/lib/savedSearchFilters.ts so a
+// unit test can reach them without a Supabase client. Re-exported here because
+// SaveSearchButton and older callers import them from this hook.
+export {
+  SAVED_SEARCH_FILTER_KEYS,
+  buildSavedSearchUrl,
+  describeSavedSearch,
+  type SavedSearchFilters,
+} from "@/lib/savedSearchFilters";
 
-/** Build a shareable /events deep link from saved filters. */
-export function buildSavedSearchUrl(filters: SavedSearchFilters): string {
-  const params = new URLSearchParams();
-  for (const key of SAVED_SEARCH_FILTER_KEYS) {
-    const v = filters[key];
-    if (v && v !== "all" && v !== "any-location" && v !== "any-price") params.set(key, v);
-  }
-  const qs = params.toString();
-  return `/events${qs ? `?${qs}` : ""}`;
-}
-
-/** Human summary of a saved search's filters for list display. */
-export function describeSavedSearch(filters: SavedSearchFilters): string {
-  const parts: string[] = [];
-  if (filters.q) parts.push(`“${filters.q}”`);
-  if (filters.category && filters.category !== "all") parts.push(filters.category);
-  if (filters.location && filters.location !== "any-location") parts.push(filters.location);
-  if (filters.price && filters.price !== "any-price") parts.push(filters.price.replace(/-/g, " "));
-  if (filters.preset) parts.push(filters.preset.replace(/-/g, " "));
-  return parts.length ? parts.join(" · ") : "All events";
+/** A saved_searches row plus the one reading of its filters the UI uses. */
+export interface SavedSearchListItem extends SavedSearchRow {
+  normalized: NormalizedSavedSearch;
 }
 
 export class SavedSearchLimitError extends Error {
@@ -47,15 +41,18 @@ export function useSavedSearchAlerts() {
   const searchesQuery = useQuery({
     queryKey: ["saved-search-alerts", userId],
     enabled: !!userId,
-    queryFn: async (): Promise<SavedSearchRow[]> => {
+    // Every row the user has, whatever wrote it (search.md WP3 item 3). This
+    // used to filter to search_type = 'event_list', so rows from /search/advanced
+    // and the iOS non-Events tabs counted toward the plan cap
+    // (20260918000001_enforce_plan_limits.sql) while no screen showed them.
+    queryFn: async (): Promise<SavedSearchListItem[]> => {
       const { data, error } = await supabase
         .from("saved_searches")
         .select("*")
         .eq("user_id", userId!)
-        .eq("search_type", "event_list")
         .order("created_at", { ascending: false });
       if (error) throw error;
-      return data ?? [];
+      return (data ?? []).map((row) => ({ ...row, normalized: normalizeSavedSearch(row) }));
     },
   });
 

@@ -49,9 +49,12 @@ const featureDescriptions: Record<
     description: "Save as many events and restaurants as you want — free accounts are limited to 3",
     tier: "insider",
   },
+  // Lists only what /search/advanced applies (search plan WP4 item 2). It
+  // used to promise distance, price range and time of day, none of which any
+  // query read.
   advanced_filters: {
     title: "Advanced Filters",
-    description: "Filter by distance, price range, rating, time of day, and more",
+    description: "Filter search by minimum rating, area, event dates and featured picks",
     tier: "insider",
   },
   ad_free: {

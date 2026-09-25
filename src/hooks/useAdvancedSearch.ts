@@ -2,39 +2,46 @@ import { useState, useEffect, useCallback } from 'react';
 import { useQuery, useQueryClient } from '@tanstack/react-query';
 import { STALE_TIME, GC_TIME, shouldRetry } from '@/lib/queryConfig';
 import { supabase } from '@/integrations/supabase/client';
+import type { Json } from '@/integrations/supabase/types';
 import { useAuth } from './useAuth';
 import { toast } from 'sonner';
-import { createLogger } from '@/lib/logger';
+import { handleError } from '@/lib/errorHandler';
 import {
   EVENT_LIST_COLUMNS,
   RESTAURANT_LIST_COLUMNS,
   ATTRACTION_LIST_COLUMNS,
   PLAYGROUND_LIST_COLUMNS,
 } from '@/lib/listColumns';
-import { sanitizePostgrestPattern } from '@/lib/postgrestPattern';
+import { escapeLikePattern, sanitizePostgrestPattern } from '@/lib/postgrestPattern';
+import { centralWindow, upcomingFloorUtc } from '@/lib/timezone';
 
-const log = createLogger('useAdvancedSearch');
-
+/**
+ * The filters /search/advanced can actually apply (search plan WP4 item 2).
+ *
+ * Radius, price range, time of day, features, deals, accessibility, open now
+ * and "Near Me" were removed: no predicate ever read them, and the Insider gate
+ * sold them anyway. What is left is exactly what reaches a query below.
+ *
+ * `dateRange` holds Central calendar dates (`yyyy-MM-dd`), not Date objects,
+ * so a saved row round-trips through JSON unchanged. Rows saved before this
+ * held ISO strings there; `toAdvancedFilters` takes the date part of those.
+ */
 export interface AdvancedSearchFilters {
   query: string;
   category: string;
+  /** An area name matched against the row's `location`, or '' for any. */
   location: string;
-  radius: number;
-  priceRange: [number, number];
+  /** Minimum rating; 0 means any. Events carry no rating, so a rating hides them. */
   rating: number;
   dateRange: {
-    start?: Date;
-    end?: Date;
+    start?: string;
+    end?: string;
   };
-  timeOfDay: string[];
-  features: string[];
-  sortBy: string;
-  openNow: boolean;
+  sortBy: AdvancedSearchSort;
   featuredOnly: boolean;
-  hasDeals: boolean;
-  accessibility: string[];
-  tags: string[];
 }
+
+export type AdvancedSearchSort = 'relevance' | 'rating';
 
 export interface SavedSearch {
   id: string;
@@ -43,6 +50,15 @@ export interface SavedSearch {
   createdAt: Date;
   lastUsed?: Date;
   useCount: number;
+  /**
+   * False for rows another surface wrote into the same table: the /events
+   * `event_list` shape `{q, category, ...}` and the iOS shape `{query, tab}`
+   * (which iOS stores as `advanced` for every tab but Events). Those can't be
+   * loaded into these controls, so "Use" sends them to /search instead.
+   */
+  restorable: boolean;
+  /** The row's own words (`query` or `q`), for the /search hand-off. */
+  query: string;
 }
 
 export interface SearchResult {
@@ -54,89 +70,328 @@ export interface SearchResult {
   rating?: number;
   price?: string;
   imageUrl?: string;
-  distance?: number;
-  features?: string[];
-  relevanceScore?: number;
+  /** Restaurants only: the slug column their detail route prefers. */
+  slug?: string | null;
   /** Events only: what createEventSlugWithCentralTime needs for the link. */
   date?: string | null;
   event_start_utc?: string | null;
 }
 
-const defaultFilters: AdvancedSearchFilters = {
+export const DEFAULT_ADVANCED_FILTERS: AdvancedSearchFilters = {
   query: '',
   category: 'All',
   location: '',
-  radius: 10,
-  priceRange: [0, 200],
   rating: 0,
   dateRange: {},
-  timeOfDay: [],
-  features: [],
   sortBy: 'relevance',
-  openNow: false,
   featuredOnly: false,
-  hasDeals: false,
-  accessibility: [],
-  tags: []
 };
 
-/** Stable empty array — a fresh `[]` default would give `results` a new identity
+const CATEGORIES = ['All', 'Events', 'Restaurants', 'Attractions', 'Playgrounds'];
+const RATINGS = [0, 3, 4, 4.5];
+
+function isRecord(value: unknown): value is Record<string, unknown> {
+  return !!value && typeof value === 'object' && !Array.isArray(value);
+}
+
+function str(value: unknown): string {
+  return typeof value === 'string' ? value.trim() : '';
+}
+
+/** `yyyy-MM-dd` from a stored date string (plain date or ISO instant), else undefined. */
+function dayOf(value: unknown): string | undefined {
+  const s = str(value).slice(0, 10);
+  return /^\d{4}-\d{2}-\d{2}$/.test(s) && !Number.isNaN(new Date(`${s}T12:00:00Z`).getTime())
+    ? s
+    : undefined;
+}
+
+/**
+ * Any stored `filters` value, of any shape (or null, or a string), as filters
+ * these controls can render. Unknown keys are dropped, missing ones take the
+ * default, and nothing here throws. This is what stops one /events or iOS save
+ * from crashing the page (WP4 item 1).
+ */
+export function toAdvancedFilters(raw: unknown): AdvancedSearchFilters {
+  const f = isRecord(raw) ? raw : {};
+  const range = isRecord(f.dateRange) ? f.dateRange : {};
+  const category = str(f.category);
+  const rating = typeof f.rating === 'number' ? f.rating : 0;
+  return {
+    query: str(f.query) || str(f.q),
+    category: CATEGORIES.includes(category) ? category : 'All',
+    location: str(f.location) === 'Near Me' ? '' : str(f.location),
+    rating: RATINGS.includes(rating) ? rating : 0,
+    dateRange: { start: dayOf(range.start), end: dayOf(range.end) },
+    sortBy: f.sortBy === 'rating' ? 'rating' : 'relevance',
+    featuredOnly: f.featuredOnly === true,
+  };
+}
+
+/**
+ * Whether a saved row was written by this page. The web advanced shape always
+ * carries `sortBy` and `featuredOnly`; the iOS `{query, tab}` shape and the
+ * /events `{q, ...}` shape never do.
+ */
+function isAdvancedRow(searchType: unknown, raw: unknown): boolean {
+  if (searchType !== 'advanced' || !isRecord(raw)) return false;
+  return 'sortBy' in raw && 'featuredOnly' in raw;
+}
+
+interface SavedSearchRow {
+  id: string;
+  name: string;
+  filters: Json;
+  search_type?: string | null;
+  created_at: string;
+  last_used?: string | null;
+  use_count?: number | null;
+}
+
+function toSavedSearch(row: SavedSearchRow): SavedSearch {
+  const raw = row.filters as unknown;
+  const f = isRecord(raw) ? raw : {};
+  return {
+    id: row.id,
+    name: row.name,
+    filters: toAdvancedFilters(raw),
+    createdAt: new Date(row.created_at),
+    lastUsed: row.last_used ? new Date(row.last_used) : undefined,
+    useCount: row.use_count || 0,
+    restorable: isAdvancedRow(row.search_type, raw),
+    query: str(f.query) || str(f.q),
+  };
+}
+
+/** Filters as stored: plain JSON, dates as `yyyy-MM-dd`, empty dates omitted. */
+function toStoredFilters(filters: AdvancedSearchFilters): Json {
+  const dateRange: Record<string, string> = {};
+  if (filters.dateRange.start) dateRange.start = filters.dateRange.start;
+  if (filters.dateRange.end) dateRange.end = filters.dateRange.end;
+  return {
+    query: filters.query,
+    category: filters.category,
+    location: filters.location,
+    rating: filters.rating,
+    dateRange,
+    sortBy: filters.sortBy,
+    featuredOnly: filters.featuredOnly,
+  };
+}
+
+/** Stable empty array - a fresh `[]` default would give `results` a new identity
  *  every render and re-fire consumer effects that depend on it. */
 const EMPTY_RESULTS: SearchResult[] = [];
 
-export function useAdvancedSearch() {
+async function searchEvents(f: AdvancedSearchFilters): Promise<SearchResult[]> {
+  // Central day boundaries: an event at 7pm Central on the 1st is 00:00 UTC
+  // on the 2nd, and a UTC-date window drops it.
+  const floor = upcomingFloorUtc();
+  const start = f.dateRange.start
+    ? centralWindow({ kind: 'single', date: f.dateRange.start }).start
+    : floor;
+  let query = supabase
+    .from('events')
+    .select(EVENT_LIST_COLUMNS)
+    .gte('date', start > floor ? start : floor)
+    .neq('is_hidden', true) // Exclude soft-hidden stale events (WEB-AUTO-006)
+    // WEB-BE-034: archived_at is the other unpublish switch.
+    .is('archived_at', null)
+    .order('date', { ascending: true })
+    .limit(50);
+
+  if (f.dateRange.end) {
+    query = query.lte('date', centralWindow({ kind: 'single', date: f.dateRange.end }).end);
+  }
+  if (f.query) {
+    const q = sanitizePostgrestPattern(f.query);
+    query = query.or(`title.ilike.%${q}%,venue.ilike.%${q}%,location.ilike.%${q}%`);
+  }
+  if (f.location) {
+    query = query.ilike('location', `%${escapeLikePattern(f.location)}%`);
+  }
+  if (f.featuredOnly) {
+    query = query.eq('is_featured', true);
+  }
+
+  const { data, error } = await query;
+  if (error) throw error;
+
+  return (data ?? []).map((event) => ({
+    id: event.id,
+    type: 'event' as const,
+    title: event.title,
+    description: event.enhanced_description || event.original_description,
+    location: event.location,
+    price: event.price,
+    imageUrl: event.image_url,
+    date: event.date,
+    event_start_utc: event.event_start_utc,
+  }));
+}
+
+async function searchRestaurants(f: AdvancedSearchFilters): Promise<SearchResult[]> {
+  let query = supabase.from('restaurants').select(RESTAURANT_LIST_COLUMNS).limit(50);
+
+  if (f.query) {
+    const q = sanitizePostgrestPattern(f.query);
+    query = query.or(`name.ilike.%${q}%,cuisine.ilike.%${q}%,location.ilike.%${q}%`);
+  }
+  if (f.location) {
+    query = query.ilike('location', `%${escapeLikePattern(f.location)}%`);
+  }
+  if (f.rating > 0) {
+    query = query.gte('rating', f.rating);
+  }
+  if (f.featuredOnly) {
+    query = query.eq('is_featured', true);
+  }
+
+  const { data, error } = await query;
+  if (error) throw error;
+
+  return (data ?? []).map((restaurant) => ({
+    id: restaurant.id,
+    type: 'restaurant' as const,
+    title: restaurant.name,
+    description: restaurant.description,
+    location: restaurant.location,
+    rating: restaurant.rating,
+    price: restaurant.price_range,
+    imageUrl: restaurant.image_url,
+    slug: restaurant.slug,
+  }));
+}
+
+async function searchAttractions(f: AdvancedSearchFilters): Promise<SearchResult[]> {
+  let query = supabase.from('attractions').select(ATTRACTION_LIST_COLUMNS).limit(50);
+
+  if (f.query) {
+    const q = sanitizePostgrestPattern(f.query);
+    query = query.or(`name.ilike.%${q}%,type.ilike.%${q}%,location.ilike.%${q}%`);
+  }
+  if (f.location) {
+    query = query.ilike('location', `%${escapeLikePattern(f.location)}%`);
+  }
+  if (f.rating > 0) {
+    query = query.gte('rating', f.rating);
+  }
+  if (f.featuredOnly) {
+    query = query.eq('is_featured', true);
+  }
+
+  const { data, error } = await query;
+  if (error) throw error;
+
+  return (data ?? []).map((attraction) => ({
+    id: attraction.id,
+    type: 'attraction' as const,
+    title: attraction.name,
+    description: attraction.description,
+    location: attraction.location,
+    rating: attraction.rating,
+    imageUrl: attraction.image_url,
+  }));
+}
+
+async function searchPlaygrounds(f: AdvancedSearchFilters): Promise<SearchResult[]> {
+  let query = supabase.from('playgrounds').select(PLAYGROUND_LIST_COLUMNS).limit(50);
+
+  if (f.query) {
+    const q = sanitizePostgrestPattern(f.query);
+    query = query.or(`name.ilike.%${q}%,location.ilike.%${q}%`);
+  }
+  if (f.location) {
+    query = query.ilike('location', `%${escapeLikePattern(f.location)}%`);
+  }
+  if (f.rating > 0) {
+    query = query.gte('rating', f.rating);
+  }
+  if (f.featuredOnly) {
+    query = query.eq('is_featured', true);
+  }
+
+  const { data, error } = await query;
+  if (error) throw error;
+
+  return (data ?? []).map((playground) => ({
+    id: playground.id,
+    type: 'playground' as const,
+    title: playground.name,
+    description: playground.description,
+    location: playground.location,
+    rating: playground.rating,
+    imageUrl: playground.image_url,
+  }));
+}
+
+async function executeSearch(f: AdvancedSearchFilters): Promise<SearchResult[]> {
+  const categories = f.category === 'All'
+    ? ['Events', 'Restaurants', 'Attractions', 'Playgrounds']
+    : [f.category];
+
+  const results: SearchResult[] = [];
+  for (const category of categories) {
+    switch (category) {
+      case 'Events':
+        // Events have no rating column, so a minimum rating can't include them.
+        if (f.rating === 0) results.push(...(await searchEvents(f)));
+        break;
+      case 'Restaurants':
+        results.push(...(await searchRestaurants(f)));
+        break;
+      case 'Attractions':
+        results.push(...(await searchAttractions(f)));
+        break;
+      case 'Playgrounds':
+        results.push(...(await searchPlaygrounds(f)));
+        break;
+    }
+  }
+
+  // 'relevance' keeps each query's own order (events soonest first). There is
+  // no relevance score to sort by, so it does not pretend to have one.
+  return f.sortBy === 'rating'
+    ? [...results].sort((a, b) => (b.rating || 0) - (a.rating || 0))
+    : results;
+}
+
+/** Cache key for a submitted search. Identical searches reuse the cache and
+ *  concurrent identical ones dedupe. */
+const searchQueryKey = (f: AdvancedSearchFilters | null) => ['advanced-search', f] as const;
+
+export interface UseAdvancedSearchOptions {
+  /** Seeds `filters.query`, from `?q=` on the page. */
+  initialQuery?: string;
+}
+
+export function useAdvancedSearch({ initialQuery = '' }: UseAdvancedSearchOptions = {}) {
   const { user } = useAuth();
-  const [filters, setFilters] = useState<AdvancedSearchFilters>(defaultFilters);
+  const [filters, setFilters] = useState<AdvancedSearchFilters>(() => ({
+    ...DEFAULT_ADVANCED_FILTERS,
+    query: initialQuery.trim(),
+  }));
   const [savedSearches, setSavedSearches] = useState<SavedSearch[]>([]);
   /** The filters of the most recently submitted search. This hook is imperative
-   *  by design — consumers call performSearch(...) — so the query is keyed on
+   *  by design - consumers call performSearch(...) - so the query is keyed on
    *  what was submitted rather than on the live `filters` state (WEB-PERF-013). */
   const [submittedFilters, setSubmittedFilters] = useState<AdvancedSearchFilters | null>(null);
   const queryClient = useQueryClient();
-  const [userLocation, setUserLocation] = useState<{lat: number, lng: number} | null>(null);
 
-  // Get user's location
-  useEffect(() => {
-    if (navigator.geolocation) {
-      navigator.geolocation.getCurrentPosition(
-        (position) => {
-          setUserLocation({
-            lat: position.coords.latitude,
-            lng: position.coords.longitude
-          });
-        },
-        (error) => {
-          log.debug('init', 'Location access denied', { error });
-        }
-      );
-    }
-  }, []);
-
-  // Load saved searches
   const loadSavedSearches = useCallback(async () => {
     if (!user) return;
-    
+
     try {
       const { data, error } = await supabase
         .from('saved_searches')
-        .select('*')
+        .select('id, name, filters, search_type, created_at, last_used, use_count')
         .eq('user_id', user.id)
         .order('created_at', { ascending: false });
-      
+
       if (error) throw error;
-      
-      const formattedSearches: SavedSearch[] = data?.map(search => ({
-        id: search.id,
-        name: search.name,
-        filters: search.filters as unknown as AdvancedSearchFilters,
-        createdAt: new Date(search.created_at),
-        lastUsed: search.last_used ? new Date(search.last_used) : undefined,
-        useCount: search.use_count || 0
-      })) || [];
-      
-      setSavedSearches(formattedSearches);
+      setSavedSearches((data ?? []).map((row) => toSavedSearch(row as SavedSearchRow)));
     } catch (error) {
-      log.error('loadSavedSearches', 'Error loading saved searches', { error });
+      handleError(error, { component: 'useAdvancedSearch', action: 'loadSavedSearches' });
       setSavedSearches([]);
     }
   }, [user]);
@@ -144,66 +399,6 @@ export function useAdvancedSearch() {
   useEffect(() => {
     loadSavedSearches();
   }, [loadSavedSearches]);
-
-  // Calculate distance between two points
-  const calculateDistance = (lat1: number, lon1: number, lat2: number, lon2: number): number => {
-    const R = 3959; // Earth's radius in miles
-    const dLat = (lat2 - lat1) * Math.PI / 180;
-    const dLon = (lon2 - lon1) * Math.PI / 180;
-    const a = 
-      Math.sin(dLat/2) * Math.sin(dLat/2) +
-      Math.cos(lat1 * Math.PI / 180) * Math.cos(lat2 * Math.PI / 180) *
-      Math.sin(dLon/2) * Math.sin(dLon/2);
-    const c = 2 * Math.atan2(Math.sqrt(a), Math.sqrt(1-a));
-    return R * c;
-  };
-
-  // Enhanced search function
-  /** Runs the actual search. Kept as a hook-scope closure because it depends on
-   *  userLocation and the per-type search helpers defined below. */
-  const executeSearch = useCallback(async (searchFilters: AdvancedSearchFilters): Promise<SearchResult[]> => {
-    {
-      const searchResults: SearchResult[] = [];
-
-      // Search different content types based on category filter
-      const categories = searchFilters.category === 'All' 
-        ? ['Events', 'Restaurants', 'Attractions', 'Playgrounds']
-        : [searchFilters.category];
-
-      for (const category of categories) {
-        switch (category) {
-          case 'Events':
-            const eventsResults = await searchEvents(searchFilters);
-            searchResults.push(...eventsResults);
-            break;
-          case 'Restaurants':
-            const restaurantsResults = await searchRestaurants(searchFilters);
-            searchResults.push(...restaurantsResults);
-            break;
-          case 'Attractions':
-            const attractionsResults = await searchAttractions(searchFilters);
-            searchResults.push(...attractionsResults);
-            break;
-          case 'Playgrounds':
-            const playgroundsResults = await searchPlaygrounds(searchFilters);
-            searchResults.push(...playgroundsResults);
-            break;
-        }
-      }
-
-      // Apply location-based filtering
-      const filteredResults = filterByLocation(searchResults, searchFilters);
-      
-      // Sort results
-      return sortResults(filteredResults, searchFilters);
-    }
-  }, [userLocation]);
-
-  /** Cache key for a submitted search. Identical searches reuse the cache and
-   *  concurrent identical ones dedupe, which the manual useState version could
-   *  not do. */
-  const searchQueryKey = (f: AdvancedSearchFilters | null) =>
-    ['advanced-search', f, userLocation] as const;
 
   const { data: results = EMPTY_RESULTS, isFetching: loading } = useQuery({
     queryKey: searchQueryKey(submittedFilters),
@@ -226,305 +421,80 @@ export function useAdvancedSearch() {
         gcTime: GC_TIME,
       });
     } catch (error) {
-      log.error('performSearch', 'Search error', { error });
+      handleError(error, { component: 'useAdvancedSearch', action: 'performSearch' });
       toast.error('Search failed. Please try again.');
       return [];
     }
-  }, [executeSearch, queryClient, userLocation]);
-
-  const searchEvents = async (searchFilters: AdvancedSearchFilters): Promise<SearchResult[]> => {
-    let query = supabase
-      .from('events')
-      .select(EVENT_LIST_COLUMNS)
-      .gte('date', new Date().toISOString())
-      .neq('is_hidden', true) // Exclude soft-hidden stale events (WEB-AUTO-006)
-      // WEB-BE-034: archived_at is the other unpublish switch.
-      .is('archived_at', null)
-      .limit(50);
-
-    // Apply text search
-    if (searchFilters.query) {
-      const safeQuery = sanitizePostgrestPattern(searchFilters.query);
-      query = query.or(`title.ilike.%${safeQuery}%,venue.ilike.%${safeQuery}%,location.ilike.%${safeQuery}%`);
-    }
-
-    // Apply location filter
-    if (searchFilters.location && searchFilters.location !== 'Near Me') {
-      query = query.ilike('location', `%${searchFilters.location}%`);
-    }
-
-    // Apply featured filter
-    if (searchFilters.featuredOnly) {
-      query = query.eq('is_featured', true);
-    }
-
-    // Apply date range filter
-    if (searchFilters.dateRange.start) {
-      query = query.gte('date', searchFilters.dateRange.start.toISOString());
-    }
-    if (searchFilters.dateRange.end) {
-      query = query.lte('date', searchFilters.dateRange.end.toISOString());
-    }
-
-    const { data, error } = await query;
-    if (error) throw error;
-
-    return data?.map(event => ({
-      id: event.id,
-      type: 'event' as const,
-      title: event.title,
-      description: event.enhanced_description || event.original_description,
-      location: event.location,
-      price: event.price,
-      imageUrl: event.image_url,
-      date: event.date,
-      event_start_utc: event.event_start_utc,
-      features: []
-    })) || [];
-  };
-
-  const searchRestaurants = async (searchFilters: AdvancedSearchFilters): Promise<SearchResult[]> => {
-    let query = supabase
-      .from('restaurants')
-      .select(RESTAURANT_LIST_COLUMNS)
-      .limit(50);
-
-    // Apply text search
-    if (searchFilters.query) {
-      const safeQuery = sanitizePostgrestPattern(searchFilters.query);
-      query = query.or(`name.ilike.%${safeQuery}%,cuisine.ilike.%${safeQuery}%,location.ilike.%${safeQuery}%`);
-    }
-
-    // Apply location filter
-    if (searchFilters.location && searchFilters.location !== 'Near Me') {
-      query = query.ilike('location', `%${searchFilters.location}%`);
-    }
-
-    // Apply rating filter
-    if (searchFilters.rating > 0) {
-      query = query.gte('rating', searchFilters.rating);
-    }
-
-    // Apply featured filter
-    if (searchFilters.featuredOnly) {
-      query = query.eq('is_featured', true);
-    }
-
-    // Apply open now filter (simplified - would need actual hours data)
-    if (searchFilters.openNow) {
-      // This would need to be implemented with actual opening hours data
-    }
-
-    const { data, error } = await query;
-    if (error) throw error;
-
-    return data?.map(restaurant => ({
-      id: restaurant.id,
-      type: 'restaurant' as const,
-      title: restaurant.name,
-      description: restaurant.description,
-      location: restaurant.location,
-      rating: restaurant.rating,
-      price: restaurant.price_range,
-      imageUrl: restaurant.image_url,
-      features: []
-    })) || [];
-  };
-
-  const searchAttractions = async (searchFilters: AdvancedSearchFilters): Promise<SearchResult[]> => {
-    let query = supabase
-      .from('attractions')
-      .select(ATTRACTION_LIST_COLUMNS)
-      .limit(50);
-
-    // Apply text search
-    if (searchFilters.query) {
-      const safeQuery = sanitizePostgrestPattern(searchFilters.query);
-      query = query.or(`name.ilike.%${safeQuery}%,type.ilike.%${safeQuery}%,location.ilike.%${safeQuery}%`);
-    }
-
-    // Apply location filter
-    if (searchFilters.location && searchFilters.location !== 'Near Me') {
-      query = query.ilike('location', `%${searchFilters.location}%`);
-    }
-
-    // Apply rating filter
-    if (searchFilters.rating > 0) {
-      query = query.gte('rating', searchFilters.rating);
-    }
-
-    // Apply featured filter
-    if (searchFilters.featuredOnly) {
-      query = query.eq('is_featured', true);
-    }
-
-    const { data, error } = await query;
-    if (error) throw error;
-
-    return data?.map(attraction => ({
-      id: attraction.id,
-      type: 'attraction' as const,
-      title: attraction.name,
-      description: attraction.description,
-      location: attraction.location,
-      rating: attraction.rating,
-      imageUrl: attraction.image_url,
-      features: []
-    })) || [];
-  };
-
-  const searchPlaygrounds = async (searchFilters: AdvancedSearchFilters): Promise<SearchResult[]> => {
-    let query = supabase
-      .from('playgrounds')
-      .select(PLAYGROUND_LIST_COLUMNS)
-      .limit(50);
-
-    // Apply text search
-    if (searchFilters.query) {
-      const safeQuery = sanitizePostgrestPattern(searchFilters.query);
-      query = query.or(`name.ilike.%${safeQuery}%,location.ilike.%${safeQuery}%`);
-    }
-
-    // Apply location filter
-    if (searchFilters.location && searchFilters.location !== 'Near Me') {
-      query = query.ilike('location', `%${searchFilters.location}%`);
-    }
-
-    // Apply rating filter
-    if (searchFilters.rating > 0) {
-      query = query.gte('rating', searchFilters.rating);
-    }
-
-    // Apply featured filter
-    if (searchFilters.featuredOnly) {
-      query = query.eq('is_featured', true);
-    }
-
-    const { data, error } = await query;
-    if (error) throw error;
-
-    return data?.map(playground => ({
-      id: playground.id,
-      type: 'playground' as const,
-      title: playground.name,
-      description: playground.description,
-      location: playground.location,
-      rating: playground.rating,
-      imageUrl: playground.image_url,
-      features: []
-    })) || [];
-  };
-
-  const filterByLocation = (results: SearchResult[], _searchFilters: AdvancedSearchFilters): SearchResult[] => {
-    // Real per-result coordinates aren't available in this aggregated result set,
-    // so we no longer fabricate distances (was Math.random). Distance-based
-    // filtering/sorting is disabled until a proximity RPC backs it (WEB-UX-018).
-    return results;
-  };
-
-  const sortResults = (results: SearchResult[], searchFilters: AdvancedSearchFilters): SearchResult[] => {
-    return [...results].sort((a, b) => {
-      switch (searchFilters.sortBy) {
-        case 'rating':
-          return (b.rating || 0) - (a.rating || 0);
-        case 'distance':
-          return (a.distance || 0) - (b.distance || 0);
-        case 'price_low':
-          // Simplified price comparison
-          return (a.price || '').localeCompare(b.price || '');
-        case 'price_high':
-          return (b.price || '').localeCompare(a.price || '');
-        case 'relevance':
-        default:
-          return (b.relevanceScore || 0) - (a.relevanceScore || 0);
-      }
-    });
-  };
+  }, [queryClient]);
 
   const saveSearch = async (name: string, searchFilters: AdvancedSearchFilters) => {
     if (!user) {
       toast.error('Please sign in to save searches');
       return;
     }
-    
+
     try {
       const { data, error } = await supabase
         .from('saved_searches')
         .insert({
           user_id: user.id,
           name,
-          filters: searchFilters as any,
-          use_count: 1
+          filters: toStoredFilters(searchFilters),
+          use_count: 1,
         })
-        .select()
+        .select('id, name, filters, search_type, created_at, last_used, use_count')
         .single();
-      
+
       if (error) throw error;
-      
-      const newSearch: SavedSearch = {
-        id: data.id,
-        name: data.name,
-        filters: data.filters as unknown as AdvancedSearchFilters,
-        createdAt: new Date(data.created_at),
-        useCount: 1
-      };
-      
-      setSavedSearches(prev => [newSearch, ...prev]);
-      toast.success('Search saved successfully');
+
+      setSavedSearches((prev) => [toSavedSearch(data as SavedSearchRow), ...prev]);
+      toast.success('Search saved');
     } catch (error) {
-      log.error('saveSearch', 'Error saving search', { error });
-      toast.error('Failed to save search');
+      handleError(error, { component: 'useAdvancedSearch', action: 'saveSearch' });
+      toast.error('Could not save this search');
     }
   };
 
+  /** Loads a row this page wrote. The page sends other rows to /search instead. */
   const loadSearch = async (search: SavedSearch) => {
+    setFilters(search.filters);
+    void performSearch(search.filters);
     try {
-      // Update use count and last used
-      await supabase
+      const { error } = await supabase
         .from('saved_searches')
         .update({
           use_count: search.useCount + 1,
-          last_used: new Date().toISOString()
+          last_used: new Date().toISOString(),
         })
         .eq('id', search.id);
-      
-      // Update local state
-      setSavedSearches(prev => 
-        prev.map(s => 
-          s.id === search.id 
-            ? { ...s, useCount: s.useCount + 1, lastUsed: new Date() }
-            : s
-        )
+      if (error) throw error;
+
+      setSavedSearches((prev) =>
+        prev.map((s) =>
+          s.id === search.id ? { ...s, useCount: s.useCount + 1, lastUsed: new Date() } : s,
+        ),
       );
-      
-      setFilters(search.filters);
-      await performSearch(search.filters);
     } catch (error) {
-      log.error('loadSearch', 'Error loading search', { error });
-      setFilters(search.filters);
-      await performSearch(search.filters);
+      // The search already ran; only the usage counter missed.
+      handleError(error, { component: 'useAdvancedSearch', action: 'loadSearch' });
     }
   };
 
   const deleteSearch = async (searchId: string) => {
     try {
-      const { error } = await supabase
-        .from('saved_searches')
-        .delete()
-        .eq('id', searchId);
-      
+      const { error } = await supabase.from('saved_searches').delete().eq('id', searchId);
       if (error) throw error;
-      
-      setSavedSearches(prev => prev.filter(s => s.id !== searchId));
-      toast.success('Search deleted successfully');
+
+      setSavedSearches((prev) => prev.filter((s) => s.id !== searchId));
+      toast.success('Search deleted');
     } catch (error) {
-      log.error('deleteSearch', 'Error deleting search', { error });
-      toast.error('Failed to delete search');
+      handleError(error, { component: 'useAdvancedSearch', action: 'deleteSearch' });
+      toast.error('Could not delete this search');
     }
   };
 
   const resetFilters = () => {
-    setFilters(defaultFilters);
+    setFilters(DEFAULT_ADVANCED_FILTERS);
     setSubmittedFilters(null);
   };
 
@@ -534,11 +504,12 @@ export function useAdvancedSearch() {
     results,
     savedSearches,
     loading,
+    /** True once any search has been submitted; the page shows a prompt before that. */
+    hasSearched: submittedFilters !== null,
     performSearch,
     saveSearch,
     loadSearch,
     deleteSearch,
     resetFilters,
-    userLocation
   };
 }

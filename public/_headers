@@ -157,3 +157,15 @@
 # API Routes - Short cache for dynamic content
 /api/*
   Cache-Control: public, max-age=300
+
+# /search and /search/advanced: internal search results are thin by
+# construction (WEB-SEO-005, search plan WP2 item 11). Sent as a header so a
+# crawler has the directive before any JS runs, and before it costs an
+# nlp-search model call to render the page's own robots meta. robots.txt is
+# left alone on purpose: a Disallow would stop crawlers reading this noindex.
+# Matching ignores the query string, so /search?q=... is covered.
+/search
+  X-Robots-Tag: noindex, follow
+
+/search/*
+  X-Robots-Tag: noindex, follow
