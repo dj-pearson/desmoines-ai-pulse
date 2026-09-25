@@ -1,4 +1,5 @@
 import { test, expect } from '@playwright/test';
+import { installFixtureBackend } from './support/fixtureBackend';
 
 /**
  * WEB-UX-036. Footer links have to be tappable on a phone.
@@ -73,3 +74,25 @@ for (const route of ['/', '/events', '/contact', '/trip-planner']) {
     ).toEqual([]);
   });
 }
+
+/*
+ * Eat & Drink pass 2 WP6 item 4. A restaurant card's Save button sits in the
+ * photo's corner, so it is the one control on the hub a thumb aims at on a
+ * phone. Measured on the element itself, not the tap-area-44 overlay: the card
+ * sizes the button h-11 w-11 (src/components/RestaurantCard.tsx), and an
+ * overlay-only 44px would still leave a 36px visible target. The hub needs
+ * rows to render a card, and the smoke build has placeholder credentials, so
+ * the fixture backend answers.
+ */
+test('a restaurant card Save button is at least 44x44 on /restaurants', async ({ page }) => {
+  await installFixtureBackend(page, { restaurantTotal: 40 });
+  await page.goto('/restaurants', { waitUntil: 'domcontentloaded' });
+
+  const save = page.locator('article').getByRole('button', { name: /^Save / }).first();
+  await expect(save).toBeVisible({ timeout: 30_000 });
+
+  const box = await save.boundingBox();
+  expect(box, 'the Save button has no layout box').not.toBeNull();
+  expect(Math.round(box!.width), 'Save button width').toBeGreaterThanOrEqual(44);
+  expect(Math.round(box!.height), 'Save button height').toBeGreaterThanOrEqual(44);
+});

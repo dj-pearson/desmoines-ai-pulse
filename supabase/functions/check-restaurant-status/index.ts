@@ -1,6 +1,8 @@
 import "https://deno.land/x/xhr@0.1.0/mod.ts";
 import { fetchWithTimeout } from "../_shared/fetchWithTimeout.ts";
 import { serve } from "https://deno.land/std@0.168.0/http/server.ts";
+import { requireAdminOrApiKey } from "../_shared/apiKeyAuth.ts";
+import { checkRateLimitPersistent } from "../_shared/rateLimit.ts";
 
 const corsHeaders = {
   "Access-Control-Allow-Origin": "*",
@@ -27,14 +29,44 @@ interface CheckStatusRequest {
   restaurants: Restaurant[];
 }
 
+// One Google Places lookup per id. The admin tool sends its list in chunks
+// of this size (GooglePlacesRestaurantTools STATUS_CHECK_BATCH); a bigger
+// body is refused rather than silently truncated, so checked_count stays true.
+const MAX_BATCH = 50;
+const MAX_CALLS_PER_WINDOW = 60;
+
 serve(async (req) => {
   // Handle CORS preflight requests
   if (req.method === "OPTIONS") {
     return new Response("ok", { headers: corsHeaders });
   }
 
+  // Anyone could POST a list of place ids and spend the site's Places quota.
+  // The admin tool calls with an admin JWT, which passes.
+  const authFailure = await requireAdminOrApiKey(req, corsHeaders);
+  if (authFailure) return authFailure;
+
+  const rateLimit = await checkRateLimitPersistent(req, {
+    endpoint: "check-restaurant-status",
+    max: MAX_CALLS_PER_WINDOW,
+    windowMs: 15 * 60 * 1000,
+  });
+  if (!rateLimit.success) {
+    return new Response(
+      JSON.stringify({ error: "Too many status checks. Try again in a few minutes." }),
+      { status: 429, headers: { ...corsHeaders, "Content-Type": "application/json" } },
+    );
+  }
+
   try {
-    const { restaurants }: CheckStatusRequest = await req.json();
+    const body: Partial<CheckStatusRequest> = await req.json().catch(() => ({}));
+    const restaurants = body.restaurants;
+    if (!Array.isArray(restaurants) || restaurants.length > MAX_BATCH) {
+      return new Response(
+        JSON.stringify({ error: `restaurants must be an array of at most ${MAX_BATCH}` }),
+        { status: 400, headers: { ...corsHeaders, "Content-Type": "application/json" } },
+      );
+    }
 
     const GOOGLE_API_KEY = Deno.env.get("GOOGLE_SEARCH_API");
     if (!GOOGLE_API_KEY) {
@@ -110,7 +142,7 @@ serve(async (req) => {
     console.error("Error in check-restaurant-status function:", error);
     return new Response(
       JSON.stringify({
-        error: error.message || "An unexpected error occurred",
+        error: error instanceof Error ? error.message : "An unexpected error occurred",
       }),
       {
         headers: { ...corsHeaders, "Content-Type": "application/json" },

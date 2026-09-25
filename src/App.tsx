@@ -1,7 +1,7 @@
 import { LucideSprite } from "@/components/ui/icon-sprite.generated";
 import { ErrorBoundary } from "@/components/ui/error-boundary";
 import { RouteErrorBoundary } from "@/components/ui/route-error-boundary";
-import { BrowserRouter, Routes, Route } from "react-router-dom";
+import { BrowserRouter, Routes, Route, Navigate } from "react-router-dom";
 import { lazy, Suspense, useState, useEffect, useRef, ComponentType } from "react";
 import { sessionStore } from "@/lib/safeStorage";
 import { useKeyboardShortcuts } from "@/hooks/use-keyboard-shortcuts";
@@ -109,7 +109,6 @@ const MonthlyEventsPage = lazyWithRetry(() => import("./pages/MonthlyEventsPage"
 const EventsSegmentHandler = lazyWithRetry(() => import("./components/EventsSegmentHandler"));
 const AdvancedSearchPage = lazyWithRetry(() => import("./components/AdvancedSearchPage"));
 const SearchResults = lazyWithRetry(() => import("./pages/SearchResults"));
-const RealTimePage = lazyWithRetry(() => import("./components/RealTimePage"));
 
 // SEO-focused time-sensitive pages
 const EventsToday = lazyWithRetry(() => import("./pages/EventsToday"));
@@ -488,6 +487,8 @@ const App = () => (
             <Route path="/restaurants/open-now" element={<OpenNowRestaurants />} />
             <Route path="/restaurants/new" element={<NewRestaurants />} />
             <Route path="/restaurants/dietary" element={<DietaryRestaurants />} />
+            {/* Eat & Drink pass 2 WP4.13: one self-canonical path per diet. */}
+            <Route path="/restaurants/dietary/:diet" element={<DietaryRestaurants />} />
             <Route path="/attractions" element={<Attractions />} />
             <Route path="/playgrounds" element={<Playgrounds />} />
             <Route path="/events" element={<EventsPage />} />
@@ -570,7 +571,10 @@ const App = () => (
             <Route path="/search" element={<SearchResults />} />
             <Route path="/search/advanced" element={<AdvancedSearchPage />} />
             <Route path="/guides" element={<GuidesPage />} />
-            <Route path="/real-time" element={<RealTimePage />} />
+            {/* Eat & Drink pass 2 WP4.7: /real-time was a second "what's open"
+                page with no status filter and two dead buttons. It goes to
+                open-now; public/_redirects 301s it too. Keep for >= 1 release. */}
+            <Route path="/real-time" element={<Navigate to="/restaurants/open-now" replace />} />
             {/* Lead magnet tools */}
             <Route path="/tools/event-promotion-planner" element={<EventPromotionPlanner />} />
             {/* AI-powered features */}

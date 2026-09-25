@@ -97,7 +97,7 @@ test.describe('/restaurants/open-now', () => {
     await expect(page.getByText('Merged Twin')).toHaveCount(0);
     await expect(page.getByText('Gone Diner')).toHaveCount(0);
     await expect(page.locator('[data-open-now-summary]')).toContainText(
-      '2 of 2 restaurants with listed hours are open right now',
+      '2 of 2 places whose hours we can read are open right now',
     );
     await expect(page.locator('[data-open-now-clock]')).toHaveText('8:00 PM CT');
   });

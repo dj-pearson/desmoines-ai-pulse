@@ -21,7 +21,11 @@ const RestaurantCard = lazy(() => import("@/components/RestaurantCard"));
 const EventCard = lazy(() => import("@/components/EventCard"));
 
 interface NearbyContentProps {
-  variant: "restaurants-near-event" | "events-near-restaurant" | "restaurants-near-attraction";
+  variant:
+    | "restaurants-near-event"
+    | "events-near-restaurant"
+    | "restaurants-near-attraction"
+    | "restaurants-near-restaurant";
   locationName?: string;
   /** Kept for call-site compatibility; distance, not city, decides now. */
   city?: string;
@@ -29,6 +33,10 @@ interface NearbyContentProps {
   /** Where "nearby" is measured from. Without both, nothing renders. */
   latitude?: number | string | null;
   longitude?: number | string | null;
+  /** restaurants-near-restaurant: rows with this cuisine come first. */
+  preferCuisine?: string | null;
+  /** Rows shown. Defaults to 3. */
+  limit?: number;
 }
 
 function CardSkeleton() {
@@ -48,9 +56,16 @@ function eventHref(event: { title?: string | null }): string {
   return `/events/${createEventSlugWithCentralTime(event.title, event)}`;
 }
 
-export function NearbyContent({ variant, excludeId, latitude, longitude }: NearbyContentProps) {
+export function NearbyContent({
+  variant,
+  excludeId,
+  latitude,
+  longitude,
+  preferCuisine,
+  limit,
+}: NearbyContentProps) {
   const navigate = useNavigate();
-  const showRestaurants = variant === "restaurants-near-event" || variant === "restaurants-near-attraction";
+  const showRestaurants = variant !== "events-near-restaurant";
   const showEvents = variant === "events-near-restaurant";
 
   // SEO-015: by distance from this page's own coordinates. See useNearbyListings.
@@ -58,7 +73,7 @@ export function NearbyContent({ variant, excludeId, latitude, longitude }: Nearb
     showRestaurants ? "restaurants" : "events",
     latitude,
     longitude,
-    { excludeId },
+    { excludeId, limit, preferCuisine: variant === "restaurants-near-restaurant" ? preferCuisine : undefined },
   );
   // A disabled query (no coordinates) reports isLoading forever; it is idle.
   const isLoading = queryLoading && fetchStatus !== "idle";
@@ -90,19 +105,34 @@ export function NearbyContent({ variant, excludeId, latitude, longitude }: Nearb
       linkText: "Browse All Restaurants",
       linkHref: "/restaurants",
     },
+    // The one restaurant rail on a restaurant page (eat-drink pass 2, WP3.8).
+    // It replaced "More X Restaurants" (same cuisine, any distance, no order)
+    // and "Other Popular Restaurants in {city}" (ordered by popularity_score,
+    // which measures nothing a diner means by popular).
+    "restaurants-near-restaurant": {
+      title: "Also within 2 miles",
+      subtitle: preferCuisine
+        ? `${preferCuisine} places first, then the rest, closest first. Straight-line distance.`
+        : "Closest first. Straight-line distance.",
+      icon: Utensils,
+      linkText: "All restaurants",
+      linkHref: "/restaurants",
+    },
   }[variant];
 
   const Icon = config.icon;
 
+  const headingId = `nearby-${variant}`;
+
   return (
-    <section className="mt-12 pt-8 border-t pb-8">
-      <div className="flex items-center justify-between mb-6">
+    <section className="mt-12 pt-8 border-t pb-8" aria-labelledby={headingId}>
+      <div className="flex flex-wrap items-center justify-between gap-3 mb-6">
         <div className="flex items-center gap-3">
           <div className="p-2 rounded-lg bg-primary/10">
-            <Icon className="h-5 w-5 text-primary" />
+            <Icon className="h-5 w-5 text-primary" aria-hidden="true" />
           </div>
           <div>
-            <h2 className="text-2xl font-bold">{config.title}</h2>
+            <h2 id={headingId} className="text-2xl font-bold text-foreground">{config.title}</h2>
             <p className="text-sm text-muted-foreground mt-1">{config.subtitle}</p>
           </div>
         </div>
@@ -207,27 +237,48 @@ export function DinnerBeforeShow({ picks, startsAt }: DinnerBeforeShowProps) {
 interface TonightNearRestaurantProps {
   /** From useTonightNearRestaurant. Nothing renders when empty. */
   events: TonightNearbyEvent[];
+  /** From tonightHeading(): "Tonight nearby" or "After dinner, nearby tonight". */
+  heading: string;
+  restaurantName: string;
+  /**
+   * The restaurant's own status for tonight, "Open until 10 PM CT", from the
+   * page's one evaluation. Null when unknown; the line is then left out.
+   */
+  restaurantHoursLine?: string | null;
+  className?: string;
 }
 
 /**
- * "After dinner, nearby tonight" (restaurants plan WP8 item 6): tonight's
- * events within PAIR_MAX_MILES of the restaurant, in start order. The mirror
- * of DinnerBeforeShow on the event page. The distance-only NearbyContent rail
- * is the fallback when nothing is on tonight.
+ * Tonight's events within PAIR_MAX_MILES of the restaurant, in start order,
+ * next to the restaurant's own closing time (eat-drink pass 2, WP3.7, bet 5).
+ * It sits under the hours block, where the question "and then what?" comes
+ * up. The mirror of DinnerBeforeShow on the event page.
  */
-export function TonightNearRestaurant({ events }: TonightNearRestaurantProps) {
+export function TonightNearRestaurant({
+  events,
+  heading,
+  restaurantName,
+  restaurantHoursLine,
+  className,
+}: TonightNearRestaurantProps) {
   if (events.length === 0) return null;
 
   return (
-    <section aria-labelledby="tonight-nearby" className="mt-12 border-t pt-8 pb-8">
-      <h2 id="tonight-nearby" className="text-2xl font-bold text-foreground">
-        After dinner, nearby tonight
+    <section id="tonight" aria-labelledby="tonight-nearby" className={className ?? "scroll-mt-20"}>
+      <h2 id="tonight-nearby" className="text-xl font-bold text-foreground">
+        {heading}
       </h2>
       <p className="mt-1 text-sm text-muted-foreground">
-        Events starting later today within {PAIR_MAX_MILES} miles. Straight-line distance from the
-        restaurant.
+        {restaurantHoursLine ? (
+          <>
+            <span className="font-medium text-foreground">
+              {restaurantName}: {restaurantHoursLine}.
+            </span>{" "}
+          </>
+        ) : null}
+        Events starting later today within {PAIR_MAX_MILES} miles, straight-line distance.
       </p>
-      <ul className="mt-4 divide-y rounded-xl border bg-card">
+      <ul className="mt-3 divide-y rounded-xl border bg-card">
         {events.map(({ event, startsAt, distanceMiles, walkable }) => (
           <li key={event.id}>
             <Link
@@ -239,7 +290,7 @@ export function TonightNearRestaurant({ events }: TonightNearRestaurantProps) {
                   {event.title || "Untitled event"}
                 </span>
                 <span className="block truncate text-muted-foreground">
-                  {[startsAt ? `${formatCentralTime(startsAt)} CT` : "Time not listed", event.venue]
+                  {[startsAt ? `Starts ${formatCentralTime(startsAt)} CT` : "Time not listed", event.venue]
                     .filter(Boolean)
                     .join(" - ")}
                 </span>
@@ -252,7 +303,7 @@ export function TonightNearRestaurant({ events }: TonightNearRestaurantProps) {
           </li>
         ))}
       </ul>
-      <p className="mt-3 text-sm">
+      <p className="mt-2 text-sm">
         <Link to="/events/today" className="inline-flex min-h-11 items-center font-medium text-primary hover:underline">
           Everything on today
         </Link>

@@ -159,7 +159,16 @@ export default defineConfig({
   // baseline with it. events-request-budget would already match the
   // unanchored `request-budget` below; it is named anyway so removing that
   // entry cannot drop it.
-  testMatch: /(search-filters|url-filter-state|sticky-filter-chips|route-smoke|cookie-consent|backend-down|touch-targets|page-headings|search-request-loop|request-budget|turnstile-inert|subscription-checkout|advertise-success-receipt|submission-live-link|campaign-self-service|home-search|home-request-budget|home-rails-cls|home-tonight|home-dashboard|home-quick-view|shell-mobile|events-hub-dates|events-hub-list|events-near-me|event-detail|restaurants-hub|restaurants-open-now|restaurant-detail|things-to-do-hub|discover-map|attractions-hub|playgrounds-hub|music-sports-hubs|outdoors-hub|deals|stay|trip-planner-window|visitors-guide|getting-around|articles|best-of-voting|whats-new|events-weekend-days|search-results|search-watch|search-advanced-redirect|auth-funnel|auth-return|account-home|account-request-budget|account-submissions|account-settings|pricing-page|subscription-success|subscription-portal|paywall|advertise-builder|campaign-detail-pay|campaign-analytics-counts|business-hub|submit-event-page|home-rails-honesty|home-truth|shell-pass2|events-hub-clock|events-card-honesty|events-landings|events-request-budget|weather-aware-events)\.spec\.ts/,
+  //
+  // restaurants-hub-pass2, restaurants-new, restaurant-detail-pass2,
+  // restaurants-open-now-pass2, restaurants-dietary and brewery-trail joined
+  // with the Eat & Drink second pass (docs/page-plans/eat-drink-pass2.md WP6),
+  // on fixtureBackend plus per-spec routes. restaurant-reservations was a lane
+  // orphan (WEB-FEAT-024's reservation CTA on the detail page) and leaves the
+  // baseline with them. The unanchored `restaurants-hub`, `restaurants-open-now`
+  // and `restaurant-detail` entries above do not match the -pass2 files, because
+  // each has to sit directly before `.spec.ts`.
+  testMatch: /(search-filters|url-filter-state|sticky-filter-chips|route-smoke|cookie-consent|backend-down|touch-targets|page-headings|search-request-loop|request-budget|turnstile-inert|subscription-checkout|advertise-success-receipt|submission-live-link|campaign-self-service|home-search|home-request-budget|home-rails-cls|home-tonight|home-dashboard|home-quick-view|shell-mobile|events-hub-dates|events-hub-list|events-near-me|event-detail|restaurants-hub|restaurants-open-now|restaurant-detail|things-to-do-hub|discover-map|attractions-hub|playgrounds-hub|music-sports-hubs|outdoors-hub|deals|stay|trip-planner-window|visitors-guide|getting-around|articles|best-of-voting|whats-new|events-weekend-days|search-results|search-watch|search-advanced-redirect|auth-funnel|auth-return|account-home|account-request-budget|account-submissions|account-settings|pricing-page|subscription-success|subscription-portal|paywall|advertise-builder|campaign-detail-pay|campaign-analytics-counts|business-hub|submit-event-page|home-rails-honesty|home-truth|shell-pass2|events-hub-clock|events-card-honesty|events-landings|events-request-budget|weather-aware-events|restaurants-hub-pass2|restaurants-new|restaurant-detail-pass2|restaurants-open-now-pass2|restaurants-dietary|brewery-trail|restaurant-reservations)\.spec\.ts/,
   // One block is held out, by title, not the file. weather-aware-events.spec.ts
   // still asserts the homepage's standalone WeatherNotice ("... in Des Moines
   // right now.", "indoor picks for today"), which the Home plan replaced with

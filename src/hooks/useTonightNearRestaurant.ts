@@ -98,14 +98,75 @@ export interface TonightNearRestaurantResult {
 
 const NO_ROWS: TonightEvent[] = [];
 
+/** Minutes of the Central day for an instant, 0-1439. */
+function centralMinuteOfDay(at: Date): number {
+  const parts = new Intl.DateTimeFormat("en-US", {
+    timeZone: "America/Chicago",
+    hour: "numeric",
+    minute: "numeric",
+    hourCycle: "h23",
+  }).formatToParts(at);
+  const hour = Number(parts.find((p) => p.type === "hour")?.value ?? 0);
+  const minute = Number(parts.find((p) => p.type === "minute")?.value ?? 0);
+  return (hour % 24) * 60 + minute;
+}
+
+/** "10 PM", "10:30 PM", "midnight", "noon" (formatClockLabel's output) to minutes, or null. */
+export function clockLabelMinutes(label: string | null | undefined): number | null {
+  if (!label) return null;
+  const t = label.trim().toLowerCase();
+  if (t === "midnight") return 24 * 60;
+  if (t === "noon") return 12 * 60;
+  const m = /^(\d{1,2})(?::(\d{2}))?\s*(am|pm)$/.exec(t);
+  if (!m) return null;
+  const h = Number(m[1]) % 12;
+  return (m[3] === "pm" ? h + 12 : h) * 60 + Number(m[2] ?? 0);
+}
+
+/** Dinner takes about this long; an event starting later than close minus this is "after dinner". */
+export const AFTER_DINNER_MINUTES = 90;
+
+/**
+ * The rail's heading (eat-drink pass 2, WP3.7). "After dinner, nearby
+ * tonight" only when the restaurant is open with a known closing time and
+ * every timed event starts at or after that time minus AFTER_DINNER_MINUTES,
+ * in Central time. Otherwise the plain "Tonight nearby": a 6 PM show near a
+ * place that closes at 10 isn't "after dinner". A close past midnight
+ * ("2 AM") counts as the next morning.
+ */
+export function tonightHeading(
+  events: readonly Pick<TonightNearbyEvent, "startsAt">[],
+  restaurantClosesAt: string | null | undefined,
+  now: Date,
+): string {
+  const close = clockLabelMinutes(restaurantClosesAt);
+  const timed = events.filter((e): e is { startsAt: Date } => e.startsAt instanceof Date);
+  if (close === null || timed.length === 0) return "Tonight nearby";
+  const nowMin = centralMinuteOfDay(now);
+  const closeMin = close <= nowMin ? close + 24 * 60 : close;
+  const afterDinner = timed.every((e) => {
+    let start = centralMinuteOfDay(e.startsAt);
+    if (start < nowMin) start += 24 * 60;
+    return start >= closeMin - AFTER_DINNER_MINUTES;
+  });
+  return afterDinner ? "After dinner, nearby tonight" : "Tonight nearby";
+}
+
+/**
+ * `now` is the page's minute clock (useMinuteClock), so an event that has
+ * started drops off the list while the page is open instead of staying until
+ * a reload (WP3.7). Omitted, it reads the time once per render.
+ */
 export function useTonightNearRestaurant(
   latitude: number | string | null | undefined,
   longitude: number | string | null | undefined,
+  now?: Date,
 ): TonightNearRestaurantResult {
   const lat = toCoord(latitude);
   const lng = toCoord(longitude);
   const located = Number.isFinite(lat) && Number.isFinite(lng) && (lat !== 0 || lng !== 0);
-  const day = centralDayWindow(new Date());
+  const clockMs = (now ?? new Date()).getTime();
+  const day = centralDayWindow(new Date(clockMs));
 
   const query = useQuery({
     queryKey: [
@@ -147,9 +208,15 @@ export function useTonightNearRestaurant(
   }, [error]);
 
   const rows = query.data ?? NO_ROWS;
+  // Keyed on the clock only when the caller passes one; without it the list is
+  // computed per data change, as before.
+  const pickAt = now ? clockMs : null;
   const events = useMemo(
-    () => (located ? pickTonightNear(rows, { latitude: lat, longitude: lng }, new Date()) : []),
-    [rows, located, lat, lng],
+    () =>
+      located
+        ? pickTonightNear(rows, { latitude: lat, longitude: lng }, pickAt === null ? new Date() : new Date(pickAt))
+        : [],
+    [rows, located, lat, lng, pickAt],
   );
 
   return {

@@ -1484,30 +1484,53 @@ async function insertData(
                 image_url: resolvedImageUrl || null,
                 is_enhanced: false,
               };
-            case "restaurants":
+            case "restaurants": {
+              // Ingest stores what the page said, or null. "Unnamed
+              // Restaurant", "American", "$$" and "Des Moines, IA" were
+              // guesses that rendered as facts (and the city-only location
+              // geocoded to the downtown centroid). A rating is never taken
+              // from the model: it can't cite whose rating it was.
+              const restaurantName = item.name?.trim().substring(0, 200);
+              if (!restaurantName) {
+                console.warn(`⚠️ Skipping restaurant with no name from ${item.source_url || "source"}`);
+                return null;
+              }
               return {
                 ...baseItem,
-                name: item.name?.substring(0, 200) || "Unnamed Restaurant",
-                cuisine: item.cuisine?.substring(0, 100) || "American",
-                location: item.location?.substring(0, 200) || "Des Moines, IA",
-                rating: item.rating || null,
-                price_range: item.price_range?.substring(0, 20) || "$$",
-                description: item.description?.substring(0, 500) || "",
+                name: restaurantName,
+                cuisine: item.cuisine?.trim().substring(0, 100) || null,
+                location: item.location?.trim().substring(0, 200) || null,
+                rating: null,
+                price_range: item.price_range?.trim().substring(0, 20) || null,
+                description: item.description?.trim().substring(0, 500) || null,
                 phone: item.phone?.substring(0, 20) || null,
                 website: item.website?.substring(0, 200) || null,
                 image_url: resolvedImageUrl || null,
               };
-            case "restaurant_openings":
+            }
+            case "restaurant_openings": {
+              const openingName = item.name?.trim().substring(0, 200);
+              if (!openingName) {
+                console.warn(`⚠️ Skipping opening with no name from ${item.source_url || "source"}`);
+                return null;
+              }
+              // The status column has a CHECK; a model-invented value would
+              // fail the whole batch insert, so anything else is "announced".
+              const openingStatus = ["announced", "opening_soon", "newly_opened"].includes(
+                String(item.status),
+              )
+                ? String(item.status)
+                : "announced";
               return {
                 ...baseItem,
-                name: item.name?.substring(0, 200) || "New Restaurant",
-                cuisine: item.cuisine?.substring(0, 100) || "American",
-                location: item.location?.substring(0, 200) || "Des Moines, IA",
-                description: item.description?.substring(0, 500) || "",
+                name: openingName,
+                cuisine: item.cuisine?.trim().substring(0, 100) || null,
+                location: item.location?.trim().substring(0, 200) || null,
+                description: item.description?.trim().substring(0, 500) || null,
                 phone: item.phone?.substring(0, 20) || null,
                 website: item.website?.substring(0, 200) || null,
-                price_range: item.price_range?.substring(0, 20) || null,
-                rating: item.rating || null,
+                price_range: item.price_range?.trim().substring(0, 20) || null,
+                rating: null,
                 // WEB-BE-032: this called .toISOString() on whichever branch
                 // won, and parseEventDateTime returns ParsedDateTime | null -
                 // an object of { event_start_local, event_timezone,
@@ -1524,10 +1547,11 @@ async function insertData(
                       .toISOString()
                       .split("T")[0]
                   : null,
-                status: item.status || "announced",
+                status: openingStatus,
                 source_url: item.source_url || "",
                 image_url: resolvedImageUrl || null,
               };
+            }
             case "playgrounds":
               return {
                 ...baseItem,

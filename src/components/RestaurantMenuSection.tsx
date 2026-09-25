@@ -1,10 +1,9 @@
 import { useState } from 'react';
-import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { Badge } from '@/components/ui/badge';
 import { Button } from '@/components/ui/button';
 import { Separator } from '@/components/ui/separator';
 import { Utensils, ChevronDown, ChevronUp, Flame, Leaf, WheatOff, Star, History } from "lucide-react";
-import { useRestaurantMenu, MenuSection } from '@/hooks/useRestaurantMenu';
+import { useRestaurantMenu, useRestaurantMenuVersions, type MenuSection } from '@/hooks/useRestaurantMenu';
 import { MenuSchema } from '@/components/schema/MenuSchema';
 import { SpriteIcon } from "@/components/ui/SpriteIcon";
 import { safeWebUrl } from '@/lib/reservations';
@@ -38,7 +37,7 @@ function DietaryBadge({ tag }: { tag: string }) {
     const Icon = config.icon;
     return (
       <Badge variant="outline" className={`text-xs px-1.5 py-0 ${config.color} border-current`}>
-        <Icon className="w-3 h-3 mr-0.5" />
+        <Icon className="w-3 h-3 mr-0.5" aria-hidden="true" />
         {config.label}
       </Badge>
     );
@@ -50,54 +49,53 @@ function DietaryBadge({ tag }: { tag: string }) {
   );
 }
 
-function MenuSectionCard({ section, defaultExpanded }: { section: MenuSection; defaultExpanded: boolean }) {
-  const [expanded, setExpanded] = useState(defaultExpanded);
+interface MenuSectionBlockProps {
+  section: MenuSection;
+  index: number;
+  expanded: boolean;
+  onToggle: () => void;
+}
 
+function MenuSectionBlock({ section, index, expanded, onToggle }: MenuSectionBlockProps) {
+  const contentId = `menu-section-${index}`;
   return (
-    <div className="space-y-1">
+    <div id={`menu-section-head-${index}`} className="scroll-mt-24 space-y-1">
       <button
-        onClick={() => setExpanded(!expanded)}
-        className="flex items-center justify-between w-full py-2 px-1 hover:bg-muted/50 rounded-lg transition-colors"
+        type="button"
+        onClick={onToggle}
+        className="flex min-h-11 w-full items-center justify-between rounded-lg px-1 py-2 transition-colors hover:bg-muted/50"
         aria-expanded={expanded}
-        aria-controls={`menu-section-${section.name.replace(/\s+/g, '-').toLowerCase()}`}
+        aria-controls={contentId}
       >
-        <h4 className="font-semibold text-base">{section.name}</h4>
-        <div className="flex items-center gap-2 text-muted-foreground">
+        <h3 className="text-base font-semibold">{section.name}</h3>
+        <span className="flex items-center gap-2 text-muted-foreground">
           <span className="text-xs">{section.items.length} items</span>
-          {expanded ? <ChevronUp className="w-4 h-4" /> : <ChevronDown className="w-4 h-4" />}
-        </div>
+          {expanded ? <ChevronUp className="h-4 w-4" aria-hidden="true" /> : <ChevronDown className="h-4 w-4" aria-hidden="true" />}
+        </span>
       </button>
 
       {expanded && (
-        <div
-          id={`menu-section-${section.name.replace(/\s+/g, '-').toLowerCase()}`}
-          className="space-y-0"
-          role="list"
-          aria-label={`${section.name} menu items`}
-        >
+        <ul id={contentId} className="space-y-0" aria-label={`${section.name} menu items`}>
           {section.items.map((item) => (
-            <div
+            <li
               key={item.id}
-              className="flex items-start justify-between gap-3 py-2.5 px-1 border-b border-dashed border-muted last:border-0"
-              role="listitem"
+              className="flex items-start justify-between gap-3 border-b border-dashed border-muted px-1 py-2.5 last:border-0"
             >
-              <div className="flex-1 min-w-0">
-                <div className="flex items-center gap-1.5 flex-wrap">
-                  <span className="font-medium text-sm">{item.item_name}</span>
+              <div className="min-w-0 flex-1">
+                <div className="flex flex-wrap items-center gap-1.5">
+                  <span className="text-sm font-medium">{item.item_name}</span>
                   {item.is_popular && (
-                    <Badge className="bg-amber-100 text-amber-800 text-[10px] px-1 py-0 leading-tight">
-                      <Star className="w-2.5 h-2.5 mr-0.5 fill-current" />
+                    <Badge className="bg-amber-100 px-1 py-0 text-[11px] leading-tight text-amber-800">
+                      <Star className="mr-0.5 h-2.5 w-2.5 fill-current" aria-hidden="true" />
                       Popular
                     </Badge>
                   )}
                 </div>
                 {item.item_description && (
-                  <p className="text-xs text-muted-foreground mt-0.5 line-clamp-2">
-                    {item.item_description}
-                  </p>
+                  <p className="mt-0.5 line-clamp-2 text-xs text-muted-foreground">{item.item_description}</p>
                 )}
                 {item.dietary_tags.length > 0 && (
-                  <div className="flex gap-1 mt-1 flex-wrap">
+                  <div className="mt-1 flex flex-wrap gap-1">
                     {item.dietary_tags.map((tag) => (
                       <DietaryBadge key={tag} tag={tag} />
                     ))}
@@ -105,47 +103,81 @@ function MenuSectionCard({ section, defaultExpanded }: { section: MenuSection; d
                 )}
               </div>
               {item.price && (
-                <span className="text-sm font-medium text-primary whitespace-nowrap">
-                  {item.price}
-                </span>
+                <span className="whitespace-nowrap text-sm font-medium text-foreground tabular-nums">{item.price}</span>
               )}
-            </div>
+            </li>
           ))}
-        </div>
+        </ul>
       )}
     </div>
   );
 }
 
+/** "August 3, 2026", in Central time. */
 function formatCapturedDate(dateStr: string): string {
   const date = new Date(dateStr);
+  if (Number.isNaN(date.getTime())) return "an unknown date";
   return date.toLocaleDateString('en-US', {
     month: 'long',
     day: 'numeric',
     year: 'numeric',
+    timeZone: 'America/Chicago',
   });
 }
 
-/** Quick-jump buttons for menu sections when menu is large */
-function MenuSectionNav({ sections }: { sections: MenuSection[] }) {
+interface MenuSectionNavProps {
+  sections: MenuSection[];
+  onJump: (index: number) => void;
+}
+
+/**
+ * Quick-jump buttons for a large menu. A collapsed section has no item list
+ * to scroll to, so a jump opens the section first and scrolls to its header,
+ * which always exists (WP3.11).
+ */
+function MenuSectionNav({ sections, onJump }: MenuSectionNavProps) {
   return (
-    <div className="flex flex-wrap gap-1.5 mb-4 pb-3 border-b">
-      <span className="text-xs text-muted-foreground mr-1 self-center">Jump to:</span>
-      {sections.map((section) => (
+    <nav aria-label="Menu sections" className="mb-4 flex flex-wrap items-center gap-1.5 border-b pb-3">
+      <span className="mr-1 text-xs text-muted-foreground">Jump to:</span>
+      {sections.map((section, index) => (
         <button
+          type="button"
           key={section.name}
-          onClick={() => {
-            const el = document.getElementById(
-              `menu-section-${section.name.replace(/\s+/g, '-').toLowerCase()}`
-            );
-            el?.scrollIntoView({ behavior: 'smooth', block: 'start' });
-          }}
-          className="text-xs px-2.5 py-1 bg-muted hover:bg-muted/80 rounded-full transition-colors text-muted-foreground hover:text-foreground"
+          onClick={() => onJump(index)}
+          className="inline-flex min-h-11 items-center rounded-full bg-muted px-3 text-xs text-foreground transition-colors hover:bg-muted/80"
         >
           {section.name} ({section.items.length})
         </button>
       ))}
-    </div>
+    </nav>
+  );
+}
+
+function MenuHistory({ restaurantId }: { restaurantId: string }) {
+  const { data: versions, isLoading } = useRestaurantMenuVersions(restaurantId, true);
+  if (isLoading) return <p className="mb-4 text-xs text-muted-foreground">Loading menu history...</p>;
+  if (!versions || versions.length <= 1) {
+    return <p className="mb-4 text-xs text-muted-foreground">This is the only version of the menu we have.</p>;
+  }
+  return (
+    <ul className="mb-4 space-y-1.5 rounded-lg bg-muted/50 p-3" aria-label="Menu history">
+      {versions.map((v) => (
+        <li
+          key={v.id}
+          className={`flex items-center justify-between rounded px-2 py-1 text-xs ${v.is_current ? 'bg-primary/10 font-medium' : ''}`}
+        >
+          <span>
+            Captured {formatCapturedDate(v.captured_at)}
+            {v.is_current && (
+              <Badge variant="secondary" className="ml-1.5 px-1 py-0 text-[11px]">
+                Current
+              </Badge>
+            )}
+          </span>
+          <span className="capitalize text-muted-foreground">{v.source_type}</span>
+        </li>
+      ))}
+    </ul>
   );
 }
 
@@ -158,29 +190,29 @@ export function RestaurantMenuSection({
   cuisine,
   menuUrl,
 }: RestaurantMenuSectionProps) {
-  const { data, isLoading } = useRestaurantMenu(restaurantId);
+  const { data, isLoading } = useRestaurantMenu(restaurantId, { includeVersions: false });
   const [showVersions, setShowVersions] = useState(false);
+  // Which sections are open. null until the reader touches one, so the
+  // default (all open on a short menu, all shut on a long one) follows the
+  // data when it arrives.
+  const [openSections, setOpenSections] = useState<Set<number> | null>(null);
 
   if (isLoading) {
     return (
-      <Card>
-        <CardHeader>
-          <CardTitle className="flex items-center gap-2">
-            <Utensils className="w-5 h-5" />
-            Menu
-          </CardTitle>
-        </CardHeader>
-        <CardContent>
-          <div className="space-y-3">
-            {[1, 2, 3].map((i) => (
-              <div key={i} className="animate-pulse">
-                <div className="h-4 bg-muted rounded w-1/3 mb-2" />
-                <div className="h-3 bg-muted rounded w-2/3" />
-              </div>
-            ))}
-          </div>
-        </CardContent>
-      </Card>
+      <section id="menu" aria-labelledby="menu-heading" aria-busy="true" className="scroll-mt-20">
+        <h2 id="menu-heading" className="flex items-center gap-2 text-xl font-bold text-foreground">
+          <Utensils className="h-5 w-5" aria-hidden="true" />
+          Menu
+        </h2>
+        <div className="mt-4 space-y-3">
+          {[1, 2, 3].map((i) => (
+            <div key={i} className="animate-pulse motion-reduce:animate-none">
+              <div className="mb-2 h-4 w-1/3 rounded bg-muted" />
+              <div className="h-3 w-2/3 rounded bg-muted" />
+            </div>
+          ))}
+        </div>
+      </section>
     );
   }
 
@@ -207,13 +239,32 @@ export function RestaurantMenuSection({
     );
   }
 
-  const menuSource = safeWebUrl(data.menu.source_url);
-
+  const menu = data.menu;
+  const menuSource = safeWebUrl(menu.source_url);
+  const fromTheirSite = menu.source_type === 'scraped' || !!menuSource;
   const isLargeMenu = data.totalItems >= LARGE_MENU_THRESHOLD;
+  const open = openSections ?? new Set(isLargeMenu ? [] : data.sections.map((_, i) => i));
+
+  const toggle = (index: number) => {
+    const next = new Set(open);
+    if (next.has(index)) next.delete(index);
+    else next.add(index);
+    setOpenSections(next);
+  };
+
+  const jumpTo = (index: number) => {
+    setOpenSections(new Set(open).add(index));
+    // After the section has rendered open.
+    requestAnimationFrame(() => {
+      document
+        .getElementById(`menu-section-head-${index}`)
+        ?.scrollIntoView({ behavior: 'smooth', block: 'start' });
+    });
+  };
 
   return (
-    <>
-      {/* Menu Schema.org structured data for "[restaurant] + menu" SEO */}
+    <section id="menu" aria-labelledby="menu-heading" className="scroll-mt-20">
+      {/* Menu JSON-LD, only when a menu with sections has been captured */}
       {restaurantSlug && (
         <MenuSchema
           restaurantName={restaurantName}
@@ -222,129 +273,74 @@ export function RestaurantMenuSection({
           city={city}
           cuisine={cuisine}
           sections={data.sections}
-          capturedAt={data.menu.captured_at}
+          capturedAt={menu.captured_at}
         />
       )}
 
-      <Card id="menu">
-        <CardHeader className="pb-3">
-          <div className="flex items-center justify-between">
-            <CardTitle className="flex items-center gap-2">
-              <Utensils className="w-5 h-5" />
-              <span>{restaurantName} Menu</span>
-            </CardTitle>
-            <div className="flex items-center gap-2">
-              {data.versions.length > 1 && (
-                <Button
-                  variant="ghost"
-                  size="sm"
-                  onClick={() => setShowVersions(!showVersions)}
-                  className="text-xs h-7"
-                >
-                  <History className="w-3.5 h-3.5 mr-1" />
-                  {data.versions.length} versions
-                </Button>
-              )}
-              {menuSource && (
-                <a
-                  href={menuSource}
-                  target="_blank"
-                  rel="noopener noreferrer"
-                  className="text-xs text-muted-foreground hover:text-foreground transition-colors"
-                  aria-label="View original menu source"
-                >
-                  <SpriteIcon name="external-link" className="w-3.5 h-3.5" />
-                </a>
-              )}
+      <div className="flex flex-wrap items-center justify-between gap-2">
+        <h2 id="menu-heading" className="flex items-center gap-2 text-xl font-bold text-foreground">
+          <Utensils className="h-5 w-5" aria-hidden="true" />
+          {restaurantName} menu
+        </h2>
+        <div className="flex items-center gap-2">
+          <Button
+            variant="ghost"
+            size="sm"
+            onClick={() => setShowVersions((v) => !v)}
+            className="min-h-11 text-xs"
+            aria-expanded={showVersions}
+          >
+            <History className="mr-1 h-3.5 w-3.5" aria-hidden="true" />
+            History
+          </Button>
+          {menuSource && (
+            <a
+              href={menuSource}
+              target="_blank"
+              rel="noopener noreferrer"
+              className="inline-flex min-h-11 items-center text-xs text-muted-foreground transition-colors hover:text-foreground"
+            >
+              Their menu
+              <SpriteIcon name="external-link" className="ml-1 h-3.5 w-3.5" />
+              <span className="sr-only"> (opens in a new tab)</span>
+            </a>
+          )}
+        </div>
+      </div>
+
+      <p className="mt-1 flex items-center gap-2 text-sm text-muted-foreground">
+        <SpriteIcon name="clock" className="h-3.5 w-3.5" aria-hidden="true" />
+        <span>
+          Menu captured{fromTheirSite ? ' from their site' : ''} on {formatCapturedDate(menu.captured_at)}.
+          Dishes and prices may have changed since.
+        </span>
+      </p>
+
+      <div className="mt-4">
+        {showVersions && <MenuHistory restaurantId={restaurantId} />}
+
+        {isLargeMenu && data.sections.length > 2 && (
+          <MenuSectionNav sections={data.sections} onJump={jumpTo} />
+        )}
+
+        <div className="space-y-4">
+          {data.sections.map((section, idx) => (
+            <div key={section.name}>
+              {idx > 0 && <Separator className="mb-3" />}
+              <MenuSectionBlock
+                section={section}
+                index={idx}
+                expanded={open.has(idx)}
+                onToggle={() => toggle(idx)}
+              />
             </div>
-          </div>
+          ))}
+        </div>
 
-          {/* SEO-friendly subtitle for menu */}
-          <p className="text-sm text-muted-foreground">
-            Browse the full {restaurantName} menu with {data.totalItems} items across{' '}
-            {data.sections.length} categories
-            {cuisine ? ` — ${cuisine} cuisine` : ''}
-            {city ? ` in ${city}, Iowa` : ''}.
-          </p>
-
-          <div className="flex items-center gap-2 text-xs text-muted-foreground">
-            <SpriteIcon name="clock" className="w-3 h-3" />
-            <span>
-              Menu from {formatCapturedDate(data.menu.captured_at)}
-              {' — '}may have changed since then
-            </span>
-          </div>
-
-          {data.menu.source_type === 'scraped' && (
-            <p className="text-[11px] text-muted-foreground/70">
-              Automatically collected from {restaurantName}&apos;s website
-            </p>
-          )}
-        </CardHeader>
-
-        <CardContent className="pt-0">
-          {/* Version history dropdown */}
-          {showVersions && data.versions.length > 1 && (
-            <div className="mb-4 p-3 bg-muted/50 rounded-lg space-y-1.5">
-              <p className="text-xs font-medium mb-2">Menu History</p>
-              {data.versions.map((v) => (
-                <div
-                  key={v.id}
-                  className={`flex items-center justify-between text-xs py-1 px-2 rounded ${
-                    v.is_current ? 'bg-primary/10 font-medium' : ''
-                  }`}
-                >
-                  <span>
-                    v{v.version} — {formatCapturedDate(v.captured_at)}
-                    {v.is_current && (
-                      <Badge variant="secondary" className="ml-1.5 text-[10px] px-1 py-0">
-                        Current
-                      </Badge>
-                    )}
-                  </span>
-                  <span className="text-muted-foreground capitalize">{v.source_type}</span>
-                </div>
-              ))}
-            </div>
-          )}
-
-          {/* Section quick-jump nav for large menus */}
-          {isLargeMenu && data.sections.length > 2 && (
-            <MenuSectionNav sections={data.sections} />
-          )}
-
-          {/* Menu sections — collapse individual sections by default on large menus */}
-          <div className="space-y-4">
-            {data.sections.map((section, idx) => (
-              <div key={section.name}>
-                {idx > 0 && <Separator className="mb-3" />}
-                <MenuSectionCard
-                  section={section}
-                  defaultExpanded={!isLargeMenu}
-                />
-              </div>
-            ))}
-          </div>
-
-          {/* Footer stats */}
-          <div className="mt-4 pt-3 border-t flex items-center justify-between text-xs text-muted-foreground">
-            <span>{data.totalItems} items across {data.sections.length} categories</span>
-            <span>v{data.menu.version}</span>
-          </div>
-
-          {/* SEO content block — hidden visually but readable by crawlers */}
-          <div className="sr-only" aria-hidden="true">
-            <h3>{restaurantName} Menu Prices and Items</h3>
-            <p>
-              View the complete {restaurantName} menu with prices.{' '}
-              {restaurantName} offers {data.totalItems} menu items
-              {cuisine ? ` featuring ${cuisine} cuisine` : ''}
-              {city ? ` in ${city}, Iowa` : ''}.
-              Menu categories include {data.sections.map((s) => s.name).join(', ')}.
-            </p>
-          </div>
-        </CardContent>
-      </Card>
-    </>
+        <p className="mt-4 border-t pt-3 text-xs text-muted-foreground">
+          {data.totalItems} items across {data.sections.length} sections
+        </p>
+      </div>
+    </section>
   );
 }

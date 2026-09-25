@@ -8,7 +8,7 @@ import {
   matchCuisines,
   presetFilters,
 } from '../restaurantPresets';
-import { getRestaurantRotationSeed } from '../restaurantRotation';
+import { getRestaurantRotationSeed, pickDailySponsors } from '../restaurantRotation';
 import { DIETARY_KEYWORDS, isSameListExceptPaging } from '@/hooks/useRestaurants';
 
 /** Every cuisine any preset names, with rows, so no preset is filtered out. */
@@ -99,6 +99,52 @@ describe('restaurant presets (eat-drink WP2 item 2)', () => {
 
   it('offers only dietary values the query understands', () => {
     for (const option of DIETARY_OPTIONS) expect(DIETARY_KEYWORDS).toHaveProperty(option.value);
+  });
+
+  // Pass 2 WP1 item 4: the default sort is the rotation shuffle, so no preset
+  // may call its result popular.
+  it('never describes a preset as popular', () => {
+    for (const preset of RESTAURANT_PRESETS) {
+      expect(preset.description.toLowerCase()).not.toContain('popular');
+      expect(preset.label.toLowerCase()).not.toContain('popular');
+    }
+  });
+
+  it('keeps American out of Brunch', () => {
+    const brunch = RESTAURANT_PRESETS.find((p) => p.id === 'brunch');
+    expect(brunch?.filters.cuisine).toBeDefined();
+    expect(brunch?.filters.cuisine).not.toContain('American');
+  });
+
+  it('labels the price preset by price, not by who it suits', () => {
+    const casual = RESTAURANT_PRESETS.find((p) => p.id === 'family-dinner');
+    expect(casual?.label).toBe('Casual ($-$$)');
+    expect(casual?.description).toBe('$ and $$');
+  });
+});
+
+describe('pickDailySponsors (eat-drink pass 2 WP1 item 8)', () => {
+  const sponsors = ['d', 'b', 'a', 'c'].map((id) => ({ id }));
+
+  it('gives every one of four sponsors a slot across four days', () => {
+    const seen = new Set<string>();
+    for (const seed of [20000, 20001, 20002, 20003]) {
+      const picked = pickDailySponsors(sponsors, seed, 2);
+      expect(picked).toHaveLength(2);
+      expect(new Set(picked.map((p) => p.id)).size).toBe(2);
+      for (const p of picked) seen.add(p.id);
+    }
+    expect([...seen].sort()).toEqual(['a', 'b', 'c', 'd']);
+  });
+
+  it('is the same pick for the same day whatever order the rows arrive in', () => {
+    const reversed = [...sponsors].reverse();
+    expect(pickDailySponsors(sponsors, 20417, 2)).toEqual(pickDailySponsors(reversed, 20417, 2));
+  });
+
+  it('returns everyone when there are no more sponsors than slots', () => {
+    expect(pickDailySponsors([{ id: 'x' }], 5, 2)).toEqual([{ id: 'x' }]);
+    expect(pickDailySponsors([], 5, 2)).toEqual([]);
   });
 });
 

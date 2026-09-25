@@ -59,18 +59,24 @@ export const RESTAURANT_PRESETS: readonly RestaurantPreset[] = [
   },
   {
     // With Kids was the same query at a narrower price, so it merged in here.
+    // "Casual", not "Family Friendly" (pass 2 WP1 item 4): nothing in the
+    // query knows whether a place suits children, only its price level. And
+    // no popularity claim: the default sort is the daily rotation shuffle, not
+    // a popularity ranking. The id stays so saved links keep matching.
     id: "family-dinner",
-    label: "Family Friendly",
-    description: "$ and $$, most popular",
+    label: "Casual ($-$$)",
+    description: "$ and $$",
     icon: "users",
     filters: { priceRange: ["$", "$$"], sortBy: "popularity" },
   },
   {
+    // No "American" (pass 2 WP1 item 4). It is the biggest cuisine in the
+    // facet, so Brunch mostly returned burger and steak places.
     id: "brunch",
     label: "Brunch",
     description: "Cafes and breakfast spots",
     icon: "coffee",
-    filters: { cuisine: ["Cafe", "Brunch", "Breakfast", "American"], sortBy: "rating" },
+    filters: { cuisine: ["Cafe", "Brunch", "Breakfast"], sortBy: "rating" },
   },
   {
     id: "healthy",

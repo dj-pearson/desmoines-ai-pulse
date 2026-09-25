@@ -71,7 +71,7 @@
 import { readFileSync, existsSync } from 'node:fs';
 import { join } from 'node:path';
 import { JSDOM } from 'jsdom';
-import { walkPrerenderedPages, prerenderRouteFromPath } from './prerender-output.mjs';
+import { walkPrerenderedPages, prerenderRouteFromPath, prerenderOutputPath } from './prerender-output.mjs';
 
 const DIST = 'dist';
 
@@ -81,6 +81,20 @@ if (!existsSync(DIST)) {
 }
 
 const allFiles = walkPrerenderedPages(DIST).map((p) => p.file);
+
+// The frozen-time assertion below can only fire on a page that was written. A
+// route the prerender dropped is a different defect with its own gate (the
+// strict prerender gate in pr-checks.yml), so a missing one is a warning here,
+// not a pass nobody sees. stderr, and once: shards never print it.
+if (!process.env.PRERENDER_CONTENT_SHARD) {
+  // Written as dist/restaurants.html, not dist/restaurants/index.html (see
+  // prerenderOutputPath), so the path comes from the helper the writer uses.
+  for (const route of ['/restaurants', '/restaurants/open-now', '/breweries']) {
+    if (!existsSync(prerenderOutputPath(DIST, route))) {
+      console.error(`[prerender-content] WARN ${route}: not prerendered, so its frozen-time check did not run.`);
+    }
+  }
+}
 
 /**
  * Shard the work across child processes, because jsdom cannot survive dist/.
@@ -259,6 +273,37 @@ function neighborhoodRoutes() {
   return routes;
 }
 
+/**
+ * Time claims frozen into static HTML (Eat & Drink pass 2, WP6 item 2).
+ *
+ * These three routes are prerendered, and each one has a line that is only
+ * true at the minute it was computed: a card's "Open until 10 PM", the
+ * open-now clock in a <time> ending "CT", a "Closed, opens 11 AM", the hub's
+ * "Dinner before a show tonight" strip. Captured at build time, every one of
+ * them is wrong within the hour and stays wrong until the next deploy, and the
+ * JS-less crawler reading the HTML has no clock to correct it. The pages skip
+ * those lines under isPrerender(); this asserts that they did.
+ *
+ * Matched against #root only. The literal strings go against its markup
+ * ("CT</time>" is a markup shape on purpose). "Open Now" is the exception: it
+ * is also the name of a route, so it legitimately appears as a link label, in
+ * the open-now page's h1 and in the breadcrumb. The frozen claim is the status
+ * badge, so that one matches an element whose whole text is "Open Now" and
+ * which is not a link, heading or nav entry.
+ */
+const FROZEN_TIME_ROUTES = new Set(['/restaurants', '/restaurants/open-now', '/breweries']);
+const FROZEN_TIME_LITERALS = ['Open until', 'Closed, opens', 'CT</time>', 'Dinner before a show tonight'];
+
+/** Elements claiming "Open Now" as a status, not naming the route. */
+function openNowStatusClaims(root) {
+  return [...root.querySelectorAll('*')].filter((el) => {
+    if ((el.textContent || '').replace(/\s+/g, ' ').trim() !== 'Open Now') return false;
+    // Only the innermost element carrying the text, so one badge counts once.
+    if ([...el.children].some((c) => (c.textContent || '').replace(/\s+/g, ' ').trim() === 'Open Now')) return false;
+    return !el.closest('a, h1, h2, h3, h4, h5, h6, nav, title, [aria-hidden="true"]');
+  });
+}
+
 /** An <a> with nothing a screen reader or a crawler could announce. */
 function unnamedLinks(doc, root) {
   return [...root.querySelectorAll('a[href]')].filter((a) => {
@@ -287,7 +332,20 @@ for (const file of files) {
     }
   }
 
-  if (route === '/') {
+  // A PRERENDER=false build (or one whose prerender wrote nothing) leaves only
+  // Vite's dist/index.html: the SPA shell with its no-JS fallback, not a
+  // rendered homepage. The home assertions below are about what the prerender
+  // produced, so they wait for one; the canonical-url-shape and entity-coverage
+  // checks are what fail a build whose prerender went missing.
+  const homeWasPrerendered = allFiles.length > 1;
+  if (route === '/' && !homeWasPrerendered) {
+    console.error(
+      '[prerender-content] WARN /: dist/index.html is the unprerendered SPA shell (no other page was prerendered), ' +
+        'so the homepage lazy-section, neighbourhood and snapshot checks did not run.',
+    );
+  }
+
+  if (route === '/' && homeWasPrerendered) {
     if (PENDING_LAZY.test(html)) {
       const n = (html.match(new RegExp(PENDING_LAZY.source, 'gi')) || []).length;
       failures.push({
@@ -318,6 +376,19 @@ for (const file of files) {
 
   const unnamed = unnamedLinks(doc, root).length;
   if (unnamed > 0) failures.push({ route, what: `${unnamed} link(s) with no accessible name` });
+
+  if (FROZEN_TIME_ROUTES.has(route)) {
+    const markup = root.innerHTML;
+    for (const literal of FROZEN_TIME_LITERALS) {
+      if (markup.includes(literal)) {
+        failures.push({ route, what: `ships a time claim frozen at build time ("${literal}")` });
+      }
+    }
+    const badges = openNowStatusClaims(root).length;
+    if (badges > 0) {
+      failures.push({ route, what: `ships ${badges} "Open Now" status badge(s) frozen at build time` });
+    }
+  }
 
   // Card images, for the listing routes only. `declaredItems` is filled by the
   // ItemList pass below and read after it.
@@ -376,7 +447,7 @@ for (const file of files) {
   }
 }
 
-console.log(`[prerender-content] ${files.length} prerendered page(s) checked for skeletons, unnamed links, self-contradictory ItemLists and imageless card grids.`);
+console.log(`[prerender-content] ${files.length} prerendered page(s) checked for skeletons, unnamed links, self-contradictory ItemLists, imageless card grids and frozen time claims.`);
 
 for (const a of allowed) {
   console.log(`  allowed: ${a.route} (aria-busy x${a.occurrences}) - ${a.reason}`);
@@ -408,6 +479,13 @@ if (failures.some((f) => f.what.startsWith('ItemList declares'))) {
     'An ItemList that declares one count and supplies another is a claim a ' +
       'crawler can check and find false. numberOfItems must count the items in ' +
       'itemListElement, not the collection the page was drawn from.',
+  );
+}
+if (failures.some((f) => f.what.includes('frozen at build time'))) {
+  console.error(
+    'A status computed at build time is wrong within the hour and stays wrong until ' +
+      'the next deploy. Gate the line on isPrerender() (src/lib/isPrerender.ts) and ' +
+      'let the browser compute it against the clock.',
   );
 }
 process.exit(1);

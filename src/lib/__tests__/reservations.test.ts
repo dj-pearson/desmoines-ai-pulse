@@ -15,6 +15,7 @@ import {
   takesReservations,
   telHref,
 } from '../reservations';
+import { safeHttpUrl } from '../safeUrl';
 
 const PHONE = '515-555-0100';
 const MAPS = 'https://maps.google.com/?cid=123';
@@ -168,6 +169,14 @@ describe('safeWebUrl', () => {
     expect(safeWebUrl('not a url')).toBeNull();
     expect(safeWebUrl(null)).toBeNull();
     expect(safeWebUrl(42)).toBeNull();
+  });
+});
+
+describe('safeWebUrl delegates to safeHttpUrl', () => {
+  it('answers the same as the shared helper the crawler shell uses', () => {
+    for (const raw of ['javascript:alert(1)', 'www.x.com', 'https://a.com/b', '/x', '', null]) {
+      expect(safeWebUrl(raw)).toBe(safeHttpUrl(raw));
+    }
   });
 });
 

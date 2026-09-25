@@ -1,6 +1,7 @@
 import { Link } from "react-router-dom";
 import { NEIGHBORHOODS } from "@/lib/neighborhoods";
 import { DIRECTORY_PILL } from "@/components/seo/MonthLinks";
+import { drinkCuisines } from "@/lib/restaurantsHubCopy";
 
 /**
  * Every way into the restaurant listings, on the /restaurants hub (eat-drink
@@ -15,14 +16,18 @@ import { DIRECTORY_PILL } from "@/components/seo/MonthLinks";
 interface DirectoryLink {
   href: string;
   label: string;
+  /** A link back into this hub, which runs onLinkClick (e.g. scroll to the results). */
+  inHub?: boolean;
 }
 
 const WHEN_AND_WHAT: DirectoryLink[] = [
   { href: "/restaurants/open-now", label: "Open now" },
   { href: "/restaurants/new", label: "New and upcoming" },
   { href: "/restaurants/dietary", label: "Dietary needs" },
-  { href: "/breweries", label: "Breweries" },
 ];
+
+/** Breweries moved to the Drinks group (pass 2 WP1 item 13), once, not twice. */
+const BREWERIES: DirectoryLink = { href: "/breweries", label: "Breweries" };
 
 const WHERE: DirectoryLink[] = NEIGHBORHOODS.map((n) => ({
   href: `/neighborhoods/${n.slug}`,
@@ -43,7 +48,7 @@ function Section({ title, links, onLinkClick }: SectionProps) {
       <ul className="flex flex-wrap gap-2">
         {links.map((l) => (
           <li key={l.href}>
-            <Link to={l.href} className={DIRECTORY_PILL} onClick={onLinkClick}>
+            <Link to={l.href} className={DIRECTORY_PILL} onClick={l.inHub ? onLinkClick : undefined}>
               {l.label}
             </Link>
           </li>
@@ -71,10 +76,15 @@ export function RestaurantsHubDirectory({
   onCuisineClick,
   className = "",
 }: RestaurantsHubDirectoryProps) {
-  const cuisineLinks = cuisineCounts.map(({ cuisine, count }) => ({
+  const cuisineLink = ({ cuisine, count }: CuisineCount): DirectoryLink => ({
     href: `/restaurants?cuisine=${encodeURIComponent(cuisine)}`,
     label: `${cuisine} (${count})`,
-  }));
+    inHub: true,
+  });
+  const cuisineLinks = cuisineCounts.map(cuisineLink);
+  // Bar-type cuisines the facet reports with at least one row, each a hub
+  // link, after the breweries page.
+  const drinkLinks = [BREWERIES, ...drinkCuisines(cuisineCounts).map(cuisineLink)];
 
   return (
     <nav aria-labelledby="restaurants-directory-heading" className={className}>
@@ -83,6 +93,7 @@ export function RestaurantsHubDirectory({
       </h2>
       <div className="space-y-8">
         <Section title="When and what" links={WHEN_AND_WHAT} />
+        <Section title="Drinks" links={drinkLinks} onLinkClick={onCuisineClick} />
         <Section title="Where" links={WHERE} />
         <Section title="Cuisine" links={cuisineLinks} onLinkClick={onCuisineClick} />
       </div>

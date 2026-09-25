@@ -1,6 +1,5 @@
-import { Link } from "react-router-dom";
-import { Badge } from "@/components/ui/badge";
-import { Star, Flame, Leaf, Wheat } from "lucide-react";
+import { Link, useLocation } from "react-router-dom";
+import { Star, Leaf, Wheat } from "lucide-react";
 // map-pin renders once per card and this card renders on nine pages. It is a
 // two-shape lucide icon, so inline costs 3 nodes and the sprite costs 2.
 //
@@ -11,7 +10,6 @@ import { Star, Flame, Leaf, Wheat } from "lucide-react";
 // every sprite symbol ships on every page whether used or not.
 import { memo, useState, useMemo, useCallback, useRef } from "react";
 import { OptimizedImage } from "@/components/OptimizedImage";
-import { SocialProofBadge } from "@/components/SocialProofBadge";
 import { SponsoredBadge } from "@/components/SponsoredBadge";
 import { FavoriteButton } from "@/components/FavoriteButton";
 import { SpriteIcon } from "@/components/ui/SpriteIcon";
@@ -23,8 +21,25 @@ import {
   resolveOpenStatus,
   type StoredOpeningHours,
 } from "@/lib/restaurantHours";
-import { STATUS_BADGE } from "@/lib/categoryStyles";
+import { isPrerender } from "@/lib/isPrerender";
+import { isStaleOpeningCopy } from "@/lib/restaurantMeta";
+import { isNewlyOpened, openingLabel as datedOpeningLabel } from "@/lib/restaurantOpenings";
 import { isSponsoredActive, logSponsoredClick } from "@/lib/sponsored";
+import { toSafeExternalUrl } from "@/lib/capacitorUtils";
+
+/** A price_range is shown only when it is one to four dollar signs. */
+const PRICE_RANGE_RE = /^\${1,4}$/;
+
+const UPCOMING_STATUSES: ReadonlySet<string> = new Set(["opening_soon", "announced"]);
+
+/** "desmoinesregister.com" from a URL, for the Source link's text. */
+function hostOf(url: string): string {
+  try {
+    return new URL(url).hostname.replace(/^www\./, "");
+  } catch {
+    return "source";
+  }
+}
 
 // WEB-UX-030: each entry carries its own dark pair. The render used to append
 // `dark:bg-opacity-20 dark:text-opacity-90`, which are no-ops - an opacity
@@ -64,26 +79,25 @@ const LIFECYCLE_LABEL: Record<string, string> = {
 export interface RestaurantCardProps {
   restaurant: {
     id: string;
-    slug?: string;
+    slug?: string | null;
     name: string;
-    description?: string;
-    cuisine?: string;
-    rating?: number;
-    price_range?: string;
-    location?: string;
-    city?: string;
-    status?: string;
-    opening?: string;
+    description?: string | null;
+    cuisine?: string | null;
+    rating?: number | null;
+    price_range?: string | null;
+    location?: string | null;
+    city?: string | null;
+    status?: string | null;
+    opening?: string | null;
+    opening_date?: string | null;
+    opening_timeframe?: string | null;
     /** Structured hours, used when the row carries them. No list query selects this yet. */
     hours_json?: StoredOpeningHours | null;
-    is_featured?: boolean;
-    is_sponsored?: boolean;
+    is_sponsored?: boolean | null;
     sponsored_until?: string | null;
-    image_url?: string;
-    phone?: string;
-    website?: string;
-    popularity_score?: number;
-    created_at?: string;
+    image_url?: string | null;
+    phone?: string | null;
+    website?: string | null;
   };
   variant?: "default" | "compact" | "featured";
   /**
@@ -95,8 +109,18 @@ export interface RestaurantCardProps {
    * hubs included - was loading="lazy" with no priority hint.
    */
   priority?: boolean;
-  /** A dated openings line from the openings watch: "Opened Sep 12", "Opening Oct 2026". */
+  /**
+   * A dated openings line from the caller: "Opened Sep 12", "Opening Oct 2026".
+   * Without it the card prints "Opened <date>" itself, only for a place
+   * isNewlyOpened() accepts.
+   */
   openingLabel?: string;
+  /**
+   * Where the openings pipeline read about this place. /restaurants/new passes
+   * the row's source_url so each opening carries its receipt; other pages
+   * leave it out. Only http(s) URLs render.
+   */
+  sourceUrl?: string | null;
   /** Structured dietary tags ("vegan", "vegetarian", "gluten-free"). Unknown values are ignored. */
   dietaryTags?: readonly string[];
 }
@@ -133,21 +157,53 @@ function RestaurantCardComponent({
   restaurant,
   variant = "default",
   priority = false,
-  openingLabel,
+  openingLabel: openingLabelProp,
+  sourceUrl,
   dietaryTags,
 }: RestaurantCardProps) {
   const [imageError, setImageError] = useState(false);
   const showImage = restaurant.image_url && !imageError;
-  const isFeatured = variant === "featured" || restaurant.is_featured;
+  // The featured ring follows the caller's variant only. restaurants.is_featured
+  // is set on sponsored rows and outlives the sponsorship (20260902000004), so
+  // a lapsed flag gets nothing and an active one gets SponsoredBadge.
+  const isFeatured = variant === "featured";
+  const location = useLocation();
 
   // Re-evaluated every minute, so a card loaded at 9:55 PM does not still say
-  // "Open until 10 PM" at 10:05.
+  // "Open until 10 PM" at 10:05. The build-time prerender gets no hours line:
+  // "Open until 10 PM" frozen into static HTML is wrong within the hour.
   const now = useMinuteClock();
+  const prerendering = isPrerender();
   const lifecycleLabel = restaurant.status ? LIFECYCLE_LABEL[restaurant.status] : undefined;
   const openStatus = useMemo(
-    () => (lifecycleLabel ? null : resolveOpenStatus(restaurant.hours_json, restaurant.opening, now)),
-    [lifecycleLabel, restaurant.hours_json, restaurant.opening, now],
+    () =>
+      lifecycleLabel || prerendering ? null : resolveOpenStatus(restaurant.hours_json, restaurant.opening, now),
+    [lifecycleLabel, prerendering, restaurant.hours_json, restaurant.opening, now],
   );
+
+  // "New" is an opening date in the last JUST_OPENED_WINDOW_DAYS, printed as
+  // the date itself ("Opened Sep 12"). It used to be a week-old badge read
+  // from created_at, the day a scraper found the row, so a place open since
+  // 2019 was new the week it was imported.
+  const openingLabel = useMemo(() => {
+    if (openingLabelProp) return openingLabelProp;
+    const row = {
+      id: restaurant.id,
+      name: restaurant.name,
+      status: restaurant.status ?? null,
+      opening_date: restaurant.opening_date ?? null,
+      opening_timeframe: restaurant.opening_timeframe ?? null,
+    };
+    return isNewlyOpened(row, now) ? datedOpeningLabel(row, now) ?? undefined : undefined;
+  }, [
+    openingLabelProp,
+    restaurant.id,
+    restaurant.name,
+    restaurant.status,
+    restaurant.opening_date,
+    restaurant.opening_timeframe,
+    now,
+  ]);
   const hoursLine = openStatus ? formatOpenStatusLine(openStatus) : null;
   // "Opening Oct 2026" is more useful than "Opening soon" when we have it.
   const lifecycleChip =
@@ -160,13 +216,19 @@ function RestaurantCardComponent({
     () => (dietaryTags ?? []).map((t) => t.toLowerCase()).filter(isDietaryTagId),
     [dietaryTags],
   );
-  const isNew = useMemo(() => {
-    if (!restaurant.created_at) return false;
-    const daysSince = (Date.now() - new Date(restaurant.created_at).getTime()) / (1000 * 60 * 60 * 24);
-    return daysSince <= 14;
-  }, [restaurant.created_at]);
-
-  const isPopular = typeof restaurant.popularity_score === "number" && restaurant.popularity_score > 70;
+  // popularity_score is a formula of rating, the featured flag and recency,
+  // not a measure of how many people go, so no badge reads it.
+  const priceRange = restaurant.price_range && PRICE_RANGE_RE.test(restaurant.price_range.trim())
+    ? restaurant.price_range.trim()
+    : null;
+  // Pre-opening copy ("Coming soon!") on a place that has opened says the
+  // opposite of the status line above it.
+  const isUpcoming = UPCOMING_STATUSES.has(restaurant.status ?? "");
+  const description =
+    restaurant.description && (isUpcoming || !isStaleOpeningCopy(restaurant.description))
+      ? restaurant.description
+      : null;
+  const sourceHref = toSafeExternalUrl(sourceUrl);
 
   const prefetchRestaurant = usePrefetchRestaurant();
   const handleMouseEnter = useCallback(() => {
@@ -219,19 +281,13 @@ function RestaurantCardComponent({
           </div>
         )}
 
-        {/* Top badges */}
-        <div className="absolute top-3 left-3 flex flex-wrap gap-1.5 z-10">
-          {sponsoredActive && <SponsoredBadge />}
-          {!sponsoredActive && isFeatured && (
-            <Badge className={`${STATUS_BADGE.featured} border-0 text-xs font-semibold px-2.5 py-0.5`}>
-              <SpriteIcon name="sparkles" className="h-3 w-3 mr-1" />
-              Featured
-            </Badge>
-          )}
-          {!sponsoredActive && !isFeatured && isNew && (
-            <SocialProofBadge type="new" size="sm" />
-          )}
-        </div>
+        {/* Top badge: paid placement only. The featured-flag and created_at
+            badges are gone; see isFeatured and openingLabel above. */}
+        {sponsoredActive && (
+          <div className="absolute top-3 left-3 flex flex-wrap gap-1.5 z-10">
+            <SponsoredBadge />
+          </div>
+        )}
       </div>
 
       {/* Save sits above the stretched link's overlay (z-20, later stacking). */}
@@ -242,7 +298,7 @@ function RestaurantCardComponent({
           itemName={restaurant.name}
           size="icon"
           variant="ghost"
-          className="h-9 w-9 rounded-full bg-white/90 hover:bg-white backdrop-blur"
+          className="h-11 w-11 rounded-full bg-white/90 hover:bg-white backdrop-blur"
         />
       </div>
 
@@ -252,6 +308,8 @@ function RestaurantCardComponent({
           <h3 className="flex-1 min-w-0 text-lg font-bold leading-tight line-clamp-2">
             <Link
               to={`/restaurants/${restaurant.slug || restaurant.id}`}
+              // The detail page's back control returns here, filters and all.
+              state={{ from: location.pathname + location.search }}
               className="after:absolute after:inset-0 after:z-10 after:rounded-2xl after:content-[''] focus-visible:outline-none focus-visible:after:ring-2 focus-visible:after:ring-primary focus-visible:after:ring-offset-2"
               onMouseEnter={handleMouseEnter}
               onFocus={handleMouseEnter}
@@ -274,15 +332,15 @@ function RestaurantCardComponent({
           ) : hoursLine ? (
             <span className={`font-semibold ${hoursTone}`}>{hoursLine}</span>
           ) : null}
-          {restaurant.price_range && (
+          {priceRange && (
             <>
               {(lifecycleChip || hoursLine) && <span aria-hidden="true" className="text-muted-foreground">&middot;</span>}
-              <span className="font-semibold text-foreground">{restaurant.price_range}</span>
+              <span className="font-semibold text-foreground">{priceRange}</span>
             </>
           )}
           {restaurant.city && (
             <>
-              {(lifecycleChip || hoursLine || restaurant.price_range) && (
+              {(lifecycleChip || hoursLine || priceRange) && (
                 <span aria-hidden="true" className="text-muted-foreground">&middot;</span>
               )}
               <span className="text-muted-foreground">{restaurant.city}</span>
@@ -292,6 +350,19 @@ function RestaurantCardComponent({
 
         {openingLine && <p className="text-xs font-medium text-muted-foreground">{openingLine}</p>}
 
+        {sourceHref && (
+          <p className="relative z-20 text-xs text-muted-foreground">
+            <a
+              href={sourceHref}
+              target="_blank"
+              rel="noopener noreferrer nofollow"
+              className="inline-flex min-h-11 items-center font-medium text-foreground underline underline-offset-4 hover:text-primary"
+            >
+              Source: {hostOf(sourceHref)}
+            </a>
+          </p>
+        )}
+
         {restaurant.cuisine && (
           <p className="flex items-center gap-1.5 text-sm text-muted-foreground">
             <SpriteIcon name="chef-hat" className="h-3.5 w-3.5 shrink-0" />
@@ -299,35 +370,21 @@ function RestaurantCardComponent({
           </p>
         )}
 
-        {(Boolean(restaurant.rating) || isPopular) && (
-          <div className="flex items-center justify-between">
-            {restaurant.rating ? (
-              <div className="flex items-center gap-2">
-                <StarRating rating={restaurant.rating} />
-                <span className="text-sm font-semibold text-foreground">
-                  <span className="sr-only">Rated </span>
-                  {restaurant.rating.toFixed(1)}
-                  <span className="sr-only"> out of 5</span>
-                </span>
-              </div>
-            ) : (
-              <span />
-            )}
-            {/* WEB-UX-030: text-orange-600 on bg-orange-50 measured 3.35:1.
-                orange-700 is 4.88:1 on the same tint. Dark side untouched -
-                orange-400 on orange-950 already clears AA. */}
-            {isPopular && (
-              <Badge variant="outline" className="text-xs border-orange-200 text-orange-700 bg-orange-50 dark:bg-orange-950 dark:border-orange-800 dark:text-orange-400 gap-1">
-                <Flame className="h-3 w-3" aria-hidden="true" />
-                Popular
-              </Badge>
-            )}
+        {typeof restaurant.rating === "number" && restaurant.rating > 0 && (
+          <div className="flex items-center gap-2">
+            <StarRating rating={restaurant.rating} />
+            <span className="text-sm font-semibold text-foreground">
+              <span className="sr-only">Rated </span>
+              {restaurant.rating.toFixed(1)}
+              <span className="sr-only"> out of 5 on</span>
+              <span className="ml-1 text-xs font-normal text-muted-foreground"> Google</span>
+            </span>
           </div>
         )}
 
-        {restaurant.description && (
+        {description && (
           <p className="text-sm text-muted-foreground leading-relaxed line-clamp-2">
-            {restaurant.description}
+            {description}
           </p>
         )}
 

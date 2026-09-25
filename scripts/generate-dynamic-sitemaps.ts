@@ -357,6 +357,12 @@ async function generateRestaurantsSitemap(): Promise<number | null> {
     // sitemapping one submits a URL the listing will not show. 0 of 478
     // restaurants are merged today and none is NULL, so this is inert now.
     .neq('is_merged', true)
+    // A closed restaurant's page is noindex (the React page and the edge
+    // shell both say so), so submitting it asks Google to crawl a page we've
+    // told it not to index. status is nullable and a bare neq would also drop
+    // the NULL rows, so "not closed" is an OR that keeps them
+    // (useBreweryTrail.ts uses the same filter).
+    .or('status.is.null,status.neq.closed')
     .order('name')
     .order('id')
     .limit(5000);

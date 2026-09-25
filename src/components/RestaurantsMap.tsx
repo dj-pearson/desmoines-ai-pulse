@@ -1,4 +1,4 @@
-import { useEffect, useMemo, useRef } from 'react';
+import { useEffect, useMemo, useRef, useState } from 'react';
 import { LocateFixed, Loader2 } from 'lucide-react';
 import { InteractiveMap, type MapLegendItem, type MapLocation, type UnmappedLocation } from './InteractiveMap';
 import { Button } from '@/components/ui/button';
@@ -77,8 +77,10 @@ export function RestaurantsMap({ filters = {}, restaurants = [] }: RestaurantsMa
 
   // Only a failed map query falls back to the page rows.
   const usingPageFallback = !!error && restaurants.length > 0;
+  // Closed rows stay off the map (pass 2 WP1 item 11). The query already
+  // leaves them out; the page fallback is filtered the same way.
   const source = useMemo(
-    () => (usingPageFallback ? restaurants.map(toPoint) : points),
+    () => (usingPageFallback ? restaurants.filter((r) => r.status !== 'closed').map(toPoint) : points),
     [usingPageFallback, restaurants, points]
   );
   const { mapped, unmapped } = useMemo(() => splitByCoordinates(source), [source]);
@@ -157,6 +159,19 @@ export function RestaurantsMap({ filters = {}, restaurants = [] }: RestaurantsMa
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [geoError, location, announce]);
 
+  // "See them in the list" opens the map's own list alternative at the
+  // unmapped group (pass 2 WP1 item 11). It used to tell the visitor to open
+  // "the list view", which is a different view without that group.
+  const [listOpen, setListOpen] = useState(false);
+  const [focusUnmapped, setFocusUnmapped] = useState(false);
+  useEffect(() => {
+    if (!focusUnmapped || !listOpen) return;
+    const heading = document.getElementById('map-unmapped-heading');
+    heading?.scrollIntoView({ behavior: 'smooth', block: 'start' });
+    heading?.focus({ preventScroll: true });
+    setFocusUnmapped(false);
+  }, [focusUnmapped, listOpen]);
+
   const handleNearMe = () => {
     askedRef.current = true;
     requestLocation();
@@ -199,9 +214,20 @@ export function RestaurantsMap({ filters = {}, restaurants = [] }: RestaurantsMa
         <p className="mb-2 text-sm text-destructive">The map could not load. Try the list view.</p>
       )}
       {unmapped.length > 0 && (
-        <p className="mb-2 text-sm text-muted-foreground">
-          {plural(unmapped.length, 'restaurant is', 'restaurants are')} not on the map. Open the list view to see{' '}
-          {unmapped.length === 1 ? 'it' : 'them'} under "Location not mapped".
+        <p className="mb-2 flex flex-wrap items-center gap-x-2 text-sm text-muted-foreground">
+          <span>{plural(unmapped.length, 'restaurant is', 'restaurants are')} not on the map.</span>
+          <Button
+            type="button"
+            variant="link"
+            className="h-11 px-0 text-sm"
+            aria-controls="map-list-alternative"
+            onClick={() => {
+              setListOpen(true);
+              setFocusUnmapped(true);
+            }}
+          >
+            See {unmapped.length === 1 ? 'it' : 'them'} in the list
+          </Button>
         </p>
       )}
       <InteractiveMap
@@ -215,6 +241,11 @@ export function RestaurantsMap({ filters = {}, restaurants = [] }: RestaurantsMa
         countLabel={countLabel}
         mapLabel={`Map of ${plural(mapLocations.length, 'restaurant', 'restaurants')}, coloured by whether each is open now`}
         unmappedLocations={unmappedLocations}
+        listOpen={listOpen}
+        onListOpenChange={setListOpen}
+        showClustering
+        clusterNoun="restaurants"
+        ratingLabel="Google rating"
         toolbar={nearMeButton}
         height="600px"
         zoom={12}

@@ -4,7 +4,6 @@
   "orphans": [
     "add-to-calendar-card",
     "layout-integrity",
-    "restaurant-dietary-filter",
-    "restaurant-reservations"
+    "restaurant-dietary-filter"
   ]
 }

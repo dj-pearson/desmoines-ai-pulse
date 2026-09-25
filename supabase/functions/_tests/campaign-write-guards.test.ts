@@ -291,10 +291,14 @@ Deno.test('user_submitted_events: a submission arrives pending and unscored', as
   assert.match(sql, /BEFORE INSERT OR UPDATE ON public\.user_submitted_events/);
 });
 
-Deno.test('user_submitted_events: length checks match the form and skip existing rows', async () => {
+// The title/description char_length CHECKs were moved out of this migration to
+// business plan D10 (docs/page-plans/business.md:152,192): a new CHECK is a
+// tightening and ships in a later release than the guards. The migration says
+// so in its header comment. This pins that decision, and keeps the form limits
+// the later CHECKs must match.
+Deno.test('user_submitted_events: no length CHECK in this release; the form holds 200/5000', async () => {
   const sql = await code(BUSINESS);
-  assert.match(sql, /CHECK \(char_length\(title\) <= 200\) NOT VALID/);
-  assert.match(sql, /CHECK \(description IS NULL OR char_length\(description\) <= 5000\) NOT VALID/);
+  assert.doesNotMatch(sql, /ADD CONSTRAINT[\s\S]{0,200}char_length\((title|description)\)/);
 
   const form = await Deno.readTextFile(new URL('../../../src/components/EventSubmissionForm.tsx', import.meta.url));
   assert.match(form, /register\("title", \{[^}]*maxLength: \{ value: 200/);

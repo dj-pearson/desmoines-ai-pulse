@@ -78,3 +78,10 @@
 # the URL not to 404. Deleted, with this 301 for at least one release cycle,
 # per the Backward Compatibility rules in CLAUDE.md.
 /sitemap-index.xml  /sitemap.xml  301
+
+# Eat & Drink pass 2 WP4.7: /real-time was a second "what's open" page (a
+# "Live Updates" badge over the top 24 by popularity, no open/closed filter,
+# two buttons with no handler). /restaurants/open-now answers the same
+# question from listed hours. App.tsx carries the same redirect for in-app
+# navigation. Keep for at least one release cycle.
+/real-time  /restaurants/open-now  301

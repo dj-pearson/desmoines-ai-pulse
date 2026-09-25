@@ -4,6 +4,15 @@ import { DIETARY_KEYWORDS, resolveDietarySelections } from "@/hooks/useRestauran
 import { formatOpenStatusLine, getRestaurantOpenStatus } from "@/lib/restaurantHours";
 import { STALE_TIME, GC_TIME } from "@/lib/queryConfig";
 import { queryKeys } from "@/lib/queryKeys";
+import { hubSearchQuery } from "@/components/events/eventsHubQuery";
+
+/**
+ * Closed rows stay off the map (eat-drink pass 2 WP1 item 11): a red pin for
+ * a place that shut for good is a pin nobody can use. Written as an OR so a
+ * NULL status (the column's default was 'open', but older rows can be NULL)
+ * is kept; a plain neq would drop it.
+ */
+const NOT_CLOSED = "status.is.null,status.neq.closed";
 
 /**
  * Every restaurant the map can draw for the visitor's filters (eat-drink plan
@@ -172,9 +181,14 @@ async function fetchRestaurantMapPoints(filters: RestaurantMapFilters): Promise<
     .select(MAP_POINT_COLUMNS, { count: "estimated" })
     .neq("is_merged", true);
 
-  const search = filters.search?.trim();
+  // The list's prefix search (pass 2 WP1 item 6), so "harb" puts the same
+  // restaurant on the map as in the list.
+  const search = hubSearchQuery(filters.search ?? "");
   if (search) {
-    query = query.textSearch("search_vector", search, { type: "websearch", config: "english" });
+    query = query.textSearch("search_vector", search.query, {
+      ...(search.type ? { type: search.type } : {}),
+      config: "english",
+    });
   }
   if (filters.cuisine && filters.cuisine.length > 0) query = query.in("cuisine", filters.cuisine);
   if (filters.priceRange && filters.priceRange.length > 0) query = query.in("price_range", filters.priceRange);
@@ -184,6 +198,8 @@ async function fetchRestaurantMapPoints(filters: RestaurantMapFilters): Promise<
   if (filters.location && filters.location.length > 0) query = query.in("location", filters.location);
   if (filters.featuredOnly) query = query.eq("is_featured", true);
 
+  // One or= param. With a dietary filter the two OR groups are AND-ed
+  // inside it, rather than relying on how PostgREST combines repeated keys.
   const dietary = resolveDietarySelections(filters);
   if (dietary.length > 0) {
     const orClauses = dietary.flatMap((diet) =>
@@ -193,7 +209,9 @@ async function fetchRestaurantMapPoints(filters: RestaurantMapFilters): Promise<
         `name.ilike.%${kw}%`,
       ])
     );
-    query = query.or(orClauses.join(","));
+    query = query.or(`and(or(${NOT_CLOSED}),or(${orClauses.join(",")}))`);
+  } else {
+    query = query.or(NOT_CLOSED);
   }
 
   const { data, error, count } = await query
@@ -202,7 +220,9 @@ async function fetchRestaurantMapPoints(filters: RestaurantMapFilters): Promise<
     .returns<RestaurantMapPoint[]>();
 
   if (error) throw error;
-  const points = (data ?? []).filter((row): row is RestaurantMapPoint => !!row?.id && !!row?.name);
+  const points = (data ?? []).filter(
+    (row): row is RestaurantMapPoint => !!row?.id && !!row?.name && row.status !== "closed"
+  );
   // Under the limit the rows are the whole set, whatever the estimate says.
   const totalCount = points.length < MAP_POINT_LIMIT ? points.length : Math.max(count ?? 0, points.length);
   return { points, totalCount };

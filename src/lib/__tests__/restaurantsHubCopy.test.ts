@@ -1,5 +1,5 @@
 import { describe, it, expect } from "vitest";
-import { buildRestaurantsHubFaqs, formatRestaurantCount } from "@/lib/restaurantsHubCopy";
+import { buildRestaurantsHubFaqs, drinkCuisines, formatRestaurantCount } from "@/lib/restaurantsHubCopy";
 
 describe("formatRestaurantCount", () => {
   it("rounds down to the ten below, so the copy never overstates", () => {
@@ -55,5 +55,42 @@ describe("buildRestaurantsHubFaqs", () => {
       ])
     );
     for (const href of hrefs) expect(href.startsWith("/")).toBe(true);
+  });
+});
+
+describe("hub copy prices (eat-drink pass 2 WP1 item 9)", () => {
+  it("names no dollar band for a price level", () => {
+    const faqs = buildRestaurantsHubFaqs({ restaurantCount: 477, cuisineCount: 31 })
+      .map((f) => f.answer)
+      .join("\n");
+    expect(faqs).not.toMatch(/under (about )?\$\d|\$\d+\s*-\s*\$?\d+/i);
+  });
+});
+
+describe("drinkCuisines (eat-drink pass 2 WP1 item 13)", () => {
+  const facet = [
+    { cuisine: "American", count: 90 },
+    { cuisine: "Bar & Grill", count: 12 },
+    { cuisine: "Brewery", count: 9 },
+    { cuisine: "Wine Bar", count: 4 },
+    { cuisine: "Sushi Bar", count: 6 },
+    { cuisine: "Salad Bar", count: 2 },
+    { cuisine: "Cocktail Lounge", count: 0 },
+    { cuisine: "Barbecue", count: 20 },
+  ];
+
+  it("keeps drinking places with rows, most rows first", () => {
+    expect(drinkCuisines(facet).map((c) => c.cuisine)).toEqual(["Bar & Grill", "Brewery", "Wine Bar"]);
+  });
+
+  it("does not read Barbecue or a food bar as a bar", () => {
+    const names = drinkCuisines(facet).map((c) => c.cuisine);
+    expect(names).not.toContain("Barbecue");
+    expect(names).not.toContain("Sushi Bar");
+    expect(names).not.toContain("Salad Bar");
+  });
+
+  it("leaves out a cuisine with no rows", () => {
+    expect(drinkCuisines(facet).map((c) => c.cuisine)).not.toContain("Cocktail Lounge");
   });
 });

@@ -177,6 +177,11 @@ jobs:
       # that all-sources-failed is a non-2xx, that a quiet day and a partial
       # failure are not, and that no model id is pasted back into index.ts.
       - run: deno test --allow-read supabase/functions/_tests/restaurant-opening-run-summary.test.ts
+      # Eat & Drink pass 2 WP5. Restaurant ingest stores what a source said, or
+      # null: no "Unnamed Restaurant", "American" or "$$" defaults, no rewrite of
+      # fields a source never gave, no resurrection of a closed row, and no
+      # anonymous caller spending the Places key.
+      - run: deno test --allow-read supabase/functions/_tests/restaurant-ingest-honesty.test.ts
       # WEB-BE-042 AC3/AC5. The Catch Des Moines adapter parsed the site's own
       # ld+json @type and then discarded it, stamping category: "Community" on
       # every event - concerts, hockey games and theatre runs alike - while the
