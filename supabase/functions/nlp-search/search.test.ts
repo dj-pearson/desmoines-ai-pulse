@@ -301,6 +301,35 @@ const CANNED: Record<string, Record<string, unknown>> = {
   "Kid-friendly attractions": {
     contentTypes: ["attractions"], keywords: [], kidFriendly: true, confidence: 0.9,
   },
+  // home-pass2 WP1 item 6 replaced the examples above with these.
+  "Tacos in East Village": {
+    contentTypes: ["restaurants"], keywords: ["tacos"], neighborhood: "East Village", confidence: 0.85,
+  },
+  "Comedy this weekend": {
+    contentTypes: ["events"], keywords: ["comedy"], category: "Comedy", dateFilter: "this_weekend",
+    confidence: 0.9,
+  },
+  "Concerts tonight": {
+    contentTypes: ["events"], keywords: ["concerts"], category: "Music", dateFilter: "today",
+    timeOfDay: "night", confidence: 0.9,
+  },
+  "Italian restaurants in West Des Moines": {
+    contentTypes: ["restaurants"], keywords: ["italian"], cuisine: "Italian", location: "West Des Moines",
+    confidence: 0.85,
+  },
+  "Art events this week": {
+    contentTypes: ["events"], keywords: ["art"], category: "Arts", dateFilter: "this_week", confidence: 0.85,
+  },
+  "Free attractions": {
+    contentTypes: ["attractions"], keywords: [], priceRange: "free", confidence: 0.9,
+  },
+  "Things to do tomorrow": {
+    contentTypes: ["events", "attractions"], keywords: [], dateFilter: "tomorrow", confidence: 0.8,
+  },
+  "Sports events this weekend": {
+    contentTypes: ["events"], keywords: ["sports"], category: "Sports", dateFilter: "this_weekend",
+    confidence: 0.9,
+  },
   "Events this week under $20": {
     contentTypes: ["events"], keywords: [], dateFilter: "this_week", maxBudget: 20, priceRange: "cheap",
     confidence: 0.8,
