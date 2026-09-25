@@ -116,7 +116,14 @@ export default defineConfig({
   // chips with no second model call on Back, the events-only watch button,
   // and /search/advanced's Stage A (no crash on foreign saved rows, only the
   // controls that filter; the redirect into /search waits on D2).
-  testMatch: /(search-filters|url-filter-state|sticky-filter-chips|route-smoke|cookie-consent|backend-down|touch-targets|page-headings|search-request-loop|request-budget|turnstile-inert|subscription-checkout|advertise-success-receipt|submission-live-link|campaign-self-service|home-search|home-request-budget|home-rails-cls|home-tonight|home-dashboard|home-quick-view|shell-mobile|events-hub-dates|events-hub-list|events-near-me|event-detail|restaurants-hub|restaurants-open-now|restaurant-detail|things-to-do-hub|discover-map|attractions-hub|playgrounds-hub|music-sports-hubs|outdoors-hub|deals|stay|trip-planner-window|visitors-guide|getting-around|articles|best-of-voting|whats-new|events-weekend-days|search-results|search-watch|search-advanced-redirect)\.spec\.ts/,
+  //
+  // auth-funnel, auth-return and the account-* specs joined with the Account
+  // plan (docs/page-plans/account.md WP6), on fixtureBackend plus per-spec
+  // routes for /auth/v1: sign-in, sign-up and the MFA step; the return path
+  // through sign-up, confirmation and OAuth; the signed-in /dashboard and
+  // /my-events with their error states and request budget; the submission
+  // timeline; and the settings security checkup and email streams.
+  testMatch: /(search-filters|url-filter-state|sticky-filter-chips|route-smoke|cookie-consent|backend-down|touch-targets|page-headings|search-request-loop|request-budget|turnstile-inert|subscription-checkout|advertise-success-receipt|submission-live-link|campaign-self-service|home-search|home-request-budget|home-rails-cls|home-tonight|home-dashboard|home-quick-view|shell-mobile|events-hub-dates|events-hub-list|events-near-me|event-detail|restaurants-hub|restaurants-open-now|restaurant-detail|things-to-do-hub|discover-map|attractions-hub|playgrounds-hub|music-sports-hubs|outdoors-hub|deals|stay|trip-planner-window|visitors-guide|getting-around|articles|best-of-voting|whats-new|events-weekend-days|search-results|search-watch|search-advanced-redirect|auth-funnel|auth-return|account-home|account-request-budget|account-submissions|account-settings)\.spec\.ts/,
   fullyParallel: true,
   forbidOnly: !!process.env.CI,
   retries: process.env.CI ? 2 : 0,

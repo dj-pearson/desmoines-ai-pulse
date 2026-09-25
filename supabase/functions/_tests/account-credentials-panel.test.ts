@@ -18,7 +18,9 @@ const codeOnly = (src: string) =>
 
 Deno.test('both forms exist and are mounted on /profile', async () => {
   const panel = await read('src/components/auth/AccountCredentials.tsx');
-  assert(/id="current-password"/.test(panel));
+  // Account plan WP5 item 1: the current password is no longer typed; an
+  // emailed reauthentication code proves the owner instead.
+  assert(/id="reauth-code"/.test(panel));
   assert(/id="new-password"/.test(panel));
   assert(/id="new-email"/.test(panel));
 
@@ -34,13 +36,19 @@ Deno.test('changing a password re-authenticates first', async () => {
   // updateUser({ password }) accepts ANY live session, so without this an
   // unlocked laptop or a stolen token is enough to take the account over
   // permanently: the attacker sets a password the owner does not know.
+  //
+  // Account plan WP5 item 1: the proof is reauthenticate() plus the emailed
+  // nonce, spent by updateUser({ password, nonce }). signInWithPassword was the
+  // old proof and it swapped an aal2 session for an aal1 one, which the
+  // WEB-SEC-026 hold then treated as signed out mid-change.
   const panel = codeOnly(await read('src/components/auth/AccountCredentials.tsx'));
 
-  const reauth = panel.indexOf('signInWithPassword');
-  const update = panel.indexOf('updatePassword(newPassword)');
-  assert(reauth > 0, 'the current password must be proven');
-  assert(update > 0);
+  const reauth = panel.indexOf('supabase.auth.reauthenticate()');
+  const update = panel.indexOf('supabase.auth.updateUser({ password: newPassword, nonce })');
+  assert(reauth > 0, 'the owner must be proven with a reauthentication code');
+  assert(update > 0, 'the nonce must be spent by the password update');
   assert(reauth < update, 're-authentication must come first');
+  assertFalse(/signInWithPassword/.test(panel), 'a password sign-in downgrades an aal2 session');
 });
 
 Deno.test('changing a password signs out the other sessions', async () => {
@@ -84,9 +92,10 @@ Deno.test('USER_UPDATED is handled, so a confirmed change shows up', async () =>
 });
 
 Deno.test('the password rules are checked before anything is sent', async () => {
+  // One rule set (account plan WP1 item 9): passwordSchema, not a local floor.
   const panel = codeOnly(await read('src/components/auth/AccountCredentials.tsx'));
-  assert(/newPassword\.length < 8/.test(panel), 'a length floor');
+  assert(/passwordSchema\.safeParse\(newPassword\)/.test(panel), 'the shared password rules');
   assert(/newPassword !== confirmPassword/.test(panel), 'and a confirmation');
-  const firstCheck = panel.indexOf('newPassword.length < 8');
-  assert(firstCheck < panel.indexOf('signInWithPassword'), 'checked before the network call');
+  const firstCheck = panel.indexOf('passwordSchema.safeParse(newPassword)');
+  assert(firstCheck < panel.indexOf('supabase.auth.reauthenticate()'), 'checked before the network call');
 });

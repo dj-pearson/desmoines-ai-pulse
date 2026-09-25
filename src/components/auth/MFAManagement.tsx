@@ -1,7 +1,6 @@
-import { useEffect, useState } from 'react';
+import { useState } from 'react';
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
-import { Alert, AlertDescription } from '@/components/ui/alert';
 import { Badge } from '@/components/ui/badge';
 import {
   AlertDialog,
@@ -13,206 +12,158 @@ import {
   AlertDialogHeader,
   AlertDialogTitle,
 } from '@/components/ui/alert-dialog';
-import { useMFA, type MFAFactor } from '@/hooks/useMFA';
+import { ErrorState } from '@/components/ui/error-state';
+import { useMFA, useMFAFactors, type MFAFactor } from '@/hooks/useMFA';
 import { MFAEnrollmentDialog } from './MFAEnrollmentDialog';
-import { Shield, ShieldCheck, ShieldAlert, Trash2, Plus, Loader2, CheckCircle2 } from 'lucide-react';
+import { Shield, Trash2, Plus, Loader2 } from 'lucide-react';
 import { formatDistanceToNow } from 'date-fns';
 
 /**
- * MFA Management Component
+ * Two-step sign-in (account plan WP5 item 7).
  *
- * Provides a UI for users to:
- * - View all enrolled MFA factors
- * - Enable new MFA factors
- * - Disable existing MFA factors
- * - See MFA status and security level
+ * Everything on this card comes from one listFactors() call through
+ * useMFAFactors, shared with SecurityCheckup. It used to make two calls on
+ * mount and a third after every change.
  */
 export function MFAManagement() {
-  const { factors, listFactors, unenrollFactor, isLoading, hasMFAEnabled } = useMFA();
+  const { summary, isLoading, isError, error, refetch } = useMFAFactors();
+  const { unenrollFactor, isLoading: isChanging } = useMFA();
 
   const [enrollDialogOpen, setEnrollDialogOpen] = useState(false);
-  const [unenrollDialogOpen, setUnenrollDialogOpen] = useState(false);
-  const [selectedFactorId, setSelectedFactorId] = useState<string | null>(null);
-  const [mfaEnabled, setMfaEnabled] = useState(false);
+  const [pendingRemoval, setPendingRemoval] = useState<MFAFactor | null>(null);
 
-  // Load factors on mount
-  useEffect(() => {
-    loadFactors();
-  }, []);
-
-  const loadFactors = async () => {
-    await listFactors();
-    const enabled = await hasMFAEnabled();
-    setMfaEnabled(enabled);
-  };
+  const verified = summary.verified;
+  const mfaEnabled = verified.length > 0;
 
   const handleUnenroll = async () => {
-    if (!selectedFactorId) return;
-
-    const success = await unenrollFactor(selectedFactorId);
-    if (success) {
-      await loadFactors();
-      setUnenrollDialogOpen(false);
-      setSelectedFactorId(null);
-    }
+    if (!pendingRemoval) return;
+    const success = await unenrollFactor(pendingRemoval.id, {
+      wasVerified: pendingRemoval.status === 'verified',
+    });
+    if (success) setPendingRemoval(null);
   };
 
-  const handleEnrollSuccess = async () => {
-    await loadFactors();
-  };
-
-  const getFactorIcon = (status: string) => {
-    if (status === 'verified') {
-      return <ShieldCheck className="h-5 w-5 text-green-600" />;
-    }
-    return <ShieldAlert className="h-5 w-5 text-yellow-600" />;
-  };
+  const removingLastVerified =
+    pendingRemoval?.status === 'verified' && verified.length === 1;
 
   return (
     <>
-      <Card>
+      <Card id="two-step">
         <CardHeader>
-          <div className="flex items-start justify-between">
+          <div className="flex items-start justify-between gap-4">
             <div className="space-y-1">
               <CardTitle className="flex items-center gap-2">
-                <Shield className="h-5 w-5" />
-                Two-Factor Authentication
+                <Shield className="h-5 w-5" aria-hidden="true" />
+                Two-step sign-in
               </CardTitle>
               <CardDescription>
-                Add an extra layer of security to your account
+                After your password, we ask for a six-digit code from an authenticator app.
               </CardDescription>
             </div>
-
-            {mfaEnabled && (
-              <Badge variant="default" className="gap-1">
-                <CheckCircle2 className="h-3 w-3" />
-                Enabled
-              </Badge>
-            )}
+            {mfaEnabled && <Badge variant="secondary">On</Badge>}
           </div>
         </CardHeader>
 
         <CardContent className="space-y-4">
-          {/* Security Status Alert */}
-          {!mfaEnabled ? (
-            <Alert>
-              <Shield className="h-4 w-4" />
-              <AlertDescription>
-                <strong>Recommended:</strong> Enable two-factor authentication to protect your account from unauthorized access.
-              </AlertDescription>
-            </Alert>
-          ) : (
-            <Alert className="border-green-200 bg-green-50">
-              <ShieldCheck className="h-4 w-4 text-green-600" />
-              <AlertDescription className="text-green-800">
-                Your account is protected with two-factor authentication.
-              </AlertDescription>
-            </Alert>
-          )}
-
-          {/* Enrolled Factors List */}
-          {isLoading && factors.length === 0 ? (
+          {isLoading ? (
             <div className="flex items-center justify-center py-8">
-              <Loader2 className="h-6 w-6 animate-spin text-muted-foreground" />
+              <Loader2 className="h-6 w-6 animate-spin text-muted-foreground" aria-label="Loading authenticators" />
             </div>
-          ) : factors.length > 0 ? (
-            <div className="space-y-3">
-              <h4 className="text-sm font-medium">Enrolled Authenticators</h4>
-              {factors.map((factor: MFAFactor) => (
-                <div
+          ) : isError ? (
+            <ErrorState
+              compact
+              error={error}
+              title="Couldn't load your authenticators"
+              onRetry={() => void refetch()}
+            />
+          ) : summary.all.length > 0 ? (
+            <ul className="space-y-3" aria-label="Your authenticators">
+              {summary.all.map((factor) => (
+                <li
                   key={factor.id}
-                  className="flex items-center justify-between p-4 border rounded-lg bg-background"
+                  className="flex items-center justify-between gap-3 rounded-lg border p-4"
                 >
-                  <div className="flex items-center gap-3">
-                    {getFactorIcon(factor.status)}
-                    <div>
-                      <p className="font-medium">{factor.friendly_name}</p>
-                      <p className="text-xs text-muted-foreground">
-                        Added {formatDistanceToNow(new Date(factor.created_at), { addSuffix: true })}
-                      </p>
-                    </div>
+                  <div className="min-w-0">
+                    <p className="font-medium truncate">{factor.friendly_name}</p>
+                    <p className="text-sm text-muted-foreground">
+                      {factor.status === 'verified'
+                        ? `Added ${formatDistanceToNow(new Date(factor.created_at), { addSuffix: true })}`
+                        : 'Setup was not finished'}
+                    </p>
                   </div>
-
-                  <div className="flex items-center gap-2">
-                    <Badge
-                      variant={factor.status === 'verified' ? 'default' : 'secondary'}
-                      className="capitalize"
-                    >
-                      {factor.status}
-                    </Badge>
-
-                    <Button
-                      variant="ghost"
-                      size="sm"
-                      onClick={() => {
-                        setSelectedFactorId(factor.id);
-                        setUnenrollDialogOpen(true);
-                      }}
-                      disabled={isLoading}
-                    >
-                      <Trash2 className="h-4 w-4 text-destructive" />
-                    </Button>
-                  </div>
-                </div>
+                  <Button
+                    variant="ghost"
+                    size="icon"
+                    onClick={() => setPendingRemoval(factor)}
+                    disabled={isChanging}
+                    aria-label={
+                      factor.status === 'verified'
+                        ? `Remove ${factor.friendly_name}`
+                        : `Remove unfinished setup ${factor.friendly_name}`
+                    }
+                  >
+                    <Trash2 className="h-4 w-4 text-destructive" />
+                  </Button>
+                </li>
               ))}
-            </div>
+            </ul>
           ) : (
-            <div className="text-center py-8 text-muted-foreground">
-              <Shield className="h-12 w-12 mx-auto mb-2 opacity-50" />
-              <p className="text-sm">No authenticators enrolled</p>
-            </div>
+            <p className="text-sm text-muted-foreground">
+              Not set up. Anyone with your password can sign in as you.
+            </p>
           )}
 
-          {/* Add Factor Button */}
+          {mfaEnabled && verified.length === 1 && (
+            <p className="text-sm text-muted-foreground">
+              Add a second authenticator on another device as your backup. Without one, losing this
+              phone locks you out until you reset your password by email.
+            </p>
+          )}
+
           <Button
             onClick={() => setEnrollDialogOpen(true)}
-            disabled={isLoading}
-            className="w-full"
-            variant={factors.length === 0 ? 'default' : 'outline'}
+            disabled={isChanging || isLoading || isError}
+            className="w-full sm:w-auto"
+            variant={mfaEnabled ? 'outline' : 'default'}
           >
-            <Plus className="mr-2 h-4 w-4" />
-            {factors.length === 0 ? 'Enable Two-Factor Authentication' : 'Add Another Authenticator'}
+            <Plus className="mr-2 h-4 w-4" aria-hidden="true" />
+            {mfaEnabled ? 'Add a backup authenticator' : 'Turn on two-step sign-in'}
           </Button>
-
-          {/* Information */}
-          <div className="space-y-2 text-xs text-muted-foreground">
-            <p className="font-medium">How it works:</p>
-            <ol className="list-decimal list-inside space-y-1 ml-2">
-              <li>Download an authenticator app (Google Authenticator, Authy, etc.)</li>
-              <li>Scan the QR code or enter the setup key</li>
-              <li>Enter the 6-digit code from the app to verify</li>
-              <li>Use the code every time you log in</li>
-            </ol>
-          </div>
         </CardContent>
       </Card>
 
-      {/* Enrollment Dialog */}
       <MFAEnrollmentDialog
         open={enrollDialogOpen}
         onOpenChange={setEnrollDialogOpen}
-        onSuccess={handleEnrollSuccess}
+        existingFactors={summary.all}
       />
 
-      {/* Unenroll Confirmation Dialog */}
-      <AlertDialog open={unenrollDialogOpen} onOpenChange={setUnenrollDialogOpen}>
+      <AlertDialog open={!!pendingRemoval} onOpenChange={(next) => !next && setPendingRemoval(null)}>
         <AlertDialogContent>
           <AlertDialogHeader>
-            <AlertDialogTitle>Disable Two-Factor Authentication?</AlertDialogTitle>
+            <AlertDialogTitle>
+              {pendingRemoval?.status === 'verified'
+                ? `Remove ${pendingRemoval.friendly_name}?`
+                : 'Remove the unfinished setup?'}
+            </AlertDialogTitle>
             <AlertDialogDescription>
-              This will remove this authenticator from your account. You'll only need your password to log in.
-              This makes your account less secure.
+              {pendingRemoval?.status !== 'verified'
+                ? 'This authenticator was never verified, so it has never protected your account. Removing it changes nothing about how you sign in.'
+                : removingLastVerified
+                  ? 'This is your only authenticator. After removing it you will sign in with just your password, and we will email you to confirm.'
+                  : 'Codes from this device will stop working. Your other authenticators keep working, and we will email you to confirm.'}
             </AlertDialogDescription>
           </AlertDialogHeader>
           <AlertDialogFooter>
-            <AlertDialogCancel onClick={() => setSelectedFactorId(null)}>
-              Cancel
-            </AlertDialogCancel>
+            <AlertDialogCancel>Keep it</AlertDialogCancel>
             <AlertDialogAction
-              onClick={handleUnenroll}
+              onClick={(e) => {
+                e.preventDefault();
+                void handleUnenroll();
+              }}
               className="bg-destructive text-destructive-foreground hover:bg-destructive/90"
             >
-              Disable MFA
+              Remove
             </AlertDialogAction>
           </AlertDialogFooter>
         </AlertDialogContent>

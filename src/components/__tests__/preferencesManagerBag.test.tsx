@@ -13,6 +13,11 @@
  *
  * These tests assert the merge, and that a failed read does not fall back to an
  * empty bag - that fallback IS the data-losing write.
+ *
+ * Account plan WP5 item 5 narrowed the write: Save is disabled until something
+ * changes, and only the consent key the user flipped is written (a key the
+ * user never touched is not stamped with a default). So each test flips the
+ * "Personalized suggestions" switch first.
  */
 import { describe, it, expect, vi, beforeEach } from "vitest";
 import { render, screen, waitFor } from "@testing-library/react";
@@ -63,10 +68,15 @@ vi.mock("@/hooks/useAuth", () => ({
 const toast = vi.fn();
 vi.mock("@/hooks/use-toast", () => ({ useToast: () => ({ toast }) }));
 
+const logConsent = vi.fn().mockResolvedValue(undefined);
+vi.mock("@/lib/consentLog", () => ({ logConsent: (...args: unknown[]) => logConsent(...args) }));
+vi.mock("@/lib/errorHandler", () => ({ handleError: vi.fn() }));
+
 const PreferencesManager = (await import("../PreferencesManager")).default;
 
-async function save() {
+async function flipSuggestionsAndSave() {
   render(<PreferencesManager />);
+  await userEvent.click(await screen.findByRole("switch", { name: /Personalized suggestions/i }));
   await userEvent.click(await screen.findByRole("button", { name: /Save Preferences/i }));
 }
 
@@ -75,19 +85,21 @@ describe("PreferencesManager and the shared preference bag", () => {
     single.mockReset();
     updateProfile.mockClear();
     toast.mockClear();
+    logConsent.mockClear();
   });
 
   it("keeps every key it does not own", async () => {
     single.mockResolvedValue({ data: { communication_preferences: STORED }, error: null });
-    await save();
+    await flipSuggestionsAndSave();
 
     await waitFor(() => expect(updateProfile).toHaveBeenCalledTimes(1));
     const bag = updateProfile.mock.calls[0][0].communication_preferences;
 
-    // The three keys this screen owns are written.
-    expect(bag.email_notifications).toBe(true);
-    expect(bag.sms_notifications).toBe(false);
+    // The key the user flipped is written; stored consent is left as it was,
+    // and nothing this screen no longer shows (SMS) is stamped with a default.
     expect(bag.event_recommendations).toBe(true);
+    expect(bag.email_notifications).toBe(true);
+    expect(bag).not.toHaveProperty("sms_notifications");
 
     // The keys it does not own survive. marketing:false is the one that
     // matters - losing it opts a user back into every nurture agent.
@@ -98,7 +110,7 @@ describe("PreferencesManager and the shared preference bag", () => {
 
   it("does not write an empty bag when the read fails", async () => {
     single.mockResolvedValue({ data: null, error: { message: "boom" } });
-    await save();
+    await flipSuggestionsAndSave();
 
     await waitFor(() => expect(toast).toHaveBeenCalled());
     // No write at all beats a write that drops the other keys.

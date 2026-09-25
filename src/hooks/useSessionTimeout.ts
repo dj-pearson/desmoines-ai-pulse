@@ -1,10 +1,9 @@
 import { useEffect, useRef, useState, useCallback } from 'react';
-import { useQuery, useMutation } from '@tanstack/react-query';
+import { useQuery } from '@tanstack/react-query';
 import { useAuth } from '@/hooks/useAuth';
 import { useToast } from '@/hooks/use-toast';
 import { supabase } from '@/integrations/supabase/client';
 import { createLogger } from '@/lib/logger';
-import { fromUnknownTable } from "@/integrations/supabase/unknownTable";
 
 const logger = createLogger('useSessionTimeout');
 
@@ -21,22 +20,6 @@ interface SessionPolicy {
   allow_remember_me: boolean;
   remember_me_days: number;
   is_active: boolean;
-}
-
-/**
- * Active Session Info
- */
-interface ActiveSession {
-  id: string;
-  session_id: string;
-  last_activity: string;
-  idle_timeout_at: string | null;
-  expires_at: string | null;
-  device_info: Record<string, unknown>;
-  ip_address: string | null;
-  user_agent: string | null;
-  is_active: boolean;
-  remember_me: boolean;
 }
 
 /**
@@ -131,76 +114,19 @@ export function useSessionTimeout(config: SessionTimeoutConfig = {}) {
         return null;
       }
     },
-    enabled: !!user && useDatabasePolicy,
+    // WP5 item 8: `enabled` gates the read too. SessionManager enables this
+    // hook for admins only, but the query ran for every signed-in visitor
+    // regardless, against an RPC production doesn't have.
+    enabled: enabled && !!user && useDatabasePolicy,
     staleTime: 5 * 60 * 1000,
   });
 
-  // Fetch active sessions
-  const { data: activeSessions, refetch: refetchSessions } = useQuery<ActiveSession[]>({
-    queryKey: ['user-sessions', user?.id],
-    queryFn: async () => {
-      if (!user) return [];
-      const { data, error } = await fromUnknownTable('user_sessions')
-        .select('*')
-        .eq('user_id', user.id)
-        .eq('is_active', true)
-        .order('last_activity', { ascending: false });
-      if (error) {
-        logger.error('activeSessions', 'Error fetching sessions', { error });
-        return [];
-      }
-      return data as ActiveSession[];
-    },
-    enabled: !!user,
-    refetchInterval: 60000,
-  });
-
-  // Update session activity mutation
-  const updateActivityMutation = useMutation({
-    mutationFn: async (rememberMe: boolean = false) => {
-      if (!user) throw new Error('Not authenticated');
-      const session = await supabase.auth.getSession();
-      const sessionId = session.data.session?.access_token?.substring(0, 32) || 'unknown';
-      const { data, error } = await supabase
-        .rpc('update_session_with_timeout', {
-          p_user_id: user.id,
-          p_session_id: sessionId,
-          p_remember_me: rememberMe,
-          p_ip_address: null,
-          p_user_agent: navigator.userAgent,
-        });
-      if (error) throw error;
-      return data;
-    },
-    onSuccess: () => {
-      lastActivityRef.current = Date.now();
-      refetchSessions();
-    },
-  });
-
-  // Revoke session mutation
-  const revokeSessionMutation = useMutation({
-    mutationFn: async (sessionId: string) => {
-      const { data, error } = await supabase
-        .rpc('revoke_session', { p_session_id: sessionId });
-      if (error) throw error;
-      return data;
-    },
-    onSuccess: () => refetchSessions(),
-  });
-
-  // Revoke all other sessions mutation
-  const revokeOtherSessionsMutation = useMutation({
-    mutationFn: async () => {
-      const session = await supabase.auth.getSession();
-      const currentSessionId = session.data.session?.access_token?.substring(0, 32) || 'unknown';
-      const { data, error } = await supabase
-        .rpc('revoke_all_other_sessions', { p_current_session_id: currentSessionId });
-      if (error) throw error;
-      return data;
-    },
-    onSuccess: () => refetchSessions(),
-  });
+  // The user_sessions poll (every 60 seconds, for every signed-in user) and
+  // the revoke_session / revoke_all_other_sessions / update_session_with_timeout
+  // mutations are gone (account plan WP5 item 8). None of those objects exist
+  // in production (scripts/db-snapshot.json) and nothing rendered what they
+  // returned. SecurityCheckup's "Sign out of other devices" is the real
+  // control; a device list waits for deferred D11.
 
   // Use database policy values if available, otherwise fall back to config
   const idleTimeout = useDatabasePolicy && sessionPolicy?.idle_timeout_minutes
@@ -469,32 +395,5 @@ export function useSessionTimeout(config: SessionTimeoutConfig = {}) {
      * Session policy from database (if using database policies)
      */
     sessionPolicy,
-
-    /**
-     * List of active sessions for the current user
-     */
-    activeSessions: activeSessions || [],
-
-    /**
-     * Revoke a specific session by ID
-     */
-    revokeSession: revokeSessionMutation.mutateAsync,
-
-    /**
-     * Revoke all sessions except the current one
-     */
-    revokeAllOtherSessions: revokeOtherSessionsMutation.mutateAsync,
-
-    /**
-     * Update session activity (extends timeout)
-     */
-    updateSessionActivity: () => updateActivityMutation.mutate(false),
-
-    /**
-     * Whether session management operations are in progress
-     */
-    isSessionLoading: updateActivityMutation.isPending ||
-      revokeSessionMutation.isPending ||
-      revokeOtherSessionsMutation.isPending,
   };
 }

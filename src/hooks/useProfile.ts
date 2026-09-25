@@ -20,7 +20,48 @@ const logger = createLogger("useProfile");
  *
  * Per CLAUDE.md: prefer the generated Supabase types over local redefinitions.
  */
-export type UserProfile = Database["public"]["Tables"]["profiles"]["Row"];
+type ProfileRow = Database["public"]["Tables"]["profiles"]["Row"];
+
+/**
+ * The columns the account pages and the header read (account plan WP5 item 12).
+ * This was `*`, which sent churn_risk_score, lifecycle_signals and the other
+ * server-owned lifecycle columns to every browser that opened a page with the
+ * header on it. They were never displayed; they were just exposed.
+ */
+const PROFILE_COLUMNS =
+  "id, user_id, email, first_name, last_name, phone, location, interests, communication_preferences, created_at, updated_at" as const;
+
+export type UserProfile = Pick<
+  ProfileRow,
+  | "id"
+  | "user_id"
+  | "email"
+  | "first_name"
+  | "last_name"
+  | "phone"
+  | "location"
+  | "interests"
+  | "communication_preferences"
+  | "created_at"
+  | "updated_at"
+>;
+
+/**
+ * The only columns a browser may write through this hook. The server half,
+ * refusing lifecycle and billing columns in the profile trigger, is deferred D6.
+ */
+export type ProfileUpdate = Partial<
+  Pick<ProfileRow, "first_name" | "last_name" | "phone" | "location" | "interests" | "communication_preferences">
+>;
+
+const WRITABLE_COLUMNS: (keyof ProfileUpdate)[] = [
+  "first_name",
+  "last_name",
+  "phone",
+  "location",
+  "interests",
+  "communication_preferences",
+];
 
 export function useProfile() {
   const queryClient = useQueryClient();
@@ -45,7 +86,7 @@ export function useProfile() {
 
       const { data, error } = await supabase
         .from("profiles")
-        .select("*")
+        .select(PROFILE_COLUMNS)
         .eq("user_id", user.id)
         .maybeSingle();
 
@@ -80,7 +121,7 @@ export function useProfile() {
         // loser, so read it back rather than trusting what the write returned.
         const { data: newProfile, error: readBackError } = await supabase
           .from("profiles")
-          .select("*")
+          .select(PROFILE_COLUMNS)
           .eq("user_id", user.id)
           .maybeSingle();
 
@@ -114,17 +155,25 @@ export function useProfile() {
     await queryClient.invalidateQueries({ queryKey: queryKeys.user.all });
   }, [queryClient]);
 
-  const updateProfile = async (updates: Partial<Omit<UserProfile, "id" | "user_id" | "created_at" | "updated_at">>) => {
+  const updateProfile = async (updates: ProfileUpdate) => {
     if (!user) {
       throw new Error("User not authenticated");
+    }
+
+    // Drop anything outside the allow-list, whatever the caller's type said.
+    const safeUpdates: ProfileUpdate = {};
+    for (const key of WRITABLE_COLUMNS) {
+      if (key in updates) {
+        (safeUpdates as Record<string, unknown>)[key] = updates[key];
+      }
     }
 
     try {
       const { data, error } = await supabase
         .from("profiles")
-        .update(updates)
+        .update(safeUpdates)
         .eq("user_id", user.id)
-        .select()
+        .select(PROFILE_COLUMNS)
         .single();
 
       if (error) {

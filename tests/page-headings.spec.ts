@@ -16,6 +16,11 @@ import { test, expect, type Page } from '@playwright/test';
 const ROUTES = [
   '/', '/events', '/restaurants', '/attractions', '/playgrounds',
   '/music', '/sports', '/articles', '/deals', '/auth', '/pricing', '/contact',
+  // The rest of the sign-up funnel (docs/page-plans/account.md WP6 item 3).
+  // Each renders its own state with no session: verified and callback show
+  // their no-token branch, reset-password its expired-link branch, and every
+  // branch has to keep a single h1.
+  '/auth/verified', '/auth/reset-password', '/auth/callback',
 ];
 
 async function headings(page: Page) {

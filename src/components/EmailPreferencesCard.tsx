@@ -1,126 +1,78 @@
-import React from 'react';
 import { useEmailPreferences } from '@/hooks/useEmailPreferences';
-import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card';
 import { Label } from '@/components/ui/label';
 import { Switch } from '@/components/ui/switch';
 import { Skeleton } from '@/components/ui/skeleton';
-import { Mail } from "lucide-react";
-import { SpriteIcon } from "@/components/ui/SpriteIcon";
+import { ErrorState } from '@/components/ui/error-state';
+import { formatInCentralTime } from '@/lib/timezone';
 
+/**
+ * The weekly digest switch (account plan WP5 item 4).
+ *
+ * It says only what the digest does. The old card described "Every Sunday at
+ * 8:00 AM" (the cron is `0 14 * * 0`, which is 9 AM while Iowa is on CDT, and
+ * digest_day_of_week / digest_time_hour are never read) and listed RSVPs from an
+ * `event_rsvps` table that doesn't exist. What the page can know for certain is
+ * whether the switch is on and when the last one was actually sent, so that is
+ * what it shows.
+ *
+ * Rendered inside EmailStreams, which supplies the card and the heading.
+ */
 export function EmailPreferencesCard() {
-  const { preferences, isLoading, updatePreferences, isUpdating } = useEmailPreferences();
+  const {
+    preferences,
+    isLoading,
+    isError,
+    error,
+    refetch,
+    lastSentAt,
+    lastSentError,
+    updatePreferences,
+    isUpdating,
+  } = useEmailPreferences();
 
   if (isLoading) {
     return (
-      <Card>
-        <CardHeader>
-          <Skeleton className="h-6 w-48" />
-          <Skeleton className="h-4 w-full mt-2" />
-        </CardHeader>
-        <CardContent>
-          <Skeleton className="h-20 w-full" />
-        </CardContent>
-      </Card>
+      <div className="space-y-2" aria-busy="true">
+        <Skeleton className="h-5 w-40" />
+        <Skeleton className="h-4 w-full" />
+      </div>
     );
   }
 
-  if (!preferences) return null;
+  if (isError || !preferences) {
+    return (
+      <ErrorState
+        compact
+        error={error}
+        title="Couldn't load your digest setting"
+        description="Your setting hasn't changed. Try again in a moment."
+        onRetry={() => void refetch()}
+      />
+    );
+  }
 
-  const handleToggleWeeklyDigest = (enabled: boolean) => {
-    updatePreferences({ weekly_digest_enabled: enabled });
-  };
-
-  const dayNames = [
-    'Sunday',
-    'Monday',
-    'Tuesday',
-    'Wednesday',
-    'Thursday',
-    'Friday',
-    'Saturday'
-  ];
+  const lastSent = lastSentError
+    ? null
+    : lastSentAt
+      ? `Last sent ${formatInCentralTime(lastSentAt, 'MMM d')}.`
+      : 'Not sent to you yet.';
 
   return (
-    <Card>
-      <CardHeader>
-        <div className="flex items-center gap-2">
-          <Mail className="h-5 w-5 text-primary" />
-          <CardTitle>Email Preferences</CardTitle>
-        </div>
-        <CardDescription>
-          Manage your email notifications and weekly digest settings
-        </CardDescription>
-      </CardHeader>
-      <CardContent className="space-y-6">
-        {/* Weekly Digest Toggle */}
-        <div className="flex items-center justify-between space-x-4">
-          <div className="flex-1 space-y-1">
-            <Label htmlFor="weekly-digest" className="text-base font-semibold">
-              Weekly Event Digest
-            </Label>
-            <p className="text-sm text-muted-foreground">
-              Receive a personalized roundup of events every week, including your upcoming RSVPs,
-              favorited events, and recommendations based on your interests
-            </p>
-          </div>
-          <Switch
-            id="weekly-digest"
-            checked={preferences.weekly_digest_enabled}
-            onCheckedChange={handleToggleWeeklyDigest}
-            disabled={isUpdating}
-          />
-        </div>
-
-        {/* Digest Schedule Info */}
-        {preferences.weekly_digest_enabled && (
-          <div className="space-y-3 p-4 bg-muted/50 rounded-lg border border-border">
-            <div className="flex items-start gap-3">
-              <SpriteIcon name="calendar" className="h-5 w-5 text-primary mt-0.5" />
-              <div>
-                <p className="font-medium text-sm">Delivery Schedule</p>
-                <p className="text-sm text-muted-foreground">
-                  Every {dayNames[preferences.digest_day_of_week]} at{' '}
-                  {preferences.digest_time_hour === 0
-                    ? '12:00 AM'
-                    : preferences.digest_time_hour < 12
-                    ? `${preferences.digest_time_hour}:00 AM`
-                    : preferences.digest_time_hour === 12
-                    ? '12:00 PM'
-                    : `${preferences.digest_time_hour - 12}:00 PM`}
-                </p>
-              </div>
-            </div>
-
-            <div className="flex items-start gap-3">
-              <Mail className="h-5 w-5 text-primary mt-0.5" />
-              <div>
-                <p className="font-medium text-sm">What's Included</p>
-                <ul className="text-sm text-muted-foreground space-y-1 mt-1">
-                  <li>• Your upcoming events (RSVPs & saved)</li>
-                  <li>• Personalized recommendations</li>
-                  <li>• Trending events in Des Moines</li>
-                  <li>• Events in your favorite categories</li>
-                </ul>
-              </div>
-            </div>
-          </div>
-        )}
-
-        {/* Info Banner */}
-        <div className="bg-primary/5 border border-primary/20 rounded-lg p-4">
-          <div className="flex items-start gap-3">
-            <SpriteIcon name="clock" className="h-5 w-5 text-primary mt-0.5 flex-shrink-0" />
-            <div className="space-y-1">
-              <h4 className="font-semibold text-sm">Smart Personalization</h4>
-              <p className="text-xs text-muted-foreground">
-                Your digest is automatically personalized based on your favorites, RSVPs, and
-                browsing history. The more you interact with events, the better your recommendations
-                become!
-              </p>
-            </div>
-          </div>
-        </div>
-      </CardContent>
-    </Card>
+    <div className="flex items-start justify-between gap-4">
+      <div className="space-y-1">
+        <Label htmlFor="weekly-digest" className="text-base font-medium">
+          Weekly event digest
+        </Label>
+        <p className="text-sm text-muted-foreground">
+          One email a week with upcoming Des Moines events. {lastSent}
+        </p>
+      </div>
+      <Switch
+        id="weekly-digest"
+        checked={preferences.weekly_digest_enabled}
+        onCheckedChange={(enabled) => updatePreferences({ weekly_digest_enabled: enabled })}
+        disabled={isUpdating}
+      />
+    </div>
   );
 }

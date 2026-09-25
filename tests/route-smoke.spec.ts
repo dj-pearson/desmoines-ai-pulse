@@ -487,3 +487,27 @@ test.describe('Sign-in details can be changed from /profile (WEB-AUTH-012)', () 
     await expect(page.locator('#new-email')).toHaveCount(0);
   });
 });
+
+test.describe('Account routes send a signed-out visitor to /auth and remember where they were', () => {
+  // docs/page-plans/account.md WP6 item 2. Only /profile was covered above.
+  // /dashboard and /my-events both sit behind ProtectedRoute, which builds
+  // /auth?redirect=<path+search+hash>. /my-events used to hand-roll its own
+  // branch that navigated to /login and dropped the return path, and a query
+  // string on /dashboard (?tab=events) is exactly what a new account would
+  // otherwise lose.
+  const CASES: Array<{ from: string; redirect: string }> = [
+    { from: '/dashboard', redirect: '/dashboard' },
+    { from: '/dashboard?tab=events', redirect: '/dashboard?tab=events' },
+    { from: '/my-events', redirect: '/my-events' },
+  ];
+
+  for (const { from, redirect } of CASES) {
+    test(`anonymous ${from} lands on /auth with the redirect kept`, async ({ page }) => {
+      await page.goto(from);
+      await page.waitForURL((url) => url.pathname === '/auth', { timeout: 30_000 });
+      await expectNoErrorBoundary(page);
+      const url = new URL(page.url());
+      expect(url.searchParams.get('redirect'), `${from} lost its return path`).toBe(redirect);
+    });
+  }
+});

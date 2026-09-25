@@ -1,6 +1,7 @@
 import { z } from "zod";
 import DOMPurify from "dompurify";
 import { isValidRedirectUrl, getSafeRedirectUrl } from "@/lib/redirectSafety";
+import { PASSWORD_MIN_LENGTH, PASSWORD_RULES, passwordRuleErrors } from "@/lib/passwordStrength";
 
 /**
  * Security utilities for input validation and sanitization
@@ -105,11 +106,12 @@ export class SecurityUtils {
     if (!emailRegex.test(email)) {
       errors.push('Invalid email format');
     }
-    
-    if (this.containsSQLInjection(email)) {
-      errors.push('Invalid characters detected');
-    }
-    
+
+    // No containsSQLInjection here (account plan WP1 item 2). It matches whole
+    // words - EXEC, UPDATE, DROP, UNION - so exec@firm.com, jane.update@gmail.com,
+    // hr@drop.io and sam@union.edu could neither sign in nor sign up, and it
+    // guarded nothing: GoTrue and PostgREST parameterise every value. The
+    // format regex and the length cap are the whole check.
     return { isValid: errors.length === 0, errors };
   }
 
@@ -160,54 +162,30 @@ export class SecurityUtils {
   }
 
   /**
-   * Validate password strength
+   * Validate password strength. The rules are PASSWORD_RULES from
+   * @/lib/passwordStrength, the same ones the meter and passwordSchema use, so
+   * this cannot disagree with what the sign-up form shows (account plan WP1
+   * item 9). `strength` keeps its three-value shape for existing callers.
    */
   static validatePassword(password: string): { isValid: boolean; errors: string[]; strength: 'weak' | 'medium' | 'strong' } {
-    const errors: string[] = [];
     let strength: 'weak' | 'medium' | 'strong' = 'weak';
-    
+
     if (!password || typeof password !== 'string') {
-      errors.push('Password is required');
-      return { isValid: false, errors, strength };
+      return { isValid: false, errors: ['Password is required'], strength };
     }
-    
-    if (password.length < 8) {
-      errors.push('Password must be at least 8 characters long');
-    }
-    
-    if (password.length > 128) {
-      errors.push('Password must be less than 128 characters long');
-    }
-    
-    if (!/[a-z]/.test(password)) {
-      errors.push('Password must contain at least one lowercase letter');
-    }
-    
-    if (!/[A-Z]/.test(password)) {
-      errors.push('Password must contain at least one uppercase letter');
-    }
-    
-    if (!/\d/.test(password)) {
-      errors.push('Password must contain at least one number');
-    }
-    
-    if (!/[!@#$%^&*()_+\-=[\]{};':"\\|,.<>/?]/.test(password)) {
-      errors.push('Password must contain at least one special character');
-    }
-    
-    // Calculate strength
-    const hasLower = /[a-z]/.test(password);
-    const hasUpper = /[A-Z]/.test(password);
-    const hasNumber = /\d/.test(password);
-    const hasSpecial = /[!@#$%^&*()_+\-=[\]{};':"\\|,.<>/?]/.test(password);
-    const criteriaCount = [hasLower, hasUpper, hasNumber, hasSpecial].filter(Boolean).length;
-    
-    if (password.length >= 12 && criteriaCount >= 3) {
+
+    const errors = passwordRuleErrors(password);
+
+    const characterRulesMet = PASSWORD_RULES.filter(
+      (rule) => rule.id !== 'length' && rule.test(password),
+    ).length;
+
+    if (password.length >= 12 && characterRulesMet >= 3) {
       strength = 'strong';
-    } else if (password.length >= 8 && criteriaCount >= 2) {
+    } else if (password.length >= PASSWORD_MIN_LENGTH && characterRulesMet >= 2) {
       strength = 'medium';
     }
-    
+
     return { isValid: errors.length === 0, errors, strength };
   }
 

@@ -73,7 +73,7 @@ export function SessionTimeoutWarning({ open, timeRemaining, onStayLoggedIn }: S
           <div className="text-xs text-muted-foreground space-y-1">
             <p>• Click the button below to stay logged in</p>
             <p>• Move your mouse or press any key to extend your session</p>
-            <p>• Your work will be saved before logout</p>
+            <p>• Unsaved changes will be lost</p>
           </div>
         </div>
 

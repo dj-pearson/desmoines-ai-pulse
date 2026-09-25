@@ -1,30 +1,30 @@
-import { useState, useEffect } from "react";
+import { useCallback, useEffect, useState } from "react";
 import { useNavigate, useSearchParams, Link } from "react-router-dom";
 import { useDocumentTitle } from "@/hooks/useDocumentTitle";
 import { Button } from "@/components/ui/button";
-import { Input } from "@/components/ui/input";
-import { PasswordInput } from "@/components/ui/PasswordInput";
-import { Label } from "@/components/ui/label";
-import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
+import { Card, CardContent, CardDescription, CardHeader } from "@/components/ui/card";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
-import { Checkbox } from "@/components/ui/checkbox";
-import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { useToast } from "@/hooks/use-toast";
 import { useAuth } from "@/hooks/useAuth";
 import { useAuthSecurity } from "@/hooks/useAuthSecurity";
-import { User, LogIn, UserPlus, Heart, Calendar, Music, Coffee, Camera, Gamepad2, Palette, AlertCircle } from "lucide-react";
-import { PasswordStrengthMeter } from "@/components/PasswordStrengthMeter";
-import { MFAVerificationDialog } from "@/components/auth/MFAVerificationDialog";
-import { Alert, AlertDescription } from "@/components/ui/alert";
-import { SecurityUtils } from "@/lib/securityUtils";
-import { authErrorCopy } from '@/lib/authErrorMessages';
-import { logConsent } from "@/lib/consentLog";
-import { SpriteIcon } from "@/components/ui/SpriteIcon";
 import { useTurnstile } from "@/hooks/useTurnstile";
+import { MFAVerificationDialog } from "@/components/auth/MFAVerificationDialog";
+import { SignInForm, type SignInValues, EMAIL_FORMAT_MESSAGE } from "@/components/auth/SignInForm";
+import { SignUpForm, type SignUpValues, type SignUpFieldError } from "@/components/auth/SignUpForm";
+import { ForgotPasswordForm, type ForgotPasswordValues } from "@/components/auth/ForgotPasswordForm";
+import { EmailSentPanel } from "@/components/auth/EmailSentPanel";
+import { supabase } from "@/integrations/supabase/client";
+import { getSafeRedirectUrl } from "@/lib/redirectSafety";
+import { rememberAuthNext, takeAuthNext } from "@/lib/authReturn";
+import { SecurityUtils } from "@/lib/securityUtils";
+import { authErrorCopy } from "@/lib/authErrorMessages";
+import { logConsent } from "@/lib/consentLog";
+import { PRIVACY_VERSION, TERMS_VERSION } from "@/lib/policyVersions";
+import { handleError } from "@/lib/errorHandler";
 
 // Google Logo SVG Component (official colors)
 const GoogleLogo = ({ className }: { className?: string }) => (
-  <svg className={className} viewBox="0 0 24 24" xmlns="http://www.w3.org/2000/svg">
+  <svg className={className} viewBox="0 0 24 24" xmlns="http://www.w3.org/2000/svg" aria-hidden="true">
     <path d="M22.56 12.25c0-.78-.07-1.53-.2-2.25H12v4.26h5.92c-.26 1.37-1.04 2.53-2.21 3.31v2.77h3.57c2.08-1.92 3.28-4.74 3.28-8.09z" fill="#4285F4"/>
     <path d="M12 23c2.97 0 5.46-.98 7.28-2.66l-3.57-2.77c-.98.66-2.23 1.06-3.71 1.06-2.86 0-5.29-1.93-6.16-4.53H2.18v2.84C3.99 20.53 7.7 23 12 23z" fill="#34A853"/>
     <path d="M5.84 14.09c-.22-.66-.35-1.36-.35-2.09s.13-1.43.35-2.09V7.07H2.18C1.43 8.55 1 10.22 1 12s.43 3.45 1.18 4.93l2.85-2.22.81-.62z" fill="#FBBC05"/>
@@ -34,108 +34,71 @@ const GoogleLogo = ({ className }: { className?: string }) => (
 
 // Apple Logo SVG Component
 const AppleLogo = ({ className }: { className?: string }) => (
-  <svg className={className} viewBox="0 0 24 24" fill="currentColor" xmlns="http://www.w3.org/2000/svg">
+  <svg className={className} viewBox="0 0 24 24" fill="currentColor" xmlns="http://www.w3.org/2000/svg" aria-hidden="true">
     <path d="M17.05 20.28c-.98.95-2.05.8-3.08.35-1.09-.46-2.09-.48-3.24 0-1.44.62-2.2.44-3.06-.35C2.79 15.25 3.51 7.59 9.05 7.31c1.35.07 2.29.74 3.08.8 1.18-.24 2.31-.93 3.57-.84 1.51.12 2.65.72 3.4 1.8-3.12 1.87-2.38 5.98.48 7.13-.57 1.5-1.31 2.99-2.54 4.09l.01-.01zM12.03 7.25c-.15-2.23 1.66-4.07 3.74-4.25.29 2.58-2.34 4.5-3.74 4.25z"/>
   </svg>
 );
 
-/**
- * Every field the /auth form holds. Named so handleInputChange can be keyed to
- * it (WEB-AUTH-008): the handler took `(field: string, value: any)`, which
- * accepted a misspelt field name as a new key on the state object and any
- * value at all - a typo wrote to a field nothing reads, and the input looked
- * like it simply did not work.
- */
-interface SignUpFormData {
-  email: string;
-  password: string;
-  firstName: string;
-  lastName: string;
-  phone: string;
-  location: string;
-  /** ISO yyyy-mm-dd. Empty = not yet provided. */
-  dateOfBirth: string;
-  interests: string[];
-  emailNotifications: boolean;
-  smsNotifications: boolean;
-  eventRecommendations: boolean;
-  termsAccepted: boolean;
-  businessName: string;
-  businessType: string;
-  businessAddress: string;
-  businessWebsite: string;
+type AuthTab = "signin" | "signup";
+type AuthView = "form" | "forgot" | "email-sent";
+
+
+interface LockoutCheck {
+  allowed?: boolean;
+  lockoutSeconds?: number;
 }
 
-const INTERESTS = [
-  { id: "food", label: "Food & Dining", icon: Coffee },
-  { id: "music", label: "Music & Concerts", icon: Music },
-  { id: "sports", label: "Sports & Recreation", icon: Gamepad2 },
-  { id: "arts", label: "Arts & Culture", icon: Palette },
-  { id: "nightlife", label: "Nightlife & Entertainment", icon: Heart },
-  { id: "outdoor", label: "Outdoor Activities", icon: Camera },
-  { id: "family", label: "Family Events", icon: User },
-  { id: "networking", label: "Business & Networking", icon: Calendar },
-];
-
-const LOCATIONS = [
-  "Downtown Des Moines",
-  "West Des Moines",
-  "Ankeny",
-  "Urbandale",
-  "Clive",
-  "Johnston",
-  "Altoona",
-  "Other"
-];
+/**
+ * Ask check-login-attempt whether this address is locked, and for how long.
+ * AuthContext consults the same function before every sign-in but returns only
+ * a sentence, and a sentence can't drive a countdown. `check` is read-only on
+ * the server. Any failure answers "not locked": an outage must never disable
+ * the sign-in button.
+ */
+async function readServerLockoutSeconds(email: string): Promise<number> {
+  try {
+    const { data, error } = await supabase.functions.invoke<LockoutCheck>("check-login-attempt", {
+      body: { email, action: "check" },
+    });
+    if (error || !data || data.allowed !== false) return 0;
+    const seconds = Number(data.lockoutSeconds);
+    return Number.isFinite(seconds) && seconds > 0 ? Math.ceil(seconds) : 0;
+  } catch {
+    return 0;
+  }
+}
 
 export default function Auth() {
-  const [isLogin, setIsLogin] = useState(true);
-  const [isLoading, setIsLoading] = useState(false);
-  const [showEmailConfirmation, setShowEmailConfirmation] = useState(false);
-  const [showForgotPassword, setShowForgotPassword] = useState(false);
-  const [forgotPasswordEmail, setForgotPasswordEmail] = useState("");
-  const [signupEmail, setSignupEmail] = useState("");
-  // WEB-AUTH-008: set when a sign-in fails only because the address was never
-  // confirmed. Holds the address so the inline resend below has something to
-  // send to, and doubles as the flag for rendering it.
-  const [unconfirmedEmail, setUnconfirmedEmail] = useState<string | null>(null);
-  // WEB-AUTH-004. The confirmation screen stays neutral either way -- saying
-  // "that address is taken" outright is the account enumeration Supabase's
-  // response shape exists to prevent -- but a Resend button that cannot work
-  // is worse than no button, so this decides which actions it offers.
-  const [addressAlreadyRegistered, setAddressAlreadyRegistered] = useState(false);
-  const [accountType, setAccountType] = useState<"personal" | "business">("personal");
-  const [showMFAVerification, setShowMFAVerification] = useState(false);
-  const [mfaFactorId, setMfaFactorId] = useState<string | null>(null);
-  const [formData, setFormData] = useState<SignUpFormData>({
-    email: "",
-    password: "",
-    firstName: "",
-    lastName: "",
-    phone: "",
-    location: "",
-    // ISO yyyy-mm-dd string. Empty = not yet provided. Used for COPPA age
-    // gate only — we do not store the raw DOB, just a minimum-age attestation.
-    dateOfBirth: "",
-    interests: [],
-    emailNotifications: false,
-    smsNotifications: false,
-    eventRecommendations: false,
-    termsAccepted: false,
-    // Business fields
-    businessName: "",
-    businessType: "",
-    businessAddress: "",
-    businessWebsite: "",
-  });
-
-  const { toast } = useToast();
-  const navigate = useNavigate();
   const [searchParams] = useSearchParams();
+  const navigate = useNavigate();
+  const { toast } = useToast();
+
+  // `?mode=signup` opens the sign-up tab. The header's "Sign Up Free" and every
+  // "create an account to save this" prompt can link straight to it.
+  const [tab, setTab] = useState<AuthTab>(searchParams.get("mode") === "signup" ? "signup" : "signin");
+  const [view, setView] = useState<AuthView>("form");
+  const [emailDraft, setEmailDraft] = useState("");
+  const [sentTo, setSentTo] = useState("");
+  // WEB-AUTH-004. Held so Resend can skip the call for an address that already
+  // had an account. The panel itself says the same thing either way.
+  const [addressAlreadyRegistered, setAddressAlreadyRegistered] = useState(false);
+  // WEB-AUTH-008: set when a sign-in fails only because the address was never
+  // confirmed.
+  const [unconfirmedEmail, setUnconfirmedEmail] = useState<string | null>(null);
+  const [isResending, setIsResending] = useState(false);
+  const [isOAuthPending, setIsOAuthPending] = useState(false);
+  const [lockoutUntil, setLockoutUntil] = useState<number | null>(null);
+  const [lockoutSecondsLeft, setLockoutSecondsLeft] = useState(0);
+  // Set once a code is accepted, so the dialog does not reopen while the
+  // context catches up with the aal2 session.
+  const [mfaDone, setMfaDone] = useState(false);
+  const [challengeVisible, setChallengeVisible] = useState(false);
+
   const {
     isAuthenticated,
     isPasswordRecovery,
     requiresMFA,
+    mfaFactorId,
     logout,
     login,
     signup,
@@ -145,35 +108,25 @@ export default function Auth() {
     resendVerification: resendVerificationContext,
   } = useAuth();
 
+  const { checkDisposableEmail } = useAuthSecurity();
+
   /**
    * WEB-SEC-029. Solves in the background and renders nothing unless
-   * Cloudflare wants to interrogate this visitor, so the form stays one step.
-   * With no VITE_TURNSTILE_SITE_KEY configured this is inert: `token` is
-   * undefined, every call below passes undefined, and nothing changes.
+   * Cloudflare wants to interrogate this visitor. With no
+   * VITE_TURNSTILE_SITE_KEY this is inert: `token` is undefined, every call
+   * below passes undefined, and nothing renders.
    */
   const turnstile = useTurnstile();
 
+  useDocumentTitle(tab === "signup" ? "Create an account" : "Sign In");
 
-  // Security hooks for rate limiting and validation
-  const {
-    isBlocked,
-    timeUntilReset,
-    checkRateLimit,
-    checkDisposableEmail,
-    logFailedAttempt,
-    validateInput
-  } = useAuthSecurity();
-
-  useDocumentTitle("Sign In");
+  const rawRedirect = searchParams.get("redirect");
+  const redirectTo = getSafeRedirectUrl(rawRedirect, "/");
 
   useEffect(() => {
-    // WEB-AUTH-001. A password-recovery link creates a real session, so this
-    // effect used to fire and bounce the user to the homepage with their old
-    // password intact. Two ways to land here mid-recovery:
-    //   - isPasswordRecovery, set from the PASSWORD_RECOVERY event;
-    //   - ?reset=true, the old redirect target, still live in any email sent
-    //     within the last hour.
-    // Both go to the page that can actually change a password.
+    // WEB-AUTH-001. A password-recovery link creates a real session; both
+    // isPasswordRecovery and the old ?reset=true link go to the page that can
+    // change a password.
     const isRecovery = isPasswordRecovery || searchParams.get("reset") === "true";
     if (isRecovery) {
       navigate("/auth/reset-password", { replace: true });
@@ -181,1178 +134,442 @@ export default function Auth() {
     }
 
     // WEB-SEC-026: never navigate away from the sign-in page while a second
-    // factor is still owed. This effect firing on the aal1 session that
-    // signInWithPassword stores is what unmounted the page before
-    // MFAVerificationDialog could open.
+    // factor is still owed.
     if (isAuthenticated && !requiresMFA) {
-      // Get the redirect parameter from URL, validate to prevent open redirect attacks
-      const redirectTo = SecurityUtils.getSafeRedirectUrl(searchParams.get("redirect"), "/");
-      navigate(redirectTo, { replace: true });
+      navigate(getSafeRedirectUrl(searchParams.get("redirect"), "/"), { replace: true });
     }
   }, [isAuthenticated, isPasswordRecovery, requiresMFA, navigate, searchParams]);
 
-  // WEB-AUTH-008: was (field: string, value: any). Keyed to the form's own
-  // shape, so a misspelt field name and a value of the wrong type are both
-  // compile errors rather than a silently ignored keystroke.
-  const handleInputChange = <K extends keyof SignUpFormData>(
-    field: K,
-    value: SignUpFormData[K],
-  ) => {
-    setFormData(prev => ({ ...prev, [field]: value }));
+  // Live countdown for the server lockout. The button re-enables at zero with
+  // no reload (WP1 item 3).
+  useEffect(() => {
+    if (!lockoutUntil) {
+      setLockoutSecondsLeft(0);
+      return;
+    }
+    const tick = () => {
+      const left = Math.max(0, Math.ceil((lockoutUntil - Date.now()) / 1000));
+      setLockoutSecondsLeft(left);
+      if (left === 0) setLockoutUntil(null);
+    };
+    tick();
+    const id = window.setInterval(tick, 1000);
+    return () => window.clearInterval(id);
+  }, [lockoutUntil]);
+
+  // WP1 item 7. Announce a Turnstile challenge when Cloudflare actually draws
+  // one. The container is `empty:hidden`, so its height is zero until then.
+  const containerRef = turnstile.containerRef;
+  useEffect(() => {
+    const el = containerRef.current;
+    if (!turnstile.enabled || !el || typeof ResizeObserver === "undefined") return;
+    const observer = new ResizeObserver(() => {
+      setChallengeVisible(el.offsetHeight > 0);
+    });
+    observer.observe(el);
+    return () => observer.disconnect();
+  }, [turnstile.enabled, containerRef]);
+
+  /** A token is single-use: after any submit that carried one, get a new one. */
+  const takeCaptchaToken = useCallback((): { token: string | undefined; done: () => void } => {
+    const token = turnstile.token;
+    return {
+      token,
+      done: () => {
+        if (token) turnstile.reset();
+      },
+    };
+  }, [turnstile]);
+
+  const goToSignIn = (email?: string) => {
+    if (email !== undefined) setEmailDraft(email);
+    setView("form");
+    setTab("signin");
   };
 
-  const handleInterestToggle = (interestId: string) => {
-    setFormData(prev => ({
-      ...prev,
-      interests: prev.interests.includes(interestId)
-        ? prev.interests.filter(id => id !== interestId)
-        : [...prev.interests, interestId]
-    }));
+  const goToForgot = (email: string) => {
+    setEmailDraft(email);
+    setTab("signin");
+    setView("forgot");
   };
 
-  const handleLogin = async (e: React.FormEvent) => {
-    e.preventDefault();
-    setIsLoading(true);
+  const handleLogin = async ({ email, password }: SignInValues) => {
+    const address = email.trim();
+    setEmailDraft(address);
 
+    // Format first, before anything counts an attempt. The schema already did
+    // this; the handler repeats it because it is the last stop before the
+    // network, and a format problem must never read as "Too Many Attempts".
+    if (!SecurityUtils.validateEmail(address).isValid) {
+      toast({ title: "Check your email address", description: EMAIL_FORMAT_MESSAGE, variant: "destructive" });
+      return;
+    }
+
+    const captcha = takeCaptchaToken();
     try {
-      // Check rate limit before attempting login
-      const rateLimitCheck = await checkRateLimit(formData.email);
-      if (!rateLimitCheck.allowed) {
-        toast({
-          title: "Too Many Attempts",
-          description: rateLimitCheck.message || "Please try again later.",
-          variant: "destructive",
-        });
-        setIsLoading(false);
+      const result = await login(address, password, captcha.token);
+
+      if (result.requiresMFA) {
+        // The dialog opens from requiresMFA; nothing else to do here.
+        setMfaDone(false);
         return;
       }
 
-      // Validate email format
-      const emailValidation = validateInput('email', formData.email);
-      if (!emailValidation.isValid) {
-        toast({
-          title: "Invalid Email",
-          description: emailValidation.errors[0],
-          variant: "destructive",
-        });
-        setIsLoading(false);
+      if (result.success) {
+        setUnconfirmedEmail(null);
+        setLockoutUntil(null);
+        toast({ title: "Signed in", description: "Welcome back." });
+        navigate(redirectTo, { replace: true });
         return;
       }
 
-      const result = await login(formData.email, formData.password, turnstile.token);
+      const copy = authErrorCopy(result.errorCode, result.error);
+      setUnconfirmedEmail(copy.action === "resend_confirmation" ? address : null);
 
-      // Check if MFA verification is required
-      if (result.requiresMFA && result.factorId) {
-        setMfaFactorId(result.factorId);
-        setShowMFAVerification(true);
-        setIsLoading(false);
-        return;
-      }
-
-      if (!result.success) {
-        // WEB-SEC-029: a Turnstile token is SINGLE-USE. Without this the
-        // visitor's second attempt fails on a replayed token, for a reason
-        // nothing on screen explains.
-        turnstile.reset();
-
-        // Log failed attempt for security monitoring
-        await logFailedAttempt(formData.email, 'login', result.error || 'Invalid credentials');
-
-        // WEB-AUTH-008: Supabase's own message used to go straight into the
-        // toast. authErrorCopy turns it into something actionable, and tells us
-        // when the only problem is an unclicked confirmation link - the one
-        // case where we can fix it for them from this screen.
-        const copy = authErrorCopy(result.errorCode, result.error);
-        setUnconfirmedEmail(
-          copy.action === 'resend_confirmation' ? formData.email : null,
-        );
-
+      // AuthContext's own throttle and the server lock both answer with a
+      // sentence and no code. Ask the server how long, so the button can count
+      // down and come back by itself.
+      const lockoutSeconds = copy.action === "resend_confirmation" ? 0 : await readServerLockoutSeconds(address);
+      if (lockoutSeconds > 0) {
+        setLockoutUntil(Date.now() + lockoutSeconds * 1000);
         toast({
-          title: copy.title,
-          description: copy.description,
+          title: "Too many attempts",
+          description: "Sign-in for this address is paused for a few minutes. The button will come back on its own.",
           variant: "destructive",
         });
         return;
       }
 
-      setUnconfirmedEmail(null);
+      if (!result.errorCode && result.error && /too many/i.test(result.error)) {
+        // The local throttle's sentence is ours, not Supabase's, so it can be
+        // shown as written.
+        toast({ title: "Too many attempts", description: result.error, variant: "destructive" });
+        return;
+      }
 
-      toast({
-        title: "Welcome back!",
-        description: "You've been successfully logged in.",
-      });
-
-      // Redirect to intended destination or home, validate to prevent open redirect attacks
-      const redirectTo = SecurityUtils.getSafeRedirectUrl(searchParams.get("redirect"), "/");
-      navigate(redirectTo, { replace: true });
-    } catch (error: any) {
-      // Log failed attempt for security monitoring
-      await logFailedAttempt(formData.email, 'login', error.message || 'Unknown error');
-
-      const copy = authErrorCopy(undefined, error?.message);
-      toast({
-        title: copy.title,
-        description: copy.description,
-        variant: "destructive",
-      });
+      toast({ title: copy.title, description: copy.description, variant: "destructive" });
+    } catch (error) {
+      handleError(error, { component: "Auth", action: "login" });
     } finally {
-      setIsLoading(false);
+      captcha.done();
     }
   };
 
   const handleMFASuccess = () => {
-    toast({
-      title: "Welcome back!",
-      description: "You've been successfully logged in.",
-    });
-
-    // Redirect to intended destination or home, validate to prevent open redirect attacks
-    const redirectTo = SecurityUtils.getSafeRedirectUrl(searchParams.get("redirect"), "/");
+    setMfaDone(true);
+    setLockoutUntil(null);
+    toast({ title: "Signed in", description: "Welcome back." });
     navigate(redirectTo, { replace: true });
   };
 
   const handleMFACancel = async () => {
-    setShowMFAVerification(false);
-    setMfaFactorId(null);
-
-    // WEB-SEC-026. signInWithPassword has already stored an aal1 session by
-    // this point. Closing the dialog used to leave that token in local storage,
-    // where it stays valid against the API for its full lifetime even though
-    // the second factor was never given. Cancelling a sign-in has to end it.
+    // WEB-SEC-026. signInWithPassword has already stored an aal1 session, and
+    // it stays valid against the API until it expires. Cancelling the second
+    // factor has to end it. This runs ONLY on a real cancel now: the dialog no
+    // longer calls onCancel after a correct code (WP1 item 1).
     await logout();
 
     toast({
-      title: "Login Cancelled",
-      description: "MFA verification was cancelled. Please try again.",
-      variant: "default",
+      title: "Sign-in cancelled",
+      description: "You're signed out. Sign in again when you have your code.",
     });
   };
 
-  // WEB-AUTH-008: takes the address rather than reading signupEmail, because
-  // there are now two callers - the post-signup screen and the login form,
-  // where the address is whatever the person just typed.
-  const handleResendVerification = async (email: string = signupEmail) => {
-    setIsLoading(true);
-    const result = await resendVerificationContext(email);
-
-    if (!result.success) {
-      toast({
-        title: "Resend Failed",
-        description: result.error || "Failed to resend verification email",
-        variant: "destructive",
-      });
-    } else {
-      toast({
-        title: "Email Sent!",
-        description: "Please check your inbox for the verification link.",
-      });
-    }
-
-    setIsLoading(false);
-  };
-
-  const handleForgotPassword = async (e: React.FormEvent) => {
-    e.preventDefault();
-    if (!forgotPasswordEmail) {
-      toast({
-        title: "Email Required",
-        description: "Please enter your email address.",
-        variant: "destructive",
-      });
-      return;
-    }
-
-    setIsLoading(true);
-    const result = await resetPasswordContext(forgotPasswordEmail, turnstile.token);
-
-    if (!result.success) {
-      turnstile.reset();
-      toast({
-        title: "Reset Failed",
-        description: result.error || "Failed to send reset email",
-        variant: "destructive",
-      });
-    } else {
-      toast({
-        title: "Reset Email Sent!",
-        description: "Check your email for a password reset link.",
-      });
-      setShowForgotPassword(false);
-      setForgotPasswordEmail("");
-    }
-
-    setIsLoading(false);
-  };
-
-  const handleSignup = async (e: React.FormEvent) => {
-    e.preventDefault();
-
-    // Validate email format
-    const emailValidation = validateInput('email', formData.email);
-    if (!emailValidation.isValid) {
-      toast({
-        title: "Invalid Email",
-        description: emailValidation.errors[0],
-        variant: "destructive",
-      });
-      return;
-    }
-
-    // Block disposable / throwaway email domains
-    const disposableCheck = await checkDisposableEmail(formData.email);
-    if (!disposableCheck.allowed) {
-      toast({
-        title: "Email Not Allowed",
-        description: disposableCheck.message || "This email provider is not allowed for signup.",
-        variant: "destructive",
-      });
-      return;
-    }
-
-    // Validate password strength
-    const passwordValidation = validateInput('password', formData.password);
-    if (!passwordValidation.isValid) {
-      toast({
-        title: "Weak Password",
-        description: passwordValidation.errors[0],
-        variant: "destructive",
-      });
-      return;
-    }
-
-    // Validate first name
-    const firstNameValidation = validateInput('firstName', formData.firstName);
-    if (!firstNameValidation.isValid) {
-      toast({
-        title: "Invalid First Name",
-        description: firstNameValidation.errors[0],
-        variant: "destructive",
-      });
-      return;
-    }
-
-    // Validate last name
-    const lastNameValidation = validateInput('lastName', formData.lastName);
-    if (!lastNameValidation.isValid) {
-      toast({
-        title: "Invalid Last Name",
-        description: lastNameValidation.errors[0],
-        variant: "destructive",
-      });
-      return;
-    }
-
-    // Validate location is selected
-    if (!formData.location) {
-      toast({
-        title: "Location Required",
-        description: "Please select your location to continue.",
-        variant: "destructive",
-      });
-      return;
-    }
-
-    // COPPA age gate — block accounts for children under 13.
-    // COPPA (15 U.S.C. §§ 6501–6506) prohibits operators from knowingly
-    // collecting personal information from children under 13 without verifiable
-    // parental consent; we don't collect that consent, so the rule is "no one
-    // under 13". We require a DOB, compute age at submission time, and reject
-    // if under 13. The DOB itself is NOT persisted — we only store the
-    // computed minimum-age attestation in the consent record.
-    if (!formData.dateOfBirth) {
-      toast({
-        title: "Date of birth required",
-        description: "Please enter your date of birth so we can make sure our service is appropriate for you.",
-        variant: "destructive",
-      });
-      return;
-    }
-    const dobTime = Date.parse(formData.dateOfBirth);
-    if (Number.isNaN(dobTime)) {
-      toast({
-        title: "Invalid date of birth",
-        description: "Please enter a valid date.",
-        variant: "destructive",
-      });
-      return;
-    }
-    const dobDate = new Date(dobTime);
-    const today = new Date();
-    let age = today.getFullYear() - dobDate.getFullYear();
-    const m = today.getMonth() - dobDate.getMonth();
-    if (m < 0 || (m === 0 && today.getDate() < dobDate.getDate())) {
-      age--;
-    }
-    if (age < 13) {
-      toast({
-        title: "Sorry — you're not old enough to sign up",
-        description:
-          "Des Moines Insider requires users to be at least 13 years old. If you're a parent creating an account for a child, please contact privacy@desmoinesinsider.com.",
-        variant: "destructive",
-      });
-      return;
-    }
-
-    // Terms & Privacy acceptance is mandatory (contract formation + privacy law compliance)
-    if (!formData.termsAccepted) {
-      toast({
-        title: "Agreement Required",
-        description: "Please accept the Terms of Service and Privacy Policy to create an account.",
-        variant: "destructive",
-      });
-      return;
-    }
-
-    // Business account validation
-    if (accountType === "business") {
-      if (!formData.businessName) {
-        toast({
-          title: "Business Name Required",
-          description: "Please enter your business name.",
-          variant: "destructive",
-        });
+  // Takes the address rather than reading state, because there are two
+  // callers: the email-sent panel and the unconfirmed-address note.
+  const handleResendVerification = async (email: string) => {
+    setIsResending(true);
+    try {
+      const result = await resendVerificationContext(email);
+      if (!result.success) {
+        const copy = authErrorCopy(undefined, result.error, "Couldn't send the email");
+        toast({ title: copy.title, description: copy.description, variant: "destructive" });
         return;
       }
-      if (!formData.businessType) {
-        toast({
-          title: "Business Type Required",
-          description: "Please select your business type.",
-          variant: "destructive",
-        });
-        return;
-      }
+      toast({ title: "Sent", description: "A new link is on its way. Check spam if it doesn't show up." });
+    } finally {
+      setIsResending(false);
     }
+  };
 
-    // Check rate limit before attempting signup
-    const rateLimitCheck = await checkRateLimit(formData.email);
-    if (!rateLimitCheck.allowed) {
-      toast({
-        title: "Too Many Attempts",
-        description: rateLimitCheck.message || "Please try again later.",
-        variant: "destructive",
-      });
+  const handleResendFromPanel = async () => {
+    if (addressAlreadyRegistered) {
+      // auth.resend({ type: 'signup' }) errors for an address that is already
+      // confirmed. Skipping the call keeps the screen identical for everyone;
+      // the copy below is the same one a new address gets.
+      toast({ title: "Sent", description: "A new link is on its way. Check spam if it doesn't show up." });
       return;
     }
+    await handleResendVerification(sentTo);
+  };
 
-    setIsLoading(true);
+  const handleForgotPassword = async ({ email }: ForgotPasswordValues) => {
+    const address = email.trim();
+    setEmailDraft(address);
+    const captcha = takeCaptchaToken();
+    try {
+      const result = await resetPasswordContext(address, captcha.token);
+      if (!result.success) {
+        const copy = authErrorCopy(undefined, result.error, "Couldn't send the reset link");
+        toast({ title: copy.title, description: copy.description, variant: "destructive" });
+        return;
+      }
+      toast({
+        title: "Check your email",
+        description: "If there's an account for that address, a reset link is on its way.",
+      });
+      setView("form");
+    } finally {
+      captcha.done();
+    }
+  };
 
-    // Consent record — timestamped acceptance of ToS + Privacy Policy
-    // Required for CCPA/GDPR/CAN-SPAM/TCPA record-keeping (proves affirmative consent)
+  const handleSignup = async (values: SignUpValues): Promise<SignUpFieldError | void> => {
+    const email = values.email.trim();
+    setEmailDraft(email);
+
+    const disposable = await checkDisposableEmail(email);
+    if (!disposable.allowed) {
+      return {
+        field: "email",
+        message: disposable.message || "Use a permanent email address.",
+      };
+    }
+
+    // Consent record - timestamped acceptance of the Terms and Privacy Policy,
+    // read out of raw_user_meta_data by the handle_new_user trigger. The
+    // opt-ins are recorded only as the person set them; both default off. SMS
+    // is recorded as not given because the form no longer offers it.
     const consentRecord = {
       terms_accepted: true,
       terms_accepted_at: new Date().toISOString(),
-      terms_version: "2026-03-10",
-      privacy_version: "2025-11-25",
-      // Minimum-age attestation derived from DOB. We store only the boolean
-      // ("yes, at least 13") — the raw DOB is discarded after validation.
-      at_least_13: true,
-      // Marketing consent captured separately and only if explicitly checked
-      email_marketing_consent: !!formData.emailNotifications,
-      sms_marketing_consent: !!formData.smsNotifications,
-      personalization_consent: !!formData.eventRecommendations,
+      terms_version: TERMS_VERSION,
+      privacy_version: PRIVACY_VERSION,
+      // The "I'm 13 or older" box. No date of birth is collected.
+      at_least_13: values.isAtLeast13,
+      email_marketing_consent: values.emailNotifications,
+      sms_marketing_consent: false,
+      personalization_consent: values.eventRecommendations,
     };
 
-    // Prepare metadata based on account type
-    const metadata = accountType === "personal"
-      ? {
-          account_type: "personal",
-          first_name: formData.firstName,
-          last_name: formData.lastName,
-          phone: formData.phone,
-          location: formData.location,
-          interests: formData.interests,
-          communication_preferences: {
-            email_notifications: formData.emailNotifications,
-            sms_notifications: formData.smsNotifications,
-            event_recommendations: formData.eventRecommendations,
-          },
-          consent: consentRecord,
-        }
-      : {
-          account_type: "business",
-          business_name: formData.businessName,
-          business_type: formData.businessType,
-          business_address: formData.businessAddress,
-          business_website: formData.businessWebsite,
-          first_name: formData.firstName,
-          last_name: formData.lastName,
-          phone: formData.phone,
-          location: formData.location,
-          // Business contacts get the same communication-preferences block so we
-          // have matching consent records (required by CAN-SPAM and TCPA for any
-          // marketing communications to business contacts at numbers they provide).
-          communication_preferences: {
-            email_notifications: formData.emailNotifications,
-            sms_notifications: formData.smsNotifications,
-            event_recommendations: formData.eventRecommendations,
-          },
-          consent: consentRecord,
-        };
+    const metadata = {
+      account_type: "personal",
+      communication_preferences: {
+        email_notifications: values.emailNotifications,
+        sms_notifications: false,
+        event_recommendations: values.eventRecommendations,
+      },
+      consent: consentRecord,
+    };
 
-    const result = await signup(formData.email, formData.password, metadata, turnstile.token);
+    // WP1 item 6. Remember where they came from before the account exists, so
+    // confirmation (or OAuth, below) can land them back there.
+    rememberAuthNext(redirectTo);
 
-    if (!result.success) {
-      turnstile.reset();
-      toast({
-        title: "Signup Failed",
-        description: result.error || "Failed to create account",
-        variant: "destructive",
-      });
-    } else {
-      // FALLBACK ONLY, AND SCHEDULED FOR REMOVAL (WEB-AUTH-003).
-      //
-      // These rows are now written by the handle_new_user trigger out of
-      // raw_user_meta_data.consent, which Auth.tsx has always sent. The trigger
-      // is the authoritative writer because it runs where a user id exists:
-      // signUp with email confirmation on returns a user and NO session, so
-      // logConsent's auth.getUser() resolves to null here and every row it
-      // writes carries user_id = NULL. That made the one record whose purpose
-      // is to prove consent invisible to export-user-data, which keys on
-      // user_id.
-      //
-      // Kept for one release so a trigger that has not been deployed yet does
-      // not mean no consent record at all. For that release a signup may
-      // produce two rows per consent; metadata.writer says which side wrote
-      // each, and an orphan is adopted on email confirmation. A duplicate in an
-      // append-only consent log proves the same fact twice, which is the safe
-      // direction to be wrong in. REMOVE THIS BLOCK once the migration is
-      // applied and verified.
-      void logConsent({
-        type: "terms",
-        granted: true,
-        source: "signup",
-        policyVersion: consentRecord.terms_version,
-        email: formData.email,
-        metadata: { privacy_version: consentRecord.privacy_version },
-      });
-      if (formData.emailNotifications) {
-        void logConsent({
-          type: "marketing_email",
-          granted: true,
-          source: "signup",
-          email: formData.email,
-        });
-      }
-      if (formData.smsNotifications) {
-        void logConsent({
-          type: "marketing_sms",
-          granted: true,
-          source: "signup",
-          email: formData.email,
-          metadata: { phone_provided: !!formData.phone },
-        });
-      }
-      if (formData.eventRecommendations) {
-        void logConsent({
-          type: "personalization_ai",
-          granted: true,
-          source: "signup",
-          email: formData.email,
-        });
-      }
-
-      if (result.needsVerification) {
-        // Show email confirmation screen
-        setSignupEmail(formData.email);
-        setAddressAlreadyRegistered(!!result.alreadyRegistered);
-        setShowEmailConfirmation(true);
-      } else {
-        // Signup successful and no verification needed (rare case)
-        toast({
-          title: "Account Created!",
-          description: "Welcome to Des Moines Insider!",
-        });
-        navigate("/", { replace: true });
-      }
+    const captcha = takeCaptchaToken();
+    let result: Awaited<ReturnType<typeof signup>>;
+    try {
+      result = await signup(email, values.password, metadata, captcha.token);
+    } finally {
+      captcha.done();
     }
 
-    setIsLoading(false);
-  };
-
-  const handleGoogleSignIn = async () => {
-    setIsLoading(true);
-    const redirectTo = searchParams.get("redirect") || undefined;
-    const result = await signInWithGoogle(redirectTo);
-
     if (!result.success) {
-      toast({
-        title: "Google Sign In Failed",
-        description: result.error || "Failed to sign in with Google",
-        variant: "destructive",
-      });
-      setIsLoading(false);
+      const copy = authErrorCopy(undefined, result.error, "Couldn't create your account");
+      // A password the server refused belongs on the password field, not in a
+      // toast that disappears while they fix it.
+      if (copy === authErrorCopy("weak_password", null)) {
+        return { field: "password", message: copy.description };
+      }
+      toast({ title: copy.title, description: copy.description, variant: "destructive" });
+      return;
     }
-    // Don't set isLoading to false on success - let the redirect happen
+
+    // FALLBACK ONLY, AND SCHEDULED FOR REMOVAL (WEB-AUTH-003).
+    //
+    // These rows are written by the handle_new_user trigger out of
+    // raw_user_meta_data.consent. This client copy stays until D9 in the
+    // account plan confirms the trigger writes them in production; a duplicate
+    // in an append-only consent log proves the same fact twice, which is the
+    // safe direction to be wrong in. metadata.writer tells the two apart.
+    void logConsent({
+      type: "terms",
+      granted: true,
+      source: "signup",
+      policyVersion: consentRecord.terms_version,
+      email,
+      metadata: { privacy_version: consentRecord.privacy_version },
+    });
+    if (values.emailNotifications) {
+      void logConsent({ type: "marketing_email", granted: true, source: "signup", email });
+    }
+    if (values.eventRecommendations) {
+      void logConsent({ type: "personalization_ai", granted: true, source: "signup", email });
+    }
+
+    if (result.needsVerification) {
+      setSentTo(email);
+      setAddressAlreadyRegistered(!!result.alreadyRegistered);
+      setView("email-sent");
+      return;
+    }
+
+    toast({ title: "Account created", description: "Welcome to Des Moines Insider." });
+    navigate(takeAuthNext() ?? redirectTo, { replace: true });
   };
 
-  const handleAppleSignIn = async () => {
-    setIsLoading(true);
-    const redirectTo = searchParams.get("redirect") || undefined;
-    const result = await signInWithApple(redirectTo);
-
+  const handleOAuth = async (provider: "google" | "apple") => {
+    setIsOAuthPending(true);
+    rememberAuthNext(redirectTo);
+    const target = rawRedirect ? redirectTo : undefined;
+    const result = provider === "google" ? await signInWithGoogle(target) : await signInWithApple(target);
     if (!result.success) {
-      toast({
-        title: "Apple Sign In Failed",
-        description: result.error || "Failed to sign in with Apple",
-        variant: "destructive",
-      });
-      setIsLoading(false);
+      const name = provider === "google" ? "Google" : "Apple";
+      const copy = authErrorCopy(undefined, result.error, `Couldn't reach ${name}`);
+      toast({ title: copy.title, description: copy.description, variant: "destructive" });
+      setIsOAuthPending(false);
     }
-    // Don't set isLoading to false on success - let the redirect happen
+    // On success the browser is leaving for the provider; keep the buttons busy.
   };
+
+  const showTabs = view !== "email-sent";
+  const showOAuth = view === "form";
 
   return (
-    <div className="min-h-screen bg-gradient-to-br from-primary/10 to-accent/10 flex items-center justify-center p-4">
-      {/* WEB-A11Y-002. This page had no <h1> at all: CardTitle renders an <h3>,
-          so the document jumped straight to h3 and a screen-reader user landing
-          here got no statement of what the page is for. Visually hidden rather
-          than shown, because the card's own title carries the design and adding
-          a second visible heading would say the same thing twice. */}
-      <h1 className="sr-only">Sign in or create your Des Moines Insider account</h1>
+    <main className="min-h-screen bg-background flex items-start justify-center px-4 py-8 sm:items-center">
       <Card className="w-full max-w-md">
-        <CardHeader className="text-center">
-          <CardTitle className="text-2xl font-bold">Des Moines Insider</CardTitle>
+        <CardHeader className="space-y-1 text-center">
+          <h1 className="text-2xl font-bold tracking-tight">
+            {tab === "signup" ? "Create your account" : "Sign in"}
+          </h1>
           <CardDescription>
-            Your personalized guide to Des Moines events and experiences
+            {tab === "signup"
+              ? "Save events, restaurants and searches to your account."
+              : "Welcome back to Des Moines Insider."}
           </CardDescription>
         </CardHeader>
         <CardContent>
-          {showEmailConfirmation ? (
-            /* Email Confirmation Screen */
-            <div className="space-y-6 text-center">
-              <div className="flex justify-center">
-                <div className="rounded-full bg-green-100 p-3">
-                  <svg className="h-12 w-12 text-green-600" fill="none" viewBox="0 0 24 24" stroke="currentColor">
-                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M3 19v-8.93a2 2 0 01.89-1.664l7-4.666a2 2 0 012.22 0l7 4.666A2 2 0 0121 10.07V19M3 19a2 2 0 002 2h14a2 2 0 002-2M3 19l6.75-4.5M21 19l-6.75-4.5M3 10l6.75 4.5M21 10l-6.75 4.5m0 0l-1.14.76a2 2 0 01-2.22 0l-1.14-.76" />
-                  </svg>
-                </div>
-              </div>
-
-              <div>
-                <h3 className="text-xl font-semibold mb-2">Check Your Email!</h3>
-                <p className="text-muted-foreground mb-1">
-                  We've sent a verification link to:
-                </p>
-                <p className="font-medium text-foreground">{signupEmail}</p>
-              </div>
-
-              <div className="bg-blue-50 border border-blue-200 rounded-lg p-4 text-left">
-                <h4 className="font-semibold text-blue-900 mb-2">Next Steps:</h4>
-                <ol className="list-decimal list-inside space-y-2 text-sm text-blue-800">
-                  <li>Check your email inbox (and spam folder)</li>
-                  <li>Click the verification link in the email</li>
-                  <li>You'll be redirected back here to start exploring!</li>
-                </ol>
-              </div>
-
-              <div className="pt-4 space-y-3">
-                {addressAlreadyRegistered ? (
-                  <>
-                    {/* No Resend here, and that is the fix. auth.resend({ type:
-                        'signup' }) errors for an address that is already
-                        confirmed, so this button used to fail on press for
-                        exactly the person who needed it least. The wording
-                        names no account and confirms nothing about this
-                        address; it reads as ordinary help for anyone. */}
-                    <p className="text-sm text-muted-foreground">
-                      Already have an account?
-                    </p>
-                    <Button
-                      onClick={() => {
-                        setShowEmailConfirmation(false);
-                        setAddressAlreadyRegistered(false);
-                        setIsLogin(true);
-                      }}
-                      variant="outline"
-                      className="w-full"
-                    >
-                      Sign in instead
-                    </Button>
-                    <Button
-                      onClick={() => {
-                        setShowEmailConfirmation(false);
-                        setAddressAlreadyRegistered(false);
-                        setIsLogin(true);
-                        setShowForgotPassword(true);
-                      }}
-                      variant="ghost"
-                      className="w-full"
-                    >
-                      Reset your password
-                    </Button>
-                  </>
-                ) : (
-                  <>
-                    <p className="text-sm text-muted-foreground">
-                      Didn't receive the email?
-                    </p>
-                    {/* WEB-CI-030 AC5. This was `onClick={handleResendVerification}`,
-                        and the handler's first parameter is
-                        `email: string = signupEmail`. onClick passes the React
-                        MouseEvent as the first argument, so the default never
-                        applied and resendVerificationContext was called with a
-                        synthetic event where an address belongs - this button
-                        could not resend anything. The other call site already
-                        wraps it correctly; this one did not. */}
-                    <Button
-                      onClick={() => handleResendVerification()}
-                      variant="outline"
-                      disabled={isLoading}
-                      className="w-full"
-                    >
-                      {isLoading ? "Sending..." : "Resend Verification Email"}
-                    </Button>
-                  </>
-                )}
-                <Button
-                  onClick={() => {
-                    setShowEmailConfirmation(false);
-                    setAddressAlreadyRegistered(false);
-                    setIsLogin(true);
-                  }}
-                  variant="ghost"
-                  className="w-full"
-                >
-                  Back to Login
-                </Button>
-              </div>
-            </div>
-          ) : (
-            /* Normal Login/Signup Tabs */
-            <Tabs value={isLogin ? "login" : "signup"} onValueChange={(value) => setIsLogin(value === "login")}>
+          <Tabs value={tab} onValueChange={(value) => { setTab(value as AuthTab); setView("form"); }}>
+            {showTabs && (
               <TabsList className="grid w-full grid-cols-2">
-                <TabsTrigger value="login" className="flex items-center gap-2">
-                  <LogIn className="h-4 w-4" />
-                  Login
-                </TabsTrigger>
-                <TabsTrigger value="signup" className="flex items-center gap-2">
-                  <UserPlus className="h-4 w-4" />
-                  Sign Up
-                </TabsTrigger>
+                <TabsTrigger value="signin">Sign in</TabsTrigger>
+                <TabsTrigger value="signup">Create account</TabsTrigger>
               </TabsList>
+            )}
 
-            <TabsContent value="login">
-              {showForgotPassword ? (
-                /* Forgot Password Form */
-                <form onSubmit={handleForgotPassword} className="space-y-4">
-                  <div className="space-y-2">
-                    <Label htmlFor="forgot-email">Email Address</Label>
-                    <Input
-                      id="forgot-email"
-                      type="email"
-                      placeholder="your@email.com"
-                      value={forgotPasswordEmail}
-                      onChange={(e) => setForgotPasswordEmail(e.target.value)}
-                      required
-                    />
-                  </div>
-                  <p className="text-sm text-muted-foreground">
-                    We'll send you a link to reset your password.
-                  </p>
-                  <div className="space-y-2">
-                    <Button type="submit" className="w-full" disabled={isLoading}>
-                      {isLoading ? "Sending..." : "Send Reset Link"}
-                    </Button>
-                    <Button
-                      type="button"
-                      variant="ghost"
-                      className="w-full"
-                      onClick={() => {
-                        setShowForgotPassword(false);
-                        setForgotPasswordEmail("");
-                      }}
-                    >
-                      Back to Login
-                    </Button>
-                  </div>
-                </form>
-              ) : (
-                /* Login Form */
-                <form onSubmit={handleLogin} className="space-y-4">
-                  {/* Rate limit warning */}
-                  {isBlocked && (
-                    <Alert variant="destructive">
-                      <AlertCircle className="h-4 w-4" />
-                      <AlertDescription>
-                        Too many failed attempts. Please try again in {Math.ceil(timeUntilReset / 60)} minute{Math.ceil(timeUntilReset / 60) !== 1 ? 's' : ''}.
-                      </AlertDescription>
-                    </Alert>
-                  )}
-
-                  <div className="space-y-2">
-                    <Label htmlFor="email">Email</Label>
-                    <Input
-                      id="email"
-                      type="email"
-                      placeholder="your@email.com"
-                      value={formData.email}
-                      onChange={(e) => handleInputChange("email", e.target.value)}
-                      required
-                      autoComplete="email"
-                      aria-required="true"
-                    />
-                  </div>
-                  <div className="space-y-2">
-                    <div className="flex items-center justify-between">
-                      <Label htmlFor="password">Password</Label>
-                      <button
-                        type="button"
-                        onClick={() => setShowForgotPassword(true)}
-                        className="text-sm text-primary hover:underline"
-                      >
-                        Forgot password?
-                      </button>
-                    </div>
-                    <PasswordInput
-                      id="password"
-                      placeholder="••••••••"
-                      value={formData.password}
-                      onChange={(e) => handleInputChange("password", e.target.value)}
-                      required
-                      autoComplete="current-password"
-                      aria-required="true"
-                    />
-                  </div>
-                  <Button type="submit" className="w-full" disabled={isLoading || isBlocked}>
-                    {isLoading ? "Signing in..." : isBlocked ? "Please wait..." : "Sign In"}
+            {/* WP1 item 5. Google and Apple above the form on BOTH tabs; they
+                were only on the sign-in tab, so a new visitor had to type a
+                password to find out they didn't need one. */}
+            {showOAuth && (
+              <div className="mt-6 space-y-3">
+                <div className="grid grid-cols-1 gap-3 sm:grid-cols-2">
+                  <Button
+                    type="button"
+                    variant="outline"
+                    onClick={() => void handleOAuth("google")}
+                    disabled={isOAuthPending}
+                    className="w-full"
+                  >
+                    <GoogleLogo className="h-4 w-4 mr-2" />
+                    Continue with Google
                   </Button>
+                  <Button
+                    type="button"
+                    variant="outline"
+                    onClick={() => void handleOAuth("apple")}
+                    disabled={isOAuthPending}
+                    className="w-full"
+                  >
+                    <AppleLogo className="h-4 w-4 mr-2" />
+                    Continue with Apple
+                  </Button>
+                </div>
+                <p className="text-xs text-muted-foreground text-center">
+                  Continuing with Google or Apple means you agree to our{" "}
+                  <Link to="/terms" className="underline underline-offset-2 hover:text-foreground">Terms</Link>
+                  {" "}and{" "}
+                  <Link to="/privacy-policy" className="underline underline-offset-2 hover:text-foreground">Privacy Policy</Link>.
+                </p>
+                <div className="relative py-2">
+                  <div className="absolute inset-0 flex items-center" aria-hidden="true">
+                    <span className="w-full border-t" />
+                  </div>
+                  <p className="relative flex justify-center text-xs">
+                    <span className="bg-card px-2 text-muted-foreground">or use your email</span>
+                  </p>
+                </div>
+              </div>
+            )}
 
-                  {/* WEB-AUTH-008. A sign-in that fails ONLY because the address
-                      was never confirmed is the one auth failure this screen can
-                      fix for the person, and the resend used to exist only on
-                      the post-signup screen they had already left. Rendered
-                      inline rather than in the toast so it survives the toast
-                      timing out. */}
-                  {unconfirmedEmail && (
-                    <div
-                      className="rounded-lg border border-amber-300 bg-amber-50 p-3 text-sm text-amber-900"
-                      role="status"
-                    >
-                      <p className="mb-2">
-                        This address has not been confirmed yet. Check your inbox and
-                        spam folder for the link, or send a new one.
-                      </p>
-                      <Button
-                        type="button"
-                        variant="outline"
-                        size="sm"
-                        disabled={isLoading}
-                        onClick={() => handleResendVerification(unconfirmedEmail)}
-                      >
-                        {isLoading ? "Sending..." : "Resend confirmation email"}
-                      </Button>
-                    </div>
+            {/* WEB-SEC-029 / WP1 item 7. ONE Turnstile widget for every form on
+                this page, kept mounted in this slot so switching tabs does not
+                throw it away. It sits above the forms, and so above every
+                submit button, and is no longer aria-hidden: that hid the
+                challenge iframe from screen readers on the one occasion it has
+                something to say. `empty:hidden` keeps an unconfigured or
+                unchallenged page free of an empty box. */}
+            <p className="sr-only" aria-live="polite">
+              {challengeVisible ? "Complete the check below to continue." : ""}
+            </p>
+            {turnstile.enabled && (
+              <div
+                ref={turnstile.containerRef}
+                className={view === "email-sent" ? "hidden" : "mt-4 flex justify-center empty:hidden"}
+              />
+            )}
+
+            {view === "email-sent" ? (
+              <EmailSentPanel
+                email={sentTo}
+                onResend={handleResendFromPanel}
+                isResending={isResending}
+                onSignIn={() => goToSignIn(sentTo)}
+                onForgotPassword={() => goToForgot(sentTo)}
+              />
+            ) : (
+              <>
+                <TabsContent value="signin" className="mt-4">
+                  {view === "forgot" ? (
+                    <ForgotPasswordForm
+                      defaultEmail={emailDraft}
+                      onSubmit={handleForgotPassword}
+                      onBack={() => setView("form")}
+                    />
+                  ) : (
+                    <SignInForm
+                      defaultEmail={emailDraft}
+                      onSubmit={handleLogin}
+                      onForgotPassword={goToForgot}
+                      lockoutSecondsLeft={lockoutSecondsLeft}
+                      unconfirmedEmail={unconfirmedEmail}
+                      onResendConfirmation={handleResendVerification}
+                      isResending={isResending}
+                    />
                   )}
-
-                  <div className="relative my-6">
-                    <div className="absolute inset-0 flex items-center">
-                      <span className="w-full border-t" />
-                    </div>
-                    <div className="relative flex justify-center text-xs uppercase">
-                      <span className="bg-background px-2 text-muted-foreground">
-                        Or continue with
-                      </span>
-                    </div>
-                  </div>
-
-                  <div className="grid grid-cols-2 gap-3">
-                    <Button
-                      type="button"
-                      variant="outline"
-                      onClick={handleGoogleSignIn}
-                      disabled={isLoading}
-                      className="w-full"
-                    >
-                      <GoogleLogo className="h-4 w-4 mr-2" />
-                      Google
-                    </Button>
-                    <Button
-                      type="button"
-                      variant="outline"
-                      onClick={handleAppleSignIn}
-                      disabled={isLoading}
-                      className="w-full"
-                    >
-                      <AppleLogo className="h-4 w-4 mr-2" />
-                      Apple
-                    </Button>
-                  </div>
-                </form>
-              )}
-            </TabsContent>
-
-            <TabsContent value="signup">
-              <form onSubmit={handleSignup} className="space-y-4">
-                {/* Account Type Selector */}
-                <div className="space-y-2">
-                  <Label>Account Type</Label>
-                  <div className="grid grid-cols-2 gap-3">
-                    <button
-                      type="button"
-                      onClick={() => setAccountType("personal")}
-                      className={`p-3 rounded-lg border-2 transition-all ${
-                        accountType === "personal"
-                          ? "border-primary bg-primary/10"
-                          : "border-gray-200 hover:border-gray-300"
-                      }`}
-                    >
-                      <User className="h-5 w-5 mx-auto mb-1" />
-                      <p className="text-sm font-medium">Personal</p>
-                      <p className="text-xs text-muted-foreground">For individual use</p>
-                    </button>
-                    <button
-                      type="button"
-                      onClick={() => setAccountType("business")}
-                      className={`p-3 rounded-lg border-2 transition-all ${
-                        accountType === "business"
-                          ? "border-primary bg-primary/10"
-                          : "border-gray-200 hover:border-gray-300"
-                      }`}
-                    >
-                      <Coffee className="h-5 w-5 mx-auto mb-1" />
-                      <p className="text-sm font-medium">Business</p>
-                      <p className="text-xs text-muted-foreground">For advertisers</p>
-                    </button>
-                  </div>
-                </div>
-
-                {/* Business Fields */}
-                {accountType === "business" && (
-                  <>
-                    <div className="space-y-2">
-                      <Label htmlFor="businessName">
-                        Business Name <span className="text-red-500">*</span>
-                      </Label>
-                      <Input
-                        id="businessName"
-                        placeholder="Your Business Name"
-                        value={formData.businessName}
-                        onChange={(e) => handleInputChange("businessName", e.target.value)}
-                        required
-                      />
-                    </div>
-
-                    <div className="space-y-2">
-                      <Label htmlFor="businessType">
-                        Business Type <span className="text-red-500">*</span>
-                      </Label>
-                      <Select
-                        value={formData.businessType}
-                        onValueChange={(value) => handleInputChange("businessType", value)}
-                      >
-                        <SelectTrigger>
-                          <SelectValue placeholder="Select business type" />
-                        </SelectTrigger>
-                        <SelectContent>
-                          <SelectItem value="restaurant">Restaurant</SelectItem>
-                          <SelectItem value="bar">Bar/Nightlife</SelectItem>
-                          <SelectItem value="venue">Event Venue</SelectItem>
-                          <SelectItem value="attraction">Attraction</SelectItem>
-                          <SelectItem value="retail">Retail</SelectItem>
-                          <SelectItem value="service">Service Provider</SelectItem>
-                          <SelectItem value="other">Other</SelectItem>
-                        </SelectContent>
-                      </Select>
-                    </div>
-
-                    <div className="space-y-2">
-                      <Label htmlFor="businessAddress">Business Address</Label>
-                      <Input
-                        id="businessAddress"
-                        placeholder="123 Main St, Des Moines, IA"
-                        value={formData.businessAddress}
-                        onChange={(e) => handleInputChange("businessAddress", e.target.value)}
-                      />
-                    </div>
-
-                    <div className="space-y-2">
-                      <Label htmlFor="businessWebsite">Website (Optional)</Label>
-                      <Input
-                        id="businessWebsite"
-                        type="url"
-                        placeholder="https://yourbusiness.com"
-                        value={formData.businessWebsite}
-                        onChange={(e) => handleInputChange("businessWebsite", e.target.value)}
-                      />
-                    </div>
-                  </>
-                )}
-
-                <div className="grid grid-cols-2 gap-4">
-                  <div className="space-y-2">
-                    <Label htmlFor="firstName">First Name</Label>
-                    <Input
-                      id="firstName"
-                      placeholder="John"
-                      value={formData.firstName}
-                      onChange={(e) => handleInputChange("firstName", e.target.value)}
-                      required
-                      autoComplete="given-name"
-                      aria-required="true"
-                    />
-                  </div>
-                  <div className="space-y-2">
-                    <Label htmlFor="lastName">Last Name</Label>
-                    <Input
-                      id="lastName"
-                      placeholder="Doe"
-                      value={formData.lastName}
-                      onChange={(e) => handleInputChange("lastName", e.target.value)}
-                      required
-                      autoComplete="family-name"
-                      aria-required="true"
-                    />
-                  </div>
-                </div>
-
-                <div className="space-y-2">
-                  <Label htmlFor="email">Email</Label>
-                  <Input
-                    id="email"
-                    type="email"
-                    placeholder="your@email.com"
-                    value={formData.email}
-                    onChange={(e) => handleInputChange("email", e.target.value)}
-                    required
-                    autoComplete="email"
-                    aria-required="true"
-                  />
-                </div>
-
-                <div className="space-y-2">
-                  <Label htmlFor="password">Password</Label>
-                  <PasswordInput
-                    id="password"
-                    placeholder="••••••••"
-                    value={formData.password}
-                    onChange={(e) => handleInputChange("password", e.target.value)}
-                    required
-                    minLength={8}
-                    autoComplete="new-password"
-                    aria-required="true"
-                  />
-                  <PasswordStrengthMeter
-                    password={formData.password}
-                    showRequirements={true}
-                  />
-                </div>
-
-                <div className="space-y-2">
-                  <Label htmlFor="phone">Phone (Optional)</Label>
-                  <Input
-                    id="phone"
-                    type="tel"
-                    placeholder="(515) 555-0123"
-                    value={formData.phone}
-                    onChange={(e) => handleInputChange("phone", e.target.value)}
-                    autoComplete="tel"
-                  />
-                </div>
-
-                {/* Date of birth — used only for COPPA age verification.
-                    We do NOT persist the raw DOB; only a minimum-age flag is
-                    saved, per our data-minimization policy. */}
-                <div className="space-y-2">
-                  <Label htmlFor="dateOfBirth">
-                    Date of birth <span className="text-red-500">*</span>
-                  </Label>
-                  <Input
-                    id="dateOfBirth"
-                    type="date"
-                    value={formData.dateOfBirth}
-                    onChange={(e) => handleInputChange("dateOfBirth", e.target.value)}
-                    required
-                    max={new Date().toISOString().slice(0, 10)}
-                    autoComplete="bday"
-                    aria-describedby="dob-description"
-                  />
-                  <p id="dob-description" className="text-xs text-muted-foreground">
-                    We use this only to confirm you are at least 13 (COPPA). We do not save your date of birth — only whether you meet our age requirement.
-                  </p>
-                </div>
-
-                <div className="space-y-2">
-                  <Label htmlFor="location">
-                    Location <span className="text-red-500">*</span>
-                  </Label>
-                  <p className="text-xs text-muted-foreground">
-                    We'll show you events and restaurants near you
-                  </p>
-                  <Select value={formData.location} onValueChange={(value) => handleInputChange("location", value)} required>
-                    <SelectTrigger>
-                      <SelectValue placeholder="Select your area" />
-                    </SelectTrigger>
-                    <SelectContent>
-                      {LOCATIONS.map((location) => (
-                        <SelectItem key={location} value={location}>
-                          <div className="flex items-center gap-2">
-                            <SpriteIcon name="map-pin" className="h-4 w-4" />
-                            {location}
-                          </div>
-                        </SelectItem>
-                      ))}
-                    </SelectContent>
-                  </Select>
-                </div>
-
-                {/* Interests (Personal accounts only) */}
-                {accountType === "personal" && (
-                  <div className="space-y-3">
-                    <Label>What interests you? (Select all that apply)</Label>
-                    <div className="grid grid-cols-2 gap-2">
-                      {INTERESTS.map((interest) => {
-                        const Icon = interest.icon;
-                        const checked = formData.interests.includes(interest.id);
-                        return (
-                          // WEB-AUTH-008: this was a <div onClick> wrapping a
-                          // Radix Checkbox given `onChange`, which Radix
-                          // ignores - it exposes onCheckedChange - so that
-                          // handler was dead and the div's click did the work.
-                          //
-                          // Toggling was not the defect: Space on the focused
-                          // checkbox fires a click that bubbled to the div, so
-                          // the tile did respond to the keyboard. The defect
-                          // was that the tile text was a sibling <span>
-                          // associated with nothing, so the checkbox had NO
-                          // ACCESSIBLE NAME - eight tiles that all announce as
-                          // "checkbox, not checked".
-                          //
-                          // A <label> wrapping the control names it and keeps
-                          // the whole tile clickable, with no onClick at all.
-                          <label
-                            key={interest.id}
-                            className={`flex items-center gap-2 p-2 rounded-lg border cursor-pointer transition-colors ${
-                              checked
-                                ? "bg-primary/10 border-primary"
-                                : "border-border hover:bg-muted"
-                            }`}
-                          >
-                            <Checkbox
-                              checked={checked}
-                              onCheckedChange={() => handleInterestToggle(interest.id)}
-                            />
-                            <Icon className="h-4 w-4" aria-hidden="true" />
-                            <span className="text-sm">{interest.label}</span>
-                          </label>
-                        );
-                      })}
-                    </div>
-                  </div>
-                )}
-
-                {/* Communication Preferences — explicit opt-in, not pre-checked.
-                    Shown for both personal and business accounts so we capture
-                    the same marketing / TCPA consent record for every user. */}
-                <div className="space-y-3">
-                    <Label>Optional Communication Preferences</Label>
-                    <p className="text-xs text-muted-foreground">
-                      These are off by default. Check only what you want — you can change these any time in your profile settings, and transactional emails (receipts, account alerts) are always sent regardless.
-                    </p>
-                  <div className="space-y-2">
-                    <div className="flex items-start space-x-2">
-                      <Checkbox
-                        id="emailNotifications"
-                        checked={formData.emailNotifications}
-                        onCheckedChange={(checked) => handleInputChange("emailNotifications", !!checked)}
-                        className="mt-0.5"
-                      />
-                      <Label htmlFor="emailNotifications" className="text-sm font-normal leading-snug">
-                        Send me marketing emails about events, restaurants, and promotions. I can unsubscribe anytime.
-                      </Label>
-                    </div>
-                    <div className="flex items-start space-x-2">
-                      <Checkbox
-                        id="smsNotifications"
-                        checked={formData.smsNotifications}
-                        onCheckedChange={(checked) => handleInputChange("smsNotifications", !!checked)}
-                        className="mt-0.5"
-                      />
-                      <Label htmlFor="smsNotifications" className="text-sm font-normal leading-snug">
-                        Send me SMS/text messages. Message &amp; data rates may apply; reply STOP to cancel, HELP for help. Consent is not a condition of purchase. (TCPA)
-                      </Label>
-                    </div>
-                    <div className="flex items-start space-x-2">
-                      <Checkbox
-                        id="eventRecommendations"
-                        checked={formData.eventRecommendations}
-                        onCheckedChange={(checked) => handleInputChange("eventRecommendations", !!checked)}
-                        className="mt-0.5"
-                      />
-                      <Label htmlFor="eventRecommendations" className="text-sm font-normal leading-snug">
-                        Use my activity to personalize event recommendations (AI-assisted profiling). You can opt out at any time.
-                      </Label>
-                    </div>
-                  </div>
-                </div>
-
-                {/* Mandatory Terms & Privacy acceptance — required for all account types */}
-                <div className="flex items-start space-x-2 pt-2 border-t">
-                  <Checkbox
-                    id="termsAccepted"
-                    checked={formData.termsAccepted}
-                    onCheckedChange={(checked) => handleInputChange("termsAccepted", !!checked)}
-                    className="mt-0.5"
-                    aria-required="true"
-                  />
-                  <Label htmlFor="termsAccepted" className="text-sm font-normal leading-snug">
-                    <span className="text-red-500">*</span> I agree to the{" "}
-                    <Link to="/terms" target="_blank" rel="noopener" className="text-primary underline hover:no-underline">
-                      Terms of Service
-                    </Link>
-                    {", "}
-                    <Link to="/privacy-policy" target="_blank" rel="noopener" className="text-primary underline hover:no-underline">
-                      Privacy Policy
-                    </Link>
-                    {", and "}
-                    <Link to="/acceptable-use" target="_blank" rel="noopener" className="text-primary underline hover:no-underline">
-                      Acceptable Use Policy
-                    </Link>
-                    .
-                  </Label>
-                </div>
-
-                <Button type="submit" className="w-full" disabled={isLoading || !formData.termsAccepted}>
-                  {isLoading ? "Creating account..." : "Create Account"}
-                </Button>
-              </form>
-            </TabsContent>
+                </TabsContent>
+                <TabsContent value="signup" className="mt-4">
+                  <SignUpForm defaultEmail={emailDraft} onSubmit={handleSignup} />
+                </TabsContent>
+              </>
+            )}
           </Tabs>
-          )}
         </CardContent>
       </Card>
 
-      {/* WEB-SEC-029. ONE widget for all three forms on this page - sign in,
-          sign up and the forgot-password dialog all read the same token, and
-          all three reset it on failure because Supabase rejects a replayed
-          one.
-
-          Rendered outside the Card and with no heading because in managed mode
-          it usually draws NOTHING: appearance "execute" shows a challenge only
-          for a visitor Cloudflare wants to interrogate. The container is still
-          in the tree so the widget has somewhere to appear when it does.
-
-          aria-hidden is deliberate and narrow: the empty container carries no
-          information, and when Cloudflare does render a challenge it manages
-          its own iframe's accessibility. Marking the wrapper stops a screen
-          reader announcing an empty landmark on every visit to /auth. */}
-      {turnstile.enabled && (
-        <div
-          ref={turnstile.containerRef}
-          aria-hidden="true"
-          className="mt-4 flex justify-center empty:hidden"
-        />
-      )}
-
-      {/* MFA Verification Dialog */}
-      {mfaFactorId && (
-        <MFAVerificationDialog
-          open={showMFAVerification}
-          onOpenChange={setShowMFAVerification}
-          factorId={mfaFactorId}
-          onSuccess={handleMFASuccess}
-          onCancel={handleMFACancel}
-        />
-      )}
-    </div>
+      {/* WP1 item 4. Open whenever the session still owes a second factor, not
+          only after the password form set a factor id: a Google or Apple
+          sign-in, or a reload between the password and the code, lands here
+          with requiresMFA set and no local state. The dialog finds the factor
+          itself when none is known. */}
+      <MFAVerificationDialog
+        open={requiresMFA && !mfaDone}
+        onOpenChange={() => {
+          /* Open state follows requiresMFA; success and cancel handle the rest. */
+        }}
+        factorId={mfaFactorId}
+        onSuccess={handleMFASuccess}
+        onCancel={handleMFACancel}
+      />
+    </main>
   );
 }

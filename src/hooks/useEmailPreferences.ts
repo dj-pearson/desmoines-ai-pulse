@@ -18,13 +18,13 @@ interface EmailPreferences {
   id?: string;
   user_id?: string;
   weekly_digest_enabled: boolean;
-  digest_day_of_week: number;
-  digest_time_hour: number;
   categories_filter: string[] | null;
-  max_distance_miles: number;
-  created_at?: string;
-  updated_at?: string;
+  max_distance_miles: number | null;
 }
+
+/** The columns this hook reads. digest_day_of_week and digest_time_hour are
+ *  never read by the sender (the cron is fixed), so they are not shown. */
+const PREFERENCE_COLUMNS = 'id, user_id, weekly_digest_enabled, categories_filter, max_distance_miles';
 
 export function useEmailPreferences() {
   const { user, isAuthenticated } = useAuth();
@@ -32,34 +32,59 @@ export function useEmailPreferences() {
   const queryClient = useQueryClient();
 
   // Fetch user's email preferences
-  const { data: preferences, isLoading } = useQuery({
+  const {
+    data: preferences,
+    isLoading,
+    isError,
+    error,
+    refetch,
+  } = useQuery({
     queryKey: ['email-preferences', user?.id],
-    queryFn: async () => {
-      if (!user?.id) return null;
+    queryFn: async (): Promise<EmailPreferences> => {
+      if (!user?.id) throw new Error('User not authenticated');
 
       const { data, error } = await supabase
         .from('user_email_preferences')
-        .select('*')
+        .select(PREFERENCE_COLUMNS)
         .eq('user_id', user.id)
-        .single();
+        .maybeSingle();
 
-      if (error) {
-        // If no preferences exist yet, return defaults
-        if (error.code === 'PGRST116') {
-          return {
-            weekly_digest_enabled: true,
-            digest_day_of_week: 0, // Sunday
-            digest_time_hour: 8, // 8 AM
-            categories_filter: null,
-            max_distance_miles: 30,
-          } as EmailPreferences;
-        }
-        throw error;
+      if (error) throw error;
+
+      // NO ROW MEANS NO DIGEST (account plan WP5 item 4). This returned
+      // `weekly_digest_enabled: true` for a missing row, so the switch showed
+      // "on" for everyone who had never touched it - while the sender,
+      // get_weekly_digest_recipients, selects only users WITH a row whose flag
+      // is true. The page promised an email the sender would never send.
+      if (!data) {
+        return { weekly_digest_enabled: false, categories_filter: null, max_distance_miles: null };
       }
 
       return data as EmailPreferences;
     },
     enabled: isAuthenticated && !!user?.id,
+  });
+
+  // When the last digest actually went out. weekly_digest_log has an own-row
+  // SELECT policy ("Users can view their own digest log"), so the page can say
+  // "Last sent Sep 21" or "Not sent yet" instead of describing a schedule.
+  const lastSentQuery = useQuery({
+    queryKey: ['weekly-digest-last-sent', user?.id],
+    queryFn: async (): Promise<string | null> => {
+      if (!user?.id) return null;
+      const { data, error } = await supabase
+        .from('weekly_digest_log')
+        .select('sent_at')
+        .eq('user_id', user.id)
+        .eq('email_status', 'sent')
+        .order('sent_at', { ascending: false })
+        .limit(1)
+        .maybeSingle();
+      if (error) throw error;
+      return data?.sent_at ?? null;
+    },
+    enabled: isAuthenticated && !!user?.id,
+    staleTime: 5 * 60 * 1000,
   });
 
   // Mutation to update email preferences
@@ -87,7 +112,7 @@ export function useEmailPreferences() {
           .from('user_email_preferences')
           .update(newPreferences)
           .eq('user_id', user.id)
-          .select()
+          .select(PREFERENCE_COLUMNS)
           .single();
 
         if (error) throw error;
@@ -100,7 +125,7 @@ export function useEmailPreferences() {
             user_id: user.id,
             ...newPreferences,
           })
-          .select()
+          .select(PREFERENCE_COLUMNS)
           .single();
 
         if (error) throw error;
@@ -109,10 +134,7 @@ export function useEmailPreferences() {
     },
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: ['email-preferences', user?.id] });
-      toast({
-        title: 'Preferences saved',
-        description: 'Your email preferences have been updated',
-      });
+      toast({ title: 'Saved' });
     },
     onError: (error: Error) => {
       // console.* is stripped from production builds, so this was invisible in
@@ -133,6 +155,11 @@ export function useEmailPreferences() {
   return {
     preferences,
     isLoading,
+    isError,
+    error,
+    refetch,
+    lastSentAt: lastSentQuery.data ?? null,
+    lastSentError: lastSentQuery.isError,
     updatePreferences,
     isUpdating: updatePreferencesMutation.isPending,
   };

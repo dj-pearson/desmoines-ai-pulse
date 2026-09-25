@@ -48,14 +48,18 @@ Deno.test('every field the signup form collects is carried across', async () => 
   const sql = await read(MIGRATION);
   const auth = await read('src/pages/Auth.tsx');
 
-  // The columns the form fills that used to be dropped.
+  // The trigger keeps copying every field, because older iOS and Android
+  // binaries still send them in raw_user_meta_data.
   for (const field of ['first_name', 'last_name', 'phone', 'location', 'interests', 'communication_preferences']) {
     assert(
       new RegExp(`'${field}'|\\b${field}\\b`).test(sql),
       `${field} must be copied out of raw_user_meta_data`,
     );
-    assert(new RegExp(`${field}`).test(auth), `${field} should still be collected at signup`);
   }
+  // The web form is four fields since account plan WP1 item 5 (names, phone,
+  // location and interests moved out of sign-up). What it still sends is the
+  // consent bag, and that must still reach the profile.
+  assert(/communication_preferences/.test(auth), 'the web sign-up still sends the consent bag');
 
   // interests is text[] and arrives as a JSON array; a non-array must not raise.
   assert(
@@ -120,7 +124,7 @@ Deno.test('the client fallback no longer races itself', async () => {
   );
   // ignoreDuplicates returns nothing to the loser, so the row has to be re-read.
   assert(
-    /const \{ data: newProfile \} = await supabase\s*\n\s*\.from\("profiles"\)\s*\n\s*\.select\("\*"\)/.test(hook),
+    /const \{ data: newProfile(, error: \w+)? \} = await supabase\s*\n\s*\.from\("profiles"\)\s*\n\s*\.select\((PROFILE_COLUMNS|"\*")\)/.test(hook),
     'the profile must be read back rather than taken from the write',
   );
 });
@@ -130,13 +134,8 @@ Deno.test('the profile page can now edit what signup promised', async () => {
   assert(/<PreferencesManager \/>/.test(page), 'the panel that writes communication_preferences must be mounted');
   assert(/import PreferencesManager from "@\/components\/PreferencesManager"/.test(page));
 
-  // The panel that was already there does not touch that column, which is why
-  // the promise was unmet even though a preferences screen existed.
-  const settings = await read('src/components/PreferencesSettings.tsx');
-  assertFalse(
-    /communication_preferences/.test(settings),
-    'if PreferencesSettings gains that column, revisit which panel owns it',
-  );
+  // PreferencesSettings, the panel that never touched that column, was deleted
+  // by account plan WP5 item 3, so PreferencesManager is the one owner.
   const manager = await read('src/components/PreferencesManager.tsx');
   assert(/communication_preferences/.test(manager));
 });
