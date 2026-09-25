@@ -1,4 +1,5 @@
 import { test, expect, type Page, type Route } from '@playwright/test';
+import AxeBuilder from '@axe-core/playwright';
 import { installFixtureBackend } from './support/fixtureBackend';
 
 /**
@@ -14,6 +15,17 @@ import { installFixtureBackend } from './support/fixtureBackend';
  *    marker images.
  * 4. The detail page reads attractions.hours JSONB at a fixed clock, shows no
  *    template claims, and never fetches venues?select=*.
+ *
+ * Explore pass 2 WP3 (the hub half; the detail page is in
+ * attraction-detail.spec.ts):
+ * 5. No Featured badge or filter, and an old ?featured= link asks for all.
+ * 6. Default sort is name; an unknown ?sort= reads as name.
+ * 7. ?open=now keeps only what is open at this minute and says out of how many
+ *    rows with hours.
+ * 8. Each card is an <article> whose title is the link, with Save beside it.
+ * 9. The Explore row and "Show on map" are on the page.
+ * 10. The map says how many rows have no location.
+ * 11. Dark mode passes axe color-contrast.
  *
  * Table overrides are registered AFTER installFixtureBackend, which the
  * fixture documents as the way to win the match.
@@ -238,5 +250,156 @@ test.describe('attraction detail (Explore WP3)', () => {
     await page.goto('/attractions/summary-fixture-park');
     await expect(page.getByRole('heading', { level: 1, name: 'Summary Fixture Park' })).toBeVisible();
     await expect(page.getByText('Dawn to dusk, seasonal').first()).toBeVisible();
+  });
+});
+
+/** Wednesday 2026-09-23, 10:00 AM in Des Moines. */
+const WED_10AM = new Date('2026-09-23T15:00:00Z');
+
+test.describe('attractions hub (explore pass 2 WP3)', () => {
+  test('no Featured badge or filter, and ?featured= asks for every row', async ({ page }) => {
+    await installFixtureBackend(page);
+    const seen: string[] = [];
+    await page.route('**/rest/v1/attractions**', (route) => {
+      seen.push(route.request().url());
+      return fulfilRows(route, [attraction(1, { is_featured: true }), attraction(2)]);
+    });
+
+    await page.goto('/attractions?featured=featured');
+    await expect(page.getByRole('heading', { level: 3, name: 'Hub Fixture Attraction 1' })).toBeVisible();
+    await expect(page.getByText('Featured', { exact: true })).toHaveCount(0);
+    await expect(page.getByRole('combobox', { name: 'Featured' })).toHaveCount(0);
+    expect(seen.some((u) => new URL(u).searchParams.has('is_featured'))).toBe(false);
+  });
+
+  test('default and unknown sorts order by name; no star without a review count', async ({ page }) => {
+    await installFixtureBackend(page);
+    const seen: string[] = [];
+    await page.route('**/rest/v1/attractions**', (route) => {
+      seen.push(route.request().url());
+      return fulfilRows(route, [attraction(1)]);
+    });
+
+    await page.goto('/attractions?sort=bogus');
+    await expect(page.getByRole('heading', { level: 3, name: 'Hub Fixture Attraction 1' })).toBeVisible();
+    const listUrls = seen.map((u) => new URL(u)).filter((u) => u.searchParams.get('is_active') === 'eq.true' && u.searchParams.has('order'));
+    expect(listUrls.length).toBeGreaterThan(0);
+    expect(listUrls.every((u) => u.searchParams.get('order') === 'name.asc')).toBe(true);
+    // The fixture row has rating 4.25; the card doesn't print it.
+    await expect(page.locator('article')).not.toContainText('4.3');
+    await expect(page.locator('article')).not.toContainText('/5');
+  });
+
+  test('Open now keeps what is open at this minute and counts rows with hours', async ({ page }) => {
+    await page.clock.setFixedTime(WED_10AM);
+    await installFixtureBackend(page);
+    const rows = [
+      attraction(1, { name: 'Open Fixture Museum', hours: { wed: NINE_TO_FIVE } }),
+      attraction(2, { name: 'Closed Fixture Park', hours: { wed: { open: '12:00', close: '17:00' } } }),
+      attraction(3, { name: 'Unknown Fixture Garden', hours: null, hours_summary: null }),
+    ];
+    await page.route('**/rest/v1/attractions**', (route) => fulfilRows(route, rows));
+
+    await page.goto('/attractions');
+    await expect(page.getByRole('heading', { level: 3, name: 'Unknown Fixture Garden' })).toBeVisible();
+    await page.getByRole('button', { name: 'Open now', exact: true }).click();
+    await expect(page).toHaveURL(/open=now/);
+    await expect(page.getByRole('button', { name: 'Open now', exact: true })).toHaveAttribute('aria-pressed', 'true');
+    await expect(page.locator('[data-open-now-count]')).toContainText('Open now: 1 of 2 with listed hours');
+    await expect(page.locator('[data-open-now-count]')).toContainText('1 more have no hours with us');
+    await expect(page.getByRole('heading', { level: 3, name: 'Open Fixture Museum' })).toBeVisible();
+    await expect(page.getByRole('heading', { level: 3, name: 'Closed Fixture Park' })).toHaveCount(0);
+    await expect(page.getByRole('heading', { level: 3, name: 'Unknown Fixture Garden' })).toHaveCount(0);
+    await expect(page.getByText('Outdoor, Kids, Open until 5 PM')).toBeVisible();
+    // 44px target.
+    const box = await page.getByRole('button', { name: 'Open now', exact: true }).boundingBox();
+    expect(box?.height).toBeGreaterThanOrEqual(44);
+  });
+
+  test('under the prerender flag: no status text, and ?open=now filters nothing', async ({ page }) => {
+    await page.clock.setFixedTime(WED_10AM);
+    await page.addInitScript(() => {
+      (window as unknown as { __DMI_PRERENDER__?: boolean }).__DMI_PRERENDER__ = true;
+    });
+    await installFixtureBackend(page);
+    const rows = [
+      attraction(1, { name: 'Open Fixture Museum', hours: { wed: NINE_TO_FIVE } }),
+      attraction(2, { name: 'Closed Fixture Park', hours: { wed: { open: '12:00', close: '17:00' } } }),
+    ];
+    await page.route('**/rest/v1/attractions**', (route) => fulfilRows(route, rows));
+
+    await page.goto('/attractions?open=now');
+    await expect(page.getByRole('heading', { level: 3, name: 'Closed Fixture Park' })).toBeVisible();
+    await expect(page.getByRole('heading', { level: 3, name: 'Open Fixture Museum' })).toBeVisible();
+    const main = page.locator('main');
+    await expect(main).not.toContainText('Open until');
+    await expect(main).not.toContainText('Closes');
+    await expect(main).not.toContainText('Closed, opens');
+    await expect(page.locator('[data-open-now-count]')).toHaveCount(0);
+  });
+
+  test('a card is an article: the title is the link and Save is outside it', async ({ page }) => {
+    await installFixtureBackend(page);
+    await page.route('**/rest/v1/attractions**', (route) => fulfilRows(route, [attraction(1)]));
+
+    await page.goto('/attractions');
+    const card = page.locator('article').filter({ hasText: 'Hub Fixture Attraction 1' });
+    await expect(card).toHaveCount(1);
+    const link = card.getByRole('link', { name: 'Hub Fixture Attraction 1', exact: true });
+    await expect(link).toHaveAttribute('href', '/attractions/hub-fixture-attraction-1');
+    await expect(link).not.toHaveAttribute('aria-label', /.*/);
+    // No interactive element inside the link.
+    await expect(link.locator('button, a')).toHaveCount(0);
+    await expect(card.getByRole('button')).not.toHaveCount(0);
+  });
+
+  test('the Explore row and Show on map link are on the page', async ({ page }) => {
+    await installFixtureBackend(page);
+    await installAttractions(page);
+
+    await page.goto('/attractions');
+    const row = page.getByRole('navigation', { name: 'Explore Des Moines' });
+    await expect(row).toBeVisible();
+    await expect(row.getByRole('link', { name: 'Attractions' })).toHaveAttribute('aria-current', 'page');
+    await expect(page.getByRole('link', { name: 'Show on map' })).toHaveAttribute('href', '/map?layers=attraction');
+  });
+
+  test('the map says how many attractions have no location', async ({ page }) => {
+    await installFixtureBackend(page);
+    await page.route('**/tile.openstreetmap.org/**', (route) => route.fulfill({ status: 204, body: '' }));
+    await page.route('**/rest/v1/attractions**', (route) =>
+      fulfilRows(route, [attraction(1), attraction(2), attraction(3, { latitude: null, longitude: null })]),
+    );
+
+    await page.goto('/attractions?view=map');
+    await expect(page.locator('.leaflet-container')).toBeVisible();
+    await expect(page.locator('[data-map-missing]')).toHaveText(
+      '1 of 3 attractions have no map location, so they are only in the list.',
+    );
+    await expect(page.locator('.leaflet-marker-icon')).toHaveCount(2);
+  });
+
+  test('dark mode passes axe color-contrast', async ({ page }) => {
+    await page.addInitScript(() => {
+      try {
+        window.localStorage.setItem('dmi-theme', 'dark');
+      } catch {
+        /* private mode: the spec then fails on the class check below */
+      }
+    });
+    await installFixtureBackend(page);
+    await installAttractions(page);
+
+    await page.goto('/attractions');
+    await expect(page.locator('html')).toHaveClass(/dark/);
+    await expect(page.getByRole('heading', { level: 3, name: 'Hub Fixture Attraction 1' })).toBeVisible();
+
+    const results = await new AxeBuilder({ page })
+      .include('main')
+      .exclude('header')
+      .exclude('footer')
+      .withRules(['color-contrast'])
+      .analyze();
+    expect(results.violations.flatMap((v) => v.nodes.map((n) => `${v.id}: ${n.target.join(' ')}`))).toEqual([]);
   });
 });

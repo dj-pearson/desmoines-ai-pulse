@@ -1,4 +1,4 @@
-import { test, expect } from '@playwright/test';
+import { test, expect, type Page } from '@playwright/test';
 import { installFixtureBackend } from './support/fixtureBackend';
 
 /**
@@ -40,38 +40,61 @@ test.use({
  */
 const INLINE_EXEMPT = ['Privacy Policy', 'hello@desmoinesinsider.com'];
 
+type Undersized = { label: string; height: number; min: number };
+
+async function undersizedFooterLinks(page: Page): Promise<Undersized[]> {
+  return page.evaluate((exempt) => {
+    const footer = document.querySelector('footer');
+    if (!footer) return [{ label: 'NO FOOTER', height: 0, min: 0 }];
+    const bad: { label: string; height: number; min: number }[] = [];
+
+    for (const el of footer.querySelectorAll('a[href], button')) {
+      const style = getComputedStyle(el);
+      if (style.display === 'none' || style.visibility === 'hidden') continue;
+      const box = el.getBoundingClientRect();
+      if (box.width < 2 || box.height < 2) continue;
+      // .tap-area-44 supplies its own 44px hit region via an ::after overlay,
+      // which getBoundingClientRect on the element does not include.
+      if (el.classList.contains('tap-area-44')) continue;
+
+      const label = (el.textContent ?? '').trim().replace(/\s+/g, ' ');
+      if (exempt.some((e) => label.includes(e))) continue;
+
+      const min = el.classList.contains('footer-link-compact') ? 24 : 44;
+      if (box.height < min) bad.push({ label: label.slice(0, 40), height: Math.round(box.height), min });
+    }
+    return bad;
+  }, INLINE_EXEMPT);
+}
+
+async function expectFooterTappable(page: Page, route: string) {
+  await page.goto(route, { waitUntil: 'domcontentloaded' });
+  await expect(page.locator('footer')).toBeVisible({ timeout: 30_000 });
+
+  const undersized = await undersizedFooterLinks(page);
+  expect(
+    undersized,
+    `footer links below their minimum: ${undersized.map((u) => `"${u.label}" ${u.height}px < ${u.min}px`).join(', ')}`
+  ).toEqual([]);
+}
+
 for (const route of ['/', '/events', '/contact', '/trip-planner']) {
   test(`${route} footer links are tappable at 375px`, async ({ page }) => {
-    await page.goto(route, { waitUntil: 'domcontentloaded' });
-    await expect(page.locator('footer')).toBeVisible({ timeout: 30_000 });
+    await expectFooterTappable(page, route);
+  });
+}
 
-    const undersized = await page.evaluate((exempt) => {
-      const footer = document.querySelector('footer');
-      if (!footer) return [{ label: 'NO FOOTER', height: 0, min: 0 }];
-      const bad: { label: string; height: number; min: number }[] = [];
-
-      for (const el of footer.querySelectorAll('a[href], button')) {
-        const style = getComputedStyle(el);
-        if (style.display === 'none' || style.visibility === 'hidden') continue;
-        const box = el.getBoundingClientRect();
-        if (box.width < 2 || box.height < 2) continue;
-        // .tap-area-44 supplies its own 44px hit region via an ::after overlay,
-        // which getBoundingClientRect on the element does not include.
-        if (el.classList.contains('tap-area-44')) continue;
-
-        const label = (el.textContent ?? '').trim().replace(/\s+/g, ' ');
-        if (exempt.some((e) => label.includes(e))) continue;
-
-        const min = el.classList.contains('footer-link-compact') ? 24 : 44;
-        if (box.height < min) bad.push({ label: label.slice(0, 40), height: Math.round(box.height), min });
-      }
-      return bad;
-    }, INLINE_EXEMPT);
-
-    expect(
-      undersized,
-      `footer links below their minimum: ${undersized.map((u) => `"${u.label}" ${u.height}px < ${u.min}px`).join(', ')}`
-    ).toEqual([]);
+/*
+ * Explore pass 2 WP6 item 10, the first pass's dropped WP8.3. The Explore
+ * hubs render their lists from the backend, and the smoke build has
+ * placeholder credentials, so the fixture backend answers and the page is
+ * measured with its content in place above the footer. Only the footer is
+ * measured here; each Explore spec asserts 44px on its own page body.
+ */
+for (const route of ['/things-to-do', '/attractions', '/playgrounds']) {
+  test(`${route} footer links are tappable at 375px`, async ({ page }) => {
+    await installFixtureBackend(page);
+    await expectFooterTappable(page, route);
   });
 }
 

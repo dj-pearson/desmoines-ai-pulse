@@ -1,5 +1,14 @@
 import { describe, it, expect } from "vitest";
-import { buildVenueJsonLd, formatMiles, matchVenue, nearby, venueCity } from "@/lib/venuePages";
+import {
+  buildVenueJsonLd,
+  currentVenueName,
+  formatMiles,
+  matchVenue,
+  nearby,
+  normaliseVenueName,
+  venueCity,
+  venueIlikeOrFilter,
+} from "@/lib/venuePages";
 
 const venues = [
   { name: "Wells Fargo Arena", slug: "wells-fargo-arena", address: "730 3rd St, Des Moines, IA 50309", latitude: 41.5908, longitude: -93.6208, capacity: 16980 },
@@ -28,6 +37,26 @@ describe("matchVenue", () => {
 
   it("does not match across a word boundary", () => {
     expect(matchVenue("Wells Fargo Arenas Parking Lot", venues)).toBeNull();
+  });
+
+  it("reads apostrophes out, so Wooly's is Woolys and Lefty's is Leftys (pass 2 WP5 item 1)", () => {
+    const rows = [
+      { name: "Woolys", slug: "woolys" },
+      { name: "Leftys Live Music", slug: "leftys-live-music" },
+      ...venues,
+    ];
+    expect(normaliseVenueName("Wooly's")).toBe(normaliseVenueName("Woolys"));
+    expect(matchVenue("Wooly's", rows)?.slug).toBe("woolys");
+    expect(matchVenue("Wooly\u2019s", rows)?.slug).toBe("woolys");
+    expect(matchVenue("Lefty's Live Music", rows)?.slug).toBe("leftys-live-music");
+    expect(matchVenue("Leftys", rows)?.slug).toBe("leftys-live-music");
+  });
+
+  it("matches the arena under its new name, Casey's Center", () => {
+    expect(matchVenue("Casey's Center", venues)?.slug).toBe("wells-fargo-arena");
+    expect(matchVenue("Caseys Center", venues)?.slug).toBe("wells-fargo-arena");
+    expect(matchVenue("Casey's Center at Iowa Events Center", venues)?.slug).toBe("wells-fargo-arena");
+    expect(matchVenue("Wells Fargo Arena", venues)?.slug).toBe("wells-fargo-arena");
   });
 
   it("returns null for an empty or unknown venue", () => {
@@ -87,5 +116,27 @@ describe("buildVenueJsonLd", () => {
 
   it("omits geo when there are no coordinates", () => {
     expect(buildVenueJsonLd(venues[3])).not.toHaveProperty("geo");
+  });
+});
+
+describe("currentVenueName", () => {
+  it("shows the arena under its current name and leaves others alone", () => {
+    expect(currentVenueName("Wells Fargo Arena")).toBe("Casey's Center");
+    expect(currentVenueName("Principal Park")).toBe("Principal Park");
+    expect(currentVenueName(null)).toBeNull();
+  });
+});
+
+describe("venueIlikeOrFilter", () => {
+  it("fetches by every name the venue answers to, apostrophes as one-character wildcards", () => {
+    const f = venueIlikeOrFilter({ name: "Wells Fargo Arena", slug: "wells-fargo-arena" });
+    expect(f).toContain("venue.ilike.%Wells Fargo Arena%");
+    expect(f).toContain("venue.ilike.%Casey_s Center%");
+    expect(f).toContain("venue.ilike.%Caseys Center%");
+  });
+
+  it("keeps or() syntax out of the pattern", () => {
+    const f = venueIlikeOrFilter({ name: "Bar, Grill (Upstairs)" });
+    expect(f).toBe("venue.ilike.%Bar Grill Upstairs%");
   });
 });

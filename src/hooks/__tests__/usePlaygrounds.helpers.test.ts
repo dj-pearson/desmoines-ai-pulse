@@ -5,10 +5,13 @@ vi.mock("@/integrations/supabase/client", () => ({ supabase: {} }));
 import {
   escapeLike,
   formatMilesAway,
+  locationInSuburb,
   pgArrayLiteral,
   PLAYGROUND_METRO_FILTER,
   sortByDistanceFrom,
+  suburbFilter,
   suburbFromLocation,
+  suburbLikePatterns,
 } from "@/hooks/usePlaygrounds";
 
 describe("suburbFromLocation", () => {
@@ -94,5 +97,54 @@ describe("formatMilesAway", () => {
   it("uses one decimal under ten miles", () => {
     expect(formatMilesAway(1.234)).toBe("1.2 mi away");
     expect(formatMilesAway(12.6)).toBe("13 mi away");
+  });
+});
+
+describe("suburb filter (explore pass 2 WP4 item 9)", () => {
+  const rows = [
+    "400 Locust St, Des Moines, IA 50309",
+    "4000 SW 9th St, Des Moines",
+    "500 Grand Ave, West Des Moines, IA 50265",
+    "West Des Moines, IA",
+    "123 Main St, Ankeny, IA 50023, USA",
+    "12 Elm St, Clive IA 50325",
+    "Jester Park, Granger",
+    "Des Moines Street Park, Ankeny, IA",
+  ];
+
+  it("Des Moines no longer returns West Des Moines", () => {
+    const hits = rows.filter((r) => locationInSuburb(r, "Des Moines"));
+    expect(hits).toEqual(["400 Locust St, Des Moines, IA 50309", "4000 SW 9th St, Des Moines"]);
+  });
+
+  it("West Des Moines returns only its own rows", () => {
+    expect(rows.filter((r) => locationInSuburb(r, "West Des Moines"))).toEqual([
+      "500 Grand Ave, West Des Moines, IA 50265",
+      "West Des Moines, IA",
+    ]);
+  });
+
+  it("a street or park name that starts with the suburb does not match", () => {
+    expect(locationInSuburb("Des Moines Street Park, Ankeny, IA", "Des Moines")).toBe(false);
+  });
+
+  it("is case-insensitive, like ilike", () => {
+    expect(locationInSuburb("1 A St, ANKENY, IA", "Ankeny")).toBe(true);
+  });
+
+  it("every suburb the facets offer matches the row it was read from", () => {
+    for (const loc of rows) {
+      const s = suburbFromLocation(loc);
+      if (s) expect(locationInSuburb(loc, s)).toBe(true);
+    }
+  });
+
+  it("builds one quoted ilike clause per pattern, wildcards escaped", () => {
+    const f = suburbFilter("Des Moines");
+    expect(f).toContain('location.ilike."%, Des Moines,%"');
+    expect(f).toContain('location.ilike."%, Des Moines"');
+    expect(f.split("location.ilike.").length - 1).toBe(suburbLikePatterns("x").length);
+    expect(suburbFilter("50%")).toContain('"50\\\\%"');
+    expect(suburbFilter('a"b')).toContain('a\\"b');
   });
 });

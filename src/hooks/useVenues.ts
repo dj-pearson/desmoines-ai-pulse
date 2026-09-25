@@ -2,8 +2,11 @@ import { useQuery } from '@tanstack/react-query';
 import { supabase } from '@/integrations/supabase/client';
 import { EVENT_LIST_COLUMNS } from '@/lib/listColumns';
 import { queryKeys } from '@/lib/queryKeys';
-import { escapeLikePattern } from '@/lib/postgrestPattern';
 import { applyEventVisibility } from '@/lib/eventQuery';
+import { eventTiming, type EventTimingInput } from '@/lib/eventTiming';
+import { hubDateOrFilter } from '@/lib/hubEventPartition';
+import { centralDateOf, centralWindow } from '@/lib/timezone';
+import { matchVenue, venueIlikeOrFilter } from '@/lib/venuePages';
 
 export interface Venue {
   id: string;
@@ -57,28 +60,51 @@ export function useVenue(slug: string) {
   });
 }
 
-export function useVenueEvents(venueName: string) {
+/** Rows the venue page lists. The fetch over-reads; matchVenue trims it. */
+const VENUE_EVENT_LIMIT = 20;
+const VENUE_EVENT_FETCH = 60;
+
+/**
+ * A venue's upcoming events, by the same rule the /music card and event
+ * detail use (explore pass 2 WP5 item 2).
+ *
+ * The fetch is loose on purpose: `venue.ilike` over the venue's name and each
+ * alias in VENUE_ALIASES (so "Casey's Center" rows reach the arena's page),
+ * then matchVenue decides row by row. `ilike %name%` alone was both too tight
+ * (it never found "Wooly's" for Woolys) and too loose (any string containing
+ * the name matched, one-word names included).
+ *
+ * Pass a venue row to get its aliases. A bare name still works, for callers
+ * such as AttractionEventsRail that only know a place's name.
+ */
+export function useVenueEvents(venue: string | { name: string; slug?: string | null }) {
+  const target = typeof venue === 'string' ? { name: venue, slug: null } : venue;
+  const today = centralDateOf();
   return useQuery({
-    // WEB-PERF-032: the key was top-level, so an admin edit never reached it;
-    // and select('*') pulled search_vector and the PostGIS geom into a list of
-    // 20 cards. Both fixed. The venue name is escaped because % and _ are LIKE
-    // wildcards - an unescaped one silently widens the match.
-    queryKey: queryKeys.events.list({ venue: venueName }),
+    // WEB-PERF-032: under the events prefix, so an admin edit reaches it; the
+    // day is in the key so crossing midnight refetches.
+    queryKey: queryKeys.events.list({ venue: target.name, venueSlug: target.slug ?? null, from: today }),
     queryFn: async () => {
+      const now = new Date();
+      const dayStart = centralWindow('today', now).start;
       // Explore plan WP5 item 1: merged, hidden and archived rows stay off
-      // the venue page, the same rule every other reader applies.
+      // the venue page, the same rule every other reader applies. Running
+      // rows (started before today, end_date still ahead) are admitted like
+      // on the hubs; ended ones are dropped below.
       const { data, error } = await applyEventVisibility(
         supabase.from('events').select(EVENT_LIST_COLUMNS)
       )
-        .ilike('venue', `%${escapeLikePattern(venueName)}%`)
-        .gte('date', new Date().toISOString())
+        .or(`and(or(${venueIlikeOrFilter(target)}),or(${hubDateOrFilter(dayStart, now)}))`)
         .order('date', { ascending: true })
-        .limit(20);
+        .limit(VENUE_EVENT_FETCH);
 
       if (error) throw error;
-      return data ?? [];
+      const rows = (data ?? []) as unknown as Array<EventTimingInput & { venue?: string | null }>;
+      return rows
+        .filter((row) => matchVenue(row.venue, [target]) !== null && !eventTiming(row, now).isOver)
+        .slice(0, VENUE_EVENT_LIMIT) as unknown as typeof data;
     },
-    enabled: !!venueName,
+    enabled: !!target.name,
     staleTime: 5 * 60 * 1000,
   });
 }

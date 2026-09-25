@@ -38,6 +38,35 @@ export function useSeasonalGuides() {
   });
 }
 
+export interface SeasonalGuideSlug {
+  slug: string;
+  season: string;
+  publish_date: string | null;
+}
+
+/**
+ * Just enough of each published guide to pick a season link (explore pass 2
+ * WP1 item 10). The /things-to-do hub used useSeasonalGuides, which ships
+ * every guide's full `content` to read two columns. Its own key, so it never
+ * hands a partial row to a page expecting the full one.
+ */
+export function useSeasonalGuideSlugs() {
+  return useQuery({
+    queryKey: ['seasonal-guides', 'slugs'],
+    queryFn: async (): Promise<SeasonalGuideSlug[]> => {
+      const { data, error } = await supabase
+        .from('seasonal_guides')
+        .select('slug, season, publish_date')
+        .eq('is_published', true)
+        .order('publish_date', { ascending: false });
+
+      if (error) throw error;
+      return (data ?? []) as unknown as SeasonalGuideSlug[];
+    },
+    staleTime: 10 * 60 * 1000,
+  });
+}
+
 export function useSeasonalGuide(slug: string) {
   return useQuery({
     queryKey: ['seasonal-guide', slug],

@@ -21,14 +21,22 @@ import { queryKeys } from '@/lib/queryKeys';
 import { SpriteIcon } from "@/components/ui/SpriteIcon";
 import { ErrorState } from '@/components/ui/error-state';
 import { applyEventVisibility } from '@/lib/eventQuery';
+import { ExploreSectionLinks } from '@/components/explore/ExploreSectionLinks';
+import { useNow } from '@/hooks/useNow';
+import { currentVenueName } from '@/lib/venuePages';
 import {
   HUB_EVENT_LIMIT,
   MUSIC_HUB_DAYS,
+  centralDayEndMs,
   hubEventWindow,
+  hubEventsOrFilter,
   partitionHubEvents,
+  sectionMayBeCut,
   showsByVenue,
   sortVenuesByShows,
 } from '@/lib/hubEventPartition';
+
+const MUSIC_CATEGORY_OR = 'category.ilike.%Music%,category.ilike.%Concert%';
 
 /** Card links: a visible focus ring, since the Card itself has no focus style. */
 const CARD_LINK =
@@ -40,8 +48,8 @@ const CARD_LINK =
  * queries (tonight, weekend, upcoming), which rendered the same show up to
  * three times and computed a weekend that, on a Saturday, was next week's.
  */
-function useMusicHubEvents() {
-  const range = hubEventWindow(MUSIC_HUB_DAYS);
+function useMusicHubEvents(now: Date) {
+  const range = hubEventWindow(MUSIC_HUB_DAYS, now);
   return useQuery({
     // Under the events prefix (WEB-PERF-032) so an admin edit invalidates it;
     // the window's first day is in the key, so crossing midnight refetches.
@@ -50,8 +58,9 @@ function useMusicHubEvents() {
       const { data, error } = await applyEventVisibility(
         supabase.from('events').select(EVENT_LIST_COLUMNS)
       )
-        .or('category.ilike.%Music%,category.ilike.%Concert%')
-        .gte('date', range.start)
+        // Pass 2 WP5 item 12: a festival that started yesterday and runs
+        // through tomorrow is on tonight; `.gte('date', start)` dropped it.
+        .or(hubEventsOrFilter(MUSIC_CATEGORY_OR, range.start, new Date()))
         .lte('date', range.end)
         .order('date', { ascending: true })
         .limit(HUB_EVENT_LIMIT);
@@ -103,15 +112,28 @@ export default function MusicHub() {
     error: venuesError,
     refetch: refetchVenues,
   } = useVenues();
-  const shows = useMusicHubEvents();
+  // Re-read every minute, so a show that ends while the tab is open leaves
+  // tonight and "On now" follows the clock (pass 2 WP5 item 12).
+  const now = useNow(60_000);
+  const shows = useMusicHubEvents(now);
   const showsSettled = shows.status === 'success';
-  const truncated = (shows.data?.length ?? 0) >= HUB_EVENT_LIMIT;
-  const range = hubEventWindow(MUSIC_HUB_DAYS);
+  const rows = useMemo(() => shows.data ?? [], [shows.data]);
+  const truncated = rows.length >= HUB_EVENT_LIMIT;
+  const range = hubEventWindow(MUSIC_HUB_DAYS, now);
 
-  const { tonight, weekend, later, onNow } = useMemo(
-    () => partitionHubEvents(shows.data ?? [], new Date(), { weekend: true }),
-    [shows.data],
+  // Tonight is the Tonight rail's evening (tonightWindow), not the calendar
+  // day: at 1 AM it is still Friday night. `now` ticks each minute, so
+  // crossing 04:00 or midnight re-partitions without a refetch.
+  const { tonight, weekend, later, onNow, weekendKind, tonightEndMs, weekendEndDay } = useMemo(
+    () => partitionHubEvents(rows, now, { weekend: true, tonight: 'evening' }),
+    [rows, now],
   );
+  // Item 13: a "+" only where the row cap could have cut this section.
+  const tonightCut = sectionMayBeCut(rows, HUB_EVENT_LIMIT, tonightEndMs);
+  const weekendCut = weekendEndDay ? sectionMayBeCut(rows, HUB_EVENT_LIMIT, centralDayEndMs(weekendEndDay)) : false;
+  // Empty tonight is not a dead end: the next date that has shows.
+  const nextShow = weekend[0] ?? later[0] ?? null;
+  const weekendTitle = weekendKind === 'sunday' ? 'Tomorrow (Sunday)' : 'This Weekend';
 
   // Item 6: what's playing at each venue, from the rows already loaded.
   const venueShows = useMemo(
@@ -136,7 +158,7 @@ export default function MusicHub() {
   // guide as much as a listings page, and the venue cluster is what the page
   // ranks on out of season. A Place list is a true claim about that section.
   const venueItems = (venues ?? []).map((venue) => ({
-    name: venue.name,
+    name: currentVenueName(venue.name),
     url: getCanonicalUrl(`/music/venues/${venue.slug}`),
     ...(venue.image_url && { image: venue.image_url }),
     ...(venue.description && { description: venue.description }),
@@ -157,12 +179,11 @@ export default function MusicHub() {
             longitude: venue.longitude,
           },
         }),
-      ...(venue.capacity != null && { maximumAttendeeCapacity: venue.capacity }),
     },
   }));
 
-  const showCount = (n: number, openEnded = false) =>
-    showsSettled ? <Badge variant="secondary">{`${n}${openEnded && truncated ? '+' : ''}`}</Badge> : null;
+  const showCount = (n: number, mayBeCut: boolean) =>
+    showsSettled ? <Badge variant="secondary">{`${n}${mayBeCut ? '+' : ''}`}</Badge> : null;
 
   return (
     <>
@@ -210,9 +231,10 @@ export default function MusicHub() {
               Live Music & Concerts
             </h1>
             <p className="text-lg text-muted-foreground max-w-2xl mx-auto">
-              Your guide to the Des Moines music scene: tonight's shows, venue guides, and upcoming concerts all in one place.
+              Tonight's shows, the next two weeks of concerts, and what's on next at each venue in the metro.
             </p>
           </div>
+          <ExploreSectionLinks current="/music" className="mb-10" />
 
           {/*
             WEB-QA-032, explore plan WP5 item 5. One alert for the one query
@@ -231,7 +253,7 @@ export default function MusicHub() {
                 <div className="flex items-center gap-2 mb-4">
                   <SpriteIcon name="clock" className="h-5 w-5 text-primary" />
                   <h2 id="music-tonight" className="text-2xl font-bold">Tonight&apos;s Shows</h2>
-                  {showCount(tonight.length)}
+                  {showCount(tonight.length, tonightCut)}
                 </div>
                 {shows.isPending ? (
                   <SectionSkeleton count={3} />
@@ -261,16 +283,30 @@ export default function MusicHub() {
                     ))}
                   </div>
                 ) : (
-                  <p className="text-muted-foreground">No shows scheduled for tonight. Check back for updates!</p>
+                  <p className="text-muted-foreground" data-empty-tonight="">
+                    Nothing listed for tonight.
+                    {nextShow && (
+                      <>
+                        {' '}The next show is {formatEventPart(nextShow, 'EEEE, MMMM d')}:{' '}
+                        <Link to={eventHref(nextShow)} className="font-medium text-primary underline underline-offset-4">
+                          {nextShow.title}
+                        </Link>
+                        .
+                      </>
+                    )}
+                  </p>
                 )}
               </section>
 
-              {/* This Weekend */}
+              {/* This Weekend. Item 6: on a Saturday evening only Sunday is
+                  left, and on a Sunday evening there is no weekend to show;
+                  those rows are in Upcoming, not dropped. */}
+              {weekendKind && (
               <section className="mb-12" aria-labelledby="music-weekend">
                 <div className="flex items-center gap-2 mb-4">
                   <SpriteIcon name="calendar" className="h-5 w-5 text-primary" />
-                  <h2 id="music-weekend" className="text-2xl font-bold">This Weekend</h2>
-                  {showCount(weekend.length)}
+                  <h2 id="music-weekend" className="text-2xl font-bold">{weekendTitle}</h2>
+                  {showCount(weekend.length, weekendCut)}
                 </div>
                 {shows.isPending ? (
                   <SectionSkeleton count={3} />
@@ -297,23 +333,27 @@ export default function MusicHub() {
                     ))}
                   </div>
                 ) : (
-                  <p className="text-muted-foreground">No weekend shows listed yet. Check upcoming concerts below!</p>
+                  <p className="text-muted-foreground">
+                    {weekendKind === 'sunday' ? 'No shows listed for Sunday yet.' : 'No weekend shows listed yet.'}
+                  </p>
                 )}
                 {showsSettled && (
+                  // Item 3: no number. The hub counts an ilike set and
+                  // /events filters category with eq, so a count here would
+                  // not be the list the link opens (D12 restores it).
                   <SeeAll to="/events?category=Music&preset=this-weekend">
-                    {weekend.length > shownWeekend.length
-                      ? `See all ${weekend.length} weekend shows`
-                      : 'This weekend on the events calendar'}
+                    This weekend on the events calendar
                   </SeeAll>
                 )}
               </section>
+              )}
 
               {/* Upcoming Concerts */}
               <section className="mb-12" aria-labelledby="music-upcoming">
                 <div className="flex items-center gap-2 mb-4">
                   <Music className="h-5 w-5 text-primary" aria-hidden="true" />
                   <h2 id="music-upcoming" className="text-2xl font-bold">Upcoming Concerts</h2>
-                  {showCount(later.length, true)}
+                  {showCount(later.length, truncated)}
                 </div>
                 {shows.isPending ? (
                   <SectionSkeleton count={3} />
@@ -348,9 +388,7 @@ export default function MusicHub() {
                 )}
                 {showsSettled && (
                   <SeeAll to={`/events?category=Music&from=${range.startDay}&to=${range.endDay}`}>
-                    {later.length > shownLater.length
-                      ? `See all ${later.length}${truncated ? '+' : ''} upcoming concerts`
-                      : `All music through ${lastDayLabel ?? 'the next two weeks'}`}
+                    {`Through ${lastDayLabel ?? 'the next two weeks'} on the events calendar`}
                   </SeeAll>
                 )}
               </section>
@@ -390,7 +428,7 @@ export default function MusicHub() {
                           <div className="h-40 overflow-hidden rounded-t-lg">
                             <OptimizedImage
                               src={venue.image_url}
-                              alt={venue.name}
+                              alt={currentVenueName(venue.name)}
                               className="object-cover"
                               containerClassName="w-full h-full"
                               sizes="(max-width: 640px) 100vw, (max-width: 1024px) 50vw, 33vw"
@@ -398,7 +436,7 @@ export default function MusicHub() {
                           </div>
                         )}
                         <CardContent className="p-5">
-                          <h3 className="text-lg font-semibold mb-1">{venue.name}</h3>
+                          <h3 className="text-lg font-semibold mb-1">{currentVenueName(venue.name)}</h3>
                           {playing && (
                             <div className="mb-3 text-sm">
                               <p className="font-medium line-clamp-1">
@@ -418,12 +456,8 @@ export default function MusicHub() {
                             {venue.venue_type && (
                               <Badge variant="secondary">{VENUE_TYPE_LABELS[venue.venue_type] || venue.venue_type}</Badge>
                             )}
-                            {venue.capacity && (
-                              <Badge variant="outline">
-                                <SpriteIcon name="users" className="h-3 w-3 mr-1" />
-                                {venue.capacity.toLocaleString()}
-                              </Badge>
-                            )}
+                            {/* No capacity badge (item 5): the seed's figures
+                                are unverified, and VenueDetail refuses them too. */}
                           </div>
                         </CardContent>
                       </Card>

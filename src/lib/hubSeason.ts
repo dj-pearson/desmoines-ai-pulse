@@ -62,14 +62,54 @@ const GUIDE_SEASONS: Record<Season, readonly string[]> = {
 export interface SeasonGuideRef {
   season: string;
   slug: string;
+  /** `seasonal_guides.publish_date`; null or absent is treated as undated. */
+  publish_date?: string | null;
+}
+
+/** A guide older than this many months answers for a past season, not this one. */
+export const GUIDE_MAX_AGE_MONTHS = 10;
+
+/** Whole months from `from` (YYYY-MM-DD...) to `to`, by calendar month. */
+function monthsBetween(from: string, to: CentralDate): number {
+  const fy = Number(from.slice(0, 4));
+  const fm = Number(from.slice(5, 7));
+  const ty = Number(to.slice(0, 4));
+  const tm = Number(to.slice(5, 7));
+  if (!Number.isFinite(fy) || !Number.isFinite(fm)) return 0;
+  const months = (ty - fy) * 12 + (tm - fm);
+  // Not a full month yet when the day of month has not come round.
+  return to.slice(8, 10) < from.slice(8, 10) ? months - 1 : months;
 }
 
 /**
- * The newest published guide for a season, or the static fallback. `guides`
- * is expected newest first, which is how useSeasonalGuides orders it.
+ * A guide still answers "this season" unless it was published more than
+ * GUIDE_MAX_AGE_MONTHS ago or its slug names a year that has passed
+ * ("summer-2026" in 2027). Without `today` nothing is stale.
  */
-export function seasonHref(season: Season, guides: readonly SeasonGuideRef[] | undefined): string {
-  const match = (guides ?? []).find((g) => GUIDE_SEASONS[season].includes(g.season) && g.slug);
+export function isGuideCurrent(guide: SeasonGuideRef, today?: CentralDate): boolean {
+  if (!today) return true;
+  const year = Number(today.slice(0, 4));
+  const slugYears = guide.slug.match(/(?:^|[^0-9])(20\d{2})(?![0-9])/g) ?? [];
+  for (const raw of slugYears) {
+    if (Number(raw.replace(/[^0-9]/g, '')) < year) return false;
+  }
+  if (guide.publish_date && monthsBetween(guide.publish_date, today) > GUIDE_MAX_AGE_MONTHS) return false;
+  return true;
+}
+
+/**
+ * The newest current guide for a season, or the static fallback. `guides` is
+ * expected newest first, which is how useSeasonalGuideSlugs orders it. Pass
+ * `today` (the Central date) to skip guides that have gone stale.
+ */
+export function seasonHref(
+  season: Season,
+  guides: readonly SeasonGuideRef[] | undefined,
+  today?: CentralDate,
+): string {
+  const match = (guides ?? []).find(
+    (g) => GUIDE_SEASONS[season].includes(g.season) && g.slug && isGuideCurrent(g, today),
+  );
   return match ? `/guides/${match.slug}` : SEASON_FALLBACK_HREF[season];
 }
 

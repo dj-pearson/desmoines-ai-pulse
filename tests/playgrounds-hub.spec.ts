@@ -19,6 +19,16 @@ import { installFixtureBackend } from './support/fixtureBackend';
  *  6. The detail page's side lists are bounded and explicit, render no
  *     "Playground Not Found", and nothing says "dawn to dusk".
  *
+ * Explore pass 2 WP4 adds:
+ *  7. A result card is on the first 390x844 screen (item 6).
+ *  8. "Des Moines" is a comma segment, not a substring: West Des Moines rows
+ *     are not counted under it, and the request is the segment or() (item 9).
+ *  9. Name A-Z by default; an error offers Try again (item 10).
+ * 10. The Explore row and "Show on map" (item 11), and no Free, "by
+ *     families", editors or "All ages welcome" on the hub.
+ *
+ * The detail page has its own spec now: tests/playground-detail.spec.ts.
+ *
  * playgrounds is overridden with page.route AFTER installFixtureBackend, which
  * the fixture documents as the way to win the match.
  */
@@ -80,6 +90,27 @@ const ROWS = [
     image_url: null,
     is_featured: false,
     rating: 3.9,
+    source: 'manual',
+    created_at: '2026-01-01T00:00:00Z',
+    updated_at: '2026-01-01T00:00:00Z',
+  },
+  {
+    // Pass 2 item 9: a substring match counted this row under "Des Moines".
+    id: '30000000-0000-0000-0000-000000000004',
+    name: 'Fixture Valley Junction Playground',
+    location: '500 Grand Ave, West Des Moines, IA 50265',
+    latitude: 41.57,
+    longitude: -93.74,
+    age_range: null,
+    amenities: [],
+    has_shade: null,
+    has_restrooms: null,
+    surface_type: null,
+    accessibility_notes: null,
+    description: null,
+    image_url: null,
+    is_featured: false,
+    rating: 0,
     source: 'manual',
     created_at: '2026-01-01T00:00:00Z',
     updated_at: '2026-01-01T00:00:00Z',
@@ -198,14 +229,20 @@ test.describe('/playgrounds hub (explore WP4)', () => {
     const options = page.getByRole('option');
     await expect(options.filter({ hasText: 'Ankeny (1)' })).toHaveCount(1);
     await expect(options.filter({ hasText: 'Clive (1)' })).toHaveCount(1);
-    await expect(options.filter({ hasText: 'Des Moines (1)' })).toHaveCount(1);
+    // Two options, one row each: "Des Moines" no longer counts the West Des
+    // Moines row as its own.
+    await expect(options.filter({ hasText: /^Des Moines \(1\)$/ })).toHaveCount(1);
+    await expect(options.filter({ hasText: /^West Des Moines \(1\)$/ })).toHaveCount(1);
     await expect(options.filter({ hasText: 'Downtown' })).toHaveCount(0);
     await expect(options.filter({ hasText: 'IA 5' })).toHaveCount(0);
 
     await options.filter({ hasText: 'Ankeny (1)' }).click();
     await expect(page).toHaveURL(/location=Ankeny/);
     const last = listRequests(seen).at(-1) ?? '';
-    expect(last).toContain('location=ilike.%Ankeny%');
+    // A comma segment, not location=ilike.%Ankeny%.
+    expect(last).not.toContain('location=ilike.%Ankeny%');
+    expect(last).toContain('location.ilike."%, Ankeny,%"');
+    expect(last).toContain('location.ilike."%, Ankeny"');
   });
 
   test('amenity chips toggle ?amenity= and send contains()', async ({ page }) => {
@@ -261,26 +298,105 @@ test.describe('/playgrounds hub (explore WP4)', () => {
   });
 });
 
-test.describe('/playgrounds/:slug (explore WP4)', () => {
-  test('side lists are bounded and explicit, no unbacked claims', async ({ page }) => {
+test.describe('/playgrounds hub (explore pass 2 WP4)', () => {
+  test('a result card is on the first 390x844 screen', async ({ page }) => {
+    await page.setViewportSize({ width: 390, height: 844 });
+    await installFixtureBackend(page);
+    await installPlaygrounds(page);
+    await page.goto('/playgrounds');
+    const firstCard = page.locator('[data-playground-grid] a').first();
+    await expect(firstCard).toBeVisible();
+    await page.evaluate(() => window.scrollTo(0, 0));
+    const box = await firstCard.boundingBox();
+    expect(box).not.toBeNull();
+    expect(box!.y).toBeLessThan(844);
+    // Near me sits with the search box in the hero, not below the fold.
+    const nearMe = page.getByRole('button', { name: /Near me/ });
+    const nearBox = await nearMe.boundingBox();
+    expect(nearBox!.y).toBeLessThan(box!.y);
+  });
+
+  test('name A-Z by default, with a Name / Near me control', async ({ page }) => {
     await installFixtureBackend(page);
     const seen = await installPlaygrounds(page);
-    await page.goto('/playgrounds/fixture-downtown-playground');
-    await expect(page.getByRole('heading', { level: 1, name: 'Fixture Downtown Playground' })).toBeVisible();
+    await page.goto('/playgrounds');
+    await expect(page.locator('[data-playground-grid]')).toBeVisible();
+    expect(listRequests(seen).at(-1) ?? '').toContain('order=name.asc');
+    const sort = page.getByRole('group', { name: 'Sort playgrounds' });
+    await expect(sort.getByRole('button', { name: 'Name' })).toHaveAttribute('aria-pressed', 'true');
+    await expect(sort.getByRole('button', { name: /Near me/ })).toHaveAttribute('aria-pressed', 'false');
+    await expect(page.locator('[data-playground-count]')).toContainText('A-Z');
+    // One polite live region for the list: the count. The amenity summary
+    // line no longer announces the same number a second time.
+    await expect(page.locator('#playground-results [aria-live="polite"]')).toHaveCount(1);
+    await page.locator('[data-amenity-chips]').getByRole('button', { name: /Swings/ }).click();
+    await expect(page.getByText(/playgrounds have Swings/)).toBeVisible();
+    await expect(page.locator('section:has([data-amenity-chips]) [aria-live]')).toHaveCount(0);
+  });
 
-    // Parent essentials read the columns; null says so.
-    const essentials = page.locator('[data-playground-essentials]');
-    await expect(essentials).toContainText('Rubber');
-    await expect(essentials).toContainText('Ramp to the main deck.');
+  test('rating 0 renders as 0.0, not a stray "0"', async ({ page }) => {
+    await installFixtureBackend(page);
+    await installPlaygrounds(page);
+    await page.goto('/playgrounds');
+    const card = page.locator('[data-playground-grid] a', { hasText: 'Fixture Valley Junction Playground' });
+    await expect(card).toContainText('0.0/5');
+  });
 
-    await expect.poll(() => seen.some((u) => u.includes('longitude=gte.'))).toBe(true);
-    const nearby = seen.find((u) => u.includes('longitude=gte.')) ?? '';
-    expect(nearby).toContain('order=rating.desc.nullslast');
-    expect(nearby).not.toContain('select=*');
+  test('a failed list offers Try again, which refetches', async ({ page }) => {
+    await installFixtureBackend(page);
+    await installPlaygrounds(page);
+    // Registered last, so it runs first; falls back to installPlaygrounds.
+    let fail = true;
+    await page.route('**/rest/v1/playgrounds**', (route) => {
+      const url = decodeURIComponent(route.request().url());
+      if (url.includes('select=age_range,location,amenities')) return route.fallback();
+      if (fail) {
+        return route.fulfill({
+          status: 400,
+          contentType: 'application/json',
+          headers: CORS,
+          body: JSON.stringify({ code: 'PGRST100', message: 'fixture failure', details: null, hint: null }),
+        });
+      }
+      return route.fallback();
+    });
+    await page.goto('/playgrounds');
+    const alert = page.getByRole('alert').filter({ hasText: "Playgrounds didn't load" });
+    await expect(alert).toBeVisible();
+    fail = false;
+    await alert.getByRole('button', { name: 'Try again' }).click();
+    await expect(page.locator('[data-playground-grid]')).toBeVisible();
+  });
 
-    await expect(page.locator('[data-playground-side-card]').first()).toBeVisible();
-    await expect(page.getByText('Playground Not Found')).toHaveCount(0);
-    await expect(page.getByText(/dawn to dusk/i)).toHaveCount(0);
-    await expect(page.getByText('Good For')).toHaveCount(0);
+  test('Explore row, Show on map, and no unbacked claims', async ({ page }) => {
+    await installFixtureBackend(page);
+    await installPlaygrounds(page);
+    await page.goto('/playgrounds');
+    await expect(page.locator('[data-playground-grid]')).toBeVisible();
+
+    await expect(page.locator('[data-show-on-map]')).toHaveAttribute('href', '/map?layers=playground');
+    const row = page.locator('[data-explore-section-links]');
+    await expect(row.getByRole('link', { name: 'Playgrounds' })).toHaveAttribute('aria-current', 'page');
+
+    const text = await pageBodyText(page);
+    expect(text).not.toMatch(/\bFree\b/);
+    expect(text).not.toMatch(/by families/i);
+    expect(text).not.toMatch(/editors/i);
+    expect(text).not.toMatch(/All ages welcome/i);
+
+    // n is the metro count from the facets query: four fixture rows.
+    await expect(page.locator('meta[name="description"]').last()).toHaveAttribute(
+      'content',
+      '4 playgrounds across the Des Moines metro, with shade, restrooms, surface and accessibility notes where we have them.',
+    );
   });
 });
+
+/** The page's own text, without the site header and footer (whose newsletter copy is not a claim about playgrounds). */
+async function pageBodyText(page: Page): Promise<string> {
+  return page.evaluate(() => {
+    const root = (document.querySelector('main') ?? document.body).cloneNode(true) as HTMLElement;
+    root.querySelectorAll('header, footer, script, style').forEach((el) => el.remove());
+    return root.innerText;
+  });
+}

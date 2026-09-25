@@ -3,29 +3,36 @@ import Header from '@/components/Header';
 import Footer from '@/components/Footer';
 import { Helmet } from 'react-helmet-async';
 import { Link, useSearchParams } from 'react-router-dom';
-import { keepPreviousData, useQueries } from '@tanstack/react-query';
-import { formatInTimeZone, fromZonedTime } from 'date-fns-tz';
+import { keepPreviousData, useQueries, type UseQueryResult } from '@tanstack/react-query';
 import { supabase } from '@/integrations/supabase/client';
 import { Button } from '@/components/ui/button';
 import { Badge } from '@/components/ui/badge';
 import { Skeleton } from '@/components/ui/skeleton';
 import { Star, Navigation, Search, ChevronUp, ChevronDown, RotateCw } from 'lucide-react';
-import { upcomingOrFilter } from '@/components/events/eventsHubQuery';
+import { ExploreSectionLinks } from '@/components/explore/ExploreSectionLinks';
 import { applyEventVisibility } from '@/lib/eventQuery';
 import { handleError } from '@/lib/errorHandler';
+import { createLogger } from '@/lib/logger';
 import { STALE_TIME } from '@/lib/queryConfig';
-import { resolveOpenStatus, formatOpenStatusLine } from '@/lib/restaurantHours';
-import { createSlug } from '@/lib/slug';
+import { resolveOpenStatus, formatOpenStatusLine, type RestaurantOpenResult } from '@/lib/restaurantHours';
+import { attractionOpenStatus } from '@/lib/attractionHours';
+import { haversineDistance } from '@/lib/geo';
 import {
-  CENTRAL_TIMEZONE,
-  centralDateOf,
-  centralHour,
-  centralWindow,
-  createEventSlugWithCentralTime,
-} from '@/lib/timezone';
+  centralTodayAt,
+  eventLowerBoundFilter,
+  eventStatusLabel,
+  eventWindow,
+  inEventWindow,
+  TONIGHT_EVENTS_FROM_HOUR,
+  type When,
+} from '@/lib/mapEventWindow';
+import { createSlug } from '@/lib/slug';
+import { centralHour, createEventSlugWithCentralTime, hasSpecificTime } from '@/lib/timezone';
 import { cn } from '@/lib/utils';
 import { getCanonicalUrl } from '@/lib/brandConfig';
-import type { MapBounds, MapEntity, MapEntityType } from '@/components/map/DiscoverMapCanvas';
+import type { MapBounds, MapEntity, MapEntityType, MapFlyTo } from '@/components/map/DiscoverMapCanvas';
+
+const logger = createLogger('DiscoverMap');
 
 // react-leaflet stays off the initial bundle (WEB-PERF-003) - the whole canvas
 // (incl. leaflet and its stylesheet) loads lazily when the map renders.
@@ -88,8 +95,6 @@ const TYPE_LABEL: Record<MapEntityType, string> = {
 // Time chips (WP2 item 8)
 // ---------------------------------------------------------------------------
 
-type When = 'now' | 'tonight' | 'weekend' | 'any';
-
 const WHEN_OPTIONS: ReadonlyArray<{ key: When; label: string }> = [
   { key: 'now', label: 'Now' },
   { key: 'tonight', label: 'Tonight' },
@@ -97,12 +102,8 @@ const WHEN_OPTIONS: ReadonlyArray<{ key: When; label: string }> = [
   { key: 'any', label: 'Any time' },
 ];
 
-/** "Now" reaches this far ahead, the same horizon as the events hub's tonight strip. */
-const NOW_AHEAD_MS = 3 * 60 * 60 * 1000;
 /** Events fetch against a 15-minute bucket so the clock tick does not refetch. */
 const BUCKET_MS = 15 * 60 * 1000;
-/** Tonight's events start from 4 PM Central; the default flips to Tonight at the same hour. */
-const TONIGHT_EVENTS_FROM_HOUR = 16;
 /** "Open tonight" for a restaurant means open at 6 PM Central, or now if later. */
 const TONIGHT_DINNER_HOUR = 18;
 
@@ -114,65 +115,9 @@ function parseWhen(value: string | null): When | null {
   return WHEN_OPTIONS.some((o) => o.key === value) ? (value as When) : null;
 }
 
-/** An instant at a Central wall-clock hour on the Central day of `now`. */
-function centralTodayAt(now: number, hour: number): number {
-  const day = centralDateOf(new Date(now));
-  return fromZonedTime(`${day}T${String(hour).padStart(2, '0')}:00:00`, CENTRAL_TIMEZONE).getTime();
-}
-
-/**
- * The instants an event must fall in for a time chip: it starts inside
- * [from, to], or it started before `from` and its end_date has not passed
- * `from`. A row that started earlier with no end_date is not "on now": nothing
- * says it still is (the rule selectTonight uses on /events).
- */
-interface EventWindow {
-  from: number;
-  to: number;
-}
-
-function eventWindow(when: When, now: number): EventWindow | null {
-  switch (when) {
-    case 'now':
-      return { from: now, to: now + NOW_AHEAD_MS };
-    case 'tonight':
-      return {
-        from: Math.max(now, centralTodayAt(now, TONIGHT_EVENTS_FROM_HOUR)),
-        to: new Date(centralWindow('today', new Date(now)).end).getTime(),
-      };
-    case 'weekend': {
-      const w = centralWindow('this-weekend', new Date(now));
-      return { from: new Date(w.start).getTime(), to: new Date(w.end).getTime() };
-    }
-    default:
-      return null;
-  }
-}
-
-function inEventWindow(row: MapRow, w: EventWindow): boolean {
-  const start = row.startMs;
-  if (start === undefined || !Number.isFinite(start)) return false;
-  if (start >= w.from && start <= w.to) return true;
-  const end = row.endMs;
-  return start < w.from && end !== undefined && Number.isFinite(end) && end >= w.from;
-}
-
-/** "7 PM", "7:30 PM". */
-function clockLabel(ms: number): string {
-  return formatInTimeZone(new Date(ms), CENTRAL_TIMEZONE, 'h:mm a').replace(':00 ', ' ');
-}
-
-function eventStatusLabel(row: MapRow, now: number): string | undefined {
-  const start = row.startMs;
-  if (start === undefined || !Number.isFinite(start)) return undefined;
-  const end = row.endMs;
-  if (start < now && end !== undefined && Number.isFinite(end) && end >= now) return 'Happening now';
-  const day = formatInTimeZone(new Date(start), CENTRAL_TIMEZONE, 'EEE, MMM d');
-  if (row.dateOnly) return day;
-  const sameDay = centralDateOf(new Date(start)) === centralDateOf(new Date(now));
-  if (sameDay) return start < now ? `Started ${clockLabel(start)}` : `Starts ${clockLabel(start)}`;
-  return `${day}, ${clockLabel(start)}`;
-}
+// The window, its request bound and the row label live in
+// src/lib/mapEventWindow.ts, where a unit test pins them (explore-pass2 WP2
+// items 1-3).
 
 // ---------------------------------------------------------------------------
 // Data
@@ -185,14 +130,21 @@ type PlacedEntity = MapEntity & { href: string };
 type MapRow = PlacedEntity & {
   startMs?: number;
   endMs?: number;
-  dateOnly?: boolean;
+  /** Events: false for the untimed 19:31:58 marker (hasSpecificTime at fetch). */
+  timed?: boolean;
+  /** Restaurants: the free-text hours. */
   opening?: string | null;
+  /** Attractions: the structured weekly hours and their text fallback. */
+  hours?: unknown;
+  hoursSummary?: string | null;
 };
 
 interface LayerResult {
   rows: MapRow[];
-  /** Rows the server returned before any client-side check. Equal to the limit means truncated. */
+  /** Rows the server returned before any client-side check. Equal to `cap` means truncated. */
   fetched: number;
+  /** The most rows this request could return. */
+  cap: number;
 }
 
 type RowsResponse<R> = { data: R[] | null; error: unknown };
@@ -200,17 +152,11 @@ type RowsResponse<R> = { data: R[] | null; error: unknown };
 /** Statuses that are never a place to go, as useOpenNowRestaurants reads them. */
 const UNVISITABLE_RESTAURANT_STATUSES = new Set(['closed', 'opening_soon', 'announced']);
 
-const DATE_ONLY = /^\d{4}-\d{2}-\d{2}$/;
-
-function parseInstant(raw: string | null | undefined): { ms: number; dateOnly: boolean } | null {
-  if (!raw) return null;
-  if (DATE_ONLY.test(raw)) {
-    // A bare date is a Central calendar day, not UTC midnight (which is the
-    // previous evening in Des Moines).
-    return { ms: fromZonedTime(`${raw}T00:00:00`, CENTRAL_TIMEZONE).getTime(), dateOnly: true };
-  }
+/** events.date and end_date are timestamptz: always an instant, never a bare day. */
+function parseInstant(raw: string | null | undefined): number | undefined {
+  if (!raw) return undefined;
   const ms = new Date(raw).getTime();
-  return Number.isFinite(ms) ? { ms, dateOnly: false } : null;
+  return Number.isFinite(ms) ? ms : undefined;
 }
 
 // NOT GENERIC OVER THE BUILDER, deliberately. Constraining T to the builder's
@@ -252,6 +198,7 @@ interface EventRow {
   date: string | null;
   end_date: string | null;
   event_start_utc: string | null;
+  event_start_local: string | null;
   is_merged?: boolean | null;
   is_hidden?: boolean | null;
   archived_at?: string | null;
@@ -266,14 +213,15 @@ async function fetchEvents(bounds: MapBounds, when: When, at: number): Promise<L
       // and original_description. Selecting `description` failed the whole
       // query with 42703, so the map showed no events at all.
       .select(
-        'id, title, latitude, longitude, enhanced_description, original_description, category, date, end_date, event_start_utc, is_merged, is_hidden, archived_at'
+        'id, title, latitude, longitude, enhanced_description, original_description, category, date, end_date, event_start_utc, event_start_local, is_merged, is_hidden, archived_at'
       )
   )
     .not('latitude', 'is', null)
     .not('longitude', 'is', null)
-    // Started today in Central, or a multi-day event still running: a
-    // `date >= now` floor dropped every festival already under way.
-    .or(upcomingOrFilter(new Date(at)));
+    // The window's lower bound, server-side: /events' "not over" rule at the
+    // window start, or the start itself for a window still ahead. The old
+    // "started today" floor listed this morning's finished events.
+    .or(eventLowerBoundFilter(when, at));
   const w = eventWindow(when, at);
   // One bucket of slack so an event the live clock reaches before the next
   // bucket is already in the fetch; the client pass trims it.
@@ -290,7 +238,6 @@ async function fetchEvents(bounds: MapBounds, when: When, at: number): Promise<L
     // Belt and braces: the request carries the same predicates.
     if (e.is_merged === true || e.is_hidden === true || e.archived_at) continue;
     const start = parseInstant(e.event_start_utc || e.date);
-    const end = parseInstant(e.end_date);
     rows.push({
       id: e.id,
       name: e.title ?? 'Event',
@@ -304,12 +251,12 @@ async function fetchEvents(bounds: MapBounds, when: When, at: number): Promise<L
       description: (e.enhanced_description ?? e.original_description)?.slice(0, 120),
       category: e.category ?? undefined,
       date: e.date ?? undefined,
-      startMs: start?.ms,
-      endMs: end?.ms,
-      dateOnly: start?.dateOnly,
+      startMs: start,
+      endMs: parseInstant(e.end_date),
+      timed: hasSpecificTime(e),
     });
   }
-  return { rows, fetched: data?.length ?? 0 };
+  return { rows, fetched: data?.length ?? 0, cap: limit };
 }
 
 interface RestaurantRow {
@@ -326,8 +273,14 @@ interface RestaurantRow {
   is_merged: boolean | null;
 }
 
-async function fetchRestaurants(bounds: MapBounds): Promise<LayerResult> {
-  const limit = LAYER_LIMIT.restaurant;
+/**
+ * Under Now and Tonight a second page is fetched when the first fills, so
+ * "open now" is not just the first 300 names alphabetically (explore-pass2 WP2
+ * item 6). Hard ceiling: two requests.
+ */
+const RESTAURANT_DEEP_CAP = 600;
+
+async function fetchRestaurantPage(bounds: MapBounds, from: number, to: number) {
   const query = supabase
     .from('restaurants')
     .select('id, slug, name, latitude, longitude, description, cuisine, rating, opening, status, is_merged')
@@ -339,11 +292,23 @@ async function fetchRestaurants(bounds: MapBounds): Promise<LayerResult> {
     .or('status.is.null,status.not.in.(closed,opening_soon,announced)');
   const { data, error } = (await inBounds(query, bounds)
     .order('name', { ascending: true })
-    .limit(limit)) as unknown as RowsResponse<RestaurantRow>;
+    // A tie-break, so page two starts where page one stopped.
+    .order('id', { ascending: true })
+    .range(from, to)) as unknown as RowsResponse<RestaurantRow>;
   if (error) throw error;
+  return data ?? [];
+}
+
+async function fetchRestaurants(bounds: MapBounds, deep: boolean): Promise<LayerResult> {
+  const limit = LAYER_LIMIT.restaurant;
+  const first = await fetchRestaurantPage(bounds, 0, limit - 1);
+  const data =
+    deep && first.length >= limit
+      ? first.concat(await fetchRestaurantPage(bounds, limit, RESTAURANT_DEEP_CAP - 1))
+      : first;
 
   const rows: MapRow[] = [];
-  for (const r of data ?? []) {
+  for (const r of data) {
     if (r.is_merged === true) continue;
     if (r.status && UNVISITABLE_RESTAURANT_STATUSES.has(r.status)) continue;
     const rating = r.rating != null ? Number(r.rating) : undefined;
@@ -360,7 +325,7 @@ async function fetchRestaurants(bounds: MapBounds): Promise<LayerResult> {
       opening: r.opening,
     });
   }
-  return { rows, fetched: data?.length ?? 0 };
+  return { rows, fetched: data.length, cap: deep ? RESTAURANT_DEEP_CAP : limit };
 }
 
 interface AttractionRow {
@@ -370,20 +335,27 @@ interface AttractionRow {
   longitude: number | string;
   description: string | null;
   type: string | null;
+  hours: unknown;
+  hours_summary: string | null;
+  is_active: boolean | null;
 }
 
 async function fetchAttractions(bounds: MapBounds): Promise<LayerResult> {
   const query = supabase
     .from('attractions')
     // public.attractions classifies with `type`, not `category`.
-    .select('id, name, latitude, longitude, description, type')
+    .select('id, name, latitude, longitude, description, type, hours, hours_summary, is_active')
     .not('latitude', 'is', null)
-    .not('longitude', 'is', null);
+    .not('longitude', 'is', null)
+    // The filter /attractions uses (useAttractions): a closed or retired
+    // place has no pin (explore-pass2 WP2 item 4).
+    .eq('is_active', true);
   const { data, error } = (await inBounds(query, bounds)
     .order('name', { ascending: true })
     .limit(LAYER_LIMIT.attraction)) as unknown as RowsResponse<AttractionRow>;
   if (error) throw error;
-  const rows: MapRow[] = (data ?? []).map((a) => ({
+  // Belt and braces: the request carries the same predicate.
+  const rows: MapRow[] = (data ?? []).filter((a) => a.is_active !== false).map((a) => ({
     id: a.id,
     name: a.name,
     type: 'attraction',
@@ -394,8 +366,10 @@ async function fetchAttractions(bounds: MapBounds): Promise<LayerResult> {
     href: `/attractions/${createSlug(a.name)}`,
     description: a.description?.slice(0, 120),
     category: a.type ?? undefined,
+    hours: a.hours,
+    hoursSummary: a.hours_summary,
   }));
-  return { rows, fetched: data?.length ?? 0 };
+  return { rows, fetched: data?.length ?? 0, cap: LAYER_LIMIT.attraction };
 }
 
 interface PlaygroundRow {
@@ -430,7 +404,7 @@ async function fetchPlaygrounds(bounds: MapBounds): Promise<LayerResult> {
     description: p.description?.slice(0, 120),
     category: p.age_range ? `Ages ${p.age_range}` : undefined,
   }));
-  return { rows, fetched: data?.length ?? 0 };
+  return { rows, fetched: data?.length ?? 0, cap: LAYER_LIMIT.playground };
 }
 
 interface TrailRow {
@@ -471,7 +445,7 @@ async function fetchTrails(bounds: MapBounds): Promise<LayerResult> {
       category: facts.length > 0 ? facts.join(', ') : undefined,
     };
   });
-  return { rows, fetched: data?.length ?? 0 };
+  return { rows, fetched: data?.length ?? 0, cap: LAYER_LIMIT.trail };
 }
 
 // ---------------------------------------------------------------------------
@@ -538,6 +512,58 @@ function listNames(names: string[]): string {
   return `${names.slice(0, -1).join(', ')} and ${names[names.length - 1]}`;
 }
 
+/** "0.4 mi", "12 mi". */
+function milesLabel(miles: number): string {
+  return miles < 10 ? `${miles.toFixed(1)} mi` : `${Math.round(miles)} mi`;
+}
+
+const LAYER_TABLE: Record<MapEntityType, 'events' | 'restaurants' | 'attractions' | 'playgrounds' | 'trails'> = {
+  event: 'events',
+  restaurant: 'restaurants',
+  attraction: 'attractions',
+  playground: 'playgrounds',
+  trail: 'trails',
+};
+
+const UUID_RE = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
+
+type LayerQuery = UseQueryResult<LayerResult, Error>;
+
+/** One stable record per layer, so the clock pass memo sees a change only when a query does. */
+function combineLayers(results: LayerQuery[]): Record<MapEntityType, LayerQuery> {
+  const out = {} as Record<MapEntityType, LayerQuery>;
+  LAYER_KEYS.forEach((k, i) => {
+    out[k] = results[i];
+  });
+  return out;
+}
+
+/**
+ * A ?sel= that is outside the first viewport was never fetched (every layer is
+ * bounds-scoped), so the map had nothing to centre on. Look its coordinates
+ * up by id in the active layers, once.
+ */
+async function locateEntity(
+  id: string,
+  layers: MapEntityType[]
+): Promise<{ lat: number; lng: number } | null> {
+  for (const layer of layers) {
+    const { data, error } = (await supabase
+      .from(LAYER_TABLE[layer])
+      .select('latitude, longitude')
+      .eq('id', id)
+      .limit(1)) as unknown as RowsResponse<{ latitude: number | string | null; longitude: number | string | null }>;
+    if (error) throw error;
+    const row = data?.[0];
+    const lat = Number(row?.latitude);
+    const lng = Number(row?.longitude);
+    if (row && row.latitude != null && row.longitude != null && Number.isFinite(lat) && Number.isFinite(lng)) {
+      return { lat, lng };
+    }
+  }
+  return null;
+}
+
 // WEB-PERF-023. The list rendered every entry in view, and with no bounds that
 // was the full fetch: /map shipped 6,568 elements inside #root against a 481
 // median. Only the LIST is capped; markers and counters report everything in
@@ -567,6 +593,15 @@ export default function DiscoverMap() {
   const [fallbackWhen] = useState<When>(() => defaultWhen(new Date()));
   const when = parseWhen(searchParams.get('when')) ?? fallbackWhen;
   const selectedId = searchParams.get('sel');
+  // The selection as the handlers last set it. The URL catches up a render
+  // later, and a popup's close event for the previous pin can land in between.
+  const selRef = useRef(selectedId);
+  useEffect(() => {
+    selRef.current = selectedId;
+  }, [selectedId]);
+  const [initialSel] = useState(selectedId);
+  const coldSelHandled = useRef(false);
+  const sortNear = searchParams.get('sort') === 'near';
   // Read once: the canvas fits to it on mount and owns the viewport after.
   const [initialBbox] = useState(() => parseBbox(searchParams.get('bbox')));
 
@@ -580,7 +615,7 @@ export default function DiscoverMap() {
   const applyOnNextMove = useRef(false);
   const applyTimer = useRef<number | null>(null);
 
-  const [flyTo, setFlyTo] = useState<{ lat: number; lng: number; key: number } | null>(null);
+  const [flyTo, setFlyTo] = useState<MapFlyTo | null>(null);
   const flyKey = useRef(0);
   const [userLocation, setUserLocation] = useState<{ lat: number; lng: number } | null>(null);
   const [geoMessage, setGeoMessage] = useState<string | null>(null);
@@ -603,13 +638,15 @@ export default function DiscoverMap() {
     []
   );
 
-  const results = useQueries({
+  const timeFiltered = when === 'now' || when === 'tonight';
+
+  const byLayer = useQueries({
     queries: LAYER_KEYS.map((layer) => ({
       queryKey: [
         'map-entities',
         layer,
         appliedBounds ? serializeBbox(appliedBounds) : null,
-        layer === 'event' ? when : null,
+        layer === 'event' ? when : layer === 'restaurant' ? timeFiltered : null,
         layer === 'event' ? bucketAt : null,
       ],
       queryFn: (): Promise<LayerResult> => {
@@ -618,7 +655,7 @@ export default function DiscoverMap() {
           case 'event':
             return fetchEvents(b, when, bucketAt);
           case 'restaurant':
-            return fetchRestaurants(b);
+            return fetchRestaurants(b, timeFiltered);
           case 'attraction':
             return fetchAttractions(b);
           case 'playground':
@@ -633,15 +670,8 @@ export default function DiscoverMap() {
       placeholderData: keepPreviousData,
       staleTime: STALE_TIME.CONTENT_LIST,
     })),
+    combine: combineLayers,
   });
-
-  const byLayer = useMemo(() => {
-    const out = {} as Record<MapEntityType, (typeof results)[number]>;
-    LAYER_KEYS.forEach((k, i) => {
-      out[k] = results[i];
-    });
-    return out;
-  }, [results]);
 
   const activeKeys = LAYER_KEYS.filter((k) => activeLayers.has(k));
   const failedLayers = activeKeys.filter((k) => byLayer[k].isError);
@@ -671,47 +701,74 @@ export default function DiscoverMap() {
     for (const k of failedLayers) void byLayer[k].refetch();
   };
 
-  // The clock-dependent pass: time-chip filtering and status labels.
-  const entities = useMemo(() => {
+  // The clock-dependent pass: time-chip filtering and status labels. Under Now
+  // and Tonight a restaurant or attraction answers "is it open"; one with no
+  // listed hours cannot, so it is held back and counted rather than shown as
+  // if it were open (explore-pass2 WP2 item 5).
+  const { entities, withoutHours } = useMemo(() => {
     const out: PlacedEntity[] = [];
+    const held: PlacedEntity[] = [];
     const evWindow = eventWindow(when, now);
     const dinnerAt =
       when === 'tonight' ? Math.max(now, centralTodayAt(now, TONIGHT_DINNER_HOUR)) : now;
     for (const k of activeKeys) {
       const rows = byLayer[k].data?.rows ?? [];
       for (const row of rows) {
-        const { startMs: _s, endMs: _e, dateOnly: _d, opening, ...entity } = row;
+        const { startMs, endMs, timed, opening, hours, hoursSummary, ...entity } = row;
         if (k === 'event') {
-          if (evWindow && !inEventWindow(row, evWindow)) continue;
-          out.push({ ...entity, statusLabel: eventStatusLabel(row, now) });
-        } else if (k === 'restaurant') {
-          const status = resolveOpenStatus(undefined, opening, new Date(dinnerAt));
-          if (
-            (when === 'now' || when === 'tonight') &&
-            status.status !== 'open' &&
-            status.status !== 'closing-soon'
-          ) {
-            continue;
+          const timing = { startMs, endMs, timed: timed !== false };
+          if (evWindow && !inEventWindow(timing, evWindow, now)) continue;
+          out.push({ ...entity, statusLabel: eventStatusLabel(timing, now) });
+        } else if (k === 'restaurant' || k === 'attraction') {
+          const statusAt = (at: number): RestaurantOpenResult =>
+            k === 'restaurant'
+              ? resolveOpenStatus(undefined, opening, new Date(at))
+              : attractionOpenStatus(hours, hoursSummary, new Date(at));
+          const status = statusAt(dinnerAt);
+          if (timeFiltered) {
+            if (status.status === 'unknown') {
+              held.push(entity);
+              continue;
+            }
+            if (status.status !== 'open' && status.status !== 'closing-soon') continue;
           }
-          const labelStatus =
-            dinnerAt === now ? status : resolveOpenStatus(undefined, opening, new Date(now));
+          const labelStatus = dinnerAt === now ? status : statusAt(now);
           out.push({ ...entity, statusLabel: formatOpenStatusLine(labelStatus) ?? undefined });
         } else {
           out.push(entity);
         }
       }
     }
-    return out;
+    return { entities: out, withoutHours: held };
     // activeKeys is derived from activeLayers.
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [byLayer, activeLayers, when, now]);
 
   // Markers and list both show what is inside the applied viewport, so
-  // "N in view" is the number of pins a user can count.
-  const inView = useMemo(
-    () => (appliedBounds ? entities.filter((e) => withinBounds(e, appliedBounds)) : []),
-    [entities, appliedBounds]
+  // "N in view" is the number of pins a user can count. After Near me, nearest
+  // first, with the distance on each row and popup (WP2 item 8).
+  const inView = useMemo(() => {
+    if (!appliedBounds) return [];
+    const visible = entities.filter((e) => withinBounds(e, appliedBounds));
+    if (!userLocation || !sortNear) return visible;
+    const here = { latitude: userLocation.lat, longitude: userLocation.lng };
+    return visible
+      .map((e) => ({ e, miles: haversineDistance(here, e) }))
+      .sort((x, y) => x.miles - y.miles)
+      .map(({ e, miles }) => ({ ...e, distanceLabel: milesLabel(miles) }));
+  }, [entities, appliedBounds, userLocation, sortNear]);
+
+  const withoutHoursInView = useMemo(
+    () => (appliedBounds ? withoutHours.filter((e) => withinBounds(e, appliedBounds)).length : 0),
+    [withoutHours, appliedBounds]
   );
+
+  // The measurement WP2 item 11 asks for before any clustering decision.
+  useEffect(() => {
+    if (import.meta.env.DEV && appliedBounds) {
+      logger.debug('inView', `${inView.length} in view`, { bbox: serializeBbox(appliedBounds) });
+    }
+  }, [inView.length, appliedBounds]);
 
   const countByType = useMemo(() => {
     const counts = Object.fromEntries(LAYER_KEYS.map((k) => [k, 0])) as Record<MapEntityType, number>;
@@ -719,8 +776,10 @@ export default function DiscoverMap() {
     return counts;
   }, [inView]);
 
-  const truncated = (k: MapEntityType) =>
-    activeLayers.has(k) && (byLayer[k].data?.fetched ?? 0) >= LAYER_LIMIT[k];
+  const truncated = (k: MapEntityType) => {
+    const data = byLayer[k].data;
+    return activeLayers.has(k) && data !== undefined && data.fetched >= data.cap;
+  };
   const anyTruncated = activeKeys.some(truncated);
   // No number until one is known: "0 in view" while the first fetch is in
   // flight, or after every layer failed, states a count nothing computed.
@@ -779,14 +838,85 @@ export default function DiscoverMap() {
     updateParams((p) => p.set('when', key));
   };
 
-  const handleSelect = (id: string) => {
+  /** Fly somewhere, then scope the list and counts to where the map landed. */
+  const flyAndApply = useCallback((target: { lat: number; lng: number }, targetId?: string) => {
+    applyOnNextMove.current = true;
+    if (applyTimer.current !== null) window.clearTimeout(applyTimer.current);
+    applyTimer.current = window.setTimeout(() => {
+      applyOnNextMove.current = false;
+    }, 3000);
+    flyKey.current += 1;
+    setFlyTo({ ...target, key: flyKey.current, targetId });
+  }, []);
+
+  // A marker click selects in place: the pin is already under the pointer,
+  // and flying to it made the map lurch (WP2 item 9).
+  const handleMarkerSelect = useCallback(
+    (id: string) => {
+      selRef.current = id;
+      updateParams((p) => p.set('sel', id));
+    },
+    [updateParams]
+  );
+
+  // A list row brings its pin into view: a pan when it is already on screen,
+  // a fly otherwise.
+  const handleRowSelect = (id: string) => {
+    selRef.current = id;
     updateParams((p) => p.set('sel', id));
     const entity = entities.find((e) => e.id === id);
     if (entity) {
       flyKey.current += 1;
-      setFlyTo({ lat: entity.latitude, lng: entity.longitude, key: flyKey.current });
+      setFlyTo({
+        lat: entity.latitude,
+        lng: entity.longitude,
+        key: flyKey.current,
+        reveal: true,
+        targetId: id,
+      });
     }
   };
+
+  // Closing the popup ends the selection, so a shared URL does not reopen a
+  // popup the user dismissed.
+  const handlePopupClose = useCallback(
+    (id: string) => {
+      if (selRef.current !== id) return;
+      selRef.current = null;
+      updateParams((p) => {
+        if (p.get('sel') === id) p.delete('sel');
+      });
+    },
+    [updateParams]
+  );
+
+  // ?sel= on a cold load: once the first rows arrive, fly to the selection if
+  // it is not among them (WP2 item 9). Ref-guarded, so it runs once.
+  useEffect(() => {
+    if (coldSelHandled.current || awaitingFirst) return;
+    coldSelHandled.current = true;
+    if (!initialSel || !UUID_RE.test(initialSel)) return;
+    const layers = LAYER_KEYS.filter((k) => activeLayers.has(k));
+    const known = layers
+      .flatMap((k) => byLayer[k].data?.rows ?? [])
+      .find((r) => r.id === initialSel);
+    if (known) {
+      if (appliedBounds && !withinBounds(known, appliedBounds)) {
+        flyAndApply({ lat: known.latitude, lng: known.longitude }, initialSel);
+      }
+      return;
+    }
+    // No cleanup cancels this: the deps move on every query update, and the
+    // guard above means the effect never runs its body again. selRef already
+    // says whether the user moved on to another selection meanwhile.
+    locateEntity(initialSel, layers)
+      .then((at) => {
+        if (at && selRef.current === initialSel) flyAndApply(at, initialSel);
+      })
+      .catch((error: unknown) => {
+        handleError(error, { component: 'DiscoverMap', action: 'locateSelection' });
+      });
+  }, [awaitingFirst, initialSel, activeLayers, byLayer, appliedBounds, flyAndApply]);
 
   const handleNearMe = () => {
     if (!navigator.geolocation) {
@@ -800,15 +930,10 @@ export default function DiscoverMap() {
         setLocating(false);
         const here = { lat: pos.coords.latitude, lng: pos.coords.longitude };
         setUserLocation(here);
+        updateParams((p) => p.set('sort', 'near'));
         // Apply the viewport once the fly-to settles, so the list and counts
         // describe where the user is rather than where the map was.
-        applyOnNextMove.current = true;
-        if (applyTimer.current !== null) window.clearTimeout(applyTimer.current);
-        applyTimer.current = window.setTimeout(() => {
-          applyOnNextMove.current = false;
-        }, 3000);
-        flyKey.current += 1;
-        setFlyTo({ ...here, key: flyKey.current });
+        flyAndApply(here);
       },
       (err) => {
         setLocating(false);
@@ -846,7 +971,7 @@ export default function DiscoverMap() {
       <li key={`${e.type}:${e.id}`} className={cn('flex items-center', selected && 'bg-primary/10')}>
         <button
           type="button"
-          onClick={() => handleSelect(e.id)}
+          onClick={() => handleRowSelect(e.id)}
           className="flex-1 min-w-0 text-left p-3 hover:bg-muted/60 transition-colors focus:outline-none focus-visible:ring-2 focus-visible:ring-primary"
           aria-current={selected ? 'true' : undefined}
         >
@@ -854,6 +979,7 @@ export default function DiscoverMap() {
             <Badge variant="outline" className="text-[10px]">
               {TYPE_LABEL[e.type]}
             </Badge>
+            {e.distanceLabel && <span className="text-[11px]">{e.distanceLabel}</span>}
             {e.rating != null && e.rating > 0 && (
               <span className="text-[11px] text-muted-foreground">
                 <Star className="h-3 w-3 inline mr-0.5 text-amber-500" aria-hidden="true" />
@@ -885,6 +1011,21 @@ export default function DiscoverMap() {
         ? 'Nothing matches this time in this area. Try "Any time", or pan and "Search this area".'
         : 'No results in this area. Pan or zoom out, then "Search this area".';
 
+  const restaurantsCapped = timeFiltered && truncated('restaurant');
+  const otherTruncated = activeKeys.some((k) => k !== 'restaurant' && truncated(k)) ||
+    (!timeFiltered && truncated('restaurant'));
+  const parksNote =
+    timeFiltered && (activeLayers.has('playground') || activeLayers.has('trail'))
+      ? 'Parks and trails show at any time.'
+      : null;
+  const hoursNote =
+    timeFiltered && withoutHoursInView > 0
+      ? `${withoutHoursInView} ${withoutHoursInView === 1 ? 'place' : 'places'} without listed hours ${
+          withoutHoursInView === 1 ? 'is' : 'are'
+        } hidden.`
+      : null;
+  const hasNotes = hiddenResults > 0 || otherTruncated || restaurantsCapped || parksNote || hoursNote;
+
   const renderResults = (limit: number, showTruncation: boolean) => (
     <ul className="divide-y" aria-label="Results in view">
       {allFailed ? null : awaitingFirst && inView.length === 0 ? (
@@ -894,13 +1035,24 @@ export default function DiscoverMap() {
       ) : (
         inView.slice(0, limit).map(renderRow)
       )}
-      {showTruncation && !allFailed && (hiddenResults > 0 || anyTruncated) && (
+      {showTruncation && !allFailed && hasNotes && (
         // Say what is not shown. A list that stops without saying so reads as
         // "that is everything", which is how a truncation becomes a fact.
-        <li className="p-3 text-xs text-muted-foreground">
-          {hiddenResults > 0 && `Showing the first ${VISIBLE_RESULTS} of ${inView.length} results. `}
-          {anyTruncated && 'Some layers have more places here than the map loads at once. '}
-          Zoom in or pan, then "Search this area", to narrow them down.
+        <li className="p-3 text-xs text-muted-foreground space-y-1">
+          {parksNote && <span className="block">{parksNote}</span>}
+          {hoursNote && <span className="block">{hoursNote}</span>}
+          {restaurantsCapped && (
+            <span className="block">
+              Showing the first {RESTAURANT_DEEP_CAP} restaurants in view by name; zoom in for the rest.
+            </span>
+          )}
+          {(hiddenResults > 0 || otherTruncated) && (
+            <span className="block">
+              {hiddenResults > 0 && `Showing the first ${VISIBLE_RESULTS} of ${inView.length} results. `}
+              {otherTruncated && 'Some layers have more places here than the map loads at once. '}
+              Zoom in or pan, then "Search this area", to narrow them down.
+            </span>
+          )}
         </li>
       )}
     </ul>
@@ -934,8 +1086,10 @@ export default function DiscoverMap() {
           title, so the h1 is screen-reader only. */}
       <h1 className="sr-only">Explore Des Moines on a Map - Events, Restaurants, Attractions, Playgrounds and Trails</h1>
       {/* Below md the page is exactly one screen: header, controls, map. The
-          app's <main> already pads 5rem for the bottom nav, hence the calc. */}
-      <div className="h-[calc(100dvh-5rem)] md:h-auto md:min-h-screen bg-background flex flex-col">
+          app's <main> pads for the bottom nav with .pb-bottom-nav, 4rem plus
+          max(1rem, safe-area inset); this subtracts the same sum, so a notched
+          phone does not scroll under the map (WP2 item 10). */}
+      <div className="h-[calc(100dvh-4rem-max(1rem,env(safe-area-inset-bottom)))] md:h-auto md:min-h-screen bg-background flex flex-col">
         <Header />
 
         {/* Controls: one horizontally scrolling row on phones */}
@@ -1020,6 +1174,9 @@ export default function DiscoverMap() {
               {statusNotice}
               {renderResults(VISIBLE_RESULTS, true)}
             </div>
+            <div className="border-t p-3">
+              <ExploreSectionLinks current="/map" />
+            </div>
           </aside>
 
           {/* Map: always mounted, so a new search never resets the viewport */}
@@ -1028,9 +1185,10 @@ export default function DiscoverMap() {
               <DiscoverMapCanvas
                 entities={inView}
                 selectedId={selectedId}
-                onSelect={handleSelect}
+                onSelect={handleMarkerSelect}
                 onBoundsChange={handleBoundsChange}
                 flyTo={flyTo}
+                onPopupClose={handlePopupClose}
                 initialBounds={initialBbox}
                 userLocation={userLocation}
                 markerHtml={MARKER_HTML}

@@ -1,6 +1,7 @@
 import { describe, it, expect } from "vitest";
 import {
   currentSeason,
+  isGuideCurrent,
   isInLeadWindow,
   nextSeason,
   seasonHref,
@@ -60,6 +61,39 @@ describe("seasonHref", () => {
 
   it("never falls back to a dated literal", () => {
     for (const href of Object.values(SEASON_FALLBACK_HREF)) expect(href).not.toMatch(/\d{4}/);
+  });
+});
+
+describe("seasonHref staleness (explore pass 2 WP1 item 10)", () => {
+  const guides = [
+    { season: "summer", slug: "summer-2026", publish_date: "2026-05-20" },
+    { season: "fall", slug: "fall-festivals", publish_date: "2025-08-01" },
+  ];
+
+  it("on 2027-06-15 skips last year's summer guide and falls back", () => {
+    expect(seasonHref("summer", guides, "2027-06-15")).toBe(SEASON_FALLBACK_HREF.summer);
+  });
+
+  it("still links the same guide while it is current", () => {
+    expect(seasonHref("summer", guides, "2026-07-01")).toBe("/guides/summer-2026");
+  });
+
+  it("skips an undated-slug guide published more than ten months ago", () => {
+    expect(seasonHref("fall", guides, "2026-09-25")).toBe(SEASON_FALLBACK_HREF.fall);
+    expect(seasonHref("fall", guides, "2026-05-31")).toBe("/guides/fall-festivals");
+  });
+
+  it("falls through to an older current guide rather than the fallback", () => {
+    const two = [
+      { season: "fall", slug: "fall-2025", publish_date: "2025-09-01" },
+      { season: "fall", slug: "fall-colors", publish_date: "2026-09-01" },
+    ];
+    expect(seasonHref("fall", two, "2026-09-25")).toBe("/guides/fall-colors");
+  });
+
+  it("treats a missing date and no today as current", () => {
+    expect(isGuideCurrent({ season: "fall", slug: "fall-2020" })).toBe(true);
+    expect(isGuideCurrent({ season: "fall", slug: "fall-guide", publish_date: null }, "2030-01-01")).toBe(true);
   });
 });
 

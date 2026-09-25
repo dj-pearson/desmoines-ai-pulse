@@ -15,7 +15,6 @@ import Header from "@/components/Header";
 import Footer from "@/components/Footer";
 import { LazyLocationMap } from "@/components/LazyLocationMap";
 import { getDirectionsUrl } from "@/lib/directions";
-import { OpenStatusChip } from "@/components/OpenStatusChip";
 import { StickyMobileCTA } from "@/components/StickyMobileCTA";
 import ShareDialog from "@/components/ShareDialog";
 import { FAQSection } from "@/components/FAQSection";
@@ -24,14 +23,16 @@ import EnhancedPlaygroundSEO from "@/components/EnhancedPlaygroundSEO";
 import { BreadcrumbListSchema } from "@/components/schema/BreadcrumbListSchema";
 import { BRAND, getCanonicalUrl } from "@/lib/brandConfig";
 import { Helmet } from "react-helmet-async";
-import { Star, ArrowLeft, Navigation, Check, Info, Zap, TreePine } from "lucide-react";
+import { Star, ArrowLeft, Navigation, Check, Zap, TreePine } from "lucide-react";
 import { useState } from "react";
 import { SpriteIcon } from "@/components/ui/SpriteIcon";
 import { OptimizedImage } from "@/components/OptimizedImage";
 import { DETAIL_STALE_TIME, detailQueryKey } from "@/lib/detailQueryKeys";
 import { isInMetro } from "@/lib/geo";
+import { AttractionEventsRail } from "@/components/attractions/AttractionEventsRail";
 import {
   formatMilesAway,
+  suburbFromLocation,
   useNearbyPlaygrounds,
   useSameAgePlaygrounds,
   type PlaygroundCard,
@@ -84,18 +85,13 @@ export default function PlaygroundDetails() {
         {/* SEO-028: the canonical cannot wait for the fetch. See RouteCanonical. */}
         <RouteCanonical path={`/playgrounds/${slug}`} />
         <Header />
-        <div className="min-h-screen bg-gray-50">
+        <div className="min-h-screen bg-background">
           <div className="container mx-auto px-4 py-8 max-w-6xl">
             <div className="animate-pulse space-y-6">
-              <div className="h-6 w-48 bg-gray-200 rounded" />
-              <div className="h-80 bg-gray-200 rounded-3xl" />
-              <div className="grid md:grid-cols-4 gap-4">
-                <div className="h-24 bg-gray-200 rounded-2xl" />
-                <div className="h-24 bg-gray-200 rounded-2xl" />
-                <div className="h-24 bg-gray-200 rounded-2xl" />
-                <div className="h-24 bg-gray-200 rounded-2xl" />
-              </div>
-              <div className="h-48 bg-gray-200 rounded-2xl" />
+              <div className="h-6 w-48 bg-muted rounded" />
+              <div className="h-80 bg-muted rounded-3xl" />
+              <div className="h-24 bg-muted rounded-2xl" />
+              <div className="h-48 bg-muted rounded-2xl" />
             </div>
           </div>
         </div>
@@ -120,14 +116,14 @@ export default function PlaygroundDetails() {
           <meta name="googlebot" content="noindex, follow" />
         </Helmet>
         <Header />
-        <div className="min-h-screen bg-gray-50 flex items-center justify-center">
-          <Card className="max-w-md mx-auto text-center shadow-lg rounded-2xl">
+        <div className="min-h-screen bg-background flex items-center justify-center">
+          <Card className="max-w-md mx-auto text-center rounded-2xl">
             <CardContent className="p-8">
-              <TreePine className="h-16 w-16 text-gray-500 mx-auto mb-4" />
-              <h2 className="text-2xl font-bold text-gray-800 mb-2">
+              <TreePine className="h-16 w-16 text-muted-foreground mx-auto mb-4" />
+              <h2 className="text-2xl font-bold text-foreground mb-2">
                 Playground Not Found
               </h2>
-              <p className="text-gray-600 mb-6">
+              <p className="text-muted-foreground mb-6">
                 The playground you're looking for doesn't exist or has been removed.
               </p>
               <Button asChild className="bg-[#2D1B69] hover:bg-[#2D1B69]/90">
@@ -147,6 +143,13 @@ export default function PlaygroundDetails() {
   const showImage = playground.image_url && !imageError;
   const playgroundSlug = createSlug(playground.name);
   const playgroundUrl = `${BRAND.baseUrl}/playgrounds/${playgroundSlug}`;
+  // The suburb the row's own location names, or none (WP4 item 3).
+  const locality = suburbFromLocation(playground.location);
+  const directionsUrl = getDirectionsUrl({
+    latitude: playground.latitude,
+    longitude: playground.longitude,
+    address: `${playground.name} ${playground.location ?? ""}`,
+  });
 
   // SEO-014. Built from this playground's own row and nothing else. The
   // previous answers told every one of these pages - suburban parks run by
@@ -179,11 +182,11 @@ export default function PlaygroundDetails() {
           },
         ]
       : []),
-    ...(playground.rating
+    ...(playground.rating != null
       ? [
           {
             question: `What is the rating for ${playground.name}?`,
-            answer: `${playground.name} is rated ${playground.rating.toFixed(1)} out of 5.${playground.is_featured ? " It is also a featured pick on Des Moines Insider." : ""}`,
+            answer: `${playground.name} is rated ${playground.rating.toFixed(1)} out of 5.`,
           },
         ]
       : []),
@@ -204,7 +207,7 @@ export default function PlaygroundDetails() {
         ]}
       />
 
-      <div className="min-h-screen bg-gray-50">
+      <div className="min-h-screen bg-background">
         <div className="container mx-auto px-4 py-6 max-w-6xl">
           {/* Breadcrumb Navigation */}
           <Breadcrumbs
@@ -227,7 +230,7 @@ export default function PlaygroundDetails() {
             <div className="flex gap-2">
               <ShareDialog
                 title={playground.name}
-                description={playground.description || `Check out ${playground.name} - playground in Des Moines`}
+                description={playground.description || `${playground.name}, a playground in ${locality ?? "the Des Moines metro"}`}
                 url={typeof window !== "undefined" ? window.location.href : ""}
                 trigger={
                   <Button variant="outline" size="sm" className="rounded-xl">
@@ -249,13 +252,13 @@ export default function PlaygroundDetails() {
           </div>
 
           {/* Hero Card */}
-          <Card className="shadow-xl rounded-3xl overflow-hidden border-0 mb-8">
+          <Card className="rounded-2xl overflow-hidden mb-8">
             {/* Hero Image / Gradient */}
             <div className="relative h-72 md:h-96 overflow-hidden">
               {showImage ? (
                 <OptimizedImage
                   src={playground.image_url}
-                  alt={`${playground.name} - Playground in ${BRAND.city}, ${BRAND.state}`}
+                  alt={`${playground.name}, playground${locality ? ` in ${locality}` : ""}`}
                   priority
                   sizes="(max-width: 768px) 100vw, 1024px"
                   containerClassName="absolute inset-0"
@@ -270,31 +273,27 @@ export default function PlaygroundDetails() {
 
               {/* Badges */}
               <div className="absolute top-4 left-4 flex gap-2 z-10">
+                {/* "Featured" is the is_featured column and nothing more: no
+                    editors' pick, and no "Free", which no column backs
+                    (explore pass 2 WP4 items 2 and 4). */}
                 {playground.is_featured && (
-                  <Badge className="bg-amber-500 text-white border-0 shadow-lg text-sm font-semibold px-3 py-1">
-                    <SpriteIcon name="sparkles" className="h-3.5 w-3.5 mr-1.5" />
+                  <Badge className="bg-amber-500 text-white border-0 text-sm font-semibold px-3 py-1">
                     Featured
                   </Badge>
                 )}
-                <Badge className="bg-emerald-500 text-white border-0 shadow-lg text-sm font-semibold px-3 py-1">
-                  Free
-                </Badge>
               </div>
 
               {/* Hero text */}
               <div className="absolute bottom-0 left-0 right-0 p-6 md:p-10 z-10">
                 <div className="max-w-3xl">
-                  <div className="flex items-center gap-2 mb-2">
-                    <TreePine className="h-4 w-4 text-white/70" />
-                    <span className="text-white/80 text-sm font-medium uppercase tracking-wider">
-                      Playground
-                    </span>
-                  </div>
+                  <p className="text-white/80 text-sm font-medium mb-2">
+                    Playground{locality ? ` in ${locality}` : ""}
+                  </p>
                   <h1 className="text-4xl md:text-5xl font-extrabold text-white mb-3 tracking-tight drop-shadow-lg">
                     {playground.name}
                   </h1>
                   <div className="flex flex-wrap items-center gap-3 text-white/90">
-                    {playground.rating && (
+                    {playground.rating != null && (
                       <div className="flex items-center gap-1.5 bg-white/20 backdrop-blur-sm rounded-full px-3 py-1">
                         <Star className="h-4 w-4 fill-amber-400 text-amber-400" />
                         <span className="font-semibold">{playground.rating.toFixed(1)}</span>
@@ -317,23 +316,6 @@ export default function PlaygroundDetails() {
               </div>
             </div>
 
-            {/* Quick Actions Bar */}
-            <div className="flex flex-wrap gap-3 p-4 md:p-6 bg-gray-50 border-b">
-              {playground.location && (
-                <Button asChild className="bg-[#2D1B69] hover:bg-[#2D1B69]/90 text-white rounded-xl">
-                  <a
-                    href={getDirectionsUrl({ latitude: playground.latitude, longitude: playground.longitude, address: `${playground.name} ${playground.location}` })}
-                    target="_blank"
-                    rel="noopener noreferrer"
-                  >
-                    <Navigation className="h-4 w-4 mr-2" />
-                    Get Directions
-                  </a>
-                </Button>
-              )}
-              {/* One Share (WP4 item 9): the top bar already has it. */}
-            </div>
-
             <CardContent className="p-6 md:p-10">
               {/* Parent essentials (WP4 items 4 and 9). One facts row in place
                   of the four-tile grid, which spent a tile on "N/A" rating and
@@ -343,11 +325,14 @@ export default function PlaygroundDetails() {
                 <h2 id="essentials-heading" className="text-xl font-bold text-foreground mb-4">
                   Parent essentials
                 </h2>
-                <dl className="grid grid-cols-2 md:grid-cols-5 gap-x-6 gap-y-4">
-                  <div>
-                    <dt className="text-sm text-muted-foreground">Ages</dt>
-                    <dd className="font-semibold text-foreground">{playground.age_range || NOT_CONFIRMED}</dd>
-                  </div>
+                <dl className="grid grid-cols-2 md:grid-cols-4 gap-x-6 gap-y-4">
+                  {/* A null age range renders nothing: "All ages" was a guess. */}
+                  {playground.age_range && (
+                    <div>
+                      <dt className="text-sm text-muted-foreground">Ages</dt>
+                      <dd className="font-semibold text-foreground">{playground.age_range}</dd>
+                    </div>
+                  )}
                   <div>
                     <dt className="text-sm text-muted-foreground">Shade</dt>
                     <dd className="font-semibold text-foreground">{yesNo(playground.has_shade)}</dd>
@@ -362,11 +347,7 @@ export default function PlaygroundDetails() {
                       {playground.surface_type?.trim() || NOT_CONFIRMED}
                     </dd>
                   </div>
-                  <div>
-                    <dt className="text-sm text-muted-foreground">Admission</dt>
-                    <dd className="font-semibold text-foreground">Free</dd>
-                  </div>
-                  <div className="col-span-2 md:col-span-5">
+                  <div className="col-span-2 md:col-span-4">
                     <dt className="text-sm text-muted-foreground">Accessibility</dt>
                     <dd className="text-foreground">
                       {playground.accessibility_notes?.trim() || NOT_CONFIRMED}
@@ -377,123 +358,62 @@ export default function PlaygroundDetails() {
 
               <Separator className="my-8" />
 
-              {/* Details Grid */}
-              <div className="grid md:grid-cols-2 gap-8">
-                {/* Location & Access */}
-                <div>
-                  <h2 className="text-xl font-bold text-gray-900 mb-4 flex items-center gap-2">
-                    <SpriteIcon name="map-pin" className="h-5 w-5 text-[#2D1B69]" />
-                    Location & Access
-                  </h2>
-                  <div className="space-y-3">
-                    {playground.location && (
-                      <div className="flex items-start gap-3 p-4 bg-gray-50 rounded-xl">
-                        <SpriteIcon name="map-pin" className="h-5 w-5 text-gray-500 mt-0.5 shrink-0" />
-                        <div>
-                          <p className="text-gray-900 font-medium">{playground.location}</p>
-                          <p className="text-sm text-gray-500">{BRAND.city}, {BRAND.state}</p>
-                          <a
-                            href={getDirectionsUrl({ latitude: playground.latitude, longitude: playground.longitude, address: `${playground.name} ${playground.location}` })}
-                            target="_blank"
-                            rel="noopener noreferrer"
-                            className="inline-flex items-center text-sm text-[#2D1B69] hover:underline mt-1"
-                          >
-                            <Navigation className="h-3.5 w-3.5 mr-1" />
-                            Get Directions
-                          </a>
-                        </div>
-                      </div>
+              {/* One Address block with one Directions link and the map
+                  (explore pass 2 WP4 item 5). The two tile grids beside it
+                  repeated admission, ages and "Area" and asserted a Free and
+                  an editors' pick no column backs. */}
+              <section aria-labelledby="address-heading" data-playground-address>
+                <h2 id="address-heading" className="text-xl font-bold text-foreground mb-4">
+                  Address
+                </h2>
+                <div className="grid gap-4 md:grid-cols-2">
+                  <div className="space-y-2">
+                    {playground.location ? (
+                      <p className="font-medium text-foreground">{playground.location}</p>
+                    ) : (
+                      <p className="text-muted-foreground">{NOT_CONFIRMED}</p>
                     )}
-                    {playground.latitude && playground.longitude && (
-                      <div className="overflow-hidden rounded-xl">
-                        <LazyLocationMap
-                          latitude={playground.latitude}
-                          longitude={playground.longitude}
-                          venue={playground.name}
-                          location={playground.location}
-                          className="h-48 w-full"
-                        />
-                      </div>
+                    {(playground.location || (playground.latitude != null && playground.longitude != null)) && (
+                      <a
+                        href={directionsUrl}
+                        target="_blank"
+                        rel="noopener noreferrer"
+                        className="inline-flex min-h-11 items-center font-medium text-primary underline-offset-4 hover:underline"
+                        data-playground-directions
+                      >
+                        <Navigation className="h-4 w-4 mr-1.5" aria-hidden="true" />
+                        Directions
+                      </a>
                     )}
-                    <div className="flex items-center justify-between p-4 bg-gray-50 rounded-xl">
-                      <span className="text-gray-600">Admission</span>
-                      <Badge className="bg-emerald-100 text-emerald-700 font-medium">Free</Badge>
-                    </div>
-                    <div className="flex items-center justify-between p-4 bg-gray-50 rounded-xl">
-                      <span className="text-gray-600">Hours</span>
-                      <OpenStatusChip hours={null} fallbackLabel="Check local park listings" />
-                    </div>
+                    <p className="text-sm text-muted-foreground">
+                      Hours aren't listed for this playground. The city that runs the park sets them.
+                    </p>
                   </div>
-                </div>
-
-                {/* Playground Details */}
-                <div>
-                  <h2 className="text-xl font-bold text-gray-900 mb-4 flex items-center gap-2">
-                    <TreePine className="h-5 w-5 text-[#2D1B69]" />
-                    Playground Details
-                  </h2>
-                  <div className="space-y-3">
-                    {playground.age_range && (
-                      <div className="flex items-center justify-between p-4 bg-gray-50 rounded-xl">
-                        <span className="text-gray-600">Age Range</span>
-                        <Badge variant="secondary" className="bg-[#2D1B69]/10 text-[#2D1B69] font-medium">
-                          <SpriteIcon name="users" className="h-3 w-3 mr-1" />
-                          Ages {playground.age_range}
-                        </Badge>
-                      </div>
-                    )}
-                    {playground.rating ? (
-                      <div className="flex items-center justify-between p-4 bg-gray-50 rounded-xl">
-                        <span className="text-gray-600">Rating</span>
-                        <div className="flex items-center gap-1.5">
-                          <Star className="h-4 w-4 fill-amber-400 text-amber-400" />
-                          <span className="text-gray-900 font-semibold">
-                            {playground.rating.toFixed(1)}
-                          </span>
-                        </div>
-                      </div>
-                    ) : null}
-                    <div className="flex items-center justify-between p-4 bg-gray-50 rounded-xl">
-                      <span className="text-gray-600">Area</span>
-                      <span className="text-gray-900 text-sm font-medium">{BRAND.region}</span>
+                  {playground.latitude != null && playground.longitude != null && (
+                    <div className="overflow-hidden rounded-xl">
+                      <LazyLocationMap
+                        latitude={playground.latitude}
+                        longitude={playground.longitude}
+                        venue={playground.name}
+                        location={playground.location}
+                        className="h-48 w-full"
+                      />
                     </div>
-                    {playground.is_featured && (
-                      <div className="p-4 bg-gradient-to-r from-amber-50 to-orange-50 rounded-xl border border-amber-200">
-                        <div className="flex items-center text-amber-700">
-                          <SpriteIcon name="sparkles" className="h-5 w-5 mr-2" />
-                          <span className="font-medium">Editor's Pick - Featured Playground</span>
-                        </div>
-                        <p className="text-sm text-amber-600 mt-1">
-                          Selected by our editors for exceptional play experience and family amenities.
-                        </p>
-                      </div>
-                    )}
-                  </div>
+                  )}
                 </div>
-              </div>
+              </section>
 
               {/* About Section */}
               {playground.description && (
                 <>
                   <Separator className="my-8" />
                   <div>
-                    <h2 className="text-xl font-bold text-gray-900 mb-4">
+                    <h2 className="text-xl font-bold text-foreground mb-4">
                       About {playground.name}
                     </h2>
-                    <p className="text-gray-700 leading-relaxed text-lg">
+                    <p className="text-foreground leading-relaxed text-lg max-w-[70ch]">
                       {playground.description}
                     </p>
-                    <div className="mt-4 p-4 bg-blue-50 rounded-xl border border-blue-100 playground-summary">
-                      <p className="text-sm text-gray-700 leading-relaxed" itemProp="description">
-                        <strong>{playground.name}</strong> is a public playground
-                        located {playground.location ? `at ${playground.location} in` : "in"} {BRAND.city}, {BRAND.state}.
-                        {playground.age_range ? ` Designed for ages ${playground.age_range}.` : ""}
-                        {playground.rating ? ` Rated ${playground.rating.toFixed(1)} out of 5.` : ""}
-                        {playground.amenities && playground.amenities.length > 0 ? ` Amenities include ${playground.amenities.join(", ")}.` : ""}
-                        {playground.is_featured ? ` This playground is an editor's pick on ${BRAND.name}.` : ""}
-                        {` Free admission.`}
-                      </p>
-                    </div>
                   </div>
                 </>
               )}
@@ -503,68 +423,37 @@ export default function PlaygroundDetails() {
                 <>
                   <Separator className="my-8" />
                   <section>
-                    <h2 className="text-xl font-bold text-gray-900 mb-4 flex items-center gap-2">
-                      <Zap className="h-5 w-5 text-[#2D1B69]" />
+                    <h2 className="text-xl font-bold text-foreground mb-4 flex items-center gap-2">
+                      <Zap className="h-5 w-5 text-primary" aria-hidden="true" />
                       Amenities & Features
                     </h2>
                     <div className="grid grid-cols-2 md:grid-cols-3 gap-3">
                       {playground.amenities.map((amenity, index) => (
-                        <div key={index} className="flex items-center gap-2 p-3 bg-gray-50 rounded-xl">
-                          <Check className="h-4 w-4 text-emerald-500 shrink-0" />
-                          <span className="text-gray-700 text-sm">{amenity}</span>
+                        <div key={index} className="flex items-center gap-2 p-3 bg-muted rounded-xl">
+                          <Check className="h-4 w-4 text-primary shrink-0" aria-hidden="true" />
+                          <span className="text-foreground text-sm">{amenity}</span>
                         </div>
                       ))}
                     </div>
                   </section>
                 </>
               )}
-
-              {/* Things To Know */}
-              <Separator className="my-8" />
-              <section>
-                <h2 className="text-xl font-bold text-gray-900 mb-4 flex items-center gap-2">
-                  <Info className="h-5 w-5 text-[#2D1B69]" />
-                  Things To Know
-                </h2>
-                <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-                  <div className="space-y-3">
-                    <div>
-                      <h3 className="font-semibold text-sm text-gray-900">Where</h3>
-                      <p className="text-sm text-gray-600">
-                        {playground.location || BRAND.city}, {BRAND.state}
-                      </p>
-                    </div>
-                    <div>
-                      <h3 className="font-semibold text-sm text-gray-900">Ages</h3>
-                      <p className="text-sm text-gray-600">
-                        {playground.age_range ? `Designed for ages ${playground.age_range}` : "All ages welcome"}
-                      </p>
-                    </div>
-                    <div>
-                      <h3 className="font-semibold text-sm text-gray-900">Admission</h3>
-                      <p className="text-sm text-gray-600">Free - public park</p>
-                    </div>
-                  </div>
-                  <div className="space-y-3">
-                    <div>
-                      <h3 className="font-semibold text-sm text-gray-900">Hours</h3>
-                      <OpenStatusChip hours={null} fallbackLabel="Check local park listings for hours" className="mt-1" />
-                    </div>
-                    <div>
-                      <h3 className="font-semibold text-sm text-gray-900">Area</h3>
-                      <p className="text-sm text-gray-600">{BRAND.region}</p>
-                    </div>
-                  </div>
-                </div>
-              </section>
             </CardContent>
           </Card>
 
+          {/* Events here and within two miles (explore pass 2 WP4 item 8).
+              Renders nothing when there are none. */}
+          <AttractionEventsRail
+            name={playground.name}
+            latitude={playground.latitude}
+            longitude={playground.longitude}
+          />
+
           {/* Playground-Specific FAQ */}
-          <Card className="shadow-lg rounded-2xl border-0 mb-8 overflow-hidden">
+          <Card className="rounded-2xl mb-8 overflow-hidden">
             <FAQSection
               title={`Frequently Asked Questions About ${playground.name}`}
-              description={`Common questions about ${playground.name} in ${BRAND.city}, ${BRAND.state}.`}
+              description={`Common questions about ${playground.name}.`}
               faqs={playgroundFaqs}
               showSchema={true}
               className="border-0"
@@ -574,11 +463,11 @@ export default function PlaygroundDetails() {
           {/* Related Playgrounds - Same Age Range */}
           {relatedPlaygrounds && relatedPlaygrounds.length > 0 && (
             <section className="mb-8" aria-labelledby="related-heading">
-              <h2 id="related-heading" className="text-2xl font-bold text-gray-900 mb-2">
+              <h2 id="related-heading" className="text-2xl font-bold text-foreground mb-2">
                 More Playgrounds for Ages {playground.age_range}
               </h2>
-              <p className="text-gray-600 mb-6">
-                Explore other playgrounds suitable for the same age group in the {BRAND.region}
+              <p className="text-muted-foreground mb-6">
+                Other metro playgrounds listed for the same ages.
               </p>
               <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-5">
                 {relatedPlaygrounds.map((related) => (
@@ -613,7 +502,7 @@ export default function PlaygroundDetails() {
             className="mb-2 text-center"
             links={[
               { title: "Kids and family events", href: "/events/kids" },
-              { title: "Free events", href: "/events/free" },
+              { title: "Events with free admission", href: "/events/free" },
               { title: "This weekend", href: "/events/this-weekend" },
               { title: "Attractions", href: "/attractions" },
             ]}
@@ -621,9 +510,9 @@ export default function PlaygroundDetails() {
 
           {/* Browse More CTA */}
           <div className="text-center py-8">
-            <Button asChild size="lg" className="bg-[#2D1B69] hover:bg-[#2D1B69]/90 text-white rounded-xl px-8">
+            <Button asChild size="lg" className="rounded-xl px-8">
               <Link to="/playgrounds">
-                <TreePine className="h-5 w-5 mr-2" />
+                <TreePine className="h-5 w-5 mr-2" aria-hidden="true" />
                 Browse All Des Moines Playgrounds
               </Link>
             </Button>
@@ -636,11 +525,7 @@ export default function PlaygroundDetails() {
         variant="playground"
         primaryAction={{
           label: "Directions",
-          href: getDirectionsUrl({
-            latitude: playground.latitude,
-            longitude: playground.longitude,
-            address: `${playground.name} ${playground.location ?? ""}`,
-          }),
+          href: directionsUrl,
           icon: "directions",
           isExternal: true,
         }}
@@ -668,7 +553,7 @@ function PlaygroundSideCard({ item }: SideCardProps) {
           <div className="aspect-video overflow-hidden">
             <OptimizedImage
               src={item.image_url}
-              alt={`${item.name} - Playground in ${BRAND.city}`}
+              alt={item.name}
               className="object-cover"
               containerClassName="w-full h-full"
               sizes="(max-width: 640px) 100vw, (max-width: 1024px) 50vw, 33vw"
@@ -690,12 +575,12 @@ function PlaygroundSideCard({ item }: SideCardProps) {
             )}
             {item.has_shade && <Badge variant="secondary" className="text-xs">Shade</Badge>}
             {item.has_restrooms && <Badge variant="secondary" className="text-xs">Restrooms</Badge>}
-            {item.rating ? (
+            {item.rating != null && (
               <div className="flex items-center gap-1">
-                <Star className="h-3 w-3 fill-amber-400 text-amber-400" />
+                <Star className="h-3 w-3 fill-amber-400 text-amber-400" aria-hidden="true" />
                 <span>{item.rating.toFixed(1)}</span>
               </div>
-            ) : null}
+            )}
           </div>
         </CardContent>
       </Card>

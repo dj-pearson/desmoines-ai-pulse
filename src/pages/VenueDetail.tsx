@@ -15,8 +15,9 @@ import { ErrorState } from '@/components/ui/error-state';
 import { NearbyHotels } from '@/components/venues/NearbyHotels';
 import { buildEventItemList } from '@/lib/eventSchema';
 import { toJsonLd } from '@/lib/jsonLd';
-import { buildVenueJsonLd, venueCity, venuePageUrl } from '@/lib/venuePages';
+import { buildVenueJsonLd, currentVenueName, venueCity, venuePageUrl } from '@/lib/venuePages';
 import { BRAND } from '@/lib/brandConfig';
+import { safeHttpUrl } from '@/lib/safeUrl';
 import type { Event } from '@/lib/types';
 
 const VENUE_TYPE_LABELS: Record<string, string> = {
@@ -31,7 +32,15 @@ const VENUE_TYPE_LABELS: Record<string, string> = {
 export default function VenueDetail() {
   const { slug } = useParams<{ slug: string }>();
   const { data: venue, isLoading, error: venueError, refetch: refetchVenue } = useVenue(slug || '');
-  const { data: events, error: eventsError, refetch: refetchEvents } = useVenueEvents(venue?.name || '');
+  // The venue row, not just its name, so its aliases reach the matcher
+  // (explore pass 2 WP5 item 2: "Casey's Center" rows belong to the arena).
+  const {
+    data: events,
+    error: eventsError,
+    refetch: refetchEvents,
+    isPending: eventsPending,
+    status: eventsStatus,
+  } = useVenueEvents(venue ? { name: venue.name, slug: venue.slug } : '');
 
   if (isLoading) {
     return (
@@ -93,20 +102,26 @@ export default function VenueDetail() {
       ? `https://www.google.com/maps/dir/?api=1&destination=${encodeURIComponent(venue.address)}`
       : null;
 
+  // The row can still carry the arena's old name; every reader-facing string
+  // uses the current one (explore-pass2 WP5 acceptance). Matching keeps the
+  // row name, which is what useVenueEvents' aliases are keyed from.
+  const venueName = currentVenueName(venue.name);
   const city = venueCity(venue.address) || BRAND.city;
+  // Admin-written; a javascript: value must never become a link (item 11).
+  const websiteUrl = safeHttpUrl(venue.website);
   const upcoming = (events ?? []) as unknown as Event[];
   const next = upcoming[0];
   const nextWhen = next ? formatEventPart(next, 'EEEE, MMMM d') : null;
   // The answer-first sentence, from the row and the list only.
   const summary = [
-    `${venue.name} is ${venue.address ? `at ${venue.address}` : `in ${city}, ${BRAND.state}`}.`,
-    upcoming.length > 0
+    `${venueName} is ${venue.address ? `at ${venue.address}` : `in ${city}, ${BRAND.state}`}.`,
+    eventsStatus === 'success' && upcoming.length > 0
       ? `${upcoming.length === 1 ? 'One upcoming event is' : `${upcoming.length} upcoming events are`} listed here${next && nextWhen ? `, the next on ${nextWhen}: ${next.title}` : ''}.`
       : null,
   ].filter(Boolean).join(' ');
   const metaDescription = upcoming.length > 0
-    ? `${upcoming.length} upcoming event${upcoming.length === 1 ? '' : 's'} at ${venue.name} in ${city}${next && nextWhen ? `, starting with ${next.title} on ${nextWhen}` : ''}. Dates, times, tickets and directions.`
-    : `Events at ${venue.name} in ${city}, ${BRAND.state}: address, directions and upcoming shows as they are announced.`;
+    ? `${upcoming.length} upcoming event${upcoming.length === 1 ? '' : 's'} at ${venueName} in ${city}${next && nextWhen ? `, starting with ${next.title} on ${nextWhen}` : ''}. Dates, times, tickets and directions.`
+    : `Events at ${venueName} in ${city}, ${BRAND.state}: address, directions and upcoming shows as they are announced.`;
 
   return (
     <>
@@ -122,17 +137,17 @@ export default function VenueDetail() {
           event list, so they answer the query this page exists for - "what is
           on at <venue>" - instead of restating the seed's marketing copy. */}
       <Helmet>
-        <title>{`Upcoming Events at ${venue.name}, ${city}`}</title>
+        <title>{`Upcoming Events at ${venueName}, ${city}`}</title>
         <meta name="description" content={metaDescription} />
-        <meta property="og:title" content={`Upcoming Events at ${venue.name}, ${city}`} />
+        <meta property="og:title" content={`Upcoming Events at ${venueName}, ${city}`} />
         <meta property="og:description" content={metaDescription} />
-        <script type="application/ld+json">{toJsonLd(buildVenueJsonLd(venue))}</script>
+        <script type="application/ld+json">{toJsonLd(buildVenueJsonLd({ ...venue, name: venueName }))}</script>
         {upcoming.length > 0 && (
           <script type="application/ld+json">
             {toJsonLd(
               buildEventItemList(upcoming, {
-                name: `Upcoming events at ${venue.name}`,
-                description: `Events scheduled at ${venue.name}, ${city}, ${BRAND.state}.`,
+                name: `Upcoming events at ${venueName}`,
+                description: `Events scheduled at ${venueName}, ${city}, ${BRAND.state}.`,
                 url: venuePageUrl(venue),
               }),
             )}
@@ -143,17 +158,17 @@ export default function VenueDetail() {
         <Header />
         <div className="container mx-auto px-4 py-8">
           {/* Breadcrumb */}
-          <nav className="text-sm text-muted-foreground mb-6">
+          <nav aria-label="Breadcrumb" className="text-sm text-muted-foreground mb-6">
             <Link to="/music" className="hover:text-primary">Music</Link>
             <span className="mx-2">/</span>
             <Link to="/events" className="hover:text-primary">Events</Link>
             <span className="mx-2">/</span>
-            <span>{venue.name}</span>
+            <span>{venueName}</span>
           </nav>
 
           {/* Venue Header */}
           <div className="mb-8">
-            <h1 className="text-3xl md:text-4xl font-bold mb-3">{venue.name}</h1>
+            <h1 className="text-3xl md:text-4xl font-bold mb-3">{venueName}</h1>
             <div className="flex items-center gap-3 flex-wrap mb-4">
               {venue.venue_type && (
                 <Badge variant="secondary">{VENUE_TYPE_LABELS[venue.venue_type] || venue.venue_type}</Badge>
@@ -175,37 +190,50 @@ export default function VenueDetail() {
                 <h3 className="font-semibold mb-2 flex items-center gap-2"><SpriteIcon name="map-pin" className="h-4 w-4" /> Location</h3>
                 {venue.address && <p className="text-sm text-muted-foreground mb-3">{venue.address}</p>}
                 {directionsUrl && (
-                  <a href={directionsUrl} target="_blank" rel="noopener noreferrer">
-                    <Button variant="outline" size="sm">
-                      <Navigation className="h-4 w-4 mr-1" /> Get Directions
-                    </Button>
-                  </a>
+                  <Button asChild variant="outline" size="sm">
+                    <a href={directionsUrl} target="_blank" rel="noopener noreferrer">
+                      <Navigation className="h-4 w-4 mr-1" aria-hidden="true" /> Get Directions
+                    </a>
+                  </Button>
                 )}
               </CardContent>
             </Card>
-            {venue.website && (
+            {websiteUrl && (
               <Card>
                 <CardContent className="p-5">
                   <h3 className="font-semibold mb-2 flex items-center gap-2"><SpriteIcon name="external-link" className="h-4 w-4" /> Website</h3>
-                  <a href={venue.website} target="_blank" rel="noopener noreferrer" className="text-primary hover:underline text-sm break-all">
-                    {venue.website.replace(/^https?:\/\//, '')}
+                  <a href={websiteUrl} target="_blank" rel="noopener noreferrer" className="text-primary hover:underline text-sm break-all">
+                    {websiteUrl.replace(/^https?:\/\//, '').replace(/\/$/, '')}
                   </a>
                 </CardContent>
               </Card>
             )}
-            <NearbyHotels latitude={venue.latitude} longitude={venue.longitude} placeName={venue.name} limit={4} nearSlug={venue.slug} />
+            <NearbyHotels latitude={venue.latitude} longitude={venue.longitude} placeName={venueName} limit={4} nearSlug={venue.slug} />
           </div>
 
           {/* Upcoming Events */}
           <section>
             <div className="flex items-center gap-2 mb-4">
               <SpriteIcon name="calendar" className="h-5 w-5 text-primary" />
-              <h2 className="text-2xl font-bold">Upcoming Events at {venue.name}</h2>
+              <h2 className="text-2xl font-bold">Upcoming Events at {venueName}</h2>
             </div>
-            {events && events.length > 0 ? (
+            {/* Item 7: loading is not empty. Skeletons while the request is
+                in flight; "No upcoming events" only once it has answered with
+                zero rows. */}
+            {eventsPending ? (
+              <div className="space-y-3" aria-busy="true" data-venue-events-loading="">
+                {Array.from({ length: 3 }).map((_, i) => (
+                  <Skeleton key={i} className="h-[88px] w-full rounded-lg" />
+                ))}
+              </div>
+            ) : events && events.length > 0 ? (
               <div className="space-y-3">
                 {events.map((event) => (
-                  <Link key={event.id} to={`/events/${createEventSlugWithCentralTime(event.title, event)}`}>
+                  <Link
+                    key={event.id}
+                    to={`/events/${createEventSlugWithCentralTime(event.title, event)}`}
+                    className="block rounded-lg focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2"
+                  >
                     <Card className="hover:border-primary transition-colors">
                       <CardContent className="p-4 flex items-center gap-4">
                         <div className="text-center min-w-[60px]">
@@ -233,9 +261,9 @@ export default function VenueDetail() {
             ) : (
               eventsError ? (
                 <ErrorState error={eventsError} compact onRetry={refetchEvents} />
-              ) : (
+              ) : eventsStatus === 'success' ? (
                 <p className="text-muted-foreground">No upcoming events listed for this venue.</p>
-              )
+              ) : null
             )}
           </section>
         </div>

@@ -2,6 +2,7 @@ import { Link } from 'react-router-dom';
 import { ExternalLink, Navigation } from 'lucide-react';
 import { getDirectionsUrl } from '@/lib/directions';
 import type { OutdoorsDestination } from '@/data/outdoorsGuide';
+import { DestinationLogistics } from '@/components/outdoors/DestinationLogistics';
 import type { NearbyPlace } from '@/hooks/useOutdoorsNearby';
 
 interface OutdoorsDestinationSectionProps {
@@ -11,41 +12,14 @@ interface OutdoorsDestinationSectionProps {
 }
 
 /**
- * "2026-08-31" -> "August 31, 2026". Read as UTC so the day can't shift by
- * one in a browser west of Greenwich, and so a prerender and a hydrate agree.
- */
-function formatCheckedOn(iso: string): string {
-  const date = new Date(`${iso}T00:00:00Z`);
-  if (Number.isNaN(date.getTime())) return iso;
-  return new Intl.DateTimeFormat('en-US', {
-    dateStyle: 'long',
-    timeZone: 'UTC',
-  }).format(date);
-}
-
-/**
- * One destination in the /outdoors guide (SEO-024).
- *
- * The logistics block is a description list rather than a row of tiles on
- * purpose. Parking, trailhead, dogs and winter hours are the questions the
- * keyword data says people are actually typing, so they are content, and a
- * <dl> is what content shaped like a question and an answer is.
+ * One destination in the /outdoors guide (SEO-024). The logistics list is
+ * DestinationLogistics, shared with the trail pages (explore pass 2 WP5
+ * item 8).
  */
 export default function OutdoorsDestinationSection({
   destination,
   nearbyPlaygrounds,
 }: OutdoorsDestinationSectionProps) {
-  const { logistics } = destination;
-
-  const facts: Array<{ term: string; detail: string }> = [
-    { term: 'From downtown', detail: logistics.fromDowntown },
-    { term: 'Parking', detail: logistics.parking },
-    { term: 'Where to start', detail: logistics.trailhead },
-    { term: 'Dogs', detail: logistics.dogs },
-    { term: 'In winter', detail: logistics.winter },
-    { term: 'Cost', detail: logistics.cost },
-  ];
-
   return (
     <article
       id={destination.id}
@@ -61,18 +35,7 @@ export default function OutdoorsDestinationSection({
         ))}
       </div>
 
-      <dl className="mt-6 grid gap-x-8 gap-y-3 sm:grid-cols-2 max-w-4xl">
-        {facts.map((fact) => (
-          <div key={fact.term}>
-            <dt className="text-sm font-semibold text-foreground">{fact.term}</dt>
-            <dd className="text-sm text-muted-foreground mt-0.5">{fact.detail}</dd>
-          </div>
-        ))}
-      </dl>
-      <p className="mt-3 text-xs text-muted-foreground">
-        Details checked{' '}
-        <time dateTime={logistics.checkedOn}>{formatCheckedOn(logistics.checkedOn)}</time>
-      </p>
+      <DestinationLogistics logistics={destination.logistics} className="mt-6" />
 
       <p className="mt-5 text-sm text-muted-foreground">
         {destination.address.street ? `${destination.address.street}, ` : ''}
@@ -112,7 +75,7 @@ export default function OutdoorsDestinationSection({
       {nearbyPlaygrounds && nearbyPlaygrounds.length > 0 && (
         <div className="mt-5 max-w-[70ch]">
           <h4 className="text-sm font-semibold text-foreground mb-2">
-            Playgrounds within a few miles
+            Playgrounds within a few miles (straight line)
           </h4>
           <ul className="flex flex-wrap gap-x-4 gap-y-1.5 text-sm">
             {nearbyPlaygrounds.map((place) => (

@@ -1,6 +1,7 @@
 import { Helmet } from "react-helmet-async";
 import { BRAND } from "@/lib/brandConfig";
 import { toJsonLd } from "@/lib/jsonLd";
+import { attractionOpeningHoursSpec } from "@/lib/attractionHours";
 
 interface AttractionData {
   id?: string | null;
@@ -10,7 +11,6 @@ interface AttractionData {
   location?: string | null;
   website?: string | null;
   image_url?: string | null;
-  rating?: number | null;
   latitude?: number | null;
   longitude?: number | null;
   is_featured?: boolean | null;
@@ -23,6 +23,11 @@ interface AttractionData {
    * absent rather than guessing.
    */
   is_free?: boolean | null;
+  /**
+   * attractions.hours JSONB. Published as openingHoursSpecification for the
+   * days it states (explore pass 2 WP3 item 4); omitted when it states none.
+   */
+  hours?: unknown;
   /** When present, AttractionDetails renders it as .attraction-summary. */
   geo_summary?: string | null;
 }
@@ -46,21 +51,20 @@ export default function EnhancedAttractionSEO({
     return `${parts.join(" - ")} | Things to Do`;
   };
 
-  // Explore WP3 item 4: no "by visitors" (no reviews table backs the rating,
-  // WEB-SEO-016), no "popular", and no "Plan your visit today" sales line.
+  // Explore WP3 item 4: no "by visitors", no "popular", and no "Plan your
+  // visit today" sales line. Pass 2 item 2: no "Rated X/5" either.
+  // attractions.rating has no source anyone can check; the only rating this
+  // page shows is the review average from content_rating_aggregates.
   const getGEODescription = () => {
     const desc = attraction.description || "";
     const typeText = attraction.type ? attraction.type.toLowerCase() : "attraction";
-    const ratingText = attraction.rating
-      ? ` Rated ${attraction.rating.toFixed(1)}/5.`
-      : "";
     const locationText = attraction.location ? ` Located at ${attraction.location}.` : "";
 
     if (desc.length > 50) {
-      return `${attraction.name} is a ${typeText} in the ${BRAND.city} area. ${desc.substring(0, 150).trim()}...${ratingText}${locationText}`;
+      return `${attraction.name} is a ${typeText} in the ${BRAND.city} area. ${desc.substring(0, 150).trim()}...${locationText}`;
     }
 
-    return `${attraction.name}, a ${typeText} in the ${BRAND.city} area.${ratingText} Hours, directions and visitor information.${locationText}`;
+    return `${attraction.name}, a ${typeText} in the ${BRAND.city} area. Hours, directions and visitor information.${locationText}`;
   };
 
   const getLocalKeywords = () => {
@@ -84,10 +88,15 @@ export default function EnhancedAttractionSEO({
     ].filter(Boolean);
   };
 
+  const openingHoursSpecification = attractionOpeningHoursSpec(attraction.hours);
+
   const attractionSchema = {
     "@context": "https://schema.org",
     "@type": "TouristAttraction",
-    "@id": attractionUrl,
+    // "#place", not the bare URL: the WebPage node below has the bare URL as
+    // its @id, and two nodes with one @id merge into a single entity in a
+    // parser's graph (explore pass 2 WP3 item 4).
+    "@id": `${attractionUrl}#place`,
     name: attraction.name,
     description: getGEODescription(),
     ...(attraction.image_url && { image: [attraction.image_url] }),
@@ -128,6 +137,8 @@ export default function EnhancedAttractionSEO({
     // set. It was hard-coded true, which claimed free admission for every
     // attraction including the ones that charge.
     ...(attraction.is_free != null && { isAccessibleForFree: attraction.is_free }),
+    // Only the days the row states; see attractionOpeningHoursSpec.
+    ...(openingHoursSpecification.length > 0 && { openingHoursSpecification }),
     // publicAccess and touristType are GONE. Nothing backs either. touristType
     // in particular listed "Family", "Couples", "Solo travelers", "Groups" for
     // every row, which is a claim that says nothing and is false the moment one
@@ -203,17 +214,12 @@ export default function EnhancedAttractionSEO({
           attraction.location || `${BRAND.city}, ${BRAND.state}`
         }
       />
-      <meta name="place:city" content={BRAND.city} />
+      {/* No place:city. The table has no city column, and the set includes
+          Ankeny, Altoona and Waukee (see the address note above). */}
       <meta name="place:state" content={BRAND.state} />
       <meta name="place:country" content="United States" />
       {attraction.image_url && (
         <meta name="place:image" content={attraction.image_url} />
-      )}
-      {attraction.rating && (
-        <meta
-          name="place:rating"
-          content={attraction.rating.toFixed(1)}
-        />
       )}
 
       {/* Structured Data */}

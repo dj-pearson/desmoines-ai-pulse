@@ -23,6 +23,7 @@
 import {
   desMoinesNow,
   formatClockLabel,
+  formatOpenStatusLine,
   resolveOpenStatus,
   type RestaurantOpenResult,
   type StoredOpeningHours,
@@ -194,4 +195,77 @@ export function weeklyHoursRows(hours: unknown, now: Date = new Date()): WeeklyH
     return { label, text, isToday: key === today };
   });
   return rows.some((r) => r.text !== null) ? rows : [];
+}
+
+/** One schema.org OpeningHoursSpecification node. */
+export interface OpeningHoursSpecification {
+  "@type": "OpeningHoursSpecification";
+  dayOfWeek: string;
+  opens: string;
+  closes: string;
+}
+
+const SCHEMA_DAY: Record<string, string> = {
+  mon: "https://schema.org/Monday",
+  tue: "https://schema.org/Tuesday",
+  wed: "https://schema.org/Wednesday",
+  thu: "https://schema.org/Thursday",
+  fri: "https://schema.org/Friday",
+  sat: "https://schema.org/Saturday",
+  sun: "https://schema.org/Sunday",
+};
+
+/** "09:00" from 540. 24:00 is written 23:59, which is what Google reads as end of day. */
+function schemaClock(minute: number): string {
+  const m = minute >= 24 * 60 ? 24 * 60 - 1 : minute;
+  return `${String(Math.floor(m / 60)).padStart(2, "0")}:${String(m % 60).padStart(2, "0")}`;
+}
+
+/**
+ * attractions.hours as schema.org openingHoursSpecification (explore pass 2
+ * WP3 item 4). Only days the row actually states: an open day with a readable
+ * open and close, or a day entered as closed (opens = closes = 00:00, the
+ * schema.org way to say closed). A day nobody entered is left out, because
+ * publishing it as closed would be a claim the row doesn't make. Empty when
+ * no day is stated, so the caller omits the property.
+ */
+export function attractionOpeningHoursSpec(hours: unknown): OpeningHoursSpecification[] {
+  const raw = normaliseKeys(hours);
+  const out: OpeningHoursSpecification[] = [];
+  for (const { key } of WEEK) {
+    const d = readDay(raw, key);
+    if (d.kind === "missing") continue;
+    out.push({
+      "@type": "OpeningHoursSpecification",
+      dayOfWeek: SCHEMA_DAY[key],
+      opens: d.kind === "open" ? schemaClock(d.openMinute) : "00:00",
+      closes: d.kind === "open" ? schemaClock(d.closeMinute) : "00:00",
+    });
+  }
+  return out;
+}
+
+/** The columns the fact line reads. */
+export interface AttractionFactFields {
+  hours?: unknown;
+  hours_summary?: string | null;
+  is_free?: boolean | null;
+  is_indoor?: boolean | null;
+  is_kid_friendly?: boolean | null;
+}
+
+/**
+ * The hub card's and the map popup's fact line, as parts: Free,
+ * Indoor/Outdoor, Kids, and today's status. Each part only when its column
+ * says something. `now` null leaves the status out, which is what the
+ * prerender wants: a status frozen into static HTML is wrong within the hour.
+ */
+export function attractionFactParts(row: AttractionFactFields, now: Date | null): string[] {
+  const status = now ? formatOpenStatusLine(attractionOpenStatus(row.hours, row.hours_summary, now)) : null;
+  return [
+    row.is_free === true ? "Free" : null,
+    row.is_indoor === true ? "Indoor" : row.is_indoor === false ? "Outdoor" : null,
+    row.is_kid_friendly === true ? "Kids" : null,
+    status,
+  ].filter((f): f is string => Boolean(f));
 }

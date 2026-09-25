@@ -278,7 +278,8 @@ export function useHotel(slug: string | undefined) {
       const { data, error: fetchError } = await supabase
         .from("hotels")
         .select("*")
-        .eq("slug", slug)
+        // `enabled: !!slug` guarantees a slug here; `?? ""` only narrows the type.
+        .eq("slug", slug ?? "")
         .eq("is_active", true)
         .maybeSingle();
 
@@ -321,7 +322,7 @@ export function useEventHotels(eventId: string | undefined) {
       const { data, error } = await supabase
         .from("event_hotels")
         .select("*, hotels(*)")
-        .eq("event_id", eventId)
+        .eq("event_id", eventId ?? "")
         .order("sort_order", { ascending: true });
 
       if (error) {

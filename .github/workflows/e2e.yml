@@ -84,6 +84,10 @@ jobs:
       # tests/restaurants-open-now-pass2.spec.ts, tests/restaurants-dietary.spec.ts
       # and tests/brewery-trail.spec.ts, plus the former orphan
       # tests/restaurant-reservations.spec.ts.
+      # The Explore second pass joined the same way
+      # (docs/page-plans/explore-pass2.md WP6): tests/explore-section-links.spec.ts,
+      # tests/discover-map-time.spec.ts, tests/attraction-detail.spec.ts,
+      # tests/playground-detail.spec.ts and tests/team-venue-trail-detail.spec.ts.
       - name: Run smoke suite against a production build
         run: npm run test:smoke
 

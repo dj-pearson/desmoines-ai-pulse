@@ -94,11 +94,15 @@ const REQUIRED_CLEAN = [
   // prerendered events routes, every month page and every music venue page.
   'components/schema/EventListJsonLd.tsx',
   'pages/VenueDetail.tsx',
+  // Explore pass 2 WP4 item 1: playground names, descriptions and amenities
+  // come from a Google Places import.
+  'components/EnhancedPlaygroundSEO.tsx',
+  // Explore pass 2 WP5 item 11 converts it; WP4 owns this file and moves it.
+  'pages/TeamDetail.tsx',
 ];
 
 // Still bare as of 2026-09-24. May only shrink.
 const BASELINE = new Set([
-  'components/EnhancedPlaygroundSEO.tsx',
   'components/LocalSEO.tsx',
   // Builds a copy-paste snippet in a template string for the admin SEO tool,
   // not a live script tag; listed so the scan stays simple.
@@ -107,7 +111,6 @@ const BASELINE = new Set([
   'components/schema/TouristTripSchema.tsx',
   'pages/ArticleDetails.tsx',
   'pages/SeasonalGuide.tsx',
-  'pages/TeamDetail.tsx',
 ]);
 
 const offenders = walk(SRC)

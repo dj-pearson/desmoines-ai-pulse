@@ -103,6 +103,57 @@ export function escapeLike(value: string): string {
 }
 
 /**
+ * The ilike patterns that mean "this location's suburb is `suburb`" (explore
+ * pass 2 WP4 item 9). A comma segment, not a substring: "%Des Moines%"
+ * matched every West Des Moines row, so the Des Moines option returned the
+ * whole western suburb as well. The segment may end the string, be followed
+ * by another comma, or carry the state or a ZIP glued on ("Clive IA 50325"),
+ * which are the shapes suburbFromLocation reads a suburb out of.
+ *
+ * The one list feeds both the server filter (suburbFilter) and the facet
+ * count (locationInSuburb), so the number beside an option is the number of
+ * rows the option returns.
+ */
+export function suburbLikePatterns(suburb: string): string[] {
+  const s = escapeLike(suburb.trim());
+  const prefixes = ["", "%, ", "%,"];
+  const suffixes = ["", ",%", " IA%", " Iowa%", " 5%"];
+  const out: string[] = [];
+  for (const p of prefixes) for (const x of suffixes) out.push(`${p}${s}${x}`);
+  return out;
+}
+
+/** A PostgREST or() body: location ilike any of the suburb patterns. */
+export function suburbFilter(suburb: string): string {
+  // Double-quoted because the patterns hold commas; inside the quotes a
+  // backslash and a double quote are escaped with a backslash.
+  const quote = (v: string) => `"${v.replace(/\\/g, "\\\\").replace(/"/g, '\\"')}"`;
+  return suburbLikePatterns(suburb)
+    .map((p) => `location.ilike.${quote(p)}`)
+    .join(",");
+}
+
+/** An ILIKE pattern as a case-insensitive RegExp, honouring \ escapes. */
+function likeToRegExp(pattern: string): RegExp {
+  let re = "";
+  for (let i = 0; i < pattern.length; i++) {
+    const c = pattern[i];
+    if (c === "\\" && i + 1 < pattern.length) {
+      re += pattern[++i].replace(/[.*+?^${}()|[\]\\]/g, "\\$&");
+    } else if (c === "%") re += "[\\s\\S]*";
+    else if (c === "_") re += "[\\s\\S]";
+    else re += c.replace(/[.*+?^${}()|[\]\\]/g, "\\$&");
+  }
+  return new RegExp(`^${re}$`, "i");
+}
+
+/** True when `location` matches suburbFilter(suburb) server-side. */
+export function locationInSuburb(location: string | null | undefined, suburb: string): boolean {
+  if (!location) return false;
+  return suburbLikePatterns(suburb).some((p) => likeToRegExp(p).test(location));
+}
+
+/**
  * Distance-sorted nearby list, computed client-side from the bounding-box
  * query below. Rows without coordinates go last with a null distance.
  */
@@ -135,7 +186,7 @@ interface PlaygroundFilters {
   source?: "google_places" | "manual";
   /** Admin-only: only manually-curated rows */
   manuallyCuratedOnly?: boolean;
-  /** Substring match on `location`, matching how the suburb chips are derived. */
+  /** The suburb `location` names, matched by comma segment (suburbFilter). */
   location?: string;
   /** Only rows with has_shade = true. */
   shade?: boolean;
@@ -201,11 +252,10 @@ export function usePlaygrounds(filters: PlaygroundFilters = {}) {
         query = query.eq("age_range", filters.age_range);
       }
 
-      // WEB-PERF-028 AC4. Substring, not equality: the suburb chips on
-      // /playgrounds are derived by splitting the `location` string, so "Ankeny"
-      // has to match "1234 Main St, Ankeny, IA".
+      // Explore pass 2 WP4 item 9. A comma segment of `location`, not a
+      // substring, so "Des Moines" no longer returns West Des Moines.
       if (filters.location) {
-        query = query.ilike("location", `%${escapeLike(filters.location)}%`);
+        query = query.or(suburbFilter(filters.location));
       }
 
       if (filters.shade) {
@@ -361,6 +411,7 @@ export function usePlaygroundFacets() {
     ageRangeCounts: Record<string, number>;
     amenityCounts: Record<string, number>;
     locationCounts: Record<string, number>;
+    metroCount: number;
   }>({
     queryKey: [...queryKeys.playgrounds.all, "facets", "metro"] as const,
     staleTime: STALE_TIME.REFERENCE,
@@ -399,15 +450,11 @@ export function usePlaygroundFacets() {
         }
       }
 
-      // A suburb's count is rows whose location CONTAINS it, since that is
-      // what the filter will return: "Des Moines" also matches every
-      // "West Des Moines" row, and the number beside it should say so.
+      // A suburb's count is the rows the filter will return for it, by the
+      // same comma-segment rule (locationInSuburb mirrors suburbFilter).
       const suburbs = Object.keys(locationCounts);
       for (const suburb of suburbs) {
-        const needle = suburb.toLowerCase();
-        locationCounts[suburb] = rows.filter((r) =>
-          (r.location || "").toLowerCase().includes(needle),
-        ).length;
+        locationCounts[suburb] = rows.filter((r) => locationInSuburb(r.location, suburb)).length;
       }
 
       return {
@@ -417,6 +464,7 @@ export function usePlaygroundFacets() {
         ageRangeCounts,
         amenityCounts,
         locationCounts,
+        metroCount: rows.length,
       };
     },
   });
@@ -428,13 +476,16 @@ export function usePlaygroundFacets() {
     ageRangeCounts: data?.ageRangeCounts ?? {},
     amenityCounts: data?.amenityCounts ?? {},
     locationCounts: data?.locationCounts ?? {},
+    /** Playgrounds inside the metro; null until the facets have loaded. */
+    metroCount: data ? data.metroCount : null,
     isLoading,
   };
 }
 
 /** Roughly 12 miles each way at Des Moines' latitude. */
 const NEARBY_BOX_DEGREES = { lat: 0.18, lng: 0.24 } as const;
-const NEARBY_CANDIDATES = 40;
+/** Above the metro's whole playground count, so the cut never drops a closer row. */
+const NEARBY_CANDIDATES = 100;
 const SIDE_LIST_SIZE = 4;
 
 interface SideQueryTarget {
@@ -471,7 +522,9 @@ export function useNearbyPlaygrounds(target: SideQueryTarget | null | undefined)
         .lte("latitude", Math.min(b.maxLatitude, target.latitude + NEARBY_BOX_DEGREES.lat))
         .gte("longitude", Math.max(b.minLongitude, target.longitude - NEARBY_BOX_DEGREES.lng))
         .lte("longitude", Math.min(b.maxLongitude, target.longitude + NEARBY_BOX_DEGREES.lng))
-        .order("rating", { ascending: false, nullsFirst: false })
+        // No rating order before the cut (explore pass 2 WP4 item 10): it
+        // kept the best-rated 40 in the box, not the closest, and dropped an
+        // unrated playground across the street. Distance is sorted below.
         .limit(NEARBY_CANDIDATES);
 
       if (error) {

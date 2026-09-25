@@ -1,5 +1,6 @@
-import { useEffect, useRef, type MutableRefObject } from "react";
+import { memo, useEffect, useMemo, useRef, useState, type MutableRefObject } from "react";
 import {
+  AttributionControl,
   MapContainer,
   TileLayer,
   Marker,
@@ -55,6 +56,21 @@ export interface MapEntity {
   date?: string;
   /** "Open until 10 PM", "Starts 7:30 PM". Shown in popup, list and marker title. */
   statusLabel?: string;
+  /** "0.4 mi", set after Near me. Shown in the popup. */
+  distanceLabel?: string;
+}
+
+/**
+ * Where the map should move. `reveal` pans without zooming when the point is
+ * already on screen (a list-row click); otherwise it flies in to street zoom.
+ * `targetId` names the selection this move is for, so the popup waits for it.
+ */
+export interface MapFlyTo {
+  lat: number;
+  lng: number;
+  key: number;
+  reveal?: boolean;
+  targetId?: string;
 }
 
 interface DiscoverMapCanvasProps {
@@ -62,7 +78,9 @@ interface DiscoverMapCanvasProps {
   selectedId: string | null;
   onSelect: (id: string) => void;
   onBoundsChange: (bounds: MapBounds) => void;
-  flyTo: { lat: number; lng: number; key: number } | null;
+  flyTo: MapFlyTo | null;
+  /** A marker's popup was closed (close button, Escape, or a click on the map). */
+  onPopupClose?: (id: string) => void;
   /** Fit to these on mount (from ?bbox=). Read once; later changes are ignored. */
   initialBounds?: MapBounds | null;
   userLocation?: { lat: number; lng: number } | null;
@@ -160,14 +178,50 @@ function BoundsWatcher({ onBoundsChange }: { onBoundsChange: (b: MapBounds) => v
   return null;
 }
 
-function FlyToController({ flyTo }: { flyTo: { lat: number; lng: number; key: number } | null }) {
+function FlyToController({ flyTo }: { flyTo: MapFlyTo | null }) {
   const map = useMap();
   useEffect(() => {
-    if (flyTo) {
-      map.flyTo([flyTo.lat, flyTo.lng], Math.max(map.getZoom(), 15), { duration: 0.6 });
+    if (!flyTo) return;
+    const target: [number, number] = [flyTo.lat, flyTo.lng];
+    // A pin already on screen: move it into view without changing the zoom
+    // the user picked (explore-pass2 WP2 item 9).
+    if (flyTo.reveal && map.getBounds().contains(target)) {
+      map.panTo(target, { duration: 0.4 });
+      return;
     }
+    map.flyTo(target, Math.max(map.getZoom(), 15), { duration: 0.6 });
   }, [flyTo, map]);
   return null;
+}
+
+/**
+ * OSM attribution where a phone can see it. Bottom-right, Leaflet's default,
+ * sits under the results sheet below md, so the licence line was covered on
+ * every phone (explore-pass2 WP2 item 7). Keyed by position so a resize across
+ * md re-adds the control rather than leaving two.
+ */
+const MD_QUERY = "(min-width: 768px)";
+
+function useIsMdUp(): boolean {
+  const [isMd, setIsMd] = useState(() =>
+    typeof window !== "undefined" && typeof window.matchMedia === "function"
+      ? window.matchMedia(MD_QUERY).matches
+      : true
+  );
+  useEffect(() => {
+    if (typeof window.matchMedia !== "function") return;
+    const mql = window.matchMedia(MD_QUERY);
+    const onChange = () => setIsMd(mql.matches);
+    mql.addEventListener("change", onChange);
+    return () => mql.removeEventListener("change", onChange);
+  }, []);
+  return isMd;
+}
+
+function ResponsiveAttribution() {
+  const isMd = useIsMdUp();
+  const position = isMd ? "bottomright" : "topright";
+  return <AttributionControl key={position} position={position} />;
 }
 
 /**
@@ -229,21 +283,187 @@ function directionsUrl(entity: MapEntity): string {
   return `https://www.google.com/maps/dir/?api=1&destination=${entity.latitude},${entity.longitude}`;
 }
 
+/** Above this many pins, markers leave the tab order: the list is the keyboard path. */
+const KEYBOARD_MARKER_LIMIT = 60;
+
+interface EntityMarkerProps {
+  entity: MapEntity;
+  selected: boolean;
+  html: string;
+  label: string;
+  keyboard: boolean;
+  onSelectRef: MutableRefObject<(id: string) => void>;
+  onPopupCloseRef: MutableRefObject<((id: string) => void) | undefined>;
+  markers: MutableRefObject<Map<string, LeafletMarker>>;
+}
+
+/**
+ * The page rebuilds entity objects on every clock tick; compare what a pin
+ * shows rather than object identity, so an unchanged pin does not re-render.
+ */
+function sameEntity(a: MapEntity, b: MapEntity): boolean {
+  return (
+    a === b ||
+    (a.id === b.id &&
+      a.type === b.type &&
+      a.name === b.name &&
+      a.latitude === b.latitude &&
+      a.longitude === b.longitude &&
+      a.href === b.href &&
+      a.description === b.description &&
+      a.category === b.category &&
+      a.rating === b.rating &&
+      a.statusLabel === b.statusLabel &&
+      a.distanceLabel === b.distanceLabel)
+  );
+}
+
+function sameMarkerProps(a: EntityMarkerProps, b: EntityMarkerProps): boolean {
+  return (
+    a.selected === b.selected &&
+    a.html === b.html &&
+    a.label === b.label &&
+    a.keyboard === b.keyboard &&
+    a.onSelectRef === b.onSelectRef &&
+    a.onPopupCloseRef === b.onPopupCloseRef &&
+    a.markers === b.markers &&
+    sameEntity(a.entity, b.entity)
+  );
+}
+
+/**
+ * One pin and its popup. Memoized, with its event handlers built once per
+ * entity id, so a clock tick or a selection change re-renders the one or two
+ * markers it touches instead of every pin (explore-pass2 WP2 item 11). The
+ * callbacks come through refs for the same reason.
+ */
+const EntityMarker = memo(function EntityMarker({
+  entity,
+  selected,
+  html,
+  label,
+  keyboard,
+  onSelectRef,
+  onPopupCloseRef,
+  markers,
+}: EntityMarkerProps) {
+  const id = entity.id;
+  const eventHandlers = useMemo(
+    () => ({
+      click: () => onSelectRef.current(id),
+      popupopen: (e: L.PopupEvent) => {
+        // Move focus into the popup when the user was already on the page
+        // (a marker or a list row); a cold ?sel= load leaves focus alone.
+        const active = document.activeElement;
+        if (!active || active === document.body) return;
+        const link = e.popup.getElement()?.querySelector<HTMLElement>("a[href]");
+        link?.focus({ preventScroll: true });
+      },
+      popupclose: (e: L.PopupEvent) => {
+        // Give focus back to the pin only when it was inside the popup, so
+        // selecting another row from the list does not pull focus to the map.
+        const container = e.popup.getElement();
+        const active = document.activeElement;
+        if (container && active && container.contains(active)) {
+          markers.current.get(id)?.getElement()?.focus({ preventScroll: true });
+        }
+        onPopupCloseRef.current?.(id);
+      },
+    }),
+    [id, onSelectRef, onPopupCloseRef, markers]
+  );
+  const title = `${entity.name}, ${label}${entity.statusLabel ? ", " + entity.statusLabel : ""}`;
+
+  return (
+    <Marker
+      ref={(m) => {
+        if (m) markers.current.set(id, m);
+        else markers.current.delete(id);
+      }}
+      position={[entity.latitude, entity.longitude]}
+      icon={markerIcon(entity.type, html, selected)}
+      title={title}
+      alt={title}
+      keyboard={keyboard}
+      zIndexOffset={selected ? 1000 : 0}
+      eventHandlers={eventHandlers}
+    >
+      <Popup>
+        <div className="min-w-[200px] space-y-1">
+          <h3 className="font-semibold text-sm">{entity.name}</h3>
+          {entity.statusLabel && (
+            <p className="text-xs font-medium !my-0">{entity.statusLabel}</p>
+          )}
+          {entity.distanceLabel && (
+            <p className="text-xs !my-0">{entity.distanceLabel} away</p>
+          )}
+          {entity.category && (
+            <p className="text-xs text-muted-foreground !my-0">{entity.category}</p>
+          )}
+          {entity.description && (
+            <p className="text-xs !my-0 line-clamp-3">{entity.description}</p>
+          )}
+          <div className="flex items-center gap-2">
+            <Badge variant="outline" className="text-xs">
+              {label}
+            </Badge>
+            {entity.rating != null && entity.rating > 0 && (
+              <span className="text-xs text-muted-foreground">
+                <Star className="h-3 w-3 inline mr-0.5 text-amber-500" aria-hidden="true" />
+                {entity.rating}
+                <span className="sr-only"> out of 5</span>
+              </span>
+            )}
+          </div>
+          <div className="flex flex-wrap gap-2 pt-1">
+            <Link
+              to={entity.href ?? `/${LEGACY_PREFIX[entity.type]}/${entity.id}`}
+              className="inline-flex min-h-11 items-center rounded-md border px-3 text-xs font-medium text-primary hover:bg-muted"
+            >
+              View details
+              <span className="sr-only"> for {entity.name}</span>
+            </Link>
+            <a
+              href={directionsUrl(entity)}
+              target="_blank"
+              rel="noopener noreferrer"
+              className="inline-flex min-h-11 items-center rounded-md border px-3 text-xs font-medium hover:bg-muted"
+            >
+              Directions
+              <span className="sr-only"> to {entity.name} (opens in a new tab)</span>
+            </a>
+          </div>
+        </div>
+      </Popup>
+    </Marker>
+  );
+}, sameMarkerProps);
+
 export default function DiscoverMapCanvas({
   entities,
   selectedId,
   onSelect,
   onBoundsChange,
   flyTo,
+  onPopupClose,
   initialBounds,
   userLocation,
   markerHtml = DEFAULT_MARKER_HTML,
   typeLabel = DEFAULT_TYPE_LABEL,
 }: DiscoverMapCanvasProps) {
   const markers = useRef(new Map<string, LeafletMarker>());
+  const onSelectRef = useRef(onSelect);
+  onSelectRef.current = onSelect;
+  const onPopupCloseRef = useRef(onPopupClose);
+  onPopupCloseRef.current = onPopupClose;
   // Read once: MapContainer ignores later changes to center/zoom/bounds anyway.
   const initial = useRef(initialBounds ?? null);
   const fit = initial.current;
+  const keyboard = entities.length <= KEYBOARD_MARKER_LIMIT;
+  // The popup waits for a move only when the move is for this selection; a
+  // marker click selects in place and opens at once.
+  const flyKey =
+    flyTo && (flyTo.targetId === undefined || flyTo.targetId === selectedId) ? flyTo.key : null;
 
   return (
     <MapContainer
@@ -257,16 +477,18 @@ export default function DiscoverMapCanvas({
         : { center: DSM_CENTER, zoom: 13 })}
       style={{ width: "100%", height: "100%", position: "absolute", inset: 0 }}
       scrollWheelZoom
+      attributionControl={false}
     >
       <TileLayer
         attribution='&copy; <a href="https://www.openstreetmap.org/copyright">OpenStreetMap</a>'
         url="https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png"
       />
+      <ResponsiveAttribution />
       <BoundsWatcher onBoundsChange={onBoundsChange} />
       <FlyToController flyTo={flyTo} />
       <SelectedPopupOpener
         selectedId={selectedId}
-        flyKey={flyTo?.key ?? null}
+        flyKey={flyKey}
         entityCount={entities.length}
         markers={markers}
       />
@@ -279,71 +501,19 @@ export default function DiscoverMapCanvas({
           keyboard={false}
         />
       )}
-      {entities.map((entity) => {
-        const label = typeLabel[entity.type];
-        const title = `${entity.name}, ${label}${entity.statusLabel ? ", " + entity.statusLabel : ""}`;
-        const selected = selectedId === entity.id;
-        return (
-          <Marker
-            key={`${entity.type}:${entity.id}`}
-            ref={(m) => {
-              if (m) markers.current.set(entity.id, m);
-              else markers.current.delete(entity.id);
-            }}
-            position={[entity.latitude, entity.longitude]}
-            icon={markerIcon(entity.type, markerHtml[entity.type], selected)}
-            title={title}
-            alt={title}
-            zIndexOffset={selected ? 1000 : 0}
-            eventHandlers={{ click: () => onSelect(entity.id) }}
-          >
-            <Popup>
-              <div className="min-w-[200px] space-y-1">
-                <h3 className="font-semibold text-sm">{entity.name}</h3>
-                {entity.statusLabel && (
-                  <p className="text-xs font-medium !my-0">{entity.statusLabel}</p>
-                )}
-                {entity.category && (
-                  <p className="text-xs text-muted-foreground !my-0">{entity.category}</p>
-                )}
-                {entity.description && (
-                  <p className="text-xs !my-0 line-clamp-3">{entity.description}</p>
-                )}
-                <div className="flex items-center gap-2">
-                  <Badge variant="outline" className="text-xs">
-                    {label}
-                  </Badge>
-                  {entity.rating != null && entity.rating > 0 && (
-                    <span className="text-xs text-muted-foreground">
-                      <Star className="h-3 w-3 inline mr-0.5 text-amber-500" aria-hidden="true" />
-                      {entity.rating}
-                      <span className="sr-only"> out of 5</span>
-                    </span>
-                  )}
-                </div>
-                <div className="flex flex-wrap gap-2 pt-1">
-                  <Link
-                    to={entity.href ?? `/${LEGACY_PREFIX[entity.type]}/${entity.id}`}
-                    className="inline-flex min-h-11 items-center rounded-md border px-3 text-xs font-medium text-primary hover:bg-muted"
-                  >
-                    View details
-                    <span className="sr-only"> for {entity.name}</span>
-                  </Link>
-                  <a
-                    href={directionsUrl(entity)}
-                    target="_blank"
-                    rel="noopener noreferrer"
-                    className="inline-flex min-h-11 items-center rounded-md border px-3 text-xs font-medium hover:bg-muted"
-                  >
-                    Directions
-                    <span className="sr-only"> to {entity.name} (opens in a new tab)</span>
-                  </a>
-                </div>
-              </div>
-            </Popup>
-          </Marker>
-        );
-      })}
+      {entities.map((entity) => (
+        <EntityMarker
+          key={`${entity.type}:${entity.id}`}
+          entity={entity}
+          selected={selectedId === entity.id}
+          html={markerHtml[entity.type]}
+          label={typeLabel[entity.type]}
+          keyboard={keyboard}
+          onSelectRef={onSelectRef}
+          onPopupCloseRef={onPopupCloseRef}
+          markers={markers}
+        />
+      ))}
     </MapContainer>
   );
 }
