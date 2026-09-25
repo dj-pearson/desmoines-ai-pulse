@@ -30,9 +30,17 @@ export function buildHubFaqs(): FAQItem[] {
       links: [{ label: "Free events", to: "/events/free" }],
     },
     {
+      // Static FAQPage JSON-LD: it names nothing it can't link at build time
+      // (events-pass2 WP1 item 16). The venue pages are listed in the
+      // directory on this page, so the answer points there instead of naming
+      // five venues the build can't check.
       question: "What are the live music venues in Des Moines?",
       answer:
-        "Each venue we track has a page listing its upcoming shows, including Wells Fargo Arena, the Des Moines Civic Center, Hoyt Sherman Place, Wooly's and the Val Air Ballroom in West Des Moines. The Live Music page covers concerts across the metro.",
+        "The Live Music page covers concerts across the metro. The directory on this page lists the music venues that have their own pages, each with its upcoming shows.",
+      links: [
+        { label: "Live music", to: "/music" },
+        { label: "Music venues", to: "/events#events-directory" },
+      ],
     },
     {
       question: "What are the biggest annual events in Des Moines?",

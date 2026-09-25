@@ -1,5 +1,5 @@
 import type { ComponentType, ReactNode, RefObject } from "react";
-import { Clock, Loader2, Navigation, Search, SlidersHorizontal, Star, Tag, X } from "lucide-react";
+import { Clock, Loader2, Navigation, Search, Star, Tag, X } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { SearchAutocomplete, addRecentSearch } from "@/components/SearchAutocomplete";
@@ -8,12 +8,17 @@ import { cn } from "@/lib/utils";
 /**
  * The /events hub's first screen (docs/page-plans/events.md WP1 item 8): a
  * flat surface with the h1, search, and ONE sideways-scrolling chip row -
- * Tonight, This weekend, Free, Near me, Filters. The old hero stacked a
+ * Today, This weekend, Free, Near me. The old hero stacked a
  * gradient, blur blobs, a date-preset row, an action row, a presets row and a
  * filter-pill row, so on a 390px phone no event was visible until the third
  * scroll.
  *
  * Every value here is read from the URL by the page; this only renders it.
+ *
+ * Filters and List/Map live once, in EventsStickyBar (events-pass2 WP1 item
+ * 14); a Filters chip here was the second of two on a phone's first screen.
+ * The first chip says "Today" because it sets preset=today, the whole Central
+ * day; the strip below owns "tonight".
  */
 
 function SpinningIcon({ className }: { className?: string }) {
@@ -26,23 +31,19 @@ function QuickChip({
   icon: Icon,
   children,
   disabled,
-  opensDialog,
 }: {
   pressed?: boolean;
   onClick: () => void;
   icon: ComponentType<{ className?: string }>;
   children: ReactNode;
   disabled?: boolean;
-  /** A chip that opens a dialog is a button, not a toggle: no aria-pressed. */
-  opensDialog?: boolean;
 }) {
   return (
     <button
       type="button"
       onClick={onClick}
       disabled={disabled}
-      aria-pressed={opensDialog ? undefined : Boolean(pressed)}
-      aria-haspopup={opensDialog ? "dialog" : undefined}
+      aria-pressed={Boolean(pressed)}
       className={cn(
         "inline-flex min-h-11 shrink-0 snap-start items-center gap-1.5 rounded-full border px-4 text-sm font-medium transition-colors",
         "focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2",
@@ -71,8 +72,6 @@ export interface EventsHubHeroProps {
   isNearMe: boolean;
   isLocating: boolean;
   onToggleNearMe: () => void;
-  activeFiltersCount: number;
-  onOpenFilters: () => void;
 }
 
 export function EventsHubHero({
@@ -87,8 +86,6 @@ export function EventsHubHero({
   isNearMe,
   isLocating,
   onToggleNearMe,
-  activeFiltersCount,
-  onOpenFilters,
 }: EventsHubHeroProps) {
   return (
     <section className="border-b bg-muted/40">
@@ -145,7 +142,7 @@ export function EventsHubHero({
             className="-mx-4 mt-3 flex snap-x gap-2 overflow-x-auto px-4 pb-1 scrollbar-hide"
           >
             <QuickChip icon={Clock} pressed={activePreset === "today"} onClick={() => onTogglePreset("today")}>
-              Tonight
+              Today
             </QuickChip>
             <QuickChip
               icon={Star}
@@ -164,9 +161,6 @@ export function EventsHubHero({
               onClick={onToggleNearMe}
             >
               {isLocating ? "Locating..." : "Near me"}
-            </QuickChip>
-            <QuickChip icon={SlidersHorizontal} opensDialog onClick={onOpenFilters}>
-              Filters{activeFiltersCount > 0 ? ` (${activeFiltersCount})` : ""}
             </QuickChip>
           </div>
         </div>

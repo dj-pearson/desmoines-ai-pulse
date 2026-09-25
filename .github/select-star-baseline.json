@@ -1,5 +1,5 @@
 {
-  "count": 136,
+  "count": 135,
   "sites": [
     "src/hooks/useAIConfiguration.ts:24",
     "src/hooks/useAIModels.ts:30",
@@ -58,7 +58,6 @@
     "src/hooks/useDeals.ts:52",
     "src/hooks/useDomainHighlights.ts:27",
     "src/hooks/useEmailPreferences.ts:42",
-    "src/hooks/useEventBySlug.ts:107",
     "src/hooks/useEventSocial.ts:102",
     "src/hooks/useEventSocial.ts:110",
     "src/hooks/useEventSocial.ts:94",

@@ -14,6 +14,7 @@ import { SpriteIcon } from "@/components/ui/SpriteIcon";
 import { ErrorState } from '@/components/ui/error-state';
 import { NearbyHotels } from '@/components/venues/NearbyHotels';
 import { buildEventItemList } from '@/lib/eventSchema';
+import { toJsonLd } from '@/lib/jsonLd';
 import { buildVenueJsonLd, venueCity, venuePageUrl } from '@/lib/venuePages';
 import { BRAND } from '@/lib/brandConfig';
 import type { Event } from '@/lib/types';
@@ -125,10 +126,10 @@ export default function VenueDetail() {
         <meta name="description" content={metaDescription} />
         <meta property="og:title" content={`Upcoming Events at ${venue.name}, ${city}`} />
         <meta property="og:description" content={metaDescription} />
-        <script type="application/ld+json">{JSON.stringify(buildVenueJsonLd(venue))}</script>
+        <script type="application/ld+json">{toJsonLd(buildVenueJsonLd(venue))}</script>
         {upcoming.length > 0 && (
           <script type="application/ld+json">
-            {JSON.stringify(
+            {toJsonLd(
               buildEventItemList(upcoming, {
                 name: `Upcoming events at ${venue.name}`,
                 description: `Events scheduled at ${venue.name}, ${city}, ${BRAND.state}.`,

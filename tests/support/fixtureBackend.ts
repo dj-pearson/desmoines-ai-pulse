@@ -136,6 +136,15 @@ function attractions(n = 12) {
   }));
 }
 
+/**
+ * The events rows, for a spec that answers one read itself on top of this
+ * backend (route-smoke's list-to-detail check answers `id=eq.` lookups, which
+ * this backend deliberately does not filter).
+ */
+export function fixtureEvents(): ReturnType<typeof events> {
+  return events();
+}
+
 const TABLES: Record<string, () => unknown[]> = {
   events,
   restaurants,

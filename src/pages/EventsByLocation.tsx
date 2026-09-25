@@ -14,27 +14,33 @@ import { useBatchEventSocial } from "@/hooks/useBatchEventSocial";
 import EnhancedLocalSEO from "@/components/EnhancedLocalSEO";
 import { EventListJsonLd } from "@/components/schema/EventListJsonLd";
 import { Card, CardContent } from "@/components/ui/card";
-import { parseISO, isAfter } from "date-fns";
+import NoIndexMeta from "@/components/schema/NoIndexMeta";
+import { EventsLandingLinks } from "@/components/events/EventsLandingLinks";
+import { DIRECTORY_PILL } from "@/components/seo/MonthLinks";
+import { notOverFilter } from "@/components/events/eventsHubQuery";
 import { BRAND } from "@/lib/brandConfig";
 import { Breadcrumbs } from "@/components/ui/breadcrumbs";
 import { RESTAURANT_LIST_COLUMNS } from "@/lib/listColumns";
 import { ErrorState } from "@/components/ui/error-state";
-import { SUBURBS } from "@/lib/suburbs";
+import { SUBURBS, type SuburbSlug } from "@/lib/suburbs";
 import { PlaceCrossLinks } from "@/components/PlaceCrossLinks";
 import { applyEventVisibility } from "@/lib/eventQuery";
+import { eventAreaOrFilter, findEventArea } from "@/lib/eventAreas";
 import { isFreePrice } from "@/lib/eventPrice";
-import { upcomingFloorUtc } from "@/lib/timezone";
 
 /** Rows fetched for one suburb. The page renders 24; the rest feed the counts. */
 const MAX_EVENTS = 500;
 
 /**
- * A PostgREST `or` over each column for each search term, as a case-insensitive
- * substring match. The terms come from SUBURBS, a fixed list with no commas,
- * parentheses or wildcards in it, so nothing needs quoting.
+ * The suburb as a place (events-pass2 WP5 items 5 and 6): eventAreas' group
+ * for the suburb's city area, the same one the hub's `?location=<slug>`
+ * sends. `city` first; a row with no city only through a location that ends
+ * in the suburb's name, so "Urbandale Ave, Des Moines" is not an Urbandale
+ * event. Restaurants have the same two columns and use the same group.
  */
-function searchTermFilter(terms: readonly string[], columns: readonly string[]): string {
-  return terms.flatMap((term) => columns.map((col) => `${col}.ilike.%${term}%`)).join(",");
+function suburbPlaceFilter(slug: string | null): string | null {
+  const area = findEventArea(slug);
+  return area ? eventAreaOrFilter(area) : null;
 }
 
 export default function EventsByLocation() {
@@ -63,6 +69,9 @@ export default function EventsByLocation() {
     id: string;
     title: string;
     date: string;
+    end_date?: string | null;
+    latitude?: number | null;
+    longitude?: number | null;
     time?: string;
     location: string;
     venue: string;
@@ -76,19 +85,25 @@ export default function EventsByLocation() {
     city?: string;
   }
 
-  // Filtered in the query, not in the browser (events plan WP6 item 8). This
-  // downloaded every upcoming event in the metro and substring-matched in JS,
-  // with no visibility predicates, so hidden and merged rows showed up here.
+  const placeFilter = suburbPlaceFilter(slug);
+
+  // Filtered in the query, not in the browser (events plan WP6 item 8). The
+  // floor is the hub's not-over rule, nested with the place group in ONE
+  // `or=` (a second .or() is a second param, and the codebase does not rely
+  // on how PostgREST combines those). It replaced a start-of-today floor plus
+  // a client isAfter(date) that dropped a festival still running and kept an
+  // 8 AM class at 9 PM.
   const {
     data: events = [],
     isLoading,
+    isSuccess: eventsLoaded,
     error: loadError,
     refetch: refetchEvents,
   } = useQuery({
     queryKey: ["events-by-location", slug],
-    enabled: !!suburbInfo,
+    enabled: !!suburbInfo && !!placeFilter,
     queryFn: async (): Promise<EventItem[]> => {
-      if (!suburbInfo) return [];
+      if (!suburbInfo || !placeFilter) return [];
       const { data, error } = await applyEventVisibility(
         supabase
           .from("events")
@@ -96,13 +111,11 @@ export default function EventsByLocation() {
           // warning on EVENT_LIST_COLUMNS in src/lib/listColumns.ts). Naming them
           // made PostgREST reject the whole projection with 42703, so this page
           // rendered zero events on every load. Neither field was read downstream.
-          .select("id, title, date, location, venue, price, category, enhanced_description, original_description, image_url, event_start_utc, city")
+          .select("id, title, date, end_date, location, venue, price, category, enhanced_description, original_description, image_url, event_start_utc, city, latitude, longitude")
       )
-        .or(searchTermFilter(suburbInfo.searchTerms, ["city", "location", "venue"]))
-        // Start of today in Central, not the UTC date, which dropped tonight's
-        // events after 7pm.
-        .gte("date", upcomingFloorUtc())
+        .or(`and(or(${placeFilter}),or(${notOverFilter(new Date())}))`)
         .order("date", { ascending: true })
+        .order("id", { ascending: true })
         .limit(MAX_EVENTS);
       if (error) {
         log.error("fetchEvents", "Error fetching events", { error });
@@ -112,25 +125,43 @@ export default function EventsByLocation() {
     },
   });
 
+  // A count, not the length of a six-card sample (WP5 item 4): the tile said
+  // "Local Restaurants: 6" for every suburb with six or more.
+  const restaurantQuery = (columns: string, head = false) =>
+    supabase
+      .from("restaurants")
+      .select(columns, head ? { count: "exact", head: true } : undefined)
+      .eq("status", "active")
+      .neq("is_merged", true)
+      .or(placeFilter ?? "id.is.null");
+
   const { data: restaurants } = useQuery({
     queryKey: ["restaurants-by-location", slug],
     queryFn: async () => {
-      if (!suburbInfo) return [];
-
-      // Match first, then limit. `.limit(5)` ran before the JS filter, so the
-      // section showed whichever of the first five active restaurants happened
-      // to be in this suburb - usually none.
-      const { data, error } = await supabase
-        .from("restaurants")
-        .select(RESTAURANT_LIST_COLUMNS)
-        .eq("status", "active")
-        .or(searchTermFilter(suburbInfo.searchTerms, ["location", "city"]))
+      const { data, error } = await restaurantQuery(RESTAURANT_LIST_COLUMNS)
+        .order("name", { ascending: true })
         .limit(6);
-
       if (error) throw error;
-      return data ?? [];
+      return (data ?? []) as unknown as Array<{
+        id: string;
+        slug: string | null;
+        name: string;
+        cuisine: string | null;
+        location: string | null;
+        city: string | null;
+      }>;
     },
-    enabled: !!suburbInfo,
+    enabled: !!suburbInfo && !!placeFilter,
+  });
+
+  const { data: restaurantCount } = useQuery({
+    queryKey: ["restaurants-by-location-count", slug],
+    queryFn: async () => {
+      const { count, error } = await restaurantQuery("id", true);
+      if (error) throw error;
+      return count ?? null;
+    },
+    enabled: !!suburbInfo && !!placeFilter,
   });
 
   // Moved above the early return below (WEB-PERF-030): it depends only on
@@ -140,21 +171,36 @@ export default function EventsByLocation() {
   // and Lighthouse flags above ~1,500 - a cost paid in HTML parse, DOM memory
   // and hydration, all main-thread (WEB-PERF-023).
   //
-  // ONLY THE RENDERED LIST IS CAPPED. Every count on this page - the FAQ answer,
-  // the stat block, the this-week filter - still reads upcomingEvents.length, so
-  // no number a user sees changes.
+  // ONLY THE RENDERED LIST IS CAPPED. The stat block and the "Showing the
+  // first 24 of N" line read upcomingEvents.length; the JSON-LD ItemList reads
+  // the 24 rendered cards, so it never lists an event the page doesn't show.
   const VISIBLE_EVENTS = 24;
 
-  const upcomingEvents =
-    events?.filter((event) => {
-      try {
-        return isAfter(parseISO(event.date), new Date());
-      } catch {
-        return false;
-      }
-    }) || [];
+  // The server applied the not-over rule; nothing is re-filtered here.
+  const upcomingEvents = events;
+  const eventsCapped = events.length >= MAX_EVENTS;
+  const freeCount = upcomingEvents.filter((e) => isFreePrice(e.price) === true).length;
 
   const visibleEvents = upcomingEvents.slice(0, VISIBLE_EVENTS);
+
+  // null value = not known yet; the tile keeps its place but prints nothing.
+  const statTiles: Array<{ label: string; value: string | null }> = eventsLoaded
+    ? [
+        { label: "Upcoming events", value: `${upcomingEvents.length}${eventsCapped ? "+" : ""}` },
+        { label: "Listed as free", value: String(freeCount) },
+        ...(restaurantCount != null
+          ? [{ label: "Restaurants listed", value: String(restaurantCount) }]
+          : []),
+      ]
+    : [
+        { label: "Upcoming events", value: null },
+        { label: "Listed as free", value: null },
+        { label: "Restaurants listed", value: null },
+      ];
+
+  const nearbySuburbs = (suburbInfo?.nearby ?? [])
+    .filter((near): near is SuburbSlug => near in SUBURBS)
+    .map((near) => ({ slug: near, name: SUBURBS[near].name }));
   const hiddenEventCount = upcomingEvents.length - visibleEvents.length;
 
   // WEB-PERF-030. SocialEventCard falls back to useEventSocial(event.id)
@@ -251,8 +297,11 @@ export default function EventsByLocation() {
         faqData={faqData}
         suburb={suburbInfo.name}
       />
+      {/* A failed first read would otherwise be captured as an empty page. */}
+      {loadError && !eventsLoaded && <NoIndexMeta />}
       <EventListJsonLd
-        events={upcomingEvents || []}
+        // The rendered cards, not every loaded row (WP5 item 7).
+        events={visibleEvents}
         listName={`Events in ${suburbInfo.name}, Iowa`}
         listDescription={pageDescription}
         listUrl={`${BRAND.baseUrl}/events/${slug}`}
@@ -280,41 +329,44 @@ export default function EventsByLocation() {
             {suburbInfo.description}
           </p>
 
-          {/* Quick Stats */}
-          <Card className="mb-8">
-            <CardContent className="pt-6">
-              <div className="grid grid-cols-1 md:grid-cols-3 gap-4 text-center">
-                <div>
-                  <div className="text-2xl font-bold text-primary">
-                    {upcomingEvents.length}
-                  </div>
-                  <div className="text-sm text-muted-foreground">
-                    Upcoming Events
-                  </div>
-                </div>
-                <div>
-                  <div className="text-2xl font-bold text-primary">
-                    {
-                      upcomingEvents.filter(
-                        (e) => isFreePrice(e.price) === true
-                      ).length
-                    }
-                  </div>
-                  <div className="text-sm text-muted-foreground">
-                    Free Events
-                  </div>
-                </div>
-                <div>
-                  <div className="text-2xl font-bold text-primary">
-                    {restaurants?.length || 0}
-                  </div>
-                  <div className="text-sm text-muted-foreground">
-                    Local Restaurants
-                  </div>
-                </div>
+          {/* Only numbers the page has (WP5 item 4). Until the events read
+              succeeds the tiles hold an invisible placeholder in the same
+              markup, so the block keeps its height and nobody sees a "0"
+              that means "still loading". The restaurant tile is a count
+              query's answer or nothing. */}
+          <dl
+            className={`mb-6 grid grid-cols-1 gap-4 rounded-xl border bg-card p-6 text-center ${
+              !eventsLoaded || restaurantCount != null ? "sm:grid-cols-3" : "sm:grid-cols-2"
+            }`}
+            aria-busy={!eventsLoaded}
+          >
+            {statTiles.map((tile) => (
+              <div key={tile.label} className="flex flex-col-reverse">
+                <dt className="text-sm text-muted-foreground">{tile.label}</dt>
+                <dd className="text-2xl font-bold text-primary">
+                  {tile.value ?? <span className="invisible">0</span>}
+                </dd>
               </div>
-            </CardContent>
-          </Card>
+            ))}
+          </dl>
+
+          <div className="flex flex-col gap-3 sm:flex-row sm:flex-wrap sm:items-center">
+            <Link to={`/events/near-me?from=${slug}`} className={DIRECTORY_PILL}>
+              Events by distance from {suburbInfo.name}
+            </Link>
+            {nearbySuburbs.length > 0 && (
+              <nav aria-labelledby="nearby-suburbs" className="flex flex-wrap items-center gap-2">
+                <span id="nearby-suburbs" className="text-sm text-muted-foreground">
+                  Events in nearby suburbs:
+                </span>
+                {nearbySuburbs.map((near) => (
+                  <Link key={near.slug} to={`/events/${near.slug}`} className={DIRECTORY_PILL}>
+                    {near.name}
+                  </Link>
+                ))}
+              </nav>
+            )}
+          </div>
         </div>
 
         {/* Events List */}
@@ -407,7 +459,7 @@ export default function EventsByLocation() {
                     </p>
                     <div className="mt-3">
                       <Link
-                        to={`/restaurants/${restaurant.id}`}
+                        to={`/restaurants/${restaurant.slug ?? restaurant.id}`}
                         className="text-primary hover:underline text-sm"
                       >
                         View Details
@@ -424,6 +476,8 @@ export default function EventsByLocation() {
             FAQPage block, so the schema cannot describe content that is not on
             the page. The heading stays "About <suburb>" — it is the visible
             title, and the questions underneath are the same either way. */}
+        <EventsLandingLinks current={`/events/${slug}`} className="mb-10" />
+
         <FAQSection faqs={faqData} title={`About ${suburbInfo.name}`} />
 
         {/* WEB-SEO-036 AC5. /events/ankeny and /neighborhoods/ankeny are both

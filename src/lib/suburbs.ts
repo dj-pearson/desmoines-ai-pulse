@@ -24,62 +24,72 @@ import { findNeighborhood } from "@/lib/neighborhoods";
  * routes stay in step.
  */
 
+/**
+ * `nearby` names the suburb pages that share a border or a main road with
+ * this one, for the "Events in nearby suburbs" links (events-pass2 WP5 item
+ * 7). Every entry must be a SUBURBS key; src/lib/__tests__/eventAreas.test.ts
+ * checks it.
+ *
+ * There is no search-term list any more. Matching is by place, through the
+ * suburb's city area in src/lib/eventAreas.ts (events-pass2 WP5 item 6); the
+ * old substring terms put "Urbandale Ave, Des Moines" on /events/urbandale.
+ */
 export const SUBURBS = {
   "west-des-moines": {
     name: "West Des Moines",
-    searchTerms: ["West Des Moines", "WDM", "Valley Junction"],
     description:
       "West Des Moines offers family-friendly events, outdoor activities, and cultural attractions in the heart of Iowa.",
     neighborhoods: ["Valley Junction", "Jordan Creek", "Clive"],
+    nearby: ["clive", "windsor-heights", "waukee", "urbandale"],
   },
   ankeny: {
     name: "Ankeny",
-    searchTerms: ["Ankeny"],
     description:
       "Ankeny is known for its community events, parks, and family activities just north of Des Moines.",
     neighborhoods: ["Downtown Ankeny", "Prairie Trail"],
+    nearby: ["johnston", "altoona"],
   },
   urbandale: {
     name: "Urbandale",
-    searchTerms: ["Urbandale"],
     description:
       "Urbandale hosts seasonal festivals, community gatherings, and outdoor recreation events.",
     neighborhoods: ["Downtown Urbandale", "Living History Farms"],
+    nearby: ["johnston", "clive", "windsor-heights"],
   },
   johnston: {
     name: "Johnston",
-    searchTerms: ["Johnston"],
     description:
       "Johnston features community events, outdoor activities, and family-friendly attractions.",
     neighborhoods: ["Downtown Johnston", "Terra Park"],
+    nearby: ["urbandale", "ankeny"],
   },
   altoona: {
     name: "Altoona",
-    searchTerms: ["Altoona", "Adventureland"],
     description:
       "Altoona is home to Adventureland and hosts numerous family events and community celebrations.",
     neighborhoods: ["Downtown Altoona", "Adventureland Area"],
+    nearby: ["ankeny"],
   },
   clive: {
     name: "Clive",
-    searchTerms: ["Clive"],
     description:
       "Clive offers upscale events, outdoor activities, and community gatherings in west Des Moines metro.",
     neighborhoods: ["Clive Village", "Greenbelt Trail"],
+    nearby: ["west-des-moines", "urbandale", "windsor-heights", "waukee"],
   },
   "windsor-heights": {
     name: "Windsor Heights",
-    searchTerms: ["Windsor Heights"],
     description:
       "Windsor Heights hosts intimate community events and local gatherings in a charming suburban setting.",
     neighborhoods: ["Downtown Windsor Heights"],
+    nearby: ["clive", "urbandale", "west-des-moines"],
   },
   waukee: {
     name: "Waukee",
-    searchTerms: ["Waukee"],
     description:
       "Waukee's calendar runs through Centennial Park, Triumph Park and the Waukee Family YMCA, with youth sports and community festivals on the west edge of the metro.",
     neighborhoods: ["Downtown Waukee", "Centennial Park", "Triumph Park"],
+    nearby: ["clive", "west-des-moines", "urbandale"],
   },
 };
 

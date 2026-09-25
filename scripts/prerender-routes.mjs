@@ -35,6 +35,10 @@ export const PRERENDER_ROUTES = [
   '/events/free',
   '/events/kids',
   '/events/date-night',
+  // events-pass2 WP5 item 10. The default origin is Downtown and nothing asks
+  // for location until a tap, so the capture holds the next 7 days' cards
+  // "within 25 miles of Downtown" and their ItemList.
+  '/events/near-me',
   '/events/west-des-moines',
   '/events/ankeny',
   '/events/urbandale',

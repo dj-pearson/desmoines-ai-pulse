@@ -360,7 +360,11 @@ test.describe('Filter Functionality', () => {
     // responded — either the result set changed or the filter state was
     // reflected in the URL. Accepting either keeps this robust when a chosen
     // facet happens to match everything.
-    const cards = () => page.locator('a[href^="/events/"]');
+    // Card TITLE links only. The events directory (landing and suburb links,
+    // all a[href^="/events/"]) mounts lazily once the list is short enough to
+    // bring it on screen, so counting every events link counted the empty
+    // state's directory as results (events-pass2 WP1 item 16).
+    const cards = () => page.locator('h3 > a[href^="/events/"], h4 > a[href^="/events/"]');
 
     // Driven through the SEARCH INPUT rather than a Radix dropdown.
     //

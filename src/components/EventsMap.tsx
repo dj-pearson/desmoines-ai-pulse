@@ -1,5 +1,5 @@
 import { useEffect, useMemo, useState } from "react";
-import { MapContainer, TileLayer, Marker, Popup, Tooltip, useMap } from "react-leaflet";
+import { MapContainer, TileLayer, Marker, Popup, Tooltip, Circle, useMap } from "react-leaflet";
 import "leaflet/dist/leaflet.css";
 import L from "leaflet";
 import { Link } from "react-router-dom";
@@ -281,6 +281,21 @@ function TouchDragPolicy({ coarse }: { coarse: boolean }) {
   return null;
 }
 
+/**
+ * The primary colour as a concrete value. Leaflet writes path colours as SVG
+ * attributes, where var() is not resolved everywhere, so read the token once
+ * after mount (dark mode included) instead of passing "hsl(var(--primary))".
+ */
+function usePrimaryColor(): string {
+  const [color, setColor] = useState("hsl(225 87% 21%)");
+  useEffect(() => {
+    if (typeof window === "undefined") return;
+    const raw = getComputedStyle(document.documentElement).getPropertyValue("--primary").trim();
+    if (raw) setColor(`hsl(${raw})`);
+  }, []);
+  return color;
+}
+
 /** True on a touch-first device. Read after mount so prerendered HTML matches. */
 function useCoarsePointer(): boolean {
   const [coarse, setCoarse] = useState(false);
@@ -308,8 +323,17 @@ export interface EventsMapProps {
    * because of the query cap (useEventsMapData's mappedCount).
    */
   mappedCount?: number;
-  /** Adds a "You" marker and includes it in the fitted bounds. */
+  /** Adds an origin marker and includes it in the fitted bounds. */
   userLocation?: MapUserLocation | null;
+  /**
+   * What the origin marker is called: "Downtown" when near me measures from a
+   * picked place, "You" (the default) when it is the visitor's position.
+   */
+  originLabel?: string;
+  /** Draws the search radius around userLocation, in miles. */
+  radiusMiles?: number;
+  /** A popup line such as "1.2 mi from Ankeny"; null or "" prints nothing. */
+  distanceLabel?: (event: MapEvent) => string | null;
   /** Switches the page back to the list. Shown in the coverage line and empty state. */
   onShowList?: () => void;
   now?: Date;
@@ -320,6 +344,9 @@ export function EventsMap({
   totalCount,
   mappedCount,
   userLocation,
+  originLabel = "You",
+  radiusMiles,
+  distanceLabel,
   onShowList,
   now,
 }: EventsMapProps) {
@@ -330,6 +357,13 @@ export function EventsMap({
   const total = Math.max(totalCount ?? events.length, mapped);
   const unmapped = total - mapped;
   const coarse = useCoarsePointer();
+  const radiusColor = usePrimaryColor();
+  // The legend names only the colours on the map (events-pass2 WP5 item 11);
+  // a key for pins nobody can find reads as missing data.
+  const presentBuckets = useMemo(() => {
+    const present = new Set(groups.map((g) => g.bucket));
+    return BUCKET_ORDER.filter((bucket) => present.has(bucket));
+  }, [groups]);
 
   const showListButton = onShowList ? (
     <Button type="button" variant="link" className="h-auto min-h-11 px-1 py-0" onClick={onShowList}>
@@ -377,7 +411,7 @@ export function EventsMap({
           )}
         </p>
         <ul className="flex flex-wrap gap-x-4 gap-y-1 text-sm text-foreground" aria-label="Pin colours">
-          {BUCKET_ORDER.map((bucket) => (
+          {presentBuckets.map((bucket) => (
             <li key={bucket} className="inline-flex items-center gap-1.5">
               {/* Static markup built from the constants above; no row data. */}
               <span
@@ -407,14 +441,31 @@ export function EventsMap({
         <FitToResults groups={groups} userLocation={userLocation} />
         <TouchDragPolicy coarse={coarse} />
 
+        {userLocation && radiusMiles != null && radiusMiles > 0 && (
+          <Circle
+            center={[userLocation.latitude, userLocation.longitude]}
+            radius={radiusMiles * 1609.34}
+            pathOptions={{
+              color: radiusColor,
+              weight: 1.5,
+              fillColor: radiusColor,
+              fillOpacity: 0.05,
+              interactive: false,
+            }}
+          />
+        )}
         {userLocation && (
           <Marker
             position={[userLocation.latitude, userLocation.longitude]}
             icon={YOU_ICON}
-            title="You"
-            alt="Your location"
+            title={originLabel}
+            alt={originLabel === "You" ? "Your location" : `Starting point: ${originLabel}`}
             keyboard={false}
-          />
+          >
+            <Tooltip direction="top" className="text-foreground">
+              {originLabel}
+            </Tooltip>
+          </Marker>
         )}
 
         {groups.map((group) => {
@@ -442,6 +493,7 @@ export function EventsMap({
                 <ul className="m-0 max-h-72 list-none space-y-3 overflow-y-auto p-0">
                   {group.events.map((event) => {
                     const venue = venueName(event);
+                    const distance = distanceLabel?.(event) || null;
                     return (
                       <li key={event.id} className="text-sm text-foreground">
                         <Link
@@ -452,6 +504,7 @@ export function EventsMap({
                         </Link>
                         <div>{whenLabel(event)}</div>
                         {venue && <div>{venue}</div>}
+                        {distance && <div>{distance}</div>}
                         <div className="text-muted-foreground">{eventPriceLabel(event.price)}</div>
                       </li>
                     );

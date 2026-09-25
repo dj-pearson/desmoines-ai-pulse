@@ -7,6 +7,9 @@ import { describe, it, expect } from "vitest";
 import { parseISO } from "date-fns";
 import { formatInTimeZone } from "date-fns-tz";
 import {
+  eventImageAlt,
+  eventKeywords,
+  isStaleEvent,
   eventMetaDescription,
   eventPageTitle,
   eventSummary,
@@ -142,5 +145,71 @@ describe("eventSummary", () => {
     );
     const bare = eventSummary(ev({ price: "Varies", source_url: undefined }), BEFORE);
     expect(bare.endsWith("Des Moines, Iowa.")).toBe(true);
+  });
+
+  // events-pass2 WP4 item 4: tense follows the end, not the start.
+  it("says 'is on now' while the show is running, and keeps the price", () => {
+    // 7:00 PM CDT start, viewed at 8:00 PM CDT: inside the three-hour default.
+    const s = eventSummary(ev(), new Date("2026-09-28T01:00:00Z"));
+    expect(s).toContain("is on now");
+    expect(s).not.toContain("took place");
+    expect(s).toContain("Tickets are $15.");
+  });
+
+  it("day 2 of a three-day festival is on now, not over", () => {
+    const fest = ev({ end_date: "2026-09-30T03:00:00+00:00" });
+    const s = eventSummary(fest, new Date("2026-09-28T18:00:00Z"));
+    expect(s).toContain("is on now");
+    expect(s).toContain("Tickets are $15.");
+  });
+
+  it("says 'took place' only once the end has passed", () => {
+    const fest = ev({ end_date: "2026-09-30T03:00:00+00:00" });
+    expect(eventSummary(fest, new Date("2026-09-30T02:00:00Z"))).toContain("is on now");
+    expect(eventSummary(fest, new Date("2026-09-30T04:00:00Z"))).toContain("took place");
+  });
+});
+
+describe("isStaleEvent measures from the end (events-pass2 WP4 item 12)", () => {
+  // A 60-day exhibit: opens Tue Sep 1, closes Fri Oct 30.
+  const exhibit = ev({
+    date: "2026-09-01T15:00:00+00:00",
+    event_start_utc: "2026-09-01T15:00:00+00:00",
+    event_start_local: "2026-09-01T10:00:00",
+    end_date: "2026-10-30T22:00:00+00:00",
+  });
+
+  it("keeps a 60-day exhibit indexable on day 45", () => {
+    expect(isStaleEvent(exhibit, new Date("2026-10-16T12:00:00Z"))).toBe(false);
+  });
+
+  it("still indexable 29 days after it closes, stale after 31", () => {
+    expect(isStaleEvent(exhibit, new Date("2026-11-28T12:00:00Z"))).toBe(false);
+    expect(isStaleEvent(exhibit, new Date("2026-12-01T12:00:00Z"))).toBe(true);
+  });
+
+  it("with no end_date, counts from start plus the default run", () => {
+    expect(isStaleEvent(ev(), new Date("2026-10-27T12:00:00Z"))).toBe(false);
+    expect(isStaleEvent(ev(), new Date("2026-10-29T12:00:00Z"))).toBe(true);
+  });
+});
+
+describe("eventKeywords and eventImageAlt (events-pass2 WP4 item 9)", () => {
+  it("carries no relative words", () => {
+    const words = eventKeywords(ev()).join(" | ").toLowerCase();
+    expect(words).not.toContain("tonight");
+    expect(words).not.toContain("this weekend");
+  });
+
+  it("does not throw on a null category, and names none", () => {
+    const row = ev({ category: null as unknown as string });
+    expect(() => eventKeywords(row)).not.toThrow();
+    expect(eventKeywords(row).join(" ")).not.toContain("null");
+    expect(eventImageAlt(row)).toBe("Jazz in the Gardens - event in Des Moines");
+  });
+
+  it("uses the row's city and category when present, and no city when absent", () => {
+    expect(eventImageAlt(ev({ city: "Waukee" }))).toBe("Jazz in the Gardens - Music event in Waukee");
+    expect(eventImageAlt(ev({ city: null }))).toBe("Jazz in the Gardens - Music event");
   });
 });

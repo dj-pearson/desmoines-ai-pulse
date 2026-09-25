@@ -89,3 +89,30 @@ for (const route of ROUTES) {
     expect(text, `${route} showed neither content nor a failure state`).toMatch(ADMITS_FAILURE);
   });
 }
+
+/*
+ * Events pass 2 WP6 item 8. A landing whose first query failed has not
+ * answered "what's on", so it must not be indexed as if it had: /events/today
+ * (WP3 item 12) and the suburb pages (WP5 item 7) render NoIndexMeta when the
+ * events read errors with nothing loaded. The prerender runs against the live
+ * backend, so a blip during a build is exactly this state captured to HTML.
+ */
+const NOINDEX_ON_FAILURE = ['/events/today', '/events/ankeny'];
+
+for (const route of NOINDEX_ON_FAILURE) {
+  test(`${route} is noindex when its first query fails`, async ({ page }) => {
+    await cutTheBackend(page);
+    await page.goto(route, { waitUntil: 'domcontentloaded' });
+
+    // The error lands after TanStack's retries, so poll rather than sleep.
+    await expect
+      .poll(
+        async () =>
+          page
+            .locator('head meta[name="robots"]')
+            .evaluateAll((els) => els.map((el) => el.getAttribute('content') ?? '')),
+        { timeout: 45_000, message: `${route} never marked itself noindex after the backend failed` },
+      )
+      .toContainEqual(expect.stringContaining('noindex'));
+  });
+}

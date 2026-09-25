@@ -147,7 +147,28 @@ export default defineConfig({
   // the dated snapshot matching /events/this-weekend and the area chips; and
   // the shell (a visible H1 on light pages, the phone consent banner, bottom
   // nav padding).
-  testMatch: /(search-filters|url-filter-state|sticky-filter-chips|route-smoke|cookie-consent|backend-down|touch-targets|page-headings|search-request-loop|request-budget|turnstile-inert|subscription-checkout|advertise-success-receipt|submission-live-link|campaign-self-service|home-search|home-request-budget|home-rails-cls|home-tonight|home-dashboard|home-quick-view|shell-mobile|events-hub-dates|events-hub-list|events-near-me|event-detail|restaurants-hub|restaurants-open-now|restaurant-detail|things-to-do-hub|discover-map|attractions-hub|playgrounds-hub|music-sports-hubs|outdoors-hub|deals|stay|trip-planner-window|visitors-guide|getting-around|articles|best-of-voting|whats-new|events-weekend-days|search-results|search-watch|search-advanced-redirect|auth-funnel|auth-return|account-home|account-request-budget|account-submissions|account-settings|pricing-page|subscription-success|subscription-portal|paywall|advertise-builder|campaign-detail-pay|campaign-analytics-counts|business-hub|submit-event-page|home-rails-honesty|home-truth|shell-pass2)\.spec\.ts/,
+  //
+  // events-hub-clock, events-card-honesty, events-landings,
+  // events-request-budget and weather-aware-events joined with the Events
+  // second pass (docs/page-plans/events-pass2.md WP6), on fixtureBackend plus
+  // per-spec routes: the hub's Tonight strip and day groups at a pinned
+  // Central clock, card times, prices and badges that say only what the row
+  // says, the date, audience and month landings, a first-view request ceiling
+  // for /events, /events/today and one detail page, and /events/today's
+  // weather order. weather-aware-events was a lane orphan and leaves the
+  // baseline with it. events-request-budget would already match the
+  // unanchored `request-budget` below; it is named anyway so removing that
+  // entry cannot drop it.
+  testMatch: /(search-filters|url-filter-state|sticky-filter-chips|route-smoke|cookie-consent|backend-down|touch-targets|page-headings|search-request-loop|request-budget|turnstile-inert|subscription-checkout|advertise-success-receipt|submission-live-link|campaign-self-service|home-search|home-request-budget|home-rails-cls|home-tonight|home-dashboard|home-quick-view|shell-mobile|events-hub-dates|events-hub-list|events-near-me|event-detail|restaurants-hub|restaurants-open-now|restaurant-detail|things-to-do-hub|discover-map|attractions-hub|playgrounds-hub|music-sports-hubs|outdoors-hub|deals|stay|trip-planner-window|visitors-guide|getting-around|articles|best-of-voting|whats-new|events-weekend-days|search-results|search-watch|search-advanced-redirect|auth-funnel|auth-return|account-home|account-request-budget|account-submissions|account-settings|pricing-page|subscription-success|subscription-portal|paywall|advertise-builder|campaign-detail-pay|campaign-analytics-counts|business-hub|submit-event-page|home-rails-honesty|home-truth|shell-pass2|events-hub-clock|events-card-honesty|events-landings|events-request-budget|weather-aware-events)\.spec\.ts/,
+  // One block is held out, by title, not the file. weather-aware-events.spec.ts
+  // still asserts the homepage's standalone WeatherNotice ("... in Des Moines
+  // right now.", "indoor picks for today"), which the Home plan replaced with
+  // the Tonight rail's RailWeatherLine (2da3ca0); src/ no longer renders either
+  // string, so the first test fails and the second passes vacuously. The
+  // /events/today half of the file is live and is what joined this lane.
+  // Whoever owns that spec: delete the block or point it at RailWeatherLine,
+  // then remove this line.
+  grepInvert: /WEB-FEAT-022 homepage conditions notice/,
   fullyParallel: true,
   forbidOnly: !!process.env.CI,
   retries: process.env.CI ? 2 : 0,

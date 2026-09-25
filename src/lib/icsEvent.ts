@@ -23,7 +23,17 @@
  * specification, and calendar clients convert to the reader's zone. Producing
  * that from a Date means using the UTC getters or `toISOString()`, never a
  * local-time formatter.
+ *
+ * THE EXPORT AGREES WITH THE PAGE (events-pass2 WP4 item 3). toIcsEvent takes
+ * all-day from hasSpecificTime, the test the page uses, so the 19:31:58 marker
+ * and SeatGeek's 03:30 placeholder export as dates, not as 7:31 PM and 3:30 AM
+ * entries. The end is eventEnd() from eventTiming.ts, which reads end_date, so
+ * a three-day festival exports as three days. The row never had the
+ * event_end_utc it used to read.
  */
+import { BRAND } from '@/lib/brandConfig';
+import { DEFAULT_EVENT_HOURS, eventEnd } from '@/lib/eventTiming';
+import { createEventSlugWithCentralTime, hasSpecificTime } from '@/lib/timezone';
 
 export interface IcsEventInput {
   id: string;
@@ -35,18 +45,24 @@ export interface IcsEventInput {
   venue?: string;
   slug?: string;
   event_start_utc?: string;
+  /** The end instant. toIcsEvent fills it from eventEnd(). */
   event_end_utc?: string;
   /**
    * True when the source published a date but no start time (WEB-BE-038, the
    * `time_tbd` column). The time component of `date` is then a placeholder -
    * SeatGeek's is 03:30 - and exporting it would drop a 3:30am entry into
-   * someone's calendar. Such events are emitted as all-day instead.
+   * someone's calendar. Such events are emitted as all-day instead, spanning
+   * through the Central day of `event_end_utc` when that is a later day.
    */
   allDay?: boolean;
 }
 
-/** Events with no published end time get this much duration. */
-export const DEFAULT_DURATION_MS = 2 * 60 * 60 * 1000;
+/**
+ * Events with no published end time get this much duration: the same
+ * DEFAULT_EVENT_HOURS the page and the JSON-LD use, so the three can't
+ * disagree about when an event ends. It was two hours here and three there.
+ */
+export const DEFAULT_DURATION_MS = DEFAULT_EVENT_HOURS * 60 * 60 * 1000;
 
 /**
  * Format an instant as an ICS UTC timestamp.
@@ -117,7 +133,22 @@ export function resolveEnd(event: IcsEventInput, start: Date): Date {
 }
 
 export function eventUrl(event: IcsEventInput): string {
-  return `https://desmoinesinsider.com/events/${event.slug || event.id}`;
+  return `${BRAND.baseUrl}/events/${event.slug || event.id}`;
+}
+
+/**
+ * The exclusive DTEND date for an all-day entry: the day after the last
+ * Central day the event covers. An end at exactly midnight belongs to the day
+ * before it, or a one-day event would show as two.
+ */
+function allDayEndDate(start: Date, event: IcsEventInput): string {
+  const startDay = formatIcsDateOnly(start);
+  const end = event.event_end_utc ? new Date(event.event_end_utc) : null;
+  if (!end || Number.isNaN(end.getTime()) || end.getTime() <= start.getTime()) {
+    return nextIcsDateOnly(startDay);
+  }
+  const lastDay = formatIcsDateOnly(new Date(end.getTime() - 1));
+  return nextIcsDateOnly(lastDay > startDay ? lastDay : startDay);
 }
 
 /** True when the event has a usable start. Callers should not offer export otherwise. */
@@ -145,7 +176,7 @@ export function buildEventIcs(event: IcsEventInput): string | null {
   const timing = event.allDay
     ? [
         `DTSTART;VALUE=DATE:${startDateOnly}`,
-        `DTEND;VALUE=DATE:${nextIcsDateOnly(startDateOnly)}`,
+        `DTEND;VALUE=DATE:${allDayEndDate(start, event)}`,
       ]
     : [`DTSTART:${formatIcsDate(start)}`, `DTEND:${formatIcsDate(end)}`];
 
@@ -192,7 +223,7 @@ export function googleCalendarUrl(event: IcsEventInput): string | null {
     text: event.title,
     // Google uses bare YYYYMMDD for all-day, with the same exclusive end.
     dates: event.allDay
-      ? `${formatIcsDateOnly(start)}/${nextIcsDateOnly(formatIcsDateOnly(start))}`
+      ? `${formatIcsDateOnly(start)}/${allDayEndDate(start, event)}`
       : `${formatIcsDate(start)}/${formatIcsDate(end)}`,
     details: event.description ? stripHtml(event.description) : '',
     location: event.venue || event.location || '',
@@ -223,37 +254,45 @@ export function outlookCalendarUrl(event: IcsEventInput): string | null {
 /**
  * Adapt a database event row to the ICS input shape.
  *
- * Three mappings that every call site would otherwise repeat and one of them
- * would get wrong:
+ * The mappings every call site would otherwise repeat and one of them would
+ * get wrong:
  *  - description comes from enhanced_description, falling back to the original
  *  - `date` may arrive as a Date from some code paths and a string from others
- *  - `time_tbd` becomes `allDay`, so a placeholder time is never exported
+ *  - all-day is `!hasSpecificTime`, so no placeholder time is ever exported
+ *  - the end is eventEnd(): end_date when the row has one, else start plus
+ *    DEFAULT_EVENT_HOURS, else the end of the Central day
+ *  - the URL is the canonical Central-dated slug, not the row id
  */
 export function toIcsEvent(row: {
   id: string;
   title: string;
   date: string | Date;
-  location?: string;
-  venue?: string;
+  location?: string | null;
+  venue?: string | null;
   slug?: string;
-  enhanced_description?: string;
-  original_description?: string;
-  description?: string;
-  event_start_utc?: string;
-  event_end_utc?: string;
+  enhanced_description?: string | null;
+  original_description?: string | null;
+  description?: string | null;
+  event_start_utc?: string | null;
+  event_start_local?: string | null;
+  end_date?: string | null;
   time_tbd?: boolean | null;
+  source_url?: string | null;
 }): IcsEventInput {
+  const date = row.date instanceof Date ? row.date.toISOString() : row.date;
+  const timingRow = { ...row, date };
+  const end = eventEnd(timingRow);
   return {
     id: row.id,
     title: row.title,
     description:
       row.enhanced_description || row.original_description || row.description || undefined,
-    date: row.date instanceof Date ? row.date.toISOString() : row.date,
-    location: row.location,
-    venue: row.venue,
-    slug: row.slug,
-    event_start_utc: row.event_start_utc,
-    event_end_utc: row.event_end_utc,
-    allDay: row.time_tbd === true,
+    date,
+    location: row.location ?? undefined,
+    venue: row.venue ?? undefined,
+    slug: row.slug || createEventSlugWithCentralTime(row.title, timingRow) || undefined,
+    event_start_utc: row.event_start_utc ?? undefined,
+    event_end_utc: end ? end.toISOString() : undefined,
+    allDay: !hasSpecificTime(timingRow),
   };
 }

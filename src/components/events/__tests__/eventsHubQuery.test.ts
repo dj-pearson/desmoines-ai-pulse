@@ -1,16 +1,27 @@
 import { describe, it, expect, vi } from "vitest";
 
-vi.mock("@/integrations/supabase/client", () => ({ supabase: {} }));
+// A supabase stand-in the near-me test fills in; everything else never calls it.
+const mockSupabase = vi.hoisted(() => ({}) as Record<string, unknown>);
+vi.mock("@/integrations/supabase/client", () => ({ supabase: mockSupabase }));
 
 import {
   applyHubFilters,
   applyHubSort,
   countLabel,
+  dayHeading,
+  fetchNearMe,
   flattenPages,
   groupByCentralDay,
+  hubSearchQuery,
+  inHubWindow,
+  isNotOver,
+  nearMeCountLabel,
+  notOverFilter,
   relativeStartLabel,
   resolveHubDate,
   selectTonight,
+  stripHeading,
+  NEAR_ME_LIMIT,
   type HubEvent,
   type HubFilters,
   type HubPage,
@@ -27,13 +38,19 @@ import { FREE_PRICE_FILTER } from "@/lib/eventPrice";
 const THU_9PM = new Date("2026-09-25T02:00:00Z");
 // Sat 2026-09-26 20:30 CDT.
 const SAT_830PM = new Date("2026-09-27T01:30:00Z");
+// Fri 2026-09-25 20:00 CDT, the plan's acceptance clock.
+const FRI25_8PM = new Date("2026-09-26T01:00:00Z");
+// Fri 2026-09-25 18:50 CDT.
+const FRI25_650PM = new Date("2026-09-25T23:50:00Z");
+// Fri 2026-09-25 19:31:58 CDT: the no-time marker for that day.
+const FRI25_MARKER = "2026-09-26T00:31:58.000Z";
 
 type Call = [string, unknown[]];
 
 function fakeQuery() {
   const calls: Call[] = [];
   const builder: Record<string, unknown> & { calls: Call[] } = { calls };
-  for (const m of ["neq", "is", "ilike", "gte", "lte", "eq", "or", "textSearch", "order"]) {
+  for (const m of ["neq", "is", "ilike", "gte", "lte", "eq", "or", "textSearch", "order", "in"]) {
     builder[m] = (...args: unknown[]) => {
       calls.push([m, args]);
       return builder;
@@ -99,24 +116,45 @@ describe("resolveHubDate", () => {
 });
 
 describe("applyHubFilters", () => {
-  it("unfiltered: visibility plus the upcoming floor that keeps running events", () => {
+  it("unfiltered: visibility plus 'not over yet' (started in the last 2h, still running, or today's untimed marker)", () => {
     const q = fakeQuery();
-    applyHubFilters(q, BASE, THU_9PM);
+    applyHubFilters(q, BASE, FRI25_8PM);
     expect(q.calls).toContainEqual(["neq", ["is_merged", true]]);
     expect(q.calls).toContainEqual(["is", ["archived_at", null]]);
     expect(q.calls).toContainEqual([
       "or",
-      ["date.gte.2026-09-24T05:00:00.000Z,end_date.gte.2026-09-25T02:00:00.000Z"],
+      [
+        `date.gte.2026-09-25T23:00:00.000Z,end_date.gte.2026-09-26T01:00:00.000Z,date.eq.${FRI25_MARKER}`,
+      ],
     ]);
+    expect(notOverFilter(FRI25_8PM)).toContain(`date.eq.${FRI25_MARKER}`);
   });
 
-  it("a window bounds date with gte/lte and drops the floor", () => {
+  it("a future window keeps festivals already running at its start, and has no 'not over' arm", () => {
     const q = fakeQuery();
-    const window = resolveHubDate("today", null, null, THU_9PM)!.window;
-    applyHubFilters(q, { ...BASE, window }, THU_9PM);
-    expect(q.calls).toContainEqual(["gte", ["date", window.start]]);
+    const window = resolveHubDate("tomorrow", null, null, FRI25_8PM)!.window;
+    applyHubFilters(q, { ...BASE, window }, FRI25_8PM);
     expect(q.calls).toContainEqual(["lte", ["date", window.end]]);
-    expect(q.calls.some(([m]) => m === "or")).toBe(false);
+    expect(q.calls.some(([m, a]) => m === "gte" && a[0] === "date")).toBe(false);
+    const at = `"${window.start}"`;
+    expect(q.calls).toContainEqual(["or", [`date.gte.${at},and(date.lt.${at},end_date.gte.${at})`]]);
+  });
+
+  it("a window holding now also drops what's over", () => {
+    const q = fakeQuery();
+    const window = resolveHubDate("today", null, null, FRI25_8PM)!.window;
+    applyHubFilters(q, { ...BASE, window }, FRI25_8PM);
+    const ors = q.calls.filter(([m]) => m === "or");
+    expect(ors).toHaveLength(1);
+    const arg = String(ors[0][1][0]);
+    expect(arg).toContain("end_date.gte.");
+    expect(arg).toContain(`or(${notOverFilter(FRI25_8PM)})`);
+  });
+
+  it("search is a prefix tsquery on the last word", () => {
+    const q = fakeQuery();
+    applyHubFilters(q, { ...BASE, search: "jaz" }, FRI25_8PM);
+    expect(q.calls).toContainEqual(["textSearch", ["search_vector", "jaz:*", { config: "english" }]]);
   });
 
   it("free plus the floor nests both OR groups in one filter", () => {
@@ -136,6 +174,14 @@ describe("applyHubFilters", () => {
     expect(q.calls).toContainEqual(["ilike", ["city", "Des Moines"]]);
   });
 
+  it("a suburb joins the one or= param instead of sending a second", () => {
+    const q = fakeQuery();
+    applyHubFilters(q, { ...BASE, area: findEventArea("ankeny"), freeOnly: true }, THU_9PM);
+    const ors = q.calls.filter(([m]) => m === "or");
+    expect(ors).toHaveLength(1);
+    expect(String(ors[0][1][0])).toContain("or(city.ilike.Ankeny,and(city.is.null,");
+  });
+
   it("a bbox area bounds latitude and longitude", () => {
     const q = fakeQuery();
     applyHubFilters(q, { ...BASE, area: findEventArea("east-village") }, THU_9PM);
@@ -152,6 +198,46 @@ describe("applyHubFilters", () => {
   });
 });
 
+describe("hubSearchQuery", () => {
+  it("ANDs words, prefixes the last, strips tsquery operators", () => {
+    expect(hubSearchQuery("jaz")).toEqual({ query: "jaz:*" });
+    expect(hubSearchQuery("  live jaz ")).toEqual({ query: "live & jaz:*" });
+    expect(hubSearchQuery("rock & roll!")).toEqual({ query: "rock & roll:*" });
+    expect(hubSearchQuery("o'brien (live)")).toEqual({ query: "o & brien & live:*" });
+  });
+
+  it("quotes or OR go to websearch", () => {
+    expect(hubSearchQuery('"state fair"')).toEqual({ query: '"state fair"', type: "websearch" });
+    expect(hubSearchQuery("jazz OR blues")).toEqual({ query: "jazz OR blues", type: "websearch" });
+  });
+
+  it("nothing typed is no search", () => {
+    expect(hubSearchQuery("   ")).toBeNull();
+  });
+});
+
+describe("not over yet, at Fri 20:00 CDT", () => {
+  it("an 08:00 row is out; a 19:00 row, an untimed row and a running festival are in", () => {
+    const morning = ev("yoga", "2026-09-25T13:00:00Z"); // 08:00 CDT
+    const evening = ev("show", "2026-09-26T00:00:00Z"); // 19:00 CDT
+    const untimed = ev("untimed", FRI25_MARKER, { event_start_local: "2026-09-25T19:31:58" });
+    const fair = ev("fair", "2026-09-20T15:00:00Z", { end_date: "2026-09-27T03:00:00Z" });
+    expect(isNotOver(morning, FRI25_8PM)).toBe(false);
+    expect(isNotOver(evening, FRI25_8PM)).toBe(true);
+    expect(isNotOver(fair, FRI25_8PM)).toBe(true);
+    // At 22:00 the marker is more than 2h back and still counts, all day.
+    expect(isNotOver(untimed, new Date("2026-09-26T03:00:00Z"))).toBe(true);
+  });
+
+  it("inHubWindow keeps a Thu-Sun festival in this weekend", () => {
+    const window = resolveHubDate("this-weekend", null, null, FRI25_8PM)!.window;
+    const fest = ev("fest", "2026-09-25T15:00:00Z", { end_date: "2026-09-28T03:00:00Z" });
+    expect(inHubWindow(fest, window, FRI25_8PM)).toBe(true);
+    const nextWeek = ev("later", "2026-10-02T23:00:00Z");
+    expect(inHubWindow(nextWeek, window, FRI25_8PM)).toBe(false);
+  });
+});
+
 describe("paging", () => {
   const page = (ids: string[], offset: number, total: number | null): HubPage => ({
     events: ids.map((id) => ev(id, "2026-10-01T00:00:00Z")),
@@ -164,6 +250,16 @@ describe("paging", () => {
   it("appends pages and never repeats an id", () => {
     const flat = flattenPages([page(["a", "b"], 0, 4), page(["b", "c", "d"], 30, null)]);
     expect(flat.map((e) => e.id)).toEqual(["a", "b", "c", "d"]);
+  });
+
+  it("leaves out ids pinned above the list", () => {
+    const flat = flattenPages([page(["a", "b", "c"], 0, 3)], new Set(["b"]));
+    expect(flat.map((e) => e.id)).toEqual(["a", "c"]);
+  });
+
+  it("near me counts by distance and says when capped", () => {
+    expect(nearMeCountLabel(42, false)).toBe("Nearest 42 within 30 mi");
+    expect(nearMeCountLabel(100, true)).toBe("Nearest 100 within 30 mi; more exist, narrow the filters");
   });
 
   it("counts honestly", () => {
@@ -188,6 +284,23 @@ describe("selectTonight", () => {
     expect(relativeStartLabel(picked[1], THU_9PM)).toBe("Starts in 2 hr");
     expect(relativeStartLabel(picked[2], THU_9PM)).toBe("Happening now");
   });
+
+  it("never counts down to the 19:31:58 no-time marker", () => {
+    const untimed = ev("untimed", FRI25_MARKER, { event_start_local: "2026-09-25T19:31:58" });
+    const timed = ev("timed", "2026-09-26T00:30:00Z", { event_start_local: "2026-09-25T19:30:00" });
+    const picked = selectTonight([untimed, timed], FRI25_650PM);
+    expect(picked.map((i) => [i.event.id, i.status])).toEqual([
+      ["timed", "soon"],
+      ["untimed", "untimed"],
+    ]);
+    expect(relativeStartLabel(picked[1], FRI25_650PM)).toBe("Today, time not listed");
+    expect(relativeStartLabel(picked[0], FRI25_650PM)).toBe("Starts in 40 min");
+  });
+
+  it("titles itself by the Central clock", () => {
+    expect(stripHeading(new Date("2026-09-25T14:00:00Z"))).toBe("Starting soon"); // 9 AM
+    expect(stripHeading(FRI25_8PM)).toBe("Tonight, Fri Sep 25");
+  });
 });
 
 describe("groupByCentralDay", () => {
@@ -204,5 +317,56 @@ describe("groupByCentralDay", () => {
       ["Tomorrow", ["fri"]],
       ["Saturday, Sep 26", ["sat"]],
     ]);
+  });
+
+  it("the prerender gets dates, never 'Tonight' or 'Tomorrow'", () => {
+    expect(dayHeading("2026-09-24", THU_9PM, false)).toBe("Thursday, Sep 24");
+    expect(dayHeading("2026-09-25", THU_9PM, false)).toBe("Friday, Sep 25");
+  });
+});
+
+describe("fetchNearMe", () => {
+  function reader(rows: unknown[]) {
+    const calls: Call[] = [];
+    const builder: Record<string, unknown> = {};
+    for (const m of ["select", "neq", "is"]) {
+      builder[m] = (...args: unknown[]) => {
+        calls.push([m, args]);
+        return builder;
+      };
+    }
+    builder.in = (...args: unknown[]) => {
+      calls.push(["in", args]);
+      return Promise.resolve({ data: rows, error: null });
+    };
+    return { builder, calls };
+  }
+
+  it("rounds the origin, reads the list projection, sorts by distance and flags a capped answer", async () => {
+    const rpcRows = Array.from({ length: NEAR_ME_LIMIT }, (_, i) => ({
+      id: `e${i}`,
+      distance_meters: i === 0 ? 5000 : 100 + i,
+    }));
+    const full = [
+      ev("e0", "2026-09-26T00:00:00Z", { is_sponsored: true, sponsored_until: null }),
+      ev("e1", "2026-09-26T00:00:00Z"),
+      ev("e2", "2026-09-25T13:00:00Z"), // 08:00, over by 20:00
+    ];
+    const rpc = vi.fn(() => Promise.resolve({ data: rpcRows, error: null }));
+    const { builder, calls } = reader(full);
+    mockSupabase.rpc = rpc;
+    mockSupabase.from = vi.fn(() => builder);
+
+    const page = await fetchNearMe(BASE, { latitude: 41.587654, longitude: -93.624321 }, FRI25_8PM);
+
+    expect(rpc).toHaveBeenCalledWith("search_events_near_location", expect.objectContaining({
+      user_lat: 41.59,
+      user_lon: -93.62,
+    }));
+    expect(calls).toContainEqual(["neq", ["is_merged", true]]);
+    expect(page.events.map((e) => e.id)).toEqual(["e1", "e0"]);
+    expect(page.events[1].is_sponsored).toBe(true);
+    expect(page.capped).toBe(true);
+    expect(page.complete).toBe(false);
   });
 });

@@ -1,6 +1,7 @@
 import { Helmet } from "react-helmet-async";
 import { Event } from "@/lib/types";
 import { buildEventItemList } from "@/lib/eventSchema";
+import { toJsonLd } from "@/lib/jsonLd";
 
 interface EventListJsonLdProps {
   events: Event[];
@@ -25,6 +26,10 @@ interface EventListJsonLdProps {
  * This component renders on the PRERENDERED hub pages (/events/today,
  * /events/this-weekend, /events/free, /events/kids, /events/date-night and the
  * monthly pages), which is exactly the HTML the JS-less crawlers read.
+ *
+ * toJsonLd, not JSON.stringify: names and descriptions are scraped, and a
+ * description holding "</script>" ended the block and let the rest parse as
+ * markup on every one of those prerendered pages (events-pass2 WP6 item 1).
  */
 export function EventListJsonLd({
   events,
@@ -43,7 +48,7 @@ export function EventListJsonLd({
 
   return (
     <Helmet>
-      <script type="application/ld+json">{JSON.stringify(itemListSchema)}</script>
+      <script type="application/ld+json">{toJsonLd(itemListSchema)}</script>
     </Helmet>
   );
 }

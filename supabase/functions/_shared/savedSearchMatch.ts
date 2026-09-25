@@ -58,18 +58,19 @@ export interface GeoBBox {
 }
 
 export type EventArea =
-  | { slug: string; label: string; kind: "city"; city: string }
+  | { slug: string; label: string; kind: "city"; city: string; locationFallback?: boolean }
   | { slug: string; label: string; kind: "bbox"; bbox: GeoBBox };
 
 export const EVENT_AREAS: readonly EventArea[] = [
   { slug: "des-moines", label: "Des Moines", kind: "city", city: "Des Moines" },
-  { slug: "west-des-moines", label: "West Des Moines", kind: "city", city: "West Des Moines" },
-  { slug: "ankeny", label: "Ankeny", kind: "city", city: "Ankeny" },
-  { slug: "urbandale", label: "Urbandale", kind: "city", city: "Urbandale" },
-  { slug: "clive", label: "Clive", kind: "city", city: "Clive" },
-  { slug: "johnston", label: "Johnston", kind: "city", city: "Johnston" },
-  { slug: "altoona", label: "Altoona", kind: "city", city: "Altoona" },
-  { slug: "windsor-heights", label: "Windsor Heights", kind: "city", city: "Windsor Heights" },
+  { slug: "west-des-moines", label: "West Des Moines", kind: "city", city: "West Des Moines", locationFallback: true },
+  { slug: "ankeny", label: "Ankeny", kind: "city", city: "Ankeny", locationFallback: true },
+  { slug: "urbandale", label: "Urbandale", kind: "city", city: "Urbandale", locationFallback: true },
+  { slug: "clive", label: "Clive", kind: "city", city: "Clive", locationFallback: true },
+  { slug: "johnston", label: "Johnston", kind: "city", city: "Johnston", locationFallback: true },
+  { slug: "altoona", label: "Altoona", kind: "city", city: "Altoona", locationFallback: true },
+  { slug: "windsor-heights", label: "Windsor Heights", kind: "city", city: "Windsor Heights", locationFallback: true },
+  { slug: "waukee", label: "Waukee", kind: "city", city: "Waukee", locationFallback: true },
   {
     slug: "downtown",
     label: "Downtown / Court Ave",
@@ -112,13 +113,31 @@ function isInBBox(
     longitude >= bbox.west && longitude <= bbox.east;
 }
 
-/** A city area is events.city exactly (case aside); a bbox needs coordinates. */
+/** Same three location endings as locationPatterns in src/lib/eventAreas.ts. */
+function locationEndsInCity(location: string | null | undefined, city: string): boolean {
+  const value = (location ?? "").toLowerCase();
+  const c = city.toLowerCase();
+  return value.endsWith(`, ${c}`) || value.includes(`, ${c}, ia`) || value.includes(`, ${c}, iowa`);
+}
+
+/**
+ * A city area is events.city exactly (case aside); a suburb also takes a row
+ * whose city is null and whose location ends in the suburb, as the web's
+ * eventInArea does. A bbox needs coordinates.
+ */
 export function eventInArea(
-  event: { city?: string | null; latitude?: number | null; longitude?: number | null },
+  event: {
+    city?: string | null;
+    location?: string | null;
+    latitude?: number | null;
+    longitude?: number | null;
+  },
   area: EventArea,
 ): boolean {
   if (area.kind === "city") {
-    return (event.city ?? "").trim().toLowerCase() === area.city.toLowerCase();
+    if ((event.city ?? "").trim().toLowerCase() === area.city.toLowerCase()) return true;
+    if (!area.locationFallback || event.city != null) return false;
+    return locationEndsInCity(event.location, area.city);
   }
   return isInBBox(event.latitude, event.longitude, area.bbox);
 }
@@ -322,11 +341,15 @@ function haystack(ev: AlertEvent): string {
     .toLowerCase();
 }
 
-/** Mirrors isFreePrice() in src/lib/eventPrice.ts: no price is NOT free. */
+/**
+ * Mirrors isFreePrice() in src/lib/eventPrice.ts: no price is NOT free, and
+ * text that names a nonzero amount ("$25; kids under 5 free") is not free
+ * either (events-pass2 WP2 item 3).
+ */
 export function isFreePrice(price: string | null | undefined): boolean {
   const text = (price ?? "").trim();
   if (!text) return false;
-  if (/free/i.test(text)) return true;
+  if (/free/i.test(text)) return !/\$ *[1-9]/.test(text);
   return /^\$?0(\.0+)?$/.test(text);
 }
 

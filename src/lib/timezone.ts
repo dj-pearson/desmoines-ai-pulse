@@ -109,6 +109,35 @@ export function isEventInFuture(eventDate: string | Date): boolean {
   }
 }
 
+/** SeatGeek's "no announced time" placeholder, as a Central wall-clock time. */
+const SEATGEEK_TBD_TIME = "03:30:00";
+
+/**
+ * True for a SeatGeek row sitting at the 03:30:00 local placeholder. Reads
+ * event_start_local when present (what the backfill matched on); otherwise the
+ * Central wall-clock time of event_start_utc or date.
+ */
+function isSeatGeekPlaceholder(event: {
+  source_url?: string | null;
+  event_start_local?: string | null;
+  event_start_utc?: string | null;
+  date?: string | Date | null;
+} | null | undefined): boolean {
+  if (!event || typeof event.source_url !== "string") return false;
+  if (!/seatgeek/i.test(event.source_url)) return false;
+  let local: string | undefined;
+  if (typeof event.event_start_local === "string" && event.event_start_local.includes("T")) {
+    local = event.event_start_local.split("T")[1]?.substring(0, 8);
+  } else {
+    const instant = event.event_start_utc || event.date;
+    if (!instant) return false;
+    const d = instant instanceof Date ? instant : new Date(instant);
+    if (Number.isNaN(d.getTime())) return false;
+    local = formatInTimeZone(d, CENTRAL_TIMEZONE, "HH:mm:ss");
+  }
+  return local === SEATGEEK_TBD_TIME;
+}
+
 /**
  * Check if an event has a specific time or uses the "no time" marker
  */
@@ -125,6 +154,13 @@ export function hasSpecificTime(event: any): boolean {
     // surface honours it at once: EnhancedEventSEO, SocialEventCard and
     // EventDetails already branch on this function.
     if (event?.time_tbd) return false;
+
+    // Interim for plan D5 (events-pass2 WP2 item 2). time_tbd is not in
+    // EVENT_LIST_COLUMNS yet, so a list row never carries it and SeatGeek's
+    // 03:30 placeholder printed as a showtime on every card. Same three-way
+    // match as the 20260902000016 backfill: SeatGeek source, a local time of
+    // exactly 03:30:00. Delete once D5 puts time_tbd in the projection.
+    if (isSeatGeekPlaceholder(event)) return false;
 
     // Check event_start_local first (new timezone field)
     if (event.event_start_local) {

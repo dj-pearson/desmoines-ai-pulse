@@ -102,6 +102,20 @@ export const EVENT_SMART_PRESETS: readonly EventPreset[] = [
 ];
 
 /**
+ * Presets the hero already offers as its own chips (Today and This week set
+ * the same `?preset=` values), so the quick picks leave them out
+ * (events-pass2 WP2 item 7). They stay in EVENT_SMART_PRESETS only because
+ * src/lib/__tests__/eventPresets.test.ts still pins the Tonight entry; drop
+ * both entries and that case together.
+ */
+const HERO_OWNED_PRESETS: ReadonlySet<EventPresetId> = new Set<EventPresetId>(["tonight", "this-week"]);
+
+/** What the filters sheet and the empty state offer under "Quick picks". */
+export const QUICK_PICK_PRESETS: readonly EventPreset[] = EVENT_SMART_PRESETS.filter(
+  (preset) => !HERO_OWNED_PRESETS.has(preset.id)
+);
+
+/**
  * A preset is ON when every value it sets is the current value. Derived from
  * the URL rather than held in state, so Clear all, a chip's X and the Back
  * button all turn it off without telling the preset row.

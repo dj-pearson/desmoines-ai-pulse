@@ -221,14 +221,26 @@ export function SearchAutocomplete({
   const cuisineMatches =
     contentType === 'restaurants' ? matchCuisines(facet?.cuisines ?? [], value) : [];
 
+  // The last row hands the words to /search, which looks across events,
+  // restaurants, attractions and hotels (search.md hand-off, events-pass2 WP2
+  // item 10). Offered once there are two characters, whatever else matched,
+  // so a hub search that finds nothing here still has somewhere to go.
+  const everythingQuery = value.trim();
+  const showEverything = everythingQuery.length >= 2;
+  const everythingHref = `/search?q=${encodeURIComponent(everythingQuery)}`;
+
   const showRecent = filteredRecent.length > 0;
   const showSuggestions = suggestions.length > 0;
   const showVenues = venues.length > 0;
   const showCuisines = cuisineMatches.length > 0;
-  const hasContent = showRecent || showSuggestions || showVenues || showCuisines;
+  const hasContent = showRecent || showSuggestions || showVenues || showCuisines || showEverything;
 
   // Build flat list of all selectable items for keyboard nav, in render order.
-  const allItems: { type: 'recent' | 'suggestion' | 'venue' | 'cuisine'; value: string; href?: string }[] = [];
+  const allItems: {
+    type: 'recent' | 'suggestion' | 'venue' | 'cuisine' | 'everything';
+    value: string;
+    href?: string;
+  }[] = [];
   if (showRecent) {
     filteredRecent.slice(0, 5).forEach((s) =>
       allItems.push({ type: 'recent', value: s })
@@ -244,6 +256,9 @@ export function SearchAutocomplete({
   }
   if (showCuisines) {
     cuisineMatches.forEach((c) => allItems.push({ type: 'cuisine', value: c }));
+  }
+  if (showEverything) {
+    allItems.push({ type: 'everything', value: everythingQuery, href: everythingHref });
   }
 
   // Open on focus or typing only. This used to open whenever there was
@@ -394,181 +409,194 @@ export function SearchAutocomplete({
   if (!isOpen || !hasContent) return null;
 
   let itemIndex = -1;
+  // Always the last entry in allItems, so its index is known up front.
+  const everythingIdx = allItems.length - 1;
 
+  // Theme tokens throughout (events-pass2 WP2 item 10): the list was
+  // bg-white with gray-* text, so it was a white slab in dark mode.
+  const optionClass = (idx: number) =>
+    cn(
+      'w-full text-left px-3 py-2 min-h-[44px] text-sm rounded-lg flex items-center gap-2 transition-colors',
+      activeIndex === idx
+        ? 'bg-accent text-accent-foreground'
+        : 'text-popover-foreground hover:bg-accent/60'
+    );
+  const groupLabelClass = 'px-2 py-1 text-xs font-medium text-muted-foreground flex items-center gap-1';
+  const divider = <div aria-hidden="true" className="border-t border-border" />;
+
+  // Options are tabIndex -1: focus stays in the input and the arrow keys move
+  // aria-activedescendant, which is the combobox pattern. Tab leaves the list.
   return (
     <div
       ref={dropdownRef}
-      id={listboxId}
       className={cn(
-        'absolute left-0 right-0 top-full mt-1 bg-white rounded-xl shadow-xl border border-gray-200 overflow-hidden z-50 max-h-80 overflow-y-auto',
+        'absolute left-0 right-0 top-full mt-1 bg-popover text-popover-foreground rounded-xl shadow-xl border border-border overflow-hidden z-50 max-h-80 overflow-y-auto',
         className
       )}
-      role="listbox"
-      aria-label="Search suggestions"
     >
+      {/* Clear sits outside the listbox: a listbox may only own options. */}
       {showRecent && (
-        <div className="p-2">
-          <div className="flex items-center justify-between px-2 py-1">
-            <span className="text-xs font-medium text-gray-500 flex items-center gap-1">
-              <SpriteIcon name="clock" className="h-3 w-3" />
-              Recent Searches
-            </span>
-            <button
-              type="button"
-              onClick={handleClearRecent}
-              className="min-h-[44px] px-2 text-xs text-gray-500 hover:text-gray-600 flex items-center gap-0.5"
-              aria-label="Clear recent searches"
-            >
-              <X className="h-3 w-3" />
-              Clear
-            </button>
-          </div>
-          {filteredRecent.slice(0, 5).map((search) => {
-            itemIndex++;
-            const idx = itemIndex;
-            return (
-              <button
-                key={`recent-${search}`}
-                id={optionId(idx)}
-                role="option"
-                aria-selected={activeIndex === idx}
-                className={cn(
-                  'w-full text-left px-3 py-2 min-h-[44px] text-sm rounded-lg flex items-center gap-2 transition-colors',
-                  activeIndex === idx
-                    ? 'bg-gray-100 text-gray-900'
-                    : 'text-gray-700 hover:bg-gray-50'
-                )}
-                onClick={() => handleSelect(search)}
-                onMouseEnter={() => setActiveIndex(idx)}
-              >
-                <SpriteIcon name="clock" className="h-3.5 w-3.5 text-gray-500 flex-shrink-0" />
-                {search}
-              </button>
-            );
-          })}
+        <div className="flex items-center justify-between px-4 pt-2">
+          <span className="text-xs font-medium text-muted-foreground flex items-center gap-1" aria-hidden="true">
+            <SpriteIcon name="clock" className="h-3 w-3" />
+            Recent searches
+          </span>
+          <button
+            type="button"
+            onClick={handleClearRecent}
+            className="min-h-[44px] px-2 text-xs text-muted-foreground hover:text-foreground flex items-center gap-0.5"
+            aria-label="Clear recent searches"
+          >
+            <X className="h-3 w-3" aria-hidden="true" />
+            Clear
+          </button>
         </div>
       )}
 
-      {showRecent && showSuggestions && (
-        <div className="border-t border-gray-100" />
-      )}
+      <div id={listboxId} role="listbox" aria-label="Search suggestions">
+        {showRecent && (
+          <div className="px-2 pb-2" role="group" aria-label="Recent searches">
+            {filteredRecent.slice(0, 5).map((search) => {
+              itemIndex++;
+              const idx = itemIndex;
+              return (
+                <button
+                  key={`recent-${search}`}
+                  id={optionId(idx)}
+                  role="option"
+                  type="button"
+                  tabIndex={-1}
+                  aria-selected={activeIndex === idx}
+                  className={optionClass(idx)}
+                  onClick={() => handleSelect(search)}
+                  onMouseEnter={() => setActiveIndex(idx)}
+                >
+                  <SpriteIcon name="clock" className="h-3.5 w-3.5 text-muted-foreground flex-shrink-0" />
+                  {search}
+                </button>
+              );
+            })}
+          </div>
+        )}
 
-      {showSuggestions && (
-        <div className="p-2">
-          <div className="px-2 py-1">
-            <span className="text-xs font-medium text-gray-500 flex items-center gap-1">
+        {showRecent && showSuggestions && divider}
+
+        {showSuggestions && (
+          <div className="p-2" role="group" aria-label="Suggestions">
+            <div className={groupLabelClass} aria-hidden="true">
               <SpriteIcon name="trending-up" className="h-3 w-3" />
               Suggestions
-            </span>
+            </div>
+            {suggestions.map((suggestion) => {
+              itemIndex++;
+              const idx = itemIndex;
+              return (
+                <button
+                  key={`suggestion-${suggestion.id}`}
+                  id={optionId(idx)}
+                  role="option"
+                  type="button"
+                  tabIndex={-1}
+                  aria-selected={activeIndex === idx}
+                  className={optionClass(idx)}
+                  onClick={() => handleSelect(suggestion.title, suggestion.href)}
+                  onMouseEnter={() => setActiveIndex(idx)}
+                >
+                  <Search className="h-3.5 w-3.5 text-muted-foreground flex-shrink-0" aria-hidden="true" />
+                  <div className="min-w-0">
+                    <div className="truncate">{suggestion.title}</div>
+                    {suggestion.subtitle && (
+                      <div className="text-xs text-muted-foreground truncate">{suggestion.subtitle}</div>
+                    )}
+                  </div>
+                </button>
+              );
+            })}
           </div>
-          {suggestions.map((suggestion) => {
-            itemIndex++;
-            const idx = itemIndex;
-            return (
-              <button
-                key={`suggestion-${suggestion.id}`}
-                id={optionId(idx)}
-                role="option"
-                aria-selected={activeIndex === idx}
-                className={cn(
-                  'w-full text-left px-3 py-2 min-h-[44px] text-sm rounded-lg flex items-center gap-2 transition-colors',
-                  activeIndex === idx
-                    ? 'bg-gray-100 text-gray-900'
-                    : 'text-gray-700 hover:bg-gray-50'
-                )}
-                onClick={() => handleSelect(suggestion.title, suggestion.href)}
-                onMouseEnter={() => setActiveIndex(idx)}
-              >
-                <Search className="h-3.5 w-3.5 text-gray-500 flex-shrink-0" />
-                <div className="min-w-0">
-                  <div className="truncate">{suggestion.title}</div>
-                  {suggestion.subtitle && (
-                    <div className="text-xs text-gray-500 truncate">
-                      {suggestion.subtitle}
-                    </div>
-                  )}
-                </div>
-              </button>
-            );
-          })}
-        </div>
-      )}
+        )}
 
-      {showVenues && (showRecent || showSuggestions) && (
-        <div className="border-t border-gray-100" />
-      )}
+        {showVenues && (showRecent || showSuggestions) && divider}
 
-      {showVenues && (
-        <div className="p-2" role="group" aria-label="Venues">
-          <div className="px-2 py-1">
-            <span className="text-xs font-medium text-gray-500 flex items-center gap-1">
-              <MapPin className="h-3 w-3" aria-hidden="true" />
+        {showVenues && (
+          <div className="p-2" role="group" aria-label="Venues">
+            <div className={groupLabelClass} aria-hidden="true">
+              <MapPin className="h-3 w-3" />
               Venues
-            </span>
+            </div>
+            {venues.map((venue) => {
+              itemIndex++;
+              const idx = itemIndex;
+              return (
+                <button
+                  key={`venue-${venue}`}
+                  id={optionId(idx)}
+                  role="option"
+                  type="button"
+                  tabIndex={-1}
+                  aria-selected={activeIndex === idx}
+                  className={optionClass(idx)}
+                  onClick={() => handleSelect(venue)}
+                  onMouseEnter={() => setActiveIndex(idx)}
+                >
+                  <MapPin className="h-3.5 w-3.5 text-muted-foreground flex-shrink-0" aria-hidden="true" />
+                  <span className="truncate">{venue}</span>
+                </button>
+              );
+            })}
           </div>
-          {venues.map((venue) => {
-            itemIndex++;
-            const idx = itemIndex;
-            return (
-              <button
-                key={`venue-${venue}`}
-                id={optionId(idx)}
-                role="option"
-                aria-selected={activeIndex === idx}
-                className={cn(
-                  'w-full text-left px-3 py-2 min-h-[44px] text-sm rounded-lg flex items-center gap-2 transition-colors',
-                  activeIndex === idx
-                    ? 'bg-gray-100 text-gray-900'
-                    : 'text-gray-700 hover:bg-gray-50'
-                )}
-                onClick={() => handleSelect(venue)}
-                onMouseEnter={() => setActiveIndex(idx)}
-              >
-                <MapPin className="h-3.5 w-3.5 text-gray-500 flex-shrink-0" aria-hidden="true" />
-                <span className="truncate">{venue}</span>
-              </button>
-            );
-          })}
-        </div>
-      )}
+        )}
 
-      {showCuisines && (showRecent || showSuggestions || showVenues) && (
-        <div className="border-t border-gray-100" />
-      )}
+        {showCuisines && (showRecent || showSuggestions || showVenues) && divider}
 
-      {showCuisines && (
-        <div className="p-2" role="group" aria-label="Cuisines">
-          <div className="px-2 py-1">
-            <span className="text-xs font-medium text-gray-500 flex items-center gap-1">
-              <ChefHat className="h-3 w-3" aria-hidden="true" />
+        {showCuisines && (
+          <div className="p-2" role="group" aria-label="Cuisines">
+            <div className={groupLabelClass} aria-hidden="true">
+              <ChefHat className="h-3 w-3" />
               Cuisines
-            </span>
+            </div>
+            {cuisineMatches.map((cuisine) => {
+              itemIndex++;
+              const idx = itemIndex;
+              return (
+                <button
+                  key={`cuisine-${cuisine}`}
+                  id={optionId(idx)}
+                  role="option"
+                  type="button"
+                  tabIndex={-1}
+                  aria-selected={activeIndex === idx}
+                  className={optionClass(idx)}
+                  onClick={() => handleSelectCuisine(cuisine)}
+                  onMouseEnter={() => setActiveIndex(idx)}
+                >
+                  <ChefHat className="h-3.5 w-3.5 text-muted-foreground flex-shrink-0" aria-hidden="true" />
+                  <span className="truncate">{cuisine} restaurants</span>
+                </button>
+              );
+            })}
           </div>
-          {cuisineMatches.map((cuisine) => {
-            itemIndex++;
-            const idx = itemIndex;
-            return (
-              <button
-                key={`cuisine-${cuisine}`}
-                id={optionId(idx)}
-                role="option"
-                aria-selected={activeIndex === idx}
-                className={cn(
-                  'w-full text-left px-3 py-2 min-h-[44px] text-sm rounded-lg flex items-center gap-2 transition-colors',
-                  activeIndex === idx
-                    ? 'bg-gray-100 text-gray-900'
-                    : 'text-gray-700 hover:bg-gray-50'
-                )}
-                onClick={() => handleSelectCuisine(cuisine)}
-                onMouseEnter={() => setActiveIndex(idx)}
-              >
-                <ChefHat className="h-3.5 w-3.5 text-gray-500 flex-shrink-0" aria-hidden="true" />
-                <span className="truncate">{cuisine} restaurants</span>
-              </button>
-            );
-          })}
-        </div>
-      )}
+        )}
+
+        {showEverything && (showRecent || showSuggestions || showVenues || showCuisines) && divider}
+
+        {showEverything && (
+          <div className="p-2" role="group" aria-label="Everywhere">
+            <button
+              id={optionId(everythingIdx)}
+              role="option"
+              type="button"
+              tabIndex={-1}
+              aria-selected={activeIndex === everythingIdx}
+              className={optionClass(everythingIdx)}
+              onClick={() => handleSelect(everythingQuery, everythingHref)}
+              onMouseEnter={() => setActiveIndex(everythingIdx)}
+            >
+              <Search className="h-3.5 w-3.5 text-muted-foreground flex-shrink-0" aria-hidden="true" />
+              <span className="truncate">Search everything for &lsquo;{everythingQuery}&rsquo;</span>
+            </button>
+          </div>
+        )}
+      </div>
     </div>
   );
 }

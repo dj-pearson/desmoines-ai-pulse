@@ -155,9 +155,10 @@ const MAX_TOKENS = 6;
 /**
  * Must equal FREE_PRICE_FILTER in src/lib/eventPrice.ts; search.test.ts reads
  * that file and compares. No `price.is.null`: an event with no listed price is
- * not free.
+ * not free. The `not.match` arm refuses a nonzero dollar amount, so
+ * "$25; kids under 5 free" is not free (events-pass2 WP2 item 3).
  */
-export const FREE_PRICE_FILTER = "price.ilike.%free%,price.eq.$0,price.eq.0";
+export const FREE_PRICE_FILTER = "and(price.ilike.%free%,price.not.match.[$] *[1-9]),price.eq.$0,price.eq.0";
 
 export const HOTEL_COLUMNS =
   "id, name, slug, area, city, short_description, image_url, avg_nightly_rate, star_rating, latitude, longitude";

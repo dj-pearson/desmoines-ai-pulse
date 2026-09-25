@@ -1,11 +1,17 @@
 import { Helmet } from "react-helmet-async";
 import { Event } from "@/lib/types";
-import { createEventSlugWithCentralTime, formatInCentralTime } from "@/lib/timezone";
+import { createEventSlugWithCentralTime } from "@/lib/timezone";
 import { BRAND } from "@/lib/brandConfig";
 import { ogImageUrl } from "@/lib/ogImage";
-import { buildEventJsonLd } from "@/lib/eventSchema";
+import { buildEventJsonLd, eventStartIso } from "@/lib/eventSchema";
 import { toJsonLd } from "@/lib/jsonLd";
-import { eventMetaDescription, eventPageTitle } from "@/lib/eventMeta";
+import {
+  eventImageAlt,
+  eventKeywords,
+  eventMetaDescription,
+  eventPageTitle,
+  isStaleEvent,
+} from "@/lib/eventMeta";
 
 interface EnhancedEventSEOProps {
   event: Event;
@@ -15,11 +21,30 @@ interface EnhancedEventSEOProps {
   // now derived from the event's own start date below, so the component no
   // longer depends on the caller computing it correctly.
   viewMode?: "list" | "detail";
+  /**
+   * The coordinates the page itself uses: the event's, else its matched
+   * venue's. geo.position and ICBM are omitted when there are none, rather
+   * than claiming downtown Des Moines for a Waukee event (events-pass2 WP4
+   * item 9).
+   */
+  latitude?: number | null;
+  longitude?: number | null;
+  /** Archived rows render as past events and ask to leave the index. */
+  noindex?: boolean;
+}
+
+function coord(value: number | string | null | undefined): number | null {
+  if (value === null || value === undefined || value === "") return null;
+  const n = Number(value);
+  return Number.isFinite(n) && n !== 0 ? n : null;
 }
 
 export default function EnhancedEventSEO({
   event,
-  viewMode = "detail"
+  viewMode = "detail",
+  latitude,
+  longitude,
+  noindex = false,
 }: EnhancedEventSEOProps) {
 
   // Both live in src/lib/eventMeta.ts, which records why: the title read the
@@ -31,86 +56,24 @@ export default function EnhancedEventSEO({
 
   const getGEODescription = () => eventMetaDescription(event);
 
-  const getLocalKeywords = () => {
-    const base = [
-      event.title,
-      `${event.title} ${BRAND.city}`,
-      `${BRAND.city} ${event.category}`,
-      `${event.category} events ${BRAND.city}`,
-      `${BRAND.city} events`,
-      `things to do ${BRAND.city}`,
-      `things to do in ${BRAND.city} ${BRAND.state}`,
-      `${BRAND.state} events`,
-      `${BRAND.region} events`,
-      `${BRAND.city} activities`,
-      `events near me ${BRAND.city}`,
-      `what to do in ${BRAND.city}`,
-      `${BRAND.city} ${BRAND.state} events today`,
-      `${BRAND.city} weekend events`,
-    ];
-
-    if (event.venue) {
-      base.push(`${event.venue} events`, `${event.venue} ${BRAND.city}`, `events at ${event.venue}`);
-    }
-
-    if (event.location && !event.location.includes(BRAND.city)) {
-      base.push(`${event.location} events`);
-    }
-
-    if (event.city && event.city !== BRAND.city) {
-      base.push(`${event.city} events`, `things to do ${event.city} Iowa`);
-    }
-
-    const month = formatInCentralTime(
-      event.event_start_utc || event.event_start_local || event.date,
-      "MMMM"
-    );
-    const year = formatInCentralTime(
-      event.event_start_utc || event.event_start_local || event.date,
-      "yyyy"
-    );
-    const dayOfWeek = formatInCentralTime(
-      event.event_start_utc || event.event_start_local || event.date,
-      "EEEE"
-    );
-
-    base.push(
-      `${BRAND.city} events ${month} ${year}`,
-      `${dayOfWeek} events ${BRAND.city}`,
-      `this weekend ${BRAND.city}`,
-      `tonight ${BRAND.city}`,
-      `${event.category.toLowerCase()} ${BRAND.city} ${month}`,
-    );
-
-    return base.filter(Boolean);
-  };
+  // Absolute words only, and no crash on a null category (eventMeta.ts).
+  const keywords = eventKeywords(event);
 
   const eventUrl = `${BRAND.baseUrl}/events/${createEventSlugWithCentralTime(event.title, event)}`;
   // Branded dynamic OG card (WEB-FEAT-008); falls back to the item photo / default.
   const ogImage = ogImageUrl("event", event.id) || event.image_url || `${BRAND.baseUrl}${BRAND.ogImage}`;
 
-  // startMs only drives the stale-event robots directive below. The schema's
-  // description, offers and endDate come from buildEventJsonLd; the locals
-  // that used to duplicate them here were never read.
-  const startDateISO = event.event_start_utc || (typeof event.date === 'string' ? event.date : event.date.toISOString());
-  const startMs = new Date(startDateISO).getTime();
-
   // WEB-SEO-009: retire long-past events from the index instead of accumulating
-  // them forever. Previously every event page emitted an unconditional
-  // "index, follow", so concluded listings never aged out.
-  //
-  // The 30-day threshold is deliberately LATER than the 7-day GRACE_DAYS in
-  // scripts/generate-dynamic-sitemaps.ts. Between day 7 and day 30 an event is
-  // still indexable but no longer submitted — it keeps ranking for
-  // "did X happen" style queries and for recurring-event research while it is
-  // still plausibly useful, then drops out. Keep "follow" throughout so the
-  // internal links on the page continue to pass.
-  const STALE_EVENT_NOINDEX_DAYS = 30;
-  const daysSinceEvent = Number.isFinite(startMs)
-    ? (Date.now() - startMs) / 86_400_000
-    : 0;
-  const isStaleEvent = daysSinceEvent > STALE_EVENT_NOINDEX_DAYS;
-  const robotsDirective = isStaleEvent
+  // them forever. Measured from the event's END since events-pass2 WP4 item
+  // 12, so a two-month exhibit is not dropped while it is still open; see
+  // isStaleEvent in eventMeta.ts. Keep "follow" throughout so the internal
+  // links on the page continue to pass.
+  const isStale = noindex || isStaleEvent(event);
+  const lat = coord(latitude) ?? coord(event.latitude);
+  const lng = coord(longitude) ?? coord(event.longitude);
+  const hasGeo = lat !== null && lng !== null;
+  const city = event.city?.trim() || null;
+  const robotsDirective = isStale
     ? "noindex, follow"
     : "index, follow, max-snippet:-1, max-image-preview:large, max-video-preview:-1";
 
@@ -185,23 +148,24 @@ export default function EnhancedEventSEO({
       {/* Core Meta */}
       <title>{getOptimizedTitle()}</title>
       <meta name="description" content={getGEODescription()} />
-      <meta name="keywords" content={getLocalKeywords().join(", ")} />
+      <meta name="keywords" content={keywords.join(", ")} />
       <link rel="canonical" href={eventUrl} />
 
       {/* Geographic Meta for Local SEO */}
       <meta name="geo.region" content={`US-${BRAND.stateAbbr}`} />
-      <meta name="geo.placename" content={`${BRAND.city}, ${BRAND.state}`} />
-      <meta name="geo.position" content="41.5868;-93.6250" />
-      <meta name="ICBM" content="41.5868, -93.6250" />
+      {city && <meta name="geo.placename" content={`${city}, ${BRAND.state}`} />}
+      {hasGeo && <meta name="geo.position" content={`${lat};${lng}`} />}
+      {hasGeo && <meta name="ICBM" content={`${lat}, ${lng}`} />}
       <meta name="DC.title" content={getOptimizedTitle()} />
 
       {/* Event-Specific Meta for AI Parsers (ChatGPT, Perplexity, Google AI) */}
       <meta name="event:title" content={event.title} />
       <meta name="event:description" content={getGEODescription()} />
-      <meta name="event:start_time" content={event.event_start_utc || (typeof event.date === 'string' ? event.date : event.date.toISOString())} />
+      {/* Same value as the JSON-LD startDate: a date only when no time was published. */}
+      <meta name="event:start_time" content={eventStartIso(event)} />
       <meta name="event:location" content={event.venue || event.location || `${BRAND.city}, ${BRAND.state}`} />
-      <meta name="event:category" content={event.category} />
-      <meta name="event:city" content={event.city || BRAND.city} />
+      {event.category && <meta name="event:category" content={event.category} />}
+      {city && <meta name="event:city" content={city} />}
       <meta name="event:state" content={BRAND.state} />
       <meta name="event:country" content="United States" />
       {event.image_url && <meta name="event:image" content={event.image_url} />}
@@ -211,20 +175,20 @@ export default function EnhancedEventSEO({
           robotsDirective flips to noindex,follow once the event is long past
           (WEB-SEO-009). */}
       <meta name="robots" content={robotsDirective} />
-      <meta name="googlebot" content={isStaleEvent ? "noindex, follow" : "index, follow"} />
-      <meta name="bingbot" content={isStaleEvent ? "noindex, follow" : "index, follow"} />
+      <meta name="googlebot" content={isStale ? "noindex, follow" : "index, follow"} />
+      <meta name="bingbot" content={isStale ? "noindex, follow" : "index, follow"} />
 
       {/* Open Graph for Social + AI */}
       <meta property="og:type" content="event" />
       <meta property="og:title" content={getOptimizedTitle()} />
       <meta property="og:description" content={getGEODescription()} />
-      <meta property="og:locality" content={event.city || BRAND.city} />
+      {city && <meta property="og:locality" content={city} />}
       <meta property="og:region" content={BRAND.state} />
       <meta property="og:country-name" content="United States" />
       <meta property="og:image" content={ogImage} />
       <meta property="og:image:width" content="1200" />
       <meta property="og:image:height" content="630" />
-      <meta property="og:image:alt" content={`${event.title} - ${event.category} event in ${event.city || BRAND.city}`} />
+      <meta property="og:image:alt" content={eventImageAlt(event)} />
       <meta property="og:url" content={eventUrl} />
       <meta property="og:site_name" content={BRAND.name} />
 

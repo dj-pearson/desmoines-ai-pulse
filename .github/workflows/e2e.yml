@@ -72,6 +72,12 @@ jobs:
       - name: Check import/export integrity
         run: npm run check-imports
 
+      # Which specs this runs is playwright.smoke.config.ts's testMatch, not
+      # this file. Named here so `npm run check-e2e-lanes` and a reader both
+      # see the Events second pass joined (docs/page-plans/events-pass2.md
+      # WP6): tests/events-hub-clock.spec.ts, tests/events-card-honesty.spec.ts,
+      # tests/events-landings.spec.ts, tests/events-request-budget.spec.ts and
+      # tests/weather-aware-events.spec.ts, all on the fixture backend.
       - name: Run smoke suite against a production build
         run: npm run test:smoke
 

@@ -1,4 +1,4 @@
-import { useQuery } from '@tanstack/react-query';
+import { keepPreviousData, useQueries } from '@tanstack/react-query';
 import { supabase } from '@/integrations/supabase/client';
 import type { EventLiveStats } from './useEventSocial';
 import { createLogger } from '@/lib/logger';
@@ -51,7 +51,10 @@ export async function fetchBatchEventSocial(eventIds: readonly string[]): Promis
         .from('event_attendees')
         .select('event_id')
         .in('event_id', ids)
-        .eq('visibility', 'public'),
+        .eq('visibility', 'public')
+        // "12 interested" counts people who said going or interested, not
+        // every row (a "maybe" is not a yes).
+        .in('status', ['going', 'interested']),
       supabase
         .from('event_live_stats')
         .select('event_id,total_checkins,current_attendees')
@@ -83,22 +86,69 @@ export async function fetchBatchEventSocial(eventIds: readonly string[]): Promis
   }
 }
 
+/** One request carries at most this many ids, so a URL stays short. */
+export const SOCIAL_CHUNK_SIZE = 30;
+
+/** Split ids into chunks of at most `size`, dropping empties and repeats. */
+export function chunkIds(ids: readonly string[], size = SOCIAL_CHUNK_SIZE): string[][] {
+  const unique = [...new Set(ids.filter(Boolean))];
+  const chunks: string[][] = [];
+  for (let i = 0; i < unique.length; i += size) chunks.push(unique.slice(i, i + size));
+  return chunks;
+}
+
+export interface BatchEventSocialState {
+  /** Every settled chunk's entries, merged. */
+  data: BatchEventSocialResult | undefined;
+  /**
+   * True while any chunk has no fresh answer, including one showing the
+   * previous key's data as a placeholder. A card with no entry then waits
+   * instead of starting its own per-event fetch (WEB-PERF-024).
+   */
+  isPending: boolean;
+}
+
 /**
- * Social counts for a list of events in two parallel requests, instead of
- * several per card.
+ * Social counts for several id groups, one query per group
+ * (events-pass2 WP1 item 10). The hub passes one group per loaded page plus
+ * one for the Tonight strip, so Load More adds a query instead of refetching
+ * every id already on screen, and a ?page=10 deep link no longer builds one
+ * ~12KB URL. Groups larger than SOCIAL_CHUNK_SIZE are split.
  *
- * The key has no user id: nothing fetched here depends on who is signed in,
+ * The keys have no user id: nothing fetched here depends on who is signed in,
  * and keying on it refetched every list on login.
  */
-export function useBatchEventSocial(eventIds: string[]) {
-  // Sorted copy: sorting the caller's array in place reordered a memoized list.
-  const key = [...eventIds].sort().join(',');
-
-  return useQuery({
-    queryKey: ['batch-event-social', key],
-    queryFn: () => fetchBatchEventSocial(eventIds),
-    staleTime: 2 * 60 * 1000, // 2 minutes - social data changes frequently
-    gcTime: 5 * 60 * 1000, // 5 minutes
-    enabled: eventIds.length > 0,
+export function useBatchEventSocialGroups(
+  groups: readonly (readonly string[])[],
+  chunkSize = SOCIAL_CHUNK_SIZE
+): BatchEventSocialState {
+  const chunks = groups.flatMap((g) => chunkIds(g, chunkSize));
+  return useQueries({
+    queries: chunks.map((chunk) => ({
+      // Sorted copy: sorting the caller's array in place reordered a memoized list.
+      queryKey: ['batch-event-social', [...chunk].sort().join(',')],
+      queryFn: () => fetchBatchEventSocial(chunk),
+      staleTime: 2 * 60 * 1000, // social data changes frequently
+      gcTime: 5 * 60 * 1000,
+      placeholderData: keepPreviousData,
+    })),
+    combine: (results) => {
+      let merged: BatchEventSocialResult | undefined;
+      let isPending = false;
+      for (const r of results) {
+        if (r.data && !r.isPlaceholderData) merged = { ...(merged ?? {}), ...r.data };
+        else isPending = true;
+      }
+      return { data: merged, isPending };
+    },
   });
+}
+
+/**
+ * Social counts for a list of events in two parallel requests, instead of
+ * several per card. One query for the whole list, as the landings have always
+ * made; the hub uses useBatchEventSocialGroups.
+ */
+export function useBatchEventSocial(eventIds: string[]): BatchEventSocialState {
+  return useBatchEventSocialGroups([eventIds], Number.POSITIVE_INFINITY);
 }

@@ -19,17 +19,33 @@ import { useBatchEventSocial } from "@/hooks/useBatchEventSocial";
 import { useUrlFilters } from "@/hooks/useUrlFilters";
 import {
   useEventLanding,
+  useLandingCards,
   countFree,
   countLabel,
+  hourLabel,
   isEveningStart,
   DATE_NIGHT_FILTER,
+  EVENING_HOURS_LABEL,
+  LANDING_LIGHT_COLUMNS,
   type LandingEvent,
 } from "@/hooks/useEventLanding";
+import NoIndexMeta from "@/components/schema/NoIndexMeta";
+import { EventsLandingLinks } from "@/components/events/EventsLandingLinks";
+import { EVENING_START_HOUR } from "@/lib/tonightPairings";
+import { addCentralDays, centralDateOf } from "@/lib/timezone";
 import { BRAND, getCanonicalUrl } from "@/lib/brandConfig";
 import { formatCount } from "@/lib/pluralize";
 import { EVENTS_UPDATE_ANSWER } from "@/content/eventsCopy";
 
-const FETCH_LIMIT = 100;
+/**
+ * WP3 item 11. The page used to take the next 100 matching rows from today,
+ * whatever their time, and filter to evenings after the cap, so the evening
+ * count was "evenings among the next 100", labelled as if it were all of
+ * them. It now asks for a fixed 14-day Central window with the light
+ * projection, filters to evenings, then caps what renders.
+ */
+const WINDOW_DAYS = 14;
+const FETCH_LIMIT = 300;
 
 /**
  * WEB-PERF-027. Uncapped, this page filled its limit(100) and weighed 756 KB
@@ -56,12 +72,21 @@ export default function DateNightEvents() {
    * now. The filter is DATE_NIGHT_FILTER: canonical categories plus
    * word-boundary title matches, with the bare "night" match removed.
    */
+  const today = centralDateOf(new Date());
+  const lastDay = addCentralDays(today, WINDOW_DAYS - 1);
   const {
     data: events = EMPTY,
     isLoading,
     error: loadError,
     refetch,
-  } = useEventLanding({ key: { landing: "date-night" }, or: DATE_NIGHT_FILTER, limit: FETCH_LIMIT });
+  } = useEventLanding({
+    key: { landing: "date-night" },
+    window: { kind: "range", from: today, to: lastDay },
+    or: DATE_NIGHT_FILTER,
+    limit: FETCH_LIMIT,
+    columns: LANDING_LIGHT_COLUMNS,
+  });
+  const capped = events.length >= FETCH_LIMIT;
 
   /**
    * "Evening" is read in Central (isEveningStart), not in the browser's zone:
@@ -72,7 +97,9 @@ export default function DateNightEvents() {
     () => (eveningOnly ? events.filter(isEveningStart) : events),
     [events, eveningOnly]
   );
-  const dateEvents = useMemo(() => matchingEvents.slice(0, VISIBLE_EVENT_LIMIT), [matchingEvents]);
+  const shownRows = useMemo(() => matchingEvents.slice(0, VISIBLE_EVENT_LIMIT), [matchingEvents]);
+  // Full card rows for the rendered 40 only; the window came back light.
+  const { cards: dateEvents, isPending: cardsPending } = useLandingCards(shownRows);
   const hiddenEventCount = matchingEvents.length - dateEvents.length;
 
   const eveningCount = useMemo(() => events.filter(isEveningStart).length, [events]);
@@ -102,8 +129,7 @@ export default function DateNightEvents() {
     },
     {
       question: "What does Evening only show?",
-      answer:
-        "Events that start between 5 PM and 2 AM, Central time. Events without a listed start time are left out of that view; switch to All times to see them.",
+      answer: `Events in the next ${WINDOW_DAYS} days that start between ${EVENING_HOURS_LABEL}, Central time, the same evening the home page means by tonight. Events without a listed start time are left out of that view; switch to All times to see them.`,
     },
     {
       question: "Are there free date night events?",
@@ -128,6 +154,8 @@ export default function DateNightEvents() {
 
   return (
     <div className="min-h-screen bg-background">
+      {/* A failed first query has not answered the page (WP3 item 12). */}
+      {loadError && events.length === 0 && <NoIndexMeta />}
       <EnhancedLocalSEO
         pageTitle={pageTitle}
         pageDescription={pageDescription}
@@ -175,8 +203,9 @@ export default function DateNightEvents() {
 
           <p className="text-lg text-muted-foreground max-w-3xl mb-4">
             Live music, comedy, arts, wine and dinner events in Des Moines and the
-            suburbs. The list starts with evening events, 5 PM or later Central
-            time; switch to All times for matinees and daytime tastings.
+            suburbs over the next {WINDOW_DAYS} days. The list starts with evening
+            events, {hourLabel(EVENING_START_HOUR)} or later Central time; switch
+            to All times for matinees and daytime tastings.
           </p>
         </div>
 
@@ -187,10 +216,14 @@ export default function DateNightEvents() {
                 <div className="text-2xl font-bold text-primary">
                   {countLabel(events.length, FETCH_LIMIT)}
                 </div>
-                <div className="text-sm text-muted-foreground">Date Night Events</div>
+                <div className="text-sm text-muted-foreground">
+                  Next {WINDOW_DAYS} days
+                </div>
               </div>
               <div>
-                <div className="text-2xl font-bold text-primary">{eveningCount}</div>
+                <div className="text-2xl font-bold text-primary">
+                  {capped ? `${eveningCount}+` : eveningCount}
+                </div>
                 <div className="text-sm text-muted-foreground">Evening Starts</div>
               </div>
               <div>
@@ -243,7 +276,7 @@ export default function DateNightEvents() {
             onClick={() => setParam(TIME_PARAM, EVENING, { def: EVENING })}
           >
             <SpriteIcon name="clock" className="h-4 w-4 mr-1" />
-            Evening only (5 PM+)
+            Evening only ({hourLabel(EVENING_START_HOUR)}+)
           </Button>
           <Button
             type="button"
@@ -259,7 +292,7 @@ export default function DateNightEvents() {
 
         {!isLoading && loadError ? (
           <ErrorState error={loadError} onRetry={() => void refetch()} />
-        ) : isLoading ? (
+        ) : isLoading || cardsPending ? (
           <SkeletonGroup label="Loading date night events..." className="grid gap-6 md:grid-cols-2 lg:grid-cols-3">
             {[...Array(6)].map((_, i) => (
               <div key={i} className="animate-pulse">
@@ -271,9 +304,17 @@ export default function DateNightEvents() {
           </SkeletonGroup>
         ) : matchingEvents.length > 0 ? (
           <>
-            <h2 className="text-2xl font-bold mb-6">
-              Upcoming Date Night Events ({matchingEvents.length})
+            <h2 className="text-2xl font-bold mb-2">
+              Date Night Events, Next {WINDOW_DAYS} Days ({capped ? `${matchingEvents.length}+` : matchingEvents.length})
             </h2>
+            {capped ? (
+              <p className="text-sm text-muted-foreground mb-6">
+                Counted from the soonest {FETCH_LIMIT} matching listings; the {WINDOW_DAYS} days may
+                hold more.
+              </p>
+            ) : (
+              <div className="mb-4" />
+            )}
             <div className="grid gap-6 md:grid-cols-2 lg:grid-cols-3">
               {dateEvents.map((event, index) => (
                 <SocialEventCard
@@ -294,8 +335,12 @@ export default function DateNightEvents() {
                   Showing the {VISIBLE_EVENT_LIMIT} soonest of{" "}
                   {formatCount(matchingEvents.length, "date night event")}.
                 </p>
+                {/* Says what it opens (WP3 item 10): the hub's Music category
+                    over the same 14 days, not this page's wider match. */}
                 <Button asChild variant="outline">
-                  <Link to="/events?category=Music">Browse all music events</Link>
+                  <Link to={`/events?from=${today}&to=${lastDay}&category=Music`}>
+                    Browse Music-category events for the next {WINDOW_DAYS} days
+                  </Link>
                 </Button>
               </div>
             )}
@@ -350,6 +395,7 @@ export default function DateNightEvents() {
 
         {/* SEO-003: FAQSection renders the questions and emits the single
             FAQPage block. */}
+        <EventsLandingLinks current="/events/date-night" className="mt-8 mb-8" />
         <FAQSection faqs={faqData} />
 
         <RelatedContent

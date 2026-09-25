@@ -31,9 +31,9 @@
  * not the list - which check-prerender-content.mjs now gates on. Do not read
  * the sentence above as a current measurement; re-measure before quoting it.
  *
- * THE LOCATION LIST IS READ FROM src/lib/suburbs.ts, not restated here. Its
- * searchTerms are what EventsByLocation filters on, so a suburb added there is
- * covered without a second edit - the hand-maintained list problem this repo
+ * THE LOCATION LIST IS READ FROM src/lib/suburbs.ts, not restated here, and
+ * each place filter from src/lib/eventAreas.ts, which is what EventsByLocation
+ * filters on, so a suburb added there is covered without a second edit - the hand-maintained list problem this repo
  * keeps rediscovering. (It used to parse EventsByLocation.tsx, which stopped
  * holding the map when SUBURBS moved to suburbs.ts.)
  *
@@ -56,6 +56,7 @@ import { readFileSync, existsSync } from 'node:fs';
 /** Straight from WEB-SEO-013 AC5. */
 const FLOOR = 8;
 const PAGE_SOURCE = 'src/lib/suburbs.ts';
+const AREA_SOURCE = 'src/lib/eventAreas.ts';
 
 function loadEnvFile(path) {
   if (!existsSync(path)) return;
@@ -82,17 +83,34 @@ if (!BASE || !KEY) {
 const HEADERS = { apikey: KEY, Authorization: `Bearer ${KEY}` };
 
 /**
- * Slug -> searchTerms, parsed out of suburbs.ts's SUBURBS map so the two
- * cannot disagree. Throws rather than returning an empty set: a regex that stops
- * matching would otherwise report a clean surface.
+ * Slug -> the PostgREST place filter EventsByLocation sends. The slugs are the
+ * SUBURBS keys in suburbs.ts; the filter is eventAreaOrFilter() from
+ * src/lib/eventAreas.ts (events-pass2 WP5 item 6): the area's city, or a null
+ * city with a location ending ", <City>" / ", <City>, IA..." / ", <City>,
+ * Iowa...". Both files are parsed so neither can drift from this script.
+ * Throws rather than returning an empty set: a regex that stops matching would
+ * otherwise report a clean surface.
  */
 function readLocations() {
-  const src = readFileSync(PAGE_SOURCE, 'utf8');
+  const suburbs = readFileSync(PAGE_SOURCE, 'utf8');
+  const block = suburbs.slice(suburbs.indexOf('export const SUBURBS'), suburbs.indexOf('export type SuburbSlug'));
+  const slugs = [...block.matchAll(/^ {2}["']?([a-z-]+)["']?\s*:\s*\{/gm)].map((m) => m[1]);
+
+  const areas = readFileSync(AREA_SOURCE, 'utf8');
+  const cityOf = new Map();
+  for (const m of areas.matchAll(/\{\s*slug:\s*"([^"]+)"[^}]*?kind:\s*"city",\s*city:\s*"([^"]+)"([^}]*)\}/g)) {
+    cityOf.set(m[1], { city: m[2], fallback: /locationFallback:\s*true/.test(m[3]) });
+  }
+
   const out = [];
-  const re = /["']?([a-z-]+)["']?\s*:\s*\{[^}]*?searchTerms:\s*\[([^\]]*)\]/g;
-  for (let m = re.exec(src); m; m = re.exec(src)) {
-    const terms = [...m[2].matchAll(/["']([^"']+)["']/g)].map((t) => t[1]);
-    if (terms.length) out.push({ slug: m[1], terms });
+  for (const slug of slugs) {
+    const area = cityOf.get(slug);
+    if (!area) throw new Error(`${slug} is a SUBURBS key with no city area in ${AREA_SOURCE}.`);
+    const { city, fallback } = area;
+    const locations = [`%, ${city}`, `%, ${city}, IA%`, `%, ${city}, Iowa%`]
+      .map((p) => `location.ilike."${p}"`)
+      .join(',');
+    out.push({ slug, or: fallback ? `city.ilike.${city},and(city.is.null,or(${locations}))` : `city.ilike.${city}` });
   }
   if (out.length === 0) {
     throw new Error(`no locations parsed from ${PAGE_SOURCE} - the check is blind, refusing to pass.`);
@@ -142,9 +160,8 @@ function upcomingParams() {
   return params;
 }
 
-for (const { slug, terms } of readLocations()) {
-  // Mirrors EventsByLocation's own filter: any of city, location or venue.
-  const or = terms.flatMap((t) => [`city.ilike.*${t}*`, `location.ilike.*${t}*`, `venue.ilike.*${t}*`]).join(',');
+for (const { slug, or } of readLocations()) {
+  // Mirrors EventsByLocation's own place filter (eventAreaOrFilter).
   const params = upcomingParams();
   params.set('or', `(${or})`);
   rows.push({ route: `/events/${slug}`, count: await countUpcoming(params) });
@@ -153,7 +170,9 @@ for (const { slug, terms } of readLocations()) {
 // /events/free is not a location and its filter is the one in FreeEvents.tsx.
 {
   const params = upcomingParams();
-  params.set('or', '(price.ilike.*free*,price.eq.$0,price.eq.0)');
+  // FREE_PRICE_FILTER from src/lib/eventPrice.ts: "free" text that names no
+  // nonzero amount, or a literal $0 / 0.
+  params.set('or', '(and(price.ilike.%free%,price.not.match.[$] *[1-9]),price.eq.$0,price.eq.0)');
   rows.push({ route: '/events/free', count: await countUpcoming(params) });
 }
 

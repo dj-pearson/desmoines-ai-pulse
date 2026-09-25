@@ -17,8 +17,12 @@ import EventCard from "@/components/EventCard";
 import EventHotelCallout from "@/components/EventHotelCallout";
 import { LazySection } from "@/components/LazySection";
 import {
+  centralDateOf,
+  centralHour,
+  centralWeekday,
   createEventSlugWithCentralTime,
   formatEventDate,
+  formatEventPart,
   formatInCentralTime,
 } from "@/lib/timezone";
 import { ArrowLeft, Tag, ChevronRight, Navigation, RotateCw } from "lucide-react";
@@ -38,16 +42,23 @@ import { eventSummary } from "@/lib/eventMeta";
 import { readGeoFaq } from "@/lib/restaurantMeta";
 import { FAQSection } from "@/components/FAQSection";
 import { matchVenue, formatMiles } from "@/lib/venuePages";
-import { useVenues } from "@/hooks/useVenues";
+import { useVenueMatchRows } from "@/hooks/useVenues";
 import { SpriteIcon } from "@/components/ui/SpriteIcon";
-import { useRelatedEvents, useSameNightNearby, useNextOccurrence } from "@/hooks/useRelatedEvents";
+import { useRelatedEvents, useSameNightNearby, useEventSeries } from "@/hooks/useRelatedEvents";
 import { useDinnerBeforeShow } from "@/hooks/useDinnerBeforeShow";
-import { eventTiming, type EventTimingTone } from "@/lib/eventTiming";
-import { eventTicketUrl } from "@/lib/eventSchema";
+import {
+  eventRunLabel,
+  eventTimeLabel,
+  eventTiming,
+  type EventTimingTone,
+} from "@/lib/eventTiming";
+import { eventOutboundLink } from "@/lib/eventSchema";
 import { eventPriceLabel, isFreePrice } from "@/lib/eventPrice";
 import { findEventArea, isInBBox } from "@/lib/eventAreas";
 import { handleError } from "@/lib/errorHandler";
-import type { TonightEvent } from "@/lib/tonightPairings";
+import { EVENING_START_HOUR, type TonightEvent } from "@/lib/tonightPairings";
+import { EventProvenance } from "@/components/events/EventProvenance";
+import { AIDisclosureBadge } from "@/components/AIDisclosureBadge";
 
 // Below-the-fold widgets that each fire their own requests on mount. React.lazy
 // defers the chunk; LazySection defers the mount until the reader scrolls near
@@ -81,6 +92,24 @@ function toCoord(value: number | string | null | undefined): number | null {
   if (value === null || value === undefined || value === "") return null;
   const n = Number(value);
   return Number.isFinite(n) && n !== 0 ? n : null;
+}
+
+/**
+ * A location string that is only a city and state ("Des Moines, IA"), which
+ * the Where row already prints on its own line (events-pass2 WP4 item 15).
+ */
+function isCityOnly(location: string | null | undefined, city: string | null | undefined): boolean {
+  const loc = (location ?? "").trim().toLowerCase().replace(/\s+/g, " ");
+  if (!loc) return true;
+  if (city && loc === city.trim().toLowerCase()) return true;
+  // One place name, then the state: no street number, no second comma.
+  return /^[a-z .'-]+,? (ia|iowa)( \d{5})?$/.test(loc);
+}
+
+/** "a Music event" / "an Outdoor event" / "an event". */
+function withArticle(category: string | null): string {
+  if (!category) return "an event";
+  return `${/^[aeiou]/i.test(category) ? "an" : "a"} ${category} event`;
 }
 
 interface DeferredWidgetProps {
@@ -151,16 +180,27 @@ export default function EventDetails() {
   // The hero is dropped entirely when its image fails, rather than hidden by
   // mutating the DOM from an onError handler (WEB-PERF-037).
   const [heroFailed, setHeroFailed] = useState(false);
+  const now = new Date();
   // Targeted, date-windowed lookup - see useEventBySlug for why the old
   // fetch-everything-then-Array.find approach 404'd listed events (WEB-QA-002).
   // It also resolves a bare UUID and a stale slug; the canonical redirect is
   // below (events plan WP8 item 2).
-  const { event, isLoading, error, refetch, isFetching } = useEventBySlug(slug);
+  // `archived`: the archive sweep retired the row; it renders as a past event
+  // with noindex (events-pass2 WP4 item 11). A merged duplicate arrives here
+  // as its survivor and is redirected below.
+  const { event, archived, isLoading, error, refetch, isFetching } = useEventBySlug(slug);
   // Used by the sticky action bar below; the inline control uses
   // AddToCalendarButton, which owns its own export handlers.
   const { downloadIcsFile } = useCalendarExport();
   // SEO-018: the venue page this event links to, when its venue is a known one.
-  const { data: venueRows } = useVenues();
+  // Six columns, not select('*') (events-pass2 WP4 item 16).
+  const { data: venueRows } = useVenueMatchRows();
+
+  // A client-side move to another event reuses this component; a failed hero
+  // on the last one must not hide this one's (events-pass2 WP4 item 15).
+  useEffect(() => {
+    setHeroFailed(false);
+  }, [event?.id]);
 
   // Track page view and content interactions
   const { trackShare, trackClick } = useContentTracking(event?.id, 'event');
@@ -170,13 +210,14 @@ export default function EventDetails() {
   const latitude = toCoord(event?.latitude) ?? toCoord(venuePage?.latitude);
   const longitude = toCoord(event?.longitude) ?? toCoord(venuePage?.longitude);
 
-  const timing = event ? eventTiming(event) : null;
-  const isUpcoming = timing ? !timing.isOver : false;
+  const timing = event ? eventTiming(event, now) : null;
+  const isUpcoming = timing ? !timing.isOver && !archived : false;
 
   // The rails wait for the event (WP8 item 7). Each hook takes null until then.
   const { events: relatedEvents } = useRelatedEvents(event);
-  const { events: sameNight } = useSameNightNearby(isUpcoming ? event : null, latitude, longitude);
-  const nextOccurrence = useNextOccurrence(event, Boolean(timing?.isOver));
+  const { events: sameNight } = useSameNightNearby(isUpcoming ? event : null, latitude, longitude, now);
+  // Other dates of the same event (events-pass2 WP4 item 13).
+  const { events: seriesDates } = useEventSeries(event);
 
   const dinnerEvent = useMemo<TonightEvent | null>(
     () =>
@@ -296,15 +337,45 @@ export default function EventDetails() {
     return <Navigate replace to={`/events/${eventSlug}`} />;
   }
 
-  // One guarded link for every CTA and the JSON-LD offer: http(s) only, not
-  // flagged broken by the link checker (WP8 item 5).
-  const ticketUrl = eventTicketUrl(event as { source_url?: string | null; source_url_broken?: boolean | null });
+  // One guarded link for every CTA: http(s) only, not flagged broken by the
+  // link checker (WP8 item 5). "Get tickets" only for a paid price on a
+  // ticketing host; otherwise the button names where it goes, "Event listing
+  // on catchdesmoines.com" (events-pass2 WP4 item 5). The sticky bar uses the
+  // same value.
+  const outbound = eventOutboundLink(event);
+  const ticketUrl = outbound?.href ?? null;
   const free = isFreePrice(event.price);
-  // "Get tickets" is a promise that the link sells them. Only a stated,
-  // non-free price earns it; everything else is the event's website.
-  const ticketLabel = free === false ? "Get tickets" : "Event website";
+  const category = event.category?.trim() || null;
   const eventUrl = `${BRAND.baseUrl}/events/${eventSlug}`;
   const showTime = timing?.hasTime ?? false;
+  // "Aug 13 - Aug 23", "7:00 - 10:00 PM CT" or "Runs through Sun, Aug 23"
+  // whenever end_date is at or after the start (events-pass2 WP4 item 7).
+  const runLabel = eventRunLabel(event, now);
+  // Evening or daytime, on the Central clock. An untimed row's hour is a
+  // placeholder, so it counts as neither: no dinner advice, "that day".
+  const startHour = timing?.hasTime && timing.start ? centralHour(timing.start) : null;
+  const isEvening = startHour !== null && startHour >= EVENING_START_HOUR;
+  // Dinner advice whose time has passed isn't advice (events-pass2 WP4 item 8).
+  const freshDinnerPicks = isUpcoming && isEvening
+    ? dinnerPicks.filter((pick) => pick.dinnerAt.getTime() > now.getTime())
+    : [];
+  // Hotels when someone would book one (events-pass2 WP4 item 17): a run over
+  // more than one Central day, a Friday or Saturday night, or a venue with a
+  // recorded capacity. Anything else gets a single link.
+  const startDay = timing?.start ? centralDateOf(timing.start) : null;
+  const endMs = event.end_date ? Date.parse(event.end_date) : NaN;
+  const multiDay =
+    startDay !== null &&
+    Number.isFinite(endMs) &&
+    endMs >= (timing?.start?.getTime() ?? Infinity) &&
+    centralDateOf(new Date(endMs)) > startDay;
+  const weekendNight = startDay !== null && [5, 6].includes(centralWeekday(startDay));
+  const bigVenue = (venuePage?.capacity ?? 0) > 0;
+  const showHotelList = multiDay || weekendNight || bigVenue;
+  const otherDates = seriesDates.filter((d) => d.id !== event.id);
+  const aboutFallback = `${event.title} is ${withArticle(category)}${
+    event.venue ? ` at ${event.venue}` : ""
+  } in ${event.city?.trim() || `the ${BRAND.city} area`}.`;
   // UTC first; `date` is also an instant. event_start_local carries no offset.
   const dateSource = event.event_start_utc || event.date;
   const fullDate = formatEventDate(event);
@@ -330,6 +401,9 @@ export default function EventDetails() {
       <EnhancedEventSEO
         event={event}
         viewMode="detail"
+        latitude={latitude}
+        longitude={longitude}
+        noindex={archived}
       />
 
       <BreadcrumbListSchema
@@ -349,7 +423,7 @@ export default function EventDetails() {
             {/* WEB-PERF-037. State, not a DOM mutation from onError. */}
             <OptimizedImage
               src={event.image_url}
-              alt={`${event.title} - ${event.category} event in ${event.city || 'Des Moines'}, Iowa`}
+              alt={`${event.title} - ${category ? `${category} event` : "event"} in ${event.city || 'Des Moines'}, Iowa`}
               className="object-cover opacity-60"
               containerClassName="absolute inset-0"
               priority
@@ -367,7 +441,9 @@ export default function EventDetails() {
               items={[
                 { label: "Home", href: "/" },
                 { label: "Events", href: "/events" },
-                { label: event.category, href: `/events?category=${encodeURIComponent(event.category)}` },
+                ...(category
+                  ? [{ label: category, href: `/events?category=${encodeURIComponent(category)}` }]
+                  : []),
                 { label: event.title }
               ]}
             />
@@ -388,7 +464,7 @@ export default function EventDetails() {
                       {timing?.label && timing.tone && timing.tone !== "past" && (
                         <Badge className={`${TONE_CLASS[timing.tone]} border-0`}>{timing.label}</Badge>
                       )}
-                      <Badge variant="outline">{event.category}</Badge>
+                      {category && <Badge variant="outline">{category}</Badge>}
                       {event.is_featured && (
                         <Badge className="bg-amber-700 text-white border-0">
                           <SpriteIcon name="sparkles" className="h-3 w-3 mr-1" />
@@ -408,7 +484,7 @@ export default function EventDetails() {
                         the row alone (src/lib/eventMeta.ts). The Speakable node
                         points at it by id. */}
                     <p id="event-summary" className="text-base text-muted-foreground mb-5 max-w-prose">
-                      {eventSummary({ ...event, source_url: ticketUrl ?? undefined })}
+                      {eventSummary({ ...event, source_url: ticketUrl ?? undefined }, now)}
                     </p>
 
                     {/* One fact list (WP8 item 10). This replaced an icon-tile
@@ -421,14 +497,12 @@ export default function EventDetails() {
                         ) : (
                           <>
                             {monthDay}
-                            <span className="block">Time TBA</span>
+                            {/* "Time not listed", or "All day" for a dated run. */}
+                            <span className="block">{eventTimeLabel(event)}</span>
                           </>
                         )}
-                        {timing?.isHappeningNow && timing.end && event.end_date && (
-                          <span className="block">
-                            Runs through {formatInCentralTime(timing.end, 'EEEE, MMMM d')}
-                          </span>
-                        )}
+                        {runLabel && <span className="block">{runLabel}</span>}
+                        <EventProvenance event={event} className="mt-1 block text-xs text-muted-foreground" />
                       </FactRow>
                       <FactRow term="Where">
                         {event.venue && (
@@ -442,7 +516,9 @@ export default function EventDetails() {
                             )}
                           </span>
                         )}
-                        {event.location && <span className="block">{event.location}</span>}
+                        {event.location && event.location !== event.venue && !isCityOnly(event.location, event.city) && (
+                          <span className="block">{event.location}</span>
+                        )}
                         {venueAddress && <span className="block">{venueAddress}</span>}
                         <span className="block">{event.city || BRAND.city}, Iowa</span>
                         <span className="mt-1 flex flex-wrap gap-x-4 gap-y-1">
@@ -450,19 +526,19 @@ export default function EventDetails() {
                             href={directionsUrl}
                             target="_blank"
                             rel="noopener noreferrer"
-                            className="inline-flex min-h-6 items-center text-primary hover:underline"
+                            className="inline-flex min-h-11 items-center text-primary hover:underline"
                           >
                             {hasCoords ? "Directions" : "Find it on Google Maps"}
                           </a>
                           {inGettingAroundArea && (
-                            <Link to="/getting-around" className="inline-flex min-h-6 items-center text-primary hover:underline">
+                            <Link to="/getting-around" className="inline-flex min-h-11 items-center text-primary hover:underline">
                               Parking and transit downtown
                             </Link>
                           )}
                           {venuePage && (
                             <Link
                               to={`/music/venues/${venuePage.slug}`}
-                              className="inline-flex min-h-6 items-center text-primary hover:underline"
+                              className="inline-flex min-h-11 items-center text-primary hover:underline"
                             >
                               More events at {venuePage.name}
                             </Link>
@@ -470,23 +546,31 @@ export default function EventDetails() {
                         </span>
                       </FactRow>
                       <FactRow term="Price">{eventPriceLabel(event.price)}</FactRow>
-                      <FactRow term="Category">
-                        <Link
-                          to={`/events?category=${encodeURIComponent(event.category)}`}
-                          className="text-primary hover:underline"
-                        >
-                          {event.category} events
-                        </Link>
-                      </FactRow>
+                      {category && (
+                        <FactRow term="Category">
+                          <Link
+                            to={`/events?category=${encodeURIComponent(category)}`}
+                            className="text-primary hover:underline"
+                          >
+                            {category} events
+                          </Link>
+                        </FactRow>
+                      )}
                     </dl>
 
                     {/* Quick Actions Row */}
                     <div className="flex flex-wrap gap-2 pb-2">
-                      {ticketUrl && (
+                      {outbound && (
                         <Button asChild size="sm">
-                          <a href={ticketUrl} target="_blank" rel="noopener noreferrer">
+                          <a
+                            href={outbound.href}
+                            target="_blank"
+                            rel="noopener noreferrer"
+                            onClick={trackClick}
+                          >
                             <SpriteIcon name="external-link" className="h-4 w-4 mr-2" />
-                            {ticketLabel}
+                            {outbound.label}
+                            <span className="sr-only"> (opens in a new tab)</span>
                           </a>
                         </Button>
                       )}
@@ -503,32 +587,50 @@ export default function EventDetails() {
                       />
                     </div>
 
-                    {/* Past event: point at the next date, when there is one (WP8 item 12). */}
-                    {timing?.isOver && nextOccurrence && (
+                    {/* Other dates of the same event (events-pass2 WP4 item 13,
+                        bet 4). On a past event's page this is where the next
+                        one is (WP8 item 12). */}
+                    {otherDates.length > 0 && (
                       <p className="mt-4 text-sm text-muted-foreground">
-                        Next date:{" "}
-                        <Link
-                          to={`/events/${createEventSlugWithCentralTime(nextOccurrence.title, nextOccurrence)}`}
-                          className="font-medium text-primary hover:underline"
-                        >
-                          {formatEventDate(nextOccurrence)}
-                        </Link>
+                        {timing?.isOver || archived ? "Next dates" : "Other dates"}:{" "}
+                        {otherDates.map((d, i) => (
+                          <span key={d.id}>
+                            {i > 0 && ", "}
+                            <Link
+                              to={`/events/${createEventSlugWithCentralTime(d.title, d)}`}
+                              className="inline-flex min-h-11 items-center font-medium text-primary hover:underline"
+                            >
+                              {formatEventPart(d, "EEE MMM d")}
+                            </Link>
+                          </span>
+                        ))}
                       </p>
                     )}
 
-                    {/* Bet 4: restaurants open before a timed, upcoming show. */}
-                    {isUpcoming && (
-                      <DinnerBeforeShow picks={dinnerPicks} startsAt={timing?.start ?? null} />
+                    {/* Bet 4: restaurants open before a timed, upcoming evening
+                        show, with picks whose dinner time has passed dropped.
+                        A daytime event gets the plain nearby list below instead;
+                        "Dinner before the show" is the component's heading. */}
+                    {freshDinnerPicks.length > 0 && (
+                      <DinnerBeforeShow picks={freshDinnerPicks} startsAt={timing?.start ?? null} />
                     )}
                   </div>
                 </article>
 
                 {/* About This Event */}
                 <section className="bg-card rounded-2xl border p-6 md:p-8">
-                  <h2 className="text-xl font-bold mb-4">About This Event</h2>
+                  <div className="mb-4 flex flex-wrap items-center gap-2">
+                    <h2 className="text-xl font-bold">About This Event</h2>
+                    {event.is_enhanced && event.enhanced_description && (
+                      <AIDisclosureBadge
+                        label="AI-assisted"
+                        tooltip="This description was rewritten or expanded with AI from the source listing. Check times and prices with the source."
+                      />
+                    )}
+                  </div>
                   <div className="prose prose-slate max-w-none">
                     <p className="text-muted-foreground leading-relaxed text-base">
-                      {event.enhanced_description || event.original_description || `Join us for ${event.title}, a ${event.category.toLowerCase()} event happening in ${event.city || 'Des Moines'}, Iowa.`}
+                      {event.enhanced_description || event.original_description || aboutFallback}
                     </p>
                   </div>
 
@@ -581,9 +683,13 @@ export default function EventDetails() {
                     <EventCheckIn eventId={event.id} eventTitle={event.title} />
                   </DeferredWidget>
                 )}
-                <DeferredWidget minHeight={240} label="Ratings and reviews">
-                  <RatingSystem contentType="event" contentId={event.id} showReviews={true} />
-                </DeferredWidget>
+                {/* Ratings only once someone could have been there (events-pass2
+                    WP4 item 15). */}
+                {(timing?.isHappeningNow || timing?.isOver || archived) && (
+                  <DeferredWidget minHeight={240} label="Ratings and reviews">
+                    <RatingSystem contentType="event" contentId={event.id} showReviews={true} />
+                  </DeferredWidget>
+                )}
               </div>
 
               {/* Sidebar */}
@@ -654,16 +760,18 @@ export default function EventDetails() {
                       </span>
                       <ChevronRight className="h-4 w-4 text-muted-foreground" />
                     </Link>
-                    <Link
-                      to={`/events?category=${encodeURIComponent(event.category)}`}
-                      className="flex items-center justify-between p-2 rounded-lg hover:bg-muted/50 transition-colors text-sm"
-                    >
-                      <span className="flex items-center gap-2">
-                        <Tag className="h-4 w-4 text-muted-foreground" />
-                        More {event.category}
-                      </span>
-                      <ChevronRight className="h-4 w-4 text-muted-foreground" />
-                    </Link>
+                    {category && (
+                      <Link
+                        to={`/events?category=${encodeURIComponent(category)}`}
+                        className="flex items-center justify-between p-2 rounded-lg hover:bg-muted/50 transition-colors text-sm"
+                      >
+                        <span className="flex items-center gap-2">
+                          <Tag className="h-4 w-4 text-muted-foreground" />
+                          More {category}
+                        </span>
+                        <ChevronRight className="h-4 w-4 text-muted-foreground" />
+                      </Link>
+                    )}
                     <Link
                       to="/events"
                       className="flex items-center justify-between p-2 rounded-lg hover:bg-muted/50 transition-colors text-sm"
@@ -688,21 +796,22 @@ export default function EventDetails() {
                 longitude={longitude}
                 placeName={event.venue || "this event"}
                 nearSlug={venuePage?.slug ?? null}
+                showList={showHotelList}
               />
             )}
 
             {/* Same category, upcoming, its own bounded query (WP8 item 7). */}
-            {relatedEvents.length > 0 && (
+            {category && relatedEvents.length > 0 && (
               <section className="mt-12 pt-8 border-t">
                 <div className="flex items-center justify-between gap-4 mb-6">
                   <div>
-                    <h2 className="text-2xl font-bold">More {event.category} Events</h2>
+                    <h2 className="text-2xl font-bold">More {category} Events</h2>
                     <p className="text-sm text-muted-foreground mt-1">Coming up in the Des Moines area</p>
                   </div>
                   <Button
                     variant="outline"
                     size="sm"
-                    onClick={() => navigate(`/events?category=${encodeURIComponent(event.category)}`)}
+                    onClick={() => navigate(`/events?category=${encodeURIComponent(category)}`)}
                   >
                     View All
                     <ChevronRight className="h-4 w-4 ml-1" />
@@ -722,10 +831,14 @@ export default function EventDetails() {
               </section>
             )}
 
-            {/* Also that night nearby: same Central date, within two miles. */}
+            {/* Same Central day, within two miles, not over, starting no
+                earlier than three hours before this one (events-pass2 WP4
+                item 14). "Night" only for an evening start. */}
             {sameNight.length > 0 && (
               <section className="mt-12 pt-8 border-t" aria-labelledby="same-night-heading">
-                <h2 id="same-night-heading" className="text-2xl font-bold">Also that night nearby</h2>
+                <h2 id="same-night-heading" className="text-2xl font-bold">
+                  {isEvening ? "Also that night nearby" : "Also that day nearby"}
+                </h2>
                 <p className="text-sm text-muted-foreground mt-1">
                   Same day, within two miles of {event.venue || "this venue"}, straight-line distance
                 </p>
@@ -739,7 +852,7 @@ export default function EventDetails() {
                         <span className="min-w-0">
                           <span className="block truncate font-medium text-foreground">{item.title}</span>
                           <span className="block truncate text-muted-foreground">
-                            {[formatEventDate(item), item.venue].filter(Boolean).join(" - ")}
+                            {[eventTimeLabel(item), item.venue].filter(Boolean).join(" - ")}
                           </span>
                         </span>
                         <span className="shrink-0 tabular-nums text-muted-foreground">{formatMiles(miles)}</span>
@@ -751,8 +864,9 @@ export default function EventDetails() {
             )}
 
             {/* Distance-only restaurants: the fallback when "Dinner before the
-                show" has nothing to say (untimed, past, or nothing open). */}
-            {dinnerPicks.length === 0 && (
+                show" has nothing to say (untimed, daytime, past, or nothing
+                open). */}
+            {freshDinnerPicks.length === 0 && (
               <NearbyContent
                 variant="restaurants-near-event"
                 city={event.city || "Des Moines"}
@@ -769,13 +883,21 @@ export default function EventDetails() {
         <Footer />
       </div>
 
+      {/* The sticky bar's link takes no onClick, so outbound clicks are
+          counted here as they bubble (consent-gated in useContentTracking). */}
+      <div
+        className="contents"
+        onClickCapture={(e) => {
+          if ((e.target as HTMLElement).closest("a[href^='http']")) trackClick();
+        }}
+      >
       <StickyMobileCTA
         variant="event"
         primaryAction={
-          ticketUrl
+          outbound
             ? {
-                label: ticketLabel,
-                href: ticketUrl,
+                label: outbound.label,
+                href: outbound.href,
                 icon: "external",
                 isExternal: true,
               }
@@ -788,7 +910,7 @@ export default function EventDetails() {
             : undefined
         }
         secondaryAction={
-          ticketUrl && isUpcoming
+          outbound && isUpcoming
             ? {
                 label: "Add to Calendar",
                 onClick: addToCalendar,
@@ -797,6 +919,7 @@ export default function EventDetails() {
             : undefined
         }
       />
+      </div>
     </>
   );
 }

@@ -110,3 +110,36 @@ export function useVenueLinks() {
     staleTime: 10 * 60 * 1000,
   });
 }
+
+/** What event detail matches an event's venue against (events-pass2 WP4 item 16). */
+export interface VenueMatchRow {
+  slug: string;
+  name: string;
+  address: string | null;
+  latitude: number | null;
+  longitude: number | null;
+  /** Read by EventHotelCallout: a venue with a recorded capacity draws visitors who stay over. */
+  capacity: number | null;
+}
+
+/**
+ * The columns matchVenue, the map fallback and the hotel callout read, instead
+ * of useVenues()'s select('*') with descriptions and images the detail page
+ * never shows. Appended at the end so the select-star baseline's line numbers
+ * above stay put.
+ */
+export function useVenueMatchRows() {
+  return useQuery({
+    queryKey: ['venues', 'match-rows'],
+    queryFn: async (): Promise<VenueMatchRow[]> => {
+      const { data, error } = await supabase
+        .from('venues')
+        .select('slug, name, address, latitude, longitude, capacity')
+        .order('name');
+
+      if (error) throw error;
+      return ((data ?? []) as VenueMatchRow[]).filter((v) => Boolean(v.slug && v.name));
+    },
+    staleTime: 10 * 60 * 1000,
+  });
+}
