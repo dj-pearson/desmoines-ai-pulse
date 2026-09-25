@@ -3,6 +3,8 @@ import { serve } from "https://deno.land/std@0.168.0/http/server.ts";
 import { createClient } from "https://esm.sh/@supabase/supabase-js@2";
 import { errorResponse } from "../_shared/errorResponse.ts";
 import { fetchWithTimeout } from "../_shared/fetchWithTimeout.ts";
+import { requireAdminOrApiKey } from "../_shared/apiKeyAuth.ts";
+import { checkRateLimitPersistent } from "../_shared/rateLimit.ts";
 
 const corsHeaders = {
   "Access-Control-Allow-Origin": "*",
@@ -23,7 +25,8 @@ interface GooglePlacesResult {
   business_status: string;
   rating?: number;
   user_ratings_total?: number;
-  price_level?: number;
+  // Places API (New) returns an enum string such as "PRICE_LEVEL_MODERATE".
+  price_level?: string;
   types: string[];
   opening_hours?: {
     open_now: boolean;
@@ -45,18 +48,46 @@ interface GooglePlace {
   types: string[];
 }
 
+const MAX_SEARCHES_PER_WINDOW = 30;
+const MAX_RADIUS_METERS = 50000;
+
 serve(async (req) => {
   // Handle CORS preflight requests
   if (req.method === "OPTIONS") {
     return new Response("ok", { headers: corsHeaders });
   }
 
+  // Every call spends Google Geocoding and Places quota on the site's key, so
+  // only the admin tool (an admin JWT) or a machine key may make one.
+  const authFailure = await requireAdminOrApiKey(req, corsHeaders);
+  if (authFailure) return authFailure;
+
+  const rateLimit = await checkRateLimitPersistent(req, {
+    endpoint: "search-new-restaurants",
+    max: MAX_SEARCHES_PER_WINDOW,
+    windowMs: 15 * 60 * 1000,
+  });
+  if (!rateLimit.success) {
+    return new Response(
+      JSON.stringify({ error: "Too many searches. Try again in a few minutes." }),
+      { status: 429, headers: { ...corsHeaders, "Content-Type": "application/json" } },
+    );
+  }
+
   try {
-    const {
-      location,
-      radius,
-      offset = 0,
-    }: GooglePlacesSearchRequest = await req.json();
+    const body: Partial<GooglePlacesSearchRequest> = await req.json().catch(() => ({}));
+    const location = typeof body.location === "string" ? body.location.trim() : "";
+    const radius = Number(body.radius);
+    const offset = Number.isFinite(Number(body.offset)) ? Number(body.offset) : 0;
+    if (!location || location.length > 200 || !Number.isFinite(radius) || radius <= 0) {
+      return new Response(
+        JSON.stringify({ error: "location (up to 200 characters) and a positive radius are required" }),
+        { status: 400, headers: { ...corsHeaders, "Content-Type": "application/json" } },
+      );
+    }
+    // Places searchNearby refuses anything above 50 km; clamp rather than
+    // spend a geocode call on a request that can't succeed.
+    const searchRadius = Math.min(radius, MAX_RADIUS_METERS);
 
     const GOOGLE_API_KEY = globalThis.Deno?.env?.get("GOOGLE_SEARCH_API");
     if (!GOOGLE_API_KEY) {
@@ -136,7 +167,7 @@ serve(async (req) => {
             latitude: lat,
             longitude: lng,
           },
-          radius: radius,
+          radius: searchRadius,
         },
       },
       languageCode: "en",

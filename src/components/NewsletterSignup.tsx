@@ -4,9 +4,18 @@ import { Input } from "@/components/ui/input";
 import { Card, CardContent, CardHeader, CardTitle, CardDescription } from "@/components/ui/card";
 import { Checkbox } from "@/components/ui/checkbox";
 import { useNewsletterSubscription, NewsletterPreferences } from "@/hooks/useNewsletterSubscription";
-import { Mail, CheckCircle, Utensils, Tag } from "lucide-react";
+import { Mail, CheckCircle, Utensils } from "lucide-react";
 import { cn } from "@/lib/utils";
 import { SpriteIcon } from "@/components/ui/SpriteIcon";
+import { NEWSLETTER_PROMISE } from "@/content/newsletterCopy";
+
+/*
+ * Copy rule (explore pass 2 WP6 item 4): say only what the weekly send holds.
+ * There was no source for "10,000+", no deal is exclusive to subscribers, and
+ * no job sends deals, so the "Deals & offers" preference is hidden until the
+ * deals digest (plan D11) exists. The promotions value is left as it was so
+ * this stays a copy change.
+ */
 
 interface NewsletterSignupProps {
   variant?: 'default' | 'compact' | 'hero' | 'footer' | 'modal';
@@ -141,7 +150,7 @@ export function NewsletterSignup({
           {title || "Get the Inside Scoop"}
         </h2>
         <p className="text-muted-foreground mb-6 max-w-md mx-auto">
-          {description || "Join 10,000+ Des Moines locals who get weekly curated events, restaurant discoveries, and exclusive deals."}
+          {description || NEWSLETTER_PROMISE}
         </p>
         <form onSubmit={handleSubmit} className="max-w-md mx-auto space-y-3">
           <div className="flex gap-2">
@@ -158,7 +167,7 @@ export function NewsletterSignup({
             </Button>
           </div>
           <p className="text-xs text-muted-foreground">
-            Free forever. Unsubscribe anytime. No spam.
+            Free. Unsubscribe anytime.
           </p>
         </form>
       </div>
@@ -218,14 +227,6 @@ export function NewsletterSignup({
                   <Utensils className="w-4 h-4 text-muted-foreground" />
                   Restaurant discoveries
                 </label>
-                <label className="flex items-center gap-2 text-sm cursor-pointer">
-                  <Checkbox
-                    checked={preferences.promotions}
-                    onCheckedChange={() => togglePreference('promotions')}
-                  />
-                  <Tag className="w-4 h-4 text-muted-foreground" />
-                  Deals & offers
-                </label>
               </div>
             </div>
           )}
@@ -251,7 +252,7 @@ export function NewsletterSignup({
           {title || "Subscribe to Our Newsletter"}
         </CardTitle>
         <CardDescription>
-          {description || "Get weekly curated events, restaurant discoveries, and insider tips delivered to your inbox."}
+          {description || NEWSLETTER_PROMISE}
         </CardDescription>
       </CardHeader>
       <CardContent>
@@ -297,13 +298,6 @@ export function NewsletterSignup({
                   />
                   Restaurant updates
                 </label>
-                <label className="flex items-center gap-2 text-sm cursor-pointer">
-                  <Checkbox
-                    checked={preferences.promotions}
-                    onCheckedChange={() => togglePreference('promotions')}
-                  />
-                  Deals & promos
-                </label>
               </div>
             </div>
           )}
@@ -322,7 +316,7 @@ export function NewsletterSignup({
           </div>
 
           <p className="text-xs text-center text-muted-foreground">
-            Join 10,000+ subscribers. Free forever. Unsubscribe anytime.
+            Free. Unsubscribe anytime.
           </p>
         </form>
       </CardContent>

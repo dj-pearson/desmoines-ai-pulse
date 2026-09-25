@@ -9,7 +9,10 @@ import { installFixtureBackend } from './support/fixtureBackend';
  * 2. /outdoors?difficulty=moderate loads pre-filtered, with aria-pressed on the
  *    active toggle, and Back restores the prior filter.
  * 3. Trail cards have a directions link and no <a> nested in an <a>.
- * 4. Every destination shows a "Details checked" date.
+ * 4. Every destination shows a date. Pass 2 (WP5 item 9): it says "Written",
+ *    never "Details checked", until someone re-checks and sets checkedOn.
+ * 5. Pass 2 items 10, 13, 15: honest copy, difficulty options from the rows
+ *    with counts, the Explore row and a "Show on map" link.
  *
  * Table overrides are registered AFTER installFixtureBackend, which the fixture
  * documents as the way to win the match.
@@ -147,10 +150,54 @@ test('trail cards carry directions without nesting links', async ({ page }) => {
   );
 });
 
-test('every destination shows a checked date', async ({ page }) => {
+test('every destination shows a Written date, and nothing says Details checked', async ({ page }) => {
   await installOutdoorsFixtures(page);
   await page.goto('/outdoors');
 
-  const checked = page.locator('section[aria-labelledby="destinations-heading"] article time[datetime]');
-  await expect(checked).toHaveCount(8);
+  const dated = page.locator('section[aria-labelledby="destinations-heading"] article [data-logistics-date]');
+  await expect(dated).toHaveCount(8);
+  await expect(dated.first()).toHaveText(/^Written August 31, 2026$/);
+  await expect(dated.locator('time[datetime]')).toHaveCount(8);
+  await expect(page.locator('#root')).not.toContainText('Details checked');
+});
+
+test('copy says only what the page backs (pass 2 WP5 item 10)', async ({ page }) => {
+  await installOutdoorsFixtures(page);
+  await page.goto('/outdoors');
+
+  await expect(trailCards(page)).toHaveCount(4);
+  const root = page.locator('#root');
+  await expect(root).not.toContainText('sorted by what is actually open');
+  await expect(root).not.toContainText('Today in Des Moines:');
+  await expect(page.locator('section[aria-labelledby="related-heading"]')).toContainText(
+    'Every Explore section, plus seasonal picks',
+  );
+  // Distances are haversine; the heading says so once per destination list.
+  await expect(page.getByRole('heading', { name: 'Playgrounds within a few miles (straight line)' }).first()).toBeVisible();
+});
+
+test('difficulty options come from the rows, with counts, and zero-count ones hide (item 13)', async ({ page }) => {
+  await installOutdoorsFixtures(page);
+  await page.route('**/rest/v1/trails**', (route) =>
+    fulfilRows(route, TRAILS.filter((t) => t.difficulty !== 'difficult')),
+  );
+  await page.goto('/outdoors');
+
+  const difficulty = page.getByRole('group', { name: 'Difficulty' });
+  await expect(difficulty.getByRole('button', { name: 'All (3)' })).toBeVisible();
+  await expect(difficulty.getByRole('button', { name: 'Easy (1)' })).toBeVisible();
+  await expect(difficulty.getByRole('button', { name: 'Moderate (2)' })).toBeVisible();
+  await expect(difficulty.getByRole('button', { name: /Difficult/ })).toHaveCount(0);
+});
+
+test('the Explore row and Show on map (item 15)', async ({ page }) => {
+  await installOutdoorsFixtures(page);
+  await page.goto('/outdoors');
+
+  const explore = page.getByRole('navigation', { name: 'Explore Des Moines' });
+  await expect(explore.locator('a[aria-current="page"]')).toHaveAttribute('href', '/outdoors');
+  await expect(page.getByRole('link', { name: 'Show trails and attractions on the map' })).toHaveAttribute(
+    'href',
+    '/map?layers=trail,attraction',
+  );
 });

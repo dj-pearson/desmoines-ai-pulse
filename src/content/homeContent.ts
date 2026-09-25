@@ -1,5 +1,6 @@
 import { BRAND } from "@/lib/brandConfig";
 import { NEIGHBORHOODS } from "@/lib/neighborhoods";
+import { EVENTS_UPDATE_ANSWER } from "@/content/eventsCopy";
 
 // Home page content, extracted from src/pages/Index.tsx (WP0 of
 // docs/page-plans/home.md) so the page file is composition only. WP5 owns
@@ -18,6 +19,24 @@ export interface HomeFaqItem {
  */
 export const HOME_PAGE_TITLE = "Des Moines Insider | Events, Restaurants & Things to Do";
 
+/**
+ * The meta description, and the WebPage node's description (home pass-2 WP4
+ * item 4). Moved here from Index.tsx so SEOHead and the Speakable node carry
+ * one string.
+ */
+export const HOME_META_DESCRIPTION =
+  "What's on in Des Moines, Iowa right now: live events and festivals, restaurants open tonight, and family plans for the weekend. Updated daily across the metro.";
+
+/**
+ * What the WebSite node says the site is. Each clause is something the code
+ * does: the four catalogues, the daily event crawl
+ * (.github/workflows/event-crawler.yml) and Central-time display. It replaced
+ * BRAND.description, which promised live updates and tailored suggestions
+ * the site does not make (home pass-2 WP4 item 4).
+ */
+export const HOME_SITE_DESCRIPTION =
+  "Events, restaurants, attractions and playgrounds across the Des Moines metro; event listings refreshed daily, times in Central.";
+
 const ORGANIZATION_ID = `${BRAND.baseUrl}/#organization`;
 const WEBSITE_ID = `${BRAND.baseUrl}/#website`;
 
@@ -31,7 +50,7 @@ export const HOME_STRUCTURED_DATA = {
   "name": BRAND.name,
   "alternateName": BRAND.shortName,
   "url": BRAND.baseUrl,
-  "description": BRAND.description,
+  "description": HOME_SITE_DESCRIPTION,
   // NO applicationCategory. It said "City Guide, AI Assistant, Event
   // Discovery" and was wrong twice over: it is a property of
   // SoftwareApplication, not WebSite, so it is invalid on this node and
@@ -92,17 +111,36 @@ export const HOME_STRUCTURED_DATA = {
 // reviews from this same object. Nothing produced those numbers either.
 
 // Speakable Schema for GEO - enables AI search engine attribution.
-// Named HOME_PAGE_TITLE, not a second product tagline, and pointed only at
-// [data-speakable]: the dated snapshot in GEOContent is the passage written to
-// be read aloud and quoted (WP5 items 4 and 8). The snapshot mounts lazily and
-// only after its query succeeds, so "h1" is listed too: the prerendered HTML
-// must always contain at least one element the Speakable node points at.
+// Named HOME_PAGE_TITLE, described with HOME_META_DESCRIPTION, and pointed only
+// at [data-speakable]: the dated snapshot in GEOContent is the passage written
+// to be read aloud and quoted. The heading used to be listed as well, because
+// the snapshot sat in a LazySection the prerender never mounted; the
+// prerender now mounts every section (home pass-2 WP1 item 1), so the
+// snapshot is in the HTML whenever its query succeeds (WP4 item 5).
 export const HOME_SPEAKABLE = {
   name: HOME_PAGE_TITLE,
-  description: BRAND.description,
+  description: HOME_META_DESCRIPTION,
   url: `${BRAND.baseUrl}/`,
-  speakableCssSelectors: ["h1", "[data-speakable]"],
+  speakableCssSelectors: ["[data-speakable]"],
 };
+
+/**
+ * What the home page is about, for the WebPage node (WP4 item 6). The Speakable
+ * component builds that node; this is exported for it to spread in.
+ */
+export const HOME_ABOUT = {
+  "@type": "City",
+  name: "Des Moines",
+  containedInPlace: { "@type": "State", name: "Iowa" },
+} as const;
+
+/**
+ * What money buys, said once. Read against src/lib/sponsored.ts
+ * (SPONSORED_CAP = 2, isSponsoredActive) and src/lib/placementSpecs.ts (the
+ * banner and sponsored-listing products /advertise sells).
+ */
+export const HOME_PAID_PLACEMENT_ANSWER =
+  "Listing an event or a restaurant is free. We sell two things: banner ad slots, and sponsored listings. A sponsored listing can appear first on the events, restaurants and attractions pages, at most two per list, and each one carries a Sponsored label. Nothing else is reordered for money.";
 
 export const HOME_FAQ_TITLE = "Des Moines: Frequently Asked Questions";
 export const HOME_FAQ_DESCRIPTION =
@@ -147,12 +185,13 @@ export const HOME_FAQS: HomeFaqItem[] = [
   },
   {
     question: "What events are happening in Des Moines today?",
-    answer: "Our today listing shows events confirmed for the current date in Central Time across Des Moines and the surrounding suburbs, filterable by category. It is rebuilt daily from event sources across the metro rather than depending on venues submitting their listings to us.",
+    answer: "Our today listing shows events confirmed for the current date in Central Time across Des Moines and the surrounding suburbs, grouped by time of day: what is on now, this afternoon and tonight. It is rebuilt daily from event sources across the metro rather than depending on venues submitting their listings to us.",
     links: [{ label: "Events today", to: "/events/today" }],
   },
   {
     question: "Where are the best restaurants in Des Moines?",
-    answer: "Des Moines dining spans fine dining, chef-driven small plates and long-standing local institutions. Well-known names include Harbinger, Alba in the East Village, 801 Chophouse and Proudfoot & Bird downtown, Splash Seafood Bar and Grill, and Latin King, where you can order Steak de Burgo, the dish most associated with the city. Our restaurant directory covers the metro with cuisine, price range, neighborhood and current open/closed status.",
+    answer: "Des Moines dining spans fine dining, chef-driven small plates and long-standing local institutions. Well-known names include Harbinger, Alba in the East Village, 801 Chophouse and Proudfoot & Bird downtown, Splash Seafood Bar and Grill, and Latin King, where you can order Steak de Burgo, the dish most associated with the city. Our restaurant directory covers the metro with cuisine, price range, city and current open/closed status, and the neighborhood guides group places area by area.",
+    links: [{ label: "Neighborhood guides", to: "/neighborhoods" }],
   },
   {
     question: "What restaurants in Des Moines are open right now?",
@@ -181,16 +220,20 @@ export const HOME_FAQS: HomeFaqItem[] = [
   },
   {
     question: "How often are the listings updated?",
-    // Events only: the crawler is scheduled once a day
-    // (.github/workflows/event-crawler.yml). No cadence is stated for
-    // restaurants or attractions because no production schedule for them can
-    // be named from this repo (WP5 item 2).
-    answer: "Event listings are refreshed daily from venue and organiser sources. Event times are stored and displayed in Central Time to avoid the timezone drift common on aggregated calendars.",
+    // Events only, and the same sentence every events page uses
+    // (src/content/eventsCopy.ts), so the cadence is stated in one place. No
+    // cadence is stated for restaurants or attractions because no production
+    // schedule for them can be named from this repo.
+    answer: EVENTS_UPDATE_ANSWER,
   },
   {
     question: "Do you charge to be listed, and are any listings paid?",
-    // Moved from GEOContent (WP5 item 3). WEB-SEO-042: this platform sells
-    // sponsored placement, so the answer says so.
-    answer: "Listing an event or a restaurant is free, and we do not charge to be included or to rank higher in the ordinary listings. We do sell advertising, including sponsored placements; those are paid, they are labelled where they appear, and they do not change the ordinary listings around them.",
+    // WEB-SEO-042 and home pass-2 WP4 item 1. The old answer said sponsored
+    // placements left the ordinary listings alone, while arrangeSponsored
+    // (src/lib/sponsored.ts) moves up to SPONSORED_CAP paid rows to the top
+    // of the events, restaurants and attractions lists. This says what the
+    // code does. HOME_PAID_PLACEMENT_ANSWER is shared with GEOContent.
+    answer: HOME_PAID_PLACEMENT_ANSWER,
+    links: [{ label: "Advertising options", to: "/advertise" }],
   },
 ];

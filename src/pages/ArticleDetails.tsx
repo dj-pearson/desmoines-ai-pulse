@@ -2,7 +2,8 @@ import React, { useEffect } from 'react';
 import { useParams, Link } from 'react-router-dom';
 import ReactMarkdown from 'react-markdown';
 import remarkGfm from 'remark-gfm';
-import { Helmet } from 'react-helmet-async';
+import type { Components } from 'react-markdown';
+import { formatInTimeZone } from 'date-fns-tz';
 import { Eye, ArrowLeft, Tag, BookOpen } from "lucide-react";
 import { RelatedLinks } from "@/components/seo/InternalLinks";
 import { OptimizedImage } from "@/components/OptimizedImage";
@@ -16,16 +17,19 @@ import { ErrorState } from '@/components/ui/error-state';
 import Header from '@/components/Header';
 import Footer from '@/components/Footer';
 import SEOHead from '@/components/SEOHead';
+import { RouteCanonical } from '@/components/RouteCanonical';
 import ShareDialog from '@/components/ShareDialog';
 import SpeakableSchema from '@/components/schema/SpeakableSchema';
 import NoIndexMeta from '@/components/schema/NoIndexMeta';
 import { NewsletterSignup } from '@/components/NewsletterSignup';
 import { RelatedArticles } from '@/components/articles/RelatedArticles';
 import { SpriteIcon } from "@/components/ui/SpriteIcon";
-import { useArticleBySlug } from '@/hooks/useArticles';
+import { VIEW_COUNTS_LIVE, useArticleBySlug } from '@/hooks/useArticles';
 import {
   ARTICLE_HUBS,
+  aiBadgeLabel,
   aiDisclosureText,
+  classifyArticleHref,
   hubsForArticle,
   isAiArticle,
   isStaleArticle,
@@ -36,16 +40,42 @@ import {
 import { ogImageUrl } from '@/lib/ogImage';
 import { BRAND, getCanonicalUrl } from '@/lib/brandConfig';
 import { handleError } from '@/lib/errorHandler';
+import { DES_MOINES_TIME_ZONE } from '@/lib/restaurantHours';
 
-const formatDate = (dateString: string) =>
-  new Date(dateString).toLocaleDateString('en-US', {
-    year: 'numeric',
-    month: 'long',
-    day: 'numeric',
-  });
+/**
+ * Dates in Central time (pass 2 WP4 item 11). toLocaleDateString used the
+ * reader's zone, so an article published at 8 PM Central read as the next day
+ * on the East Coast and in the UTC prerender.
+ */
+function formatCentral(dateString: string, pattern: string): string {
+  const t = Date.parse(dateString);
+  return Number.isFinite(t) ? formatInTimeZone(t, DES_MOINES_TIME_ZONE, pattern) : '';
+}
 
-const formatMonthYear = (dateString: string) =>
-  new Date(dateString).toLocaleDateString('en-US', { year: 'numeric', month: 'long' });
+const formatDate = (dateString: string) => formatCentral(dateString, 'MMMM d, yyyy');
+
+const formatMonthYear = (dateString: string) => formatCentral(dateString, 'MMMM yyyy');
+
+/**
+ * Links inside the article body (pass 2 WP4 item 12). A site path is an
+ * in-app route; another host opens in a new tab with rel="nofollow noopener",
+ * because the article pipeline writes these and nobody vouches for them.
+ */
+const markdownComponents: Components = {
+  a: ({ href, children }) => {
+    const target = classifyArticleHref(href, BRAND.baseUrl);
+    if (target.kind === 'internal') return <Link to={target.path}>{children}</Link>;
+    if (target.kind === 'external') {
+      return (
+        <a href={target.href} target="_blank" rel="nofollow noopener">
+          {children}
+          <span className="sr-only"> (opens in a new tab)</span>
+        </a>
+      );
+    }
+    return <a href={target.href}>{children}</a>;
+  },
+};
 
 const ArticleDetails: React.FC = () => {
   const { slug } = useParams();
@@ -66,9 +96,13 @@ const ArticleDetails: React.FC = () => {
   if (isLoading) {
     return (
       <>
+        {/* SEO-028: the canonical comes from the route, so a prerender capture
+            that lands mid-fetch still has one (pass 2 WP4 item 1). */}
+        <RouteCanonical path={`/articles/${slug ?? ''}`} />
         <Header />
         <div className="min-h-screen bg-background">
           <div className="container mx-auto px-4 py-8">
+            <h1 className="sr-only">Loading article</h1>
             <div className="flex items-center justify-center min-h-[400px]">
               <LoadingSpinner />
             </div>
@@ -186,12 +220,10 @@ const ArticleDetails: React.FC = () => {
           { name: "Articles", url: "/articles" },
           { name: article.title, url: `/articles/${article.slug}` },
         ]}
+        // Serialized by toJsonLd, which escapes "</script>" in a title or
+        // body the pipeline wrote (pass 2 WP4 item 2).
+        structuredData={articleSchema}
       />
-      <Helmet>
-        <script type="application/ld+json">
-          {JSON.stringify(articleSchema)}
-        </script>
-      </Helmet>
       <SpeakableSchema
         name={article.title}
         description={article.excerpt || article.seo_description || `Read ${article.title} on ${BRAND.name}`}
@@ -265,7 +297,7 @@ const ArticleDetails: React.FC = () => {
                       showed it (Plan & Stay WP4 item 1). */}
                   {isAiArticle(article) && disclosure && (
                     <AIDisclosureBadge
-                      label={article.is_auto_published ? "AI-written" : "AI-assisted"}
+                      label={aiBadgeLabel(article)}
                       tooltip={disclosure}
                     />
                   )}
@@ -285,10 +317,13 @@ const ArticleDetails: React.FC = () => {
                       <SpriteIcon name="clock" className="h-4 w-4" />
                       {readTimeLabel(article.content)}
                     </span>
-                    <span className="flex items-center gap-1">
-                      <Eye className="h-4 w-4" />
-                      {article.view_count || 0} views
-                    </span>
+                    {/* Hidden until counts are real (pass 2 WP4 item 3, D13). */}
+                    {VIEW_COUNTS_LIVE && (
+                      <span className="flex items-center gap-1">
+                        <Eye className="h-4 w-4" aria-hidden="true" />
+                        {article.view_count || 0} views
+                      </span>
+                    )}
                   </div>
                 </div>
 
@@ -375,7 +410,9 @@ const ArticleDetails: React.FC = () => {
                       side-tab for this WHOLE file - and an article page is
                       where a real one is most likely to appear
                       (WEB-UX-034 AC2). */}
-                  <div className="prose prose-lg max-w-none dark:prose-invert 
+                  {/* article-content is what SpeakableSchema's
+                      ".article-content > p:first-of-type" selector names. */}
+                  <div className="article-content prose prose-lg max-w-none dark:prose-invert
                                prose-headings:font-bold prose-headings:text-foreground
                                prose-h2:text-2xl prose-h2:mt-8 prose-h2:mb-4
                                prose-h3:text-xl prose-h3:mt-6 prose-h3:mb-3
@@ -388,7 +425,7 @@ const ArticleDetails: React.FC = () => {
                                prose-img:rounded-lg prose-img:shadow-md
                                prose-blockquote:border-l-4 prose-blockquote:border-primary prose-blockquote:pl-4 prose-blockquote:italic
                                prose-code:bg-muted prose-code:px-1 prose-code:py-0.5 prose-code:rounded prose-code:text-sm">
-                    <ReactMarkdown remarkPlugins={[remarkGfm]}>
+                    <ReactMarkdown remarkPlugins={[remarkGfm]} components={markdownComponents}>
                       {article.content}
                     </ReactMarkdown>
                   </div>

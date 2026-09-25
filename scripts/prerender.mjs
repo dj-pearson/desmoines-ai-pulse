@@ -597,6 +597,15 @@ const duplicateJsonLdRoutes = [];
   async function renderRoute(route, strict = false, browser = browsers[0]) {
     const page = await browser.newPage();
     try {
+      // Tell the app it is being prerendered (src/lib/isPrerender.ts), before
+      // any of its scripts run. LazySection then mounts every section at once:
+      // this page never scrolls, so without the flag Home's snapshot,
+      // neighbourhood links and dashboard shipped as empty placeholders
+      // (home-pass2 WP1 item 1). Not navigator.webdriver, which Playwright also
+      // sets and which would defeat the request-budget spec.
+      await page.evaluateOnNewDocument(() => {
+        window.__DMI_PRERENDER__ = true;
+      });
       await page.goto(`http://127.0.0.1:${PORT}${route}`, {
         waitUntil: 'domcontentloaded',
         timeout: 30000,

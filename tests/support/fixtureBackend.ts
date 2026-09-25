@@ -136,6 +136,15 @@ function attractions(n = 12) {
   }));
 }
 
+/**
+ * The events rows, for a spec that answers one read itself on top of this
+ * backend (route-smoke's list-to-detail check answers `id=eq.` lookups, which
+ * this backend deliberately does not filter).
+ */
+export function fixtureEvents(): ReturnType<typeof events> {
+  return events();
+}
+
 const TABLES: Record<string, () => unknown[]> = {
   events,
   restaurants,
@@ -180,6 +189,9 @@ function fulfil(route: Route, body: unknown, total: number) {
     // one. Without it every "N results" label renders null and the count
     // assertions fail for a reason that has nothing to do with the UI.
     'content-range': total > 0 ? `0-${total - 1}/${total}` : `*/0`,
+    // Cross-origin, the browser hides Content-Range from fetch() unless it is
+    // exposed, and supabase-js then reads every count as null.
+    'access-control-expose-headers': 'content-range',
   };
 
   // A COUNT-ONLY QUERY IS A HEAD REQUEST, and answering it with a body is not

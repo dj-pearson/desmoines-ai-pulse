@@ -26,6 +26,8 @@ import {
 import { BRAND, getCanonicalUrl } from "@/lib/brandConfig";
 import { formatCount } from "@/lib/pluralize";
 import { EVENTS_UPDATE_ANSWER } from "@/content/eventsCopy";
+import NoIndexMeta from "@/components/schema/NoIndexMeta";
+import { EventsLandingLinks } from "@/components/events/EventsLandingLinks";
 
 const FETCH_LIMIT = 100;
 /** Same render cap as the other landings (WEB-PERF-023). */
@@ -53,6 +55,11 @@ export default function KidsEvents() {
   // isFreePrice, the same count every landing uses. Unknown price is not free.
   const freeKidsCount = countFree(kidsEvents);
   const categoryCount = new Set(kidsEvents.map((e) => e.category).filter(Boolean)).size;
+  // At the cap the free count covers the soonest FETCH_LIMIT only (WP3 item 11).
+  const capped = kidsEvents.length >= FETCH_LIMIT;
+  const freeScope = capped
+    ? `${freeKidsCount} of the next ${FETCH_LIMIT} family events are listed as free.`
+    : `${freeKidsCount} of the events below are listed as free.`;
 
   const pageTitle = `Kids & Family Events in Des Moines | ${BRAND.name}`;
   const pageDescription =
@@ -108,6 +115,8 @@ export default function KidsEvents() {
 
   return (
     <div className="min-h-screen bg-background">
+      {/* A failed first query has not answered the page (WP3 item 12). */}
+      {loadError && kidsEvents.length === 0 && <NoIndexMeta />}
       <EnhancedLocalSEO
         pageTitle={pageTitle}
         pageDescription={pageDescription}
@@ -170,7 +179,7 @@ export default function KidsEvents() {
           </p>
 
           <p className="text-base text-muted-foreground max-w-3xl">
-            {freeKidsCount} of the events below are listed as free. Looking for somewhere to play instead? See the <Link to="/playgrounds" className="text-primary hover:underline font-semibold">Des Moines playgrounds guide</Link>.
+            {freeScope} Looking for somewhere to play instead? See the <Link to="/playgrounds" className="text-primary hover:underline font-semibold">Des Moines playgrounds guide</Link>.
           </p>
         </div>
 
@@ -185,7 +194,9 @@ export default function KidsEvents() {
               </div>
               <div>
                 <div className="text-2xl font-bold text-primary">{freeKidsCount}</div>
-                <div className="text-sm text-muted-foreground">Listed as Free</div>
+                <div className="text-sm text-muted-foreground">
+                  {capped ? `Free, of the next ${FETCH_LIMIT}` : "Listed as Free"}
+                </div>
               </div>
               <div>
                 <div className="text-2xl font-bold text-primary">{categoryCount}</div>
@@ -266,8 +277,10 @@ export default function KidsEvents() {
                   Showing the {visibleEvents.length} soonest of{" "}
                   {formatCount(kidsEvents.length, "family event")}.
                 </p>
+                {/* Says what it opens (WP3 item 10): the hub's Family
+                    category, which is narrower than this page's word match. */}
                 <Button asChild variant="outline">
-                  <Link to="/events?category=Family">See every Family event</Link>
+                  <Link to="/events?category=Family">Browse Family-category events</Link>
                 </Button>
               </div>
             )}
@@ -307,7 +320,7 @@ export default function KidsEvents() {
               <div>
                 <h3 className="font-semibold mb-2">Stay on budget</h3>
                 <p className="text-sm text-muted-foreground">
-                  {freeKidsCount} of the events on this page are listed as free. See all <Link to="/events/free" className="text-primary hover:underline font-semibold">free events in Des Moines</Link>.
+                  {freeScope} See all <Link to="/events/free" className="text-primary hover:underline font-semibold">free events in Des Moines</Link>.
                 </p>
               </div>
               <div>
@@ -321,11 +334,13 @@ export default function KidsEvents() {
         </Card>
 
         {/* FAQ Section - Visible FAQs for SEO rich results */}
+        <EventsLandingLinks current="/events/kids" className="mt-8 mb-8" />
+
+        {/* The single FAQPage emitter (EnhancedLocalSEO no longer emits one). */}
         <FAQSection
           faqs={faqData}
           title="Kids & Family Events FAQ"
           description="Common questions about family-friendly activities in the Des Moines metro area"
-          showSchema={false}
         />
 
         {/* Related Content for Internal Linking */}

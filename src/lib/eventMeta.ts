@@ -34,7 +34,8 @@
  */
 import { BRAND } from "@/lib/brandConfig";
 import { parseEventPrice } from "@/lib/eventOffers";
-import { formatEventPart, hasSpecificTime } from "@/lib/timezone";
+import { eventEnd, eventTiming } from "@/lib/eventTiming";
+import { formatEventPart, formatInCentralTime, hasSpecificTime } from "@/lib/timezone";
 import type { Event } from "@/lib/types";
 
 /** Roughly where a desktop result truncates a title. */
@@ -54,6 +55,7 @@ type EventLike = Pick<
   | "city"
   | "event_start_utc"
   | "event_start_local"
+  | "end_date"
   | "time_tbd"
   | "enhanced_description"
   | "original_description"
@@ -175,8 +177,9 @@ export function eventMetaDescription(event: EventLike): string {
 
 /**
  * The visible answer-first summary under the H1: one sentence of what, when
- * and where, and one of price. Tense follows `now`, so a page read after the
- * event does not still promise it.
+ * and where, and one of price. Tense follows the event's END, not its start
+ * (events-pass2 WP4 item 4): day 2 of a festival "is on now", and only an
+ * event that is over "took place". The price line stays until then.
  */
 export function eventSummary(event: EventLike, now: Date = new Date()): string {
   const title = event.title.trim();
@@ -184,16 +187,21 @@ export function eventSummary(event: EventLike, now: Date = new Date()): string {
   const time = startTime(event);
   const venue = venueName(event);
 
-  const source = event.event_start_utc || (typeof event.date === "string" ? event.date : event.date?.toISOString());
-  const startMs = source ? Date.parse(source) : NaN;
-  const past = Number.isFinite(startMs) && startMs < now.getTime();
-
-  const verb = past ? "took place" : "takes place";
-  const when = date ? ` on ${date}${time ? ` at ${time} Central` : ""}` : "";
+  const timing = eventTiming(event, now);
   const where = venue ? ` at ${venue} ${inPlace(event)}` : ` ${inPlace(event)}`;
-  const first = `${title} ${verb}${when}${where}.`;
 
-  if (past) return first;
+  let first: string;
+  if (timing.isOver) {
+    const when = date ? ` on ${date}${time ? ` at ${time} Central` : ""}` : "";
+    first = `${title} took place${when}${where}.`;
+    return first;
+  }
+  if (timing.isHappeningNow) {
+    first = `${title} is on now${where}.`;
+  } else {
+    const when = date ? ` on ${date}${time ? ` at ${time} Central` : ""}` : "";
+    first = `${title} takes place${when}${where}.`;
+  }
 
   const price = priceFragment(event);
   let second = "";
@@ -202,4 +210,78 @@ export function eventSummary(event: EventLike, now: Date = new Date()): string {
   else if (event.source_url) second = " Ticket prices are listed on the official event page.";
 
   return `${first}${second}`;
+}
+
+/**
+ * Days after an event ENDS before its page asks to leave the index
+ * (WEB-SEO-009). Later than the sitemap's 7-day grace: between the two an
+ * event is indexable but no longer submitted.
+ */
+export const STALE_EVENT_NOINDEX_DAYS = 30;
+
+/**
+ * True once the event has been over for STALE_EVENT_NOINDEX_DAYS. Measured
+ * from the end (events-pass2 WP4 item 12): end_date when the row has one,
+ * else start plus DEFAULT_EVENT_HOURS. Measuring from the start dropped a
+ * 60-day exhibit from the index on day 31, while it was still open.
+ */
+export function isStaleEvent(event: EventLike, now: Date = new Date()): boolean {
+  const end = eventEnd(event);
+  if (!end) return false;
+  return (now.getTime() - end.getTime()) / 86_400_000 > STALE_EVENT_NOINDEX_DAYS;
+}
+
+/**
+ * The keywords meta. Absolute words only: "this weekend" and "tonight" were
+ * true of almost no event page on the day a crawler read it (events-pass2 WP4
+ * item 9). A row with no category gets no category keywords rather than a
+ * crash on `null.toLowerCase()`.
+ */
+export function eventKeywords(event: EventLike): string[] {
+  const city = BRAND.city;
+  const category = event.category?.trim() || null;
+  const out: string[] = [
+    event.title,
+    `${event.title} ${city}`,
+    `${city} events`,
+    `things to do ${city}`,
+    `things to do in ${city} ${BRAND.state}`,
+    `${BRAND.state} events`,
+    `${BRAND.region} events`,
+    `what to do in ${city}`,
+  ];
+  if (category) out.push(`${city} ${category}`, `${category} events ${city}`);
+
+  if (event.venue) out.push(`${event.venue} events`, `${event.venue} ${city}`, `events at ${event.venue}`);
+  if (event.location && !event.location.includes(city)) out.push(`${event.location} events`);
+  const rowCity = eventCity(event);
+  if (rowCity && rowCity !== city) out.push(`${rowCity} events`, `things to do ${rowCity} Iowa`);
+
+  const month = formatEventPart(event, "MMMM");
+  const year = formatEventPart(event, "yyyy");
+  const dayOfWeek = formatEventPart(event, "EEEE");
+  if (month && year) out.push(`${city} events ${month} ${year}`);
+  if (dayOfWeek) out.push(`${dayOfWeek} events ${city}`);
+  if (category && month) out.push(`${category.toLowerCase()} ${city} ${month}`);
+
+  return out.filter(Boolean);
+}
+
+/** og:image:alt, with no category or city clause it can't fill. */
+export function eventImageAlt(event: EventLike): string {
+  const category = event.category?.trim();
+  const place = eventCity(event);
+  const what = category ? `${category} event` : "event";
+  return place ? `${event.title} - ${what} in ${place}` : `${event.title} - ${what}`;
+}
+
+/**
+ * "Sep 25, 2026" in Central, for lines such as the provenance note that the
+ * prerender freezes: an absolute date is still true a week later.
+ */
+export function centralDateLabel(instant: string | Date | null | undefined): string | null {
+  if (!instant) return null;
+  const d = instant instanceof Date ? instant : new Date(instant);
+  if (Number.isNaN(d.getTime())) return null;
+  return formatInCentralTime(d, "MMM d, yyyy");
 }

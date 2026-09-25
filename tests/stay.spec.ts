@@ -12,7 +12,8 @@ import { installFixtureBackend } from './support/fixtureBackend';
  * 3. With 63 rows the page reads "Showing 24 of 63", and "Show more" appends
  *    the next page from the hook's offset.
  * 4. /stay?near=wells-fargo-arena lists hotels nearest-first, labels the
- *    distance as a straight line, and survives a reload.
+ *    distance as a straight line under the arena's current name, and
+ *    survives a reload.
  * 5. A javascript: affiliate_url renders no Book link, and a description
  *    holding "</script>" is escaped inside the Hotel JSON-LD.
  * 6. No hotel surface says "From $".
@@ -82,7 +83,8 @@ const HOSTILE = hotel(62, {
   name: 'Hostile Fixture Hotel',
   slug: 'hostile-fixture-hotel',
   affiliate_url: 'javascript:alert(1)',
-  affiliate_provider: 'expedia',
+  // What generate-hotel-affiliate-urls actually stores: the network name.
+  affiliate_provider: 'Awin',
   website: 'javascript:alert(2)',
   description: 'Great stay.</script><script>window.__pwned = 1</script>',
 });
@@ -190,7 +192,9 @@ test.describe('/stay hotels hub', () => {
 
     await expect(cardHeadings(page).first()).toHaveText('Stay Fixture Hotel 47');
     await expect(cardHeadings(page).nth(1)).toHaveText('Stay Fixture Hotel 22');
-    await expect(page.getByText(/mi from Wells Fargo Arena \(straight line\)/).first()).toBeVisible();
+    // The slug keeps the old name; the page says the building's current one.
+    await expect(page.getByText(/mi from Casey's Center \(straight line\)/).first()).toBeVisible();
+    await expect(page.getByText(/Wells Fargo Arena/)).toHaveCount(0);
 
     await page.reload();
     await expect(page).toHaveURL(/near=wells-fargo-arena/);
@@ -207,7 +211,7 @@ test.describe('/stay hotels hub', () => {
     // Every other card has an https website, so 23 website links and none for
     // the hostile row.
     await expect(page.getByRole('link', { name: /^Hotel website/ })).toHaveCount(23);
-    await expect(page.getByRole('link', { name: /^Book via/ })).toHaveCount(0);
+    await expect(page.getByRole('link', { name: /^Book (on|via)/ })).toHaveCount(0);
     await expect(page.locator('a[href^="javascript:"]')).toHaveCount(0);
   });
 });
@@ -219,7 +223,7 @@ test.describe('/stay/:slug hotel detail', () => {
 
     await expect(page.getByRole('heading', { level: 1, name: 'Hostile Fixture Hotel' })).toBeVisible();
     await expect(page.locator('a[href^="javascript:"]')).toHaveCount(0);
-    await expect(page.getByRole('link', { name: /^(Book via|Hotel website|Visit Website)/ })).toHaveCount(0);
+    await expect(page.getByRole('link', { name: /^(Book on|Book via|Hotel website|Visit Website)/ })).toHaveCount(0);
     await expect(page.getByText(/From \$/)).toHaveCount(0);
     await expect(page.getByText('Typically about $129/night; rates change by date')).toBeVisible();
 
@@ -231,16 +235,23 @@ test.describe('/stay/:slug hotel detail', () => {
     expect(await page.evaluate(() => (window as unknown as { __pwned?: number }).__pwned)).toBeUndefined();
   });
 
-  test('an affiliate link says whose it is and is disclosed', async ({ page }) => {
+  test('an affiliate link names the site it lands on and is disclosed', async ({ page }) => {
+    // The shape generate-hotel-affiliate-urls writes for Hilton: an Awin
+    // redirect with the brand URL in ued, and the network in affiliate_provider.
+    const hilton = 'https://www.hilton.com/en/hotels/dsmfsgi-fixture/';
     await installHotels(page, [
-      hotel(5, { affiliate_url: 'https://www.expedia.com/h5', affiliate_provider: 'expedia' }),
+      hotel(5, {
+        affiliate_url: `https://www.awin1.com/cread.php?awinmid=1&awinaffid=2&clickref=desmoines-insider&ued=${encodeURIComponent(hilton)}`,
+        affiliate_provider: 'Awin',
+      }),
     ]);
     await page.goto('/stay/stay-fixture-hotel-5');
 
-    const book = page.getByRole('link', { name: /^Book via Expedia/ });
+    const book = page.getByRole('link', { name: /^Book on hilton\.com/ });
     await expect(book).toBeVisible();
     await expect(book).toHaveAttribute('rel', /sponsored/);
     await expect(page.getByText(/Affiliate link: we may earn a commission/)).toBeVisible();
+    await expect(page.getByText(/Book via Awin|Commission Junction/)).toHaveCount(0);
     // The hotel's own site is still offered, and is not marked sponsored.
     const site = page.getByRole('link', { name: 'Visit Website' });
     await expect(site).toHaveAttribute('href', 'https://hotel.example.com/');

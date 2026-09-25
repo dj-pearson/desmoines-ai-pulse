@@ -1,7 +1,7 @@
 import { Link } from "react-router-dom";
 import { useQuery } from "@tanstack/react-query";
 import { supabase } from "@/integrations/supabase/client";
-import { useArticleHubListings } from "@/hooks/useArticles";
+import { useArticleHubListings, type HubListingMode } from "@/hooks/useArticles";
 import { STALE_TIME } from "@/lib/queryConfig";
 import { ARTICLE_HUBS, primaryHubForArticle, relatedArticles, type ScoredArticle } from "@/lib/articleHubs";
 
@@ -12,6 +12,16 @@ import { ARTICLE_HUBS, primaryHubForArticle, relatedArticles, type ScoredArticle
  * asking again; if one side changes, change both.
  */
 const HUB_RAIL_ROWS = 40;
+
+/**
+ * The heading says only what the query checked (pass 2 WP4 item 6). "On now"
+ * sat over the four most popular restaurants with no hours check at all.
+ */
+const LISTING_HEADINGS: Record<HubListingMode, string> = {
+  "open-now": "Open now",
+  places: "Places to try",
+  "coming-up": "Coming up",
+};
 
 interface RailArticle extends ScoredArticle {
   published_at: string | null;
@@ -28,13 +38,15 @@ interface RelatedArticlesProps {
 }
 
 /**
- * "Related reading" and "On now" for an article page (Plan & Stay WP4 item 7).
+ * "Related reading" and live listings for an article page (Plan & Stay WP4
+ * item 7, pass 2 WP4 item 6).
  *
  * Related: the three recent published articles sharing the most tags, then the
- * same category. On now: three or four current listings from the article's
- * primary hub, as plain links, so a piece about patios ends at restaurants you
- * can go to tonight. Each half renders nothing without a match, and the whole
- * block renders nothing when both are empty.
+ * same category. Listings: three or four links from the article's primary hub.
+ * Restaurants are the ones open now by their listed hours, cuisine matches
+ * with the article's tags first; events include ones already under way. Each
+ * half renders nothing without a match, and the whole block renders nothing
+ * when both are empty.
  */
 export function RelatedArticles({ article, className = "" }: RelatedArticlesProps) {
   const { data: rail } = useQuery({
@@ -53,10 +65,11 @@ export function RelatedArticles({ article, className = "" }: RelatedArticlesProp
   });
 
   const hub = primaryHubForArticle(article);
-  const { data: listings } = useArticleHubListings(hub);
+  const { data: listings } = useArticleHubListings(hub, article.tags);
 
   const related = relatedArticles(article, (rail ?? []) as RailArticle[]);
-  const live = listings ?? [];
+  const live = listings?.items ?? [];
+  const heading = listings ? LISTING_HEADINGS[listings.mode] : "";
 
   if (related.length === 0 && live.length === 0) return null;
 
@@ -81,8 +94,8 @@ export function RelatedArticles({ article, className = "" }: RelatedArticlesProp
       )}
 
       {hub && live.length > 0 && (
-        <nav aria-label={`Current ${ARTICLE_HUBS[hub].title}`}>
-          <h2 className="text-lg font-semibold mb-3">On now: {ARTICLE_HUBS[hub].title}</h2>
+        <nav aria-label={`${heading}: ${ARTICLE_HUBS[hub].title}`}>
+          <h2 className="text-lg font-semibold mb-3">{heading}</h2>
           <ul>
             {live.map((item) => (
               <li key={item.id}>

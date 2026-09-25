@@ -59,7 +59,7 @@ export function buildRestaurantsHubFaqs({ restaurantCount, cuisineCount }: Resta
     },
     {
       question: "What are the best cheap eats in Des Moines?",
-      answer: "Filter by the '$' price range to find meals under about $15 per person. Taco shops on the east side, food trucks downtown at lunch and weekday lunch specials are good places to start. Many downtown restaurants and bars run happy hours, though times and offers vary by venue, so check with the restaurant directly.",
+      answer: "Filter by '$', the lowest of the four price levels a listing can carry. Listings give a level, not a dollar amount, so check the menu for prices. Taco shops on the east side, food trucks downtown at lunch and weekday lunch specials are good places to start. Many downtown restaurants and bars run happy hours, though times and offers vary by venue, so check with the restaurant directly.",
     },
     {
       question: "Are there vegan and vegetarian restaurants in Des Moines?",
@@ -78,3 +78,22 @@ export function buildRestaurantsHubFaqs({ restaurantCount, cuisineCount }: Resta
   ];
 }
 
+
+/**
+ * Cuisine values that name a place you go to drink (eat-drink pass 2 WP1 item
+ * 13), for the hub directory's Drinks group. Matched on words, so "Bar &
+ * Grill" and "Wine Bar" count, and food counters that happen to say "bar"
+ * ("Sushi Bar", "Salad Bar") do not. Only cuisines with at least one row are
+ * returned, most rows first, in the facet's own spelling.
+ */
+const DRINK_WORDS =
+  /\b(bars?|pubs?|brewery|breweries|brewpub|taproom|tavern|saloon|lounge|speakeasy|wine|winery|cocktails?|distillery|beer|gastropub)\b/i;
+const FOOD_BARS = /\b(sushi|salad|juice|smoothie|oyster|raw|taco|poke|noodle|coffee|espresso|dessert|yogurt|acai|salsa)\s+bar\b/i;
+
+export function drinkCuisines(
+  cuisineCounts: ReadonlyArray<{ cuisine: string; count: number }>
+): Array<{ cuisine: string; count: number }> {
+  return cuisineCounts
+    .filter((c) => c.count > 0 && DRINK_WORDS.test(c.cuisine) && !FOOD_BARS.test(c.cuisine))
+    .sort((a, b) => b.count - a.count);
+}

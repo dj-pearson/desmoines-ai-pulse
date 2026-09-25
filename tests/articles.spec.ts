@@ -109,6 +109,11 @@ function selectedColumns(url: URL): string[] {
   return (url.searchParams.get('select') || '').split(',').map((c) => c.trim());
 }
 
+/** A page-of-cards request: not a slug lookup and not the category list. */
+function isListGet(s: Seen): boolean {
+  return s.method === 'GET' && !s.url.searchParams.get('slug') && s.url.searchParams.get('select') !== 'category';
+}
+
 const DEAD_BUTTONS = /^(Save|Like|Yes|Feedback|Explore More Topics|Subscribe to Newsletter)$/;
 
 test.describe('articles list', () => {
@@ -120,9 +125,10 @@ test.describe('articles list', () => {
     // Let any stray mount effect fire before counting.
     await page.waitForLoadState('networkidle');
 
-    const listGets = seen.filter((s) => s.method === 'GET' && !s.url.searchParams.get('slug'));
-    // The hub-rail query (related reading) is an article-detail concern; the
-    // list page issues exactly one request of its own.
+    const listGets = seen.filter(isListGet);
+    // The hub-rail query (related reading) is an article-detail concern, and
+    // the category dropdown's select=category read (pass 2 WP4 item 5) is not
+    // a page of cards; the list itself is exactly one request.
     expect(listGets).toHaveLength(1);
     const [first] = listGets;
     expect(first.url.searchParams.get('status')).toBe('eq.published');
@@ -134,7 +140,7 @@ test.describe('articles list', () => {
     await more.click();
     await expect(page.getByRole('link', { name: `Fixture Article ${TOTAL - 1}` })).toBeVisible();
 
-    const afterMore = seen.filter((s) => s.method === 'GET' && !s.url.searchParams.get('slug'));
+    const afterMore = seen.filter(isListGet);
     expect(afterMore).toHaveLength(2);
     expect(afterMore[1].url.searchParams.get('offset')).toBe('12');
     await expect(more).toBeHidden();
@@ -143,10 +149,10 @@ test.describe('articles list', () => {
   test('an auto-published card carries the AI badge', async ({ page }) => {
     await installArticles(page);
     await page.goto('/articles');
-    const card = page.getByRole('link', { name: /Auto Published Patio Guide/ });
-    await expect(card).toBeVisible();
-    await expect(card.getByText('AI-written')).toBeVisible();
-    await expect(page.getByRole('link', { name: /Fixture Article 1\b/ }).getByText('AI-written')).toHaveCount(0);
+    // The link is the title alone now (pass 2 WP4 item 9), so the badge is
+    // found by its own short name, once, on the one AI card.
+    await expect(page.getByRole('link', { name: 'Auto Published Patio Guide', exact: true })).toBeVisible();
+    await expect(page.getByRole('note', { name: 'AI-written', exact: true })).toHaveCount(1);
   });
 
   test('no handler-less buttons', async ({ page }) => {

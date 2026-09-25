@@ -19,6 +19,7 @@ import { toast } from "sonner";
 import { createLogger } from '@/lib/logger';
 import { FormErrorSummary, useFormErrors } from "./ui/form-error-summary";
 import { EVENT_CATEGORIES } from "@/lib/eventCategories";
+import { SubmissionNotEditableError } from "@/lib/submissionActions";
 
 const log = createLogger('EventSubmissionForm');
 
@@ -47,34 +48,50 @@ const POPULAR_TAGS = [
 interface EventSubmissionFormProps {
   onSuccess?: () => void;
   editEvent?: UserSubmittedEvent;
+  /**
+   * Pre-fill from an earlier submission and send a NEW submission (an INSERT),
+   * leaving the original untouched. For rows the owner can't edit in place:
+   * declined ones, and ones sent back for changes until 20260926000001 lets
+   * the owner update them. Ignored when editEvent is set.
+   */
+  copyFrom?: UserSubmittedEvent;
 }
 
-export default function EventSubmissionForm({ onSuccess, editEvent }: EventSubmissionFormProps) {
+/** A copied date only carries over while it's still today or later. */
+function copiedDate(value: string | undefined): Date | undefined {
+  if (!value) return undefined;
+  const date = new Date(value);
+  if (Number.isNaN(date.getTime())) return undefined;
+  return date >= new Date(new Date().setHours(0, 0, 0, 0)) ? date : undefined;
+}
+
+export default function EventSubmissionForm({ onSuccess, editEvent, copyFrom }: EventSubmissionFormProps) {
   const isEditing = !!editEvent;
+  const seed = editEvent ?? copyFrom;
   const [selectedDate, setSelectedDate] = useState<Date | undefined>(
-    editEvent?.date ? new Date(editEvent.date) : undefined
+    editEvent?.date ? new Date(editEvent.date) : copiedDate(copyFrom?.date)
   );
-  const [selectedTags, setSelectedTags] = useState<string[]>(editEvent?.tags || []);
+  const [selectedTags, setSelectedTags] = useState<string[]>(seed?.tags || []);
   const [customTag, setCustomTag] = useState("");
-  const [imagePreview, setImagePreview] = useState<string | null>(editEvent?.image_url || null);
-  const [uploadedImageUrl, setUploadedImageUrl] = useState<string>(editEvent?.image_url || '');
+  const [imagePreview, setImagePreview] = useState<string | null>(seed?.image_url || null);
+  const [uploadedImageUrl, setUploadedImageUrl] = useState<string>(seed?.image_url || '');
   const fileInputRef = useRef<HTMLInputElement>(null);
 
   const { register, handleSubmit, formState: { errors, isSubmitted }, setValue, watch, reset, setFocus } = useForm({
-    defaultValues: editEvent ? {
-      title: editEvent.title,
-      description: editEvent.description || '',
-      category: editEvent.category || '',
-      start_time: editEvent.start_time || '',
-      end_time: editEvent.end_time || '',
-      venue: editEvent.venue || '',
-      location: editEvent.location || '',
-      address: editEvent.address || '',
-      price: editEvent.price || '',
-      website_url: editEvent.website_url || '',
-      contact_email: editEvent.contact_email || '',
-      contact_phone: editEvent.contact_phone || '',
-      image_url: editEvent.image_url || '',
+    defaultValues: seed ? {
+      title: seed.title,
+      description: seed.description || '',
+      category: seed.category || '',
+      start_time: seed.start_time || '',
+      end_time: seed.end_time || '',
+      venue: seed.venue || '',
+      location: seed.location || '',
+      address: seed.address || '',
+      price: seed.price || '',
+      website_url: seed.website_url || '',
+      contact_email: seed.contact_email || '',
+      contact_phone: seed.contact_phone || '',
+      image_url: seed.image_url || '',
     } : undefined,
   });
   const submitEvent = useSubmitEvent();
@@ -131,11 +148,11 @@ export default function EventSubmissionForm({ onSuccess, editEvent }: EventSubmi
       setValue("image_url", result.url);
       toast.success("Image uploaded successfully!");
     } catch (err) {
-      setImagePreview(editEvent?.image_url || null);
-      setUploadedImageUrl(editEvent?.image_url || '');
+      setImagePreview(seed?.image_url || null);
+      setUploadedImageUrl(seed?.image_url || '');
       toast.error(err instanceof Error ? err.message : "Failed to upload image");
     }
-  }, [upload, setValue, editEvent]);
+  }, [upload, setValue, seed]);
 
   const handleRemoveImage = () => {
     setImagePreview(null);
@@ -182,7 +199,11 @@ export default function EventSubmissionForm({ onSuccess, editEvent }: EventSubmi
       onSuccess?.();
     } catch (error) {
       log.error('submit', 'Error submitting event', { data: error });
-      toast.error("Failed to submit event. Please try again.");
+      if (error instanceof SubmissionNotEditableError) {
+        toast.error(error.message);
+      } else {
+        toast.error("Failed to submit event. Please try again.");
+      }
     }
   };
 
@@ -193,6 +214,8 @@ export default function EventSubmissionForm({ onSuccess, editEvent }: EventSubmi
         <AlertDescription>
           {isEditing
             ? "Update your event details below. Once saved, it will be resubmitted for review."
+            : copyFrom
+            ? `This starts a new submission from "${copyFrom.title}". Change what you need and submit it; the original stays as it was.`
             : "All events are reviewed within 48 hours. We'll email you when your event is approved or if we need more information."}
         </AlertDescription>
       </Alert>
@@ -240,7 +263,7 @@ export default function EventSubmissionForm({ onSuccess, editEvent }: EventSubmi
 
               <div>
                 <Label htmlFor="category">Category *</Label>
-                <Select defaultValue={editEvent?.category || undefined} onValueChange={(value) => setValue("category", value)}>
+                <Select defaultValue={seed?.category || undefined} onValueChange={(value) => setValue("category", value)}>
                   <SelectTrigger aria-invalid={!!errors.category} aria-describedby={errors.category ? "category-error" : undefined}>
                     <SelectValue placeholder="Select a category" />
                   </SelectTrigger>

@@ -4,6 +4,8 @@ import { useAuth } from '@/contexts/AuthContext';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
+import { Skeleton } from '@/components/ui/skeleton';
+import { OptimizedImage } from '@/components/OptimizedImage';
 import { useToast } from '@/hooks/use-toast';
 import {
   useCastVote,
@@ -17,6 +19,13 @@ import {
 import { supabase } from '@/integrations/supabase/client';
 import { handleError, ErrorSeverity } from '@/lib/errorHandler';
 import { storage } from '@/lib/safeStorage';
+import { isVisitableStatus } from '@/lib/restaurantHours';
+import {
+  VOTE_CHANGE_AVAILABLE,
+  VOTES_FINAL_COPY,
+  boothRulesCopy,
+  voteFailureMessage,
+} from '@/lib/votingStatus';
 import { Search, Check, PenLine, Utensils, MapPin, LogIn } from 'lucide-react';
 
 interface VotingBoothProps {
@@ -30,6 +39,8 @@ interface SearchResult {
   name: string;
   type: 'restaurant' | 'attraction';
   image_url?: string | null;
+  /** "123 Grand Ave, Des Moines": enough to tell two same-named places apart. */
+  place?: string | null;
 }
 
 interface Pick {
@@ -43,6 +54,24 @@ type SearchStatus = 'idle' | 'searching' | 'done' | 'error';
 
 const SEARCH_DEBOUNCE_MS = 250;
 const WRITE_IN_MAX = 80;
+
+/**
+ * restaurants.status values that mean you can't eat there today. Mirrors
+ * NOT_VISITABLE_STATUSES in src/lib/restaurantHours.ts, which isVisitableStatus
+ * reads; this copy exists because PostgREST needs the list in the query so a
+ * closed place doesn't take one of the five slots. A NULL status defaults to
+ * open, hence the `status.is.null` arm.
+ */
+const NOT_VISITABLE_FILTER =
+  'status.is.null,status.not.in.(closed,opening_soon,announced,permanently_closed,temporarily_closed,closed_permanently,closed_temporarily,coming_soon)';
+
+/** "123 Grand Ave, Des Moines", skipping a city the street line already names. */
+function placeLine(street: string | null | undefined, city: string | null | undefined): string | null {
+  const s = street?.trim() || '';
+  const c = city?.trim() || '';
+  if (s && c && !s.toLowerCase().includes(c.toLowerCase())) return `${s}, ${c}`;
+  return s || c || null;
+}
 
 /** Escape LIKE metacharacters so "100%" searches for a percent sign. */
 function escapeLike(value: string): string {
@@ -64,7 +93,11 @@ export function VotingBooth({ category, results = [] }: VotingBoothProps) {
   const { user } = useAuth();
   const { toast } = useToast();
   const castVote = useCastVote();
-  const { data: existingVote, isError: voteReadFailed } = useUserVote(category.id);
+  const {
+    data: existingVote,
+    isError: voteReadFailed,
+    isLoading: voteLoading,
+  } = useUserVote(category.id);
 
   const [searchQuery, setSearchQuery] = useState('');
   const [searchResults, setSearchResults] = useState<SearchResult[]>([]);
@@ -99,9 +132,24 @@ export function VotingBooth({ category, results = [] }: VotingBoothProps) {
     const timer = window.setTimeout(async () => {
       setSearchStatus('searching');
       const pattern = `%${escapeLike(query)}%`;
+      // Only places someone can visit: no merged duplicates, no closed or
+      // not-yet-open restaurants, no inactive attractions. restaurants has no
+      // address column (scripts/db-snapshot.json); `location` holds the
+      // street line, and attractions has `location` but no `city`.
       const [restaurantsRes, attractionsRes] = await Promise.all([
-        supabase.from('restaurants').select('id, name, image_url').ilike('name', pattern).limit(5),
-        supabase.from('attractions').select('id, name, image_url').ilike('name', pattern).limit(5),
+        supabase
+          .from('restaurants')
+          .select('id, name, image_url, location, city, status')
+          .ilike('name', pattern)
+          .not('is_merged', 'is', true)
+          .or(NOT_VISITABLE_FILTER)
+          .limit(5),
+        supabase
+          .from('attractions')
+          .select('id, name, image_url, location')
+          .ilike('name', pattern)
+          .eq('is_active', true)
+          .limit(5),
       ]);
       if (requestId !== latestSearch.current) return;
 
@@ -116,8 +164,22 @@ export function VotingBooth({ category, results = [] }: VotingBoothProps) {
       }
 
       setSearchResults([
-        ...(restaurantsRes.data ?? []).map((r) => ({ ...r, type: 'restaurant' as const })),
-        ...(attractionsRes.data ?? []).map((a) => ({ ...a, type: 'attraction' as const })),
+        ...(restaurantsRes.data ?? [])
+          .filter((r) => isVisitableStatus(r.status))
+          .map((r) => ({
+            id: r.id,
+            name: r.name,
+            image_url: r.image_url,
+            place: placeLine(r.location, r.city),
+            type: 'restaurant' as const,
+          })),
+        ...(attractionsRes.data ?? []).map((a) => ({
+          id: a.id,
+          name: a.name,
+          image_url: a.image_url,
+          place: placeLine(a.location, null),
+          type: 'attraction' as const,
+        })),
       ]);
       setSearchStatus('done');
     }, SEARCH_DEBOUNCE_MS);
@@ -146,8 +208,11 @@ export function VotingBooth({ category, results = [] }: VotingBoothProps) {
       return true;
     } catch (error) {
       handleError(error, { component: 'VotingBooth', action: 'castVote' });
-      const message = error instanceof Error && error.message ? error.message : 'Please try again.';
-      toast({ title: 'Vote not saved', description: message, variant: 'destructive' });
+      toast({
+        title: 'Vote not saved',
+        description: voteFailureMessage(error, !!existingVote || voteReadFailed),
+        variant: 'destructive',
+      });
       return false;
     }
   };
@@ -197,16 +262,24 @@ export function VotingBooth({ category, results = [] }: VotingBoothProps) {
       )?.name ?? existingVote.custom_entry ?? 'your pick'
     : null;
 
-  const showBallot = !pendingPick && !stashedPick && (!existingVote || changing);
+  // With changes switched off, a signed-in voter who already has a vote can't
+  // confirm a stashed pick either: that is a change by another route.
+  const pendingBlocked = !!pendingPick && !!existingVote && !VOTE_CHANGE_AVAILABLE;
+  // Hold the ballot until we know whether this voter already has one, so a
+  // returning voter doesn't see a fresh ballot flash before "Your vote".
+  const checkingVote = !!user && voteLoading;
+  const showBallot =
+    !checkingVote &&
+    !pendingPick &&
+    !stashedPick &&
+    (!existingVote || (changing && VOTE_CHANGE_AVAILABLE));
   const query = searchQuery.trim();
 
   return (
     <Card>
       <CardHeader>
         <CardTitle className="text-lg">Cast your vote</CardTitle>
-        <p className="text-sm text-muted-foreground">
-          One vote per person in {category.name}. You can change it while voting is open.
-        </p>
+        <p className="text-sm text-muted-foreground">{boothRulesCopy(category.name)}</p>
       </CardHeader>
       <CardContent className="space-y-4">
         {!user && !stashedPick && (
@@ -246,7 +319,26 @@ export function VotingBooth({ category, results = [] }: VotingBoothProps) {
           </div>
         )}
 
-        {user && pendingPick && (
+        {checkingVote && (
+          <div className="space-y-2" aria-busy="true" aria-label="Checking your vote">
+            <Skeleton className="h-11 w-full" />
+            <Skeleton className="h-5 w-40" />
+          </div>
+        )}
+
+        {user && pendingPick && pendingBlocked && (
+          <div className="space-y-3 rounded-lg bg-muted p-3 text-sm" role="status">
+            <p>
+              Before you signed in you picked <strong>{pendingPick.name}</strong>, but you'd
+              already voted for <strong>{currentPickName}</strong> here. {VOTES_FINAL_COPY}
+            </p>
+            <Button variant="outline" size="sm" className="min-h-11" onClick={discardPending}>
+              Dismiss
+            </Button>
+          </div>
+        )}
+
+        {user && pendingPick && !pendingBlocked && (
           <div className="space-y-3 rounded-lg bg-muted p-3 text-sm" role="status">
             <p>
               Before you signed in you picked <strong>{pendingPick.name}</strong>.
@@ -270,23 +362,28 @@ export function VotingBooth({ category, results = [] }: VotingBoothProps) {
           </div>
         )}
 
-        {user && existingVote && !changing && !pendingPick && (
+        {user && existingVote && (!changing || !VOTE_CHANGE_AVAILABLE) && !pendingPick && (
           <div className="flex flex-wrap items-center justify-between gap-2 rounded-lg bg-primary/10 p-3 text-sm text-foreground">
             <span className="flex items-center gap-2">
               <Check className="h-4 w-4 text-primary" aria-hidden="true" />
               <span>
-                Your vote: <strong>{currentPickName}</strong>
+                Your vote: <strong>{currentPickName}</strong>.
+                {!VOTE_CHANGE_AVAILABLE && ` ${VOTES_FINAL_COPY}`}
               </span>
             </span>
-            <Button variant="outline" size="sm" className="min-h-11" onClick={() => setChanging(true)}>
-              Change
-            </Button>
+            {VOTE_CHANGE_AVAILABLE && (
+              <Button variant="outline" size="sm" className="min-h-11" onClick={() => setChanging(true)}>
+                Change
+              </Button>
+            )}
           </div>
         )}
 
         {user && voteReadFailed && (
           <p className="text-sm text-muted-foreground">
-            We couldn't check whether you've already voted. Voting again replaces any earlier pick.
+            {VOTE_CHANGE_AVAILABLE
+              ? "We couldn't check whether you've already voted. Voting again replaces any earlier pick."
+              : "We couldn't check whether you've already voted. If you have, your earlier vote stands."}
           </p>
         )}
 
@@ -326,13 +423,16 @@ export function VotingBooth({ category, results = [] }: VotingBoothProps) {
                       className="flex min-h-11 items-center gap-3 w-full p-2 rounded hover:bg-accent text-left transition-colors"
                     >
                       {result.image_url ? (
-                        <img
+                        // 64px rendition for a 32px box: sharp on 2x screens
+                        // without pulling the full-size original.
+                        <OptimizedImage
                           src={result.image_url}
                           alt=""
-                          width={32}
-                          height={32}
-                          loading="lazy"
-                          className="w-8 h-8 rounded object-cover"
+                          width={64}
+                          height={64}
+                          sizes="32px"
+                          className="object-cover"
+                          containerClassName="w-8 h-8 rounded flex-shrink-0"
                         />
                       ) : (
                         <span className="w-8 h-8 rounded bg-muted flex items-center justify-center" aria-hidden="true">
@@ -343,9 +443,12 @@ export function VotingBooth({ category, results = [] }: VotingBoothProps) {
                           )}
                         </span>
                       )}
-                      <span>
+                      <span className="min-w-0">
                         <span className="block text-sm font-medium">{result.name}</span>
-                        <span className="block text-xs text-muted-foreground capitalize">{result.type}</span>
+                        <span className="block text-xs text-muted-foreground">
+                          <span className="capitalize">{result.type}</span>
+                          {result.place && <> - {result.place}</>}
+                        </span>
                       </span>
                     </button>
                   </li>

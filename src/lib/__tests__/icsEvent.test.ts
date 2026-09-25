@@ -18,6 +18,7 @@ import {
   outlookCalendarUrl,
   resolveEnd,
   resolveStart,
+  toIcsEvent,
   DEFAULT_DURATION_MS,
 } from '../icsEvent';
 
@@ -81,7 +82,8 @@ describe('resolveStart / resolveEnd', () => {
     expect(start.toISOString()).toBe('2026-09-09T01:00:00.000Z');
   });
 
-  it('defaults to a two-hour duration with no published end', () => {
+  it('defaults to DEFAULT_EVENT_HOURS (three) with no published end', () => {
+    expect(DEFAULT_DURATION_MS).toBe(3 * 60 * 60 * 1000);
     const start = resolveStart(EVENING_EVENT);
     const end = resolveEnd(EVENING_EVENT, start);
     expect(end.getTime() - start.getTime()).toBe(DEFAULT_DURATION_MS);
@@ -112,7 +114,7 @@ describe('buildEventIcs', () => {
   it('writes the correct UTC start and end', () => {
     const ics = buildEventIcs(EVENING_EVENT)!;
     expect(ics).toContain('DTSTART:20260909T000000Z');
-    expect(ics).toContain('DTEND:20260909T020000Z');
+    expect(ics).toContain('DTEND:20260909T030000Z');
   });
 
   it('escapes the summary', () => {
@@ -168,7 +170,7 @@ describe('buildEventIcs', () => {
 describe('calendar links', () => {
   it('sends Google the UTC range', () => {
     const url = googleCalendarUrl(EVENING_EVENT)!;
-    expect(url).toContain('dates=20260909T000000Z%2F20260909T020000Z');
+    expect(url).toContain('dates=20260909T000000Z%2F20260909T030000Z');
   });
 
   it('sends Outlook ISO instants', () => {
@@ -234,5 +236,71 @@ describe('all-day events (time_tbd)', () => {
     const ics = buildEventIcs({ ...PLACEHOLDER, allDay: false })!;
     expect(ics).toContain('DTSTART:20260908T033000Z');
     expect(ics).not.toContain('VALUE=DATE');
+  });
+});
+
+describe('toIcsEvent matches the page (events-pass2 WP4 item 3)', () => {
+  it('exports a 19:31:58 sentinel row as an all-day DATE on its Central day', () => {
+    // 19:31:58 CDT Fri Sep 4 is 00:31:58Z on the 5th.
+    const ics = buildEventIcs(
+      toIcsEvent({
+        id: 's1',
+        title: 'Sentinel Show',
+        date: '2026-09-05T00:31:58+00:00',
+        event_start_local: '2026-09-04T19:31:58',
+      }),
+    )!;
+    expect(ics).toContain('DTSTART;VALUE=DATE:20260904');
+    expect(ics).toContain('DTEND;VALUE=DATE:20260905');
+    expect(ics).not.toContain('T003158Z');
+  });
+
+  it('exports a SeatGeek 03:30 row as all-day with no time_tbd column', () => {
+    const input = toIcsEvent({
+      id: 'sg',
+      title: 'Arena Show',
+      date: '2026-09-04T08:30:00+00:00',
+      event_start_utc: '2026-09-04T08:30:00+00:00',
+      event_start_local: '2026-09-04T03:30:00',
+      source_url: 'https://seatgeek.com/arena-show-tickets/123',
+    });
+    expect(input.allDay).toBe(true);
+    expect(buildEventIcs(input)).toContain('DTSTART;VALUE=DATE:20260904');
+  });
+
+  it('spans a three-day untimed festival through its last day', () => {
+    // Fri Sep 4 to Sun Sep 6, no published hours. DTEND is exclusive: Mon 7th.
+    const ics = buildEventIcs(
+      toIcsEvent({
+        id: 'fest',
+        title: 'Harvest Festival',
+        date: '2026-09-05T00:31:58+00:00',
+        event_start_local: '2026-09-04T19:31:58',
+        end_date: '2026-09-06T23:00:00+00:00',
+      }),
+    )!;
+    expect(ics).toContain('DTSTART;VALUE=DATE:20260904');
+    expect(ics).toContain('DTEND;VALUE=DATE:20260907');
+  });
+
+  it('uses end_date for a timed three-day festival', () => {
+    const ics = buildEventIcs(
+      toIcsEvent({
+        id: 'fest2',
+        title: 'Art Fair',
+        date: '2026-09-04T15:00:00Z',
+        event_start_utc: '2026-09-04T15:00:00Z',
+        end_date: '2026-09-06T22:00:00Z',
+      }),
+    )!;
+    expect(ics).toContain('DTSTART:20260904T150000Z');
+    expect(ics).toContain('DTEND:20260906T220000Z');
+  });
+
+  it('links the canonical Central-dated slug on the site origin', () => {
+    const ics = buildEventIcs(
+      toIcsEvent({ id: 'abc', title: 'Jazz in the Park', date: '2026-09-09T00:00:00Z' }),
+    )!;
+    expect(ics).toContain('URL:https://desmoinesinsider.com/events/jazz-in-the-park-2026-09-08');
   });
 });

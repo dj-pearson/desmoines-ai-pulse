@@ -1,6 +1,7 @@
 import { Helmet } from "react-helmet-async";
 import { toJsonLd } from "@/lib/jsonLd";
 import { safeWebUrl } from "@/lib/reservations";
+import { parseHotelTime } from "@/lib/hotelTimes";
 
 interface HotelSchemaProps {
   name: string;
@@ -15,9 +16,15 @@ interface HotelSchemaProps {
   website?: string;
   image?: string;
   priceRange?: string;
-  starRating?: number;
-  checkInTime?: string;
-  checkOutTime?: string;
+  starRating?: number | null;
+  /**
+   * Set for rows the Google Places import created. Their star_rating is a
+   * review average, not a hotel class, so no starRating is emitted for them.
+   */
+  googlePlaceId?: string | null;
+  /** Row text; emitted only when it parses to HH:MM ("3:00 PM" -> "15:00"). */
+  checkInTime?: string | null;
+  checkOutTime?: string | null;
   /** This hotel's page on our site. Used for @id and url (SEO-013). */
   pageUrl?: string;
   latitude?: number | null;
@@ -34,6 +41,7 @@ export default function HotelSchema({
   image,
   priceRange,
   starRating,
+  googlePlaceId,
   checkInTime,
   checkOutTime,
   pageUrl,
@@ -44,6 +52,14 @@ export default function HotelSchema({
   // plan-stay WP2 item 3: `website` is row text, so only an http(s) URL is
   // emitted as sameAs/url.
   const safeWebsite = safeWebUrl(website);
+  // plan-stay-pass2 WP2 item 11: schema.org wants Time values and a URL image.
+  const safeImage = safeWebUrl(image);
+  const checkin = parseHotelTime(checkInTime);
+  const checkout = parseHotelTime(checkOutTime);
+  const stars =
+    !googlePlaceId && typeof starRating === "number" && starRating > 0 && starRating <= 5
+      ? starRating
+      : null;
   const schema = {
     "@context": "https://schema.org",
     "@type": "Hotel",
@@ -69,16 +85,16 @@ export default function HotelSchema({
     ...(amenities && amenities.length > 0 && {
       amenityFeature: amenities.map((a) => ({ "@type": "LocationFeatureSpecification", name: a, value: true })),
     }),
-    ...(image && { image }),
+    ...(safeImage && { image: safeImage }),
     ...(priceRange && { priceRange }),
-    ...(starRating && {
+    ...(stars !== null && {
       starRating: {
         "@type": "Rating",
-        ratingValue: String(starRating),
+        ratingValue: String(stars),
       },
     }),
-    ...(checkInTime && { checkinTime: checkInTime }),
-    ...(checkOutTime && { checkoutTime: checkOutTime }),
+    ...(checkin && { checkinTime: checkin }),
+    ...(checkout && { checkoutTime: checkout }),
   };
 
   return (

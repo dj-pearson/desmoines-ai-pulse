@@ -8,6 +8,7 @@ import { Database } from "@/integrations/supabase/types";
 import AffiliateDisclosureBanner from "@/components/AffiliateDisclosureBanner";
 import { SpriteIcon } from "@/components/ui/SpriteIcon";
 import { hotelRateLabel, resolveBooking } from "@/lib/hotelBooking";
+import { formatMiles } from "@/lib/venuePages";
 
 type Hotel = Database["public"]["Tables"]["hotels"]["Row"];
 
@@ -26,7 +27,16 @@ interface EventHotelCalloutProps {
    * "See all hotels near X" (plan-stay WP2 item 7 / hand-off).
    */
   nearSlug?: string | null;
+  /**
+   * Whether this is an event someone would book a room for: multi-day, a
+   * Friday or Saturday night, or a venue with a recorded capacity. The page
+   * decides (events-pass2 WP4 item 17). Otherwise the section is one link.
+   */
+  showList?: boolean;
 }
+
+/** Height of the hotel list while the linked-hotels read is in flight. */
+const RESERVED_HEIGHT = 280;
 
 function HotelMiniCard({ hotel, distance, notes }: { hotel: Hotel; distance?: number; notes?: string }) {
   // resolveBooking puts both URLs through safeWebUrl, so a javascript: or
@@ -67,9 +77,9 @@ function HotelMiniCard({ hotel, distance, notes }: { hotel: Hotel; distance?: nu
             )}
 
             {/* Distance / notes */}
-            {(distance || notes) && (
+            {(typeof distance === "number" || notes) && (
               <p className="text-xs text-muted-foreground">
-                {notes || (distance ? `${distance} mi from venue` : "")}
+                {notes || (typeof distance === "number" ? `${formatMiles(distance)} from the venue` : "")}
               </p>
             )}
 
@@ -103,17 +113,40 @@ function HotelMiniCard({ hotel, distance, notes }: { hotel: Hotel; distance?: nu
   );
 }
 
+function staysHref(nearSlug: string | null): string {
+  return nearSlug ? `/stay?near=${encodeURIComponent(nearSlug)}` : "/stay";
+}
+
 /**
  * The one hotel section on event detail (events plan WP8 item 9).
  *
  * Hotels an editor linked to this event come first. Without any, it falls back
  * to NearbyHotels: real distances from the venue. The old fallback was the
  * site's featured hotels under "Make It a Weekend", which put the same three
- * downtown hotels on a Waukee barn dance, and the page also rendered
- * NearbyHotels in the sidebar, so an event could show two hotel lists.
+ * downtown hotels on a Waukee barn dance.
+ *
+ * events-pass2 WP4 item 17: a Tuesday trivia night doesn't need three hotel
+ * cards. Unless `showList`, this is one line, and it makes no request.
  * The caller renders this only while the event is upcoming.
  */
-export default function EventHotelCallout({
+export default function EventHotelCallout({ showList = true, ...props }: EventHotelCalloutProps) {
+  if (!showList) {
+    const place = props.placeName ?? "this event";
+    return (
+      <p className="mt-8 text-sm">
+        <Link
+          to={staysHref(props.nearSlug ?? null)}
+          className="inline-flex min-h-11 items-center font-medium text-primary hover:underline"
+        >
+          Staying over? Hotels near {place}
+        </Link>
+      </p>
+    );
+  }
+  return <HotelList {...props} />;
+}
+
+function HotelList({
   eventId,
   latitude,
   longitude,
@@ -122,7 +155,9 @@ export default function EventHotelCallout({
 }: EventHotelCalloutProps) {
   const { hotels: linkedHotels, isLoading } = useEventHotels(eventId);
 
-  if (isLoading) return null;
+  // Reserve the space instead of rendering nothing, so the rails below don't
+  // jump when the list lands.
+  if (isLoading) return <div className="mt-8" style={{ minHeight: RESERVED_HEIGHT }} aria-hidden="true" />;
   if (linkedHotels.length === 0) {
     return (
       <div className="mt-8">
@@ -161,21 +196,12 @@ export default function EventHotelCallout({
         ))}
       </div>
       <div className="mt-3 flex flex-col items-center gap-2">
-        {nearSlug ? (
-          <Link
-            to={`/stay?near=${encodeURIComponent(nearSlug)}`}
-            className="inline-flex min-h-11 items-center text-sm text-primary hover:text-primary/80 font-medium"
-          >
-            See all hotels near {placeName} &rarr;
-          </Link>
-        ) : (
-          <Link
-            to="/stay"
-            className="inline-flex min-h-11 items-center text-sm text-primary hover:text-primary/80 font-medium"
-          >
-            View all hotels &rarr;
-          </Link>
-        )}
+        <Link
+          to={staysHref(nearSlug)}
+          className="inline-flex min-h-11 items-center text-sm text-primary hover:text-primary/80 font-medium"
+        >
+          {nearSlug ? <>See all hotels near {placeName} &rarr;</> : <>View all hotels &rarr;</>}
+        </Link>
         {anyAffiliate && <AffiliateDisclosureBanner variant="inline" />}
       </div>
     </section>

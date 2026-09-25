@@ -44,27 +44,58 @@ export function applyEventVisibility<Q extends { neq: unknown; is: unknown }>(qu
  */
 const IDS_PER_REQUEST = 150;
 
+function chunks<T>(items: readonly T[], size: number): T[][] {
+  const out: T[][] = [];
+  for (let i = 0; i < items.length; i += size) out.push(items.slice(i, i + size));
+  return out;
+}
+
 /**
  * Which of these event ids are visible, as a Set.
  *
  * For results that come from an RPC that does not apply the visibility
  * predicates itself, `search_events_near_location` today (deferred D1 in the
  * plan): filter the RPC's rows with `visible.has(row.id)`. One query per 150
- * ids, same predicates as `applyEventVisibility`.
+ * ids, same predicates as `applyEventVisibility`, all chunks in flight at
+ * once (events-pass2 WP5 item 11); they were awaited one after another.
  *
  * Throws the PostgREST error on failure rather than returning an empty set: an
  * empty set would hide every result and read as "nothing near you".
  */
 export async function filterVisibleIds(ids: readonly string[]): Promise<Set<string>> {
   const unique = Array.from(new Set(ids.filter(Boolean)));
+  const results = await Promise.all(
+    chunks(unique, IDS_PER_REQUEST).map((chunk) =>
+      applyEventVisibility(supabase.from("events").select("id")).in("id", chunk)
+    )
+  );
   const visible = new Set<string>();
-  for (let i = 0; i < unique.length; i += IDS_PER_REQUEST) {
-    const chunk = unique.slice(i, i + IDS_PER_REQUEST);
-    const { data, error } = await applyEventVisibility(
-      supabase.from("events").select("id")
-    ).in("id", chunk);
+  for (const { data, error } of results) {
     if (error) throw error;
     for (const row of data ?? []) visible.add(row.id);
   }
   return visible;
+}
+
+/**
+ * The visible rows among these ids, read with `columns`, in no particular
+ * order. Same chunking and failure rule as filterVisibleIds; for an RPC that
+ * returns ids and distances but not the list projection.
+ */
+export async function fetchVisibleEventsByIds<Row>(
+  ids: readonly string[],
+  columns: string
+): Promise<Row[]> {
+  const unique = Array.from(new Set(ids.filter(Boolean)));
+  const results = await Promise.all(
+    chunks(unique, IDS_PER_REQUEST).map((chunk) =>
+      applyEventVisibility(supabase.from("events").select(columns)).in("id", chunk)
+    )
+  );
+  const rows: Row[] = [];
+  for (const { data, error } of results) {
+    if (error) throw error;
+    rows.push(...((data ?? []) as unknown as Row[]));
+  }
+  return rows;
 }

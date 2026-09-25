@@ -23,12 +23,18 @@ import { DIRECTORY_PILL, MonthLinks } from "@/components/seo/MonthLinks";
  * its neighborhood guide when one exists. Venues come from the venues table.
  */
 
-interface DirectoryLink {
+export interface DirectoryLink {
   href: string;
   label: string;
 }
 
-const WHEN_AND_WHO: DirectoryLink[] = [
+/**
+ * Exported for EventsLandingLinks, which puts the same list at the foot of
+ * every landing, so the hub and the landings can't drift (events-pass2 WP6
+ * item 4). The suburb list is SUBURB_EVENT_PAGES from src/lib/suburbs.ts,
+ * which both already read.
+ */
+export const WHEN_AND_WHO: DirectoryLink[] = [
   { href: "/events/today", label: "Events today" },
   { href: "/events/this-weekend", label: "This weekend" },
   { href: "/events/free", label: "Free events" },
@@ -134,7 +140,10 @@ export function EventsHubDirectory({ className = "" }: { className?: string }) {
         <Section title="By when and who" links={WHEN_AND_WHO} />
         <MonthLinks embedded />
         <PlacesSection />
-        <Section title="What's on at each venue" links={venueLinks} />
+        {/* The venues table is the music venue list, and every link goes to
+            /music/venues/<slug>, so the heading says so. "What's on at each
+            venue" promised every building in town. */}
+        <Section title="Music venues" links={venueLinks} />
         <Section title="Plan around it" links={PLAN_AROUND_IT} />
       </div>
     </nav>

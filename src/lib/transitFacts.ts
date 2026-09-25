@@ -23,11 +23,15 @@
  *                        catch a bus we cannot show exists.
  *
  * WHAT THIS DELIBERATELY DOES NOT DO. It does not invent a confidence level for
- * the parking rates and drive times that page also hardcodes. Those stay where
- * they are, but the page now labels them as approximate rather than implying
- * they were checked. Real transit data needs the DART GTFS feed, which is
- * tracked in this story's notes as blocked.
+ * figures nobody checked. The parking rates went in plan-stay WP3; the typed
+ * drive times, the garage list and the skywalk length went in pass 2 WP3.
+ * Distances are now computed from stored coordinates (STRAIGHT_LINE_* below)
+ * and say they are straight-line. Real transit times need the DART GTFS feed,
+ * which is tracked in this story's notes as blocked.
  */
+
+import { haversineDistance } from '@/lib/geo';
+import { NEAR_ME_ORIGINS, findNearMeOrigin, type NearMeOrigin } from '@/lib/nearMeOrigins';
 
 export interface SourcedFact {
   /** Rendered label, e.g. "Base fare". */
@@ -138,10 +142,64 @@ export interface TravelOption {
   detail: string;
 }
 
-/** Airport to downtown. Distance and drive time match DISTANCE_TABLE on the page. */
+/*
+ * STRAIGHT-LINE DISTANCES (plan-stay-pass2 WP3 item 3).
+ *
+ * The page had a typed table of drive times and distances ("Jordan Creek Mall,
+ * 15 min, 10.5 mi") with no source. These are computed instead: haversine from
+ * one named downtown point to each place's stored point, printed as "x.x mi
+ * straight line" so nobody reads them as a road distance. The points are the
+ * ones /events/near-me already uses (src/lib/nearMeOrigins.ts), so the two
+ * pages can't disagree. Places with no stored point (Gray's Lake,
+ * Adventureland, Ames) are left out rather than given a typed number.
+ */
+
+/** The named downtown point every distance is measured from. */
+export const STRAIGHT_LINE_ORIGIN: NearMeOrigin = findNearMeOrigin('downtown') ?? NEAR_ME_ORIGINS[0];
+
+/**
+ * Des Moines International Airport, the FAA airport reference point
+ * (41 32 01 N, 93 39 47 W), rounded to three decimals like the other points.
+ */
+export const DSM_AIRPORT_POINT = { label: 'Des Moines International Airport (DSM)', latitude: 41.534, longitude: -93.663 } as const;
+
+export interface StraightLineRow {
+  destination: string;
+  /** Miles, one decimal. */
+  miles: number;
+}
+
+/** Miles between two points, rounded to one decimal. */
+export function straightLineMiles(
+  from: { latitude: number; longitude: number },
+  to: { latitude: number; longitude: number },
+): number {
+  return Math.round(haversineDistance(from, to) * 10) / 10;
+}
+
+/** "4.2 mi straight line". The one formatter for these figures. */
+export function formatStraightLine(miles: number): string {
+  return `${miles.toFixed(1)} mi straight line`;
+}
+
+/** Every stored point except downtown itself, plus the airport, nearest first. */
+export function straightLineTable(): StraightLineRow[] {
+  const places = [
+    ...NEAR_ME_ORIGINS.filter((o) => o.slug !== STRAIGHT_LINE_ORIGIN.slug),
+    DSM_AIRPORT_POINT,
+  ];
+  return places
+    .map((p) => ({ destination: p.label, miles: straightLineMiles(STRAIGHT_LINE_ORIGIN, p) }))
+    .sort((a, b) => a.miles - b.miles || a.destination.localeCompare(b.destination));
+}
+
+const AIRPORT_MILES = straightLineMiles(STRAIGHT_LINE_ORIGIN, DSM_AIRPORT_POINT);
+
+/** Airport to downtown. The distance is the same computed figure the table prints. */
 export const AIRPORT_TO_DOWNTOWN = {
-  summary:
-    'Des Moines International Airport (DSM) is about 5 miles from downtown, roughly 10 minutes by car.',
+  summary: `Des Moines International Airport (DSM) is on the south side of the city, ${formatStraightLine(
+    AIRPORT_MILES,
+  )} from downtown; the drive is longer.`,
   bus: 'DART buses serve the airport. Check ridedart.com for the route that runs there now; it costs the regular DART one-trip fare.',
   options: [
     { label: 'Uber and Lyft', detail: 'Pick up at the arrivals curb. The app quotes the fare before you book.' },
@@ -159,7 +217,7 @@ export function airportFaqAnswer(): string {
 
 export const SKYWALK = {
   summary:
-    'The Des Moines Skywalk is a network of enclosed, climate-controlled walkways, more than 4 miles of it, connecting buildings across downtown. It is free and open to the public.',
+    'The Des Moines Skywalk is a network of enclosed, climate-controlled walkways connecting buildings across downtown. It is free and open to the public.',
   hours:
     'There is no single schedule: each building sets its own hours, so some segments close in the evening and on weekends. If a door is locked, the street is the way through.',
 } as const;

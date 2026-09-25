@@ -4,6 +4,7 @@ import { supabase } from '@/integrations/supabase/client';
 import { useAuth } from '@/contexts/AuthContext';
 import { createLogger } from '@/lib/logger';
 import { storage } from '@/lib/safeStorage';
+import { hasConsent } from '@/components/CookieConsentBanner';
 
 const log = createLogger('useConversionFunnel');
 
@@ -29,12 +30,18 @@ export type FunnelEvent =
  * Hook for tracking conversion funnel events in the subscription flow.
  *
  * Records events to user_analytics with event_type prefix 'funnel_'.
+ *
+ * Analytics are non-essential, so nothing is recorded, and no session id is
+ * written to storage, unless the visitor granted the analytics category. Same
+ * gate as usePageTracking; hasConsent() is false when no choice was made.
  */
 export function useConversionFunnel() {
   const { user } = useAuth();
 
   const trackFunnelEvent = useCallback(
     async (event: FunnelEvent, details?: Record<string, unknown>) => {
+      if (!hasConsent('analytics')) return;
+
       try {
         const sessionId = getSessionId();
         const { error } = await supabase
@@ -55,11 +62,15 @@ export function useConversionFunnel() {
             filters_used: details ? JSON.parse(JSON.stringify(details)) : null,
           });
 
-        if (error) {
+        // A lost funnel row is not the visitor's problem, so it is reported in
+        // development only and never surfaced on the page.
+        if (error && import.meta.env.DEV) {
           log.warn('trackFunnelEvent', 'Failed to track funnel event', { error: error.message });
         }
       } catch (err) {
-        log.error('trackFunnelEvent', 'Unexpected error tracking funnel event', { err });
+        if (import.meta.env.DEV) {
+          log.error('trackFunnelEvent', 'Unexpected error tracking funnel event', { err });
+        }
       }
     },
     [user?.id]

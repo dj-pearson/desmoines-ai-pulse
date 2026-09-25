@@ -1,72 +1,210 @@
 import { useEffect, useMemo, useState } from "react";
-import { useNavigate, useLocation, Link } from "react-router-dom";
+import { useLocation, Link } from "react-router-dom";
+import { CheckCircle, MailQuestion, XCircle } from "lucide-react";
+
 import { Button } from "@/components/ui/button";
-import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
-import { CheckCircle, Heart, XCircle } from "lucide-react";
-import { useAuth } from "@/hooks/useAuth";
-import { useDocumentTitle } from "@/hooks/useDocumentTitle";
-import { supabase } from "@/integrations/supabase/client";
-import { useToast } from "@/hooks/use-toast";
-import { readAuthCallbackError, looksConfirmed } from "@/lib/authCallbackError";
+import { Input } from "@/components/ui/input";
+import { Label } from "@/components/ui/label";
 import Header from "@/components/Header";
 import Footer from "@/components/Footer";
-import { SpriteIcon } from "@/components/ui/SpriteIcon";
+import { useAuth } from "@/hooks/useAuth";
+import { useDocumentTitle } from "@/hooks/useDocumentTitle";
+import { useToast } from "@/hooks/use-toast";
+import { useTurnstile } from "@/hooks/useTurnstile";
+import { supabase } from "@/integrations/supabase/client";
+import { readAuthCallbackError, looksConfirmed, LINK_EXPIRY_COPY } from "@/lib/authCallbackError";
+import { peekAuthNext, takeAuthNext } from "@/lib/authReturn";
+import { getSafeRedirectUrl } from "@/lib/redirectSafety";
+import { interestLabel } from "@/lib/interests";
+import { handleError, ErrorSeverity } from "@/lib/errorHandler";
 
+/**
+ * /auth/verified: the end of an email confirmation.
+ *
+ * THREE STATES, AND ONLY ONE OF THEM CELEBRATES (account plan WP2 item 5).
+ * WEB-AUTH-005 fixed the error branch; the third state is the one that still
+ * lied. A bookmark, a typed URL or a history reopen has no error and no
+ * confirmation either, and it used to get "Email Verified!" and a countdown.
+ *
+ * No auto-redirect. The ten-second countdown moved people off a page they were
+ * still reading (WCAG 2.2.1), and it went to '/' rather than the page they
+ * signed up from.
+ */
 export default function AuthVerified() {
-  const navigate = useNavigate();
   const location = useLocation();
-  const { toast } = useToast();
-  const { user, isAuthenticated } = useAuth();
-  const [countdown, setCountdown] = useState(10);
-  const [resending, setResending] = useState(false);
-  const [resendEmail, setResendEmail] = useState("");
+  const { user, isAuthenticated, isLoading } = useAuth();
 
-  // WEB-AUTH-005. This page used to render "Email Verified! 🎉" no matter what
-  // brought the reader here. It read no error parameter, so an expired link, a
-  // reused link and a cross-device confirmation all produced a celebration and
-  // a ten-second countdown to the homepage -- while the reader was still logged
-  // out and told nothing.
-  //
-  // Both halves of the URL are read. Supabase puts PKCE and OAuth failures in
-  // the query string and implicit-flow and email-link failures in the FRAGMENT,
-  // which never reaches a server and which useSearchParams does not expose.
+  // Both halves of the URL: Supabase puts PKCE failures in the query string
+  // and implicit-flow and email-link failures in the fragment.
   const authError = useMemo(
-    () => readAuthCallbackError(location.search, location.hash),
+    () => readAuthCallbackError(location.search, location.hash, "email"),
     [location.search, location.hash],
   );
   const confirmed = useMemo(
     () => looksConfirmed(location.search, location.hash, isAuthenticated),
     [location.search, location.hash, isAuthenticated],
   );
+  const nextParam = useMemo(() => new URLSearchParams(location.search).get("next"), [location.search]);
 
-  useDocumentTitle(authError ? "Verification Problem" : "Email Verified");
+  const state: "error" | "confirmed" | "checking" | "nothing" = authError
+    ? "error"
+    : confirmed
+      ? "confirmed"
+      : isLoading
+        ? "checking"
+        : "nothing";
+
+  useDocumentTitle(
+    state === "error"
+      ? "Verification Problem"
+      : state === "confirmed"
+        ? "Email Confirmed"
+        : "Confirm Your Email",
+  );
+
+  return (
+    <div className="min-h-screen bg-background flex flex-col">
+      <Header />
+      <div className="flex-1 flex items-center justify-center px-4 py-10">
+        <div className="w-full max-w-lg rounded-2xl border bg-card p-6 sm:p-8">
+          {state === "error" && authError && (
+            <>
+              <XCircle className="h-10 w-10 text-destructive" aria-hidden="true" />
+              <h1 className="mt-4 text-2xl font-semibold">We couldn't confirm your email</h1>
+              <p className="mt-2 text-muted-foreground">{authError.message}</p>
+              {authError.canResend && <ResendConfirmation defaultEmail={user?.email ?? ""} next={nextParam} />}
+              <p className="mt-6 text-sm text-muted-foreground">
+                Already confirmed?{" "}
+                <Link to="/auth" className="font-medium text-foreground underline underline-offset-2">
+                  Sign in
+                </Link>
+              </p>
+              {/* For a support conversation, not for the reader to interpret. */}
+              <p className="mt-2 text-xs text-muted-foreground">Reference: {authError.code}</p>
+            </>
+          )}
+
+          {state === "confirmed" && <Confirmed nextParam={nextParam} />}
+
+          {state === "checking" && (
+            <div role="status" aria-live="polite">
+              <h1 className="text-2xl font-semibold">Checking your link</h1>
+            </div>
+          )}
+
+          {state === "nothing" && (
+            <>
+              <MailQuestion className="h-10 w-10 text-muted-foreground" aria-hidden="true" />
+              <h1 className="mt-4 text-2xl font-semibold">Nothing to confirm here</h1>
+              <p className="mt-2 text-muted-foreground">
+                This page opens from the link in a confirmation email. If you're waiting on one, we can send it
+                again.
+              </p>
+              <ResendConfirmation defaultEmail={user?.email ?? ""} next={nextParam} />
+              <Button asChild variant="outline" className="mt-4 w-full h-11">
+                <Link to="/auth">Sign in</Link>
+              </Button>
+            </>
+          )}
+        </div>
+      </div>
+      <Footer />
+    </div>
+  );
+}
+
+interface ConfirmedProps {
+  nextParam: string | null;
+}
+
+function Confirmed({ nextParam }: ConfirmedProps) {
+  const { user } = useAuth();
+
+  // Peeked during render and consumed in an effect, so React's dev double
+  // render cannot use up the single-use path before the link reads it.
+  const [destination] = useState(() => {
+    const fromUrl = nextParam ? getSafeRedirectUrl(nextParam, "") : "";
+    return fromUrl || peekAuthNext() || "/";
+  });
+  useEffect(() => {
+    takeAuthNext();
+  }, []);
+
+  let continueTo = destination;
+  if (!user) continueTo = destination === "/" ? "/auth" : `/auth?redirect=${encodeURIComponent(destination)}`;
+
+  const firstName =
+    typeof user?.user_metadata?.first_name === "string" ? user.user_metadata.first_name.trim() : "";
+  const rawInterests: unknown = user?.user_metadata?.interests;
+  const interests = Array.isArray(rawInterests)
+    ? rawInterests.filter((value): value is string => typeof value === "string")
+    : [];
+
+  return (
+    <>
+      <CheckCircle className="h-10 w-10 text-primary" aria-hidden="true" />
+      <h1 className="mt-4 text-2xl font-semibold">
+        {firstName ? `You're in, ${firstName}` : "Your email is confirmed"}
+      </h1>
+      <p className="mt-2 text-muted-foreground">
+        {user ? "Your account is ready and you're signed in." : "Your account is ready. Sign in to use it."}
+      </p>
+
+      {interests.length > 0 && (
+        <div className="mt-6">
+          <h2 className="text-sm font-medium">You told us you're into</h2>
+          <ul className="mt-2 flex flex-wrap gap-2">
+            {interests.map((id) => (
+              <li key={id} className="rounded-full bg-secondary px-3 py-1 text-sm text-secondary-foreground">
+                {interestLabel(id)}
+              </li>
+            ))}
+          </ul>
+        </div>
+      )}
+
+      <div className="mt-8 flex flex-col gap-3">
+        {/* Signed out (a cross-browser confirmation, or the session is still
+            loading), Continue goes through sign-in and still ends up there. */}
+        <Button asChild className="w-full h-11">
+          <Link to={continueTo} replace>
+            Continue
+          </Link>
+        </Button>
+        {user && destination !== "/dashboard" && (
+          <Button asChild variant="ghost" className="w-full h-11">
+            <Link to="/dashboard">Go to your account</Link>
+          </Button>
+        )}
+      </div>
+    </>
+  );
+}
+
+interface ResendConfirmationProps {
+  defaultEmail: string;
+  next: string | null;
+}
+
+/**
+ * Its own component so the Turnstile widget mounts with the form: useTurnstile
+ * renders into its container once, on mount, and a container that appears
+ * after that gets no widget.
+ */
+function ResendConfirmation({ defaultEmail, next }: ResendConfirmationProps) {
+  const { toast } = useToast();
+  const turnstile = useTurnstile();
+  const [email, setEmail] = useState(defaultEmail);
+  const [sending, setSending] = useState(false);
 
   useEffect(() => {
-    // No countdown on the error branch. Bouncing someone to the homepage after
-    // telling them something went wrong takes away the one screen that explains
-    // it, and the action they need is on this page.
-    if (authError || !confirmed) return;
+    if (defaultEmail) setEmail((current) => current || defaultEmail);
+  }, [defaultEmail]);
 
-    const timer = setInterval(() => {
-      setCountdown((prev) => {
-        if (prev <= 1) {
-          navigate("/");
-          return 0;
-        }
-        return prev - 1;
-      });
-    }, 1000);
-
-    return () => clearInterval(timer);
-  }, [navigate, authError, confirmed]);
-
-  const handleExploreNow = () => {
-    navigate("/");
-  };
-
-  const handleResend = async () => {
-    const email = (resendEmail || user?.email || "").trim();
-    if (!email) {
+  const handleResend = async (event: React.FormEvent) => {
+    event.preventDefault();
+    const address = email.trim();
+    if (!address) {
       toast({
         title: "Enter your email",
         description: "We need the address you signed up with to send a new link.",
@@ -75,206 +213,50 @@ export default function AuthVerified() {
       return;
     }
 
-    setResending(true);
-    const { error } = await supabase.auth.resend({ type: "signup", email });
-    setResending(false);
+    const callback = new URL(`${window.location.origin}/auth/callback`);
+    callback.searchParams.set("redirect", "/auth/verified");
+    const safeNext = next ? getSafeRedirectUrl(next, "") : "";
+    if (safeNext) callback.searchParams.set("next", safeNext);
+
+    setSending(true);
+    const { error } = await supabase.auth.resend({
+      type: "signup",
+      email: address,
+      options: { captchaToken: turnstile.token, emailRedirectTo: callback.toString() },
+    });
+    setSending(false);
+    // A token is single-use whether the send worked or not.
+    turnstile.reset();
 
     // NEUTRAL EITHER WAY. resend errors for an address that is already
-    // confirmed, and reporting that would turn this page into an account
-    // checker for anyone who can type an address (the same enumeration
-    // WEB-AUTH-004 is about). The message says what was attempted, not what
-    // was found.
+    // confirmed, and saying so would make this page an account checker
+    // (WEB-AUTH-004). The message says what was attempted, not what was found.
     toast({
       title: "Check your email",
-      description:
-        "If that address needs confirming, a new link is on its way. It is good for 24 hours.",
+      description: `If that address needs confirming, a new link is on its way. ${LINK_EXPIRY_COPY}`,
     });
     if (error) {
-      // Kept out of the user-facing message on purpose; useful in a dev console.
-      if (import.meta.env.DEV) console.warn("resend failed", error.message);
+      handleError(error, { component: "AuthVerified", action: "resendConfirmation" }, ErrorSeverity.WARNING);
     }
   };
 
-  if (authError) {
-    return (
-      <div className="min-h-screen bg-gradient-to-br from-primary/10 to-accent/10 flex flex-col">
-        <Header />
-
-        <div className="flex-1 flex items-center justify-center p-4">
-          <Card className="w-full max-w-xl">
-            <CardHeader className="text-center space-y-4 pb-6">
-              <div className="flex justify-center">
-                <div className="rounded-full bg-red-100 p-4">
-                  <XCircle className="h-16 w-16 text-red-600" />
-                </div>
-              </div>
-              <CardTitle className="text-3xl font-bold">
-                We couldn't confirm your email
-              </CardTitle>
-              <CardDescription className="text-lg">{authError.message}</CardDescription>
-            </CardHeader>
-
-            <CardContent className="space-y-6">
-              {authError.canResend && (
-                <div className="space-y-3">
-                  <label htmlFor="resend-email" className="text-sm font-medium">
-                    Email address
-                  </label>
-                  <input
-                    id="resend-email"
-                    type="email"
-                    autoComplete="email"
-                    className="w-full h-11 rounded-md border bg-background px-3 text-base"
-                    placeholder={user?.email || "you@example.com"}
-                    value={resendEmail}
-                    onChange={(e) => setResendEmail(e.target.value)}
-                  />
-                  <Button onClick={handleResend} disabled={resending} className="w-full h-12">
-                    {resending ? "Sending..." : "Send a new confirmation link"}
-                  </Button>
-                </div>
-              )}
-
-              <div className="text-center text-sm text-muted-foreground space-y-2">
-                <p>
-                  Already confirmed?{" "}
-                  <Link to="/auth" className="underline font-medium">
-                    Sign in
-                  </Link>
-                </p>
-                {/* The code is here for a support conversation, not for the
-                    reader to interpret. */}
-                <p className="text-xs">Reference: {authError.code}</p>
-              </div>
-            </CardContent>
-          </Card>
-        </div>
-
-        <Footer />
-      </div>
-    );
-  }
-
   return (
-    <div className="min-h-screen bg-gradient-to-br from-primary/10 to-accent/10 flex flex-col">
-      <Header />
-
-      <div className="flex-1 flex items-center justify-center p-4">
-        <Card className="w-full max-w-2xl">
-          <CardHeader className="text-center space-y-4 pb-6">
-            <div className="flex justify-center">
-              <div className="rounded-full bg-green-100 p-4">
-                <CheckCircle className="h-16 w-16 text-green-600" />
-              </div>
-            </div>
-            <CardTitle className="text-3xl font-bold">
-              Email Verified! 🎉
-            </CardTitle>
-            <CardDescription className="text-lg">
-              {user?.email && `Welcome, ${user.email.split('@')[0]}! `}
-              Your account is now active and ready to use.
-            </CardDescription>
-          </CardHeader>
-
-          <CardContent className="space-y-8">
-            {/* What's Next Section */}
-            <div className="bg-primary/5 rounded-lg p-6 space-y-4">
-              <h3 className="font-semibold text-lg flex items-center gap-2">
-                <SpriteIcon name="sparkles" className="h-5 w-5 text-primary" />
-                What You Can Do Now
-              </h3>
-
-              <div className="grid gap-4">
-                <div className="flex items-start gap-3">
-                  <div className="rounded-full bg-primary/10 p-2 mt-1">
-                    <Heart className="h-4 w-4 text-primary" />
-                  </div>
-                  <div>
-                    <h4 className="font-medium">Save Your Favorites</h4>
-                    <p className="text-sm text-muted-foreground">
-                      Click the heart icon on any event to save it to your favorites
-                    </p>
-                  </div>
-                </div>
-
-                <div className="flex items-start gap-3">
-                  <div className="rounded-full bg-primary/10 p-2 mt-1">
-                    <SpriteIcon name="calendar" className="h-4 w-4 text-primary" />
-                  </div>
-                  <div>
-                    <h4 className="font-medium">Get Personalized Recommendations</h4>
-                    <p className="text-sm text-muted-foreground">
-                      We'll show you events based on your interests and location
-                    </p>
-                  </div>
-                </div>
-
-                <div className="flex items-start gap-3">
-                  <div className="rounded-full bg-primary/10 p-2 mt-1">
-                    <SpriteIcon name="sparkles" className="h-4 w-4 text-primary" />
-                  </div>
-                  <div>
-                    <h4 className="font-medium">Add Events to Your Calendar</h4>
-                    <p className="text-sm text-muted-foreground">
-                      Download .ics files to add events to Google, Apple, or Outlook calendars
-                    </p>
-                  </div>
-                </div>
-              </div>
-            </div>
-
-            {/* Personalization Info */}
-            {user?.user_metadata && (
-              <div className="border rounded-lg p-4 space-y-3">
-                <h3 className="font-semibold">Your Preferences</h3>
-
-                {user.user_metadata.location && (
-                  <div className="flex items-center gap-2 text-sm">
-                    <span className="text-muted-foreground">Location:</span>
-                    <span className="font-medium">{user.user_metadata.location}</span>
-                  </div>
-                )}
-
-                {user.user_metadata.interests && user.user_metadata.interests.length > 0 && (
-                  <div className="space-y-2">
-                    <span className="text-sm text-muted-foreground">Interests:</span>
-                    <div className="flex flex-wrap gap-2">
-                      {user.user_metadata.interests.map((interest: string) => (
-                        <span
-                          key={interest}
-                          className="px-2 py-1 bg-primary/10 text-primary rounded-full text-xs font-medium"
-                        >
-                          {interest}
-                        </span>
-                      ))}
-                    </div>
-                  </div>
-                )}
-              </div>
-            )}
-
-            {/* Action Buttons */}
-            <div className="space-y-3">
-              <Button
-                onClick={handleExploreNow}
-                className="w-full h-12 text-lg"
-                size="lg"
-              >
-                Start Exploring Events
-                <SpriteIcon name="arrow-right" className="ml-2 h-5 w-5" />
-              </Button>
-
-              {confirmed && (
-                <p className="text-center text-sm text-muted-foreground">
-                  Redirecting automatically in {countdown} second{countdown !== 1 ? 's' : ''}...
-                </p>
-              )}
-            </div>
-          </CardContent>
-        </Card>
-      </div>
-
-      <Footer />
-    </div>
+    <form onSubmit={handleResend} className="mt-6 space-y-3" noValidate>
+      <Label htmlFor="resend-email">Email address</Label>
+      <Input
+        id="resend-email"
+        type="email"
+        autoComplete="email"
+        inputMode="email"
+        className="h-11"
+        placeholder="you@example.com"
+        value={email}
+        onChange={(event) => setEmail(event.target.value)}
+      />
+      {turnstile.enabled && <div ref={turnstile.containerRef} className="flex justify-center empty:hidden" />}
+      <Button type="submit" disabled={sending} className="w-full h-11">
+        {sending ? "Sending..." : "Send a new confirmation link"}
+      </Button>
+    </form>
   );
 }

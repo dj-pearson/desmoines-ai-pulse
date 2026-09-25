@@ -21,12 +21,22 @@ import { queryKeys } from '@/lib/queryKeys';
 import { SpriteIcon } from "@/components/ui/SpriteIcon";
 import { ErrorState } from '@/components/ui/error-state';
 import { applyEventVisibility } from '@/lib/eventQuery';
+import { ExploreSectionLinks } from '@/components/explore/ExploreSectionLinks';
+import { useNow } from '@/hooks/useNow';
+import { safeHttpUrl } from '@/lib/safeUrl';
+import { currentVenueName } from '@/lib/venuePages';
 import {
   HUB_EVENT_LIMIT,
   SPORTS_HUB_DAYS,
   hubEventWindow,
+  hubEventsOrFilter,
   partitionHubEvents,
+  sectionMayBeCut,
+  teamVenueSentence,
 } from '@/lib/hubEventPartition';
+
+const SPORTS_CATEGORY_OR =
+  'category.ilike.%Sport%,category.ilike.%Baseball%,category.ilike.%Hockey%,category.ilike.%Basketball%,category.ilike.%Football%,category.ilike.%Soccer%';
 
 /** Card links: a visible focus ring, since the Card itself has no focus style. */
 const CARD_LINK =
@@ -41,8 +51,8 @@ const CARD_LINK =
  * The canonical vocabulary (src/lib/eventCategories.json) files every sport
  * under "Sports", and the per-sport terms stay for rows written before it.
  */
-function useSportsHubEvents() {
-  const range = hubEventWindow(SPORTS_HUB_DAYS);
+function useSportsHubEvents(now: Date) {
+  const range = hubEventWindow(SPORTS_HUB_DAYS, now);
   return useQuery({
     // Under the events prefix (WEB-PERF-032); the first day is in the key, so
     // crossing midnight Central refetches.
@@ -51,8 +61,9 @@ function useSportsHubEvents() {
       const { data, error } = await applyEventVisibility(
         supabase.from('events').select(EVENT_LIST_COLUMNS)
       )
-        .or('category.ilike.%Sport%,category.ilike.%Baseball%,category.ilike.%Hockey%,category.ilike.%Basketball%,category.ilike.%Football%,category.ilike.%Soccer%')
-        .gte('date', range.start)
+        // Pass 2 WP5 item 12: a tournament that began yesterday and is still
+        // running is on today; `.gte('date', start)` dropped it.
+        .or(hubEventsOrFilter(SPORTS_CATEGORY_OR, range.start, new Date()))
         .lte('date', range.end)
         .order('date', { ascending: true })
         .limit(HUB_EVENT_LIMIT);
@@ -97,31 +108,31 @@ const SPORT_ICONS: Record<string, string> = {
   'Multi-Sport': '\ud83c\udfc5',
 };
 
-/** An http(s) URL, or null. Team rows are admin-written; never render javascript:. */
-function safeExternalUrl(url: string | null | undefined): string | null {
-  return url && /^https?:\/\//i.test(url) ? url : null;
-}
-
 export default function SportsHub() {
   const { data: teams, isPending: teamsPending, error: teamsError, refetch: refetchTeams } = useTeams();
-  const games = useSportsHubEvents();
+  const now = useNow(60_000);
+  const games = useSportsHubEvents(now);
   const gamesSettled = games.status === 'success';
-  const truncated = (games.data?.length ?? 0) >= HUB_EVENT_LIMIT;
+  const rows = useMemo(() => games.data ?? [], [games.data]);
+  const truncated = rows.length >= HUB_EVENT_LIMIT;
 
-  const { tonight: todayGames, later: weekGames, onNow } = useMemo(
-    () => partitionHubEvents(games.data ?? [], new Date(), { weekend: false }),
-    [games.data],
+  // Sports keeps "Today" (the calendar day), not the music hub's evening.
+  const { tonight: todayGames, later: weekGames, onNow, tonightEndMs } = useMemo(
+    () => partitionHubEvents(rows, now, { weekend: false, tonight: 'day' }),
+    [rows, now],
   );
+  const todayCut = sectionMayBeCut(rows, HUB_EVENT_LIMIT, tonightEndMs);
+  const heroVenues = teams ? teamVenueSentence(teams) : null;
   const weekEmpty = gamesSettled && todayGames.length === 0 && weekGames.length === 0;
 
   // Item 7: out of season, each team's own schedule is the next step.
   const teamSchedules = (teams ?? [])
-    .map((team) => ({ team, url: safeExternalUrl(team.schedule_url) ?? safeExternalUrl(team.website) }))
+    .map((team) => ({ team, url: safeHttpUrl(team.schedule_url) ?? safeHttpUrl(team.website) }))
     .filter((entry): entry is { team: Team; url: string } => entry.url !== null);
 
   const canonicalUrl = getCanonicalUrl('/sports');
   const pageDescription =
-    'Des Moines sports hub: Iowa Cubs, Iowa Wild, Iowa Wolves, Iowa Barnstormers, and more. Game schedules, venue guides, and tailgating tips.';
+    "Des Moines sports this week: Iowa Cubs, Iowa Wild, Iowa Wolves and Iowa Barnstormers games, with each team's schedule and venue.";
 
   // SEO-022. Exactly the games rendered below; the sections no longer overlap.
   const schemaGames: Event[] = [...todayGames, ...weekGames];
@@ -136,12 +147,13 @@ export default function SportsHub() {
     itemProps: {
       ...(team.sport && { sport: team.sport }),
       ...(team.league && { memberOf: { '@type': 'SportsOrganization', name: team.league } }),
-      ...(team.venue_name && { location: { '@type': 'Place', name: team.venue_name } }),
+      ...(team.venue_name && { location: { '@type': 'Place', name: currentVenueName(team.venue_name) } }),
     },
   }));
 
-  const countBadge = (n: number, openEnded = false) =>
-    gamesSettled ? <Badge variant="secondary">{`${n}${openEnded && truncated ? '+' : ''}`}</Badge> : null;
+  const countBadge = (n: number, mayBeCut: boolean) =>
+    gamesSettled ? <Badge variant="secondary">{`${n}${mayBeCut ? '+' : ''}`}</Badge> : null;
+  const nextGame = weekGames[0] ?? null;
 
   return (
     <>
@@ -188,11 +200,13 @@ export default function SportsHub() {
             <h1 className="text-4xl md:text-5xl font-bold mb-3">
               Des Moines Sports
             </h1>
-            {/* Item 10: named teams and venues, not an unsourced ranking. */}
-            <p className="text-lg text-muted-foreground max-w-2xl mx-auto">
-              Iowa Cubs baseball at Principal Park, and Iowa Wild hockey, Iowa Wolves basketball and Iowa Barnstormers football at Wells Fargo Arena. Here's who's playing this week.
+            {/* Pass 2 item 4: the teams and venues come from the teams rows,
+                and nothing renders until they have loaded. */}
+            <p className="text-lg text-muted-foreground max-w-2xl mx-auto min-h-[1.75rem]" data-sports-hero="">
+              {heroVenues ? `${heroVenues}. Here's who's playing this week.` : null}
             </p>
           </div>
+          <ExploreSectionLinks current="/sports" className="mb-10" />
 
           {/*
             WEB-QA-032, explore plan WP5 item 5. One alert for the one query
@@ -210,7 +224,7 @@ export default function SportsHub() {
                 <div className="flex items-center gap-2 mb-4">
                   <SpriteIcon name="clock" className="h-5 w-5 text-primary" />
                   <h2 id="sports-today" className="text-2xl font-bold">Today&apos;s Games</h2>
-                  {countBadge(todayGames.length)}
+                  {countBadge(todayGames.length, todayCut)}
                 </div>
                 {games.isPending ? (
                   <SectionSkeleton count={3} />
@@ -240,7 +254,18 @@ export default function SportsHub() {
                     ))}
                   </div>
                 ) : (
-                  <p className="text-muted-foreground">No games scheduled for today.</p>
+                  <p className="text-muted-foreground" data-empty-today="">
+                    No games listed for today.
+                    {nextGame && (
+                      <>
+                        {' '}The next one is {formatEventPart(nextGame, 'EEEE, MMMM d')}:{' '}
+                        <Link to={eventHref(nextGame)} className="font-medium text-primary underline underline-offset-4">
+                          {nextGame.title}
+                        </Link>
+                        .
+                      </>
+                    )}
+                  </p>
                 )}
                 {gamesSettled && todayGames.length > 0 && (
                   <SeeAll to="/events?category=Sports&preset=today">Today on the events calendar</SeeAll>
@@ -252,7 +277,7 @@ export default function SportsHub() {
                 <div className="flex items-center gap-2 mb-4">
                   <SpriteIcon name="calendar" className="h-5 w-5 text-primary" />
                   <h2 id="sports-week" className="text-2xl font-bold">This Week&apos;s Schedule</h2>
-                  {countBadge(weekGames.length, true)}
+                  {countBadge(weekGames.length, truncated)}
                 </div>
                 {games.isPending ? (
                   <SectionSkeleton count={3} />
@@ -281,11 +306,11 @@ export default function SportsHub() {
                     ))}
                   </div>
                 ) : (
-                  <p className="text-muted-foreground">No games scheduled this week.</p>
+                  <p className="text-muted-foreground">No games listed for the next 7 days.</p>
                 )}
                 {gamesSettled && weekGames.length > 0 && (
                   <SeeAll to="/events?category=Sports&preset=next-7-days">
-                    The next 7 days on the events calendar
+                    Next 7 days on the events calendar
                   </SeeAll>
                 )}
                 {weekEmpty && teamSchedules.length > 0 && (
@@ -358,7 +383,7 @@ export default function SportsHub() {
                           {team.venue_name && (
                             <Badge variant="outline">
                               <SpriteIcon name="map-pin" className="h-3 w-3 mr-1" />
-                              {team.venue_name}
+                              {currentVenueName(team.venue_name)}
                             </Badge>
                           )}
                         </div>

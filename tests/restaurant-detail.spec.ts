@@ -5,8 +5,8 @@
  * overridden per test so each case gets the one row it is about. What these
  * pin:
  *   - a scraped `javascript:` website never becomes a link;
- *   - a permanently closed place shows a notice, no Reserve/Call, no Open badge,
- *     and is noindexed;
+ *   - a permanently closed place (status or Google's business_status) shows a
+ *     notice, no Reserve/Call, no Open badge, and is noindexed;
  *   - a merged row redirects to the row it was merged into;
  *   - nearby events ask PostgREST to leave out hidden and archived rows, and
  *     "View Details" on one lands on /events/...;
@@ -92,18 +92,27 @@ test.describe('restaurant detail', () => {
     );
   });
 
-  test('a permanently closed place shows a notice and no open claims', async ({ page }) => {
-    await installFixtureBackend(page);
-    await serveRestaurants(page, [{ ...BASE, status: 'permanently_closed', opening: '24 hours' }]);
-    await page.goto(`/restaurants/${BASE.slug}`);
+  // `closed` is the CHECK value (20250728165446:13); this used to pin
+  // 'permanently_closed', which the CHECK rejects, so no production row could
+  // ever reach the case it tested. Google's business_status is the second
+  // source of the same fact (eat-drink pass 2, WP3.2).
+  for (const [label, row] of [
+    ['status closed', { status: 'closed' }],
+    ['business_status CLOSED_PERMANENTLY', { status: 'open', business_status: 'CLOSED_PERMANENTLY' }],
+  ] as const) {
+    test(`a permanently closed place (${label}) shows a notice and no open claims`, async ({ page }) => {
+      await installFixtureBackend(page);
+      await serveRestaurants(page, [{ ...BASE, ...row, opening: '24 hours' }]);
+      await page.goto(`/restaurants/${BASE.slug}`);
 
-    await expect(page.getByText(/has closed permanently/i).first()).toBeVisible();
-    await expect(page.getByRole('link', { name: /Reserve a table/i })).toHaveCount(0);
-    await expect(page.getByRole('link', { name: /^Call$/ })).toHaveCount(0);
-    await expect(page.locator('a[href^="tel:"]')).toHaveCount(0);
-    await expect(page.getByText(/^Open Now$/)).toHaveCount(0);
-    await expect(page.locator('meta[name="robots"]').first()).toHaveAttribute('content', /noindex/);
-  });
+      await expect(page.getByText(/has closed permanently/i).first()).toBeVisible();
+      await expect(page.getByRole('link', { name: /Reserve a table/i })).toHaveCount(0);
+      await expect(page.getByRole('link', { name: /^Call$/ })).toHaveCount(0);
+      await expect(page.locator('a[href^="tel:"]')).toHaveCount(0);
+      await expect(page.getByText(/^Open Now$/)).toHaveCount(0);
+      await expect(page.locator('meta[name="robots"]').first()).toHaveAttribute('content', /noindex/);
+    });
+  }
 
   test('a merged row redirects to the restaurant it was merged into', async ({ page }) => {
     await installFixtureBackend(page);

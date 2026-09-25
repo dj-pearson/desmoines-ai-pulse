@@ -41,24 +41,32 @@ describe("groupByCentralDay with ongoing events", () => {
     expect([win.startDay, win.endDay]).toEqual(["2026-09-25", "2026-09-27"]);
   });
 
-  it("lists a festival that opened Thursday on Friday by default", () => {
+  it("lists a festival that opened Thursday on Friday by default, as still running", () => {
     const fest = ev("fest", "2026-09-24T15:00:00Z", { end_date: "2026-09-28T03:00:00Z" });
     const groups = groupByCentralDay([fest], win.startDay, win.endDay);
-    expect(groups.map((g) => g.events.map((e) => e.id))).toEqual([["fest"], [], []]);
+    expect(groups.map((g) => g.events.map((e) => e.id))).toEqual([[], [], []]);
+    expect(groups.map((g) => g.running.map((e) => e.id))).toEqual([["fest"], [], []]);
   });
 
-  it("carries a still-running event to today, not a day already over", () => {
+  it("carries a still-running event to today, after the day's own starts", () => {
     const fest = ev("fest", "2026-09-24T15:00:00Z", { end_date: "2026-09-28T03:00:00Z" });
     const friOnly = ev("fri", "2026-09-26T00:00:00Z"); // Fri 7pm CDT, no end
     const friToSat = ev("fri-sat", "2026-09-25T20:00:00Z", { end_date: "2026-09-26T20:00:00Z" });
-    const groups = groupByCentralDay([fest, friOnly, friToSat], win.startDay, win.endDay, "2026-09-26");
-    expect(groups.map((g) => g.events.map((e) => e.id))).toEqual([["fri"], ["fest", "fri-sat"], []]);
+    const sat = ev("sat", "2026-09-27T00:00:00Z"); // Sat 7pm CDT
+    const groups = groupByCentralDay(
+      [fest, friOnly, friToSat, sat],
+      win.startDay,
+      win.endDay,
+      "2026-09-26"
+    );
+    expect(groups.map((g) => g.events.map((e) => e.id))).toEqual([["fri"], ["sat"], []]);
+    expect(groups.map((g) => g.running.map((e) => e.id))).toEqual([[], ["fest", "fri-sat"], []]);
   });
 
   it("drops an event that started and ended before the window", () => {
     const old = ev("old", "2026-09-23T15:00:00Z", { end_date: "2026-09-24T03:00:00Z" });
     const groups = groupByCentralDay([old], win.startDay, win.endDay);
-    expect(groups.every((g) => g.events.length === 0)).toBe(true);
+    expect(groups.every((g) => g.events.length === 0 && g.running.length === 0)).toBe(true);
   });
 });
 

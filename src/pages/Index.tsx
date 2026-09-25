@@ -1,22 +1,33 @@
-import { useState, lazy, Suspense } from "react";
-import { AdBanner } from "@/components/AdBanner";
+import { lazy, Suspense, useCallback, useEffect, useRef, useState } from "react";
+import { useNavigate, useSearchParams } from "react-router-dom";
+import { useQuery } from "@tanstack/react-query";
 import { BackToTop } from "@/components/BackToTop";
 import { EnhancedHero } from "@/components/EnhancedHero";
 import { FAQSection } from "@/components/FAQSection";
 import { ForYouRail } from "@/components/ForYouRail";
 import Header from "@/components/Header";
 import { LazySection } from "@/components/LazySection";
+import { RecentlyViewedRail } from "@/components/RecentlyViewedRail";
 import SEOHead from "@/components/SEOHead";
 import SpeakableSchema from "@/components/schema/SpeakableSchema";
+import { SocialProof } from "@/components/SocialProof";
 import { TonightRail } from "@/components/TonightRail";
 import { DashboardGridSkeleton } from "@/components/ui/loading-skeleton";
+import { useHomeSnapshotAsOfDate } from "@/hooks/useHomeSnapshot";
 import { useHomepageStats } from "@/hooks/useHomepageStats";
+import { supabase } from "@/integrations/supabase/client";
 import { BRAND } from "@/lib/brandConfig";
+import { ErrorSeverity, handleError } from "@/lib/errorHandler";
+import { applyEventVisibility } from "@/lib/eventQuery";
+import { isPrerender } from "@/lib/isPrerender";
+import { EVENT_LIST_COLUMNS } from "@/lib/listColumns";
 import type { Event } from "@/lib/types";
 import {
+  HOME_ABOUT,
   HOME_FAQ_DESCRIPTION,
   HOME_FAQ_TITLE,
   HOME_FAQS,
+  HOME_META_DESCRIPTION,
   HOME_PAGE_TITLE,
   HOME_SPEAKABLE,
   HOME_STRUCTURED_DATA,
@@ -24,55 +35,145 @@ import {
 
 // Lazy chunks for everything below the rails. React.lazy defers the download
 // only; LazySection (below) is what defers the MOUNT, and with it each
-// section's queries, until the visitor is within 400px of it (WP1 item 10).
+// section's queries, until the visitor is within 400px of it.
+//
+// AdBanner is lazy too (home-pass2 WP1 item 10): as a static import it pulled
+// HouseAd and UpgradeModal into the first view for a slot below the rails.
+const AdBanner = lazy(() => import("@/components/AdBanner").then(m => ({ default: m.AdBanner })));
 const Footer = lazy(() => import("@/components/Footer"));
 const AllInclusiveDashboard = lazy(() => import("@/components/AllInclusiveDashboard"));
 const MostSearched = lazy(() => import("@/components/MostSearched"));
 const GEOContent = lazy(() => import("@/components/GEOContent"));
 const EventQuickView = lazy(() => import("@/components/EventQuickView").then(m => ({ default: m.EventQuickView })));
-const RecentlyViewedRail = lazy(() => import("@/components/RecentlyViewedRail").then(m => ({ default: m.RecentlyViewedRail })));
-const HomeInterestNav = lazy(() => import("@/components/HomeInterestNav").then(m => ({ default: m.HomeInterestNav })));
-const SocialProof = lazy(() => import("@/components/SocialProof").then(m => ({ default: m.SocialProof })));
 
 // A neutral fixed-height box for sections whose own skeleton lives elsewhere.
 const SectionPlaceholder = ({ height }: { height: number }) => (
   <div className="w-full animate-pulse bg-muted/20" style={{ minHeight: height }} aria-hidden="true" />
 );
 
-// WEB-SEO-012: the page title and description. WEB-SEO-027 collapsed the two
-// head managers that used to share these into one, so there is no longer a
-// second component to keep in step - SEOHead owns the head.
-//
-// SEO-008: RE-TARGETED. This was "Things to Do in Des Moines This Weekend",
-// which put the homepage in direct competition with two of its own pages:
-// /things-to-do owns "things to do in des moines" and /events/this-weekend
-// owns the weekend phrase (with /weekend 301'd onto it). Measured 2026-08-28,
-// the homepage sat at position 30.03 with 12 clicks in sixteen months while
-// /things-to-do sat at 39.8 and /events/this-weekend at 37.2, so all three were
-// losing the same query rather than covering three different ones.
-//
-// The homepage takes the brand and the city entity, and names the categories
-// without claiming any hub's exact head term. The hubs keep theirs.
-// 60 chars is where Google truncates; this was 69 (WEB-SEO-043).
-// The title string is HOME_PAGE_TITLE in src/content/homeContent.ts, so SEOHead
-// and the Speakable node share one constant.
-const HOME_DESCRIPTION =
-  "What's on in Des Moines, Iowa right now: live events and festivals, restaurants open tonight, and family plans for the weekend. Updated daily across the metro.";
+// The page title and description (WEB-SEO-012, SEO-008) live in
+// src/content/homeContent.ts as HOME_PAGE_TITLE and HOME_META_DESCRIPTION, so
+// SEOHead, the Speakable node and the WebPage node share one string each.
+// SEO-008's reasoning still holds: the homepage takes the brand and the city
+// entity and leaves each hub its own head term.
+
+/** The quick view's URL parameter: `/?event=<uuid>`. */
+const EVENT_PARAM = "event";
+const UUID_RE = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
+
+/**
+ * The event a shared or reloaded `/?event=<id>` link names (home-pass2 WP1
+ * item 11). One row, the list projection, the site's visibility predicate: a
+ * hidden, merged or archived event does not open. Nothing fires without the
+ * parameter, so the first view of `/` pays nothing for this.
+ */
+async function fetchEventForQuickView(id: string): Promise<Event | null> {
+  const { data, error } = await applyEventVisibility(
+    supabase.from("events").select(EVENT_LIST_COLUMNS),
+  )
+    .eq("id", id)
+    .maybeSingle();
+  if (error) throw error;
+  return (data as unknown as Event | null) ?? null;
+}
+
+/**
+ * The quick view's open state lives in the URL, so Back closes the sheet on
+ * Android and a copied link reopens it.
+ *
+ * Opening from a card pushes `?event=<id>`. Closing pops that entry when this
+ * page pushed it, so the history holds no second copy of `/` to Back through;
+ * a sheet opened from a pasted link has no entry of ours to pop, so closing
+ * replaces the URL instead.
+ */
+function useQuickViewParam() {
+  const [searchParams, setSearchParams] = useSearchParams();
+  const navigate = useNavigate();
+  const pushedByUs = useRef(false);
+  const [picked, setPicked] = useState<Event | null>(null);
+
+  const rawId = searchParams.get(EVENT_PARAM);
+  const eventId = rawId && UUID_RE.test(rawId) && !isPrerender() ? rawId : null;
+  const needsFetch = eventId !== null && picked?.id !== eventId;
+
+  const { data: linked, isFetched, error } = useQuery({
+    queryKey: ["home-quick-view-event", eventId],
+    queryFn: () => fetchEventForQuickView(eventId as string),
+    enabled: needsFetch,
+    staleTime: 5 * 60 * 1000,
+  });
+
+  useEffect(() => {
+    if (error) handleError(error, { component: "Index", action: "fetchEventForQuickView" }, ErrorSeverity.WARNING);
+  }, [error]);
+
+  const dropParam = useCallback(() => {
+    setSearchParams(
+      (prev) => {
+        const next = new URLSearchParams(prev);
+        next.delete(EVENT_PARAM);
+        return next;
+      },
+      { replace: true, preventScrollReset: true },
+    );
+  }, [setSearchParams]);
+
+  // A malformed id, or one that names no visible event: take the parameter
+  // off rather than leave a URL that promises a sheet and opens nothing.
+  useEffect(() => {
+    if (rawId && !eventId && !isPrerender()) dropParam();
+  }, [rawId, eventId, dropParam]);
+  useEffect(() => {
+    if (needsFetch && isFetched && !error && linked === null) dropParam();
+  }, [needsFetch, isFetched, error, linked, dropParam]);
+
+  const open = useCallback(
+    (event: Event) => {
+      setPicked(event);
+      pushedByUs.current = true;
+      setSearchParams(
+        (prev) => {
+          const next = new URLSearchParams(prev);
+          next.set(EVENT_PARAM, event.id);
+          return next;
+        },
+        { preventScrollReset: true },
+      );
+    },
+    [setSearchParams],
+  );
+
+  const onOpenChange = useCallback(
+    (nextOpen: boolean) => {
+      if (nextOpen) return;
+      if (pushedByUs.current) {
+        pushedByUs.current = false;
+        navigate(-1);
+      } else {
+        dropParam();
+      }
+    },
+    [navigate, dropParam],
+  );
+
+  // Back, or any navigation that drops the parameter, forgets the push.
+  useEffect(() => {
+    if (!eventId) pushedByUs.current = false;
+  }, [eventId]);
+
+  const event = eventId ? (picked?.id === eventId ? picked : linked ?? null) : picked;
+  return { event, isOpen: eventId !== null && event !== null, open, onOpenChange };
+}
 
 export default function Index() {
-  const [selectedEvent, setSelectedEvent] = useState<Event | null>(null);
-  const [showEventDetails, setShowEventDetails] = useState(false);
-  const { eventsToday, restaurantsCount, newThisWeek, isLoading: statsLoading } = useHomepageStats();
+  const quickView = useQuickViewParam();
+  const { eventsToday, mode: countMode, isLoading: statsLoading } = useHomepageStats();
+  const snapshotAsOf = useHomeSnapshotAsOfDate();
 
   // No preferences modal on load (WP1 item 9). An effect here opened
   // PreferencesOnboarding one second after any signed-in visit that had not
   // finished onboarding. ForYouRail now carries an inline "Tune your picks"
   // prompt that opens it on request (WP2).
-
-  const handleViewEventDetails = (event: Event) => {
-    setSelectedEvent(event);
-    setShowEventDetails(true);
-  };
 
   return (
     <div className="min-h-screen bg-background overflow-x-hidden">
@@ -93,7 +194,7 @@ export default function Index() {
           stable @id. */}
       <SEOHead
         title={HOME_PAGE_TITLE}
-        description={HOME_DESCRIPTION}
+        description={HOME_META_DESCRIPTION}
         url="/"
         canonicalUrl={`${BRAND.baseUrl}/`}
         type="website"
@@ -101,7 +202,18 @@ export default function Index() {
       />
 
       {/* Speakable Schema for GEO - enables AI search engine attribution */}
-      <SpeakableSchema {...HOME_SPEAKABLE} />
+      {/* dateModified is the snapshot's as-of date, read from its cache entry
+          without a fetch (home-pass2 WP4 items 5 and 6). Rendered once the
+          snapshot has settled, so the node is written with its final props:
+          see useHomeSnapshotAsOfDate for the Helmet orphan this avoids. On a
+          failed snapshot it renders without dateModified. */}
+      {snapshotAsOf.settled && (
+        <SpeakableSchema
+          {...HOME_SPEAKABLE}
+          about={HOME_ABOUT}
+          dateModified={snapshotAsOf.asOfDate ?? undefined}
+        />
+      )}
 
       {/* Page order (WP1 item 8): hero and search, Tonight, For You, recently
           viewed, neighbourhood strip, this week, most searched, snapshot and
@@ -119,14 +231,13 @@ export default function Index() {
             the quick-pick chips. */}
         <EnhancedHero
           eventsToday={eventsToday}
-          restaurantsCount={restaurantsCount}
-          newThisWeek={newThisWeek}
+          countMode={countMode}
           isLoadingStats={statsLoading}
         />
 
-        {/* Current conditions (WEB-FEAT-022) now render in ForYouRail's
-            fixed-height header slot (RailWeatherLine, WP2 item 6), so a late
-            forecast changes text there instead of inserting a block here. */}
+        {/* Current conditions (WEB-FEAT-022) render in a rail header's
+            fixed-height slot (RailWeatherLine), so a late forecast changes
+            text there instead of inserting a block here. */}
 
         {/* Tonight: an event paired with a nearby restaurant open at dinner
             time. The page's primary content under the hero (WP10). */}
@@ -135,36 +246,35 @@ export default function Index() {
         {/* For You / Trending rail - IOS-DISCOVER-2026-002 web parity */}
         <ForYouRail />
 
-        {/* Recently viewed (WEB-FEAT-007). Computes synchronously from the
-            local store, so no layout shift. */}
-        <Suspense fallback={null}>
-          <RecentlyViewedRail />
-        </Suspense>
+        {/* Recently viewed (WEB-FEAT-007). A static import: the rail reads
+            safeStorage synchronously, so it renders in the first commit or not
+            at all. It was React.lazy with a null fallback, which inserted it
+            about 230px tall after first paint (home-pass2 WP1 item 10). */}
+        <RecentlyViewedRail />
 
-        {/* Everything from here down mounts near the viewport. */}
-        <LazySection minHeight={44}>
-          <Suspense fallback={<SectionPlaceholder height={44} />}>
-            <HomeInterestNav />
-          </Suspense>
-        </LazySection>
+        {/* Everything from here down mounts near the viewport, except the
+            neighbourhood strip. HomeInterestNav is gone: it repeated the
+            header, the bottom nav and the hero chips, and wrote a cohort row
+            nobody read. */}
 
-        {/* AdBanner renders its own sized wrapper (WP4); no py band here. */}
+        {/* AdBanner renders its own sized wrapper (WP4); no py band here. The
+            below-the-fold slot is gone: on a day with no paid ad it showed a
+            second trip-planner upsell. */}
         <LazySection minHeight={80} className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8">
-          <AdBanner placement="top_banner" />
-        </LazySection>
-
-        {/* Neighbourhood strip (WP5) */}
-        <LazySection minHeight={160}>
-          <Suspense fallback={<SectionPlaceholder height={160} />}>
-            <SocialProof />
+          <Suspense fallback={<SectionPlaceholder height={80} />}>
+            <AdBanner placement="top_banner" />
           </Suspense>
         </LazySection>
+
+        {/* Neighbourhood strip. Static and outside LazySection: it renders
+            from src/lib/neighborhoods.ts, and its links are crawl paths. */}
+        <SocialProof />
 
         {/* This week in Des Moines (WP3) */}
         <LazySection minHeight={720} placeholder={<DashboardGridSkeleton />}>
           <div data-dashboard="all-inclusive">
             <Suspense fallback={<DashboardGridSkeleton />}>
-              <AllInclusiveDashboard onViewEventDetails={handleViewEventDetails} />
+              <AllInclusiveDashboard onViewEventDetails={quickView.open} />
             </Suspense>
           </div>
         </LazySection>
@@ -199,10 +309,6 @@ export default function Index() {
           </div>
         </section>
 
-        <LazySection minHeight={80} className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8">
-          <AdBanner placement="below_fold" />
-        </LazySection>
-
         {/* The footer holds the page's one newsletter signup (WP7). Not in a
             LazySection: it makes no queries until submit, and its links are
             the site's crawl paths. */}
@@ -211,13 +317,14 @@ export default function Index() {
         </Suspense>
       </div>
 
-      {/* Event quick view - lazy, mounted only once a card has been selected */}
-      {selectedEvent && (
+      {/* Event quick view - lazy, mounted only once an event is selected.
+          Its open state is the ?event= parameter (useQuickViewParam). */}
+      {quickView.event && (
         <Suspense fallback={null}>
           <EventQuickView
-            event={selectedEvent}
-            open={showEventDetails}
-            onOpenChange={setShowEventDetails}
+            event={quickView.event}
+            open={quickView.isOpen}
+            onOpenChange={quickView.onOpenChange}
           />
         </Suspense>
       )}

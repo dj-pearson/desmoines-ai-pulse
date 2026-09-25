@@ -168,7 +168,17 @@ function resolveRange(openRaw: string, closeRaw: string): { open: number; close:
   }
 
   // Both bare, both 1-12. Only "later number first" has one reading: a
-  // morning open and an evening close ("11-9", "12-8").
+  // morning open and an evening close ("11-9", "12-8", "7-3").
+  //
+  // Bar hours break that reading (eat-drink pass 2, WP2.1). "Fri-Sat 4-2"
+  // and "Daily 5-2" are 4 PM-2 AM, but the morning rule made them 4 AM-2 PM,
+  // so a bar read Open at 10 on a Saturday morning. Nobody opens a dining
+  // room at 1-5 AM, so an open hour of 1-5 is a PM open with a small-hours
+  // close, which bare numbers cannot say: unknown. The same goes for a close
+  // at 1 or 2 below the open ("9-2", "10-2"): Iowa's last call is 2 AM, so
+  // "10 AM-2 PM" and "10 PM-2 AM" are both live readings.
+  if (open.hours >= 1 && open.hours <= 5) return null;
+  if (close.hours < open.hours && close.hours <= 2) return null;
   const openMin = toMinutes(open, 'am') === 0 ? 12 * 60 : toMinutes(open, 'am');
   const closeAm = toMinutes(close, 'am');
   if (closeAm <= openMin || open.hours === 12) {
@@ -242,6 +252,28 @@ interface TimeRange {
   closeMinutes: number;
 }
 
+/**
+ * What the text parser made of an `opening` string.
+ *
+ * `dropped` is true when a segment that carried a time range could not be
+ * read ("Sun Brunch 10am-2pm", "Drive-thru 24 hours", "Sat 5-10"). The days
+ * that segment named are then not known to be closed, only not understood,
+ * so a caller must not turn their absence into "Closed" (WP2.2).
+ */
+interface ParsedOpening {
+  ranges: TimeRange[];
+  dropped: boolean;
+  /** Days the text says are closed, from "Closed Mon" or "Sunday: Closed". */
+  closedDays: Set<number>;
+}
+
+interface SegmentResult {
+  ranges: TimeRange[];
+  dropped: boolean;
+  /** Days a "<days>: Closed" segment names. */
+  closedDays: Set<number>;
+}
+
 const CLOSED_DAYS_RE = new RegExp(
   `closed\\s+(?:on\\s+)?((?:sun|mon|tue|wed|thu|fri|sat)[a-z]*\\.?` +
     `(?:\\s*(?:&|/|\\band\\b|${RANGE_SEP})\\s*(?:sun|mon|tue|wed|thu|fri|sat)[a-z]*\\.?)*)`,
@@ -267,24 +299,46 @@ function isPermanentlyClosedText(lower: string): boolean {
   );
 }
 
+const ALL_DAYS = [0, 1, 2, 3, 4, 5, 6] as const;
+
+/**
+ * The whole text says open around the clock, and nothing else. Anchored, so
+ * "Tuesday: Open 24 hours; Wednesday: Closed" or "Drive-thru 24 hours; dining
+ * room 10am-11pm" is not read as a 24/7 week (WP2.3). A day-scoped
+ * "<days>: open 24 hours" is handled per segment instead.
+ */
+const WHOLE_WEEK_24H_RE =
+  /^(?:(?:daily|every day|everyday|mon(?:day)?\s*(?:-|to|through|thru)\s*sun(?:day)?)\s*:?\s*)?(?:open\s+)?(?:24\s*(?:hours?|hrs?)(?:\s+a\s+day)?(?:\s*,?\s*7\s+days(?:\s+a\s+week)?)?|24\/7|always open)\.?$/;
+
+/** "<days>: open 24 hours" within one segment: the prefix, or null. */
+const SEGMENT_24H_RE = /^(.*?)\s*:?\s*(?:open\s+)?24\s*(?:hours?|hrs?)\.?$/;
+
+/** "<days>: Closed" as a whole segment: the prefix, or null. */
+const SEGMENT_CLOSED_RE = /^(.+?)\s*:?\s*closed\.?$/;
+
 /**
  * Try to extract structured time ranges from the opening text.
- * Returns null if the text is too ambiguous to parse, [] if it says closed.
+ * Returns null if the text is too ambiguous to parse; empty ranges if it says
+ * closed for good.
  */
-function parseOpeningText(opening: string): TimeRange[] | null {
+function parseOpeningText(opening: string): ParsedOpening | null {
   const text = opening.trim().toLowerCase();
 
-  if (text.includes('24 hour') || text.includes('24/7') || text === 'always open' || text === 'open 24 hours') {
-    const allDays = new Set<number>();
-    for (let i = 0; i < 7; i++) allDays.add(i);
-    return [{ days: allDays, openMinutes: 0, closeMinutes: MINUTES_PER_DAY }];
+  if (WHOLE_WEEK_24H_RE.test(text)) {
+    return {
+      ranges: [{ days: new Set<number>(ALL_DAYS), openMinutes: 0, closeMinutes: MINUTES_PER_DAY }],
+      dropped: false,
+      closedDays: new Set(),
+    };
   }
 
   if (isPermanentlyClosedText(text)) {
-    return [];
+    return { ranges: [], dropped: false, closedDays: new Set() };
   }
 
   const ranges: TimeRange[] = [];
+  let dropped = false;
+  const closedDays = parseClosedDays(text);
 
   // Split on semicolons, pipes and newlines, then on commas that separate
   // day segments.
@@ -295,18 +349,20 @@ function parseOpeningText(opening: string): TimeRange[] | null {
     .flatMap(splitByDaySegments);
 
   for (const segment of segments) {
-    ranges.push(...parseSegment(segment));
+    const result = parseSegment(segment);
+    ranges.push(...result.ranges);
+    if (result.dropped) dropped = true;
+    for (const d of result.closedDays) closedDays.add(d);
   }
 
-  const closedDays = parseClosedDays(text);
   if (closedDays.size > 0) {
     for (const range of ranges) {
       for (const d of closedDays) range.days.delete(d);
     }
   }
   const kept = ranges.filter((r) => r.days.size > 0);
-  if (kept.length > 0) return kept;
-  // Every range landed on a closed day: the text is contradictory.
+  if (kept.length > 0) return { ranges: kept, dropped, closedDays };
+  // Every range landed on a closed day, or nothing was readable.
   return null;
 }
 
@@ -341,9 +397,11 @@ export function getOpeningHoursSpecification(
   opening: string | null | undefined
 ): OpeningHoursSpecification[] | null {
   if (!opening || !opening.trim()) return null;
-  const ranges = parseOpeningText(opening);
-  if (!ranges || ranges.length === 0) return null;
-  const specs = ranges
+  const parsed = parseOpeningText(opening);
+  // A dropped segment means part of the week is unread. Publishing the rest
+  // would tell a crawler those days are closed (WP2.2).
+  if (!parsed || parsed.dropped || parsed.ranges.length === 0) return null;
+  const specs = parsed.ranges
     .filter((r) => r.days.size > 0)
     .map((r) => ({
       '@type': 'OpeningHoursSpecification' as const,
@@ -409,29 +467,56 @@ const TIME_RANGE_RE = new RegExp(`(?<![\\d:])(${TIME_TOKEN})\\s*${RANGE_SEP}\\s*
  * Parse one segment: "Mon-Fri 11am-10pm", "11am - 10pm", "Tue-Sat 11am-2pm, 5-9pm".
  * Every time range in it shares the day prefix before the first one.
  */
-function parseSegment(segment: string): TimeRange[] {
+function parseSegment(segment: string): SegmentResult {
   const lower = segment.trim().toLowerCase();
+  const none: SegmentResult = { ranges: [], dropped: false, closedDays: new Set() };
+
+  // "Tuesday: Open 24 hours" is a whole day for the days it names.
+  const allDay = lower.match(SEGMENT_24H_RE);
+  if (allDay) {
+    const prefix = allDay[1].trim();
+    const days = prefix ? parseDayRange(prefix) : new Set<number>();
+    // No prefix inside a longer text, or one we cannot read ("Drive-thru"):
+    // the segment is about something, and we do not know what.
+    if (days.size === 0) return { ...none, dropped: true };
+    return { ranges: [{ days, openMinutes: 0, closeMinutes: MINUTES_PER_DAY }], dropped: false, closedDays: new Set() };
+  }
+
   const matches = [...lower.matchAll(TIME_RANGE_RE)];
-  if (matches.length === 0) return [];
+  if (matches.length === 0) {
+    // "Sunday: Closed" names its days as closed, which the hours table and the
+    // evaluator both want to know.
+    const closed = lower.match(SEGMENT_CLOSED_RE);
+    if (closed) {
+      const days = parseDayRange(closed[1]);
+      if (days.size > 0) return { ...none, closedDays: days };
+    }
+    return none;
+  }
 
   const beforeTime = lower.substring(0, matches[0].index ?? 0).trim();
   let days: Set<number>;
   if (beforeTime) {
-    if (beforeTime.includes('closed')) return [];
+    if (beforeTime.includes('closed')) return none;
     days = parseDayRange(beforeTime);
-    // An unreadable prefix ("Brunch Sat-Sun", "Kitchen") drops the segment.
-    if (days.size === 0) return [];
+    // An unreadable prefix ("Sun Brunch", "Kitchen") drops the segment, and
+    // says so: those hours exist, we just cannot place them.
+    if (days.size === 0) return { ...none, dropped: true };
   } else {
-    days = new Set<number>([0, 1, 2, 3, 4, 5, 6]);
+    days = new Set<number>(ALL_DAYS);
   }
 
   const out: TimeRange[] = [];
+  let dropped = false;
   for (const m of matches) {
     const range = resolveRange(m[1], m[2]);
-    if (!range) continue;
+    if (!range) {
+      dropped = true;
+      continue;
+    }
     out.push({ days: new Set(days), openMinutes: range.open, closeMinutes: range.close });
   }
-  return out;
+  return { ranges: out, dropped, closedDays: new Set() };
 }
 
 /** An open interval in minutes since Sunday 00:00, end exclusive, possibly past the week end. */
@@ -582,16 +667,111 @@ export function getRestaurantOpenStatus(
   if (isPermanentlyClosedText(opening.trim().toLowerCase())) return { ...CLOSED_FOR_GOOD };
 
   const t = weekMinute(now, options);
-  const ranges = parseOpeningText(opening);
-  if (ranges === null) {
+  const today = Math.floor(t / MINUTES_PER_DAY);
+  const parsed = parseOpeningText(opening);
+  if (parsed === null) {
     // "Closed Mondays" with no readable hours still settles today, if today
     // is the day it names. Any other day stays unknown.
-    const today = Math.floor(t / MINUTES_PER_DAY);
     return parseClosedDays(opening.toLowerCase()).has(today) ? { ...CLOSED_FOR_GOOD } : { ...UNKNOWN };
   }
-  if (ranges.length === 0) return { ...CLOSED_FOR_GOOD };
+  if (parsed.ranges.length === 0) return { ...CLOSED_FOR_GOOD };
 
-  return evaluateIntervals(intervalsFromRanges(ranges), t);
+  const result = evaluateIntervals(intervalsFromRanges(parsed.ranges), t);
+  if (parsed.dropped && result.status === 'closed') {
+    // Part of the week was unreadable, so "closed" may only mean "in the part
+    // we could not read" (Sunday brunch). A day the text names as closed is
+    // still closed, but the next opening may be in the unread part.
+    return parsed.closedDays.has(today) ? { ...CLOSED_FOR_GOOD } : { ...UNKNOWN };
+  }
+  return result;
+}
+
+/** One day of an OpeningCoverage. */
+export interface DayCoverage {
+  /** JS day index, 0 = Sunday. */
+  day: number;
+  /**
+   * `listed`: the text gives hours for this day. `closed`: the text says this
+   * day is closed. `not-listed`: the text says nothing we could read, which
+   * is not the same as closed.
+   */
+  state: 'listed' | 'closed' | 'not-listed';
+  /** Ranges for a listed day, minutes since midnight. A close <= open runs past midnight. */
+  ranges: Array<{ openMinutes: number; closeMinutes: number }>;
+}
+
+export interface OpeningCoverage {
+  /** Seven entries, Sunday first. */
+  days: DayCoverage[];
+  listedDays: number[];
+  closedDays: number[];
+  /** True when a segment carrying hours could not be read. */
+  hasUnreadSegment: boolean;
+}
+
+/**
+ * Which days the free text actually covers (WP2.2, for the detail page's
+ * hours table). A day with no range is only "closed" when the text says so;
+ * otherwise it is "not listed". Null for empty text or text with nothing
+ * readable at all.
+ */
+export function getOpeningCoverage(opening: string | null | undefined): OpeningCoverage | null {
+  if (typeof opening !== 'string' || !opening.trim()) return null;
+  const lower = opening.trim().toLowerCase();
+  if (isPermanentlyClosedText(lower)) {
+    return {
+      days: ALL_DAYS.map((day) => ({ day, state: 'closed' as const, ranges: [] })),
+      listedDays: [],
+      closedDays: [...ALL_DAYS],
+      hasUnreadSegment: false,
+    };
+  }
+  const parsed = parseOpeningText(opening);
+  const closed = parsed?.closedDays ?? parseClosedDays(lower);
+  if (!parsed && closed.size === 0) return null;
+
+  const days: DayCoverage[] = ALL_DAYS.map((day) => {
+    const ranges = (parsed?.ranges ?? [])
+      .filter((r) => r.days.has(day))
+      .map((r) => ({ openMinutes: r.openMinutes, closeMinutes: r.closeMinutes }))
+      .sort((a, b) => a.openMinutes - b.openMinutes);
+    if (ranges.length > 0) return { day, state: 'listed' as const, ranges };
+    if (closed.has(day)) return { day, state: 'closed' as const, ranges: [] };
+    return { day, state: 'not-listed' as const, ranges: [] };
+  });
+  return {
+    days,
+    listedDays: days.filter((d) => d.state === 'listed').map((d) => d.day),
+    closedDays: days.filter((d) => d.state === 'closed').map((d) => d.day),
+    hasUnreadSegment: parsed?.dropped ?? false,
+  };
+}
+
+/**
+ * The CHECK on restaurants.status (20250728165446) allows open, newly_opened,
+ * opening_soon, announced and closed. The last three mean you cannot eat
+ * there today. The legacy spellings are for rows written before the CHECK,
+ * and for code that still says them.
+ */
+const NOT_VISITABLE_STATUSES: ReadonlySet<string> = new Set([
+  'closed',
+  'opening_soon',
+  'announced',
+  'permanently_closed',
+  'temporarily_closed',
+  'closed_permanently',
+  'closed_temporarily',
+  'coming_soon',
+]);
+
+/**
+ * Can someone eat here today, going by the lifecycle status alone? True for
+ * open, newly_opened and a missing status (the column defaults to open).
+ * The one rule for Surprise Me, open-now, the map and search ordering (WP2.4).
+ */
+export function isVisitableStatus(status: string | null | undefined): boolean {
+  if (!status) return true;
+  return !NOT_VISITABLE_STATUSES.has(status.trim().toLowerCase());
 }
 
 /**

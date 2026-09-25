@@ -1,6 +1,7 @@
 import { Link } from "react-router-dom";
 import { cn } from "@/lib/utils";
 import { SpriteIcon } from "@/components/ui/SpriteIcon";
+import { AI_PLANNER_AVAILABLE } from "@/lib/tripPlannerStatus";
 
 /**
  * The hero's one-tap chips (WP1 item 5, docs/page-plans/home.md).
@@ -11,7 +12,9 @@ import { SpriteIcon } from "@/components/ui/SpriteIcon";
  * destinations at three times the height.
  */
 const HERO_CHIPS = [
-  { to: "/events/today", label: "Tonight" },
+  // #today-tonight is the evening group on /events/today (home-pass2 WP1 item
+  // 13); scrolling to it on mount is the Events plan's hand-off.
+  { to: "/events/today#today-tonight", label: "Tonight" },
   { to: "/events/this-weekend", label: "This weekend" },
   { to: "/restaurants/open-now", label: "Open now" },
   { to: "/events/near-me", label: "Near me" },
@@ -44,21 +47,31 @@ export function QuickActions({ className }: QuickActionsProps) {
         </ul>
       </nav>
 
-      {/* "AI Plan My Night" used to be the biggest button on the page, on a
-          gold gradient, and it ends on an Insider paywall (/trip-planner wraps
-          the planner in <PremiumGate requiredTier="insider">). It is a
-          secondary link now, and still says what it costs (WEB-QA-005 AC2). */}
+      {/* The planner link says what it is (home-pass2 WP1 item 2). The AI
+          planner is paused (AI_PLANNER_AVAILABLE, src/lib/tripPlannerStatus.ts)
+          and /trip-planner is free while it is, so the link names the date
+          planner that works, with no tier badge and no sparkles. The AI label
+          and its Insider badge come back only when the flag does. */}
       <p className="mt-3 text-center text-sm text-white/80">
-        <Link
-          to="/trip-planner"
-          className="inline-flex min-h-11 items-center gap-2 font-medium text-white underline-offset-4 hover:underline focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[#FFD700] rounded"
-        >
-          <SpriteIcon name="sparkles" className="h-4 w-4 text-[#FFD700]" aria-hidden="true" />
-          AI Plan My Night
-          <span className="rounded-full bg-[#FFC107] px-2 py-0.5 text-xs font-semibold text-[#2D1B69]">
-            Insider
-          </span>
-        </Link>
+        {AI_PLANNER_AVAILABLE ? (
+          <Link
+            to="/trip-planner"
+            className="inline-flex min-h-11 items-center gap-2 rounded font-medium text-white underline-offset-4 hover:underline focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[#FFD700]"
+          >
+            <SpriteIcon name="sparkles" className="h-4 w-4 text-[#FFD700]" aria-hidden="true" />
+            AI Plan My Night
+            <span className="rounded-full bg-[#FFC107] px-2 py-0.5 text-xs font-semibold text-[#2D1B69]">
+              Insider
+            </span>
+          </Link>
+        ) : (
+          <Link
+            to="/trip-planner"
+            className="inline-flex min-h-11 items-center rounded font-medium text-white underline underline-offset-4 hover:decoration-2 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[#FFD700]"
+          >
+            Visiting? Plan your dates
+          </Link>
+        )}
       </p>
     </div>
   );

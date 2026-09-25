@@ -28,7 +28,7 @@ import { dirname, join } from 'node:path';
 const HERE = dirname(fileURLToPath(import.meta.url));
 const SRC = readFileSync(join(HERE, '../_middleware.ts'), 'utf8');
 
-const { detailShellStatus, isHomepageShell } = await import('../_middleware.ts');
+const { detailShellStatus, isHomepageShell, resolveEntity, resolveEntityCached, detailResponsePlan } = await import('../_middleware.ts');
 
 let failures = 0;
 function test(name, fn) {
@@ -171,6 +171,152 @@ test('slug lookups are cached at the edge, including misses', () => {
   // absorbing, so a null result is cached too.
   assert.match(SRC, /JSON\.stringify\(entity \?\? \{\}\)/, 'misses must be cached as well');
   assert.match(SRC, /max-age=300/);
+});
+
+// ---------------------------------------------------------------------------
+// Outage, merged and id-addressed restaurants (eat-drink pass 2 WP5.3, WP5.4).
+// resolveEntity runs against a fake PostgREST: global fetch is swapped for a
+// router over the query string, so the real request shapes are exercised.
+// ---------------------------------------------------------------------------
+
+async function atest(name, fn) {
+  try {
+    await fn();
+    console.log(`  ok  ${name}`);
+  } catch (err) {
+    failures++;
+    console.error(`  FAIL  ${name}\n        ${err.message}`);
+  }
+}
+
+const SB = 'https://proj.supabase.co';
+const ORIGIN = 'https://desmoinesinsider.com';
+const realFetch = globalThis.fetch;
+/** Answers /rest/v1/* from `route(pathAndQuery)`: an array is 200 rows, a number is that status. */
+function fakePostgrest(route) {
+  const calls = [];
+  globalThis.fetch = async (input) => {
+    const url = String(input);
+    const pq = decodeURIComponent(url.slice(`${SB}/rest/v1/`.length));
+    calls.push(pq);
+    const answer = route(pq);
+    if (typeof answer === 'number') return new Response('{"message":"boom"}', { status: answer });
+    return new Response(JSON.stringify(answer), { status: 200, headers: { 'Content-Type': 'application/json' } });
+  };
+  return calls;
+}
+
+console.log('\nrestaurant lookups against a fake PostgREST\n');
+
+await atest('a PostgREST 500 is an error, not a miss', async () => {
+  fakePostgrest(() => 500);
+  const outcome = await resolveEntity(SB, 'anon', 'restaurant', 'fongs-pizza');
+  assert.equal(outcome.kind, 'error');
+});
+
+await atest('an error plans a 200 with no-store, not a 404', async () => {
+  const plan = detailResponsePlan({ kind: 'error' }, 'restaurant', 'fongs-pizza', ORIGIN, NOW);
+  assert.equal(plan.action, 'unavailable');
+  assert.equal(plan.status, 200);
+  assert.equal(plan.cacheControl, 'no-store');
+});
+
+await atest('a real miss still plans a 404', async () => {
+  fakePostgrest(() => []);
+  const outcome = await resolveEntity(SB, 'anon', 'restaurant', 'no-such-place');
+  assert.equal(outcome.kind, 'not-found');
+  const plan = detailResponsePlan(outcome, 'restaurant', 'no-such-place', ORIGIN, NOW);
+  assert.equal(plan.action, 'missing');
+  assert.equal(plan.status, 404);
+});
+
+await atest('an error is not written to the edge cache; a miss is', async () => {
+  const puts = [];
+  const prevCaches = globalThis.caches;
+  globalThis.caches = { default: { match: async () => undefined, put: async (k) => { puts.push(String(k.url)); } } };
+  const ctx = { waitUntil: (p) => p };
+  try {
+    fakePostgrest(() => 500);
+    const failed = await resolveEntityCached(ctx, SB, 'anon', 'restaurant', 'down-now');
+    assert.equal(failed.kind, 'error');
+    assert.equal(puts.length, 0, 'a failed lookup must not be cached');
+
+    fakePostgrest(() => []);
+    const missing = await resolveEntityCached(ctx, SB, 'anon', 'restaurant', 'gone');
+    assert.equal(missing.kind, 'not-found');
+    assert.equal(puts.length, 1, 'a real miss is still cached');
+  } finally {
+    globalThis.caches = prevCaches;
+  }
+});
+
+await atest('the rich select failing alone falls back to the minimal one', async () => {
+  // A 42703 on a shell column must not turn a real page into an outage.
+  fakePostgrest((pq) => (pq.includes('is_merged') ? 400 : [{ id: 'r1', name: 'Fong\'s', description: 'Pizza' }]));
+  const outcome = await resolveEntity(SB, 'anon', 'restaurant', 'fongs-pizza');
+  assert.equal(outcome.kind, 'row');
+  assert.equal(outcome.entity.row, undefined);
+});
+
+await atest('a merged row with a live survivor plans a 301 to the survivor slug', async () => {
+  const SURVIVOR = '11111111-2222-3333-4444-555555555555';
+  fakePostgrest((pq) => {
+    if (pq.startsWith('restaurants?slug=eq.old-dup')) {
+      return [{ id: 'dup', name: 'Old Dup', slug: 'old-dup', status: 'open', is_merged: true, merged_into: SURVIVOR }];
+    }
+    if (pq.startsWith(`restaurants?id=eq.${SURVIVOR}`)) return [{ id: SURVIVOR, slug: 'the-survivor', is_merged: false, merged_into: null }];
+    return [];
+  });
+  const outcome = await resolveEntity(SB, 'anon', 'restaurant', 'old-dup');
+  const plan = detailResponsePlan(outcome, 'restaurant', 'old-dup', ORIGIN, NOW);
+  assert.equal(plan.action, 'redirect');
+  assert.equal(plan.status, 301);
+  assert.equal(plan.location, `${ORIGIN}/restaurants/the-survivor`);
+});
+
+await atest('a merged row whose survivor is gone is served, not redirected', async () => {
+  fakePostgrest((pq) => (pq.startsWith('restaurants?slug=eq.orphan')
+    ? [{ id: 'o', name: 'Orphan', slug: 'orphan', is_merged: true, merged_into: 'nowhere' }]
+    : []));
+  const outcome = await resolveEntity(SB, 'anon', 'restaurant', 'orphan');
+  assert.equal(detailResponsePlan(outcome, 'restaurant', 'orphan', ORIGIN, NOW).action, 'shell');
+});
+
+await atest('two rows merged into each other do not loop', async () => {
+  fakePostgrest((pq) => {
+    if (pq.includes('slug=eq.a')) return [{ id: 'A', name: 'A', slug: 'a', is_merged: true, merged_into: 'b' }];
+    if (pq.includes('slug=eq.b')) return [{ id: 'B', slug: 'b', is_merged: true, merged_into: 'a' }];
+    return [];
+  });
+  const outcome = await resolveEntity(SB, 'anon', 'restaurant', 'a');
+  assert.equal(outcome.kind, 'row');
+  assert.equal(outcome.entity.redirectTo, undefined);
+});
+
+await atest('a uuid-shaped slug is looked up by id and 301s to the slug', async () => {
+  const ID = 'aaaaaaaa-bbbb-cccc-dddd-eeeeeeeeeeee';
+  const calls = fakePostgrest((pq) => (pq.startsWith(`restaurants?id=eq.${ID}`)
+    ? [{ id: ID, name: 'Noce', slug: 'noce', status: 'open', is_merged: false }]
+    : []));
+  const outcome = await resolveEntity(SB, 'anon', 'restaurant', ID);
+  const plan = detailResponsePlan(outcome, 'restaurant', ID, ORIGIN, NOW);
+  assert.ok(calls[0].startsWith(`restaurants?slug=eq.${ID}`), 'the slug is tried first');
+  assert.equal(plan.action, 'redirect');
+  assert.equal(plan.location, `${ORIGIN}/restaurants/noce`);
+});
+
+await atest('a closed row resolves to a shell (its noindex is in the shell rules)', async () => {
+  fakePostgrest(() => [{ id: 'c', name: 'Closed Co', slug: 'closed-co', status: 'closed', is_merged: false }]);
+  const outcome = await resolveEntity(SB, 'anon', 'restaurant', 'closed-co');
+  assert.equal(detailResponsePlan(outcome, 'restaurant', 'closed-co', ORIGIN, NOW).action, 'shell');
+});
+
+globalThis.fetch = realFetch;
+
+test('the handler serves the unavailable plan uncached and self-canonical', () => {
+  assert.match(SRC, /if \(plan\.action === "unavailable"\)/);
+  assert.match(SRC, /withSelfCanonical\(passthrough\(\), pageUrl\)/);
+  assert.match(SRC, /headers\.set\("Cache-Control", plan\.cacheControl\)/);
 });
 
 if (failures) {

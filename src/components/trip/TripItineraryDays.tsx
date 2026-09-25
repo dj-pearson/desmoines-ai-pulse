@@ -125,7 +125,7 @@ export function TripItineraryDays({ trip, items, onMoveItem, onAddDayToCalendar 
                               </p>
                             )}
                           </div>
-                          {item.estimated_cost && <Badge variant="outline">{item.estimated_cost}</Badge>}
+                          {item.estimated_cost && <Badge variant="outline">AI estimate: {item.estimated_cost}</Badge>}
                         </div>
                         {item.location && (
                           <p className="flex items-center gap-1 text-sm text-muted-foreground">

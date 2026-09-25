@@ -216,7 +216,9 @@ const rich = await rewrite(SHELL, {
   entity: { id: 'b1', title: 'Bonchon', row: bonchonRow },
 });
 const rn = injectedNode(rich);
-ck('the title names the suburb and the menu', rich.includes('<title>Bonchon West Des Moines - Menu, Hours &amp; Reviews | Des Moines Insider</title>'), /<title>[^<]*/.exec(rich)?.[0]);
+// No menu_url and no hours on this row, so the title promises neither
+// (restaurantPageTitle, eat-drink pass 2 WP3.5).
+ck('the title names the suburb and only what the page has', rich.includes('<title>Bonchon West Des Moines - Reviews | Des Moines Insider</title>'), /<title>[^<]*/.exec(rich)?.[0]);
 ck('the stale "opening soon" description is not served', !rich.includes('opening soon') && !rich.includes('Coming soon'));
 ck('the H1 is the restaurant', rich.includes('<h1>Bonchon</h1>'));
 ck('addressLocality is the suburb, not the city column', rn?.address?.addressLocality === 'West Des Moines', JSON.stringify(rn?.address));
@@ -275,6 +277,49 @@ const hostile = await rewrite(SHELL, {
   entity: { id: 'h', title: 'x', row: { ...bonchonRow, name: '<img src=x onerror=alert(1)>', description: '<script>alert(1)</script>' } },
 });
 ck('row text is escaped in the body', !hostile.includes('<img src=x') && !hostile.includes('<script>alert'), hostile.match(/<h1>[^]*?<\/h1>/)?.[0]);
+
+console.log('\nlinks are http(s) or nothing (eat-drink pass 2 WP5.2)');
+const hostileLinks = await rewrite(SHELL, {
+  pageUrl: PAGE,
+  sbBase: SB,
+  type: 'restaurant',
+  entity: {
+    id: 'j1',
+    title: 'x',
+    row: { ...bonchonRow, website: 'javascript:alert(document.cookie)', menu_url: 'JavaScript:alert(1)' },
+  },
+});
+const hn = injectedNode(hostileLinks);
+ck('a javascript: website renders no <a>', !/<a [^>]*href="javascript:/i.test(hostileLinks) && !hostileLinks.includes('>Website</a>'), hostileLinks.match(/<li><a[^>]*>(Website|Menu)<\/a>/g)?.join(' '));
+ck('nor a javascript: menu', !hostileLinks.includes('>Menu</a>'));
+ck('sameAs and hasMenu are left out', hn && !('sameAs' in hn) && !('hasMenu' in hn), JSON.stringify(hn?.sameAs ?? hn?.hasMenu));
+const bareHost = await rewrite(SHELL, {
+  pageUrl: PAGE,
+  sbBase: SB,
+  type: 'restaurant',
+  entity: { id: 'j2', title: 'x', row: { ...bonchonRow, website: 'www.bonchon.com', menu_url: 'bonchon.com/menu' } },
+});
+ck('a bare host becomes an https link', bareHost.includes('href="https://www.bonchon.com/"') && bareHost.includes('href="https://bonchon.com/menu"'));
+ck('and sameAs carries the same https URL', injectedNode(bareHost)?.sameAs?.[0] === 'https://www.bonchon.com/');
+
+console.log('\nclosed and not-yet-open rows (eat-drink pass 2 WP5.3)');
+const HOURS = 'Mon-Sun: 11:00 AM - 9:00 PM';
+const openRow = { ...bonchonRow, status: 'open', opening: HOURS, description: 'Korean fried chicken.' };
+const openOut = await rewrite(SHELL, { pageUrl: PAGE, sbBase: SB, type: 'restaurant', entity: { id: 'o1', title: 'x', row: openRow } });
+ck('control: an open row shows its hours', openOut.includes(`Hours: ${HOURS}`) && Array.isArray(injectedNode(openOut)?.openingHoursSpecification), JSON.stringify(injectedNode(openOut)?.openingHoursSpecification)?.slice(0, 80));
+ck('control: an open row stays indexable', openOut.includes('name="robots" content="index, follow"'));
+
+const closedOut = await rewrite(SHELL, { pageUrl: PAGE, sbBase: SB, type: 'restaurant', entity: { id: 'c1', title: 'x', row: { ...openRow, status: 'closed' } } });
+ck('a closed row says "Permanently closed"', closedOut.includes('Permanently closed'));
+ck('with no hours in the body', !closedOut.includes('Hours:'));
+ck('and no openingHoursSpecification', injectedNode(closedOut) && !('openingHoursSpecification' in injectedNode(closedOut)));
+ck('and robots noindex, follow', closedOut.includes('name="robots" content="noindex, follow"'), closedOut.match(/name="robots"[^>]*/)?.[0]);
+
+for (const status of ['opening_soon', 'announced']) {
+  const soon = await rewrite(SHELL, { pageUrl: PAGE, sbBase: SB, type: 'restaurant', entity: { id: 's1', title: 'x', row: { ...openRow, status } } });
+  ck(`${status}: no hours anywhere`, !soon.includes('Hours:') && !('openingHoursSpecification' in (injectedNode(soon) ?? {})));
+  ck(`${status}: still indexable and not called closed`, soon.includes('name="robots" content="index, follow"') && !soon.includes('Permanently closed'));
+}
 
 console.log('\nabsences the shell really has');
 // A title-less entity must not blank the shell's own title.

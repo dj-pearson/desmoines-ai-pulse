@@ -4,7 +4,7 @@ import { Badge } from "@/components/ui/badge";
 import { Star } from "lucide-react";
 import { Database } from "@/integrations/supabase/types";
 import { STATUS_BADGE } from "@/lib/categoryStyles";
-import { hotelRateLabel, resolveBooking } from "@/lib/hotelBooking";
+import { hotelClassStars, hotelRateLabel, resolveBooking } from "@/lib/hotelBooking";
 import { SpriteIcon } from "@/components/ui/SpriteIcon";
 
 type Hotel = Database["public"]["Tables"]["hotels"]["Row"];
@@ -14,7 +14,7 @@ interface HotelCardProps {
   variant?: "default" | "compact" | "featured";
   showBookButton?: boolean;
   /**
-   * "1.2 mi from Wells Fargo Arena (straight line)" when the list is sorted by
+   * "1.2 mi from Casey's Center (straight line)" when the list is sorted by
    * distance to a place (plan-stay WP2 item 7). Omitted otherwise.
    */
   distanceLabel?: string;
@@ -33,7 +33,7 @@ function renderStars(rating: number | null) {
     stars.push(<Star key="half" className="h-3.5 w-3.5 fill-yellow-400/50 text-yellow-400" />);
   }
   return (
-    <div className="flex items-center gap-0.5" role="img" aria-label={`${rating} stars`}>
+    <div className="flex items-center gap-0.5" role="img" aria-label={`${rating}-star hotel`}>
       {stars}
     </div>
   );
@@ -95,7 +95,8 @@ export default function HotelCard({
             <Link to={`/stay/${hotel.slug}`} className="hover:underline">
               <h3 className="font-semibold text-sm line-clamp-1">{hotel.name}</h3>
             </Link>
-            {renderStars(hotel.star_rating)}
+            {/* Hotel class only: a Google review average is not one (pass-2 WP2 item 13). */}
+            {renderStars(hotelClassStars(hotel))}
           </div>
 
           {(hotel.chain_name || hotel.brand_parent) && (

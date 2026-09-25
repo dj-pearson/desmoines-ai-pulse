@@ -65,7 +65,13 @@ Deno.test('the signature and return type are unchanged', async () => {
 Deno.test('the page asks for its page', async () => {
   const page = codeOnly(await read('src/pages/Restaurants.tsx'));
   assert(/limit: ITEMS_PER_PAGE, offset: \(page - 1\) \* ITEMS_PER_PAGE/.test(page), 'desktop');
-  assert(/limit: page \* ITEMS_PER_PAGE, offset: 0/.test(page), 'mobile load-more');
+  // Mobile load-more asks for the NEXT window only (eat-drink pass 2 WP1 item
+  // 7). It used to re-request limit=page*30 from offset 0 on every tap.
+  assert(/useInfiniteRestaurants\(filters/.test(page), 'mobile load-more');
+  assertFalse(/limit: page \* ITEMS_PER_PAGE, offset: 0/.test(page), 'mobile must not refetch what is on screen');
+  const hooks = codeOnly(await read('src/hooks/useRestaurants.ts'));
+  assert(/limit: pageParam\.limit, offset: pageParam\.offset/.test(hooks), 'each mobile request is one window');
+  assert(/return \{ offset: nextOffset, limit: pageSize \};/.test(hooks), 'and the next window is one page');
   // The client-side slice is what the query replaces.
   assertFalse(
     /arrangedRestaurants\.slice\(start, start \+ ITEMS_PER_PAGE\)/.test(page),

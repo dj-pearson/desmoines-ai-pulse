@@ -41,6 +41,101 @@ interface RestaurantOpening {
   price_range?: string;
 }
 
+// BEGIN pure: planOpeningUpdate
+// Self-contained on purpose (no imports, no module state):
+// _tests/restaurant-ingest-honesty.test.ts lifts this block out of the file and
+// runs it, because importing index.ts would start the server.
+
+/** Existing row as the lookup selects it (EXISTING_OPENING_COLUMNS). */
+export interface ExistingOpeningRow {
+  id: string;
+  name: string;
+  location: string | null;
+  status: string | null;
+  opening_date: string | null;
+  opening_timeframe: string | null;
+  description: string | null;
+  cuisine: string | null;
+  source_url: string | null;
+  phone: string | null;
+  website: string | null;
+  price_range: string | null;
+}
+
+/** What one scrape extracted for a restaurant. */
+export interface ScrapedOpening {
+  name: string;
+  status: string;
+  opening_date?: string | null;
+  opening_timeframe?: string | null;
+  description?: string | null;
+  cuisine?: string | null;
+  location?: string | null;
+  source_url?: string | null;
+  phone?: string | null;
+  website?: string | null;
+  price_range?: string | null;
+}
+
+export const EXISTING_OPENING_COLUMNS =
+  'id, name, location, status, opening_date, opening_timeframe, description, cuisine, source_url, phone, website, price_range';
+
+// Lower number = earlier in the lifecycle. `closed` is deliberately absent:
+// a scrape never moves a row onto or off it (a closed row is skipped whole).
+const OPENING_STATUS_RANK: Record<string, number> = {
+  announced: 1,
+  opening_soon: 2,
+  newly_opened: 3,
+  open: 4,
+};
+
+const FILLABLE_FIELDS = ['description', 'cuisine', 'source_url', 'phone', 'website', 'price_range'] as const;
+
+function isBlank(value: unknown): boolean {
+  return value === null || value === undefined || (typeof value === 'string' && value.trim() === '');
+}
+
+/**
+ * The columns one scrape may change on an existing row, or null for none.
+ * Status only moves forward, and never off `closed` or an unknown status.
+ * Dates follow the newest scrape. Every other field is filled only when the
+ * row has nothing there; `location` is never rewritten, because the row's
+ * location is what matched it.
+ */
+export function planOpeningUpdate(
+  existing: ExistingOpeningRow,
+  scraped: ScrapedOpening,
+): Record<string, string> | null {
+  if (existing.status === 'closed') return null;
+
+  const update: Record<string, string> = {};
+
+  const existingRank = existing.status === null ? 0 : OPENING_STATUS_RANK[existing.status];
+  const scrapedRank = OPENING_STATUS_RANK[scraped.status];
+  if (existingRank !== undefined && scrapedRank !== undefined && scrapedRank > existingRank) {
+    update.status = scraped.status;
+  }
+
+  if (!isBlank(scraped.opening_date) && existing.opening_date !== scraped.opening_date) {
+    update.opening_date = scraped.opening_date as string;
+  }
+  if (!isBlank(scraped.opening_timeframe) && existing.opening_timeframe !== scraped.opening_timeframe) {
+    update.opening_timeframe = scraped.opening_timeframe as string;
+  }
+
+  for (const field of FILLABLE_FIELDS) {
+    if (isBlank(existing[field]) && !isBlank(scraped[field])) {
+      update[field] = scraped[field] as string;
+    }
+  }
+  if (isBlank(existing.location) && !isBlank(scraped.location)) {
+    update.location = scraped.location as string;
+  }
+
+  return Object.keys(update).length > 0 ? update : null;
+}
+// END pure: planOpeningUpdate
+
 interface ScraperSource {
   url: string;
   name: string;
@@ -276,7 +371,7 @@ FORMAT AS JSON ARRAY ONLY - no other text:
             // Check if restaurant already exists (by name AND similar location)
             const { data: existingList } = await supabase
               .from('restaurants')
-              .select('id, name, location, status, opening_date, opening_timeframe')
+              .select(EXISTING_OPENING_COLUMNS)
               // A scraped name is a LIKE pattern here; a percent or underscore in
               // it would widen this existence check and mask a genuinely new
               // restaurant. Escaped, not stripped - sanitizeLikeInput keeps
@@ -309,58 +404,18 @@ FORMAT AS JSON ARRAY ONLY - no other text:
             }
 
             if (existing) {
-              // Define status hierarchy (lower number = earlier in lifecycle)
-              const statusHierarchy: Record<string, number> = {
-                'announced': 1,
-                'opening_soon': 2,
-                'newly_opened': 3,
-                'open': 4,
-              };
+              // planOpeningUpdate decides what changes. It used to be decided
+              // here against a row that never selected description, so every
+              // run rewrote description, cuisine, location, phone, website and
+              // price_range, and a closed row came back to life because
+              // `closed` wasn't in the status ranking.
+              const planned = planOpeningUpdate(existing as ExistingOpeningRow, restaurant);
 
-              const existingStatusLevel = statusHierarchy[existing.status] || 0;
-              const newStatusLevel = statusHierarchy[restaurant.status] || 0;
-
-              // Determine if we should update
-              const shouldUpdate = 
-                // Status is elevated (announced -> opening_soon -> newly_opened -> open)
-                newStatusLevel > existingStatusLevel ||
-                // Opening date changed (only update if new date exists and is different)
-                (restaurant.opening_date && existing.opening_date !== restaurant.opening_date) ||
-                // Opening timeframe changed
-                (restaurant.opening_timeframe && existing.opening_timeframe !== restaurant.opening_timeframe) ||
-                // New information added (description, website, etc.)
-                (restaurant.description && !existing.description) ||
-                (restaurant.website && !existing.website);
-
-              if (shouldUpdate) {
-                // Build update object with smart merging
-                const updateData: any = {
+              if (planned) {
+                const updateData: Record<string, string> = {
+                  ...planned,
                   updated_at: new Date().toISOString(),
                 };
-
-                // Update status if elevated or if current is null
-                if (newStatusLevel > existingStatusLevel || !existing.status) {
-                  updateData.status = restaurant.status;
-                }
-
-                // Update opening date if changed
-                if (restaurant.opening_date && existing.opening_date !== restaurant.opening_date) {
-                  updateData.opening_date = restaurant.opening_date;
-                }
-
-                // Update opening timeframe if changed
-                if (restaurant.opening_timeframe && existing.opening_timeframe !== restaurant.opening_timeframe) {
-                  updateData.opening_timeframe = restaurant.opening_timeframe;
-                }
-
-                // Add new information (don't overwrite existing)
-                if (restaurant.description) updateData.description = restaurant.description;
-                if (restaurant.cuisine) updateData.cuisine = restaurant.cuisine;
-                if (restaurant.location) updateData.location = restaurant.location;
-                if (restaurant.source_url) updateData.source_url = restaurant.source_url;
-                if (restaurant.phone) updateData.phone = restaurant.phone;
-                if (restaurant.website) updateData.website = restaurant.website;
-                if (restaurant.price_range) updateData.price_range = restaurant.price_range;
 
                 const { error: updateError } = await supabase
                   .from('restaurants')
@@ -372,8 +427,8 @@ FORMAT AS JSON ARRAY ONLY - no other text:
                   rowErrors.push(`update ${restaurant.name}: ${updateError.message}`);
                 } else {
                   const changes = [];
-                  if (updateData.status) changes.push(`status: ${existing.status} → ${restaurant.status}`);
-                  if (updateData.opening_date) changes.push(`date: ${existing.opening_date || 'none'} → ${restaurant.opening_date}`);
+                  if (planned.status) changes.push(`status: ${existing.status} → ${restaurant.status}`);
+                  if (planned.opening_date) changes.push(`date: ${existing.opening_date || 'none'} → ${restaurant.opening_date}`);
                   console.log(`✅ Updated: ${restaurant.name} (${changes.join(', ')})`);
                   outcome.updated++;
                 }

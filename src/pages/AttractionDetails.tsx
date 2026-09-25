@@ -14,7 +14,6 @@ import Header from "@/components/Header";
 import Footer from "@/components/Footer";
 import { LazyLocationMap } from "@/components/LazyLocationMap";
 import { getDirectionsUrl } from "@/lib/directions";
-import { STATUS_BADGE } from "@/lib/categoryStyles";
 import { OpenStatusChip } from "@/components/OpenStatusChip";
 import ShareDialog from "@/components/ShareDialog";
 import { FAQSection } from "@/components/FAQSection";
@@ -37,6 +36,9 @@ import { SpriteIcon } from "@/components/ui/SpriteIcon";
 import { createSlug } from "@/lib/slug";
 import { fetchBySlug } from "@/lib/resolveBySlug";
 import { attractionOpenStatus, weeklyHoursRows } from "@/lib/attractionHours";
+import { isPrerender } from "@/lib/isPrerender";
+import { useNow } from "@/hooks/useNow";
+import { handleError } from "@/lib/errorHandler";
 import { formatMiles, nearby } from "@/lib/venuePages";
 import type { Database } from "@/integrations/supabase/types";
 import { OptimizedImage } from "@/components/OptimizedImage";
@@ -60,10 +62,15 @@ const VISIT_DURATION_BY_TYPE: Record<string, { min: number; max: number }> = {
   'Shopping': { min: 30, max: 120 },
   'Entertainment': { min: 60, max: 180 },
 };
-const DEFAULT_DURATION = { min: 30, max: 120 };
 
-function getEstimatedDuration(type: string | null): string {
-  const duration = (type && VISIT_DURATION_BY_TYPE[type]) || DEFAULT_DURATION;
+/**
+ * Null for a type the table doesn't list (explore pass 2 WP3 item 8). The old
+ * DEFAULT_DURATION printed "30 min - 2h" for every unknown type, which is a
+ * number with nothing behind it.
+ */
+function getEstimatedDuration(type: string | null): string | null {
+  const duration = type ? VISIT_DURATION_BY_TYPE[type] : undefined;
+  if (!duration) return null;
   const formatTime = (minutes: number) => {
     if (minutes < 60) return `${minutes} min`;
     const hours = Math.floor(minutes / 60);
@@ -79,11 +86,49 @@ const NEAR_LAT_PAD = 0.15;
 const NEAR_LNG_PAD = 0.2;
 const NEAR_MAX_MILES = 10;
 
-type AttractionCardRow = Pick<Attraction, "id" | "name" | "type" | "image_url" | "rating" | "latitude" | "longitude">;
+type AttractionCardRow = Pick<Attraction, "id" | "name" | "type" | "image_url" | "latitude" | "longitude">;
+
+interface ReviewAggregate {
+  average_rating: number;
+  total_ratings: number;
+}
+
+/**
+ * The review average and count for one attraction, from
+ * content_rating_aggregates (explore pass 2 WP3 item 2). Only these two
+ * columns: RatingSystem further down fetches the reviews themselves, and the
+ * hero needs nothing else. Null when nobody has reviewed it, or when the read
+ * fails, in which case the hero shows no rating rather than a wrong one.
+ */
+function useReviewAggregate(contentId: string | undefined) {
+  return useQuery({
+    queryKey: ["content-rating-aggregate", "attraction", contentId],
+    queryFn: async (): Promise<ReviewAggregate | null> => {
+      const { data, error } = await supabase
+        .from("content_rating_aggregates")
+        .select("average_rating, total_ratings")
+        .eq("content_type", "attraction")
+        .eq("content_id", contentId ?? "")
+        .maybeSingle();
+      if (error) {
+        handleError(error, { component: "AttractionDetails", action: "loadReviewAggregate" });
+        return null;
+      }
+      return data && data.total_ratings > 0 ? data : null;
+    },
+    enabled: Boolean(contentId) && !isPrerender(),
+    staleTime: 5 * 60 * 1000,
+  });
+}
 
 export default function AttractionDetails() {
   const { slug } = useParams();
   const [imageError, setImageError] = useState(false);
+  // Status is true at the minute it's read, and absent from static HTML
+  // (explore pass 2 WP3 item 3): the prerender freezes whatever it prints.
+  const prerender = isPrerender();
+  const tick = useNow(60_000);
+  const now = prerender ? null : tick;
 
   const {
     data: attraction,
@@ -105,6 +150,7 @@ export default function AttractionDetails() {
 
   // Track page view and content interactions
   const { trackShare, trackClick } = useContentTracking(attraction?.id, 'attraction');
+  const { data: reviewAggregate } = useReviewAggregate(attraction?.id);
   // Record into the unified recently-viewed feed (WEB-FEAT-007). Only
   // EventDetails used to, so the home rail could never resume an attraction.
   // The href is the param that just resolved this row, so it resolves again.
@@ -145,8 +191,10 @@ export default function AttractionDetails() {
   const located = lat != null && lng != null && Number.isFinite(lat) && Number.isFinite(lng) && (lat !== 0 || lng !== 0);
 
   // Geographic when the attraction has coordinates: a bounding box around it,
-  // nearest first. Without coordinates it falls back to the highest-rated
-  // active attractions, and the heading says so rather than calling them near.
+  // nearest first. Without coordinates it falls back to other active
+  // attractions by name, and the heading says so rather than calling them
+  // near. It used to say "Highest-rated", ranked by attractions.rating, which
+  // has no source (explore pass 2 WP3 item 2).
   const { data: nearbyAttractions } = useQuery({
     queryKey: ["nearby-attractions", attraction?.id, located ? lat?.toFixed(3) : null, located ? lng?.toFixed(3) : null],
     queryFn: async (): Promise<Array<{ row: AttractionCardRow; miles?: number }>> => {
@@ -173,7 +221,7 @@ export default function AttractionDetails() {
         .select(ATTRACTION_LIST_COLUMNS)
         .eq("is_active", true)
         .neq("id", attraction.id)
-        .order("rating", { ascending: false, nullsFirst: false })
+        .order("name", { ascending: true })
         .limit(8);
       if (error) throw error;
       return ((data || []) as unknown as AttractionCardRow[]).map((row) => ({ row }));
@@ -188,18 +236,18 @@ export default function AttractionDetails() {
         {/* SEO-028: the canonical cannot wait for the fetch. See RouteCanonical. */}
         <RouteCanonical path={`/attractions/${slug}`} />
         <Header />
-        <div className="min-h-screen bg-gray-50">
+        <div className="min-h-screen bg-background">
           <div className="container mx-auto px-4 py-8 max-w-6xl">
             <div className="animate-pulse space-y-6">
-              <div className="h-6 w-48 bg-gray-200 rounded" />
-              <div className="h-80 bg-gray-200 rounded-3xl" />
+              <div className="h-6 w-48 bg-muted rounded" />
+              <div className="h-80 bg-muted rounded-2xl" />
               <div className="grid md:grid-cols-4 gap-4">
-                <div className="h-24 bg-gray-200 rounded-2xl" />
-                <div className="h-24 bg-gray-200 rounded-2xl" />
-                <div className="h-24 bg-gray-200 rounded-2xl" />
-                <div className="h-24 bg-gray-200 rounded-2xl" />
+                <div className="h-24 bg-muted rounded-2xl" />
+                <div className="h-24 bg-muted rounded-2xl" />
+                <div className="h-24 bg-muted rounded-2xl" />
+                <div className="h-24 bg-muted rounded-2xl" />
               </div>
-              <div className="h-48 bg-gray-200 rounded-2xl" />
+              <div className="h-48 bg-muted rounded-2xl" />
             </div>
           </div>
         </div>
@@ -220,22 +268,22 @@ export default function AttractionDetails() {
           <meta name="robots" content="noindex, follow" />
         </Helmet>
         <Header />
-        <div className="min-h-screen bg-gray-50 flex items-center justify-center">
-          <Card className="max-w-md mx-auto text-center shadow-lg rounded-2xl">
+        <div className="min-h-screen bg-background flex items-center justify-center px-4">
+          <Card className="max-w-md mx-auto text-center rounded-2xl">
             <CardContent className="p-8">
-              <Landmark className="h-16 w-16 text-gray-500 mx-auto mb-4" />
-              <h2 className="text-2xl font-bold text-gray-800 mb-2">
-                Attraction Not Found
-              </h2>
-              <p className="text-gray-600 mb-6">
-                The attraction you're looking for doesn't exist or has been removed.
+              <Landmark className="h-16 w-16 text-muted-foreground mx-auto mb-4" aria-hidden="true" />
+              <h1 className="text-2xl font-bold text-foreground mb-2">
+                Attraction not found
+              </h1>
+              <p className="text-muted-foreground mb-6">
+                We don't list an attraction at this address, or it's been taken off the site.
               </p>
-              <Link to="/attractions">
-                <Button className="bg-[#2D1B69] hover:bg-[#2D1B69]/90">
-                  <ArrowLeft className="h-4 w-4 mr-2" />
-                  Back to Attractions
-                </Button>
-              </Link>
+              <Button asChild>
+                <Link to="/attractions">
+                  <ArrowLeft className="h-4 w-4 mr-2" aria-hidden="true" />
+                  Back to attractions
+                </Link>
+              </Button>
             </CardContent>
           </Card>
         </div>
@@ -254,8 +302,13 @@ export default function AttractionDetails() {
 
   // Explore plan WP3 item 3. attractions.hours is per-day JSONB; the chip used
   // to be handed that object and always fell back to "check official site".
-  const openStatus = attractionOpenStatus(attraction.hours, attraction.hours_summary);
-  const weeklyHours = weeklyHoursRows(attraction.hours);
+  const openStatus = now ? attractionOpenStatus(attraction.hours, attraction.hours_summary, now) : null;
+  // No today highlight under prerender: which row is "today" is a claim about
+  // the build machine's clock.
+  const weeklyHours = weeklyHoursRows(attraction.hours, now ?? undefined).map((row) =>
+    now ? row : { ...row, isToday: false },
+  );
+  const visitTime = getEstimatedDuration(attraction.type);
   const typeLabel = attraction.type?.toLowerCase() || "attraction";
 
   // Rows for "Plan your visit". Each renders only with data behind it.
@@ -263,7 +316,9 @@ export default function AttractionDetails() {
     attraction.is_free === true
       ? "Free"
       : attraction.is_free === false
-        ? "Paid admission. Prices are on the official site."
+        ? attraction.website
+          ? "Paid admission. Prices are on the official site."
+          : "Paid admission"
         : null;
   const setting =
     attraction.is_indoor === true ? "Indoor" : attraction.is_indoor === false ? "Outdoor" : null;
@@ -299,14 +354,15 @@ export default function AttractionDetails() {
             question: `Is ${attraction.name} free?`,
             answer: attraction.is_free
               ? `Yes, admission to ${attraction.name} is free.`
-              : `No, ${attraction.name} charges admission. Check its official site for current prices.`,
+              : attraction.website
+                ? `No, ${attraction.name} charges admission. Check its official site for current prices.`
+                : `No, ${attraction.name} charges admission.`,
           },
         ]
       : []),
-    {
-      question: `How long should I spend at ${attraction.name}?`,
-      answer: `Plan on ${getEstimatedDuration(attraction.type)}. That is a rough estimate for a ${attraction.type?.toLowerCase() || "visit like this"}, not a figure from ${attraction.name}; check its official site for anything time-sensitive.`,
-    },
+    // No "How long should I spend" answer. It was our own estimate by type,
+    // and FAQPage schema publishes it as a fact about this place (explore
+    // pass 2 WP3 item 8). The page still shows it, labelled as ours.
   ];
 
   const relatedShown = relatedAttractions && relatedAttractions.length >= 3 ? relatedAttractions : [];
@@ -348,7 +404,7 @@ export default function AttractionDetails() {
         ]}
       />
 
-      <div className="min-h-screen bg-gray-50">
+      <div className="min-h-screen bg-background">
         <div className="container mx-auto px-4 py-6 max-w-6xl">
           {/* Breadcrumb Navigation */}
           <Breadcrumbs
@@ -363,12 +419,12 @@ export default function AttractionDetails() {
 
           {/* Top Actions Bar: the page's one Share control. */}
           <div className="flex items-center justify-between mb-6">
-            <Link to="/attractions">
-              <Button variant="ghost" size="sm" className="text-gray-600 hover:text-gray-900 -ml-2">
-                <ArrowLeft className="h-4 w-4 mr-1" />
-                All Attractions
-              </Button>
-            </Link>
+            <Button asChild variant="ghost" size="sm" className="text-muted-foreground hover:text-foreground -ml-2">
+              <Link to="/attractions">
+                <ArrowLeft className="h-4 w-4 mr-1" aria-hidden="true" />
+                All attractions
+              </Link>
+            </Button>
             <div className="flex gap-2">
               <ShareDialog
                 title={attraction.name}
@@ -395,7 +451,7 @@ export default function AttractionDetails() {
           </div>
 
           {/* Hero Card */}
-          <Card className="shadow-sm rounded-2xl overflow-hidden border mb-8">
+          <Card className="rounded-2xl overflow-hidden border mb-8">
             {/* A photo gets the tall hero; without one, a solid band at about
                 half the height (Explore plan WP3 item 11). */}
             <div className={`relative overflow-hidden ${showImage ? "h-72 md:h-96" : "h-44 md:h-52 bg-[#2D1B69]"}`}>
@@ -414,14 +470,9 @@ export default function AttractionDetails() {
                 </>
               )}
 
-              {attraction.is_featured && (
-                <div className="absolute top-4 left-4 flex gap-2 z-10">
-                  <Badge className={`${STATUS_BADGE.featured} border-0 text-sm font-semibold px-3 py-1`}>
-                    <SpriteIcon name="sparkles" className="h-3.5 w-3.5 mr-1.5" />
-                    Featured
-                  </Badge>
-                </div>
-              )}
+              {/* No Featured badge (explore pass 2 WP3 item 1): the flags it
+                  read were never reviewed. D8 brings it back with a
+                  featured_reviewed_at date behind it. */}
 
               <div className="absolute bottom-0 left-0 right-0 p-6 md:p-10 z-10">
                 <div className="max-w-3xl">
@@ -435,14 +486,21 @@ export default function AttractionDetails() {
                     {attraction.name}
                   </h1>
                   <div className="flex flex-wrap items-center gap-3 text-white/90">
-                    {attraction.rating != null && (
+                    {/* The review average with its count, from the reviews
+                        below (explore pass 2 WP3 item 2). attractions.rating
+                        is not shown: nothing says where it came from. */}
+                    {reviewAggregate && (
                       <a
                         href="#reviews"
-                        className="flex items-center gap-1.5 bg-white/20 rounded-full px-3 py-1 hover:bg-white/30"
-                        aria-label={`Rated ${attraction.rating.toFixed(1)} out of 5. Go to reviews`}
+                        className="flex min-h-11 items-center gap-1.5 bg-white/20 rounded-full px-3 py-1 hover:bg-white/30"
+                        data-review-summary=""
                       >
                         <Star className="h-4 w-4 fill-amber-400 text-amber-400" aria-hidden="true" />
-                        <span className="font-semibold">{attraction.rating.toFixed(1)}</span>
+                        <span>
+                          <span className="font-semibold">{reviewAggregate.average_rating.toFixed(1)}</span>
+                          {" "}from {reviewAggregate.total_ratings}{" "}
+                          {reviewAggregate.total_ratings === 1 ? "review" : "reviews"}
+                        </span>
                       </a>
                     )}
                     {attraction.location && (
@@ -456,20 +514,24 @@ export default function AttractionDetails() {
               </div>
             </div>
 
-            {/* Today's status, computed from the row (or the hours text). */}
-            <div className="flex flex-wrap items-center gap-3 px-6 py-4 md:px-10 bg-gray-50 border-b">
-              <OpenStatusChip
-                status={openStatus}
-                website={attraction.website}
-                fallbackLabel={attraction.hours_summary || "Check official site for hours"}
-              />
-            </div>
+            {/* Today's status, computed from the row (or the hours text) at
+                this minute. Not rendered under prerender. The fallback is
+                plain text: the Website row below is the page's one link to
+                the official site (explore pass 2 WP3 items 3 and 8). */}
+            {openStatus && (
+              <div className="flex flex-wrap items-center gap-3 px-6 py-4 md:px-10 bg-muted/50 border-b" data-attraction-status="">
+                <OpenStatusChip
+                  status={openStatus}
+                  fallbackLabel={attraction.hours_summary || "Hours not listed"}
+                />
+              </div>
+            )}
 
             <CardContent className="p-6 md:p-10">
               {/* Plan your visit (Explore plan WP3 item 6): one list in place
                   of the stat tiles and the two detail blocks. */}
               <section aria-labelledby="plan-visit-heading">
-                <h2 id="plan-visit-heading" className="text-xl font-bold text-gray-900 mb-2">
+                <h2 id="plan-visit-heading" className="text-xl font-bold text-foreground mb-2">
                   Plan your visit
                 </h2>
                 <dl className="divide-y">
@@ -481,7 +543,7 @@ export default function AttractionDetails() {
                           {weeklyHours.map((row) => (
                             <tr
                               key={row.label}
-                              className={row.isToday ? "font-semibold text-amber-950 bg-amber-50" : undefined}
+                              className={row.isToday ? "font-semibold text-foreground bg-muted" : undefined}
                               aria-current={row.isToday ? "date" : undefined}
                             >
                               <th scope="row" className="py-1 pr-4 pl-2 text-left font-[inherit]">
@@ -510,7 +572,7 @@ export default function AttractionDetails() {
                         href={directionsUrl}
                         target="_blank"
                         rel="noopener noreferrer"
-                        className="inline-flex min-h-11 items-center text-sm font-medium text-[#2D1B69] hover:underline"
+                        className="inline-flex min-h-11 items-center text-sm font-medium text-primary hover:underline"
                       >
                         <Navigation className="h-3.5 w-3.5 mr-1" aria-hidden="true" />
                         Directions
@@ -528,19 +590,21 @@ export default function AttractionDetails() {
                       )}
                     </VisitRow>
                   )}
-                  <VisitRow term="Est. visit time">
-                    {getEstimatedDuration(attraction.type)}
-                    <span className="block text-sm text-gray-500">
-                      Our estimate for a {typeLabel}, not a figure from {attraction.name}.
-                    </span>
-                  </VisitRow>
+                  {visitTime && (
+                    <VisitRow term="Est. visit time">
+                      {visitTime}
+                      <span className="block text-sm text-muted-foreground">
+                        Our estimate for a {typeLabel}, not a figure from {attraction.name}.
+                      </span>
+                    </VisitRow>
+                  )}
                   {attraction.website && (
                     <VisitRow term="Website">
                       <a
                         href={attraction.website}
                         target="_blank"
                         rel="noopener noreferrer"
-                        className="inline-flex min-h-11 items-center gap-1 font-medium text-[#2D1B69] hover:underline"
+                        className="inline-flex min-h-11 items-center gap-1 font-medium text-primary hover:underline"
                       >
                         Official site
                         <SpriteIcon name="external-link" className="h-3.5 w-3.5" aria-hidden="true" />
@@ -557,17 +621,17 @@ export default function AttractionDetails() {
                 <>
                   <Separator className="my-8" />
                   <section>
-                    <h2 className="text-xl font-bold text-gray-900 mb-4">
+                    <h2 className="text-xl font-bold text-foreground mb-4">
                       About {attraction.name}
                     </h2>
                     {attraction.description && (
-                      <p className="text-gray-700 leading-relaxed text-lg max-w-prose">
+                      <p className="text-foreground/90 leading-relaxed text-lg max-w-prose">
                         {attraction.description}
                       </p>
                     )}
                     {attraction.geo_summary && (
                       <p
-                        className="attraction-summary mt-4 text-gray-700 leading-relaxed max-w-prose"
+                        className="attraction-summary mt-4 text-foreground/90 leading-relaxed max-w-prose"
                         itemProp="description"
                       >
                         {attraction.geo_summary}
@@ -614,7 +678,7 @@ export default function AttractionDetails() {
           {/* Same type - hidden when fewer than 3 matches */}
           {relatedShown.length > 0 && (
             <section className="mb-8" aria-labelledby="related-heading">
-              <h2 id="related-heading" className="text-2xl font-bold text-gray-900 mb-6">
+              <h2 id="related-heading" className="text-2xl font-bold text-foreground mb-6">
                 More {typeLabel} attractions
               </h2>
               <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-5" onClick={trackClick}>
@@ -627,13 +691,13 @@ export default function AttractionDetails() {
 
           {nearShown.length > 0 && (
             <section className="mb-8" aria-labelledby="nearby-heading">
-              <h2 id="nearby-heading" className="text-2xl font-bold text-gray-900 mb-2">
-                {located ? `Near ${attraction.name}` : "Highest-rated attractions"}
+              <h2 id="nearby-heading" className="text-2xl font-bold text-foreground mb-2">
+                {located ? `Near ${attraction.name}` : "Other attractions"}
               </h2>
-              <p className="text-gray-600 mb-6">
+              <p className="text-muted-foreground mb-6">
                 {located
                   ? `Within ${NEAR_MAX_MILES} miles, closest first. Distances are straight-line.`
-                  : "Sorted by rating, since this attraction has no map location."}
+                  : "By name. This attraction has no map location, so we can't say what's near it."}
               </p>
               <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-5">
                 {nearShown.map(({ row, miles }) => (
@@ -661,12 +725,20 @@ export default function AttractionDetails() {
 
           {/* Browse More CTA */}
           <div className="text-center py-8">
-            <Link to="/attractions">
-              <Button size="lg" className="bg-[#2D1B69] hover:bg-[#2D1B69]/90 text-white rounded-xl px-8">
-                <Landmark className="h-5 w-5 mr-2" />
+            <Button asChild size="lg" className="rounded-xl px-8">
+              <Link to="/attractions">
+                <Landmark className="h-5 w-5 mr-2" aria-hidden="true" />
                 Browse all attractions
-              </Button>
-            </Link>
+              </Link>
+            </Button>
+            <p className="mt-4">
+              <Link
+                to="/map?layers=attraction"
+                className="inline-flex min-h-11 items-center text-sm font-medium text-foreground underline underline-offset-4 hover:text-primary"
+              >
+                Show attractions on the map
+              </Link>
+            </p>
           </div>
         </div>
 
@@ -733,12 +805,6 @@ function AttractionMiniCard({ row, miles }: AttractionMiniCardProps) {
           <h3 className="font-semibold text-base line-clamp-1 mb-1">{row.name}</h3>
           <div className="flex flex-wrap items-center gap-2 text-sm text-muted-foreground">
             <Badge variant="outline" className="text-xs">{row.type}</Badge>
-            {row.rating != null && (
-              <span className="flex items-center gap-1">
-                <Star className="h-3 w-3 fill-amber-400 text-amber-400" aria-hidden="true" />
-                <span>{row.rating.toFixed(1)}</span>
-              </span>
-            )}
             {miles != null && <span>{formatMiles(miles)}</span>}
           </div>
         </CardContent>
@@ -755,8 +821,8 @@ interface VisitRowProps {
 function VisitRow({ term, children }: VisitRowProps) {
   return (
     <div className="grid gap-1 py-3 sm:grid-cols-[11rem_1fr] sm:gap-4">
-      <dt className="text-sm font-semibold text-gray-900">{term}</dt>
-      <dd className="text-gray-700">{children}</dd>
+      <dt className="text-sm font-semibold text-foreground">{term}</dt>
+      <dd className="text-foreground/90">{children}</dd>
     </div>
   );
 }

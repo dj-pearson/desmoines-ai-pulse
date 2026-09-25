@@ -2,6 +2,8 @@ import { describe, it, expect } from "vitest";
 import {
   attractionHoursToPeriods,
   attractionOpenStatus,
+  attractionOpeningHoursSpec,
+  attractionFactParts,
   parseClock,
   weeklyHoursRows,
 } from "@/lib/attractionHours";
@@ -137,5 +139,57 @@ describe("weeklyHoursRows", () => {
   it("is empty when nothing is readable", () => {
     expect(weeklyHoursRows(null, WED_10AM)).toEqual([]);
     expect(weeklyHoursRows({ mon: { open: "soon" } }, WED_10AM)).toEqual([]);
+  });
+});
+
+describe("attractionOpeningHoursSpec", () => {
+  it("emits six entries when Sunday was never entered", () => {
+    const { sun: _sun, ...noSunday } = FULL_WEEK;
+    void _sun;
+    const spec = attractionOpeningHoursSpec(noSunday);
+    expect(spec).toHaveLength(6);
+    expect(spec.map((s) => s.dayOfWeek)).not.toContain("https://schema.org/Sunday");
+    expect(spec[0]).toEqual({
+      "@type": "OpeningHoursSpecification",
+      dayOfWeek: "https://schema.org/Monday",
+      opens: "09:00",
+      closes: "17:00",
+    });
+    expect(spec[5]).toMatchObject({ dayOfWeek: "https://schema.org/Saturday", opens: "10:00", closes: "16:00" });
+  });
+
+  it("states an entered closed day as 00:00-00:00", () => {
+    const spec = attractionOpeningHoursSpec(FULL_WEEK);
+    expect(spec).toHaveLength(7);
+    expect(spec[6]).toMatchObject({ dayOfWeek: "https://schema.org/Sunday", opens: "00:00", closes: "00:00" });
+  });
+
+  it("writes a 24:00 close as 23:59 and keeps an overnight close as stored", () => {
+    const spec = attractionOpeningHoursSpec({ fri: { open: "00:00", close: "24:00" }, sat: { open: "20:00", close: "02:00" } });
+    expect(spec).toEqual([
+      { "@type": "OpeningHoursSpecification", dayOfWeek: "https://schema.org/Friday", opens: "00:00", closes: "23:59" },
+      { "@type": "OpeningHoursSpecification", dayOfWeek: "https://schema.org/Saturday", opens: "20:00", closes: "02:00" },
+    ]);
+  });
+
+  it("is empty for no readable day", () => {
+    expect(attractionOpeningHoursSpec(null)).toEqual([]);
+    expect(attractionOpeningHoursSpec({ mon: { open: "soon" } })).toEqual([]);
+  });
+});
+
+describe("attractionFactParts", () => {
+  const row = { hours: FULL_WEEK, hours_summary: null, is_free: true, is_indoor: false, is_kid_friendly: true };
+
+  it("lists the set columns and today's status", () => {
+    expect(attractionFactParts(row, WED_10AM)).toEqual(["Free", "Outdoor", "Kids", "Open until 5 PM"]);
+  });
+
+  it("leaves the status out when there is no clock", () => {
+    expect(attractionFactParts(row, null)).toEqual(["Free", "Outdoor", "Kids"]);
+  });
+
+  it("says nothing for unset columns", () => {
+    expect(attractionFactParts({}, WED_10AM)).toEqual([]);
   });
 });

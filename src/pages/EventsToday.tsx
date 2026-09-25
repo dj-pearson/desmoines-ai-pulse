@@ -15,14 +15,20 @@ import { BRAND, getCanonicalUrl } from "@/lib/brandConfig";
 import { Breadcrumbs } from "@/components/ui/breadcrumbs";
 import { formatCount } from "@/lib/pluralize";
 import { useWeather, reorderForWeather } from "@/hooks/useWeather";
-import { useEventIndoorFlags } from "@/hooks/useEventIndoorFlags";
+import { useNow } from "@/hooks/useNow";
 import {
   useEventLanding,
+  useWindowIndoorFlags,
   groupTodayEvents,
   countFree,
   countStartingAfter5pm,
+  formatCentralDate,
+  hourLabel,
   type LandingEvent,
 } from "@/hooks/useEventLanding";
+import NoIndexMeta from "@/components/schema/NoIndexMeta";
+import { EventsLandingLinks } from "@/components/events/EventsLandingLinks";
+import { EVENING_START_HOUR } from "@/lib/tonightPairings";
 import { WeatherNotice } from "@/components/WeatherNotice";
 import { ErrorState } from "@/components/ui/error-state";
 import { SkeletonGroup } from "@/components/ui/skeleton";
@@ -35,6 +41,9 @@ import { EVENTS_UPDATE_ANSWER } from "@/content/eventsCopy";
  */
 const VISIBLE_EVENTS = 36;
 
+/** Row cap for today's window. At the cap the count reads "N+". */
+const FETCH_LIMIT = 200;
+
 const EMPTY: LandingEvent[] = [];
 
 export default function EventsToday() {
@@ -46,19 +55,34 @@ export default function EventsToday() {
    * this page used to skip, and the window is centralWindow("today"), the same
    * Central day the hub's Today preset uses.
    */
+  /*
+   * includeOngoing (events-pass2 WP3 item 1): day 3 of a festival, and last
+   * night's show still running after midnight, are part of today. They group
+   * under "Happening now" and drop off once over (groupTodayEvents).
+   */
   const {
     data: events = EMPTY,
     isLoading,
     error: loadError,
     refetch,
-  } = useEventLanding({ key: { landing: "today" }, window: "today", limit: 200 });
+    window: todayWindow,
+  } = useEventLanding({
+    key: { landing: "today" },
+    window: "today",
+    limit: FETCH_LIMIT,
+    includeOngoing: true,
+  });
+
+  // A minute clock, so "Happening now" and "Tonight" regroup while the tab is
+  // open instead of keeping the buckets from the moment it loaded.
+  const now = useNow(60 * 1000);
 
   const { weather, hasVerdict } = useWeather();
 
-  // Fetched separately so a not-yet-deployed column can never fail the events
-  // query itself - see the header of useEventIndoorFlags.
-  const loadedIds = useMemo(() => events.map((event) => event.id), [events]);
-  const indoorFlags = useEventIndoorFlags(loadedIds, hasVerdict);
+  // Fetched by the day's bounds rather than by up to 200 ids in one in()
+  // filter, and separately, so a not-yet-deployed column can never fail the
+  // events query itself - see useWindowIndoorFlags.
+  const indoorFlags = useWindowIndoorFlags(todayWindow, hasVerdict);
 
   /**
    * Grouped against the clock (Happening now / This afternoon / Tonight...),
@@ -66,11 +90,19 @@ export default function EventsToday() {
    * shows up within "Tonight" without moving them out of it. Reordering never
    * filters. The render cap is then filled group by group in page order.
    */
+  const grouped = useMemo(
+    () =>
+      groupTodayEvents(events, now).map((group) => ({
+        ...group,
+        events: reorderForWeather(group.events, (event) => indoorFlags[event.id], weather),
+      })),
+    [events, now, indoorFlags, weather]
+  );
+  // What the page lists: carried rows that are already over are not in any
+  // group, so the counts come from the groups, not the raw rows.
+  const listed = useMemo(() => grouped.flatMap((group) => group.events), [grouped]);
+
   const groups = useMemo(() => {
-    const grouped = groupTodayEvents(events, new Date()).map((group) => ({
-      ...group,
-      events: reorderForWeather(group.events, (event) => indoorFlags[event.id], weather),
-    }));
     let remaining = VISIBLE_EVENTS;
     return grouped
       .map((group) => {
@@ -79,10 +111,17 @@ export default function EventsToday() {
         return { ...group, total: group.events.length, events: shown };
       })
       .filter((group) => group.events.length > 0);
-  }, [events, indoorFlags, weather]);
+  }, [grouped]);
 
   const visibleEvents = useMemo(() => groups.flatMap((group) => group.events), [groups]);
-  const hiddenCount = events.length - visibleEvents.length;
+  const hiddenCount = listed.length - visibleEvents.length;
+
+  // The day the rows were fetched for, under the h1, as the weekend page does.
+  // Absolute, so it is still true in prerendered HTML read later that day.
+  const dayLabel =
+    todayWindow && !isLoading && !loadError
+      ? formatCentralDate(todayWindow.startDay, "EEEE, MMMM d, yyyy")
+      : null;
 
   /**
    * WEB-SEO-031: the title and description used to interpolate `new Date()`,
@@ -103,7 +142,7 @@ export default function EventsToday() {
   const faqData = [
     {
       question: `What's happening today in Des Moines?`,
-      answer: `This page lists every event on our calendar for today, Central time, in Des Moines and the surrounding suburbs, grouped into what is on now, this afternoon and tonight.`,
+      answer: `This page lists the events on our calendar for today, Central time, in Des Moines and the surrounding suburbs, plus anything that started earlier and is still running. It is grouped into what is on now, this morning, this afternoon and tonight, which starts at ${hourLabel(EVENING_START_HOUR)}.`,
     },
     {
       question: "How often is this list updated?",
@@ -129,6 +168,8 @@ export default function EventsToday() {
 
   return (
     <div className="min-h-screen bg-background">
+      {/* A failed first query has not answered "what's on today" (WP3 item 12). */}
+      {loadError && events.length === 0 && <NoIndexMeta />}
       <EnhancedLocalSEO
         pageTitle={pageTitle}
         pageDescription={pageDescription}
@@ -164,6 +205,7 @@ export default function EventsToday() {
             <SpriteIcon name="calendar" className="h-6 w-6 text-primary" />
             <h1 className="text-3xl font-bold">Events Today in Des Moines</h1>
           </div>
+          {dayLabel && <p className="text-lg text-muted-foreground mb-2">{dayLabel}</p>}
 
           {/* SEO-009: a visible, absolute freshness date from the rows, not
               from the clock that ran the build. */}
@@ -186,16 +228,18 @@ export default function EventsToday() {
           <CardContent className="pt-6">
             <div className="grid grid-cols-1 md:grid-cols-3 gap-4 text-center">
               <div>
-                <div className="text-2xl font-bold text-primary">{events.length}</div>
+                <div className="text-2xl font-bold text-primary">
+                  {events.length >= FETCH_LIMIT ? `${listed.length}+` : listed.length}
+                </div>
                 <div className="text-sm text-muted-foreground">Events Today</div>
               </div>
               <div>
-                <div className="text-2xl font-bold text-primary">{countFree(events)}</div>
+                <div className="text-2xl font-bold text-primary">{countFree(listed)}</div>
                 <div className="text-sm text-muted-foreground">Free Events</div>
               </div>
               <div>
                 <div className="text-2xl font-bold text-primary">
-                  {countStartingAfter5pm(events)}
+                  {countStartingAfter5pm(listed)}
                 </div>
                 <div className="text-sm text-muted-foreground">Starting after 5 PM</div>
               </div>
@@ -256,7 +300,7 @@ export default function EventsToday() {
             {hiddenCount > 0 && (
               <div className="mb-8 text-center">
                 <p className="text-muted-foreground mb-3">
-                  Showing {visibleEvents.length} of {formatCount(events.length, "event")} today.
+                  Showing {visibleEvents.length} of {formatCount(listed.length, "event")} today.
                 </p>
                 <Button asChild variant="outline">
                   <Link to="/events?preset=today">See all of today on the events page</Link>
@@ -322,6 +366,7 @@ export default function EventsToday() {
         </Card>
         {/* SEO-003: FAQSection renders the questions and emits the single
             FAQPage block, so the schema never describes an invisible FAQ. */}
+        <EventsLandingLinks current="/events/today" className="mb-8" />
         <FAQSection faqs={faqData} />
       </div>
 

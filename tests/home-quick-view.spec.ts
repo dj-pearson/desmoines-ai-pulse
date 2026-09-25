@@ -136,6 +136,12 @@ async function openQuickView(page: Page, title: string) {
   await installFixtureBackend(page);
   // Registered after the catch-all, so it wins for events.
   await page.route('**/rest/v1/events?*', (route) => json(route, EVENTS));
+  // The For You rail reads events ordered by trending_score. Given the same
+  // rows it would show them, and the dashboard below drops anything a rail
+  // above already shows (home-pass2 WP3 item 6), so the card never appears.
+  await page.route('**/rest/v1/events?*', (route) =>
+    decodeURIComponent(route.request().url()).includes('order=trending_score') ? json(route, []) : route.fallback(),
+  );
 
   await page.goto('/', { waitUntil: 'domcontentloaded' });
   const dashboard = page.locator('section[aria-labelledby="dashboard-heading"]');
@@ -244,4 +250,58 @@ test('Share with no Web Share and a refusing clipboard shows the link to copy', 
   await expect(input).toBeVisible();
   await expect(input).toHaveValue(/\/events\//);
   expect(errors).toEqual([]);
+});
+
+/**
+ * home-pass2 WP1 item 11: the quick view's open state is `?event=<id>`.
+ * Opening from a card pushes an entry, so Back closes the sheet; Close pops
+ * that entry; a pasted link opens the one visible row; a malformed id is
+ * dropped from the URL.
+ */
+test.describe('the quick view lives in the URL', () => {
+  const TIMED_ID = EVENTS[0].id;
+
+  test('opening from a card pushes ?event=, and Back closes it', async ({ page }) => {
+    const dialog = await openQuickView(page, 'Timed Fixture Show');
+    await expect(page).toHaveURL(new RegExp(`[?&]event=${TIMED_ID}`));
+
+    await page.goBack();
+    await expect(dialog).toBeHidden();
+    expect(new URL(page.url()).searchParams.has('event')).toBe(false);
+    expect(new URL(page.url()).pathname).toBe('/');
+  });
+
+  test('Close takes the parameter off', async ({ page }) => {
+    const dialog = await openQuickView(page, 'Timed Fixture Show');
+    await dialog.getByRole('button', { name: 'Close' }).click();
+    await expect(dialog).toBeHidden();
+    await expect(page).not.toHaveURL(/[?&]event=/);
+    expect(new URL(page.url()).pathname).toBe('/');
+  });
+
+  test('a pasted link opens that event, and Close leaves a clean URL', async ({ page }) => {
+    await seedConsent(page);
+    await installFixtureBackend(page);
+    await page.route('**/rest/v1/events?*', (route) => json(route, EVENTS));
+    // The by-id read is maybeSingle: answer it with exactly the one row.
+    await page.route('**/rest/v1/events?*', (route) =>
+      decodeURIComponent(route.request().url()).includes(`id=eq.${TIMED_ID}`) ? json(route, [EVENTS[0]]) : route.fallback(),
+    );
+
+    await page.goto(`/?event=${TIMED_ID}`, { waitUntil: 'domcontentloaded' });
+    const dialog = page.getByRole('dialog', { name: 'Timed Fixture Show' });
+    await expect(dialog).toBeVisible({ timeout: 30_000 });
+
+    await dialog.getByRole('button', { name: 'Close' }).click();
+    await expect(dialog).toBeHidden();
+    await expect(page).not.toHaveURL(/[?&]event=/);
+  });
+
+  test('a malformed id is dropped and nothing opens', async ({ page }) => {
+    await seedConsent(page);
+    await installFixtureBackend(page);
+    await page.goto('/?event=not-an-id', { waitUntil: 'domcontentloaded' });
+    await expect(page).not.toHaveURL(/[?&]event=/, { timeout: 15_000 });
+    await expect(page.locator('[data-quick-view]')).toHaveCount(0);
+  });
 });

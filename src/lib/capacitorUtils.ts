@@ -212,6 +212,48 @@ export async function nativeShare(opts: {
   return false;
 }
 
+export type ShareOutcome = 'shared' | 'cancelled' | 'unavailable';
+
+/** True when a share rejection means the person closed the sheet. */
+function isShareCancel(err: unknown): boolean {
+  if (err instanceof DOMException && err.name === 'AbortError') return true;
+  const message = String((err as { message?: unknown } | null)?.message ?? err ?? '');
+  return /cancel/i.test(message);
+}
+
+/**
+ * nativeShare with the outcome spelled out. nativeShare answers false for a
+ * cancel and for "no share sheet here" alike, so a caller that falls back to
+ * the clipboard overwrote whatever the person had copied after they chose not
+ * to share. 'cancelled' is the person's answer and needs no fallback;
+ * 'unavailable' (no sheet, or it failed) does.
+ */
+export async function shareWithOutcome(opts: {
+  title?: string;
+  text?: string;
+  url?: string;
+}): Promise<ShareOutcome> {
+  try {
+    if (isCapacitor() && window.Capacitor?.Plugins?.Share) {
+      await window.Capacitor.Plugins.Share.share({
+        title: opts.title,
+        text: opts.text,
+        url: opts.url,
+        dialogTitle: opts.title,
+      });
+      return 'shared';
+    }
+    if (typeof navigator.share === 'function') {
+      await navigator.share(opts);
+      return 'shared';
+    }
+  } catch (err) {
+    if (isShareCancel(err)) return 'cancelled';
+    logger.warn('shareWithOutcome', 'share failed', { error: String(err) });
+  }
+  return 'unavailable';
+}
+
 /* ------------------------------------------------------------------ */
 /* Haptic feedback                                                    */
 /* ------------------------------------------------------------------ */

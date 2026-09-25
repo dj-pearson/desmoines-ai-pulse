@@ -19,13 +19,13 @@ import {
   Shield,
   LogOut,
   Trophy,
+  Plus,
+  Megaphone,
 } from "lucide-react";
 import { cn } from "@/lib/utils";
 import { prefetchRoute } from "@/lib/prefetch";
 import { ThemeToggle } from "@/components/ThemeToggle";
-import { AdvertiseButton } from "@/components/AdvertiseButton";
-import SubmitEventButton from "@/components/SubmitEventButton";
-import { navigationGroups } from "./navigationConfig";
+import { navigationGroups, signInHref } from "./navigationConfig";
 import { MemberUpgradeGate } from "./UserMenu";
 
 interface MobileNavProps {
@@ -64,6 +64,7 @@ export function MobileNav({
   getInitials,
 }: MobileNavProps) {
   const location = useLocation();
+  const signIn = signInHref(location.pathname, location.search);
 
   const isActivePath = (path: string) => {
     return location.pathname === path || location.pathname.startsWith(path + "/");
@@ -154,12 +155,10 @@ export function MobileNav({
                 <ChevronRight className="h-5 w-5 text-muted-foreground" aria-hidden="true" />
               </Link>
             </MemberUpgradeGate>
-            <div onClick={handleLinkClick} className="w-full">
-              <SubmitEventButton />
-            </div>
-            <div onClick={handleLinkClick} className="w-full">
-              <AdvertiseButton />
-            </div>
+            {/* Plain links: /advertise is public, so a phone visitor reaches the
+                rate card without the sign-in wall AdvertiseButton put first. */}
+            <BusinessLink href="/submit-event" icon={Plus} label="Submit an event" onClick={handleLinkClick} />
+            <BusinessLink href="/advertise" icon={Megaphone} label="Advertise with us" onClick={handleLinkClick} />
           </div>
 
           {/* Mobile User Actions */}
@@ -214,9 +213,9 @@ export function MobileNav({
             </div>
           ) : (
             <div className="border-t border-border pt-4 mt-6">
-              <Link to="/auth" onClick={handleLinkClick} className="block w-full" aria-label="Sign in to your account">
-                <Button className="w-full h-12 text-base touch-target">Sign In</Button>
-              </Link>
+              <Button asChild className="w-full h-12 text-base touch-target">
+                <Link to={signIn} onClick={handleLinkClick}>Sign In</Link>
+              </Button>
             </div>
           )}
         </div>
@@ -284,6 +283,22 @@ function UserLink({ href, icon: Icon, label, onClick }: UserLinkProps) {
     >
       <Icon className="h-5 w-5 text-primary flex-shrink-0" aria-hidden="true" />
       <span className="text-base">{label}</span>
+    </Link>
+  );
+}
+
+function BusinessLink({ href, icon: Icon, label, onClick }: UserLinkProps) {
+  return (
+    <Link
+      to={href}
+      onClick={onClick}
+      className="flex items-center justify-between p-4 bg-muted/50 hover:bg-muted rounded-xl min-h-[56px] smooth-transition"
+    >
+      <span className="flex items-center gap-3">
+        <Icon className="h-5 w-5 text-primary flex-shrink-0" aria-hidden="true" />
+        <span className="font-medium">{label}</span>
+      </span>
+      <ChevronRight className="h-5 w-5 text-muted-foreground" aria-hidden="true" />
     </Link>
   );
 }

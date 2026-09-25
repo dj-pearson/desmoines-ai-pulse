@@ -107,13 +107,22 @@ Deno.test('the column is additive and the backfill is scoped', async () => {
 
 Deno.test('the JSON-LD publishes a date, not an invented time', async () => {
   const src = await read('src/lib/eventSchema.ts');
-  assert(/if \(event\.time_tbd\) \{/.test(src));
-  assert(/return datePart;/.test(src), 'startDate becomes date-only');
+  // Events pass 2 (WP4 item 2) routes the schema through hasSpecificTime, the
+  // same test the page uses, so time_tbd, the 19:31:58 marker and SeatGeek's
+  // 03:30 placeholder all give a date-only startDate. hasSpecificTime reading
+  // time_tbd first is asserted in the next test.
+  assert(/return hasSpecificTime\(\{ \.\.\.event, date \}\);/.test(src), 'the schema asks hasSpecificTime');
+  const start = src.slice(src.indexOf('export function eventStartIso'), src.indexOf('export function eventEndIso'));
+  assert(/if \(!eventHasTime\(event\)\) \{/.test(start));
+  assert(/if \(day\) return day;/.test(start), 'startDate becomes date-only');
   // And endDate is omitted rather than estimated: adding three hours to
   // midnight would publish a 3 AM end, moving the implausible hour to the
-  // other field instead of removing it.
-  assert(/if \(event\.time_tbd\) return null;/.test(src));
-  assert(/eventEndIso\(event\) \? \{ endDate/.test(src));
+  // other field instead of removing it. A REAL end_date is kept, as a date.
+  const end = src.slice(src.indexOf('export function eventEndIso'));
+  const noTime = end.slice(end.indexOf('if (!eventHasTime(event)) {'), end.indexOf('if (realEnd) return realEnd;'));
+  assert(/return realEnd \? centralDay\(realEnd\) : null;/.test(noTime), 'no estimate without a start time');
+  assertFalse(/DEFAULT_EVENT_HOURS/.test(noTime));
+  assert(/\.\.\.\(endDate \? \{ endDate \} : \{\}\)/.test(src));
 });
 
 Deno.test('every display surface honours the flag through one function', async () => {

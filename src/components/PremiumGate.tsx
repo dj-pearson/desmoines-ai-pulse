@@ -1,18 +1,30 @@
-import { useState, ReactNode } from "react";
-import { Link } from "react-router-dom";
-import { Lock, Crown } from "lucide-react";
+import { useEffect, useState, type ReactNode } from "react";
+import { Link, useLocation } from "react-router-dom";
+import { Lock, Crown, RefreshCw } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent } from "@/components/ui/card";
 import { useSubscription } from "@/hooks/useSubscription";
+import { useAuthFlags } from "@/hooks/useAuth";
 import { UpgradeModal } from "@/components/UpgradeModal";
 import { FeatureTag } from "@/components/PremiumBadge";
+import { requiredTierFor } from "@/lib/premiumFeatures";
+import { isValidRedirectUrl } from "@/lib/redirectSafety";
+import { handleError } from "@/lib/errorHandler";
+import { createLogger } from "@/lib/logger";
 import { cn } from "@/lib/utils";
 import { SpriteIcon } from "@/components/ui/SpriteIcon";
+
+type PaidTier = "insider" | "vip";
 
 interface PremiumGateProps {
   children: ReactNode;
   feature: string;
-  requiredTier?: "insider" | "vip";
+  /**
+   * Kept for existing call sites. The tier a feature needs comes from
+   * PREMIUM_FEATURES (src/lib/premiumFeatures.ts); a prop that disagrees with
+   * the map is reported in development and the map wins.
+   */
+  requiredTier?: PaidTier;
   // Display modes
   mode?: "blur" | "lock" | "hide" | "inline";
   // Custom messaging
@@ -24,17 +36,78 @@ interface PremiumGateProps {
   inline?: boolean;
 }
 
+const log = createLogger("PremiumGate");
+
+const TIER_LABEL: Record<PaidTier, string> = { insider: "Insider", vip: "VIP" };
+
+/**
+ * Whether someone is signed in. The gate is also rendered in unit tests with
+ * no AuthProvider, where useAuthFlags throws; with no provider there is no
+ * session to know about, so the gate answers as it did before it asked
+ * (the upgrade prompt). The hook call itself is unconditional.
+ */
+function useIsSignedIn(): boolean {
+  try {
+    return useAuthFlags().isAuthenticated;
+  } catch {
+    return true;
+  }
+}
+
+function resolveRequiredTier(feature: string, prop: PaidTier | undefined): PaidTier {
+  const mapped = requiredTierFor(feature);
+  if (import.meta.env.DEV && mapped && prop && mapped !== prop) {
+    log.warn(
+      "resolveRequiredTier",
+      `feature="${feature}" has requiredTier="${prop}" but PREMIUM_FEATURES says "${mapped}"; using "${mapped}".`,
+    );
+  }
+  return mapped ?? prop ?? "insider";
+}
+
+function tierButtonClass(tier: PaidTier): string {
+  return tier === "vip"
+    ? "bg-secondary text-secondary-foreground hover:bg-secondary/90"
+    : "bg-amber-700 text-white hover:bg-amber-800";
+}
+
+function TierIcon({ tier, className }: { tier: PaidTier; className?: string }) {
+  return tier === "vip" ? (
+    <Crown className={cn("text-secondary", className)} aria-hidden="true" />
+  ) : (
+    <SpriteIcon name="sparkles" className={cn("text-amber-700 dark:text-amber-500", className)} />
+  );
+}
+
 export function PremiumGate({
   children,
   feature,
-  requiredTier = "insider",
+  requiredTier: requiredTierProp,
   mode = "lock",
   title,
   description,
   className,
 }: PremiumGateProps) {
-  const { hasFeature, tier, isPremium, subscriptionLoading } = useSubscription();
+  const {
+    hasFeature,
+    tier,
+    subscriptionLoading,
+    subscriptionError,
+    refetchSubscription,
+    isPastDue,
+    inGracePeriod,
+  } = useSubscription();
+  const signedIn = useIsSignedIn();
+  const { pathname, search } = useLocation();
   const [showModal, setShowModal] = useState(false);
+  const requiredTier = resolveRequiredTier(feature, requiredTierProp);
+
+  // Pricing plan WP4 item 6: a failed read is "don't know", not "free".
+  useEffect(() => {
+    if (subscriptionError) {
+      handleError(subscriptionError, { component: "PremiumGate", action: "readSubscription" });
+    }
+  }, [subscriptionError]);
 
   // WEB-FEAT-018: do not answer before the answer is known.
   //
@@ -56,102 +129,167 @@ export function PremiumGate({
       <div
         className={cn("animate-pulse rounded-lg bg-muted/60 min-h-24", className)}
         aria-busy="true"
-        aria-live="polite"
         aria-label="Checking your subscription"
       />
     );
   }
 
-  // Check if user has access
-  const hasAccess = hasFeature(feature);
-
-  // If user has access, show content
-  if (hasAccess) {
+  // Cached rows can still grant access after a failed refetch.
+  if (hasFeature(feature)) {
     return <>{children}</>;
   }
 
-  // Determine if current tier is lower than required
-  const needsHigherTier =
-    requiredTier === "vip" && tier === "insider" ? true : false;
-
-  const defaultTitle = needsHigherTier
-    ? "VIP Feature"
-    : `${requiredTier === "vip" ? "VIP" : "Insider"} Feature`;
-
-  const defaultDescription = needsHigherTier
-    ? "Upgrade to VIP to unlock this feature"
-    : `Upgrade to ${requiredTier === "vip" ? "VIP" : "Insider"} to access this feature`;
-
-  // Hide mode - don't show anything
   if (mode === "hide") {
     return null;
   }
+
+  // The read failed, so this may well be a paying member. Offer a retry, never
+  // the paywall.
+  if (subscriptionError) {
+    const retry = () => {
+      void refetchSubscription?.();
+    };
+    if (mode === "inline") {
+      return (
+        <div
+          role="status"
+          className={cn("flex flex-wrap items-center gap-2 text-sm text-muted-foreground", className)}
+        >
+          <span>Couldn't check your plan.</span>
+          <Button type="button" variant="outline" size="sm" className="min-h-11" onClick={retry}>
+            <RefreshCw className="h-4 w-4 mr-1" aria-hidden="true" />
+            Retry
+          </Button>
+        </div>
+      );
+    }
+    return (
+      <Card className={cn("border-dashed", className)}>
+        <CardContent role="status" className="flex flex-col items-center justify-center py-8 text-center">
+          <h3 className="font-semibold mb-1">Couldn't check your plan</h3>
+          <p className="text-sm text-muted-foreground mb-4 max-w-sm">
+            We couldn't reach our servers to confirm your membership. Nothing has changed on your account.
+          </p>
+          <Button type="button" variant="outline" className="min-h-11" onClick={retry}>
+            <RefreshCw className="h-4 w-4 mr-2" aria-hidden="true" />
+            Retry
+          </Button>
+        </CardContent>
+      </Card>
+    );
+  }
+
+  const tierLabel = TIER_LABEL[requiredTier];
+  const featureName = title || `This ${tierLabel} feature`;
+
+  // Pricing plan WP4 item 8: what to say depends on who is looking.
+  const here = `${pathname}${search}`;
+  const authHref = `/auth?redirect=${encodeURIComponent(isValidRedirectUrl(here) ? here : "/")}`;
+  const lapsedPastDue = signedIn && isPastDue && !inGracePeriod;
+
+  let heading: string;
+  let body: string;
+  let primary: ReactNode;
+  let secondary: ReactNode = null;
+
+  if (!signedIn) {
+    heading = title || `${tierLabel} feature`;
+    body = description || `${featureName} is part of ${tierLabel}. Start with a free account, then pick a plan.`;
+    primary = (
+      <Button asChild className="min-h-11">
+        <Link to={authHref}>Create a free account</Link>
+      </Button>
+    );
+    secondary = (
+      <Button type="button" variant="ghost" className="min-h-11" onClick={() => setShowModal(true)}>
+        See what {tierLabel} includes
+      </Button>
+    );
+  } else if (lapsedPastDue) {
+    heading = "Update your payment";
+    body = `Your last payment didn't go through and the grace period has ended. Update your card to get ${tierLabel} back.`;
+    primary = (
+      <Button asChild className="min-h-11">
+        <Link to="/subscription">Update payment</Link>
+      </Button>
+    );
+  } else {
+    const needsHigherTier = requiredTier === "vip" && tier === "insider";
+    heading = title || (needsHigherTier ? "VIP feature" : `${tierLabel} feature`);
+    body =
+      description ||
+      (needsHigherTier ? "Move up to VIP to use this." : `Upgrade to ${tierLabel} to use this.`);
+    primary = (
+      <Button type="button" onClick={() => setShowModal(true)} className={cn("min-h-11", tierButtonClass(requiredTier))}>
+        <TierIcon tier={requiredTier} className="h-4 w-4 mr-2 text-current" />
+        {mode === "blur" ? "Unlock" : "Upgrade to Unlock"}
+      </Button>
+    );
+  }
+
+  const modal = (
+    <UpgradeModal
+      open={showModal}
+      onOpenChange={setShowModal}
+      feature={feature}
+      requiredTier={requiredTier}
+    />
+  );
 
   // Blur mode - show blurred content with overlay
   if (mode === "blur") {
     return (
       <div className={cn("relative", className)}>
-        <div className="blur-sm pointer-events-none select-none">{children}</div>
+        <div className="blur-sm pointer-events-none select-none" aria-hidden="true">
+          {children}
+        </div>
         <div className="absolute inset-0 flex items-center justify-center bg-background/60 backdrop-blur-sm rounded-lg">
           <div className="text-center p-4">
             <div className="inline-flex items-center justify-center w-12 h-12 rounded-full bg-muted mb-3">
-              <Lock className="h-5 w-5 text-muted-foreground" />
+              <Lock className="h-5 w-5 text-muted-foreground" aria-hidden="true" />
             </div>
-            <h3 className="font-semibold mb-1">{title || defaultTitle}</h3>
-            <p className="text-sm text-muted-foreground mb-3">
-              {description || defaultDescription}
-            </p>
-            <Button
-              size="sm"
-              onClick={() => setShowModal(true)}
-              className={cn(
-                requiredTier === "vip"
-                  ? "bg-secondary text-secondary-foreground hover:bg-secondary/90"
-                  : "bg-amber-700 text-white hover:bg-amber-800"
-              )}
-            >
-              {requiredTier === "vip" ? (
-                <Crown className="h-4 w-4 mr-1" />
-              ) : (
-                <SpriteIcon name="sparkles" className="h-4 w-4 mr-1" />
-              )}
-              Unlock
-            </Button>
+            <h3 className="font-semibold mb-1">{heading}</h3>
+            <p className="text-sm text-muted-foreground mb-3">{body}</p>
+            <div className="flex flex-wrap justify-center gap-2">
+              {primary}
+              {secondary}
+            </div>
           </div>
         </div>
-        <UpgradeModal
-          open={showModal}
-          onOpenChange={setShowModal}
-          feature={feature}
-          requiredTier={requiredTier}
-        />
+        {modal}
       </div>
     );
   }
 
-  // Inline mode - small inline prompt
+  // Inline mode - a compact prompt with its description
   if (mode === "inline") {
-    return (
+    const lockedLabel = (
       <>
-        <button
-          type="button"
-          onClick={() => setShowModal(true)}
-          className={cn(
-            "flex items-center gap-2 px-3 py-2 rounded-lg border border-dashed text-sm text-muted-foreground hover:bg-muted/50 transition-colors",
-            className
-          )}
-        >
-          <Lock className="h-4 w-4" />
-          <span>{title || defaultTitle}</span>
-          <FeatureTag requiredTier={requiredTier} size="sm" />
-        </button>
-        <UpgradeModal
-          open={showModal}
-          onOpenChange={setShowModal}
-          feature={feature}
-          requiredTier={requiredTier}
-        />
+        <Lock className="h-4 w-4" aria-hidden="true" />
+        <span>{heading}</span>
+        <FeatureTag requiredTier={requiredTier} size="sm" />
       </>
+    );
+    const rowClass =
+      "flex items-center gap-2 min-h-11 px-3 py-2 rounded-lg border border-dashed text-sm text-muted-foreground hover:bg-muted/50 transition-colors";
+    return (
+      <div className={cn("space-y-1", className)}>
+        {!signedIn ? (
+          <Link to={authHref} className={rowClass}>
+            {lockedLabel}
+          </Link>
+        ) : lapsedPastDue ? (
+          <Link to="/subscription" className={rowClass}>
+            {lockedLabel}
+          </Link>
+        ) : (
+          <button type="button" onClick={() => setShowModal(true)} className={rowClass}>
+            {lockedLabel}
+          </button>
+        )}
+        <p className="text-xs text-muted-foreground">{body}</p>
+        {modal}
+      </div>
     );
   }
 
@@ -161,40 +299,18 @@ export function PremiumGate({
       <Card className={cn("border-dashed", className)}>
         <CardContent className="flex flex-col items-center justify-center py-8 text-center">
           <div className="inline-flex items-center justify-center w-14 h-14 rounded-full bg-muted mb-4">
-            {requiredTier === "vip" ? (
-              <Crown className="h-6 w-6 text-secondary" />
-            ) : (
-              <SpriteIcon name="sparkles" className="h-6 w-6 text-amber-700 dark:text-amber-500" />
-            )}
+            <TierIcon tier={requiredTier} className="h-6 w-6" />
           </div>
           <FeatureTag requiredTier={requiredTier} size="md" />
-          <h3 className="font-semibold mt-3 mb-1">{title || defaultTitle}</h3>
-          <p className="text-sm text-muted-foreground mb-4 max-w-sm">
-            {description || defaultDescription}
-          </p>
-          <Button
-            onClick={() => setShowModal(true)}
-            className={cn(
-              requiredTier === "vip"
-                ? "bg-secondary text-secondary-foreground hover:bg-secondary/90"
-                : "bg-amber-700 text-white hover:bg-amber-800"
-            )}
-          >
-            {requiredTier === "vip" ? (
-              <Crown className="h-4 w-4 mr-2" />
-            ) : (
-              <SpriteIcon name="sparkles" className="h-4 w-4 mr-2" />
-            )}
-            Upgrade to Unlock
-          </Button>
+          <h3 className="font-semibold mt-3 mb-1">{heading}</h3>
+          <p className="text-sm text-muted-foreground mb-4 max-w-sm">{body}</p>
+          <div className="flex flex-wrap justify-center gap-2">
+            {primary}
+            {secondary}
+          </div>
         </CardContent>
       </Card>
-      <UpgradeModal
-        open={showModal}
-        onOpenChange={setShowModal}
-        feature={feature}
-        requiredTier={requiredTier}
-      />
+      {modal}
     </>
   );
 }

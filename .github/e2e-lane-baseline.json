@@ -1,11 +1,9 @@
 {
   "_comment": "Playwright specs that no CI lane runs (WEB-CI-028). They still run locally via playwright.config.ts, which sweeps tests/ - that is why they look wired up. This list must only ever SHRINK. See scripts/check-e2e-lanes.mjs.",
-  "generated": "2026-09-19",
+  "generated": "2026-09-25",
   "orphans": [
     "add-to-calendar-card",
     "layout-integrity",
-    "restaurant-dietary-filter",
-    "restaurant-reservations",
-    "weather-aware-events"
+    "restaurant-dietary-filter"
   ]
 }

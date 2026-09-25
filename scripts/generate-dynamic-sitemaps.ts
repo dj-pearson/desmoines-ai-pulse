@@ -15,6 +15,9 @@ import { join } from 'path';
 import { computePseoShippable } from './lib/pseoShippable';
 import { childLastmod } from './lib/sitemapLastmod';
 import { isInMetro } from '../src/lib/geo';
+// The month floor, the range and the Central-month rule are the month page's
+// own (src/lib/monthPages.ts has no `@/` imports so it loads under tsx here).
+import { centralMonthOf, isIndexableMonth, monthSlug, MIN_EVENTS_PER_MONTH, type MonthRef } from '../src/lib/monthPages';
 // Slug shapes live in one place so the freshness check cannot build a URL the
 // generator would not have written. See scripts/lib/sitemapSlugs.ts.
 import { createSlug, createEventSlug } from './lib/sitemapSlugs';
@@ -185,13 +188,23 @@ async function generateEventsSitemap(): Promise<number | null> {
   // `.limit(5000)` was silently truncated — the generator quietly dropped rows
   // and reported success. Page explicitly so the cap cannot hide data again.
   const PAGE = 1000;
-  const eventList: Array<{ title: string; date: string | null; event_start_utc: string | null; updated_at: string | null }> = [];
+  const eventList: Array<{
+    title: string;
+    date: string | null;
+    end_date: string | null;
+    event_start_utc: string | null;
+    updated_at: string | null;
+  }> = [];
 
   for (let from = 0; ; from += PAGE) {
     const { data, error } = await supabase
       .from('events')
-      .select('title, date, event_start_utc, updated_at')
-      .gte('date', cutoff)
+      .select('title, date, end_date, event_start_utc, updated_at')
+      // A run that started before the cutoff and is still on (an exhibit, a
+      // festival week, a show's run) is live and must stay in the sitemap.
+      // Filtering on `date` alone dropped it once its first day was more than
+      // GRACE_DAYS ago (events-pass2 WP6 item 2).
+      .or(`date.gte.${cutoff},end_date.gte.${cutoff}`)
       // THE SITEMAP MUST NOT ADVERTISE A URL THE APP REFUSES TO RENDER.
       // useEventBySlug.ts:53-54 filters both of these, so a merged or hidden
       // event resolves to nothing on its own detail page - while this query
@@ -233,7 +246,7 @@ async function generateEventsSitemap(): Promise<number | null> {
     }
   }
 
-  console.log(`   ${eventList.length} event(s) dated on or after ${cutoff} (grace: ${GRACE_DAYS}d)`);
+  console.log(`   ${eventList.length} event(s) starting or still running on or after ${cutoff} (grace: ${GRACE_DAYS}d)`);
 
   if (eventList.length === 0) {
     console.warn('⚠️ No events found in database - check RLS policies or add events');
@@ -272,24 +285,29 @@ async function generateEventsSitemap(): Promise<number | null> {
   //
   // MIN_EVENTS_PER_MONTH is a floor on top of that. One event in a month is not
   // a listing page, it is a detail page with a heading, and it would compete
-  // with the event's own URL.
-  const MIN_EVENTS_PER_MONTH = 3;
-  const MONTH_NAMES = [
-    'january', 'february', 'march', 'april', 'may', 'june',
-    'july', 'august', 'september', 'october', 'november', 'december',
-  ];
+  // with the event's own URL. It is imported from src/lib/monthPages.ts, the
+  // same constant MonthlyEventsPage uses to decide noindex, and the month must
+  // also be in the page's range (last month to twelve ahead): a sitemap entry
+  // for a page that renders noindex is a contradiction Search Console reports.
+  //
+  // Months are CENTRAL months. getUTCMonth put an 8 PM CDT Sep 30 event
+  // (01:00Z Oct 1) in October, so a month's count could differ from what its
+  // own page lists. centralMonthOf is pinned at exactly that instant by
+  // src/hooks/__tests__/landingQueries.test.ts.
+  const monthNow = new Date();
 
-  const perMonth = new Map<string, { count: number; lastmod: string }>();
+  const perMonth = new Map<string, { ref: MonthRef; count: number; lastmod: string }>();
   for (const event of eventList) {
     // Prefer the UTC start, matching what the page itself queries on.
     const raw = event.event_start_utc || event.date;
     if (!raw) continue;
     const d = new Date(raw);
     if (!Number.isFinite(d.getTime())) continue;
-    const slug = `${MONTH_NAMES[d.getUTCMonth()]}-${d.getUTCFullYear()}`;
+    const ref = centralMonthOf(d);
+    const slug = monthSlug(ref);
     const lastmod = event.updated_at ? event.updated_at.split('T')[0] : currentDate;
     const seen = perMonth.get(slug);
-    if (!seen) perMonth.set(slug, { count: 1, lastmod });
+    if (!seen) perMonth.set(slug, { ref, count: 1, lastmod });
     else {
       seen.count += 1;
       // Newest touched event in the month is the month page's real lastmod.
@@ -298,7 +316,7 @@ async function generateEventsSitemap(): Promise<number | null> {
   }
 
   const monthUrls = [...perMonth.entries()]
-    .filter(([, v]) => v.count >= MIN_EVENTS_PER_MONTH)
+    .filter(([, v]) => isIndexableMonth(v.ref, v.count, monthNow))
     .sort(([a], [b]) => (a < b ? -1 : 1))
     .map(([slug, v]) => ({
       loc: `${baseUrl}/events/${slug}`,
@@ -310,7 +328,7 @@ async function generateEventsSitemap(): Promise<number | null> {
   const skipped = perMonth.size - monthUrls.length;
   console.log(
     `   ${monthUrls.length} month page(s) with >= ${MIN_EVENTS_PER_MONTH} events` +
-      (skipped > 0 ? `; ${skipped} month(s) skipped as too thin` : ''),
+      (skipped > 0 ? `; ${skipped} month(s) skipped as too thin or out of range` : ''),
   );
   urls.push(...monthUrls);
 
@@ -339,6 +357,12 @@ async function generateRestaurantsSitemap(): Promise<number | null> {
     // sitemapping one submits a URL the listing will not show. 0 of 478
     // restaurants are merged today and none is NULL, so this is inert now.
     .neq('is_merged', true)
+    // A closed restaurant's page is noindex (the React page and the edge
+    // shell both say so), so submitting it asks Google to crawl a page we've
+    // told it not to index. status is nullable and a bare neq would also drop
+    // the NULL rows, so "not closed" is an OR that keeps them
+    // (useBreweryTrail.ts uses the same filter).
+    .or('status.is.null,status.neq.closed')
     .order('name')
     .order('id')
     .limit(5000);

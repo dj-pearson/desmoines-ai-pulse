@@ -2,6 +2,8 @@ import { useCallback, useEffect, useState } from "react";
 import { useAuth } from "@/hooks/useAuth";
 import { supabase } from "@/integrations/supabase/client";
 import {
+  MAX_AGE_MS,
+  MAX_ITEMS,
   readRecentlyViewed,
   recordView,
   removeView,
@@ -18,6 +20,11 @@ import {
  * to the `recently_viewed` table so items follow them across devices. Server
  * calls are best-effort: any failure (incl. the table not being deployed yet)
  * is swallowed so the guest experience never breaks.
+ *
+ * `localCount` is how many entries the local store held at mount. The home
+ * rail uses it to decide whether to render at all, so rows that arrive from
+ * the server later fill a rail that is already there instead of inserting a
+ * new one under the visitor's thumb (home pass-2 WP3 item 10).
  */
 type ViewInput = Omit<RecentlyViewedEntry, "viewedAt">;
 
@@ -45,6 +52,7 @@ function toEntry(row: {
 export function useRecentlyViewedFeed() {
   const { user, isAuthenticated } = useAuth();
   const [entries, setEntries] = useState<RecentlyViewedEntry[]>(() => readRecentlyViewed());
+  const [localCount] = useState(() => entries.length);
 
   // Merge server rows for signed-in users (server + local union, newest wins).
   useEffect(() => {
@@ -52,10 +60,15 @@ export function useRecentlyViewedFeed() {
     let cancelled = false;
     (async () => {
       try {
+        // The local store keeps MAX_ITEMS for MAX_AGE_MS; asking the server
+        // for more than that only to drop it in normalizeEntries was waste.
+        const since = new Date(Date.now() - MAX_AGE_MS).toISOString();
         const { data, error } = await supabase
           .from("recently_viewed" as never)
           .select("content_id, content_type, title, href, image_url, subtitle, viewed_at")
-          .order("viewed_at", { ascending: false });
+          .gte("viewed_at", since)
+          .order("viewed_at", { ascending: false })
+          .limit(MAX_ITEMS);
         if (error || cancelled || !data) return;
         const serverEntries = (data as unknown as Parameters<typeof toEntry>[0][]).map(toEntry);
         setEntries((local) => {
@@ -95,7 +108,7 @@ export function useRecentlyViewedFeed() {
     setEntries([]);
   }, []);
 
-  return { entries, remove, clear };
+  return { entries, localCount, remove, clear };
 }
 
 /**

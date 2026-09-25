@@ -196,9 +196,10 @@ export function useTripPlanner() {
       setSelectedTrip(data.tripPlan);
       queryClient.invalidateQueries({ queryKey: ['trip-plans', user?.id] });
     },
+    // No toast here: the caller (TripPlanner handleGenerate) reports through
+    // handleError, so a failed generate is reported once, not twice.
     onError: (error: Error) => {
       log.error('generateItinerary', 'Failed to generate itinerary', { error: error.message });
-      toast.error(`Failed to generate itinerary: ${error.message}`);
     },
   });
 
@@ -316,12 +317,16 @@ export function useTripPlanner() {
     mutationFn: async (
       swaps: { id: string; order_index: number }[]
     ) => {
-      await Promise.all(
+      // A PostgREST failure resolves with { error } rather than rejecting, so
+      // Promise.all alone reported a failed reorder as a success.
+      const results = (await Promise.all(
         swaps.map((s) =>
           // @ts-ignore -- Supabase SDK deep-type instantiation under strict mode
           fromUnknownTable('trip_plan_items').update({ order_index: s.order_index }).eq('id', s.id)
         )
-      );
+      )) as Array<{ error: { message: string } | null }>;
+      const failed = results.find((r) => r?.error);
+      if (failed?.error) throw new Error(failed.error.message);
     },
     onSuccess: () => {
       if (selectedTrip) {
@@ -439,7 +444,9 @@ export function useTripPlanner() {
 
     // Fetch items — cast through unknown for strict compatibility
     // @ts-ignore -- RPC function not in generated types yet
-    const { data: itemsData } = await supabase.rpc('get_trip_itinerary', { p_trip_id: (data as unknown as { id: string }).id });
+    const { data: itemsData, error: itemsError } = await supabase.rpc('get_trip_itinerary', { p_trip_id: (data as unknown as { id: string }).id });
+    // A trip with its stops missing is not the trip; say it failed.
+    if (itemsError) throw itemsError;
 
     return {
       ...(data as unknown as Record<string, unknown>),

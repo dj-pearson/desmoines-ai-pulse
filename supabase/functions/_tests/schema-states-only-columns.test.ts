@@ -44,10 +44,11 @@ Deno.test('no entity claims a postcode or a city no column holds', async () => {
 });
 
 Deno.test('geo is emitted only from real coordinates', async () => {
+  // The restaurant node moved into buildRestaurantSchema (restaurantMeta.ts)
+  // in the Eat & Drink second pass; it is checked where it lives now.
   for (const [rel, start, end, col] of [
     ['src/components/EnhancedAttractionSEO.tsx', 'const attractionSchema', 'publisher:', 'attraction'],
-    ['src/components/EnhancedPlaygroundSEO.tsx', 'const playgroundSchema', 'publisher:', 'playground'],
-    ['src/pages/RestaurantDetails.tsx', 'const restaurantSchema', 'areaServed:', 'restaurant'],
+    ['src/lib/restaurantMeta.ts', 'export function buildRestaurantSchema', 'areaServed:', 'row'],
   ] as const) {
     const block = await entityNode(rel, start, end);
     assert(
@@ -56,6 +57,18 @@ Deno.test('geo is emitted only from real coordinates', async () => {
     );
     assertFalse(/41\.58/.test(block), `${rel} still falls back to the downtown pin`);
   }
+
+  // The playground names the same test once, as hasCoords, because the ICBM and
+  // geo.position meta tags use it too (explore pass 2).
+  const playgroundRel = 'src/components/EnhancedPlaygroundSEO.tsx';
+  const playgroundSrc = codeOnly(await read(playgroundRel));
+  assert(
+    /const hasCoords = playground\.latitude != null && playground\.longitude != null/.test(playgroundSrc),
+    `${playgroundRel}: hasCoords must test both coordinates`,
+  );
+  const block = await entityNode(playgroundRel, 'const playgroundSchema', 'publisher:');
+  assert(/\.\.\.\(hasCoords\b/.test(block), `${playgroundRel} must omit geo rather than guess it`);
+  assertFalse(/41\.58/.test(block), `${playgroundRel} still falls back to the downtown pin`);
 });
 
 Deno.test('invented properties are gone', async () => {
@@ -67,20 +80,22 @@ Deno.test('invented properties are gone', async () => {
   // is_free IS a column, so this can be stated -- when it is set.
   assert(/attraction\.is_free != null && \{ isAccessibleForFree: attraction\.is_free \}/.test(attraction));
 
-  const restaurant = await entityNode('src/pages/RestaurantDetails.tsx', 'const restaurantSchema', 'areaServed:');
+  const restaurant = await entityNode('src/lib/restaurantMeta.ts', 'export function buildRestaurantSchema', 'areaServed:');
   assertFalse(/paymentAccepted:/.test(restaurant), 'card acceptance was claimed for cash-only rooms');
   // Every restaurant in Des Moines takes dollars. That is a safe default, not
   // an invented fact, and it is the difference this story turns on.
   assert(/currenciesAccepted: "USD"/.test(restaurant));
 });
 
-Deno.test('a playground is still free, and that one is defensible', async () => {
-  // playgrounds has no is_free column, but a public playground is free by
-  // definition -- that is what makes it a playground rather than an attraction.
-  // The attraction version was removed precisely because attractions DO have
-  // the column and many of them charge.
+Deno.test('a playground claims no admission price it has no column for', async () => {
+  // This used to assert isAccessibleForFree: true on the grounds that a public
+  // playground is free by definition. Explore pass 2 (WP4 item 2) found the
+  // table also holds paid indoor play spaces, so the claim was dropped until a
+  // column can back it (plan D9). Once that column exists, assert it the way
+  // the attraction test above does.
   const block = await entityNode('src/components/EnhancedPlaygroundSEO.tsx', 'const playgroundSchema', 'publisher:');
-  assert(/isAccessibleForFree: true/.test(block));
+  assertFalse(/isAccessibleForFree:/.test(block), 'no column backs a free-admission claim');
+  assertFalse(/publicAccess:/.test(block));
 });
 
 Deno.test('a check keeps the placeholders out', async () => {

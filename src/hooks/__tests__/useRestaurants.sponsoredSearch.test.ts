@@ -7,16 +7,28 @@ import { describe, it, expect, vi, beforeEach } from 'vitest';
  * text search matches nothing - and that RPC knows nothing of sponsorship. So a
  * search that matched no paid row came back with ordinary fuzzy matches, which
  * the hub then pinned above the real results. sponsoredOnly must never take
- * the fuzzy fallback.
+ * the fuzzy fallback, and since pass 2 an ordinary search only gets fuzzy rows
+ * as suggestions.
  */
 const rpc = vi.fn();
 
 function emptyTableQuery() {
   const chain: Record<string, unknown> = {};
+  let selected: unknown;
   for (const m of ['select', 'neq', 'textSearch', 'in', 'gte', 'lte', 'eq', 'or', 'order', 'limit', 'range']) {
-    chain[m] = () => chain;
+    chain[m] = (...args: unknown[]) => {
+      if (m === 'select') selected = args[0];
+      return chain;
+    };
   }
-  chain.returns = () => Promise.resolve({ data: [], error: null, count: 0 });
+  // The did-you-mean lookup (select 'id,slug,name') re-reads the fuzzy ids for
+  // slugs; every other read is the search that matched nothing.
+  chain.returns = () =>
+    Promise.resolve(
+      selected === 'id,slug,name'
+        ? { data: [{ id: 'fuzzy-1', slug: 'not-sponsored-diner', name: 'Not Sponsored Diner' }], error: null }
+        : { data: [], error: null, count: 0 },
+    );
   return chain;
 }
 
@@ -53,13 +65,18 @@ describe('useRestaurants sponsoredOnly with a search that matches nothing', () =
     expect(rpc).not.toHaveBeenCalledWith('fuzzy_search_restaurants', expect.anything());
   });
 
-  it('still falls back to fuzzy matches for an ordinary search', async () => {
+  // Eat-drink pass 2 WP1 item 5: fuzzy matches ignore every filter, so they
+  // come back as did-you-mean suggestions, never as results.
+  it('offers fuzzy matches as suggestions, not results, for an ordinary search', async () => {
     const { result } = renderHook(
       () => useRestaurants({ search: 'tacos', sortBy: 'rating', limit: 30, offset: 0 }),
       { wrapper },
     );
     await waitFor(() => expect(result.current.isLoading).toBe(false));
     expect(rpc).toHaveBeenCalledWith('fuzzy_search_restaurants', expect.anything());
-    expect(result.current.restaurants.map((r) => r.id)).toEqual(['fuzzy-1']);
+    expect(result.current.restaurants).toEqual([]);
+    expect(result.current.suggestions).toEqual([
+      { id: 'fuzzy-1', name: 'Not Sponsored Diner', slug: 'not-sponsored-diner' },
+    ]);
   });
 });

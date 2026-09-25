@@ -13,45 +13,32 @@ import {
   BCYCLE,
   DART_FARES,
   SKYWALK,
+  STRAIGHT_LINE_ORIGIN,
   airportFaqAnswer,
+  formatStraightLine,
+  straightLineTable,
   verificationLine,
 } from "@/lib/transitFacts";
+import { currentVenueName } from "@/lib/venuePages";
 
 /*
- * plan-stay WP3 item 7. This list used to carry rates ("$1/hr, $10 max") and
- * hours ("24/7") with no source; the page itself admitted they were a rough
- * guide. The figures are gone. What stays is where each garage is, with a
- * one-tap directions link from the coordinates, and a pointer to ParkDSM and
- * the posted signs for what it costs today.
+ * Parking (plan-stay-pass2 WP3 item 4). The garage cards are gone. Two of the
+ * five were not garages at all: "Civic Center Garage" carried the theater's
+ * own address and coordinates, and "Iowa Events Center lots" reused the
+ * arena's. None named a source, and the city's list could not be reached to
+ * check them when this was written. Rather than a directions button that
+ * drives someone to a stage door, the section points at ParkDSM and the city,
+ * which own the list. To bring cards back: put them in a TransitFactSet with
+ * the city list as sourceUrl, each garage's own entrance coordinates, and
+ * render verificationLine() under the grid.
  */
-interface ParkingGarage {
-  name: string;
-  address: string;
-  lat: number;
-  lng: number;
-}
+const CITY_SITE_URL = 'https://www.dsm.city';
 
-const PARKING_GARAGES: readonly ParkingGarage[] = [
-  { name: 'Capital Square Garage', address: '400 Locust St', lat: 41.5867, lng: -93.625 },
-  { name: 'City Parking Ramp', address: '300 SW 5th St', lat: 41.5839, lng: -93.631 },
-  { name: 'Civic Center Garage', address: '221 Walnut St', lat: 41.5851, lng: -93.6271 },
-  { name: 'Iowa Events Center lots', address: '730 3rd St', lat: 41.5908, lng: -93.6208 },
-  { name: 'Court Avenue Garage', address: '309 Court Ave', lat: 41.5844, lng: -93.6213 },
-];
+/* Computed once: the points are constants (plan-stay-pass2 WP3 item 3). */
+const DISTANCE_ROWS = straightLineTable();
 
-function directionsUrl(lat: number, lng: number): string {
-  return `https://www.google.com/maps/dir/?api=1&destination=${lat},${lng}`;
-}
-
-const DISTANCE_TABLE = [
-  { destination: 'East Village', drive: '3 min', transit: '5 min walk', distance: '0.3 mi' },
-  { destination: 'Gray\'s Lake', drive: '5 min', transit: '15 min bike', distance: '2.1 mi' },
-  { destination: 'Valley Junction', drive: '10 min', transit: 'DART bus', distance: '5.2 mi' },
-  { destination: 'Jordan Creek Mall', drive: '15 min', transit: 'DART bus', distance: '10.5 mi' },
-  { destination: 'Adventureland', drive: '20 min', transit: 'N/A', distance: '14.2 mi' },
-  { destination: 'Ames (Iowa State)', drive: '35 min', transit: 'N/A', distance: '30 mi' },
-  { destination: 'DSM Airport (DSM)', drive: '10 min', transit: 'DART bus', distance: '5.1 mi' },
-];
+/* The arena's name as it reads today; the venue slug keeps its old name. */
+const ARENA_NAME = currentVenueName('Wells Fargo Arena');
 
 // The airport and skywalk answers are built from the same constants the page
 // body renders (plan-stay WP3 item 2), so the two cannot disagree again.
@@ -72,7 +59,7 @@ export default function GettingAround() {
           which the bare Helmet never supplied. */}
       <SEOHead
         title="Des Moines Parking & Transit"
-        description="How to get around Des Moines: downtown parking garages, skywalk system guide, BCycle bike share, DART transit, airport info, and rideshare tips."
+        description="How to get around Des Moines: parking downtown, the skywalk, BCycle bike share, DART fares, the airport and rideshare."
         url={getCanonicalUrl('/getting-around')}
         canonicalUrl={getCanonicalUrl('/getting-around')}
         keywords={[
@@ -99,7 +86,14 @@ export default function GettingAround() {
               Getting Around Des Moines
             </h1>
             <p className="text-lg text-muted-foreground max-w-2xl mx-auto">
-              Parking, the skywalk, bike share, DART and the airport, with where each figure came from.
+              Parking, the skywalk, bike share, DART and the airport. Fares carry their source and check date.
+            </p>
+            <p className="text-muted-foreground mt-3">
+              Know your dates?{' '}
+              <Link to="/trip-planner" className="underline font-medium text-foreground">
+                Pick your dates
+              </Link>{' '}
+              and see what&apos;s on each day.
             </p>
           </div>
 
@@ -110,32 +104,16 @@ export default function GettingAround() {
               <h2 className="text-2xl font-bold">Parking &amp; ParkDSM</h2>
             </div>
             <p className="text-muted-foreground mb-4 max-w-prose">
-              Download the <strong>ParkDSM</strong> app to pay from your phone. We list
-              where the main garages are, not what they charge: rates and hours change,
-              so check the app or the sign at the entrance.
+              The city runs the public garages downtown, and the <strong>ParkDSM</strong> app shows
+              where they are and lets you pay from your phone. We don&apos;t keep our own garage list:
+              we couldn&apos;t check one against the city&apos;s, and rates and hours change, so the app
+              and the sign at the entrance are the ones to trust.
             </p>
-            <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-4 mb-4">
-              {PARKING_GARAGES.map((garage) => (
-                <Card key={garage.name}>
-                  <CardContent className="p-4">
-                    <h3 className="font-semibold">{garage.name}</h3>
-                    <p className="text-sm text-muted-foreground flex items-center gap-1 mt-1">
-                      <SpriteIcon name="map-pin" className="h-3 w-3" /> {garage.address}
-                    </p>
-                    <Button asChild variant="outline" size="sm" className="min-h-11 mt-3">
-                      <a
-                        href={directionsUrl(garage.lat, garage.lng)}
-                        target="_blank"
-                        rel="noopener noreferrer"
-                        aria-label={`Directions to ${garage.name}`}
-                      >
-                        <SpriteIcon name="external-link" className="h-4 w-4 mr-1" /> Directions
-                      </a>
-                    </Button>
-                  </CardContent>
-                </Card>
-              ))}
-            </div>
+            <Button asChild variant="outline" size="sm" className="min-h-11">
+              <a href={CITY_SITE_URL} target="_blank" rel="noopener noreferrer">
+                <SpriteIcon name="external-link" className="h-4 w-4 mr-1" /> City of Des Moines parking
+              </a>
+            </Button>
           </section>
 
           {/* Skywalk System */}
@@ -268,28 +246,28 @@ export default function GettingAround() {
               <Footprints className="h-5 w-5 text-primary" />
               <h2 className="text-2xl font-bold">Distances From Downtown</h2>
             </div>
-            <p className="text-muted-foreground mb-4">
-              Approximate, from the edge of downtown in normal traffic. Bus times depend on the route and the hour; ridedart.com has the trip planner.
+            <p className="text-muted-foreground mb-4 max-w-prose">
+              Measured in a straight line from {STRAIGHT_LINE_ORIGIN.label.toLowerCase()} Des Moines, so the road is always further. For a bus trip, DART&apos;s trip planner has the
+              route and the time.
             </p>
-            <Card>
+            <Card className="max-w-xl">
               <CardContent className="p-0">
                 <div className="overflow-x-auto">
-                  <table className="w-full text-sm">
+                  <table className="w-full text-sm" data-distance-table="straight-line">
+                    <caption className="sr-only">
+                      Straight-line distance from downtown Des Moines to each place, nearest first
+                    </caption>
                     <thead>
                       <tr className="border-b">
-                        <th className="text-left p-3 font-semibold">Destination</th>
-                        <th className="text-left p-3 font-semibold">Distance</th>
-                        <th className="text-left p-3 font-semibold">Drive Time</th>
-                        <th className="text-left p-3 font-semibold">Transit/Other</th>
+                        <th scope="col" className="text-left p-3 font-semibold">Place</th>
+                        <th scope="col" className="text-left p-3 font-semibold">From downtown</th>
                       </tr>
                     </thead>
                     <tbody>
-                      {DISTANCE_TABLE.map((row) => (
+                      {DISTANCE_ROWS.map((row) => (
                         <tr key={row.destination} className="border-b last:border-0">
-                          <td className="p-3 font-medium">{row.destination}</td>
-                          <td className="p-3 text-muted-foreground">{row.distance}</td>
-                          <td className="p-3 text-muted-foreground">{row.drive}</td>
-                          <td className="p-3 text-muted-foreground">{row.transit}</td>
+                          <th scope="row" className="text-left p-3 font-medium">{row.destination}</th>
+                          <td className="p-3 text-muted-foreground tabular-nums">{formatStraightLine(row.miles)}</td>
                         </tr>
                       ))}
                     </tbody>
@@ -297,6 +275,11 @@ export default function GettingAround() {
                 </div>
               </CardContent>
             </Card>
+            <Button asChild variant="outline" size="sm" className="min-h-11 mt-4">
+              <a href="https://www.ridedart.com" target="_blank" rel="noopener noreferrer">
+                <SpriteIcon name="external-link" className="h-4 w-4 mr-1" /> Plan a bus trip with DART
+              </a>
+            </Button>
           </section>
 
           {/* plan-stay WP3 item 9: from "how do I get there" to our own listings. */}
@@ -311,13 +294,16 @@ export default function GettingAround() {
                 tonight, then pick the nearest garage above.
               </li>
               <li>
-                <Link to="/stay?near=wells-fargo-arena" className="underline font-medium text-foreground">Hotels near Wells Fargo Arena and the Iowa Events Center</Link>, nearest first.
+                <Link to="/stay?near=wells-fargo-arena" className="underline font-medium text-foreground">Hotels near {ARENA_NAME} at the Iowa Events Center</Link>, nearest first.
               </li>
               <li>
-                <Link to="/events?q=Iowa%20Events%20Center" className="underline font-medium text-foreground">Events at the Iowa Events Center</Link>
+                <Link to="/music/venues/wells-fargo-arena" className="underline font-medium text-foreground">Events at {ARENA_NAME} and the Iowa Events Center</Link>
               </li>
               <li>
-                <Link to="/events?q=Civic%20Center" className="underline font-medium text-foreground">Events at the Des Moines Civic Center</Link>
+                <Link to="/music/venues/des-moines-civic-center" className="underline font-medium text-foreground">Events at the Des Moines Civic Center</Link>
+              </li>
+              <li>
+                <Link to="/trip-planner" className="underline font-medium text-foreground">Plan a trip for your dates</Link>: what&apos;s on each day you&apos;re here.
               </li>
               <li>
                 <Link to="/stay" className="underline font-medium text-foreground">All Des Moines hotels</Link>

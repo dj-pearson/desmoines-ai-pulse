@@ -1,7 +1,7 @@
 /**
  * Reading an auth error off a Supabase redirect (WEB-AUTH-005).
  *
- * /auth/verified rendered "Email Verified! 🎉" unconditionally. It read no
+ * /auth/verified rendered "Email Verified!" (with an emoji) unconditionally. It read no
  * error parameter at all, so an expired link, a reused link and a
  * cross-device confirmation all landed on a celebration page and a ten-second
  * countdown to the homepage -- with no session, and nothing telling the user
@@ -26,45 +26,104 @@ export interface AuthCallbackError {
 }
 
 /**
+ * How long a link lasts, said without a number (account plan WP2 item 6).
+ *
+ * The copy used to promise 24 hours for confirmation and one hour for reset.
+ * GoTrue uses one mailer OTP expiry for both, and supabase/config.toml sets
+ * neither, so at least one of those was wrong and possibly both. Put a number
+ * back only once D9 has read the configured value off the auth dashboard.
+ */
+export const LINK_EXPIRY_COPY = 'Links expire. Request a new one and it arrives in a minute or two.';
+
+/**
+ * Which redirect this is. The same error code means different things: an
+ * `access_denied` on a confirmation link is a reused or cross-browser link,
+ * while on an OAuth return it is someone pressing Cancel at Google.
+ */
+export type AuthFlow = 'email' | 'oauth' | 'recovery';
+
+type Copy = { message: string; canResend: boolean };
+
+/**
  * Messages we write ourselves, because Supabase's descriptions are written for
  * developers ("Email link is invalid or has expired") and do not tell a person
  * what to do next or why it happened to them.
  */
-const KNOWN: Record<string, { message: string; canResend: boolean }> = {
-  otp_expired: {
-    message:
-      'That confirmation link has expired. Links are good for 24 hours -- request a new one and it will arrive in a moment.',
-    canResend: true,
+const KNOWN: Record<AuthFlow, Record<string, Copy>> = {
+  email: {
+    otp_expired: {
+      message: `That confirmation link has expired. ${LINK_EXPIRY_COPY}`,
+      canResend: true,
+    },
+    access_denied: {
+      message:
+        'That confirmation link could not be used. This usually means it was already opened, or it was opened in a different browser from the one you signed up in. A new link will work.',
+      canResend: true,
+    },
+    invalid_request: {
+      message:
+        'That confirmation link is not valid. It may have been broken across two lines by an email client. Request a new one and open it in a single click.',
+      canResend: true,
+    },
+    server_error: {
+      message: 'Something went wrong on our side while confirming your email. Trying again usually works.',
+      canResend: true,
+    },
   },
-  access_denied: {
-    message:
-      'That confirmation link could not be used. This usually means it was already opened, or it was opened in a different browser from the one you signed up in. A new link will work.',
-    canResend: true,
+  oauth: {
+    access_denied: {
+      message: 'Sign-in was cancelled before it finished, so nothing changed. Try again when you are ready.',
+      canResend: false,
+    },
+    server_error: {
+      message:
+        "Google or Apple didn't hand the sign-in back to us. Try again, or sign in with your email and password.",
+      canResend: false,
+    },
   },
-  invalid_request: {
-    message:
-      'That confirmation link is not valid. It may have been broken across two lines by an email client. Request a new one and open it in a single click.',
-    canResend: true,
-  },
-  server_error: {
-    message: 'Something went wrong on our side while confirming your email. Trying again usually works.',
-    canResend: true,
+  recovery: {
+    otp_expired: {
+      message: `That reset link has expired. ${LINK_EXPIRY_COPY}`,
+      canResend: true,
+    },
+    access_denied: {
+      message:
+        'That reset link could not be used. It was probably opened already, or opened in a different browser from the one that asked for it. A new link will work.',
+      canResend: true,
+    },
+    invalid_request: {
+      message:
+        'That reset link is not valid. It may have been broken across two lines by an email client. Request a new one and open it in a single click.',
+      canResend: true,
+    },
   },
 };
 
-const FALLBACK = {
-  message:
-    'We could not confirm your email with that link. Request a new one, and open it on the device you signed up on if you can.',
-  canResend: true,
+const FALLBACK: Record<AuthFlow, Copy> = {
+  email: {
+    message:
+      'We could not confirm your email with that link. Request a new one, and open it on the device you signed up on if you can.',
+    canResend: true,
+  },
+  oauth: {
+    message: "We couldn't finish signing you in. Try again, or sign in with your email and password.",
+    canResend: false,
+  },
+  recovery: {
+    message: `We could not use that reset link. ${LINK_EXPIRY_COPY}`,
+    canResend: true,
+  },
 };
 
 /**
  * @param search the `?...` part, with or without its leading `?`
  * @param hash   the `#...` part, with or without its leading `#`
+ * @param flow   which redirect this is; decides the wording, not the code
  */
 export function readAuthCallbackError(
   search: string | undefined | null,
   hash: string | undefined | null,
+  flow: AuthFlow = 'email',
 ): AuthCallbackError | null {
   const params = new URLSearchParams((search ?? '').replace(/^\?/, ''));
   const fragment = new URLSearchParams((hash ?? '').replace(/^#/, ''));
@@ -79,10 +138,10 @@ export function readAuthCallbackError(
 
   if (!code) return null;
 
-  const known = KNOWN[code];
+  const known = KNOWN[flow][code];
   if (known) return { code, ...known };
 
-  return { code, ...FALLBACK };
+  return { code, ...FALLBACK[flow] };
 }
 
 /**

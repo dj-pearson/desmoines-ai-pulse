@@ -75,6 +75,21 @@ const ATTRACTIONS = [
     longitude: LNG - 0.002,
     description: 'A fixture attraction.',
     type: 'Museum',
+    hours: null,
+    hours_summary: null,
+    is_active: true,
+  },
+  // Retired. The server is asked to drop it; the page must drop it anyway.
+  {
+    id: 'a3000000-0000-0000-0000-000000000002',
+    name: 'Closed For Good Museum',
+    latitude: LAT + 0.0025,
+    longitude: LNG - 0.0025,
+    description: 'A retired fixture attraction.',
+    type: 'Museum',
+    hours: null,
+    hours_summary: null,
+    is_active: false,
   },
 ];
 const PLAYGROUNDS = [
@@ -119,7 +134,8 @@ const TABLE_ROWS: Record<string, unknown[]> = {
   trails: TRAILS,
 };
 
-async function setup(page: Page, options: { fail?: boolean } = {}): Promise<string[]> {
+/** `fail: true` fails every layer; a list of tables fails just those. */
+async function setup(page: Page, options: { fail?: boolean | string[] } = {}): Promise<string[]> {
   const requested: string[] = [];
   await installFixtureBackend(page);
   // Tiles are not what this spec is about, and CI has no route to OSM.
@@ -129,7 +145,8 @@ async function setup(page: Page, options: { fail?: boolean } = {}): Promise<stri
   for (const [table, rows] of Object.entries(TABLE_ROWS)) {
     await page.route(`**/rest/v1/${table}?**`, (route) => {
       requested.push(route.request().url());
-      if (options.fail) {
+      const fails = Array.isArray(options.fail) ? options.fail.includes(table) : options.fail;
+      if (fails) {
         return route.fulfill({
           status: 500,
           contentType: 'application/json',
@@ -191,6 +208,49 @@ test.describe('/map', () => {
     expect(decodeURIComponent(events!)).toMatch(/latitude=gte\./);
     expect(decodeURIComponent(restaurants!)).toContain('is_merged=not.is.true');
     expect(decodeURIComponent(restaurants!)).toContain('status.not.in.(closed,opening_soon,announced)');
+  });
+
+  test('plots no retired attraction, and asks the server for active ones only', async ({ page }) => {
+    const requested = await setup(page);
+    await page.goto('/map?when=any');
+
+    await expect(marker(page, 'Fixture Art Center')).toHaveCount(1);
+    await expect(marker(page, 'Closed For Good Museum')).toHaveCount(0);
+    const attractions = requested.find((u) => u.includes('/rest/v1/attractions?'));
+    expect(decodeURIComponent(attractions!)).toContain('is_active=eq.true');
+  });
+
+  test('a marker click selects it, and closing the popup clears ?sel=', async ({ page }) => {
+    await setup(page);
+    await page.goto('/map?when=any');
+    await expect(marker(page, 'Visible Show')).toHaveCount(1);
+
+    await marker(page, 'Visible Show').click();
+    await expect(page).toHaveURL(/[?&]sel=a1000000-0000-0000-0000-000000000001/);
+    const popup = page.locator('.leaflet-popup');
+    await expect(popup).toContainText('Visible Show');
+
+    await page.locator('.leaflet-popup-close-button').click();
+    await expect(popup).toHaveCount(0);
+    await expect(page).not.toHaveURL(/[?&]sel=/);
+  });
+
+  test('a cold ?sel= outside the first viewport flies there and opens its popup', async ({ page }) => {
+    await installFixtureBackend(page);
+    await page.route('https://*.tile.openstreetmap.org/**', (route) =>
+      route.fulfill({ status: 204, body: '' }),
+    );
+    // About 20 km north of the default centre, well outside the z13 view.
+    const far = eventRow(9, 'Far North Fair', { latitude: 41.78, longitude: -93.62 });
+    await page.route('**/rest/v1/events?**', (route) => json(route, [EVENTS[0], far]));
+    for (const table of ['restaurants', 'attractions', 'playgrounds', 'trails']) {
+      await page.route(`**/rest/v1/${table}?**`, (route) => json(route, []));
+    }
+    await page.goto(`/map?when=any&layers=event&sel=${far.id}`);
+
+    await expect(marker(page, 'Far North Fair')).toHaveCount(1, { timeout: 15_000 });
+    await expect(page.locator('.leaflet-popup')).toContainText('Far North Fair');
+    await expect(page).toHaveURL(new RegExp(`[?&]sel=${far.id}`));
   });
 
   test('counts what is in view and links each result to its canonical page', async ({ page }) => {
@@ -264,6 +324,16 @@ test.describe('/map', () => {
     ).toHaveAttribute('href', '/playgrounds/fixture-park-playground');
   });
 
+  test('one failed layer names itself and the others still render', async ({ page }) => {
+    await setup(page, { fail: ['trails'] });
+    await page.goto('/map?when=any&layers=event,restaurant,trail');
+
+    await expect(marker(page, 'Visible Show')).toHaveCount(1);
+    await expect(marker(page, 'Open Kitchen')).toHaveCount(1);
+    const alert = page.getByRole('alert').filter({ hasText: 'Could not load Trails' });
+    await expect(alert.first()).toBeVisible({ timeout: 20_000 });
+  });
+
   test('says the map could not load, with a retry, when every layer fails', async ({ page }) => {
     await setup(page, { fail: true });
     await page.goto('/map?when=any');
@@ -272,5 +342,36 @@ test.describe('/map', () => {
     await expect(alert.first()).toBeVisible({ timeout: 20_000 });
     await expect(alert.first().getByRole('button', { name: 'Retry' })).toBeVisible();
     await expect(page.getByText(/No results in this area/)).toHaveCount(0);
+  });
+});
+
+test.describe('/map on a phone', () => {
+  test.use({ viewport: { width: 390, height: 844 } });
+
+  test('the OSM attribution is on screen and not covered', async ({ page }) => {
+    await setup(page);
+    await page.goto('/map?when=any');
+    await expect(marker(page, 'Visible Show')).toHaveCount(1);
+
+    const attribution = page.locator('.leaflet-control-attribution');
+    await expect(attribution).toContainText('OpenStreetMap');
+    const box = await attribution.boundingBox();
+    expect(box).not.toBeNull();
+    const hit = await page.evaluate(
+      ({ x, y }) => !!document.elementFromPoint(x, y)?.closest('.leaflet-control-attribution'),
+      { x: box!.x + box!.width / 2, y: box!.y + box!.height / 2 },
+    );
+    expect(hit).toBe(true);
+  });
+
+  test('the page is exactly one screen tall', async ({ page }) => {
+    await setup(page);
+    await page.goto('/map?when=any');
+    await expect(marker(page, 'Visible Show')).toHaveCount(1);
+    const { scrollHeight, innerHeight } = await page.evaluate(() => ({
+      scrollHeight: document.documentElement.scrollHeight,
+      innerHeight: window.innerHeight,
+    }));
+    expect(scrollHeight).toBe(innerHeight);
   });
 });

@@ -83,7 +83,6 @@ describe('queries whose answer depends on the account say so in the key', () => 
       ['src/hooks/useFavorites.ts', /queryKey: \["favorites", user\?\.id\]/],
       ['src/hooks/useSubscription.ts', /queryKey: \["user-subscriptions", user\?\.id\]/],
       ['src/hooks/useTripPlanner.ts', /queryKey: \['trip-plans', user\?\.id\]/],
-      ['src/hooks/useApiKeys.ts', /queryKey: \['api-keys', user\?\.id\]/],
       ['src/hooks/useBreweryTrail.ts', /queryKey: \['brewery-checkins', user\?\.id\]/],
       ['src/hooks/useProfile.ts', /queryKeys\.user\.profile\(user\?\.id/],
     ];

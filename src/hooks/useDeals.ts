@@ -17,9 +17,7 @@ export interface Deal {
   start_date: string;
   end_date: string | null;
   image_url: string | null;
-  is_verified: boolean;
   is_featured: boolean;
-  redemption_count: number;
   created_at: string;
   /**
    * Recurrence (migration 20260520000015). Subset of mon..sun; null or empty
@@ -30,6 +28,15 @@ export interface Deal {
   start_time?: string | null;
   end_time?: string | null;
 }
+
+/**
+ * The columns the card, the page and its JSON-LD read. `select('*')` also
+ * shipped created_by (an admin's user id) and redemption_count to every
+ * visitor. `code` stays in the list response until plan D6 moves it behind
+ * the reveal.
+ */
+const DEAL_LIST_COLUMNS =
+  'id, title, description, business_name, entity_type, entity_id, deal_type, discount_value, code, terms, start_date, end_date, image_url, is_featured, created_at, days_of_week, start_time, end_time';
 
 /** Deals are listed and scheduled in Des Moines time, whatever the browser's zone. */
 const DEALS_TIME_ZONE = 'America/Chicago';
@@ -66,7 +73,7 @@ export function useDeals(category?: string) {
       const active = activeWindowFilter(new Date().toISOString());
       let query = supabase
         .from('deals')
-        .select('*')
+        .select(DEAL_LIST_COLUMNS)
         .lte('start_date', active.start)
         .or(active.endOr)
         .order('is_featured', { ascending: false })
@@ -77,27 +84,6 @@ export function useDeals(category?: string) {
       }
 
       const { data, error } = await query;
-      if (error) throw error;
-      return (data ?? []) as unknown as Deal[];
-    },
-    staleTime: 5 * 60 * 1000,
-  });
-}
-
-export function useFeaturedDeals(limit = 4) {
-  return useQuery({
-    queryKey: ['deals', 'featured', limit],
-    queryFn: async (): Promise<Deal[]> => {
-      const active = activeWindowFilter(new Date().toISOString());
-      const { data, error } = await supabase
-        .from('deals')
-        .select('*')
-        .eq('is_featured', true)
-        .lte('start_date', active.start)
-        .or(active.endOr)
-        .order('created_at', { ascending: false })
-        .limit(limit);
-
       if (error) throw error;
       return (data ?? []) as unknown as Deal[];
     },
@@ -127,33 +113,43 @@ export function useClaimDeal() {
  * Venue links for a page of deals: one batched query per entity type.
  * restaurants carry a slug (falls back to id, as RestaurantsTonightStrip
  * does); attractions have no stored slug yet (plan D2), so their route slug is
- * derived from the name the same way the attractions pages build it.
+ * derived from the name the same way the attractions pages build it; hotels
+ * link /stay/<slug> (hotels.slug is in the 2026-08-24 snapshot) and a hotel
+ * without a slug gets no link rather than a guessed one.
  */
 export function useDealVenueLinks(deals: Deal[] | undefined) {
   const restaurantIds = uniqueIds(deals, 'restaurant');
   const attractionIds = uniqueIds(deals, 'attraction');
+  const hotelIds = uniqueIds(deals, 'hotel');
 
   return useQuery({
-    queryKey: ['deals', 'venues', restaurantIds, attractionIds],
-    enabled: restaurantIds.length > 0 || attractionIds.length > 0,
+    queryKey: ['deals', 'venues', restaurantIds, attractionIds, hotelIds],
+    enabled: restaurantIds.length > 0 || attractionIds.length > 0 || hotelIds.length > 0,
     queryFn: async (): Promise<Record<string, string>> => {
       const links: Record<string, string> = {};
-      const [restaurants, attractions] = await Promise.all([
+      const [restaurants, attractions, hotels] = await Promise.all([
         restaurantIds.length
           ? supabase.from('restaurants').select('id, slug').in('id', restaurantIds)
           : Promise.resolve({ data: [], error: null }),
         attractionIds.length
           ? supabase.from('attractions').select('id, name').in('id', attractionIds)
           : Promise.resolve({ data: [], error: null }),
+        hotelIds.length
+          ? supabase.from('hotels').select('id, slug').in('id', hotelIds)
+          : Promise.resolve({ data: [], error: null }),
       ]);
       if (restaurants.error) throw restaurants.error;
       if (attractions.error) throw attractions.error;
+      if (hotels.error) throw hotels.error;
 
       for (const row of (restaurants.data ?? []) as Array<{ id: string; slug: string | null }>) {
         links[`restaurant:${row.id}`] = `/restaurants/${row.slug || row.id}`;
       }
       for (const row of (attractions.data ?? []) as Array<{ id: string; name: string | null }>) {
         if (row.name) links[`attraction:${row.id}`] = `/attractions/${createSlug(row.name)}`;
+      }
+      for (const row of (hotels.data ?? []) as Array<{ id: string; slug: string | null }>) {
+        if (row.slug) links[`hotel:${row.id}`] = `/stay/${row.slug}`;
       }
       return links;
     },
@@ -197,6 +193,10 @@ export interface DealBadge {
  * with a far end date read as new forever. It now means what it says: the
  * later of start_date and created_at falls in the last 7 days, and only when
  * no urgency badge applies.
+ *
+ * Urgency counts Des Moines calendar days, not 24-hour blocks: a deal ending
+ * at 9 AM tomorrow "Ends tomorrow", not "Last day!" because it is under 24
+ * hours away.
  */
 export function getDealExpiryBadge(
   deal: Pick<Deal, 'end_date' | 'start_date' | 'created_at'>,
@@ -204,11 +204,19 @@ export function getDealExpiryBadge(
 ): DealBadge | null {
   if (deal.end_date) {
     const end = new Date(deal.end_date);
-    const daysLeft = Math.ceil((end.getTime() - now.getTime()) / DAY_MS);
-    if (daysLeft <= 0) return null;
-    if (daysLeft === 1) return { text: 'Last day!', variant: 'destructive' };
-    if (daysLeft <= 3) return { text: `Expires in ${daysLeft} days`, variant: 'destructive' };
-    if (daysLeft <= 7) return { text: `${daysLeft} days left`, variant: 'secondary' };
+    if (Number.isFinite(end.getTime())) {
+      if (end.getTime() <= now.getTime()) return null;
+      const days = desMoinesDaysBetween(now, end);
+      if (days === 0) {
+        const endMinutes = desMoinesClock(end).minutes;
+        // An end stored as 23:59 CT means "through today"; don't print the minute.
+        const text = endMinutes >= 23 * 60 + 59 ? 'Ends today' : `Ends today at ${clockLabel(endMinutes)}`;
+        return { text, variant: 'destructive' };
+      }
+      if (days === 1) return { text: 'Ends tomorrow', variant: 'destructive' };
+      if (days <= 3) return { text: `Ends in ${days} days`, variant: 'destructive' };
+      if (days <= 7) return { text: `${days} days left`, variant: 'secondary' };
+    }
   }
 
   const stamps = [deal.start_date, deal.created_at]
@@ -269,6 +277,12 @@ function clock(minutes: number): { text: string; meridiem: 'AM' | 'PM' } {
   return { text: mins ? `${h12}:${String(mins).padStart(2, '0')}` : String(h12), meridiem };
 }
 
+/** "9 AM", "4:30 PM". */
+function clockLabel(minutes: number): string {
+  const c = clock(minutes);
+  return `${c.text} ${c.meridiem}`;
+}
+
 function formatTimes(start: number, end: number): string {
   const a = clock(start);
   const b = clock(end);
@@ -313,6 +327,24 @@ export function desMoinesClock(now: Date): { day: string; minutes: number } {
   return { day, minutes: hour * 60 + minute };
 }
 
+/** Des Moines calendar date of an instant, as YYYY-MM-DD. */
+function desMoinesDate(at: Date): string {
+  // en-CA formats as YYYY-MM-DD.
+  return new Intl.DateTimeFormat('en-CA', {
+    timeZone: DEALS_TIME_ZONE,
+    year: 'numeric',
+    month: '2-digit',
+    day: '2-digit',
+  }).format(at);
+}
+
+/** Whole Des Moines calendar days from `from` to `to` (0 = same date). */
+function desMoinesDaysBetween(from: Date, to: Date): number {
+  const a = Date.parse(`${desMoinesDate(from)}T00:00:00Z`);
+  const b = Date.parse(`${desMoinesDate(to)}T00:00:00Z`);
+  return Math.round((b - a) / DAY_MS);
+}
+
 function previousDay(day: string): string {
   const i = DAY_KEYS.indexOf(day as (typeof DAY_KEYS)[number]);
   return DAY_KEYS[(i + 6) % 7];
@@ -346,14 +378,48 @@ export function isDealLiveAt(
   return (onDay(day) && minutes >= start) || (onDay(previousDay(day)) && minutes < end);
 }
 
-/** Whether the deal runs at some point on today's Des Moines date. */
+/**
+ * Whether the deal runs at some point on today's Des Moines date, or is
+ * running right now. The second half matters for an overnight window: a Fri
+ * 9 PM-2 AM deal is live at 1 AM Saturday (isDealLiveAt says so), and it used
+ * to be missing from Today at that minute because only Saturday's weekday was
+ * checked.
+ */
 export function isDealOnToday(
-  deal: Pick<Deal, 'days_of_week' | 'start_date' | 'end_date'>,
+  deal: Pick<Deal, 'days_of_week' | 'start_time' | 'end_time' | 'start_date' | 'end_date'>,
   now: Date = new Date(),
 ): boolean {
   if (!inDateRange(deal, now)) return false;
   const days = dealDays(deal);
-  return days.length === 0 || days.includes(desMoinesClock(now).day);
+  if (days.length === 0 || days.includes(desMoinesClock(now).day)) return true;
+  return isDealLiveAt(deal, now);
+}
+
+/**
+ * Where a deal with a daily time window stands at `now`, from the same clock
+ * the Running now badge uses: running, starting later today, or done for
+ * today. Null when the deal has no time window or doesn't run today.
+ */
+export type DealTodayStatus =
+  | { kind: 'running' }
+  | { kind: 'later'; text: string }
+  | { kind: 'ended'; text: string };
+
+export function dealTodayStatus(
+  deal: Pick<Deal, 'days_of_week' | 'start_time' | 'end_time' | 'start_date' | 'end_date'>,
+  now: Date = new Date(),
+): DealTodayStatus | null {
+  const start = parseTime(deal.start_time);
+  const end = parseTime(deal.end_time);
+  if (start === null || end === null) return null;
+  if (!isDealOnToday(deal, now)) return null;
+  if (isDealLiveAt(deal, now)) return { kind: 'running' };
+  const days = dealDays(deal);
+  const { day, minutes } = desMoinesClock(now);
+  const runsToday = days.length === 0 || days.includes(day);
+  if (!runsToday) return null;
+  if (minutes < start) return { kind: 'later', text: `Starts ${clockLabel(start)}` };
+  return { kind: 'ended', text: 'Ended for today' };
 }
 
 export type DealWhen = 'all' | 'now' | 'today';
@@ -362,8 +428,13 @@ export function normalizeDealWhen(value: string | null | undefined): DealWhen {
   return value === 'now' || value === 'today' ? value : 'all';
 }
 
+/**
+ * Every value applies the date window, including 'all': the page re-runs this
+ * each minute, and a deal that expires while the page is open should leave the
+ * list then, not at the next refetch.
+ */
 export function filterDealsByWhen(deals: Deal[], when: DealWhen, now: Date = new Date()): Deal[] {
   if (when === 'now') return deals.filter((d) => isDealLiveAt(d, now));
   if (when === 'today') return deals.filter((d) => isDealOnToday(d, now));
-  return deals;
+  return deals.filter((d) => inDateRange(d, now));
 }

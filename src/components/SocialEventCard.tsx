@@ -9,11 +9,16 @@ import { useEventSocial } from '@/hooks/useEventSocial';
 import { BatchEventSocialData } from '@/hooks/useBatchEventSocial';
 import { Event } from '@/lib/types';
 import { SpriteIcon } from '@/components/ui/SpriteIcon';
+import { createEventSlugWithCentralTime, formatInCentralTime } from '@/lib/timezone';
 import {
-  createEventSlugWithCentralTime,
-  formatInCentralTime,
-  hasSpecificTime,
-} from '@/lib/timezone';
+  eventRunLabel,
+  eventStart,
+  eventTimeLabel,
+  eventTiming,
+  isRunningFromEarlierDay,
+} from '@/lib/eventTiming';
+import { formatNearMeDistance } from '@/lib/nearMeOrigins';
+import { isPrerender } from '@/lib/isPrerender';
 import { Link } from 'react-router-dom';
 import { getEventCategoryStyle, STATUS_BADGE } from '@/lib/categoryStyles';
 import { SponsoredBadge } from '@/components/SponsoredBadge';
@@ -22,6 +27,8 @@ import { useSponsoredImpression } from '@/hooks/useSponsoredImpression';
 import { useRef, useState } from 'react';
 import { isFreePrice } from '@/lib/eventPrice';
 import { EVENT_AREAS, isInBBox } from '@/lib/eventAreas';
+
+const METERS_TO_MILES = 0.000621371;
 
 interface SocialEventCardProps {
   event: Event;
@@ -53,6 +60,11 @@ interface SocialEventCardProps {
    * already finished for every other element.
    */
   priority?: boolean;
+  /**
+   * Where the distance badge measures from, when it isn't the viewer: near
+   * me's picked origin ("1.2 mi from Downtown"). Omitted, it reads "away".
+   */
+  distanceOriginLabel?: string;
   featured?: boolean;
   /**
    * Optional lead line such as "Starts in 40 min" or "Happening now", for the
@@ -60,6 +72,12 @@ interface SocialEventCardProps {
    * the time line; the card computes nothing from it.
    */
   relativeStart?: string;
+  /**
+   * The title's heading level. 3 by default; a list that nests cards under
+   * day headings (h3) passes 4 so the outline doesn't skip or flatten
+   * (events-pass2 WP2 item 6).
+   */
+  headingLevel?: 3 | 4;
 }
 
 type CardEvent = Event & { distance_meters?: number | null };
@@ -79,6 +97,18 @@ function placeLabel(event: CardEvent): string | null {
   return null;
 }
 
+/**
+ * The card's one time line. A run under way ("Runs through Sun, Sep 27") and a
+ * time range ("7:00 - 10:00 PM CT") replace the start time; a multi-day run
+ * that hasn't started keeps it and adds the dates ("10:00 AM CT, Sep 22 -
+ * Sep 27").
+ */
+function leadTimeWords(timeLabel: string, runLabel: string | null): string {
+  if (!runLabel) return timeLabel;
+  if (runLabel.startsWith('Runs through') || runLabel.endsWith(' CT')) return runLabel;
+  return `${timeLabel}, ${runLabel}`;
+}
+
 function SocialEventCardComponent({
   event,
   showSocialPreview = true,
@@ -86,7 +116,9 @@ function SocialEventCardComponent({
   socialDataPending = false,
   featured = false,
   priority = false,
+  distanceOriginLabel,
   relativeStart,
+  headingLevel = 3,
 }: SocialEventCardProps) {
   // Passing '' disables the hook (it early-returns on a falsy id). Skip the
   // individual fetch both when batch data has arrived AND while it is pending.
@@ -114,30 +146,45 @@ function SocialEventCardComponent({
 
   const categoryStyle = getEventCategoryStyle(event.category);
 
+  // One clock per render. The card is memoised, so this re-reads whenever the
+  // list re-renders, which is often enough for "is it on now".
+  const now = new Date();
+  const timing = eventTiming(event, now);
+  // Day 2 of a festival sits under today's header; its badge says today too
+  // (events-pass2 WP2 item 5). Not in prerendered HTML, where "today" would be
+  // frozen at build time: the static card keeps the start date.
+  const runningFromEarlierDay = !isPrerender() && isRunningFromEarlierDay(event, now);
+
   const getDateParts = () => {
-    try {
-      const dateSource = event.event_start_utc || event.event_start_local || event.date;
-      const month = formatInCentralTime(dateSource, 'MMM').toUpperCase();
-      const day = formatInCentralTime(dateSource, 'd');
-      const weekday = formatInCentralTime(dateSource, 'EEE');
-      const showTime = hasSpecificTime(event);
-      const time = showTime ? formatInCentralTime(dateSource, 'h:mm a') : null;
-      // Always provide an explicit time label - never leave the slot blank.
-      const timeLabel = time ? `${time} CT` : 'All day';
-      return { month, day, weekday, time, timeLabel };
-    } catch {
-      return { month: 'TBA', day: '--', weekday: '', time: null, timeLabel: 'Time TBA' };
-    }
+    const start = eventStart(event);
+    if (!start) return { month: 'TBA', day: '--', weekday: '' };
+    const badgeDate = runningFromEarlierDay ? now : start;
+    return {
+      month: formatInCentralTime(badgeDate, 'MMM').toUpperCase(),
+      day: formatInCentralTime(badgeDate, 'd'),
+      weekday: formatInCentralTime(badgeDate, 'EEE'),
+    };
   };
 
+  // The lead time words come from eventTiming.ts, the same helper detail and
+  // the map use (events-pass2 WP2 item 1). An unknown time says so; "All day"
+  // is only for a row whose end_date runs past its start day.
+  const timeLabel = eventTimeLabel(event);
+  const runLabel = eventRunLabel(event, now);
+  const leadTime = leadTimeWords(timeLabel, runLabel);
+
   const dateParts = getDateParts();
+  const Heading = headingLevel === 4 ? 'h4' : 'h3';
   const eventSlug = createEventSlugWithCentralTime(event.title, event);
   const eventUrl = `/events/${eventSlug}`;
 
   // Unknown price is unknown, not free (WP3 item 1). A row with no price used
   // to get the green Free badge here and in the hub's filter.
   const free = isFreePrice(event.price);
-  const isLive = (liveStats?.total_checkins ?? 0) > 0;
+  // LIVE means now (events-pass2 WP2 item 4). total_checkins is all-time, so a
+  // check-in alone put LIVE on next week's show.
+  const checkins = liveStats?.total_checkins ?? 0;
+  const isLive = checkins > 0 && timing.isHappeningNow;
   const cardEvent = event as CardEvent;
   const distanceMeters = cardEvent.distance_meters;
   const venueName = event.venue || event.location;
@@ -150,7 +197,7 @@ function SocialEventCardComponent({
   // Mirrors the four conditions inside the stack below. Kept adjacent to them
   // so a fifth badge cannot be added without this going false for it.
   const hasTopRightBadge = Boolean(
-    sponsoredActive || isLive || (!sponsoredActive && event.is_featured) || distanceMeters,
+    sponsoredActive || isLive || (!sponsoredActive && event.is_featured) || distanceMeters != null,
   );
   useSponsoredImpression(cardRef, 'event', event.id, sponsoredActive);
 
@@ -182,7 +229,9 @@ function SocialEventCardComponent({
             // OptimizedImage's own "Image unavailable" panel.
             <OptimizedImage
               src={imageUrl}
-              alt={`${event.title} - ${event.category} event in ${event.city || 'Des Moines'}, Iowa`}
+              // Decorative: the title link names the event (events-pass2 WP2
+              // item 6), and repeating it here made screen readers say it twice.
+              alt=""
               className="object-cover transition-transform duration-500 group-hover:scale-110"
               containerClassName="w-full h-full"
               priority={priority}
@@ -244,10 +293,10 @@ function SocialEventCardComponent({
                   Featured
                 </Badge>
               )}
-              {distanceMeters ? (
+              {distanceMeters != null ? (
                 <Badge className="bg-white/90 text-slate-800 border-0 shadow-lg text-[10px] px-2">
                   <SpriteIcon name="map-pin" className="h-3 w-3 mr-1" />
-                  {(distanceMeters * 0.000621371).toFixed(1)} mi
+                  {formatNearMeDistance(distanceMeters * METERS_TO_MILES, distanceOriginLabel)}
                 </Badge>
               ) : null}
             </div>
@@ -281,7 +330,7 @@ function SocialEventCardComponent({
               "7:30 PM CT - Wooly's - East Village" (WP3 item 3). */}
           <p className="flex min-w-0 items-center text-sm text-muted-foreground">
             <SpriteIcon name="clock" className="h-3.5 w-3.5 mr-2 flex-shrink-0" />
-            <span className="flex-shrink-0 font-medium text-foreground">{dateParts.timeLabel}</span>
+            <span className="flex-shrink-0 font-medium text-foreground">{leadTime}</span>
             {venueName && (
               <>
                 <span aria-hidden="true" className="mx-1.5 flex-shrink-0">&middot;</span>
@@ -296,9 +345,10 @@ function SocialEventCardComponent({
             )}
           </p>
 
-          <h3 className="text-lg font-bold leading-tight text-foreground line-clamp-2">
+          <Heading className="text-lg font-bold leading-tight text-foreground line-clamp-2">
             <Link
               to={eventUrl}
+              data-testid="event-card-link"
               className="rounded-sm after:absolute after:inset-0 after:z-[1] after:rounded-xl after:content-[''] focus:outline-none focus-visible:after:ring-2 focus-visible:after:ring-primary focus-visible:after:ring-offset-2"
               onClick={() => {
                 if (sponsoredActive) logSponsoredClick('event', event.id);
@@ -307,7 +357,7 @@ function SocialEventCardComponent({
               {sponsoredActive && <span className="sr-only">Sponsored: </span>}
               {event.title}
             </Link>
-          </h3>
+          </Heading>
 
           {/* Description Preview */}
           {(event.enhanced_description || event.original_description) && (
@@ -317,17 +367,19 @@ function SocialEventCardComponent({
           )}
 
           {/* Social Proof Bar */}
-          {showSocialPreview && attendeeCount > 0 && (
+          {showSocialPreview && (attendeeCount > 0 || checkins > 0) && (
             <div className="flex items-center gap-3 text-xs text-muted-foreground pt-2 border-t">
-              <div className="flex items-center gap-1">
-                <SpriteIcon name="users" className="h-3.5 w-3.5" />
-                <span className="font-medium">{attendeeCount}</span>
-                <span>interested</span>
-              </div>
-              {(liveStats?.total_checkins ?? 0) > 0 && (
+              {attendeeCount > 0 && (
                 <div className="flex items-center gap-1">
-                  <span aria-hidden="true" className="w-1.5 h-1.5 rounded-full bg-green-600" />
-                  <span>{liveStats?.total_checkins} checked in</span>
+                  <SpriteIcon name="users" className="h-3.5 w-3.5" />
+                  <span className="font-medium">{attendeeCount}</span>
+                  <span>interested</span>
+                </div>
+              )}
+              {checkins > 0 && (
+                <div className="flex items-center gap-1">
+                  {isLive && <span aria-hidden="true" className="w-1.5 h-1.5 rounded-full bg-green-600" />}
+                  <span>{checkins} checked in</span>
                 </div>
               )}
             </div>

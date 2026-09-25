@@ -146,7 +146,13 @@ console.log('\nthe browser calls them and never computes the answer itself');
   // A server call that can refuse has to be able to say so. The version that
   // swallows the error leaves an advertiser pressing a dead button.
   check('a refusal reaches the advertiser', /toast\.error\(/.test(dashboard));
-  check('paused renders as a status rather than falling through', /paused: "outline"/.test(dashboard));
+  // The status map moved to src/lib/campaignDisplay.ts (business plan WP0) so
+  // the dashboard and the detail page cannot word a status differently.
+  const display = readFileSync('src/lib/campaignDisplay.ts', 'utf8');
+  check(
+    'paused renders as a status rather than falling through',
+    /paused: \{ label: "Paused", tone: "\w+" \}/.test(display) && /CAMPAIGN_STATUS\[campaign\.status\]/.test(dashboard),
+  );
 }
 
 console.log(`\n${failures} failure(s)`);

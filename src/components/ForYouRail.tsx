@@ -1,17 +1,26 @@
-import { lazy, Suspense, useEffect, useState } from "react";
+import { lazy, Suspense, useEffect, useRef, useState } from "react";
 import { Link } from "react-router-dom";
 import { RefreshCw, X } from "lucide-react";
 import { Button } from "@/components/ui/button";
-import { useForYouRail } from "@/hooks/useForYouRail";
+import { SponsoredBadge } from "@/components/SponsoredBadge";
+import { useForYouRail, type ForYouRecommendation } from "@/hooks/useForYouRail";
 import { useUserPreferences } from "@/hooks/useUserPreferences";
 import { useAuth } from "@/hooks/useAuth";
+import { useSponsoredImpression } from "@/hooks/useSponsoredImpression";
 import { SpriteIcon } from "@/components/ui/SpriteIcon";
 import { OptimizedImage } from "@/components/OptimizedImage";
-import { RailWeatherLine } from "@/components/WeatherNotice";
-import { createEventSlugWithCentralTime } from "@/lib/timezone";
+import { createEventSlugWithCentralTime, formatEventDateShort } from "@/lib/timezone";
 import { storage } from "@/lib/safeStorage";
 import { handleError } from "@/lib/errorHandler";
-import { TASTE_CHIPS, togglePick } from "@/lib/forYouRerank";
+import { isSponsoredActive, logSponsoredClick } from "@/lib/sponsored";
+import {
+  TASTE_CHIPS,
+  displayReason,
+  forYouHeading,
+  togglePick,
+  unmatchedLine,
+  type Reranked,
+} from "@/lib/forYouRerank";
 import { PREFS_PROMPT_DISMISSED_KEY } from "@/lib/userPreferencesStore";
 import { cn } from "@/lib/utils";
 
@@ -23,21 +32,29 @@ const PreferencesOnboarding = lazy(() =>
 /**
  * The card strip's height, shared by skeleton, cards and the empty state so
  * none of the three can change the rail's height when it replaces another
- * (WP2 item 6). 126px image + two title lines + two reason lines + gaps.
+ * (WP2 item 6). 126px image + the when/where line + two title lines + two
+ * reason lines + gaps.
  */
-const STRIP_MIN_HEIGHT = "min-h-[13.5rem]";
+const STRIP_MIN_HEIGHT = "min-h-[15rem]";
 
 /**
  * The home For You rail.
  *
- * Web parity for the iOS HomeView rail (IOS-DISCOVER-2026-002), plus three
- * things from the Home plan (WP2):
+ * Web parity for the iOS HomeView rail (IOS-DISCOVER-2026-002), plus, from
+ * the Home plans (pass 1 WP2, pass 2 WP3):
  *   - taste chips a guest can use: picks re-order the rows in the browser and
  *     each moved card says why ("Because you picked Free");
+ *   - a heading that claims only what the rows support: "For you" when a pick
+ *     matched or the rows are personal, "Trending" when enough rows carry a
+ *     measured trending_score, "Coming up" otherwise;
+ *   - "Sponsored" on every active sponsored row, with the impression and click
+ *     logged the way EventCard logs them;
+ *   - each card says when and where before what;
  *   - an inline "Tune your picks" prompt in place of the modal that used to
  *     open itself a second after load;
  *   - a fixed-height layout: the rail no longer collapses to nothing when the
- *     RPC is empty, and the weather line sits in a slot that never resizes.
+ *     read is empty. The weather line moved to the Tonight rail, whose order
+ *     it explains.
  */
 export function ForYouRail() {
   const { recommendations, source, picks, isLoading, isError, refetch } = useForYouRail(12);
@@ -72,7 +89,7 @@ export function ForYouRail() {
     }
   };
 
-  const headerTitle = picks.length > 0 || source === "for-you" ? "For you" : "Trending now";
+  const { title: headerTitle, unmatched } = forYouHeading({ source, picks, rows: recommendations });
   const pickSet = new Set(picks);
   const showSkeleton = isLoading && recommendations.length === 0;
   // A failed read is not an empty one (WEB-QA-032): "Nothing trending yet" on a
@@ -83,7 +100,7 @@ export function ForYouRail() {
   return (
     <section className="py-6" aria-labelledby="for-you-rail-heading">
       <div className="container mx-auto px-4">
-        <div className="flex items-center justify-between gap-3">
+        <div className="mb-3 flex items-center justify-between gap-3">
           <h2
             id="for-you-rail-heading"
             className="text-xl font-semibold flex items-center gap-2"
@@ -105,8 +122,6 @@ export function ForYouRail() {
             />
           </Button>
         </div>
-
-        <RailWeatherLine className="mb-3" />
 
         {showPrompt && (
           <div className="mb-3 flex flex-wrap items-center gap-x-3 gap-y-1 rounded-xl bg-muted px-4 py-2">
@@ -157,6 +172,18 @@ export function ForYouRail() {
           })}
         </div>
 
+        {unmatched.length > 0 && (
+          <p className="mb-3 text-sm text-muted-foreground" role="status">
+            {unmatchedLine(unmatched)}.{" "}
+            <Link
+              to={unmatched[0].hub}
+              className="font-medium text-foreground underline underline-offset-4"
+            >
+              {unmatched[0].hubLabel}
+            </Link>
+          </p>
+        )}
+
         <div
           className={cn("flex gap-4 overflow-x-auto pb-2 -mx-4 px-4 snap-x snap-mandatory", STRIP_MIN_HEIGHT)}
           aria-busy={showSkeleton}
@@ -185,7 +212,7 @@ export function ForYouRail() {
           {showEmpty && (
             <div className="flex w-full items-center justify-center rounded-xl bg-muted px-4 text-center">
               <p className="text-sm text-muted-foreground">
-                Nothing trending yet.{" "}
+                Nothing is listed yet.{" "}
                 <Link
                   to="/events/today"
                   className="font-medium text-foreground underline underline-offset-4"
@@ -196,47 +223,9 @@ export function ForYouRail() {
             </div>
           )}
 
-          {recommendations.map((rec) => {
-            const reason = rec.pickReason ?? rec.recommendation_reason;
-            return (
-              <Link
-                key={rec.id}
-                to={`/events/${createEventSlugWithCentralTime(rec.title, rec)}`}
-                className="snap-start shrink-0 w-56 group"
-              >
-                <div className="aspect-video w-56 overflow-hidden rounded-lg bg-muted">
-                  {rec.image_url ? (
-                    <OptimizedImage
-                      src={rec.image_url}
-                      alt={rec.title ?? "Event"}
-                      width={224}
-                      height={126}
-                      containerClassName="h-full w-full"
-                      className="object-cover group-hover:scale-105 transition-transform duration-200"
-                      sizes="224px"
-                    />
-                  ) : (
-                    <div className="h-full w-full flex items-center justify-center text-muted-foreground">
-                      <SpriteIcon name="sparkles" className="h-8 w-8" aria-hidden="true" />
-                    </div>
-                  )}
-                </div>
-                <p className="mt-2 font-medium text-sm line-clamp-2 group-hover:text-primary">
-                  {rec.title}
-                </p>
-                {reason && (
-                  <p
-                    className={cn(
-                      "mt-1 text-xs line-clamp-2",
-                      rec.pickReason ? "font-medium text-foreground" : "text-muted-foreground",
-                    )}
-                  >
-                    {reason}
-                  </p>
-                )}
-              </Link>
-            );
-          })}
+          {recommendations.map((rec) => (
+            <ForYouCard key={rec.id} rec={rec} heading={headerTitle} />
+          ))}
         </div>
       </div>
 
@@ -250,5 +239,69 @@ export function ForYouRail() {
         </Suspense>
       )}
     </section>
+  );
+}
+
+interface ForYouCardProps {
+  rec: Reranked<ForYouRecommendation>;
+  heading: string;
+}
+
+/**
+ * One card: when and where, then what, then why. The image is decorative
+ * (alt=""): the link's name is the title text inside it.
+ */
+function ForYouCard({ rec, heading }: ForYouCardProps) {
+  const ref = useRef<HTMLAnchorElement>(null);
+  const sponsored = isSponsoredActive(rec);
+  useSponsoredImpression(ref, "event", rec.id, sponsored);
+
+  const reason = displayReason(rec, heading);
+  const when = rec.date || rec.event_start_utc ? formatEventDateShort(rec) : null;
+  const where = rec.venue?.trim() || rec.location?.trim() || null;
+  const line = [when, where].filter(Boolean).join(" \u00b7 ");
+
+  return (
+    <Link
+      ref={ref}
+      to={`/events/${createEventSlugWithCentralTime(rec.title, rec)}`}
+      className="snap-start shrink-0 w-56 group"
+      onClick={() => {
+        if (sponsored) logSponsoredClick("event", rec.id);
+      }}
+    >
+      <div className="relative aspect-video w-56 overflow-hidden rounded-lg bg-muted">
+        {rec.image_url ? (
+          <OptimizedImage
+            src={rec.image_url}
+            alt=""
+            width={224}
+            height={126}
+            containerClassName="h-full w-full"
+            className="object-cover group-hover:scale-105 transition-transform duration-200"
+            sizes="224px"
+          />
+        ) : (
+          <div className="h-full w-full flex items-center justify-center text-muted-foreground">
+            <SpriteIcon name="sparkles" className="h-8 w-8" aria-hidden="true" />
+          </div>
+        )}
+        {sponsored && <SponsoredBadge className="absolute left-2 top-2" />}
+      </div>
+      {line && <p className="mt-2 text-xs font-medium text-muted-foreground line-clamp-1">{line}</p>}
+      <p className={cn("font-medium text-sm line-clamp-2 group-hover:text-primary", line ? "mt-0.5" : "mt-2")}>
+        {rec.title}
+      </p>
+      {reason && (
+        <p
+          className={cn(
+            "mt-1 text-xs line-clamp-2",
+            rec.pickReason ? "font-medium text-foreground" : "text-muted-foreground",
+          )}
+        >
+          {reason}
+        </p>
+      )}
+    </Link>
   );
 }

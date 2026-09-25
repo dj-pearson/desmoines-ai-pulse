@@ -95,6 +95,21 @@ export const PLAYGROUND_LIST_COLUMNS =
   "accessibility_notes, age_range, amenities, created_at, description, has_restrooms, has_shade, id, image_url, is_featured, latitude, location, longitude, name, rating, source, surface_type, updated_at";
 
 /**
+ * The Tonight rail and everything that reads its cache (home pass-2 WP2 item
+ * 3): RestaurantsTonightStrip, SocialProof's per-area counts, the home rails'
+ * shown-id exclusion. Every name is in scripts/db-snapshot.json (2026-08-24).
+ * is_indoor is NOT here: it arrives in 20260908000001 and is read separately by
+ * useEventIndoorFlags so a missing column can't blank the rail (42703).
+ * time_tbd is not here for the reason given on EVENT_LIST_COLUMNS.
+ */
+export const TONIGHT_EVENT_COLUMNS =
+  "id, title, date, event_start_utc, event_start_local, end_date, venue, location, city, category, price, latitude, longitude, is_sponsored, sponsored_until";
+
+/** Every column pickDinner and the Tonight card read, and nothing else. */
+export const TONIGHT_RESTAURANT_COLUMNS =
+  "id, name, slug, cuisine, latitude, longitude, opening, opening_date, status";
+
+/**
  * The four columns needed to DERIVE an event slug, and nothing else
  * (WEB-PERF-035 AC2).
  *

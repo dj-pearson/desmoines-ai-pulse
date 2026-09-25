@@ -1,4 +1,5 @@
 import { test, expect, type Route } from '@playwright/test';
+import { installFixtureBackend } from './support/fixtureBackend';
 
 /**
  * WEB-ADS-005 AC5. What /advertise/success tells an advertiser about their
@@ -32,13 +33,27 @@ const CAMPAIGN = {
 
 const JSON_HEADERS = { 'access-control-allow-origin': '*' };
 
-async function mockPaidCampaign(page: import('@playwright/test').Page) {
+async function mockPaidCampaign(
+  page: import('@playwright/test').Page,
+  campaign: Record<string, unknown> = CAMPAIGN,
+  links: unknown[] = [],
+  verifyBody: Record<string, unknown> = { paid: true },
+) {
+  await installFixtureBackend(page);
+  await page.route('**/rest/v1/sponsored_listing_links**', (route: Route) =>
+    route.fulfill({
+      status: 200,
+      contentType: 'application/json',
+      headers: JSON_HEADERS,
+      body: JSON.stringify(links),
+    }),
+  );
   await page.route('**/functions/v1/verify-campaign-payment', (route: Route) =>
     route.fulfill({
       status: 200,
       contentType: 'application/json',
       headers: JSON_HEADERS,
-      body: JSON.stringify({ paid: true }),
+      body: JSON.stringify(verifyBody),
     }),
   );
 
@@ -50,10 +65,15 @@ async function mockPaidCampaign(page: import('@playwright/test').Page) {
       status: 200,
       contentType: 'application/json',
       headers: { ...JSON_HEADERS, 'content-range': '0-0/1' },
-      body: JSON.stringify(CAMPAIGN),
+      body: JSON.stringify(campaign),
     }),
   );
 }
+
+// Business WP2 item 9: a date-only start_date must read as the day it names in
+// Des Moines. new Date('2026-10-01') is UTC midnight, which is September 30 in
+// Central time, and that is what the page printed.
+test.use({ timezoneId: 'America/Chicago' });
 
 test.describe('advertise success receipt copy', () => {
   test('does not promise a confirmation email', async ({ page }) => {
@@ -92,5 +112,66 @@ test.describe('advertise success receipt copy', () => {
         page.getByRole('link', { name: /upload/i }),
       ).first(),
     ).toBeVisible();
+  });
+  test('the amount paid is what Stripe charged, and a list price is not called that', async ({ page }) => {
+    // A promotion code (allow_promotion_codes) makes the charge differ from
+    // the stored campaign total; verify-campaign-payment reports amountPaid.
+    await mockPaidCampaign(page, CAMPAIGN, [], { paid: true, amountPaid: 378 });
+    await page.goto(`/advertise/success?campaign_id=${CAMPAIGN_ID}`);
+    await expect(page.getByText('Amount paid')).toBeVisible();
+    await expect(page.getByText('$378.00')).toBeVisible();
+    await expect(page.getByText('$420.00')).toHaveCount(0);
+  });
+
+  test('without amountPaid the stored total is labelled as the campaign total', async ({ page }) => {
+    await mockPaidCampaign(page);
+    await page.goto(`/advertise/success?campaign_id=${CAMPAIGN_ID}`);
+    await expect(page.getByText('Campaign total')).toBeVisible();
+    await expect(page.getByText('$420.00')).toBeVisible();
+    await expect(page.getByText('Amount paid')).toHaveCount(0);
+  });
+
+  test('dates read as the Des Moines calendar day', async ({ page }) => {
+    await mockPaidCampaign(page);
+    await page.goto(`/advertise/success?campaign_id=${CAMPAIGN_ID}`);
+
+    await expect(page.getByText('October 1, 2026').first()).toBeVisible();
+    await expect(page.getByText(/September 30, 2026/)).toHaveCount(0);
+  });
+
+  test('a sponsored-listing-only purchase is not told to upload artwork', async ({ page }) => {
+    await mockPaidCampaign(
+      page,
+      { ...CAMPAIGN, campaign_placements: [{ placement_type: 'sponsored_listing' }] },
+      [{ listing_type: 'restaurant', listing_id: 'd0000000-0000-4000-8000-0000000000ad' }],
+    );
+    await page.goto(`/advertise/success?campaign_id=${CAMPAIGN_ID}`);
+
+    await expect(page.getByText(/Nothing to upload\. Your listing gets the Sponsored label/)).toBeVisible();
+    await expect(page.getByRole('link', { name: /see your listing/i })).toHaveAttribute(
+      'href',
+      '/restaurants/d0000000-0000-4000-8000-0000000000ad',
+    );
+    await expect(page.getByRole('link', { name: /upload creatives/i })).toHaveCount(0);
+  });
+
+  test('an unconfirmed payment says nothing is lost and links to the campaign', async ({ page }) => {
+    await installFixtureBackend(page);
+    await page.route('**/functions/v1/verify-campaign-payment', (route: Route) =>
+      route.fulfill({
+        status: 200,
+        contentType: 'application/json',
+        headers: JSON_HEADERS,
+        body: JSON.stringify({ paid: false }),
+      }),
+    );
+    await page.goto(`/advertise/success?campaign_id=${CAMPAIGN_ID}`);
+
+    await expect(page.getByRole('heading', { name: "We haven't seen the payment yet" })).toBeVisible();
+    await expect(page.getByText(/Nothing is lost/)).toBeVisible();
+    await expect(page.getByRole('link', { name: /open the campaign/i })).toHaveAttribute(
+      'href',
+      `/campaigns/${CAMPAIGN_ID}`,
+    );
   });
 });

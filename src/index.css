@@ -496,8 +496,10 @@ All colors MUST be HSL. Touch targets minimum 44px.
   }
 
   /* Safe area support - use CSS properties directly */
+  /* No 1rem floor: on a phone without a notch the inset is 0, and the floor
+     put 16px of empty space above every header. */
   .safe-area-top {
-    padding-top: max(1rem, env(safe-area-inset-top));
+    padding-top: env(safe-area-inset-top);
   }
 
   .safe-area-bottom {
@@ -505,8 +507,16 @@ All colors MUST be HSL. Touch targets minimum 44px.
   }
 
   /* Bottom navigation spacing - prevents content from being hidden behind bottom nav on mobile */
+  /* BottomNav is h-16 plus its .safe-area-bottom padding, max(1rem, inset).
+     A flat pb-20 (5rem) left the footer's last line under the bar on any
+     phone whose inset is over 1rem (every notched iPhone). */
   .pb-bottom-nav {
-    @apply pb-20 lg:pb-0;
+    padding-bottom: calc(4rem + max(1rem, env(safe-area-inset-bottom)));
+  }
+  @media (min-width: 1024px) {
+    .pb-bottom-nav {
+      padding-bottom: 0;
+    }
   }
 
   /* Content-visibility for below-the-fold sections */

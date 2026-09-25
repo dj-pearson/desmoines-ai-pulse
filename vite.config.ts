@@ -224,12 +224,9 @@ export default defineConfig(({ command, mode }) => {
     cssCodeSplit: true,
     minify: "esbuild", // Use esbuild - faster and more reliable than terser
     target: "es2020",
-    // Drop console.* and debugger statements in production
-    ...(mode === "production" && {
-      esbuild: {
-        drop: ["console", "debugger"],
-      },
-    }),
+    // No esbuild options here: `build.esbuild` isn't a Vite option, so the
+    // drop list that sat here was ignored and every console.* shipped. It
+    // lives at the top level now (see `esbuild` below this block).
     rollupOptions: {
       output: {
         // Improved code splitting - group related modules to reduce chunk count
@@ -347,10 +344,9 @@ export default defineConfig(({ command, mode }) => {
             return "vendor-dates";
           }
 
-          // Icons - lucide
-          if (id.includes("lucide-react")) {
-            return "vendor-icons";
-          }
+          // No lucide-react chunk. Forcing every icon into one vendor-icons
+          // chunk put icons only /admin uses on the critical path of every
+          // page; left alone, each icon ships with the chunk that imports it.
 
           // DON'T create vendor-misc - let Vite handle remaining node_modules automatically
           // This prevents bundling issues with lazy-loaded libraries
@@ -394,6 +390,10 @@ export default defineConfig(({ command, mode }) => {
     reportCompressedSize: false,
   },
   // Optimize dependencies
+  // Top level, where Vite reads it: esbuild transforms every module during
+  // `vite build`, and `drop` removes console.* and debugger from app code.
+  // scripts/check-dist-console.mjs checks the result in dist/assets.
+  esbuild: mode === "production" ? { drop: ["console", "debugger"] } : undefined,
   optimizeDeps: {
     include: [
       "react",

@@ -8,8 +8,10 @@ import {
   restaurantMetaDescription,
   restaurantPageTitle,
   isStaleOpeningCopy,
+  type RestaurantMetaInput,
 } from "../src/lib/restaurantMeta";
 import { resolveOpeningHoursSpecification } from "../src/lib/restaurantHours";
+import { safeHttpUrl } from "../src/lib/safeUrl";
 
 /**
  * Cloudflare Pages Functions middleware.
@@ -106,13 +108,31 @@ interface Resolved {
    * entityShellRewrites then falls back to the identity-only rewrite.
    */
   row?: Record<string, any>;
+  /**
+   * Site path this URL should 301 to: the survivor of a merged duplicate, or
+   * the slug of a row that was asked for by its id.
+   */
+  redirectTo?: string;
 }
+
+/**
+ * What a lookup found. "error" is its own answer: a PostgREST outage used to
+ * come back as an empty list, so a Supabase blip answered every restaurant URL
+ * with a cached 404 and noindex, which is how a crawler delists a page.
+ */
+export type ResolveOutcome =
+  | { kind: "row"; entity: Resolved }
+  | { kind: "not-found" }
+  | { kind: "error" };
+
+const UUID_RE = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
 
 // What the shell body needs. Named in types.ts, but CLAUDE.md is explicit that
 // types.ts is not proof a column exists - so a failed select falls back to the
 // minimal one below instead of turning a real page into a 404.
 const RESTAURANT_SHELL_COLUMNS =
-  "id,name,slug,city,location,cuisine,price_range,phone,website,menu_url,latitude,longitude,opening,seo_description,description";
+  "id,name,slug,city,location,cuisine,price_range,phone,website,menu_url,latitude,longitude,opening,seo_description,description,status,is_merged,merged_into";
+const RESTAURANT_MINIMAL_COLUMNS = "id,name,seo_description,description";
 const EVENT_SHELL_COLUMNS =
   "id,title,date,event_start_utc,end_date,seo_description,geo_summary,location,venue,city,price,enhanced_description,original_description";
 
@@ -126,40 +146,113 @@ async function sbGet(base: string, anon: string, pathAndQuery: string): Promise<
   return Array.isArray(json) ? json : [];
 }
 
-async function sbGetRows(base: string, anon: string, pathAndQuery: string): Promise<any[]> {
-  return (await sbGet(base, anon, pathAndQuery)) ?? [];
+/**
+ * A restaurant row by `filter`, trying the rich select and then the minimal
+ * one (a rich select can 42703 on a column the snapshot doesn't have). Null
+ * only when both reads failed, which is an outage, not an empty result.
+ */
+async function fetchRestaurantRow(
+  base: string,
+  anon: string,
+  filter: string,
+): Promise<{ row: Record<string, any> | undefined; rich: boolean } | null> {
+  const rich = await sbGet(base, anon, `${filter}&select=${RESTAURANT_SHELL_COLUMNS}&limit=1`);
+  if (rich) return { row: rich[0], rich: true };
+  const minimal = await sbGet(base, anon, `${filter}&select=${RESTAURANT_MINIMAL_COLUMNS}&limit=1`);
+  if (minimal) return { row: minimal[0], rich: false };
+  return null;
 }
 
-async function resolveEntity(
+/**
+ * Where a merged row's survivor lives, following at most three hops the way
+ * RestaurantDetails.tsx follows one per navigation. `merged_into` holds an id
+ * or a slug. Null when there is no survivor to send anyone to; "error" when
+ * the read failed.
+ */
+async function resolveMergeSurvivor(
+  base: string,
+  anon: string,
+  start: Record<string, any>,
+): Promise<string | null | "error"> {
+  const seen = new Set<string>([String(start.id)]);
+  let target = String(start.merged_into);
+  for (let hop = 0; hop < 3; hop++) {
+    const column = UUID_RE.test(target) ? "id" : "slug";
+    const rows = await sbGet(
+      base,
+      anon,
+      `restaurants?${column}=eq.${encodeURIComponent(target)}&select=id,slug,is_merged,merged_into&limit=1`,
+    );
+    if (!rows) return "error";
+    const next = rows[0];
+    if (!next || seen.has(String(next.id))) return null;
+    seen.add(String(next.id));
+    if (next.is_merged && next.merged_into) {
+      target = String(next.merged_into);
+      continue;
+    }
+    return `/restaurants/${next.slug || next.id}`;
+  }
+  return null;
+}
+
+async function resolveRestaurant(base: string, anon: string, slug: string): Promise<ResolveOutcome> {
+  let found = await fetchRestaurantRow(base, anon, `restaurants?slug=eq.${encodeURIComponent(slug)}`);
+  if (!found) return { kind: "error" };
+  // The React page falls back to the id when the param is a uuid; the shell
+  // does the same and then 301s to the slug, so the id URL isn't a duplicate.
+  if (!found.row && UUID_RE.test(slug)) {
+    found = await fetchRestaurantRow(base, anon, `restaurants?id=eq.${slug}`);
+    if (!found) return { kind: "error" };
+  }
+  const r = found.row;
+  if (!r) return { kind: "not-found" };
+
+  const entity: Resolved = {
+    id: r.id,
+    title: r.name,
+    description: truncate(r.seo_description || r.description),
+    ...(found.rich ? { row: r } : {}),
+  };
+
+  if (found.rich && r.is_merged && r.merged_into) {
+    const survivor = await resolveMergeSurvivor(base, anon, r);
+    if (survivor === "error") return { kind: "error" };
+    if (survivor) return { kind: "row", entity: { ...entity, redirectTo: survivor } };
+  }
+  if (found.rich && r.slug && r.slug !== slug) {
+    return { kind: "row", entity: { ...entity, redirectTo: `/restaurants/${r.slug}` } };
+  }
+  return { kind: "row", entity };
+}
+
+/** A lookup that found one row, none, or could not tell. */
+function outcomeOf(rows: any[] | null, pick: (rows: any[]) => Resolved | null): ResolveOutcome {
+  if (!rows) return { kind: "error" };
+  const entity = pick(rows);
+  return entity ? { kind: "row", entity } : { kind: "not-found" };
+}
+
+export async function resolveEntity(
   base: string,
   anon: string,
   type: string,
   slug: string,
-): Promise<Resolved | null> {
-  if (type === "restaurant") {
-    const bySlug = `restaurants?slug=eq.${encodeURIComponent(slug)}`;
-    const rich = await sbGet(base, anon, `${bySlug}&select=${RESTAURANT_SHELL_COLUMNS}&limit=1`);
-    const rows = rich ?? (await sbGetRows(base, anon, `${bySlug}&select=id,name,seo_description,description&limit=1`));
-    const r = rows[0];
-    return r
-      ? {
-          id: r.id,
-          title: r.name,
-          description: truncate(r.seo_description || r.description),
-          ...(rich ? { row: r } : {}),
-        }
-      : null;
-  }
+): Promise<ResolveOutcome> {
+  if (type === "restaurant") return resolveRestaurant(base, anon, slug);
   if (type === "article") {
-    const rows = await sbGetRows(base, anon, `articles?slug=eq.${encodeURIComponent(slug)}&select=id,title,seo_description,excerpt&limit=1`);
-    const r = rows[0];
-    return r ? { id: r.id, title: r.title, description: truncate(r.seo_description || r.excerpt) } : null;
+    const rows = await sbGet(base, anon, `articles?slug=eq.${encodeURIComponent(slug)}&select=id,title,seo_description,excerpt&limit=1`);
+    return outcomeOf(rows, ([r]) =>
+      r ? { id: r.id, title: r.title, description: truncate(r.seo_description || r.excerpt) } : null,
+    );
   }
   if (type === "attraction") {
     // No slug column — the app routes by slugify(name). Match over the (small) active set.
-    const rows = await sbGetRows(base, anon, `attractions?is_active=eq.true&select=id,name,seo_description,description&limit=1000`);
-    const r = rows.find((a: any) => slugify(a.name) === slug);
-    return r ? { id: r.id, title: r.name, description: truncate(r.seo_description || r.description) } : null;
+    const rows = await sbGet(base, anon, `attractions?is_active=eq.true&select=id,name,seo_description,description&limit=1000`);
+    return outcomeOf(rows, (all) => {
+      const r = all.find((a: any) => slugify(a.name) === slug);
+      return r ? { id: r.id, title: r.name, description: truncate(r.seo_description || r.description) } : null;
+    });
   }
   if (type === "event") {
     // Slug embeds a central-time YYYY-MM-DD suffix; match within a small date window.
@@ -180,33 +273,38 @@ async function resolveEntity(
       };
       const richRows = await inWindow(EVENT_SHELL_COLUMNS);
       rich = !!richRows;
-      const all = richRows ?? (await inWindow("id,title,date,event_start_utc,seo_description,geo_summary")) ?? [];
+      const all = richRows ?? (await inWindow("id,title,date,event_start_utc,seo_description,geo_summary"));
+      if (!all) return { kind: "error" };
       const seen = new Set<string>();
       rows = all.filter((e) => (seen.has(e.id) ? false : (seen.add(e.id), true)));
     }
     const r = rows.find((e: any) => eventSlug(e.title, e.event_start_utc || e.date) === slug);
     return r
       ? {
-          id: r.id,
-          title: r.title,
-          description: truncate(r.seo_description || r.geo_summary),
-          startDate: r.event_start_utc || r.date || null,
-          ...(rich ? { row: r } : {}),
+          kind: "row",
+          entity: {
+            id: r.id,
+            title: r.title,
+            description: truncate(r.seo_description || r.geo_summary),
+            startDate: r.event_start_utc || r.date || null,
+            ...(rich ? { row: r } : {}),
+          },
         }
-      : null;
+      : { kind: "not-found" };
   }
   if (type === "playground") {
     // Like attractions: no slug column, the app routes by createSlug(name).
-    const rows = await sbGetRows(base, anon, `playgrounds?select=id,name,description&limit=1000`);
-    const r = rows.find((a: any) => slugify(a.name) === slug);
-    return r ? { id: r.id, title: r.name, description: truncate(r.description) } : null;
+    const rows = await sbGet(base, anon, `playgrounds?select=id,name,description&limit=1000`);
+    return outcomeOf(rows, (all) => {
+      const r = all.find((a: any) => slugify(a.name) === slug);
+      return r ? { id: r.id, title: r.name, description: truncate(r.description) } : null;
+    });
   }
   if (type === "hotel") {
-    const rows = await sbGetRows(base, anon, `hotels?slug=eq.${encodeURIComponent(slug)}&select=id,name,description&limit=1`);
-    const r = rows[0];
-    return r ? { id: r.id, title: r.name, description: truncate(r.description) } : null;
+    const rows = await sbGet(base, anon, `hotels?slug=eq.${encodeURIComponent(slug)}&select=id,name,description&limit=1`);
+    return outcomeOf(rows, ([r]) => (r ? { id: r.id, title: r.name, description: truncate(r.description) } : null));
   }
-  return null;
+  return { kind: "not-found" };
 }
 
 /**
@@ -315,15 +413,17 @@ function escapeHtml(s: string): string {
  * Cache failures are swallowed: this is an optimisation, and a cache that is
  * unavailable must not turn into a 500 on a page request.
  */
-async function resolveEntityCached(
-  context: EventContext,
+export async function resolveEntityCached(
+  context: Pick<EventContext, "waitUntil">,
   base: string,
   anon: string,
   type: string,
   slug: string,
-): Promise<Resolved | null> {
+): Promise<ResolveOutcome> {
+  // v3: entries now carry status, is_merged and redirectTo; a v2 entry
+  // would serve a closed row's hours for another five minutes.
   const key = new Request(
-    `https://slug-resolve.internal/v2/${encodeURIComponent(type)}/${encodeURIComponent(slug)}`,
+    `https://slug-resolve.internal/v3/${encodeURIComponent(type)}/${encodeURIComponent(slug)}`,
   );
   // deno-lint-ignore no-explicit-any
   const cache: any = (globalThis as any).caches?.default;
@@ -332,17 +432,22 @@ async function resolveEntityCached(
     const hit = await cache?.match(key);
     if (hit) {
       const body = await hit.json();
-      return body && body.id ? (body as Resolved) : null;
+      return body && body.id ? { kind: "row", entity: body as Resolved } : { kind: "not-found" };
     }
   } catch {
     /* fall through to a live lookup */
   }
 
-  const entity = await resolveEntity(base, anon, type, slug);
+  const outcome = await resolveEntity(base, anon, type, slug);
+
+  // A failed read is never cached: the next request should try again, not be
+  // told for five minutes that the page doesn't exist.
+  if (outcome.kind === "error") return outcome;
 
   try {
     // A miss is cached too, and for the same reason: a crawler hammering dead
     // slugs is exactly the traffic worth absorbing.
+    const entity = outcome.kind === "row" ? outcome.entity : null;
     const payload = new Response(JSON.stringify(entity ?? {}), {
       headers: { "Content-Type": "application/json", "Cache-Control": "public, max-age=300" },
     });
@@ -351,7 +456,57 @@ async function resolveEntityCached(
     /* the lookup already succeeded; caching it is best effort */
   }
 
-  return entity;
+  return outcome;
+}
+
+/**
+ * What to send for a detail URL once the lookup is done, as data so the
+ * outage, redirect and missing cases can be asserted without a Pages runtime.
+ */
+export type DetailResponsePlan =
+  | { action: "redirect"; status: 301; location: string; cacheControl: string }
+  | { action: "shell"; status: 200; entity: Resolved }
+  | { action: "unavailable"; status: 200; cacheControl: "no-store" }
+  | { action: "missing"; status: number; cacheControl: string };
+
+export function detailResponsePlan(
+  outcome: ResolveOutcome,
+  type: string,
+  slug: string,
+  origin: string,
+  now: Date = new Date(),
+): DetailResponsePlan {
+  if (outcome.kind === "error") {
+    // Supabase is down or refused both selects. Say nothing about the page:
+    // 200, self-canonical, and not stored anywhere, so the next crawl gets a
+    // real answer.
+    return { action: "unavailable", status: 200, cacheControl: "no-store" };
+  }
+  if (outcome.kind === "not-found") {
+    const verdict = detailShellStatus(type, slug, false, now);
+    return { action: "missing", status: verdict.status, cacheControl: "public, max-age=300" };
+  }
+  if (outcome.entity.redirectTo) {
+    return {
+      action: "redirect",
+      status: 301,
+      location: `${origin}${outcome.entity.redirectTo}`,
+      cacheControl: "public, max-age=300",
+    };
+  }
+  return { action: "shell", status: 200, entity: outcome.entity };
+}
+
+/**
+ * The robots directive a restaurant row's shell carries, or null for the
+ * default. A closed place and a merged duplicate with nowhere to send the
+ * visitor both stay followable, so the related links still count.
+ */
+export function restaurantShellRobots(row: Record<string, any> | undefined): string | null {
+  if (!row) return null;
+  if (row.status === "closed") return "noindex, follow";
+  if (row.is_merged) return "noindex, follow";
+  return null;
 }
 
 /**
@@ -443,16 +598,28 @@ function breadcrumb(hubHref: string, hubLabel: string, name: string): string {
   return `<nav aria-label="Breadcrumb"><a href="/">Home</a> / <a href="${hubHref}">${hubLabel}</a> / <span>${escapeHtml(name)}</span></nav>`;
 }
 
+/**
+ * Hours are published only for a place you can walk into today. A closed row
+ * keeps its last-known hours in `opening`, and an announced one often carries
+ * the hours it plans to keep; neither is a schedule a visitor can use.
+ */
+function showsHours(row: Record<string, any>): boolean {
+  return row.status !== "closed" && row.status !== "opening_soon" && row.status !== "announced";
+}
+
 export function restaurantShellNode(row: Record<string, any>, pageUrl: string): Record<string, unknown> {
   const addr = parseIowaAddress(row.location);
-  const hours = resolveOpeningHoursSpecification(null, row.opening);
+  const hours = showsHours(row) ? resolveOpeningHoursSpecification(null, row.opening) : null;
+  // Scraped text, not links we built: only http(s) reaches the node.
+  const website = safeHttpUrl(row.website);
+  const menu = safeHttpUrl(row.menu_url);
   return {
     "@context": "https://schema.org",
     "@type": "Restaurant",
     "@id": pageUrl,
     url: pageUrl,
     name: row.name,
-    description: restaurantMetaDescription(row),
+    description: restaurantMetaDescription(row as RestaurantMetaInput),
     ...(row.cuisine ? { servesCuisine: row.cuisine } : {}),
     address: {
       "@type": "PostalAddress",
@@ -468,8 +635,8 @@ export function restaurantShellNode(row: Record<string, any>, pageUrl: string): 
       ? { geo: { "@type": "GeoCoordinates", latitude: row.latitude, longitude: row.longitude } }
       : {}),
     ...(hours ? { openingHoursSpecification: hours } : {}),
-    ...(row.website ? { sameAs: [row.website] } : {}),
-    ...(row.menu_url ? { hasMenu: row.menu_url } : {}),
+    ...(website ? { sameAs: [website] } : {}),
+    ...(menu ? { hasMenu: menu } : {}),
   };
 }
 
@@ -477,18 +644,25 @@ export function restaurantShellBody(row: Record<string, any>): string {
   const loc = restaurantLocality(row) || "Des Moines";
   const kind = row.cuisine ? `${row.cuisine} restaurant` : "Restaurant";
   const facts: string[] = [];
+  const closed = row.status === "closed";
+  // A javascript: or relative value renders no link at all, the same answer
+  // the React page gives (reservations.safeWebUrl delegates to safeHttpUrl).
+  const menu = safeHttpUrl(row.menu_url);
+  const website = safeHttpUrl(row.website);
   if (row.location) facts.push(`<li>Address: ${escapeHtml(row.location)}</li>`);
   if (row.phone) facts.push(`<li>Phone: <a href="tel:${escapeHtml(String(row.phone).replace(/[^\d+]/g, ""))}">${escapeHtml(row.phone)}</a></li>`);
   if (row.price_range) facts.push(`<li>Price: ${escapeHtml(row.price_range)}</li>`);
-  if (row.opening) facts.push(`<li>Hours: ${escapeHtml(row.opening)}</li>`);
-  if (row.menu_url) facts.push(`<li><a href="${escapeHtml(row.menu_url)}" rel="nofollow noopener">Menu</a></li>`);
-  if (row.website) facts.push(`<li><a href="${escapeHtml(row.website)}" rel="nofollow noopener">Website</a></li>`);
+  if (row.opening && showsHours(row)) facts.push(`<li>Hours: ${escapeHtml(row.opening)}</li>`);
+  if (menu) facts.push(`<li><a href="${escapeHtml(menu)}" rel="nofollow noopener">Menu</a></li>`);
+  if (website) facts.push(`<li><a href="${escapeHtml(website)}" rel="nofollow noopener">Website</a></li>`);
   // Pre-opening copy is left out rather than repeated to a crawler as current.
   const about = [row.description, row.seo_description].find((d) => d && !isStaleOpeningCopy(d));
   return [
     "<article>",
     breadcrumb("/restaurants", "Restaurants", row.name),
     `<h1>${escapeHtml(row.name)}</h1>`,
+    // The React page's badge says "Permanently closed"; so does the shell.
+    closed ? "<p><strong>Permanently closed.</strong></p>" : "",
     `<p>${escapeHtml(kind)} in ${escapeHtml(loc)}, Iowa.</p>`,
     facts.length ? `<ul>${facts.join("")}</ul>` : "",
     about ? `<p>${escapeHtml(clipText(about, 1200))}</p>` : "",
@@ -608,7 +782,7 @@ export function entityShellRewrites(opts: {
   // description the React page renders (restaurantMeta.ts), not the bare name.
   let entity = opts.entity;
   if (row && type === "restaurant" && row.name) {
-    entity = { ...entity, title: `${restaurantPageTitle(row)} | Des Moines Insider`, description: restaurantMetaDescription(row) };
+    entity = { ...entity, title: `${restaurantPageTitle(row as RestaurantMetaInput)} | Des Moines Insider`, description: restaurantMetaDescription(row as RestaurantMetaInput) };
   } else if (row && type === "event" && row.title) {
     // With neither seo_description nor geo_summary the homepage's description
     // would stay in place; say when and where instead.
@@ -684,6 +858,10 @@ export function entityShellRewrites(opts: {
   if (type === "event" && isLongPastEvent(entity.startDate, now)) {
     rules.push({ selector: 'meta[name="robots"]', setAttribute: "content", to: "noindex, follow" });
   }
+  const restaurantRobots = type === "restaurant" ? restaurantShellRobots(row) : null;
+  if (restaurantRobots) {
+    rules.push({ selector: 'meta[name="robots"]', setAttribute: "content", to: restaurantRobots });
+  }
 
   if (entity.title) {
     rules.push(
@@ -738,6 +916,8 @@ function entityShell(
   // The header, not only the meta tag: the prerendered homepage carries a
   // robots meta, but a shell built without one would otherwise say nothing.
   if (opts.type === "event" && isLongPastEvent(opts.entity.startDate)) headers["X-Robots-Tag"] = "noindex";
+  const restaurantRobots = opts.type === "restaurant" ? restaurantShellRobots(opts.entity.row) : null;
+  if (restaurantRobots) headers["X-Robots-Tag"] = restaurantRobots;
 
   return new Response(rewriter.transform(shell).body, { status: 200, headers });
 }
@@ -973,31 +1153,50 @@ export async function onRequest(context: EventContext) {
         const sbAnon = env.VITE_SUPABASE_ANON_KEY || env.SUPABASE_ANON_KEY;
 
         if (sbBase && sbAnon) {
-          const entity = await resolveEntityCached(context, sbBase, sbAnon, type!, slug);
-          const verdict = detailShellStatus(type!, slug, !!entity);
+          const outcome = await resolveEntityCached(context, sbBase, sbAnon, type!, slug);
+          const plan = detailResponsePlan(outcome, type!, slug, url.origin);
+
+          // A merged duplicate goes to its survivor, and a restaurant asked
+          // for by id goes to its slug, as the React page does client-side.
+          if (plan.action === "redirect") {
+            return new Response(null, {
+              status: plan.status,
+              headers: { Location: plan.location, "Cache-Control": plan.cacheControl },
+            });
+          }
+
+          // The lookup failed, so nothing is known about this page. Serve the
+          // shell as itself, 200 and uncached, rather than a 404 with noindex
+          // that a crawler would act on.
+          if (plan.action === "unavailable") {
+            const rewritten = withSelfCanonical(passthrough(), pageUrl);
+            const headers = new Headers(rewritten.headers);
+            headers.set("Cache-Control", plan.cacheControl);
+            return new Response(rewritten.body, { status: plan.status, headers });
+          }
 
           // WEB-SEO-030: a dead slug is a 404 and a long-finished event is a
           // 410. Both used to answer 200 with a self-canonical, which under
           // include ["/*"] made every one of them an indexable duplicate of the
           // homepage.
-          if (!entity) {
+          if (plan.action === "missing") {
             const rewritten = new HTMLRewriter()
               .on('link[rel="canonical"]', new AttrSetter("href", pageUrl))
               .on('meta[name="robots"]', new AttrSetter("content", "noindex, follow"))
               .transform(passthrough());
             return new Response(rewritten.body, {
-              status: verdict.status,
+              status: plan.status,
               headers: {
                 "Content-Type": "text/html; charset=utf-8",
                 "X-Robots-Tag": "noindex",
-                "Cache-Control": "public, max-age=300",
+                "Cache-Control": plan.cacheControl,
               },
             });
           }
 
           // Resolved, but it missed the prerender budget. Keep the 200 and give
           // it its own identity instead of the homepage's (WEB-SEO-030 AC3).
-          return entityShell(passthrough(), { pageUrl, sbBase, type: type!, entity });
+          return entityShell(passthrough(), { pageUrl, sbBase, type: type!, entity: plan.entity });
         }
       }
 

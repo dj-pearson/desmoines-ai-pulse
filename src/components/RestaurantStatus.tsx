@@ -1,7 +1,8 @@
 import {
   desMoinesNow,
   formatClockLabel,
-  resolveOpeningHoursSpecification,
+  getOpeningCoverage,
+  getOpeningHoursSpecificationFromJson,
   type RestaurantOpenResult,
   type StoredOpeningHours,
 } from "@/lib/restaurantHours";
@@ -49,25 +50,59 @@ function rangeLabel(opens: string, closes: string): string | null {
   return `${formatClockLabel(o)} - ${formatClockLabel(c)}`;
 }
 
+type RowState = "listed" | "closed" | "not-listed";
+
+interface WeekRow {
+  day: number;
+  label: string;
+  text: string;
+  state: RowState;
+}
+
 /**
- * One row per weekday from the same parsed hours the schema publishes, or null
- * when nothing parses. A day with no range reads "Closed", which is what the
- * open/closed evaluator says for that day too.
+ * One row per weekday, or null when nothing parses.
+ *
+ * Structured hours (hours_json, from Google) list every open day, so a day
+ * with no period there is closed. The free text is different: "Mon-Fri
+ * 11am-9pm" says nothing about Saturday, and printing "Closed" for it sent
+ * people away from places that are open (eat-drink pass 2, WP3.12). A text day
+ * is "Closed" only when the text says so; otherwise it is "Not listed".
  */
 function weekRows(
   hoursJson: StoredOpeningHours | null | undefined,
   hours: string | null | undefined,
-): Array<{ day: number; label: string; text: string }> | null {
-  const specs = resolveOpeningHoursSpecification(hoursJson, hours);
-  if (!specs) return null;
-  return WEEK.map(({ day, label, schema }) => {
-    const ranges = specs
-      .filter((s) => s.dayOfWeek.includes(schema))
-      .map((s) => ({ key: clockMinutes(s.opens) ?? 0, text: rangeLabel(s.opens, s.closes) }))
-      .filter((r): r is { key: number; text: string } => r.text !== null)
-      .sort((a, b) => a.key - b.key)
-      .map((r) => r.text);
-    return { day, label, text: ranges.length > 0 ? ranges.join(", ") : "Closed" };
+): WeekRow[] | null {
+  const specs = getOpeningHoursSpecificationFromJson(hoursJson);
+  if (specs) {
+    return WEEK.map(({ day, label, schema }) => {
+      const ranges = specs
+        .filter((s) => s.dayOfWeek.includes(schema))
+        .map((s) => ({ key: clockMinutes(s.opens) ?? 0, text: rangeLabel(s.opens, s.closes) }))
+        .filter((r): r is { key: number; text: string } => r.text !== null)
+        .sort((a, b) => a.key - b.key)
+        .map((r) => r.text);
+      return ranges.length > 0
+        ? { day, label, text: ranges.join(", "), state: "listed" as const }
+        : { day, label, text: "Closed", state: "closed" as const };
+    });
+  }
+
+  const coverage = getOpeningCoverage(hours);
+  if (!coverage || coverage.listedDays.length === 0) return null;
+  return WEEK.map(({ day, label }) => {
+    const d = coverage.days.find((c) => c.day === day);
+    if (d?.state === "listed") {
+      const text = d.ranges
+        .map((r) =>
+          r.openMinutes === 0 && r.closeMinutes === 24 * 60
+            ? "Open 24 hours"
+            : `${formatClockLabel(r.openMinutes)} - ${formatClockLabel(r.closeMinutes)}`,
+        )
+        .join(", ");
+      return { day, label, text, state: "listed" as const };
+    }
+    if (d?.state === "closed") return { day, label, text: "Closed", state: "closed" as const };
+    return { day, label, text: "Not listed", state: "not-listed" as const };
   });
 }
 
@@ -144,7 +179,14 @@ export function RestaurantStatus({ hours, hoursJson, openStatus, now }: Restaura
                     {row.label}
                     {isToday && <span className="ml-2 text-xs font-normal text-muted-foreground">today</span>}
                   </th>
-                  <td className="py-2 pr-2 text-right tabular-nums text-foreground">{row.text}</td>
+                  <td
+                    className={cn(
+                      "py-2 pr-2 text-right tabular-nums",
+                      row.state === "not-listed" ? "text-muted-foreground" : "text-foreground",
+                    )}
+                  >
+                    {row.text}
+                  </td>
                 </tr>
               );
             })}
@@ -156,6 +198,11 @@ export function RestaurantStatus({ hours, hoursJson, openStatus, now }: Restaura
 
       {rows && rawText && (
         <p className="mt-3 text-xs text-muted-foreground">Listed as: {rawText}</p>
+      )}
+      {rows?.some((r) => r.state === "not-listed") && (
+        <p className="mt-1 text-xs text-muted-foreground">
+          "Not listed" means the hours we have don't mention that day. Call ahead.
+        </p>
       )}
       <p className="mt-1 text-xs text-muted-foreground">
         Holiday hours can differ. Call ahead if it matters.

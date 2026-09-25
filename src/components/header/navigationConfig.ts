@@ -23,13 +23,13 @@ import {
   DollarSign,
   type LucideIcon,
 } from "lucide-react";
+import { isValidRedirectUrl } from "@/lib/redirectSafety";
 
 export interface NavItem {
   href: string;
   label: string;
   icon: LucideIcon;
   featured?: boolean;
-  priority?: boolean;
 }
 
 export interface NavGroup {
@@ -53,8 +53,8 @@ export const navigationGroups: Record<string, NavGroup> = {
     items: [
       { href: "/events", label: "All Events", icon: Calendar, featured: true },
       { href: "/events/near-me", label: "Near Me", icon: Navigation, featured: true },
-      { href: "/events/today", label: "Today's Events", icon: Calendar, priority: true },
-      { href: "/events/this-weekend", label: "This Weekend", icon: CalendarDays, priority: true },
+      { href: "/events/today", label: "Today's Events", icon: Calendar },
+      { href: "/events/this-weekend", label: "This Weekend", icon: CalendarDays },
       { href: "/events/free", label: "Free Events", icon: Gift },
       { href: "/events/kids", label: "Kids & Family", icon: Baby },
       { href: "/events/date-night", label: "Date Night", icon: Camera },
@@ -66,7 +66,7 @@ export const navigationGroups: Record<string, NavGroup> = {
     href: "/restaurants",
     items: [
       { href: "/restaurants", label: "All Restaurants", icon: Utensils, featured: true },
-      { href: "/restaurants/open-now", label: "Open Now", icon: Clock, priority: true },
+      { href: "/restaurants/open-now", label: "Open Now", icon: Clock },
       { href: "/breweries", label: "Brewery Trail", icon: Beer },
     ],
   },
@@ -92,7 +92,7 @@ export const navigationGroups: Record<string, NavGroup> = {
     items: [
       // "Plan a trip", not "AI Trip Planner": the free date-window planner is
       // what everyone gets; the AI itinerary is the paused upgrade on top.
-      { href: "/trip-planner", label: "Plan a trip", icon: Sparkles, featured: true, priority: true },
+      { href: "/trip-planner", label: "Plan a trip", icon: Sparkles, featured: true },
       // No weekend entry here. /weekend only 301s to /events/this-weekend,
       // which the Events group already lists as "This Weekend".
       { href: "/stay", label: "Hotels & Stay", icon: Building2 },
@@ -109,9 +109,9 @@ export const navigationGroups: Record<string, NavGroup> = {
 // Flat list (mobile fallback / search). De-duplicated to one entry per concept.
 export const navigationLinks: NavItem[] = [
   { href: "/events", label: "Events", icon: Calendar },
-  { href: "/events/near-me", label: "Near Me", icon: Navigation, priority: true },
-  { href: "/events/today", label: "Today's Events", icon: Calendar, priority: true },
-  { href: "/events/this-weekend", label: "This Weekend", icon: CalendarDays, priority: true },
+  { href: "/events/near-me", label: "Near Me", icon: Navigation },
+  { href: "/events/today", label: "Today's Events", icon: Calendar },
+  { href: "/events/this-weekend", label: "This Weekend", icon: CalendarDays },
   { href: "/events/free", label: "Free Events", icon: Gift },
   { href: "/events/kids", label: "Kids & Family", icon: Baby },
   { href: "/events/date-night", label: "Date Night", icon: Camera },
@@ -126,12 +126,34 @@ export const navigationLinks: NavItem[] = [
   { href: "/sports", label: "Sports", icon: Trophy },
   { href: "/outdoors", label: "Trails & Outdoors", icon: TreePine },
   { href: "/deals", label: "Deals & Coupons", icon: DollarSign },
-  { href: "/trip-planner", label: "Plan a trip", icon: Sparkles, priority: true },
+  { href: "/trip-planner", label: "Plan a trip", icon: Sparkles },
   { href: "/stay", label: "Hotels & Stay", icon: Building2 },
   { href: "/visitors-guide", label: "Visitor Guide", icon: BookOpen },
   { href: "/getting-around", label: "Getting Around", icon: Navigation },
   { href: "/group-travel", label: "Group & Meetings", icon: Briefcase },
   { href: "/articles", label: "Articles", icon: FileText },
-  { href: "/best-of", label: "Des Best", icon: Trophy, priority: true },
+  { href: "/best-of", label: "Des Best", icon: Trophy },
   { href: "/whats-new", label: "What's New", icon: Sparkles },
 ];
+
+/** Where the shell's auth links bring a visitor back to: this page, or "/". */
+function returnPath(pathname: string, search: string): string {
+  if (pathname.startsWith("/auth")) return "/";
+  const here = `${pathname}${search}`;
+  if (isValidRedirectUrl(here)) return here;
+  return isValidRedirectUrl(pathname) ? pathname : "/";
+}
+
+/**
+ * The shell's "Sign Up Free" links: opens the sign-up tab and comes back to
+ * the page the visitor was on. Auth validates `redirect` again.
+ */
+export function signUpHref(pathname: string, search = ""): string {
+  return `/auth?mode=signup&redirect=${encodeURIComponent(returnPath(pathname, search))}`;
+}
+
+/** Sign in, coming back to the current page. */
+export function signInHref(pathname: string, search = ""): string {
+  const target = returnPath(pathname, search);
+  return target === "/" ? "/auth" : `/auth?redirect=${encodeURIComponent(target)}`;
+}

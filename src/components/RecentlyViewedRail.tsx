@@ -15,16 +15,19 @@ const TYPE_ICON: Record<RecentlyViewedType, typeof Calendar> = {
 /**
  * Homepage "Recently viewed" rail (WEB-FEAT-007).
  *
- * Appears only once there are >= 3 entries (so first-time/cold-start users
- * don't see an empty or near-empty rail). Renders synchronously from the local
- * store, so it doesn't shift layout after paint.
+ * Appears only when the LOCAL store held >= 3 entries at mount (so first-time
+ * visitors don't see an empty or near-empty rail). It renders synchronously
+ * from that store, so it is there at first paint. A signed-in visitor's server
+ * rows merge into a rail that is already showing, but never make one appear
+ * after paint: that inserted about 230px above the dashboard (home pass-2 WP3
+ * item 10). The rail stays until the entries drop below 3.
  */
 const MIN_ENTRIES = 3;
 
 export function RecentlyViewedRail({ limit = 12 }: { limit?: number }) {
-  const { entries, remove } = useRecentlyViewedFeed();
+  const { entries, localCount, remove } = useRecentlyViewedFeed();
 
-  if (entries.length < MIN_ENTRIES) return null;
+  if (localCount < MIN_ENTRIES || entries.length < MIN_ENTRIES) return null;
 
   const items = entries.slice(0, limit);
 
@@ -53,7 +56,7 @@ export function RecentlyViewedRail({ limit = 12 }: { limit?: number }) {
                     {item.image_url ? (
                       <OptimizedImage
                         src={item.image_url}
-                        alt={item.title}
+                        alt=""
                         width={176}
                         height={99}
                         containerClassName="w-full h-full"

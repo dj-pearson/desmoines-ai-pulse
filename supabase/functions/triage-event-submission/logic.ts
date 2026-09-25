@@ -88,6 +88,11 @@ export function buildSafetyRequest(s: Submission): { system: string; userContent
     `Description: ${s.description ?? ''}\n` +
     `Venue: ${s.venue ?? ''}\n` +
     `Category: ${s.category ?? ''}\n` +
+    // Inside the markers like every other submitted field. They were outside
+    // until WP4 item 8, which put two attacker-controlled strings where the
+    // prompt treats text as trusted.
+    `Website: ${s.website_url ?? ''}\n` +
+    `Image: ${s.image_url ?? ''}\n` +
     `<<<END ${nonce}>>>`;
   return { system, userContent, nonce };
 }
@@ -107,4 +112,63 @@ export function decideTriage(
   if (score < AUTO_REJECT_THRESHOLD) return 'rejected';
   if (score >= AUTO_APPROVE_THRESHOLD && dateValid && safety.determined && safety.safe) return 'approved';
   return 'pending';
+}
+
+export type TriageDecision = 'approved' | 'rejected' | 'pending';
+
+/** The reason recorded when triage would have published but could not. */
+export const PUBLISH_UNAVAILABLE_REASON = 'auto-approve eligible, publish unavailable';
+
+export const SAFETY_DECLINE_NOTE =
+  'Automatically declined: the submission did not pass our content guidelines.';
+export const QUALITY_DECLINE_NOTE =
+  'Automatically declined: the submission was missing key details (date, venue, or a clear description). You are welcome to resubmit with more information.';
+
+/**
+ * What triage writes back to the submission, given the decision and, for an
+ * approval, whether publish_submission worked.
+ *
+ * A FAILED PUBLISH IS NOT A FAILED TRIAGE. publish_submission arrives with
+ * 20260920000001 and its Central-date fix with 20260926000002; until both are
+ * applied it errors, and the old code threw, so the job failed and the score
+ * and reasons were never saved. The best submissions - the only ones that
+ * reach this branch - fell out of triage unscored. Now the row keeps its score
+ * and reasons, stays pending for a human, and says why.
+ */
+export function buildTriagePatch(input: {
+  decision: TriageDecision;
+  score: number;
+  reasons: string[];
+  safetyFlag: boolean;
+  /** Set when decision is 'approved' and publish_submission returned an error. */
+  publishError?: string | null;
+  now?: Date;
+}): { decision: TriageDecision; patch: Record<string, unknown> } {
+  const { score, safetyFlag, publishError } = input;
+  let decision = input.decision;
+  const reasons = [...input.reasons];
+
+  if (decision === 'approved' && publishError) {
+    decision = 'pending';
+    reasons.push(PUBLISH_UNAVAILABLE_REASON);
+  }
+
+  const patch: Record<string, unknown> = {
+    quality_score: score,
+    triage_reasons: reasons,
+    triaged_at: (input.now ?? new Date()).toISOString(),
+  };
+
+  if (decision === 'approved') {
+    // publish_submission sets status itself; auto_decided is this path's fact.
+    patch.status = 'approved';
+    patch.auto_decided = true;
+  } else if (decision === 'rejected') {
+    patch.status = 'rejected';
+    patch.auto_decided = true;
+    patch.admin_notes = safetyFlag ? SAFETY_DECLINE_NOTE : QUALITY_DECLINE_NOTE;
+  }
+  // pending: status untouched, score and reasons stored for the admin queue.
+
+  return { decision, patch };
 }

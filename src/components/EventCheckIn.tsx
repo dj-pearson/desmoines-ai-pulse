@@ -2,7 +2,6 @@ import { useState } from 'react';
 import { useQuery, useQueryClient } from '@tanstack/react-query';
 import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
-import { Badge } from "@/components/ui/badge";
 import { useCommunityFeatures } from "@/hooks/useCommunityFeatures";
 import { Check, Heart, X } from "lucide-react";
 import { useAuth } from "@/hooks/useAuth";
@@ -51,12 +50,14 @@ export function EventCheckIn({ eventId, eventTitle }: EventCheckInProps) {
     setLoading(false);
   };
 
+  // -700 fills: white text on the -500 shades this used failed 4.5:1
+  // (events-pass2 WP4 item 10).
   const getStatusColor = (status: string) => {
     switch (status) {
-      case 'going': return 'bg-green-500 hover:bg-green-600';
-      case 'interested': return 'bg-blue-500 hover:bg-blue-600';
-      case 'maybe': return 'bg-yellow-500 hover:bg-yellow-600';
-      case 'not_going': return 'bg-gray-500 hover:bg-gray-600';
+      case 'going': return 'bg-green-700 text-white hover:bg-green-800';
+      case 'interested': return 'bg-blue-700 text-white hover:bg-blue-800';
+      case 'maybe': return 'bg-yellow-700 text-white hover:bg-yellow-800';
+      case 'not_going': return 'bg-gray-700 text-white hover:bg-gray-800';
       default: return 'bg-primary hover:bg-primary/90';
     }
   };
@@ -124,47 +125,40 @@ export function EventCheckIn({ eventId, eventTitle }: EventCheckInProps) {
           </div>
         </div>
 
-        {/* Community Stats */}
-        <div className="space-y-3">
-          <p className="text-sm font-medium">Community Interest:</p>
-          <div className="space-y-2">
-            <div className="flex items-center justify-between">
+        {/* Community Stats. A total of 0 is also what a failed read returns
+            (useCommunityFeatures getEventCheckIns), so "0 people" would be a
+            claim the page can't back. Say nothing about counts until someone
+            has answered (events-pass2 WP4 item 10). */}
+        {checkInCounts.total > 0 ? (
+          <div className="space-y-3">
+            <p className="text-sm font-medium">Community interest</p>
+            <dl className="space-y-2 text-sm">
               <div className="flex items-center gap-2">
-                <Badge variant="secondary" className="bg-green-100 text-green-800">
-                  <Check className="w-3 h-3 mr-1" />
+                <dt className="flex items-center gap-1 font-medium text-foreground">
+                  <Check className="w-3 h-3" aria-hidden="true" />
                   Going
-                </Badge>
-                <span className="text-sm text-muted-foreground">{checkInCounts.going} people</span>
+                </dt>
+                <dd className="text-muted-foreground tabular-nums">{checkInCounts.going}</dd>
               </div>
-            </div>
-            
-            <div className="flex items-center justify-between">
               <div className="flex items-center gap-2">
-                <Badge variant="secondary" className="bg-blue-100 text-blue-800">
-                  <Heart className="w-3 h-3 mr-1" />
+                <dt className="flex items-center gap-1 font-medium text-foreground">
+                  <Heart className="w-3 h-3" aria-hidden="true" />
                   Interested
-                </Badge>
-                <span className="text-sm text-muted-foreground">{checkInCounts.interested} people</span>
+                </dt>
+                <dd className="text-muted-foreground tabular-nums">{checkInCounts.interested}</dd>
               </div>
-            </div>
-            
-            <div className="flex items-center justify-between">
               <div className="flex items-center gap-2">
-                <Badge variant="secondary" className="bg-yellow-100 text-yellow-800">
-                  <SpriteIcon name="clock" className="w-3 h-3 mr-1" />
+                <dt className="flex items-center gap-1 font-medium text-foreground">
+                  <SpriteIcon name="clock" className="w-3 h-3" />
                   Maybe
-                </Badge>
-                <span className="text-sm text-muted-foreground">{checkInCounts.maybe} people</span>
+                </dt>
+                <dd className="text-muted-foreground tabular-nums">{checkInCounts.maybe}</dd>
               </div>
-            </div>
+            </dl>
           </div>
-          
-          <div className="pt-2 border-t">
-            <p className="text-sm text-muted-foreground">
-              Total responses: {checkInCounts.total}
-            </p>
-          </div>
-        </div>
+        ) : (
+          <p className="text-sm text-muted-foreground">Be the first to say you're going.</p>
+        )}
       </CardContent>
     </Card>
   );

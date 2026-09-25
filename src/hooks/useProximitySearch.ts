@@ -2,9 +2,12 @@ import { useState, useEffect, useCallback } from 'react';
 import { keepPreviousData, useQuery } from '@tanstack/react-query';
 import { supabase } from '@/integrations/supabase/client';
 import { Database } from '@/integrations/supabase/types';
-import { filterVisibleIds } from '@/lib/eventQuery';
+import { fetchVisibleEventsByIds } from '@/lib/eventQuery';
 import { handleError } from '@/lib/errorHandler';
-import { eventStartsInWindow, roundCoordinate } from '@/lib/nearMeOrigins';
+import { nearMeBox, roundCoordinate } from '@/lib/nearMeOrigins';
+import { EVENT_LIST_COLUMNS } from '@/lib/listColumns';
+import type { CentralWindow } from '@/lib/timezone';
+import { applyHubFilters, isNotOver, type HubEvent } from '@/components/events/eventsHubQuery';
 
 type Event = Database['public']['Tables']['events']['Row'];
 type Restaurant = Database['public']['Tables']['restaurants']['Row'];
@@ -48,30 +51,154 @@ export interface EventsNearbyOptions {
   /** Canonical category (EVENT_CATEGORIES), or undefined/'all' for any. */
   category?: string;
   /** Central-time bounds from nearMeWindowBounds(); null means any date. */
-  window?: { start: string; end: string } | null;
+  window?: CentralWindow | null;
   enabled?: boolean;
 }
 
+/** A near-me row: the list projection plus its distance from the origin. */
+export type NearbyEvent = HubEvent & {
+  distance_miles: number;
+  distance_meters: number;
+};
+
+export interface NearbyEventsResult {
+  items: NearbyEvent[];
+  /** The source stopped at its cap, so there may be more than `items`. */
+  limitHit: boolean;
+  /** Which query answered: the windowed table read, or the Anytime RPC. */
+  source: "window" | "rpc";
+}
+
 /**
- * Rows the RPC may return. Enough headroom that the category and time-window
- * filters applied after LIMIT are not starved by the RPC's featured-first
- * ordering (docs/page-plans/events.md WP6 item 3).
+ * Rows the RPC may return ("Anytime" only). The v1 RPC orders featured rows
+ * first and applies its LIMIT before anything else, so a full answer is not
+ * the nearest 200; the page says so (events-pass2 WP5 item 2).
  */
 export const NEARBY_EVENTS_LIMIT = 200;
 
+/**
+ * Rows the windowed read may return. A 50-mile box over a week is a few
+ * hundred rows on a busy week; at the cap the page says the list may be
+ * incomplete rather than presenting it as all of them.
+ */
+export const NEARBY_WINDOW_CAP = 1000;
+
 const METERS_PER_MILE = 1609.34;
 
+type Center = { latitude: number; longitude: number };
+
+function withDistance(event: HubEvent, center: Center): NearbyEvent | null {
+  if (typeof event.latitude !== "number" || typeof event.longitude !== "number") return null;
+  const miles = calculateDistance(center.latitude, center.longitude, event.latitude, event.longitude);
+  return { ...event, distance_miles: miles, distance_meters: Math.round(miles * METERS_PER_MILE) };
+}
+
+function startMs(event: HubEvent): number {
+  const raw = event.event_start_utc || event.date;
+  const t = raw instanceof Date ? raw.getTime() : Date.parse(String(raw ?? ""));
+  return Number.isNaN(t) ? Infinity : t;
+}
+
+function byDistanceThenStart(a: NearbyEvent, b: NearbyEvent): number {
+  if (a.distance_miles !== b.distance_miles) return a.distance_miles - b.distance_miles;
+  return startMs(a) - startMs(b);
+}
+
 /**
- * Events within a radius, via the PostGIS RPC, on TanStack Query.
+ * A window is set: read `events` directly (events-pass2 WP5 item 1). The
+ * hub's own predicates (visibility, the Central window with running
+ * festivals, the not-over rule when the window holds now, category) plus a
+ * lat/lng box around the rounded origin, THEN the cap, so a busy later date
+ * can never push a nearer in-window row out of the answer the way the RPC's
+ * LIMIT did. The box's corners are dropped by haversine distance here.
+ */
+export async function fetchNearbyInWindow(
+  center: Center,
+  radiusMiles: number,
+  category: string | null,
+  window: CentralWindow,
+  now: Date = new Date()
+): Promise<NearbyEventsResult> {
+  const box = nearMeBox(center, radiusMiles);
+  const { data, error } = await applyHubFilters(
+    supabase.from("events").select(EVENT_LIST_COLUMNS),
+    { search: "", category: category ?? "all", window, area: undefined, freeOnly: false, sort: "date_asc" },
+    now
+  )
+    .not("latitude", "is", null)
+    .gte("latitude", box.south)
+    .lte("latitude", box.north)
+    .gte("longitude", box.west)
+    .lte("longitude", box.east)
+    .order("date", { ascending: true })
+    .order("id", { ascending: true })
+    .limit(NEARBY_WINDOW_CAP);
+  if (error) throw error;
+
+  const rows = (data ?? []) as unknown as HubEvent[];
+  const items = rows
+    .map((row) => withDistance(row, center))
+    .filter((row): row is NearbyEvent => row !== null && row.distance_miles <= radiusMiles)
+    .sort(byDistanceThenStart);
+  return { items, limitHit: rows.length >= NEARBY_WINDOW_CAP, source: "window" };
+}
+
+interface NearbyRpcRow {
+  id: string;
+  distance_meters: number | null;
+}
+
+/**
+ * "Anytime": the PostGIS RPC for ids and distances, then one read of the list
+ * projection under the visibility rules (the v1 RPC applies none, D1), the
+ * hub's not-over rule, and the category. Interim until D1's v2.
+ */
+export async function fetchNearbyAnytime(
+  center: Center,
+  radiusMiles: number,
+  category: string | null,
+  now: Date = new Date()
+): Promise<NearbyEventsResult> {
+  const { data, error } = await supabase.rpc("search_events_near_location", {
+    user_lat: center.latitude,
+    user_lon: center.longitude,
+    radius_meters: Math.round(radiusMiles * METERS_PER_MILE),
+    search_limit: NEARBY_EVENTS_LIMIT,
+  });
+  if (error) throw error;
+
+  const raw = (data ?? []) as unknown as NearbyRpcRow[];
+  const distance = new Map<string, number>();
+  for (const row of raw) {
+    if (row?.id && row.distance_meters != null) distance.set(row.id, row.distance_meters);
+  }
+  const rows =
+    distance.size > 0
+      ? await fetchVisibleEventsByIds<HubEvent>([...distance.keys()], EVENT_LIST_COLUMNS)
+      : [];
+
+  const items = rows
+    .filter((event) => isNotOver(event, now))
+    .filter((event) => !category || event.category === category)
+    .map((event): NearbyEvent => {
+      const meters = distance.get(event.id) ?? 0;
+      return {
+        ...event,
+        distance_meters: meters,
+        distance_miles: Number((meters / METERS_PER_MILE).toFixed(1)),
+      };
+    })
+    .sort(byDistanceThenStart);
+  return { items, limitHit: raw.length >= NEARBY_EVENTS_LIMIT, source: "rpc" };
+}
+
+/**
+ * Events within a radius, on TanStack Query.
  *
- * The query key carries the coordinates ROUNDED to 2 decimals, and the RPC
- * receives the same rounded pair, so the visitor's precise position is never
- * sent or cached. Category and window are applied client-side (the v1 RPC takes
- * neither; D1's v2 will), and every id is passed through filterVisibleIds
- * because v1 returns merged, hidden and archived rows (D1).
- *
- * `limitHit` is true when the RPC returned its full LIMIT, so the page can say
- * the list is the nearest N rather than all of them.
+ * The query key carries the coordinates ROUNDED to 2 decimals, and the
+ * queries receive the same rounded pair, so the visitor's precise position is
+ * never sent or cached. With a window the answer is exact (fetchNearbyInWindow);
+ * "Anytime" goes through the RPC and says when it hit its cap.
  */
 export function useEventsNearby(options: EventsNearbyOptions) {
   const latitude = roundCoordinate(options.latitude);
@@ -93,44 +220,20 @@ export function useEventsNearby(options: EventsNearbyOptions) {
     enabled: options.enabled !== false && Number.isFinite(latitude) && Number.isFinite(longitude),
     staleTime: 5 * 60 * 1000,
     placeholderData: keepPreviousData,
-    queryFn: async () => {
-      const { data, error } = await supabase.rpc("search_events_near_location", {
-        user_lat: latitude,
-        user_lon: longitude,
-        radius_meters: Math.round(radiusMiles * METERS_PER_MILE),
-        search_limit: NEARBY_EVENTS_LIMIT,
-      });
-      if (error) throw error;
-
-      const raw = (data ?? []) as EventWithDistance[];
-      // Interim until D1: the RPC applies no visibility predicates.
-      const visible = raw.length > 0 ? await filterVisibleIds(raw.map((e) => e.id)) : new Set<string>();
-
-      const items = raw
-        .filter((event) => visible.has(event.id))
-        .filter((event) => !category || event.category === category)
-        .filter((event) => eventStartsInWindow(event, timeWindow))
-        .map((event) => ({
-          ...event,
-          distance_miles:
-            event.distance_meters != null
-              ? Number((event.distance_meters / METERS_PER_MILE).toFixed(1))
-              : undefined,
-        }));
-
-      return {
-        items: sortResults(items, "distance"),
-        limitHit: raw.length >= NEARBY_EVENTS_LIMIT,
-      };
-    },
+    queryFn: () =>
+      timeWindow
+        ? fetchNearbyInWindow({ latitude, longitude }, radiusMiles, category, timeWindow)
+        : fetchNearbyAnytime({ latitude, longitude }, radiusMiles, category),
   });
 
   return {
     items: query.data?.items ?? [],
     limitHit: query.data?.limitHit ?? false,
+    source: query.data?.source ?? (timeWindow ? "window" : "rpc"),
     isLoading: query.isLoading,
     isFetching: query.isFetching,
     isFetched: query.isFetched,
+    isSuccess: query.isSuccess,
     error: query.error,
     refetch: query.refetch,
     searchCenter: { latitude, longitude },

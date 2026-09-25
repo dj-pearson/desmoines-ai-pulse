@@ -72,6 +72,15 @@ const BY_CODE: Record<string, AuthErrorCopy> = {
     title: 'Pick a different password',
     description: 'The new password has to differ from your current one.',
   },
+  // WP1 item 7. GoTrue answers a missing, expired or replayed Turnstile token
+  // with this code once captcha protection is switched on. The fix on our side
+  // is a fresh token, which /auth requests after every submit; the person only
+  // needs to know it is not their password.
+  captcha_failed: {
+    title: "We couldn't verify this browser",
+    description: 'Wait a moment and try again.',
+    action: 'wait',
+  },
   signup_disabled: {
     title: 'Sign-ups are paused',
     description: 'New accounts are not being accepted at the moment. Try again later.',
@@ -92,6 +101,7 @@ const BY_MESSAGE: Array<[string, string]> = [
   ['user already registered', 'user_already_exists'],
   ['password should be at least', 'weak_password'],
   ['signups not allowed', 'signup_disabled'],
+  ['captcha verification process failed', 'captcha_failed'],
 ];
 
 const FALLBACK: AuthErrorCopy = {
@@ -108,6 +118,13 @@ const FALLBACK: AuthErrorCopy = {
 export function authErrorCopy(
   code: string | undefined | null,
   message: string | undefined | null,
+  /**
+   * Title for an unrecognised failure. Sign-up, password reset and Google or
+   * Apple all route their errors through here now (WP1 item 8), and "Sign in
+   * failed" over a failed sign-up is wrong. Optional, so existing callers are
+   * unchanged.
+   */
+  fallbackTitle?: string,
 ): AuthErrorCopy {
   if (code && BY_CODE[code]) return BY_CODE[code];
 
@@ -118,7 +135,7 @@ export function authErrorCopy(
     }
   }
 
-  return FALLBACK;
+  return fallbackTitle ? { ...FALLBACK, title: fallbackTitle } : FALLBACK;
 }
 
 /** Whether a failure is the "you never clicked the link" one. */

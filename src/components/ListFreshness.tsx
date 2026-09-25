@@ -1,4 +1,6 @@
 import { CheckCircle } from "lucide-react";
+import { formatInTimeZone } from "date-fns-tz";
+import { CENTRAL_TIMEZONE } from "@/lib/timezone";
 
 /**
  * SEO-009: a visible, honest freshness date for a LIST page.
@@ -68,12 +70,13 @@ export function ListFreshness({
   const iso = newestTimestamp(rows);
   if (!iso) return null;
 
+  // Central, like every other date on these pages (events-pass2 WP3 item 12).
+  // toLocaleDateString used the reader's zone, and the prerenderer's (UTC):
+  // an edit at 8 PM CDT on the 24th printed as the 25th, and the <time> value
+  // was the UTC date.
   const d = new Date(iso);
-  const formatted = d.toLocaleDateString("en-US", {
-    year: "numeric",
-    month: "long",
-    day: "numeric",
-  });
+  const formatted = formatInTimeZone(d, CENTRAL_TIMEZONE, "MMMM d, yyyy");
+  const centralDay = formatInTimeZone(d, CENTRAL_TIMEZONE, "yyyy-MM-dd");
 
   return (
     <p className={`flex items-center gap-1.5 text-sm text-muted-foreground ${className}`}>
@@ -83,7 +86,7 @@ export function ListFreshness({
         {/* A machine-readable date beside the human one. <time> is the only
             element that carries an unambiguous timestamp, and the visible text
             is a US-formatted string that a parser would have to guess at. */}
-        <time dateTime={iso.slice(0, 10)}>{formatted}</time>
+        <time dateTime={centralDay}>{formatted}</time>
       </span>
     </p>
   );

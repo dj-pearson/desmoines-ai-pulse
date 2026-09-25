@@ -1,4 +1,5 @@
 import { Link } from "react-router-dom";
+import { centralMonthOf, monthName, monthSlug, shiftMonth } from "@/lib/monthPages";
 
 /**
  * SEO-016: links to the upcoming month index pages.
@@ -27,16 +28,6 @@ import { Link } from "react-router-dom";
  * Linking is cheap and reversible; sitemapping a thin page is neither.
  */
 
-const MONTH_NAMES = [
-  "january", "february", "march", "april", "may", "june",
-  "july", "august", "september", "october", "november", "december",
-];
-
-const MONTH_LABELS = [
-  "January", "February", "March", "April", "May", "June",
-  "July", "August", "September", "October", "November", "December",
-];
-
 export interface MonthLink {
   slug: string;
   label: string;
@@ -46,19 +37,19 @@ export interface MonthLink {
 /**
  * The next `count` months starting from `from`, inclusive of the current one.
  * Exported so a test can pin the rollover without waiting for December.
+ *
+ * The current month is the CENTRAL month (events-pass2 WP6 item 3). It used
+ * to be the browser's local month, so at 8 PM CDT on Sep 30 a visitor on UTC
+ * (and the prerender, which runs on UTC) was offered October first while the
+ * month pages and the sitemap still counted it as September.
  */
 export function upcomingMonths(from: Date = new Date(), count = 6): MonthLink[] {
+  const start = centralMonthOf(from);
   const out: MonthLink[] = [];
-  const year = from.getFullYear();
-  const month = from.getMonth();
   for (let i = 0; i < count; i++) {
-    const d = new Date(year, month + i, 1);
-    const slug = `${MONTH_NAMES[d.getMonth()]}-${d.getFullYear()}`;
-    out.push({
-      slug,
-      label: `${MONTH_LABELS[d.getMonth()]} ${d.getFullYear()}`,
-      href: `/events/${slug}`,
-    });
+    const ref = shiftMonth(start, i);
+    const slug = monthSlug(ref);
+    out.push({ slug, label: monthName(ref), href: `/events/${slug}` });
   }
   return out;
 }

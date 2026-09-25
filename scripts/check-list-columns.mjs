@@ -37,6 +37,8 @@ const TABLE_FOR = {
   HOTEL_LIST_COLUMNS: 'hotels',
   PLAYGROUND_LIST_COLUMNS: 'playgrounds',
   EVENT_SLUG_COLUMNS: 'events',
+  TONIGHT_EVENT_COLUMNS: 'events',
+  TONIGHT_RESTAURANT_COLUMNS: 'restaurants',
 };
 
 const src = readFileSync(COLUMNS_FILE, 'utf8');

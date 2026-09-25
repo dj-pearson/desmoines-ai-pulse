@@ -1,4 +1,5 @@
-import { useState, useEffect } from "react";
+import { useState } from "react";
+import { useQuery, useQueryClient } from "@tanstack/react-query";
 import { supabase } from "@/integrations/supabase/client";
 import { useAuth } from "./useAuth";
 import { createLogger } from "@/lib/logger";
@@ -110,21 +111,73 @@ export async function fetchRateCard(): Promise<RateCardEntry[]> {
   return (data || []) as RateCardEntry[];
 }
 
-export function useCampaigns() {
-  const [campaigns, setCampaigns] = useState<Campaign[]>([]);
-  const [isLoading, setIsLoading] = useState(true);
-  const [error, setError] = useState<string | null>(null);
+/**
+ * The lowest active daily rate on the rate card, or null when the card is
+ * empty or could not be read. For "From $X/day" copy only: what anyone is
+ * charged is decided by calculate_campaign_pricing() and
+ * create-campaign-checkout on the server.
+ */
+export function lowestDailyRate(rates: RateCardEntry[]): number | null {
+  const values = rates
+    .map((rate) => Number(rate.base_daily_rate))
+    .filter((value) => Number.isFinite(value) && value > 0);
+  return values.length > 0 ? Math.min(...values) : null;
+}
+
+/** The rate card, cached. An unreadable card is an empty one (fetchRateCard). */
+export function useRateCard() {
+  return useQuery({
+    queryKey: ["ad-rate-card"],
+    queryFn: fetchRateCard,
+    staleTime: 60 * 60 * 1000,
+  });
+}
+
+/** The campaign statuses that wait on the advertiser, not on us. */
+export const CAMPAIGN_ACTION_STATUSES = ["pending_creative", "pending_payment"] as const;
+
+/**
+ * How many of the signed-in user's campaigns are waiting on them: creative to
+ * upload or payment to finish. A HEAD count, so no rows cross the wire.
+ */
+export function useCampaignActionCount(): { count: number; isError: boolean } {
   const { user } = useAuth();
+  const query = useQuery({
+    queryKey: ["campaigns", user?.id, "action-count"],
+    queryFn: async (): Promise<number> => {
+      if (!user) return 0;
+      const { count, error } = await supabase
+        .from("campaigns")
+        .select("id", { count: "exact", head: true })
+        .eq("user_id", user.id)
+        .in("status", [...CAMPAIGN_ACTION_STATUSES]);
+      if (error) throw error;
+      return count ?? 0;
+    },
+    enabled: !!user,
+    staleTime: 60 * 1000,
+  });
+  return { count: query.data ?? 0, isError: query.isError };
+}
 
-  useEffect(() => {
-    if (user) {
-      fetchCampaigns();
-    }
-  }, [user]);
+export interface UseCampaignsOptions {
+  /** False to hold the list read, e.g. until the Advertise tab is opened. */
+  enabled?: boolean;
+}
 
-  const fetchCampaigns = async () => {
-    try {
-      setIsLoading(true);
+export function useCampaigns(options: UseCampaignsOptions = {}) {
+  const { enabled = true } = options;
+  const [mutationError, setError] = useState<string | null>(null);
+  const { user } = useAuth();
+  const queryClient = useQueryClient();
+
+  const campaignsQuery = useQuery({
+    queryKey: ["campaigns", user?.id],
+    queryFn: async (): Promise<Campaign[]> => {
+      if (!user) return [];
+      // OWN CAMPAIGNS ONLY. RLS lets an admin read every campaign
+      // (useAdminCampaigns relies on it), so without this filter an admin's
+      // own Advertise tab listed every advertiser's spend as theirs.
       const { data, error: fetchError } = await supabase
         .from("campaigns")
         .select(`
@@ -132,15 +185,25 @@ export function useCampaigns() {
           campaign_placements (*),
           campaign_creatives (*)
         `)
+        .eq("user_id", user.id)
         .order("created_at", { ascending: false });
 
       if (fetchError) throw fetchError;
-      setCampaigns(data || []);
-    } catch (err) {
-      setError(err instanceof Error ? err.message : "Failed to fetch campaigns");
-    } finally {
-      setIsLoading(false);
-    }
+      return (data || []) as Campaign[];
+    },
+    enabled: enabled && !!user,
+  });
+
+  const campaigns = campaignsQuery.data ?? [];
+  const isLoading = campaignsQuery.isLoading;
+  const queryError = campaignsQuery.error;
+  const error =
+    mutationError ??
+    (queryError ? (queryError instanceof Error ? queryError.message : "Failed to fetch campaigns") : null);
+
+  /** Re-read the list and the action count. Resolves once the list is back. */
+  const fetchCampaigns = async () => {
+    await queryClient.invalidateQueries({ queryKey: ["campaigns", user?.id] });
   };
 
   const getCurrentPricing = async (

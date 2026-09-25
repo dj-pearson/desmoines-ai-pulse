@@ -27,6 +27,7 @@ import { Skeleton } from '@/components/ui/skeleton';
 import { Button } from '@/components/ui/button';
 import { Ruler, Mountain, Bike, Footprints, Route, Navigation } from 'lucide-react';
 import { ErrorState } from '@/components/ui/error-state';
+import { ExploreSectionLinks } from '@/components/explore/ExploreSectionLinks';
 
 const DIFFICULTY_COLORS: Record<string, string> = {
   easy: 'bg-green-500/10 text-green-700 dark:text-green-400',
@@ -105,7 +106,7 @@ const RELATED_GUIDES: Array<{ to: string; label: string; note: string }> = [
   {
     to: '/things-to-do',
     label: 'Things to do in Des Moines',
-    note: 'Indoor and outdoor, sorted by what is actually open.',
+    note: 'Every Explore section, plus seasonal picks.',
   },
   {
     to: '/events/this-weekend',
@@ -162,6 +163,22 @@ export default function OutdoorsHub() {
     next.delete('activity');
     setSearchParams(next);
   };
+
+  // Item 13: difficulty options come from the rows, each with its count, and
+  // an option with no trails is hidden once the list has loaded. The one in
+  // the URL stays visible so it can be switched off.
+  const difficultyCounts = new Map<string, number>();
+  for (const trail of allTrails ?? []) {
+    if (trail.difficulty) difficultyCounts.set(trail.difficulty, (difficultyCounts.get(trail.difficulty) ?? 0) + 1);
+  }
+  const trailsLoaded = !!allTrails && allTrails.length > 0;
+  const difficultyOptions = DIFFICULTY_FILTERS.filter(
+    (option) =>
+      option.value === 'all' ||
+      !trailsLoaded ||
+      option.value === difficultyFilter ||
+      (difficultyCounts.get(option.value) ?? 0) > 0,
+  );
 
   const filteredTrails = allTrails?.filter((trail) => {
     if (difficultyFilter !== 'all' && trail.difficulty !== difficultyFilter) return false;
@@ -334,8 +351,8 @@ export default function OutdoorsHub() {
                 verdict the line isn't rendered and nothing sits under it yet. */}
             {hasVerdict && (
               <p className="mt-4 text-base text-foreground/90">
-                <span className="font-medium">Today in Des Moines:</span> {weather.conditions}.
-                {showMudNote && ' Unpaved trails are likely to be muddy.'}
+                <span className="font-medium">Right now in Des Moines:</span> {weather.conditions}.
+                {showMudNote && ' Rain is likely today; unpaved trails may be muddy.'}
                 {showWinterLink && (
                   <>
                     {' '}
@@ -349,7 +366,16 @@ export default function OutdoorsHub() {
                 )}
               </p>
             )}
+            <p className="mt-4">
+              <Link
+                to="/map?layers=trail,attraction"
+                className="inline-flex min-h-11 items-center font-medium text-primary underline underline-offset-4"
+              >
+                Show trails and attractions on the map
+              </Link>
+            </p>
           </header>
+          <ExploreSectionLinks current="/outdoors" className="mt-6" />
 
           <nav aria-label="Jump to a destination" className="mt-8 max-w-4xl">
             <h2 className="text-sm font-semibold text-foreground mb-3">
@@ -414,18 +440,25 @@ export default function OutdoorsHub() {
                   Difficulty
                 </p>
                 <div className="flex gap-2 flex-wrap">
-                  {DIFFICULTY_FILTERS.map((option) => (
-                    <Button
-                      key={option.value}
-                      type="button"
-                      variant={difficultyFilter === option.value ? 'default' : 'outline'}
-                      size="sm"
-                      aria-pressed={difficultyFilter === option.value}
-                      onClick={() => setFilter('difficulty', option.value)}
-                    >
-                      {option.label}
-                    </Button>
-                  ))}
+                  {difficultyOptions.map((option) => {
+                    const count =
+                      option.value === 'all' ? allTrails?.length : difficultyCounts.get(option.value) ?? 0;
+                    return (
+                      <Button
+                        key={option.value}
+                        type="button"
+                        variant={difficultyFilter === option.value ? 'default' : 'outline'}
+                        size="sm"
+                        aria-pressed={difficultyFilter === option.value}
+                        onClick={() => setFilter('difficulty', option.value)}
+                      >
+                        {option.label}
+                        {trailsLoaded && count !== undefined && (
+                          <span className="ml-1 tabular-nums opacity-80">({count})</span>
+                        )}
+                      </Button>
+                    );
+                  })}
                 </div>
               </div>
               <div role="group" aria-labelledby={activityLabelId}>

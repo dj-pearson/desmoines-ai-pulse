@@ -35,13 +35,37 @@ export interface OutdoorsLogistics {
   winter: string;
   cost: string;
   /**
-   * ISO date (YYYY-MM-DD) the logistics above were last checked against the
-   * park's own site. Shown under the facts so a reader can judge how fresh
-   * they are; src/data/__tests__/outdoorsGuide.test.ts fails once any is more
-   * than a year old. The first value for all eight is the date the guide was
-   * written (876c357, 2026-08-31).
+   * ISO date (YYYY-MM-DD) the logistics above were written (876c357,
+   * 2026-08-31, for all eight). The page says "Written <date>" from this.
+   *
+   * It used to be `checkedOn` and rendered as "Details checked", which claimed
+   * a check against the park's own site that nobody had done since writing
+   * (explore pass 2 WP5 item 9).
    */
-  checkedOn: string;
+  writtenOn: string;
+  /**
+   * ISO date someone last re-checked these facts against the park's own site.
+   * Set it only after doing that check; when set, the page says "Checked
+   * <date>" instead of "Written <date>". The outdoorsGuide test's 365-day
+   * limit applies to whichever date is shown.
+   */
+  checkedOn?: string;
+}
+
+/** The date a destination's facts are dated by: checked if re-checked, else written. */
+export function logisticsDate(logistics: Pick<OutdoorsLogistics, "writtenOn" | "checkedOn">): {
+  kind: "Checked" | "Written";
+  iso: string;
+} {
+  return logistics.checkedOn
+    ? { kind: "Checked", iso: logistics.checkedOn }
+    : { kind: "Written", iso: logistics.writtenOn };
+}
+
+/** The guide destination whose own page is /outdoors/<slug>, if any. */
+export function destinationForTrailSlug(slug: string | null | undefined): OutdoorsDestination | undefined {
+  if (!slug) return undefined;
+  return OUTDOORS_DESTINATIONS.find((d) => d.internalPath === `/outdoors/${slug}`);
 }
 
 export interface OutdoorsDestination {
@@ -88,7 +112,7 @@ export const OUTDOORS_DESTINATIONS: OutdoorsDestination[] = [
       winter:
         "Open and worth it. The loop is cleared through winter and the bridge lights run year round, which makes this one of the few places in the metro to walk after dark in January.",
       cost: "Free. Rentals are seasonal and paid.",
-      checkedOn: "2026-08-31",
+      writtenOn: "2026-08-31",
     },
     address: {
       street: "2101 Fleur Dr",
@@ -124,7 +148,7 @@ export const OUTDOORS_DESTINATIONS: OutdoorsDestination[] = [
       winter:
         "Canyon Road closes for the season, but the park and the upper trails stay open. Bare sandstone and ice do not mix, so treat the steps as a spring-through-fall route.",
       cost: "Free. Iowa charges no entrance fee at state parks.",
-      checkedOn: "2026-08-31",
+      writtenOn: "2026-08-31",
     },
     address: {
       street: "1519 250th St",
@@ -164,7 +188,7 @@ export const OUTDOORS_DESTINATIONS: OutdoorsDestination[] = [
       winter:
         "Open, not plowed. The lights run year round and a still, cold night is the clearest view of them you will get all year. Walk it rather than ride it.",
       cost: "Free. Bike rentals near the Woodward and Madrid trailheads are seasonal and worth calling ahead about.",
-      checkedOn: "2026-08-31",
+      writtenOn: "2026-08-31",
     },
     address: {
       street: "5th St and Broad St",
@@ -204,7 +228,7 @@ export const OUTDOORS_DESTINATIONS: OutdoorsDestination[] = [
       winter:
         "Open and not plowed. The surface underneath is good, so a dry cold spell makes for fast, empty riding.",
       cost: "Trail pass required for riders 18 and over, sold at trailhead kiosks. Walking and running are free.",
-      checkedOn: "2026-08-31",
+      writtenOn: "2026-08-31",
     },
     address: { city: "Waukee", state: "IA", zip: "50263" },
     geo: { latitude: 41.6027, longitude: -93.8858 },
@@ -235,7 +259,7 @@ export const OUTDOORS_DESTINATIONS: OutdoorsDestination[] = [
       winter:
         "Open, not plowed, and exposed along the lake. Wind off Saylorville is the deciding factor most winter days.",
       cost: "Free.",
-      checkedOn: "2026-08-31",
+      writtenOn: "2026-08-31",
     },
     address: { city: "Des Moines", state: "IA", zip: "50317" },
     geo: { latitude: 41.6267, longitude: -93.5544 },
@@ -263,7 +287,7 @@ export const OUTDOORS_DESTINATIONS: OutdoorsDestination[] = [
       dogs: "Leashed dogs are allowed and this is the easiest trail on the list to bring one on, because the traffic is light and the surface is forgiving.",
       winter: "Open, not plowed, and very quiet. Expect to break your own track after snow.",
       cost: "Free.",
-      checkedOn: "2026-08-31",
+      writtenOn: "2026-08-31",
     },
     address: { city: "Martensdale", state: "IA", zip: "50160" },
     geo: { latitude: 41.3836, longitude: -93.7419 },
@@ -292,7 +316,7 @@ export const OUTDOORS_DESTINATIONS: OutdoorsDestination[] = [
       winter:
         "Open year round and this is the season locals use it for. Ice fishing when the ice is safe, and cross-country skiing when there is enough snow. Check DNR conditions rather than guessing at ice.",
       cost: "Free. A fishing license is required for anglers 16 and over.",
-      checkedOn: "2026-08-31",
+      writtenOn: "2026-08-31",
     },
     address: {
       street: "8794 NW 125th Ave",
@@ -331,7 +355,7 @@ export const OUTDOORS_DESTINATIONS: OutdoorsDestination[] = [
       winter:
         "Open year round. The shoreline is exposed and the trails are not cleared, but the bison are easier to see once the leaves are down.",
       cost: "Free. Camping, equestrian and golf are paid.",
-      checkedOn: "2026-08-31",
+      writtenOn: "2026-08-31",
     },
     address: {
       street: "12130 NW 128th St",

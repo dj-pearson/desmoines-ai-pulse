@@ -27,29 +27,15 @@
  * they reach an href, so a `javascript:` value renders no link at all rather
  * than a clickable one (restaurants plan WP8 item 1).
  */
-import { toSafeExternalUrl } from '@/lib/capacitorUtils';
-
-/** A scheme at the start of the string: "https:", "javascript:", "tel:". */
-const HAS_SCHEME = /^[a-z][a-z0-9+.-]*:/i;
-/** A bare hostname with at least one dot, optionally followed by a path. */
-const BARE_HOST = /^[a-z0-9-]+(\.[a-z0-9-]+)+(?::\d+)?(?:[/?#]|$)/i;
+import { safeHttpUrl } from '@/lib/safeUrl';
 
 /**
- * An absolute http(s) URL, or null.
- *
- * Rows often hold a bare "www.x.com". That is prefixed with https:// before
- * validating, so it becomes a working link instead of a relative one that
- * resolves against our own origin. Anything with a scheme other than http(s)
- * is refused by toSafeExternalUrl.
+ * An absolute http(s) URL, or null. Delegates to safeHttpUrl so the React
+ * page and the crawler shell (functions/_middleware.ts) refuse the same values.
+ * A bare "www.x.com" becomes https://www.x.com/; any other scheme is refused.
  */
 export function safeWebUrl(raw: unknown): string | null {
-  if (typeof raw !== 'string') return null;
-  const trimmed = raw.trim();
-  if (!trimmed) return null;
-  if (!HAS_SCHEME.test(trimmed) && BARE_HOST.test(trimmed)) {
-    return toSafeExternalUrl(`https://${trimmed}`);
-  }
-  return toSafeExternalUrl(trimmed);
+  return safeHttpUrl(raw);
 }
 
 /**

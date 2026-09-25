@@ -122,12 +122,16 @@ Deno.test('the browser no longer drives any lockout', async () => {
     'the client must not write the throttle table',
   );
 
-  // checkRateLimit keeps its signature and its local counter, but the server
-  // path it used to block on is gone, so it can no longer report `allowed:
-  // false` on anyone else's behalf.
-  const fn = hook.slice(hook.indexOf('const checkRateLimit'), hook.indexOf('const checkDisposableEmail'));
-  assert(fn.length > 0, 'checkRateLimit must still exist ahead of checkDisposableEmail');
-  assert(/SecurityUtils\.checkRateLimit\(/.test(fn), 'the local per-browser counter stays');
+  // Account plan WP1 item 3: the hook's own per-browser limiter is gone too.
+  // It counted successful presses, never un-blocked and froze its countdown.
+  // The only lock /auth shows is the server's, read from check-login-attempt.
+  // Comments stripped: the hook's header explains the limiter it replaced.
+  const hookCode = hook.replace(/\/\*[\s\S]*?\*\//g, '').replace(/\/\/.*$/gm, '');
+  assertFalse(/const checkRateLimit/.test(hookCode), 'no second, client-side limiter');
+  assertFalse(/isBlocked/.test(hookCode), 'no client-side block state');
+
+  const page = await read('src/pages/Auth.tsx');
+  assert(/invoke<[^>]*>\("check-login-attempt"/.test(page), 'the countdown comes from the server lock');
 });
 
 Deno.test('AuthContext sends the proof it now needs', async () => {

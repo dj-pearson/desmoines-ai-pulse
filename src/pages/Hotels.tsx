@@ -1,6 +1,8 @@
 import { useState, useRef, useEffect, useMemo } from "react";
-import { Helmet } from "react-helmet-async";
+import { Link } from "react-router-dom";
 import HotelCard from "@/components/HotelCard";
+import SEOHead from "@/components/SEOHead";
+import ItemListSchema from "@/components/schema/ItemListSchema";
 import { Input } from "@/components/ui/input";
 import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
@@ -28,12 +30,12 @@ import AffiliateDisclosureBanner from "@/components/AffiliateDisclosureBanner";
 import Header from "@/components/Header";
 import Footer from "@/components/Footer";
 import { SpriteIcon } from "@/components/ui/SpriteIcon";
-import { useHotels } from "@/hooks/useHotels";
-import { useVenues } from "@/hooks/useVenues";
+import { useHotelFilterOptions, useHotels } from "@/hooks/useHotels";
+import { useVenueMatchRows } from "@/hooks/useVenues";
 import { useUrlFilters } from "@/hooks/useUrlFilters";
 import { getCanonicalUrl } from "@/lib/brandConfig";
 import { sanitizePostgrestPattern } from "@/lib/postgrestPattern";
-import { formatMiles, nearby } from "@/lib/venuePages";
+import { currentVenueName, formatMiles, nearby } from "@/lib/venuePages";
 import type { Database } from "@/integrations/supabase/types";
 
 type Hotel = Database["public"]["Tables"]["hotels"]["Row"];
@@ -78,11 +80,17 @@ const AMENITY_OPTIONS = [
   "Suite Available",
 ];
 
+/**
+ * Labels say what the column is (pass-2 WP2 item 4). "rating" sorts by
+ * star_rating, which is a hotel class where an editor set one, not a review
+ * score, and the price sorts use a seeded typical rate. The values stay, so
+ * an old ?sort=rating link still works.
+ */
 const SORT_OPTIONS = [
   { value: "featured", label: "Featured" },
-  { value: "price_low", label: "Price: Low to High" },
-  { value: "price_high", label: "Price: High to Low" },
-  { value: "rating", label: "Highest Rated" },
+  { value: "price_low", label: "Typical rate: low to high" },
+  { value: "price_high", label: "Typical rate: high to low" },
+  { value: "rating", label: "Hotel class" },
   { value: "alphabetical", label: "A-Z" },
   { value: "newest", label: "Newest" },
 ] as const;
@@ -126,7 +134,9 @@ interface NearPlace {
  * row. Coordinates are the published location of each site.
  */
 const FIXED_NEAR_PLACES: NearPlace[] = [
-  { slug: "wells-fargo-arena", name: "Wells Fargo Arena", latitude: 41.5908, longitude: -93.6208 },
+  // The slug keeps the old name so shared links work; the page says the
+  // building's current name (pass-2 WP2 item 9).
+  { slug: "wells-fargo-arena", name: currentVenueName("Wells Fargo Arena"), latitude: 41.5908, longitude: -93.6208 },
   { slug: "iowa-state-fairgrounds", name: "Iowa State Fairgrounds", latitude: 41.5964, longitude: -93.5531 },
 ];
 
@@ -142,6 +152,8 @@ interface HotelFilterValues {
 interface FilterPanelProps {
   /** Keeps ids unique when the panel renders twice (sidebar and sheet). */
   idPrefix: string;
+  areaOptions: string[];
+  typeOptions: string[];
   selectedAreas: string[];
   selectedPriceRanges: string[];
   selectedTypes: string[];
@@ -162,6 +174,8 @@ interface FilterPanelProps {
  */
 function FilterPanel({
   idPrefix,
+  areaOptions,
+  typeOptions,
   selectedAreas,
   selectedPriceRanges,
   selectedTypes,
@@ -204,7 +218,7 @@ function FilterPanel({
 
   return (
     <div className="space-y-6">
-      {checkboxGroup("Area", "area", AREAS, selectedAreas, onToggleArea)}
+      {checkboxGroup("Area", "area", areaOptions, selectedAreas, onToggleArea)}
 
       <fieldset>
         <legend className="text-sm font-semibold mb-3">Price range</legend>
@@ -228,7 +242,7 @@ function FilterPanel({
         </div>
       </fieldset>
 
-      {checkboxGroup("Hotel type", "type", HOTEL_TYPES, selectedTypes, onToggleType)}
+      {checkboxGroup("Hotel type", "type", typeOptions, selectedTypes, onToggleType)}
       {checkboxGroup("Amenities", "amenity", AMENITY_OPTIONS, selectedAmenities, onToggleAmenity)}
 
       {activeFilterCount > 0 && (
@@ -295,6 +309,19 @@ function toggle(list: string[], value: string): string[] {
   return list.includes(value) ? list.filter((v) => v !== value) : [...list, value];
 }
 
+/**
+ * Filter options from the live rows (pass-2 WP2 item 10), with the curated
+ * constants while they load or if the read fails. A value already selected
+ * (from a shared link) stays in the list so it can be unticked.
+ */
+function withSelected(live: string[], fallback: string[], selected: string[]): string[] {
+  const base = live.length > 0 ? live : fallback;
+  const extra = selected.filter((v) => !base.includes(v));
+  return [...base, ...extra];
+}
+
+const SEARCH_DEBOUNCE_MS = 300;
+
 export default function Hotels() {
   const { getStr, getList, setParam, clearParams } = useUrlFilters();
 
@@ -303,28 +330,46 @@ export default function Hotels() {
   const nearSlug = getStr("near", "");
   const selectedAreas = getList("area");
   const selectedPriceRanges = getList("price");
+  // Pass-2 WP2 item 10: type, amenity and the search term live in the URL
+  // too, so a shared or reloaded /stay link comes back as the same list, and
+  // Search's hotel hub link can hand over its term as ?q=.
+  const selectedTypes = getList("type");
+  const selectedAmenities = getList("amenity");
+  const qParam = getStr("q", "");
   const sortParam = getStr("sort", DEFAULT_SORT);
   const sortBy: SortOption = isSortOption(sortParam) ? sortParam : DEFAULT_SORT;
 
-  const [search, setSearch] = useState("");
-  const [debouncedSearch, setDebouncedSearch] = useState("");
-  const [selectedTypes, setSelectedTypes] = useState<string[]>([]);
-  const [selectedAmenities, setSelectedAmenities] = useState<string[]>([]);
+  const [search, setSearch] = useState(qParam);
   const [filtersOpen, setFiltersOpen] = useState(false);
   const searchTimeoutRef = useRef<ReturnType<typeof setTimeout>>();
+  // The last value this page wrote to ?q=, so its own write does not echo
+  // back into the box while someone is still typing.
+  const lastWrittenQ = useRef(qParam);
+
+  // Back/forward and links change ?q= from outside; follow them.
+  useEffect(() => {
+    if (qParam !== lastWrittenQ.current) {
+      lastWrittenQ.current = qParam;
+      setSearch(qParam);
+    }
+  }, [qParam]);
+
+  const writeQ = (value: string) => {
+    const trimmed = value.trim();
+    lastWrittenQ.current = trimmed;
+    setParam("q", trimmed || null, { replace: true });
+  };
 
   const handleSearch = (value: string) => {
     setSearch(value);
     if (searchTimeoutRef.current) clearTimeout(searchTimeoutRef.current);
-    searchTimeoutRef.current = setTimeout(() => {
-      setDebouncedSearch(value);
-    }, 300);
+    searchTimeoutRef.current = setTimeout(() => writeQ(value), SEARCH_DEBOUNCE_MS);
   };
 
   const clearSearch = () => {
     if (searchTimeoutRef.current) clearTimeout(searchTimeoutRef.current);
     setSearch("");
-    setDebouncedSearch("");
+    writeQ("");
   };
 
   useEffect(() => {
@@ -336,10 +381,21 @@ export default function Hotels() {
   // WP2 item 9. useHotels interpolates the term into .or(), where a comma ends
   // a clause: "Hilton, Downtown" was a 400 and an ErrorState. The hook belongs
   // to the Home plan, so the term is made safe here before it gets there.
-  const searchTerm = sanitizePostgrestPattern(debouncedSearch);
+  const searchTerm = sanitizePostgrestPattern(qParam);
+
+  // ---- Filter options from live rows (pass-2 WP2 item 10) ------------------
+  const filterOptions = useHotelFilterOptions();
+  const areaOptions = withSelected(filterOptions.areas, AREAS, selectedAreas);
+  const typeOptions = withSelected(filterOptions.hotelTypes, HOTEL_TYPES, selectedTypes);
+  // The quick chips stay curated, but only name areas that have a hotel.
+  const quickAreas = AREAS.filter(
+    (a) => filterOptions.areas.length === 0 || filterOptions.areas.includes(a),
+  ).slice(0, 5);
 
   // ---- Near: which place, and its coordinates ------------------------------
-  const { data: venues } = useVenues();
+  // Pass-2 WP2 item 8: the lean venue read, and only venues with coordinates
+  // become options, since a place with no location cannot order anything.
+  const { data: venues, isLoading: venuesLoading } = useVenueMatchRows();
   const nearPlaces = useMemo<NearPlace[]>(() => {
     const bySlug = new Map<string, NearPlace>();
     for (const p of FIXED_NEAR_PLACES) bySlug.set(p.slug, p);
@@ -347,11 +403,15 @@ export default function Hotels() {
       const lat = v.latitude == null ? NaN : Number(v.latitude);
       const lng = v.longitude == null ? NaN : Number(v.longitude);
       if (!v.slug || !v.name || !Number.isFinite(lat) || !Number.isFinite(lng)) continue;
-      bySlug.set(v.slug, { slug: v.slug, name: v.name, latitude: lat, longitude: lng });
+      bySlug.set(v.slug, { slug: v.slug, name: currentVenueName(v.name), latitude: lat, longitude: lng });
     }
     return [...bySlug.values()].sort((a, b) => a.name.localeCompare(b.name));
   }, [venues]);
   const nearPlace = nearSlug ? nearPlaces.find((p) => p.slug === nearSlug) ?? null : null;
+  // A slug that is not a fixed place is unknown until the venues arrive; show
+  // the skeleton rather than a default list that is about to be reordered.
+  const nearPending = Boolean(nearSlug) && !nearPlace && venuesLoading;
+  const nearUnknown = Boolean(nearSlug) && !nearPlace && !venuesLoading;
 
   const baseFilters: HotelFilterValues = {
     search: searchTerm || undefined,
@@ -407,8 +467,10 @@ export default function Hotels() {
 
   // WP2 item 10: featured hotels rendered twice, once in the strip and again
   // at the top of the featured-first grid.
+  // Pass-2 WP2 item 4: only under the Featured sort. Under "A-Z" the strip
+  // put three hotels above the A-Z list and took them out of it.
   const showFeaturedStrip =
-    !nearPlace && !hasQuery && featuredHotels.length > 0;
+    sortBy === "featured" && !nearPlace && !hasQuery && featuredHotels.length > 0;
   const featuredIds = useMemo(
     () => new Set(showFeaturedStrip ? featuredHotels.map((h) => h.id) : []),
     [showFeaturedStrip, featuredHotels],
@@ -418,18 +480,20 @@ export default function Hotels() {
   const hasMore = shownCount < totalCount;
 
   const clearAllFilters = () => {
-    clearParams(["near", "area", "price", "sort"]);
-    setSelectedTypes([]);
-    setSelectedAmenities([]);
-    clearSearch();
+    if (searchTimeoutRef.current) clearTimeout(searchTimeoutRef.current);
+    setSearch("");
+    lastWrittenQ.current = "";
+    clearParams(["near", "area", "price", "type", "amenity", "q", "sort"]);
   };
 
   const onToggleArea = (v: string) => setParam("area", toggle(selectedAreas, v));
   const onTogglePrice = (v: string) => setParam("price", toggle(selectedPriceRanges, v));
-  const onToggleType = (v: string) => setSelectedTypes((a) => toggle(a, v));
-  const onToggleAmenity = (v: string) => setSelectedAmenities((a) => toggle(a, v));
+  const onToggleType = (v: string) => setParam("type", toggle(selectedTypes, v));
+  const onToggleAmenity = (v: string) => setParam("amenity", toggle(selectedAmenities, v));
 
   const panelProps = {
+    areaOptions,
+    typeOptions,
     selectedAreas,
     selectedPriceRanges,
     selectedTypes,
@@ -449,48 +513,66 @@ export default function Hotels() {
     ...selectedAmenities.map((v) => ({ key: `amenity-${v}`, label: v, onRemove: () => onToggleAmenity(v) })),
   ];
 
-  const resultLine = isLoading
-    ? "Loading..."
-    : hasMore
-      ? `Showing ${shownCount} of ${totalCount} hotels`
-      : `${totalCount} hotel${totalCount !== 1 ? "s" : ""}`;
+  const countLine = hasMore
+    ? `Showing ${shownCount} of ${totalCount} hotels`
+    : `${totalCount} hotel${totalCount !== 1 ? "s" : ""}`;
+
+  // Pass-2 WP2 item 1. "nearest X first" was appended whether or not any row
+  // had a distance, and until D9 backfills hotels.latitude, none may.
+  const locatedCount = nearRows ? nearRows.filter((r) => r.miles !== null).length : 0;
+  const unlocatedCount = nearRows ? nearRows.length - locatedCount : 0;
+  const resultLine =
+    isLoading || nearPending
+      ? "Loading..."
+      : nearPlace && nearRows
+        ? locatedCount === 0
+          ? `${countLine}. No hotel locations yet, so these are listed A-Z.`
+          : unlocatedCount === 0
+            ? `${countLine}, nearest ${nearPlace.name} first.`
+            : `${countLine}: ${locatedCount} with a known location, nearest ${nearPlace.name} first; ${unlocatedCount} listed after.`
+        : countLine;
+
+  // Pass-2 WP2 item 11: the first page as an ItemList of our own hotel URLs.
+  const listForSchema = !isLoading && !hotelsError
+    ? (nearRows ? nearRows.map((r) => r.hotel) : hotels).slice(0, PAGE_SIZE)
+    : [];
 
   return (
     <>
-      <Helmet>
-        <title>Hotels in Des Moines - Where to Stay | Des Moines Insider</title>
-        <meta
-          name="description"
-          content="Find the best hotels in Des Moines, Iowa. Browse downtown hotels, West Des Moines accommodations, and hotels near popular event venues. Book your stay today."
-        />
-        <meta name="keywords" content="Des Moines hotels, where to stay Des Moines, hotels downtown Des Moines, West Des Moines hotels, Iowa hotels" />
-        {/* WEB-SEO-002: was a RELATIVE canonical (href="/stay"). Valid, but an
-            absolute URL is unambiguous for crawlers and matches every other page. */}
-        <link rel="canonical" href={getCanonicalUrl('/stay')} />
-        {/* WEB-SEO-002: these pages set only title/description, so index.html's
-            static og: and twitter: tags were the only ones shipping. */}
-        <meta property="og:title" content="Hotels in Des Moines - Where to Stay | Des Moines Insider" />
-        <meta property="og:description" content="Find the best hotels in Des Moines, Iowa. Browse downtown hotels, West Des Moines accommodations, and hotels near popular event venues. Book your stay today." />
-        <meta property="og:url" content={getCanonicalUrl('/stay')} />
-        <meta name="twitter:title" content="Stay in Des Moines - Hotels & Accommodations | Des Moines Insider" />
-        <meta name="twitter:description" content="Find the best hotels in Des Moines, Iowa. Browse downtown hotels, West Des Moines accommodations, and hotels near popular event venues. Book your stay today." />
-      </Helmet>
+      <SEOHead
+        title="Hotels in Des Moines - Where to Stay"
+        description="Compare Des Moines hotels by area and by distance to the venue you're visiting."
+        url="/stay"
+        canonicalUrl={getCanonicalUrl("/stay")}
+        keywords={["Des Moines hotels", "where to stay Des Moines", "downtown Des Moines hotels", "West Des Moines hotels"]}
+        breadcrumbs={[
+          { name: "Home", url: "/" },
+          { name: "Hotels", url: "/stay" },
+        ]}
+      />
+      <ItemListSchema
+        name="Hotels in Des Moines"
+        itemListOrder="Unordered"
+        items={listForSchema.map((h) => ({ name: h.name, url: getCanonicalUrl(`/stay/${h.slug}`) }))}
+      />
 
       <div className="min-h-screen bg-background pb-24">
         <Header />
 
         {/* Hero: a flat brand surface (WP2 item 10). */}
-        <section className="bg-primary text-primary-foreground py-12 md:py-20">
+        {/* Pass-2 WP2 item 5: h1 and search only on a phone, so a hotel card
+            starts on the first screen. The subtitle returns from sm up. */}
+        <section className="bg-primary text-primary-foreground py-4 sm:py-12 md:py-16">
           <div className="container mx-auto px-4">
             <div className="max-w-3xl mx-auto text-center">
-              <div className="flex items-center justify-center gap-2 mb-4">
-                <SpriteIcon name="building-2" className="h-8 w-8" />
-                <h1 className="text-3xl md:text-5xl font-bold">
+              <div className="flex items-center justify-center gap-2 mb-3 sm:mb-4">
+                <SpriteIcon name="building-2" className="hidden sm:block h-8 w-8" />
+                <h1 className="text-2xl sm:text-3xl md:text-5xl font-bold">
                   Stay in Des Moines
                 </h1>
               </div>
-              <p className="text-lg md:text-xl text-primary-foreground/85 mb-8">
-                Hotels and accommodations near the best events and attractions in Des Moines
+              <p className="hidden sm:block text-lg md:text-xl text-primary-foreground/85 mb-8">
+                Hotels by area, and by distance to the venue you&apos;re visiting
               </p>
 
               <div className="max-w-xl mx-auto relative">
@@ -518,20 +600,24 @@ export default function Hotels() {
           </div>
         </section>
 
-        <div className="container mx-auto px-4 py-8">
-          <div className="mb-6">
+        <div className="container mx-auto px-4 py-4 sm:py-8">
+          <div className="mb-3 sm:mb-6">
             <AffiliateDisclosureBanner />
           </div>
 
-          {/* Filter controls */}
-          <div className="flex flex-wrap items-center gap-3 mb-6">
+          {/* Filter controls. On a phone, Filters, Near and Sort share one row. */}
+          <div className="flex items-center gap-2 sm:gap-3 mb-4 sm:mb-6">
             <Sheet open={filtersOpen} onOpenChange={setFiltersOpen}>
               <SheetTrigger asChild>
-                <Button variant="outline" className="lg:hidden min-h-11">
-                  <SlidersHorizontal className="h-4 w-4 mr-2" aria-hidden="true" />
-                  Filters
+                <Button
+                  variant="outline"
+                  className="lg:hidden min-h-11 min-w-11 shrink-0 px-3"
+                  aria-label={activeFilterCount > 0 ? `Filters, ${activeFilterCount} active` : "Filters"}
+                >
+                  <SlidersHorizontal className="h-4 w-4 sm:mr-2" aria-hidden="true" />
+                  <span className="hidden sm:inline">Filters</span>
                   {activeFilterCount > 0 && (
-                    <Badge className="ml-2 h-5 w-5 p-0 flex items-center justify-center text-xs">
+                    <Badge className="ml-1 sm:ml-2 h-5 w-5 p-0 flex items-center justify-center text-xs" aria-hidden="true">
                       {activeFilterCount}
                     </Badge>
                   )}
@@ -548,8 +634,8 @@ export default function Hotels() {
             </Sheet>
 
             {/* Area quick filters */}
-            <div className="hidden md:flex items-center gap-2 flex-wrap">
-              {AREAS.slice(0, 5).map((area) => {
+            <div className="hidden xl:flex items-center gap-2 flex-wrap">
+              {quickAreas.map((area) => {
                 const pressed = selectedAreas.includes(area);
                 return (
                   <Button
@@ -568,17 +654,17 @@ export default function Hotels() {
               })}
             </div>
 
-            <div className="ml-auto flex flex-wrap items-center gap-3">
+            <div className="ml-auto flex min-w-0 flex-1 items-center justify-end gap-2 sm:gap-3">
               {/* Near (WP2 item 7) */}
-              <div className="flex items-center gap-2">
-                <Label htmlFor="stay-near" className="text-sm text-muted-foreground">
+              <div className="flex min-w-0 flex-1 items-center gap-2 sm:flex-none">
+                <Label htmlFor="stay-near" className="sr-only sm:not-sr-only text-sm text-muted-foreground">
                   Near
                 </Label>
                 <Select
                   value={nearPlace ? nearPlace.slug : NEAR_ANY}
                   onValueChange={(v) => setParam("near", v === NEAR_ANY ? null : v)}
                 >
-                  <SelectTrigger id="stay-near" className="w-[200px] min-h-11">
+                  <SelectTrigger id="stay-near" className="w-full min-w-0 sm:w-[200px] min-h-11">
                     <SelectValue placeholder="Anywhere" />
                   </SelectTrigger>
                   <SelectContent>
@@ -594,15 +680,15 @@ export default function Hotels() {
 
               {/* Sort. Distance decides the order while Near is set. */}
               {!nearPlace && (
-                <div className="flex items-center gap-2">
-                  <Label htmlFor="stay-sort" className="text-sm text-muted-foreground">
+                <div className="flex min-w-0 flex-1 items-center gap-2 sm:flex-none">
+                  <Label htmlFor="stay-sort" className="sr-only sm:not-sr-only text-sm text-muted-foreground">
                     Sort
                   </Label>
                   <Select
                     value={sortBy}
                     onValueChange={(v) => setParam("sort", v, { def: DEFAULT_SORT })}
                   >
-                    <SelectTrigger id="stay-sort" className="w-[180px] min-h-11">
+                    <SelectTrigger id="stay-sort" className="w-full min-w-0 sm:w-[210px] min-h-11">
                       <SelectValue />
                     </SelectTrigger>
                     <SelectContent>
@@ -650,22 +736,45 @@ export default function Hotels() {
             </aside>
 
             <div className="flex-1 min-w-0">
-              <p className="text-sm text-muted-foreground mb-4" aria-live="polite">
-                {resultLine}
-                {nearPlace && !isLoading && ` nearest ${nearPlace.name} first`}
-              </p>
+              {nearUnknown && (
+                <div className="mb-4 flex flex-wrap items-center gap-3 text-sm" role="status">
+                  <span>We don&apos;t have a location for &apos;{nearSlug}&apos; yet.</span>
+                  <Button
+                    type="button"
+                    variant="outline"
+                    size="sm"
+                    className="min-h-11"
+                    onClick={() => setParam("near", null)}
+                  >
+                    Clear
+                  </Button>
+                </div>
+              )}
 
-              {isLoading && (
+              <div className="mb-4 flex flex-wrap items-baseline justify-between gap-x-4">
+                <p className="text-sm text-muted-foreground" aria-live="polite">
+                  {resultLine}
+                </p>
+                {/* Pass-2 WP2 item 7: dates first, then hotels near what's on. */}
+                <Link
+                  to="/trip-planner"
+                  className="inline-flex min-h-11 items-center text-sm font-medium text-primary underline-offset-4 hover:underline"
+                >
+                  Pick your dates
+                </Link>
+              </div>
+
+              {(isLoading || nearPending) && (
                 <div className="grid grid-cols-1 md:grid-cols-2 xl:grid-cols-3 gap-6">
                   <HotelGridSkeleton count={6} />
                 </div>
               )}
 
-              {!isLoading && hotelsError && (
+              {!isLoading && !nearPending && hotelsError && (
                 <ErrorState error={hotelsError} onRetry={() => void refetch()} />
               )}
 
-              {!isLoading && !hotelsError && showFeaturedStrip && (
+              {!isLoading && !nearPending && !hotelsError && showFeaturedStrip && (
                 <section className="mb-8" aria-labelledby="stay-featured">
                   <h2 id="stay-featured" className="text-xl font-semibold mb-4">Featured hotels</h2>
                   <div className="grid grid-cols-1 md:grid-cols-2 xl:grid-cols-3 gap-6">
@@ -679,7 +788,7 @@ export default function Hotels() {
               {/* Three answers, not two (WP2 item 1). The old else branch said
                   "No hotels available yet" under a full grid, and crawlers
                   indexed it. */}
-              {!isLoading && !hotelsError && (
+              {!isLoading && !nearPending && !hotelsError && (
                 hotels.length > 0 ? (
                   <section aria-labelledby={showFeaturedStrip ? "stay-all" : undefined}>
                     {showFeaturedStrip && (
@@ -716,9 +825,9 @@ export default function Hotels() {
                           </>
                         )}
                     </div>
-                    {nearPlace && nearRows?.some((r) => r.miles === null) && (
+                    {nearPlace && locatedCount > 0 && unlocatedCount > 0 && (
                       <p className="mt-4 text-xs text-muted-foreground">
-                        Hotels without a stored location are listed last, with no distance.
+                        Hotels without a stored location are listed last, A-Z, with no distance.
                       </p>
                     )}
                     {hasMore && (
@@ -752,8 +861,8 @@ export default function Hotels() {
                 <h2 className="text-2xl font-bold mb-4">Hotels in Des Moines, Iowa</h2>
                 <p className="text-muted-foreground">
                   Des Moines offers a range of accommodations from luxury downtown hotels to
-                  comfortable suburban stays. Whether you're visiting for an event at Wells Fargo
-                  Arena, attending the Iowa State Fair, or exploring the East Village, you'll find
+                  comfortable suburban stays. Whether you're visiting for an event at{" "}
+                  {currentVenueName("Wells Fargo Arena")}, attending the Iowa State Fair, or exploring the East Village, you'll find
                   the perfect place to stay. Many hotels are conveniently located near major venues
                   and attractions, with easy access to I-80 and I-35 corridors.
                 </p>

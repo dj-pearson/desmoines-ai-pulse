@@ -109,7 +109,94 @@ export default defineConfig({
   // paging and AI disclosure; Best Of voting as one upsert; What's New chips
   // and future rows; and the weekend page's per-day groups. getting-around
   // was a lane orphan before this and leaves the baseline with it.
-  testMatch: /(search-filters|url-filter-state|sticky-filter-chips|route-smoke|cookie-consent|backend-down|touch-targets|page-headings|search-request-loop|request-budget|turnstile-inert|subscription-checkout|advertise-success-receipt|submission-live-link|campaign-self-service|home-search|home-request-budget|home-rails-cls|home-tonight|home-dashboard|home-quick-view|shell-mobile|events-hub-dates|events-hub-list|events-near-me|event-detail|restaurants-hub|restaurants-open-now|restaurant-detail|things-to-do-hub|discover-map|attractions-hub|playgrounds-hub|music-sports-hubs|outdoors-hub|deals|stay|trip-planner-window|visitors-guide|getting-around|articles|best-of-voting|whats-new|events-weekend-days)\.spec\.ts/,
+  //
+  // search-results, search-watch and search-advanced-redirect joined with the
+  // Search plan (docs/page-plans/search.md WP6), on fixtureBackend plus
+  // per-spec routes for nlp-search: /search's grouped results, hrefs and
+  // chips with no second model call on Back, the events-only watch button,
+  // and /search/advanced's Stage A (no crash on foreign saved rows, only the
+  // controls that filter; the redirect into /search waits on D2).
+  //
+  // auth-funnel, auth-return and the account-* specs joined with the Account
+  // plan (docs/page-plans/account.md WP6), on fixtureBackend plus per-spec
+  // routes for /auth/v1: sign-in, sign-up and the MFA step; the return path
+  // through sign-up, confirmation and OAuth; the signed-in /dashboard and
+  // /my-events with their error states and request budget; the submission
+  // timeline; and the settings security checkup and email streams.
+  //
+  // pricing-page, subscription-success, subscription-portal and paywall joined
+  // with the Pricing & Premium plan (docs/page-plans/pricing.md WP6), on
+  // fixtureBackend plus per-spec routes for subscription_plans,
+  // user_subscriptions and the checkout and manage-subscription functions:
+  // /pricing's first-screen price, true benefit lines and checkout errors that
+  // reach the person; the success page's wait for the webhook; the portal's
+  // per-platform rows and paused plan change; and the paywall dialog.
+  //
+  // advertise-builder, campaign-detail-pay, campaign-analytics-counts,
+  // business-hub and submit-event-page joined with the Business plan
+  // (docs/page-plans/business.md WP5), on fixtureBackend plus per-spec routes:
+  // /advertise showing the server's total for the chosen dates and one
+  // campaign per double click; Pay on a saved campaign and the list/detail
+  // error states; analytics totals from the exact count; the /business
+  // workspace and /business-partnership inquiry; and /submit-event's one h1.
+  //
+  // home-rails-honesty, home-truth and shell-pass2 joined with the Home second
+  // pass (docs/page-plans/home-pass2.md WP6), on fixtureBackend plus per-spec
+  // routes: the anonymous rail reading events without get_trending_events,
+  // sponsored rows labelled and no admin-only reads; the one JSON-LD graph,
+  // the dated snapshot matching /events/this-weekend and the area chips; and
+  // the shell (a visible H1 on light pages, the phone consent banner, bottom
+  // nav padding).
+  //
+  // events-hub-clock, events-card-honesty, events-landings,
+  // events-request-budget and weather-aware-events joined with the Events
+  // second pass (docs/page-plans/events-pass2.md WP6), on fixtureBackend plus
+  // per-spec routes: the hub's Tonight strip and day groups at a pinned
+  // Central clock, card times, prices and badges that say only what the row
+  // says, the date, audience and month landings, a first-view request ceiling
+  // for /events, /events/today and one detail page, and /events/today's
+  // weather order. weather-aware-events was a lane orphan and leaves the
+  // baseline with it. events-request-budget would already match the
+  // unanchored `request-budget` below; it is named anyway so removing that
+  // entry cannot drop it.
+  //
+  // restaurants-hub-pass2, restaurants-new, restaurant-detail-pass2,
+  // restaurants-open-now-pass2, restaurants-dietary and brewery-trail joined
+  // with the Eat & Drink second pass (docs/page-plans/eat-drink-pass2.md WP6),
+  // on fixtureBackend plus per-spec routes. restaurant-reservations was a lane
+  // orphan (WEB-FEAT-024's reservation CTA on the detail page) and leaves the
+  // baseline with them. The unanchored `restaurants-hub`, `restaurants-open-now`
+  // and `restaurant-detail` entries above do not match the -pass2 files, because
+  // each has to sit directly before `.spec.ts`.
+  //
+  // explore-section-links, discover-map-time, attraction-detail,
+  // playground-detail and team-venue-trail-detail joined with the Explore
+  // second pass (docs/page-plans/explore-pass2.md WP6 item 9), on
+  // fixtureBackend plus per-spec routes: the Explore row on every Explore
+  // page, the map's time chips at a pinned Central clock, and the attraction,
+  // playground, team, venue and trail detail pages. The unanchored
+  // `discover-map` entry above does not match discover-map-time.spec.ts, for
+  // the same reason as the -pass2 files.
+  //
+  // trip-planner-pass2, stay-pass2, group-travel, articles-pass2 and
+  // best-of-pass2 joined with the Plan & Stay second pass
+  // (docs/page-plans/plan-stay-pass2.md WP6 item 1), on fixtureBackend plus
+  // per-spec routes: the planner's multi-day rows, cut-off days, past-window
+  // fallback and free trip calendar; /stay's honest "nearest" line, booking
+  // host labels and events near a hotel; the group travel request reaching
+  // contact_submissions; the article pages' counts and canonicals; and Best Of
+  // with no ranking below the vote floor. The unanchored `stay`, `articles`
+  // and `trip-planner-window` entries above do not match the -pass2 files.
+  testMatch: /(search-filters|url-filter-state|sticky-filter-chips|route-smoke|cookie-consent|backend-down|touch-targets|page-headings|search-request-loop|request-budget|turnstile-inert|subscription-checkout|advertise-success-receipt|submission-live-link|campaign-self-service|home-search|home-request-budget|home-rails-cls|home-tonight|home-dashboard|home-quick-view|shell-mobile|events-hub-dates|events-hub-list|events-near-me|event-detail|restaurants-hub|restaurants-open-now|restaurant-detail|things-to-do-hub|discover-map|attractions-hub|playgrounds-hub|music-sports-hubs|outdoors-hub|deals|stay|trip-planner-window|visitors-guide|getting-around|articles|best-of-voting|whats-new|events-weekend-days|search-results|search-watch|search-advanced-redirect|auth-funnel|auth-return|account-home|account-request-budget|account-submissions|account-settings|pricing-page|subscription-success|subscription-portal|paywall|advertise-builder|campaign-detail-pay|campaign-analytics-counts|business-hub|submit-event-page|home-rails-honesty|home-truth|shell-pass2|events-hub-clock|events-card-honesty|events-landings|events-request-budget|weather-aware-events|restaurants-hub-pass2|restaurants-new|restaurant-detail-pass2|restaurants-open-now-pass2|restaurants-dietary|brewery-trail|restaurant-reservations|explore-section-links|discover-map-time|attraction-detail|playground-detail|team-venue-trail-detail|trip-planner-pass2|stay-pass2|group-travel|articles-pass2|best-of-pass2)\.spec\.ts/,
+  // One block is held out, by title, not the file. weather-aware-events.spec.ts
+  // still asserts the homepage's standalone WeatherNotice ("... in Des Moines
+  // right now.", "indoor picks for today"), which the Home plan replaced with
+  // the Tonight rail's RailWeatherLine (2da3ca0); src/ no longer renders either
+  // string, so the first test fails and the second passes vacuously. The
+  // /events/today half of the file is live and is what joined this lane.
+  // Whoever owns that spec: delete the block or point it at RailWeatherLine,
+  // then remove this line.
+  grepInvert: /WEB-FEAT-022 homepage conditions notice/,
   fullyParallel: true,
   forbidOnly: !!process.env.CI,
   retries: process.env.CI ? 2 : 0,

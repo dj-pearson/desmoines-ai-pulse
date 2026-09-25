@@ -1,5 +1,5 @@
 import { useState, useCallback } from 'react';
-import { useMutation, useQueryClient } from '@tanstack/react-query';
+import { useMutation } from '@tanstack/react-query';
 import { supabase } from '@/integrations/supabase/client';
 import { Event, Restaurant, Attraction } from '@/lib/types';
 import { createLogger } from '@/lib/logger';
@@ -62,35 +62,45 @@ export interface NLPSearchResponse {
 }
 
 /**
- * Example queries for user guidance
+ * Example queries for the hero box and the bare /search page (home-pass2 WP1
+ * item 6).
+ *
+ * Each one uses only facets nlp-search turns into SQL (when, free, area,
+ * cuisine, category, kid-friendly, content type; supabase/functions/nlp-search/
+ * search.ts). The old list offered "under $50", "near me", "dog-friendly",
+ * "outdoor seating", "romantic" and "tomorrow afternoon", none of which the
+ * planner applies, so an example promised a filter and returned the unfiltered
+ * list. src/hooks/__tests__/nlpSearchExamples.test.ts fails on those phrases.
  */
 export const NLP_SEARCH_EXAMPLES = [
-  "Family dinner under $50 near downtown Saturday",
   "Free things to do this weekend with kids",
-  "Best brunch spots with outdoor seating",
-  "Live music events tonight",
-  "Romantic dinner date in East Village",
-  "Dog-friendly restaurants",
-  "Things to do tomorrow afternoon",
-  "Italian food near me",
+  "Tacos in East Village",
   "Kid-friendly attractions",
-  "Events this week under $20",
+  "Comedy this weekend",
+  "Concerts tonight",
+  "Italian restaurants in West Des Moines",
+  "Art events this week",
+  "Free attractions",
+  "Things to do tomorrow",
+  "Sports events this weekend",
 ];
 
 type Daypart = 'morning' | 'afternoon' | 'evening' | 'late';
 
 /** When each example is worth offering first. Untagged examples keep their place after the tagged ones. */
 const EXAMPLE_DAYPARTS: Record<string, Daypart[]> = {
-  "Best brunch spots with outdoor seating": ['morning'],
   "Free things to do this weekend with kids": ['morning', 'afternoon'],
   "Kid-friendly attractions": ['morning', 'afternoon'],
-  "Dog-friendly restaurants": ['afternoon'],
-  "Family dinner under $50 near downtown Saturday": ['afternoon', 'evening'],
-  "Italian food near me": ['afternoon', 'evening'],
-  "Live music events tonight": ['evening', 'late'],
-  "Romantic dinner date in East Village": ['evening'],
-  "Things to do tomorrow afternoon": ['late'],
+  "Free attractions": ['morning'],
+  "Tacos in East Village": ['afternoon', 'evening'],
+  "Italian restaurants in West Des Moines": ['afternoon', 'evening'],
+  "Concerts tonight": ['evening'],
+  "Comedy this weekend": ['evening', 'late'],
+  "Things to do tomorrow": ['late'],
 };
+
+/** Exported for the examples test: every tagged example must be in the list. */
+export const NLP_EXAMPLE_DAYPARTS: Readonly<Record<string, readonly Daypart[]>> = EXAMPLE_DAYPARTS;
 
 export function daypartForHour(hour: number): Daypart {
   if (hour >= 5 && hour < 11) return 'morning';
@@ -100,8 +110,8 @@ export function daypartForHour(hour: number): Daypart {
 }
 
 /**
- * Example chips ordered for the hour (WP1 item 7). "Best brunch spots" at 9pm
- * and "Live music tonight" at 8am both read as a page that is not paying
+ * Example chips ordered for the hour (WP1 item 7). A kids' outing at 10pm and
+ * "Concerts tonight" at 8am both read as a page that is not paying
  * attention. Pass the CENTRAL hour: the examples describe Des Moines time, not
  * the visitor's clock. Stable: ties keep the list's own order.
  */
@@ -166,14 +176,13 @@ export function loosenQuery(query: string): string | null {
  * const { search, results, parsedIntent, isSearching, error } = useNLPSearch();
  *
  * // Perform a search
- * await search("Family dinner under $50 near downtown Saturday");
+ * await search("Free things to do this weekend with kids");
  *
  * // Access results
  * console.log(results.events, results.restaurants, results.attractions);
  * console.log(parsedIntent.dateFilter); // "this_weekend"
  */
 export function useNLPSearch() {
-  const queryClient = useQueryClient();
   const [parsedIntent, setParsedIntent] = useState<ParsedSearchIntent | null>(null);
   const [results, setResults] = useState<NLPSearchResults>({
     events: [],
@@ -205,9 +214,6 @@ export function useNLPSearch() {
       setResults(data.results);
       setLastQuery(data.query);
       setResponseTime(data.metadata.responseTimeMs);
-
-      // Invalidate related queries to reflect new search
-      queryClient.invalidateQueries({ queryKey: ['search-suggestions'] });
     },
     onError: (error) => {
       log.warn('search', 'nlp-search failed', { error: String(error) });
@@ -246,8 +252,9 @@ export function useNLPSearch() {
    * runs `search(query)` from an effect keyed on it. That is a loop: search ->
    * state change -> re-render -> new identity -> effect re-runs -> search.
    * MEASURED on /search?q=pizza: 82 calls to the nlp-search edge function in
-   * 16 seconds, each one an AI request, against a function rate-limited to 100
-   * per 15 minutes. mutateAsync is referentially stable, which breaks it.
+   * 16 seconds, each one an AI request, against a function that allows 30 per
+   * minute (nlp-search/index.ts). mutateAsync is referentially stable, which
+   * breaks it.
    */
   // Referentially stable across renders, unlike `searchMutation` itself.
   const { mutateAsync } = searchMutation;

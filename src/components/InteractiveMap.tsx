@@ -2,6 +2,10 @@ import { useMemo, useState, useEffect, useRef, type ReactNode } from 'react';
 import { MapContainer, TileLayer, Marker, Popup, Circle, useMap } from 'react-leaflet';
 import 'leaflet/dist/leaflet.css';
 import L from 'leaflet';
+// Marker clustering (eat-drink pass 2 WP1 item 12). Imported here, and this
+// file is only ever reached through a lazy() map import, so the library and
+// its CSS travel in the map chunk and never in the entry.
+import MarkerClusterGroup from 'react-leaflet-cluster';
 import { Link } from 'react-router-dom';
 import { Button } from '@/components/ui/button';
 import { Badge } from '@/components/ui/badge';
@@ -41,6 +45,21 @@ function getColorIcon(color: string): L.DivIcon {
     iconCache.set(safe, icon);
   }
   return icon;
+}
+
+/** Digits only, so nothing but a count reaches the cluster's html string. */
+function clusterIcon(count: number, noun: string): L.DivIcon {
+  const n = Math.max(0, Math.floor(count));
+  const size = n < 10 ? 34 : n < 100 ? 40 : 46;
+  // The visible number is aria-hidden; the sr-only text is the name the
+  // cluster's keyboard button (role="button", set by Leaflet) is read by.
+  const safeNoun = noun.replace(/[^a-z ]/gi, '');
+  return L.divIcon({
+    className: 'map-cluster-marker',
+    html: `<span class="sr-only">${n} ${safeNoun}, zoom in</span><span aria-hidden="true" style="display:flex;align-items:center;justify-content:center;width:${size}px;height:${size}px;border-radius:50%;background-color:#1e293b;color:#fff;font:600 13px/1 system-ui,sans-serif;border:3px solid #fff;box-shadow:0 2px 4px rgba(0,0,0,0.3);">${n}</span>`,
+    iconSize: [size, size],
+    iconAnchor: [size / 2, size / 2],
+  });
 }
 
 const userLocationIcon = L.divIcon({
@@ -90,8 +109,22 @@ interface InteractiveMapProps {
   zoom?: number;
   className?: string;
   height?: string;
-  /** Not implemented: clustering needs a dependency this map does not carry yet. */
+  /**
+   * Group nearby pins into one numbered marker that zooms in on click
+   * (eat-drink pass 2 WP1 item 12). Each cluster is named "12 <clusterNoun>,
+   * zoom in" for keyboard and screen-reader users.
+   */
   showClustering?: boolean;
+  /** Plural noun for a cluster's name. Default "locations". */
+  clusterNoun?: string;
+  /** Words after a popup or list rating, e.g. "Google rating". Default: "out of 5" for screen readers only. */
+  ratingLabel?: string;
+  /**
+   * Controls the list alternative from outside, e.g. a "see the unmapped
+   * ones" button above the map. Uncontrolled when left out.
+   */
+  listOpen?: boolean;
+  onListOpenChange?: (open: boolean) => void;
   showUserLocation?: boolean;
   userLocation?: { latitude: number; longitude: number };
   showRadius?: boolean;
@@ -227,10 +260,20 @@ export function InteractiveMap({
   unmappedLocations,
   focusUserLocation = false,
   toolbar,
+  showClustering = false,
+  clusterNoun = 'locations',
+  ratingLabel,
+  listOpen,
+  onListOpenChange,
 }: InteractiveMapProps) {
   const mapRef = useRef<L.Map | null>(null);
   const [isFullscreen, setIsFullscreen] = useState(false);
-  const [showListView, setShowListView] = useState(false);
+  const [listOpenState, setListOpenState] = useState(false);
+  const showListView = listOpen ?? listOpenState;
+  const setShowListView = (open: boolean) => {
+    if (listOpen === undefined) setListOpenState(open);
+    onListOpenChange?.(open);
+  };
 
   // Filter out locations without coordinates
   const validLocations = useMemo(
@@ -346,7 +389,11 @@ export function InteractiveMap({
                   <div className="flex items-center gap-1 text-xs">
                     <Star className="h-3 w-3 fill-amber-400 text-amber-400" aria-hidden="true" />
                     <span>{location.rating.toFixed(1)}</span>
-                    <span className="sr-only">out of 5</span>
+                    {ratingLabel ? (
+                      <span className="text-muted-foreground">{ratingLabel}</span>
+                    ) : (
+                      <span className="sr-only">out of 5</span>
+                    )}
                   </div>
                 )}
                 {location.price && (
@@ -481,7 +528,18 @@ export function InteractiveMap({
           </>
         )}
 
-        {renderMarkers()}
+        {showClustering ? (
+          <MarkerClusterGroup
+            chunkedLoading
+            showCoverageOnHover={false}
+            maxClusterRadius={50}
+            iconCreateFunction={(cluster: L.MarkerCluster) => clusterIcon(cluster.getChildCount(), clusterNoun)}
+          >
+            {renderMarkers()}
+          </MarkerClusterGroup>
+        ) : (
+          renderMarkers()
+        )}
       </MapContainer>
 
       {/* Custom controls overlay */}
@@ -556,6 +614,7 @@ export function InteractiveMap({
                               <span className="flex items-center gap-0.5">
                                 <Star className="h-3 w-3 fill-amber-400 text-amber-400" aria-hidden="true" />
                                 {location.rating.toFixed(1)}
+                                {ratingLabel && <span className="ml-0.5">{ratingLabel}</span>}
                               </span>
                             )}
                             {location.distance_miles !== undefined && (
@@ -573,7 +632,9 @@ export function InteractiveMap({
             {hasUnmapped && (
               <>
                 <div className="bg-muted px-4 py-2 border-y">
-                  <h3 className="text-sm font-semibold">Location not mapped ({unmappedLocations.length})</h3>
+                  <h3 id="map-unmapped-heading" tabIndex={-1} className="text-sm font-semibold scroll-mt-40 focus:outline-none">
+                    Location not mapped ({unmappedLocations.length})
+                  </h3>
                 </div>
                 <ul className="divide-y max-h-[300px] overflow-y-auto">
                   {unmappedLocations.map((location) => (

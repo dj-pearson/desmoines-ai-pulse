@@ -16,9 +16,15 @@ import { listAdminUserIds } from "../_shared/apiKeyAuth.ts";
 import { sendNurtureEmail } from "../_shared/sendNurtureEmail.ts";
 import { sendCampaignEmail } from "../_shared/campaignNotificationEmail.ts";
 import { buildTrialNotice, planAmount } from "../_shared/trialNotice.ts";
+import { getSiteUrl } from "../_shared/siteUrl.ts";
 import {
+  isSecondLiveSubscription,
+  resolvePlanForSubscription,
+  statusAfterInvoicePaid,
+  subscriptionDeletedPatch,
   subscriptionUpdatePatch,
   webSubscriptionRow,
+  type PlanPriceRow,
   type StripeSubscriptionLike,
 } from "../_shared/stripeSubscriptionRow.ts";
 
@@ -167,7 +173,7 @@ serve(async (req) => {
 
       case "invoice.payment_succeeded": {
         const invoice = event.data.object as Stripe.Invoice;
-        await handleInvoicePaymentSucceeded(supabase, invoice);
+        await handleInvoicePaymentSucceeded(supabase, stripe, invoice);
         break;
       }
 
@@ -446,7 +452,7 @@ async function handleCampaignPayment(
           campaignName: campaign.name || "Campaign",
           campaignId,
           notificationType: "payment_received",
-          siteUrl: Deno.env.get("VITE_SITE_URL") || "https://desmoinesinsider.com",
+          siteUrl: getSiteUrl(),
         },
         resendApiKey: Deno.env.get("RESEND_API_KEY") ?? undefined,
         sendgridApiKey: Deno.env.get("SENDGRID_API_KEY") ?? undefined,
@@ -515,7 +521,7 @@ async function handleSubscriptionPayment(
   // idempotency id is only recorded after success, so the retry is safe.
   const { data: existingSubscription, error: existingSubscriptionError } = await supabase
     .from("user_subscriptions")
-    .select("id")
+    .select("id, status, stripe_subscription_id, platform")
     .eq("user_id", userId)
     .eq("platform", "web")
     .maybeSingle();
@@ -523,6 +529,42 @@ async function handleSubscriptionPayment(
   if (existingSubscriptionError) {
     console.error("Failed to look up existing subscription:", existingSubscriptionError);
     throw existingSubscriptionError;
+  }
+
+  // WP5 item 6: a SECOND live subscription must not overwrite the first. The
+  // web row is one per user, so the overwrite hid the old subscription from
+  // every screen while Stripe kept billing it. The old row stays; the new one
+  // is recorded for an admin to refund, because refunding is a money decision
+  // and not one a webhook should make on its own.
+  const existingWebRow = existingSubscription as
+    | { id: string; status: string | null; stripe_subscription_id: string | null; platform: string | null }
+    | null;
+  if (isSecondLiveSubscription(existingWebRow, subscriptionId)) {
+    console.error(
+      `DUPLICATE SUBSCRIPTION for user ${userId}: web row holds ` +
+        `${existingWebRow?.stripe_subscription_id} (${existingWebRow?.status}), ` +
+        `checkout ${session.id} created ${subscriptionId}. Row left as is; refund the second by hand.`,
+    );
+    const { error: duplicateLogError } = await supabase.from("subscription_events").insert({
+      user_id: userId,
+      subscription_id: existingWebRow?.id ?? null,
+      event_type: "duplicate_subscription",
+      platform: existingWebRow?.platform ?? null,
+      details: {
+        kept_stripe_subscription_id: existingWebRow?.stripe_subscription_id ?? null,
+        duplicate_stripe_subscription_id: subscriptionId,
+        checkout_session_id: session.id,
+        plan_id: planId,
+        action_needed: "refund_and_cancel_duplicate",
+      },
+    });
+    if (duplicateLogError) {
+      // Throw so Stripe redelivers: this record is the only way an admin
+      // learns a member is paying twice.
+      console.error("Failed to record duplicate subscription:", duplicateLogError);
+      throw duplicateLogError;
+    }
+    return;
   }
 
   // WEB-CI-029. Built by _shared/stripeSubscriptionRow.ts rather than inline, so
@@ -586,13 +628,42 @@ async function handleSubscriptionUpdated(
 ) {
   console.log("Subscription updated:", subscription.id);
 
+  // WP5 item 1: a plan change arrives here and nowhere else. The price on the
+  // subscription is looked up in our own catalogue and plan_id moves only when
+  // exactly one plan owns that price. Every row, active or not: a member on a
+  // plan that has since been hidden from sale is still on it.
+  const { data: catalog, error: catalogError } = await supabase
+    .from("subscription_plans")
+    .select("id, stripe_price_id_monthly, stripe_price_id_yearly");
+
+  if (catalogError) {
+    // Throw so Stripe redelivers. Writing the patch without plan_id would
+    // look like success and leave a paid upgrade on the old tier.
+    console.error("Failed to read subscription_plans for the price lookup:", catalogError);
+    throw catalogError;
+  }
+
+  const stripeLike = subscription as unknown as StripeSubscriptionLike;
+  const planCatalog = (catalog ?? []) as PlanPriceRow[];
+  const resolved = resolvePlanForSubscription(stripeLike, planCatalog);
+  if (resolved.reason !== "matched") {
+    console.error(
+      `PLAN NOT RESOLVED for subscription ${subscription.id}: ` +
+        (resolved.reason === "no_price"
+          ? "the event carries no price."
+          : `price ${resolved.priceId} matches no single subscription_plans row. ` +
+            "plan_id left unchanged; fix stripe_price_id_* on the plan row."),
+    );
+  }
+
   const { error } = await supabase
     .from("user_subscriptions")
     // WEB-CI-029: the patch, not the full row. Keyed on stripe_subscription_id,
-    // so re-sending user_id, plan_id or platform would let a malformed event
-    // rewrite who the subscription belongs to. Also backfills billing_interval
-    // on existing rows as Stripe sends updates (WEB-LEGAL-006).
-    .update(subscriptionUpdatePatch(subscription as unknown as StripeSubscriptionLike))
+    // so re-sending user_id, platform or stripe_customer_id would let a
+    // malformed event rewrite who the subscription belongs to. plan_id comes
+    // only from the price lookup above. Also backfills billing_interval on
+    // existing rows as Stripe sends updates (WEB-LEGAL-006).
+    .update(subscriptionUpdatePatch(stripeLike, planCatalog))
     .eq("stripe_subscription_id", subscription.id);
 
   if (error) {
@@ -610,12 +681,10 @@ async function handleSubscriptionDeleted(
 ) {
   console.log("Subscription deleted:", subscription.id);
 
+  // Stripe's own end time, not the time this delivery ran (WP5 item 5).
   const { error } = await supabase
     .from("user_subscriptions")
-    .update({
-      status: "canceled",
-      canceled_at: new Date().toISOString(),
-    })
+    .update(subscriptionDeletedPatch(subscription as unknown as StripeSubscriptionLike))
     .eq("stripe_subscription_id", subscription.id);
 
   if (error) {
@@ -629,6 +698,7 @@ async function handleSubscriptionDeleted(
  */
 async function handleInvoicePaymentSucceeded(
   supabase: ReturnType<typeof createClient>,
+  stripe: InstanceType<typeof Stripe>,
   invoice: Stripe.Invoice
 ) {
   console.log("Invoice payment succeeded:", invoice.id);
@@ -666,19 +736,42 @@ async function handleInvoicePaymentSucceeded(
       );
     }
 
-    // Update subscription status to active. This is the entitlement write: if it
-    // fails silently the customer has paid and stays locked out, which is the
-    // worst outcome in this file, so it throws.
-    const { error: activateError } = await supabase
-      .from("user_subscriptions")
-      .update({
-        status: "active",
-      })
-      .eq("stripe_subscription_id", invoice.subscription as string);
+    // WP5 item 5: TRIALS STAY TRIALS. This wrote status 'active'
+    // unconditionally, and a trial's first invoice is a $0 subscription_create
+    // invoice that "succeeds" the moment the trial starts - so every web trial
+    // was stored as paid. Now the $0 trial-start invoice writes nothing, and
+    // any other paid invoice writes the subscription's own mapped status.
+    //
+    // MOBILE ORDERING: iOS and Android read only status = 'active', so the old
+    // bug is what makes web trials visible in the apps today. Deploy this only
+    // after binaries that also read 'trialing' are the minimum (pricing plan D3).
+    const needsStatus = !(invoice.billing_reason === "subscription_create" && (invoice.amount_paid ?? 0) === 0);
+    let stripeStatus: string | null = null;
+    if (needsStatus) {
+      // Throws on failure: Stripe redelivers, and guessing 'active' for a
+      // subscription we could not read is how trials became paid rows.
+      const live = await stripe.subscriptions.retrieve(invoice.subscription as string);
+      stripeStatus = live.status;
+    }
 
-    if (activateError) {
-      console.error("Failed to activate subscription after payment:", activateError);
-      throw activateError;
+    const nextStatus = statusAfterInvoicePaid({
+      billingReason: invoice.billing_reason,
+      amountPaid: invoice.amount_paid,
+      subscriptionStatus: stripeStatus,
+    });
+
+    if (nextStatus) {
+      // The entitlement write: if it fails silently the customer has paid and
+      // stays locked out, which is the worst outcome in this file, so it throws.
+      const { error: activateError } = await supabase
+        .from("user_subscriptions")
+        .update({ status: nextStatus })
+        .eq("stripe_subscription_id", invoice.subscription as string);
+
+      if (activateError) {
+        console.error("Failed to write subscription status after payment:", activateError);
+        throw activateError;
+      }
     }
   }
 
@@ -728,7 +821,11 @@ async function handleInvoicePaymentFailed(
     .eq("stripe_subscription_id", invoice.subscription as string);
 
   if (error) {
+    // Throws like every other handler (WP5 item 5). Swallowing it recorded
+    // the event as processed with the row still 'active', so the dunning job
+    // never saw the failure and no "update your card" email went out.
     console.error("Failed to update subscription after failed payment:", error);
+    throw error;
   }
 }
 
@@ -826,8 +923,7 @@ async function handleTrialWillEnd(
     amount,
     interval,
     chargeAt: new Date(subscription.trial_end * 1000).toISOString(),
-    siteUrl: (Deno.env.get("VITE_SITE_URL") || Deno.env.get("SITE_URL") ||
-      "https://desmoinesinsider.com").replace(/\/+$/, ""),
+    siteUrl: getSiteUrl(),
   });
 
   await sendNurtureEmail(supabase, {

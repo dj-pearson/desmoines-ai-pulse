@@ -10,13 +10,13 @@ import {
   votingPhase,
   votingYear,
   formatVotingDate,
-  MIN_VOTES_FOR_RANKING,
   type CategoryLeader,
   type VotingCategory,
 } from '@/hooks/useVoting';
 import { Skeleton } from '@/components/ui/skeleton';
 import { ErrorState } from '@/components/ui/error-state';
 import { Trophy, ChevronRight } from 'lucide-react';
+import { indexRulesCopy, pluralVotes } from '@/lib/votingStatus';
 
 /** The year of the most recent voting round, from the data rather than a literal. */
 function roundYear(categories: VotingCategory[]): string | null {
@@ -38,18 +38,37 @@ function windowLabel(cat: VotingCategory): string {
   return end ? `Closes ${end}` : 'No closing date';
 }
 
-function leaderLabel(cat: VotingCategory, leader: CategoryLeader | undefined): string {
+/**
+ * The second line of an index row.
+ *
+ * voting_winners() skips write-ins (it filters entity_id IS NOT NULL), so its
+ * row is the top LISTED place, not necessarily the leader: a write-in with 10
+ * votes beats a listed place with 3 on the category page. While voting runs
+ * the row says exactly what it knows. A closed round keeps "Top place",
+ * which is how the round's result has always been labelled.
+ */
+function leaderLabel(
+  cat: VotingCategory,
+  leader: CategoryLeader | undefined,
+  countsFailed: boolean,
+): string {
   const total = cat.vote_count || 0;
-  if (total === 0) return 'No votes yet';
-  if (!leader) return 'No listed place leads yet';
-  const name = leader.name ?? 'An unnamed place';
-  const count = `${leader.vote_count} vote${leader.vote_count === 1 ? '' : 's'}`;
+  if (countsFailed) {
+    if (!leader) return 'Vote counts unavailable';
+  } else if (total === 0) {
+    return 'No votes yet';
+  }
+  if (!leader) return 'No listed place has votes yet';
+  const name = leader.name ?? 'Name unavailable';
+  const count = pluralVotes(leader.vote_count);
   if (votingPhase(cat) === 'closed') return `Top place: ${name} (${count})`;
-  return total < MIN_VOTES_FOR_RANKING ? `Early lead: ${name} (${count})` : `Leading: ${name} (${count})`;
+  return `Top listed place: ${name} (${count})`;
 }
 
 export default function BestOf() {
-  const { data: categories, isLoading, isError, error, refetch } = useVotingCategories();
+  const { data, isLoading, isError, error, refetch } = useVotingCategories();
+  const categories = data?.categories;
+  const countsFailed = data?.countsFailed ?? false;
   // Leaders are an enrichment. If voting_winners fails the list still renders,
   // each row reading its vote count without a name.
   const { data: leaders, isError: leadersFailed } = useVotingLeaders();
@@ -59,6 +78,9 @@ export default function BestOf() {
   const ordered = [...(categories ?? [])].sort(
     (a, b) => (b.vote_count || 0) - (a.vote_count || 0) || a.name.localeCompare(b.name),
   );
+  // A rank over a column of zeros, or over counts that failed to load, ranks
+  // nothing: it is alphabetical order with numbers on it.
+  const showRanks = !countsFailed && ordered.some((cat) => (cat.vote_count || 0) > 0);
 
   const canonicalUrl = getCanonicalUrl('/best-of');
 
@@ -96,7 +118,7 @@ export default function BestOf() {
       />
       <div className="min-h-screen bg-background">
         <Header />
-        <div className="container mx-auto px-4 py-8">
+        <div className="container mx-auto px-4 py-8" data-best-of-index>
           {/* Hero */}
           <div className="text-center mb-10">
             <div className="inline-flex items-center gap-2 bg-primary/10 text-primary px-4 py-2 rounded-full mb-4">
@@ -108,7 +130,8 @@ export default function BestOf() {
             </h1>
             <p className="text-lg text-muted-foreground max-w-2xl mx-auto">
               Help crown the best restaurants, venues, and hidden gems in the Des Moines area.
-              One vote per category, and you can change it while voting is open.
+              {' '}
+              {indexRulesCopy()}
             </p>
           </div>
 
@@ -129,42 +152,53 @@ export default function BestOf() {
             </div>
           ) : (
             <div className="max-w-3xl mx-auto">
-              <h2 className="sr-only">Categories by votes cast</h2>
-              {leadersFailed && (
-                <p className="text-sm text-muted-foreground mb-3">
-                  Current leaders couldn't be loaded. Vote counts are still up to date.
+              <h2 className="sr-only">{showRanks ? 'Categories by votes cast' : 'Categories'}</h2>
+              {countsFailed ? (
+                <p className="text-sm text-muted-foreground mb-3" role="status">
+                  Vote counts couldn't be loaded, so categories are listed alphabetically.
                 </p>
+              ) : (
+                leadersFailed && (
+                  <p className="text-sm text-muted-foreground mb-3" role="status">
+                    Current leaders couldn't be loaded. Vote counts are still up to date.
+                  </p>
+                )
               )}
               <ol className="divide-y rounded-lg border bg-card">
-                {ordered.map((cat, index) => (
+                {ordered.map((cat, index) => {
+                  const votes = countsFailed ? 'Vote count unavailable' : pluralVotes(cat.vote_count || 0);
+                  return (
                   <li key={cat.id}>
                     <Link
                       to={`/best-of/${cat.slug}`}
                       className="flex min-h-11 items-center gap-4 p-4 hover:bg-accent transition-colors"
                     >
-                      <span className="w-6 text-right text-sm font-semibold text-muted-foreground tabular-nums">
-                        <span className="sr-only">Rank </span>
-                        {index + 1}
-                      </span>
+                      {showRanks && (
+                        <span className="w-6 text-right text-sm font-semibold text-muted-foreground tabular-nums">
+                          <span className="sr-only">Rank </span>
+                          {index + 1}
+                        </span>
+                      )}
                       <span className="flex-1 min-w-0">
                         <span className="block font-semibold">{cat.name}</span>
                         <span className="block text-sm text-muted-foreground truncate">
-                          {leadersFailed ? `${cat.vote_count || 0} votes` : leaderLabel(cat, leaders?.[cat.id])}
+                          {leadersFailed
+                            ? votes
+                            : leaderLabel(cat, leaders?.[cat.id], countsFailed)}
                         </span>
                         <span className="block sm:hidden text-xs text-muted-foreground">
-                          {cat.vote_count || 0} vote{cat.vote_count === 1 ? '' : 's'} - {windowLabel(cat)}
+                          {votes} - {windowLabel(cat)}
                         </span>
                       </span>
                       <span className="hidden sm:block text-right text-sm text-muted-foreground flex-shrink-0">
-                        <span className="block tabular-nums">
-                          {cat.vote_count || 0} vote{cat.vote_count === 1 ? '' : 's'}
-                        </span>
+                        <span className="block tabular-nums">{votes}</span>
                         <span className="block">{windowLabel(cat)}</span>
                       </span>
                       <ChevronRight className="h-4 w-4 text-muted-foreground flex-shrink-0" aria-hidden="true" />
                     </Link>
                   </li>
-                ))}
+                  );
+                })}
               </ol>
             </div>
           )}

@@ -13,6 +13,9 @@ import {
   restaurantPageTitle,
   restaurantMetaDescription,
   readGeoFaq,
+  currentDescription,
+  buildRestaurantSchema,
+  priceTier,
   RESTAURANT_TITLE_BUDGET,
   RESTAURANT_DESCRIPTION_BUDGET,
 } from '@/lib/restaurantMeta';
@@ -24,6 +27,9 @@ const BONCHON = {
   cuisine: 'Korean',
   price_range: '$$',
   seo_description: 'Bonchon West Des Moines is opening soon with Korean fried chicken.',
+  opening: 'Daily 11am-10pm',
+  menu_url: 'https://bonchon.com/menu',
+  phone: '515-555-0100',
 };
 
 describe('parseIowaAddress', () => {
@@ -92,7 +98,12 @@ describe('restaurantPageTitle', () => {
 
   it('does not repeat a suburb the name already carries', () => {
     expect(
-      restaurantPageTitle({ name: "Bubbie's Pleasant Hill", location: '1 Main St, Pleasant Hill, IA 50327' }),
+      restaurantPageTitle({
+        name: "Bubbie's Pleasant Hill",
+        location: '1 Main St, Pleasant Hill, IA 50327',
+        hasMenu: true,
+        hasHours: true,
+      }),
     ).toBe("Bubbie's Pleasant Hill - Menu, Hours & Reviews");
   });
 
@@ -100,9 +111,20 @@ describe('restaurantPageTitle', () => {
     const t = restaurantPageTitle({
       name: 'Purveyor Restaurant & Wine Market',
       location: '2716 Beaver Ave, Des Moines, IA 50310',
+      hasMenu: true,
+      hasHours: true,
     });
     expect(t).toBe('Purveyor Restaurant & Wine Market Des Moines - Menu & Hours');
     expect(t.length).toBeLessThanOrEqual(RESTAURANT_TITLE_BUDGET);
+  });
+
+  it('says Menu and Hours only when the page has them', () => {
+    const base = { name: 'Atlas Cafe', location: '1 Main St, Des Moines, IA 50309' };
+    expect(restaurantPageTitle(base)).toBe('Atlas Cafe Des Moines - Reviews');
+    expect(restaurantPageTitle({ ...base, opening: 'Daily 7am-3pm' })).toBe('Atlas Cafe Des Moines - Hours & Reviews');
+    expect(restaurantPageTitle({ ...base, menu_url: 'javascript:alert(1)' })).toBe('Atlas Cafe Des Moines - Reviews');
+    // The page's own flags win over the row, e.g. a captured menu with no menu_url.
+    expect(restaurantPageTitle({ ...base, hasMenu: true })).toBe('Atlas Cafe Des Moines - Menu & Reviews');
   });
 
   it('never exceeds the budget unless the bare name does', () => {
@@ -115,9 +137,19 @@ describe('restaurantMetaDescription', () => {
   it('replaces stale pre-opening copy with facts', () => {
     const d = restaurantMetaDescription(BONCHON);
     expect(d).toBe(
-      'Bonchon is a Korean restaurant at 6880 EP True Pkwy Unit 104 in West Des Moines, Iowa. $15-30 a person. Menu, hours, phone, map and directions.',
+      'Bonchon is a Korean restaurant at 6880 EP True Pkwy Unit 104 in West Des Moines, Iowa. $$ on Google. Menu, hours, phone and directions.',
     );
     expect(d.length).toBeLessThanOrEqual(RESTAURANT_DESCRIPTION_BUDGET);
+  });
+
+  it('names only what the page has, and no dollar band', () => {
+    const d = restaurantMetaDescription({
+      name: 'Atlas Cafe',
+      location: '1 Main St, Des Moines, IA 50309',
+      price_range: '$',
+    });
+    expect(d).toBe('Atlas Cafe is a restaurant at 1 Main St in Des Moines, Iowa. $ on Google. Directions.');
+    expect(d).not.toMatch(/\$\d/);
   });
 
   it('keeps a current hand-written description', () => {
@@ -147,5 +179,74 @@ describe('readGeoFaq', () => {
   it('returns [] for anything that is not an array', () => {
     expect(readGeoFaq(null)).toEqual([]);
     expect(readGeoFaq({ question: 'q', answer: 'a' })).toEqual([]);
+  });
+});
+
+describe('currentDescription', () => {
+  it('drops pre-opening copy once the place is open', () => {
+    expect(currentDescription({ description: 'Coming soon!', status: 'open' })).toBeNull();
+    expect(currentDescription({ description: 'Coming soon!', status: null })).toBeNull();
+  });
+  it('keeps it while the place is still upcoming', () => {
+    expect(currentDescription({ description: 'Coming soon!', status: 'opening_soon' })).toBe('Coming soon!');
+  });
+  it('keeps current copy and returns null for none', () => {
+    expect(currentDescription({ description: ' Double-fried chicken. ', status: 'open' })).toBe('Double-fried chicken.');
+    expect(currentDescription({ description: null })).toBeNull();
+  });
+});
+
+describe('priceTier', () => {
+  it('accepts $ to $$$$ only', () => {
+    expect(priceTier('$$')).toBe('$$');
+    expect(priceTier('$$$$$')).toBeNull();
+    expect(priceTier('Moderate')).toBeNull();
+    expect(priceTier(null)).toBeNull();
+  });
+});
+
+describe('buildRestaurantSchema', () => {
+  const row = {
+    name: 'Fixture Supper Club',
+    cuisine: 'American',
+    location: '400 Locust St, Des Moines, IA 50309',
+    phone: '515-555-0100',
+    price_range: '$$',
+    latitude: 41.58,
+    longitude: -93.62,
+  };
+  const spec = [{ '@type': 'OpeningHoursSpecification', dayOfWeek: ['Monday'], opens: '11:00', closes: '22:00' }];
+  const ctx = {
+    url: 'https://example.com/restaurants/fixture',
+    description: 'A place.',
+    locality: 'Des Moines',
+    website: 'https://example.com/',
+    menuUrl: 'https://example.com/menu',
+    hasCapturedMenu: false,
+    openingHoursSpecification: spec,
+    openForBusiness: true,
+  };
+
+  it('publishes facts from the row', () => {
+    const s = buildRestaurantSchema(row, ctx);
+    expect(s.priceRange).toBe('$$');
+    expect(s.hasMenu).toBe('https://example.com/menu');
+    expect(s.openingHoursSpecification).toEqual(spec);
+    expect(s.address.streetAddress).toBe('400 Locust St');
+    expect(s.address.postalCode).toBe('50309');
+  });
+
+  it('leaves hours out for a place that is not open for business', () => {
+    expect(buildRestaurantSchema(row, { ...ctx, openForBusiness: false })).not.toHaveProperty('openingHoursSpecification');
+  });
+
+  it('leaves hasMenu to MenuSchema when a menu is captured', () => {
+    expect(buildRestaurantSchema(row, { ...ctx, hasCapturedMenu: true })).not.toHaveProperty('hasMenu');
+  });
+
+  it('puts only a tier in priceRange, and no geo without coordinates', () => {
+    const s = buildRestaurantSchema({ ...row, price_range: '$10-20', latitude: null, longitude: null }, ctx);
+    expect(s).not.toHaveProperty('priceRange');
+    expect(s).not.toHaveProperty('geo');
   });
 });

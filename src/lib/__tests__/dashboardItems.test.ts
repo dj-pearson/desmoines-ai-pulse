@@ -1,11 +1,11 @@
 import { describe, it, expect, afterEach, vi } from "vitest";
 import {
   attractionHref,
-  centralWeekWindow,
   eventHref,
+  homeOpenings,
+  homeWeekWindows,
   hotelHref,
   isHttpUrl,
-  orderHomeEvents,
   playgroundHref,
   restaurantHref,
 } from "@/lib/dashboardItems";
@@ -90,26 +90,78 @@ describe("the home events lower bound is Central midnight", () => {
   });
 });
 
-describe("orderHomeEvents puts tonight, then the weekend, first", () => {
-  // Thursday 2026-09-24, 20:00 CDT.
-  const NOW = new Date("2026-09-25T01:00:00Z");
-
-  it("computes the Central weekend from a Thursday evening", () => {
-    expect(centralWeekWindow(NOW)).toEqual({ today: "2026-09-24", weekend: ["2026-09-26", "2026-09-27"] });
+describe("homeWeekWindows: the events group starts tomorrow, weekend first (pass-2 WP3 item 5)", () => {
+  it("from a Thursday evening: the weekend is Friday to Sunday and there are no weekdays", () => {
+    // Thursday 2026-09-24, 20:00 CDT.
+    const w = homeWeekWindows(new Date("2026-09-25T01:00:00Z"));
+    expect([w.weekend.startDay, w.weekend.endDay]).toEqual(["2026-09-25", "2026-09-27"]);
+    // Friday 00:00 CDT is 05:00Z; the window never includes today.
+    expect(w.weekend.start).toBe("2026-09-25T05:00:00.000Z");
+    expect(w.weekdays).toBeNull();
+    expect(w.labels.weekend).toBe("This weekend");
   });
 
-  it("treats Sunday as its own weekend", () => {
-    expect(centralWeekWindow(new Date("2026-09-27T17:00:00Z")).weekend).toEqual(["2026-09-27"]);
+  it("from a Monday: weekend Friday to Sunday, weekdays Tuesday to Thursday", () => {
+    const w = homeWeekWindows(new Date("2026-09-21T17:00:00Z")); // Mon noon CDT
+    expect([w.weekend.startDay, w.weekend.endDay]).toEqual(["2026-09-25", "2026-09-27"]);
+    expect([w.weekdays?.startDay, w.weekdays?.endDay]).toEqual(["2026-09-22", "2026-09-24"]);
+    expect(w.labels.weekdays).toBe("Later this week");
   });
 
-  it("orders today, then weekend, then the rest, stable within each band", () => {
+  it("from a Friday: the weekend is what is left of it, from tomorrow", () => {
+    const w = homeWeekWindows(new Date("2026-09-25T17:00:00Z"));
+    expect([w.weekend.startDay, w.weekend.endDay]).toEqual(["2026-09-26", "2026-09-27"]);
+    expect(w.weekdays).toBeNull();
+  });
+
+  it("from a Saturday: Sunday alone", () => {
+    const w = homeWeekWindows(new Date("2026-09-26T17:00:00Z"));
+    expect([w.weekend.startDay, w.weekend.endDay]).toEqual(["2026-09-27", "2026-09-27"]);
+  });
+
+  it("from a Sunday: next weekend, and the week ahead as weekdays", () => {
+    const w = homeWeekWindows(new Date("2026-09-27T17:00:00Z"));
+    expect([w.weekend.startDay, w.weekend.endDay]).toEqual(["2026-10-02", "2026-10-04"]);
+    expect([w.weekdays?.startDay, w.weekdays?.endDay]).toEqual(["2026-09-28", "2026-10-01"]);
+    expect(w.labels).toEqual({ weekend: "Next weekend", weekdays: "This week" });
+  });
+
+  it("an 11pm Saturday UTC instant is still Saturday evening in Central", () => {
+    // 2026-09-27T03:00Z is Sat 22:00 CDT.
+    const w = homeWeekWindows(new Date("2026-09-27T03:00:00Z"));
+    expect(w.weekend.startDay).toBe("2026-09-27");
+  });
+});
+
+describe("homeOpenings never promises a date that has passed (pass-2 WP3 item 7)", () => {
+  const NOW = new Date("2026-09-25T17:00:00Z");
+  const base = { id: "r", name: "Fixture" };
+
+  it("prints Opened for a place that just opened", () => {
+    const out = homeOpenings([{ ...base, status: "newly_opened", openingDate: "2026-09-12" }], NOW);
+    expect(out.map((o) => o.label)).toEqual(["Opened Sep 12"]);
+  });
+
+  it("leaves out an upcoming opening whose date is last year", () => {
     const rows = [
-      { id: "fri", event_start_utc: "2026-09-26T00:00:00Z" }, // Fri 19:00 CDT
-      { id: "sat", event_start_utc: "2026-09-26T18:00:00Z" },
-      { id: "tonight", event_start_utc: "2026-09-25T00:30:00Z" }, // Thu 19:30 CDT
-      { id: "sun", event_start_utc: "2026-09-27T18:00:00Z" },
-      { id: "nodate" },
+      { ...base, id: "stale", status: "opening_soon", openingDate: "2025-03-03" },
+      { ...base, id: "stale2", status: "announced", openingDate: "2026-09-24" },
+      { ...base, id: "next", status: "opening_soon", openingDate: "2026-10-02" },
     ];
-    expect(orderHomeEvents(rows, NOW).map((r) => r.id)).toEqual(["tonight", "sat", "sun", "fri", "nodate"]);
+    const out = homeOpenings(rows, NOW);
+    expect(out.map((o) => o.row.id)).toEqual(["next"]);
+    expect(out[0].label).toBe("Opening Oct 2");
+    for (const { label } of out) expect(label).not.toMatch(/2025/);
+  });
+
+  it("keeps an undated upcoming opening with what is known", () => {
+    const out = homeOpenings(
+      [
+        { ...base, id: "a", status: "opening_soon", openingTimeframe: "Winter 2026" },
+        { ...base, id: "b", status: "announced" },
+      ],
+      NOW,
+    );
+    expect(out.map((o) => o.label)).toEqual(["Opening Winter 2026", "Announced"]);
   });
 });

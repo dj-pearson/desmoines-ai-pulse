@@ -26,6 +26,8 @@ import { BRAND, getCanonicalUrl } from "@/lib/brandConfig";
 import { FREE_PRICE_FILTER } from "@/lib/eventPrice";
 import { formatCount } from "@/lib/pluralize";
 import { EVENTS_UPDATE_ANSWER } from "@/content/eventsCopy";
+import NoIndexMeta from "@/components/schema/NoIndexMeta";
+import { EventsLandingLinks } from "@/components/events/EventsLandingLinks";
 
 const FETCH_LIMIT = 100;
 /** Same render cap as the other landings (WEB-PERF-023); the rest are a link away. */
@@ -62,6 +64,9 @@ export default function FreeEvents() {
   }, [freeEvents]);
 
   const visibleEvents = useMemo(() => freeEvents.slice(0, VISIBLE_EVENTS), [freeEvents]);
+  // At the cap, the breakdown covers the soonest FETCH_LIMIT, not every free
+  // event on the calendar, and says so (WP3 item 11).
+  const capped = freeEvents.length >= FETCH_LIMIT;
 
   // WEB-SEO-002: under 60 characters, current brand.
   const pageTitle = `Free Events in Des Moines | ${BRAND.name}`;
@@ -116,6 +121,8 @@ export default function FreeEvents() {
 
   return (
     <div className="min-h-screen bg-background">
+      {/* A failed first query has not answered the page (WP3 item 12). */}
+      {loadError && freeEvents.length === 0 && <NoIndexMeta />}
       <EnhancedLocalSEO
         pageTitle={pageTitle}
         pageDescription={pageDescription}
@@ -199,7 +206,14 @@ export default function FreeEvents() {
         {categoryCounts.length > 0 && (
           <Card className="mb-8">
             <CardContent className="pt-6">
-              <h2 className="text-xl font-semibold mb-4">Free Events by Category</h2>
+              <h2 className="text-xl font-semibold mb-4">
+                Free Events by Category
+                {capped && (
+                  <span className="block text-sm font-normal text-muted-foreground mt-1">
+                    Of the next {FETCH_LIMIT} free events
+                  </span>
+                )}
+              </h2>
               <div className="grid grid-cols-2 md:grid-cols-3 lg:grid-cols-4 gap-3">
                 {categoryCounts.map(([category, count]) => (
                   <div key={category} className="flex items-center justify-between p-3 bg-muted rounded-lg">
@@ -303,11 +317,13 @@ export default function FreeEvents() {
           </CardContent>
         </Card>
 
+        <EventsLandingLinks current="/events/free" className="mt-8 mb-8" />
+
+        {/* The single FAQPage emitter (EnhancedLocalSEO no longer emits one). */}
         <FAQSection
           faqs={faqData}
           title="Free Events in Des Moines FAQ"
           description="Common questions about free activities and events in the Des Moines metro area"
-          showSchema={false}
         />
 
         <RelatedContent

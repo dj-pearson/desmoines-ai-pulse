@@ -23,33 +23,8 @@ export const imageOptimizationConfig = {
   }
 };
 
-// Critical resource preloading for LCP optimization
-export const criticalResourcesConfig = {
-  preloadLinks: [
-    // Preload critical fonts for Des Moines Insider branding
-    { 
-      href: 'https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&display=swap',
-      rel: 'preload',
-      as: 'style',
-      crossorigin: 'anonymous'
-    },
-    // Preload hero images for main pages
-    {
-      href: '/DMI-Logo-Header.png',
-      rel: 'preload', 
-      as: 'image',
-      media: '(min-width: 768px)'
-    }
-  ],
-  
-  // DNS prefetching for external resources
-  prefetchDomains: [
-    'fonts.googleapis.com',
-    'fonts.gstatic.com',
-    'www.googletagmanager.com',
-    'www.google-analytics.com'
-  ]
-};
+// No criticalResourcesConfig: it preloaded Google-hosted Inter (no CSS uses
+// it) and DMI-Logo-Header.png (the header renders logo2), and nothing read it.
 
 // Code splitting configuration for reduced bundle size
 export const codeSplittingConfig = {
@@ -71,35 +46,8 @@ export const codeSplittingConfig = {
   }
 };
 
-// Service Worker configuration for caching strategy
-export const serviceWorkerConfig = {
-  // Cache static assets for performance
-  staticCache: {
-    name: 'des-moines-insider-static-v1',
-    urls: [
-      '/',
-      '/restaurants',
-      '/events', 
-      '/neighborhoods',
-      '/DMI-Logo-Header.png'
-    ]
-  },
-  
-  // Cache API responses for offline functionality
-  apiCache: {
-    name: 'des-moines-insider-api-v1',
-    strategy: 'network-first', // Fresh content when online
-    maxAge: 5 * 60 * 1000, // 5 minutes
-    maxEntries: 100
-  },
-  
-  // Cache Google Fonts and external resources
-  externalCache: {
-    name: 'des-moines-insider-external-v1',
-    strategy: 'cache-first',
-    maxAge: 30 * 24 * 60 * 60 * 1000, // 30 days
-  }
-};
+// No serviceWorkerConfig: index.html unregisters every service worker on load,
+// so a cache list here described nothing that runs.
 
 // Core Web Vitals monitoring configuration
 export const webVitalsConfig = {
@@ -180,9 +128,7 @@ export const performanceMonitoring = {
 
 export default {
   imageOptimizationConfig,
-  criticalResourcesConfig,
   codeSplittingConfig,
-  serviceWorkerConfig,
   webVitalsConfig,
   mobileFirstConfig,
   performanceMonitoring

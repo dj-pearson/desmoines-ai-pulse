@@ -1,8 +1,14 @@
+import { useCallback, useState } from "react";
 import { useQuery, useQueryClient } from "@tanstack/react-query";
 import { supabase } from "@/integrations/supabase/client";
-import { tierHasFeature } from '@/lib/premiumFeatures';
 import { useAuth } from "./useAuth";
-import { useState } from "react";
+import { tierHasFeature } from '@/lib/premiumFeatures';
+import { handleError } from "@/lib/errorHandler";
+import {
+  IN_PLACE_PLAN_CHANGE_ENABLED,
+  PLAN_CHANGE_PAUSED_CODE,
+  PLAN_CHANGE_PAUSED_MESSAGE,
+} from "@/lib/billingStatus";
 
 export type SubscriptionTier = "free" | "insider" | "vip";
 
@@ -48,6 +54,73 @@ const FREE_LIMITS: SubscriptionLimits = {
   alerts: 0,
   saved_searches: 0,
 };
+
+/**
+ * The query key the per-user subscription rows live under, as
+ * `[USER_SUBSCRIPTIONS_QUERY_KEY, userId]`. Exported so a mutation elsewhere
+ * (cancel, resume) invalidates the key the data actually lives under.
+ */
+export const USER_SUBSCRIPTIONS_QUERY_KEY = "user-subscriptions";
+
+/**
+ * What a checkout attempt came to. On failure, `code` and `message` are the
+ * server's own (create-subscription-checkout's `{ error, code, platform }`
+ * body), so a caller can tell "verify your email" from "you already pay through
+ * the App Store" from "try again". `code` is null when the server sent none.
+ */
+export type CheckoutFailure = {
+  ok: false;
+  code: string | null;
+  message: string;
+  platform?: "ios" | "android";
+};
+export type CheckoutResult = { ok: true; url: string } | CheckoutFailure;
+
+/**
+ * Narrows a CheckoutResult to its failure branch. The app project compiles
+ * with strictNullChecks off, where `if (result.ok) return;` does NOT narrow
+ * what follows; `result.ok === false` or this guard does.
+ */
+export function isCheckoutFailure(result: CheckoutResult): result is CheckoutFailure {
+  return result.ok === false;
+}
+
+// Stable empty defaults, so callbacks keyed on `plans` keep their identity
+// while the query has no data yet.
+const NO_PLANS: SubscriptionPlan[] = [];
+const NO_SUBSCRIPTIONS: UserSubscription[] = [];
+
+const CHECKOUT_FALLBACK_MESSAGE = "We couldn't start checkout. Please try again in a moment.";
+
+interface CheckoutErrorBody {
+  error?: unknown;
+  code?: unknown;
+  platform?: unknown;
+}
+
+/**
+ * Turns a supabase-js invoke error into a CheckoutResult. A FunctionsHttpError
+ * carries the Response in `context`; its body is what the server said, which
+ * the generic "non-2xx status code" message throws away. Same approach as
+ * useTripPlanner's generate-itinerary call.
+ */
+async function checkoutFailureFromInvokeError(error: unknown): Promise<CheckoutResult> {
+  const ctx = (error as { context?: unknown } | null)?.context;
+  if (ctx && typeof (ctx as Response).json === "function") {
+    const body = (await (ctx as Response).json().catch(() => null)) as CheckoutErrorBody | null;
+    if (body && typeof body.error === "string" && body.error) {
+      const platform = body.platform === "ios" || body.platform === "android" ? body.platform : undefined;
+      return {
+        ok: false,
+        code: typeof body.code === "string" ? body.code : null,
+        message: body.error,
+        ...(platform ? { platform } : {}),
+      };
+    }
+  }
+  handleError(error, { component: "useSubscription", action: "checkout" });
+  return { ok: false, code: null, message: CHECKOUT_FALLBACK_MESSAGE };
+}
 
 const TIER_RANK: Record<string, number> = { vip: 2, insider: 1, free: 0 };
 
@@ -116,7 +189,11 @@ export function useSubscription() {
   const [checkoutError, setCheckoutError] = useState<string | null>(null);
 
   // Fetch available subscription plans
-  const { data: plans = [], isLoading: plansLoading } = useQuery({
+  const {
+    data: plans = NO_PLANS,
+    isLoading: plansLoading,
+    error: plansError,
+  } = useQuery({
     queryKey: ["subscription-plans"],
     queryFn: async (): Promise<SubscriptionPlan[]> => {
       // @ts-ignore -- Supabase SDK TS2589: deep type instantiation under strict mode
@@ -139,7 +216,18 @@ export function useSubscription() {
   // (web/Stripe, ios, android). We return ALL active rows (used for the per-
   // platform breakdown in Profile/Pricing) plus a derived `subscription`
   // pointing at the highest tier for back-compat with existing call sites.
-  const { data: subscriptions = [], isLoading: subscriptionLoading } = useQuery({
+  // A failed read throws, so `subscriptionError` is set and the caller can say
+  // "couldn't check your plan" instead of showing a paying member as free. The
+  // derived tier still falls back to free, which is the safe default for gates.
+  const {
+    data: subscriptions = NO_SUBSCRIPTIONS,
+    isLoading: subscriptionLoading,
+    error: subscriptionError,
+    refetch: refetchSubscriptionQuery,
+  } = useQuery({
+    // Spelled out rather than [USER_SUBSCRIPTIONS_QUERY_KEY, ...]: the
+    // logout teardown test reads this literal to prove the key is per-user.
+    // planBenefits.test.ts pins the constant to the same string.
     queryKey: ["user-subscriptions", user?.id],
     queryFn: async (): Promise<UserSubscription[]> => {
       if (!user) return [];
@@ -271,67 +359,104 @@ export function useSubscription() {
     return daysUntilExpiry <= 7 && daysUntilExpiry > 0;
   };
 
-  // Create checkout session for subscription
-  const createCheckoutSession = async (
-    planId: string,
-    billingInterval: "monthly" | "yearly" = "monthly"
-  ): Promise<string | null> => {
-    if (!user) {
-      setCheckoutError("Please log in to subscribe");
-      return null;
-    }
+  const userId = user?.id;
 
-    setCheckoutLoading(true);
-    setCheckoutError(null);
+  // The web row, if any, that a checkout for another tier would change in
+  // place. See IN_PLACE_PLAN_CHANGE_ENABLED for why that is refused today.
+  const activeWebPlanName =
+    subscriptions.find(
+      (s) => s.platform === "web" && (s.status === "active" || s.status === "trialing"),
+    )?.plan?.name ?? null;
 
-    try {
-      const { data, error } = await supabase.functions.invoke(
-        "create-subscription-checkout",
-        {
-          body: { planId, billingInterval },
+  // Create checkout session for subscription. Never throws.
+  const createCheckoutSession = useCallback(
+    async (
+      planId: string,
+      billingInterval: "monthly" | "yearly" = "monthly",
+    ): Promise<CheckoutResult> => {
+      if (!userId) {
+        const message = "Please sign in to subscribe.";
+        setCheckoutError(message);
+        return { ok: false, code: "not_signed_in", message };
+      }
+
+      if (!IN_PLACE_PLAN_CHANGE_ENABLED && activeWebPlanName) {
+        const target = plans.find((p) => p.id === planId || p.name === planId);
+        if (target && target.name !== "free" && target.name !== activeWebPlanName) {
+          setCheckoutError(PLAN_CHANGE_PAUSED_MESSAGE);
+          return { ok: false, code: PLAN_CHANGE_PAUSED_CODE, message: PLAN_CHANGE_PAUSED_MESSAGE };
         }
-      );
-
-      if (error) {
-        throw new Error(error.message || "Failed to create checkout session");
       }
 
-      if (!data?.url) {
-        throw new Error("No checkout URL returned");
+      setCheckoutLoading(true);
+      setCheckoutError(null);
+
+      try {
+        const { data, error } = await supabase.functions.invoke(
+          "create-subscription-checkout",
+          { body: { planId, billingInterval } },
+        );
+
+        let result: CheckoutResult;
+        if (error) {
+          result = await checkoutFailureFromInvokeError(error);
+        } else if (typeof data?.url === "string" && data.url) {
+          result = { ok: true, url: data.url };
+        } else {
+          handleError(new Error("create-subscription-checkout returned no url"), {
+            component: "useSubscription",
+            action: "checkout",
+          });
+          result = { ok: false, code: null, message: CHECKOUT_FALLBACK_MESSAGE };
+        }
+
+        if (result.ok === false) setCheckoutError(result.message);
+        return result;
+      } catch (err) {
+        handleError(err, { component: "useSubscription", action: "checkout" });
+        setCheckoutError(CHECKOUT_FALLBACK_MESSAGE);
+        return { ok: false, code: null, message: CHECKOUT_FALLBACK_MESSAGE };
+      } finally {
+        setCheckoutLoading(false);
       }
+    },
+    [userId, activeWebPlanName, plans],
+  );
 
-      return data.url;
-    } catch (err) {
-      const message = err instanceof Error ? err.message : "Checkout failed";
-      setCheckoutError(message);
-      return null;
-    } finally {
-      setCheckoutLoading(false);
-    }
-  };
-
-  // Redirect to checkout
-  const startCheckout = async (
-    planId: string,
-    billingInterval: "monthly" | "yearly" = "monthly"
-  ): Promise<boolean> => {
-    const url = await createCheckoutSession(planId, billingInterval);
-    if (url) {
-      window.location.href = url;
-      return true;
-    }
-    return false;
-  };
+  // Start checkout and redirect only when the server returned a URL. The
+  // result goes back to the caller either way, so a refusal can be shown.
+  const startCheckout = useCallback(
+    async (
+      planId: string,
+      billingInterval: "monthly" | "yearly" = "monthly",
+    ): Promise<CheckoutResult> => {
+      const result = await createCheckoutSession(planId, billingInterval);
+      if (result.ok) {
+        window.location.href = result.url;
+      }
+      return result;
+    },
+    [createCheckoutSession],
+  );
 
   // Get a specific plan by name
-  const getPlanByName = (name: SubscriptionTier): SubscriptionPlan | undefined => {
-    return plans.find((plan) => plan.name === name);
-  };
+  const getPlanByName = useCallback(
+    (name: SubscriptionTier): SubscriptionPlan | undefined =>
+      plans.find((plan) => plan.name === name),
+    [plans],
+  );
 
-  // Refresh subscription data
-  const refreshSubscription = () => {
-    queryClient.invalidateQueries({ queryKey: ["user-subscriptions", user?.id] });
-  };
+  // Mark the rows stale and refetch them. Stable across renders (it used to be
+  // a new function every render, which fed SubscriptionSuccess's refetch loop).
+  const refreshSubscription = useCallback(() => {
+    queryClient.invalidateQueries({ queryKey: [USER_SUBSCRIPTIONS_QUERY_KEY, userId] });
+  }, [queryClient, userId]);
+
+  // Refetch now and resolve when the rows are back, for a caller that polls.
+  const refetchSubscription = useCallback(
+    () => refetchSubscriptionQuery(),
+    [refetchSubscriptionQuery],
+  );
 
   return {
     // Data
@@ -345,6 +470,11 @@ export function useSubscription() {
     isLoading: plansLoading || subscriptionLoading,
     plansLoading,
     subscriptionLoading,
+
+    // Read errors: set when the query failed, so "free" and "couldn't check"
+    // are distinguishable.
+    subscriptionError,
+    plansError,
 
     // Feature checks
     hasFeature,
@@ -367,10 +497,12 @@ export function useSubscription() {
     createCheckoutSession,
     startCheckout,
     checkoutLoading,
+    // Kept for compatibility; prefer the CheckoutResult startCheckout returns.
     checkoutError,
 
     // Utility functions
     getPlanByName,
     refreshSubscription,
+    refetchSubscription,
   };
 }

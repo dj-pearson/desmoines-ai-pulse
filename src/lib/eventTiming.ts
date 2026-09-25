@@ -15,7 +15,7 @@
  * plus three hours, else (no announced time) the end of its Central day.
  * Everything takes `now` so the rules are tested on a fixed clock.
  */
-import { centralDateOf, centralWindow, hasSpecificTime } from "@/lib/timezone";
+import { centralDateOf, centralWindow, formatInCentralTime, hasSpecificTime } from "@/lib/timezone";
 
 /** Same assumed run time as eventEndIso in eventSchema.ts. */
 export const DEFAULT_EVENT_HOURS = 3;
@@ -29,6 +29,8 @@ export interface EventTimingInput {
   event_start_local?: string | null;
   end_date?: string | null;
   time_tbd?: boolean | null;
+  /** Read by hasSpecificTime for the SeatGeek 03:30 placeholder (pass-2 WP2 item 2). */
+  source_url?: string | null;
 }
 
 export type EventTimingTone = "now" | "today" | "soon" | "later" | "past";
@@ -159,4 +161,107 @@ export function eventTiming(event: EventTimingInput, now: Date = new Date()): Ev
 export function eventCentralDate(event: EventTimingInput): string | null {
   const start = eventStart(event);
   return start ? centralDateOf(start) : null;
+}
+
+// ---------------------------------------------------------------------------
+// Time words (docs/page-plans/events-pass2.md WP2 items 1 and 5). One place
+// decides what a card, the detail page and the map popup print for a start
+// time, so they can't disagree about a row.
+// ---------------------------------------------------------------------------
+
+/** What a row with no published start time says. Never "All day". */
+export const TIME_NOT_LISTED = "Time not listed";
+
+/** "All day" is only for a row whose end_date carries it past its start day. */
+export const ALL_DAY = "All day";
+
+const DATE_ONLY_RE = /^\d{4}-\d{2}-\d{2}$/;
+
+/**
+ * The Central date end_date falls on. A bare "yyyy-MM-dd" is already a
+ * Central date; parsing it as UTC midnight would put it on the day before.
+ */
+function endCentralDate(event: EventTimingInput): string | null {
+  const raw = event.end_date;
+  if (!raw) return null;
+  if (DATE_ONLY_RE.test(raw)) return raw;
+  const d = parse(raw);
+  return d ? centralDateOf(d) : null;
+}
+
+/** The explicit end, when it's a readable instant at or after the start. */
+function explicitEnd(event: EventTimingInput): Date | null {
+  const start = eventStart(event);
+  const raw = event.end_date;
+  if (!start || !raw) return null;
+  const end = DATE_ONLY_RE.test(raw)
+    ? new Date(centralWindow({ kind: "single", date: raw }).end)
+    : parse(raw);
+  if (!end || end.getTime() < start.getTime()) return null;
+  return end;
+}
+
+/** "Sun, Aug 23" for a Central yyyy-MM-dd. Noon keeps it clear of DST edges. */
+function centralDayLabel(day: string): string {
+  return formatInCentralTime(new Date(`${day}T17:00:00Z`), "EEE, MMM d");
+}
+
+/**
+ * The card's time word: "7:30 PM CT" when the source published a start time,
+ * "All day" when it didn't but end_date runs past the start day, and
+ * "Time not listed" otherwise. The 19:31:58 marker, time_tbd and SeatGeek's
+ * 03:30 placeholder all count as not published (hasSpecificTime).
+ */
+export function eventTimeLabel(event: EventTimingInput): string {
+  const start = eventStart(event);
+  if (!start) return TIME_NOT_LISTED;
+  if (eventHasTime(event)) return `${formatInCentralTime(start, "h:mm a")} CT`;
+  const endDay = endCentralDate(event);
+  if (endDay && endDay > centralDateOf(start)) return ALL_DAY;
+  return TIME_NOT_LISTED;
+}
+
+/**
+ * The span a row covers, when it has an explicit end_date worth saying:
+ *   - a run already under way on an earlier day: "Runs through Sun, Aug 23";
+ *   - a multi-day run not started yet: "Aug 13 - Aug 23";
+ *   - a timed single-day row: "7:00 - 10:00 PM CT" or "11:00 AM - 2:00 PM CT".
+ * null when there's no end_date, it's before the start, or the row is over.
+ * Every word is absolute, so the label is still true in prerendered HTML read
+ * a day later; `now` only decides which of the three shapes applies.
+ */
+export function eventRunLabel(event: EventTimingInput, now: Date = new Date()): string | null {
+  const start = eventStart(event);
+  const end = explicitEnd(event);
+  if (!start || !end) return null;
+  if (isEventOver(event, now)) return null;
+
+  const startDay = centralDateOf(start);
+  const endDay = endCentralDate(event) ?? centralDateOf(end);
+  const today = centralDateOf(now);
+
+  if (endDay > startDay) {
+    if (startDay < today) return `Runs through ${centralDayLabel(endDay)}`;
+    const from = formatInCentralTime(new Date(`${startDay}T17:00:00Z`), "MMM d");
+    const to = formatInCentralTime(new Date(`${endDay}T17:00:00Z`), "MMM d");
+    return `${from} - ${to}`;
+  }
+
+  // Same Central day: a time range, only when both ends are real times.
+  if (!eventHasTime(event) || DATE_ONLY_RE.test(event.end_date ?? "")) return null;
+  if (end.getTime() === start.getTime()) return null;
+  const startMeridiem = formatInCentralTime(start, "a");
+  const endMeridiem = formatInCentralTime(end, "a");
+  const from =
+    startMeridiem === endMeridiem
+      ? formatInCentralTime(start, "h:mm")
+      : formatInCentralTime(start, "h:mm a");
+  return `${from} - ${formatInCentralTime(end, "h:mm a")} CT`;
+}
+
+/** Started on an earlier Central day and not over: day 2 of a festival. */
+export function isRunningFromEarlierDay(event: EventTimingInput, now: Date = new Date()): boolean {
+  const start = eventStart(event);
+  if (!start || !explicitEnd(event)) return false;
+  return centralDateOf(start) < centralDateOf(now) && !isEventOver(event, now);
 }

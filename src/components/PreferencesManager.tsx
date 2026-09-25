@@ -1,178 +1,205 @@
-import { useState, useEffect } from "react";
+import { useEffect, useMemo, useState } from "react";
 import { useAuth } from "@/hooks/useAuth";
 import { useProfile } from "@/hooks/useProfile";
 import { supabase } from "@/integrations/supabase/client";
-import {
-  Card,
-  CardContent,
-  CardDescription,
-  CardHeader,
-  CardTitle,
-} from "@/components/ui/card";
+import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
-import { Badge } from "@/components/ui/badge";
 import { Checkbox } from "@/components/ui/checkbox";
 import { Label } from "@/components/ui/label";
-import {
-  Select,
-  SelectContent,
-  SelectItem,
-  SelectTrigger,
-  SelectValue,
-} from "@/components/ui/select";
-import { Separator } from "@/components/ui/separator";
+import { Skeleton } from "@/components/ui/skeleton";
+import { Switch } from "@/components/ui/switch";
 import { useToast } from "@/hooks/use-toast";
-import { Coffee, Music, Gamepad2, Palette, Heart, Camera, User, Calendar, Settings, Save } from "lucide-react";
-import { SpriteIcon } from "@/components/ui/SpriteIcon";
+import { handleError } from "@/lib/errorHandler";
+import { logConsent, type ConsentType } from "@/lib/consentLog";
+import { INTERESTS } from "@/lib/interests";
+import { cn } from "@/lib/utils";
 
-const INTERESTS = [
-  {
-    id: "food",
-    label: "Food & Dining",
-    icon: Coffee,
-    description: "Restaurants, food festivals, culinary events",
-  },
-  {
-    id: "music",
-    label: "Music & Concerts",
-    icon: Music,
-    description: "Live music, concerts, festivals",
-  },
-  {
-    id: "sports",
-    label: "Sports & Recreation",
-    icon: Gamepad2,
-    description: "Games, athletics, recreational activities",
-  },
-  {
-    id: "arts",
-    label: "Arts & Culture",
-    icon: Palette,
-    description: "Museums, galleries, theater, cultural events",
-  },
-  {
-    id: "nightlife",
-    label: "Nightlife & Entertainment",
-    icon: Heart,
-    description: "Bars, clubs, evening entertainment",
-  },
-  {
-    id: "outdoor",
-    label: "Outdoor Activities",
-    icon: Camera,
-    description: "Parks, nature, outdoor adventures",
-  },
-  {
-    id: "family",
-    label: "Family Events",
-    icon: User,
-    description: "Kid-friendly activities, family outings",
-  },
-  {
-    id: "networking",
-    label: "Business & Networking",
-    icon: Calendar,
-    description: "Professional events, meetups",
-  },
-];
+/**
+ * The consent keys this file owns in profiles.communication_preferences.
+ *
+ * sms_notifications is no longer shown or written: no SMS sender exists, so a
+ * switch for it controlled nothing. A stored value is left where it is.
+ */
+export type ConsentKey = "email_notifications" | "event_recommendations";
 
-const LOCATIONS = [
-  "Downtown Des Moines",
-  "West Des Moines",
-  "Ankeny",
-  "Urbandale",
-  "Clive",
-  "Johnston",
-  "Altoona",
-  "Other",
-];
+const CONSENT_TYPE: Record<ConsentKey, ConsentType> = {
+  email_notifications: "marketing_email",
+  event_recommendations: "personalization_ai",
+};
 
-export default function PreferencesManager() {
+/**
+ * ONLY AN EXPLICIT true IS AN OPT-IN (account plan WP5 item 5).
+ *
+ * This read `?? true`, so every account without the key - every Google and
+ * Apple sign-up, which never passes through the sign-up form's unticked boxes -
+ * rendered as opted in, and pressing Save for an unrelated interest wrote that
+ * opt-in to the row. Sign-up leaves both unticked; so does this.
+ */
+export function readOptIn(bag: unknown, key: ConsentKey): boolean {
+  if (!bag || typeof bag !== "object") return false;
+  return (bag as Record<string, unknown>)[key] === true;
+}
+
+/**
+ * Write changed consent keys (and optionally interests) without disturbing the
+ * rest of the shared bag.
+ *
+ * communication_preferences IS A SHARED BAG. useUserPreferences.ts keeps
+ * taste_preferences in it, use-user-preferences.ts keeps ui_preferences, and
+ * the lifecycle classifier reads `marketing`, `email` and `email_notifications`
+ * out of it. A PostgREST update of a JSONB column REPLACES it, so this reads the
+ * current bag and merges. A failed read fails the save: treating it as an empty
+ * bag is exactly the write that loses the other keys (WEB-LEGAL-012).
+ *
+ * Only the keys passed in `consent` are written, and each one gets a
+ * consent_records row, so the history panel shows every flip with its date.
+ */
+export function usePreferenceWriter() {
   const { user } = useAuth();
-  const { profile, updateProfile, isLoading } = useProfile();
-  const { toast } = useToast();
-  const [formData, setFormData] = useState({
-    interests: [] as string[],
-    location: "",
-    emailNotifications: true,
-    smsNotifications: false,
-    eventRecommendations: true,
-  });
-  const [isUpdating, setIsUpdating] = useState(false);
+  const { updateProfile } = useProfile();
 
-  useEffect(() => {
-    if (profile) {
-      setFormData({
-        interests: profile.interests || [],
-        location: profile.location || "",
-        emailNotifications:
-          profile.communication_preferences?.email_notifications ?? true,
-        smsNotifications:
-          profile.communication_preferences?.sms_notifications ?? false,
-        eventRecommendations:
-          profile.communication_preferences?.event_recommendations ?? true,
-      });
-    }
-  }, [profile]);
+  return async (
+    consent: Partial<Record<ConsentKey, boolean>>,
+    extra: { interests?: string[] } = {},
+  ): Promise<void> => {
+    if (!user) throw new Error("User not authenticated");
+    const changedKeys = Object.keys(consent) as ConsentKey[];
 
-  const handleInterestToggle = (interestId: string) => {
-    setFormData((prev) => ({
-      ...prev,
-      interests: prev.interests.includes(interestId)
-        ? prev.interests.filter((id) => id !== interestId)
-        : [...prev.interests, interestId],
-    }));
-  };
-
-  const handleSave = async () => {
-    if (!user) return;
-
-    setIsUpdating(true);
-    try {
-      // communication_preferences IS A SHARED BAG, and this screen owns three of
-      // its keys. Two other writers keep their own:
-      //   useUserPreferences.ts    taste_preferences
-      //   use-user-preferences.ts  ui_preferences
-      // and the lifecycle classifier reads `marketing` and `email` out of it
-      // (supabase/functions/_shared/agents/lifecycle-classifier.ts:121).
-      // Writing a fresh three-key object here replaced the whole JSONB column,
-      // so pressing Save on this form deleted every one of those. Both other
-      // writers already read-then-merge for exactly this reason; one says so in
-      // a comment. This one did not.
+    if (changedKeys.length > 0) {
       const { data: current, error: readError } = await supabase
         .from("profiles")
         .select("communication_preferences")
         .eq("user_id", user.id)
         .single();
-
-      // A failed read cannot be treated as an empty bag - that is the write
-      // that loses the other keys. Fail the save instead: the catch below
-      // already surfaces it, and a visible retry beats silent data loss.
       if (readError) throw readError;
 
-      const existing =
-        (current?.communication_preferences as Record<string, unknown>) ?? {};
-
+      const existing = (current?.communication_preferences as Record<string, unknown>) ?? {};
       await updateProfile({
-        interests: formData.interests,
-        location: formData.location,
+        ...(extra.interests ? { interests: extra.interests } : {}),
         communication_preferences: {
           ...existing,
-          email_notifications: formData.emailNotifications,
-          sms_notifications: formData.smsNotifications,
-          event_recommendations: formData.eventRecommendations,
+          ...consent,
         },
       });
 
-      toast({
-        title: "Preferences Updated!",
-        description:
-          "Your event recommendations will be updated based on your new preferences.",
-      });
+      await Promise.all(
+        changedKeys.map((key) =>
+          logConsent({
+            type: CONSENT_TYPE[key],
+            granted: consent[key] === true,
+            source: "profile_settings",
+            metadata: { key },
+          }),
+        ),
+      );
+    } else if (extra.interests) {
+      await updateProfile({ interests: extra.interests });
+    }
+  };
+}
+
+interface ConsentSwitchProps {
+  consentKey: ConsentKey;
+  id: string;
+  label: string;
+  description: string;
+}
+
+/**
+ * One consent switch that saves as soon as it is flipped. Used by EmailStreams
+ * for "Account and activity emails"; the recommendations switch below is the
+ * same control.
+ */
+export function ConsentSwitch({ consentKey, id, label, description }: ConsentSwitchProps) {
+  const { profile, isLoading } = useProfile();
+  const { toast } = useToast();
+  const save = usePreferenceWriter();
+  const stored = readOptIn(profile?.communication_preferences, consentKey);
+  const [checked, setChecked] = useState(stored);
+  const [saving, setSaving] = useState(false);
+
+  useEffect(() => setChecked(stored), [stored]);
+
+  const flip = async (next: boolean) => {
+    setChecked(next);
+    setSaving(true);
+    try {
+      await save({ [consentKey]: next });
+      toast({ title: next ? "Turned on" : "Turned off", description: label });
     } catch (error) {
+      setChecked(!next);
+      handleError(error, { component: "ConsentSwitch", action: consentKey });
       toast({
-        title: "Update Failed",
-        description: "Failed to update preferences. Please try again.",
+        title: "Couldn't save that",
+        description: "Your setting hasn't changed. Try again in a moment.",
+        variant: "destructive",
+      });
+    } finally {
+      setSaving(false);
+    }
+  };
+
+  if (isLoading) return <Skeleton className="h-12 w-full" />;
+
+  return (
+    <div className="flex items-start justify-between gap-4">
+      <div className="space-y-1">
+        <Label htmlFor={id} className="text-base font-medium">
+          {label}
+        </Label>
+        <p className="text-sm text-muted-foreground">{description}</p>
+      </div>
+      <Switch id={id} checked={checked} onCheckedChange={flip} disabled={saving} />
+    </div>
+  );
+}
+
+/**
+ * Interests and the personalization consent (account plan WP5 item 5).
+ *
+ * The location picker ("We'll prioritize events near your preferred area") and
+ * the "Your Personalized Experience" card are gone: nothing on the web ranks by
+ * profiles.location, so both described a feature that doesn't exist. The
+ * account-email switch moved to EmailStreams, next to the other email streams.
+ */
+export default function PreferencesManager() {
+  const { profile, isLoading } = useProfile();
+  const { toast } = useToast();
+  const save = usePreferenceWriter();
+
+  const storedInterests = useMemo(() => profile?.interests ?? [], [profile?.interests]);
+  const storedRecommendations = readOptIn(profile?.communication_preferences, "event_recommendations");
+
+  const [interests, setInterests] = useState<string[]>(storedInterests);
+  const [recommendations, setRecommendations] = useState(storedRecommendations);
+  const [isUpdating, setIsUpdating] = useState(false);
+
+  useEffect(() => {
+    setInterests(storedInterests);
+    setRecommendations(storedRecommendations);
+  }, [storedInterests, storedRecommendations]);
+
+  const interestsChanged =
+    interests.length !== storedInterests.length || interests.some((id) => !storedInterests.includes(id));
+  const recommendationsChanged = recommendations !== storedRecommendations;
+  const dirty = interestsChanged || recommendationsChanged;
+
+  const toggleInterest = (id: string, on: boolean) => {
+    setInterests((prev) => (on ? [...prev.filter((x) => x !== id), id] : prev.filter((x) => x !== id)));
+  };
+
+  const handleSave = async () => {
+    setIsUpdating(true);
+    try {
+      await save(recommendationsChanged ? { event_recommendations: recommendations } : {}, {
+        interests: interestsChanged ? interests : undefined,
+      });
+      toast({ title: "Saved" });
+    } catch (error) {
+      handleError(error, { component: "PreferencesManager", action: "save" });
+      toast({
+        title: "Couldn't save your preferences",
+        description: "Nothing was changed. Try again in a moment.",
         variant: "destructive",
       });
     } finally {
@@ -182,193 +209,73 @@ export default function PreferencesManager() {
 
   if (isLoading) {
     return (
-      <div className="max-w-4xl mx-auto p-6">
-        <div className="animate-pulse space-y-6">
-          <div className="h-8 bg-gray-200 rounded w-1/3"></div>
-          <div className="h-4 bg-gray-200 rounded w-2/3"></div>
-          <div className="grid grid-cols-2 gap-4">
-            {[...Array(8)].map((_, i) => (
-              <div key={i} className="h-20 bg-gray-200 rounded"></div>
-            ))}
-          </div>
-        </div>
-      </div>
+      <Card>
+        <CardHeader>
+          <Skeleton className="h-6 w-40" />
+        </CardHeader>
+        <CardContent className="grid grid-cols-1 gap-3 sm:grid-cols-2">
+          {INTERESTS.map((interest) => (
+            <Skeleton key={interest.id} className="h-12" />
+          ))}
+        </CardContent>
+      </Card>
     );
   }
 
   return (
-    <div className="max-w-4xl mx-auto p-6 space-y-8">
-      <div className="text-center">
-        <div className="flex items-center justify-center gap-2 mb-4">
-          <Settings className="h-6 w-6 text-[#DC143C]" />
-          <h2 className="text-2xl font-bold">Personalization Settings</h2>
-        </div>
-        <p className="text-neutral-600">
-          Fine-tune your preferences to get better event recommendations
-        </p>
-      </div>
-
-      <Card>
-        <CardHeader>
-          <CardTitle className="flex items-center gap-2">
-            <SpriteIcon name="trending-up" className="h-5 w-5" />
-            Your Interests
-          </CardTitle>
-          <CardDescription>
-            Select topics you're interested in. We'll use these to recommend
-            relevant events.
-          </CardDescription>
-        </CardHeader>
-        <CardContent>
-          <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+    <Card>
+      <CardHeader>
+        <CardTitle>Interests and suggestions</CardTitle>
+        <CardDescription>The kinds of events you follow, saved to your profile.</CardDescription>
+      </CardHeader>
+      <CardContent className="space-y-6">
+        <fieldset>
+          <legend className="sr-only">Interests</legend>
+          <div className="grid grid-cols-1 gap-3 sm:grid-cols-2">
             {INTERESTS.map((interest) => {
-              const Icon = interest.icon;
-              const isSelected = formData.interests.includes(interest.id);
-
+              const id = `interest-${interest.id}`;
+              const selected = interests.includes(interest.id);
               return (
-                <div
+                <label
                   key={interest.id}
-                  className={`flex items-start gap-3 p-4 rounded-lg border cursor-pointer transition-all ${
-                    isSelected
-                      ? "bg-primary/10 border-primary shadow-sm"
-                      : "border-border hover:bg-muted/50"
-                  }`}
-                  onClick={() => handleInterestToggle(interest.id)}
+                  htmlFor={id}
+                  className={cn(
+                    "flex min-h-11 cursor-pointer items-center gap-3 rounded-lg border px-4 py-3 transition-colors",
+                    selected ? "border-primary bg-primary/10" : "hover:bg-muted",
+                  )}
                 >
                   <Checkbox
-                    checked={isSelected}
-                    onChange={() => handleInterestToggle(interest.id)}
-                    className="mt-1"
+                    id={id}
+                    checked={selected}
+                    onCheckedChange={(state) => toggleInterest(interest.id, state === true)}
                   />
-                  <div className="flex-1">
-                    <div className="flex items-center gap-2 mb-1">
-                      <Icon className="h-4 w-4" />
-                      <Label className="font-medium cursor-pointer">
-                        {interest.label}
-                      </Label>
-                    </div>
-                    <p className="text-sm text-neutral-500">
-                      {interest.description}
-                    </p>
-                  </div>
-                </div>
+                  <span className="font-medium">{interest.label}</span>
+                </label>
               );
             })}
           </div>
-        </CardContent>
-      </Card>
+        </fieldset>
 
-      <Card>
-        <CardHeader>
-          <CardTitle className="flex items-center gap-2">
-            <SpriteIcon name="map-pin" className="h-5 w-5" />
-            Location Preferences
-          </CardTitle>
-          <CardDescription>
-            We'll prioritize events near your preferred area.
-          </CardDescription>
-        </CardHeader>
-        <CardContent>
-          <Select
-            value={formData.location}
-            onValueChange={(value) =>
-              setFormData((prev) => ({ ...prev, location: value }))
-            }
-          >
-            <SelectTrigger>
-              <SelectValue placeholder="Select your preferred area" />
-            </SelectTrigger>
-            <SelectContent>
-              {LOCATIONS.map((location) => (
-                <SelectItem key={location} value={location}>
-                  {location}
-                </SelectItem>
-              ))}
-            </SelectContent>
-          </Select>
-        </CardContent>
-      </Card>
-
-      <Card>
-        <CardHeader>
-          <CardTitle>Communication Preferences</CardTitle>
-          <CardDescription>
-            Choose how you'd like to receive event updates and recommendations.
-          </CardDescription>
-        </CardHeader>
-        <CardContent className="space-y-4">
-          <div className="flex items-center space-x-2">
-            <Checkbox
-              id="emailNotifications"
-              checked={formData.emailNotifications}
-              onCheckedChange={(checked) =>
-                setFormData((prev) => ({
-                  ...prev,
-                  emailNotifications: !!checked,
-                }))
-              }
-            />
-            <Label htmlFor="emailNotifications">
-              Email notifications about new events
+        <div className="flex items-start justify-between gap-4">
+          <div className="space-y-1">
+            <Label htmlFor="event-recommendations" className="text-base font-medium">
+              Personalized suggestions
             </Label>
+            <p className="text-sm text-muted-foreground">
+              Lets us use the events and places you save to suggest others.
+            </p>
           </div>
+          <Switch
+            id="event-recommendations"
+            checked={recommendations}
+            onCheckedChange={setRecommendations}
+          />
+        </div>
 
-          <div className="flex items-center space-x-2">
-            <Checkbox
-              id="smsNotifications"
-              checked={formData.smsNotifications}
-              onCheckedChange={(checked) =>
-                setFormData((prev) => ({
-                  ...prev,
-                  smsNotifications: !!checked,
-                }))
-              }
-            />
-            <Label htmlFor="smsNotifications">
-              SMS notifications for urgent updates
-            </Label>
-          </div>
-
-          <div className="flex items-center space-x-2">
-            <Checkbox
-              id="eventRecommendations"
-              checked={formData.eventRecommendations}
-              onCheckedChange={(checked) =>
-                setFormData((prev) => ({
-                  ...prev,
-                  eventRecommendations: !!checked,
-                }))
-              }
-            />
-            <Label htmlFor="eventRecommendations">
-              Personalized event recommendations
-            </Label>
-          </div>
-        </CardContent>
-      </Card>
-
-      <div className="flex justify-center gap-4">
-        <Button onClick={handleSave} disabled={isUpdating} className="min-w-32">
-          <Save className="h-4 w-4 mr-2" />
+        <Button onClick={handleSave} disabled={isUpdating || !dirty}>
           {isUpdating ? "Saving..." : "Save Preferences"}
         </Button>
-      </div>
-
-      {formData.interests.length > 0 && (
-        <Card className="bg-accent/5 border-accent/20">
-          <CardContent className="pt-6">
-            <div className="text-center">
-              <h4 className="font-semibold text-accent mb-2">
-                🎯 Your Personalized Experience
-              </h4>
-              <p className="text-sm text-neutral-600">
-                Based on your {formData.interests.length} selected interests,
-                we'll recommend events that match your preferences and location.
-              </p>
-            </div>
-          </CardContent>
-        </Card>
-      )}
-    </div>
+      </CardContent>
+    </Card>
   );
 }

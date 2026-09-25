@@ -1,4 +1,5 @@
-import { useSearchParams, Link } from "react-router-dom";
+import { useState } from "react";
+import { Link, Navigate, useNavigate, useParams, useSearchParams } from "react-router-dom";
 import { Leaf, Wheat, Beef, UtensilsCrossed, type LucideIcon } from "lucide-react";
 import Header from "@/components/Header";
 import Footer from "@/components/Footer";
@@ -15,6 +16,7 @@ import {
   DIETS,
   DIETARY_FETCH_LIMIT,
   dietFromParam,
+  dietPath,
   useDietaryRestaurants,
   type Diet,
   type DietId,
@@ -24,7 +26,9 @@ import { getCanonicalUrl } from "@/lib/brandConfig";
 /**
  * WEB-PERF-023. The query fetches 100 and the grid rendered all of them, which
  * measured 4,985 DOM elements inside #root. 36 is three full rows of the
- * lg:grid-cols-3 grid. The heading still reports the true count.
+ * lg:grid-cols-3 grid. The heading still reports the true count, and "Show
+ * more" reveals the rest of what was fetched (WP4.12) instead of sending the
+ * visitor to the unfiltered hub.
  */
 const VISIBLE_RESTAURANTS = 36;
 
@@ -60,19 +64,19 @@ function buildFaqs(diet: Diet | null): FAQItem[] {
       question: "Is the gluten-free food on this list safe for celiac disease?",
       answer:
         "A listing can't tell you that. Call ahead, say it's celiac disease rather than a preference, and ask about shared fryers and prep surfaces.",
-      links: [{ label: "Gluten-free mentions", to: "/restaurants/dietary?diet=gluten-free" }],
+      links: [{ label: "Gluten-free mentions", to: "/restaurants/dietary/gluten-free" }],
     },
     {
       question: "Where can I find halal food in Des Moines?",
       answer:
         "Start with the halal list on this page, which shows places that mention halal in their listing. Call ahead to ask how the meat is sourced and whether it shares fryers and prep surfaces with other dishes.",
-      links: [{ label: "Halal mentions", to: "/restaurants/dietary?diet=halal" }],
+      links: [{ label: "Halal mentions", to: "/restaurants/dietary/halal" }],
     },
     {
       question: "Where can I find kosher food in Des Moines?",
       answer:
         "Start with the kosher list on this page, which shows places that mention kosher in their listing. Call ahead to ask about supervision and whether dishes share fryers and prep surfaces.",
-      links: [{ label: "Kosher mentions", to: "/restaurants/dietary?diet=kosher" }],
+      links: [{ label: "Kosher mentions", to: "/restaurants/dietary/kosher" }],
     },
   ];
 }
@@ -106,7 +110,7 @@ function DietEntryPoints() {
               <Icon className="h-5 w-5 flex-shrink-0 text-muted-foreground" aria-hidden="true" />
               <span className="flex-1 min-w-0">
                 <Link
-                  to={`/restaurants/dietary?diet=${diet.id}`}
+                  to={dietPath(diet)}
                   className="font-semibold after:absolute after:inset-0 after:content-[''] focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring rounded-sm"
                 >
                   {diet.label}
@@ -123,16 +127,35 @@ function DietEntryPoints() {
   );
 }
 
+/**
+ * /restaurants/dietary and /restaurants/dietary/:diet (WP4.13).
+ *
+ * Each diet has its own self-canonical path. The old `?diet=` form
+ * replace-navigates to that path, so shared links and anything still building
+ * the query string land on the one URL; keep that for at least one release.
+ * An unknown diet in the path goes to the index rather than rendering a page
+ * called "undefined".
+ */
 export default function DietaryRestaurants() {
-  const [searchParams, setSearchParams] = useSearchParams();
+  const { diet: dietSlug } = useParams<{ diet?: string }>();
+  const [searchParams] = useSearchParams();
+  const legacy = dietSlug ? null : dietFromParam(searchParams.get("diet"));
+  const unknownPath = dietSlug !== undefined && dietFromParam(dietSlug) === null;
   // Derived from the URL on every render, so Back and Forward move the list
-  // and the h1 together. An unknown slug is "no diet", never "undefined".
-  const selected = dietFromParam(searchParams.get("diet"));
+  // and the h1 together.
+  const selected = dietSlug ? dietFromParam(dietSlug) : null;
   const { data: restaurants = [], isLoading, isError, error, refetch } = useDietaryRestaurants(selected);
+  const navigate = useNavigate();
+  // Which diet the "Show more" was pressed for. Keyed on the diet so moving to
+  // another diet starts collapsed again without an effect.
+  const [expandedFor, setExpandedFor] = useState<DietId | null>(null);
+
+  if (legacy) return <Navigate to={dietPath(legacy)} replace />;
+  if (unknownPath) return <Navigate to="/restaurants/dietary" replace />;
 
   // A push, not a replace: each choice is a history entry.
-  const chooseDiet = (id: DietId) => setSearchParams({ diet: id });
-  const clearDiet = () => setSearchParams({});
+  const chooseDiet = (id: DietId) => navigate(`/restaurants/dietary/${id}`);
+  const clearDiet = () => navigate("/restaurants/dietary");
 
   const label = selected?.label;
   const pageTitle = selected
@@ -144,18 +167,24 @@ export default function DietaryRestaurants() {
 
   const breadcrumbs = [
     { name: "Restaurants", url: "/restaurants" },
-    { name: selected ? label : "Dietary Options", url: "/restaurants/dietary" },
+    { name: "Dietary Options", url: "/restaurants/dietary" },
+    ...(selected ? [{ name: label, url: dietPath(selected) }] : []),
   ];
   const faqs = buildFaqs(selected);
-  const shown = restaurants.slice(0, VISIBLE_RESTAURANTS);
-  const countLabel = restaurants.length >= DIETARY_FETCH_LIMIT ? `first ${DIETARY_FETCH_LIMIT}` : String(restaurants.length);
+  const expanded = selected !== null && expandedFor === selected.id;
+  const shown = expanded ? restaurants : restaurants.slice(0, VISIBLE_RESTAURANTS);
+  const hidden = restaurants.length - shown.length;
+  // "first 100" only when the fetch came back full: then there may be more
+  // rows than we read, and the number is a floor, not a count.
+  const hitLimit = restaurants.length >= DIETARY_FETCH_LIMIT;
+  const countLabel = hitLimit ? `first ${DIETARY_FETCH_LIMIT}` : String(restaurants.length);
 
   return (
     <div className="min-h-screen bg-background">
       <EnhancedLocalSEO
         pageTitle={pageTitle}
         pageDescription={pageDescription}
-        canonicalUrl={getCanonicalUrl(`/restaurants/dietary${selected ? `?diet=${selected.id}` : ""}`)}
+        canonicalUrl={getCanonicalUrl(selected ? dietPath(selected) : "/restaurants/dietary")}
         pageType="website"
         breadcrumbs={breadcrumbs}
         keywords={[
@@ -176,7 +205,9 @@ export default function DietaryRestaurants() {
           items={[
             { label: "Home", href: "/" },
             { label: "Restaurants", href: "/restaurants" },
-            { label: "Dietary Options" },
+            ...(selected
+              ? [{ label: "Dietary Options", href: "/restaurants/dietary" }, { label: selected.label }]
+              : [{ label: "Dietary Options" }]),
           ]}
           className="mb-4"
         />
@@ -250,13 +281,25 @@ export default function DietaryRestaurants() {
                     ))}
                   </div>
                   {restaurants.length > VISIBLE_RESTAURANTS && (
-                    <div className="mt-8 text-center">
+                    <div className="mt-8 text-center" data-dietary-more>
                       <p className="text-muted-foreground mb-3">
-                        Showing {VISIBLE_RESTAURANTS} of {countLabel} that mention {label.toLowerCase()}.
+                        Showing {shown.length} of {countLabel} that mention {label.toLowerCase()}.
+                        {expanded && hitLimit ? " There may be more we didn't load." : ""}
                       </p>
-                      <Button asChild variant="outline">
-                        <Link to="/restaurants">Browse all restaurants</Link>
-                      </Button>
+                      {hidden > 0 ? (
+                        <Button
+                          type="button"
+                          variant="outline"
+                          className="min-h-11"
+                          onClick={() => setExpandedFor(selected.id)}
+                        >
+                          Show {hidden} more
+                        </Button>
+                      ) : (
+                        <Button asChild variant="outline" className="min-h-11">
+                          <Link to="/restaurants">Browse all restaurants</Link>
+                        </Button>
+                      )}
                     </div>
                   )}
                 </>

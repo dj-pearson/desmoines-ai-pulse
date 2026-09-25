@@ -2,11 +2,10 @@ import { useState, useCallback, useEffect, useMemo } from "react";
 import { Badge } from "@/components/ui/badge";
 import { Input } from "@/components/ui/input";
 import { Slider } from "@/components/ui/slider";
-import { Switch } from "@/components/ui/switch";
 import { Popover, PopoverContent, PopoverTrigger } from "@/components/ui/popover";
-import { ChefHat, DollarSign, Star, Leaf, ChevronDown, Check, SlidersHorizontal } from "lucide-react";
+import { Link } from "react-router-dom";
+import { ChefHat, DollarSign, Star, Leaf, ChevronDown, Check } from "lucide-react";
 import type { RestaurantFilterOptions } from "@/components/RestaurantFilters";
-import { SpriteIcon } from "@/components/ui/SpriteIcon";
 import { useCuisineCounts } from "@/hooks/useRestaurants";
 import { DIETARY_OPTIONS } from "@/lib/restaurantPresets";
 import { cn } from "@/lib/utils";
@@ -29,11 +28,17 @@ interface RestaurantInlineFiltersProps {
   isLoading?: boolean;
 }
 
+/**
+ * Price levels as the listing gives them (eat-drink pass 2 WP1 item 9). The
+ * dollar bands that were here (a price per head for each level) were invented: price_range
+ * is a level of one to four dollar signs with no amount behind it. The words
+ * are the level names Google uses for the same scale.
+ */
 const PRICE_OPTIONS = [
-  { value: "$", label: "$", description: "Under $15" },
-  { value: "$$", label: "$$", description: "$15-30" },
-  { value: "$$$", label: "$$$", description: "$30-50" },
-  { value: "$$$$", label: "$$$$", description: "$50+" },
+  { value: "$", label: "$", description: "inexpensive" },
+  { value: "$$", label: "$$", description: "moderate" },
+  { value: "$$$", label: "$$$", description: "expensive" },
+  { value: "$$$$", label: "$$$$", description: "very expensive" },
 ];
 
 const RATING_STEPS = [0, 3, 3.5, 4, 4.5];
@@ -300,10 +305,10 @@ export function RestaurantInlineFilters({
                   type="button"
                   aria-pressed={isSelected}
                   onClick={() => toggleArrayFilter("priceRange", option.value)}
-                  className={cn(OPTION_BASE, "flex flex-col items-center p-2", isSelected ? OPTION_ON : OPTION_OFF)}
+                  className={cn(OPTION_BASE, "flex flex-col items-center p-2 text-center", isSelected ? OPTION_ON : OPTION_OFF)}
                 >
                   <span className="text-base font-bold">{option.label}</span>
-                  <span className={cn("text-[11px]", isSelected ? "text-primary-foreground/80" : "text-muted-foreground")}>
+                  <span className={cn("text-[11px] leading-tight", isSelected ? "text-primary-foreground/80" : "text-muted-foreground")}>
                     {option.description}
                   </span>
                 </button>
@@ -325,8 +330,13 @@ export function RestaurantInlineFilters({
         icon={Leaf}
         activeCount={filters.tags.filter((t) => DIETARY_OPTIONS.some((d) => d.value === t)).length}
       >
+        {/* "Mentions in listing" (pass 2 WP1 item 9): this is a keyword match
+            on the name, cuisine and description, not a menu check. */}
         <div className="space-y-2">
-          <span className="text-sm font-semibold">Dietary preferences</span>
+          <span className="block text-sm font-semibold">Mentions in listing</span>
+          <span className="block text-xs text-muted-foreground">
+            Matches the words in a restaurant's name, cuisine or description. Call ahead to confirm.
+          </span>
           <div className="space-y-1.5">
             {DIETARY_OPTIONS.map((option) => {
               const isSelected = filters.tags.includes(option.value);
@@ -338,35 +348,28 @@ export function RestaurantInlineFilters({
                   onClick={() => toggleArrayFilter("tags", option.value)}
                   className={cn(OPTION_BASE, "flex items-center gap-3 w-full px-3", isSelected ? OPTION_ON : OPTION_OFF)}
                 >
-                  <span>{option.label}</span>
+                  <span>Mentions {option.label.toLowerCase()}</span>
                   {isSelected && <Check className="h-4 w-4 ml-auto" aria-hidden="true" />}
                 </button>
               );
             })}
           </div>
+          <Link
+            to="/restaurants/dietary"
+            className="inline-flex min-h-11 items-center text-sm font-medium text-primary underline-offset-4 hover:underline"
+          >
+            See the dietary guide
+          </Link>
         </div>
       </FilterPill>
 
       {/* Open Now is not offered here: nothing server-side filters on it yet
-          (plan D2), so the hub links to /restaurants/open-now instead. */}
-      <FilterPill label="More" icon={SlidersHorizontal} activeCount={filters.featuredOnly ? 1 : 0}>
-        <div className="space-y-3">
-          <span className="text-sm font-semibold">More options</span>
-          <label className="flex items-center justify-between min-h-[44px] p-2.5 rounded-xl bg-muted cursor-pointer">
-            <span className="flex items-center gap-2">
-              <SpriteIcon name="sparkles" className="h-4 w-4 text-muted-foreground" />
-              <span>
-                <span className="block text-sm font-medium">Featured only</span>
-                <span className="block text-xs text-muted-foreground">Editor's picks</span>
-              </span>
-            </span>
-            <Switch
-              checked={filters.featuredOnly}
-              onCheckedChange={(checked) => onFiltersChange({ ...filters, featuredOnly: checked })}
-            />
-          </label>
-        </div>
-      </FilterPill>
+          (plan D2), so the hub links to /restaurants/open-now instead.
+
+          The "More" pill held one switch, "Featured only / Editor's picks",
+          and nothing editorial sets is_featured on restaurants; only sponsored
+          rows kept it (20260902000004). It is gone (pass 2 WP1 item 2). An old
+          ?featured=1 link still filters and shows a "Sponsored only" chip. */}
     </div>
   );
 }

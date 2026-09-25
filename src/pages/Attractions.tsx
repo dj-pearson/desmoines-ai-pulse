@@ -15,7 +15,6 @@ import { getCanonicalUrl } from "@/lib/brandConfig";
 import { useToast } from "@/hooks/use-toast";
 import { BackToTop } from "@/components/BackToTop";
 import { useAnnounce } from "@/hooks/use-announce";
-import { Card, CardContent } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
@@ -27,10 +26,10 @@ import {
   SelectValue,
 } from "@/components/ui/select";
 import { CardsGridSkeleton } from "@/components/ui/loading-skeleton";
-import { Star, Filter, List, Map, SlidersHorizontal, Landmark, ChevronRight, SearchX, X, ChevronDown, Shuffle } from "lucide-react";
+import { Filter, List, Map, SlidersHorizontal, Landmark, ChevronRight, SearchX, X, ChevronDown, Shuffle, LocateFixed } from "lucide-react";
 import { EmptyState } from "@/components/ui/empty-state";
 import { ErrorState } from "@/components/ui/error-state";
-import { SortDropdown, ATTRACTION_SORT_OPTIONS } from "@/components/SortDropdown";
+import { SortDropdown, type SortOption } from "@/components/SortDropdown";
 import { Link, useLocation, useNavigate } from "react-router-dom";
 import {
   Pagination,
@@ -58,8 +57,12 @@ import {
   SheetTrigger,
 } from "@/components/ui/sheet";
 import { SpriteIcon } from "@/components/ui/SpriteIcon";
-import { attractionOpenStatus } from "@/lib/attractionHours";
-import { formatOpenStatusLine } from "@/lib/restaurantHours";
+import { ExploreSectionLinks } from "@/components/explore/ExploreSectionLinks";
+import { useNow } from "@/hooks/useNow";
+import { useGeolocation } from "@/hooks/useProximitySearch";
+import { sortByDistanceFrom, formatMilesAway } from "@/hooks/usePlaygrounds";
+import { attractionFactParts, attractionOpenStatus } from "@/lib/attractionHours";
+import { isPrerender } from "@/lib/isPrerender";
 
 // Lazy load map to prevent react-leaflet bundling issues
 const AttractionsMap = lazy(() => import("@/components/AttractionsMap"));
@@ -85,8 +88,28 @@ function AttractionsMapSkeleton() {
 
 type AttractionRow = ReturnType<typeof useAttractions>["attractions"][number];
 
+/**
+ * Sort values the hub accepts. Name is the default (explore pass 2 WP3 item
+ * 2): "Highest rated" as a default ordered the page by attractions.rating, a
+ * column nothing on the page can source. It stays available on request.
+ */
+const SORT_VALUES = ["name_asc", "rating", "newest"] as const;
+type AttractionSort = (typeof SORT_VALUES)[number];
+const DEFAULT_SORT: AttractionSort = "name_asc";
+const ATTRACTION_SORTS: SortOption[] = [
+  { value: "name_asc", label: "Name (A-Z)" },
+  { value: "rating", label: "Highest rated" },
+  { value: "newest", label: "Recently added" },
+];
+
+function readSort(value: string): AttractionSort {
+  return (SORT_VALUES as readonly string[]).includes(value) ? (value as AttractionSort) : DEFAULT_SORT;
+}
+
 interface AttractionFactLineProps {
   attraction: AttractionRow;
+  /** Null under prerender: no status goes into static HTML. */
+  now: Date | null;
 }
 
 /**
@@ -94,14 +117,8 @@ interface AttractionFactLineProps {
  * Indoor/Outdoor, Kids, and today's status when the hours say something. Each
  * part renders only when its column is set; nothing renders when none are.
  */
-function AttractionFactLine({ attraction }: AttractionFactLineProps) {
-  const status = formatOpenStatusLine(attractionOpenStatus(attraction.hours, attraction.hours_summary));
-  const facts = [
-    attraction.is_free === true ? "Free" : null,
-    attraction.is_indoor === true ? "Indoor" : attraction.is_indoor === false ? "Outdoor" : null,
-    attraction.is_kid_friendly === true ? "Kids" : null,
-    status,
-  ].filter((f): f is string => Boolean(f));
+function AttractionFactLine({ attraction, now }: AttractionFactLineProps) {
+  const facts = attractionFactParts(attraction, now);
   if (facts.length === 0) return null;
   return <p className="text-sm font-medium text-foreground/80">{facts.join(", ")}</p>;
 }
@@ -119,12 +136,14 @@ export default function Attractions() {
   const { getStr, getNum, setParam, clearParams } = useUrlFilters();
   const selectedType = getStr("type", "all");
   const minRating = getStr("rating", "any-rating");
-  const featuredOnly = getStr("featured", "all");
-  const sortBy = getStr("sort", "rating");
+  // No Featured filter (explore pass 2 WP3 item 1). The is_featured flags were
+  // left set by 20260902000004 without anyone reviewing them, so "Featured"
+  // said nothing a visitor could rely on. An old ?featured= link reads as all;
+  // D8 brings the filter back once the flags are reviewed.
+  const sortBy = readSort(getStr("sort", DEFAULT_SORT));
   const setSelectedType = (v: string) => setParam("type", v, { def: "all", resetsPage: true });
   const setMinRating = (v: string) => setParam("rating", v, { def: "any-rating", resetsPage: true });
-  const setFeaturedOnly = (v: string) => setParam("featured", v, { def: "all", resetsPage: true });
-  const setSortBy = (v: string) => setParam("sort", v, { def: "rating", resetsPage: true });
+  const setSortBy = (v: string) => setParam("sort", v, { def: DEFAULT_SORT, resetsPage: true });
   // Explore plan WP3 item 7. The hook already applies these server-side; the
   // page never exposed them. "1" in the URL, absent otherwise.
   const freeOnly = getStr("free", "") === "1";
@@ -132,6 +151,34 @@ export default function Attractions() {
   const indoorOnly = getStr("indoor", "") === "1";
   const toggleFlag = (key: "free" | "kids" | "indoor", on: boolean) =>
     setParam(key, on ? "1" : "", { resetsPage: true });
+
+  // Open now (explore pass 2 WP3 items 3 and 5). The prerender has no clock a
+  // visitor shares, so under it there is no status anywhere on the page and
+  // ?open=now filters nothing. Otherwise the clock ticks each minute, so a tab
+  // left open drops a place when it closes.
+  const prerender = isPrerender();
+  const tick = useNow(60_000);
+  const now = prerender ? null : tick;
+  const openNowParam = getStr("open", "") === "now";
+  const openNowOnly = openNowParam && now !== null;
+  const setOpenNow = (on: boolean) => setParam("open", on ? "now" : "", { resetsPage: true });
+
+  // Near me is per visit: the position never goes in the URL.
+  const [nearMe, setNearMe] = useState(false);
+  const {
+    location: userLocation,
+    error: locationError,
+    isLoading: locating,
+    requestLocation,
+  } = useGeolocation();
+  const handleNearMe = () => {
+    if (nearMe) {
+      setNearMe(false);
+      return;
+    }
+    setNearMe(true);
+    if (!userLocation) requestLocation();
+  };
 
   const urlQ = getStr("q", "");
   const [searchQuery, setSearchQuery] = useState(() => urlQ);
@@ -193,11 +240,10 @@ export default function Attractions() {
     search: urlQ || undefined,
     type: selectedType !== "all" ? selectedType : undefined,
     minRating: minRating !== "any-rating" ? parseFloat(minRating) : undefined,
-    featuredOnly: featuredOnly === "featured" || undefined,
     freeOnly: freeOnly || undefined,
     kidFriendlyOnly: kidsOnly || undefined,
     indoorOnly: indoorOnly || undefined,
-    sortBy: sortBy === "name_asc" ? "alphabetical" : sortBy === "newest" ? "newest" : "rating",
+    sortBy: sortBy === "rating" ? "rating" : sortBy === "newest" ? "newest" : "alphabetical",
   });
   const { announce, announcement, regionProps } = useAnnounce();
 
@@ -211,17 +257,36 @@ export default function Attractions() {
     [attractionTypeCounts]
   );
 
-  // Postgres has already applied every filter and the sort. Both names are kept
-  // because the JSX below reads each of them in a dozen places, and the
-  // distinction between "filtered" and "sorted" no longer exists client-side.
-  const filteredAttractions = allAttractions;
+  // Open now is the one client-side filter: it depends on the minute, which
+  // Postgres doesn't know in Des Moines time. The count says how many rows
+  // have hours at all, since "7 open" out of 23 with hours is a different
+  // answer from 7 out of 60 with 37 unknown.
+  const openNow = useMemo(() => {
+    if (!now) return null;
+    let listed = 0;
+    const open: AttractionRow[] = [];
+    for (const a of allAttractions) {
+      const status = attractionOpenStatus(a.hours, a.hours_summary, now);
+      if (status.status === "unknown") continue;
+      listed++;
+      if (status.isOpen) open.push(a);
+    }
+    return { listed, open };
+  }, [allAttractions, now]);
+
+  // Postgres has applied every other filter and the sort.
+  const filteredAttractions = openNowOnly && openNow ? openNow.open : allAttractions;
   // arrangeSponsored still runs client-side: boosting up to two active
   // sponsored listings to the top (WEB-FEAT-005) is not something the ORDER BY
-  // expresses, and it must be applied AFTER the sort, exactly as before.
-  const sortedAttractions = useMemo(
-    () => arrangeSponsored([...allAttractions]),
-    [allAttractions]
-  );
+  // expresses, and it must be applied AFTER the sort, exactly as before. Near
+  // me replaces both: in distance order a boosted row would be a wrong answer.
+  const nearMeActive = nearMe && userLocation !== null && !prerender;
+  const sortedAttractions = useMemo(() => {
+    if (nearMeActive && userLocation) {
+      return sortByDistanceFrom(filteredAttractions, userLocation);
+    }
+    return arrangeSponsored([...filteredAttractions]).map((a) => ({ ...a, distanceMiles: null as number | null }));
+  }, [filteredAttractions, nearMeActive, userLocation]);
 
   const handleSurpriseMe = () => {
     if (!filteredAttractions || filteredAttractions.length === 0) return;
@@ -260,7 +325,7 @@ export default function Attractions() {
     if (searchQuery) count++;
     if (selectedType !== "all") count++;
     if (minRating !== "any-rating") count++;
-    if (featuredOnly !== "all") count++;
+    if (openNowOnly) count++;
     if (freeOnly) count++;
     if (kidsOnly) count++;
     if (indoorOnly) count++;
@@ -271,7 +336,7 @@ export default function Attractions() {
 
   const handleClearFilters = () => {
     setSearchQuery("");
-    clearParams(["q", "type", "rating", "featured", "sort", "free", "kids", "indoor"]);
+    clearParams(["q", "type", "rating", "featured", "sort", "free", "kids", "indoor", "open"]);
     toast({
       title: "Filters Cleared",
       description: "All filters have been reset",
@@ -360,7 +425,7 @@ export default function Attractions() {
                       addRecentSearch('attractions', searchQuery);
                     }
                   }}
-                  className="text-base bg-white/95 backdrop-blur border-0 focus:ring-2 focus:ring-white h-12"
+                  className="text-base bg-background border-0 focus:ring-2 focus:ring-white h-12"
                   aria-label="Search attractions"
                   role="searchbox"
                 />
@@ -443,22 +508,6 @@ export default function Attractions() {
                               </SelectContent>
                             </Select>
                           </div>
-
-                          {/* Featured Filter */}
-                          <div className="space-y-2">
-                            <label htmlFor="m-filter-featured" className="text-base font-medium">
-                              Featured
-                            </label>
-                            <Select value={featuredOnly} onValueChange={setFeaturedOnly}>
-                              <SelectTrigger id="m-filter-featured" className="input-mobile">
-                                <SelectValue />
-                              </SelectTrigger>
-                              <SelectContent>
-                                <SelectItem value="all">All Attractions</SelectItem>
-                                <SelectItem value="featured">Featured Only</SelectItem>
-                              </SelectContent>
-                            </Select>
-                          </div>
                         </div>
 
                         {/* Mobile Filter Actions */}
@@ -521,16 +570,17 @@ export default function Attractions() {
             { label: "Attractions" },
           ]}
         />
+        <ExploreSectionLinks current="/attractions" className="mb-6" />
         <div className="flex gap-8">
         <div className="flex-1 min-w-0">
 
         {/* Filters Section */}
         {showFilters && (
-          <div className="bg-white rounded-2xl shadow-lg p-6 mb-8 border">
-            <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-4">
+          <div className="bg-card text-card-foreground rounded-2xl p-6 mb-8 border">
+            <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
               {/* Type Filter */}
               <div className="space-y-2">
-                <label className="text-sm font-medium text-gray-700">
+                <label className="text-sm font-medium text-foreground">
                   Attraction Type
                 </label>
                 <Select value={selectedType} onValueChange={setSelectedType}>
@@ -550,7 +600,7 @@ export default function Attractions() {
 
               {/* Rating Filter */}
               <div className="space-y-2">
-                <label className="text-sm font-medium text-gray-700">
+                <label className="text-sm font-medium text-foreground">
                   Minimum Rating
                 </label>
                 <Select value={minRating} onValueChange={setMinRating}>
@@ -566,37 +616,31 @@ export default function Attractions() {
                   </SelectContent>
                 </Select>
               </div>
-
-              {/* Featured Filter */}
-              <div className="space-y-2">
-                <label className="text-sm font-medium text-gray-700">
-                  Featured
-                </label>
-                <Select value={featuredOnly} onValueChange={setFeaturedOnly}>
-                  <SelectTrigger aria-label="Featured">
-                    <SelectValue />
-                  </SelectTrigger>
-                  <SelectContent>
-                    <SelectItem value="all">All Attractions</SelectItem>
-                    <SelectItem value="featured">Featured Only</SelectItem>
-                  </SelectContent>
-                </Select>
-              </div>
             </div>
 
             <div className="flex justify-between mt-6">
               <Button variant="outline" onClick={handleClearFilters}>
                 Clear Filters
               </Button>
-              <div className="text-sm text-gray-500">
+              <div className="text-sm text-muted-foreground">
                 {formatCount(filteredAttractions?.length || 0, 'attraction')} found
               </div>
             </div>
           </div>
         )}
 
-        {/* Free / Kids / Indoors (item 7): one tap each, URL-synced. */}
-        <div className="flex flex-wrap gap-2 mb-6" role="group" aria-label="Quick filters">
+        {/* Open now, Free / Kids / Indoors (item 7), Near me: one tap each.
+            All but Near me are URL-synced; a position never goes in a URL. */}
+        <div className="flex flex-wrap gap-2 mb-2" role="group" aria-label="Quick filters">
+          <Button
+            type="button"
+            variant={openNowOnly ? "default" : "outline"}
+            className="h-11 rounded-full px-5"
+            aria-pressed={openNowOnly}
+            onClick={() => setOpenNow(!openNowParam)}
+          >
+            Open now
+          </Button>
           {([
             { key: "free", label: "Free", on: freeOnly },
             { key: "kids", label: "Kid-friendly", on: kidsOnly },
@@ -613,6 +657,33 @@ export default function Attractions() {
               {chip.label}
             </Button>
           ))}
+          <Button
+            type="button"
+            variant={nearMeActive ? "default" : "outline"}
+            className="h-11 rounded-full px-5"
+            aria-pressed={nearMe}
+            onClick={handleNearMe}
+            disabled={locating}
+          >
+            <LocateFixed className="h-4 w-4 mr-2" aria-hidden="true" />
+            {locating ? "Locating..." : "Near me"}
+          </Button>
+        </div>
+        <div className="mb-6 min-h-5 text-sm text-muted-foreground">
+          {openNowOnly && openNow && !isLoading && (
+            <p data-open-now-count="">
+              Open now: {openNow.open.length} of {openNow.listed} with listed hours
+              {allAttractions.length > openNow.listed
+                ? `. ${allAttractions.length - openNow.listed} more have no hours with us.`
+                : ""}
+            </p>
+          )}
+          {nearMe && locationError && (
+            <p className="text-destructive" role="alert">
+              {locationError} The list is in its usual order.
+            </p>
+          )}
+          {nearMeActive && <p>Nearest first, straight-line distance. Places with no map location are last.</p>}
         </div>
 
         {/* Screen reader announcement for result count changes */}
@@ -637,11 +708,21 @@ export default function Attractions() {
               ? `${selectedType} Attractions`
               : "Des Moines Attractions"}
           </h2>
-          <SortDropdown
-            options={ATTRACTION_SORT_OPTIONS}
-            value={sortBy}
-            onChange={setSortBy}
-          />
+          <div className="flex items-center gap-4">
+            {/* The site map with only attractions on, next to events and
+                restaurants when a visitor turns those on (item 10). */}
+            <Link
+              to="/map?layers=attraction"
+              className="inline-flex min-h-11 items-center text-sm font-medium text-foreground underline underline-offset-4 hover:text-primary"
+            >
+              Show on map
+            </Link>
+            <SortDropdown
+              options={ATTRACTION_SORTS}
+              value={sortBy}
+              onChange={setSortBy}
+            />
+          </div>
         </div>
 
         {/* Sticky filter bar: result count + removable chips (WEB-UX-003) */}
@@ -662,9 +743,7 @@ export default function Attractions() {
               ...(minRating !== "any-rating"
                 ? [{ key: "rating", label: `Rating: ${minRating}+`, onRemove: () => setMinRating("any-rating") }]
                 : []),
-              ...(featuredOnly !== "all"
-                ? [{ key: "featured", label: "Featured only", onRemove: () => setFeaturedOnly("all") }]
-                : []),
+              ...(openNowOnly ? [{ key: "open", label: "Open now", onRemove: () => setOpenNow(false) }] : []),
               ...(freeOnly ? [{ key: "free", label: "Free", onRemove: () => toggleFlag("free", false) }] : []),
               ...(kidsOnly ? [{ key: "kids", label: "Kid-friendly", onRemove: () => toggleFlag("kids", false) }] : []),
               ...(indoorOnly ? [{ key: "indoor", label: "Indoors", onRemove: () => toggleFlag("indoor", false) }] : []),
@@ -687,7 +766,7 @@ export default function Attractions() {
           // Local boundary: the lazy map chunk used to suspend up to the
           // route's fallback and blank the whole page on first toggle.
           <Suspense fallback={<AttractionsMapSkeleton />}>
-            <AttractionsMap attractions={sortedAttractions} />
+            <AttractionsMap attractions={sortedAttractions} now={now} />
           </Suspense>
         ) : sortedAttractions.length === 0 ? (
           <EmptyState
@@ -718,21 +797,18 @@ export default function Attractions() {
             </p>
 
             <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
-              {paginatedAttractions.map((attraction, index) => (
-                <Link
-                  key={attraction.id}
-                  to={`/attractions/${createSlug(attraction.name)}`}
-                  className="block"
-                  aria-label={`${isSponsoredActive(attraction) ? "Sponsored: " : ""}${attraction.name}`}
-                  onMouseEnter={() => prefetchAttraction(createSlug(attraction.name))}
-                  onClick={() => {
-                    if (isSponsoredActive(attraction))
-                      logSponsoredClick("attraction", attraction.id);
-                  }}
-                >
-                  <Card
-                    className={`h-full hover:shadow-lg transition-all duration-200 hover:-translate-y-1 rounded-2xl overflow-hidden ${
-                      isSponsoredActive(attraction) ? "ring-2 ring-amber-400 shadow-lg" : ""
+              {paginatedAttractions.map((attraction, index) => {
+                const sponsored = isSponsoredActive(attraction);
+                const href = `/attractions/${createSlug(attraction.name)}`;
+                // An <article> with the title as a stretched link, and Save as
+                // a sibling above it (explore pass 2 WP3 item 7). The whole
+                // card was one <Link> with an aria-label, so a screen reader
+                // heard only the name and a button sat inside a link.
+                return (
+                  <article
+                    key={attraction.id}
+                    className={`relative flex h-full flex-col overflow-hidden rounded-2xl border bg-card text-card-foreground transition-shadow hover:shadow-lg focus-within:ring-2 focus-within:ring-ring ${
+                      sponsored ? "ring-2 ring-amber-400" : ""
                     }`}
                   >
                     <div className="relative">
@@ -749,27 +825,27 @@ export default function Attractions() {
                           priority={index < 3}
                           width={640}
                           height={360}
-                          className="transition-transform duration-200 hover:scale-105 object-cover"
+                          className="object-cover"
                           containerClassName="aspect-video overflow-hidden"
                           sizes="(max-width: 640px) 100vw, (max-width: 1024px) 50vw, 33vw"
                         />
                       ) : (
                         <div className="aspect-video bg-muted flex items-center justify-center" role="img" aria-label={`No image available for ${attraction.name}`}>
-                          <Landmark className="h-12 w-12 text-muted-foreground/60" />
+                          <Landmark className="h-12 w-12 text-muted-foreground" aria-hidden="true" />
                         </div>
                       )}
                       {/* Sponsored listing treatment (WEB-FEAT-005) */}
-                      {isSponsoredActive(attraction) && (
+                      {sponsored && (
                         <div className="absolute top-3 left-3 z-20">
-                          <SponsoredBadge className="shadow-lg" />
+                          <SponsoredBadge />
                         </div>
                       )}
                       <SponsoredImpressionMarker
                         contentType="attraction"
                         contentId={attraction.id}
-                        active={isSponsoredActive(attraction)}
+                        active={sponsored}
                       />
-                      {/* Save (favorite) overlay — stopPropagation handled inside */}
+                      {/* Save sits above the stretched link, so it is its own control. */}
                       <div className="absolute top-3 right-3 z-20">
                         <FavoriteButton
                           contentType="attraction"
@@ -777,39 +853,40 @@ export default function Attractions() {
                           itemName={attraction.name}
                           size="icon"
                           variant="ghost"
-                          className="h-11 w-11 rounded-full bg-white/90 hover:bg-white shadow-md"
+                          className="h-11 w-11 rounded-full bg-background/90 hover:bg-background"
                         />
                       </div>
                     </div>
-                    <CardContent className="p-5">
-                      <div className="flex items-center justify-between mb-2">
-                        <Badge
-                          variant="outline"
-                          className="bg-[#2D1B69]/10 text-[#2D1B69] text-xs"
-                        >
-                          <Landmark className="h-3 w-3 mr-1" />
+                    <div className="flex flex-1 flex-col p-5">
+                      {attraction.type && (
+                        <p className="mb-2 flex items-center gap-1 text-xs font-medium text-muted-foreground">
+                          <Landmark className="h-3 w-3" aria-hidden="true" />
                           {attraction.type}
-                        </Badge>
-                        {attraction.is_featured && (
-                          <Badge className="bg-[#DC143C] text-white text-xs">Featured</Badge>
-                        )}
-                      </div>
+                        </p>
+                      )}
                       <h3 className="font-semibold text-lg line-clamp-2 mb-2">
-                        {attraction.name}
+                        <Link
+                          to={href}
+                          className="after:absolute after:inset-0 after:z-10 after:content-[''] focus-visible:outline-none"
+                          onMouseEnter={() => prefetchAttraction(createSlug(attraction.name))}
+                          onFocus={() => prefetchAttraction(createSlug(attraction.name))}
+                          onClick={() => {
+                            if (sponsored) logSponsoredClick("attraction", attraction.id);
+                          }}
+                        >
+                          {attraction.name}
+                        </Link>
                       </h3>
                       <div className="space-y-2 text-sm text-muted-foreground">
-                        {attraction.rating != null && (
-                          <div className="flex items-center gap-2">
-                            <Star className="h-4 w-4 fill-yellow-400 text-yellow-400" aria-hidden="true" />
-                            <span>{attraction.rating.toFixed(1)}/5</span>
-                          </div>
-                        )}
-                        <AttractionFactLine attraction={attraction} />
+                        <AttractionFactLine attraction={attraction} now={now} />
                         {attraction.location && (
                           <div className="flex items-center gap-2">
                             <SpriteIcon name="map-pin" className="h-4 w-4" />
                             <span className="line-clamp-1">{attraction.location}</span>
                           </div>
+                        )}
+                        {attraction.distanceMiles != null && (
+                          <p className="font-medium text-foreground/80">{formatMilesAway(attraction.distanceMiles)}</p>
                         )}
                       </div>
                       {attraction.description && (
@@ -817,10 +894,10 @@ export default function Attractions() {
                           {attraction.description}
                         </p>
                       )}
-                    </CardContent>
-                  </Card>
-                </Link>
-              ))}
+                    </div>
+                  </article>
+                );
+              })}
             </div>
 
             {/* Pagination controls */}
@@ -916,12 +993,12 @@ export default function Attractions() {
 
       {/* Browse Attractions By Type - Internal Linking for SEO */}
       {attractionTypes.length > 0 && (
-        <section className="py-12 bg-white border-t">
+        <section className="py-12 bg-background border-t">
           <div className="container mx-auto px-4">
-            <h2 className="text-2xl font-bold text-gray-900 mb-2">
+            <h2 className="text-2xl font-bold text-foreground mb-2">
               Browse Attractions By Type
             </h2>
-            <p className="text-gray-600 mb-6">
+            <p className="text-muted-foreground mb-6">
               Every type we list, with how many active attractions carry it
             </p>
             <div className="grid grid-cols-2 sm:grid-cols-3 md:grid-cols-4 lg:grid-cols-6 gap-3">
@@ -932,15 +1009,15 @@ export default function Attractions() {
                     key={type}
                     to={`/attractions?type=${encodeURIComponent(type)}`}
                     onClick={() => window.scrollTo({ top: 0, behavior: 'smooth' })}
-                    className="flex items-center justify-between p-3 rounded-xl border hover:border-[#2D1B69] hover:bg-[#2D1B69]/5 transition-colors text-left group"
+                    className="flex min-h-11 items-center justify-between p-3 rounded-xl border hover:border-primary hover:bg-muted transition-colors text-left group"
                   >
                     <div>
-                      <span className="text-sm font-medium text-gray-900 group-hover:text-[#2D1B69]">
+                      <span className="text-sm font-medium text-foreground group-hover:text-primary">
                         {type}
                       </span>
-                      <span className="block text-xs text-gray-500">{formatCount(count, 'attraction')}</span>
+                      <span className="block text-xs text-muted-foreground">{formatCount(count, 'attraction')}</span>
                     </div>
-                    <ChevronRight className="h-4 w-4 text-gray-500 group-hover:text-[#2D1B69]" aria-hidden="true" />
+                    <ChevronRight className="h-4 w-4 text-muted-foreground group-hover:text-primary" aria-hidden="true" />
                   </Link>
                 );
               })}
@@ -957,12 +1034,12 @@ export default function Attractions() {
       </div>
 
       {/* SEO Content Section - Things to Do */}
-      <section className="py-12 bg-gray-50 border-t">
+      <section className="py-12 bg-muted/40 border-t">
         <div className="container mx-auto px-4 max-w-4xl">
-          <h2 className="text-2xl font-bold text-gray-900 mb-4">
+          <h2 className="text-2xl font-bold text-foreground mb-4">
             Things to Do in Des Moines, Iowa
           </h2>
-          <div className="prose prose-gray max-w-none text-gray-700 leading-relaxed space-y-4">
+          <div className="max-w-prose text-foreground/90 leading-relaxed space-y-4">
             <p>
               Des Moines has museums, parks, gardens, landmarks and family attractions across the
               metro, from downtown to Ankeny and West Des Moines.

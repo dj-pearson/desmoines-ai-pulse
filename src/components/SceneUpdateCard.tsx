@@ -2,7 +2,12 @@ import { Link } from 'react-router-dom';
 import { Card, CardContent } from '@/components/ui/card';
 import { Badge } from '@/components/ui/badge';
 import { OptimizedImage } from '@/components/OptimizedImage';
-import { formatSceneUpdateTime, type SceneUpdate, type SceneUpdateType } from '@/hooks/useSceneUpdates';
+import {
+  formatSceneUpdateTime,
+  sceneUpdateHref,
+  type SceneUpdate,
+  type SceneUpdateType,
+} from '@/hooks/useSceneUpdates';
 import { safeWebUrl } from '@/lib/hotelBooking';
 
 /**
@@ -33,15 +38,23 @@ const TYPE_CONFIG: Record<SceneUpdateType, { label: string; className: string }>
   },
 };
 
-function getEntityLink(update: SceneUpdate): string | null {
-  if (!update.entity_id || !update.entity_type) return null;
-  if (update.entity_type === 'restaurant') {
-    return `/restaurants/${update.entity_slug || update.entity_id}`;
-  }
-  if (update.entity_type === 'attraction') {
-    return `/attractions/${update.entity_id}`;
-  }
-  return null;
+/**
+ * Shown in place of "New", "Under renovation" or "Expanding" when the
+ * restaurant's row now says closed (pass 2 WP4 item 7). The update is still
+ * history worth reading; its label should not say the place is operating.
+ */
+const NOW_CLOSED = {
+  label: 'Now closed',
+  className: TYPE_CONFIG.closing.className,
+};
+
+function badgeFor(update: SceneUpdate): { label: string; className: string } {
+  const base = TYPE_CONFIG[update.update_type] ?? TYPE_CONFIG.news;
+  const claimsOperating =
+    update.update_type === 'new_opening' ||
+    update.update_type === 'renovation' ||
+    update.update_type === 'expansion';
+  return update.entity_state === 'closed' && claimsOperating ? NOW_CLOSED : base;
 }
 
 interface SceneUpdateCardProps {
@@ -49,8 +62,8 @@ interface SceneUpdateCardProps {
 }
 
 export function SceneUpdateCard({ update }: SceneUpdateCardProps) {
-  const typeConfig = TYPE_CONFIG[update.update_type] ?? TYPE_CONFIG.news;
-  const entityLink = getEntityLink(update);
+  const typeConfig = badgeFor(update);
+  const entityLink = sceneUpdateHref(update);
   const sourceUrl = safeWebUrl(update.source_url);
 
   return (

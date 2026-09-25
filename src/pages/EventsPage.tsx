@@ -1,17 +1,7 @@
 import { useState, useEffect, useCallback, lazy, Suspense, useRef, useMemo } from "react";
-import { Link, useNavigate } from "react-router-dom";
+import { Link, useLocation, useNavigate } from "react-router-dom";
 import { keepPreviousData, useInfiniteQuery, useQuery } from "@tanstack/react-query";
-import {
-  AlertCircle,
-  Calendar,
-  ChevronDown,
-  List,
-  Map as MapIcon,
-  RefreshCw,
-  SearchX,
-  Tag,
-  X,
-} from "lucide-react";
+import { AlertCircle, Calendar, ChevronDown, RefreshCw, SearchX, Tag, X } from "lucide-react";
 import Header from "@/components/Header";
 import Footer from "@/components/Footer";
 import SEOHead from "@/components/SEOHead";
@@ -24,10 +14,14 @@ import { FAQSection } from "@/components/FAQSection";
 import { BackToTop } from "@/components/BackToTop";
 import { ListFreshness } from "@/components/ListFreshness";
 import { SocialEventCard } from "@/components/SocialEventCard";
-import { EventSmartPresets } from "@/components/EventSmartPresets";
+import { QuickPicks } from "@/components/EventSmartPresets";
+import { LazySection } from "@/components/LazySection";
 import type { EventPresetFilters } from "@/lib/eventPresets";
-import type { EventDateChange } from "@/components/EventInlineFilters";
-import { EventFiltersSheet } from "@/components/events/EventFiltersSheet";
+import {
+  EventFiltersSheet,
+  type EventDateChange,
+  type SheetWriteOptions,
+} from "@/components/events/EventFiltersSheet";
 import { EventsStickyBar } from "@/components/events/EventsStickyBar";
 import { TonightStrip } from "@/components/events/TonightStrip";
 import { DayGroupedList } from "@/components/events/DayGroupedList";
@@ -40,7 +34,8 @@ import { useIsMobile } from "@/hooks/use-mobile";
 import { usePullToRefresh } from "@/hooks/use-pull-to-refresh";
 import { useUrlFilters } from "@/hooks/useUrlFilters";
 import { useToast } from "@/hooks/use-toast";
-import { useBatchEventSocial } from "@/hooks/useBatchEventSocial";
+import { useBatchEventSocialGroups } from "@/hooks/useBatchEventSocial";
+import { useNow } from "@/hooks/useNow";
 import { useAnnounce } from "@/hooks/use-announce";
 import { useFilterKeyboardShortcuts } from "@/hooks/useFilterKeyboardShortcuts";
 import { useEventsMapData } from "@/hooks/useEventsMapData";
@@ -49,9 +44,10 @@ import { queryKeys } from "@/lib/queryKeys";
 import { arrangeSponsored, isSponsoredActive, SPONSORED_CAP } from "@/lib/sponsored";
 import { BRAND, getCanonicalUrl } from "@/lib/brandConfig";
 import { buildEventItemList } from "@/lib/eventSchema";
-import { isCanonicalCategory } from "@/lib/eventCategories";
+import { EVENT_CATEGORIES, isCanonicalCategory } from "@/lib/eventCategories";
 import { findEventArea } from "@/lib/eventAreas";
-import { createEventSlugWithCentralTime } from "@/lib/timezone";
+import { isPrerender } from "@/lib/isPrerender";
+import { centralDateOf, createEventSlugWithCentralTime } from "@/lib/timezone";
 import { cn } from "@/lib/utils";
 import {
   EVENTS_PER_PAGE,
@@ -59,10 +55,13 @@ import {
   countLabel,
   fetchHubPage,
   fetchNearMe,
+  fetchSponsoredLead,
   flattenPages,
+  nearMeCountLabel,
   parseHubSort,
   pickedDay,
   resolveHubDate,
+  selectTonight,
   useTonightStripEvents,
   type HubEvent,
   type HubFilters,
@@ -76,6 +75,14 @@ const EventsMap = lazy(() => import("@/components/EventsMap"));
 const MAX_DEEP_LINK_PAGES = 10;
 /** The top_banner slot sits after this many cards (0-based index 5). */
 const AD_AFTER_INDEX = 5;
+/** No empty state or noindex until the search box has been still this long. */
+const SEARCH_SETTLE_MS = 800;
+/** Where the FAQ's "Music venues" link lands. */
+const DIRECTORY_ID = "events-directory";
+/** Near me is in distance order; the sort control says so. */
+const DISTANCE_SORT_OPTIONS = [{ value: "distance", label: "Distance" }];
+/** Every URL key Clear all removes. */
+const FILTER_KEYS = ["q", "search", "category", "preset", "from", "to", "location", "area", "price", "sort", "near"];
 
 type Origin = { latitude: number; longitude: number };
 
@@ -83,6 +90,7 @@ const HUB_FAQS = buildHubFaqs();
 
 export default function EventsPage() {
   const navigate = useNavigate();
+  const { hash } = useLocation();
   const isMobile = useIsMobile();
   const { toast } = useToast();
   const searchInputRef = useRef<HTMLInputElement>(null);
@@ -111,10 +119,18 @@ export default function EventsPage() {
   const viewMode = getStr("view", "list") === "map" ? "map" : "list";
   const initialPage = Math.min(Math.max(1, Math.floor(getNum("page", 1))), MAX_DEEP_LINK_PAGES);
 
+  // One clock for the page: the strip's labels, "not over yet" and the day
+  // headers. Paused while the tab is hidden, re-read when it comes back.
+  const now = useNow(60 * 1000);
+  const today = centralDateOf(now);
+
   const area = findEventArea(location);
+  // Keyed on the Central date too, so a tab left open over midnight rolls
+  // "Today" over to the new day (events-pass2 WP1 item 6).
   const resolvedDate = useMemo(
     () => resolveHubDate(presetParam, fromParam, toParam),
-    [presetParam, fromParam, toParam]
+    // eslint-disable-next-line react-hooks/exhaustive-deps -- `today` is the rollover trigger
+    [presetParam, fromParam, toParam, today]
   );
   const activePreset = resolvedDate?.source === "preset" ? resolvedDate.preset ?? "" : "";
 
@@ -133,13 +149,6 @@ export default function EventsPage() {
   // Local immediate search input; writes to URL 'q' debounced.
   const [searchQuery, setSearchQuery] = useState(() => debouncedSearchQuery);
   const [filtersOpen, setFiltersOpen] = useState(false);
-
-  // Clock for the Tonight strip's "starts in 40 min" labels.
-  const [now, setNow] = useState(() => new Date());
-  useEffect(() => {
-    const id = window.setInterval(() => setNow(new Date()), 60 * 1000);
-    return () => window.clearInterval(id);
-  }, []);
 
   // ---------------------------------------------------------------------
   // Near me. `?near=1` is in the URL; coordinates stay in memory only.
@@ -163,16 +172,23 @@ export default function EventsPage() {
       },
       (error) => {
         setIsLoadingLocation(false);
-        const message =
-          error.code === error.PERMISSION_DENIED
-            ? "Location permission was denied. The Near Me page lets you pick a starting point instead."
-            : "We couldn't get your location.";
-        toast({ title: "Near me is off", description: message });
+        if (error.code === error.PERMISSION_DENIED) {
+          // Denied is not a dead end (item 8): the Near Me page lets you pick
+          // a starting point, and it reads the same window and category.
+          // A ?near=1 entry is replaced, so Back doesn't ask again.
+          const params = new URLSearchParams();
+          if (activePreset) params.set("when", activePreset);
+          if (selectedCategory !== "all") params.set("category", selectedCategory);
+          const qs = params.toString();
+          navigate(`/events/near-me${qs ? `?${qs}` : ""}`, { replace: nearParam });
+          return;
+        }
+        toast({ title: "Near me is off", description: "We couldn't get your location." });
         setParam("near", "", { resetsPage: true, replace: true });
       },
       { enableHighAccuracy: false, timeout: 10000, maximumAge: 300000 }
     );
-  }, [setParam, toast]);
+  }, [setParam, toast, navigate, activePreset, selectedCategory, nearParam]);
 
   // A shared or reloaded ?near=1 link asks for the location once.
   const askedForLocation = useRef(false);
@@ -196,37 +212,49 @@ export default function EventsPage() {
   // ---------------------------------------------------------------------
   // Filter writers. Each one navigates once.
   // ---------------------------------------------------------------------
-  const setSelectedCategory = (v: string) => setParam("category", v, { def: "all", resetsPage: true });
-  const setLocation = (v: string) =>
-    setMany({ location: v === "any-location" ? null : v, area: null });
-  const setPriceRange = (v: string) => setParam("price", v, { def: "any-price", resetsPage: true });
-  const setSortBy = (v: string) => setParam("sort", v, { def: "date_asc", resetsPage: true });
+  // The sheet passes { replace } on every write after its first, so one sheet
+  // session is one history entry (WP2 item 8). The hero's chips pass nothing
+  // and push, as a tap on the page should.
+  const setSelectedCategory = (v: string, o?: SheetWriteOptions) =>
+    setParam("category", v, { def: "all", resetsPage: true, replace: o?.replace });
+  const setLocation = (v: string, o?: SheetWriteOptions) =>
+    setMany({ location: v === "any-location" ? null : v, area: null }, { replace: o?.replace });
+  const setPriceRange = (v: string, o?: SheetWriteOptions) =>
+    setParam("price", v, { def: "any-price", resetsPage: true, replace: o?.replace });
+  const setSortBy = (v: string, o?: SheetWriteOptions) => {
+    if (v === "distance") return; // near me's only order; nothing to write
+    setParam("sort", v, { def: "date_asc", resetsPage: true, replace: o?.replace });
+  };
   const setView = (v: "list" | "map") => setParam("view", v, { def: "list", replace: true });
-  const setDatePreset = (preset: string) =>
-    setMany({ preset: preset || null, from: null, to: null });
+  const setDatePreset = (preset: string, o?: SheetWriteOptions) =>
+    setMany({ preset: preset || null, from: null, to: null }, { replace: o?.replace });
 
   const toggleDatePreset = (preset: string) => setDatePreset(activePreset === preset ? "" : preset);
 
-  const handleDateChange = (d: EventDateChange) => {
+  const handleDateChange = (d: EventDateChange, o?: SheetWriteOptions) => {
     if (!d) {
-      setMany({ preset: null, from: null, to: null });
+      setMany({ preset: null, from: null, to: null }, { replace: o?.replace });
     } else if (d.mode === "preset") {
-      setDatePreset(d.preset && d.preset !== "any-date" ? d.preset : "");
+      setDatePreset(d.preset && d.preset !== "any-date" ? d.preset : "", o);
     } else if (d.start) {
       const from = pickedDay(d.start);
       const to = d.mode === "range" && d.end ? pickedDay(d.end) : null;
-      setMany({ preset: null, from, to: to && to !== from ? to : null });
+      setMany({ preset: null, from, to: to && to !== from ? to : null }, { replace: o?.replace });
     }
   };
 
-  const handleClearFilters = () => {
+  const handleClearFilters = (o?: SheetWriteOptions) => {
     setSearchQuery("");
     setUserLocation(null);
-    clearParams(["q", "search", "category", "preset", "from", "to", "location", "area", "price", "sort", "near"]);
+    if (o?.replace) {
+      setMany(Object.fromEntries(FILTER_KEYS.map((k) => [k, null])), { replace: true });
+    } else {
+      clearParams(FILTER_KEYS);
+    }
   };
 
   /** A preset writes category, price and date in ONE navigation (WP1 item 5). */
-  const handleEventPreset = (filters: EventPresetFilters) => {
+  const handleEventPreset = (filters: EventPresetFilters, o?: SheetWriteOptions) => {
     const entries: Record<string, string | null> = {};
     if (filters.category) entries.category = filters.category;
     if (filters.priceRange) entries.price = filters.priceRange;
@@ -235,15 +263,15 @@ export default function EventsPage() {
       entries.from = null;
       entries.to = null;
     }
-    setMany(entries, { defaults: { category: "all", price: "any-price" } });
+    setMany(entries, { defaults: { category: "all", price: "any-price" }, replace: o?.replace });
   };
 
-  const handleClearPreset = (filters: EventPresetFilters) => {
+  const handleClearPreset = (filters: EventPresetFilters, o?: SheetWriteOptions) => {
     const entries: Record<string, string | null> = {};
     if (filters.category) entries.category = null;
     if (filters.priceRange) entries.price = null;
     if (filters.datePreset) entries.preset = null;
-    setMany(entries);
+    setMany(entries, { replace: o?.replace });
   };
 
   useFilterKeyboardShortcuts({
@@ -271,23 +299,41 @@ export default function EventsPage() {
     setSearchQuery(debouncedSearchQuery);
   }, [debouncedSearchQuery]);
 
+  // "No results" and noindex wait until the box has been still for
+  // SEARCH_SETTLE_MS (item 12), so "ja" on the way to "jazz" never flashes an
+  // empty state. A shared ?q= link is settled from the first render.
+  const [searchSettled, setSearchSettled] = useState(true);
+  const typedOnce = useRef(false);
+  useEffect(() => {
+    if (!typedOnce.current) {
+      typedOnce.current = true;
+      return;
+    }
+    setSearchSettled(false);
+    const timer = setTimeout(() => setSearchSettled(true), SEARCH_SETTLE_MS);
+    return () => clearTimeout(timer);
+  }, [searchQuery]);
+
   // ---------------------------------------------------------------------
   // The list. Pages APPEND (WP1 item 3): Load More used to swap page 1 for
   // page 2, and the header printed the page length as the total.
   // ---------------------------------------------------------------------
   const waitingForLocation = nearParam && !userLocation;
+  const filterKey = {
+    search: debouncedSearchQuery,
+    category: selectedCategory,
+    windowStart: hubFilters.window?.start ?? null,
+    windowEnd: hubFilters.window?.end ?? null,
+    area: area?.slug ?? null,
+    free: hubFilters.freeOnly,
+  };
   const listQuery = useInfiniteQuery({
     // WEB-PERF-032: nested under ["events","list"] so one invalidation reaches
     // every events list. `page` is deliberately not in the key: it only says
     // how much of this list to load first.
     queryKey: queryKeys.events.list({
       hub: "list",
-      search: debouncedSearchQuery,
-      category: selectedCategory,
-      windowStart: hubFilters.window?.start ?? null,
-      windowEnd: hubFilters.window?.end ?? null,
-      area: area?.slug ?? null,
-      free: hubFilters.freeOnly,
+      ...filterKey,
       sort: sortBy,
       near: isNearMeActive && userLocation
         ? [userLocation.latitude.toFixed(2), userLocation.longitude.toFixed(2)]
@@ -299,7 +345,8 @@ export default function EventsPage() {
         ? fetchNearMe(hubFilters, userLocation, new Date())
         : fetchHubPage(hubFilters, pageParam, new Date()),
     getNextPageParam: (lastPage, allPages): HubPageParam | undefined => {
-      if (lastPage.complete) return undefined;
+      // Near me answers in one page, capped or not.
+      if (lastPage.complete || lastPage.capped !== undefined) return undefined;
       const total = allPages[0]?.total ?? 0;
       const offset = lastPage.offset + lastPage.limit;
       return offset < total ? { offset, limit: EVENTS_PER_PAGE } : undefined;
@@ -312,25 +359,35 @@ export default function EventsPage() {
   const pages = useMemo(() => listQuery.data?.pages ?? [], [listQuery.data]);
   const firstPage = pages[0];
   const totalCount = firstPage?.total ?? 0;
+  const nearMeCapped = Boolean(isNearMeActive && firstPage?.capped);
+  // The list is showing the previous filters' rows while the new ones load.
+  const isUpdating = listQuery.isPlaceholderData;
 
-  // Paid placement: up to SPONSORED_CAP active sponsored rows from PAGE 1 lead
-  // the list (WEB-FEAT-005). Later pages are organic order only.
+  // Paid placement (item 9): up to SPONSORED_CAP active sponsored rows that
+  // match the filters lead the list, wherever they sit in organic order. The
+  // placement is sold as "moved to the top of the list"; this used to move
+  // only a row already on page 1. Position only - the price is server-side.
+  const sponsoredQuery = useQuery({
+    queryKey: queryKeys.events.list({ hub: "sponsored", ...filterKey }),
+    queryFn: () => fetchSponsoredLead(hubFilters, new Date()),
+    enabled: viewMode === "list" && !nearParam,
+    placeholderData: keepPreviousData,
+    staleTime: 5 * 60 * 1000,
+  });
+
   const { pinned, listEvents, allEvents } = useMemo(() => {
-    if (!firstPage) return { pinned: [], listEvents: [], allEvents: [] };
-    const arranged = arrangeSponsored(firstPage.events);
-    const lead: HubEvent[] = [];
-    for (const event of arranged) {
-      if (lead.length >= SPONSORED_CAP || !isSponsoredActive(event)) break;
-      lead.push(event);
-    }
+    // arrangeSponsored is the shared lift rule (active first, SPONSORED_CAP),
+    // the same call every sponsored_listing page makes (placementSpecs.test).
+    const lead =
+      !nearParam && firstPage
+        ? arrangeSponsored(sponsoredQuery.data)
+            .filter(isSponsoredActive)
+            .slice(0, SPONSORED_CAP)
+        : [];
     const leadIds = new Set(lead.map((e) => e.id));
-    const flat = flattenPages(pages);
-    return {
-      pinned: lead,
-      listEvents: flat.filter((e) => !leadIds.has(e.id)),
-      allEvents: flat,
-    };
-  }, [firstPage, pages]);
+    const organic = flattenPages(pages, leadIds);
+    return { pinned: lead, listEvents: organic, allEvents: [...lead, ...organic] };
+  }, [nearParam, firstPage, sponsoredQuery.data, pages]);
 
   const loadedCount = allEvents.length;
 
@@ -347,7 +404,7 @@ export default function EventsPage() {
   // Keep ?page= in step with what is loaded, so a reload or a shared link
   // comes back to the same place.
   const loadMore = () => {
-    const nextPage = Math.ceil(loadedCount / EVENTS_PER_PAGE) + 1;
+    const nextPage = pages.length + (initialPage - 1) + 1;
     void listQuery.fetchNextPage();
     setParam("page", nextPage, { def: 1, replace: true });
   };
@@ -361,40 +418,61 @@ export default function EventsPage() {
     nearParam,
   ].filter(Boolean).length;
 
-  // Tonight strip: only on the unfiltered list view.
-  const tonightEnabled = activeFiltersCount === 0 && viewMode === "list";
+  // The strip: only on the unfiltered list, and never in the prerender, whose
+  // HTML would freeze "Starts in 40 min" (item 6).
+  const tonightEnabled = activeFiltersCount === 0 && viewMode === "list" && !isPrerender();
   const tonightQuery = useTonightStripEvents(tonightEnabled, now);
-  const tonightRows = useMemo(
-    () => (tonightEnabled ? tonightQuery.data ?? [] : []),
-    [tonightEnabled, tonightQuery.data]
+  const stripItems = useMemo(
+    () => (tonightEnabled ? selectTonight(tonightQuery.data ?? [], now) : []),
+    [tonightEnabled, tonightQuery.data, now]
   );
+  // Strip rows are already on screen; the list leaves them out (item 14).
+  const stripIds = useMemo(() => new Set(stripItems.map((i) => i.event.id)), [stripItems]);
+  // One LCP priority (item 11): the strip's first two cards when it shows,
+  // otherwise the list's first three.
+  const stripCount = stripItems.length;
 
   // Announce the count once per change. The visible count is NOT a live
   // region; announcing it twice was the old behaviour.
-  const countText = countLabel(loadedCount, totalCount);
+  const countText = isNearMeActive
+    ? nearMeCountLabel(loadedCount, nearMeCapped)
+    : countLabel(loadedCount, Math.max(totalCount, loadedCount));
   useEffect(() => {
-    if (isInitialLoading || firstPageFailed) return;
+    if (isInitialLoading || firstPageFailed || isUpdating) return;
     announce(`${countText}${debouncedSearchQuery ? ` matching "${debouncedSearchQuery}"` : ""}`);
-  }, [countText, isInitialLoading, firstPageFailed, debouncedSearchQuery, announce]);
+  }, [countText, isInitialLoading, firstPageFailed, isUpdating, debouncedSearchQuery, announce]);
 
-  const { data: categories } = useQuery({
+  // Categories load when someone opens the sheet or arrives with a category
+  // (item 15), not on every visit. The canonical list stands in on error.
+  const wantCategories = filtersOpen || selectedCategory !== "all";
+  const categoriesQuery = useQuery({
     queryKey: ["event-categories"],
     queryFn: async () => {
       const { data, error } = await supabase.rpc("get_event_categories");
       if (error) throw error;
       return (data || []).map((row: { category: string }) => row.category);
     },
+    enabled: wantCategories,
     staleTime: 30 * 60 * 1000,
   });
+  const categories = useMemo(() => {
+    const rows = categoriesQuery.data;
+    if (rows && rows.length > 0) return rows;
+    return EVENT_CATEGORIES.filter(isCanonicalCategory);
+  }, [categoriesQuery.data]);
 
-  // One social batch for the strip and the list. isPending is forwarded so
-  // cards don't each fall back to their own fetch (WEB-PERF-024).
-  const socialIds = useMemo(() => {
-    const ids = new Set<string>(allEvents.map((e) => e.id));
-    for (const row of tonightRows) ids.add(row.id);
-    return Array.from(ids);
-  }, [allEvents, tonightRows]);
-  const { data: batchSocialData, isPending: batchSocialPending } = useBatchEventSocial(socialIds);
+  // Social counts, one query per loaded page plus one for the strip (item
+  // 10). Load More adds a query; it doesn't refetch what's on screen.
+  const socialGroups = useMemo(
+    () => [
+      pinned.map((e) => e.id),
+      ...pages.map((p) => p.events.map((e) => e.id)),
+      stripItems.map((i) => i.event.id),
+    ],
+    [pinned, pages, stripItems]
+  );
+  const { data: batchSocialData, isPending: batchSocialPending } =
+    useBatchEventSocialGroups(socialGroups);
 
   const handleViewEventDetails = useCallback(
     (event: HubEvent) => {
@@ -409,10 +487,18 @@ export default function EventsPage() {
     },
   });
 
+  // The FAQ's "Music venues" link is /events#events-directory. The router
+  // doesn't scroll to a hash, so this does.
+  useEffect(() => {
+    if (hash !== `#${DIRECTORY_ID}`) return;
+    document.getElementById(DIRECTORY_ID)?.scrollIntoView({ block: "start" });
+  }, [hash]);
+
   // ---------------------------------------------------------------------
   // Empty state: offer ONE relaxation, measured by count-only HEAD queries.
   // ---------------------------------------------------------------------
-  const isEmpty = !isInitialLoading && !firstPageFailed && loadedCount === 0;
+  const isEmpty =
+    !isInitialLoading && !firstPageFailed && !isUpdating && searchSettled && loadedCount === 0;
   const relaxable =
     isEmpty && !isNearMeActive && (selectedCategory !== "all" || resolvedDate !== null);
   const relaxQuery = useQuery({
@@ -472,7 +558,9 @@ export default function EventsPage() {
 
   const canonicalCategory = selectedCategory !== "all" && isCanonicalCategory(selectedCategory);
   const noIndex =
-    firstPageFailed || Boolean(debouncedSearchQuery) || (selectedCategory !== "all" && !canonicalCategory);
+    firstPageFailed ||
+    (Boolean(debouncedSearchQuery) && searchSettled) ||
+    (selectedCategory !== "all" && !canonicalCategory);
 
   const resultsHeading = debouncedSearchQuery
     ? `Results for "${debouncedSearchQuery}"`
@@ -507,19 +595,21 @@ export default function EventsPage() {
     );
   }, [activeFiltersCount, firstPage, seoDescription]);
 
-
-  const renderCard = (event: HubEvent, index: number) => (
+  const renderCard = (event: HubEvent, index: number, options: { headingLevel: 3 | 4 }) => (
     <SocialEventCard
-      priority={index < 3}
+      priority={stripCount === 0 && index < 3}
       key={event.id}
       event={event}
+      headingLevel={options.headingLevel}
       socialData={batchSocialData?.[event.id]}
-      socialDataPending={batchSocialPending}
+      socialDataPending={batchSocialPending && !batchSocialData?.[event.id]}
       onViewDetails={handleViewEventDetails}
     />
   );
 
-  const cardCount = pinned.length + listEvents.length;
+  const shownCardCount =
+    pinned.filter((e) => !stripIds.has(e.id)).length +
+    listEvents.filter((e) => !stripIds.has(e.id)).length;
   const adSlot = (
     <div className="py-1">
       <AdBanner placement="top_banner" />
@@ -539,6 +629,24 @@ export default function EventsPage() {
           icon: Calendar,
         }
     : null;
+
+  const barCountLabel = isInitialLoading
+    ? "Loading events..."
+    : firstPageFailed
+    ? "Events unavailable"
+    : isUpdating
+    ? "Updating..."
+    : isNearMeActive
+    ? countText
+    : `${countText} in Des Moines`;
+
+  const sheetResultLabel = isInitialLoading
+    ? undefined
+    : isUpdating
+    ? "Updating..."
+    : isNearMeActive
+    ? `Show ${countText}`
+    : `Show ${countLabel(totalCount, totalCount)}`;
 
   return (
     <>
@@ -576,14 +684,12 @@ export default function EventsPage() {
           isNearMe={nearParam}
           isLocating={isLoadingLocation}
           onToggleNearMe={handleNearMe}
-          activeFiltersCount={activeFiltersCount}
-          onOpenFilters={() => setFiltersOpen(true)}
         />
 
         <EventFiltersSheet
           open={filtersOpen}
           onOpenChange={setFiltersOpen}
-          categories={categories || []}
+          categories={categories}
           selectedCategory={selectedCategory}
           onCategoryChange={setSelectedCategory}
           location={location}
@@ -596,9 +702,12 @@ export default function EventsPage() {
           customDateLabel={resolvedDate?.source === "custom" ? resolvedDate.label : undefined}
           sortBy={sortBy}
           onSortChange={setSortBy}
+          onApplyPreset={handleEventPreset}
+          onClearPreset={handleClearPreset}
           activeFiltersCount={activeFiltersCount}
           onClearAll={handleClearFilters}
-          resultLabel={isInitialLoading ? undefined : `Show ${countLabel(totalCount, totalCount)}`}
+          resultLabel={sheetResultLabel}
+          resultPending={isUpdating}
         />
 
         <div ref={pullToRefreshRef} className="container relative mx-auto px-4 pb-6 pt-4 md:py-8">
@@ -620,67 +729,35 @@ export default function EventsPage() {
 
           {tonightEnabled && (
             <TonightStrip
-              rows={tonightRows}
+              items={stripItems}
               now={now}
               socialData={batchSocialData}
               socialDataPending={batchSocialPending}
               onViewDetails={handleViewEventDetails}
+              priorityCount={2}
             />
           )}
 
           <div {...regionProps}>{announcement}</div>
 
-          {/* Results header: heading, freshness, list/map. */}
-          <div className="mb-3 flex items-center justify-between gap-3">
-            <div className="min-w-0">
-              <h2 className="text-xl font-bold text-foreground md:text-2xl">{resultsHeading}</h2>
-              <ListFreshness rows={allEvents} className="mt-1" />
-            </div>
-            <div
-              role="group"
-              aria-label="View"
-              className="inline-flex rounded-full border bg-background p-0.5"
-            >
-              {(["list", "map"] as const).map((mode) => {
-                const Icon = mode === "list" ? List : MapIcon;
-                const pressed = viewMode === mode;
-                return (
-                  <button
-                    key={mode}
-                    type="button"
-                    aria-pressed={pressed}
-                    onClick={() => setView(mode)}
-                    className={cn(
-                      "inline-flex min-h-11 items-center gap-1.5 rounded-full px-4 text-sm font-medium transition-colors",
-                      "focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring",
-                      pressed ? "bg-primary text-primary-foreground" : "text-foreground hover:bg-accent"
-                    )}
-                  >
-                    <Icon className="h-4 w-4" aria-hidden="true" />
-                    {mode === "list" ? "List" : "Map"}
-                  </button>
-                );
-              })}
-            </div>
+          <div className="mb-3 min-w-0">
+            <h2 className="text-xl font-bold text-foreground md:text-2xl">{resultsHeading}</h2>
+            <ListFreshness rows={allEvents} className="mt-1" />
           </div>
 
           <EventsStickyBar
             className="mb-4"
-            countLabel={
-              isInitialLoading
-                ? "Loading events..."
-                : firstPageFailed
-                ? "Events unavailable"
-                : `${countText} in Des Moines${isNearMeActive ? " near you" : ""}`
-            }
+            countLabel={barCountLabel}
             chips={eventChips}
-            onClearAll={handleClearFilters}
+            onClearAll={() => handleClearFilters()}
             onOpenFilters={() => setFiltersOpen(true)}
             activeFiltersCount={activeFiltersCount}
-            sortBy={sortBy}
+            sortBy={isNearMeActive ? "distance" : sortBy}
             onSortChange={setSortBy}
+            sortOptions={isNearMeActive ? DISTANCE_SORT_OPTIONS : undefined}
+            viewMode={viewMode}
+            onViewChange={setView}
           />
-
 
           {isInitialLoading && (
             <CardsGridSkeleton
@@ -746,19 +823,26 @@ export default function EventsPage() {
             </Suspense>
           )}
 
-          {!isInitialLoading && !firstPageFailed && cardCount > 0 && viewMode === "list" && (
-            <DayGroupedList
-              events={listEvents}
-              pinned={pinned}
-              grouped={sortBy === "date_asc"}
-              now={now}
-              renderEvent={renderCard}
-              insertAfter={{ index: Math.min(AD_AFTER_INDEX, cardCount - 1), node: adSlot }}
-              stickyTopClass={eventChips.length > 0 ? "top-44 sm:top-32" : "top-32"}
-            />
+          {!isInitialLoading && !firstPageFailed && loadedCount > 0 && viewMode === "list" && (
+            <div
+              aria-busy={isUpdating || undefined}
+              className={cn("transition-opacity", isUpdating && "opacity-60")}
+              data-hub-list=""
+            >
+              <DayGroupedList
+                events={listEvents}
+                pinned={pinned}
+                grouped={sortBy === "date_asc" && !isNearMeActive}
+                now={now}
+                relative={!isPrerender()}
+                renderEvent={renderCard}
+                insertAfter={{ index: Math.min(AD_AFTER_INDEX, shownCardCount - 1), node: adSlot }}
+                hiddenIds={stripIds}
+              />
+            </div>
           )}
 
-          {viewMode === "list" && listQuery.hasNextPage && cardCount > 0 && (
+          {viewMode === "list" && listQuery.hasNextPage && loadedCount > 0 && (
             <div className="mt-10 flex flex-col items-center gap-2">
               {listQuery.isFetchNextPageError && (
                 <p className="text-sm text-muted-foreground" role="status">
@@ -782,7 +866,7 @@ export default function EventsPage() {
             </div>
           )}
 
-          {viewMode === "list" && !listQuery.hasNextPage && cardCount > 0 && (
+          {viewMode === "list" && !listQuery.hasNextPage && loadedCount > 0 && !isNearMeActive && (
             <p className="mb-4 mt-8 text-center text-sm text-muted-foreground">
               Showing all {countLabel(loadedCount, loadedCount)}
             </p>
@@ -801,35 +885,33 @@ export default function EventsPage() {
                 relaxAction
                   ? [relaxAction]
                   : activeFiltersCount > 0
-                  ? [{ label: "Clear all filters", onClick: handleClearFilters, variant: "outline", icon: X }]
+                  ? [{ label: "Clear all filters", onClick: () => handleClearFilters(), variant: "outline", icon: X }]
                   : undefined
               }
               compact={isMobile}
             >
-              <Link
-                to="/events/this-weekend"
-                className="inline-flex min-h-11 items-center text-sm font-medium text-primary underline-offset-4 hover:underline"
-              >
-                See what's on this weekend
-              </Link>
+              <div className="flex flex-col items-center gap-4">
+                <QuickPicks
+                  title="Or try one of these"
+                  headingLevel={3}
+                  className="flex flex-col items-center"
+                  current={{
+                    category: selectedCategory !== "all" ? selectedCategory : undefined,
+                    priceRange: priceRange !== "any-price" ? priceRange : undefined,
+                    datePreset: activePreset || undefined,
+                  }}
+                  onApplyPreset={handleEventPreset}
+                  onClearPreset={handleClearPreset}
+                />
+                <Link
+                  to="/events/this-weekend"
+                  className="inline-flex min-h-11 items-center text-sm font-medium text-primary underline-offset-4 hover:underline"
+                >
+                  See what's on this weekend
+                </Link>
+              </div>
             </EmptyState>
           )}
-
-          {/* Quick picks: one tap sets category, price and date in one
-              navigation. Interim dark tray: EventSmartPresets is still styled
-              for the old dark hero (white text); drop the tray once it uses
-              surface tokens. */}
-          <div className="mt-10 rounded-2xl bg-slate-900 p-3">
-            <EventSmartPresets
-              current={{
-                category: selectedCategory !== "all" ? selectedCategory : undefined,
-                priceRange: priceRange !== "any-price" ? priceRange : undefined,
-                datePreset: activePreset || undefined,
-              }}
-              onApplyPreset={handleEventPreset}
-              onClearPreset={handleClearPreset}
-            />
-          </div>
         </div>
 
         <div className="bg-muted/10 py-6">
@@ -857,12 +939,18 @@ export default function EventsPage() {
               </div>
             </div>
 
-            <div className="mx-auto mb-12 max-w-4xl">
-              <EventsHubDirectory />
+            {/* Below the fold: mounted when scrolled near (item 15). The
+                prerender mounts both, so crawlers keep every link. */}
+            <div id={DIRECTORY_ID} className="mx-auto mb-12 max-w-4xl scroll-mt-20">
+              <LazySection minHeight={900} label="Browse Des Moines events">
+                <EventsHubDirectory />
+              </LazySection>
             </div>
 
             <div className="mx-auto mb-12 max-w-4xl">
-              <HubArticles hub="events" />
+              <LazySection minHeight={360} label="Guides and articles">
+                <HubArticles hub="events" />
+              </LazySection>
             </div>
 
             <div className="mx-auto max-w-4xl">

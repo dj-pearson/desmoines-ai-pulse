@@ -24,8 +24,14 @@ describe("hubsForArticle", () => {
 });
 
 import {
+  AI_ASSISTED_NOTICE,
   AI_AUTO_PUBLISHED_NOTICE,
+  AI_SCORED_NOTICE,
+  aiBadgeLabel,
   aiDisclosureText,
+  classifyArticleHref,
+  cuisineMatchesTags,
+  preferCuisineMatches,
   isAiArticle,
   isStaleArticle,
   primaryHubForArticle,
@@ -46,8 +52,11 @@ describe("AI disclosure (Plan & Stay WP4 item 1)", () => {
     expect(text).not.toMatch(/reviewed by a human editor/);
   });
 
-  it("keeps the assisted copy for suggestion-generated articles", () => {
-    expect(aiDisclosureText({ generated_from_suggestion_id: "abc" })).toMatch(/reviewed by a human editor/);
+  it("does not claim a training set or an editor for suggestion-generated articles", () => {
+    const text = aiDisclosureText({ generated_from_suggestion_id: "abc" }) ?? "";
+    expect(text).toBe(AI_ASSISTED_NOTICE);
+    expect(text).not.toMatch(/trained on public data/);
+    expect(text).not.toMatch(/reviewed by a human editor/);
   });
 
   it("shows nothing for a human-written article", () => {
@@ -101,5 +110,68 @@ describe("relatedArticles", () => {
 
   it("returns nothing when nothing overlaps", () => {
     expect(relatedArticles({ id: "z", category: null, tags: [] }, rows)).toEqual([]);
+  });
+});
+
+describe("pipeline drafts (pass 2 WP4 item 4)", () => {
+  it("treats a quality_score as AI, even when a person published it", () => {
+    const row = { quality_score: 72, is_auto_published: false };
+    expect(isAiArticle(row)).toBe(true);
+    expect(aiDisclosureText(row)).toBe(AI_SCORED_NOTICE);
+    expect(AI_SCORED_NOTICE).toMatch(/published by a person on our team/);
+    expect(aiBadgeLabel(row)).toBe("AI-assisted");
+  });
+
+  it("counts a score of zero, and prefers the auto-published notice", () => {
+    expect(isAiArticle({ quality_score: 0 })).toBe(true);
+    expect(aiDisclosureText({ quality_score: 90, is_auto_published: true })).toBe(AI_AUTO_PUBLISHED_NOTICE);
+    expect(aiBadgeLabel({ is_auto_published: true })).toBe("AI-written");
+  });
+
+  it("a null score is not AI", () => {
+    expect(isAiArticle({ quality_score: null })).toBe(false);
+  });
+});
+
+describe("cuisine preference (pass 2 WP4 item 6)", () => {
+  it("matches whole words from the tags", () => {
+    expect(cuisineMatchesTags("Pizza, Italian", ["patio", "pizza"])).toBe(true);
+    expect(cuisineMatchesTags("BBQ", ["bbq"])).toBe(true);
+    expect(cuisineMatchesTags("Barbecue", ["bar"])).toBe(false);
+    expect(cuisineMatchesTags(null, ["pizza"])).toBe(false);
+    expect(cuisineMatchesTags("Mexican", [])).toBe(false);
+  });
+
+  it("puts matches first and keeps popularity order otherwise", () => {
+    const rows = [
+      { id: "1", cuisine: "American" },
+      { id: "2", cuisine: "Pizza" },
+      { id: "3", cuisine: null },
+      { id: "4", cuisine: "Pizza, Bar" },
+    ];
+    expect(preferCuisineMatches(rows, ["pizza"]).map((r) => r.id)).toEqual(["2", "4", "1", "3"]);
+    expect(preferCuisineMatches(rows, []).map((r) => r.id)).toEqual(["1", "2", "3", "4"]);
+  });
+});
+
+describe("classifyArticleHref (pass 2 WP4 item 12)", () => {
+  const site = "https://desmoinesinsider.com";
+  it("routes site paths and same-host URLs in-app", () => {
+    expect(classifyArticleHref("/restaurants/open-now", site)).toEqual({ kind: "internal", path: "/restaurants/open-now" });
+    expect(classifyArticleHref("https://www.desmoinesinsider.com/events?x=1#top", site)).toEqual({
+      kind: "internal",
+      path: "/events?x=1#top",
+    });
+  });
+
+  it("marks other hosts external", () => {
+    expect(classifyArticleHref("https://example.com/menu", site)).toEqual({ kind: "external", href: "https://example.com/menu" });
+    expect(classifyArticleHref("//example.com/a", site).kind).toBe("external");
+  });
+
+  it("leaves mailto, fragments and junk as plain anchors", () => {
+    expect(classifyArticleHref("mailto:hi@example.com", site).kind).toBe("other");
+    expect(classifyArticleHref("#section", site).kind).toBe("other");
+    expect(classifyArticleHref(undefined, site).kind).toBe("other");
   });
 });

@@ -4,7 +4,7 @@ import { Event, Restaurant } from "@/lib/types";
 import { EVENT_LIST_COLUMNS, RESTAURANT_LIST_COLUMNS } from "@/lib/listColumns";
 import { createLogger } from "@/lib/logger";
 import { queryKeys } from "@/lib/queryKeys";
-import { JUST_OPENED_WINDOW_DAYS } from "@/lib/restaurantOpenings";
+import { JUST_OPENED_WINDOW_DAYS, orderOpeningsWatch } from "@/lib/restaurantOpenings";
 import { addCentralDays, centralDateOf } from "@/lib/timezone";
 
 const logger = createLogger("useSupabase");
@@ -159,30 +159,33 @@ interface RestaurantOpeningsOptions {
 
 export function useRestaurantOpenings(options: RestaurantOpeningsOptions = {}) {
   const { limit, includeRecentlyOpened = false } = options;
-  // A Central calendar date, so the key changes once a day, not every render.
-  const since = includeRecentlyOpened
-    ? addCentralDays(centralDateOf(), -JUST_OPENED_WINDOW_DAYS)
-    : null;
+  // Central calendar dates, so the key changes once a day, not every render.
+  const today = centralDateOf();
+  const since = includeRecentlyOpened ? addCentralDays(today, -JUST_OPENED_WINDOW_DAYS) : null;
   return useQuery<RestaurantWithSlug[]>({
-    // The unbounded caller keeps the key it always had, so an invalidation of
-    // ['restaurant-openings'] still reaches every variant by prefix.
+    // Every variant starts with 'restaurant-openings', so an invalidation of
+    // that prefix still reaches all of them.
     queryKey:
       limit || since
-        ? ['restaurant-openings', { limit: limit ?? null, since }]
-        : ['restaurant-openings'],
+        ? ['restaurant-openings', { limit: limit ?? null, since, today }]
+        : ['restaurant-openings', { today }],
     queryFn: async () => {
       let query = supabase
         .from('restaurants')
         .select(RESTAURANT_LIST_COLUMNS)
         // Hide rows merged into a duplicate (WEB-AUTO-005).
         .neq('is_merged', true);
+      // An upcoming row whose date has passed is a stale announcement
+      // (eat-drink pass 2, WP2.7). It is left out here so it cannot take one
+      // of the capped slots; /restaurants/new lists it under "Announced, not
+      // confirmed". A stale year in an undated timeframe is dropped below.
+      const upcoming = `and(status.in.(opening_soon,announced),or(opening_date.gte.${today},opening_date.is.null))`;
       query = since
-        ? query.or(
-            `status.in.(opening_soon,announced),and(status.eq.newly_opened,opening_date.gte.${since})`,
-          )
-        : query.in('status', ['opening_soon', 'announced']);
-      // Oldest first: the places that just opened lead, then the soonest
-      // upcoming date, then the undated announcements.
+        ? query.or(`${upcoming},and(status.eq.newly_opened,opening_date.gte.${since})`)
+        : query.or(upcoming);
+      // Ascending picks the right rows under the cap: every recent opening
+      // (at most JUST_OPENED_WINDOW_DAYS old), then the soonest upcoming
+      // dates, undated last. The display order is set after the fetch.
       query = query.order('opening_date', { ascending: true, nullsFirst: false });
       if (limit) {
         query = query.limit(limit);
@@ -194,7 +197,15 @@ export function useRestaurantOpenings(options: RestaurantOpeningsOptions = {}) {
         throw error;
       }
       logger.info('useRestaurantOpenings', 'Restaurant openings fetched', { count: data?.length });
-      return data?.map(transformRestaurant) || [];
+      // Newest opening first, then the soonest upcoming, then undated; stale
+      // announcements dropped.
+      return orderOpeningsWatch((data ?? []).map(transformRestaurant), (row) => ({
+        id: row.id,
+        name: row.name,
+        status: row.status ?? null,
+        opening_date: row.openingDate ?? null,
+        opening_timeframe: row.openingTimeframe ?? null,
+      }));
     },
     staleTime: 120000, // 2 minutes
     gcTime: 600000, // 10 minutes

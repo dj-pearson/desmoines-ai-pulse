@@ -1,478 +1,216 @@
-import React from 'react';
-import { useAuth } from '@/hooks/useAuth';
-import { useTabState } from '@/hooks/useTabState';
-import { useNavigate } from 'react-router-dom';
-import { useQuery } from '@tanstack/react-query';
-import { supabase } from '@/integrations/supabase/client';
-import Header from '@/components/Header';
-import Footer from '@/components/Footer';
-import { Card, CardContent, CardHeader, CardTitle, CardDescription } from '@/components/ui/card';
-import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs';
-import { Badge } from '@/components/ui/badge';
-import { Button } from '@/components/ui/button';
-import { Skeleton } from '@/components/ui/skeleton';
-import { EmptyState } from '@/components/ui/empty-state';
-import { SocialEventCard } from '@/components/SocialEventCard';
-import SEOHead from '@/components/SEOHead';
+import type { ReactNode } from "react";
+import { Link } from "react-router-dom";
+import { Bell, CalendarCheck, Heart, History } from "lucide-react";
+import Header from "@/components/Header";
+import Footer from "@/components/Footer";
+import SEOHead from "@/components/SEOHead";
+import { ProtectedRoute } from "@/components/ProtectedRoute";
+import { FavoritesView } from "@/components/FavoritesView";
+import { PlanRow } from "@/components/account/PlanRow";
+import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
+import { Badge } from "@/components/ui/badge";
+import { Button } from "@/components/ui/button";
+import { Skeleton } from "@/components/ui/skeleton";
+import { ErrorState } from "@/components/ui/error-state";
 import { Breadcrumbs } from "@/components/ui/breadcrumbs";
-import {
-  Calendar,
-  Heart,
-  Bell,
-  History,
-  MessageSquare,
-  CalendarCheck,
-  LogIn,
-  Sparkles,
-} from 'lucide-react';
-import { createEventSlugWithCentralTime } from '@/lib/timezone';
+import { useTabState } from "@/hooks/useTabState";
+import { useMyPlans, PAST_PLAN_LIMIT, type PlanSourceState } from "@/hooks/useMyPlans";
 
-export default function ProfilePage() {
-  const { user, isAuthenticated, isLoading: authLoading } = useAuth();
-  const navigate = useNavigate();
-  const [activeTab, setActiveTab] = useTabState('upcoming');
+const MY_EVENTS_TABS = ["upcoming", "saved", "reminders", "past"] as const;
 
-  // Fetch user's upcoming events (going/interested status)
-  const { data: upcomingEvents, isLoading: upcomingLoading } = useQuery({
-    queryKey: ['user-upcoming-events', user?.id],
-    queryFn: async () => {
-      if (!user?.id) return [];
+interface ListStateProps {
+  source: PlanSourceState;
+  count: number;
+  emptyTitle: string;
+  emptyText: string;
+  emptyLink: { to: string; label: string };
+  children: ReactNode;
+}
 
-      const { data, error } = await supabase
-        .from('event_attendance')
-        .select(`
-          event_id,
-          status,
-          created_at,
-          events (
-            id, title, date, location, category, image_url, price, venue,
-            is_featured, event_start_utc, event_start_local, city,
-            latitude, longitude, enhanced_description
-          )
-        `)
-        .eq('user_id', user.id)
-        .in('status', ['going', 'interested'])
-        .gte('events.date', new Date().toISOString().split('T')[0])
-        .order('events.date', { ascending: true });
-
-      if (error) throw error;
-      return data?.map((item: any) => ({ ...item.events, attendance_status: item.status })) || [];
-    },
-    enabled: !!user?.id,
-  });
-
-  // Fetch user's favorited events
-  const { data: savedEvents, isLoading: savedLoading } = useQuery({
-    queryKey: ['user-saved-events', user?.id],
-    queryFn: async () => {
-      if (!user?.id) return [];
-
-      // Fetch favorite event IDs from user_event_interactions
-      const { data: favoriteInteractions, error: favError } = await supabase
-        .from('user_event_interactions')
-        .select('event_id')
-        .eq('user_id', user.id)
-        .eq('interaction_type', 'favorite');
-
-      if (favError) throw favError;
-
-      const favoriteEventIds = favoriteInteractions?.map(item => item.event_id) || [];
-
-      // If no favorites, return empty array
-      if (favoriteEventIds.length === 0) return [];
-
-      // Fetch the actual event details for favorited events
-      const { data, error } = await supabase
-        .from('events')
-        .select('id, title, date, location, category, image_url, price, venue, is_featured, event_start_utc, event_start_local, city, latitude, longitude, enhanced_description')
-        .in('id', favoriteEventIds)
-        .gte('date', new Date().toISOString().split('T')[0])
-        .order('date', { ascending: true });
-
-      if (error) throw error;
-      return data || [];
-    },
-    enabled: !!user?.id,
-  });
-
-  // Fetch user's active reminders
-  const { data: activeReminders, isLoading: remindersLoading } = useQuery({
-    queryKey: ['user-active-reminders', user?.id],
-    queryFn: async () => {
-      if (!user?.id) return [];
-
-      const { data, error } = await supabase
-        .from('user_event_reminders')
-        .select(`
-          id,
-          reminder_type,
-          created_at,
-          events (
-            id, title, date, location, category, image_url, price, venue,
-            is_featured, event_start_utc, event_start_local, city,
-            latitude, longitude, enhanced_description
-          )
-        `)
-        .eq('user_id', user.id)
-        .eq('delivery_status', 'pending')
-        .gte('events.date', new Date().toISOString().split('T')[0])
-        .order('events.date', { ascending: true });
-
-      if (error) throw error;
-
-      // Group reminders by event
-      const groupedByEvent = data?.reduce((acc: any, item: any) => {
-        const eventId = item.events.id;
-        if (!acc[eventId]) {
-          acc[eventId] = {
-            ...item.events,
-            reminders: []
-          };
-        }
-        acc[eventId].reminders.push(item.reminder_type);
-        return acc;
-      }, {});
-
-      return Object.values(groupedByEvent || {});
-    },
-    enabled: !!user?.id,
-  });
-
-  // Fetch user's past events
-  const { data: pastEvents, isLoading: pastLoading } = useQuery({
-    queryKey: ['user-past-events', user?.id],
-    queryFn: async () => {
-      if (!user?.id) return [];
-
-      const { data, error } = await supabase
-        .from('event_attendance')
-        .select(`
-          event_id,
-          status,
-          created_at,
-          events (
-            id, title, date, location, category, image_url, price, venue,
-            is_featured, event_start_utc, event_start_local, city,
-            latitude, longitude, enhanced_description
-          )
-        `)
-        .eq('user_id', user.id)
-        .in('status', ['going', 'interested'])
-        .lt('events.date', new Date().toISOString().split('T')[0])
-        .order('events.date', { ascending: false })
-        .limit(20);
-
-      if (error) throw error;
-      return data?.map((item: any) => ({ ...item.events, attendance_status: item.status })) || [];
-    },
-    enabled: !!user?.id,
-  });
-
-  // Not authenticated
-  if (!authLoading && !isAuthenticated) {
+/**
+ * Loading, then error, then empty, then the list - in that order, so a failed
+ * read can never render as "you have nothing here" (WEB-QA-031).
+ */
+function ListState({ source, count, emptyTitle, emptyText, emptyLink, children }: ListStateProps) {
+  if (source.isLoading) {
     return (
-      <>
-        <SEOHead
-          title="Sign In Required - Des Moines Insider"
-          description="Sign in to view your event profile"
-          type="website"
-        />
-        <div className="min-h-screen bg-background">
-          <Header />
-          <div className="container mx-auto px-4 py-16">
-            <EmptyState
-              icon={LogIn}
-              title="Sign In Required"
-              description="Please sign in to view your event profile and manage your events"
-              actions={[
-                {
-                  label: 'Sign In',
-                  onClick: () => navigate('/login'),
-                  icon: LogIn,
-                }
-              ]}
-            />
-          </div>
-          <Footer />
-        </div>
-      </>
+      <div className="space-y-2" aria-busy="true">
+        <Skeleton className="h-14 w-full bg-muted" />
+        <Skeleton className="h-14 w-full bg-muted" />
+        <Skeleton className="h-14 w-3/4 bg-muted" />
+      </div>
     );
   }
+  if (source.isError) {
+    return <ErrorState compact error={source.error} onRetry={source.refetch} />;
+  }
+  if (count === 0) {
+    return (
+      <div className="py-8 text-center">
+        <p className="font-medium">{emptyTitle}</p>
+        <p className="mt-1 text-sm text-muted-foreground">{emptyText}</p>
+        <Button asChild variant="outline" className="mt-4 min-h-[44px]">
+          <Link to={emptyLink.to}>{emptyLink.label}</Link>
+        </Button>
+      </div>
+    );
+  }
+  return <ul className="-mx-3 divide-y">{children}</ul>;
+}
 
-  const handleViewEvent = (event: any) => {
-    navigate(`/events/${createEventSlugWithCentralTime(event.title, event)}`);
-  };
+function CountBadge({ source, count }: { source: PlanSourceState; count: number }) {
+  if (source.isLoading || source.isError || count === 0) return null;
+  return (
+    <Badge variant="secondary" className="ml-1">
+      {count}
+    </Badge>
+  );
+}
+
+/**
+ * /my-events: the full lists behind the dashboard's week view (account plan
+ * WP3 items 1 and 2). One hook, `useMyPlans`, replaces four queries that
+ * filtered on a plain embed and returned `events: null` rows.
+ */
+function MyEventsContent() {
+  const [activeTab, setActiveTab] = useTabState("upcoming", { validTabs: MY_EVENTS_TABS });
+  const plans = useMyPlans({ includePast: true, includePlaces: true });
+  const { sources } = plans;
+
+  const placeCount = plans.savedPlaces.length;
+  const savedSummaryReady =
+    !sources.saved.isLoading && !sources.saved.isError && !sources.places.isLoading && !sources.places.isError;
 
   return (
     <>
       <SEOHead
         title="My Events - Des Moines Insider"
-        description="Manage your events, reminders, and favorites"
+        description="Your RSVPs, saved events and places, and reminders."
         type="website"
+        noindex
       />
       <div className="min-h-screen bg-background">
         <Header />
 
-        <div className="container mx-auto px-4 py-8">
+        <main className="container mx-auto max-w-3xl px-4 py-6 md:py-8">
           <Breadcrumbs
             className="mb-4"
             items={[
-              { label: "Home", href: "/" },
+              { label: "Account", href: "/dashboard" },
               { label: "My Events" },
             ]}
           />
-          {/* Profile Header */}
-          <div className="mb-8">
-            <h1 className="text-3xl md:text-4xl font-bold mb-2">My Events</h1>
-            <p className="text-muted-foreground">
-              Manage your upcoming events, reminders, and favorites
-            </p>
+          <div className="mb-6">
+            <h1 className="text-2xl font-bold md:text-3xl">My Events</h1>
+            <p className="mt-1 text-muted-foreground">What you're going to, what you saved, and what you've been to.</p>
           </div>
 
-          {/* Tabs */}
-          <Tabs value={activeTab} onValueChange={setActiveTab} className="space-y-6">
-            <TabsList className="grid w-full grid-cols-2 lg:grid-cols-4 gap-2">
-              <TabsTrigger value="upcoming" className="flex items-center gap-2">
-                <CalendarCheck className="h-4 w-4" />
-                <span>Upcoming</span>
-                {upcomingEvents && upcomingEvents.length > 0 && (
-                  <Badge variant="secondary" className="ml-1">
-                    {upcomingEvents.length}
-                  </Badge>
-                )}
-              </TabsTrigger>
+          <Tabs value={activeTab} onValueChange={setActiveTab} className="space-y-4">
+            <div className="-mx-4 overflow-x-auto px-4">
+              <TabsList className="inline-flex w-max gap-1 p-1">
+                <TabsTrigger value="upcoming" className="min-h-[44px] gap-2">
+                  <CalendarCheck className="h-4 w-4" aria-hidden="true" />
+                  Upcoming
+                  <CountBadge source={sources.upcoming} count={plans.upcoming.length} />
+                </TabsTrigger>
+                <TabsTrigger value="saved" className="min-h-[44px] gap-2">
+                  <Heart className="h-4 w-4" aria-hidden="true" />
+                  Saved
+                </TabsTrigger>
+                <TabsTrigger value="reminders" className="min-h-[44px] gap-2">
+                  <Bell className="h-4 w-4" aria-hidden="true" />
+                  Reminders
+                  <CountBadge source={sources.reminders} count={plans.reminders.length} />
+                </TabsTrigger>
+                <TabsTrigger value="past" className="min-h-[44px] gap-2">
+                  <History className="h-4 w-4" aria-hidden="true" />
+                  Past
+                </TabsTrigger>
+              </TabsList>
+            </div>
 
-              <TabsTrigger value="saved" className="flex items-center gap-2">
-                <Heart className="h-4 w-4" />
-                <span>Saved</span>
-                {savedEvents && savedEvents.length > 0 && (
-                  <Badge variant="secondary" className="ml-1">
-                    {savedEvents.length}
-                  </Badge>
-                )}
-              </TabsTrigger>
-
-              <TabsTrigger value="reminders" className="flex items-center gap-2">
-                <Bell className="h-4 w-4" />
-                <span>Reminders</span>
-                {activeReminders && activeReminders.length > 0 && (
-                  <Badge variant="secondary" className="ml-1">
-                    {activeReminders.length}
-                  </Badge>
-                )}
-              </TabsTrigger>
-
-              <TabsTrigger value="past" className="flex items-center gap-2">
-                <History className="h-4 w-4" />
-                <span>Past</span>
-                {pastEvents && pastEvents.length > 0 && (
-                  <Badge variant="secondary" className="ml-1">
-                    {pastEvents.length}
-                  </Badge>
-                )}
-              </TabsTrigger>
-            </TabsList>
-
-            {/* Upcoming Events Tab */}
-            <TabsContent value="upcoming" className="space-y-6">
-              <Card>
-                <CardHeader>
-                  <CardTitle>Upcoming Events</CardTitle>
-                  <CardDescription>
-                    Events you're attending or interested in
-                  </CardDescription>
-                </CardHeader>
-                <CardContent>
-                  {upcomingLoading ? (
-                    <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
-                      {[1, 2, 3].map((i) => (
-                        <Skeleton key={i} className="h-64" />
-                      ))}
-                    </div>
-                  ) : upcomingEvents && upcomingEvents.length > 0 ? (
-                    <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
-                      {upcomingEvents.map((event: any) => (
-                        <div key={event.id} className="relative">
-                          <SocialEventCard
-                            event={event}
-                            onViewDetails={() => handleViewEvent(event)}
-                          />
-                          <Badge
-                            variant={event.attendance_status === 'going' ? 'default' : 'secondary'}
-                            className="absolute top-2 right-2"
-                          >
-                            {event.attendance_status === 'going' ? '✓ Going' : 'Interested'}
-                          </Badge>
-                        </div>
-                      ))}
-                    </div>
-                  ) : (
-                    <EmptyState
-                      icon={Calendar}
-                      title="No upcoming events"
-                      description="RSVP to events to see them here"
-                      actions={[
-                        {
-                          label: 'Browse Events',
-                          onClick: () => navigate('/events'),
-                          icon: Sparkles,
-                        },
-                      ]}
-                      compact
-                    />
-                  )}
-                </CardContent>
-              </Card>
+            <TabsContent value="upcoming">
+              <h2 className="sr-only">Upcoming</h2>
+              <ListState
+                source={sources.upcoming}
+                count={plans.upcoming.length}
+                emptyTitle="No upcoming events"
+                emptyText="Mark an event as going or interested and it shows up here."
+                emptyLink={{ to: "/events", label: "Browse events" }}
+              >
+                {plans.upcoming.map((plan) => (
+                  <li key={plan.event.id}>
+                    <PlanRow event={plan.event} reasons={[plan.status]} showDate />
+                  </li>
+                ))}
+              </ListState>
             </TabsContent>
 
-            {/* Saved Events Tab */}
-            <TabsContent value="saved" className="space-y-6">
-              <Card>
-                <CardHeader>
-                  <CardTitle>Saved Events</CardTitle>
-                  <CardDescription>
-                    Events you've favorited for later
-                  </CardDescription>
-                </CardHeader>
-                <CardContent>
-                  {savedLoading ? (
-                    <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
-                      {[1, 2, 3].map((i) => (
-                        <Skeleton key={i} className="h-64" />
-                      ))}
-                    </div>
-                  ) : savedEvents && savedEvents.length > 0 ? (
-                    <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
-                      {savedEvents.map((event: any) => (
-                        <SocialEventCard
-                          key={event.id}
-                          event={event}
-                          onViewDetails={() => handleViewEvent(event)}
-                        />
-                      ))}
-                    </div>
-                  ) : (
-                    <EmptyState
-                      icon={Heart}
-                      title="No saved events"
-                      description="Save events by clicking the heart icon"
-                      actions={[
-                        {
-                          label: 'Discover Events',
-                          onClick: () => navigate('/events'),
-                          icon: Sparkles,
-                        },
-                      ]}
-                      compact
-                    />
-                  )}
-                </CardContent>
-              </Card>
+            <TabsContent value="saved" className="space-y-4">
+              <h2 className="sr-only">Saved</h2>
+              {savedSummaryReady && (plans.savedEvents.length > 0 || placeCount > 0) && (
+                <p className="text-sm text-muted-foreground">
+                  {plans.savedEvents.length} saved {plans.savedEvents.length === 1 ? "event" : "events"} coming up,{" "}
+                  {placeCount} saved {placeCount === 1 ? "place" : "places"}.
+                </p>
+              )}
+              <FavoritesView />
             </TabsContent>
 
-            {/* Active Reminders Tab */}
-            <TabsContent value="reminders" className="space-y-6">
-              <Card>
-                <CardHeader>
-                  <CardTitle>Active Reminders</CardTitle>
-                  <CardDescription>
-                    Events with email reminders set
-                  </CardDescription>
-                </CardHeader>
-                <CardContent>
-                  {remindersLoading ? (
-                    <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
-                      {[1, 2, 3].map((i) => (
-                        <Skeleton key={i} className="h-64" />
-                      ))}
-                    </div>
-                  ) : activeReminders && activeReminders.length > 0 ? (
-                    <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
-                      {activeReminders.map((event: any) => (
-                        <div key={event.id} className="relative">
-                          <SocialEventCard
-                            event={event}
-                            onViewDetails={() => handleViewEvent(event)}
-                          />
-                          <div className="absolute top-2 right-2 flex flex-col gap-1">
-                            {event.reminders?.map((reminderType: string) => (
-                              <Badge key={reminderType} variant="default" className="text-xs">
-                                <Bell className="h-3 w-3 mr-1" />
-                                {reminderType === '1_day' ? '1d' : reminderType === '3_hours' ? '3h' : '1h'}
-                              </Badge>
-                            ))}
-                          </div>
-                        </div>
-                      ))}
-                    </div>
-                  ) : (
-                    <EmptyState
-                      icon={Bell}
-                      title="No active reminders"
-                      description="Set reminders on event pages to get notified before events start"
-                      actions={[
-                        {
-                          label: 'Find Events',
-                          onClick: () => navigate('/events'),
-                          icon: Calendar,
-                        },
-                      ]}
-                      compact
-                    />
-                  )}
-                </CardContent>
-              </Card>
+            <TabsContent value="reminders">
+              <h2 className="sr-only">Reminders</h2>
+              <ListState
+                source={sources.reminders}
+                count={plans.reminders.length}
+                emptyTitle="No reminders set"
+                emptyText="Set a reminder on an event page and we'll email you before it starts."
+                emptyLink={{ to: "/events", label: "Find an event" }}
+              >
+                {plans.reminders.map((plan) => (
+                  <li key={plan.event.id}>
+                    <PlanRow event={plan.event} reasons={["reminder"]} reminderTypes={plan.reminderTypes} showDate />
+                  </li>
+                ))}
+              </ListState>
             </TabsContent>
 
-            {/* Past Events Tab */}
-            <TabsContent value="past" className="space-y-6">
-              <Card>
-                <CardHeader>
-                  <CardTitle>Past Events</CardTitle>
-                  <CardDescription>
-                    Events you attended or were interested in
-                  </CardDescription>
-                </CardHeader>
-                <CardContent>
-                  {pastLoading ? (
-                    <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
-                      {[1, 2, 3].map((i) => (
-                        <Skeleton key={i} className="h-64" />
-                      ))}
-                    </div>
-                  ) : pastEvents && pastEvents.length > 0 ? (
-                    <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
-                      {pastEvents.map((event: any) => (
-                        <SocialEventCard
-                          key={event.id}
-                          event={event}
-                          onViewDetails={() => handleViewEvent(event)}
-                        />
-                      ))}
-                    </div>
-                  ) : (
-                    <EmptyState
-                      icon={History}
-                      title="No past events"
-                      description="Events you attended will appear here"
-                      actions={[
-                        {
-                          label: 'Explore Events',
-                          onClick: () => navigate('/events'),
-                          icon: Sparkles,
-                        },
-                      ]}
-                      compact
-                    />
-                  )}
-                </CardContent>
-              </Card>
+            <TabsContent value="past">
+              <h2 className="sr-only">Past</h2>
+              <ListState
+                source={sources.past}
+                count={plans.past.length}
+                emptyTitle="No past events"
+                emptyText="Events you marked as going or interested move here once they're over."
+                emptyLink={{ to: "/events", label: "Browse events" }}
+              >
+                {plans.past.map((plan) => (
+                  <li key={plan.event.id}>
+                    <PlanRow event={plan.event} reasons={[plan.status]} showDate />
+                  </li>
+                ))}
+              </ListState>
+              {plans.past.length === PAST_PLAN_LIMIT && (
+                <p className="mt-3 text-sm text-muted-foreground">Showing your {PAST_PLAN_LIMIT} most recent.</p>
+              )}
             </TabsContent>
           </Tabs>
-        </div>
+        </main>
 
         <Footer />
       </div>
     </>
+  );
+}
+
+/**
+ * Signed out, ProtectedRoute sends the visitor to /auth?redirect=/my-events.
+ * The hand-rolled branch this replaces sent them to /login, which App.tsx has
+ * never routed.
+ */
+export default function ProfilePage() {
+  return (
+    <ProtectedRoute>
+      <MyEventsContent />
+    </ProtectedRoute>
   );
 }

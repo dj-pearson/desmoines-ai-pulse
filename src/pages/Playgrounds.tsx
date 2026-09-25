@@ -17,6 +17,9 @@ import { useGeolocation } from "@/hooks/useProximitySearch";
 import { useToast } from "@/hooks/use-toast";
 import { BackToTop } from "@/components/BackToTop";
 import { getCanonicalUrl } from "@/lib/brandConfig";
+import { HUB_PLAYGROUND_MAP_HREF } from "@/lib/hubLinks";
+import { ExploreSectionLinks } from "@/components/explore/ExploreSectionLinks";
+import { ErrorState } from "@/components/ui/error-state";
 import { useIsMobile } from "@/hooks/use-mobile";
 import {
   Card,
@@ -39,7 +42,7 @@ import {
   SheetTitle,
   SheetTrigger,
 } from "@/components/ui/sheet";
-import { Star, Filter, List, Map, TreePine, SlidersHorizontal, ChevronRight, LocateFixed } from "lucide-react";
+import { Star, Filter, List, Map, TreePine, SlidersHorizontal, ChevronRight, LocateFixed, ArrowDownAZ } from "lucide-react";
 // map-pin and users render once per card. Both are multi-shape lucide icons, so
 // the sprite costs 2 nodes where inline costs 3 and 5 - see the membership rules
 // in scripts/generate-icon-sprite.mjs. Measured saving on this route: 154 of
@@ -305,9 +308,12 @@ export default function Playgrounds() {
   //
   // Shade, restrooms, accessibility and amenities are server-side too (WP4
   // items 4 and 6): each is a whole-value match PostgREST can express.
-  const { playgrounds: allPlaygrounds, isLoading, error } = usePlaygrounds({
+  const { playgrounds: allPlaygrounds, isLoading, error, refetch } = usePlaygrounds({
     // This page renders no total, so it does not pay for one (WEB-PERF-033).
     countMode: "none",
+    // Name A-Z by default (explore pass 2 WP4 item 10). Newest-first put the
+    // last import batch on top, which is an order no parent asked for.
+    sortBy: "name",
     // No select=* from a public page (WP4 item 5).
     projection: "list",
     age_range: selectedAgeRange !== "all" ? selectedAgeRange : undefined,
@@ -329,6 +335,7 @@ export default function Playgrounds() {
     ageRangeCounts,
     amenityCounts,
     locationCounts,
+    metroCount,
   } = usePlaygroundFacets();
 
   // The Select needs the facet's own spelling to show the current value; an
@@ -413,7 +420,12 @@ export default function Playgrounds() {
     ? `Playgrounds for Ages ${selectedAgeRange} in Des Moines`
     : "Des Moines Playgrounds - Parks, Splash Pads & Family Fun";
 
-  const pageDescription = `Discover ${filteredPlaygrounds.length}+ playgrounds in Des Moines, Iowa: splash pads, accessible equipment and climbing structures, free and open to all ages across the metro.`;
+  // Explore pass 2 WP4 item 7. The metro count from the facets query, which
+  // is the whole catalogue, not the filtered list; no number while it loads.
+  const pageDescription =
+    metroCount != null && metroCount > 0
+      ? `${metroCount} playgrounds across the Des Moines metro, with shade, restrooms, surface and accessibility notes where we have them.`
+      : "Playgrounds across the Des Moines metro, with shade, restrooms, surface and accessibility notes where we have them.";
 
   const breadcrumbs = [
     { name: "Home", url: "/" },
@@ -442,7 +454,7 @@ export default function Playgrounds() {
     <div className="min-h-screen bg-background">
       <ItemListSchema
         name="Playgrounds in Des Moines, Iowa"
-        description="Public playgrounds, splash pads and accessible play equipment across the Greater Des Moines area."
+        description="Playgrounds, splash pads and play equipment across the Greater Des Moines area."
         items={schemaItems}
       />
       <EnhancedLocalSEO
@@ -469,20 +481,20 @@ export default function Playgrounds() {
 
       <Header />
 
-      {/* Flat brand hero (WP4 item 9): the purple/emerald/crimson gradient
-          was decoration carrying nothing. */}
-      <section className="relative bg-[#2D1B69] overflow-hidden min-h-[400px]">
-        <div className="relative container mx-auto px-4 py-16 md:py-24 text-center">
-          <h1 className="text-4xl md:text-5xl lg:text-6xl font-bold text-white mb-4 tracking-tight">
+      {/* Flat brand hero. Explore pass 2 WP4 item 6: no min-height and a short
+          top on phones, one line of subcopy, and the sort control (Name /
+          Near me) next to the search box, so the first result card is on a
+          390x844 first screen. */}
+      <section className="bg-[#2D1B69]" data-playgrounds-hero>
+        <div className="container mx-auto px-4 py-6 md:py-16 text-center">
+          <h1 className="text-3xl md:text-5xl lg:text-6xl font-bold text-white mb-2 md:mb-4 tracking-tight">
             Discover Des Moines Playgrounds
           </h1>
-          <p className="text-xl md:text-2xl text-white/90 mb-8 max-w-3xl mx-auto">
-            Find the perfect playground for your family with splash pads,
-            climbing structures, and accessible equipment
+          <p className="text-base md:text-xl text-white/90 mb-4 md:mb-8 max-w-3xl mx-auto">
+            Filter by age, shade, restrooms or distance.
           </p>
 
-          {/* Search Bar */}
-          <div className="max-w-2xl mx-auto">
+          <div className="max-w-3xl mx-auto">
             <div className="flex flex-col sm:flex-row gap-3">
               <div className="flex-1">
                 <Input
@@ -490,12 +502,37 @@ export default function Playgrounds() {
                   placeholder="Search playgrounds, amenities..."
                   value={searchQuery}
                   onChange={(e) => setSearchQuery(e.target.value)}
-                  className="text-base bg-white/95 backdrop-blur border-0 focus:ring-2 focus:ring-white h-12"
+                  className="text-base bg-background text-foreground border-0 focus:ring-2 focus:ring-white h-12"
                   aria-label="Search playgrounds"
                   role="searchbox"
                 />
               </div>
-              <div className="flex items-center gap-3">
+              <div className="flex flex-wrap items-center justify-center gap-2">
+                <div role="group" aria-label="Sort playgrounds" className="flex items-center rounded-md bg-white/20 p-0.5">
+                  <Button
+                    type="button"
+                    onClick={() => setNearMe(false)}
+                    aria-pressed={!nearMe}
+                    variant={!nearMe ? "secondary" : "ghost"}
+                    className={!nearMe ? "h-11" : "h-11 text-white hover:bg-white/30 hover:text-white"}
+                    data-sort="name"
+                  >
+                    <ArrowDownAZ className="h-4 w-4 mr-1.5" aria-hidden="true" />
+                    Name
+                  </Button>
+                  <Button
+                    type="button"
+                    onClick={handleNearMe}
+                    aria-pressed={nearMe}
+                    variant={nearMe ? "secondary" : "ghost"}
+                    className={nearMe ? "h-11" : "h-11 text-white hover:bg-white/30 hover:text-white"}
+                    disabled={locating}
+                    data-sort="near-me"
+                  >
+                    <LocateFixed className="h-4 w-4 mr-1.5" aria-hidden="true" />
+                    {locating ? "Locating..." : "Near me"}
+                  </Button>
+                </div>
                 {/* Filter Button - Mobile Sheet or Desktop Toggle */}
                 {isMobile ? (
                   <Sheet open={showMobileFilters} onOpenChange={setShowMobileFilters}>
@@ -585,7 +622,7 @@ export default function Playgrounds() {
         </div>
       </section>
 
-      <div id="playground-results" className="container mx-auto px-4 py-8 scroll-mt-20">
+      <div id="playground-results" className="container mx-auto px-4 py-4 md:py-8 scroll-mt-20">
         <Breadcrumbs
           className="mb-4"
           items={[
@@ -626,29 +663,30 @@ export default function Playgrounds() {
         )}
 
         {/* Results Header */}
-        <div className="flex flex-wrap items-center justify-between gap-3 mb-6">
-          <h2 className="text-2xl font-bold">
+        <div className="flex flex-wrap items-baseline justify-between gap-x-4 gap-y-1 mb-4 md:mb-6">
+          <h2 className="text-xl md:text-2xl font-bold text-foreground">
             {searchQuery
               ? `Search results for "${searchQuery}"`
               : selectedAgeRange && selectedAgeRange !== "all"
               ? `Playgrounds for Ages ${selectedAgeRange}`
               : "Des Moines Playgrounds"}
           </h2>
-          <div className="flex items-center gap-3">
-            <div className="text-sm text-muted-foreground" aria-live="polite" data-testid="playground-count">
-              {isLoading ? "Loading..." : `${filteredPlaygrounds.length} playgrounds`}
-            </div>
-            <Button
-              type="button"
-              variant={nearMe && userLocation ? "default" : "outline"}
-              className="h-11"
-              aria-pressed={nearMe}
-              onClick={handleNearMe}
-              disabled={locating}
+          <div className="flex items-baseline gap-4 text-sm">
+            {/* The one polite live region on the page (WP4 item 10). */}
+            <span className="text-muted-foreground" aria-live="polite" data-testid="playground-count" data-playground-count>
+              {isLoading
+                ? "Loading..."
+                : `${filteredPlaygrounds.length} playgrounds, ${
+                    nearMe && userLocation ? "nearest first" : "A-Z"
+                  }`}
+            </span>
+            <Link
+              to={HUB_PLAYGROUND_MAP_HREF}
+              className="inline-flex min-h-11 items-center font-medium text-foreground underline underline-offset-4 hover:text-primary"
+              data-show-on-map
             >
-              <LocateFixed className="h-4 w-4 mr-2" aria-hidden="true" />
-              {locating ? "Locating..." : "Near me"}
-            </Button>
+              Show on map
+            </Link>
           </div>
         </div>
         {nearMe && locationError && (
@@ -678,13 +716,11 @@ export default function Playgrounds() {
             </div>
           )
         ) : error ? (
-          <div className="text-center py-16">
-            <TreePine className="h-16 w-16 text-muted-foreground mx-auto mb-4" />
-            <h3 className="text-xl font-medium mb-2">Error Loading Playgrounds</h3>
-            <p className="text-muted-foreground">
-              Please try again later.
-            </p>
-          </div>
+          <ErrorState
+            error={error}
+            title="Playgrounds didn't load"
+            onRetry={() => void refetch()}
+          />
         ) : filteredPlaygrounds.length === 0 ? (
           <div className="text-center py-16">
             <TreePine className="h-16 w-16 text-muted-foreground mx-auto mb-4" />
@@ -761,10 +797,10 @@ export default function Playgrounds() {
                           {formatMilesAway(playground.distanceMiles)}
                         </div>
                       )}
-                      {playground.rating && (
+                      {playground.rating != null && (
                         <div className="flex items-center gap-2">
-                          <Star className="h-4 w-4 fill-yellow-400 text-yellow-400" />
-                          <span>{playground.rating}/5</span>
+                          <Star className="h-4 w-4 fill-yellow-400 text-yellow-400" aria-hidden="true" />
+                          <span>{playground.rating.toFixed(1)}/5</span>
                         </div>
                       )}
                       {playground.location && (
@@ -794,7 +830,7 @@ export default function Playgrounds() {
                     {playground.amenities && playground.amenities.length > 0 && (
                       <div className="flex flex-wrap gap-1 mt-3">
                         {playground.amenities.slice(0, 3).map((amenity, index) => (
-                          <Badge key={index} variant="outline" className="text-xs bg-emerald-50 text-emerald-700 border-emerald-200">
+                          <Badge key={index} variant="outline" className="text-xs">
                             {/* No check icon. It cost 2 nodes x 75 badges and
                                 said nothing the amenity name does not: a badge
                                 in this list means the playground HAS that
@@ -821,10 +857,10 @@ export default function Playgrounds() {
       {ageRanges.length > 0 && (
         <section className="py-12 bg-card border-t">
           <div className="container mx-auto px-4">
-            <h2 className="text-2xl font-bold text-gray-900 mb-2">
+            <h2 className="text-2xl font-bold text-foreground mb-2">
               Browse Playgrounds By Age Group
             </h2>
-            <p className="text-gray-600 mb-6">
+            <p className="text-muted-foreground mb-6">
               Find the right playground for your child's age in the Des Moines area
             </p>
             <div className="grid grid-cols-2 sm:grid-cols-3 md:grid-cols-4 gap-3">
@@ -840,12 +876,12 @@ export default function Playgrounds() {
                     className="flex items-center justify-between p-3 rounded-xl border hover:border-[#2D1B69] hover:bg-[#2D1B69]/5 transition-colors text-left group"
                   >
                     <div>
-                      <span className="text-sm font-medium text-gray-900 group-hover:text-[#2D1B69]">
+                      <span className="text-sm font-medium text-foreground group-hover:text-[#2D1B69]">
                         Ages {range}
                       </span>
-                      <span className="block text-xs text-gray-500">{count} playgrounds</span>
+                      <span className="block text-xs text-muted-foreground">{count} playgrounds</span>
                     </div>
-                    <ChevronRight className="h-4 w-4 text-gray-500 group-hover:text-[#2D1B69]" />
+                    <ChevronRight className="h-4 w-4 text-muted-foreground group-hover:text-[#2D1B69]" />
                   </button>
                 );
               })}
@@ -856,12 +892,12 @@ export default function Playgrounds() {
 
       {/* Browse by Amenity - SEO Internal Linking */}
       {uniqueAmenities.length > 0 && (
-        <section className="py-12 bg-gray-50 border-t">
+        <section className="py-12 bg-muted/40 border-t">
           <div className="container mx-auto px-4">
-            <h2 className="text-2xl font-bold text-gray-900 mb-2">
+            <h2 className="text-2xl font-bold text-foreground mb-2">
               Browse Playgrounds By Amenity
             </h2>
-            <p className="text-gray-600 mb-6">
+            <p className="text-muted-foreground mb-6">
               Find playgrounds with specific features and amenities in Des Moines
             </p>
             {/* A real multi-select now (WP4 item 6): each chip toggles
@@ -891,7 +927,7 @@ export default function Playgrounds() {
               })}
             </div>
             {selectedAmenities.length > 0 && (
-              <p className="mt-4 text-sm text-muted-foreground" aria-live="polite">
+              <p className="mt-4 text-sm text-muted-foreground">
                 {isLoading
                   ? "Updating..."
                   : `${filteredPlaygrounds.length} playgrounds have ${selectedAmenities.join(" + ")}.`}{" "}
@@ -907,15 +943,14 @@ export default function Playgrounds() {
       {/* SEO Content Section */}
       <section className="py-12 bg-card border-t">
         <div className="container mx-auto px-4 max-w-4xl">
-          <h2 className="text-2xl font-bold text-gray-900 mb-4">
+          <h2 className="text-2xl font-bold text-foreground mb-4">
             Playgrounds & Parks in Des Moines, Iowa
           </h2>
-          <div className="prose prose-gray max-w-none text-gray-700 leading-relaxed space-y-4">
+          <div className="prose dark:prose-invert max-w-none text-foreground leading-relaxed space-y-4">
             <p>
-              Des Moines and the surrounding metro area offer an extensive network of public
-              playgrounds and parks designed for children of all ages. From splash pads and climbing
-              structures to accessible equipment and nature play areas, there's something for every
-              family in the Greater Des Moines Area.
+              This list covers playgrounds across Des Moines and its suburbs, from park equipment
+              and splash pads to nature play areas. Each card says what the listing records about
+              it: ages, shade, restrooms and amenities.
             </p>
             {/* WP4 item 3. This paragraph asserted hours and amenities for
                 every park; neither is a column for most rows. */}
@@ -949,6 +984,10 @@ export default function Playgrounds() {
         </div>
       </section>
 
+      <div className="max-w-4xl mx-auto px-4 sm:px-6 lg:px-8 pt-8">
+        <ExploreSectionLinks current="/playgrounds" />
+      </div>
+
       <div className="max-w-4xl mx-auto px-4 sm:px-6 lg:px-8 py-8">
         {/* SEO-014 / SEO-015: the family cluster, linked in both directions.
             /events/kids links back here. */}
@@ -958,7 +997,7 @@ export default function Playgrounds() {
           className=""
           links={[
             { title: "Kids and family events", href: "/events/kids" },
-            { title: "Free events", href: "/events/free" },
+            { title: "Events with free admission", href: "/events/free" },
             { title: "This weekend", href: "/events/this-weekend" },
             { title: "Attractions", href: "/attractions" },
           ]}
@@ -999,7 +1038,7 @@ export default function Playgrounds() {
               },
               {
                 question: "What else is there for kids in Des Moines?",
-                answer: "The Kids and Family events page lists upcoming family events across the metro, and the Free Events page lists everything on the calendar with free admission."
+                answer: "The Kids and Family events page lists upcoming family events across the metro, and the free events page lists everything on the calendar with free admission."
               }
             ]}
             showSchema={true}

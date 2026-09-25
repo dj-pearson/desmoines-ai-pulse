@@ -37,6 +37,23 @@ export function dietFromParam(value: string | null | undefined): Diet | null {
   return DIETS.find((d) => d.id === slug) ?? null;
 }
 
+/** The page for one diet (WP4.13): `/restaurants/dietary/vegan`. */
+export function dietPath(diet: Pick<Diet, "id">): string {
+  return `/restaurants/dietary/${diet.id}`;
+}
+
+/**
+ * dietOrClause, for rows already loaded (open-now's `diet` filter): the same
+ * keywords over the same three fields, case aside. Keep the two in step.
+ */
+export function rowMentionsDiet(
+  row: { name?: string | null; cuisine?: string | null; description?: string | null },
+  diet: Diet,
+): boolean {
+  const text = `${row.name ?? ""} ${row.cuisine ?? ""} ${row.description ?? ""}`.toLowerCase();
+  return diet.keywords.some((k) => text.includes(k));
+}
+
 /**
  * The PostgREST `or` clause for one diet. The keywords are fixed strings above,
  * so there is nothing user-typed to escape; "gf" was dropped because it matched

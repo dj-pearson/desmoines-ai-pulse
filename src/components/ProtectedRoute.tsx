@@ -74,17 +74,16 @@ export function ProtectedRoute({
   deniedMessage,
 }: ProtectedRouteProps) {
   const { user, isLoading, isAdmin, isAdminLoading } = useAuth();
-  const {
-    hasPermission,
-    hasAnyPermission,
-    hasMinimumRole,
-    isLoading: permissionLoading,
-  } = usePermission();
   const location = useLocation();
 
-  // Determine if we need role/permission checks
-  const needsRoleCheck = requireAdmin || minRole;
-  const needsPermissionCheck = permission || (anyPermissions && anyPermissions.length > 0);
+  // Role and permission checks need the security context (usePermission ->
+  // useSecurityContext), which reads user_roles and profiles. /dashboard,
+  // /profile and /my-events set none of these props, and AuthContext has
+  // already read both tables, so they were paying for the same two requests
+  // again before first paint (account plan WP3 item 11). The permission branch
+  // now lives in PermissionGate below and mounts only when a prop asks for it.
+  const needsPermissionGate =
+    !!minRole || !!permission || (!!anyPermissions && anyPermissions.length > 0);
 
   // Clear any stored errors on successful navigation to a protected route
   useEffect(() => {
@@ -95,24 +94,15 @@ export function ProtectedRoute({
 
   // CRITICAL: Show loading state while auth is initializing
   // This prevents premature redirects during session restoration
-  // Also wait for permission checks if needed
-  const stillLoading =
-    isLoading ||
-    (requireAdmin && isAdminLoading) ||
-    (needsPermissionCheck && permissionLoading);
+  const stillLoading = isLoading || (requireAdmin && isAdminLoading);
 
-  // Whether this user currently satisfies every check on this route.
-  const passesAllChecks =
-    !!user &&
-    !(requireAdmin && !isAdmin) &&
-    !(minRole && !hasMinimumRole(minRole)) &&
-    !(permission && !hasPermission(permission)) &&
-    !(anyPermissions && anyPermissions.length > 0 && !hasAnyPermission(anyPermissions));
+  // Whether this user currently satisfies the auth-level checks on this route.
+  const passesAuthChecks = !!user && !(requireAdmin && !isAdmin);
 
   // Remember that this user was fully verified for this route.
   //
   // Once the page is on screen we must never swap it back out for a spinner:
-  // unmounting it destroys everything the user was doing — the open tab, the
+  // unmounting it destroys everything the user was doing - the open tab, the
   // scroll position, half-filled forms. Auth layers re-report "loading" for
   // reasons that have nothing to do with the user (a session refresh when the
   // browser tab regains focus, a permission re-fetch), and those re-checks
@@ -125,28 +115,23 @@ export function ProtectedRoute({
       verifiedUserIdRef.current = null;
       return;
     }
-    if (!stillLoading && passesAllChecks) {
+    if (!stillLoading && passesAuthChecks) {
       verifiedUserIdRef.current = user.id;
     }
-  }, [user, stillLoading, passesAllChecks]);
+  }, [user, stillLoading, passesAuthChecks]);
 
   const isReVerifyingInBackground =
     stillLoading && !!user && verifiedUserIdRef.current === user.id;
 
   if (stillLoading && !isReVerifyingInBackground) {
     return (
-      <div className="min-h-screen bg-background flex items-center justify-center">
-        <div className="text-center space-y-4">
-          <Spinner size="xl" className="mx-auto" />
-          <p className="text-muted-foreground">
-            {requireAdmin && isAdminLoading
-              ? "Verifying admin access..."
-              : needsPermissionCheck
-              ? "Checking permissions..."
-              : "Verifying authentication..."}
-          </p>
-        </div>
-      </div>
+      <VerifyingScreen
+        message={
+          requireAdmin && isAdminLoading
+            ? "Verifying admin access..."
+            : "Verifying authentication..."
+        }
+      />
     );
   }
 
@@ -167,6 +152,71 @@ export function ProtectedRoute({
         message={deniedMessage || "Admin access is required to view this page."}
       />
     );
+  }
+
+  if (needsPermissionGate) {
+    return (
+      <PermissionGate
+        userId={user.id}
+        minRole={minRole}
+        permission={permission}
+        anyPermissions={anyPermissions}
+        deniedMessage={deniedMessage}
+      >
+        {children}
+      </PermissionGate>
+    );
+  }
+
+  // All checks passed - render children
+  return <>{children}</>;
+}
+
+interface PermissionGateProps {
+  children: ReactNode;
+  userId: string;
+  minRole?: UserRole;
+  permission?: Permission;
+  anyPermissions?: Permission[];
+  deniedMessage?: string;
+}
+
+/**
+ * The role and permission half of ProtectedRoute. Mounted only for a route
+ * that sets minRole, permission or anyPermissions, so usePermission's reads
+ * happen only where an answer is needed.
+ */
+function PermissionGate({
+  children,
+  userId,
+  minRole,
+  permission,
+  anyPermissions,
+  deniedMessage,
+}: PermissionGateProps) {
+  const {
+    hasPermission,
+    hasAnyPermission,
+    hasMinimumRole,
+    isLoading: permissionLoading,
+  } = usePermission();
+
+  const passesAllChecks =
+    !(minRole && !hasMinimumRole(minRole)) &&
+    !(permission && !hasPermission(permission)) &&
+    !(anyPermissions && anyPermissions.length > 0 && !hasAnyPermission(anyPermissions));
+
+  // Same WEB-UX-008 rule as above: once this user passed, a background
+  // permission re-fetch must not swap the page for a spinner.
+  const verifiedUserIdRef = useRef<string | null>(null);
+  useEffect(() => {
+    if (!permissionLoading && passesAllChecks) {
+      verifiedUserIdRef.current = userId;
+    }
+  }, [userId, permissionLoading, passesAllChecks]);
+
+  if (permissionLoading && verifiedUserIdRef.current !== userId) {
+    return <VerifyingScreen message="Checking permissions..." />;
   }
 
   // Check minimum role requirement
@@ -205,8 +255,18 @@ export function ProtectedRoute({
     );
   }
 
-  // All checks passed - render children
   return <>{children}</>;
+}
+
+function VerifyingScreen({ message }: { message: string }) {
+  return (
+    <div className="min-h-screen bg-background flex items-center justify-center">
+      <div className="text-center space-y-4">
+        <Spinner size="xl" className="mx-auto" />
+        <p className="text-muted-foreground">{message}</p>
+      </div>
+    </div>
+  );
 }
 
 /**

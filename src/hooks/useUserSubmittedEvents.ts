@@ -5,12 +5,20 @@ import { createLogger } from '@/lib/logger';
 import { useAuth } from "./useAuth";
 import { handleError } from "@/lib/errorHandler";
 import { formatInCentralTime, CENTRAL_TIMEZONE, formatEventPart } from "@/lib/timezone";
+import { SubmissionNotDeletedError, SubmissionNotEditableError } from "@/lib/submissionActions";
 
 const log = createLogger('useUserSubmittedEvents');
 
 /** The columns UserSubmittedEvent declares; the table also has triage fields. */
 const SUBMITTED_EVENT_COLUMNS =
   'id, user_id, title, description, date, start_time, end_time, venue, location, address, price, category, website_url, contact_email, contact_phone, image_url, tags, status, admin_notes, admin_reviewed_by, admin_reviewed_at, submitted_at, created_at, updated_at';
+
+/**
+ * What the organizer's own list reads: the declared columns plus the two triage
+ * stamps the timeline shows. quality_score and triage_reasons stay server-side;
+ * they are the reviewer's notes on the organizer, not the organizer's data.
+ */
+const OWN_SUBMISSION_COLUMNS = `${SUBMITTED_EVENT_COLUMNS}, triaged_at, auto_decided`;
 
 export interface UserSubmittedEvent {
   id: string;
@@ -37,6 +45,10 @@ export interface UserSubmittedEvent {
   submitted_at: string;
   created_at: string;
   updated_at: string;
+  /** When the automatic check ran (triage-event-submission). Own list only. */
+  triaged_at?: string | null;
+  /** True when the automatic check made the decision itself. Own list only. */
+  auto_decided?: boolean | null;
   /**
    * The published events row's id, when this submission has a visible listing
    * (WEB-ADS-008). Hydrated by useUserSubmittedEvents from a second query, not
@@ -44,6 +56,8 @@ export interface UserSubmittedEvent {
    * everywhere 20260920000001 has not been applied.
    */
   live_event_id?: string | null;
+  /** events.view_count of that listing, from the same second query. */
+  live_view_count?: number | null;
   /** Hydrated by useAllSubmittedEvents from a separate profiles query. */
   profiles?: {
     first_name: string | null;
@@ -89,7 +103,7 @@ export function useUserSubmittedEvents() {
 
       const { data, error} = await supabase
         .from('user_submitted_events')
-        .select('*')
+        .select(OWN_SUBMISSION_COLUMNS)
         .eq('user_id', user.id)
         .order('submitted_at', { ascending: false });
 
@@ -121,7 +135,7 @@ export function useUserSubmittedEvents() {
       // here - check-unknown-tables fails it for a table types.ts DOES know -
       // so the chain is typed at its edges instead, which is also the only
       // place the row shape is worth stating.
-      type LiveRow = { id: string; submission_id: string | null };
+      type LiveRow = { id: string; submission_id: string | null; view_count: number | null };
       const eventsBySubmission = supabase.from('events') as unknown as {
         select(columns: string): {
           in(column: string, values: string[]): {
@@ -139,7 +153,7 @@ export function useUserSubmittedEvents() {
       };
 
       const { data: published, error: publishedError } = await eventsBySubmission
-        .select('id, submission_id')
+        .select('id, submission_id, view_count')
         .in('submission_id', submissions.map((s) => s.id))
         .eq('is_hidden', false)
         // BOTH unpublish switches. A moderator hiding a row and the agent
@@ -156,9 +170,16 @@ export function useUserSubmittedEvents() {
       const liveById = new Map(
         (published ?? [])
           .filter((row) => row.submission_id)
-          .map((row) => [row.submission_id as string, row.id]),
+          .map((row) => [row.submission_id as string, row]),
       );
-      return submissions.map((s) => ({ ...s, live_event_id: liveById.get(s.id) ?? null }));
+      return submissions.map((s) => {
+        const live = liveById.get(s.id);
+        return {
+          ...s,
+          live_event_id: live?.id ?? null,
+          live_view_count: typeof live?.view_count === 'number' ? live.view_count : null,
+        };
+      });
     },
     enabled: !!user,
   });
@@ -225,14 +246,19 @@ export function useUpdateEvent() {
       id,
       ...eventData
     }: Database['public']['Tables']['user_submitted_events']['Update'] & { id: string }) => {
+      // maybeSingle, not single: RLS answers an update it refuses with ZERO
+      // rows and no error. The owner's UPDATE policy matches only editable
+      // states, so zero rows means "this left an editable state", and the
+      // form says exactly that instead of "Failed to submit event".
       const { data, error } = await supabase
         .from('user_submitted_events')
         .update(eventData)
         .eq('id', id)
-        .select()
-        .single();
+        .select(SUBMITTED_EVENT_COLUMNS)
+        .maybeSingle();
 
       if (error) throw error;
+      if (!data) throw new SubmissionNotEditableError();
 
       // WEB-ADS-008 AC3: an edit after approval UNPUBLISHES until it is
       // re-approved.
@@ -268,15 +294,26 @@ export function useUpdateEvent() {
 
 export function useDeleteEvent() {
   const queryClient = useQueryClient();
+  const { user } = useAuth();
 
   return useMutation({
     mutationFn: async (id: string) => {
-      const { error } = await supabase
+      if (!user) throw new Error('User not authenticated');
+
+      // .select('id') makes PostgREST return what it deleted. Without it a
+      // delete that RLS refused and a delete that worked look identical (204,
+      // no error), which is how the dashboard toasted "Event deleted
+      // successfully" over a row that was still there. Zero rows back is the
+      // refusal, and it throws.
+      const { data, error } = await supabase
         .from('user_submitted_events')
         .delete()
-        .eq('id', id);
+        .eq('id', id)
+        .eq('user_id', user.id)
+        .select('id');
 
       if (error) throw error;
+      if (!data || data.length === 0) throw new SubmissionNotDeletedError();
     },
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: ['user-submitted-events'] });

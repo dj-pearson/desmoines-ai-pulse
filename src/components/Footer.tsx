@@ -1,6 +1,6 @@
 import { useState } from "react";
 import { Heart, Utensils, Map, Crown, Facebook, Twitter, Instagram, PlusCircle, DollarSign } from "lucide-react";
-import { Link } from "react-router-dom";
+import { Link, useLocation } from "react-router-dom";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { BRAND } from "@/lib/brandConfig";
@@ -9,10 +9,27 @@ import { reopenConsentBanner } from "@/components/CookieConsentBanner";
 import { SiteDirectory } from "@/components/seo/SiteDirectory";
 import { SpriteIcon } from "@/components/ui/SpriteIcon";
 import { useNewsletterSubscription } from "@/hooks/useNewsletterSubscription";
+import { useAuthFlags } from "@/contexts/AuthContext";
+import { isCapacitor } from "@/lib/capacitorUtils";
+import { MemberUpgradeGate } from "@/components/header/UserMenu";
+import { signUpHref } from "@/components/header/navigationConfig";
+import {
+  NEWSLETTER_PROMISE,
+  NEWSLETTER_SUBMIT_LABEL,
+  NEWSLETTER_SUBMITTING_LABEL,
+} from "@/content/newsletterCopy";
+
+/** Footer column titles: sentence case, no tracking. */
+const COLUMN_TITLE = "text-sm font-semibold mb-4 text-neutral-200";
 
 export default function Footer() {
   const [email, setEmail] = useState("");
   const { subscribe, loading: isLoading } = useNewsletterSubscription();
+  const { isAuthenticated } = useAuthFlags();
+  const { pathname, search } = useLocation();
+  // Inside the iOS/Android app the App Store badge sends a person who already
+  // has the app to install it.
+  const inApp = isCapacitor();
 
   // Double opt-in through the newsletter-subscribe edge function (WEB-FEAT-019,
   // Home plan WP7). This used to insert into newsletter_subscribers from the
@@ -29,17 +46,22 @@ export default function Footer() {
   };
 
   return (
-    <footer className="bg-neutral-900 text-white">
-      {/* CTA Banner */}
+    <footer className="bg-neutral-900 text-white" aria-labelledby="site-footer-heading">
+      <h2 id="site-footer-heading" className="sr-only">
+        Site footer
+      </h2>
+      {/* CTA Banner: only for people who could act on it (guests and free
+          members), the same gate the header's Upgrade link uses. */}
+      <MemberUpgradeGate isAuthenticated={isAuthenticated}>
       <div className="bg-primary py-8">
         <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8">
           <div className="flex flex-col md:flex-row items-center justify-between gap-4">
             <div className="text-center md:text-left">
               <h3 className="text-xl font-bold text-white mb-1">
-                Unlock Premium Features
+                Unlock premium features
               </h3>
               <p className="text-white/90 text-sm">
-                Get early event access, unlimited favorites & personalized recommendations
+                Unlimited favorites, saved-search alerts and no ads with Insider
               </p>
             </div>
             {/* asChild: one interactive element, not a <button> inside an <a>. */}
@@ -53,6 +75,7 @@ export default function Footer() {
           </div>
         </div>
       </div>
+      </MemberUpgradeGate>
 
       {/* Main Footer */}
       <div className="py-12">
@@ -82,15 +105,14 @@ export default function Footer() {
                 fetchPriority="low"
               />
               <p className="text-neutral-400 mb-4 text-sm">
-                Your AI-powered guide to discovering the best events, dining, and attractions
-                in Des Moines. {/* WEB-SEO-016: "Join 15,000+ locals" removed — nothing
+                Events, restaurants and things to do in Des Moines, updated
+                daily. {/* WEB-SEO-016: "Join 15,000+ locals" removed — nothing
                 measures it. */}
               </p>
 
               {/* Newsletter Benefit Line */}
               <p className="text-neutral-300 text-sm mb-2 flex items-center gap-1.5">
-                <SpriteIcon name="sparkles" className="h-3.5 w-3.5 text-amber-400 flex-shrink-0" aria-hidden="true" />
-                Weekly digest of trending events + AI-powered recommendations
+                {NEWSLETTER_PROMISE}
               </p>
 
               {/* Newsletter Mini Form */}
@@ -99,16 +121,18 @@ export default function Footer() {
                 <Input
                   id="footer-newsletter-email"
                   type="email"
-                  placeholder="Get your weekly Des Moines plan"
+                  autoComplete="email"
+                  inputMode="email"
+                  placeholder="you@example.com"
                   value={email}
                   onChange={(e) => setEmail(e.target.value)}
-                  className="bg-neutral-800 border-neutral-700 text-white placeholder:text-neutral-400 h-10"
+                  className="bg-neutral-800 border-neutral-700 text-white placeholder:text-neutral-400 h-11"
                   required
                   aria-describedby="newsletter-description"
                 />
                 <span id="newsletter-description" className="sr-only">Subscribe to receive weekly updates about Des Moines events</span>
-                <Button type="submit" disabled={isLoading} size="sm" className="h-10 px-5 whitespace-nowrap" aria-label="Subscribe to newsletter">
-                  Subscribe Free
+                <Button type="submit" disabled={isLoading} size="sm" className="h-11 px-5 whitespace-nowrap">
+                  {isLoading ? NEWSLETTER_SUBMITTING_LABEL : NEWSLETTER_SUBMIT_LABEL}
                 </Button>
               </form>
 
@@ -162,7 +186,8 @@ export default function Footer() {
                 </div>
               )}
 
-              {/* App Store Badge */}
+              {/* App Store badge, web only. */}
+              {!inApp && (
               <a
                 href="https://apps.apple.com/us/app/des-moines-insider-events/id6759137729"
                 target="_blank"
@@ -179,11 +204,12 @@ export default function Footer() {
                   loading="lazy"
                 />
               </a>
+              )}
             </div>
 
             {/* Explore */}
             <nav aria-label="Explore links">
-              <h4 className="text-sm font-semibold mb-4 uppercase tracking-wider text-neutral-300">Explore</h4>
+              <h3 className={COLUMN_TITLE}>Explore</h3>
               <ul className="footer-link-list space-y-2">
                 <li>
                   <Link to="/events" className="footer-link flex items-center gap-2">
@@ -240,18 +266,20 @@ export default function Footer() {
 
             {/* For You */}
             <nav aria-label="Account links">
-              <h4 className="text-sm font-semibold mb-4 uppercase tracking-wider text-neutral-300">For You</h4>
+              <h3 className={COLUMN_TITLE}>For you</h3>
               <ul className="footer-link-list space-y-2">
                 <li>
                   <Link to="/pricing" className="footer-link">
                     Pricing
                   </Link>
                 </li>
-                <li>
-                  <Link to="/auth" className="footer-link">
-                    Sign Up Free
-                  </Link>
-                </li>
+                {!isAuthenticated && (
+                  <li>
+                    <Link to={signUpHref(pathname, search)} className="footer-link">
+                      Sign Up Free
+                    </Link>
+                  </li>
+                )}
                 <li>
                   <Link to="/gamification" className="footer-link">
                     Earn Rewards
@@ -267,7 +295,7 @@ export default function Footer() {
 
             {/* Business & Legal */}
             <nav aria-label="Business links">
-              <h4 className="text-sm font-semibold mb-4 uppercase tracking-wider text-neutral-300">Business</h4>
+              <h3 className={COLUMN_TITLE}>Business</h3>
               <ul className="footer-link-list space-y-2">
                 <li>
                   <Link to="/advertise" className="footer-link">
@@ -383,8 +411,9 @@ export default function Footer() {
               <p>
                 © {new Date().getFullYear()} Des Moines Insider. All rights reserved.
               </p>
-              {/* Physical postal address — required by CAN-SPAM §5(a)(5) for any
-                  marketing email we send out, and generally useful for legal notices. */}
+              {/* Contact line. This is not a CAN-SPAM postal address: a city
+                  and state don't meet 15 U.S.C. 7704(a)(5). The street address
+                  or PO box is an owner decision (home-pass2.md, Deferred). */}
               <address className="not-italic">
                 Des Moines Insider · Des Moines, Iowa, USA ·{" "}
                 <a

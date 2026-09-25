@@ -114,8 +114,34 @@ serve(async (req) => {
     // Check payment status with Stripe
     const session = await stripe.checkout.sessions.retrieve(campaign.stripe_session_id);
 
+    // The session must be THIS campaign's. create-campaign-checkout stamps
+    // metadata.campaignId on every session it creates; a stored id that
+    // points at some other session (a stale write, a hand edit, a row copied
+    // by renew) must not mark this campaign paid on the strength of another
+    // one's payment.
+    if (session.metadata?.campaignId !== campaignId) {
+      console.error("[verify-campaign-payment] session does not belong to campaign", {
+        campaignId,
+        sessionCampaignId: session.metadata?.campaignId ?? null,
+      });
+      return new Response(
+        JSON.stringify({ error: "This payment session is not for this campaign", code: "SESSION_MISMATCH" }),
+        {
+          status: 409,
+          headers: { ...corsHeaders, "Content-Type": "application/json" },
+        }
+      );
+    }
+
+    // What was actually charged, after any promotion code
+    // (create-campaign-checkout sets allow_promotion_codes), so the success
+    // page can show it instead of the list price. Stripe amounts are cents.
+    const amountPaid = typeof session.amount_total === "number" ? session.amount_total / 100 : null;
+
     if (session.payment_status === "paid") {
-      // Update campaign status if not already updated (webhook might have done it)
+      // Update campaign status if not already updated (webhook might have done it).
+      // Scoped to pending_payment in the write itself, so a webhook that got
+      // there first is not overwritten.
       if (campaign.status === "pending_payment") {
         const { error: updateError } = await supabase
           .from("campaigns")
@@ -123,7 +149,8 @@ serve(async (req) => {
             status: "pending_creative",
             stripe_payment_intent_id: session.payment_intent as string,
           })
-          .eq("id", campaignId);
+          .eq("id", campaignId)
+          .eq("status", "pending_payment");
 
         if (updateError) {
           console.error("Failed to update campaign:", updateError);
@@ -135,6 +162,7 @@ serve(async (req) => {
           paid: true,
           status: "pending_creative",
           campaignId,
+          amountPaid,
           nextStep: "Upload your creative assets",
         }),
         {
@@ -164,7 +192,7 @@ serve(async (req) => {
     console.error("Verification error:", error);
     return new Response(
       JSON.stringify({
-        error: error.message || "Failed to verify payment",
+        error: error instanceof Error ? error.message : "Failed to verify payment",
       }),
       {
         status: 500,

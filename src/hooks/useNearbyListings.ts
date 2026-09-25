@@ -3,6 +3,7 @@ import { supabase } from "@/integrations/supabase/client";
 import { EVENT_LIST_COLUMNS, RESTAURANT_LIST_COLUMNS } from "@/lib/listColumns";
 import { STALE_TIME } from "@/lib/queryConfig";
 import { nearby, NEARBY_MILES } from "@/lib/venuePages";
+import { isVisitableStatus } from "@/lib/restaurantHours";
 
 /**
  * Restaurants or upcoming events within NEARBY_MILES of a point (SEO-015).
@@ -18,6 +19,11 @@ import { nearby, NEARBY_MILES } from "@/lib/venuePages";
  *
  * No coordinates, no query and no list. An unlocated page gets nothing rather
  * than an arbitrary list labelled "nearby".
+ *
+ * Restaurants that are closed, not open yet or merged are left out: every
+ * caller labels this list as places to go (eat-drink pass 2, WP3.8).
+ * `preferCuisine` moves same-cuisine rows ahead of the rest, each group
+ * still nearest first, for the "Also within 2 miles" rail on a restaurant page.
  */
 const LAT_PAD = 0.03;
 const LNG_PAD = 0.04;
@@ -28,7 +34,7 @@ export function useNearbyListings(
   kind: Kind,
   latitude: number | string | null | undefined,
   longitude: number | string | null | undefined,
-  opts: { excludeId?: string; limit?: number } = {},
+  opts: { excludeId?: string; limit?: number; preferCuisine?: string | null } = {},
 ) {
   const lat = latitude == null ? NaN : Number(latitude);
   const lng = longitude == null ? NaN : Number(longitude);
@@ -70,10 +76,26 @@ export function useNearbyListings(
       if (error) throw error;
       return (data ?? []) as unknown as Array<{ id: string; latitude: number | null; longitude: number | null }>;
     },
-    select: (rows) =>
-      nearby({ latitude: lat, longitude: lng }, rows.filter((r) => r.id !== opts.excludeId), {
+    select: (rows) => {
+      const candidates = rows.filter(
+        (r) =>
+          r.id !== opts.excludeId &&
+          (kind !== "restaurants" || isVisitableStatus((r as { status?: string | null }).status)),
+      );
+      const limit = opts.limit ?? 3;
+      const cuisine = opts.preferCuisine?.trim().toLowerCase();
+      if (!cuisine) {
+        return nearby({ latitude: lat, longitude: lng }, candidates, { maxMiles: NEARBY_MILES, limit }).map(
+          (x) => x.item,
+        );
+      }
+      const all = nearby({ latitude: lat, longitude: lng }, candidates, {
         maxMiles: NEARBY_MILES,
-        limit: opts.limit ?? 3,
-      }).map((x) => x.item),
+        limit: candidates.length,
+      }).map((x) => x.item);
+      const same = (r: (typeof all)[number]) =>
+        ((r as { cuisine?: string | null }).cuisine ?? "").trim().toLowerCase() === cuisine;
+      return [...all.filter(same), ...all.filter((r) => !same(r))].slice(0, limit);
+    },
   });
 }

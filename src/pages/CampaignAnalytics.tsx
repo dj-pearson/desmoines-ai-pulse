@@ -1,341 +1,353 @@
-import { useState, useEffect } from "react";
-import { useParams, useNavigate } from "react-router-dom";
-import { useCampaignAnalytics } from "@/hooks/useCampaignAnalytics";
-import { useCampaigns } from "@/hooks/useCampaigns";
+import { useState } from "react";
+import { Link, useParams } from "react-router-dom";
+import { CartesianGrid, Line, LineChart, ResponsiveContainer, Tooltip, XAxis, YAxis } from "recharts";
+import { ArrowLeft, Download } from "lucide-react";
+import { BusinessLayout } from "@/components/business/BusinessLayout";
+import { WhatWeCount } from "@/components/campaigns/WhatWeCount";
+import SEOHead from "@/components/SEOHead";
 import { Button } from "@/components/ui/button";
-import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
+import { ErrorState } from "@/components/ui/error-state";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { Skeleton } from "@/components/ui/skeleton";
-import { Badge } from "@/components/ui/badge";
-import { ArrowLeft, Download, MousePointerClick, Eye, DollarSign } from "lucide-react";
-import { LineChart, Line, BarChart, Bar, XAxis, YAxis, CartesianGrid, Tooltip, Legend, ResponsiveContainer } from "recharts";
-import { useDocumentTitle } from "@/hooks/useDocumentTitle";
-import { SpriteIcon } from "@/components/ui/SpriteIcon";
+import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table";
+import { useCampaignById, paidDays } from "@/hooks/useCampaignById";
+import {
+  clickThroughRate,
+  downloadDeliveryCsv,
+  MAX_SERIES_ROWS,
+  useCampaignAnalytics,
+  type AnalyticsRange,
+  type DailyDelivery,
+} from "@/hooks/useCampaignAnalytics";
+import { campaignDays, formatCampaignDate, formatUSD } from "@/lib/campaignDisplay";
+import { PLACEMENT_SPECS, type PlacementType } from "@/lib/placementSpecs";
+
+const RANGE_LABELS: Record<AnalyticsRange, string> = {
+  all: "Whole campaign",
+  "7days": "Last 7 days",
+  "30days": "Last 30 days",
+  "90days": "Last 90 days",
+};
+
+const NUMBER = new Intl.NumberFormat("en-US");
+
+function formatCount(n: number): string {
+  return NUMBER.format(n);
+}
+
+function formatCtr(ctr: number | null): string {
+  return ctr === null ? "-" : `${ctr.toFixed(2)}%`;
+}
+
+function shortDate(value: string): string {
+  return formatCampaignDate(value, "MMM d");
+}
+
+interface StatProps {
+  label: string;
+  value: string;
+  note?: string;
+}
+
+function Stat({ label, value, note }: StatProps) {
+  return (
+    <div className="py-3">
+      <dt className="text-sm text-muted-foreground">{label}</dt>
+      <dd className="mt-1 text-2xl font-semibold tabular-nums">{value}</dd>
+      {note && <dd className="mt-1 text-xs text-muted-foreground">{note}</dd>}
+    </div>
+  );
+}
+
+interface SeriesChartProps {
+  data: DailyDelivery[];
+  dataKey: "impressions" | "clicks";
+  title: string;
+}
+
+/** One measure per chart: impressions and clicks differ by orders of magnitude, so they don't share an axis. */
+function SeriesChart({ data, dataKey, title }: SeriesChartProps) {
+  return (
+    <figure>
+      <figcaption className="mb-2 text-sm font-medium">{title} per day</figcaption>
+      <div aria-hidden="true">
+        <ResponsiveContainer width="100%" height={180}>
+          <LineChart data={data} margin={{ top: 8, right: 8, bottom: 0, left: 0 }}>
+            <CartesianGrid stroke="hsl(var(--border))" vertical={false} />
+            <XAxis
+              dataKey="date"
+              tickFormatter={shortDate}
+              tick={{ fontSize: 12, fill: "hsl(var(--muted-foreground))" }}
+              stroke="hsl(var(--border))"
+              minTickGap={24}
+            />
+            <YAxis
+              allowDecimals={false}
+              width={48}
+              tick={{ fontSize: 12, fill: "hsl(var(--muted-foreground))" }}
+              stroke="hsl(var(--border))"
+            />
+            <Tooltip
+              labelFormatter={(value: string) => formatCampaignDate(value)}
+              formatter={(value: number) => [formatCount(value), title]}
+              contentStyle={{
+                background: "hsl(var(--popover))",
+                border: "1px solid hsl(var(--border))",
+                color: "hsl(var(--popover-foreground))",
+                borderRadius: 8,
+              }}
+            />
+            <Line
+              type="linear"
+              dataKey={dataKey}
+              stroke="hsl(var(--primary))"
+              strokeWidth={2}
+              dot={data.length <= 31 ? { r: 3 } : false}
+              activeDot={{ r: 5 }}
+              isAnimationActive={false}
+            />
+          </LineChart>
+        </ResponsiveContainer>
+      </div>
+    </figure>
+  );
+}
 
 export default function CampaignAnalytics() {
   const { campaignId } = useParams<{ campaignId: string }>();
-  const navigate = useNavigate();
-  const { campaigns } = useCampaigns();
-  const { summary, dailyData, creativePerformance, isLoading, fetchAnalytics, exportToCSV } = useCampaignAnalytics(campaignId || "");
-  const [dateRange, setDateRange] = useState("all");
-  useDocumentTitle("Campaign Analytics");
+  const [range, setRange] = useState<AnalyticsRange>("all");
 
-  const campaign = campaigns.find((c) => c.id === campaignId);
+  const campaignQuery = useCampaignById(campaignId);
+  const campaign = campaignQuery.data ?? null;
+  const delivery = useCampaignAnalytics(campaign, range);
 
-  useEffect(() => {
-    if (campaignId && dateRange !== "all") {
-      const endDate = new Date().toISOString().split("T")[0];
-      let startDate = "";
+  const seo = (
+    <SEOHead
+      title="Campaign analytics"
+      description="Impressions and clicks for your Des Moines Insider ad campaign."
+      robots="noindex, follow"
+    />
+  );
 
-      switch (dateRange) {
-        case "7days":
-          startDate = new Date(Date.now() - 7 * 24 * 60 * 60 * 1000).toISOString().split("T")[0];
-          break;
-        case "30days":
-          startDate = new Date(Date.now() - 30 * 24 * 60 * 60 * 1000).toISOString().split("T")[0];
-          break;
-        case "90days":
-          startDate = new Date(Date.now() - 90 * 24 * 60 * 60 * 1000).toISOString().split("T")[0];
-          break;
-      }
-
-      fetchAnalytics(startDate, endDate);
-    } else if (campaignId) {
-      fetchAnalytics();
-    }
-  }, [dateRange, campaignId]);
-
-  const formatCurrency = (amount: number) => {
-    return new Intl.NumberFormat("en-US", {
-      style: "currency",
-      currency: "USD",
-    }).format(amount);
-  };
-
-  const formatNumber = (num: number) => {
-    return new Intl.NumberFormat("en-US").format(num);
-  };
-
-  if (isLoading && !summary) {
+  if (campaignQuery.isLoading) {
     return (
-      <div className="container mx-auto py-8 px-4 max-w-7xl">
-        <Skeleton className="h-12 w-64 mb-6" />
-        <div className="grid grid-cols-1 md:grid-cols-4 gap-4 mb-6">
-          {[1, 2, 3, 4].map((i) => (
-            <Skeleton key={i} className="h-32" />
-          ))}
+      <BusinessLayout>
+        {seo}
+        <div className="container mx-auto max-w-5xl px-4 py-8" role="status" aria-label="Loading campaign analytics">
+          <Skeleton className="mb-6 h-10 w-64" />
+          <Skeleton className="h-64" />
         </div>
-        <Skeleton className="h-96" />
-      </div>
+      </BusinessLayout>
     );
   }
 
+  if (campaignQuery.isError) {
+    return (
+      <BusinessLayout>
+        {seo}
+        <div className="container mx-auto max-w-5xl px-4 py-8">
+          <ErrorState
+            error={campaignQuery.error}
+            onRetry={() => void campaignQuery.refetch()}
+            title="This campaign didn't load"
+          />
+        </div>
+      </BusinessLayout>
+    );
+  }
+
+  if (!campaign) {
+    return (
+      <BusinessLayout>
+        {seo}
+        <div className="container mx-auto max-w-5xl px-4 py-12">
+          <h1 className="text-2xl font-semibold text-foreground">Campaign not found</h1>
+          <p className="mt-2 text-muted-foreground">
+            There's no campaign with this link on your account.
+          </p>
+          <Button asChild variant="outline" className="mt-6">
+            <Link to="/campaigns">Back to your campaigns</Link>
+          </Button>
+        </div>
+      </BusinessLayout>
+    );
+  }
+
+  const data = delivery.data;
+  const days = paidDays(campaign.campaign_placements, campaignDays(campaign.start_date, campaign.end_date));
+  const ctr = data ? clickThroughRate(data.impressions, data.clicks) : null;
+  const cpm =
+    range === "all" && data && data.impressions > 0 && typeof campaign.total_cost === "number"
+      ? (campaign.total_cost / data.impressions) * 1000
+      : null;
+
   return (
-    <div className="container mx-auto py-8 px-4 max-w-7xl">
-      {/* Header */}
-      <div className="mb-6">
-        <Button variant="ghost" onClick={() => navigate(`/campaigns`)} className="mb-4">
-          <ArrowLeft className="mr-2 h-4 w-4" />
-          Back to Campaigns
+    <BusinessLayout>
+      {seo}
+      <div className="container mx-auto max-w-5xl px-4 py-8">
+        <Button asChild variant="ghost" className="mb-4 -ml-3">
+          <Link to={`/campaigns/${campaign.id}`}>
+            <ArrowLeft className="mr-2 h-4 w-4" aria-hidden="true" />
+            Back to the campaign
+          </Link>
         </Button>
 
-        <div className="flex items-start justify-between flex-wrap gap-4">
+        <div className="flex flex-wrap items-end justify-between gap-4">
           <div>
-            <h1 className="text-3xl font-bold mb-2">Campaign Analytics</h1>
-            {campaign && (
-              <p className="text-muted-foreground">{campaign.name}</p>
-            )}
+            <h1 className="text-2xl font-bold sm:text-3xl text-foreground">{campaign.name}</h1>
+            <p className="mt-1 text-muted-foreground">
+              {campaign.start_date && campaign.end_date
+                ? `Runs ${formatCampaignDate(campaign.start_date)} to ${formatCampaignDate(campaign.end_date)}`
+                : "Dates not set"}
+            </p>
           </div>
-
-          <div className="flex items-center gap-2">
-            <Select value={dateRange} onValueChange={setDateRange}>
-              <SelectTrigger className="w-[180px]">
-                <SelectValue placeholder="Select range" />
+          <div className="flex flex-wrap items-center gap-2">
+            <Select value={range} onValueChange={(value) => setRange(value as AnalyticsRange)}>
+              <SelectTrigger className="w-[200px]" aria-label="Date range">
+                <SelectValue />
               </SelectTrigger>
               <SelectContent>
-                <SelectItem value="all">All Time</SelectItem>
-                <SelectItem value="7days">Last 7 Days</SelectItem>
-                <SelectItem value="30days">Last 30 Days</SelectItem>
-                <SelectItem value="90days">Last 90 Days</SelectItem>
+                {(Object.keys(RANGE_LABELS) as AnalyticsRange[]).map((key) => (
+                  <SelectItem key={key} value={key}>
+                    {RANGE_LABELS[key]}
+                  </SelectItem>
+                ))}
               </SelectContent>
             </Select>
-
-            <Button variant="outline" onClick={exportToCSV}>
-              <Download className="mr-2 h-4 w-4" />
-              Export CSV
+            <Button
+              variant="outline"
+              disabled={!data || !data.from}
+              onClick={() => data && downloadDeliveryCsv(campaign.id, data, campaign.total_cost)}
+            >
+              <Download className="mr-2 h-4 w-4" aria-hidden="true" />
+              Download CSV
             </Button>
           </div>
         </div>
-      </div>
 
-      {/* Summary Cards */}
-      <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-5 gap-4 mb-6">
-        <Card>
-          <CardContent className="pt-6">
-            <div className="flex items-center justify-between mb-2">
-              <Eye className="h-5 w-5 text-muted-foreground" />
-              <SpriteIcon name="trending-up" className="h-4 w-4 text-green-500" />
-            </div>
-            <p className="text-2xl font-bold">{formatNumber(summary?.totalImpressions || 0)}</p>
-            <p className="text-xs text-muted-foreground">Total Impressions</p>
-          </CardContent>
-        </Card>
+        {delivery.isError ? (
+          <ErrorState
+            className="mt-8"
+            error={delivery.error}
+            onRetry={() => void delivery.refetch()}
+            title="The numbers didn't load"
+            description="Nothing is lost; the counts are stored. Try again."
+          />
+        ) : delivery.isLoading || !data ? (
+          <div role="status" aria-label="Counting impressions and clicks" className="mt-8 space-y-4">
+            <Skeleton className="h-24" />
+            <Skeleton className="h-64" />
+          </div>
+        ) : (
+          <>
+            <section aria-labelledby="delivery-heading" className="mt-8">
+              <h2 id="delivery-heading" className="sr-only">
+                Delivery
+              </h2>
+              <p className="text-sm text-muted-foreground">
+                {data.from && data.to
+                  ? `${RANGE_LABELS[range]}: ${formatCampaignDate(data.from)} to ${formatCampaignDate(data.to)}`
+                  : "This campaign hasn't started yet, so there's nothing to count."}
+              </p>
+              <dl className="mt-2 grid grid-cols-2 gap-x-6 border-y sm:grid-cols-3 lg:grid-cols-4">
+                <Stat label="Impressions" value={formatCount(data.impressions)} />
+                <Stat label="Clicks" value={formatCount(data.clicks)} />
+                <Stat label="Click-through rate" value={formatCtr(ctr)} />
+                <Stat label="Days served" value={formatCount(data.daysServed)} note="Days with at least one impression" />
+                <Stat label="Amount paid" value={formatUSD(campaign.total_cost)} />
+                <Stat label="Days paid for" value={days === null ? "-" : formatCount(days)} />
+                {cpm !== null && (
+                  <Stat
+                    label="Effective CPM"
+                    value={formatUSD(cpm)}
+                    note="Worked out: amount paid / impressions x 1,000. Not a rate you were charged."
+                  />
+                )}
+              </dl>
+            </section>
 
-        <Card>
-          <CardContent className="pt-6">
-            <div className="flex items-center justify-between mb-2">
-              <MousePointerClick className="h-5 w-5 text-muted-foreground" />
-              <SpriteIcon name="trending-up" className="h-4 w-4 text-green-500" />
-            </div>
-            <p className="text-2xl font-bold">{formatNumber(summary?.totalClicks || 0)}</p>
-            <p className="text-xs text-muted-foreground">Total Clicks</p>
-          </CardContent>
-        </Card>
-
-        <Card>
-          <CardContent className="pt-6">
-            <div className="flex items-center justify-between mb-2">
-              <SpriteIcon name="trending-up" className="h-5 w-5 text-muted-foreground" />
-            </div>
-            <p className="text-2xl font-bold">{summary?.avgCtr.toFixed(2) || 0}%</p>
-            <p className="text-xs text-muted-foreground">Average CTR</p>
-          </CardContent>
-        </Card>
-
-        <Card>
-          <CardContent className="pt-6">
-            <div className="flex items-center justify-between mb-2">
-              <SpriteIcon name="users" className="h-5 w-5 text-muted-foreground" />
-            </div>
-            <p className="text-2xl font-bold">{formatNumber(summary?.uniqueViewers || 0)}</p>
-            <p className="text-xs text-muted-foreground">Unique Viewers</p>
-          </CardContent>
-        </Card>
-
-        <Card>
-          <CardContent className="pt-6">
-            <div className="flex items-center justify-between mb-2">
-              <DollarSign className="h-5 w-5 text-muted-foreground" />
-            </div>
-            <p className="text-2xl font-bold">{formatCurrency(summary?.totalCost || 0)}</p>
-            <p className="text-xs text-muted-foreground">Total Spend</p>
-          </CardContent>
-        </Card>
-      </div>
-
-      {/* Charts */}
-      <div className="grid grid-cols-1 lg:grid-cols-2 gap-6 mb-6">
-        <Card>
-          <CardHeader>
-            <CardTitle>Impressions Over Time</CardTitle>
-            <CardDescription>Daily impression trends</CardDescription>
-          </CardHeader>
-          <CardContent>
-            {dailyData.length > 0 ? (
-              <ResponsiveContainer width="100%" height={300}>
-                <LineChart data={dailyData}>
-                  <CartesianGrid strokeDasharray="3 3" />
-                  <XAxis dataKey="date" tick={{ fontSize: 12 }} />
-                  <YAxis tick={{ fontSize: 12 }} />
-                  <Tooltip />
-                  <Legend />
-                  <Line type="monotone" dataKey="impressions" stroke="#8884d8" strokeWidth={2} />
-                </LineChart>
-              </ResponsiveContainer>
-            ) : (
-              <div className="h-[300px] flex items-center justify-center text-muted-foreground">
-                No data available
-              </div>
-            )}
-          </CardContent>
-        </Card>
-
-        <Card>
-          <CardHeader>
-            <CardTitle>Clicks Over Time</CardTitle>
-            <CardDescription>Daily click trends</CardDescription>
-          </CardHeader>
-          <CardContent>
-            {dailyData.length > 0 ? (
-              <ResponsiveContainer width="100%" height={300}>
-                <LineChart data={dailyData}>
-                  <CartesianGrid strokeDasharray="3 3" />
-                  <XAxis dataKey="date" tick={{ fontSize: 12 }} />
-                  <YAxis tick={{ fontSize: 12 }} />
-                  <Tooltip />
-                  <Legend />
-                  <Line type="monotone" dataKey="clicks" stroke="#82ca9d" strokeWidth={2} />
-                </LineChart>
-              </ResponsiveContainer>
-            ) : (
-              <div className="h-[300px] flex items-center justify-center text-muted-foreground">
-                No data available
-              </div>
-            )}
-          </CardContent>
-        </Card>
-      </div>
-
-      <div className="grid grid-cols-1 lg:grid-cols-2 gap-6 mb-6">
-        <Card>
-          <CardHeader>
-            <CardTitle>CTR Trend</CardTitle>
-            <CardDescription>Click-through rate over time</CardDescription>
-          </CardHeader>
-          <CardContent>
-            {dailyData.length > 0 ? (
-              <ResponsiveContainer width="100%" height={300}>
-                <LineChart data={dailyData}>
-                  <CartesianGrid strokeDasharray="3 3" />
-                  <XAxis dataKey="date" tick={{ fontSize: 12 }} />
-                  <YAxis tick={{ fontSize: 12 }} />
-                  <Tooltip />
-                  <Legend />
-                  <Line type="monotone" dataKey="ctr" stroke="#ffc658" strokeWidth={2} name="CTR %" />
-                </LineChart>
-              </ResponsiveContainer>
-            ) : (
-              <div className="h-[300px] flex items-center justify-center text-muted-foreground">
-                No data available
-              </div>
-            )}
-          </CardContent>
-        </Card>
-
-        <Card>
-          <CardHeader>
-            <CardTitle>Daily Cost</CardTitle>
-            <CardDescription>Spending over time</CardDescription>
-          </CardHeader>
-          <CardContent>
-            {dailyData.length > 0 ? (
-              <ResponsiveContainer width="100%" height={300}>
-                <BarChart data={dailyData}>
-                  <CartesianGrid strokeDasharray="3 3" />
-                  <XAxis dataKey="date" tick={{ fontSize: 12 }} />
-                  <YAxis tick={{ fontSize: 12 }} />
-                  <Tooltip />
-                  <Legend />
-                  <Bar dataKey="cost" fill="#8884d8" name="Cost ($)" />
-                </BarChart>
-              </ResponsiveContainer>
-            ) : (
-              <div className="h-[300px] flex items-center justify-center text-muted-foreground">
-                No data available
-              </div>
-            )}
-          </CardContent>
-        </Card>
-      </div>
-
-      {/* Creative Performance */}
-      <Card>
-        <CardHeader>
-          <CardTitle>Creative Performance</CardTitle>
-          <CardDescription>Performance breakdown by creative</CardDescription>
-        </CardHeader>
-        <CardContent>
-          {creativePerformance.length > 0 ? (
-            <div className="space-y-4">
-              {creativePerformance.map((creative) => (
-                <div key={creative.creativeId} className="border rounded-lg p-4">
-                  <div className="flex items-start gap-4">
-                    <div className="w-32 h-24 bg-muted rounded overflow-hidden flex-shrink-0">
-                      {creative.imageUrl ? (
-                        <img src={creative.imageUrl} alt={creative.title} className="w-full h-full object-cover" loading="lazy" />
-                      ) : (
-                        <div className="w-full h-full flex items-center justify-center">
-                          <Eye className="h-8 w-8 text-muted-foreground" />
-                        </div>
-                      )}
-                    </div>
-
-                    <div className="flex-grow">
-                      <div className="flex items-start justify-between mb-2">
-                        <div>
-                          <h3 className="font-semibold">{creative.title}</h3>
-                          <Badge variant="outline" className="mt-1">
-                            {creative.placementType.replace("_", " ")}
-                          </Badge>
-                        </div>
-                      </div>
-
-                      <div className="grid grid-cols-2 md:grid-cols-5 gap-4 mt-3">
-                        <div>
-                          <p className="text-xs text-muted-foreground">Impressions</p>
-                          <p className="font-semibold">{formatNumber(creative.impressions)}</p>
-                        </div>
-                        <div>
-                          <p className="text-xs text-muted-foreground">Clicks</p>
-                          <p className="font-semibold">{formatNumber(creative.clicks)}</p>
-                        </div>
-                        <div>
-                          <p className="text-xs text-muted-foreground">CTR</p>
-                          <p className="font-semibold">{creative.ctr.toFixed(2)}%</p>
-                        </div>
-                        <div>
-                          <p className="text-xs text-muted-foreground">Cost</p>
-                          <p className="font-semibold">{formatCurrency(creative.cost)}</p>
-                        </div>
-                        <div>
-                          <p className="text-xs text-muted-foreground">Cost/Click</p>
-                          <p className="font-semibold">
-                            {creative.clicks > 0 ? formatCurrency(creative.cost / creative.clicks) : "$0.00"}
-                          </p>
-                        </div>
-                      </div>
-                    </div>
-                  </div>
+            {data.from && (
+              <section aria-labelledby="daily-heading" className="mt-10">
+                <h2 id="daily-heading" className="text-lg font-semibold">
+                  Day by day
+                </h2>
+                {!data.seriesComplete && (
+                  <p className="mt-1 text-sm text-muted-foreground">
+                    The daily lines cover the first {formatCount(MAX_SERIES_ROWS)} events. The totals above are exact.
+                  </p>
+                )}
+                <div className="mt-4 grid gap-8 lg:grid-cols-2">
+                  <SeriesChart data={data.daily} dataKey="impressions" title="Impressions" />
+                  <SeriesChart data={data.daily} dataKey="clicks" title="Clicks" />
                 </div>
-              ))}
-            </div>
-          ) : (
-            <div className="text-center py-12 text-muted-foreground">
-              No creative performance data available yet
-            </div>
-          )}
-        </CardContent>
-      </Card>
-    </div>
+                <details className="mt-4 text-sm">
+                  <summary className="cursor-pointer text-muted-foreground underline underline-offset-4">
+                    Show the numbers as a table
+                  </summary>
+                  <Table className="mt-2">
+                    <TableHeader>
+                      <TableRow>
+                        <TableHead>Date</TableHead>
+                        <TableHead className="text-right">Impressions</TableHead>
+                        <TableHead className="text-right">Clicks</TableHead>
+                        <TableHead className="text-right">CTR</TableHead>
+                      </TableRow>
+                    </TableHeader>
+                    <TableBody>
+                      {data.daily.map((d) => (
+                        <TableRow key={d.date}>
+                          <TableCell>{formatCampaignDate(d.date)}</TableCell>
+                          <TableCell className="text-right tabular-nums">{formatCount(d.impressions)}</TableCell>
+                          <TableCell className="text-right tabular-nums">{formatCount(d.clicks)}</TableCell>
+                          <TableCell className="text-right tabular-nums">
+                            {formatCtr(clickThroughRate(d.impressions, d.clicks))}
+                          </TableCell>
+                        </TableRow>
+                      ))}
+                    </TableBody>
+                  </Table>
+                </details>
+              </section>
+            )}
+
+            {data.creatives.length > 0 && (
+              <section aria-labelledby="creatives-heading" className="mt-10">
+                <h2 id="creatives-heading" className="text-lg font-semibold">
+                  By creative
+                </h2>
+                <Table className="mt-2">
+                  <TableHeader>
+                    <TableRow>
+                      <TableHead>Creative</TableHead>
+                      <TableHead>Placement</TableHead>
+                      <TableHead className="text-right">Impressions</TableHead>
+                      <TableHead className="text-right">Clicks</TableHead>
+                      <TableHead className="text-right">CTR</TableHead>
+                    </TableRow>
+                  </TableHeader>
+                  <TableBody>
+                    {data.creatives.map((c) => (
+                      <TableRow key={c.creativeId}>
+                        <TableCell className="font-medium">{c.title}</TableCell>
+                        <TableCell>
+                          {PLACEMENT_SPECS[c.placementType as PlacementType]?.name ?? c.placementType.replace(/_/g, " ")}
+                        </TableCell>
+                        <TableCell className="text-right tabular-nums">{formatCount(c.impressions)}</TableCell>
+                        <TableCell className="text-right tabular-nums">{formatCount(c.clicks)}</TableCell>
+                        <TableCell className="text-right tabular-nums">
+                          {formatCtr(clickThroughRate(c.impressions, c.clicks))}
+                        </TableCell>
+                      </TableRow>
+                    ))}
+                  </TableBody>
+                </Table>
+              </section>
+            )}
+          </>
+        )}
+
+        <WhatWeCount className="mt-12 border-t pt-8" />
+      </div>
+    </BusinessLayout>
   );
 }

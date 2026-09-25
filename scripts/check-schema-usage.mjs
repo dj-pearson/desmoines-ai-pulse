@@ -146,6 +146,10 @@ const PENDING_MIGRATIONS = [
   // renders in the pending window.
   { rpc: 'claim_listing', migration: '20260920000005' },
   { rpc: 'review_business_claim', migration: '20260920000005' },
+  // The owner's edit of a verified claim's listing (WEB-ADS-009 AC4), called by
+  // useMyBusinessClaims on /business. ClaimedListingEditForm treats PGRST202 as
+  // "editing opens once claims are switched on" rather than an error.
+  { rpc: 'update_claimed_listing', migration: '20260920000005' },
   { table: 'business_claims', migration: '20260920000005' },
   // The Stripe customer remembered on the profile (WEB-ADS-014 AC6). Until it
   // exists the read 42703s, which create-campaign-checkout logs and falls back

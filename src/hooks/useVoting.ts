@@ -4,6 +4,7 @@ import { useAuth } from '@/contexts/AuthContext';
 import { createLogger } from '@/lib/logger';
 import { createSlug } from '@/lib/slug';
 import { formatInTimeZone } from 'date-fns-tz';
+import { voteWriteError } from '@/lib/votingStatus';
 
 const log = createLogger('useVoting');
 
@@ -125,6 +126,16 @@ export const PENDING_VOTE_KEY = 'pendingVote';
 /** A stashed pick older than this is dropped rather than offered. */
 export const PENDING_VOTE_MAX_AGE_MS = 24 * 60 * 60 * 1000;
 
+export interface VotingCategoriesData {
+  categories: VotingCategory[];
+  /**
+   * True when voting_category_tallies failed. Every vote_count is then 0 by
+   * default, which is not the same as "no votes": the index says the counts
+   * are unavailable instead of printing "No votes yet".
+   */
+  countsFailed: boolean;
+}
+
 /**
  * Fetch all active voting categories with vote counts.
  *
@@ -134,44 +145,45 @@ export const PENDING_VOTE_MAX_AGE_MS = 24 * 60 * 60 * 1000;
 export function useVotingCategories() {
   return useQuery({
     queryKey: ['voting-categories'],
-    queryFn: async (): Promise<VotingCategory[]> => {
-      const { data: categories, error } = await supabase
-        .from('voting_categories')
-        .select(CATEGORY_COLUMNS)
-        .eq('is_active', true)
-        .order('name');
+    queryFn: async (): Promise<VotingCategoriesData> => {
+      // Categories and tallies don't depend on each other, so one round trip.
+      // Tallies are aggregated server-side (WEB-SEC-025 step 2): the RPC
+      // returns counts and nothing else, never a ballot or a user_id.
+      const [categoriesRes, countsRes] = await Promise.all([
+        supabase
+          .from('voting_categories')
+          .select(CATEGORY_COLUMNS)
+          .eq('is_active', true)
+          .order('name'),
+        supabase.rpc('voting_category_tallies'),
+      ]);
 
-      if (error) {
-        log.warn('useVotingCategories', 'Failed to fetch categories', { error: error.message });
+      if (categoriesRes.error) {
+        log.warn('useVotingCategories', 'Failed to fetch categories', { error: categoriesRes.error.message });
         // Thrown as-is: its `code` is what shouldRetry reads to skip retrying
         // a permanent error.
-        throw error;
+        throw categoriesRes.error;
       }
 
-      // Vote counts per category, aggregated server-side (WEB-SEC-025 step 2).
-      // This used to select every row of `votes` and count them in the browser,
-      // which meant the client held one row per ballot -- and `votes` carries
-      // `user_id`. The RPC returns counts and nothing else, so the leaderboard
-      // stops depending on a read that has to be revoked in step 3.
-      const { data: counts, error: countsError } = await supabase.rpc('voting_category_tallies');
-
-      if (countsError) {
-        // Counts absent, categories present: the page still renders, every
-        // category reading 0. Deliberately not falling back to the raw table --
-        // a fallback is a read path that survives the policy change and fails
-        // then instead, when it is harder to notice.
-        log.warn('useVotingCategories', 'Failed to fetch vote tallies', { error: countsError.message });
+      // Counts absent, categories present: the page still renders and says the
+      // counts are unavailable. Deliberately not falling back to the raw table:
+      // a fallback is a read path that survives the policy change and fails
+      // then instead, when it is harder to notice.
+      const countsFailed = !!countsRes.error;
+      if (countsRes.error) {
+        log.warn('useVotingCategories', 'Failed to fetch vote tallies', { error: countsRes.error.message });
       }
 
       const countMap: Record<string, number> = {};
-      for (const row of (counts ?? []) as Array<{ category_id: string; vote_count: number }>) {
+      for (const row of (countsRes.data ?? []) as Array<{ category_id: string; vote_count: number }>) {
         countMap[row.category_id] = Number(row.vote_count);
       }
 
-      return ((categories || []) as unknown as VotingCategory[]).map((cat) => ({
+      const categories = ((categoriesRes.data || []) as unknown as VotingCategory[]).map((cat) => ({
         ...cat,
         vote_count: countMap[cat.id] || 0,
       }));
+      return { categories, countsFailed };
     },
     staleTime: 2 * 60 * 1000,
   });
@@ -303,48 +315,54 @@ export function useCategoryResults(categorySlug: string) {
         }))
         .sort((a, b) => b.vote_count - a.vote_count);
 
-      // Enrich with entity names for restaurants
-      const restaurantIds = results.filter((r) => r.entity_type === 'restaurant' && r.entity_id).map((r) => r.entity_id!);
-      if (restaurantIds.length > 0) {
-        const { data: restaurants } = await supabase
-          .from('restaurants')
-          .select('id, name, image_url, slug')
-          .in('id', restaurantIds);
+      // Names, images and links for listed places. Restaurants and attractions
+      // are read in parallel. A failed lookup is logged and leaves the entry
+      // unnamed; the page says "Name unavailable" rather than guessing.
+      const restaurantIds = results
+        .filter((r) => r.entity_type === 'restaurant' && r.entity_id)
+        .map((r) => r.entity_id as string);
+      const attractionIds = results
+        .filter((r) => r.entity_type === 'attraction' && r.entity_id)
+        .map((r) => r.entity_id as string);
 
-        if (restaurants) {
-          const restMap = new Map(restaurants.map((r) => [r.id, r]));
-          for (const result of results) {
-            if (result.entity_type === 'restaurant' && result.entity_id) {
-              const rest = restMap.get(result.entity_id);
-              if (rest) {
-                result.name = rest.name;
-                result.image_url = rest.image_url;
-                result.url = `/restaurants/${rest.slug || rest.id}`;
-              }
-            }
-          }
-        }
+      const [restaurantsRes, attractionsRes] = await Promise.all([
+        restaurantIds.length > 0
+          ? supabase.from('restaurants').select('id, name, image_url, slug').in('id', restaurantIds)
+          : Promise.resolve(null),
+        attractionIds.length > 0
+          ? supabase.from('attractions').select('id, name, image_url').in('id', attractionIds)
+          : Promise.resolve(null),
+      ]);
+
+      if (restaurantsRes?.error) {
+        log.warn('useCategoryResults', 'Failed to name restaurants', { error: restaurantsRes.error.message });
+      }
+      if (attractionsRes?.error) {
+        log.warn('useCategoryResults', 'Failed to name attractions', { error: attractionsRes.error.message });
       }
 
-      // Enrich attractions
-      const attractionIds = results.filter((r) => r.entity_type === 'attraction' && r.entity_id).map((r) => r.entity_id!);
-      if (attractionIds.length > 0) {
-        const { data: attractions } = await supabase
-          .from('attractions')
-          .select('id, name, image_url')
-          .in('id', attractionIds);
-
-        if (attractions) {
-          const attrMap = new Map(attractions.map((a) => [a.id, a]));
-          for (const result of results) {
-            if (result.entity_type === 'attraction' && result.entity_id) {
-              const attr = attrMap.get(result.entity_id);
-              if (attr) {
-                result.name = attr.name;
-                result.image_url = attr.image_url;
-                result.url = `/attractions/${createSlug(attr.name)}`;
-              }
-            }
+      type NamedRow = { id: string; name: string; image_url: string | null; slug?: string | null };
+      const restMap = new Map<string, NamedRow>(
+        ((restaurantsRes?.data ?? []) as NamedRow[]).map((r) => [r.id, r]),
+      );
+      const attrMap = new Map<string, NamedRow>(
+        ((attractionsRes?.data ?? []) as NamedRow[]).map((a) => [a.id, a]),
+      );
+      for (const result of results) {
+        if (!result.entity_id) continue;
+        if (result.entity_type === 'restaurant') {
+          const rest = restMap.get(result.entity_id);
+          if (rest) {
+            result.name = rest.name;
+            result.image_url = rest.image_url;
+            result.url = `/restaurants/${rest.slug || rest.id}`;
+          }
+        } else if (result.entity_type === 'attraction') {
+          const attr = attrMap.get(result.entity_id);
+          if (attr) {
+            result.name = attr.name;
+            result.image_url = attr.image_url;
+            result.url = `/attractions/${createSlug(attr.name)}`;
           }
         }
       }
@@ -415,7 +433,9 @@ export function useCastVote() {
       // One statement. The old delete-then-insert ignored the delete's error
       // and lost the ballot whenever the insert failed; an upsert on the
       // (category_id, user_id) unique key either replaces the vote or leaves
-      // the previous one intact. Needs the UPDATE policy from 20260829000001.
+      // the previous one intact. A change needs the UPDATE policy in
+      // 20260925000001; until it is applied the booth doesn't offer one
+      // (VOTE_CHANGE_AVAILABLE in src/lib/votingStatus.ts).
       const ballot = {
         category_id: categoryId,
         entity_type: entityType,
@@ -431,8 +451,9 @@ export function useCastVote() {
         .upsert(ballot, { onConflict: 'category_id,user_id' });
 
       // PostgrestError is a plain object, not an Error; wrap it so the
-      // server's message survives to the toast and to handleError.
-      if (error) throw new Error(error.message);
+      // server's message survives to handleError, and keep its code: the
+      // booth tells a 42501 (RLS refused the change) from a network failure.
+      if (error) throw voteWriteError(error.message, error.code);
     },
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: ['voting-categories'] });

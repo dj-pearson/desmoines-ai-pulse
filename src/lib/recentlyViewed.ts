@@ -143,14 +143,36 @@ function sameItem(a: { id: string; type: RecentlyViewedType }, b: { id: string; 
   return a.id === b.id && a.type === b.type;
 }
 
-/** Sort newest-first, drop entries older than MAX_AGE_MS, cap to MAX_ITEMS. */
+/**
+ * An in-app path: one leading slash, then anything but a second slash or a
+ * backslash. `//evil.example` and `/\evil.example` are protocol-relative to a
+ * browser, and `https:` or `javascript:` are not paths at all. Entries come
+ * from local storage and from the recently_viewed table, and either can hold
+ * anything, so the rail only links to what this accepts (home pass-2 WP3
+ * item 10).
+ */
+export function isInternalHref(href: unknown): href is string {
+  return typeof href === "string" && /^\/(?![/\\])/.test(href);
+}
+
+/**
+ * Sort newest-first, drop entries older than MAX_AGE_MS or with an href that
+ * is not an in-app path, cap to MAX_ITEMS.
+ */
 export function normalizeEntries(
   entries: RecentlyViewedEntry[],
   now: number = Date.now(),
 ): RecentlyViewedEntry[] {
   const cutoff = now - MAX_AGE_MS;
   return entries
-    .filter((e) => e && typeof e.id === "string" && typeof e.viewedAt === "number" && e.viewedAt >= cutoff)
+    .filter(
+      (e) =>
+        e &&
+        typeof e.id === "string" &&
+        typeof e.viewedAt === "number" &&
+        e.viewedAt >= cutoff &&
+        isInternalHref(e.href),
+    )
     .sort((a, b) => b.viewedAt - a.viewedAt)
     .slice(0, MAX_ITEMS);
 }

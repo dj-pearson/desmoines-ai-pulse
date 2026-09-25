@@ -11,6 +11,7 @@ import {
   SCENE_UPDATE_TYPES,
   formatSceneUpdateTime,
   isSceneUpdateType,
+  sceneUpdateHref,
   useSceneUpdateTypeCounts,
   useSceneUpdates,
   type SceneUpdateType,
@@ -32,7 +33,7 @@ export default function WhatsNew() {
 
   const { data, isLoading, isError, error, refetch, hasNextPage, fetchNextPage, isFetchingNextPage } =
     useSceneUpdates({ type: activeType });
-  const { data: countData } = useSceneUpdateTypeCounts();
+  const { data: countData, isError: countsFailed } = useSceneUpdateTypeCounts();
 
   const updates = data?.pages.flatMap((p) => p.rows) ?? [];
   const counts = countData?.counts ?? {};
@@ -40,8 +41,12 @@ export default function WhatsNew() {
 
   // A chip only for a type that has rows. Four of the old six had no writer
   // anywhere, so they could only ever open an empty list. The selected type
-  // stays visible even at zero, so the pressed state matches the URL.
-  const chips = SCENE_UPDATE_TYPES.filter((t) => (counts[t.value] ?? 0) > 0 || t.value === activeType);
+  // stays visible even at zero, so the pressed state matches the URL. When the
+  // counts failed, every chip shows: a filter that may be empty beats no
+  // filters at all (pass 2 WP4 item 8).
+  const chips = countsFailed
+    ? SCENE_UPDATE_TYPES
+    : SCENE_UPDATE_TYPES.filter((t) => (counts[t.value] ?? 0) > 0 || t.value === activeType);
 
   const setType = (type: SceneUpdateType | undefined) => {
     const next = new URLSearchParams(searchParams);
@@ -51,18 +56,26 @@ export default function WhatsNew() {
   };
 
   const canonicalUrl = getCanonicalUrl(PAGE_PATH);
+  // Each entry carries the URL its card links to, and an update with no link
+  // is left out (pass 2 WP4 item 13): a ListItem with only a name points
+  // nowhere, and the positions stay 1..n over what is listed.
+  const linked = updates
+    .map((u) => ({ name: u.title, href: sceneUpdateHref(u) }))
+    .filter((u): u is { name: string; href: string } => Boolean(u.href))
+    .slice(0, 10);
   const itemList =
-    updates.length > 0
+    linked.length > 0
       ? {
           '@context': 'https://schema.org',
           '@type': 'ItemList',
           name: "What's new in Des Moines",
           url: canonicalUrl,
-          numberOfItems: Math.min(updates.length, 10),
-          itemListElement: updates.slice(0, 10).map((u, i) => ({
+          numberOfItems: linked.length,
+          itemListElement: linked.map((u, i) => ({
             '@type': 'ListItem',
             position: i + 1,
-            name: u.title,
+            name: u.name,
+            url: getCanonicalUrl(u.href),
           })),
         }
       : undefined;

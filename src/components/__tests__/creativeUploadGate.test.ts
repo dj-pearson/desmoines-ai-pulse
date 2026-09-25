@@ -54,7 +54,9 @@ describe("creative upload is gated on payment", () => {
     // The banner for pending_payment must not claim receipt. Checked as an
     // ordering fact rather than by exact wording: whatever the pending_payment
     // branch says, "Payment received" may not be inside it.
-    const branch = PAGE.indexOf("campaign.status === 'pending_payment'");
+    // Either quote style: the page is formatted with double quotes since the
+    // business plan (WP2) rewrite.
+    const branch = PAGE.search(/campaign\.status === ["']pending_payment["']/);
     expect(branch).toBeGreaterThan(-1);
     const nextBranch = PAGE.indexOf("campaign.status ===", branch + 10);
     const body = PAGE.slice(branch, nextBranch === -1 ? branch + 600 : nextBranch);

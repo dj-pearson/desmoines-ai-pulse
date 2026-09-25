@@ -42,10 +42,11 @@
  *     costs a recommended field; a wrong one is bad data on a live page.
  */
 import { Event } from '@/lib/types';
-import { createEventSlugWithCentralTime } from '@/lib/timezone';
+import { centralDateOf, createEventSlugWithCentralTime, hasSpecificTime } from '@/lib/timezone';
 import { BRAND } from '@/lib/brandConfig';
 import { isHttpUrl } from '@/lib/dashboardItems';
-import { buildEventOffers, isEventAccessibleForFree } from '@/lib/eventOffers';
+import { buildEventOffers, isEventAccessibleForFree, parseEventPrice } from '@/lib/eventOffers';
+import { DEFAULT_EVENT_HOURS } from '@/lib/eventTiming';
 
 /**
  * The event's outbound source link, or null when it is missing, not http(s)
@@ -57,28 +58,104 @@ export function eventTicketUrl(event: { source_url?: string | null; source_url_b
   return isHttpUrl(event.source_url) ? event.source_url : null;
 }
 
-/** Assumed run time when an event has no explicit end. */
-const DEFAULT_EVENT_HOURS = 3;
+/**
+ * Hosts that sell tickets for what they list (events-pass2 WP4 item 5): the
+ * national ticketers, plus the team and venue sites the scrapers ingest from
+ * (supabase/functions/_shared/knownVenues.ts and the firecrawl sources), which
+ * sell their own. A match is the host itself or any subdomain of it.
+ */
+export const TICKETING_HOSTS: readonly string[] = [
+  'ticketmaster.com',
+  'seatgeek.com',
+  'etix.com',
+  'eventbrite.com',
+  'axs.com',
+  'iowawild.com',
+  'theiowabarnstormers.com',
+  'milb.com',
+  'iowa.gleague.nba.com',
+];
+
+/** The link's host without "www.", or null for a missing or non-http link. */
+export function linkHost(url: string | null | undefined): string | null {
+  if (!isHttpUrl(url)) return null;
+  try {
+    return new URL(url as string).hostname.replace(/^www\./, '').toLowerCase();
+  } catch {
+    return null;
+  }
+}
+
+function isTicketingHost(host: string): boolean {
+  return TICKETING_HOSTS.some((h) => host === h || host.endsWith(`.${h}`));
+}
+
+export interface EventOutboundLink {
+  href: string;
+  /** "Get tickets", or "Event listing on catchdesmoines.com". */
+  label: string;
+  /** True only when the label promises tickets. */
+  sellsTickets: boolean;
+}
+
+/**
+ * What the detail page's outbound button says, and where it goes. "Get
+ * tickets" is a promise that the link sells them, so it needs both a stated
+ * paid price (fixed or a range) and a ticketing host. Anything else names the
+ * host, so a reader knows they are going to a listing, not a box office. null
+ * when there is no usable link (eventTicketUrl).
+ */
+export function eventOutboundLink(event: {
+  source_url?: string | null;
+  source_url_broken?: boolean | null;
+  price?: string | null;
+}): EventOutboundLink | null {
+  const href = eventTicketUrl(event);
+  const host = linkHost(href);
+  if (!href || !host) return null;
+  const kind = parseEventPrice(event.price).kind;
+  const paid = kind === 'fixed' || kind === 'range';
+  if (paid && isTicketingHost(host)) {
+    return { href, label: 'Get tickets', sellsTickets: true };
+  }
+  return { href, label: `Event listing on ${host}`, sellsTickets: false };
+}
 
 export function eventPageUrl(event: Event): string {
   return `${BRAND.baseUrl}/events/${createEventSlugWithCentralTime(event.title, event)}`;
 }
 
-export function eventStartIso(event: Event): string {
-  const iso =
-    event.event_start_utc ||
-    (typeof event.date === 'string' ? event.date : event.date.toISOString());
+/** hasSpecificTime reads string fields, and `date` can arrive as a Date. */
+function eventHasTime(event: Event): boolean {
+  const date = typeof event.date === 'string' ? event.date : event.date?.toISOString();
+  return hasSpecificTime({ ...event, date });
+}
 
-  // WEB-BE-038. DATE ONLY when the source announced no start time.
+function startInstant(event: Event): string {
+  return event.event_start_utc || (typeof event.date === 'string' ? event.date : event.date.toISOString());
+}
+
+/** The Central yyyy-MM-dd of an instant string, or null when it won't parse. */
+function centralDay(iso: string): string | null {
+  if (/^\d{4}-\d{2}-\d{2}$/.test(iso)) return iso;
+  const ms = Date.parse(iso);
+  return Number.isFinite(ms) ? centralDateOf(new Date(ms)) : null;
+}
+
+export function eventStartIso(event: Event): string {
+  const iso = startInstant(event);
+
+  // WEB-BE-038, widened by events-pass2 WP4 item 2. DATE ONLY when the source
+  // announced no start time: time_tbd, the 19:31:58 marker, or SeatGeek's
+  // 03:30 placeholder - the same test the page uses (hasSpecificTime), so the
+  // JSON-LD can't publish a showtime the page says isn't listed. schema.org
+  // accepts a bare date for startDate.
   //
-  // schema.org/Event accepts a bare date for startDate, and that is exactly
-  // what "the date is known, the time is not" means. The alternative was
-  // publishing SeatGeek's 03:30:00 placeholder as a showtime -- which Google
-  // then renders in a rich result, so a visitor sees "3:30 AM" and concludes
-  // the listing is broken rather than that the time is unannounced.
-  if (event.time_tbd) {
-    const datePart = iso.slice(0, 10);
-    if (/^\d{4}-\d{2}-\d{2}$/.test(datePart)) return datePart;
+  // The date is the CENTRAL one. iso.slice(0, 10) of a UTC string put every
+  // evening event on the next day.
+  if (!eventHasTime(event)) {
+    const day = centralDay(iso);
+    if (day) return day;
   }
 
   return iso;
@@ -87,28 +164,49 @@ export function eventStartIso(event: Event): string {
 /**
  * endDate, which Google's Events report names as a missing field.
  *
- * Falls back to start + 3h rather than omitting. This is the one estimated
- * field here and it is a deliberate exception to the omit-rather-than-guess
- * rule above: an Event with no endDate is treated by Google as a point in time
- * and drops out of "happening now" style surfaces, and a three-hour evening
- * event is a far better estimate than no duration at all. It is bounded, it
- * cannot mislead a reader (nothing renders it), and it is never applied over a
- * real end_date.
+ * Falls back to start + DEFAULT_EVENT_HOURS rather than omitting. This is the
+ * one estimated field here and it is a deliberate exception to the
+ * omit-rather-than-guess rule above: an Event with no endDate is treated by
+ * Google as a point in time and drops out of "happening now" style surfaces.
+ * It is bounded, nothing renders it, and it is never applied over a real
+ * end_date. eventTiming.ts uses the same constant for "is it over".
  */
 export function eventEndIso(event: Event): string | null {
-  if (event.end_date) return event.end_date;
+  const startMs = Date.parse(startInstant(event));
+  const endMs = event.end_date ? Date.parse(event.end_date) : NaN;
+  // An end before the start is bad data; treat it as absent.
+  const realEnd =
+    event.end_date && (!Number.isFinite(startMs) || !Number.isFinite(endMs) || endMs >= startMs)
+      ? event.end_date
+      : null;
 
-  // WEB-BE-038. NO ESTIMATE WHEN THERE IS NO START TIME. The three-hour
-  // fallback above is defensible because it is anchored to a real start; with
-  // a date-only start there is nothing to anchor it to, and adding three hours
-  // to midnight would publish a 3 AM end time -- reintroducing, on the endDate,
-  // exactly the implausible-hour problem this story removes from startDate.
-  if (event.time_tbd) return null;
+  if (!eventHasTime(event)) {
+    // WEB-BE-038. NO ESTIMATE WHEN THERE IS NO START TIME: three hours after
+    // a placeholder is a made-up hour. A real end_date is kept, as a Central
+    // date so it matches the date-only startDate.
+    return realEnd ? centralDay(realEnd) : null;
+  }
 
-  const startMs = new Date(eventStartIso(event)).getTime();
+  if (realEnd) return realEnd;
   if (!Number.isFinite(startMs)) return eventStartIso(event);
   return new Date(startMs + DEFAULT_EVENT_HOURS * 60 * 60 * 1000).toISOString();
 }
+
+/**
+ * Cut at a word boundary with "..." (events-pass2 WP4 item 18). List pages
+ * carried 30-50 full descriptions each in their ItemList.
+ */
+function clipDescription(text: string, max: number): string {
+  const t = text.trim().replace(/\s+/g, ' ');
+  if (t.length <= max) return t;
+  const cut = t.slice(0, max - 3);
+  const lastSpace = cut.lastIndexOf(' ');
+  const base = lastSpace > (max - 3) * 0.6 ? cut.slice(0, lastSpace) : cut;
+  return `${base.replace(/[\s,;:.-]+$/, '')}...`;
+}
+
+/** Characters of description per Event node inside an ItemList. */
+export const LIST_DESCRIPTION_MAX = 300;
 
 /** The Place node, with the locality rules described in this file's header. */
 export function buildEventLocation(event: Event) {
@@ -140,11 +238,18 @@ export function buildEventLocation(event: Event) {
  * One Event node. `withContext` adds @context for a standalone block; leave it
  * off inside an ItemList, where the wrapper already carries it.
  */
-export function buildEventJsonLd(event: Event, opts: { withContext?: boolean } = {}) {
+export function buildEventJsonLd(
+  event: Event,
+  opts: { withContext?: boolean; descriptionMax?: number } = {},
+) {
   const url = eventPageUrl(event);
+  const endDate = eventEndIso(event);
+  const fullDescription =
+    event.enhanced_description ||
+    event.original_description ||
+    `${event.title} in ${event.city?.trim() || BRAND.city}, ${BRAND.state}`;
   const offers = buildEventOffers(event.price);
   const accessibleForFree = isEventAccessibleForFree(event.price);
-  const city = event.city?.trim();
 
   return {
     ...(opts.withContext ? { '@context': 'https://schema.org' } : {}),
@@ -155,14 +260,14 @@ export function buildEventJsonLd(event: Event, opts: { withContext?: boolean } =
     // so the Event and its page were read as one thing that was both.
     '@id': `${url}#event`,
     name: event.title,
-    description:
-      event.enhanced_description ||
-      event.original_description ||
-      `${event.title} in ${city || BRAND.city}, ${BRAND.state}`,
+    // The detail page keeps the full text; lists pass descriptionMax.
+    description: opts.descriptionMax
+      ? clipDescription(fullDescription, opts.descriptionMax)
+      : fullDescription,
     startDate: eventStartIso(event),
     // Omitted rather than estimated when there is no announced start time
     // (WEB-BE-038); see eventEndIso.
-    ...(eventEndIso(event) ? { endDate: eventEndIso(event) as string } : {}),
+    ...(endDate ? { endDate } : {}),
     eventStatus: 'https://schema.org/EventScheduled',
     eventAttendanceMode: 'https://schema.org/OfflineEventAttendanceMode',
     location: buildEventLocation(event),
@@ -201,7 +306,7 @@ export function buildEventItemList(
       '@type': 'ListItem' as const,
       position: index + 1,
       url: eventPageUrl(event),
-      item: buildEventJsonLd(event),
+      item: buildEventJsonLd(event, { descriptionMax: LIST_DESCRIPTION_MAX }),
     })),
   };
 }

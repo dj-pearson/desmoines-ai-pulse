@@ -16,8 +16,15 @@ import { installFixtureBackend } from './support/fixtureBackend';
  * Events, hotels and venues are answered here, registered AFTER
  * installFixtureBackend so these handlers win. The events handler does not
  * filter by the date bounds on purpose: the grouping by Central day is what's
- * under test, and every fixture row is inside the window.
+ * under test, and every fixture row is inside the window. The planner makes
+ * two events reads (rows starting in the window, and rows still running from
+ * before it, which carry `end_date=gte`); the second gets no rows here.
+ *
+ * The clock is pinned (plan-stay-pass2 WP1 item 3): the planner refuses a
+ * window that has ended, and these fixtures are dated Oct 9-11, 2026.
  */
+
+const NOW = new Date('2026-10-01T17:00:00Z');
 
 const ISO = '2026-09-01T12:00:00.000Z';
 const ARENA = { latitude: 41.5908, longitude: -93.6208 };
@@ -124,9 +131,12 @@ async function seedConsent(page: Page) {
 }
 
 async function installWindow(page: Page): Promise<string[]> {
+  await page.clock.setFixedTime(NOW);
   await seedConsent(page);
   await installFixtureBackend(page);
-  await page.route('**/rest/v1/events**', (route) => reply(route, EVENTS));
+  await page.route('**/rest/v1/events**', (route) =>
+    reply(route, /end_date=gte/.test(route.request().url()) ? [] : EVENTS),
+  );
   await page.route('**/rest/v1/hotels**', (route) => reply(route, HOTELS));
   await page.route('**/rest/v1/venues**', (route) => reply(route, VENUES));
 

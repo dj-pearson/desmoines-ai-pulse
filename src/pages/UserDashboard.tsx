@@ -1,31 +1,37 @@
-import { useState } from "react";
-import { useNavigate, Link } from "react-router-dom";
-import { useDocumentTitle } from "@/hooks/useDocumentTitle";
-import { useTabState } from "@/hooks/useTabState";
-import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
+import { lazy, Suspense, useState, type ReactNode } from "react";
+import { Link } from "react-router-dom";
+import { useQuery } from "@tanstack/react-query";
+import { Bell, Megaphone, Plus, Settings, User, X } from "lucide-react";
+import Header from "@/components/Header";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { Button } from "@/components/ui/button";
-import { Badge } from "@/components/ui/badge";
-import { Alert, AlertDescription } from "@/components/ui/alert";
-import { Progress } from "@/components/ui/progress";
-import { Plus, User, Settings, Eye, Edit, Trash2, CheckCircle, XCircle, AlertTriangle, ArrowLeft, Megaphone, Crown, Heart, Bell, Zap, Upload, BarChart3, DollarSign, ExternalLink } from "lucide-react";
-import { useAuth } from "@/hooks/useAuth";
-import { useUserSubmittedEvents, useDeleteEvent } from "@/hooks/useUserSubmittedEvents";
-import { useSubscription } from "@/hooks/useSubscription";
-import { useFavorites } from "@/hooks/useFavorites";
-import { useCampaigns } from "@/hooks/useCampaigns";
+import { Skeleton } from "@/components/ui/skeleton";
+import { Spinner } from "@/components/ui/loading-skeleton";
+import { SpriteIcon } from "@/components/ui/SpriteIcon";
+import { PremiumBadge } from "@/components/PremiumBadge";
 import { RecentlyViewedList } from "@/components/RecentlyViewedList";
 import SavedSearchesTab from "@/components/dashboard/SavedSearchesTab";
-import { PremiumBadge } from "@/components/PremiumBadge";
-import { Breadcrumbs } from "@/components/ui/breadcrumbs";
-import EventSubmissionForm from "@/components/EventSubmissionForm";
-import { EmailPreferencesCard } from "@/components/EmailPreferencesCard";
-import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogTrigger } from "@/components/ui/dialog";
-import { format } from "date-fns";
-import { toast } from "sonner";
-import { SpriteIcon } from "@/components/ui/SpriteIcon";
-import { ErrorState } from "@/components/ui/error-state";
-import { Spinner } from "@/components/ui/loading-skeleton";
+import { YourWeek } from "@/components/account/YourWeek";
+import { SubmissionsTab } from "@/components/account/SubmissionsTab";
+import { AdvertiseTab } from "@/components/account/AdvertiseTab";
+import { useDocumentTitle } from "@/hooks/useDocumentTitle";
+import { useTabState } from "@/hooks/useTabState";
+import { useAuth } from "@/hooks/useAuth";
+import { useProfile } from "@/hooks/useProfile";
+import { useUserSubmittedEvents } from "@/hooks/useUserSubmittedEvents";
+import { useSubscription } from "@/hooks/useSubscription";
+import { useSavedCount } from "@/hooks/useSavedCount";
+import { useCampaignActionCount } from "@/hooks/useCampaigns";
+import { supabase } from "@/integrations/supabase/client";
+import { handleError } from "@/lib/errorHandler";
+import { storage } from "@/lib/safeStorage";
+import { INTERESTS } from "@/lib/interests";
+import { formatInCentralTime } from "@/lib/timezone";
+import { cn } from "@/lib/utils";
+
+// The form is only needed on the Submit tab; the overview is what most people
+// open, and it should not pay for a form bundle it never shows.
+const EventSubmissionForm = lazy(() => import("@/components/EventSubmissionForm"));
 
 const DASHBOARD_TABS = [
   "overview",
@@ -36,604 +42,436 @@ const DASHBOARD_TABS = [
   "settings",
 ] as const;
 
+const INTERESTS_PROMPT_DISMISSED_KEY = "dmi_interests_prompt_dismissed_v1";
+
+function formatDate(iso: string | null | undefined): string | null {
+  if (!iso) return null;
+  try {
+    return formatInCentralTime(iso, "MMM d, yyyy");
+  } catch {
+    return null;
+  }
+}
+
+// ---------------------------------------------------------------------------
+// Overview pieces
+// ---------------------------------------------------------------------------
+
+interface InterestsPromptProps {
+  onDone: () => void;
+}
+
+/**
+ * Sign-up no longer asks for interests (WP1 item 5); this asks once, on the
+ * first overview visit with none saved (WP3 item 9).
+ */
+function InterestsPrompt({ onDone }: InterestsPromptProps) {
+  const { updateProfile } = useProfile();
+  const [picked, setPicked] = useState<string[]>([]);
+  const [saving, setSaving] = useState(false);
+  const [saveFailed, setSaveFailed] = useState(false);
+
+  const toggle = (id: string) =>
+    setPicked((current) => (current.includes(id) ? current.filter((x) => x !== id) : [...current, id]));
+
+  const dismiss = () => {
+    storage.set(INTERESTS_PROMPT_DISMISSED_KEY, true);
+    onDone();
+  };
+
+  const save = async () => {
+    setSaving(true);
+    setSaveFailed(false);
+    try {
+      await updateProfile({ interests: picked });
+      storage.set(INTERESTS_PROMPT_DISMISSED_KEY, true);
+      onDone();
+    } catch (error) {
+      handleError(error, { component: "UserDashboard", action: "saveInterests" });
+      setSaveFailed(true);
+    } finally {
+      setSaving(false);
+    }
+  };
+
+  return (
+    <section aria-labelledby="interests-heading" className="rounded-xl border bg-card p-4 sm:p-5">
+      <div className="flex items-start justify-between gap-3">
+        <div>
+          <h2 id="interests-heading" className="font-semibold">
+            What are you into?
+          </h2>
+          <p className="mt-1 text-sm text-muted-foreground">Pick a few. We use them to choose events for your emails.</p>
+        </div>
+        <Button variant="ghost" size="icon" className="h-11 w-11 shrink-0" onClick={dismiss} aria-label="Not now">
+          <X className="h-4 w-4" aria-hidden="true" />
+        </Button>
+      </div>
+      <div className="mt-3 flex flex-wrap gap-2">
+        {INTERESTS.map((interest) => {
+          const on = picked.includes(interest.id);
+          return (
+            <button
+              key={interest.id}
+              type="button"
+              aria-pressed={on}
+              onClick={() => toggle(interest.id)}
+              className={cn(
+                "min-h-[44px] rounded-full border px-4 text-sm transition-colors focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring",
+                on ? "border-primary bg-primary text-primary-foreground" : "bg-background hover:bg-muted",
+              )}
+            >
+              {interest.label}
+            </button>
+          );
+        })}
+      </div>
+      <div className="mt-3 flex flex-wrap items-center gap-3">
+        <Button onClick={save} disabled={picked.length === 0 || saving} className="min-h-[44px]">
+          {saving ? "Saving..." : "Save"}
+        </Button>
+        {saveFailed && (
+          <p role="alert" className="text-sm text-destructive">
+            That didn't save. Try again.
+          </p>
+        )}
+      </div>
+    </section>
+  );
+}
+
+interface ActionNeededProps {
+  onOpenTab: (tab: (typeof DASHBOARD_TABS)[number]) => void;
+}
+
+/** Shown only when something is waiting on this person (WP3 item 3). */
+function ActionNeeded({ onOpenTab }: ActionNeededProps) {
+  const { data: submissions } = useUserSubmittedEvents();
+  const campaigns = useCampaignActionCount();
+
+  const revisions = (submissions ?? []).filter((s) => s.status === "needs_revision").length;
+  const campaignCount = campaigns.isError ? 0 : campaigns.count;
+
+  if (revisions === 0 && campaignCount === 0) return null;
+
+  return (
+    <section aria-labelledby="action-needed-heading" className="rounded-xl border bg-card p-4 sm:p-5">
+      <h2 id="action-needed-heading" className="font-semibold">
+        Action needed
+      </h2>
+      <ul className="mt-2 space-y-1">
+        {revisions > 0 && (
+          <li>
+            <Button variant="link" className="h-auto min-h-[44px] px-0" onClick={() => onOpenTab("events")}>
+              {revisions === 1 ? "1 submission needs changes" : `${revisions} submissions need changes`}
+            </Button>
+          </li>
+        )}
+        {campaignCount > 0 && (
+          <li>
+            <Button variant="link" className="h-auto min-h-[44px] px-0" onClick={() => onOpenTab("advertise")}>
+              {campaignCount === 1
+                ? "1 campaign is waiting on creative or payment"
+                : `${campaignCount} campaigns are waiting on creative or payment`}
+            </Button>
+          </li>
+        )}
+      </ul>
+    </section>
+  );
+}
+
+/** "3 saved", counted the way the server caps it (WP3 item 5). */
+function SavedCard() {
+  const saved = useSavedCount();
+  const { limits, isLoading: planLoading } = useSubscription();
+  const limit = limits.favorites;
+
+  return (
+    <div className="rounded-xl border bg-card p-4">
+      <p className="text-sm text-muted-foreground">Saved</p>
+      {saved.isLoading ? (
+        <Skeleton className="mt-2 h-7 w-24 bg-muted" />
+      ) : saved.isError || saved.count === null ? (
+        <div className="mt-1 flex items-center gap-2">
+          <span className="text-xl font-semibold" aria-label="Saved count unavailable">
+            -
+          </span>
+          <Button variant="link" size="sm" className="h-auto min-h-[44px] px-0" onClick={saved.refetch}>
+            Retry
+          </Button>
+        </div>
+      ) : (
+        <>
+          <Link
+            to="/my-events?tab=saved"
+            className="mt-1 inline-flex min-h-[44px] items-center text-xl font-semibold hover:underline"
+          >
+            {saved.count} saved
+          </Link>
+          {!planLoading && (
+            <p className="text-sm text-muted-foreground">
+              {limit === -1 ? "No limit on your plan" : `Your plan holds ${limit}`}
+            </p>
+          )}
+        </>
+      )}
+    </div>
+  );
+}
+
+/** Plan status without the "Free Plan" flash for paying members (WP3 item 4). */
+function PlanCard() {
+  const {
+    isLoading,
+    isPremium,
+    tier,
+    subscription,
+    cancelAtPeriodEnd,
+    isPastDue,
+    gracePeriodEndsAt,
+  } = useSubscription();
+
+  if (isLoading) {
+    return (
+      <div className="rounded-xl border bg-card p-4" aria-busy="true">
+        <Skeleton className="h-4 w-16 bg-muted" />
+        <Skeleton className="mt-2 h-7 w-32 bg-muted" />
+        <Skeleton className="mt-2 h-4 w-40 bg-muted" />
+      </div>
+    );
+  }
+
+  const periodEnd = formatDate(subscription?.current_period_end);
+  const graceEnd = formatDate(gracePeriodEndsAt);
+  const name = isPremium ? (tier === "vip" ? "VIP" : "Insider") : "Free";
+
+  let sentence: ReactNode = null;
+  if (isPastDue) {
+    sentence = (
+      <>
+        Payment failed{graceEnd ? `, access until ${graceEnd}` : ""}.{" "}
+        <Link to="/subscription" className="font-medium text-primary hover:underline">
+          Update payment
+        </Link>
+      </>
+    );
+  } else if (isPremium && cancelAtPeriodEnd && periodEnd) {
+    sentence = `Ends ${periodEnd}`;
+  } else if (isPremium && periodEnd) {
+    sentence = `Renews ${periodEnd}`;
+  } else if (!isPremium) {
+    sentence = (
+      <Link to="/pricing" className="font-medium text-primary hover:underline">
+        See Insider and VIP
+      </Link>
+    );
+  }
+
+  return (
+    <div className="rounded-xl border bg-card p-4">
+      <p className="text-sm text-muted-foreground">Plan</p>
+      <p className="mt-1 text-xl font-semibold">{name}</p>
+      {sentence && <p className="mt-1 text-sm text-muted-foreground">{sentence}</p>}
+    </div>
+  );
+}
+
+interface SubmissionsSummaryProps {
+  onOpen: () => void;
+}
+
+/**
+ * "Your submissions: N, M live" - only for people who have submitted. Live
+ * means a published listing exists (`live_event_id`), not that a status column
+ * says approved; pending includes submissions sent back for changes.
+ */
+function SubmissionsSummary({ onOpen }: SubmissionsSummaryProps) {
+  const { data: submissions, isError } = useUserSubmittedEvents();
+  if (isError || !submissions || submissions.length === 0) return null;
+
+  const total = submissions.length;
+  const live = submissions.filter((s) => !!s.live_event_id).length;
+  const pending = submissions.filter((s) => s.status === "pending" || s.status === "needs_revision").length;
+
+  return (
+    <div className="rounded-xl border bg-card p-4">
+      <p className="text-sm text-muted-foreground">Your submissions</p>
+      <Button variant="link" className="h-auto min-h-[44px] px-0 text-xl font-semibold" onClick={onOpen}>
+        {total}, {live} live
+      </Button>
+      {pending > 0 && <p className="text-sm text-muted-foreground">{pending} pending</p>}
+    </div>
+  );
+}
+
+// ---------------------------------------------------------------------------
+// Settings summary
+// ---------------------------------------------------------------------------
+
+/** Two lines and a link: the one settings page is /profile?tab=settings (WP3 item 8). */
+function SettingsSummary() {
+  const { user } = useAuth();
+  const factors = useQuery({
+    queryKey: ["mfa-factors", user?.id],
+    enabled: !!user,
+    queryFn: async () => {
+      const { data, error } = await supabase.auth.mfa.listFactors();
+      if (error) throw error;
+      return (data?.totp ?? []).filter((factor) => factor.status === "verified").length;
+    },
+  });
+
+  const emailLine = user?.email_confirmed_at
+    ? `${user.email ?? "Your email"} is verified.`
+    : `${user?.email ?? "Your email"} isn't verified yet.`;
+
+  let twoStepLine: string;
+  if (factors.isLoading) twoStepLine = "Checking two-step sign-in...";
+  else if (factors.isError) twoStepLine = "We couldn't check two-step sign-in.";
+  else twoStepLine = (factors.data ?? 0) > 0 ? "Two-step sign-in is on." : "Two-step sign-in is off.";
+
+  return (
+    <section aria-labelledby="settings-summary-heading" className="max-w-xl rounded-xl border bg-card p-4 sm:p-5">
+      <h2 id="settings-summary-heading" className="font-semibold">
+        Settings
+      </h2>
+      <p className="mt-2 text-sm">{emailLine}</p>
+      <p className="mt-1 text-sm">{twoStepLine}</p>
+      <Button asChild className="mt-4 min-h-[44px]">
+        <Link to="/profile?tab=settings">
+          <Settings className="mr-2 h-4 w-4" aria-hidden="true" />
+          Open settings
+        </Link>
+      </Button>
+      <p className="mt-2 text-sm text-muted-foreground">Password, two-step sign-in, emails and privacy all live there.</p>
+    </section>
+  );
+}
+
+// ---------------------------------------------------------------------------
+// Page
+// ---------------------------------------------------------------------------
+
 export default function UserDashboard() {
   // Tab lives in the URL so it survives a reload, a back-navigation, or any
-  // remount — previously the dashboard always snapped back to "overview".
+  // remount.
   const [activeTab, setActiveTab] = useTabState("overview", {
     validTabs: DASHBOARD_TABS,
   });
-  const [editingEventId, setEditingEventId] = useState<string | null>(null);
-  const navigate = useNavigate();
-  const { user } = useAuth(); // No longer need to check authLoading - ProtectedRoute handles it
   useDocumentTitle("My Dashboard");
-  const { data: events, isLoading, isError, error: eventsError, refetch } =
-    useUserSubmittedEvents();
-  const deleteEvent = useDeleteEvent();
-  const {
-    campaigns,
-    isLoading: campaignsLoading,
-    error: campaignsError,
-    refetch: refetchCampaigns,
-  } = useCampaigns();
-  const { tier, isPremium, isExpiringSoon, subscription } = useSubscription();
-  const { favoritedEvents, remainingFavorites, favoritesLimit } = useFavorites();
+  const { profile, isLoading: profileLoading, error: profileError } = useProfile();
+  const { refetch: refetchSubmissions } = useUserSubmittedEvents();
 
-  const getStatusIcon = (status: string) => {
-    switch (status) {
-      case "approved":
-        return <CheckCircle className="h-4 w-4 text-green-500" />;
-      case "rejected":
-        return <XCircle className="h-4 w-4 text-red-500" />;
-      case "needs_revision":
-        return <AlertTriangle className="h-4 w-4 text-yellow-500" />;
-      default:
-        return <SpriteIcon name="clock" className="h-4 w-4 text-blue-500" />;
-    }
-  };
-
-  const getStatusColor = (status: string) => {
-    switch (status) {
-      case "approved":
-        return "bg-green-100 text-green-800 border-green-200";
-      case "rejected":
-        return "bg-red-100 text-red-800 border-red-200";
-      case "needs_revision":
-        return "bg-yellow-100 text-yellow-800 border-yellow-200";
-      default:
-        return "bg-blue-100 text-blue-800 border-blue-200";
-    }
-  };
+  const [interestsDismissed, setInterestsDismissed] = useState<boolean>(
+    () => storage.get<boolean>(INTERESTS_PROMPT_DISMISSED_KEY, false) === true,
+  );
+  const showInterestsPrompt =
+    !interestsDismissed &&
+    !profileLoading &&
+    !profileError &&
+    !!profile &&
+    (!profile.interests || profile.interests.length === 0);
 
   const handleEventSubmitted = () => {
-    refetch();
-    setEditingEventId(null);
+    // EventSubmissionForm toasts on its own; a second toast here said the same
+    // thing and promised a review time nobody measures.
+    void refetchSubmissions();
     setActiveTab("events");
-    toast.success("Event submitted successfully! We'll review it within 48 hours.");
   };
 
-  const handleDeleteEvent = async (id: string) => {
-    try {
-      await deleteEvent.mutateAsync(id);
-      toast.success("Event deleted successfully");
-      refetch();
-    } catch {
-      toast.error("Failed to delete event");
-    }
-  };
-
-  // No loading check needed - ProtectedRoute handles authentication
   return (
     <div className="min-h-screen bg-background">
-      {/* Header */}
-      <div className="bg-card border-b mobile-padding py-4 sticky top-0 z-40 backdrop-blur supports-[backdrop-filter]:bg-card/95">
-        <div className="container mx-auto">
-          <div className="flex items-center justify-between">
-            <div className="flex items-center gap-3">
-              <Button
-                variant="ghost"
-                size="sm"
-                onClick={() => navigate("/")}
-                className="text-muted-foreground hover:text-foreground"
-              >
-                <ArrowLeft className="h-4 w-4 mr-2" />
-                Back to Site
-              </Button>
-            </div>
-            <div className="flex items-center gap-2">
-              <User className="h-5 w-5 text-primary" />
-              <h1 className="text-xl font-bold">My Dashboard</h1>
-              <PremiumBadge showTier={true} size="sm" />
-            </div>
-          </div>
-        </div>
-      </div>
+      <Header />
 
-      <div className="container mx-auto mobile-padding py-6">
-        <Breadcrumbs
-          className="mb-4"
-          items={[
-            { label: "Home", href: "/" },
-            { label: "Dashboard" },
-          ]}
-        />
+      <main className="container mx-auto mobile-padding py-4 md:py-6">
+        <div className="mb-3 flex items-center gap-2">
+          <User className="h-5 w-5 text-primary" aria-hidden="true" />
+          <h1 className="text-xl font-bold">Your account</h1>
+          <PremiumBadge showTier={true} size="sm" />
+        </div>
+
         <Tabs value={activeTab} onValueChange={setActiveTab}>
-          {/* Tab Navigation */}
-          <div className="mb-6 overflow-x-auto">
-            <TabsList className="flex w-max sm:w-auto gap-1 p-1">
-              <TabsTrigger value="overview" className="flex items-center gap-2">
-                <User className="h-4 w-4" />
+          <div className="-mx-4 mb-4 overflow-x-auto px-4 md:mx-0 md:px-0">
+            <TabsList className="inline-flex w-max gap-1 p-1">
+              <TabsTrigger value="overview" className="min-h-[44px] gap-2">
+                <User className="h-4 w-4" aria-hidden="true" />
                 Overview
               </TabsTrigger>
-              <TabsTrigger value="submit-event" className="flex items-center gap-2">
-                <Plus className="h-4 w-4" />
-                Submit Event
+              <TabsTrigger value="submit-event" className="min-h-[44px] gap-2">
+                <Plus className="h-4 w-4" aria-hidden="true" />
+                Submit event
               </TabsTrigger>
-              <TabsTrigger value="events" className="flex items-center gap-2">
-                <SpriteIcon name="calendar" className="h-4 w-4" />
-                My Events
+              <TabsTrigger value="events" className="min-h-[44px] gap-2">
+                <SpriteIcon name="calendar" className="h-4 w-4" aria-hidden="true" />
+                Submissions
               </TabsTrigger>
-              <TabsTrigger value="saved-searches" className="flex items-center gap-2">
-                <Bell className="h-4 w-4" />
-                Saved Searches
+              <TabsTrigger value="saved-searches" className="min-h-[44px] gap-2">
+                <Bell className="h-4 w-4" aria-hidden="true" />
+                Saved searches
               </TabsTrigger>
-              <TabsTrigger value="advertise" className="flex items-center gap-2">
-                <Megaphone className="h-4 w-4" />
+              <TabsTrigger value="advertise" className="min-h-[44px] gap-2">
+                <Megaphone className="h-4 w-4" aria-hidden="true" />
                 Advertise
               </TabsTrigger>
-              <TabsTrigger value="settings" className="flex items-center gap-2">
-                <Settings className="h-4 w-4" />
+              <TabsTrigger value="settings" className="min-h-[44px] gap-2">
+                <Settings className="h-4 w-4" aria-hidden="true" />
                 Settings
               </TabsTrigger>
             </TabsList>
           </div>
 
-          {/* Overview Tab */}
-          <TabsContent value="overview">
-            {/* Subscription Status Card */}
-            <Card className={`mb-6 ${isPremium ? 'bg-gradient-to-r from-amber-50 to-orange-50 dark:from-amber-950/20 dark:to-orange-950/20 border-amber-200 dark:border-amber-800' : 'bg-gradient-to-r from-slate-50 to-slate-100 dark:from-slate-900 dark:to-slate-800'}`}>
-              <CardContent className="pt-6">
-                <div className="flex flex-col md:flex-row md:items-center md:justify-between gap-4">
-                  <div className="flex items-center gap-4">
-                    <div className={`p-3 rounded-full ${isPremium ? 'bg-amber-100 dark:bg-amber-900' : 'bg-slate-200 dark:bg-slate-700'}`}>
-                      {isPremium ? (
-                        tier === 'vip' ? <Crown className="h-6 w-6 text-purple-500" /> : <SpriteIcon name="sparkles" className="h-6 w-6 text-amber-500" />
-                      ) : (
-                        <User className="h-6 w-6 text-slate-500" />
-                      )}
-                    </div>
-                    <div>
-                      <h3 className="font-semibold text-lg flex items-center gap-2">
-                        {isPremium ? `${tier === 'vip' ? 'VIP' : 'Insider'} Member` : 'Free Plan'}
-                        {isExpiringSoon && (
-                          <Badge variant="outline" className="bg-yellow-100 text-yellow-800 border-yellow-300">
-                            Expiring Soon
-                          </Badge>
-                        )}
-                      </h3>
-                      <p className="text-sm text-muted-foreground">
-                        {isPremium
-                          ? `Your subscription renews ${subscription?.current_period_end ? format(new Date(subscription.current_period_end), 'MMM d, yyyy') : 'soon'}`
-                          : 'Upgrade to unlock premium features and unlimited favorites'}
-                      </p>
-                    </div>
-                  </div>
-                  {!isPremium && (
-                    <Button asChild className="bg-gradient-to-r from-amber-500 to-orange-500 hover:from-amber-600 hover:to-orange-600">
-                      <Link to="/pricing">
-                        <Zap className="h-4 w-4 mr-2" />
-                        Upgrade Now
-                      </Link>
-                    </Button>
-                  )}
-                </div>
-
-                {/* Favorites Usage for Free Users */}
-                {!isPremium && favoritesLimit > 0 && (
-                  <div className="mt-4 pt-4 border-t border-slate-200 dark:border-slate-700">
-                    <div className="flex items-center justify-between text-sm mb-2">
-                      <span className="flex items-center gap-2">
-                        <Heart className="h-4 w-4 text-red-500" />
-                        Favorites Used
-                      </span>
-                      <span className="font-medium">
-                        {favoritedEvents.length} / {favoritesLimit}
-                      </span>
-                    </div>
-                    <Progress
-                      value={(favoritedEvents.length / favoritesLimit) * 100}
-                      className="h-2"
-                    />
-                    {remainingFavorites !== 'unlimited' && remainingFavorites <= 2 && (
-                      <p className="text-xs text-amber-600 dark:text-amber-400 mt-2">
-                        {remainingFavorites === 0
-                          ? 'Limit reached! Upgrade for unlimited favorites.'
-                          : `Only ${remainingFavorites} favorite${remainingFavorites === 1 ? '' : 's'} remaining`}
-                      </p>
-                    )}
-                  </div>
-                )}
-              </CardContent>
-            </Card>
-
-            <div className="grid gap-6 md:grid-cols-2 lg:grid-cols-3">
-              <Card>
-                <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
-                  <CardTitle className="text-sm font-medium">Submitted Events</CardTitle>
-                  <SpriteIcon name="calendar" className="h-4 w-4 text-muted-foreground" />
-                </CardHeader>
-                <CardContent>
-                  <div className="text-2xl font-bold">{events?.length || 0}</div>
-                  <p className="text-xs text-muted-foreground">
-                    Total events submitted
-                  </p>
-                </CardContent>
-              </Card>
-
-              <Card>
-                <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
-                  <CardTitle className="text-sm font-medium">Approved Events</CardTitle>
-                  <CheckCircle className="h-4 w-4 text-green-500" />
-                </CardHeader>
-                <CardContent>
-                  <div className="text-2xl font-bold">
-                    {events?.filter(e => e.status === "approved").length || 0}
-                  </div>
-                  <p className="text-xs text-muted-foreground">
-                    Live on the site
-                  </p>
-                </CardContent>
-              </Card>
-
-              <Card>
-                <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
-                  <CardTitle className="text-sm font-medium">Pending Review</CardTitle>
-                  <SpriteIcon name="clock" className="h-4 w-4 text-blue-500" />
-                </CardHeader>
-                <CardContent>
-                  <div className="text-2xl font-bold">
-                    {events?.filter(e => e.status === "pending").length || 0}
-                  </div>
-                  <p className="text-xs text-muted-foreground">
-                    Awaiting approval
-                  </p>
-                </CardContent>
-              </Card>
-
-              {/* Saved Favorites Card */}
-              <Card>
-                <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
-                  <CardTitle className="text-sm font-medium">Saved Favorites</CardTitle>
-                  <Heart className="h-4 w-4 text-red-500" />
-                </CardHeader>
-                <CardContent>
-                  <div className="text-2xl font-bold">{favoritedEvents.length}</div>
-                  <p className="text-xs text-muted-foreground">
-                    {isPremium ? 'Unlimited' : `${remainingFavorites} remaining`}
-                  </p>
-                </CardContent>
-              </Card>
+          <TabsContent value="overview" className="space-y-4">
+            <YourWeek />
+            {showInterestsPrompt && <InterestsPrompt onDone={() => setInterestsDismissed(true)} />}
+            <ActionNeeded onOpenTab={setActiveTab} />
+            <div className="grid gap-4 sm:grid-cols-2 lg:grid-cols-3">
+              <SavedCard />
+              <PlanCard />
+              <SubmissionsSummary onOpen={() => setActiveTab("events")} />
             </div>
-
-            <div className="mt-6">
-              <RecentlyViewedList />
-            </div>
-
-            <div className="mt-6">
-              <Card>
-                <CardHeader>
-                  <CardTitle>Quick Actions</CardTitle>
-                  <CardDescription>
-                    Get started with submitting events and managing your listings
-                  </CardDescription>
-                </CardHeader>
-                <CardContent className="space-y-4">
-                  <Button 
-                    onClick={() => setActiveTab("submit-event")} 
-                    className="w-full sm:w-auto"
-                  >
-                    <Plus className="h-4 w-4 mr-2" />
-                    Submit New Event
-                  </Button>
-                  <Button 
-                    variant="outline" 
-                    onClick={() => setActiveTab("advertise")}
-                    className="w-full sm:w-auto ml-0 sm:ml-2"
-                  >
-                    <Megaphone className="h-4 w-4 mr-2" />
-                    Advertise Your Business
-                  </Button>
-                </CardContent>
-              </Card>
-            </div>
+            <RecentlyViewedList />
           </TabsContent>
 
-          {/* Submit Event Tab */}
           <TabsContent value="submit-event">
-            <Card>
-              <CardHeader>
-                <CardTitle>Submit Your Event</CardTitle>
-                <CardDescription>
-                  Share your event with the Des Moines community. All submissions are reviewed within 48 hours.
-                </CardDescription>
-              </CardHeader>
-              <CardContent>
-                <EventSubmissionForm onSuccess={handleEventSubmitted} />
-              </CardContent>
-            </Card>
+            <section aria-labelledby="submit-heading" className="rounded-xl border bg-card p-4 sm:p-6">
+              <h2 id="submit-heading" className="text-lg font-semibold">
+                Submit an event
+              </h2>
+              <p className="mt-1 text-sm text-muted-foreground">
+                An automatic check runs as soon as you send it; some submissions also go to a person.
+              </p>
+              <div className="mt-4">
+                <Suspense
+                  fallback={
+                    <div className="py-8 text-center">
+                      <Spinner size="lg" className="mx-auto" />
+                    </div>
+                  }
+                >
+                  <EventSubmissionForm onSuccess={handleEventSubmitted} />
+                </Suspense>
+              </div>
+            </section>
           </TabsContent>
 
-          {/* My Events Tab */}
           <TabsContent value="events">
-            <Card>
-              <CardHeader>
-                <CardTitle>My Submitted Events</CardTitle>
-                <CardDescription>
-                  Track the status of your event submissions
-                </CardDescription>
-              </CardHeader>
-              <CardContent>
-                {isLoading ? (
-                  <div className="text-center py-8">
-                    <Spinner size="lg" className="mx-auto mb-4" />
-                    <p>Loading your events...</p>
-                  </div>
-                ) : events && events.length > 0 ? (
-                  <div className="space-y-4">
-                    {events.map((event) => (
-                      <div key={event.id} className="border rounded-lg p-4">
-                        <div className="flex items-start justify-between">
-                          <div className="flex-1">
-                            <h3 className="font-semibold text-lg">{event.title}</h3>
-                            <div className="flex flex-wrap gap-3 text-sm text-muted-foreground mb-2">
-                              {event.venue && <span>{event.venue}</span>}
-                              {event.category && (
-                                <Badge variant="secondary" className="text-xs">{event.category}</Badge>
-                              )}
-                              {event.price && <span>{event.price}</span>}
-                            </div>
-                            <p className="text-sm text-muted-foreground mb-3">
-                              Submitted {format(new Date(event.submitted_at), "MMM d, yyyy 'at' h:mm a")}
-                            </p>
-                            {event.admin_notes && (
-                              <Alert className="mt-2">
-                                <AlertTriangle className="h-4 w-4" />
-                                <AlertDescription>
-                                  <strong>Admin Notes:</strong> {event.admin_notes}
-                                </AlertDescription>
-                              </Alert>
-                            )}
-                          </div>
-                          <div className="ml-4 flex flex-col items-end gap-2">
-                            <Badge
-                              variant="outline"
-                              className={getStatusColor(event.status)}
-                            >
-                              {getStatusIcon(event.status)}
-                              <span className="ml-1 capitalize">{event.status.replace("_", " ")}</span>
-                            </Badge>
-                            {event.date && (
-                              <p className="text-sm text-muted-foreground">
-                                {format(new Date(event.date), "MMM d, yyyy")}
-                              </p>
-                            )}
-                            <div className="flex gap-1 mt-1">
-                              {/*
-                                WEB-ADS-008 AC5. Approval used to mean a badge
-                                and nothing else - no listing was ever created,
-                                so there was nothing to link to. This appears
-                                only when a visible events row exists, which is
-                                what makes it an answer to "where is my event?"
-                                rather than another claim about it.
-                              */}
-                              {event.live_event_id && (
-                                <Button variant="outline" size="sm" asChild>
-                                  <a href={`/events/${event.live_event_id}`}>
-                                    <ExternalLink className="h-3 w-3 mr-1" />
-                                    View listing
-                                  </a>
-                                </Button>
-                              )}
-                              {(event.status === "needs_revision" || event.status === "pending") && (
-                                <Dialog open={editingEventId === event.id} onOpenChange={(open) => setEditingEventId(open ? event.id : null)}>
-                                  <DialogTrigger asChild>
-                                    <Button variant="outline" size="sm">
-                                      <Edit className="h-3 w-3 mr-1" />
-                                      Edit
-                                    </Button>
-                                  </DialogTrigger>
-                                  <DialogContent className="max-w-4xl max-h-[90vh] overflow-y-auto">
-                                    <DialogHeader>
-                                      <DialogTitle>Edit Event: {event.title}</DialogTitle>
-                                    </DialogHeader>
-                                    <EventSubmissionForm
-                                      editEvent={event}
-                                      onSuccess={() => {
-                                        setEditingEventId(null);
-                                        refetch();
-                                        toast.success("Event updated and resubmitted for review!");
-                                      }}
-                                    />
-                                  </DialogContent>
-                                </Dialog>
-                              )}
-                              {(event.status === "pending" || event.status === "needs_revision" || event.status === "rejected") && (
-                                <Button
-                                  variant="ghost"
-                                  size="sm"
-                                  className="text-red-500 hover:text-red-700 hover:bg-red-50"
-                                  onClick={() => handleDeleteEvent(event.id)}
-                                  disabled={deleteEvent.isPending}
-                                >
-                                  <Trash2 className="h-3 w-3" />
-                                </Button>
-                              )}
-                            </div>
-                          </div>
-                        </div>
-                      </div>
-                    ))}
-                  </div>
-                ) : isError ? (
-                  // WEB-QA-031: "No events submitted yet" plus a Submit Your
-                  // First Event button tells someone who has submitted events
-                  // that their work is gone.
-                  <ErrorState error={eventsError} compact onRetry={() => void refetch()} />
-                ) : (
-                  <div className="text-center py-8">
-                    <SpriteIcon name="calendar" className="h-12 w-12 text-muted-foreground mx-auto mb-4" />
-                    <h3 className="text-lg font-semibold mb-2">No events submitted yet</h3>
-                    <p className="text-muted-foreground mb-4">
-                      Start by submitting your first event to the community!
-                    </p>
-                    <Button onClick={() => setActiveTab("submit-event")}>
-                      <Plus className="h-4 w-4 mr-2" />
-                      Submit Your First Event
-                    </Button>
-                  </div>
-                )}
-              </CardContent>
-            </Card>
+            <SubmissionsTab />
           </TabsContent>
 
-          {/* Saved Searches Tab */}
           <TabsContent value="saved-searches">
             <SavedSearchesTab />
           </TabsContent>
 
-          {/* Advertise Tab */}
           <TabsContent value="advertise">
-            <div className="space-y-6">
-              {/* Create New Campaign CTA */}
-              <Card className="bg-gradient-to-r from-primary/5 to-primary/10 border-primary/20">
-                <CardContent className="pt-6">
-                  <div className="flex flex-col md:flex-row md:items-center md:justify-between gap-4">
-                    <div>
-                      <h3 className="text-lg font-semibold mb-1">Advertise Your Business</h3>
-                      <p className="text-sm text-muted-foreground">
-                        Reach 50K+ local visitors with banner ads, featured spots, and more. Starting at $5/day.
-                      </p>
-                    </div>
-                    <Button onClick={() => navigate("/advertise")} className="shrink-0">
-                      <Plus className="h-4 w-4 mr-2" />
-                      Create Campaign
-                    </Button>
-                  </div>
-                </CardContent>
-              </Card>
-
-              {/* My Campaigns */}
-              <Card>
-                <CardHeader>
-                  <div className="flex items-center justify-between">
-                    <div>
-                      <CardTitle>My Campaigns</CardTitle>
-                      <CardDescription>
-                        Manage your advertising campaigns
-                      </CardDescription>
-                    </div>
-                    {campaigns.length > 0 && (
-                      <Button variant="outline" size="sm" onClick={() => navigate("/campaigns")}>
-                        View All
-                      </Button>
-                    )}
-                  </div>
-                </CardHeader>
-                <CardContent>
-                  {campaignsLoading ? (
-                    <div className="text-center py-6">
-                      <Spinner size="lg" className="mx-auto mb-4" />
-                      <p className="text-sm text-muted-foreground">Loading campaigns...</p>
-                    </div>
-                  ) : campaigns.length > 0 ? (
-                    <div className="space-y-4">
-                      {campaigns.slice(0, 5).map((campaign) => (
-                        <div key={campaign.id} className="border rounded-lg p-4">
-                          <div className="flex items-start justify-between">
-                            <div className="flex-1">
-                              <div className="flex items-center gap-2 mb-1">
-                                <h4 className="font-semibold">{campaign.name}</h4>
-                                <Badge variant={
-                                  campaign.status === 'active' ? 'default' :
-                                  campaign.status === 'pending_payment' ? 'destructive' :
-                                  'secondary'
-                                } className="text-xs">
-                                  {campaign.status.replace(/_/g, ' ')}
-                                </Badge>
-                              </div>
-                              <div className="flex flex-wrap gap-3 text-sm text-muted-foreground">
-                                {campaign.start_date && campaign.end_date && (
-                                  <span className="flex items-center gap-1">
-                                    <SpriteIcon name="calendar" className="h-3 w-3" />
-                                    {format(new Date(campaign.start_date), "MMM d")} - {format(new Date(campaign.end_date), "MMM d")}
-                                  </span>
-                                )}
-                                {campaign.total_cost && (
-                                  <span className="flex items-center gap-1">
-                                    <DollarSign className="h-3 w-3" />
-                                    ${campaign.total_cost}
-                                  </span>
-                                )}
-                                <span className="flex items-center gap-1">
-                                  <Eye className="h-3 w-3" />
-                                  {campaign.campaign_placements?.length || 0} placements
-                                </span>
-                              </div>
-                            </div>
-                            <div className="flex gap-1 ml-4">
-                              {campaign.status === 'pending_creative' && (
-                                <Button size="sm" onClick={() => navigate(`/campaigns/${campaign.id}/creatives`)}>
-                                  <Upload className="h-3 w-3 mr-1" />
-                                  Upload
-                                </Button>
-                              )}
-                              {(campaign.status === 'active' || campaign.status === 'completed') && (
-                                <Button variant="outline" size="sm" onClick={() => navigate(`/campaigns/${campaign.id}/analytics`)}>
-                                  <BarChart3 className="h-3 w-3 mr-1" />
-                                  Stats
-                                </Button>
-                              )}
-                              <Button variant="ghost" size="sm" onClick={() => navigate(`/campaigns/${campaign.id}`)}>
-                                <Eye className="h-3 w-3" />
-                              </Button>
-                            </div>
-                          </div>
-                        </div>
-                      ))}
-                    </div>
-                  ) : campaignsError ? (
-                    // Same again, and this one is about money: an advertiser
-                    // whose campaign list failed to load is shown a page that
-                    // says they have never run one.
-                    <ErrorState
-                      error={campaignsError}
-                      compact
-                      onRetry={() => void refetchCampaigns()}
-                    />
-                  ) : (
-                    <div className="text-center py-8">
-                      <Megaphone className="h-12 w-12 text-muted-foreground mx-auto mb-4" />
-                      <h3 className="text-lg font-semibold mb-2">No campaigns yet</h3>
-                      <p className="text-muted-foreground mb-4">
-                        Create your first campaign to reach thousands of Des Moines locals.
-                      </p>
-                      <Button onClick={() => navigate("/advertise")}>
-                        <Plus className="h-4 w-4 mr-2" />
-                        Create Your First Campaign
-                      </Button>
-                    </div>
-                  )}
-                </CardContent>
-              </Card>
-            </div>
+            <AdvertiseTab />
           </TabsContent>
 
-          {/* Settings Tab */}
           <TabsContent value="settings">
-            <div className="space-y-6">
-              <EmailPreferencesCard />
-
-              <Card>
-                <CardHeader>
-                  <CardTitle>Account Settings</CardTitle>
-                  <CardDescription>
-                    Additional account preferences
-                  </CardDescription>
-                </CardHeader>
-                <CardContent>
-                  <div className="space-y-4">
-                    <Alert>
-                      <Settings className="h-4 w-4" />
-                      <AlertDescription>
-                        More settings coming soon. For now, you can manage your account through the profile page.
-                      </AlertDescription>
-                    </Alert>
-                  </div>
-                </CardContent>
-              </Card>
-            </div>
+            <SettingsSummary />
           </TabsContent>
         </Tabs>
-      </div>
+      </main>
     </div>
   );
 }

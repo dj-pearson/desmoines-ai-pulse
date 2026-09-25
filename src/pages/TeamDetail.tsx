@@ -9,14 +9,23 @@ import { Card, CardContent } from '@/components/ui/card';
 import { Badge } from '@/components/ui/badge';
 import { Skeleton } from '@/components/ui/skeleton';
 import { Button } from '@/components/ui/button';
-import { Trophy } from "lucide-react";
 import { SpriteIcon } from "@/components/ui/SpriteIcon";
 import { ErrorState } from '@/components/ui/error-state';
+import { toJsonLd } from '@/lib/jsonLd';
+import { safeHttpUrl } from '@/lib/safeUrl';
+import { currentVenueName } from '@/lib/venuePages';
+import { getCanonicalUrl } from '@/lib/brandConfig';
 
 export default function TeamDetail() {
   const { slug } = useParams<{ slug: string }>();
   const { data: team, isLoading, error: teamError, refetch: refetchTeam } = useTeam(slug || '');
-  const { data: games, error: gamesError, refetch: refetchGames } = useTeamGames(team?.name || '');
+  const {
+    data: games,
+    error: gamesError,
+    refetch: refetchGames,
+    isPending: gamesPending,
+    status: gamesStatus,
+  } = useTeamGames(team ? { name: team.name, slug: team.slug } : '');
 
   if (isLoading) {
     return (
@@ -71,6 +80,20 @@ export default function TeamDetail() {
     );
   }
 
+  // Item 11: team rows are admin-written; only http(s) becomes a link.
+  const websiteUrl = safeHttpUrl(team.website);
+  const scheduleUrl = safeHttpUrl(team.schedule_url);
+  const venueName = currentVenueName(team.venue_name);
+  const teamJsonLd = {
+    '@context': 'https://schema.org',
+    '@type': 'SportsTeam',
+    name: team.name,
+    sport: team.sport,
+    memberOf: { '@type': 'SportsOrganization', name: team.league },
+    ...(websiteUrl ? { url: websiteUrl, sameAs: [websiteUrl] } : { url: getCanonicalUrl(`/sports/${team.slug}`) }),
+    ...(venueName ? { location: { '@type': 'Place', name: venueName } } : {}),
+  };
+
   return (
     <>
       {/* WEB-SEO-033. RouteCanonical was only in the LOADING branch, so the
@@ -82,24 +105,16 @@ export default function TeamDetail() {
           both. */}
       <RouteCanonical path={`/sports/${slug}`} />
       <Helmet>
-        <title>{team.name} — {team.sport} in Des Moines | Des Moines Insider</title>
-        <meta name="description" content={team.description || `${team.name} — ${team.league} ${team.sport} in Des Moines, Iowa.`} />
-        <script type="application/ld+json">
-          {JSON.stringify({
-            '@context': 'https://schema.org',
-            '@type': 'SportsTeam',
-            name: team.name,
-            sport: team.sport,
-            memberOf: { '@type': 'SportsOrganization', name: team.league },
-            ...(team.website && { url: team.website }),
-          })}
-        </script>
+        <title>{`${team.name} - ${team.sport} in Des Moines | Des Moines Insider`}</title>
+        <meta name="description" content={team.description || `${team.name}: ${team.league} ${team.sport} in Des Moines, Iowa.`} />
+        {/* Item 11: escaped through toJsonLd, like every ld+json block. */}
+        <script type="application/ld+json">{toJsonLd(teamJsonLd)}</script>
       </Helmet>
       <div className="min-h-screen bg-background">
         <Header />
         <div className="container mx-auto px-4 py-8">
           {/* Breadcrumb */}
-          <nav className="text-sm text-muted-foreground mb-6">
+          <nav aria-label="Breadcrumb" className="text-sm text-muted-foreground mb-6">
             <Link to="/sports" className="hover:text-primary">Sports</Link>
             <span className="mx-2">/</span>
             <span>{team.name}</span>
@@ -111,9 +126,9 @@ export default function TeamDetail() {
             <div className="flex items-center gap-3 flex-wrap mb-4">
               <Badge variant="secondary">{team.sport}</Badge>
               <Badge variant="outline">{team.league}</Badge>
-              {team.venue_name && (
+              {venueName && (
                 <Badge variant="outline">
-                  <SpriteIcon name="map-pin" className="h-3 w-3 mr-1" /> {team.venue_name}
+                  <SpriteIcon name="map-pin" className="h-3 w-3 mr-1" /> {venueName}
                 </Badge>
               )}
             </div>
@@ -121,19 +136,21 @@ export default function TeamDetail() {
               <p className="text-lg text-muted-foreground max-w-3xl">{team.description}</p>
             )}
             <div className="flex gap-3 mt-4">
-              {team.website && (
-                <a href={team.website} target="_blank" rel="noopener noreferrer">
-                  <Button variant="outline" size="sm">
-                    <SpriteIcon name="external-link" className="h-4 w-4 mr-1" /> Official Website
-                  </Button>
-                </a>
+              {websiteUrl && (
+                <Button asChild variant="outline" size="sm">
+                  <a href={websiteUrl} target="_blank" rel="noopener noreferrer">
+                    <SpriteIcon name="external-link" className="h-4 w-4 mr-1" /> Official website
+                    <span className="sr-only"> (opens in a new tab)</span>
+                  </a>
+                </Button>
               )}
-              {team.schedule_url && (
-                <a href={team.schedule_url} target="_blank" rel="noopener noreferrer">
-                  <Button variant="outline" size="sm">
-                    <SpriteIcon name="calendar" className="h-4 w-4 mr-1" /> Full Schedule
-                  </Button>
-                </a>
+              {scheduleUrl && (
+                <Button asChild variant="outline" size="sm">
+                  <a href={scheduleUrl} target="_blank" rel="noopener noreferrer">
+                    <SpriteIcon name="calendar" className="h-4 w-4 mr-1" /> Full schedule
+                    <span className="sr-only"> (opens in a new tab)</span>
+                  </a>
+                </Button>
               )}
             </div>
           </div>
@@ -144,10 +161,22 @@ export default function TeamDetail() {
               <SpriteIcon name="calendar" className="h-5 w-5 text-primary" />
               <h2 className="text-2xl font-bold">Upcoming Games</h2>
             </div>
-            {games && games.length > 0 ? (
+            {/* Item 7: skeletons while the games request is in flight; the
+                empty line only once it has answered with zero rows. */}
+            {gamesPending ? (
+              <div className="space-y-3" aria-busy="true" data-team-games-loading="">
+                {Array.from({ length: 3 }).map((_, i) => (
+                  <Skeleton key={i} className="h-[88px] w-full rounded-lg" />
+                ))}
+              </div>
+            ) : games && games.length > 0 ? (
               <div className="space-y-3">
                 {games.map((event) => (
-                  <Link key={event.id} to={`/events/${createEventSlugWithCentralTime(event.title, event)}`}>
+                  <Link
+                    key={event.id}
+                    to={`/events/${createEventSlugWithCentralTime(event.title, event)}`}
+                    className="block rounded-lg focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2"
+                  >
                     <Card className="hover:border-primary transition-colors">
                       <CardContent className="p-4 flex items-center gap-4">
                         <div className="text-center min-w-[60px]">
@@ -176,9 +205,21 @@ export default function TeamDetail() {
             ) : (
               gamesError ? (
                 <ErrorState error={gamesError} compact onRetry={refetchGames} />
-              ) : (
-                <p className="text-muted-foreground">No upcoming games listed for {team.name}.</p>
-              )
+              ) : gamesStatus === 'success' ? (
+                <p className="text-muted-foreground">
+                  No upcoming games listed for {team.name}.
+                  {scheduleUrl && (
+                    <>
+                      {' '}
+                      <a href={scheduleUrl} target="_blank" rel="noopener noreferrer" className="font-medium text-primary underline underline-offset-4">
+                        See the team&apos;s own schedule
+                        <span className="sr-only"> (opens in a new tab)</span>
+                      </a>
+                      .
+                    </>
+                  )}
+                </p>
+              ) : null
             )}
           </section>
         </div>

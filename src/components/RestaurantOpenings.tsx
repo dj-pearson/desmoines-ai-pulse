@@ -11,18 +11,19 @@ export const OPENINGS_WATCH_LIMIT = 8;
  * The line a row prints. openingLabel works on the snake_case row; the hook's
  * transform renamed those fields, so they are mapped back here.
  */
-function labelFor(row: RestaurantWithSlug, now: Date): string {
-  return (
-    openingLabel(
-      {
-        id: row.id,
-        name: row.name,
-        status: row.status ?? null,
-        opening_date: row.openingDate ?? null,
-        opening_timeframe: row.openingTimeframe ?? null,
-      },
-      now,
-    ) ?? "Announced"
+function labelFor(row: RestaurantWithSlug, now: Date): string | null {
+  // No fallback text: "Announced" on a place that opened was a claim the row
+  // did not make. The hook orders and filters, so every row it returns has a
+  // dated line or an upcoming status.
+  return openingLabel(
+    {
+      id: row.id,
+      name: row.name,
+      status: row.status ?? null,
+      opening_date: row.openingDate ?? null,
+      opening_timeframe: row.openingTimeframe ?? null,
+    },
+    now,
   );
 }
 
@@ -44,7 +45,9 @@ function Heading() {
 
 /**
  * The hub's openings watch: one dated line per place that just opened or is
- * about to. "Opened Sep 12", "Opening Oct 2026", "Announced", plus cuisine and
+ * about to. Newest opening first, then the soonest upcoming date, then the
+ * undated announcements; a stale announcement never takes a slot (pass 2,
+ * WP2.7, ordered in useRestaurantOpenings). "Opened Sep 12", "Opening Oct 2026", "Announced", plus cuisine and
  * city, linking to the restaurant's own page by its stored slug.
  *
  * Links used to be rebuilt from the name (`createSlug`). Stored slugs are

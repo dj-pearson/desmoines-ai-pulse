@@ -16,22 +16,22 @@ describe('daypartForHour', () => {
 });
 
 describe('orderExamplesForHour', () => {
-  it('puts brunch first in the morning and live music first in the evening', () => {
+  it('puts family outings first in the morning and concerts first in the evening', () => {
     const morning = orderExamplesForHour(9);
-    expect(morning.slice(0, 3)).toContain('Best brunch spots with outdoor seating');
-    expect(morning.indexOf('Best brunch spots with outdoor seating')).toBeLessThan(
-      morning.indexOf('Live music events tonight'),
+    expect(morning.slice(0, 3)).toContain('Free things to do this weekend with kids');
+    expect(morning.indexOf('Free things to do this weekend with kids')).toBeLessThan(
+      morning.indexOf('Concerts tonight'),
     );
     const evening = orderExamplesForHour(19);
-    expect(evening.indexOf('Live music events tonight')).toBeLessThan(
-      evening.indexOf('Best brunch spots with outdoor seating'),
+    expect(evening.indexOf('Concerts tonight')).toBeLessThan(
+      evening.indexOf('Free things to do this weekend with kids'),
     );
   });
 
   it('keeps every example and is stable within a rank', () => {
     const ordered = orderExamplesForHour(14);
     expect([...ordered].sort()).toEqual([...NLP_SEARCH_EXAMPLES].sort());
-    const untagged = ordered.filter((e) => e === 'Events this week under $20');
+    const untagged = ordered.filter((e) => e === 'Art events this week');
     expect(untagged).toHaveLength(1);
   });
 });

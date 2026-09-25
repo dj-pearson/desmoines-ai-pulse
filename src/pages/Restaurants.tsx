@@ -15,23 +15,28 @@ import { RestaurantsHubDirectory } from "@/components/seo/RestaurantsHubDirector
 import { RestaurantsHubFaq, RestaurantsHubGuide } from "@/components/RestaurantsHubGuide";
 import {
   useRestaurants,
+  useInfiniteRestaurants,
   useRestaurantFilterOptions,
   useCuisineCounts,
+  initialRestaurantPageParam,
+  RESTAURANT_PAGE_SIZE,
 } from "@/hooks/useRestaurants";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { CardsGridSkeleton, LoadingSpinner } from "@/components/ui/loading-skeleton";
-import { Star, DollarSign, Search, SearchX, Utensils, X, Sparkles, Clock, List, Map, SlidersHorizontal, TrendingUp, ChevronDown, Shuffle, Loader2 } from "lucide-react";
-import { useState, lazy, Suspense, useMemo, useCallback, useRef, useEffect, type MouseEvent } from "react";
+import { Star, DollarSign, Search, SearchX, Utensils, X, Sparkles, Clock, List, Map, SlidersHorizontal, TrendingUp, ChevronDown, ChevronUp, Shuffle, Loader2 } from "lucide-react";
+import { useState, lazy, Suspense, useMemo, useCallback, useRef, useEffect, useSyncExternalStore, type MouseEvent } from "react";
 import { useToast } from "@/hooks/use-toast";
 import { EmptyState } from "@/components/ui/empty-state";
 import { ErrorState } from "@/components/ui/error-state";
 import { BackToTop } from "@/components/BackToTop";
 import { useAnnounce } from "@/hooks/use-announce";
 import { Breadcrumbs } from "@/components/ui/breadcrumbs";
-import { useIsMobile } from "@/hooks/use-mobile";
 import RestaurantCard from "@/components/RestaurantCard";
-import { SPONSORED_CAP, arrangeSponsored } from "@/lib/sponsored";
+import { SPONSORED_CAP, arrangeSponsored, isSponsoredActive } from "@/lib/sponsored";
+import { getRestaurantRotationSeed, pickDailySponsors } from "@/lib/restaurantRotation";
+import { parseIowaAddress, restaurantLocality } from "@/lib/restaurantMeta";
+import { isVisitableStatus } from "@/lib/restaurantHours";
 import { useUrlFilters } from "@/hooks/useUrlFilters";
 import { ActiveFilterChips } from "@/components/filters/ActiveFilterChips";
 import { SearchAutocomplete, addRecentSearch } from "@/components/SearchAutocomplete";
@@ -64,17 +69,35 @@ const sortOptions = [
   // through get_rotated_restaurants, which shuffles by a rotation seed so the
   // top of the list varies between visits — it is deliberately NOT a popularity
   // ranking, and calling it "Most Popular" told visitors the three venues at the
-  // top were the city's most popular when the order was largely arbitrary.
+  // top were the city's favourites when the order was largely arbitrary.
   // "Highest Rated" below remains the deterministic quality sort.
   { value: "popularity", label: "Recommended", icon: TrendingUp },
   { value: "rating", label: "Highest Rated", icon: Star },
-  { value: "newest", label: "Newest", icon: Clock },
+  // "Recently added", not "Newest" (pass 2 WP1 item 9): the sort is
+  // created_at, which is when we scraped the row, not when it opened.
+  // ?sort=newest is still the value, so shared links keep working.
+  { value: "newest", label: "Recently added", icon: Clock },
   { value: "alphabetical", label: "A-Z", icon: SlidersHorizontal },
   { value: "price_low", label: "Price: Low-High", icon: DollarSign },
   { value: "price_high", label: "Price: High-Low", icon: DollarSign },
 ];
 
-const ITEMS_PER_PAGE = 30;
+const ITEMS_PER_PAGE = RESTAURANT_PAGE_SIZE;
+
+/**
+ * Sponsored rows fetched for the two boosted slots (pass 2 WP1 item 8). The
+ * query used to take the top two by popularity_score, so a third sponsor never
+ * got the slot; pickDailySponsors rotates through up to this many.
+ */
+const SPONSOR_POOL = 10;
+
+/** Search box to URL (pass 2 WP1 item 10). */
+const SEARCH_DEBOUNCE_MS = 400;
+/** No "No results" until typing has stopped this long, so it cannot flash mid-word. */
+const SEARCH_IDLE_MS = 800;
+
+/** Cards above the Tonight strip on a phone (pass 2 WP1 item 3). */
+const CARDS_BEFORE_TONIGHT = 3;
 
 /**
  * Cards before the openings strip, guides and the featured_spot ad. Nine is
@@ -86,8 +109,6 @@ const RESULTS_BEFORE_INTERSTITIAL = 9;
 /** How many restaurants go into the ItemList. Both fields must use it. */
 const RESTAURANT_SCHEMA_LIMIT = 20;
 
-/** Rows Surprise Me must not pick: nobody can eat there tonight. */
-const NOT_VISITABLE = new Set(["closed", "opening_soon", "permanently_closed", "temporarily_closed"]);
 
 const FILTER_KEYS = ["q", "cuisine", "price", "rmin", "rmax", "location", "sort", "featured", "open", "tags"];
 
@@ -100,6 +121,25 @@ function isPlainClick(e: MouseEvent<HTMLAnchorElement>): boolean {
   return e.button === 0 && !e.metaKey && !e.ctrlKey && !e.shiftKey && !e.altKey;
 }
 
+/**
+ * A media query read synchronously on the first render. useIsMobile starts at
+ * false and corrects in an effect, which on a phone fired the desktop list
+ * query first and then the mobile one; a hub that picks its query by width
+ * needs the width before the first fetch.
+ */
+function useMediaQuery(query: string): boolean {
+  return useSyncExternalStore(
+    (onChange) => {
+      if (typeof window === "undefined" || !window.matchMedia) return () => {};
+      const mql = window.matchMedia(query);
+      mql.addEventListener("change", onChange);
+      return () => mql.removeEventListener("change", onChange);
+    },
+    () => (typeof window !== "undefined" && window.matchMedia ? window.matchMedia(query).matches : false),
+    () => false
+  );
+}
+
 function scrollToResults() {
   document.getElementById("all-restaurants-heading")?.scrollIntoView({ behavior: "smooth" });
 }
@@ -107,7 +147,10 @@ function scrollToResults() {
 export default function Restaurants() {
   const navigate = useNavigate();
   const location = useLocation();
-  const isMobile = useIsMobile();
+  // Same breakpoint as useIsMobile (768), read before the first query.
+  const isMobile = useMediaQuery("(max-width: 767px)");
+  // Tailwind's sm. Below it the Tonight strip moves under the third card.
+  const isAboveSm = useMediaQuery("(min-width: 640px)");
   const searchInputRef = useRef<HTMLInputElement>(null);
   // Filters are URL-synced (WEB-UX-001): shareable + survive back/forward.
   const { getStr, getNum, getList, setParam, setMany, clearParams } = useUrlFilters();
@@ -176,7 +219,9 @@ export default function Restaurants() {
       chips.push({ key: `price-${c}`, label: c, onRemove: () => setFilters((p) => ({ ...p, priceRange: p.priceRange.filter((x) => x !== c) })) })
     );
     filters.tags.forEach((t) =>
-      chips.push({ key: `tag-${t}`, label: DIETARY_LABELS[t] ?? t, onRemove: () => setFilters((p) => ({ ...p, tags: p.tags.filter((x) => x !== t) })) })
+      // "Mentions vegan", not "Vegan" (pass 2 WP1 item 9): the filter is a
+      // keyword match on the listing text, not a menu or a certification.
+      chips.push({ key: `tag-${t}`, label: DIETARY_LABELS[t] ? `Mentions ${DIETARY_LABELS[t].toLowerCase()}` : t, onRemove: () => setFilters((p) => ({ ...p, tags: p.tags.filter((x) => x !== t) })) })
     );
     // ONE chip for the whole legacy ?location= value, never one per value.
     // The old Area pill wrote street addresses, and useUrlFilters splits list
@@ -185,8 +230,12 @@ export default function Restaurants() {
     // to be seen and removed.
     if (filters.location.length > 0)
       chips.push({ key: "location", label: "Area (from an old link)", onRemove: () => setFilters((p) => ({ ...p, location: [] })) });
+    // ?featured=1 is read for one more release (URL rule in CLAUDE.md) and
+    // nothing on the hub writes it any more. is_featured on restaurants is
+    // set only on sponsored rows (20260902000004), so the chip says what the
+    // filter actually selects (pass 2 WP1 item 2).
     if (filters.featuredOnly)
-      chips.push({ key: "featured", label: "Featured only", onRemove: () => setFilters((p) => ({ ...p, featuredOnly: false })) });
+      chips.push({ key: "featured", label: "Sponsored only", onRemove: () => setFilters((p) => ({ ...p, featuredOnly: false })) });
     if (filters.rating[0] !== 0 || filters.rating[1] !== 5)
       chips.push({ key: "rating", label: `Rating ${filters.rating[0]}-${filters.rating[1]}`, onRemove: () => setFilters((p) => ({ ...p, rating: [0, 5] })) });
     return chips;
@@ -210,35 +259,48 @@ export default function Restaurants() {
   const setPage = (v: number | ((prev: number) => number)) =>
     setParam("page", typeof v === "function" ? v(page) : v, { def: 1 });
 
-  // WEB-PERF-029. THE PAGE ASKS FOR THE PAGE NOW.
+  // WEB-PERF-029. THE PAGE ASKS FOR THE PAGE NOW. Desktop asks for one page
+  // of thirty by offset.
   //
-  // This passed no limit, so useRestaurants defaulted to 1000 and the browser
-  // sliced 30 out of it -- a visitor who looked at the first page paid for every
-  // restaurant in the database. The migration in the same change also stopped
-  // the RPC returning to_jsonb(r), so each of those rows was carrying four SEO
-  // fields, three GEO fields, the AI prompt audit trail, a tsvector and a
-  // PostGIS blob.
-  //
-  // Mobile is a load-more list, so it asks for everything up to the current
-  // page and keeps growing one request at a time. Desktop asks for one page.
-  const restaurantQuery = useMemo(
-    () =>
-      isMobile
-        ? { ...filters, limit: page * ITEMS_PER_PAGE, offset: 0 }
-        : { ...filters, limit: ITEMS_PER_PAGE, offset: (page - 1) * ITEMS_PER_PAGE },
-    [filters, page, isMobile]
+  // THE PHONE ASKS FOR THE NEXT THIRTY, NOT ALL OF THEM AGAIN (pass 2 WP1
+  // item 7). Mobile asked for limit=page*30 from row 0 on every Load More, so
+  // reaching row 478 moved about 4,000 rows. It is an infinite query of
+  // offset pages now, keyed on the filters and the rotation seed; a cold
+  // ?page=N loads at most two pages and offers "Load earlier results".
+  const desktopQuery = useMemo(
+    () => ({ ...filters, limit: ITEMS_PER_PAGE, offset: (page - 1) * ITEMS_PER_PAGE }),
+    [filters, page]
   );
+  const desktop = useRestaurants(desktopQuery, { enabled: !isMobile });
+  const mobile = useInfiniteRestaurants(filters, { enabled: isMobile, startPage: page });
 
-  const {
-    restaurants,
-    isLoading,
-    isFetching,
-    isPlaceholderData,
-    error,
-    totalCount,
-    refetch,
-    suggestions,
-  } = useRestaurants(restaurantQuery);
+  const restaurants = isMobile ? mobile.restaurants : desktop.restaurants;
+  const isLoading = isMobile ? mobile.isLoading : desktop.isLoading;
+  const error = isMobile ? mobile.error : desktop.error;
+  const totalCount = isMobile ? mobile.totalCount : desktop.totalCount;
+  const suggestions = isMobile ? mobile.suggestions : desktop.suggestions;
+  const refetch = isMobile ? mobile.refetch : desktop.refetch;
+  /** 0-based index of the first row on screen. */
+  const firstOffset = isMobile ? mobile.firstOffset : (page - 1) * ITEMS_PER_PAGE;
+
+  // Load More writes ?page= with replace (pass 2 WP1 item 7), so a reload
+  // restores the place and Back leaves the page instead of stepping through
+  // every Load More. The key does not include the page, so this starts no
+  // new query.
+  const mobilePagesThrough = mobile.pagesThrough;
+  useEffect(() => {
+    if (!isMobile || mobilePagesThrough <= 0 || mobilePagesThrough === page) return;
+    setParam("page", mobilePagesThrough, { def: 1, replace: true });
+  }, [isMobile, mobilePagesThrough, page, setParam]);
+
+  // Does the top of the visible list sit at row 1? Only then do sponsors go
+  // above it. Before the mobile list has loaded, it is where it will start.
+  const listStartsAtTop = isMobile
+    ? mobile.restaurants.length > 0
+      ? mobile.firstOffset === 0
+      : initialRestaurantPageParam(page).offset === 0
+    : page === 1;
+  const boostsSponsored = listStartsAtTop;
 
   // PAID PLACEMENT CANNOT COME FROM A PAGE OF THIRTY.
   //
@@ -246,25 +308,38 @@ export default function Restaurants() {
   // array it is handed, and that only worked because the array used to be every
   // restaurant -- a sponsored listing ranked 400th by rotation was still pulled
   // onto page 1. Bounding the fetch without this would have quietly ended that,
-  // which is a contract question and not a performance decision. Two rows,
-  // fetched on their own, and only on the first page.
+  // which is a contract question and not a performance decision.
   //
   // THE SPONSORED QUERY CARRIES THE VISITOR'S FILTERS (eat-drink plan WP1 item
-  // 3). It used to ask for any two sponsored rows, so a Mexican search led with
-  // whatever was paid for, Mexican or not. Boosting in place is the paid
-  // contract; relevance is what makes it worth anything.
-  const { restaurants: sponsoredRestaurants } = useRestaurants(
+  // 3). Boosting in place is the paid contract; relevance is what makes it
+  // worth anything.
+  //
+  // SPONSORS ROTATE BY DAY (pass 2 WP1 item 8). Up to ten matching sponsors
+  // in the same request, two picked with the daily Central seed, so a third
+  // sponsor gets the slot on some days instead of never. Skipped entirely
+  // where nothing is boosted (desktop pages 2+).
+  const { restaurants: sponsoredPool } = useRestaurants(
     useMemo(
-      () => ({ ...filters, sponsoredOnly: true, limit: SPONSORED_CAP, offset: 0 }),
+      () => ({ ...filters, sponsoredOnly: true, limit: SPONSOR_POOL, offset: 0 }),
       [filters]
-    )
+    ),
+    { enabled: boostsSponsored }
+  );
+  const rotationSeed = getRestaurantRotationSeed();
+  const sponsoredRestaurants = useMemo(
+    () => pickDailySponsors(sponsoredPool.filter(isSponsoredActive), rotationSeed, SPONSORED_CAP),
+    [sponsoredPool, rotationSeed]
   );
   const filterOptions = useRestaurantFilterOptions();
   const { cuisineCounts } = useCuisineCounts();
   const { announce, announcement, regionProps } = useAnnounce();
 
   const handleSurpriseMe = useCallback(() => {
-    const candidates = restaurants.filter((r) => !NOT_VISITABLE.has((r as { status?: string | null }).status ?? ""));
+    // announced counts as not visitable now (pass 2 WP1 item 5): it could
+    // send a visitor to a place that has not opened.
+    const candidates = restaurants.filter((r) =>
+      isVisitableStatus((r as { status?: string | null }).status)
+    );
     if (candidates.length === 0) {
       toast({
         title: "Nothing to pick from",
@@ -276,18 +351,21 @@ export default function Restaurants() {
     navigate(`/restaurants/${random.slug || random.id}`);
   }, [restaurants, navigate, toast]);
 
-  // Mobile's list always starts at row 0, so it boosts on every "page".
-  const boostsSponsored = isMobile || page === 1;
-
   // Boost up to 2 active sponsored listings to the top (WEB-FEAT-005), organic
   // order otherwise.
+  //
+  // NOTHING UNTIL THE ORGANIC ROWS ARE HERE (pass 2 WP1 item 1). The sponsored
+  // query is cheaper and lands first, so this held two rows while the list
+  // was still loading; the skeleton gate saw a non-empty array and the page
+  // rendered "No restaurants available at the moment" over a list that was
+  // on its way.
   const arrangedRestaurants = useMemo(() => {
+    if (restaurants.length === 0) return [];
     if (!boostsSponsored || sponsoredRestaurants.length === 0) return restaurants;
     // De-duplicate: a sponsored restaurant that is also in this page's rotation
     // must appear once, at the top, not twice.
-    const boosted = sponsoredRestaurants.slice(0, SPONSORED_CAP);
-    const boostedIds = new Set(boosted.map((r) => r.id));
-    return arrangeSponsored([...boosted, ...restaurants.filter((r) => !boostedIds.has(r.id))]);
+    const boostedIds = new Set(sponsoredRestaurants.map((r) => r.id));
+    return arrangeSponsored([...sponsoredRestaurants, ...restaurants.filter((r) => !boostedIds.has(r.id))]);
   }, [restaurants, sponsoredRestaurants, boostsSponsored]);
 
   // The slicing is gone: the query returned this page. totalCount is the
@@ -297,13 +375,9 @@ export default function Restaurants() {
   const totalPages = Math.ceil(total / ITEMS_PER_PAGE);
   const paginatedRestaurants = arrangedRestaurants;
 
-  const hasMorePages = isMobile
-    ? page * ITEMS_PER_PAGE < total
-    : page < totalPages;
-
-  // A Load More in flight: the kept rows are the previous page's (WP2's
-  // placeholderData), so the grid stays mounted and only the button spins.
-  const isLoadingMore = isMobile && isFetching && isPlaceholderData;
+  // A Load More in flight: the grid stays mounted and only the button spins.
+  const isLoadingMore = isMobile && mobile.isFetchingNextPage;
+  const isLoadingEarlier = isMobile && mobile.isFetchingPreviousPage;
 
   // Page reset on filter change is handled by setMany/setParam (resetsPage).
 
@@ -313,9 +387,22 @@ export default function Restaurants() {
     if (searchInput === filters.search) return;
     const timer = setTimeout(() => {
       setParam("q", searchInput, { def: "", resetsPage: true, replace: true });
-    }, 300);
+    }, SEARCH_DEBOUNCE_MS);
     return () => clearTimeout(timer);
   }, [searchInput, filters.search, setParam]);
+
+  // "No results" waits for typing to stop (pass 2 WP1 item 10). Until then an
+  // empty list shows the skeleton, so "No results for 'har'" cannot flash
+  // on the way to "harbinger".
+  const [searchIdle, setSearchIdle] = useState(true);
+  const lastTypedRef = useRef(searchInput);
+  useEffect(() => {
+    if (lastTypedRef.current === searchInput) return;
+    lastTypedRef.current = searchInput;
+    setSearchIdle(false);
+    const timer = setTimeout(() => setSearchIdle(true), SEARCH_IDLE_MS);
+    return () => clearTimeout(timer);
+  }, [searchInput]);
 
   // Back/forward & shared links: pull URL search back into the input.
   useEffect(() => {
@@ -427,6 +514,10 @@ export default function Restaurants() {
         // contradicts itself is worse than none: it is a claim a crawler can check.
         numberOfItems: schemaRows.length,
         itemListElement: schemaRows.map((restaurant, index) => {
+          // The same address reading as the detail page (pass 2 WP1 item 13):
+          // `location` is the full address and `city` says "Des Moines" for
+          // rows in West Des Moines, so both used to be wrong here.
+          const parsed = parseIowaAddress(restaurant.location);
           // Each entry points at OUR page for the restaurant. It pointed at
           // the restaurant's own website, which told a crawler this list was
           // a list of other people's sites; the website is sameAs now.
@@ -445,9 +536,10 @@ export default function Restaurants() {
               priceRange: restaurant.price_range,
               address: {
                 "@type": "PostalAddress",
-                streetAddress: restaurant.location,
-                addressLocality: restaurant.city || "Des Moines",
-                addressRegion: "Iowa",
+                streetAddress: parsed?.streetAddress || restaurant.location,
+                addressLocality: restaurantLocality(restaurant) || "Des Moines",
+                addressRegion: "IA",
+                ...(parsed?.postalCode && { postalCode: parsed.postalCode }),
                 addressCountry: "US",
               },
               ...(restaurant.image_url && { image: restaurant.image_url }),
@@ -487,22 +579,62 @@ export default function Restaurants() {
   // than folded into a range that would then be off by two.
   const organicShown = restaurants.length;
   const sponsoredExtra = Math.max(0, paginatedRestaurants.length - organicShown);
-  const firstShown = isMobile ? 1 : (page - 1) * ITEMS_PER_PAGE + 1;
+  const firstShown = firstOffset + 1;
   const lastShown = firstShown + organicShown - 1;
+  // A phone list that starts at row 1 says "Showing 60"; one restored from a
+  // later page says which rows it holds.
+  const shownRange = isMobile && firstOffset === 0 ? String(organicShown) : `${firstShown}-${lastShown}`;
   const counterText =
     isLoading
       ? "Searching..."
       : organicShown === 0
         ? `0 of ${total} restaurants`
-        : `Showing ${isMobile ? organicShown : `${firstShown}-${lastShown}`} of ${total} restaurants${
+        : `Showing ${shownRange} of ${total} restaurants${
             sponsoredExtra > 0 ? `, plus ${sponsoredExtra} sponsored` : ""
           }`;
 
+  // PAST THE LAST PAGE (pass 2 WP1 item 10). A ?page=40 link on a list of
+  // sixteen pages came back empty and said "Check back soon", as if there
+  // were no restaurants. The RPC reports no total on an empty page, so one
+  // row is asked for from the top to learn where the end is.
+  const pastEnd = !isLoading && !error && restaurants.length === 0 && firstOffset > 0;
+  const endProbe = useRestaurants(
+    useMemo(() => ({ ...filters, limit: 1, offset: 0 }), [filters]),
+    { enabled: pastEnd }
+  );
+  const lastPage = Math.max(1, Math.ceil((endProbe.totalCount || 0) / ITEMS_PER_PAGE));
+  const showPastEnd = pastEnd && !endProbe.isLoading && endProbe.totalCount > 0;
+
+  // Mobile Load More / Load earlier.
+  const hasMorePages = isMobile ? !!mobile.hasNextPage : page < totalPages;
+  const hasEarlierPages = isMobile && !!mobile.hasPreviousPage;
+
+  // Nothing on screen yet: loading, or a search still being typed.
+  const showSkeleton =
+    (isLoading && paginatedRestaurants.length === 0) ||
+    (!searchIdle && !error && paginatedRestaurants.length === 0) ||
+    (pastEnd && endProbe.isLoading);
+
+  // THE TONIGHT STRIP IS NOT THE FIRST THING ON A PHONE (pass 2 WP1 item 3).
+  // Above sm it sits over the grid; below it goes after the third card, so
+  // the first card title clears the bottom nav.
+  const showTonight = !hasActiveFilters && viewMode === "list";
+  const tonightInGrid = showTonight && !isAboveSm;
+
   // Openings, guides and the featured_spot ad sit AFTER the first results,
   // and only on the unfiltered hub: a visitor who searched wants results.
-  const showInterstitial = !hasActiveFilters && viewMode === "list";
+  const showInterstitial = !hasActiveFilters && viewMode === "list" && listStartsAtTop;
   const firstCards = paginatedRestaurants.slice(0, RESULTS_BEFORE_INTERSTITIAL);
   const restCards = paginatedRestaurants.slice(RESULTS_BEFORE_INTERSTITIAL);
+  const cardsBeforeTonight = tonightInGrid ? firstCards.slice(0, CARDS_BEFORE_TONIGHT) : firstCards;
+  const cardsAfterTonight = tonightInGrid ? firstCards.slice(CARDS_BEFORE_TONIGHT) : [];
+
+  const suggestionLinks = suggestions.filter((sg): sg is typeof sg & { slug: string } => !!sg.slug);
+
+  // An unfiltered ?page=N is its own canonical (pass 2 WP1 item 10): it is a
+  // different slice of the list, and pointing it at page 1 told crawlers
+  // rows 31-478 were duplicates of rows 1-30.
+  const canonicalPath = !hasActiveFilters && page > 1 ? `/restaurants?page=${page}` : "/restaurants";
 
   const heroPill =
     "rounded-full text-sm min-h-11 sm:min-h-9 bg-white/15 hover:bg-white/25 text-white border-white/20";
@@ -519,7 +651,7 @@ export default function Restaurants() {
           { name: "Home", url: "/" },
           { name: "Restaurants", url: "/restaurants" },
         ]}
-        url="/restaurants"
+        url={canonicalPath}
         // A search results page is thin and endless; keep it out of the index
         // but let crawlers follow through to the restaurants it lists.
         robots={filters.search ? "noindex, follow" : undefined}
@@ -554,13 +686,15 @@ export default function Restaurants() {
                 competition index 11, against 87 for the things-to-do terms -
                 this is the head term worth agreeing on.
               */}
-              <h1 className="text-3xl leading-[1.1] sm:leading-9 md:leading-none md:text-5xl lg:text-6xl font-extrabold text-white sm:mb-4 tracking-tight">
+              <h1 className="text-2xl leading-[1.1] sm:text-3xl sm:leading-9 md:leading-none md:text-5xl lg:text-6xl font-extrabold text-white sm:mb-4 tracking-tight">
                 Best Restaurants in{' '}
                 {/* WEB-UX-034: was a bg-clip-text gradient. Gradient text is
                     decorative rather than meaningful, and on an h1 it costs
                     legibility for nothing - emphasis here comes from the block
-                    break and the weight the heading already carries. */}
-                <span className="sm:block text-amber-300">
+                    break and the weight the heading already carries.
+                    whitespace-nowrap (pass 2 WP1 item 3): at 390px the line
+                    broke inside the city name, "Des / Moines". */}
+                <span className="whitespace-nowrap sm:block text-amber-300">
                   Des Moines
                 </span>
               </h1>
@@ -652,20 +786,11 @@ export default function Restaurants() {
                     Open Now
                   </Link>
                 </Button>
-                <Button
-                  variant={filters.featuredOnly ? "default" : "secondary"}
-                  size="sm"
-                  aria-pressed={filters.featuredOnly}
-                  onClick={() => setFilters((prev) => ({ ...prev, featuredOnly: !prev.featuredOnly }))}
-                  className={
-                    filters.featuredOnly
-                      ? "rounded-full text-sm min-h-11 sm:min-h-9 bg-white text-slate-900 hover:bg-white/90"
-                      : heroPill
-                  }
-                >
-                  <SpriteIcon name="sparkles" className="hidden sm:inline h-3.5 w-3.5 mr-1.5" />
-                  Featured
-                </Button>
+                {/* No Featured pill (pass 2 WP1 item 2). Nothing editorial
+                    sets is_featured on restaurants; only sponsored rows kept
+                    it (20260902000004), so the pill was a paid filter under
+                    an editorial name. An old ?featured=1 link still works and
+                    shows a "Sponsored only" chip. */}
 
                 {/* View Mode Toggle - 44px at every breakpoint (item 11) */}
                 <div className="flex items-center rounded-full bg-white/15 p-0.5" role="group" aria-label="Results view">
@@ -765,9 +890,13 @@ export default function Restaurants() {
               {/* Results count — visible at all viewports (WEB-UX-003).
                   WEB-PERF-029: the "of N" is totalCount, not the length of
                   the fetched array, which is one page. */}
-              <p className="text-sm text-muted-foreground" data-results-count="">
-                {counterText}
-              </p>
+              {/* In map view the map carries its own count ("N of M mapped"),
+                  so there is one total on screen, not two (pass 2 WP1 item 11). */}
+              {viewMode === "list" && (
+                <p className="text-sm text-muted-foreground" data-results-count="">
+                  {counterText}
+                </p>
+              )}
               {restaurantChips.length > 0 && (
                 <ActiveFilterChips onClearAll={handleClearFilters} chips={restaurantChips} />
               )}
@@ -782,7 +911,7 @@ export default function Restaurants() {
               </p>
             )}
 
-            {!hasActiveFilters && <RestaurantsTonightStrip />}
+            {showTonight && isAboveSm && <RestaurantsTonightStrip />}
 
             {/* Main Restaurant Grid */}
             <section aria-labelledby="all-restaurants-heading">
@@ -793,7 +922,7 @@ export default function Restaurants() {
                 {hasActiveFilters ? "Search Results" : "All Restaurants"}
               </h2>
 
-              {isLoading && paginatedRestaurants.length === 0 ? (
+              {showSkeleton ? (
                 <CardsGridSkeleton
                   count={9}
                   variant="restaurant"
@@ -802,6 +931,21 @@ export default function Restaurants() {
                 />
               ) : error ? (
                 <ErrorState error={error} onRetry={() => refetch()} />
+              ) : showPastEnd ? (
+                <EmptyState
+                  icon={SearchX}
+                  title="That page is past the end"
+                  description={`This list has ${lastPage} page${lastPage === 1 ? "" : "s"}.`}
+                >
+                  <p className="mt-2 text-sm">
+                    <Link
+                      to={pageHref(lastPage)}
+                      className="font-semibold text-primary underline-offset-4 hover:underline"
+                    >
+                      Go to page {lastPage}
+                    </Link>
+                  </p>
+                </EmptyState>
               ) : restaurants.length === 0 ? (
                 <EmptyState
                   icon={hasActiveFilters ? SearchX : Utensils}
@@ -813,7 +957,7 @@ export default function Restaurants() {
                   description={
                     hasActiveFilters
                       ? "Try adjusting your search criteria or filters to find more restaurants."
-                      : "No restaurants available at the moment. Check back soon!"
+                      : "No restaurants are listed right now."
                   }
                   actions={
                     hasActiveFilters
@@ -836,14 +980,17 @@ export default function Restaurants() {
                       : undefined
                   }
                 >
-                  {filters.search && suggestions.length > 0 && (
-                    <p className="mt-2 text-sm text-muted-foreground">
+                  {/* Slugs only (pass 2 WP1 item 5): the fuzzy RPC returns no
+                      slug, so every link went to /restaurants/<uuid>. The hook
+                      looks the ids up again; a row with no slug is left out. */}
+                  {filters.search && suggestionLinks.length > 0 && (
+                    <p className="mt-2 text-sm text-muted-foreground" data-did-you-mean="">
                       Did you mean{" "}
-                      {suggestions.map((s, i) => (
+                      {suggestionLinks.map((s, i) => (
                         <span key={s.id}>
                           {i > 0 && ", "}
                           <Link
-                            to={`/restaurants/${s.slug || s.id}`}
+                            to={`/restaurants/${s.slug}`}
                             className="font-semibold text-primary underline-offset-4 hover:underline"
                           >
                             {s.name}
@@ -860,8 +1007,27 @@ export default function Restaurants() {
                 </Suspense>
               ) : (
                 <>
+                  {hasEarlierPages && (
+                    <div className="mb-6">
+                      <Button
+                        variant="outline"
+                        className="w-full min-h-11"
+                        disabled={isLoadingEarlier}
+                        aria-busy={isLoadingEarlier}
+                        onClick={() => void mobile.fetchPreviousPage()}
+                      >
+                        {isLoadingEarlier ? (
+                          <Loader2 className="h-4 w-4 mr-2 animate-spin motion-reduce:animate-none" aria-hidden="true" />
+                        ) : (
+                          <ChevronUp className="h-4 w-4 mr-2" aria-hidden="true" />
+                        )}
+                        {isLoadingEarlier ? "Loading earlier results..." : "Load earlier results"}
+                      </Button>
+                    </div>
+                  )}
+
                   <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-6">
-                    {firstCards.map((restaurant, index) => (
+                    {cardsBeforeTonight.map((restaurant, index) => (
                       <RestaurantCard
                         priority={index < 3}
                         key={restaurant.id}
@@ -869,6 +1035,16 @@ export default function Restaurants() {
                       />
                     ))}
                   </div>
+
+                  {tonightInGrid && <RestaurantsTonightStrip className="mt-6" />}
+
+                  {cardsAfterTonight.length > 0 && (
+                    <div className="mt-6 grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-6">
+                      {cardsAfterTonight.map((restaurant) => (
+                        <RestaurantCard key={restaurant.id} restaurant={restaurant} />
+                      ))}
+                    </div>
+                  )}
 
                   {showInterstitial && (
                     <div className="my-10 space-y-8">
@@ -900,7 +1076,7 @@ export default function Restaurants() {
                           className="w-full min-h-11"
                           disabled={isLoadingMore}
                           aria-busy={isLoadingMore}
-                          onClick={() => setPage((p) => p + 1)}
+                          onClick={() => void mobile.fetchNextPage()}
                         >
                           {isLoadingMore ? (
                             <Loader2 className="h-4 w-4 mr-2 animate-spin motion-reduce:animate-none" aria-hidden="true" />

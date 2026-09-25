@@ -90,6 +90,10 @@ function saveConsent(consent: CookieConsent) {
   );
 }
 
+/** Three across on a phone, 44px tall, labels allowed to wrap. */
+const CHOICE_BUTTON =
+  "h-auto min-h-11 whitespace-normal px-2 text-xs leading-tight sm:h-9 sm:min-h-0 sm:px-3 sm:text-sm";
+
 export function CookieConsentBanner() {
   const [visible, setVisible] = useState(false);
   const [showDetails, setShowDetails] = useState(false);
@@ -175,6 +179,17 @@ export function CookieConsentBanner() {
     setVisible(false);
   }, [prefs]);
 
+  // Marks <html> while the banner is up, so the accessibility widget (fixed
+  // bottom-left, z-[9998]) can step aside instead of covering "Reject
+  // non-essential" on a phone. An attribute rather than a shared store keeps
+  // the two components from importing each other.
+  useEffect(() => {
+    const root = document.documentElement;
+    if (visible) root.setAttribute("data-consent-open", "");
+    else root.removeAttribute("data-consent-open");
+    return () => root.removeAttribute("data-consent-open");
+  }, [visible]);
+
   if (!visible) return null;
 
   return (
@@ -183,19 +198,22 @@ export function CookieConsentBanner() {
       aria-modal="false"
       aria-labelledby="cookie-consent-title"
       aria-describedby="cookie-consent-description"
-      className="fixed bottom-0 inset-x-0 z-[60] p-4 sm:p-6"
+      className="fixed bottom-0 inset-x-0 z-[60] p-2 sm:p-6"
     >
-      <div className="max-w-4xl mx-auto rounded-lg border bg-background shadow-2xl">
-        <div className="p-5 sm:p-6">
-          <div className="flex items-start gap-3">
+      {/* Below sm the banner is one line and three buttons (about 140px on a
+          390x844 phone); the full text and the categories are behind
+          Customize. It used to cover 418-844px of an 844px screen. */}
+      <div className="max-w-4xl mx-auto max-h-[85dvh] overflow-y-auto rounded-lg border bg-background shadow-2xl">
+        <div className="p-3 sm:p-6">
+          <div className="flex items-center gap-3 sm:items-start">
             <Cookie
-              className="h-6 w-6 text-primary flex-shrink-0 mt-0.5"
+              className="hidden h-6 w-6 text-primary flex-shrink-0 mt-0.5 sm:block"
               aria-hidden="true"
             />
             <div className="flex-1 min-w-0">
               <h2
                 id="cookie-consent-title"
-                className="text-base font-semibold mb-1"
+                className="sr-only text-base font-semibold mb-1 sm:not-sr-only"
               >
                 We value your privacy
               </h2>
@@ -203,11 +221,16 @@ export function CookieConsentBanner() {
                 id="cookie-consent-description"
                 className="text-sm text-muted-foreground"
               >
+                <span className={showDetails ? "hidden" : "sm:hidden"}>
+                  We use cookies; essential ones are always on.{" "}
+                </span>
+                <span className={showDetails ? undefined : "hidden sm:inline"}>
                 We use cookies to keep you signed in, remember your preferences,
                 measure how people use the site, and — with your permission —
                 personalize content and ads. You can accept all, reject
                 non-essential, or customize your choices. Essential cookies are
                 always on because the site can&apos;t function without them.{" "}
+                </span>
                 <Link
                   to="/cookie-policy"
                   className="underline hover:no-underline"
@@ -325,12 +348,13 @@ export function CookieConsentBanner() {
             </fieldset>
           )}
 
-          <div className="mt-5 flex flex-col sm:flex-row gap-2 sm:justify-end">
+          <div className="mt-3 grid grid-cols-3 gap-2 sm:mt-5 sm:flex sm:flex-row sm:justify-end">
             {!showDetails ? (
               <>
                 <Button
                   variant="ghost"
                   size="sm"
+                  className={CHOICE_BUTTON}
                   onClick={() => setShowDetails(true)}
                 >
                   Customize
@@ -338,11 +362,12 @@ export function CookieConsentBanner() {
                 <Button
                   variant="outline"
                   size="sm"
+                  className={CHOICE_BUTTON}
                   onClick={rejectNonEssential}
                 >
                   Reject non-essential
                 </Button>
-                <Button size="sm" onClick={acceptAll}>
+                <Button size="sm" className={CHOICE_BUTTON} onClick={acceptAll}>
                   Accept all
                 </Button>
               </>
@@ -351,6 +376,7 @@ export function CookieConsentBanner() {
                 <Button
                   variant="ghost"
                   size="sm"
+                  className={CHOICE_BUTTON}
                   onClick={() => setShowDetails(false)}
                 >
                   Back
@@ -358,11 +384,12 @@ export function CookieConsentBanner() {
                 <Button
                   variant="outline"
                   size="sm"
+                  className={CHOICE_BUTTON}
                   onClick={rejectNonEssential}
                 >
                   Reject non-essential
                 </Button>
-                <Button size="sm" onClick={saveCustom}>
+                <Button size="sm" className={CHOICE_BUTTON} onClick={saveCustom}>
                   Save my choices
                 </Button>
               </>

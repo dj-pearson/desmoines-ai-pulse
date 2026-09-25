@@ -10,7 +10,16 @@ interface NavItem {
   label: string;
   icon: React.ElementType;
   requiresAuth?: boolean;
+  /**
+   * Other path prefixes that belong to this item. The Account item links to
+   * /dashboard but /profile and /my-events are the same area, and the tab bar
+   * showed nothing active on either (account plan WP3 item 10).
+   */
+  alsoActiveOn?: string[];
 }
+
+/** The signed-in Account area. Sign In keeps /auth as its only match. */
+const ACCOUNT_PATHS = ["/dashboard", "/profile", "/my-events"];
 
 export default function BottomNav() {
   // Flags-only so the tab bar doesn't re-render on token-refresh. (WEB-PERF-005)
@@ -47,6 +56,7 @@ export default function BottomNav() {
       href: isAuthenticated ? "/dashboard" : "/auth",
       label: isAuthenticated ? "Account" : "Sign In",
       icon: User,
+      alsoActiveOn: isAuthenticated ? ACCOUNT_PATHS : undefined,
     },
   ];
 
@@ -59,11 +69,19 @@ export default function BottomNav() {
     );
   };
 
+  // The length of the longest path this item matches on the current route, or
+  // 0 when it does not match at all.
+  const matchLength = (item: NavItem) =>
+    [item.href, ...(item.alsoActiveOn ?? [])]
+      .filter(matchesPath)
+      .reduce((longest, path) => Math.max(longest, path.length), 0);
+
   // Only the most-specific matching item should appear active, so a deeper
   // route like /events/near-me highlights "Near Me" and not the "/events" tab.
   const activeHref = navItems
-    .filter((item) => matchesPath(item.href))
-    .sort((a, b) => b.href.length - a.href.length)[0]?.href;
+    .map((item) => ({ href: item.href, length: matchLength(item) }))
+    .filter((match) => match.length > 0)
+    .sort((a, b) => b.length - a.length)[0]?.href;
 
   const isActivePath = (path: string) => path === activeHref;
 

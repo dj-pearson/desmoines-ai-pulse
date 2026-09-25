@@ -46,6 +46,8 @@ import { Alert, AlertDescription } from "@/components/ui/alert";
 import { useToast } from "@/hooks/use-toast";
 import { useAuth } from "@/hooks/useAuth";
 import { supabase } from "@/integrations/supabase/client";
+import { handleError } from "@/lib/errorHandler";
+import { formatInCentralTime } from "@/lib/timezone";
 import { reopenConsentBanner } from "@/components/CookieConsentBanner";
 import {
   Shield,
@@ -56,14 +58,54 @@ import {
   Loader2,
 } from "lucide-react";
 
+interface FunctionFailure {
+  message: string;
+  code?: string;
+  manageUrl?: string;
+}
+
+/**
+ * The server's own words for a failed edge-function call. supabase-js reports
+ * any non-2xx as "Edge Function returned a non-2xx status code" and keeps the
+ * response on `error.context`; the body carries the message worth showing and,
+ * for BILLING_TEARDOWN_FAILED, where the subscription is managed.
+ */
+async function readFunctionFailure(error: unknown, fallback: string): Promise<FunctionFailure> {
+  const ctx = (error as { context?: Response } | null)?.context;
+  if (ctx && typeof ctx.json === "function") {
+    const body = (await ctx.json().catch(() => null)) as
+      | { error?: string; code?: string; manage_subscription_url?: string }
+      | null;
+    if (body?.error) {
+      return { message: body.error, code: body.code, manageUrl: body.manage_subscription_url };
+    }
+  }
+  return { message: error instanceof Error && error.message ? error.message : fallback };
+}
+
+interface DeletionResult {
+  complete?: boolean;
+  storage_incomplete?: string[];
+  tables_incomplete?: string[];
+  store_subscriptions_still_active?: { platform: string; manageUrl: string }[];
+}
+
+type DeleteStep = "idle" | "requesting" | "requested" | "deleting";
+
+type ExportTableReader = (table: string) => {
+  select: (columns: string) => {
+    eq: (column: string, value: string) => PromiseLike<{ data: unknown[] | null; error: { message: string } | null }>;
+  };
+};
+
 export function PrivacyControls() {
   const { user, logout } = useAuth();
   const { toast } = useToast();
   const [isExporting, setIsExporting] = useState(false);
-  const [deleteStep, setDeleteStep] = useState<"idle" | "requested" | "deleting">(
-    "idle"
-  );
+  const [deleteStep, setDeleteStep] = useState<DeleteStep>("idle");
   const [confirmationToken, setConfirmationToken] = useState<string | null>(null);
+  const [tokenExpiresAt, setTokenExpiresAt] = useState<string | null>(null);
+  const [deleteFailure, setDeleteFailure] = useState<FunctionFailure | null>(null);
 
   const handleExport = async () => {
     if (!user) return;
@@ -109,6 +151,12 @@ export function PrivacyControls() {
       // is not among the 71 verify_jwt=false functions that deploy-edge-functions
       // deliberately withholds. Its erasure counterpart delete-user-account is
       // already live (401 on an anon POST).
+      //
+      // WP5 item 13 adds the six tables the account pages themselves show -
+      // plans, reminders, saved searches, submissions, email settings and the
+      // consent history - so the export is at least a copy of what the user
+      // can see. All six are in scripts/db-snapshot.json with owner-scoped RLS.
+      // That is still not the full export; D10 is.
       const tables = [
         "profiles",
         "user_event_interactions",
@@ -118,6 +166,12 @@ export function PrivacyControls() {
         "event_reviews",
         "user_subscriptions",
         "user_analytics",
+        "event_attendance",
+        "user_event_reminders",
+        "saved_searches",
+        "user_submitted_events",
+        "user_email_preferences",
+        "consent_records",
       ];
 
       const exported: Record<string, unknown> = {
@@ -140,9 +194,10 @@ export function PrivacyControls() {
 
       for (const table of tables) {
         try {
-          const { data, error } = await supabase
-            .from(table)
-            // @ts-expect-error — user_id column present on all tables above
+          // Every table above has a user_id column; the generated types
+          // can't express "any of these tables", so the builder is typed by
+          // hand rather than suppressed.
+          const { data, error } = await (supabase.from.bind(supabase) as unknown as ExportTableReader)(table)
             .select("*")
             .eq("user_id", user.id);
           exported[table] = error ? { error: error.message } : data ?? [];
@@ -173,6 +228,7 @@ export function PrivacyControls() {
           "Your personal data was downloaded as a JSON file. Keep it somewhere safe.",
       });
     } catch (err) {
+      handleError(err, { component: "PrivacyControls", action: "export" });
       toast({
         title: "Export failed",
         description:
@@ -188,7 +244,10 @@ export function PrivacyControls() {
 
   const requestDeletion = async () => {
     if (!user) return;
-    setDeleteStep("requested");
+    setDeleteFailure(null);
+    // "requesting" until the token exists, so Confirm can never render against
+    // a token that hasn't arrived (or never will).
+    setDeleteStep("requesting");
     try {
       const { data, error } = await supabase.functions.invoke(
         "delete-user-account",
@@ -197,26 +256,27 @@ export function PrivacyControls() {
         }
       );
       if (error) throw error;
-      const token = (data as { confirmation_token?: string })?.confirmation_token;
-      if (!token) {
+      const reply = data as { confirmation_token?: string; expires_at?: string } | null;
+      if (!reply?.confirmation_token) {
         throw new Error("Server did not return a confirmation token.");
       }
-      setConfirmationToken(token);
+      setConfirmationToken(reply.confirmation_token);
+      setTokenExpiresAt(reply.expires_at ?? null);
+      setDeleteStep("requested");
     } catch (err) {
+      handleError(err, { component: "PrivacyControls", action: "requestDeletion" });
+      const failure = await readFunctionFailure(
+        err,
+        "We couldn't start the deletion. Try again, or email privacy@desmoinesinsider.com.",
+      );
       setDeleteStep("idle");
-      toast({
-        title: "Could not start deletion",
-        description:
-          err instanceof Error
-            ? err.message
-            : "Please try again or contact privacy@desmoinesinsider.com.",
-        variant: "destructive",
-      });
+      setDeleteFailure(failure);
     }
   };
 
   const confirmDeletion = async () => {
     if (!confirmationToken) return;
+    setDeleteFailure(null);
     setDeleteStep("deleting");
     try {
       const { data, error } = await supabase.functions.invoke("delete-user-account", {
@@ -224,21 +284,28 @@ export function PrivacyControls() {
       });
       if (error) throw error;
 
+      const result = (data ?? {}) as DeletionResult;
+
       // WEB-AUTH-006 AC3. An App Store or Play subscription cannot be cancelled
       // from a server -- Apple and Google own it -- so the account can be gone
       // while the charge continues. Saying nothing here would let someone
       // believe deleting the account stopped it, which is the same failure this
       // story is about, one platform over.
-      const stillActive =
-        (data as { store_subscriptions_still_active?: { platform: string; manageUrl: string }[] })
-          ?.store_subscriptions_still_active ?? [];
+      const stillActive = result.store_subscriptions_still_active ?? [];
+
+      // WP5 item 9. The server reports whether every row and file went; only a
+      // `complete: true` earns the word "permanently". A partial erasure still
+      // removed the sign-in, so the account is gone either way.
+      const fullyErased =
+        result.complete === true &&
+        !(result.storage_incomplete?.length || result.tables_incomplete?.length);
 
       if (stillActive.length > 0) {
         const where = stillActive
           .map((s) => (s.platform === "ios" ? "the App Store" : "Google Play"))
           .join(" and ");
         toast({
-          title: "Account deleted — your subscription is still active",
+          title: "Account deleted. Your subscription is still active",
           description:
             `Your account is gone, but your subscription was bought through ${where} ` +
             `and only ${where} can cancel it. Open your subscriptions there to stop the charge: ` +
@@ -250,33 +317,45 @@ export function PrivacyControls() {
         });
         // Give them time to read it and follow the link before the redirect.
         await new Promise((resolve) => setTimeout(resolve, 8000));
-      } else {
+      } else if (fullyErased) {
         toast({
           title: "Account deleted",
           description:
             "Your account and associated personal data have been permanently deleted.",
         });
+      } else {
+        toast({
+          title: "Account deleted",
+          description:
+            "You can no longer sign in to this account. Some of its records are still being removed; " +
+            "email privacy@desmoinesinsider.com if you want confirmation when that's finished.",
+          duration: 20000,
+        });
+        await new Promise((resolve) => setTimeout(resolve, 4000));
       }
 
       // Sign out locally; the server-side auth record is already gone.
       await logout();
       window.location.href = "/";
     } catch (err) {
-      setDeleteStep("requested");
-      toast({
-        title: "Deletion failed",
-        description:
-          err instanceof Error
-            ? err.message
-            : "Your token may have expired. Please request a new one.",
-        variant: "destructive",
-      });
+      handleError(err, { component: "PrivacyControls", action: "confirmDeletion" });
+      const failure = await readFunctionFailure(
+        err,
+        "Your confirmation may have expired. Start again to get a new one.",
+      );
+      setDeleteFailure(failure);
+      // A refused deletion changed nothing, so the flow starts over rather than
+      // offering the same token again.
+      setDeleteStep("idle");
+      setConfirmationToken(null);
+      setTokenExpiresAt(null);
     }
   };
 
   const cancelDeletion = () => {
     setDeleteStep("idle");
     setConfirmationToken(null);
+    setTokenExpiresAt(null);
   };
 
   return (
@@ -304,9 +383,9 @@ export function PrivacyControls() {
                 Download your data
               </h3>
               <p className="text-sm text-muted-foreground">
-                Get a machine-readable JSON copy of the profile, preferences,
-                favorites, reviews, subscription, and usage-analytics records we
-                hold about your account.
+                A JSON file with your profile, saved events and places, plans,
+                reminders, saved searches, submitted events, reviews, email
+                settings, consent history and subscription records.
               </p>
             </div>
           </div>
@@ -426,16 +505,25 @@ export function PrivacyControls() {
             </AlertDialog>
           )}
 
-          {deleteStep === "requested" && (
+          {deleteStep === "requesting" && (
+            <Alert>
+              <Loader2 className="h-4 w-4 animate-spin" />
+              <AlertDescription>Preparing your confirmation...</AlertDescription>
+            </Alert>
+          )}
+
+          {deleteStep === "requested" && confirmationToken && (
             <Alert>
               <AlertTriangle className="h-4 w-4" />
               <AlertDescription className="space-y-3">
                 <p>
-                  We generated a 15-minute confirmation token. Click
-                  &quot;Confirm deletion&quot; below to finish permanently
-                  deleting your account, or Cancel to abort.
+                  Last step. Confirm to delete your account now
+                  {tokenExpiresAt
+                    ? `; this confirmation works until ${formatInCentralTime(tokenExpiresAt, "h:mm a")} Central`
+                    : ""}
+                  .
                 </p>
-                <div className="flex gap-2">
+                <div className="flex flex-wrap gap-2">
                   <Button variant="outline" onClick={cancelDeletion}>
                     Cancel
                   </Button>
@@ -443,6 +531,24 @@ export function PrivacyControls() {
                     Confirm deletion
                   </Button>
                 </div>
+              </AlertDescription>
+            </Alert>
+          )}
+
+          {deleteFailure && deleteStep === "idle" && (
+            <Alert variant="destructive" role="alert">
+              <AlertTriangle className="h-4 w-4" />
+              <AlertDescription className="space-y-2">
+                <p>{deleteFailure.message}</p>
+                {deleteFailure.code === "BILLING_TEARDOWN_FAILED" && (
+                  <p>
+                    Your account has not been deleted and your subscription is still active.{" "}
+                    <Link to="/subscription" className="underline">
+                      Manage your subscription
+                    </Link>{" "}
+                    to cancel it, then try again.
+                  </p>
+                )}
               </AlertDescription>
             </Alert>
           )}

@@ -13,19 +13,26 @@
  * the same number. This pins all three.
  */
 
-import { assert, assertEquals, assertFalse } from 'https://deno.land/std@0.208.0/assert/mod.ts';
+import { assert, assertFalse } from 'jsr:@std/assert@1';
 
 const REPO = new URL('../../../', import.meta.url);
 const read = (rel: string) => Deno.readTextFile(new URL(rel, REPO));
 
 const MIGRATION = 'supabase/migrations/20260902000008_campaign_pricing_authority.sql';
+// The trigger function's CURRENT body. 20260902000008 called the text overload
+// of calculate_campaign_pricing, which 20260822000004 had already dropped, so
+// its body 42883s on every client insert. This file replaces it; the trigger
+// itself is still the one 20260902000008 installed.
+const TRIGGER_FN_MIGRATION = 'supabase/migrations/20260928000001_campaign_pricing_trigger_enum_arg.sql';
+const MIGRATIONS_DIR = 'supabase/migrations/';
+
+const TRIGGER_FN_RE =
+  /CREATE OR REPLACE FUNCTION public\.enforce_campaign_placement_pricing\(\)[\s\S]*?\n\$\$;/;
 const CHECKOUT = 'supabase/functions/create-campaign-checkout/index.ts';
 
 Deno.test('a client-supplied price is overwritten before it is stored', async () => {
-  const sql = await read(MIGRATION);
-  const fn = sql.match(
-    /CREATE OR REPLACE FUNCTION public\.enforce_campaign_placement_pricing\(\)[\s\S]*?\n\$\$;/,
-  );
+  const sql = await read(TRIGGER_FN_MIGRATION);
+  const fn = sql.match(TRIGGER_FN_RE);
   assert(fn, 'the pricing trigger function must exist');
   const body = fn[0];
 
@@ -33,12 +40,42 @@ Deno.test('a client-supplied price is overwritten before it is stored', async ()
   assert(/NEW\.total_cost := v_price\.total_price;/.test(body), 'total_cost is replaced');
   assert(/NEW\.days_count := v_days;/.test(body), 'days_count is derived, not accepted');
   assert(
-    /FROM public\.calculate_campaign_pricing\(NEW\.placement_type::text, NEW\.days_count\)/.test(body),
-    'the replacement value comes from the rate card',
+    /FROM public\.calculate_campaign_pricing\(NEW\.placement_type, NEW\.days_count\)/.test(body),
+    'the replacement value comes from the rate card, through the enum overload',
   );
+
+  const installed = await read(MIGRATION);
   assert(
-    /BEFORE INSERT OR UPDATE ON public\.campaign_placements/.test(sql),
+    /BEFORE INSERT OR UPDATE ON public\.campaign_placements/.test(installed),
     'it must run BEFORE the write, on both insert and update',
+  );
+});
+
+Deno.test('the trigger calls the overload that exists, not the dropped text one', async () => {
+  // 20260822000004 dropped calculate_campaign_pricing(text, integer). There is
+  // no implicit cast from text to an enum, so a ::text argument is a 42883 on
+  // every advertiser checkout. This test used to assert that cast.
+  const repair = await read('supabase/migrations/20260822000004_repair_broken_rpcs.sql');
+  assert(
+    /DROP FUNCTION IF EXISTS public\.calculate_campaign_pricing\(text, integer\);/.test(repair),
+    'the text overload is dropped upstream of this trigger',
+  );
+
+  const body = (await read(TRIGGER_FN_MIGRATION)).match(TRIGGER_FN_RE)![0];
+  assertFalse(/calculate_campaign_pricing\([^)]*::text/.test(body), 'no ::text argument');
+
+  // Whichever migration defines the function LAST is what runs. If a newer
+  // file redefines it, this test must be pointed there.
+  const definers: string[] = [];
+  for await (const entry of Deno.readDir(new URL(MIGRATIONS_DIR, REPO))) {
+    if (!entry.isFile || !entry.name.endsWith('.sql')) continue;
+    const sql = await read(MIGRATIONS_DIR + entry.name);
+    if (TRIGGER_FN_RE.test(sql)) definers.push(entry.name);
+  }
+  definers.sort();
+  assert(
+    TRIGGER_FN_MIGRATION.endsWith(definers[definers.length - 1]),
+    `the newest definer is ${definers[definers.length - 1]}; read that one`,
   );
 });
 
@@ -134,31 +171,62 @@ Deno.test('no price is hardcoded in the bundle any more', async () => {
 
   const page = await read('src/pages/Advertise.tsx');
   assertFalse(/option\.dailyCost/.test(page), 'the page must not read a spec price');
-  assert(/placementTotalPrice\(/.test(page), 'it totals through the shared helper');
 });
 
-Deno.test('the displayed total applies the same discount the server charges', async () => {
-  const hook = await read('src/hooks/useCampaigns.ts');
-  const fn = hook.match(/export function placementTotalPrice[\s\S]*?\n\}/);
-  assert(fn, 'the shared helper must exist');
-  const body = fn[0];
+Deno.test('the total on /advertise is the server\'s total, from the call checkout makes', async () => {
+  // placementTotalPrice mirrored the TEXT overload that 20260822000004 dropped,
+  // so the page and the charge came from two formulas. The page now asks
+  // calculate_campaign_pricing itself, with the same argument names
+  // create-campaign-checkout uses, and has no arithmetic of its own to drift.
+  const page = await read('src/pages/Advertise.tsx');
+  assertFalse(/placementTotalPrice\(/.test(page), 'the page must not total with the mirror');
+  assertFalse(/calculateTotalCost/.test(page), 'nor with a local sum of daily rates');
+  assert(/useCampaignQuote\(/.test(page), 'it totals through the server quote');
 
-  // calculate_campaign_pricing rounds the TOTAL once:
-  //   ROUND(base * (1 - d/100) * days, 2)
-  // Multiplying a rounded daily rate by days gives a different answer on some
-  // inputs, which is how a display and a charge drift apart by pennies.
+  const quote = await read('src/hooks/useCampaignQuote.ts');
+  const checkout = await read(CHECKOUT);
+  const call = /rpc\(\s*"calculate_campaign_pricing",\s*\{\s*p_placement_type: [\w.]+,\s*p_days_count: \w+,?\s*\}/;
+  assert(call.test(quote), 'the quote calls calculate_campaign_pricing(p_placement_type, p_days_count)');
+  assert(call.test(checkout), 'checkout calls the same function with the same arguments');
+  assert(/total_price/.test(quote), 'and reads the same column checkout charges from');
+});
+
+Deno.test('a retry reuses an open session and never opens a second payable one', async () => {
+  // Business plan WP4 item 7. The idempotency key used to be the campaign and
+  // total only, while expires_at changed on every call, so a retry within
+  // Stripe's 24-hour key window failed as a parameter mismatch.
+  const src = await read(CHECKOUT);
   assert(
-    /Math\.round\(rate\.base_daily_rate \* \(1 - discount \/ 100\) \* days \* 100\) \/ 100/.test(body),
-    'the helper must round once at the end, as the SQL does',
+    /idempotencyKey: `campaign:\$\{campaignId\}:\$\{authoritativeTotal\.toFixed\(2\)\}:\$\{attempt\}`/.test(src),
+    'the key carries a per-attempt part',
   );
-  for (const [threshold, field] of [
-    ['30', 'discount_30_day'],
-    ['14', 'discount_14_day'],
-    ['7', 'discount_7_day'],
-  ] as const) {
-    assert(
-      new RegExp(`days >= ${threshold} \\? \\(rate\\.${field}`).test(body),
-      `the ${threshold}-day tier must match the SQL`,
-    );
-  }
+  assert(/const attempt = crypto\.randomUUID\(\);/.test(src), 'a fresh nonce per attempt');
+  assert(
+    /previous\.status === "open"[\s\S]{0,120}previous\.amount_total === authoritativeCents/.test(src),
+    'an open session at the same amount is handed back',
+  );
+  assert(/sessions\.expire\(previous\.id\)/.test(src), 'an open session at another amount is expired first');
+  assert(/previous\.status === "complete"[\s\S]{0,200}status: 400/.test(src), 'a paid session is not paid twice');
+  // Two concurrent attempts: only the one that records its session wins.
+  assert(
+    /claim\.eq\("stripe_session_id", previousSessionId\)\s*:\s*claim\.is\("stripe_session_id", null\)/.test(src),
+    'the session is recorded with a compare-and-set',
+  );
+  assert(/sessions\.expire\(session\.id\)/.test(src), 'the loser withdraws its session');
+  assert(
+    src.indexOf('previous.status === "open"') < src.indexOf('stripe.checkout.sessions.create('),
+    'the open session is checked before a new one is created',
+  );
+});
+
+Deno.test('verify-campaign-payment checks the session is this campaign\'s and reports what was paid', async () => {
+  const src = await read('supabase/functions/verify-campaign-payment/index.ts');
+  assert(/session\.metadata\?\.campaignId !== campaignId/.test(src), 'the session must name this campaign');
+  assert(
+    src.indexOf('session.metadata?.campaignId !== campaignId') < src.indexOf('status: "pending_creative",\n'),
+    'checked before the campaign is moved on',
+  );
+  assert(/session\.amount_total \/ 100/.test(src), 'amountPaid is Stripe\'s charged amount, in dollars');
+  assert(/amountPaid,/.test(src), 'and it is returned');
+  assert(/\.eq\("status", "pending_payment"\)/.test(src), 'the status write cannot overwrite the webhook');
 });

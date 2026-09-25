@@ -2,6 +2,7 @@ import { readFileSync } from 'node:fs';
 import { dirname, join } from 'node:path';
 import { fileURLToPath } from 'node:url';
 import { test, expect, type Page } from '@playwright/test';
+import { fixtureEvents, installFixtureBackend } from './support/fixtureBackend';
 
 /**
  * WEB-QA-001 / WEB-QA-002 / WEB-QA-003 — production regressions found in the
@@ -36,7 +37,21 @@ async function expectNoErrorBoundary(page: Page) {
 test.describe('Route smoke: monetization / B2B pages mount (WEB-QA-001)', () => {
   // React error #130 (undefined component) took /advertise down entirely. Audit
   // the sibling revenue routes reachable from the footer at the same time.
-  const routes = ['/advertise', '/business-partnership'];
+  // The Business plan (docs/page-plans/business.md WP5 item 2) adds the rest of
+  // the way businesses and organizers pay or contribute: event supply comes in
+  // through /submit-event, a paid campaign lands on /advertise/success (here
+  // with no session_id, the state a refresh or a shared link produces), and
+  // /business is the claimed-listing workspace. /campaigns is behind
+  // ProtectedRoute, so for a signed-out visitor this proves the redirect to
+  // /auth mounts; the block at the end of this file checks where it lands.
+  const routes = [
+    '/advertise',
+    '/business-partnership',
+    '/submit-event',
+    '/campaigns',
+    '/business',
+    '/advertise/success',
+  ];
 
   for (const route of routes) {
     test(`${route} mounts without hitting the error boundary`, async ({ page }) => {
@@ -225,12 +240,46 @@ test.describe('Every public route in App.tsx mounts (WEB-QA-023)', () => {
 
 test.describe('Listed events resolve to a detail page (WEB-QA-002)', () => {
   test('a sample of event cards from the listing all render a detail page', async ({ page }) => {
+    // The lane builds with placeholder VITE_SUPABASE_*, so without fixtures
+    // the hub lists nothing and the title-link locator below skips the test.
+    // The old bare locator never skipped only because it sampled the hub's
+    // own landing links; with rows served, it samples real cards.
+    await installFixtureBackend(page);
+    // The shared backend ignores filters on purpose, so a detail page's
+    // `.eq("id", ...).maybeSingle()` would get all twelve rows and fail with
+    // PGRST116. An id lookup is identity, not a filter under test: answer it
+    // with the row it names. Registered after the backend, so it wins.
+    await page.route('**/rest/v1/events?**', (route) => {
+      const id = new URL(route.request().url()).searchParams.get('id');
+      if (route.request().method() !== 'GET' || !id?.startsWith('eq.')) return route.fallback();
+      const rows = fixtureEvents().filter((r) => `eq.${r.id}` === id);
+      return route.fulfill({
+        status: 200,
+        contentType: 'application/json',
+        headers: {
+          'access-control-allow-origin': '*',
+          'content-range': rows.length ? `0-${rows.length - 1}/${rows.length}` : '*/0',
+        },
+        body: JSON.stringify(rows),
+      });
+    });
     await page.goto('/events');
     await page.waitForLoadState('networkidle');
 
     // Event cards link to /events/<slug>. Sample the first few rather than every
     // card, to keep this fast while still catching a systemic list/detail split.
-    const links = page.locator('a[href^="/events/"]');
+    //
+    // Scoped to a card's title link (events-pass2 WP6 item 7). The bare
+    // a[href^="/events/"] matched the hub's own chips and directory first -
+    // /events/today, /events/this-weekend, /events/september-2026 - so the
+    // "sample of event cards" could be a sample of landing pages that never
+    // opened a single event. The plan named the event-card-link test id, but
+    // vite.config.ts strips data-testid from every build
+    // (babel-plugin-react-remove-properties), so on this lane's production
+    // build that locator matches nothing and the test skips itself forever.
+    // SocialEventCard puts its link directly inside the h3/h4 title, which is
+    // the same selector the events-* specs use.
+    const links = page.locator('h3 > a[href^="/events/"], h4 > a[href^="/events/"]');
     const count = await links.count();
     test.skip(count === 0, 'No events currently listed — nothing to verify.');
 
@@ -486,4 +535,31 @@ test.describe('Sign-in details can be changed from /profile (WEB-AUTH-012)', () 
     await expect(page.locator('#current-password')).toHaveCount(0);
     await expect(page.locator('#new-email')).toHaveCount(0);
   });
+});
+
+test.describe('Account routes send a signed-out visitor to /auth and remember where they were', () => {
+  // docs/page-plans/account.md WP6 item 2. Only /profile was covered above.
+  // /dashboard and /my-events both sit behind ProtectedRoute, which builds
+  // /auth?redirect=<path+search+hash>. /my-events used to hand-roll its own
+  // branch that navigated to /login and dropped the return path, and a query
+  // string on /dashboard (?tab=events) is exactly what a new account would
+  // otherwise lose.
+  const CASES: Array<{ from: string; redirect: string }> = [
+    { from: '/dashboard', redirect: '/dashboard' },
+    { from: '/dashboard?tab=events', redirect: '/dashboard?tab=events' },
+    { from: '/my-events', redirect: '/my-events' },
+    // docs/page-plans/business.md WP5 item 2: an advertiser who follows a
+    // campaign email while signed out must come back to their campaigns.
+    { from: '/campaigns', redirect: '/campaigns' },
+  ];
+
+  for (const { from, redirect } of CASES) {
+    test(`anonymous ${from} lands on /auth with the redirect kept`, async ({ page }) => {
+      await page.goto(from);
+      await page.waitForURL((url) => url.pathname === '/auth', { timeout: 30_000 });
+      await expectNoErrorBoundary(page);
+      const url = new URL(page.url());
+      expect(url.searchParams.get('redirect'), `${from} lost its return path`).toBe(redirect);
+    });
+  }
 });

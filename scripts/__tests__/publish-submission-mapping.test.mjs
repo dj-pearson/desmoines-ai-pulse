@@ -159,5 +159,79 @@ console.log('\nan edit after approval takes the listing down until it is re-revi
   );
 }
 
+console.log('\nthe wall clock is built from the Central date, not timestamptz text (account WP4 item 3)');
+{
+  const FIX = 'supabase/migrations/20260926000002_publish_submission_central_date.sql';
+  const fix = readFileSync(FIX, 'utf8').replace(/^\s*--[^\n]*$/gm, '');
+
+  // The LAST migration that defines the function is the one production runs,
+  // so the mapping guarantees above have to hold for it too.
+  check(
+    'it replaces the same function with the same signature',
+    /CREATE OR REPLACE FUNCTION public\.publish_submission\(\s*p_submission_id uuid,\s*p_admin_notes text DEFAULT NULL\s*\)\s*RETURNS uuid/.test(fix),
+  );
+  const fixMapped = new Set([...fix.matchAll(/\bs\.([a-z_]+)\b/g)].map((m) => m[1]));
+  const fixDropped = content.filter((c) => !fixMapped.has(c));
+  check(
+    `and still maps all ${content.length} content columns`,
+    fixDropped.length === 0,
+    fixDropped.length ? `dropped: ${fixDropped.join(', ')}` : '',
+  );
+  check('it keeps the admin-or-service-role gate', /auth\.role\(\), ''\) = 'service_role' OR public\.is_admin\(\)/.test(fix));
+  check('anon still cannot execute it', /REVOKE ALL ON FUNCTION public\.publish_submission\(uuid, text\) FROM anon/.test(fix));
+  check('it still upserts on submission_id', /ON CONFLICT \(submission_id\)[\s\S]*?DO UPDATE SET/.test(fix));
+  check(
+    'the day is read in America/Chicago',
+    /v_local_date := \(s\.date AT TIME ZONE 'America\/Chicago'\)::date;/.test(fix),
+  );
+  check('no timestamptz is concatenated as text', !/s\.date::text\s*\|\|/.test(fix));
+  check(
+    'start and end are both built from that day',
+    /v_start_local := \(v_local_date::text \|\|/.test(fix) && /\(v_local_date::text \|\| ' ' \|\| s\.end_time::text\)::timestamp/.test(fix),
+  );
+
+  // There is no Postgres here, so both expressions are modelled on a real
+  // timestamptz input: what the form stores for "Oct 1" picked in a Central
+  // browser is local midnight through toISOString().
+  const TIMESTAMP_LITERAL = /^\d{4}-\d{2}-\d{2} \d{2}:\d{2}(:\d{2})?$/;
+  /** timestamptz::text in a UTC session, which is what Supabase runs. */
+  const timestamptzText = (iso) => new Date(iso).toISOString().replace('T', ' ').replace(/\.\d{3}Z$/, '+00');
+  /** (ts AT TIME ZONE 'America/Chicago')::date */
+  const centralDate = (iso) =>
+    new Intl.DateTimeFormat('en-CA', { timeZone: 'America/Chicago', year: 'numeric', month: '2-digit', day: '2-digit' })
+      .format(new Date(iso));
+  const oldExpr = (iso, time) => `${timestamptzText(iso)} ${time || '19:31:58'}`;
+  const newExpr = (iso, time) => `${centralDate(iso)} ${time || '19:31:58'}`;
+
+  const cdtMidnight = '2026-10-01T05:00:00.000Z';
+  check(
+    'model: the old expression is not a timestamp Postgres can parse',
+    !TIMESTAMP_LITERAL.test(oldExpr(cdtMidnight, '19:00')),
+    oldExpr(cdtMidnight, '19:00'),
+  );
+  check(
+    'model: the new one is, on the day picked (CDT)',
+    newExpr(cdtMidnight, '19:00') === '2026-10-01 19:00',
+    newExpr(cdtMidnight, '19:00'),
+  );
+  check(
+    'model: and in winter (CST midnight is 06:00Z)',
+    newExpr('2026-12-05T06:00:00.000Z', '') === '2026-12-05 19:31:58',
+    newExpr('2026-12-05T06:00:00.000Z', ''),
+  );
+  check(
+    'model: a Pacific browser lands on the same day',
+    newExpr('2026-10-01T07:00:00.000Z', '18:30') === '2026-10-01 18:30',
+    newExpr('2026-10-01T07:00:00.000Z', '18:30'),
+  );
+  // Known and written down in the migration header: an Eastern browser's
+  // midnight is 23:00 Central the day before. Pinned so a change to that is
+  // deliberate, and so nobody reads the three checks above as "every zone".
+  check(
+    'model: an Eastern browser still lands a day early, as the header says',
+    centralDate('2026-10-01T04:00:00.000Z') === '2026-09-30' && /east of Central/.test(readFileSync(FIX, 'utf8')),
+  );
+}
+
 console.log(`\n${failures} failure(s)`);
 process.exit(failures ? 1 : 0);

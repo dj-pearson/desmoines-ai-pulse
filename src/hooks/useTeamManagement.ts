@@ -1,6 +1,7 @@
 import { useState, useEffect } from "react";
 import { supabase } from "@/integrations/supabase/client";
 import { useToast } from "./use-toast";
+import { handleError, ErrorSeverity } from "@/lib/errorHandler";
 
 export interface TeamMember {
   id: string;
@@ -14,6 +15,46 @@ export interface TeamMember {
   expiresAt: string;
 }
 
+const TEAM_COLUMNS =
+  "id, campaign_owner_id, team_member_email, team_member_id, role, invitation_status, invited_at, accepted_at, expires_at";
+
+interface TeamMemberRow {
+  id: string;
+  campaign_owner_id: string;
+  team_member_email: string;
+  team_member_id: string | null;
+  role: string;
+  invitation_status: string;
+  invited_at: string;
+  accepted_at: string | null;
+  expires_at: string;
+}
+
+/**
+ * The table is snake_case and the page reads camelCase. This used to be a
+ * cast (`data as TeamMember[]`), which type-checked and rendered every row
+ * blank, because `teamMemberEmail` was never on the object.
+ */
+export function toTeamMember(row: TeamMemberRow): TeamMember {
+  return {
+    id: row.id,
+    campaignOwnerId: row.campaign_owner_id,
+    teamMemberEmail: row.team_member_email,
+    teamMemberId: row.team_member_id,
+    role: row.role as TeamMember["role"],
+    invitationStatus: row.invitation_status as TeamMember["invitationStatus"],
+    invitedAt: row.invited_at,
+    acceptedAt: row.accepted_at,
+    expiresAt: row.expires_at,
+  };
+}
+
+/**
+ * NOTHING SENDS EMAIL AND NOTHING GRANTS ACCESS. An invitation is a row in
+ * campaign_team_members; no function mails it and no policy or RPC lets the
+ * invitee see the owner's campaigns (business plan D13). The copy below says
+ * that instead of "Invitation sent".
+ */
 export function useTeamManagement(campaignOwnerId?: string) {
   const [teamMembers, setTeamMembers] = useState<TeamMember[]>([]);
   const [isLoading, setIsLoading] = useState(false);
@@ -38,16 +79,16 @@ export function useTeamManagement(campaignOwnerId?: string) {
       setError(null);
       const { data, error } = await supabase
         .from("campaign_team_members")
-        .select("*")
+        .select(TEAM_COLUMNS)
         .eq("campaign_owner_id", campaignOwnerId)
         .order("invited_at", { ascending: false });
 
       if (error) throw error;
 
-      setTeamMembers((data as TeamMember[]) || []);
+      setTeamMembers(((data ?? []) as TeamMemberRow[]).map(toTeamMember));
     } catch (err) {
       setError(err);
-      console.error("Error fetching team members:", err);
+      handleError(err, { component: "useTeamManagement", action: "fetch" }, ErrorSeverity.WARNING);
       toast({
         variant: "destructive",
         title: "Failed to fetch team members",
@@ -115,17 +156,17 @@ export function useTeamManagement(campaignOwnerId?: string) {
       if (error) throw error;
 
       toast({
-        title: "Invitation sent",
-        description: `An invitation has been sent to ${email}.`,
+        title: "Invitation saved",
+        description: "No email goes out yet, and team access isn't switched on, so they can't see your campaigns yet.",
       });
 
       await fetchTeamMembers();
       return true;
     } catch (err) {
-      console.error("Error inviting team member:", err);
+      handleError(err, { component: "useTeamManagement", action: "invite" }, ErrorSeverity.WARNING);
       toast({
         variant: "destructive",
-        title: "Failed to send invitation",
+        title: "Couldn't save the invitation",
         description: err instanceof Error ? err.message : "Unknown error",
       });
       return false;
@@ -148,17 +189,17 @@ export function useTeamManagement(campaignOwnerId?: string) {
       if (error) throw error;
 
       toast({
-        title: "Invitation resent",
-        description: "The invitation has been resent with a new expiration date.",
+        title: "Invitation renewed",
+        description: "It now expires in 7 days. No email goes out yet; tell them yourself.",
       });
 
       await fetchTeamMembers();
       return true;
     } catch (err) {
-      console.error("Error resending invitation:", err);
+      handleError(err, { component: "useTeamManagement", action: "renew" }, ErrorSeverity.WARNING);
       toast({
         variant: "destructive",
-        title: "Failed to resend invitation",
+        title: "Couldn't renew the invitation",
         description: err instanceof Error ? err.message : "Unknown error",
       });
       return false;
@@ -182,7 +223,7 @@ export function useTeamManagement(campaignOwnerId?: string) {
       await fetchTeamMembers();
       return true;
     } catch (err) {
-      console.error("Error updating role:", err);
+      handleError(err, { component: "useTeamManagement", action: "update-role" }, ErrorSeverity.WARNING);
       toast({
         variant: "destructive",
         title: "Failed to update role",
@@ -209,7 +250,7 @@ export function useTeamManagement(campaignOwnerId?: string) {
       await fetchTeamMembers();
       return true;
     } catch (err) {
-      console.error("Error removing member:", err);
+      handleError(err, { component: "useTeamManagement", action: "remove" }, ErrorSeverity.WARNING);
       toast({
         variant: "destructive",
         title: "Failed to remove member",
@@ -231,7 +272,7 @@ export function useTeamManagement(campaignOwnerId?: string) {
       // Find invitation by token
       const { data: invitation, error: findError } = await supabase
         .from("campaign_team_members")
-        .select("*")
+        .select("id, expires_at")
         .eq("invitation_token", token)
         .single();
 
@@ -263,7 +304,7 @@ export function useTeamManagement(campaignOwnerId?: string) {
 
       return true;
     } catch (err) {
-      console.error("Error accepting invitation:", err);
+      handleError(err, { component: "useTeamManagement", action: "accept" }, ErrorSeverity.WARNING);
       toast({
         variant: "destructive",
         title: "Failed to accept invitation",
