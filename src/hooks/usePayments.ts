@@ -1,70 +1,21 @@
+import { useState } from "react";
 import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
 import { supabase } from "@/integrations/supabase/client";
-import { createLogger } from "@/lib/logger";
+import { handleError } from "@/lib/errorHandler";
 import { useAuth } from "./useAuth";
-import { useState } from "react";
-import { fromUnknownTable } from "@/integrations/supabase/unknownTable";
+import { USER_SUBSCRIPTIONS_QUERY_KEY } from "./useSubscription";
 
-const logger = createLogger('usePayments');
-
-export interface Payment {
-  id: string;
-  user_id: string;
-  stripe_payment_intent_id: string | null;
-  stripe_charge_id: string | null;
-  stripe_invoice_id: string | null;
-  amount: number;
-  currency: string;
-  payment_type: "subscription" | "campaign" | "one_time";
-  status: "pending" | "succeeded" | "failed" | "refunded" | "partially_refunded";
-  subscription_id: string | null;
-  campaign_id: string | null;
-  refunded_amount: number;
-  description: string | null;
-  metadata: Record<string, unknown>;
-  created_at: string;
-  updated_at: string;
-  paid_at: string | null;
-}
-
-export interface Invoice {
-  id: string;
-  user_id: string;
-  payment_id: string | null;
-  invoice_number: string;
-  stripe_invoice_id: string | null;
-  status: "draft" | "open" | "paid" | "void" | "uncollectible";
-  subtotal: number;
-  tax: number;
-  total: number;
-  currency: string;
-  customer_name: string | null;
-  customer_email: string | null;
-  billing_address: Record<string, unknown> | null;
-  line_items: Array<{
-    description: string;
-    quantity: number;
-    unit_price: number;
-    amount: number;
-  }>;
-  description: string | null;
-  notes: string | null;
-  pdf_url: string | null;
-  pdf_generated_at: string | null;
-  invoice_date: string;
-  due_date: string | null;
-  paid_at: string | null;
-  created_at: string;
-  updated_at: string;
-}
-
-export interface PaymentSummary {
-  total_spent: number;
-  payment_count: number;
-  subscription_payments: number;
-  campaign_payments: number;
-  last_payment_date: string | null;
-}
+// BILLING HISTORY IS STRIPE'S (docs/page-plans/pricing.md, WP3 item 8).
+//
+// This hook used to read `payments`, `invoices` and the
+// get_user_payment_summary RPC. None of the three exists in production (both
+// migrations sit in .github/migration-drift-baseline.json and the snapshot has
+// no such relation), so two of the portal's three tabs could only ever show an
+// error. It also rendered invoices from the generate-invoice-pdf function into
+// blob: URLs and document.write, which interpolated profile fields unescaped.
+// All of that is gone. Receipts and invoices live in the Stripe billing portal
+// (openCustomerPortal) for web rows and in the store account for store rows,
+// until pricing plan D4 lists Stripe's own invoices in the page.
 
 export interface SubscriptionDetails {
   id: string;
@@ -76,9 +27,9 @@ export interface SubscriptionDetails {
     price_monthly: number;
     price_yearly: number;
     features: string[];
-  };
-  currentPeriodStart: string;
-  currentPeriodEnd: string;
+  } | null;
+  currentPeriodStart: string | null;
+  currentPeriodEnd: string | null;
   cancelAtPeriodEnd: boolean;
   trialEnd: string | null;
   /** Which billing relationship this row belongs to (WEB-FEAT-015). */
@@ -119,126 +70,102 @@ export function isStoreManaged(value: unknown): value is StoreManagedResult {
   return !!value && (value as StoreManagedResult).managedExternally === true;
 }
 
+/** Stripe's next charge for the web row, in major units. */
 export interface UpcomingInvoice {
   amount: number;
   currency: string;
   dueDate: string | null;
 }
 
+/** manage-subscription `details`. `payments` is still sent; nothing reads it. */
+export interface SubscriptionDetailsResponse {
+  subscription: SubscriptionDetails | null;
+  tier: string;
+  hasActiveSubscription: boolean;
+  upcomingInvoice: UpcomingInvoice | null;
+  // WEB-FEAT-015. Set only when the user has no web row -- a store-billed
+  // subscriber used to be reported here as tier "free".
+  manageAt: ManageAt | null;
+  manageUrl: string | null;
+  platforms: SubscriptionPlatformRow[];
+}
+
+/** What cancel and resume answer. `cancelAtPeriodEnd` arrives with WP5 item 8. */
+interface CancelResumeResponse {
+  success?: boolean;
+  message?: string;
+  cancelAtPeriodEnd?: boolean;
+  currentPeriodEnd?: string;
+}
+
+export const SUBSCRIPTION_DETAILS_QUERY_KEY = "subscription-details";
+
+/**
+ * The server's own message from a failed functions.invoke. A
+ * FunctionsHttpError carries the Response in `context`; supabase-js's own
+ * message is the generic "non-2xx status code", which tells a member nothing.
+ */
+export async function functionErrorMessage(error: unknown, fallback: string): Promise<string> {
+  const ctx = (error as { context?: unknown } | null)?.context;
+  if (ctx && typeof (ctx as Response).json === "function") {
+    try {
+      const body = (await (ctx as Response).clone().json()) as { error?: unknown } | null;
+      if (body && typeof body.error === "string" && body.error) return body.error;
+    } catch {
+      // Not JSON; fall through to the fallback.
+    }
+  }
+  return fallback;
+}
+
+/** A mutation error that already carries the message to show. */
+export class BillingActionError extends Error {}
+
 export function usePayments() {
   const { user } = useAuth();
   const queryClient = useQueryClient();
   const [portalLoading, setPortalLoading] = useState(false);
+  const userId = user?.id;
+  const detailsKey = [SUBSCRIPTION_DETAILS_QUERY_KEY, userId] as const;
 
-  // Fetch payment history
-  const {
-    data: payments = [],
-    isLoading: paymentsLoading,
-    error: paymentsError,
-    refetch: refetchPayments,
-  } = useQuery({
-    queryKey: ["payments", user?.id],
-    queryFn: async () => {
-      if (!user) return [];
-
-      const { data, error } = await fromUnknownTable("payments")
-        .select("*")
-        .eq("user_id", user.id)
-        .order("created_at", { ascending: false });
-
-      if (error) throw error;
-      return data as Payment[];
-    },
-    enabled: !!user,
-  });
-
-  // Fetch invoices
-  const {
-    data: invoices = [],
-    isLoading: invoicesLoading,
-    error: invoicesError,
-    refetch: refetchInvoices,
-  } = useQuery({
-    queryKey: ["invoices", user?.id],
-    queryFn: async () => {
-      if (!user) return [];
-
-      const { data, error } = await fromUnknownTable("invoices")
-        .select("*")
-        .eq("user_id", user.id)
-        .order("invoice_date", { ascending: false });
-
-      if (error) throw error;
-      return data as Invoice[];
-    },
-    enabled: !!user,
-  });
-
-  // Fetch payment summary
-  const { data: paymentSummary } = useQuery({
-    queryKey: ["payment-summary", user?.id],
-    queryFn: async () => {
-      if (!user) return null;
-
-      const { data, error } = await supabase.rpc("get_user_payment_summary", {
-        p_user_id: user.id,
-      });
-
-      if (error) throw error;
-      return data?.[0] as PaymentSummary | null;
-    },
-    enabled: !!user,
-  });
-
-  // Fetch detailed subscription info
+  // The web row (or, for a store-only subscriber, their store row), Stripe's
+  // upcoming invoice, and where to manage store billing.
   const {
     data: subscriptionDetails,
     isLoading: subscriptionLoading,
+    error: subscriptionDetailsError,
     refetch: refetchSubscription,
   } = useQuery({
-    queryKey: ["subscription-details", user?.id],
-    queryFn: async () => {
-      if (!user) return null;
+    queryKey: detailsKey,
+    queryFn: async (): Promise<SubscriptionDetailsResponse | null> => {
+      if (!userId) return null;
 
-      const { data, error } = await supabase.functions.invoke(
-        "manage-subscription",
-        {
-          body: { action: "details" },
-        }
-      );
+      const { data, error } = await supabase.functions.invoke("manage-subscription", {
+        body: { action: "details" },
+      });
 
-      if (error) throw error;
-      return data as {
-        subscription: SubscriptionDetails | null;
-        tier: string;
-        hasActiveSubscription: boolean;
-        payments: Payment[];
-        upcomingInvoice: UpcomingInvoice | null;
-        // WEB-FEAT-015. Set only when the user has no web row -- a store-billed
-        // subscriber used to be reported here as tier "free".
-        manageAt: ManageAt | null;
-        manageUrl: string | null;
-        platforms: SubscriptionPlatformRow[];
-      };
+      if (error) {
+        throw new Error(
+          await functionErrorMessage(error, "We couldn't load your billing details."),
+        );
+      }
+      return data as SubscriptionDetailsResponse;
     },
-    enabled: !!user,
+    enabled: !!userId,
   });
 
-  // Open Stripe Customer Portal
+  // Open the Stripe customer portal (payment method, receipts, invoices).
   const openCustomerPortal = async (returnUrl?: string): Promise<string | null> => {
-    if (!user) return null;
+    if (!userId) return null;
 
     setPortalLoading(true);
     try {
-      const { data, error } = await supabase.functions.invoke(
-        "manage-subscription",
-        {
-          body: {
-            action: "portal",
-            returnUrl: returnUrl || window.location.href,
-          },
-        }
-      );
+      const { data, error } = await supabase.functions.invoke("manage-subscription", {
+        body: {
+          action: "portal",
+          returnUrl: returnUrl || window.location.href,
+        },
+      });
 
       if (error) throw error;
 
@@ -257,114 +184,68 @@ export function usePayments() {
       }
       return null;
     } catch (err) {
-      logger.error('openCustomerPortal', 'Failed to open customer portal', { error: err });
+      handleError(err, { component: "usePayments", action: "openCustomerPortal" });
       return null;
     } finally {
       setPortalLoading(false);
     }
   };
 
-  // Cancel subscription
+  /**
+   * After cancel or resume: write the new flag into the details cache so the
+   * badge and button change at once, then re-read both the details and the
+   * per-platform rows. The rows live under [USER_SUBSCRIPTIONS_QUERY_KEY, id];
+   * this used to invalidate ["user-subscription"], which matched nothing, and
+   * refetchOnWindowFocus is off, so the page kept the old state until reload.
+   */
+  const applyCancelFlag = (response: unknown, fallback: boolean) => {
+    if (isStoreManaged(response)) return;
+    const body = (response ?? {}) as CancelResumeResponse;
+    const cancelAtPeriodEnd =
+      typeof body.cancelAtPeriodEnd === "boolean" ? body.cancelAtPeriodEnd : fallback;
+
+    queryClient.setQueryData<SubscriptionDetailsResponse | null>(detailsKey, (prev) => {
+      if (!prev?.subscription) return prev;
+      return {
+        ...prev,
+        subscription: {
+          ...prev.subscription,
+          cancelAtPeriodEnd,
+          ...(typeof body.currentPeriodEnd === "string"
+            ? { currentPeriodEnd: body.currentPeriodEnd }
+            : {}),
+        },
+      };
+    });
+    void queryClient.invalidateQueries({ queryKey: [SUBSCRIPTION_DETAILS_QUERY_KEY] });
+    void queryClient.invalidateQueries({ queryKey: [USER_SUBSCRIPTIONS_QUERY_KEY] });
+  };
+
+  const runAction = async (action: "cancel" | "resume", fallback: string) => {
+    const { data, error } = await supabase.functions.invoke("manage-subscription", {
+      body: { action },
+    });
+    if (error) {
+      handleError(error, { component: "usePayments", action });
+      throw new BillingActionError(await functionErrorMessage(error, fallback));
+    }
+    return data as CancelResumeResponse | StoreManagedResult;
+  };
+
   const cancelSubscription = useMutation({
-    mutationFn: async () => {
-      const { data, error } = await supabase.functions.invoke(
-        "manage-subscription",
-        {
-          body: { action: "cancel" },
-        }
-      );
-
-      if (error) throw error;
-      return data;
-    },
-    onSuccess: () => {
-      queryClient.invalidateQueries({ queryKey: ["subscription-details"] });
-      queryClient.invalidateQueries({ queryKey: ["user-subscription"] });
-    },
+    mutationFn: () => runAction("cancel", "We couldn't cancel your subscription. Please try again."),
+    onSuccess: (data) => applyCancelFlag(data, true),
   });
 
-  // Resume subscription
   const resumeSubscription = useMutation({
-    mutationFn: async () => {
-      const { data, error } = await supabase.functions.invoke(
-        "manage-subscription",
-        {
-          body: { action: "resume" },
-        }
-      );
-
-      if (error) throw error;
-      return data;
-    },
-    onSuccess: () => {
-      queryClient.invalidateQueries({ queryKey: ["subscription-details"] });
-      queryClient.invalidateQueries({ queryKey: ["user-subscription"] });
-    },
+    mutationFn: () => runAction("resume", "We couldn't resume your subscription. Please try again."),
+    onSuccess: (data) => applyCancelFlag(data, false),
   });
-
-  // Generate/get invoice
-  const getInvoice = async (
-    paymentId: string,
-    format: "html" | "json" = "json"
-  ) => {
-    const { data, error } = await supabase.functions.invoke(
-      "generate-invoice-pdf",
-      {
-        body: { paymentId, format },
-      }
-    );
-
-    if (error) throw error;
-    return data;
-  };
-
-  // Open invoice in new tab
-  const viewInvoice = async (paymentId: string) => {
-    try {
-      const { data } = await supabase.functions.invoke("generate-invoice-pdf", {
-        body: { paymentId, format: "html" },
-      });
-
-      if (typeof data === "string") {
-        const blob = new Blob([data], { type: "text/html" });
-        const url = URL.createObjectURL(blob);
-        window.open(url, "_blank");
-      }
-    } catch (err) {
-      logger.error('viewInvoice', 'Failed to view invoice', { error: err });
-      throw err;
-    }
-  };
-
-  // Print invoice
-  const printInvoice = async (paymentId: string) => {
-    try {
-      const { data } = await supabase.functions.invoke("generate-invoice-pdf", {
-        body: { paymentId, format: "html" },
-      });
-
-      if (typeof data === "string") {
-        const printWindow = window.open("", "_blank");
-        if (printWindow) {
-          printWindow.document.write(data);
-          printWindow.document.close();
-          printWindow.focus();
-          printWindow.print();
-        }
-      }
-    } catch (err) {
-      logger.error('printInvoice', 'Failed to print invoice', { error: err });
-      throw err;
-    }
-  };
 
   return {
     // Data
-    payments,
-    invoices,
-    paymentSummary,
-    subscriptionDetails: subscriptionDetails?.subscription,
-    upcomingInvoice: subscriptionDetails?.upcomingInvoice,
+    subscriptionDetails: subscriptionDetails?.subscription ?? null,
+    upcomingInvoice: subscriptionDetails?.upcomingInvoice ?? null,
     tier: subscriptionDetails?.tier || "free",
     hasActiveSubscription: subscriptionDetails?.hasActiveSubscription || false,
     // WEB-FEAT-015: non-null means this site cannot manage the billing and the
@@ -373,29 +254,16 @@ export function usePayments() {
     manageUrl: subscriptionDetails?.manageUrl ?? null,
     subscriptionPlatforms: subscriptionDetails?.platforms ?? [],
 
-    // Loading states
-    isLoading: paymentsLoading || invoicesLoading || subscriptionLoading,
-    paymentsLoading,
-    invoicesLoading,
+    // Loading and errors
+    isLoading: subscriptionLoading,
     subscriptionLoading,
+    subscriptionDetailsError,
     portalLoading,
-
-    // Errors
-    paymentsError,
-    invoicesError,
-    // WEB-QA-031: the portal rendered "No payments yet" whatever happened, so
-    // a failed read looked like a clean billing history. Both panels need a
-    // way out that is not a page reload.
-    refetchPayments,
-    refetchInvoices,
 
     // Actions
     openCustomerPortal,
     cancelSubscription: cancelSubscription.mutateAsync,
     resumeSubscription: resumeSubscription.mutateAsync,
-    getInvoice,
-    viewInvoice,
-    printInvoice,
     refetchSubscription,
 
     // Mutation states

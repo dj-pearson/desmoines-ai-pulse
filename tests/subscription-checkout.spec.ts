@@ -188,13 +188,21 @@ test.describe('Paid path: /pricing -> checkout -> success (WEB-CI-029 AC4)', () 
       return json(route, []);
     });
 
-    await page.goto('/pricing', { waitUntil: 'domcontentloaded' });
+    // Yearly on purpose: the old redirect was '/auth?redirect=/pricing&plan=..&billing=..'
+    // unencoded, so plan and billing became parameters of /auth and the
+    // return trip to /pricing dropped both (pricing plan WP2 item 7).
+    await page.goto('/pricing?billing=yearly', { waitUntil: 'domcontentloaded' });
     const goVip = page.getByRole('button', { name: /go vip/i });
     await expect(goVip).toBeVisible({ timeout: 15_000 });
     await goVip.click();
 
     await page.waitForURL(/\/auth\?/, { timeout: 15_000 });
-    expect(page.url()).toContain('plan=vip');
+    const redirect = new URL(page.url()).searchParams.get('redirect');
+    expect(redirect, 'the auth URL must carry a redirect back to /pricing').not.toBeNull();
+    const back = new URL(redirect!, 'http://localhost');
+    expect(back.pathname).toBe('/pricing');
+    expect(back.searchParams.get('plan')).toBe('vip');
+    expect(back.searchParams.get('billing'), 'the billing choice must survive sign-in').toBe('yearly');
     expect(checkoutCalls, 'no checkout may be created for a signed-out reader').toHaveLength(0);
   });
 });

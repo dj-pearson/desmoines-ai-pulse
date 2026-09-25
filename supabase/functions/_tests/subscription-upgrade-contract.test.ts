@@ -16,18 +16,32 @@
  *
  * The upgrade branch is exercised against a fake Stripe so the three outcomes
  * are asserted as behaviour rather than as source text.
+ *
+ * node:assert rather than deno.land/std, so this runs offline (pricing plan
+ * WP5 item 4 found it failing and unrunnable in a container).
  */
 
-import { assert, assertEquals, assertFalse } from 'https://deno.land/std@0.208.0/assert/mod.ts';
+import { strict as nodeAssert } from 'node:assert';
+import { quoteFromUpcoming } from '../create-subscription-checkout/decision.ts';
+
+const assert = (condition: unknown, message = '') => nodeAssert.ok(condition, message);
+const assertFalse = (condition: unknown, message = '') => nodeAssert.ok(!condition, message);
+const assertEquals = <T>(actual: T, expected: T, message = '') =>
+  nodeAssert.deepStrictEqual(actual, expected, message);
 
 const REPO = new URL('../../../', import.meta.url);
 const FN = 'supabase/functions/create-subscription-checkout/index.ts';
 const src = await Deno.readTextFile(new URL(FN, REPO));
+// The refusal rules moved to a pure module (WEB-CI-029 AC3); index.ts calls it.
+const decision = await Deno.readTextFile(
+  new URL('supabase/functions/create-subscription-checkout/decision.ts', REPO),
+);
 
 Deno.test('the guard query is scoped to one platform, so it can return one row', () => {
+  // past_due is live too (WP5 item 3): Stripe is still retrying it.
   assert(
-    /\.eq\("platform", "web"\)\s*\n\s*\.in\("status", \["active", "trialing"\]\)\s*\n\s*\.maybeSingle\(\);/.test(src),
-    'the web lookup must filter by platform and use maybeSingle',
+    /\.eq\("platform", "web"\)\s*\n\s*\.in\("status", \["active", "trialing", "past_due"\]\)\s*\n\s*\.maybeSingle\(\);/.test(src),
+    'the web lookup must filter by platform, include past_due, and use maybeSingle',
   );
   // .single() on a query that can match several rows is the defect itself.
   assertFalse(
@@ -38,11 +52,35 @@ Deno.test('the guard query is scoped to one platform, so it can return one row',
 
 Deno.test('a store subscription at the same or a higher tier blocks a web purchase', () => {
   assert(/\.in\("platform", \["ios", "android"\]\)/.test(src), 'store rows must be looked up');
-  assert(/rank >= requestedRank/.test(src), 'same tier counts, not just higher');
-  assert(/code: "store_subscription_active"/.test(src));
-  assert(/status: 409/.test(src));
+  assert(/decideCheckout\(\{/.test(src), 'index.ts must route through the decision module');
+  assert(/rank >= requestedSortOrder/.test(decision), 'same tier counts, not just higher');
+  assert(/code: "store_subscription_active"/.test(decision));
+  assert(/status: 409/.test(decision));
   // The message has to send them where the billing actually lives.
-  assert(/the App Store/.test(src) && /Google Play/.test(src), 'name the store they bought from');
+  assert(/the App Store/.test(decision) && /Google Play/.test(decision), 'name the store they bought from');
+});
+
+Deno.test('a preview changes nothing and returns before any Stripe write', () => {
+  const previewAt = src.indexOf('if (preview) {');
+  const scheduleAt = src.indexOf('stripe.subscriptionSchedules');
+  const updateAt = src.indexOf('await stripe.subscriptions.update(');
+  assert(previewAt > 0 && previewAt < scheduleAt && previewAt < updateAt, 'the preview branch returns first');
+  const branch = src.slice(previewAt, scheduleAt);
+  assert(/\.\.\.quote,/.test(branch), 'and returns the quote');
+  assert(/body\.preview === true/.test(src) && /body\.confirm === true/.test(src), 'only a literal true counts');
+});
+
+Deno.test('a confirmed downgrade is scheduled for period end, not charged now', () => {
+  assert(/const deferDowngrade = outcome\.direction === "downgrade" && \(preview \|\| confirm\);/.test(src));
+  assert(/end_behavior: "release"/.test(src));
+  assert(/end_date: current\.current_period_end/.test(src));
+  assert(/code: "plan_change_scheduled"/.test(src));
+});
+
+Deno.test('a confirmed upgrade is charged now, and applied only if paid', () => {
+  assert(/proration_behavior: "always_invoice"/.test(src));
+  assert(/payment_behavior: "pending_if_incomplete"/.test(src));
+  assert(/code: "plan_change_payment_failed"/.test(src));
 });
 
 Deno.test('a different active web plan is changed in place, never bought again', () => {
@@ -117,7 +155,12 @@ function fakeStripe(calls: FakeCall[], opts: { previewFails?: boolean } = {}) {
       retrieveUpcoming: (params: Record<string, unknown>) => {
         calls.push({ method: 'invoices.retrieveUpcoming', args: [params] });
         if (opts.previewFails) return Promise.reject(new Error('no upcoming invoice'));
-        return Promise.resolve({ amount_due: 700 });
+        // 700 of proration, then the next full period: amount_due is the
+        // whole next invoice, which is not the proration.
+        return Promise.resolve({
+          amount_due: 1_999,
+          lines: { data: [{ amount: 700, proration: true }, { amount: 1_299, proration: false }] },
+        });
       },
     },
     checkout: {
@@ -149,7 +192,7 @@ async function performUpgrade(
       subscription_items: [{ id: itemId, price: newPriceId }],
       subscription_proration_behavior: 'create_prorations',
     });
-    prorationAmount = typeof preview.amount_due === 'number' ? preview.amount_due : null;
+    prorationAmount = quoteFromUpcoming(preview, 'upgrade', null).amountDueNow;
   } catch {
     prorationAmount = null;
   }
@@ -166,7 +209,7 @@ Deno.test('BRANCH: upgrading changes the price on the one subscription', async (
   const result = await performUpgrade(fakeStripe(calls), 'sub_existing', 'price_vip');
 
   assertEquals(result.subscriptionId, 'sub_existing', 'the same subscription, not a new one');
-  assertEquals(result.prorationAmount, 700, 'the previewed amount is returned');
+  assertEquals(result.prorationAmount, 700, 'the proration lines are returned, not amount_due');
 
   const methods = calls.map((c) => c.method);
   assert(methods.includes('subscriptions.update'));

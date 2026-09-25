@@ -52,6 +52,15 @@ on:
       - 'src/lib/eventPrice.ts'
       - 'src/hooks/useNLPSearch.ts'
       - 'src/lib/eventAreas.ts'
+      # Pricing plan WP6: plan-features-truthful.test.ts reads the benefit lines
+      # from planBenefits.ts and scans every premium surface for withdrawn
+      # claims, so a change to any of them has to run this suite. The two new
+      # billing tests live under supabase/functions/ and are already covered.
+      - 'src/lib/planBenefits.ts'
+      - 'src/pages/Pricing.tsx'
+      - 'src/components/UpgradeModal.tsx'
+      - 'src/pages/SubscriptionSuccess.tsx'
+      - 'src/pages/SubscriptionPortal.tsx'
 
 concurrency:
   group: subscription-sync-${{ github.head_ref }}
@@ -218,6 +227,11 @@ jobs:
       # map, the past_due grace window, platform='web' on the checkout row, and
       # that the update patch carries no identity columns.
       - run: deno test --allow-read supabase/functions/_tests/subscription-status-entitlement.test.ts
+      # Pricing plan WP5 item 1. A plan switch in Stripe changed the price and
+      # left plan_id alone, so someone who paid for VIP kept Insider. Pins that
+      # plan_id moves only through an exact price match and an unknown price
+      # leaves it out of the patch.
+      - run: deno test --allow-read supabase/functions/_tests/stripe-plan-from-price.test.ts
       # WEB-BE-043 AC6. The ingestion functions were the one class of automation
       # with no job ledger, so a source going dark was invisible: SeatGeek - 375
       # events, the largest single source - stopped ingesting on 2026-08-21 and
@@ -375,6 +389,11 @@ jobs:
       # none. Fails if the pricing page or the stored plan row promises a feature
       # no component gates on.
       - run: deno test --allow-read supabase/functions/_tests/plan-features-truthful.test.ts
+      # Pricing plan WP5 item 3. Two dunning clocks (Stripe's retries and the
+      # job's own downgrade) disagreed about when a past_due member lost access.
+      # Pins the grace window from _shared/entitlements.ts, cancellation in
+      # Stripe past grace, and that a store row is never cancelled locally.
+      - run: deno test --allow-read supabase/functions/_tests/subscription-lifecycle-policy.test.ts
       # WEB-AUTH-002. Signup collects phone, location, interests and marketing
       # preferences into raw_user_meta_data and nothing ever moved them, so those
       # profile columns were NULL for every account. Pins the trigger, its

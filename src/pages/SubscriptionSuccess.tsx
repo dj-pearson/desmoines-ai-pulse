@@ -1,231 +1,356 @@
-import { useEffect, useState } from "react";
-import { useNavigate, useSearchParams } from "react-router-dom";
+import { useCallback, useEffect, useRef, useState, type ReactNode } from "react";
+import { Link, useSearchParams } from "react-router-dom";
 import { Helmet } from "react-helmet-async";
-import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
+import { CheckCircle, Crown, Loader2, Sparkles } from "lucide-react";
+import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
 import Header from "@/components/Header";
 import Footer from "@/components/Footer";
-import { useSubscription } from "@/hooks/useSubscription";
-import { CheckCircle, Sparkles, Crown, Loader2 } from "lucide-react";
 import { SpriteIcon } from "@/components/ui/SpriteIcon";
+import { PlanStatusLine } from "@/components/subscription/PlanStatusLine";
+import { useAuth } from "@/hooks/useAuth";
+import { useConversionFunnel } from "@/hooks/useConversionFunnel";
+import {
+  isSubscriptionEntitled,
+  useSubscription,
+  type UserSubscription,
+} from "@/hooks/useSubscription";
+import { benefitsFor, type PlanName } from "@/lib/planBenefits";
+import { AI_PLANNER_AVAILABLE } from "@/lib/tripPlannerStatus";
+import { sessionStore } from "@/lib/safeStorage";
+
+/**
+ * Where Stripe Checkout lands (docs/page-plans/pricing.md, WP3 items 1-3).
+ *
+ * Stripe redirects here as soon as checkout completes, which is before
+ * stripe-webhook has written the user_subscriptions row. This page used to
+ * sleep 2s and then announce "Your subscription is now active" with an
+ * "Active" badge and eight benefits whatever the row said. Now it polls the
+ * row, every POLL_INTERVAL_MS for at most POLL_LIMIT_MS, and says only what
+ * the row says: confirmed, still activating, or signed out.
+ */
+
+const POLL_INTERVAL_MS = 2_000;
+const POLL_LIMIT_MS = 20_000;
+
+const TIER_LABEL: Record<Exclude<PlanName, "free">, string> = {
+  insider: "Insider",
+  vip: "VIP",
+};
+
+const BILLED_BY: Record<UserSubscription["platform"], string> = {
+  web: "Stripe",
+  ios: "the App Store",
+  android: "Google Play",
+};
+
+// Tier colours match PremiumBadge and SubscriptionPortal: Insider is amber,
+// VIP is the brand red.
+const TIER_STYLE: Record<Exclude<PlanName, "free">, { icon: typeof Sparkles; chip: string }> = {
+  insider: {
+    icon: Sparkles,
+    chip: "bg-amber-100 text-amber-900 dark:bg-amber-950 dark:text-amber-200",
+  },
+  vip: {
+    icon: Crown,
+    chip: "bg-secondary/10 text-secondary",
+  },
+};
+
+function isPaidPlan(value: string | null): value is Exclude<PlanName, "free"> {
+  return value === "insider" || value === "vip";
+}
+
+type SubscriptionRowWithTrial = UserSubscription & { trial_end?: string | null };
+
+function RobotsNoindex({ title }: { title: string }) {
+  return (
+    <Helmet>
+      <title>{title} - Des Moines Insider</title>
+      <meta name="robots" content="noindex" />
+    </Helmet>
+  );
+}
+
+function PageShell({ children }: { children: ReactNode }) {
+  return (
+    <div className="min-h-screen bg-background">
+      <Header />
+      {/* App.tsx already renders the page's <main>; this is its content column. */}
+      <div className="container mx-auto px-4 py-12 md:py-16" id="subscription-success">
+        <div className="mx-auto max-w-2xl">{children}</div>
+      </div>
+      <Footer />
+    </div>
+  );
+}
+
+function HelpLine() {
+  return (
+    <p className="mt-8 text-center text-sm text-muted-foreground">
+      Questions about your subscription?{" "}
+      <Link to="/contact" className="text-primary underline-offset-4 hover:underline">
+        Contact us
+      </Link>
+    </p>
+  );
+}
 
 export default function SubscriptionSuccess() {
-  const navigate = useNavigate();
   const [searchParams] = useSearchParams();
-  const { refreshSubscription, tier, subscription, isLoading } = useSubscription();
-  const [verifying, setVerifying] = useState(true);
+  const { user, isLoading: authLoading } = useAuth();
+  const { tier, subscriptions, limits, subscriptionLoading, refetchSubscription } =
+    useSubscription();
+  const { trackFunnelEvent } = useConversionFunnel();
 
+  // The upgrade path (create-subscription-checkout's in-place change) sends
+  // ?plan=<name>; a new checkout sends ?session_id=<cs_...>.
+  const planParam = searchParams.get("plan");
+  const expectedPlan = isPaidPlan(planParam) ? planParam : null;
   const sessionId = searchParams.get("session_id");
 
+  const confirmed = expectedPlan ? tier === expectedPlan : tier !== "free";
+  const [timedOut, setTimedOut] = useState(false);
+  const [checkingAgain, setCheckingAgain] = useState(false);
+
+  // Bounded poll. Stops when the row confirms, when the limit passes, or on
+  // unmount. The query's own first read plus at most ten polls keeps this to
+  // eleven reads of user_subscriptions.
+  const confirmedRef = useRef(confirmed);
+  confirmedRef.current = confirmed;
+  const userId = user?.id;
   useEffect(() => {
-    // Refresh subscription data to get the updated tier
-    const verifySubscription = async () => {
-      // Give the webhook a moment to process
-      await new Promise((resolve) => setTimeout(resolve, 2000));
-      refreshSubscription();
-      setVerifying(false);
-    };
+    if (!userId) return;
+    if (confirmedRef.current) return;
+    const startedAt = Date.now();
+    const timer = window.setInterval(() => {
+      if (confirmedRef.current) {
+        window.clearInterval(timer);
+        return;
+      }
+      if (Date.now() - startedAt >= POLL_LIMIT_MS) {
+        window.clearInterval(timer);
+        setTimedOut(true);
+        return;
+      }
+      void refetchSubscription();
+    }, POLL_INTERVAL_MS);
+    return () => window.clearInterval(timer);
+  }, [userId, refetchSubscription]);
 
-    verifySubscription();
-  }, [refreshSubscription]);
+  // funnel_checkout_completed, once per checkout, only when the row confirms.
+  // Consent is checked inside trackFunnelEvent. Pricing plan D4 moves this to
+  // the webhook.
+  const trackedRef = useRef(false);
+  useEffect(() => {
+    if (!confirmed || !user || trackedRef.current) return;
+    trackedRef.current = true;
+    const onceKey = `dmi-checkout-completed:${sessionId ?? expectedPlan ?? tier}`;
+    if (sessionStore.get<boolean>(onceKey)) return;
+    sessionStore.set(onceKey, true);
+    void trackFunnelEvent("funnel_checkout_completed", {
+      plan: tier,
+      ...(sessionId ? { sessionId } : {}),
+    });
+  }, [confirmed, user, sessionId, expectedPlan, tier, trackFunnelEvent]);
 
-  // Tier colours match PremiumBadge and SubscriptionPortal: Insider is amber,
-  // VIP is the brand red. This screen used to say Insider-blue / VIP-amber, so
-  // the tier a member had just paid for changed colour between the upgrade
-  // modal and the receipt.
-  const tierConfig = {
-    insider: {
-      name: "Insider",
-      icon: Sparkles,
-      color: "text-amber-800 dark:text-amber-300",
-      bgColor: "bg-amber-100 dark:bg-amber-900",
-      features: [
-        "Unlimited favorites",
-        "Early access to hot events",
-        "Advanced search filters",
-        "Daily personalized digest",
-        "Ad-free experience",
-        "Priority support",
-      ],
-    },
-    vip: {
-      name: "VIP",
-      icon: Crown,
-      color: "text-secondary",
-      bgColor: "bg-secondary/10",
-      features: [
-        "Everything in Insider",
-        "Exclusive VIP-only events",
-        "Restaurant reservation help",
-        "SMS alerts for your interests",
-        "Monthly local business perks",
-        "Concierge support",
-      ],
-    },
-  };
+  const checkAgain = useCallback(async () => {
+    setCheckingAgain(true);
+    try {
+      await refetchSubscription();
+    } finally {
+      setCheckingAgain(false);
+    }
+  }, [refetchSubscription]);
 
-  const currentTierConfig = tier !== "free" ? tierConfig[tier as "insider" | "vip"] : null;
-  const TierIcon = currentTierConfig?.icon || Sparkles;
-
-  if (verifying || isLoading) {
+  if (authLoading || (user && subscriptionLoading)) {
     return (
-      <div className="min-h-screen bg-background">
-        <Header />
-        <div className="container mx-auto px-4 py-16">
-          <div className="max-w-lg mx-auto text-center">
-            <Loader2 className="h-12 w-12 animate-spin mx-auto text-primary mb-4" />
-            <h1 className="text-2xl font-bold mb-2">Verifying your subscription...</h1>
-            <p className="text-muted-foreground">
-              Please wait while we confirm your payment.
-            </p>
+      <>
+        <RobotsNoindex title="Confirming your plan" />
+        <PageShell>
+          <div role="status" aria-live="polite" className="text-center">
+            <Loader2 className="mx-auto mb-4 h-10 w-10 animate-spin text-primary" aria-hidden="true" />
+            <h1 className="mb-2 text-2xl font-bold text-foreground">Confirming your plan</h1>
+            <p className="text-muted-foreground">Checking your account for the new subscription.</p>
           </div>
-        </div>
-        <Footer />
-      </div>
+        </PageShell>
+      </>
     );
   }
 
+  if (!user) {
+    return (
+      <>
+        <RobotsNoindex title="Sign in to see your plan" />
+        <PageShell>
+          <div className="text-center">
+            <h1 className="mb-3 text-3xl font-bold text-foreground">Sign in to see your plan</h1>
+            <p className="mb-6 text-muted-foreground">
+              Your checkout is tied to your account. Sign in and we'll show you
+              what's active.
+            </p>
+            <Button asChild>
+              <Link to={`/auth?redirect=${encodeURIComponent("/subscription")}`}>Sign in</Link>
+            </Button>
+          </div>
+          <HelpLine />
+        </PageShell>
+      </>
+    );
+  }
+
+  if (!confirmed) {
+    return (
+      <>
+        <RobotsNoindex title="Your plan is activating" />
+        <PageShell>
+          <div role="status" aria-live="polite" className="text-center">
+            {timedOut ? (
+              <>
+                <h1 className="mb-3 text-3xl font-bold text-foreground">Your plan is activating</h1>
+                <p className="mb-2 text-muted-foreground">
+                  Checkout went through, but your account doesn't show the new
+                  plan yet. This can take a minute.
+                </p>
+                <p className="mb-6 text-muted-foreground">
+                  Your subscription page will show the plan once it's ready.
+                </p>
+                <div className="flex flex-col items-center justify-center gap-3 sm:flex-row">
+                  <Button onClick={() => void checkAgain()} disabled={checkingAgain}>
+                    {checkingAgain ? "Checking..." : "Check again"}
+                  </Button>
+                  <Button asChild variant="outline">
+                    <Link to="/subscription">Go to your subscription</Link>
+                  </Button>
+                </div>
+              </>
+            ) : (
+              <>
+                <Loader2 className="mx-auto mb-4 h-10 w-10 animate-spin text-primary" aria-hidden="true" />
+                <h1 className="mb-2 text-2xl font-bold text-foreground">Confirming your plan</h1>
+                <p className="text-muted-foreground">
+                  Checkout is done. We're waiting for your account to show the
+                  new plan.
+                </p>
+              </>
+            )}
+          </div>
+          <HelpLine />
+        </PageShell>
+      </>
+    );
+  }
+
+  // Confirmed: `tier` is a paid plan held by an entitled row.
+  const paidTier = tier as Exclude<PlanName, "free">;
+  const tierLabel = TIER_LABEL[paidTier];
+  const { icon: TierIcon, chip } = TIER_STYLE[paidTier];
+  const row = (subscriptions.find(
+    (s) => s.plan?.name === paidTier && isSubscriptionEntitled(s),
+  ) ?? null) as SubscriptionRowWithTrial | null;
+  const benefits = benefitsFor(paidTier, limits);
+
   return (
     <>
-      <Helmet>
-        <title>Welcome to {currentTierConfig?.name || "Premium"}! - Des Moines Insider</title>
-        <meta
-          name="description"
-          content="Your subscription is now active. Start exploring exclusive Des Moines experiences."
-        />
-      </Helmet>
-
-      <div className="min-h-screen bg-background">
-        <Header />
-
-        <div className="container mx-auto px-4 py-16">
-          <div className="max-w-2xl mx-auto">
-            {/* Success Header */}
-            <div className="text-center mb-8">
-              <div className="inline-flex items-center justify-center w-20 h-20 rounded-full bg-green-100 mb-6">
-                <CheckCircle className="h-10 w-10 text-green-600" />
-              </div>
-              <h1 className="text-3xl md:text-4xl font-bold mb-4">
-                Welcome to {currentTierConfig?.name || "Premium"}!
-              </h1>
-              <p className="text-xl text-muted-foreground">
-                Your subscription is now active. Let's explore Des Moines together!
-              </p>
-            </div>
-
-            {/* Subscription Details Card */}
-            <Card className="mb-8">
-              <CardHeader>
-                <div className="flex items-center justify-between">
-                  <div className="flex items-center gap-3">
-                    <div
-                      className={`p-2 rounded-full ${currentTierConfig?.bgColor || "bg-primary/10"}`}
-                    >
-                      <TierIcon
-                        className={`h-6 w-6 ${currentTierConfig?.color || "text-primary"}`}
-                      />
-                    </div>
-                    <div>
-                      <CardTitle>{currentTierConfig?.name || "Premium"} Member</CardTitle>
-                      <CardDescription>
-                        Your benefits are now active
-                      </CardDescription>
-                    </div>
-                  </div>
-                  <Badge variant="secondary" className="bg-green-100 text-green-800">
-                    Active
-                  </Badge>
-                </div>
-              </CardHeader>
-              <CardContent>
-                <h4 className="font-semibold mb-3">Your Benefits:</h4>
-                <ul className="grid md:grid-cols-2 gap-2">
-                  {(currentTierConfig?.features || []).map((feature, idx) => (
-                    <li key={idx} className="flex items-center gap-2 text-sm">
-                      <CheckCircle className="h-4 w-4 text-green-500 flex-shrink-0" />
-                      <span>{feature}</span>
-                    </li>
-                  ))}
-                </ul>
-
-                {subscription?.current_period_end && (
-                  <div className="mt-4 pt-4 border-t">
-                    <p className="text-sm text-muted-foreground">
-                      Next billing date:{" "}
-                      <span className="font-medium">
-                        {new Date(subscription.current_period_end).toLocaleDateString("en-US", {
-                          year: "numeric",
-                          month: "long",
-                          day: "numeric",
-                        })}
-                      </span>
-                    </p>
-                  </div>
-                )}
-              </CardContent>
-            </Card>
-
-            {/* Quick Actions */}
-            <Card>
-              <CardHeader>
-                <CardTitle className="text-lg">Get Started</CardTitle>
-                <CardDescription>
-                  Make the most of your membership
-                </CardDescription>
-              </CardHeader>
-              <CardContent>
-                <div className="grid sm:grid-cols-2 gap-4">
-                  <Button
-                    variant="default"
-                    className="w-full justify-between"
-                    onClick={() => navigate("/events")}
-                  >
-                    Browse Events
-                    <SpriteIcon name="arrow-right" className="h-4 w-4" />
-                  </Button>
-                  <Button
-                    variant="outline"
-                    className="w-full justify-between"
-                    onClick={() => navigate("/restaurants")}
-                  >
-                    Discover Restaurants
-                    <SpriteIcon name="arrow-right" className="h-4 w-4" />
-                  </Button>
-                  <Button
-                    variant="outline"
-                    className="w-full justify-between"
-                    onClick={() => navigate("/trip-planner")}
-                  >
-                    Plan Your Trip
-                    <SpriteIcon name="arrow-right" className="h-4 w-4" />
-                  </Button>
-                  <Button
-                    variant="outline"
-                    className="w-full justify-between"
-                    onClick={() => navigate("/profile")}
-                  >
-                    Set Preferences
-                    <SpriteIcon name="arrow-right" className="h-4 w-4" />
-                  </Button>
-                </div>
-              </CardContent>
-            </Card>
-
-            {/* Help Section */}
-            <div className="text-center mt-8">
-              <p className="text-sm text-muted-foreground">
-                Questions about your subscription?{" "}
-                <a href="/contact" className="text-primary hover:underline">
-                  Contact Support
-                </a>
-              </p>
-            </div>
+      <RobotsNoindex title={`Welcome to ${tierLabel}`} />
+      <PageShell>
+        <div className="mb-8 text-center">
+          <div className="mb-6 inline-flex h-16 w-16 items-center justify-center rounded-full bg-green-100 dark:bg-green-950">
+            <CheckCircle className="h-8 w-8 text-green-700 dark:text-green-300" aria-hidden="true" />
           </div>
+          <h1 className="mb-3 text-3xl font-bold text-foreground md:text-4xl">Welcome to {tierLabel}</h1>
+          <p className="text-lg text-muted-foreground" role="status" aria-live="polite">
+            You're on {tierLabel}
+            {row ? `, billed by ${BILLED_BY[row.platform]}` : ""}.
+          </p>
         </div>
 
-        <Footer />
-      </div>
+        <Card className="mb-8">
+          <CardHeader>
+            <div className="flex flex-wrap items-center justify-between gap-3">
+              <div className="flex items-center gap-3">
+                <span className={`inline-flex rounded-full p-2 ${chip}`}>
+                  <TierIcon className="h-5 w-5" aria-hidden="true" />
+                </span>
+                <CardTitle className="text-xl">{tierLabel}</CardTitle>
+              </div>
+              {row?.status === "trialing" && (
+                <Badge variant="secondary">Trial</Badge>
+              )}
+              {row?.status === "active" && (
+                <Badge className="bg-green-100 text-green-900 hover:bg-green-100 dark:bg-green-950 dark:text-green-200">
+                  Active
+                </Badge>
+              )}
+            </div>
+            {row && (
+              <PlanStatusLine
+                className="pt-1"
+                status={row.status}
+                cancelAtPeriodEnd={row.cancel_at_period_end}
+                currentPeriodEnd={row.current_period_end ?? null}
+                trialEnd={row.trial_end ?? null}
+              />
+            )}
+          </CardHeader>
+          <CardContent>
+            <h2 className="mb-3 text-base font-semibold text-foreground">What {tierLabel} includes</h2>
+            <ul className="grid gap-2 sm:grid-cols-2">
+              {benefits.map((benefit) => (
+                <li key={benefit.key} className="flex items-start gap-2 text-sm">
+                  <CheckCircle className="mt-0.5 h-4 w-4 flex-shrink-0 text-green-700 dark:text-green-400" aria-hidden="true" />
+                  {benefit.href ? (
+                    <Link to={benefit.href} className="underline-offset-4 hover:underline">
+                      {benefit.text}
+                    </Link>
+                  ) : (
+                    <span>{benefit.text}</span>
+                  )}
+                </li>
+              ))}
+            </ul>
+          </CardContent>
+        </Card>
+
+        <Card>
+          <CardHeader>
+            <CardTitle className="text-lg">Get started</CardTitle>
+          </CardHeader>
+          <CardContent>
+            <div className="grid gap-3 sm:grid-cols-2">
+              <Button asChild className="w-full justify-between">
+                <Link to="/events">
+                  Browse events
+                  <SpriteIcon name="arrow-right" className="h-4 w-4" aria-hidden="true" />
+                </Link>
+              </Button>
+              <Button asChild variant="outline" className="w-full justify-between">
+                <Link to="/restaurants">
+                  Find restaurants
+                  <SpriteIcon name="arrow-right" className="h-4 w-4" aria-hidden="true" />
+                </Link>
+              </Button>
+              {AI_PLANNER_AVAILABLE && (
+                <Button asChild variant="outline" className="w-full justify-between">
+                  <Link to="/trip-planner">
+                    Plan a trip
+                    <SpriteIcon name="arrow-right" className="h-4 w-4" aria-hidden="true" />
+                  </Link>
+                </Button>
+              )}
+              <Button asChild variant="outline" className="w-full justify-between">
+                <Link to="/subscription">
+                  Manage subscription
+                  <SpriteIcon name="arrow-right" className="h-4 w-4" aria-hidden="true" />
+                </Link>
+              </Button>
+            </div>
+          </CardContent>
+        </Card>
+
+        <HelpLine />
+      </PageShell>
     </>
   );
 }

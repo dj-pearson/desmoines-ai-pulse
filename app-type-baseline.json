@@ -1,5 +1,5 @@
 {
-  "total": 72,
+  "total": 71,
   "files": {
     "src/components/AIConfigurationManager.tsx": 2,
     "src/components/ScrapingJobManager.tsx": 2,
@@ -24,7 +24,6 @@
     "src/hooks/useCrmTasks.ts": 1,
     "src/hooks/useEventReminders.ts": 1,
     "src/hooks/useExperiment.ts": 1,
-    "src/hooks/usePayments.ts": 1,
     "src/hooks/useSessionTimeout.ts": 2,
     "src/hooks/useTeamManagement.ts": 1,
     "src/hooks/useUsage.ts": 3,

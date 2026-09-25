@@ -5,6 +5,7 @@ import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { useSubscription, type SubscriptionPlatform, type UserSubscription } from "@/hooks/useSubscription";
 import { usePayments } from "@/hooks/usePayments";
 import { SpriteIcon } from "@/components/ui/SpriteIcon";
+import { planStatusSentence } from "@/components/subscription/PlanStatusLine";
 
 const PLATFORM_LABELS: Record<SubscriptionPlatform, string> = {
   web: "Website (Stripe)",
@@ -30,13 +31,22 @@ function formatTierName(name: string | undefined): string {
   return name.charAt(0).toUpperCase() + name.slice(1);
 }
 
-function formatPeriodEnd(end: string | undefined): string {
-  if (!end) return "—";
-  return new Date(end).toLocaleDateString(undefined, {
-    year: "numeric",
-    month: "short",
-    day: "numeric",
-  });
+/**
+ * What happens next to this row, in the same words the portal's own status
+ * line uses. No amount: only Stripe knows the next charge, and only for the
+ * web row, so a per-platform list names dates alone.
+ */
+function rowStatusText(sub: UserSubscription): string {
+  if (sub.status === "past_due") return "Payment failed. Update your payment method to keep this plan.";
+  const trialEnd = (sub as UserSubscription & { trial_end?: string | null }).trial_end ?? null;
+  return (
+    planStatusSentence({
+      status: sub.status,
+      cancelAtPeriodEnd: sub.cancel_at_period_end,
+      currentPeriodEnd: sub.current_period_end ?? null,
+      trialEnd,
+    }) ?? "No renewal date on file."
+  );
 }
 
 interface SubscriptionPlatformBreakdownProps {
@@ -54,9 +64,9 @@ interface SubscriptionPlatformBreakdownProps {
  * than one platform (Stripe / Apple / Google), unless `alwaysShow` is set.
  *
  * Cancel routing:
- *   - web    → Stripe customer portal (manage-subscription edge function)
- *   - ios    → https://apps.apple.com/account/subscriptions
- *   - android → https://play.google.com/store/account/subscriptions
+ *   - web     -> Stripe customer portal (manage-subscription edge function)
+ *   - ios     -> https://apps.apple.com/account/subscriptions
+ *   - android -> https://play.google.com/store/account/subscriptions
  *
  * Implements SUB-SYNC-012.
  */
@@ -73,12 +83,11 @@ export function SubscriptionPlatformBreakdown({
   const handleCancel = (sub: UserSubscription) => {
     switch (sub.platform) {
       case "web":
-        // Send the user to the Stripe customer portal in a new tab so the
-        // Profile page state isn't lost.
+        // The Stripe customer portal, which returns here when they're done.
         void openCustomerPortal(window.location.href);
         return;
       case "ios":
-        // App Store deep link — works on macOS Safari and iOS browsers; on
+        // App Store deep link - works on macOS Safari and iOS browsers; on
         // desktop browsers it falls back to the marketing page.
         window.open("https://apps.apple.com/account/subscriptions", "_blank", "noopener,noreferrer");
         return;
@@ -102,9 +111,9 @@ export function SubscriptionPlatformBreakdown({
       <CardHeader>
         <CardTitle className="text-lg">Your Subscriptions</CardTitle>
         <p className="text-sm text-muted-foreground">
-          You have active subscriptions on more than one platform. Cancel from
-          the platform you bought it on — that's the only place each store will
-          let you manage the renewal.
+          You have subscriptions on more than one platform. Manage or cancel
+          each one where you bought it; that's the only place each store lets
+          you change the renewal.
         </p>
       </CardHeader>
       <CardContent className="space-y-3">
@@ -126,11 +135,7 @@ export function SubscriptionPlatformBreakdown({
                     <span className="font-medium">{tierName}</span>
                     <Badge variant="secondary">{platformLabel}</Badge>
                   </div>
-                  <p className="text-sm text-muted-foreground">
-                    {sub.cancel_at_period_end
-                      ? `Cancels on ${formatPeriodEnd(sub.current_period_end)}`
-                      : `Renews on ${formatPeriodEnd(sub.current_period_end)}`}
-                  </p>
+                  <p className="text-sm text-muted-foreground">{rowStatusText(sub)}</p>
                 </div>
               </div>
 

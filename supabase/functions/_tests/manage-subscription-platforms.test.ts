@@ -19,8 +19,14 @@
  * because the routing is only as good as the rows fed to it.
  */
 
-import { assert, assertEquals, assertFalse } from 'https://deno.land/std@0.208.0/assert/mod.ts';
+import { strict as nodeAssert } from 'node:assert';
 import { manageAtForPlatform, STORE_MANAGE_URLS, getSiteUrl } from '../_shared/siteUrl.ts';
+
+// node:assert rather than deno.land/std, so this runs offline.
+const assert = (condition: unknown, message = '') => nodeAssert.ok(condition, message);
+const assertFalse = (condition: unknown, message = '') => nodeAssert.ok(!condition, message);
+const assertEquals = <T>(actual: T, expected: T, message = '') =>
+  nodeAssert.deepStrictEqual(actual, expected, message);
 
 const REPO = new URL('../../../', import.meta.url);
 const FN = 'supabase/functions/manage-subscription/index.ts';
@@ -110,5 +116,52 @@ Deno.test('getSiteUrl prefers the configured value and never keeps a trailing sl
   } finally {
     if (previous === undefined) Deno.env.delete('SITE_URL');
     else Deno.env.set('SITE_URL', previous);
+  }
+});
+
+/* ------------------------------------------------------------------------- *
+ * Pricing plan WP5 item 8: limits, actions, state, invoices.
+ * ------------------------------------------------------------------------- */
+
+const code = src.replace(/\/\*[\s\S]*?\*\//g, '').replace(/^[ \t]*\/\/[^\n]*$/gm, '');
+
+Deno.test('a missing action is details, an unknown one is a 400', () => {
+  assert(/const requestedAction = body\?\.action \?\? "details";/.test(code), 'old bundles that omit action get details');
+  assert(/if \(!ACTIONS\.includes\(requestedAction\)\) \{/.test(code));
+  assert(/code: "unknown_action"/.test(code));
+  assertFalse(/case "details":\s*\n\s*default:/.test(code), 'details must no longer be the catch-all');
+});
+
+Deno.test('every action is rate limited per user, reads looser than writes', () => {
+  assert(/checkRateLimitPersistent\(req, \{/.test(code));
+  assert(/userId: user\.id,/.test(code));
+  const read = code.match(/read: \{ max: (\d+)/);
+  const write = code.match(/write: \{ max: (\d+)/);
+  assert(read && write && Number(read[1]) > Number(write[1]), 'details and invoices get the looser limit');
+  assert(/addCorsHeaders\(limit\.response, allowedOrigin\)/.test(code), 'the 429 carries CORS headers');
+  // The limit runs after auth, so it can be keyed on a verified user id.
+  assert(code.indexOf('checkRateLimitPersistent(req') > code.indexOf('supabase.auth.getUser(token)'));
+});
+
+Deno.test('cancel and resume return Stripe\'s state and check the local write', () => {
+  assert(/const canceled = await stripe\.subscriptions\.update\(/.test(code));
+  assert(/const resumed = await stripe\.subscriptions\.update\(/.test(code));
+  assert(/cancelAtPeriodEnd: canceled\.cancel_at_period_end/.test(code));
+  assert(/cancelAtPeriodEnd: resumed\.cancel_at_period_end/.test(code));
+  assert(/if \(cancelWriteError\) \{/.test(code) && /if \(resumeWriteError\) \{/.test(code));
+  // cancel_at stays for bundles that read it.
+  assert(/cancel_at: canceledPeriodEnd/.test(code));
+});
+
+Deno.test('the dead payments read is gone and the key stays for compatibility', () => {
+  assertFalse(/\.from\("payments"\)/.test(code), 'payments is not in production');
+  assert(/payments: \[\],/.test(code));
+});
+
+Deno.test('invoices come from Stripe, capped at 12, with Stripe\'s own links', () => {
+  assert(/case "invoices": \{/.test(code));
+  assert(/stripe\.invoices\.list\(\{\s*\n\s*customer: customerRow\.stripe_customer_id as string,\s*\n\s*limit: 12,/.test(code));
+  for (const field of ['number:', 'created:', 'status:', 'amountPaid:', 'currency:', 'hostedInvoiceUrl:', 'invoicePdf:']) {
+    assert(code.includes(field), `invoice field ${field}`);
   }
 });

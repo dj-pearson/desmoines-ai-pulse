@@ -1,32 +1,42 @@
 /**
  * subscription-lifecycle (WEB-AUTO-013)
  *
- * Daily driver for web-billed subscription dunning + retention, so failed
- * payments, renewals, and churn are handled by machines. For each WEB
- * subscription (Apple/Google excluded — their stores own dunning):
+ * Daily driver for web-billed subscription dunning + retention. For each WEB
+ * subscription (Apple/Google excluded - their stores own dunning):
  *   - renewal reminder 7 days before period end (once per period),
- *   - payment-failed email while past_due (frequency-capped to once/day),
- *   - automatic downgrade once past_due exceeds the grace window (+ inform),
- *   - one win-back email per lapse after cancellation.
- * Every transition is logged to subscription_events (MRR/churn analytics) and
- * the run is recorded through the jobRunner. Stripe's smart-retries config is
- * the retry ladder; these emails sit at each state.
+ *   - payment-failed email while past_due and still in grace (once a day),
+ *   - once grace is over, the Stripe subscription is CANCELLED IN STRIPE and
+ *     customer.subscription.deleted writes the row (one writer, one clock),
+ *   - one win-back email per lapse after cancellation, for members who have
+ *     not opted out of marketing.
+ * The decisions live in ./policy.ts, pure and tested; this file reads, sends
+ * and writes. Every transition is logged to subscription_events and the run
+ * is recorded through the jobRunner.
  */
 import { createClient } from 'https://esm.sh/@supabase/supabase-js@2';
+import Stripe from 'https://esm.sh/stripe@14.21.0';
 import { handleCors, getCorsHeaders } from '../_shared/cors.ts';
 import { runJob } from '../_shared/jobRunner.ts';
 import { renderEmail, SITE_URL } from '../_shared/emailLayout.ts';
 import { fetchWithTimeout } from '../_shared/fetchWithTimeout.ts';
 import { requireAdminOrApiKey } from "../_shared/apiKeyAuth.ts";
+import {
+  DAY_MS,
+  lifecycleActions,
+  lifecycleEmail,
+  manageUrlFor,
+  marketingAllowedFrom,
+  planLabel,
+  type LifecycleAction,
+  type LifecycleRow,
+} from './policy.ts';
 
 // deno-lint-ignore no-explicit-any
 type Supa = any;
 
 const RESEND_API_KEY = Deno.env.get('RESEND_API_KEY');
 const FROM = 'Des Moines Insider <billing@desmoinesinsider.com>';
-const DAY = 24 * 60 * 60 * 1000;
-const GRACE_DAYS = 7;       // past-due grace before auto-downgrade
-const WINBACK_WINDOW = 3;   // days after cancellation to send a win-back
+const DAY = DAY_MS;
 
 async function sendEmail(
   to: string,
@@ -87,20 +97,52 @@ async function alreadyLogged(
   }
 }
 
+/**
+ * Returns whether the event was recorded. Not fatal either way, but no longer
+ * silent: this ledger is what alreadyLogged dedupes on, so an unrecorded send
+ * is one the next run may repeat.
+ */
 async function logEvent(
   supabase: Supa,
   row: { user_id: string; subscription_id: string; event_type: string; platform: string; details?: unknown },
-) {
+): Promise<boolean> {
   try {
-    await supabase.from('subscription_events').insert({
+    const { error } = await supabase.from('subscription_events').insert({
       user_id: row.user_id,
       subscription_id: row.subscription_id,
       event_type: row.event_type,
       platform: row.platform,
       details: row.details ?? null,
     });
-  } catch {
-    // log failures are non-fatal
+    if (error) {
+      console.error(`[subscription-lifecycle] logEvent(${row.event_type}) failed:`, error.message);
+      return false;
+    }
+    return true;
+  } catch (err) {
+    console.error(`[subscription-lifecycle] logEvent(${row.event_type}) threw:`, String(err));
+    return false;
+  }
+}
+
+/**
+ * Ends a Stripe subscription whose grace is over. True when it is cancelled,
+ * including when Stripe says it already was (a lost deleted webhook must not
+ * make every later run fail on the same row).
+ */
+async function cancelInStripe(stripe: InstanceType<typeof Stripe>, stripeSubscriptionId: string): Promise<boolean> {
+  try {
+    await stripe.subscriptions.cancel(stripeSubscriptionId);
+    return true;
+  } catch (cancelError) {
+    try {
+      const current = await stripe.subscriptions.retrieve(stripeSubscriptionId);
+      if (current.status === 'canceled') return true;
+    } catch {
+      // fall through to the original error
+    }
+    console.error(`[subscription-lifecycle] Stripe cancel failed for ${stripeSubscriptionId}:`, String(cancelError));
+    return false;
   }
 }
 
@@ -121,119 +163,147 @@ Deno.serve(async (req) => {
   const serviceKey = Deno.env.get('SUPABASE_SERVICE_ROLE_KEY')!;
   const supabase: Supa = createClient(url, serviceKey);
 
+  const stripeKey = Deno.env.get('STRIPE_SECRET_KEY');
+  const stripe = stripeKey ? new Stripe(stripeKey, { apiVersion: '2023-10-16' }) : null;
+
   const job = await runJob('subscription-lifecycle', async (ctx) => {
     const now = Date.now();
-    const counts = { reminders: 0, paymentFailed: 0, downgraded: 0, winbacks: 0 };
+    const counts = { reminders: 0, paymentFailed: 0, downgraded: 0, winbacks: 0, cancelFailed: 0 };
 
-    // Web-billed subscriptions only (platform 'web' or legacy NULL).
+    // Web-billed subscriptions only (platform 'web' or legacy NULL). policy.ts
+    // refuses store rows as well, so a widened query cannot cancel one.
     const { data, error } = await supabase
       .from('user_subscriptions')
-      .select('id, user_id, status, platform, current_period_end, canceled_at, cancel_at_period_end')
+      .select('id, user_id, status, platform, current_period_end, canceled_at, cancel_at_period_end, stripe_subscription_id, plan:subscription_plans(name, display_name)')
       .or('platform.eq.web,platform.is.null')
       .limit(2000);
     if (error) throw error;
-    const subs = (data || []) as Record<string, string | boolean | null>[];
+    const subs = (data || []) as Array<LifecycleRow & { plan?: { name?: string | null; display_name?: string | null } | null }>;
 
-    // Resolve emails in bulk from profiles.
-    const userIds = [...new Set(subs.map((s) => s.user_id as string).filter(Boolean))];
-    const emailById = new Map<string, string>();
+    // Emails and marketing consent in bulk from profiles.
+    const userIds = [...new Set(subs.map((s) => s.user_id).filter(Boolean))];
+    const profileById = new Map<string, { email: string | null; lifecycle_signals: unknown }>();
+    let profilesOk = true;
     if (userIds.length > 0) {
       try {
-        const { data: profiles } = await supabase
+        const { data: profiles, error: profilesError } = await supabase
           .from('profiles')
-          .select('user_id, email')
+          .select('user_id, email, lifecycle_signals')
           .in('user_id', userIds);
-        for (const p of (profiles || []) as { user_id: string; email: string | null }[]) {
-          if (p.email) emailById.set(p.user_id, p.email);
+        if (profilesError) {
+          profilesOk = false;
+          console.error('[subscription-lifecycle] profiles read failed, no email will send this run:', profilesError.message);
         }
-      } catch {
-        // no emails -> emails simply won't send (events still log)
+        for (const p of (profiles || []) as { user_id: string; email: string | null; lifecycle_signals: unknown }[]) {
+          profileById.set(p.user_id, { email: p.email, lifecycle_signals: p.lifecycle_signals });
+        }
+      } catch (err) {
+        profilesOk = false;
+        console.error('[subscription-lifecycle] profiles read threw:', String(err));
       }
     }
 
     for (const sub of subs) {
-      const userId = sub.user_id as string;
-      const subId = sub.id as string;
-      const platform = (sub.platform as string) || 'web';
-      const email = emailById.get(userId) || '';
-      const status = sub.status as string;
-      const periodEnd = sub.current_period_end ? new Date(sub.current_period_end as string).getTime() : 0;
-      const canceledAt = sub.canceled_at ? new Date(sub.canceled_at as string).getTime() : 0;
+      const userId = sub.user_id;
+      const subId = sub.id;
+      const platform = sub.platform || 'web';
+      const profile = profileById.get(userId);
+      const email = profile?.email || '';
+      const marketingAllowed = marketingAllowedFrom(profile?.lifecycle_signals, profilesOk && !!profile);
+      const emailCtx = {
+        planName: planLabel(sub.plan),
+        manageUrl: manageUrlFor(sub.platform, SITE_URL),
+        siteUrl: SITE_URL,
+      };
 
-      // 1. Pre-renewal reminder: active, auto-renewing, ~7 days out, once/period.
-      if (status === 'active' && !sub.cancel_at_period_end && periodEnd) {
-        const daysOut = (periodEnd - now) / DAY;
-        if (daysOut > 0 && daysOut <= 7) {
-          const periodStart = new Date(periodEnd - 31 * DAY).toISOString();
-          if (!(await alreadyLogged(supabase, userId, 'renewal_reminder', periodStart))) {
-            const when = new Date(periodEnd).toLocaleDateString('en-US', { month: 'long', day: 'numeric' });
-            await sendEmail(
-              email,
-              'Your Des Moines Insider membership renews soon',
-              `<h2>Your membership renews on ${when}</h2><p>No action needed — we'll keep your Insider perks running. Manage your plan anytime in your <a href="${SITE_URL}/profile?tab=settings">account settings</a>.</p>`,
-              `Your membership renews on ${when}. Manage your plan: ${SITE_URL}/profile?tab=settings`,
-              'transactional',
-            );
+      for (const action of lifecycleActions(sub, now, { marketingAllowed })) {
+        const message = lifecycleEmail(action, emailCtx);
+        const send = () =>
+          message
+            ? sendEmail(email, message.subject, message.html, message.text, message.category)
+            : Promise.resolve(false);
+
+        switch (action.kind) {
+          case 'renewal_reminder': {
+            const periodStart = new Date(action.periodEnd - 31 * DAY).toISOString();
+            if (await alreadyLogged(supabase, userId, 'renewal_reminder', periodStart)) break;
+            // Logged only once it actually went: an unsent reminder is retried
+            // tomorrow instead of being recorded as sent.
+            if (!(await send())) break;
             await logEvent(supabase, { user_id: userId, subscription_id: subId, event_type: 'renewal_reminder', platform, details: { periodEnd: sub.current_period_end } });
             counts.reminders++;
             ctx.processed(1);
+            break;
           }
-        }
-      }
 
-      // 2. Payment failed (past_due): nudge once/day with an update-payment link.
-      if (status === 'past_due') {
-        if (!(await alreadyLogged(supabase, userId, 'payment_failed', new Date(now - DAY).toISOString()))) {
-          await sendEmail(
-            email,
-            'Action needed: your payment didn\'t go through',
-            `<h2>We couldn't process your payment</h2><p>Please <a href="${SITE_URL}/profile?tab=settings">update your payment method</a> to keep your Insider perks. We'll retry automatically in the meantime.</p>`,
-            `We couldn't process your payment. Update it here: ${SITE_URL}/profile?tab=settings`,
-            'transactional',
-          );
-          await logEvent(supabase, { user_id: userId, subscription_id: subId, event_type: 'payment_failed', platform });
-          counts.paymentFailed++;
-          ctx.processed(1);
-        }
+          case 'payment_failed': {
+            if (await alreadyLogged(supabase, userId, 'payment_failed', new Date(now - DAY).toISOString())) break;
+            if (!(await send())) break;
+            await logEvent(supabase, { user_id: userId, subscription_id: subId, event_type: 'payment_failed', platform });
+            counts.paymentFailed++;
+            ctx.processed(1);
+            break;
+          }
 
-        // 3. Auto-downgrade once past_due exceeds the grace window.
-        if (periodEnd && now > periodEnd + GRACE_DAYS * DAY) {
-          try {
-            await supabase
-              .from('user_subscriptions')
-              .update({ status: 'canceled', canceled_at: new Date().toISOString() })
-              .eq('id', subId);
-            await sendEmail(
-              email,
-              'Your Insider membership has paused',
-              `<h2>Your membership has paused</h2><p>We couldn't collect payment after several tries, so your account is back on the free plan. <a href="${SITE_URL}/pricing">Reactivate anytime</a> to restore your perks.</p>`,
-              `Your membership paused (payment couldn't be collected). Reactivate: ${SITE_URL}/pricing`,
-              'transactional',
-            );
-            await logEvent(supabase, { user_id: userId, subscription_id: subId, event_type: 'downgraded', platform, details: { reason: 'dunning_exhausted' } });
+          case 'cancel_in_stripe':
+          case 'expire_locally': {
+            const since = sub.current_period_end ?? new Date(now - 60 * DAY).toISOString();
+            if (await alreadyLogged(supabase, userId, 'downgraded', since)) break;
+
+            let ended = false;
+            if (action.kind === 'cancel_in_stripe') {
+              if (!stripe) {
+                console.error('[subscription-lifecycle] STRIPE_SECRET_KEY missing; cannot end dunning for', subId);
+              } else {
+                // The row is written by customer.subscription.deleted, not here.
+                ended = await cancelInStripe(stripe, action.stripeSubscriptionId);
+              }
+            } else {
+              // No Stripe subscription behind this web row, so no webhook will
+              // ever end it. Checked, unlike the write this replaces.
+              const { error: expireError } = await supabase
+                .from('user_subscriptions')
+                .update({ status: 'canceled', canceled_at: new Date(now).toISOString() })
+                .eq('id', subId)
+                .eq('status', 'past_due');
+              if (expireError) {
+                console.error(`[subscription-lifecycle] local expiry failed for ${subId}:`, expireError.message);
+              } else {
+                ended = true;
+              }
+            }
+
+            if (!ended) {
+              counts.cancelFailed++;
+              ctx.failed(1);
+              break;
+            }
+
+            const emailed = await send();
+            await logEvent(supabase, {
+              user_id: userId,
+              subscription_id: subId,
+              event_type: 'downgraded',
+              platform,
+              details: { reason: 'dunning_exhausted', via: action.kind, emailed },
+            });
             counts.downgraded++;
             ctx.processed(1);
-          } catch {
-            ctx.failed(1);
+            break;
           }
-        }
-      }
 
-      // 4. Win-back: one per lapse, shortly after cancellation.
-      if (status === 'canceled' && canceledAt) {
-        const daysSince = (now - canceledAt) / DAY;
-        if (daysSince >= 1 && daysSince <= WINBACK_WINDOW) {
-          if (!(await alreadyLogged(supabase, userId, 'winback', new Date(canceledAt).toISOString()))) {
-            await sendEmail(
-              email,
-              'We saved your spot — come back to Insider',
-              `<h2>Come back to Insider</h2><p>Your favorites and trips are still here. <a href="${SITE_URL}/pricing">Resubscribe</a> to pick up where you left off.</p>`,
-              `Come back to Insider — resubscribe: ${SITE_URL}/pricing`,
-              'marketing',
-            );
+          case 'winback': {
+            if (await alreadyLogged(supabase, userId, 'winback', new Date(action.canceledAt).toISOString())) break;
+            if (!(await send())) break;
             await logEvent(supabase, { user_id: userId, subscription_id: subId, event_type: 'winback', platform });
             counts.winbacks++;
             ctx.processed(1);
+            break;
+          }
+
+          default: {
+            const unreachable: never = action;
+            console.error('[subscription-lifecycle] unknown action', unreachable as LifecycleAction);
           }
         }
       }

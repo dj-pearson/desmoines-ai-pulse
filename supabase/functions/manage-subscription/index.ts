@@ -5,13 +5,18 @@
  * - Create Stripe Customer Portal session (for payment methods, cancel, etc.)
  * - Cancel subscription
  * - Resume subscription (if canceled but period not ended)
- * - Get subscription details
+ * - Get subscription details (the default when no action is sent)
+ * - List Stripe invoices (WP5 item 8)
+ *
+ * An unknown action is a 400; a missing one is "details", which is what every
+ * shipped bundle that omits it has always received.
  */
 
 import { serve } from "https://deno.land/std@0.190.0/http/server.ts";
 import Stripe from "https://esm.sh/stripe@14.21.0";
 import { createClient } from "https://esm.sh/@supabase/supabase-js@2.45.0";
-import { handleCors, getCorsHeaders, isOriginAllowed } from "../_shared/cors.ts";
+import { handleCors, getCorsHeaders, isOriginAllowed, addCorsHeaders } from "../_shared/cors.ts";
+import { checkRateLimitPersistent } from "../_shared/rateLimit.ts";
 import { getSiteUrl, manageAtForPlatform, STORE_MANAGE_URLS, type ManageAt } from "../_shared/siteUrl.ts";
 
 /**
@@ -42,13 +47,35 @@ function validateReturnUrl(returnUrl: string | undefined, siteUrl: string): stri
   return `${siteUrl}/subscription`;
 }
 
+/** The Stripe invoice fields the invoices action returns. */
+interface InvoiceSummarySource {
+  id: string;
+  number: string | null;
+  created: number;
+  status: string | null;
+  amount_paid: number;
+  currency: string;
+  hosted_invoice_url?: string | null;
+  invoice_pdf?: string | null;
+}
+
+const ACTIONS = ["portal", "cancel", "resume", "details", "invoices"] as const;
+type Action = typeof ACTIONS[number];
+
+/** Reads are cheap and polled; writes move Stripe state. */
+const LIMITS: Record<"read" | "write", { max: number; windowMs: number }> = {
+  read: { max: 60, windowMs: 15 * 60 * 1000 },
+  write: { max: 10, windowMs: 15 * 60 * 1000 },
+};
+
 serve(async (req) => {
   // Handle CORS preflight
   const corsResponse = handleCors(req);
   if (corsResponse) return corsResponse;
 
   const origin = req.headers.get("origin") || "";
-  const corsHeaders = getCorsHeaders(isOriginAllowed(origin) ? origin : undefined);
+  const allowedOrigin = isOriginAllowed(origin) ? origin : undefined;
+  const corsHeaders = getCorsHeaders(allowedOrigin);
 
   try {
     // Initialize clients
@@ -91,7 +118,27 @@ serve(async (req) => {
 
     // Parse request body
     const body = await req.json().catch(() => ({}));
-    const { action, returnUrl } = body;
+    const { returnUrl } = body ?? {};
+    const requestedAction = body?.action ?? "details";
+    if (!ACTIONS.includes(requestedAction)) {
+      return new Response(
+        JSON.stringify({ error: "Unknown action.", code: "unknown_action" }),
+        { status: 400, headers: { ...corsHeaders, "Content-Type": "application/json" } }
+      );
+    }
+    const action = requestedAction as Action;
+
+    // Per user, persistent (WP5 item 8). Looser for the reads the portal
+    // polls, tight for the ones that change a Stripe subscription.
+    const limitKind = action === "details" || action === "invoices" ? "read" : "write";
+    const limit = await checkRateLimitPersistent(req, {
+      endpoint: `manage-subscription:${limitKind}`,
+      userId: user.id,
+      ...LIMITS[limitKind],
+    });
+    if (!limit.success && limit.response) {
+      return addCorsHeaders(limit.response, allowedOrigin);
+    }
 
     // WEB-FEAT-015 -- ONE ROW PER PLATFORM, SO .single() WAS NEVER SAFE HERE.
     //
@@ -239,24 +286,35 @@ serve(async (req) => {
           );
         }
 
-        await stripe.subscriptions.update(subscription.stripe_subscription_id, {
+        const canceled = await stripe.subscriptions.update(subscription.stripe_subscription_id, {
           cancel_at_period_end: true,
         });
 
-        // Update local database
-        await supabase
+        // Update local database. Stripe has already changed, so a failed write
+        // is logged, not returned as a failure: the member did cancel, and
+        // customer.subscription.updated writes the same column shortly.
+        const { error: cancelWriteError } = await supabase
           .from("user_subscriptions")
           .update({
             cancel_at_period_end: true,
             updated_at: new Date().toISOString(),
           })
           .eq("id", subscription.id);
+        if (cancelWriteError) {
+          console.error("[manage-subscription] local cancel write failed; the webhook will sync it", cancelWriteError);
+        }
 
+        // The state is Stripe's answer, not a restatement of our row, so the
+        // portal can render it without a refetch (WP5 item 8).
+        const canceledPeriodEnd = new Date(canceled.current_period_end * 1000).toISOString();
         return new Response(
           JSON.stringify({
             success: true,
             message: "Subscription will be canceled at period end",
-            cancel_at: subscription.current_period_end,
+            cancel_at: canceledPeriodEnd,
+            cancelAtPeriodEnd: canceled.cancel_at_period_end,
+            currentPeriodEnd: canceledPeriodEnd,
+            synced: !cancelWriteError,
           }),
           {
             status: 200,
@@ -289,23 +347,29 @@ serve(async (req) => {
           );
         }
 
-        await stripe.subscriptions.update(subscription.stripe_subscription_id, {
+        const resumed = await stripe.subscriptions.update(subscription.stripe_subscription_id, {
           cancel_at_period_end: false,
         });
 
-        // Update local database
-        await supabase
+        // Same posture as cancel: Stripe is the record, the row follows.
+        const { error: resumeWriteError } = await supabase
           .from("user_subscriptions")
           .update({
             cancel_at_period_end: false,
             updated_at: new Date().toISOString(),
           })
           .eq("id", subscription.id);
+        if (resumeWriteError) {
+          console.error("[manage-subscription] local resume write failed; the webhook will sync it", resumeWriteError);
+        }
 
         return new Response(
           JSON.stringify({
             success: true,
             message: "Subscription has been resumed",
+            cancelAtPeriodEnd: resumed.cancel_at_period_end,
+            currentPeriodEnd: new Date(resumed.current_period_end * 1000).toISOString(),
+            synced: !resumeWriteError,
           }),
           {
             status: 200,
@@ -314,8 +378,69 @@ serve(async (req) => {
         );
       }
 
-      case "details":
-      default: {
+      case "invoices": {
+        // Stripe is the ledger (pricing plan, "Billing history"): the local
+        // payments and invoices tables are not in production, and a second
+        // record of the same money is one more thing to disagree with it.
+        // Any web row with a customer counts, so a member who cancelled can
+        // still fetch last year's receipts.
+        const { data: customerRow, error: customerError } = await supabase
+          .from("user_subscriptions")
+          .select("stripe_customer_id")
+          .eq("user_id", user.id)
+          .eq("platform", "web")
+          .not("stripe_customer_id", "is", null)
+          .limit(1)
+          .maybeSingle();
+
+        if (customerError) {
+          console.error("[manage-subscription] customer read failed", customerError);
+          return new Response(
+            JSON.stringify({ error: "Could not read your billing history. Please try again." }),
+            { status: 503, headers: { ...corsHeaders, "Content-Type": "application/json" } }
+          );
+        }
+
+        if (!customerRow?.stripe_customer_id) {
+          // Nothing Stripe billed. A store subscriber's receipts live with
+          // the store, so say where.
+          return new Response(
+            JSON.stringify({
+              invoices: [],
+              manageAt,
+              manageUrl: manageAt ? STORE_MANAGE_URLS[manageAt] : null,
+            }),
+            { status: 200, headers: { ...corsHeaders, "Content-Type": "application/json" } }
+          );
+        }
+
+        const list = await stripe.invoices.list({
+          customer: customerRow.stripe_customer_id as string,
+          limit: 12,
+        });
+
+        return new Response(
+          JSON.stringify({
+            invoices: list.data.map((invoice: InvoiceSummarySource) => ({
+              id: invoice.id,
+              number: invoice.number,
+              created: new Date(invoice.created * 1000).toISOString(),
+              status: invoice.status,
+              // Cents, as Stripe gives them. The client formats; it does not
+              // do arithmetic on money.
+              amountPaid: invoice.amount_paid,
+              currency: invoice.currency,
+              hostedInvoiceUrl: invoice.hosted_invoice_url ?? null,
+              invoicePdf: invoice.invoice_pdf ?? null,
+            })),
+            manageAt: null,
+            manageUrl: null,
+          }),
+          { status: 200, headers: { ...corsHeaders, "Content-Type": "application/json" } }
+        );
+      }
+
+      case "details": {
         // WEB-FEAT-015: a store-billed subscriber used to land here with
         // subscription null and be reported as tier "free" -- the portal then
         // offered them the plan they were already paying for. Every row the
@@ -365,13 +490,11 @@ serve(async (req) => {
           manageAt: manageAtForPlatform(row["platform"] as string | null),
         }));
 
-        // Get payment history
-        const { data: payments } = await supabase
-          .from("payments")
-          .select("*")
-          .eq("user_id", user.id)
-          .order("created_at", { ascending: false })
-          .limit(10);
+        // The payments read that stood here is gone (WP5 item 8): that table
+        // is not in production, so every call paid for a failed query and
+        // reported an empty history. `payments: []` stays in the response
+        // below for bundles that read the key; the `invoices` action is the
+        // real billing history.
 
         // Get upcoming invoice from Stripe. Only a Stripe-billed row has one --
         // Apple and Google do not expose the next charge to us.
@@ -405,7 +528,7 @@ serve(async (req) => {
             manageAt: subscription ? null : manageAt,
             manageUrl: subscription || !manageAt ? null : STORE_MANAGE_URLS[manageAt],
             platforms,
-            payments: payments || [],
+            payments: [],
             upcomingInvoice: upcomingInvoice
               ? {
                   amount: upcomingInvoice.amount_due / 100,

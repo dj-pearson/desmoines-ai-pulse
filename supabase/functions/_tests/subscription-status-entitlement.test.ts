@@ -18,7 +18,10 @@
 
 import { strict as assert } from 'node:assert';
 import {
+  isSecondLiveSubscription,
   mapStripeStatus,
+  statusAfterInvoicePaid,
+  subscriptionDeletedPatch,
   subscriptionUpdatePatch,
   webSubscriptionRow,
   type StripeSubscriptionLike,
@@ -182,14 +185,77 @@ Deno.test('billing_interval comes through, and is null when Stripe omits it', ()
 
 Deno.test('the update patch does NOT carry identity columns', () => {
   // customer.subscription.updated is keyed on stripe_subscription_id. Sending
-  // user_id, plan_id or platform in that patch would let a malformed event
-  // rewrite who the subscription belongs to.
+  // user_id, platform or stripe_customer_id in that patch would let a
+  // malformed event rewrite who the subscription belongs to.
   const patch = subscriptionUpdatePatch(sub({ status: 'past_due', canceled_at: nowSec }));
   for (const forbidden of ['user_id', 'plan_id', 'platform', 'stripe_customer_id']) {
     assert.equal(forbidden in patch, false, `${forbidden} must not be in the update patch`);
   }
   assert.equal(patch.status, 'past_due');
   assert.equal(typeof patch.canceled_at, 'string');
+});
+
+Deno.test('plan_id enters the patch only through the price lookup (WP5 item 1)', () => {
+  const catalog = [{ id: 'plan_vip', stripe_price_id_monthly: 'price_vip', stripe_price_id_yearly: null }];
+  const moved = subscriptionUpdatePatch(
+    sub({ items: { data: [{ price: { id: 'price_vip', recurring: { interval: 'month' } } }] } }),
+    catalog,
+  );
+  assert.equal(moved.plan_id, 'plan_vip');
+  for (const forbidden of ['user_id', 'platform', 'stripe_customer_id']) {
+    assert.equal(forbidden in moved, false, `${forbidden} must not be in the update patch`);
+  }
+
+  // Metadata is not a route: a planId in the event changes nothing.
+  const withMetadata = {
+    ...sub({ items: { data: [{ price: { id: 'price_unknown' } }] } }),
+    metadata: { planId: 'plan_vip', userId: 'someone-else' },
+  } as StripeSubscriptionLike;
+  assert.equal('plan_id' in subscriptionUpdatePatch(withMetadata, catalog), false);
+});
+
+Deno.test('a $0 trial-start invoice writes no status, so trials stay trialing (WP5 item 5)', () => {
+  assert.equal(
+    statusAfterInvoicePaid({ billingReason: 'subscription_create', amountPaid: 0, subscriptionStatus: 'trialing' }),
+    null,
+  );
+  // The first real charge after the trial writes the live status.
+  assert.equal(
+    statusAfterInvoicePaid({ billingReason: 'subscription_cycle', amountPaid: 499, subscriptionStatus: 'active' }),
+    'active',
+  );
+  // A paid first invoice (no trial) is active.
+  assert.equal(
+    statusAfterInvoicePaid({ billingReason: 'subscription_create', amountPaid: 499, subscriptionStatus: 'active' }),
+    'active',
+  );
+  // Whatever the subscription says, mapped the one way every handler maps it.
+  assert.equal(
+    statusAfterInvoicePaid({ billingReason: 'subscription_update', amountPaid: 250, subscriptionStatus: 'past_due' }),
+    'past_due',
+  );
+});
+
+Deno.test('a deleted subscription is stamped with Stripe\'s end time, not the delivery time', () => {
+  const endedAt = nowSec - 3 * DAY;
+  const patch = subscriptionDeletedPatch({ ended_at: endedAt, canceled_at: nowSec - 10 * DAY }, NOW);
+  assert.equal(patch.status, 'canceled');
+  assert.equal(patch.canceled_at, new Date(endedAt * 1000).toISOString());
+  assert.equal(
+    subscriptionDeletedPatch({ ended_at: null, canceled_at: nowSec - 10 * DAY }, NOW).canceled_at,
+    new Date((nowSec - 10 * DAY) * 1000).toISOString(),
+  );
+  assert.equal(subscriptionDeletedPatch({}, NOW).canceled_at, NOW.toISOString());
+});
+
+Deno.test('a second live subscription never replaces the first (WP5 item 6)', () => {
+  for (const status of ['active', 'trialing', 'past_due']) {
+    assert.equal(isSecondLiveSubscription({ status, stripe_subscription_id: 'sub_old' }, 'sub_new'), true, status);
+  }
+  assert.equal(isSecondLiveSubscription({ status: 'active', stripe_subscription_id: 'sub_old' }, 'sub_old'), false);
+  assert.equal(isSecondLiveSubscription({ status: 'canceled', stripe_subscription_id: 'sub_old' }, 'sub_new'), false);
+  assert.equal(isSecondLiveSubscription(null, 'sub_new'), false);
+  assert.equal(isSecondLiveSubscription({ status: 'active', stripe_subscription_id: null }, 'sub_new'), false);
 });
 
 Deno.test('the webhook uses the shared mapping rather than its own copy', async () => {
@@ -202,6 +268,10 @@ Deno.test('the webhook uses the shared mapping rather than its own copy', async 
 
   assert.ok(/webSubscriptionRow\(/.test(code), 'the checkout row must come from the shared builder');
   assert.ok(/subscriptionUpdatePatch\(/.test(code), 'the update patch must come from the shared builder');
+  assert.ok(/subscriptionDeletedPatch\(/.test(code), 'the deleted patch must come from the shared builder');
+  assert.ok(/statusAfterInvoicePaid\(/.test(code), 'invoice.payment_succeeded must not hardcode a status');
+  assert.ok(!/status: "active",?\s*\}/.test(code), 'a hardcoded status: "active" write is back');
+  assert.ok(/isSecondLiveSubscription\(existingWebRow, subscriptionId\)/.test(code));
   assert.ok(
     !/function\s+mapStripeStatus\s*\(/.test(code),
     'stripe-webhook has its own mapStripeStatus again',

@@ -39,7 +39,7 @@ export default function Footer() {
                 Unlock Premium Features
               </h3>
               <p className="text-white/90 text-sm">
-                Get early event access, unlimited favorites & personalized recommendations
+                Unlimited favorites, saved-search alerts and no ads with Insider
               </p>
             </div>
             {/* asChild: one interactive element, not a <button> inside an <a>. */}

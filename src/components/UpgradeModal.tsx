@@ -1,4 +1,4 @@
-import { useEffect, useRef, useState } from "react";
+import { useCallback, useEffect, useMemo, useRef, useState, type KeyboardEvent, type ReactNode } from "react";
 import { Link } from "react-router-dom";
 import {
   Dialog,
@@ -8,128 +8,99 @@ import {
   DialogTitle,
 } from "@/components/ui/dialog";
 import { Button } from "@/components/ui/button";
-import { Badge } from "@/components/ui/badge";
 import { Switch } from "@/components/ui/switch";
 import { Label } from "@/components/ui/label";
-import {
-  Crown,
-  Sparkles,
-  Check,
-  Zap,
-  Heart,
-  Bell,
-  Filter,
-  Star,
-  X,
-} from "lucide-react";
+import { Crown, Check } from "lucide-react";
 import { useSubscription } from "@/hooks/useSubscription";
 import { useTrialEligibility } from "@/hooks/useTrialEligibility";
 import { logPaywallEvent } from "@/lib/paywallAnalytics";
+import {
+  benefitsFor,
+  displayPrice,
+  yearlySavings,
+  TRIP_PLANNER_MONTHLY_QUOTA,
+  type BillingInterval,
+} from "@/lib/planBenefits";
+import { IN_PLACE_PLAN_CHANGE_ENABLED, PLAN_CHANGE_PAUSED_MESSAGE } from "@/lib/billingStatus";
 import { cn } from "@/lib/utils";
 import { SpriteIcon } from "@/components/ui/SpriteIcon";
+
+type PaidPlan = "insider" | "vip";
 
 interface UpgradeModalProps {
   open: boolean;
   onOpenChange: (open: boolean) => void;
   feature?: string;
-  requiredTier?: "insider" | "vip";
+  requiredTier?: PaidPlan;
+  /**
+   * The cap the viewer hit and how much of it they have used, when the caller
+   * knows (a saved-search limit, a trip-plan quota). Both come from the
+   * server's refusal or the caller's own count; the modal never estimates them.
+   */
+  limit?: number;
+  used?: number;
 }
 
-const featureDescriptions: Record<
-  string,
-  { title: string; description: string; tier: "insider" | "vip" }
-> = {
-  // WEB-FEAT-016: early_access, vip_events, reservation_assistance,
-  // sms_alerts and concierge were removed. Each was copy for a feature no
-  // component delivers, so the modal was selling upgrades to nothing. The keys
+const featureDescriptions: Record<string, { title: string; description: string }> = {
+  // WEB-FEAT-016 removed the copy for five entitlement keys nothing delivers
+  // (the vip_* keys, reservation_assistance, sms_alerts, concierge, and the
+  // insider early-events key). WP4 removed daily_digest (the digest is weekly
+  // and free) and insider_tips (a key in neither entitlement map). The keys
   // stay in _shared/entitlements.ts and useSubscription so no shipped mobile
   // build loses a feature it can ask about; what is gone is the promise.
+  // The tier each feature needs comes from the caller's requiredTier, not here.
   unlimited_favorites: {
-    title: "Unlimited Favorites",
-    description: "Save as many events and restaurants as you want — free accounts are limited to 3",
-    tier: "insider",
+    title: "Unlimited favorites",
+    // The free cap in the sentence comes from the free plan row at render.
+    description: "",
   },
   // Lists only what /search/advanced applies (search plan WP4 item 2). It
   // used to promise distance, price range and time of day, none of which any
-  // query read.
+  // query read. Search WP4 Stage B owns this entry (pricing plan D-D2).
   advanced_filters: {
     title: "Advanced Filters",
     description: "Filter search by minimum rating, area, event dates and featured picks",
-    tier: "insider",
   },
   ad_free: {
-    title: "Ad-Free Experience",
-    description: "Browse without interruptions from advertisements",
-    tier: "insider",
-  },
-  daily_digest: {
-    title: "Daily Personalized Digest",
-    description: "Get daily recommendations tailored just for you",
-    tier: "insider",
+    title: "Ad-free browsing",
+    description: "Browse without ads.",
   },
   trip_planner: {
-    title: "AI Trip Planner",
-    description: "Plan your perfect Des Moines trip with AI-powered itineraries. Insider members get 5 trips/month",
-    tier: "insider",
+    title: "AI trip plans",
+    description: "Build a Des Moines itinerary with AI.",
   },
   write_reviews: {
-    title: "Write Reviews",
-    description: "Share your experiences by writing reviews for events and restaurants",
-    tier: "insider",
+    title: "Writing reviews",
+    description: "Rate and review events, restaurants and attractions.",
   },
   save_searches: {
-    title: "Saved Searches",
-    description: "Save your search criteria and get notified when new matches appear",
-    tier: "insider",
+    title: "Saved searches",
+    description: "Save a search and get an email when new events match it.",
   },
   create_alerts: {
-    title: "Custom Event Alerts",
-    description: "Set up alerts to be notified when events match your interests",
-    tier: "insider",
-  },
-  insider_tips: {
-    title: "Insider & Dining Tips",
-    description: "Unlock curated local dining tips and insider picks for the best of Des Moines",
-    tier: "insider",
+    title: "Event alerts",
+    description: "Get an email when new events match what you follow.",
   },
 };
 
-const insiderFeatures = [
-  { icon: Heart, text: "Unlimited favorites" },
-  { icon: Zap, text: "AI Trip Planner (5/month)" },
-  { icon: Filter, text: "Advanced search filters" },
-  { icon: Star, text: "Ad-free experience" },
-  { icon: Bell, text: "Alerts & saved searches" },
-  { icon: Zap, text: "Write reviews & ratings" },
-  { icon: Zap, text: "Early access to events" },
-];
-
-const vipFeatures = [
-  { icon: Crown, text: "Exclusive VIP events" },
-  { icon: Star, text: "Reservation assistance" },
-  { icon: Bell, text: "SMS alerts for your interests" },
-  { icon: Sparkles, text: "Monthly local business perks" },
-];
-
-// Plan prices — must match the Pricing page + iOS SKUs (WEB-FEAT-002).
-const PLAN_PRICING: Record<"insider" | "vip", { monthly: number; yearly: number }> = {
-  insider: { monthly: 4.99, yearly: 49.99 },
-  vip: { monthly: 12.99, yearly: 129.99 },
+/** What the viewer ran out of, for "You've used 10 of 10 saved searches." */
+const USAGE_NOUN: Record<string, string> = {
+  save_searches: "saved searches",
+  create_alerts: "saved searches",
+  trip_planner: "trip plans this month",
+  unlimited_favorites: "favorites",
 };
 
-function yearlySavingsPct(plan: "insider" | "vip"): number {
-  const { monthly, yearly } = PLAN_PRICING[plan];
-  return Math.round((1 - yearly / (monthly * 12)) * 100);
+const PLAN_LABEL: Record<PaidPlan, string> = { insider: "Insider", vip: "VIP" };
+
+function formatDollars(amount: number): string {
+  return `$${amount.toFixed(2)}`;
 }
 
-// Largest annual discount across paid plans — drives the toggle badge.
-const MAX_YEARLY_SAVINGS_PCT = Math.max(
-  yearlySavingsPct("insider"),
-  yearlySavingsPct("vip"),
-);
-
-function formatPlanPrice(plan: "insider" | "vip", billing: "monthly" | "yearly"): string {
-  return `$${PLAN_PRICING[plan][billing].toFixed(2)}`;
+function nextPlanFor(tier: string, requiredTier: PaidPlan): PaidPlan[] {
+  if (tier === "vip") return [];
+  if (tier === "insider") return ["vip"];
+  return requiredTier === "vip" ? ["vip"] : ["insider", "vip"];
 }
 
 export function UpgradeModal({
@@ -137,41 +108,129 @@ export function UpgradeModal({
   onOpenChange,
   feature,
   requiredTier = "insider",
+  limit,
+  used,
 }: UpgradeModalProps) {
-  const { tier: currentTier } = useSubscription();
+  const { tier: currentTier, plans, subscriptions } = useSubscription();
   // WEB-FEAT-014: an Insider upgrading to VIP, and anyone resubscribing after a
   // cancellation, gets no trial. Promising one here was copy the checkout refuses.
   const { isEligibleForTrial } = useTrialEligibility();
-  const [selectedPlan, setSelectedPlan] = useState<"insider" | "vip">(
-    requiredTier
-  );
-  const [billing, setBilling] = useState<"monthly" | "yearly">("monthly");
+
+  // An Insider is only ever offered VIP; a free viewer sent here for a VIP
+  // feature is offered VIP alone, since Insider would not unlock it.
+  const offered = nextPlanFor(currentTier, requiredTier);
+  const preferred: PaidPlan | null = offered.includes(requiredTier) ? requiredTier : offered[0] ?? null;
+
+  const [selectedPlan, setSelectedPlan] = useState<PaidPlan>(preferred ?? requiredTier);
+  const [billing, setBilling] = useState<BillingInterval>("monthly");
+
+  // The dialog can stay mounted between openings (PremiumGate), and the tier
+  // can resolve after it opens, so the selection follows both.
+  useEffect(() => {
+    if (open && preferred) setSelectedPlan(preferred);
+  }, [open, preferred]);
+
+  // A web subscriber changing tier goes through /subscription while in-place
+  // changes are paused (billingStatus.ts, pricing plan D1).
+  const heldWebPlan =
+    subscriptions.find(
+      (s) => s.platform === "web" && (s.status === "active" || s.status === "trialing"),
+    )?.plan?.name ?? null;
+  const planChangePaused = !IN_PLACE_PLAN_CHANGE_ENABLED && !!heldWebPlan;
 
   const featureInfo = feature ? featureDescriptions[feature] : null;
-  // Context id for funnel logging — the feature key, or "generic".
   const contextId = feature || "generic";
-  const checkoutStartedRef = useRef(false);
+  const ctaClickedRef = useRef(false);
 
-  // Log present once per open; log dismiss on close unless checkout started.
+  // Log present once per open; log dismiss on close unless the CTA was used.
   useEffect(() => {
     if (open) {
-      checkoutStartedRef.current = false;
-      logPaywallEvent("paywall_present", contextId);
+      ctaClickedRef.current = false;
+      logPaywallEvent("paywall_present", contextId, { tier: currentTier });
     }
+    // currentTier is context for the row, not a reason to log again.
+    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [open, contextId]);
 
   const handleOpenChange = (next: boolean) => {
-    if (!next && open && !checkoutStartedRef.current) {
+    if (!next && open && !ctaClickedRef.current) {
       logPaywallEvent("paywall_dismiss", contextId);
     }
     onOpenChange(next);
   };
 
-  const handleCheckoutStart = (plan: "insider" | "vip") => {
-    checkoutStartedRef.current = true;
-    logPaywallEvent("paywall_checkout_start", contextId, { plan, billing });
+  const handleCtaClick = (destination: "pricing" | "subscription") => {
+    ctaClickedRef.current = true;
+    logPaywallEvent("paywall_cta_click", contextId, { plan: selectedPlan, billing, destination });
     onOpenChange(false);
   };
+
+  const rowFor = (name: PaidPlan) => plans.find((p) => p.name === name);
+  const benefits = benefitsFor(selectedPlan, rowFor(selectedPlan)?.limits);
+
+  const usageLine = (() => {
+    if (typeof limit !== "number" || typeof used !== "number" || limit < 0) return null;
+    const noun = feature ? USAGE_NOUN[feature] : undefined;
+    if (!noun) return null;
+    let vipNote = "";
+    if (feature === "trip_planner" && TRIP_PLANNER_MONTHLY_QUOTA.vip === -1) {
+      vipNote = " VIP has no monthly cap.";
+    } else if (feature === "save_searches" || feature === "create_alerts") {
+      const vipCap = rowFor("vip")?.limits?.saved_searches;
+      if (vipCap === -1) vipNote = " VIP has no cap.";
+    }
+    return `You've used ${used} of ${limit} ${noun}.${vipNote}`;
+  })();
+
+  const freeFavorites = plans.find((p) => p.name === "free")?.limits?.favorites;
+  const featureDetail = (() => {
+    if (!featureInfo) return null;
+    if (feature === "unlimited_favorites" && typeof freeFavorites === "number" && freeFavorites > 0) {
+      return `Free accounts can save ${freeFavorites}.`;
+    }
+    if (feature === "unlimited_favorites") return null;
+    const text = featureInfo.description;
+    return text.endsWith(".") ? text : `${text}.`;
+  })();
+
+  const description: ReactNode = (() => {
+    if (offered.length === 0) return "You're on VIP, which includes this.";
+    if (usageLine) return usageLine;
+    if (currentTier === "insider") {
+      return featureInfo ? (
+        <>
+          <span className="font-medium text-foreground">{featureInfo.title}</span> needs VIP. Here's
+          what VIP adds to your Insider plan.
+        </>
+      ) : (
+        "Here's what VIP adds to your Insider plan."
+      );
+    }
+    return featureInfo ? (
+      <>
+        <span className="font-medium text-foreground">{featureInfo.title}</span> is part of{" "}
+        {PLAN_LABEL[requiredTier]}.{featureDetail ? ` ${featureDetail}` : ""}
+      </>
+    ) : (
+      "Pick a plan to see what it adds."
+    );
+  })();
+
+  // Roving focus for the plan radio group (arrow keys move the selection).
+  const cardRefs = useRef<Record<PaidPlan, HTMLButtonElement | null>>({ insider: null, vip: null });
+  const onCardKeyDown = (event: KeyboardEvent<HTMLButtonElement>) => {
+    if (offered.length < 2) return;
+    const keys = ["ArrowRight", "ArrowDown", "ArrowLeft", "ArrowUp"];
+    if (!keys.includes(event.key)) return;
+    event.preventDefault();
+    const step = event.key === "ArrowRight" || event.key === "ArrowDown" ? 1 : -1;
+    const at = offered.indexOf(selectedPlan);
+    const next = offered[(at + step + offered.length) % offered.length];
+    setSelectedPlan(next);
+    cardRefs.current[next]?.focus();
+  };
+
+  const selectedLabel = PLAN_LABEL[selectedPlan];
 
   return (
     <Dialog open={open} onOpenChange={handleOpenChange}>
@@ -179,225 +238,246 @@ export function UpgradeModal({
         <DialogHeader>
           <DialogTitle className="flex items-center gap-2 text-xl">
             <SpriteIcon name="sparkles" className="h-5 w-5 text-amber-700 dark:text-amber-500" />
-            Unlock Premium Features
+            {currentTier === "insider" ? "Move up to VIP" : "Unlock Premium Features"}
           </DialogTitle>
-          <DialogDescription>
-            {featureInfo ? (
-              <>
-                <span className="font-medium text-foreground">
-                  {featureInfo.title}
-                </span>{" "}
-                is available with our{" "}
-                <span className="capitalize">{featureInfo.tier}</span> plan.
-              </>
-            ) : (
-              "Upgrade to access exclusive features and get more out of Des Moines."
-            )}
-          </DialogDescription>
+          <DialogDescription>{description}</DialogDescription>
         </DialogHeader>
 
-        <div className="mt-4 space-y-4">
-          {/* Billing interval toggle */}
-          <div className="flex items-center justify-center gap-3">
-            <Label
-              htmlFor="paywall-billing-toggle"
-              className={cn(
-                "text-sm cursor-pointer",
-                billing === "monthly" ? "font-semibold" : "text-muted-foreground"
-              )}
-            >
-              Monthly
-            </Label>
-            <Switch
-              id="paywall-billing-toggle"
-              checked={billing === "yearly"}
-              onCheckedChange={(checked) => setBilling(checked ? "yearly" : "monthly")}
-              aria-label="Toggle annual billing"
-            />
-            <Label
-              htmlFor="paywall-billing-toggle"
-              className={cn(
-                "text-sm cursor-pointer flex items-center gap-2",
-                billing === "yearly" ? "font-semibold" : "text-muted-foreground"
-              )}
-            >
-              Yearly
-              <Badge variant="secondary" className="bg-green-100 text-green-800 text-[10px]">
-                Save up to {MAX_YEARLY_SAVINGS_PCT}%
-              </Badge>
-            </Label>
+        {offered.length === 0 ? (
+          <div className="mt-4 flex justify-end">
+            <Button variant="ghost" onClick={() => handleOpenChange(false)}>
+              Close
+            </Button>
           </div>
+        ) : (
+          <div className="mt-4 space-y-4">
+            <div className="flex items-center justify-center gap-3">
+              <Label
+                htmlFor="paywall-billing-toggle"
+                className={cn(
+                  "text-sm cursor-pointer",
+                  billing === "monthly" ? "font-semibold" : "text-muted-foreground"
+                )}
+              >
+                Monthly
+              </Label>
+              <Switch
+                id="paywall-billing-toggle"
+                checked={billing === "yearly"}
+                onCheckedChange={(checked) => setBilling(checked ? "yearly" : "monthly")}
+                aria-label="Bill yearly"
+              />
+              <Label
+                htmlFor="paywall-billing-toggle"
+                className={cn(
+                  "text-sm cursor-pointer",
+                  billing === "yearly" ? "font-semibold" : "text-muted-foreground"
+                )}
+              >
+                Yearly
+              </Label>
+            </div>
 
-          {/* Plan Selection */}
-          <div className="grid grid-cols-2 gap-3">
-            {/* Insider Plan */}
-            <button
-              type="button"
-              onClick={() => setSelectedPlan("insider")}
-              className={cn(
-                "relative p-4 rounded-lg border-2 text-left transition-all",
-                selectedPlan === "insider"
-                  ? "border-amber-700 bg-amber-50 dark:border-amber-500 dark:bg-amber-950/20"
-                  : "border-muted hover:border-amber-700/40"
-              )}
+            <div
+              role="radiogroup"
+              aria-label="Choose a plan"
+              className={cn("grid gap-3", offered.length > 1 ? "grid-cols-2" : "grid-cols-1")}
             >
-              {selectedPlan === "insider" && (
-                <div className="absolute -top-2 -right-2">
-                  <Check className="h-5 w-5 text-amber-700 dark:text-amber-500 bg-white dark:bg-background rounded-full" />
-                </div>
-              )}
-              <div className="flex items-center gap-2 mb-2">
-                <SpriteIcon name="sparkles" className="h-4 w-4 text-amber-700 dark:text-amber-500" />
-                <span className="font-semibold">Insider</span>
-              </div>
-              <div className="text-2xl font-bold">
-                {formatPlanPrice("insider", billing)}
-                <span className="text-sm font-normal text-muted-foreground">
-                  /{billing === "yearly" ? "yr" : "mo"}
-                </span>
-              </div>
-              <p className="text-xs text-muted-foreground mt-1">
-                {billing === "yearly"
-                  ? `Save ${yearlySavingsPct("insider")}% vs monthly`
-                  : `or ${formatPlanPrice("insider", "yearly")}/yr`}
-              </p>
-            </button>
+              {offered.map((plan) => {
+                const selected = selectedPlan === plan;
+                const price = displayPrice(plans, plan, billing);
+                const yearlyPrice = displayPrice(plans, plan, "yearly");
+                const saved = yearlySavings(plans, plan);
+                const isVip = plan === "vip";
+                return (
+                  <button
+                    key={plan}
+                    ref={(el) => {
+                      cardRefs.current[plan] = el;
+                    }}
+                    type="button"
+                    role="radio"
+                    aria-checked={selected}
+                    tabIndex={selected ? 0 : -1}
+                    data-plan={plan}
+                    onClick={() => setSelectedPlan(plan)}
+                    onKeyDown={onCardKeyDown}
+                    className={cn(
+                      "relative p-4 rounded-xl border-2 text-left transition-colors min-h-11",
+                      "focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2",
+                      selected
+                        ? isVip
+                          ? "border-secondary bg-secondary/5"
+                          : "border-amber-700 bg-amber-50 dark:border-amber-500 dark:bg-amber-950/20"
+                        : isVip
+                          ? "border-muted hover:border-secondary/40"
+                          : "border-muted hover:border-amber-700/40"
+                    )}
+                  >
+                    {selected && (
+                      <span className="absolute -top-2 -right-2" aria-hidden="true">
+                        <Check
+                          className={cn(
+                            "h-5 w-5 rounded-full bg-background",
+                            isVip ? "text-secondary" : "text-amber-700 dark:text-amber-500"
+                          )}
+                        />
+                      </span>
+                    )}
+                    <span className="flex items-center gap-2 mb-2">
+                      {isVip ? (
+                        <Crown className="h-4 w-4 text-secondary" aria-hidden="true" />
+                      ) : (
+                        <SpriteIcon name="sparkles" className="h-4 w-4 text-amber-700 dark:text-amber-500" />
+                      )}
+                      <span className="font-semibold">{PLAN_LABEL[plan]}</span>
+                    </span>
+                    {price === null ? (
+                      <span className="block text-sm text-muted-foreground">Price on the plans page</span>
+                    ) : (
+                      <span className="block text-2xl font-bold">
+                        {formatDollars(price)}
+                        <span className="text-sm font-normal text-muted-foreground">
+                          /{billing === "yearly" ? "yr" : "mo"}
+                        </span>
+                      </span>
+                    )}
+                    <span className="block text-xs text-muted-foreground mt-1">
+                      {billing === "yearly"
+                        ? saved !== null
+                          ? `${formatDollars(saved)} less than paying monthly`
+                          : null
+                        : yearlyPrice !== null
+                          ? `or ${formatDollars(yearlyPrice)}/yr`
+                          : null}
+                    </span>
+                  </button>
+                );
+              })}
+            </div>
 
-            {/* VIP Plan */}
-            <button
-              type="button"
-              onClick={() => setSelectedPlan("vip")}
-              className={cn(
-                "relative p-4 rounded-lg border-2 text-left transition-all",
-                selectedPlan === "vip"
-                  ? "border-secondary bg-secondary/5"
-                  : "border-muted hover:border-secondary/40"
-              )}
-            >
-              <Badge className="absolute -top-2 left-1/2 -translate-x-1/2 bg-secondary text-secondary-foreground border-0 text-[10px]">
-                BEST VALUE
-              </Badge>
-              {selectedPlan === "vip" && (
-                <div className="absolute -top-2 -right-2">
-                  <Check className="h-5 w-5 text-secondary bg-white dark:bg-background rounded-full" />
-                </div>
-              )}
-              <div className="flex items-center gap-2 mb-2">
-                <Crown className="h-4 w-4 text-secondary" />
-                <span className="font-semibold">VIP</span>
-              </div>
-              <div className="text-2xl font-bold">
-                {formatPlanPrice("vip", billing)}
-                <span className="text-sm font-normal text-muted-foreground">
-                  /{billing === "yearly" ? "yr" : "mo"}
-                </span>
-              </div>
-              <p className="text-xs text-muted-foreground mt-1">
-                {billing === "yearly"
-                  ? `Save ${yearlySavingsPct("vip")}% vs monthly`
-                  : `or ${formatPlanPrice("vip", "yearly")}/yr`}
-              </p>
-            </button>
-          </div>
+            <div className="bg-muted/50 rounded-xl p-4">
+              <h3 className="font-medium mb-3">
+                {selectedPlan === "vip" && currentTier === "insider"
+                  ? "What VIP adds"
+                  : selectedPlan === "vip"
+                    ? "What VIP includes"
+                    : "What Insider includes"}
+              </h3>
+              <ul className="space-y-2">
+                {benefits.map((b) => (
+                  <li key={b.key} className="flex items-center gap-2 text-sm">
+                    <Check className="h-4 w-4 text-green-700 dark:text-green-500 flex-shrink-0" aria-hidden="true" />
+                    <span>{b.text}</span>
+                  </li>
+                ))}
+              </ul>
+            </div>
 
-          {/* Features List */}
-          <div className="bg-muted/50 rounded-lg p-4">
-            <h4 className="font-medium mb-3 flex items-center gap-2">
-              {selectedPlan === "insider" ? (
+            <div className="flex flex-col gap-2">
+              {planChangePaused ? (
                 <>
-                  <SpriteIcon name="sparkles" className="h-4 w-4 text-amber-700 dark:text-amber-500" />
-                  Insider Features
+                  <p className="text-sm text-muted-foreground" role="status">
+                    {PLAN_CHANGE_PAUSED_MESSAGE}
+                  </p>
+                  <Button asChild variant="outline" className="w-full min-h-11">
+                    <Link to="/subscription" onClick={() => handleCtaClick("subscription")}>
+                      Manage your plan
+                    </Link>
+                  </Button>
                 </>
               ) : (
-                <>
-                  <Crown className="h-4 w-4 text-secondary" />
-                  VIP Features (includes Insider)
-                </>
+                <Button
+                  asChild
+                  className={cn(
+                    "w-full min-h-11",
+                    selectedPlan === "insider"
+                      ? "bg-amber-700 text-white hover:bg-amber-800"
+                      : "bg-secondary text-secondary-foreground hover:bg-secondary/90"
+                  )}
+                >
+                  <Link
+                    to={`/pricing?plan=${selectedPlan}&billing=${billing}`}
+                    onClick={() => handleCtaClick("pricing")}
+                  >
+                    Upgrade to {selectedLabel}
+                  </Link>
+                </Button>
               )}
-            </h4>
-            <ul className="space-y-2">
-              {(selectedPlan === "insider"
-                ? insiderFeatures
-                : [...insiderFeatures, ...vipFeatures]
-              ).map((feat, idx) => (
-                <li key={idx} className="flex items-center gap-2 text-sm">
-                  <feat.icon className="h-4 w-4 text-green-500 flex-shrink-0" />
-                  <span>{feat.text}</span>
-                </li>
-              ))}
-            </ul>
-          </div>
-
-          {/* CTA Buttons */}
-          <div className="flex flex-col gap-2">
-            <Button
-              asChild
-              className={cn(
-                "w-full",
-                selectedPlan === "insider"
-                  ? "bg-amber-700 text-white hover:bg-amber-800"
-                  : "bg-secondary text-secondary-foreground hover:bg-secondary/90"
-              )}
-            >
-              <Link
-                to={`/pricing?plan=${selectedPlan}&billing=${billing}`}
-                onClick={() => handleCheckoutStart(selectedPlan)}
+              <Button
+                variant="ghost"
+                onClick={() => handleOpenChange(false)}
+                className="text-muted-foreground min-h-11"
               >
-                Upgrade to {selectedPlan === "insider" ? "Insider" : "VIP"}
-              </Link>
-            </Button>
-            <Button
-              variant="ghost"
-              onClick={() => handleOpenChange(false)}
-              className="text-muted-foreground"
-            >
-              Maybe later
-            </Button>
-          </div>
+                Maybe later
+              </Button>
+            </div>
 
-          {/* Trust Indicators */}
-          <p className="text-xs text-center text-muted-foreground">
-            Cancel anytime{isEligibleForTrial ? " • 7-day free trial" : ""} • Secure
-            checkout
-          </p>
-        </div>
+            {!planChangePaused && (
+              <p className="text-xs text-center text-muted-foreground">
+                {isEligibleForTrial ? "7-day free trial. " : ""}Cancel anytime. Checkout is handled by Stripe.
+              </p>
+            )}
+          </div>
+        )}
       </DialogContent>
     </Dialog>
   );
 }
 
-// Hook for easy modal usage
+interface UpgradeModalRequest {
+  feature?: string;
+  requiredTier?: PaidPlan;
+  limit?: number;
+  used?: number;
+}
+
+/**
+ * Local modal state for a component that opens the paywall itself.
+ *
+ * `UpgradeModalComponent` keeps its identity until the modal opens, closes or
+ * gets new props. It used to be a fresh arrow function each render, which React
+ * treats as a new component type: any parent re-render (a toast, a query
+ * resolving) unmounted and remounted the open dialog, reset its selection and
+ * logged paywall_present again.
+ */
 export function useUpgradeModal() {
   const [isOpen, setIsOpen] = useState(false);
-  const [modalProps, setModalProps] = useState<{
-    feature?: string;
-    requiredTier?: "insider" | "vip";
-  }>({});
+  const [modalProps, setModalProps] = useState<UpgradeModalRequest>({});
 
-  const openUpgradeModal = (
-    feature?: string,
-    requiredTier?: "insider" | "vip"
-  ) => {
-    setModalProps({ feature, requiredTier });
-    setIsOpen(true);
-  };
+  const openUpgradeModal = useCallback(
+    (feature?: string, requiredTier?: PaidPlan, usage?: { limit?: number; used?: number }) => {
+      setModalProps({ feature, requiredTier, limit: usage?.limit, used: usage?.used });
+      setIsOpen(true);
+    },
+    [],
+  );
 
-  const closeUpgradeModal = () => {
+  const closeUpgradeModal = useCallback(() => {
     setIsOpen(false);
-  };
+  }, []);
+
+  const UpgradeModalComponent = useMemo(() => {
+    function BoundUpgradeModal() {
+      return (
+        <UpgradeModal
+          open={isOpen}
+          onOpenChange={setIsOpen}
+          feature={modalProps.feature}
+          requiredTier={modalProps.requiredTier}
+          limit={modalProps.limit}
+          used={modalProps.used}
+        />
+      );
+    }
+    return BoundUpgradeModal;
+  }, [isOpen, modalProps]);
 
   return {
     isOpen,
     openUpgradeModal,
     closeUpgradeModal,
-    UpgradeModalComponent: () => (
-      <UpgradeModal
-        open={isOpen}
-        onOpenChange={setIsOpen}
-        feature={modalProps.feature}
-        requiredTier={modalProps.requiredTier}
-      />
-    ),
+    UpgradeModalComponent,
   };
 }
 
