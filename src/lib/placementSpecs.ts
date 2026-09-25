@@ -78,7 +78,9 @@ const PIXEL_SIZE_NOTE = 'Exactly one of the sizes above, in pixels (DPI is ignor
 
 const TOP_BANNER_PAGES: PlacementPage[] = ['Home', 'Events'];
 const FEATURED_SPOT_PAGES: PlacementPage[] = ['Restaurants', 'Attractions'];
-const BELOW_FOLD_PAGES: PlacementPage[] = ['Home', 'Events', 'Restaurants', 'Attractions'];
+// Home dropped its below_fold slot in the Home pass-2 plan (WP1 item 10); on an
+// ad-free day it rendered a second trip-planner upsell.
+const BELOW_FOLD_PAGES: PlacementPage[] = ['Events', 'Restaurants', 'Attractions'];
 /** Not an AdBanner slot: arrangeSponsored() lifts the listing in these lists. */
 const SPONSORED_LISTING_PAGES: PlacementPage[] = ['Events', 'Restaurants'];
 

@@ -1,112 +1,82 @@
-import { useEffect } from 'react';
+import { useEffect, useMemo } from 'react';
 import { useQuery } from '@tanstack/react-query';
 import { supabase } from '@/integrations/supabase/client';
-import { toZonedTime, fromZonedTime } from 'date-fns-tz';
 import { handleError } from '@/lib/errorHandler';
+import { applyEventVisibility } from '@/lib/eventQuery';
+import { centralDateOf, centralHour, centralWindow } from '@/lib/timezone';
 
 /**
- * Counts behind the homepage trust strip (EnhancedHero's "N Events Today /
- * N Restaurants / N New This Week" tiles).
+ * The one count in the hero's context line: "Friday: N events today", or after
+ * 15:00 Central "N still to start tonight" (home-pass2 WP1 items 4 and 13).
  *
- * WEB-QA-024 — three things this hook used to get wrong:
+ * It used to feed three desktop tiles as well (restaurants, new this week).
+ * Those tiles are gone, and with them two first-view requests.
  *
- * 1. It counted events that /events refuses to show. useEvents.ts:59-60 filters
- *    .neq("is_merged", true).neq("is_hidden", true) per WEB-AUTO-005/006, and
- *    this hook filtered on date alone, so the tile and the page it links to
- *    disagreed by construction — the counter included merged duplicates and
- *    soft-hidden stale rows.
- * 2. It read `count ?? 0` and discarded the error, so a rejected query rendered
- *    a confident "0 Events Today" on the highest-traffic trust signal on the
- *    site. A wrong number a visitor believes is worse than a dash they don't.
- * 3. It was raw useState + useEffect with an empty dep array — no retry, no
- *    cache, no dedup, no isError — against the CLAUDE.md data-flow convention.
+ * Rules this keeps (WEB-QA-024):
+ * - The count uses the site's visibility predicate (applyEventVisibility), so
+ *   the number and /events/today, the page it links to, agree.
+ * - The window is centralWindow('today'), the same Central day that page lists.
+ * - A failed count, or a response with no count, THROWS. `count ?? 0` is how
+ *   an outage used to render a confident "0 events today".
  *
- * Counts are `null`, never 0, when unknown. Callers must render that as
- * something other than a number.
+ * Counts are `null` when unknown, never 0. Callers render that as a dash.
  */
-const TZ = 'America/Chicago';
+
+/** From this Central hour the line counts only what has not started yet. */
+export const STILL_TO_START_HOUR = 15;
+
+/**
+ * `today`: every visible event on today's Central date.
+ * `still-to-start`: the ones from now to the end of today.
+ */
+export type TodayCountMode = 'today' | 'still-to-start';
+
+export function todayCountMode(now: Date = new Date()): TodayCountMode {
+  return centralHour(now) >= STILL_TO_START_HOUR ? 'still-to-start' : 'today';
+}
+
+export interface TodayCount {
+  count: number;
+  mode: TodayCountMode;
+}
 
 export interface HomepageStats {
   eventsToday: number | null;
-  restaurantsCount: number | null;
-  newThisWeek: number | null;
+  mode: TodayCountMode;
   isLoading: boolean;
   isError: boolean;
 }
 
-interface HomepageCounts {
-  eventsToday: number;
-  restaurantsCount: number;
-  newThisWeek: number;
-}
+/** Exported for the unit tests: src/hooks/__tests__/useHomepageStats.test.ts. */
+export async function fetchHomepageCounts(now: Date = new Date()): Promise<TodayCount> {
+  const today = centralWindow('today', now);
+  const mode = todayCountMode(now);
+  const floor = mode === 'still-to-start' ? now.toISOString() : today.start;
 
-/** Exported for the unit tests — see src/hooks/__tests__/useHomepageStats.test.ts. */
-export async function fetchHomepageCounts(): Promise<HomepageCounts> {
-  const now = new Date();
-  const nowLocal = toZonedTime(now, TZ);
+  const { count, error } = await applyEventVisibility(
+    supabase.from('events').select('id', { count: 'exact', head: true }),
+  )
+    .gte('date', floor)
+    .lte('date', today.end);
 
-  // Today's date range in UTC (matching EventsToday.tsx logic)
-  const startLocal = new Date(nowLocal.getFullYear(), nowLocal.getMonth(), nowLocal.getDate(), 0, 0, 0, 0);
-  const endLocal = new Date(nowLocal.getFullYear(), nowLocal.getMonth(), nowLocal.getDate(), 23, 59, 59, 999);
-  const todayStartUtc = fromZonedTime(startLocal, TZ).toISOString();
-  const todayEndUtc = fromZonedTime(endLocal, TZ).toISOString();
-
-  // 7 days ago for "new this week"
-  const weekAgo = new Date(now);
-  weekAgo.setDate(weekAgo.getDate() - 7);
-  const weekAgoUtc = weekAgo.toISOString();
-
-  const [eventsRes, restaurantsRes, newEventsRes] = await Promise.all([
-    // Events happening today. The visibility predicate is the whole point of
-    // AC1 -- it must stay in step with useEvents.ts, which now also filters
-    // archived_at (WEB-BE-034).
-    supabase
-      .from('events')
-      .select('*', { count: 'exact', head: true })
-      .gte('date', todayStartUtc)
-      .lte('date', todayEndUtc)
-      .neq('is_merged', true)
-      .neq('is_hidden', true)
-      // WEB-BE-034: archived_at is the other unpublish switch.
-      .is('archived_at', null),
-
-    // All restaurants. The tile this feeds links to /restaurants, the page
-    // that lists all of them. It used to link to /restaurants/open-now, a
-    // subset, so the number and the destination never matched; the link moved
-    // rather than the number (WP1 item 11, docs/page-plans/home.md).
-    supabase
-      .from('restaurants')
-      .select('*', { count: 'exact', head: true }),
-
-    // Events created in the last 7 days. Same visibility predicate, plus the
-    // upcoming-only bound: the tile links to /events, and an event created two
-    // days ago for a date that has already passed is not on that page.
-    supabase
-      .from('events')
-      .select('*', { count: 'exact', head: true })
-      .gte('created_at', weekAgoUtc)
-      .gte('date', todayStartUtc)
-      .neq('is_merged', true)
-      .neq('is_hidden', true)
-      // WEB-BE-034: archived_at is the other unpublish switch.
-      .is('archived_at', null),
-  ]);
-
-  // Surface the first failure rather than substituting a zero for it.
-  const failure = eventsRes.error ?? restaurantsRes.error ?? newEventsRes.error;
-  if (failure) throw failure;
-
-  return {
-    eventsToday: eventsRes.count ?? 0,
-    restaurantsCount: restaurantsRes.count ?? 0,
-    newThisWeek: newEventsRes.count ?? 0,
-  };
+  if (error) throw error;
+  if (typeof count !== 'number') {
+    throw new Error('events count came back without a count');
+  }
+  return { count, mode };
 }
 
 export function useHomepageStats(): HomepageStats {
+  // Keyed on the Central day and the mode, so the line rolls over at 15:00 and
+  // at midnight on the next refetch instead of keeping yesterday's number.
+  const { day, mode } = useMemo(() => {
+    const now = new Date();
+    return { day: centralDateOf(now), mode: todayCountMode(now) };
+  }, []);
+
   const { data, isLoading, isError, error } = useQuery({
-    queryKey: ['homepage-stats'],
-    queryFn: fetchHomepageCounts,
+    queryKey: ['homepage-stats', day, mode],
+    queryFn: () => fetchHomepageCounts(),
     // Counts move on a scale of hours, and this fires on every homepage view.
     staleTime: 5 * 60 * 1000,
   });
@@ -120,9 +90,8 @@ export function useHomepageStats(): HomepageStats {
   }, [error]);
 
   return {
-    eventsToday: data?.eventsToday ?? null,
-    restaurantsCount: data?.restaurantsCount ?? null,
-    newThisWeek: data?.newThisWeek ?? null,
+    eventsToday: data?.count ?? null,
+    mode: data?.mode ?? mode,
     isLoading,
     isError,
   };

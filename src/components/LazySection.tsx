@@ -1,4 +1,5 @@
 import { useEffect, useRef, useState, type ReactNode } from "react";
+import { isPrerender } from "@/lib/isPrerender";
 
 interface LazySectionProps {
   children: ReactNode;
@@ -32,6 +33,14 @@ interface LazySectionProps {
  *
  * Content that must be in the initial DOM for indexing (the FAQ) does not go
  * in here.
+ *
+ * Under the build-time prerender (`isPrerender()`) every section mounts at
+ * once, so the static HTML crawlers get carries the snapshot, the
+ * neighbourhood links and the dashboard (home-pass2 WP1 item 1). The page never
+ * scrolls there, so without this they stayed placeholders.
+ *
+ * The idle placeholder is not `aria-busy`: nothing is loading, the section is
+ * deferred. `aria-busy` also made the prerender wait out its timeout on `/`.
  */
 export function LazySection({
   children,
@@ -43,7 +52,9 @@ export function LazySection({
 }: LazySectionProps) {
   const ref = useRef<HTMLDivElement>(null);
   const [visible, setVisible] = useState(
-    () => typeof window !== "undefined" && typeof window.IntersectionObserver === "undefined",
+    () =>
+      isPrerender() ||
+      (typeof window !== "undefined" && typeof window.IntersectionObserver === "undefined"),
   );
 
   useEffect(() => {
@@ -72,7 +83,6 @@ export function LazySection({
       ref={ref}
       className={className}
       style={{ minHeight }}
-      aria-busy="true"
       aria-label={label}
       role={label ? "region" : undefined}
       data-lazy-section="pending"

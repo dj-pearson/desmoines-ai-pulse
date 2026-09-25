@@ -224,6 +224,41 @@ const ALLOWED_IMAGELESS_ROUTES = new Map([
   // ['/example', 'why this grid legitimately has no images'],
 ]);
 
+/**
+ * The homepage's crawler content (home-pass2 WP1 item 1).
+ *
+ * Home defers its lower sections with LazySection, which mounts on scroll. The
+ * prerender never scrolls, so until the __DMI_PRERENDER__ flag existed every
+ * one of them shipped as an empty placeholder: the dated snapshot, the
+ * neighbourhood links and the dashboard were missing from the HTML that
+ * non-JS crawlers get. Two absolute assertions and one warning:
+ *
+ *   no data-lazy-section="pending"   a section the crawler never sees
+ *   a link to every NEIGHBORHOOD_ROUTES entry   the strip actually rendered
+ *   [data-speakable] present (WARN)  the dated snapshot rendered. A warning,
+ *                         because a placeholder-env build cannot fetch the
+ *                         counts, and the snapshot correctly renders nothing
+ *                         rather than a zero.
+ */
+const PENDING_LAZY = /data-lazy-section\s*=\s*["']pending["']/i;
+
+/**
+ * The prerendered neighbourhood slugs, read from the TypeScript inventory
+ * without compiling it, the same way check-neighborhood-inventory.mjs does. A
+ * file that stops matching fails loudly instead of reading zero routes.
+ */
+function neighborhoodRoutes() {
+  const src = readFileSync(join('src', 'lib', 'neighborhoods.ts'), 'utf8');
+  const routes = [...src.matchAll(/^\s{4}slug: '([a-z0-9-]+)',[\s\S]*?^\s{4}prerender: (true|false),/gm)]
+    .filter((m) => m[2] === 'true')
+    .map((m) => `/neighborhoods/${m[1]}`);
+  if (routes.length === 0) {
+    console.error('[prerender-content] read 0 neighbourhood routes from src/lib/neighborhoods.ts; the file changed shape.');
+    process.exit(1);
+  }
+  return routes;
+}
+
 /** An <a> with nothing a screen reader or a crawler could announce. */
 function unnamedLinks(doc, root) {
   return [...root.querySelectorAll('a[href]')].filter((a) => {
@@ -249,6 +284,29 @@ for (const file of files) {
       allowed.push({ route, occurrences, reason: ALLOWED_SKELETON_ROUTES.get(route) });
     } else {
       failures.push({ route, what: `ships a loading skeleton (aria-busy x${occurrences})` });
+    }
+  }
+
+  if (route === '/') {
+    if (PENDING_LAZY.test(html)) {
+      const n = (html.match(new RegExp(PENDING_LAZY.source, 'gi')) || []).length;
+      failures.push({
+        route,
+        what: `ships ${n} unmounted lazy section(s) (data-lazy-section="pending"); the prerender flag did not reach LazySection`,
+      });
+    }
+    const missing = neighborhoodRoutes().filter((r) => !html.includes(`href="${r}"`));
+    if (missing.length > 0) {
+      failures.push({ route, what: `has no link to ${missing.join(', ')} (the neighbourhood strip did not render)` });
+    }
+    // An attribute on an element, not the "[data-speakable]" selector string
+    // the Speakable JSON-LD carries on every build.
+    if (!/<[a-z][^>]*\sdata-speakable(?:[\s=>/])/i.test(html)) {
+      // stderr: the sharded parent only forwards stdout for failures.
+      console.error(
+        '[prerender-content] WARN /: no [data-speakable] block. The dated snapshot did not render; ' +
+          'expected on a placeholder-env build, a defect on a real one.',
+      );
     }
   }
 

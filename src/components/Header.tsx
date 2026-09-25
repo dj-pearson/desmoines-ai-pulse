@@ -1,18 +1,28 @@
-import { useState } from "react";
+import { useEffect, useState } from "react";
 import { useAuthFlags, useAuthActions } from "@/contexts/AuthContext";
 import { useProfile } from "@/hooks/useProfile";
 import { useUserLevel } from "@/hooks/useUserLevel";
 import { useAccessibility } from "@/hooks/useAccessibility";
 import { useSwipe } from "@/hooks/use-swipe";
-import { Link, useNavigate } from "react-router-dom";
+import { Link, useLocation, useNavigate } from "react-router-dom";
+import { Search } from "lucide-react";
 import { OptimizedLogo } from "./OptimizedLogo";
 import { DesktopNav } from "./header/DesktopNav";
 import { MobileNav } from "./header/MobileNav";
 import { UserMenu } from "./header/UserMenu";
+import { signUpHref } from "./header/navigationConfig";
 import { Button } from "@/components/ui/button";
 import { createLogger } from '@/lib/logger';
 
 const log = createLogger('Header');
+
+/** True when a keypress belongs to whatever has focus, not to the page. */
+function isTypingTarget(target: EventTarget | null): boolean {
+  if (!(target instanceof HTMLElement)) return false;
+  if (target.isContentEditable) return true;
+  const tag = target.tagName;
+  return tag === "INPUT" || tag === "TEXTAREA" || tag === "SELECT";
+}
 
 export default function Header() {
   // Flags + actions only (no user/session) so the header doesn't re-render on
@@ -27,6 +37,25 @@ export default function Header() {
   const { saveFocus, restoreFocus } = useFocusRestore();
   const [isMobileMenuOpen, setIsMobileMenuOpen] = useState(false);
   const navigate = useNavigate();
+  const { pathname, search } = useLocation();
+
+  // "/" and search. App's useKeyboardShortcuts already focuses a search box
+  // when the page has one (the hero on /, the field on /search). This covers
+  // every other page: with no box to focus, "/" goes to /search. Ignored while
+  // typing in a field and with a modifier held, so it never eats a character
+  // or a browser shortcut.
+  useEffect(() => {
+    const onKeyDown = (e: KeyboardEvent) => {
+      if (e.key !== "/" || e.metaKey || e.ctrlKey || e.altKey) return;
+      if (isTypingTarget(e.target) || isTypingTarget(document.activeElement)) return;
+      if (document.activeElement?.closest('[role="dialog"]')) return;
+      if (document.querySelector('input[type="search"], input[role="searchbox"]')) return;
+      e.preventDefault();
+      navigate("/search");
+    };
+    window.addEventListener("keydown", onKeyDown);
+    return () => window.removeEventListener("keydown", onKeyDown);
+  }, [navigate]);
   // Route changes are announced once, by useFocusOnRouteChange in the App
   // shell. Header used to announce them too, so every navigation spoke twice.
 
@@ -105,15 +134,23 @@ export default function Header() {
 
           {/* Sign Up CTA for non-authenticated users (desktop only) */}
           {!isAuthenticated && (
-            <Link to="/auth?utm_source=header&utm_medium=cta" className="hidden lg:block flex-shrink-0">
-              <Button size="sm" className="font-semibold">
-                Sign Up Free
-              </Button>
-            </Link>
+            <Button asChild size="sm" className="hidden lg:inline-flex flex-shrink-0 font-semibold">
+              <Link to={signUpHref(pathname, search)}>Sign Up Free</Link>
+            </Button>
           )}
 
-          {/* Mobile Menu + User Actions */}
-          <div className="flex items-center gap-2">
+          {/* Search, Mobile Menu + User Actions */}
+          <div className="ml-auto flex items-center gap-2">
+            <Button
+              asChild
+              variant="ghost"
+              size="icon"
+              className="h-11 w-11 flex-shrink-0 rounded-lg"
+            >
+              <Link to="/search" aria-label="Search" aria-keyshortcuts="/" title="Search (press /)">
+                <Search className="h-5 w-5" aria-hidden="true" />
+              </Link>
+            </Button>
             {/* Mobile Menu */}
             <MobileNav
               isOpen={isMobileMenuOpen}

@@ -1,4 +1,4 @@
-import { Link } from "react-router-dom";
+import { Link, useLocation } from "react-router-dom";
 import { Button } from "@/components/ui/button";
 import { Avatar, AvatarFallback } from "@/components/ui/avatar";
 import {
@@ -23,6 +23,7 @@ import {
 } from "lucide-react";
 import { ThemeToggle } from "@/components/ThemeToggle";
 import { useSubscription } from "@/hooks/useSubscription";
+import { signInHref } from "./navigationConfig";
 
 interface UserMenuProps {
   isAuthenticated: boolean;
@@ -53,6 +54,7 @@ export function UserMenu({
   onLogout,
   getInitials,
 }: UserMenuProps) {
+  const { pathname, search } = useLocation();
   return (
     <div className="hidden lg:flex items-center gap-2 flex-shrink-0">
       <ThemeToggle />
@@ -60,12 +62,12 @@ export function UserMenu({
         <>
           {/* Upgrade CTA, only for members who are not already paying */}
           <MemberUpgradeGate isAuthenticated={isAuthenticated}>
-            <Link to="/pricing" className="hidden xl:block">
-              <Button variant="secondary" size="sm" className="font-semibold">
+            <Button asChild variant="secondary" size="sm" className="hidden xl:inline-flex font-semibold">
+              <Link to="/pricing">
                 <Crown className="h-3.5 w-3.5 mr-1.5 text-primary" aria-hidden="true" />
                 Upgrade
-              </Button>
-            </Link>
+              </Link>
+            </Button>
           </MemberUpgradeGate>
           <DropdownMenu>
             <DropdownMenuTrigger asChild>
@@ -134,9 +136,13 @@ export function UserMenu({
           </DropdownMenu>
         </>
       ) : (
-        <Link to="/auth" aria-label="Sign in to your account">
-          <Button className="touch-target">Sign In</Button>
-        </Link>
+        <Button asChild className="touch-target">
+          {/* The name keeps its visible words first (label in name) and stays
+              distinct from a page's own "Sign in" link. */}
+          <Link to={signInHref(pathname, search)} aria-label="Sign in to your account">
+            Sign In
+          </Link>
+        </Button>
       )}
     </div>
   );

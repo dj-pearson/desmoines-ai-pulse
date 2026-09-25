@@ -1,13 +1,17 @@
-import type { ReactNode } from "react";
+import { useRef, type ReactNode } from "react";
 import { Link } from "react-router-dom";
 import { Baby, Search, Star, Utensils, type LucideIcon } from "lucide-react";
+import { SponsoredBadge } from "@/components/SponsoredBadge";
 import { Badge } from "@/components/ui/badge";
 import { Skeleton } from "@/components/ui/skeleton";
 import { SpriteIcon } from "@/components/ui/SpriteIcon";
 import { useAnalytics } from "@/hooks/useAnalytics";
-import { useSearchInsights } from "@/hooks/useSearchInsights";
+import { useAuth } from "@/hooks/useAuth";
+import { SUGGESTED_SEARCHES } from "@/hooks/useSearchInsights";
+import { useSponsoredImpression } from "@/hooks/useSponsoredImpression";
 import { useTrending, type TrendingContentType } from "@/hooks/useTrending";
 import { attractionHref, playgroundHref, restaurantHref } from "@/lib/dashboardItems";
+import { isSponsoredActive, logSponsoredClick } from "@/lib/sponsored";
 
 // WP9 of docs/page-plans/home.md.
 //
@@ -18,6 +22,15 @@ import { attractionHref, playgroundHref, restaurantHref } from "@/lib/dashboardI
 // search_analytics, so they always got a hardcoded list with counts and green
 // "trending" arrows. Without real data the column is "Try searching" and shows
 // no counts and no arrows.
+//
+// Pass 2 (docs/page-plans/home-pass2.md WP3 items 2, 4, 11):
+//   - no search_analytics read at all: "Try searching" is the static list
+//     until get_popular_searches can serve the public safely;
+//   - trending_scores is read only for admins (the only role RLS lets read it);
+//   - the public columns are "Highly rated", chosen by rating, not the
+//     is_featured rows that are paid or admin picks;
+//   - a sponsored row that qualifies is labelled, logged, and capped at one
+//     per column.
 
 // Events are never rendered here, so the hook does not read them.
 const TYPES: TrendingContentType[] = ["restaurant", "attraction", "playground"];
@@ -25,6 +38,8 @@ const TYPES: TrendingContentType[] = ["restaurant", "attraction", "playground"];
 interface ContentRow {
   id: string;
   name: string;
+  is_sponsored?: boolean | null;
+  sponsored_until?: string | null;
   slug?: string | null;
   rating?: number | string | null;
   location?: string | null;
@@ -56,16 +71,32 @@ function toRow(content: Record<string, unknown> | undefined): ContentRow | null 
     price_range: str(content.price_range),
     type: str(content.type),
     age_range: str(content.age_range),
+    is_sponsored: typeof content.is_sponsored === "boolean" ? content.is_sponsored : null,
+    sponsored_until: str(content.sponsored_until),
   };
 }
 
+/** Sponsored rows allowed in one column. The rest of a column is organic. */
+const SPONSORED_PER_COLUMN = 1;
+
+/**
+ * The first three usable rows, in the order given, with at most
+ * SPONSORED_PER_COLUMN active sponsored rows among them. A sponsored row is
+ * never moved up; one past the cap is skipped.
+ */
 function toItems(
   items: Array<{ rank: number; views24h?: number; content?: Record<string, unknown> }>,
 ): ColumnItem[] {
   const out: ColumnItem[] = [];
+  let sponsored = 0;
   for (const item of items) {
     const row = toRow(item.content);
-    if (row) out.push({ row, rank: item.rank, views24h: item.views24h });
+    if (!row) continue;
+    if (isSponsoredActive(row)) {
+      if (sponsored >= SPONSORED_PER_COLUMN) continue;
+      sponsored += 1;
+    }
+    out.push({ row, rank: item.rank, views24h: item.views24h });
     if (out.length === 3) break;
   }
   return out;
@@ -94,22 +125,38 @@ function Column({ title, icon, children }: ColumnProps) {
 const cardLinkClass =
   "block rounded-xl border border-border bg-card p-4 transition-colors hover:border-foreground/30 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2";
 
+type PlaceType = "restaurant" | "attraction" | "playground";
+
 interface PlaceCardProps {
   item: ColumnItem;
   href: string;
+  type: PlaceType;
   showMeasured: boolean;
   onClick: () => void;
   meta?: ReactNode;
 }
 
-function PlaceCard({ item, href, showMeasured, onClick, meta }: PlaceCardProps) {
+function PlaceCard({ item, href, type, showMeasured, onClick, meta }: PlaceCardProps) {
   const { row } = item;
+  const ref = useRef<HTMLAnchorElement>(null);
+  // Playgrounds carry no sponsorship columns, so this is false for them.
+  const sponsored = isSponsoredActive(row);
+  useSponsoredImpression(ref, type, row.id, sponsored);
   return (
     <li>
-      <Link to={href} onClick={onClick} className={cardLinkClass}>
+      <Link
+        ref={ref}
+        to={href}
+        onClick={() => {
+          if (sponsored) logSponsoredClick(type, row.id);
+          onClick();
+        }}
+        className={cardLinkClass}
+      >
         <div className="flex items-start justify-between gap-2">
           <span className="text-base font-semibold leading-snug text-foreground">{row.name}</span>
           <span className="flex flex-shrink-0 items-center gap-2">
+            {sponsored && <SponsoredBadge />}
             {showMeasured && (
               <Badge variant="secondary" className="text-xs">
                 #{item.rank}
@@ -147,37 +194,36 @@ function iconFor(Icon: LucideIcon) {
 }
 
 export default function MostSearched() {
+  const { isAdmin } = useAuth();
   const {
     trending,
-    isLoading: trendingLoading,
+    isLoading,
     hasRealData: hasRealTrendingData,
-  } = useTrending({ types: TYPES });
-  const {
-    insights,
-    isLoading: insightsLoading,
-    hasRealData: hasRealSearchData,
-  } = useSearchInsights();
+  } = useTrending({ types: TYPES, readScores: isAdmin });
   const { trackEvent } = useAnalytics();
 
-  const track = (contentType: "restaurant" | "attraction" | "playground", contentId: string) => {
+  const track = (contentType: PlaceType, contentId: string) => {
     trackEvent({ eventType: "click", contentType, contentId });
   };
 
-  if (trendingLoading || insightsLoading) {
+  if (isLoading) {
     return (
       <section className="bg-muted/50 py-16" id="most-searched" aria-busy="true">
         <div className="mx-auto max-w-7xl px-4 sm:px-6 lg:px-8">
           <div className="mb-12 text-center">
-            <Skeleton className="mx-auto mb-4 h-8 w-64" />
-            <Skeleton className="mx-auto h-4 w-full max-w-md" />
+            <Skeleton className="mx-auto h-9 w-64" />
+            <Skeleton className="mx-auto mt-3 h-7 w-full max-w-md" />
           </div>
-          <div className="grid grid-cols-1 gap-8 lg:grid-cols-4">
+          {/* The content's own grid, so the swap does not reflow the columns. */}
+          <div className="grid grid-cols-1 gap-8 md:grid-cols-2 lg:grid-cols-4">
             {[...Array(4)].map((_, i) => (
-              <div key={i} className="space-y-4">
-                <Skeleton className="h-6 w-32" />
-                {[...Array(3)].map((_, j) => (
-                  <Skeleton key={j} className="h-24 w-full" />
-                ))}
+              <div key={i}>
+                <Skeleton className="mb-4 h-7 w-40" />
+                <div className="space-y-3">
+                  {[...Array(3)].map((_, j) => (
+                    <Skeleton key={j} className="h-24 w-full rounded-xl" />
+                  ))}
+                </div>
               </div>
             ))}
           </div>
@@ -186,88 +232,63 @@ export default function MostSearched() {
     );
   }
 
-  const searches = insights.popularSearches.slice(0, 6);
+  const searches = SUGGESTED_SEARCHES.slice(0, 6);
   const restaurants = toItems(trending.restaurants);
   const attractions = toItems(trending.attractions);
   const playgrounds = toItems(trending.playgrounds);
+  const noPlaces = restaurants.length === 0 && attractions.length === 0 && playgrounds.length === 0;
 
-  if (
-    searches.length === 0 &&
-    restaurants.length === 0 &&
-    attractions.length === 0 &&
-    playgrounds.length === 0
-  ) {
-    return null;
-  }
-
-  const measured = hasRealTrendingData || hasRealSearchData;
+  const columnTitle = (noun: string) => (hasRealTrendingData ? `Trending ${noun}` : `Highly rated ${noun}`);
 
   return (
     <section className="bg-muted/50 py-16" id="most-searched" aria-labelledby="most-searched-title">
       <div className="mx-auto max-w-7xl px-4 sm:px-6 lg:px-8">
         <div className="mb-12 text-center">
           <h2 id="most-searched-title" className="text-3xl font-bold text-foreground">
-            {measured ? "Trending now" : "Places to start"}
+            {hasRealTrendingData ? "Trending now" : "Places to start"}
           </h2>
           <p className="mt-3 text-lg text-muted-foreground">
             {hasRealTrendingData
               ? "Ranked by what people viewed today"
-              : hasRealSearchData
-              ? "What people searched for this week, plus featured places"
-              : "Featured places around Des Moines, and a few searches to try"}
+              : "Places rated 4 stars or higher, and a few searches to try"}
           </p>
         </div>
 
         <div className="grid grid-cols-1 gap-8 md:grid-cols-2 lg:grid-cols-4">
-          {searches.length > 0 && (
-            <Column
-              title={hasRealSearchData ? "Top searches" : "Try searching"}
-              icon={iconFor(Search)}
-            >
-              {searches.map((search) => (
-                <li key={search.query}>
-                  <Link
-                    to={`/search?q=${encodeURIComponent(search.query)}`}
-                    className={cardLinkClass}
-                  >
-                    <span className="block text-sm font-medium text-foreground">{search.query}</span>
-                    {(search.category || (hasRealSearchData && search.count != null)) && (
-                      <span className="mt-1 flex items-center gap-2">
-                        {search.category && (
-                          <Badge variant="outline" className="text-xs">
-                            {search.category}
-                          </Badge>
-                        )}
-                        {hasRealSearchData && search.count != null && (
-                          <span className="text-xs text-muted-foreground">
-                            {search.count} searches
-                          </span>
-                        )}
-                        {hasRealSearchData && search.trending && (
-                          <SpriteIcon
-                            name="trending-up"
-                            className="h-3 w-3 text-foreground"
-                            title="Searched more in the last day"
-                          />
-                        )}
-                      </span>
-                    )}
-                  </Link>
-                </li>
-              ))}
-            </Column>
+          <Column title="Try searching" icon={iconFor(Search)}>
+            {searches.map((search) => (
+              <li key={search.query}>
+                <Link to={`/search?q=${encodeURIComponent(search.query)}`} className={cardLinkClass}>
+                  <span className="block text-sm font-medium text-foreground">{search.query}</span>
+                  {search.category && (
+                    <span className="mt-1 flex items-center gap-2">
+                      <Badge variant="outline" className="text-xs">
+                        {search.category}
+                      </Badge>
+                    </span>
+                  )}
+                </Link>
+              </li>
+            ))}
+          </Column>
+
+          {noPlaces && (
+            <p className="text-sm text-muted-foreground md:col-span-1 lg:col-span-3">
+              No rated places to show right now.{" "}
+              <Link to="/restaurants" className="font-medium text-foreground underline underline-offset-4">
+                Browse restaurants
+              </Link>
+            </p>
           )}
 
           {restaurants.length > 0 && (
-            <Column
-              title={hasRealTrendingData ? "Trending restaurants" : "Featured restaurants"}
-              icon={iconFor(Utensils)}
-            >
+            <Column title={columnTitle("restaurants")} icon={iconFor(Utensils)}>
               {restaurants.map((item) => (
                 <PlaceCard
                   key={item.row.id}
                   item={item}
                   href={restaurantHref(item.row)}
+                  type="restaurant"
                   showMeasured={hasRealTrendingData}
                   onClick={() => track("restaurant", item.row.id)}
                   meta={
@@ -287,7 +308,7 @@ export default function MostSearched() {
 
           {attractions.length > 0 && (
             <Column
-              title={hasRealTrendingData ? "Trending attractions" : "Featured attractions"}
+              title={columnTitle("attractions")}
               icon={<SpriteIcon name="map-pin" className="h-5 w-5 text-primary" />}
             >
               {attractions.map((item) => (
@@ -295,6 +316,7 @@ export default function MostSearched() {
                   key={item.row.id}
                   item={item}
                   href={attractionHref(item.row)}
+                  type="attraction"
                   showMeasured={hasRealTrendingData}
                   onClick={() => track("attraction", item.row.id)}
                   meta={item.row.type && <Badge variant="outline">{item.row.type}</Badge>}
@@ -304,15 +326,13 @@ export default function MostSearched() {
           )}
 
           {playgrounds.length > 0 && (
-            <Column
-              title={hasRealTrendingData ? "Trending playgrounds" : "Featured playgrounds"}
-              icon={iconFor(Baby)}
-            >
+            <Column title={columnTitle("playgrounds")} icon={iconFor(Baby)}>
               {playgrounds.map((item) => (
                 <PlaceCard
                   key={item.row.id}
                   item={item}
                   href={playgroundHref(item.row)}
+                  type="playground"
                   showMeasured={hasRealTrendingData}
                   onClick={() => track("playground", item.row.id)}
                   meta={

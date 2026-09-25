@@ -9,6 +9,8 @@ interface SpeakableSchemaProps {
   datePublished?: string;
   dateModified?: string;
   speakableCssSelectors?: string[];
+  /** What the page is about, e.g. a schema.org City node. */
+  about?: Record<string, unknown>;
 }
 
 export default function SpeakableSchema({
@@ -18,6 +20,7 @@ export default function SpeakableSchema({
   datePublished,
   dateModified,
   speakableCssSelectors = ["[data-speakable]", "h1", "h2", "[role='main'] > p:first-of-type"],
+  about,
 }: SpeakableSchemaProps) {
   // One graph, not three strangers (WP5 item 8, docs/page-plans/home.md).
   // The publisher and the site are REFERENCES by @id to the nodes SEOHead
@@ -32,6 +35,7 @@ export default function SpeakableSchema({
     url,
     ...(datePublished && { datePublished }),
     ...(dateModified && { dateModified }),
+    ...(about && { about }),
     speakable: {
       "@type": "SpeakableSpecification",
       cssSelector: speakableCssSelectors,

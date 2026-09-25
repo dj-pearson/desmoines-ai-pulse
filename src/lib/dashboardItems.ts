@@ -1,7 +1,13 @@
-import { addDays, parseISO } from "date-fns";
-import { formatInTimeZone } from "date-fns-tz";
 import { createSlug } from "@/lib/slug";
-import { CENTRAL_TIMEZONE, createEventSlugWithCentralTime } from "@/lib/timezone";
+import { openingDay, openingLabel } from "@/lib/restaurantOpenings";
+import {
+  addCentralDays,
+  centralDateOf,
+  centralWeekday,
+  centralWindow,
+  createEventSlugWithCentralTime,
+  type CentralWindow,
+} from "@/lib/timezone";
 
 /**
  * Pure helpers for the home page "This week in Des Moines" block
@@ -69,55 +75,102 @@ export function isHttpUrl(value: unknown): value is string {
   }
 }
 
-/** The Central calendar date an event starts on, or null when it has no start. */
-export function centralDateKey(event: EventLike): string | null {
-  // event_start_local is deliberately skipped: it has no offset, so parsing it
-  // would read it in the runner's zone.
-  const source = event.event_start_utc || event.date;
-  if (!source) return null;
-  try {
-    const instant = typeof source === "string" ? parseISO(source) : source;
-    if (Number.isNaN(instant.getTime())) return null;
-    return formatInTimeZone(instant, CENTRAL_TIMEZONE, "yyyy-MM-dd");
-  } catch {
-    return null;
-  }
-}
+// ---------------------------------------------------------------------------
+// The dashboard's events group (home pass-2 WP3 item 5).
+//
+// Pass 1 fetched the 9 soonest events from Central midnight and reordered those
+// 9 tonight-then-weekend, so on any day with 9 events nothing from the weekend
+// could appear, and tonight's events repeated the Tonight rail. The group now
+// starts TOMORROW and asks the server for the weekend first.
+// ---------------------------------------------------------------------------
 
-/** Today's Central date and the Central dates of the coming (or current) weekend. */
-export function centralWeekWindow(now: Date = new Date()): {
-  today: string;
-  weekend: string[];
-} {
-  const today = formatInTimeZone(now, CENTRAL_TIMEZONE, "yyyy-MM-dd");
-  // "i" is ISO day of week, 1 = Monday .. 7 = Sunday.
-  const isoDow = Number(formatInTimeZone(now, CENTRAL_TIMEZONE, "i"));
-  const noon = parseISO(`${today}T12:00:00Z`);
-  const shift = (days: number) =>
-    formatInTimeZone(addDays(noon, days), "UTC", "yyyy-MM-dd");
-  if (isoDow === 7) return { today, weekend: [today] };
-  const toSaturday = 6 - isoDow;
-  return { today, weekend: [shift(toSaturday), shift(toSaturday + 1)] };
+export type HomeWeekBand = "weekend" | "weekdays";
+
+export interface HomeWeekWindows {
+  /**
+   * Friday (or tomorrow, if later) through the coming Sunday: the same
+   * Friday-to-Sunday weekend centralWindow("this-weekend") and
+   * /events/this-weekend use, minus today.
+   */
+  weekend: CentralWindow;
+  /** Tomorrow through the day before `weekend`, or null when there is none. */
+  weekdays: CentralWindow | null;
+  /** Group heading for each band. */
+  labels: Record<HomeWeekBand, string>;
 }
 
 /**
- * Order events for the home block: anything on today's Central date first,
- * then this weekend, then the rest. Stable within each band, so the incoming
- * soonest-first order holds inside it.
+ * The windows the dashboard's events group reads, from tomorrow's Central start
+ * through the end of the coming Sunday.
+ *
+ * On a Sunday the coming Sunday is a week away, so the weekend is next
+ * weekend and says so; the weekdays are the week ahead.
  */
-export function orderHomeEvents<T extends EventLike>(
-  events: readonly T[],
-  now: Date = new Date(),
-): T[] {
-  const { today, weekend } = centralWeekWindow(now);
-  const band = (event: T) => {
-    const key = centralDateKey(event);
-    if (key === today) return 0;
-    if (key && weekend.includes(key)) return 1;
-    return 2;
+export function homeWeekWindows(now: Date = new Date()): HomeWeekWindows {
+  const today = centralDateOf(now);
+  const tomorrow = addCentralDays(today, 1);
+  const tomorrowDow = centralWeekday(tomorrow); // 0 = Sunday
+  const sunday = addCentralDays(tomorrow, (7 - tomorrowDow) % 7);
+  const friday = addCentralDays(sunday, -2);
+  const weekendStart = friday > tomorrow ? friday : tomorrow;
+  const weekend = centralWindow({ kind: "range", from: weekendStart, to: sunday }, now);
+  const weekdays =
+    weekendStart > tomorrow
+      ? centralWindow({ kind: "range", from: tomorrow, to: addCentralDays(weekendStart, -1) }, now)
+      : null;
+  const todayIsSunday = centralWeekday(today) === 0;
+  return {
+    weekend,
+    weekdays,
+    labels: {
+      weekend: todayIsSunday ? "Next weekend" : "This weekend",
+      weekdays: todayIsSunday ? "This week" : "Later this week",
+    },
   };
-  return events
-    .map((event, index) => ({ event, index, band: band(event) }))
-    .sort((a, b) => a.band - b.band || a.index - b.index)
-    .map((entry) => entry.event);
+}
+
+// ---------------------------------------------------------------------------
+// New openings (home pass-2 WP3 item 7).
+// ---------------------------------------------------------------------------
+
+export interface HomeOpeningRow {
+  id: string;
+  name: string;
+  slug?: string | null;
+  status?: string | null;
+  openingDate?: string | null;
+  openingTimeframe?: string | null;
+}
+
+/**
+ * The openings the dashboard shows, each with its dated line.
+ *
+ * An opening_soon or announced row whose opening_date has passed is left out:
+ * nobody has confirmed it opened, and "Opens Mar 3, 2025" under "New openings"
+ * promised a date that is gone. A newly_opened row prints "Opened <date>".
+ * The label comes from openingLabel, the same rule /restaurants/new prints.
+ */
+export function homeOpenings<T extends HomeOpeningRow>(
+  rows: readonly T[],
+  now: Date = new Date(),
+): Array<{ row: T; label: string }> {
+  const today = centralDateOf(now);
+  const out: Array<{ row: T; label: string }> = [];
+  for (const row of rows) {
+    const status = row.status ?? "";
+    const day = openingDay(row.openingDate);
+    if ((status === "opening_soon" || status === "announced") && day && day < today) continue;
+    const label = openingLabel(
+      {
+        id: row.id,
+        name: row.name,
+        status: row.status,
+        opening_date: row.openingDate,
+        opening_timeframe: row.openingTimeframe,
+      },
+      now,
+    );
+    if (label) out.push({ row, label });
+  }
+  return out;
 }

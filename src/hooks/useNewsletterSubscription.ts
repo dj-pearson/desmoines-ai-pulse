@@ -2,6 +2,7 @@ import { useState } from "react";
 import { supabase } from "@/integrations/supabase/client";
 import { toast } from "sonner";
 import { createLogger } from "@/lib/logger";
+import { NEWSLETTER_RETRY_MESSAGE } from "@/content/newsletterCopy";
 
 const log = createLogger("useNewsletterSubscription");
 
@@ -25,6 +26,26 @@ const defaultPreferences: NewsletterPreferences = {
   restaurant_updates: true,
   promotions: true,
 };
+
+/**
+ * The function's own sentence for a 400 (not an email address) or a 429 (too
+ * many attempts). Both answer `{ error }`, and both are things the person can
+ * act on, which "try again" is not when the address is the problem. Any other
+ * failure gets the generic retry line.
+ */
+async function explainFailure(error: unknown): Promise<string> {
+  const ctx = (error as { context?: unknown } | null)?.context;
+  if (!(ctx instanceof Response) || (ctx.status !== 400 && ctx.status !== 429)) {
+    return NEWSLETTER_RETRY_MESSAGE;
+  }
+  try {
+    const body = (await ctx.clone().json()) as { error?: unknown } | null;
+    if (body && typeof body.error === "string" && body.error) return body.error;
+  } catch {
+    // Not JSON: fall through to the generic line.
+  }
+  return NEWSLETTER_RETRY_MESSAGE;
+}
 
 export function useNewsletterSubscription() {
   const [loading, setLoading] = useState(false);
@@ -75,7 +96,7 @@ export function useNewsletterSubscription() {
       return true;
     } catch (error) {
       log.error("subscribe", "Failed to subscribe", { data: error });
-      toast.error("Failed to subscribe. Please try again.");
+      toast.error(await explainFailure(error));
       return false;
     } finally {
       setLoading(false);

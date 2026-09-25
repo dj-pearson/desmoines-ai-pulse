@@ -61,6 +61,27 @@ function code(source) {
  */
 const INVENTED_PERCENT = /\b\d{1,3}%\s+(more|less|fewer|higher|increase|faster)/i;
 
+/**
+ * Home pass-2 WP4 item 1. The FAQ said sponsored placements "do not change the
+ * ordinary listings around them" and that nobody can pay "to rank higher in
+ * the ordinary listings", while arrangeSponsored (src/lib/sponsored.ts) lifts
+ * up to two paid rows to the top of the events, restaurants and attractions
+ * lists. Either sentence is a denial of what the code does.
+ */
+const DENIES_PAID_ORDER =
+  /(do(?:es)? not|don't|never) change the ordinary listings|rank higher in the ordinary listings/i;
+
+/**
+ * Home pass-2 WP4 item 4. The WebSite and WebPage nodes described the site
+ * with BRAND.description: "real-time updates, personalized recommendations".
+ * Events are crawled once a day and anonymous visitors get no personalisation.
+ */
+const UNBACKED_HOME_DESCRIPTION = /real-time|personali[sz]ed recommendations/i;
+
+/** The old FAQ answer, verbatim, so the detector is proven against it. */
+const OLD_PAID_ANSWER =
+  'Listing an event or a restaurant is free, and we do not charge to be included or to rank higher in the ordinary listings. We do sell advertising, including sponsored placements; those are paid, they are labelled where they appear, and they do not change the ordinary listings around them.';
+
 console.log('\nAI-facing content claims');
 
 for (const file of FILES) {
@@ -111,6 +132,21 @@ for (const file of FILES) {
     'there is no reviews table (42P01 in production)',
   );
   check(
+    `${name}: does not deny that sponsored listings are moved up`,
+    !DENIES_PAID_ORDER.test(source),
+    (source.match(DENIES_PAID_ORDER) ?? [''])[0],
+  );
+  if (file === 'src/content/homeContent.ts') {
+    // The whole file, comments included: this is also the acceptance check
+    // `rg -n "real-time|personalized recommendations" src/content/homeContent.ts`.
+    const raw = fs.readFileSync(file, 'utf8');
+    check(
+      `${name}: no "real-time" or "personalized recommendations"`,
+      !UNBACKED_HOME_DESCRIPTION.test(raw),
+      (raw.match(UNBACKED_HOME_DESCRIPTION) ?? [''])[0],
+    );
+  }
+  check(
     `${name}: no hardcoded catalogue counts`,
     !/\b\d{2,3},?\d*\+\s*(events|restaurants|venues|playgrounds|attractions)/i.test(source),
     'useHomepageStats reads the real numbers; a hardcoded one drifts and contradicts',
@@ -120,6 +156,13 @@ for (const file of FILES) {
 console.log('\nthe detectors are not vacuous');
 check('percentage detector fires on the removed sentence', INVENTED_PERCENT.test('Notification users attend 35% more events on average.'));
 check('percentage detector ignores a plain percentage', !INVENTED_PERCENT.test('a 100% free event'));
+check('paid-order detector fires on the old FAQ answer', DENIES_PAID_ORDER.test(OLD_PAID_ANSWER));
+check(
+  'paid-order detector passes the current answer',
+  !DENIES_PAID_ORDER.test(
+    'A sponsored listing can appear first on the events, restaurants and attractions pages, at most two per list, and each one carries a Sponsored label. Nothing else is reordered for money.',
+  ),
+);
 check(
   'comment stripping removes a // line comment',
   !/removed/.test(code('// removed: 40% more\nconst a = 1;')),
@@ -142,6 +185,25 @@ console.log('\nhome FAQ coverage answer');
   for (const area of ['Beaverdale', 'Highland Park', 'Court Avenue District', 'Windsor Heights']) {
     check(`the coverage answer does not hand-name ${area}`, !new RegExp(`cover[^"\`]*${area}`).test(code2));
   }
+}
+
+console.log('\nhome FAQ single sources');
+// WP4 item 7: the cadence sentence lives once, in eventsCopy.ts; the paid
+// answer lives once, in homeContent.ts, and GEOContent renders the same one.
+{
+  const home = fs.readFileSync('src/content/homeContent.ts', 'utf8');
+  const geo = fs.readFileSync('src/components/GEOContent.tsx', 'utf8');
+  check(
+    'homeContent.ts answers the cadence question with EVENTS_UPDATE_ANSWER',
+    /How often are the listings updated\?[\s\S]{0,600}answer:\s*EVENTS_UPDATE_ANSWER/.test(home),
+  );
+  check('GEOContent renders EVENTS_UPDATE_ANSWER', /\{EVENTS_UPDATE_ANSWER\}/.test(geo));
+  check('GEOContent renders HOME_PAID_PLACEMENT_ANSWER', /\{HOME_PAID_PLACEMENT_ANSWER\}/.test(geo));
+  check(
+    'the paid answer links /advertise',
+    /answer:\s*HOME_PAID_PLACEMENT_ANSWER,\s*links:\s*\[\{[^}]*to:\s*"\/advertise"/.test(home),
+  );
+  check('the today answer does not claim a category filter', !/today listing[^"]*filterable by category/.test(code(home)));
 }
 
 console.log(

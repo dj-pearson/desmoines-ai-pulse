@@ -59,11 +59,6 @@ export function DesktopNav() {
                               <div className={cn("text-sm leading-none", item.featured ? "font-semibold" : "font-medium")}>
                                 {item.label}
                               </div>
-                              {item.priority && (
-                                <span className="ml-auto text-[10px] font-semibold uppercase tracking-wide text-primary">
-                                  Popular
-                                </span>
-                              )}
                             </div>
                           </Link>
                         </NavigationMenuLink>

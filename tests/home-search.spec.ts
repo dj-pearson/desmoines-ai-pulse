@@ -1,118 +1,165 @@
-import { test, expect, type Route } from '@playwright/test';
+import { test, expect, type Page, type Route } from '@playwright/test';
 import { installFixtureBackend } from './support/fixtureBackend';
 
 /**
- * WP1 (docs/page-plans/home.md): Home has ONE free-text search, in the hero,
- * and it goes somewhere.
+ * Home's one search box (docs/page-plans/home-pass2.md WP1 items 2, 5-8, 12).
  *
- * Three things this pins:
- *  1. There is exactly one free-text input on `/`. There used to be two - the
- *     NLP bar and the structured SearchSection - plus a toast-driven filter
- *     path that searched only the 100 rows the dashboard happened to hold.
- *  2. Enter navigates to /search?q=, the page the WebSite SearchAction names.
- *  3. NLP result links resolve. They were `/${type}/${item.id}` for every type,
- *     and the event detail page matches a date-suffixed slug, so every event
- *     result was an Event Not Found. The nlp-search function is stubbed here,
- *     so this is a statement about the links the component builds, not about
- *     the edge function.
+ * What this pins:
+ *  1. There is exactly one free-text input on `/`.
+ *  2. Everything in the box navigates. Enter and an example chip go to
+ *     /search?q=; nothing on `/` calls the nlp-search model. The chips used to
+ *     run an inline model search, and /search ran it again.
+ *  3. Typing a name offers the event, restaurant or place itself, linked with
+ *     the detail pages' own slugs, above a "Search everything" row.
+ *  4. Escape closes the suggestions from inside the panel and they stay
+ *     closed when focus returns to the input.
+ *  5. While the AI planner is paused the hero says nothing about AI.
+ *
+ * The suggestion queries are answered here, after installFixtureBackend, and
+ * only for requests that carry an ilike filter; everything else falls through
+ * to the fixture backend.
  */
 
-const NLP_RESPONSE = {
-  success: true,
-  query: 'Live music events tonight',
-  parsedIntent: { contentTypes: ['events', 'restaurants', 'attractions'], keywords: ['live music'], confidence: 0.9, originalQuery: 'Live music events tonight' },
-  results: {
-    events: [
-      {
-        id: '30000000-0000-0000-0000-000000000001',
-        title: 'Jazz on the Riverfront',
-        date: '2026-10-01T00:30:00Z',
-        event_start_utc: '2026-10-01T00:30:00Z',
-        location: 'Des Moines',
-        category: 'Music',
-      },
-    ],
-    restaurants: [
-      { id: '30000000-0000-0000-0000-000000000002', name: "Proof's Kitchen", slug: 'proofs-kitchen' },
-    ],
-    attractions: [
-      { id: '30000000-0000-0000-0000-000000000003', name: 'Pappajohn Sculpture Park', type: 'park' },
-    ],
-  },
-  metadata: { totalResults: 3, responseTimeMs: 12, modelUsed: 'stub' },
+const JAZZ_EVENT = {
+  id: '30000000-0000-0000-0000-000000000001',
+  title: 'Jazz on the Riverfront',
+  venue: 'Principal Riverwalk',
+  date: '2026-10-01T00:30:00Z',
+  event_start_utc: '2026-10-01T00:30:00Z',
+  event_start_local: null,
 };
+const JAZZ_RESTAURANT = { id: '30000000-0000-0000-0000-000000000002', name: 'Jazz Kitchen', cuisine: 'Cajun', slug: 'jazz-kitchen' };
+const JAZZ_ATTRACTION = { id: '30000000-0000-0000-0000-000000000003', name: 'Jazz Sculpture Walk', type: 'park' };
 
-const CORS = {
-  'access-control-allow-origin': '*',
-  'access-control-allow-headers': '*',
-  'access-control-allow-methods': 'POST, OPTIONS',
-};
+const CORS = { 'access-control-allow-origin': '*' };
 
-async function stubNlpSearch(route: Route) {
-  if (route.request().method() === 'OPTIONS') {
-    return route.fulfill({ status: 204, headers: CORS });
-  }
-  return route.fulfill({
-    status: 200,
-    contentType: 'application/json',
-    headers: CORS,
-    body: JSON.stringify(NLP_RESPONSE),
+function answerIlike(rows: unknown[]) {
+  return (route: Route) => {
+    if (!/ilike\./.test(decodeURIComponent(route.request().url()))) return route.fallback();
+    return route.fulfill({
+      status: 200,
+      contentType: 'application/json',
+      headers: { ...CORS, 'content-range': `0-${rows.length - 1}/${rows.length}` },
+      body: JSON.stringify(rows),
+    });
+  };
+}
+
+/** Counts nlp-search calls made while the page is still on `/`. */
+function watchNlpSearch(page: Page) {
+  const calls: string[] = [];
+  page.on('request', (req) => {
+    if (req.method() === 'OPTIONS') return;
+    if (!req.url().includes('/functions/v1/nlp-search')) return;
+    if (new URL(page.url()).pathname === '/') calls.push(req.url());
   });
+  return calls;
 }
 
 test.beforeEach(async ({ page }) => {
   await installFixtureBackend(page);
-  // Registered after the fixture backend so it wins for this function.
-  await page.route('**/functions/v1/nlp-search**', stubNlpSearch);
+  await page.route('**/rest/v1/events?**', answerIlike([JAZZ_EVENT]));
+  await page.route('**/rest/v1/restaurants?**', answerIlike([JAZZ_RESTAURANT]));
+  await page.route('**/rest/v1/attractions?**', answerIlike([JAZZ_ATTRACTION]));
 });
 
-test('home has exactly one free-text search input', async ({ page }) => {
+async function heroInput(page: Page) {
   await page.goto('/', { waitUntil: 'domcontentloaded' });
-  await expect(page.getByRole('search')).toBeVisible({ timeout: 30_000 });
+  const input = page.getByRole('search').getByRole('searchbox');
+  await expect(input).toBeVisible({ timeout: 30_000 });
+  return input;
+}
 
+test('home has exactly one free-text search input', async ({ page }) => {
+  await heroInput(page);
   const freeText = page.locator('input[type="search"]:visible, input[type="text"]:visible, input:not([type]):visible');
   await expect(freeText).toHaveCount(1);
 });
 
 test('Enter in the hero search lands on /search?q=', async ({ page }) => {
-  await page.goto('/', { waitUntil: 'domcontentloaded' });
-  const input = page.getByRole('search').getByRole('combobox');
-  await expect(input).toBeVisible({ timeout: 30_000 });
-
+  const input = await heroInput(page);
   await input.fill('Jazz Kitchen');
   await input.press('Enter');
-
   await expect(page).toHaveURL(/\/search\?q=Jazz(%20|\+)Kitchen$/);
 });
 
-test('NLP result links use the detail pages\' slugs', async ({ page }) => {
-  await page.goto('/', { waitUntil: 'domcontentloaded' });
-  const input = page.getByRole('search').getByRole('combobox');
-  await expect(input).toBeVisible({ timeout: 30_000 });
+test('an example chip navigates to /search and / never calls the model', async ({ page }) => {
+  const nlpCalls = watchNlpSearch(page);
+  const input = await heroInput(page);
 
   await input.focus();
   await expect(input).toHaveAttribute('aria-expanded', 'true');
-  await page.getByRole('button', { name: 'Live music events tonight' }).click();
+  const chip = page.locator('a[data-search-chip]').first();
+  await expect(chip).toBeVisible();
+  const example = (await chip.textContent())?.trim() ?? '';
+  expect(example.length).toBeGreaterThan(0);
+  await expect(chip).toHaveAttribute('href', `/search?q=${encodeURIComponent(example)}`);
+
+  await chip.click();
+  await expect(page).toHaveURL(/\/search\?q=/);
+  expect(nlpCalls, 'the home page called nlp-search without a navigation').toEqual([]);
+});
+
+test('typing a name offers the places themselves, with detail-page links', async ({ page }) => {
+  const nlpCalls = watchNlpSearch(page);
+  const input = await heroInput(page);
+
+  await input.fill('Jazz');
 
   const eventLink = page.locator('a[data-result-type="events"]').first();
   await expect(eventLink).toBeVisible();
-  await expect(eventLink).toHaveAttribute('href', /^\/events\/[a-z0-9-]+-\d{4}-\d{2}-\d{2}$/);
   // 00:30 UTC on Oct 1 is 19:30 CDT on Sep 30: the slug carries the Central date.
   await expect(eventLink).toHaveAttribute('href', '/events/jazz-on-the-riverfront-2026-09-30');
-
   await expect(page.locator('a[data-result-type="restaurants"]').first()).toHaveAttribute(
     'href',
-    '/restaurants/proofs-kitchen',
+    '/restaurants/jazz-kitchen',
   );
   await expect(page.locator('a[data-result-type="attractions"]').first()).toHaveAttribute(
     'href',
-    '/attractions/pappajohn-sculpture-park',
+    '/attractions/jazz-sculpture-walk',
   );
+  await expect(page.locator('a[data-search-everything]')).toHaveAttribute('href', '/search?q=Jazz');
 
-  // The live region names what the results are for.
-  await expect(page.getByText('3 results for Live music events tonight.')).toBeAttached();
+  await eventLink.click();
+  await expect(page).toHaveURL(/\/events\/jazz-on-the-riverfront-2026-09-30$/);
+  expect(nlpCalls).toEqual([]);
+});
 
-  // Escape closes the panel.
-  await input.press('Escape');
+test('Escape inside the panel closes it and it stays closed', async ({ page }) => {
+  const input = await heroInput(page);
+
+  await input.focus();
+  await expect(input).toHaveAttribute('aria-expanded', 'true');
+
+  // Tab past the Search button to the first chip in the panel.
+  const chip = page.locator('a[data-search-chip]').first();
+  for (let i = 0; i < 4 && !(await chip.evaluate((el) => el === document.activeElement)); i += 1) {
+    await page.keyboard.press('Tab');
+  }
+  await expect(chip).toBeFocused();
+
+  await page.keyboard.press('Escape');
+  await expect(input).toBeFocused();
   await expect(input).toHaveAttribute('aria-expanded', 'false');
+  await expect(page.locator('a[data-search-chip]').first()).toBeHidden();
+});
+
+test('a search is offered again as a recent search', async ({ page }) => {
+  const input = await heroInput(page);
+  await input.fill('pizza by the slice');
+  await input.press('Enter');
+  await expect(page).toHaveURL(/\/search\?q=/);
+
+  const again = await heroInput(page);
+  await again.focus();
+  await expect(page.getByText('Recent searches')).toBeVisible();
+  await expect(page.locator('a[data-search-chip]').first()).toHaveText('pizza by the slice');
+});
+
+test('the hero says nothing about AI while the planner is paused', async ({ page }) => {
+  await heroInput(page);
+  const hero = page.locator('section').filter({ has: page.getByRole('heading', { level: 1 }) }).first();
+  await expect(hero.getByRole('link', { name: 'Visiting? Plan your dates' })).toHaveAttribute('href', '/trip-planner');
+  await expect(hero).not.toContainText(/\bAI\b/);
+  await expect(hero).not.toContainText('Insider');
 });

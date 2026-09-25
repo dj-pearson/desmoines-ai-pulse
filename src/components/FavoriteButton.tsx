@@ -8,9 +8,11 @@ import {
 import { cn } from "@/lib/utils";
 import { hapticTap } from "@/lib/capacitorUtils";
 import { toast } from "sonner";
-import { useState, useSyncExternalStore } from "react";
+import { useSyncExternalStore } from "react";
 import { useAuthFlags } from "@/contexts/AuthContext";
-import { UpgradeModal } from "@/components/UpgradeModal";
+import { openPaywall } from "@/lib/paywallStore";
+import { stashPendingAction } from "@/lib/authReturn";
+import { signUpHref } from "@/components/header/navigationConfig";
 import {
   subscribeGuestFavorites,
   isGuestFavorited,
@@ -36,13 +38,29 @@ interface FavoriteButtonProps {
   showText?: boolean;
   /** Item name for a specific accessible label ("Save {name}"). */
   itemName?: string;
+  /**
+   * Report the outcome to the caller instead of a toast. A modal (the Home
+   * quick view) needs this: Radix makes everything outside an open dialog
+   * inert, the toaster included, so a toast's "Sign up" could be seen and not
+   * pressed, and a screen reader heard nothing.
+   */
+  onResult?: (result: FavoriteResult) => void;
 }
+
+/** What a tap did, for a caller that shows it itself (see `onResult`). */
+export type FavoriteResult =
+  | { kind: "removed" }
+  | { kind: "guest-saved"; count: number; cap: number; signUpHref: string }
+  | { kind: "guest-cap"; cap: number; signUpHref: string }
+  | { kind: "needs-upgrade" };
 
 type ViewProps = {
   favorited: boolean;
   isToggling: boolean;
   onToggle: () => void;
 } & Pick<FavoriteButtonProps, "variant" | "size" | "className" | "showText" | "itemName">;
+
+type DataProps = Omit<FavoriteButtonProps, "eventId" | "contentType" | "contentId">;
 
 /** Shared presentational button — no data dependency. */
 function FavoriteButtonView({
@@ -101,77 +119,68 @@ function FavoriteButtonView({
   );
 }
 
+/**
+ * The plan limit opens the one app-level paywall (GlobalUpgradeModal) rather
+ * than a modal per button, so the dialog code isn't in every list page's chunk.
+ */
+function reportNeedsUpgrade(onResult: DataProps["onResult"]) {
+  openPaywall("unlimited_favorites");
+  onResult?.({ kind: "needs-upgrade" });
+}
+
 function EventFavoriteButton({
   eventId,
+  onResult,
   ...rest
-}: Omit<FavoriteButtonProps, "contentType" | "contentId" | "eventId"> & {
-  eventId: string;
-}) {
+}: DataProps & { eventId: string }) {
   const { isFavorited, toggleFavorite, isToggling } = useFavorites();
   const favorited = isFavorited(eventId);
-  const [showUpgrade, setShowUpgrade] = useState(false);
   return (
-    <>
-      <FavoriteButtonView
-        favorited={favorited}
-        isToggling={isToggling}
-        onToggle={() => {
-          // No toast here. useFavorites toasts from the mutation's onSuccess
-          // and onError, after the write resolves; a success toast here fired
-          // before the insert and doubled up with it (and lied on failure).
-          const result = toggleFavorite(eventId);
-          if (result.needsUpgrade) {
-            setShowUpgrade(true);
-          }
-        }}
-        {...rest}
-      />
-      <UpgradeModal
-        open={showUpgrade}
-        onOpenChange={setShowUpgrade}
-        feature="unlimited_favorites"
-      />
-    </>
+    <FavoriteButtonView
+      favorited={favorited}
+      isToggling={isToggling}
+      onToggle={() => {
+        // No toast here. useFavorites toasts from the mutation's onSuccess
+        // and onError, after the write resolves; a success toast here fired
+        // before the insert and doubled up with it (and lied on failure).
+        const result = toggleFavorite(eventId);
+        if (result.needsUpgrade) reportNeedsUpgrade(onResult);
+      }}
+      {...rest}
+    />
   );
 }
 
 function ContentFavoriteButton({
   contentType,
   contentId,
+  onResult,
   ...rest
-}: Omit<FavoriteButtonProps, "eventId" | "contentType"> & {
+}: DataProps & {
   contentType: FavoriteContentType;
   contentId: string;
 }) {
   const { isFavorited, toggleFavorite, isToggling } =
     useContentFavorites(contentType);
   const favorited = isFavorited(contentId);
-  const [showUpgrade, setShowUpgrade] = useState(false);
   return (
-    <>
-      <FavoriteButtonView
-        favorited={favorited}
-        isToggling={isToggling}
-        onToggle={() => {
-          const wasFavorited = favorited;
-          const result = toggleFavorite(contentId);
-          if (result.success) {
-            toast.success(
-              wasFavorited ? "Removed from favorites" : "Added to favorites",
-              { id: `fav-${contentType}-${contentId}` }
-            );
-          } else if (result.needsUpgrade) {
-            setShowUpgrade(true);
-          }
-        }}
-        {...rest}
-      />
-      <UpgradeModal
-        open={showUpgrade}
-        onOpenChange={setShowUpgrade}
-        feature="unlimited_favorites"
-      />
-    </>
+    <FavoriteButtonView
+      favorited={favorited}
+      isToggling={isToggling}
+      onToggle={() => {
+        const wasFavorited = favorited;
+        const result = toggleFavorite(contentId);
+        if (result.success) {
+          toast.success(
+            wasFavorited ? "Removed from favorites" : "Added to favorites",
+            { id: `fav-${contentType}-${contentId}` }
+          );
+        } else if (result.needsUpgrade) {
+          reportNeedsUpgrade(onResult);
+        }
+      }}
+      {...rest}
+    />
   );
 }
 
@@ -182,8 +191,9 @@ function ContentFavoriteButton({
 function GuestFavoriteButton({
   guestType,
   id,
+  onResult,
   ...rest
-}: Omit<FavoriteButtonProps, "eventId" | "contentType" | "contentId"> & {
+}: DataProps & {
   guestType: GuestFavoriteType;
   id: string;
 }) {
@@ -199,10 +209,15 @@ function GuestFavoriteButton({
       isToggling={false}
       onToggle={() => {
         const result = toggleGuestFavorite(guestType, id);
+        const href = currentSignUpHref();
         if (result.action === "added") {
           logFavoriteFunnelEvent("guest_save", guestType, id, null, {
             count: result.count,
           });
+          if (onResult) {
+            onResult({ kind: "guest-saved", count: result.count, cap: GUEST_FAVORITE_CAP, signUpHref: href });
+            return;
+          }
           toast.success(
             `Saved ${result.count}/${GUEST_FAVORITE_CAP} — sign up free to keep saving`,
             {
@@ -211,6 +226,10 @@ function GuestFavoriteButton({
             }
           );
         } else if (result.action === "removed") {
+          if (onResult) {
+            onResult({ kind: "removed" });
+            return;
+          }
           toast.success("Removed from favorites", {
             id: `guest-fav-${guestType}-${id}`,
           });
@@ -219,6 +238,12 @@ function GuestFavoriteButton({
           logFavoriteFunnelEvent("guest_save_wall_hit", guestType, id, null, {
             count: result.count,
           });
+          // Hold this tap so it can be replayed once the account exists.
+          stashPendingAction({ type: "favorite", payload: { type: guestType, id } });
+          if (onResult) {
+            onResult({ kind: "guest-cap", cap: GUEST_FAVORITE_CAP, signUpHref: href });
+            return;
+          }
           toast("Sign up free to keep saving", {
             id: "guest-fav-wall",
             description: `You've saved ${GUEST_FAVORITE_CAP} items as a guest. Create a free account to save more.`,
@@ -231,12 +256,14 @@ function GuestFavoriteButton({
   );
 }
 
+function currentSignUpHref(): string {
+  if (typeof window === "undefined") return signUpHref("/");
+  return signUpHref(window.location.pathname, window.location.search);
+}
+
 function goToSignup() {
   if (typeof window !== "undefined") {
-    const next = encodeURIComponent(
-      window.location.pathname + window.location.search
-    );
-    window.location.href = `/auth?redirect=${next}`;
+    window.location.href = currentSignUpHref();
   }
 }
 

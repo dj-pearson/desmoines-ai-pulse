@@ -50,8 +50,15 @@ const EMPTY_INSIGHTS: SearchInsights = {
 /**
  * Suggestions shown when there is no measured search data. Query text and a
  * category only: no counts, no trend flags, no "recent searches" nobody ran.
+ *
+ * Home's MostSearched renders these directly and does not call
+ * useSearchInsights (home pass-2 WP3 item 4): search_analytics SELECT is
+ * admin-only, so the read was always empty for the public, and for an admin it
+ * put other visitors' raw queries on the home page. "Top searches" can come
+ * back once get_popular_searches is SECURITY DEFINER with a distinct-session
+ * threshold and a PII filter (deferred in docs/page-plans/home-pass2.md).
  */
-const SUGGESTED_SEARCHES: PopularSearch[] = [
+export const SUGGESTED_SEARCHES: readonly PopularSearch[] = [
   { query: 'farmers market', category: 'Events' },
   { query: 'free activities', category: 'Events' },
   { query: 'live music', category: 'Events' },
@@ -63,7 +70,7 @@ const SUGGESTED_SEARCHES: PopularSearch[] = [
 ];
 
 function fallbackInsights(): SearchInsights {
-  return { ...EMPTY_INSIGHTS, popularSearches: SUGGESTED_SEARCHES };
+  return { ...EMPTY_INSIGHTS, popularSearches: [...SUGGESTED_SEARCHES] };
 }
 
 /** The category lives inside the search_filters JSON (WEB-QA-012). */

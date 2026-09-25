@@ -77,6 +77,26 @@
         --border: 214.3 31.8% 91.4%;
         --radius: 0.75rem;
       }
+      /* Dark tokens, same values as .dark in src/index.css, so a dark-mode
+         visitor doesn't get a white frame before the app CSS arrives. The
+         inline script below adds .light or .dark from the stored dmi-theme
+         choice; :not(.light) keeps an explicit light choice light. */
+      @media (prefers-color-scheme: dark) {
+        :root:not(.light) {
+          --background: 225 50% 5%;
+          --foreground: 225 20% 98%;
+          --primary: 225 87% 68%;
+          --primary-foreground: 225 87% 10%;
+          --border: 225 30% 15%;
+        }
+      }
+      :root.dark {
+        --background: 225 50% 5%;
+        --foreground: 225 20% 98%;
+        --primary: 225 87% 68%;
+        --primary-foreground: 225 87% 10%;
+        --border: 225 30% 15%;
+      }
       * {
         border-color: hsl(var(--border));
       }
@@ -154,7 +174,6 @@
         font-size: 2.25rem;
         font-weight: 700;
         line-height: 1.2;
-        color: #fff;
       }
       @media (min-width: 768px) {
         h1 {
@@ -188,31 +207,11 @@
       .grid {
         display: grid;
       }
-      .gap-6 {
-        gap: 1.5rem;
-      }
-      .grid-cols-2 {
-        grid-template-columns: repeat(2, minmax(0, 1fr));
-      }
-      @media (min-width: 768px) {
-        .md\\:grid-cols-4 {
-          grid-template-columns: repeat(4, minmax(0, 1fr));
-        }
-      }
       .rounded-lg {
         border-radius: 0.5rem;
       }
       .p-4 {
         padding: 1rem;
-      }
-      .mb-6 {
-        margin-bottom: 1.5rem;
-      }
-      .mb-8 {
-        margin-bottom: 2rem;
-      }
-      .mt-12 {
-        margin-top: 3rem;
       }
       .py-16 {
         padding-top: 4rem;
@@ -255,11 +254,18 @@
       }
     </style>
 
+    <!-- Applies the stored dmi-theme (ThemeProvider's key) before first paint.
+         Pinned by SHA-256 in public/_headers script-src; regenerate the hash
+         if you edit it (node scripts/check-csp-hashes.mjs). -->
+    <script>
+      (function () { try { var t = localStorage.getItem("dmi-theme"); var d = t === "dark" || ((!t || t === "system") && window.matchMedia("(prefers-color-scheme: dark)").matches); document.documentElement.classList.add(d ? "dark" : "light"); } catch (e) {} })();
+    </script>
+
     <!-- Core Web Vitals optimization: DNS prefetch and preconnect for critical resources -->
     <!-- IMPORTANT: Use at most 4 preconnect hints (Lighthouse recommendation) -->
-    <!-- Fonts: Critical for FCP and LCP -->
-    <link rel="preconnect" href="https://fonts.googleapis.com" />
-    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
+    <!-- No Google Fonts: nothing in the CSS names Inter, and the request sent
+         every visitor's IP to Google before consent. The body font is the
+         system stack above. -->
 
     <!-- Database: Critical for interactivity (crossorigin needed for fetch/XHR requests) -->
     <!-- Project URL is injected at build time from VITE_SUPABASE_URL (no hardcoded project ref) -->
@@ -280,26 +286,8 @@
     <link rel="dns-prefetch" href="https://js.stripe.com" />
     <link rel="dns-prefetch" href="https://tile.openstreetmap.org" />
 
-    <!-- Critical resource preloading for LCP - WebP only (PNG used as img fallback, no preload needed) -->
-    <link
-      rel="preload"
-      as="image"
-      href="/DMI-Logo-Header.webp"
-      type="image/webp"
-      fetchpriority="high"
-    />
-    <!-- Font preloading with display=swap for better CLS -->
-    <link
-      rel="preload"
-      href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&display=swap"
-      as="style"
-      onload="this.onload=null;this.rel='stylesheet'"
-    />
-    <noscript
-      ><link
-        rel="stylesheet"
-        href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&display=swap"
-    /></noscript>
+    <!-- No logo preload: the header doesn't render DMI-Logo-Header.webp, so
+         the preload was a high-priority fetch nobody used. -->
 
     <!-- Favicons -->
     <link rel="icon" type="image/x-icon" href="/favicon.ico" />
@@ -487,8 +475,8 @@
 
     <!-- Twitter -->
     <meta name="twitter:card" content="summary_large_image" />
-    <meta name="twitter:site" content="@desmoinessider" />
-    <meta name="twitter:creator" content="@desmoinessider" />
+    <meta name="twitter:site" content="@desmoinesinsider" />
+    <meta name="twitter:creator" content="@desmoinesinsider" />
     <meta data-rh="true" name="twitter:title"
       content="Des Moines Insider: Events, Restaurants & Attractions"
     />
@@ -521,11 +509,11 @@
     <div id="root">
       <!-- Fallback content - replaced by React when app mounts successfully -->
       <!-- This content is visible to search engines and users without JavaScript -->
-      <div style="min-height:100vh;background:hsl(0 0% 100%);font-family:system-ui,sans-serif">
+      <div style="min-height:100vh;background:hsl(var(--background));color:hsl(var(--foreground));font-family:system-ui,sans-serif">
         <noscript>
-          <div style="max-width:1024px;margin:0 auto;padding:2rem 1rem">
+          <div style="max-width:1024px;margin:0 auto;padding:2rem 1rem;background:#fff;color:#111">
             <h1 style="font-size:2rem;font-weight:700;color:#1e3a5f;margin-bottom:1rem">Des Moines Insider</h1>
-            <p style="font-size:1.125rem;color:#444;margin-bottom:2rem">Your AI-powered guide to Des Moines events, restaurants, attractions, and local discoveries. Discover what's happening in Des Moines, Iowa.</p>
+            <p style="font-size:1.125rem;color:#444;margin-bottom:2rem">Des Moines events, restaurants and attractions, with what's on today and this weekend across the metro.</p>
             <nav style="margin-bottom:2rem">
               <h2 style="font-size:1.25rem;font-weight:600;margin-bottom:1rem;color:#333">Explore Des Moines</h2>
               <ul style="list-style:none;padding:0;display:flex;flex-wrap:wrap;gap:0.75rem">
@@ -539,13 +527,13 @@
                 <li><a href="/neighborhoods" style="color:#2563eb;text-decoration:underline">Neighborhoods</a></li>
                 <li><a href="/articles" style="color:#2563eb;text-decoration:underline">Articles</a></li>
                 <li><a href="/guides" style="color:#2563eb;text-decoration:underline">Guides</a></li>
-                <li><a href="/trip-planner" style="color:#2563eb;text-decoration:underline">AI Trip Planner</a></li>
+                <li><a href="/trip-planner" style="color:#2563eb;text-decoration:underline">Plan a trip</a></li>
                 <li><a href="/things-to-do" style="color:#2563eb;text-decoration:underline">Things to Do</a></li>
               </ul>
             </nav>
             <section style="margin-bottom:2rem">
               <h2 style="font-size:1.25rem;font-weight:600;margin-bottom:0.5rem;color:#333">About Des Moines Insider</h2>
-              <p style="color:#555;line-height:1.6">Des Moines Insider is your comprehensive guide to Des Moines, Iowa. We cover events, restaurants, attractions, and activities across the Greater Des Moines metro area including West Des Moines, Ankeny, Urbandale, Johnston, Clive, Waukee, and Altoona. Get personalized recommendations for things to do, places to eat, and local discoveries.</p>
+              <p style="color:#555;line-height:1.6">Des Moines Insider is your comprehensive guide to Des Moines, Iowa. We cover events, restaurants, attractions, and activities across the Greater Des Moines metro area including West Des Moines, Ankeny, Urbandale, Johnston, Clive, Waukee, and Altoona. Event listings are updated daily.</p>
             </section>
           </div>
         </noscript>

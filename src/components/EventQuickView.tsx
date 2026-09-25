@@ -1,7 +1,7 @@
 import { Link } from "react-router-dom";
 import { useEffect, useRef, useState, type MouseEvent } from "react";
 import { AddToCalendarButton } from "@/components/AddToCalendarButton";
-import { FavoriteButton } from "@/components/FavoriteButton";
+import { FavoriteButton, type FavoriteResult } from "@/components/FavoriteButton";
 import { OptimizedImage } from "@/components/OptimizedImage";
 import { Button } from "@/components/ui/button";
 import {
@@ -12,7 +12,8 @@ import {
   DialogTitle,
 } from "@/components/ui/dialog";
 import { SpriteIcon } from "@/components/ui/SpriteIcon";
-import { isCapacitor, nativeShare, openExternalUrl } from "@/lib/capacitorUtils";
+import { isCapacitor, openExternalUrl, shareWithOutcome } from "@/lib/capacitorUtils";
+import { useRecordRecentView } from "@/hooks/useRecentlyViewedFeed";
 import { getDirectionsUrl } from "@/lib/directions";
 import { handleError } from "@/lib/errorHandler";
 import { isFreePrice } from "@/lib/eventPrice";
@@ -61,14 +62,45 @@ function sameText(a: string | undefined, b: string | undefined): boolean {
  */
 type ShareStatus = { kind: "idle" } | { kind: "copied" } | { kind: "manual"; url: string };
 
+/** What the in-dialog status line says after Save, for the same reason. */
+function favoriteMessage(result: FavoriteResult): string | null {
+  switch (result.kind) {
+    case "guest-saved":
+      return `Saved on this device (${result.count} of ${result.cap}).`;
+    case "guest-cap":
+      return `You've saved ${result.cap} as a guest.`;
+    case "removed":
+      return "Removed from your saved list.";
+    case "needs-upgrade":
+      return null;
+  }
+}
+
 export function EventQuickView({ event, open, onOpenChange }: EventQuickViewProps) {
   const [shareStatus, setShareStatus] = useState<ShareStatus>({ kind: "idle" });
+  const [favoriteResult, setFavoriteResult] = useState<FavoriteResult | null>(null);
   const manualInputRef = useRef<HTMLInputElement>(null);
 
-  // A different event, or reopening, starts with no stale share message.
+  // A different event, or reopening, starts with no stale message.
   useEffect(() => {
     setShareStatus({ kind: "idle" });
+    setFavoriteResult(null);
   }, [event?.id, open]);
+
+  // Opening the quick view is a view: it feeds "Recently viewed" the same way
+  // the detail page does.
+  useRecordRecentView(
+    open && event
+      ? {
+          id: event.id,
+          type: "event",
+          title: event.title,
+          href: `/events/${createEventSlugWithCentralTime(event.title, event)}`,
+          image_url: event.image_url ?? undefined,
+          subtitle: event.venue || event.location || event.category || undefined,
+        }
+      : null,
+  );
 
   useEffect(() => {
     if (shareStatus.kind === "manual") manualInputRef.current?.select();
@@ -93,9 +125,10 @@ export function EventQuickView({ event, open, onOpenChange }: EventQuickViewProp
         (typeof navigator.canShare !== "function" || navigator.canShare(shareData));
 
       if (isCapacitor() || webShareOk) {
-        // nativeShare returns false on any failure, including a cancel, so a
-        // cancelled sheet falls through to the clipboard copy below.
-        if (await nativeShare(shareData)) return;
+        // A cancelled sheet is the person's answer: stop there rather than
+        // overwrite their clipboard. Only "no sheet" falls through to copy.
+        const outcome = await shareWithOutcome(shareData);
+        if (outcome !== "unavailable") return;
       }
 
       if (navigator.clipboard && typeof navigator.clipboard.writeText === "function") {
@@ -265,9 +298,12 @@ export function EventQuickView({ event, open, onOpenChange }: EventQuickViewProp
           </div>
         </div>
 
-        <div className="space-y-3 border-t bg-background p-4 sm:px-6">
+        <div className="space-y-3 border-t bg-background p-4 max-sm:pb-[max(1rem,env(safe-area-inset-bottom))] sm:px-6">
+          {/* No onOpenChange(false) on this link: on Home, closing is
+              navigate(-1) (the ?event= state) and it raced this push back to
+              /. Leaving the route unmounts the dialog. */}
           <Button asChild className="min-h-11 w-full">
-            <Link to={detailsHref} onClick={() => onOpenChange(false)}>
+            <Link to={detailsHref}>
               View details
               <SpriteIcon name="arrow-right" className="ml-2 h-4 w-4" />
             </Link>
@@ -281,12 +317,19 @@ export function EventQuickView({ event, open, onOpenChange }: EventQuickViewProp
               className="min-h-11 w-full"
               itemName={event.title}
               showText
+              onResult={(result) => {
+                setShareStatus({ kind: "idle" });
+                setFavoriteResult(result);
+              }}
             />
 
             <Button
               variant="outline"
               className="min-h-11 w-full"
-              onClick={() => handleShareEvent(event)}
+              onClick={() => {
+                setFavoriteResult(null);
+                handleShareEvent(event);
+              }}
             >
               <SpriteIcon name="share-2" className="mr-2 h-4 w-4" />
               Share
@@ -294,6 +337,24 @@ export function EventQuickView({ event, open, onOpenChange }: EventQuickViewProp
           </div>
 
           <div role="status" aria-live="polite">
+            {favoriteResult && favoriteMessage(favoriteResult) && (
+              <p className="text-sm text-muted-foreground" data-quick-view-save-status="">
+                {favoriteMessage(favoriteResult)}{" "}
+                {(favoriteResult.kind === "guest-saved" || favoriteResult.kind === "guest-cap") && (
+                  // No onOpenChange(false) here: closing rewrites the URL
+                  // (the ?event= state) and raced this navigation back to /.
+                  // Leaving the route unmounts the dialog anyway.
+                  <Link
+                    to={favoriteResult.signUpHref}
+                    className="font-medium text-primary underline underline-offset-2"
+                  >
+                    {favoriteResult.kind === "guest-cap"
+                      ? "Sign up free to keep saving"
+                      : "Sign up free to keep them"}
+                  </Link>
+                )}
+              </p>
+            )}
             {shareStatus.kind === "copied" && (
               <p className="text-sm text-muted-foreground">Link copied to your clipboard.</p>
             )}

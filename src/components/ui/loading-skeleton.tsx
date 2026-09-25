@@ -250,35 +250,72 @@ export function DashboardSkeleton() {
 }
 
 /**
- * Placeholder for the home "This week in Des Moines" block (home plan WP3
- * item 8): heading, tab row and a 3x3 card grid, laid out on the same
- * section/container/grid classes as AllInclusiveDashboard so the swap to
- * real content does not move the page. Also the Suspense fallback on Index.
+ * One dashboard card's placeholder, laid out like DashboardCard in
+ * AllInclusiveDashboard: 16:9 image, then a 40px badge-and-save row, the
+ * when/where line, a two-line title and a two-line description.
+ */
+function DashboardCardSkeleton() {
+  return (
+    <div className="flex h-full flex-col overflow-hidden rounded-xl border border-border bg-card">
+      <Skeleton className="aspect-video w-full rounded-none" />
+      <div className="flex flex-1 flex-col gap-2 p-4">
+        <div className="flex h-10 items-center justify-between">
+          <Skeleton className="h-5 w-20 rounded-full" />
+          <Skeleton className="h-8 w-8 rounded-md" />
+        </div>
+        <Skeleton className="h-5 w-2/3" />
+        <Skeleton className="h-6 w-5/6 md:h-7" />
+        <Skeleton className="h-10 w-full" />
+      </div>
+    </div>
+  );
+}
+
+/**
+ * A dashboard group's reserved slot (home pass-2 WP3 item 9): three cards on
+ * the grid the real group uses. A group shows this while its own query loads,
+ * so a table that answers late fills its slot instead of pushing the groups
+ * below it down.
+ */
+export function DashboardGroupSkeleton() {
+  return (
+    <div className="grid grid-cols-1 gap-6 md:grid-cols-2 lg:grid-cols-3" aria-hidden="true">
+      {Array.from({ length: 3 }).map((_, i) => (
+        <DashboardCardSkeleton key={i} />
+      ))}
+    </div>
+  );
+}
+
+/**
+ * Placeholder for the home "Explore Des Moines" block: heading, tab row and
+ * five groups of three cards, the shape the block has once every group has
+ * rows (home pass-2 WP3 item 9). Laid out on the same section/container/grid
+ * classes as AllInclusiveDashboard so the swap to real content does not move
+ * the page. Also the Suspense fallback on Index.
  */
 export function DashboardGridSkeleton() {
   return (
     <section className="py-8 md:py-16 bg-muted/30">
       <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8">
-        <SkeletonGroup label="Loading this week in Des Moines..." className="space-y-6 md:space-y-8">
+        <SkeletonGroup label="Loading Explore Des Moines..." className="space-y-6 md:space-y-8">
           <div className="space-y-3">
             <Skeleton className="h-8 w-64 md:h-9 md:w-80" />
             <Skeleton className="h-5 w-full max-w-md" />
           </div>
           <div className="flex gap-2 overflow-hidden">
             {Array.from({ length: 6 }).map((_, i) => (
-              <Skeleton key={i} className="h-10 w-24 flex-shrink-0 rounded-md" />
+              <Skeleton key={i} className="h-11 w-24 flex-shrink-0 rounded-md" />
             ))}
           </div>
-          <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
-            {Array.from({ length: 9 }).map((_, i) => (
-              <div key={i} className="overflow-hidden rounded-xl border border-border bg-card">
-                <Skeleton className="aspect-video w-full rounded-none" />
-                <div className="space-y-3 p-4">
-                  <Skeleton className="h-5 w-20 rounded-full" />
-                  <Skeleton className="h-4 w-2/3" />
-                  <Skeleton className="h-6 w-5/6" />
-                  <Skeleton className="h-4 w-full" />
+          <div className="space-y-10 md:space-y-12">
+            {Array.from({ length: 5 }).map((_, i) => (
+              <div key={i}>
+                <div className="mb-4 flex items-baseline justify-between gap-4">
+                  <Skeleton className="h-7 w-40" />
+                  <Skeleton className="h-5 w-32" />
                 </div>
+                <DashboardGroupSkeleton />
               </div>
             ))}
           </div>

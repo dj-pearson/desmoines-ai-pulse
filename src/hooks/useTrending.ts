@@ -8,6 +8,9 @@ import {
   PLAYGROUND_LIST_COLUMNS,
 } from '@/lib/listColumns';
 import { createLogger } from '@/lib/logger';
+import { applyEventVisibility } from '@/lib/eventQuery';
+import { CENTRAL_TIMEZONE } from '@/lib/timezone';
+import { formatInTimeZone } from 'date-fns-tz';
 
 const logger = createLogger('useTrending');
 
@@ -51,9 +54,30 @@ interface FallbackConfig {
    * docs/page-plans/home.md). Defaults to all four.
    */
   types?: TrendingContentType[];
+  /**
+   * Read trending_scores. Its only SELECT policy is "Admins can view trending
+   * scores" (docs/RLS_AUDIT.md:607), so for everyone else the read is a wasted
+   * request that always comes back empty. Callers pass useAuth().isAdmin.
+   * Defaults to false (home pass-2 WP3 item 4).
+   */
+  readScores?: boolean;
 }
 
-const DEFAULT_CONFIG = { useRealData: true, minItemsRequired: 3, fallbackSeed: 42 };
+const DEFAULT_CONFIG = { useRealData: true, minItemsRequired: 3, fallbackSeed: 42, readScores: false };
+
+/** Only the trending_scores columns this hook reads. */
+const TRENDING_SCORE_COLUMNS =
+  'id, content_type, content_id, score, rank, views_24h, views_7d, velocity_score';
+
+/** Restaurant statuses that mean "you cannot eat here now". */
+const NOT_SERVING = '(closed,permanently_closed,temporarily_closed)';
+
+/**
+ * The organic floor for the fallback columns. Not a claim that these are the
+ * best places in town: the column is titled "Highly rated" and shows the
+ * rating it was chosen by.
+ */
+export const HIGHLY_RATED_MIN = 4.0;
 
 const EMPTY_TRENDING: TrendingData = {
   events: [],
@@ -78,12 +102,13 @@ export function useTrending(options: FallbackConfig = {}) {
   // change for no behavioural gain (WEB-PERF-013).
   const fetchTrendingData = async (): Promise<TrendingQueryResult> => {
     try {
-      if (config.useRealData) {
-        // Fetch real trending data
+      if (config.useRealData && config.readScores) {
+        // The scores are written per Central day; a UTC date read the next
+        // day's (empty) rows every evening after 7pm Central.
         const { data: trendingScores, error: scoresError } = await supabase
           .from('trending_scores')
-          .select('*')
-          .eq('date', new Date().toISOString().split('T')[0])
+          .select(TRENDING_SCORE_COLUMNS)
+          .eq('date', formatInTimeZone(new Date(), CENTRAL_TIMEZONE, 'yyyy-MM-dd'))
           .in('content_type', types)
           .order('rank')
           .limit(10);
@@ -110,7 +135,7 @@ export function useTrending(options: FallbackConfig = {}) {
         }
       }
 
-      // Fallback: Generate smart trending based on featured/recent content
+      // Fallback: organic reads (upcoming events, highly rated places)
       return { trending: await generateFallbackTrending(), hasRealData: false };
     } catch (error) {
       // Trending is a nice-to-have surface: fall back rather than surfacing an
@@ -144,19 +169,23 @@ export function useTrending(options: FallbackConfig = {}) {
     try {
       const [eventsRes, restaurantsRes, attractionsRes, playgroundsRes] = await Promise.all([
         idsByType.event.length
-          ? supabase
-              .from('events')
-              .select(EVENT_LIST_COLUMNS)
-              .in('id', idsByType.event)
-              .neq('is_hidden', true) // Exclude soft-hidden stale events (WEB-AUTO-006)
-              // WEB-BE-034: archived_at is the other unpublish switch.
-              .is('archived_at', null)
+          ? applyEventVisibility(
+              supabase.from('events').select(EVENT_LIST_COLUMNS).in('id', idsByType.event),
+            )
           : null,
         idsByType.restaurant.length
-          ? supabase.from('restaurants').select(RESTAURANT_LIST_COLUMNS).in('id', idsByType.restaurant)
+          ? supabase
+              .from('restaurants')
+              .select(RESTAURANT_LIST_COLUMNS)
+              .in('id', idsByType.restaurant)
+              .neq('is_merged', true)
           : null,
         idsByType.attraction.length
-          ? supabase.from('attractions').select(ATTRACTION_LIST_COLUMNS).in('id', idsByType.attraction)
+          ? supabase
+              .from('attractions')
+              .select(ATTRACTION_LIST_COLUMNS)
+              .in('id', idsByType.attraction)
+              .eq('is_active', true)
           : null,
         idsByType.playground.length
           ? supabase.from('playgrounds').select(PLAYGROUND_LIST_COLUMNS).in('id', idsByType.playground)
@@ -200,7 +229,7 @@ export function useTrending(options: FallbackConfig = {}) {
   };
 
   const generateFallbackTrending = async (): Promise<TrendingData> => {
-    // Create smart fallback based on featured content, recent additions, and algorithmic selection
+    // No view data on this path; see the TrendingItem comment.
     const fallback: TrendingData = {
       events: [],
       restaurants: [],
@@ -209,49 +238,28 @@ export function useTrending(options: FallbackConfig = {}) {
     };
 
     try {
-      // Fetch featured and recent events.
+      // ORGANIC READS ONLY (home pass-2 WP3 item 2). This used to read
+      // is_featured rows for every type and title them "Featured". Since
+      // 20260902000004 a featured restaurant or event is a sponsored one or an
+      // admin pick, so the column was paid placement under an editorial label.
+      // Now: upcoming visible events by date, and places rated
+      // HIGHLY_RATED_MIN or better (restaurants not merged and not closed,
+      // attractions active). A sponsored row can still qualify on its rating;
+      // the caller labels it and caps it at one per column.
       //
-      // Both use EVENT_LIST_COLUMNS rather than select('*'), matching the
-      // primary path at line ~112. select('*') drags the SEO/GEO text blocks,
-      // search_vector and the PostGIS geometry into a card payload that
-      // renders none of them. The restaurant, attraction and playground
-      // fallbacks below now do the same (WEB-PERF-035) - they were still on
-      // select('*') when this comment claimed these two were the last.
-      //
-      // Measured on the homepage against production: these two responses were
-      // 21,106 and 13,160 bytes; the same six rows under the projection are
-      // 6,183 bytes — a 71% reduction (WEB-PERF-025).
-      //
-      // All five reads run in parallel (they were a sequential waterfall), and
-      // a type the caller did not ask for is not read at all.
+      // All reads use the list projections (WEB-PERF-025/035), run in
+      // parallel, and a type the caller did not ask for is not read at all.
       const skip = Promise.resolve({ data: null, error: null });
       const [
-        { data: featuredEvents, error: featuredEventsError },
         { data: recentEvents, error: recentEventsError },
         { data: restaurants, error: restaurantsError },
         { data: attractions, error: attractionsError },
         { data: playgrounds, error: playgroundsError },
       ] = await Promise.all([
         wants('event')
-          ? supabase
-              .from('events')
-              .select(EVENT_LIST_COLUMNS)
-              .eq('is_featured', true)
-              .neq('is_hidden', true) // Exclude soft-hidden stale events (WEB-AUTO-006)
-              // WEB-BE-034: archived_at is the other unpublish switch.
-              .is('archived_at', null)
-              .order('created_at', { ascending: false })
-              .limit(6)
-          : skip,
-        wants('event')
-          ? supabase
-              .from('events')
-              .select(EVENT_LIST_COLUMNS)
-              .gte('date', new Date().toISOString())
-              // Same unpublish switches as the featured read; this one had
-              // neither, so a hidden or archived event could "trend".
-              .neq('is_hidden', true)
-              .is('archived_at', null)
+          ? applyEventVisibility(
+              supabase.from('events').select(EVENT_LIST_COLUMNS).gte('date', new Date().toISOString()),
+            )
               .order('date')
               .limit(6)
           : skip,
@@ -259,36 +267,38 @@ export function useTrending(options: FallbackConfig = {}) {
           ? supabase
               .from('restaurants')
               .select(RESTAURANT_LIST_COLUMNS)
-              .eq('is_featured', true)
-              .order('created_at', { ascending: false })
+              .gte('rating', HIGHLY_RATED_MIN)
+              .neq('is_merged', true)
+              // Keeps rows with no status; a bare .not('status','in',...)
+              // would drop them.
+              .or(`status.is.null,status.not.in.${NOT_SERVING}`)
+              .order('rating', { ascending: false })
+              .order('name')
               .limit(4)
           : skip,
         wants('attraction')
           ? supabase
               .from('attractions')
               .select(ATTRACTION_LIST_COLUMNS)
-              .eq('is_featured', true)
-              .order('created_at', { ascending: false })
+              .gte('rating', HIGHLY_RATED_MIN)
+              .eq('is_active', true)
+              .order('rating', { ascending: false })
+              .order('name')
               .limit(4)
           : skip,
         wants('playground')
           ? supabase
               .from('playgrounds')
               .select(PLAYGROUND_LIST_COLUMNS)
-              .eq('is_featured', true)
-              .order('created_at', { ascending: false })
+              .gte('rating', HIGHLY_RATED_MIN)
+              .order('rating', { ascending: false })
+              .order('name')
               .limit(4)
           : skip,
       ]);
 
-      // Combine and dedupe events
-      const allEvents = [...(featuredEvents || []), ...(recentEvents || [])];
-      const uniqueEvents = allEvents.filter((event, index, self) => 
-        index === self.findIndex(e => e.id === event.id)
-      );
-
-      // Create mock trending items with realistic-looking scores
-      fallback.events = uniqueEvents.slice(0, 6).map((event, index) => ({
+      // Position-based scores: an ordering key for this list, not a measurement.
+      fallback.events = (recentEvents || []).slice(0, 6).map((event, index) => ({
         id: `fallback-event-${event.id}`,
         contentType: 'event' as const,
         contentId: event.id,
@@ -301,7 +311,7 @@ export function useTrending(options: FallbackConfig = {}) {
         content: event
       }));
 
-      // Restaurants, attractions and playgrounds: featured rows.
+      // Restaurants, attractions and playgrounds: highly rated rows.
       fallback.restaurants = (restaurants || []).map((restaurant, index) => ({
         id: `fallback-restaurant-${restaurant.id}`,
         contentType: 'restaurant' as const,
@@ -343,9 +353,8 @@ export function useTrending(options: FallbackConfig = {}) {
 
       // The fallback is itself a set of reads, and each one silently discarded
       // its error. A trending section that is empty because five queries failed
-      // and one that is empty because nothing is featured render identically.
+      // and one that is empty because nothing qualifies render identically.
       const fallbackErrors = [
-        featuredEventsError && `featured events: ${featuredEventsError.message}`,
         recentEventsError && `recent events: ${recentEventsError.message}`,
         restaurantsError && `restaurants: ${restaurantsError.message}`,
         attractionsError && `attractions: ${attractionsError.message}`,
@@ -374,7 +383,14 @@ export function useTrending(options: FallbackConfig = {}) {
   };
 
   const { data, isLoading, refetch } = useQuery({
-    queryKey: ['trending', config.useRealData, config.minItemsRequired, config.fallbackSeed, types.join(',')],
+    queryKey: [
+      'trending',
+      config.useRealData,
+      config.readScores,
+      config.minItemsRequired,
+      config.fallbackSeed,
+      types.join(','),
+    ],
     queryFn: fetchTrendingData,
     // Trending is a fast-moving signal, but not per-request fresh.
     staleTime: STALE_TIME.SHORT,

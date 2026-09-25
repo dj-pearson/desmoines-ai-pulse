@@ -7,9 +7,15 @@
  * (src/lib/__tests__/tonightPairings.test.ts). The hook that fetches rows is
  * src/hooks/useTonightPairings.ts.
  *
- * THE CLOCK IS CENTRAL, NOT THE READER'S. "Tonight" is the rest of today's
- * America/Chicago calendar day, and a restaurant's hours are checked against
- * Central wall time. getRestaurantOpenStatus takes the instant and does the
+ * THE CLOCK IS CENTRAL, NOT THE READER'S. Two definitions of "tonight" live
+ * here, and callers pick one:
+ *   - "day" (the default, kept for the restaurant and search callers): the
+ *     rest of today's America/Chicago calendar day.
+ *   - "evening" (the home rail, home pass-2 WP2): events starting between
+ *     max(now, 16:00 CT) and 04:00 CT the next morning, plus multi-day events
+ *     that started earlier and are still running. Between 00:00 and 04:00 CT
+ *     it is what is left of the previous evening. See tonightWindow().
+ * A restaurant's hours are checked against Central wall time. getRestaurantOpenStatus takes the instant and does the
  * Central conversion itself, so it is handed `at` unconverted. Passing a
  * toZonedTime() Date here as well would convert twice and put the check
  * five or six hours off.
@@ -17,7 +23,7 @@
 import { addDays, parseISO } from "date-fns";
 import { formatInTimeZone, fromZonedTime } from "date-fns-tz";
 import { haversineDistance } from "@/lib/geo";
-import { getRestaurantOpenStatus } from "@/lib/restaurantHours";
+import { getRestaurantOpenStatus, type RestaurantOpenResult } from "@/lib/restaurantHours";
 import { reorderForWeather, type WeatherSnapshot } from "@/hooks/useWeather";
 
 const CENTRAL = "America/Chicago";
@@ -30,6 +36,27 @@ export const PAIR_MAX_MILES = 1.5;
 
 /** Dinner starts this long before the event, and the restaurant must be open then. */
 export const DINNER_LEAD_MINUTES = 90;
+
+/** "Tonight" in the evening sense starts at this Central hour... */
+export const EVENING_START_HOUR = 16;
+
+/** ...and runs until this Central hour the next morning. */
+export const NIGHT_END_HOUR = 4;
+
+/**
+ * The rail's query reaches this far back from `now`, so a show that started a
+ * few minutes ago is still in the rows while the minute clock catches up.
+ */
+export const QUERY_LOOKBACK_MINUTES = 15;
+
+/**
+ * The query's lower bound is floored to this many minutes, so the cache key
+ * changes a few times an evening rather than every minute.
+ */
+export const QUERY_BOUND_STEP_MINUTES = 30;
+
+/** Names on a Tonight card are cut to about this many characters. */
+export const TONIGHT_NAME_MAX = 40;
 
 /** The rail shows at most this many cards. */
 export const MAX_TONIGHT_CARDS = 5;
@@ -65,6 +92,11 @@ export interface TonightEvent {
   latitude?: number | null;
   longitude?: number | null;
   time_tbd?: boolean | null;
+  /** Multi-day events: when the run ends (timestamptz). */
+  end_date?: string | null;
+  city?: string | null;
+  is_sponsored?: boolean | null;
+  sponsored_until?: string | null;
 }
 
 export interface TonightRestaurant {
@@ -86,6 +118,12 @@ export interface TonightDinner {
   distanceMiles: number;
   /** The instant dinner starts: event start minus DINNER_LEAD_MINUTES. */
   dinnerAt: Date;
+  /**
+   * The Central closing time at `dinnerAt` ("10 PM", "midnight"), from
+   * getRestaurantOpenStatus. Null when the hours say open around the clock.
+   * Optional so callers that build their own TonightDinner still type-check.
+   */
+  closesAt?: string | null;
 }
 
 export interface TonightPairing {
@@ -93,6 +131,39 @@ export interface TonightPairing {
   /** Null when the event has no known time, no coordinates, or nothing open nearby. */
   startsAt: Date | null;
   dinner: TonightDinner | null;
+  /**
+   * Set for a multi-day event that started before tonight's window and is
+   * still running (evening mode only): its end instant. Such a card has no
+   * start time of its own tonight and gets no dinner.
+   */
+  ongoingUntil?: Date | null;
+}
+
+/** Which definition of "tonight" a caller wants. See the file header. */
+export type TonightMode = "day" | "evening";
+
+export interface TonightWindow {
+  /** yyyy-MM-dd of the evening in Central. Between 00:00 and 04:00 CT, yesterday. */
+  dateKey: string;
+  /** 16:00 CT on dateKey, as UTC ISO. */
+  eveningStartISO: string;
+  /** max(now, eveningStart), as UTC ISO. */
+  startISO: string;
+  /** 04:00 CT the morning after dateKey, as UTC ISO. */
+  endISO: string;
+}
+
+export interface TonightQueryBounds {
+  dateKey: string;
+  /**
+   * Lower bound on `date` for events starting tonight:
+   * max(eveningStart, now - QUERY_LOOKBACK_MINUTES), floored to
+   * QUERY_BOUND_STEP_MINUTES (never below eveningStart). Also the bound an
+   * ongoing row's end_date must reach.
+   */
+  fromISO: string;
+  /** Upper bound (exclusive): 04:00 CT the next morning. */
+  toISO: string;
 }
 
 export interface CentralDayWindow {
@@ -116,6 +187,57 @@ export function centralDayWindow(now: Date): CentralDayWindow {
     startISO: fromZonedTime(`${dateKey}T00:00:00`, CENTRAL).toISOString(),
     endISO: fromZonedTime(`${nextKey}T00:00:00`, CENTRAL).toISOString(),
     dateKey,
+  };
+}
+
+function shiftDateKey(dateKey: string, days: number): string {
+  return formatInTimeZone(
+    addDays(parseISO(`${dateKey}T12:00:00Z`), days),
+    "UTC",
+    "yyyy-MM-dd",
+  );
+}
+
+function hh(hour: number): string {
+  return String(hour).padStart(2, "0");
+}
+
+/**
+ * Tonight, the evening sense: from max(now, 16:00 CT) to 04:00 CT the next
+ * morning. From 00:00 to 04:00 CT it is the rest of the previous evening, so
+ * at 00:30 on Saturday "tonight" is still Friday night.
+ */
+export function tonightWindow(now: Date): TonightWindow {
+  const todayKey = formatInTimeZone(now, CENTRAL, "yyyy-MM-dd");
+  const hour = Number(formatInTimeZone(now, CENTRAL, "H"));
+  const dateKey = hour < NIGHT_END_HOUR ? shiftDateKey(todayKey, -1) : todayKey;
+  const eveningStart = fromZonedTime(`${dateKey}T${hh(EVENING_START_HOUR)}:00:00`, CENTRAL);
+  const end = fromZonedTime(`${shiftDateKey(dateKey, 1)}T${hh(NIGHT_END_HOUR)}:00:00`, CENTRAL);
+  const start = Math.max(now.getTime(), eveningStart.getTime());
+  return {
+    dateKey,
+    eveningStartISO: eveningStart.toISOString(),
+    startISO: new Date(start).toISOString(),
+    endISO: end.toISOString(),
+  };
+}
+
+/**
+ * The bounds the rail's events query uses. Bounded on the evening, not on
+ * Central midnight, so morning rows cannot use up the row limit. The lower
+ * bound moves in QUERY_BOUND_STEP_MINUTES steps so the cache key rolls over a
+ * few times an evening; selectTonightEvents drops anything already started.
+ */
+export function tonightQueryBounds(now: Date): TonightQueryBounds {
+  const w = tonightWindow(now);
+  const eveningStart = Date.parse(w.eveningStartISO);
+  const step = QUERY_BOUND_STEP_MINUTES * 60_000;
+  const lookback = now.getTime() - QUERY_LOOKBACK_MINUTES * 60_000;
+  const floored = Math.floor(lookback / step) * step;
+  return {
+    dateKey: w.dateKey,
+    fromISO: new Date(Math.max(eveningStart, floored)).toISOString(),
+    toISO: w.endISO,
   };
 }
 
@@ -144,7 +266,9 @@ const INDOOR_RE =
 /**
  * Is this event indoors? true / false, or null when the text does not say.
  *
- * events has no is_indoor column, so this reads the category, title and venue.
+ * The fallback when events.is_indoor is not available (useEventIndoorFlags
+ * fails open until migration 20260908000001 is applied, and most rows carry
+ * null there anyway): this reads the category, title and venue.
  * Null is the honest answer for most rows and reorderForWeather keeps unknowns
  * in place between the two known groups. Outdoor wins a tie ("Jazz in the
  * Gardens at the Botanical Hall") because a wet evening is the costly miss.
@@ -167,32 +291,97 @@ function hasCoords(row: { latitude?: number | null; longitude?: number | null })
   );
 }
 
+function parseInstant(value: string | null | undefined): number {
+  return value ? Date.parse(value) : NaN;
+}
+
+/**
+ * A multi-day event that started before tonight's evening window and is still
+ * running after `now`. Evening mode only: in day mode a row is either today or
+ * not. A row with no end_date is never "ongoing"; an end_date written as
+ * midnight of the last day ends at that midnight, which is the conservative
+ * reading.
+ */
+export function isOngoingTonight(event: TonightEvent, now: Date): boolean {
+  const started = parseInstant(event.event_start_utc ?? event.date);
+  const ends = parseInstant(event.end_date);
+  if (!Number.isFinite(started) || !Number.isFinite(ends)) return false;
+  const eveningStart = Date.parse(tonightWindow(now).eveningStartISO);
+  return started < eveningStart && ends > now.getTime();
+}
+
+/**
+ * The start time a Tonight card may print. For an ongoing event that is only
+ * a time the source gives for tonight itself (event_start_local dated on
+ * tonight's evening, still ahead); otherwise null, so no dinner is invented
+ * against yesterday's opening hour.
+ */
+export function tonightStartInstant(event: TonightEvent, now: Date, mode: TonightMode = "day"): Date | null {
+  if (mode === "evening" && isOngoingTonight(event, now)) {
+    if (event.time_tbd) return null;
+    const local = event.event_start_local ?? "";
+    const [datePart, timePart] = local.split("T");
+    if (!timePart || timePart.substring(0, 8) === NO_TIME_MARKER) return null;
+    if (datePart !== tonightWindow(now).dateKey) return null;
+    const at = fromZonedTime(local.substring(0, 19), CENTRAL);
+    return Number.isNaN(at.getTime()) || at.getTime() <= now.getTime() ? null : at;
+  }
+  return eventStartInstant(event);
+}
+
+export interface SelectTonightOptions {
+  /** "day" (default) or "evening". See the file header. */
+  mode?: TonightMode;
+  /**
+   * Indoor classifier for the weather reorder. Defaults to eventIsIndoor; the
+   * home rail passes the is_indoor flag first with eventIsIndoor as fallback.
+   */
+  isIndoor?: (event: TonightEvent) => boolean | null | undefined;
+}
+
 /**
  * Tonight's events from `now` on, ordered for the weather.
  *
- * The query already bounds on the Central day, but the rows are filtered again
- * here so a cached result from an hour ago does not list a show that has
- * started, and so the rule is testable without a database. Timed events come
- * in start order; no-time events sit after them. The weather reorder is stable,
- * so start order survives within each indoor/outdoor group.
+ * The query already bounds the rows, but they are filtered again here so a
+ * cached result from an hour ago does not list a show that has started, and so
+ * the rule is testable without a database. Timed events come in start order;
+ * ongoing and no-time events sit after them. The weather reorder is stable, so
+ * start order survives within each indoor/outdoor group: weather rank first,
+ * start time second.
  */
 export function selectTonightEvents(
   events: readonly TonightEvent[],
   now: Date,
   weather: WeatherSnapshot,
+  options: SelectTonightOptions = {},
 ): TonightEvent[] {
-  const { startISO, endISO } = centralDayWindow(now);
-  const dayStart = Date.parse(startISO);
-  const dayEnd = Date.parse(endISO);
+  const mode = options.mode ?? "day";
+  let lower: number;
+  let upper: number;
+  if (mode === "evening") {
+    const w = tonightWindow(now);
+    lower = Date.parse(w.eveningStartISO);
+    upper = Date.parse(w.endISO);
+  } else {
+    const { startISO, endISO } = centralDayWindow(now);
+    lower = Date.parse(startISO);
+    upper = Date.parse(endISO);
+  }
   const nowMs = now.getTime();
 
   const seen = new Set<string>();
   const kept: Array<{ event: TonightEvent; start: number | null }> = [];
   for (const event of events) {
     if (!event?.id || seen.has(event.id)) continue;
-    const source = event.event_start_utc ?? event.date;
-    const at = source ? Date.parse(source) : NaN;
-    if (!Number.isFinite(at) || at < dayStart || at >= dayEnd) continue;
+    const at = parseInstant(event.event_start_utc ?? event.date);
+    if (!Number.isFinite(at) || at >= upper) continue;
+    if (at < lower) {
+      if (mode !== "evening" || !isOngoingTonight(event, now)) continue;
+      const tonightStart = tonightStartInstant(event, now, mode);
+      seen.add(event.id);
+      kept.push({ event, start: tonightStart ? tonightStart.getTime() : null });
+      continue;
+    }
     const start = eventStartInstant(event);
     if (start && start.getTime() < nowMs) continue;
     seen.add(event.id);
@@ -208,7 +397,7 @@ export function selectTonightEvents(
 
   return reorderForWeather(
     kept.map((k) => k.event),
-    eventIsIndoor,
+    options.isIndoor ?? eventIsIndoor,
     weather,
   );
 }
@@ -234,18 +423,40 @@ export function restaurantBoxes(events: readonly TonightEvent[]): string[] {
 /**
  * Will this restaurant be open, with time to eat, at `at`?
  *
- * "open" only. "closing-soon" means it shuts within the hour, which is not a
- * dinner, and "unknown" (unparseable or missing hours) is not a claim we can
- * print as "open".
+ * Returns the open-status result (so the card can print "open until 10 PM"
+ * from its closesAt), or null when the answer is no. "open" only:
+ * "closing-soon" means it shuts within the hour, which is not a dinner, and
+ * "unknown" (unparseable or missing hours) is not a claim we can print as
+ * "open".
  */
-export function isOpenForDinner(restaurant: TonightRestaurant, at: Date, now: Date): boolean {
-  if (restaurant.status && NOT_SERVING.has(restaurant.status)) return false;
+export function isOpenForDinner(
+  restaurant: TonightRestaurant,
+  at: Date,
+  now: Date,
+): RestaurantOpenResult | null {
+  if (restaurant.status && NOT_SERVING.has(restaurant.status)) return null;
   if (restaurant.opening_date) {
     const opens = Date.parse(restaurant.opening_date);
-    if (Number.isFinite(opens) && opens > now.getTime()) return false;
+    if (Number.isFinite(opens) && opens > now.getTime()) return null;
   }
-  if (typeof restaurant.opening !== "string") return false;
-  return getRestaurantOpenStatus(restaurant.opening, at).status === "open";
+  if (typeof restaurant.opening !== "string") return null;
+  const result = getRestaurantOpenStatus(restaurant.opening, at);
+  return result.status === "open" ? result : null;
+}
+
+export interface PickDinnerOptions {
+  /**
+   * Home's rule (home pass-2 WP2 item 1): refuse a dinner that starts before
+   * 16:00 CT on tonight's evening or has already passed. Off by default, so
+   * the Eat & Drink and Events callers keep their behaviour.
+   */
+  eveningOnly?: boolean;
+}
+
+/** Does a dinner at `dinnerAt` pass the evening rule? */
+export function isEveningDinner(dinnerAt: Date, now: Date): boolean {
+  const eveningStart = Date.parse(tonightWindow(now).eveningStartISO);
+  return dinnerAt.getTime() >= eveningStart && dinnerAt.getTime() > now.getTime();
 }
 
 /**
@@ -258,9 +469,11 @@ export function pickDinner(
   restaurants: readonly TonightRestaurant[],
   now: Date,
   used: ReadonlySet<string> = new Set(),
+  options: PickDinnerOptions = {},
 ): TonightDinner | null {
   if (!startsAt || !hasCoords(event)) return null;
   const dinnerAt = new Date(startsAt.getTime() - DINNER_LEAD_MINUTES * 60_000);
+  if (options.eveningOnly && !isEveningDinner(dinnerAt, now)) return null;
   const venue = { latitude: event.latitude as number, longitude: event.longitude as number };
 
   let best: TonightDinner | null = null;
@@ -272,8 +485,9 @@ export function pickDinner(
       longitude: restaurant.longitude as number,
     });
     if (distanceMiles > PAIR_MAX_MILES) continue;
-    if (!isOpenForDinner(restaurant, dinnerAt, now)) continue;
-    const candidate = { restaurant, distanceMiles, dinnerAt };
+    const open = isOpenForDinner(restaurant, dinnerAt, now);
+    if (!open) continue;
+    const candidate: TonightDinner = { restaurant, distanceMiles, dinnerAt, closesAt: open.closesAt };
     if (!best || distanceMiles < best.distanceMiles) best = candidate;
     if (!used.has(restaurant.id) && (!bestFresh || distanceMiles < bestFresh.distanceMiles)) {
       bestFresh = candidate;
@@ -282,12 +496,18 @@ export function pickDinner(
   return bestFresh ?? best;
 }
 
+export interface BuildTonightOptions extends PickDinnerOptions {
+  /** "day" (default) or "evening"; evening marks ongoing events and gives them no dinner. */
+  mode?: TonightMode;
+}
+
 /**
  * Tonight's cards: ordered events, each with a dinner when one fits.
  *
- * Paired events come first so the top of the rail is a complete plan; within
- * the paired and unpaired groups the weather-and-time order from
- * selectTonightEvents holds. An event that cannot pair is still shown on its
+ * The order is the one selectTonightEvents produced (weather rank first, start
+ * time second). Having a dinner is only a tie-break between cards that start
+ * at the same time, so a paired card never jumps over the weather order the
+ * rail's header explains. An event that cannot pair is still shown on its
  * own, so the rail is never empty while anything is on tonight.
  */
 export function buildTonightPairings(
@@ -295,17 +515,57 @@ export function buildTonightPairings(
   restaurants: readonly TonightRestaurant[],
   now: Date,
   limit: number = MAX_TONIGHT_CARDS,
+  options: BuildTonightOptions = {},
 ): TonightPairing[] {
+  const mode = options.mode ?? "day";
   const used = new Set<string>();
   const all: TonightPairing[] = orderedEvents.slice(0, MAX_PAIRING_CANDIDATES).map((event) => {
-    const startsAt = eventStartInstant(event);
-    const dinner = pickDinner(event, startsAt, restaurants, now, used);
+    const ongoing = mode === "evening" && isOngoingTonight(event, now);
+    const startsAt = tonightStartInstant(event, now, mode);
+    const dinner = pickDinner(event, startsAt, restaurants, now, used, options);
     if (dinner) used.add(dinner.restaurant.id);
-    return { event, startsAt, dinner };
+    const pairing: TonightPairing = { event, startsAt, dinner };
+    if (ongoing) pairing.ongoingUntil = new Date(parseInstant(event.end_date));
+    return pairing;
   });
-  const paired = all.filter((p) => p.dinner);
-  const alone = all.filter((p) => !p.dinner);
-  return [...paired, ...alone].slice(0, limit);
+
+  // Tie-break only: within a run of cards with the same start (and the same
+  // place in the weather order, since the run is contiguous), paired first.
+  const keyOf = (p: TonightPairing) => (p.startsAt ? p.startsAt.getTime() : null);
+  const out: TonightPairing[] = [];
+  let i = 0;
+  while (i < all.length) {
+    let j = i + 1;
+    while (j < all.length && keyOf(all[j]) === keyOf(all[i])) j += 1;
+    const run = all.slice(i, j);
+    out.push(...run.filter((p) => p.dinner), ...run.filter((p) => !p.dinner));
+    i = j;
+  }
+  return out.slice(0, limit);
+}
+
+/**
+ * Put `items` in the order of `frozenIds`, for a rail that must not move a
+ * card under a thumb once it has rendered. Ids not in the frozen list keep
+ * their relative order after the frozen ones; frozen ids no longer present
+ * (a show that started) simply drop out.
+ */
+export function applyFrozenOrder<T>(
+  items: readonly T[],
+  getId: (item: T) => string,
+  frozenIds: readonly string[] | null,
+): T[] {
+  if (!frozenIds || frozenIds.length === 0) return [...items];
+  const rank = new Map(frozenIds.map((id, index) => [id, index]));
+  return items
+    .map((item, index) => ({ item, index, rank: rank.get(getId(item)) }))
+    .sort((a, b) => {
+      const ra = a.rank ?? Number.POSITIVE_INFINITY;
+      const rb = b.rank ?? Number.POSITIVE_INFINITY;
+      if (ra !== rb) return ra - rb;
+      return a.index - b.index;
+    })
+    .map((entry) => entry.item);
 }
 
 /** The detail page's "Before the show" block lists at most this many. */
@@ -340,9 +600,10 @@ export function pickDinnerBeforeShow(
       longitude: restaurant.longitude as number,
     });
     if (distanceMiles > PAIR_MAX_MILES) continue;
-    if (!isOpenForDinner(restaurant, dinnerAt, now)) continue;
+    const open = isOpenForDinner(restaurant, dinnerAt, now);
+    if (!open) continue;
     seen.add(restaurant.id);
-    picks.push({ restaurant, distanceMiles, dinnerAt });
+    picks.push({ restaurant, distanceMiles, dinnerAt, closesAt: open.closesAt });
   }
   return picks.sort((a, b) => a.distanceMiles - b.distanceMiles).slice(0, limit);
 }
@@ -356,4 +617,27 @@ export function formatMiles(miles: number): string {
 /** "7:30 PM" in Central. */
 export function formatCentralTime(at: Date): string {
   return formatInTimeZone(at, CENTRAL, "h:mm a");
+}
+
+/** "Friday, Sep 25" for a yyyy-MM-dd Central date key (the rail heading). */
+export function formatTonightDate(dateKey: string): string {
+  return formatInTimeZone(parseISO(`${dateKey}T12:00:00Z`), "UTC", "EEEE, MMM d");
+}
+
+/** "Sat, Sep 26" in Central, for an ongoing event's end. */
+export function formatCentralShortDate(at: Date): string {
+  return formatInTimeZone(at, CENTRAL, "EEE, MMM d");
+}
+
+/**
+ * A name cut to `max` characters on a word boundary where one is close, with
+ * an ellipsis, so the time and distance beside it always fit on the card.
+ */
+export function truncateName(name: string, max: number = TONIGHT_NAME_MAX): string {
+  const clean = name.trim().replace(/\s+/g, " ");
+  if (clean.length <= max) return clean;
+  const cut = clean.slice(0, max - 1);
+  const space = cut.lastIndexOf(" ");
+  const base = space >= max * 0.6 ? cut.slice(0, space) : cut;
+  return `${base.replace(/[\s,.;:-]+$/, "")}...`;
 }

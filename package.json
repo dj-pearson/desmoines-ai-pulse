@@ -129,6 +129,7 @@
     "check-false-empty-state": "node scripts/check-false-empty-state.mjs",
     "check-lcp-priority": "node scripts/check-lcp-priority.mjs",
     "check-csp-hashes": "node scripts/check-csp-hashes.mjs",
+    "check-dist-console": "node scripts/check-dist-console.mjs",
     "check-sitemap-redirects": "node scripts/check-sitemap-redirects.mjs",
     "check-bucket-anon": "tsx scripts/check-bucket-public-anon.ts",
     "icons:sprite": "node scripts/generate-icon-sprite.mjs",

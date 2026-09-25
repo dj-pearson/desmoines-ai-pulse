@@ -139,7 +139,15 @@ export default defineConfig({
   // campaign per double click; Pay on a saved campaign and the list/detail
   // error states; analytics totals from the exact count; the /business
   // workspace and /business-partnership inquiry; and /submit-event's one h1.
-  testMatch: /(search-filters|url-filter-state|sticky-filter-chips|route-smoke|cookie-consent|backend-down|touch-targets|page-headings|search-request-loop|request-budget|turnstile-inert|subscription-checkout|advertise-success-receipt|submission-live-link|campaign-self-service|home-search|home-request-budget|home-rails-cls|home-tonight|home-dashboard|home-quick-view|shell-mobile|events-hub-dates|events-hub-list|events-near-me|event-detail|restaurants-hub|restaurants-open-now|restaurant-detail|things-to-do-hub|discover-map|attractions-hub|playgrounds-hub|music-sports-hubs|outdoors-hub|deals|stay|trip-planner-window|visitors-guide|getting-around|articles|best-of-voting|whats-new|events-weekend-days|search-results|search-watch|search-advanced-redirect|auth-funnel|auth-return|account-home|account-request-budget|account-submissions|account-settings|pricing-page|subscription-success|subscription-portal|paywall|advertise-builder|campaign-detail-pay|campaign-analytics-counts|business-hub|submit-event-page)\.spec\.ts/,
+  //
+  // home-rails-honesty, home-truth and shell-pass2 joined with the Home second
+  // pass (docs/page-plans/home-pass2.md WP6), on fixtureBackend plus per-spec
+  // routes: the anonymous rail reading events without get_trending_events,
+  // sponsored rows labelled and no admin-only reads; the one JSON-LD graph,
+  // the dated snapshot matching /events/this-weekend and the area chips; and
+  // the shell (a visible H1 on light pages, the phone consent banner, bottom
+  // nav padding).
+  testMatch: /(search-filters|url-filter-state|sticky-filter-chips|route-smoke|cookie-consent|backend-down|touch-targets|page-headings|search-request-loop|request-budget|turnstile-inert|subscription-checkout|advertise-success-receipt|submission-live-link|campaign-self-service|home-search|home-request-budget|home-rails-cls|home-tonight|home-dashboard|home-quick-view|shell-mobile|events-hub-dates|events-hub-list|events-near-me|event-detail|restaurants-hub|restaurants-open-now|restaurant-detail|things-to-do-hub|discover-map|attractions-hub|playgrounds-hub|music-sports-hubs|outdoors-hub|deals|stay|trip-planner-window|visitors-guide|getting-around|articles|best-of-voting|whats-new|events-weekend-days|search-results|search-watch|search-advanced-redirect|auth-funnel|auth-return|account-home|account-request-budget|account-submissions|account-settings|pricing-page|subscription-success|subscription-portal|paywall|advertise-builder|campaign-detail-pay|campaign-analytics-counts|business-hub|submit-event-page|home-rails-honesty|home-truth|shell-pass2)\.spec\.ts/,
   fullyParallel: true,
   forbidOnly: !!process.env.CI,
   retries: process.env.CI ? 2 : 0,
