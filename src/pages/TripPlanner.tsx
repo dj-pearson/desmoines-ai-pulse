@@ -1,4 +1,4 @@
-import { useEffect, useMemo, useRef, useState, lazy, Suspense, type ReactNode, type RefObject } from "react";
+import { useCallback, useEffect, useMemo, useRef, useState, lazy, Suspense, type ReactNode, type RefObject } from "react";
 import { Link, useNavigate, useSearchParams } from "react-router-dom";
 import { useQuery } from "@tanstack/react-query";
 import { format } from "date-fns";
@@ -41,12 +41,21 @@ import { useSubscription } from "@/hooks/useSubscription";
 import { useTripPlanner, type TripPlan, type TripPlanItem, type TripPreferences } from "@/hooks/useTripPlanner";
 import { supabase } from "@/integrations/supabase/client";
 import { getCanonicalUrl } from "@/lib/brandConfig";
-import { dateOnlySpanDays, parseDateOnly, tripWindowProblem } from "@/lib/dateOnly";
+import { dateOnlySpanDays, isDateOnly, parseDateOnly, tripWindowProblem } from "@/lib/dateOnly";
 import { handleError } from "@/lib/errorHandler";
 import { STALE_TIME } from "@/lib/queryConfig";
 import { addCentralDays, centralDateOf, centralWindow } from "@/lib/timezone";
 import { buildTripICS, downloadICS } from "@/lib/tripCalendar";
+import {
+  parseShortlistParam,
+  readStoredShortlist,
+  serializeShortlist,
+  SHORTLIST_PARAM,
+  toggleShortlist,
+  writeStoredShortlist,
+} from "@/lib/tripShortlist";
 import { AI_PLANNER_AVAILABLE, AI_PLANNER_PAUSED_MESSAGE } from "@/lib/tripPlannerStatus";
+import { TRIP_PLANNER_MONTHLY_QUOTA } from "@/lib/planBenefits";
 
 const DiscoverMapCanvas = lazy(() => import("@/components/map/DiscoverMapCanvas"));
 
@@ -128,11 +137,53 @@ function faqItems(): FAQItem[] {
 export default function TripPlanner() {
   const [searchParams, setSearchParams] = useSearchParams();
   const fallback = useMemo(defaultWindow, []);
+  const today = centralDateOf();
   const urlFrom = searchParams.get("from") ?? "";
   const urlTo = searchParams.get("to") ?? "";
-  const urlValid = tripWindowProblem(urlFrom, urlTo) === null;
+  const urlValid = tripWindowProblem(urlFrom, urlTo, today) === null;
   const from = urlValid ? urlFrom : fallback.from;
   const to = urlValid ? urlTo : fallback.to;
+  // A stale or mangled shared link falls back to this weekend, and says so.
+  const notice =
+    !urlValid && (urlFrom || urlTo)
+      ? isDateOnly(urlTo) && urlTo < today
+        ? "Those dates have passed, so this shows this weekend instead."
+        : "Those dates didn't work as a trip, so this shows this weekend instead."
+      : null;
+
+  // The free trip calendar: picks live in ?e= (shareable) and are mirrored to
+  // storage so a visitor coming back without the link gets them back.
+  const shortlistParam = searchParams.get(SHORTLIST_PARAM);
+  const picks = useMemo(() => parseShortlistParam(shortlistParam), [shortlistParam]);
+  const setPicks = useCallback(
+    (ids: readonly string[]) => {
+      setSearchParams(
+        (prev) => {
+          const next = new URLSearchParams(prev);
+          const value = serializeShortlist(ids);
+          if (value) next.set(SHORTLIST_PARAM, value);
+          else next.delete(SHORTLIST_PARAM);
+          return next;
+        },
+        { replace: true },
+      );
+    },
+    [setSearchParams],
+  );
+  const restoredPicks = useRef(false);
+  useEffect(() => {
+    if (!restoredPicks.current) {
+      restoredPicks.current = true;
+      if (picks.length === 0) {
+        const stored = readStoredShortlist();
+        if (stored.length > 0) {
+          setPicks(stored);
+          return;
+        }
+      }
+    }
+    writeStoredShortlist(picks);
+  }, [picks, setPicks]);
 
   const applyWindow = (nextFrom: string, nextTo: string) => {
     setSearchParams((prev) => {
@@ -182,7 +233,15 @@ export default function TripPlanner() {
           )}
 
           <div className="mt-6">
-            <DateWindowPlanner from={from} to={to} onApply={applyWindow}>
+            <DateWindowPlanner
+              from={from}
+              to={to}
+              onApply={applyWindow}
+              notice={notice}
+              picks={picks}
+              onTogglePick={(id) => setPicks(toggleShortlist(picks, id))}
+              onClearPicks={() => setPicks([])}
+            >
               {AI_PLANNER_AVAILABLE && <AiTripPlanner startDate={from} endDate={to} />}
             </DateWindowPlanner>
           </div>
@@ -221,7 +280,7 @@ function AiTripPlanner({ startDate, endDate }: AiTripPlannerProps) {
   const navigate = useNavigate();
   const planner = useTripPlanner();
   const { selectedTrip, setSelectedTrip, fetchTripDetails, generateItinerary, isGenerating } = planner;
-  const { tier, hasFeature } = useSubscription();
+  const { tier, hasFeature, isLoading: subscriptionLoading } = useSubscription();
   const canUseTripPlanner = hasFeature("trip_planner");
   const [showPaywall, setShowPaywall] = useState(false);
   const [tab, setTab] = useState<PlannerTab>("plan");
@@ -251,6 +310,9 @@ function AiTripPlanner({ startDate, endDate }: AiTripPlannerProps) {
   };
 
   const handleGenerate = async () => {
+    // Until the subscription settles, hasFeature reads as free and a paying
+    // member would see the paywall. The button is disabled meanwhile too.
+    if (subscriptionLoading) return;
     if (!user) {
       navigate(`/auth?redirect=${encodeURIComponent(`${PAGE_PATH}?from=${startDate}&to=${endDate}`)}`);
       return;
@@ -277,7 +339,9 @@ function AiTripPlanner({ startDate, endDate }: AiTripPlannerProps) {
     } catch (error) {
       handleError(error, { component: "TripPlanner", action: "generateItinerary" });
       const code = (error as { code?: string })?.code;
+      // The mutation no longer toasts, so this is the one report of a failure.
       if (code === "quota_exceeded" || code === "upgrade_required") setShowPaywall(true);
+      else toast.error("We couldn't generate that itinerary. Please try again.");
     }
   };
 
@@ -343,14 +407,16 @@ function AiTripPlanner({ startDate, endDate }: AiTripPlannerProps) {
               <div>
                 <p className="font-semibold">Ready for the itinerary?</p>
                 <p className="text-sm text-muted-foreground">
-                  {tier === "vip"
-                    ? "VIP: unlimited AI trips."
-                    : tier === "insider"
-                      ? "Insider: 5 AI trips per month."
-                      : "AI itineraries are an Insider feature."}
+                  {subscriptionLoading
+                    ? "Checking your plan..."
+                    : tier === "vip"
+                      ? quotaSentence("VIP", TRIP_PLANNER_MONTHLY_QUOTA.vip)
+                      : tier === "insider"
+                        ? quotaSentence("Insider", TRIP_PLANNER_MONTHLY_QUOTA.insider)
+                        : "AI itineraries are an Insider feature."}
                 </p>
               </div>
-              <Button size="lg" onClick={handleGenerate} disabled={isGenerating || numDays < 1} className="min-h-11 gap-2">
+              <Button size="lg" onClick={handleGenerate} disabled={isGenerating || subscriptionLoading || numDays < 1} className="min-h-11 gap-2">
                 {isGenerating ? (
                   <>
                     <Loader2 className="h-5 w-5 animate-spin" aria-hidden="true" />
@@ -405,6 +471,11 @@ function AiTripPlanner({ startDate, endDate }: AiTripPlannerProps) {
       <UpgradeModal open={showPaywall} onOpenChange={setShowPaywall} feature="trip_planner" />
     </section>
   );
+}
+
+/** "Insider: 5 AI trips a month." from the quota the edge function enforces. */
+function quotaSentence(plan: string, quota: number): string {
+  return quota === -1 ? `${plan}: unlimited AI trips.` : `${plan}: ${quota} AI trips a month.`;
 }
 
 function EmptyPanel({ title, body, action }: { title: string; body: string; action: ReactNode }) {
@@ -704,7 +775,7 @@ function ItineraryView({
             {trip.total_estimated_cost && (
               <Badge variant="outline">
                 <DollarSign className="mr-1 h-3 w-3" aria-hidden="true" />
-                {trip.total_estimated_cost}
+                AI estimate: {trip.total_estimated_cost}
               </Badge>
             )}
             {trip.ai_generated && <Badge>AI generated</Badge>}

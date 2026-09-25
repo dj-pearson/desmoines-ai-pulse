@@ -22,8 +22,12 @@ import { BreadcrumbListSchema } from "@/components/schema/BreadcrumbListSchema";
 import { BRAND, getCanonicalUrl } from "@/lib/brandConfig";
 import { SpriteIcon } from "@/components/ui/SpriteIcon";
 import { OptimizedImage } from "@/components/OptimizedImage";
-import { AFFILIATE_DISCLOSURE, hotelRateLabel, resolveBooking, safeWebUrl } from "@/lib/hotelBooking";
+import { STATUS_BADGE } from "@/lib/categoryStyles";
+import { AFFILIATE_DISCLOSURE, hotelClassStars, hotelRateLabel, resolveBooking, safeWebUrl } from "@/lib/hotelBooking";
 import { telHref } from "@/lib/reservations";
+import { FAQSection } from "@/components/FAQSection";
+import { readGeoFaq } from "@/lib/restaurantMeta";
+import { HotelNearbyEvents } from "@/components/hotels/HotelNearbyEvents";
 
 function StarRating({ rating }: { rating: number }) {
   const stars = [];
@@ -113,9 +117,9 @@ export default function HotelDetails() {
             <p className="text-muted-foreground mb-6">
               The hotel you're looking for doesn't exist or has been removed.
             </p>
-            <Link to="/stay">
-              <Button>Browse All Hotels</Button>
-            </Link>
+            <Button asChild className="min-h-11">
+              <Link to="/stay">Browse All Hotels</Link>
+            </Button>
           </div>
         </div>
         <Footer />
@@ -131,19 +135,35 @@ export default function HotelDetails() {
   const fullAddress = [hotel.address, hotel.city, hotel.state, hotel.zip]
     .filter(Boolean)
     .join(", ");
+  // Pass-2 WP2 item 13: only a curated class prints as stars, never a Google
+  // review average and never a literal 0.
+  const classStars = hotelClassStars(hotel);
+  const totalRooms = hotel.total_rooms != null && hotel.total_rooms > 0 ? hotel.total_rooms : null;
+
+  // Pass-2 WP2 item 12: the row's own SEO and GEO fields, when an editor set them.
+  const seoTitle = hotel.seo_title?.trim() || `${hotel.name} - Hotels in ${hotel.city}, ${hotel.state}`;
+  const seoDescription =
+    hotel.seo_description?.trim() ||
+    hotel.short_description ||
+    `${hotel.name} in ${hotel.area || hotel.city}.${hotel.price_range ? ` Price range: ${hotel.price_range}.` : ""} Book your stay in Des Moines.`;
+  const keyFacts = (hotel.geo_key_facts ?? []).map((f) => f.trim()).filter(Boolean);
+  const geoSummary = hotel.geo_summary?.trim() || null;
+  const faqs = readGeoFaq(hotel.geo_faq);
+  const imageUrl = hotel.image_url
+    ? hotel.image_url.startsWith("/")
+      ? getCanonicalUrl(hotel.image_url)
+      : hotel.image_url
+    : undefined;
 
   return (
     <>
       <Helmet>
-        <title>{hotel.name} - Hotels in {hotel.city}, {hotel.state} | Des Moines Insider</title>
-        <meta
-          name="description"
-          content={hotel.short_description || `${hotel.name} in ${hotel.area || hotel.city}. ${hotel.price_range ? `Price range: ${hotel.price_range}.` : ""} Book your stay in Des Moines.`}
-        />
+        <title>{`${seoTitle} | Des Moines Insider`}</title>
+        <meta name="description" content={seoDescription} />
         <link rel="canonical" href={getCanonicalUrl(`/stay/${hotel.slug}`)} />
         <meta property="og:type" content="website" />
-        <meta property="og:title" content={`${hotel.name} - Hotels in ${hotel.city}, ${hotel.state}`} />
-        <meta property="og:description" content={hotel.short_description || `${hotel.name} in ${hotel.area || hotel.city}. Book your stay in Des Moines.`} />
+        <meta property="og:title" content={seoTitle} />
+        <meta property="og:description" content={seoDescription} />
         {/* WEB-SEO-034: was a RELATIVE path when a hotel has no image. Every
             social crawler resolves og:image against nothing and shows no
             preview image; the spec requires an absolute URL. */}
@@ -153,7 +173,7 @@ export default function HotelDetails() {
         <meta property="og:image:alt" content={`${hotel.name} - Hotel in ${hotel.city}, ${hotel.state}`} />
         <meta property="og:url" content={getCanonicalUrl(`/stay/${hotel.slug}`)} />
         <meta name="twitter:card" content="summary_large_image" />
-        <meta name="twitter:title" content={`${hotel.name} - Hotels in ${hotel.city}`} />
+        <meta name="twitter:title" content={seoTitle} />
         <meta name="twitter:image" content={getCanonicalUrl(hotel.image_url || BRAND.ogImage)} />
       </Helmet>
 
@@ -168,11 +188,12 @@ export default function HotelDetails() {
         }}
         phone={hotel.phone || undefined}
         website={hotel.website || undefined}
-        image={hotel.image_url || undefined}
+        image={imageUrl}
         priceRange={hotel.price_range || undefined}
-        starRating={hotel.star_rating || undefined}
-        checkInTime={hotel.check_in_time || undefined}
-        checkOutTime={hotel.check_out_time || undefined}
+        starRating={hotel.star_rating}
+        googlePlaceId={hotel.google_place_id}
+        checkInTime={hotel.check_in_time}
+        checkOutTime={hotel.check_out_time}
         pageUrl={getCanonicalUrl(`/stay/${hotel.slug}`)}
         latitude={hotel.latitude}
         longitude={hotel.longitude}
@@ -196,23 +217,27 @@ export default function HotelDetails() {
 
         {/* Breadcrumbs */}
         <div className="container mx-auto px-4 py-4">
-          <nav className="flex items-center gap-2 text-sm text-muted-foreground">
-            <Link to="/" className="hover:text-foreground">Home</Link>
-            <ChevronRight className="h-3 w-3" />
-            <Link to="/stay" className="hover:text-foreground">Hotels</Link>
-            <ChevronRight className="h-3 w-3" />
-            <span className="text-foreground font-medium truncate">{hotel.name}</span>
+          <nav aria-label="Breadcrumb">
+            <ol className="flex items-center gap-2 text-sm text-muted-foreground">
+              <li><Link to="/" className="hover:text-foreground">Home</Link></li>
+              <li aria-hidden="true"><ChevronRight className="h-3 w-3" /></li>
+              <li><Link to="/stay" className="hover:text-foreground">Hotels</Link></li>
+              <li aria-hidden="true"><ChevronRight className="h-3 w-3" /></li>
+              <li className="min-w-0">
+                <span aria-current="page" className="block text-foreground font-medium truncate">{hotel.name}</span>
+              </li>
+            </ol>
           </nav>
         </div>
 
         {/* Back button */}
         <div className="container mx-auto px-4 mb-4">
-          <Link to="/stay">
-            <Button variant="ghost" size="sm">
-              <ArrowLeft className="h-4 w-4 mr-2" />
+          <Button asChild variant="ghost" size="sm" className="min-h-11">
+            <Link to="/stay">
+              <ArrowLeft className="h-4 w-4 mr-2" aria-hidden="true" />
               Back to Hotels
-            </Button>
-          </Link>
+            </Link>
+          </Button>
         </div>
 
         {/* Affiliate disclosure - FTC compliance */}
@@ -237,7 +262,7 @@ export default function HotelDetails() {
               </div>
             )}
             {hotel.is_featured && (
-              <Badge className="absolute top-4 left-4 bg-amber-500 text-white border-0">
+              <Badge className={`absolute top-4 left-4 ${STATUS_BADGE.featured} border-0`}>
                 Featured Hotel
               </Badge>
             )}
@@ -268,10 +293,10 @@ export default function HotelDetails() {
                   </p>
                 )}
 
-                {hotel.star_rating && (
+                {classStars !== null && (
                   <div className="flex items-center gap-2 mb-3">
-                    <StarRating rating={hotel.star_rating} />
-                    <span className="text-sm text-muted-foreground">{hotel.star_rating} stars</span>
+                    <StarRating rating={classStars} />
+                    <span className="text-sm text-muted-foreground">{classStars}-star hotel</span>
                   </div>
                 )}
 
@@ -299,14 +324,34 @@ export default function HotelDetails() {
               </div>
 
               {/* Description */}
-              {hotel.description && (
+              {(hotel.description || geoSummary || keyFacts.length > 0) && (
                 <section>
                   <h2 className="text-xl font-semibold mb-3">About This Hotel</h2>
-                  <p className="text-muted-foreground leading-relaxed whitespace-pre-line">
-                    {hotel.description}
-                  </p>
+                  {hotel.description && (
+                    <p className="text-muted-foreground leading-relaxed whitespace-pre-line max-w-prose">
+                      {hotel.description}
+                    </p>
+                  )}
+                  {geoSummary && geoSummary !== hotel.description?.trim() && (
+                    <p className="mt-3 text-muted-foreground leading-relaxed max-w-prose">{geoSummary}</p>
+                  )}
+                  {keyFacts.length > 0 && (
+                    <ul className="mt-4 list-disc pl-5 space-y-1 text-muted-foreground max-w-prose">
+                      {keyFacts.map((fact) => (
+                        <li key={fact}>{fact}</li>
+                      ))}
+                    </ul>
+                  )}
                 </section>
               )}
+
+              {/* Pass-2 WP2 item 7: this week's events within a mile. Renders
+                  nothing without coordinates (D9) or during prerender. */}
+              <HotelNearbyEvents
+                hotelName={hotel.name}
+                latitude={hotel.latitude}
+                longitude={hotel.longitude}
+              />
 
               {/* Amenities */}
               {hotel.amenities && hotel.amenities.length > 0 && (
@@ -321,6 +366,13 @@ export default function HotelDetails() {
                     ))}
                   </div>
                 </section>
+              )}
+
+              {/* FAQSection renders the questions and emits the FAQPage block
+                  (through toJsonLd) in one place, so the schema can't outlive
+                  the visible copy (SEO-003, faq-single-emitter.test.mjs). */}
+              {faqs.length > 0 && (
+                <FAQSection faqs={faqs} title={`Questions about ${hotel.name}`} />
               )}
 
               {/* Gallery */}
@@ -476,10 +528,10 @@ export default function HotelDetails() {
                   )}
 
                   {/* Rooms */}
-                  {hotel.total_rooms && (
+                  {totalRooms !== null && (
                     <div className="flex items-center gap-3 text-sm">
                       <SpriteIcon name="building-2" className="h-5 w-5 text-primary flex-shrink-0" />
-                      {hotel.total_rooms} rooms
+                      {totalRooms} rooms
                     </div>
                   )}
                 </CardContent>

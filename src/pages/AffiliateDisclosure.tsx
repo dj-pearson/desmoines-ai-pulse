@@ -1,6 +1,19 @@
 import { Helmet } from "react-helmet-async";
 import { Link } from "react-router-dom";
 
+/**
+ * The hotel programmes generate-hotel-affiliate-urls actually wraps
+ * (BRAND_CONFIGS in supabase/functions/generate-hotel-affiliate-urls). The
+ * first version of this page named Booking.com, Hotels.com, TripAdvisor and
+ * "direct hotel partnerships", none of which any code links to
+ * (plan-stay-pass2 WP2 item 6). Keep this list in step with BRAND_CONFIGS.
+ */
+const HOTEL_PROGRAMMES: Array<{ brands: string; network: string }> = [
+  { brands: "Marriott", network: "Partnerize" },
+  { brands: "Hilton and Hyatt", network: "Awin" },
+  { brands: "IHG, Choice, Wyndham and Best Western", network: "CJ (Commission Junction)" },
+];
+
 export default function AffiliateDisclosure() {
 
   return (
@@ -19,7 +32,7 @@ export default function AffiliateDisclosure() {
 
           <div className="prose prose-sm max-w-none space-y-6 text-muted-foreground">
             <p className="text-base">
-              <strong className="text-foreground">Last updated:</strong> February 2026
+              <strong className="text-foreground">Last updated:</strong> September 2026
             </p>
 
             <section>
@@ -50,35 +63,37 @@ export default function AffiliateDisclosure() {
               <h2 className="text-xl font-semibold text-foreground mt-8 mb-3">
                 Our Affiliate Partners
               </h2>
-              <p>We may earn commissions from the following types of partnerships:</p>
+              <p>
+                On hotel pages, a booking link for these brands can be an affiliate link. It goes
+                through the brand&apos;s affiliate network and lands on the brand&apos;s own site:
+              </p>
               <ul className="list-disc pl-6 space-y-2 mt-2">
-                <li>
-                  <strong className="text-foreground">Hotel booking platforms</strong> such as
-                  Booking.com, Hotels.com, and TripAdvisor when you book accommodations
-                  through our hotel pages
-                </li>
-                <li>
-                  <strong className="text-foreground">Direct hotel partnerships</strong> with
-                  individual hotels in the Des Moines area
-                </li>
-                <li>
-                  <strong className="text-foreground">Event ticket platforms</strong> when
-                  you purchase tickets through our event links
-                </li>
+                {HOTEL_PROGRAMMES.map((p) => (
+                  <li key={p.network}>
+                    <strong className="text-foreground">{p.brands}</strong>, through {p.network}
+                  </li>
+                ))}
               </ul>
+              <p className="mt-3">
+                A hotel outside these brands gets a plain link to its own website, and we earn
+                nothing from it. Some banner ads on the site are also affiliate links.
+              </p>
             </section>
 
-            <section>
+            <section id="featured" className="scroll-mt-24">
               <h2 className="text-xl font-semibold text-foreground mt-8 mb-3">
-                How We Choose What to Recommend
+                How We Choose Featured Hotels
               </h2>
               <p>
-                Our editorial content is not influenced by our affiliate relationships.
-                We recommend hotels, events, and venues based on their quality, location,
-                and relevance to Des Moines visitors and residents. We include both
-                affiliate and non-affiliate listings on our site, and the presence of an
-                affiliate relationship does not affect a listing's placement, rating, or
-                how it is described.
+                &quot;Featured&quot; on a hotel is a flag our editors set by hand. It adds a Featured
+                badge, and puts the hotel at the top of the list when the list is sorted by Featured. Every
+                other sort (hotel class, typical rate, A-Z, newest, or distance to a venue) ignores
+                the flag.
+              </p>
+              <p className="mt-3">
+                Our editorial content is not influenced by affiliate relationships. We list hotels
+                with and without affiliate links, and a link doesn&apos;t change how a hotel is
+                described.
               </p>
             </section>
 
@@ -87,11 +102,10 @@ export default function AffiliateDisclosure() {
                 Identifying Affiliate Links
               </h2>
               <p>
-                On our hotel pages and event pages, "Book Now" buttons and links that
-                direct you to external booking platforms may be affiliate links. These
-                links are marked with <code>rel="sponsored"</code> in the HTML for
-                transparency. You will also see disclosure notices on pages that contain
-                affiliate links.
+                A booking button names the site it opens, for example &quot;Book on hilton.com&quot;.
+                When that button is an affiliate link it says so right next to it, and it is marked
+                with <code>rel=&quot;sponsored&quot;</code> in the HTML. A link that reads &quot;Hotel
+                website&quot; is not an affiliate link.
               </p>
             </section>
 
@@ -112,7 +126,7 @@ export default function AffiliateDisclosure() {
               </h2>
               <p>
                 If you have any questions about our affiliate relationships, please{" "}
-                <Link to="/contact" className="text-primary hover:underline">
+                <Link to="/contact" className="text-primary underline underline-offset-2">
                   contact us
                 </Link>
                 .

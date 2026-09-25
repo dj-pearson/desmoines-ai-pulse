@@ -1,6 +1,7 @@
 import { useQuery, useMutation } from '@tanstack/react-query';
 import { supabase } from '@/integrations/supabase/client';
 import { handleError } from '@/lib/errorHandler';
+import type { ContactFormData } from '@/hooks/useContactForm';
 
 export interface MeetingVenue {
   id: string;
@@ -22,10 +23,39 @@ export interface MeetingVenue {
   created_at: string;
 }
 
+/**
+ * What a venue card renders, and nothing else (plan-stay-pass2 WP3 item 9).
+ * Every column is in scripts/db-snapshot.json. contact_email is read by no
+ * card and stays out.
+ */
+export const MEETING_VENUE_COLUMNS =
+  'id, name, slug, venue_type, max_capacity, sq_footage, catering, av_equipment, website, description';
+
+export type MeetingVenueCard = Pick<
+  MeetingVenue,
+  'id' | 'name' | 'slug' | 'venue_type' | 'max_capacity' | 'sq_footage' | 'catering' | 'av_equipment' | 'website' | 'description'
+>;
+
+/**
+ * Former names the seeded rows still carry, and what a page should say today.
+ * The arena has been Casey's Center since the rename; the meeting_venues seed
+ * (20260228000007) still describes it as Wells Fargo Arena until the D12 data
+ * migration. Display only: the stored text is left alone.
+ */
+const FORMER_VENUE_NAMES: ReadonlyArray<readonly [RegExp, string]> = [[/Wells Fargo Arena/g, "Casey's Center"]];
+
+export function withCurrentVenueNames(text: string): string;
+export function withCurrentVenueNames(text: string | null): string | null;
+export function withCurrentVenueNames(text: string | null): string | null {
+  if (!text) return text;
+  return FORMER_VENUE_NAMES.reduce((out, [from, to]) => out.replace(from, to), text);
+}
+
 export interface RfpSubmission {
   event_name: string;
   event_dates: string;
-  expected_attendance: number;
+  /** Null when the planner left it blank: "not given" is not zero people. */
+  expected_attendance: number | null;
   venue_requirements: string;
   budget_range: string;
   contact_name: string;
@@ -38,11 +68,13 @@ export interface RfpSubmission {
 export function useMeetingVenues(filters?: { venueType?: string; minCapacity?: number }) {
   return useQuery({
     queryKey: ['meeting-venues', filters],
-    queryFn: async (): Promise<MeetingVenue[]> => {
+    queryFn: async (): Promise<MeetingVenueCard[]> => {
+      // nullsFirst: false, or PostgREST's descending default puts venues with
+      // no capacity on file at the top of the list.
       let query = supabase
         .from('meeting_venues')
-        .select('*')
-        .order('max_capacity', { ascending: false });
+        .select(MEETING_VENUE_COLUMNS)
+        .order('max_capacity', { ascending: false, nullsFirst: false });
 
       if (filters?.venueType && filters.venueType !== 'all') {
         query = query.eq('venue_type', filters.venueType);
@@ -53,7 +85,7 @@ export function useMeetingVenues(filters?: { venueType?: string; minCapacity?: n
 
       const { data, error } = await query;
       if (error) throw error;
-      return (data ?? []) as unknown as MeetingVenue[];
+      return (data ?? []) as unknown as MeetingVenueCard[];
     },
     staleTime: 10 * 60 * 1000,
   });
@@ -102,7 +134,7 @@ export const RFP_REQUIRED: ReadonlyArray<keyof RfpSubmission> = ['event_name', '
 /** Deliberately loose: one @, something on each side, a dot in the domain. */
 const EMAIL_PATTERN = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
 
-/** Largest attendance figure accepted. Wells Fargo Arena seats about 17,000. */
+/** Largest attendance figure accepted: well past any single room in the metro. */
 export const RFP_MAX_ATTENDANCE = 100000;
 
 export type RfpErrors = Partial<Record<keyof RfpSubmission, string>>;
@@ -137,9 +169,54 @@ export function toRfpSubmission(values: RfpFormValues): RfpSubmission {
   const trimmed = Object.fromEntries(
     Object.entries(values).map(([key, value]) => [key, value.trim()]),
   ) as RfpFormValues;
-  return { ...trimmed, expected_attendance: Number(trimmed.expected_attendance) || 0 };
+  const attendance = trimmed.expected_attendance ? Number(trimmed.expected_attendance) : NaN;
+  return { ...trimmed, expected_attendance: Number.isFinite(attendance) ? attendance : null };
 }
 
+/** Where the RFP lands in the admin inbox (FeedbackInbox filters on source_page). */
+export const RFP_SOURCE_PAGE = '/group-travel';
+
+const RFP_MESSAGE_LINES: ReadonlyArray<readonly [keyof RfpSubmission, string]> = [
+  ['event_name', 'Event'],
+  ['event_dates', 'Preferred dates'],
+  ['expected_attendance', 'Expected attendance'],
+  ['budget_range', 'Budget range'],
+  ['organization', 'Organization'],
+];
+
+/**
+ * The RFP as a contact_submissions row (plan-stay-pass2 WP3 item 1).
+ *
+ * rfp_submissions has no reader; contact_submissions has the admin inbox,
+ * moderation and support-ticket mirroring, and anon INSERT (RLS_AUDIT.md:231).
+ * So the request goes there as a 'business' inquiry, with every field the
+ * planner filled in laid out in the message. Blank fields are left out rather
+ * than printed as "Budget range: ". Call only after validateRfp passed.
+ */
+export function toRfpContact(values: RfpFormValues): ContactFormData {
+  const row = toRfpSubmission(values);
+  const lines: string[] = [];
+  for (const [field, label] of RFP_MESSAGE_LINES) {
+    const value = row[field];
+    if (value !== null && value !== '') lines.push(`${label}: ${value}`);
+  }
+  if (row.venue_requirements) lines.push('', 'Venue requirements:', row.venue_requirements);
+  if (row.notes) lines.push('', 'Notes:', row.notes);
+  return {
+    name: row.contact_name,
+    email: row.contact_email,
+    phone: row.contact_phone || undefined,
+    subject: `Group RFP: ${row.event_name}`,
+    message: lines.join('\n'),
+    inquiry_type: 'business',
+  };
+}
+
+/**
+ * The old write path. Nothing on the site calls it since pass 2 WP3 item 1;
+ * it stays (with its table) so the retirement follows the D6 deprecation path
+ * rather than landing in the same release.
+ */
 export function useSubmitRfp() {
   return useMutation({
     mutationFn: async (rfp: RfpSubmission) => {

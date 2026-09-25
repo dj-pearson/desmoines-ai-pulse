@@ -55,10 +55,15 @@ Deno.test('the footer links to the same profiles the JSON-LD claims', async () =
 });
 
 Deno.test('entity ids are on the canonical origin', async () => {
+  // The Restaurant node is built by buildRestaurantSchema (eat-drink pass 2
+  // WP3.14); its @id is the url the page hands it, which must be canonical.
   const rd = codeOnly(await read('src/pages/RestaurantDetails.tsx'));
   assert(
-    /"@id": getCanonicalUrl\(`\/restaurants\/\$\{restaurant\.slug \|\| restaurant\.id\}`\)/.test(rd),
+    /const canonicalUrl = getCanonicalUrl\(`\/restaurants\/\$\{restaurant\.slug \|\| restaurant\.id\}`\)/.test(rd),
   );
+  assert(/buildRestaurantSchema\(restaurant, \{\s*url: canonicalUrl,/.test(rd));
+  const meta = codeOnly(await read('src/lib/restaurantMeta.ts'));
+  assert(/"@id": ctx\.url,/.test(meta), 'the node id is the canonical url it was given');
 
   const menu = codeOnly(await read('src/components/schema/MenuSchema.tsx'));
   assert(/getCanonicalUrl\(`\/restaurants\/\$\{restaurantSlug\}`\)/.test(menu));

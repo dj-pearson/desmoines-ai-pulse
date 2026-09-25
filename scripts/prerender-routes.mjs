@@ -95,6 +95,10 @@ export const PRERENDER_ROUTES = [
   '/breweries',
   '/best-of',
   '/getting-around',
+  // Plan & Stay pass 2 (docs/page-plans/plan-stay-pass2.md WP6 item 2): the
+  // meeting-venue list and RFP form, in App.tsx since the first pass and in
+  // neither list until now.
+  '/group-travel',
 
   // Neighborhood guides. WEB-SEO-036: this prerendered downtown, east-village,
   // beaverdale and highland-park. Three of the four had no editorial entry in
@@ -136,6 +140,11 @@ export const SITEMAP_ONLY_ROUTES = [
   // Indexable so "submit an event Des Moines" finds it; signed out it is a
   // short explanation and a sign-in link, not worth a Chromium render.
   '/submit-event',
+  // Indexable, not prerendered yet: the feed carries scene_updates rows the
+  // D4 trigger guard has not cleaned, and a static capture would freeze them
+  // into the HTML. Move it to PRERENDER_ROUTES once D4 lands
+  // (docs/page-plans/plan-stay-pass2.md WP6 item 2).
+  '/whats-new',
   '/privacy-policy',
   '/terms',
 ];

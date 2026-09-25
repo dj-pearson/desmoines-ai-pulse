@@ -36,10 +36,15 @@ export interface HotelBooking {
   href: string;
   /** True when the link is a paid/affiliate one. */
   isAffiliate: boolean;
-  /** Visible link text: "Book via Expedia" or "Hotel website". */
+  /** Visible link text: "Book on hilton.com" or "Hotel website". */
   label: string;
   /** The rel attribute to put on the anchor. */
   rel: string;
+  /**
+   * The site the visitor ends up on ("hilton.com"), or null when an affiliate
+   * redirect could not be decoded and there is no website to fall back to.
+   */
+  host: string | null;
 }
 
 /** Shown next to every affiliate booking link. */
@@ -60,35 +65,132 @@ const PROVIDER_NAMES: Record<string, string> = {
   trivago: 'trivago',
 };
 
+/**
+ * Affiliate NETWORKS, not places anyone books. generate-hotel-affiliate-urls
+ * stores the network in affiliate_provider ("Partnerize", "Awin",
+ * "Commission Junction"), so "Book via Awin" is what the first pass printed
+ * on a link that lands on hilton.com (plan-stay-pass2 WP2 item 2).
+ */
+const NETWORK_NAMES = new Set([
+  'partnerize',
+  'awin',
+  'commission junction',
+  'cj',
+  'cj affiliate',
+  'impact',
+  'rakuten',
+  'shareasale',
+]);
+
 /** The longest provider name we will print; anything longer is not a name. */
 const MAX_PROVIDER_LENGTH = 40;
 
-/** "Expedia" from "expedia", the stored text for an unknown one, or null. */
+/**
+ * "Expedia" from "expedia", the stored text for an unknown one, or null. A
+ * network name ("Awin") is null: it is who pays us, not where you book.
+ */
 export function bookingProviderName(provider: string | null | undefined): string | null {
   if (typeof provider !== 'string') return null;
   const trimmed = provider.trim();
   if (!trimmed || trimmed.length > MAX_PROVIDER_LENGTH) return null;
+  if (NETWORK_NAMES.has(trimmed.toLowerCase())) return null;
   return PROVIDER_NAMES[trimmed.toLowerCase()] ?? trimmed;
+}
+
+/** CJ's click domains. generate-hotel-affiliate-urls writes anrdoezrs.net. */
+const CJ_HOSTS = new Set([
+  'anrdoezrs.net',
+  'dpbolvw.net',
+  'jdoqocy.com',
+  'kqzyfj.com',
+  'tkqlhce.com',
+]);
+
+function parseUrl(value: string): URL | null {
+  try {
+    return new URL(value);
+  } catch {
+    return null;
+  }
+}
+
+function bareHost(hostname: string): string {
+  return hostname.toLowerCase().replace(/^www\./, '');
+}
+
+function isNetworkHost(host: string): boolean {
+  return host === 'awin1.com' || host === 'prf.hn' || host.endsWith('.prf.hn') || CJ_HOSTS.has(host);
+}
+
+/**
+ * Where an affiliate redirect sends the visitor, as a safe http(s) URL, or
+ * null. Reads the three shapes generate-hotel-affiliate-urls builds:
+ * Awin `?ued=`, CJ `?url=` and Partnerize `/destination:<url>`.
+ */
+export function affiliateDestination(affiliateUrl: string | null | undefined): string | null {
+  const safe = safeWebUrl(affiliateUrl);
+  if (!safe) return null;
+  const url = parseUrl(safe);
+  if (!url) return null;
+  const host = bareHost(url.hostname);
+
+  if (host === 'awin1.com') return safeWebUrl(url.searchParams.get('ued'));
+  if (CJ_HOSTS.has(host)) return safeWebUrl(url.searchParams.get('url'));
+  if (host === 'prf.hn' || host.endsWith('.prf.hn')) {
+    // The destination is the rest of the URL, query and all, and may or may
+    // not be percent-encoded.
+    const marker = '/destination:';
+    const at = safe.indexOf(marker);
+    if (at < 0) return null;
+    let rest = safe.slice(at + marker.length);
+    if (/^https?%3A/i.test(rest)) {
+      try {
+        rest = decodeURIComponent(rest);
+      } catch {
+        return null;
+      }
+    }
+    return safeWebUrl(rest);
+  }
+  return null;
+}
+
+/** "hilton.com" from "https://www.hilton.com/en/hotels/...", or null. */
+export function bookingHost(url: string | null | undefined): string | null {
+  const safe = safeWebUrl(url);
+  if (!safe) return null;
+  const parsed = parseUrl(safe);
+  return parsed ? bareHost(parsed.hostname) : null;
 }
 
 /**
  * The booking link to render for a hotel, or null when it has no usable one.
  *
- * An affiliate URL wins: it reads "Book via {provider}" and is sponsored. A
- * plain website reads "Hotel website" and carries no sponsored rel, because
- * nobody pays us for it and saying otherwise to a crawler is a false claim.
+ * An affiliate URL wins and is sponsored. Its label names the site the
+ * visitor lands on ("Book on hilton.com"): the link's own host, or for a
+ * network redirect the destination decoded from it, then the hotel's own
+ * website host. A network name is never printed. A plain website reads "Hotel website" and carries
+ * no sponsored rel, because nobody pays us for it and saying otherwise to a
+ * crawler is a false claim.
  */
 export function resolveBooking(hotel: HotelBookingSource | null | undefined): HotelBooking | null {
   if (!hotel) return null;
 
   const affiliate = safeWebUrl(hotel.affiliate_url);
   if (affiliate) {
-    const provider = bookingProviderName(hotel.affiliate_provider);
+    const ownHost = bookingHost(affiliate);
+    // A network redirect lands where it points; any other link lands on its
+    // own host. Only an undecodable redirect falls back to the website.
+    const host =
+      ownHost && !isNetworkHost(ownHost)
+        ? ownHost
+        : bookingHost(affiliateDestination(affiliate)) ?? bookingHost(hotel.website);
     return {
       href: affiliate,
       isAffiliate: true,
-      label: provider ? `Book via ${provider}` : 'Book via our partner',
+      label: host ? `Book on ${host}` : 'Book with our partner',
       rel: 'sponsored noopener noreferrer',
+      host,
     };
   }
 
@@ -99,10 +201,28 @@ export function resolveBooking(hotel: HotelBookingSource | null | undefined): Ho
       isAffiliate: false,
       label: 'Hotel website',
       rel: 'noopener noreferrer',
+      host: bookingHost(website),
     };
   }
 
   return null;
+}
+
+/**
+ * The official hotel class to print as stars, or null.
+ *
+ * The Google Places import wrote the review average into star_rating (a 4.5
+ * from reviews is not a four-and-a-half-star hotel), and D15 cleans the rows
+ * already stored. Until then a row with a google_place_id is not trusted as a
+ * class, and 0 is never printed.
+ */
+export function hotelClassStars(hotel: {
+  star_rating?: number | null;
+  google_place_id?: string | null;
+}): number | null {
+  if (hotel.google_place_id) return null;
+  const n = hotel.star_rating;
+  return typeof n === 'number' && Number.isFinite(n) && n > 0 && n <= 5 ? n : null;
 }
 
 /**

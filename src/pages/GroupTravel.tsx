@@ -21,21 +21,24 @@ import {
 import { SpriteIcon } from '@/components/ui/SpriteIcon';
 import { Briefcase, Send } from 'lucide-react';
 import { toast } from 'sonner';
+import { useContactForm } from '@/hooks/useContactForm';
 import {
   EMPTY_RFP_FORM,
   RFP_MAX_LENGTH,
+  RFP_SOURCE_PAGE,
   getCateringLabel,
   getVenueTypeLabel,
-  toRfpSubmission,
+  toRfpContact,
   useMeetingVenues,
-  useSubmitRfp,
   validateRfp,
-  type MeetingVenue,
+  withCurrentVenueNames,
+  type MeetingVenueCard,
   type RfpErrors,
   type RfpFormValues,
 } from '@/hooks/useMeetingVenues';
 import { useUrlFilters } from '@/hooks/useUrlFilters';
 import { getCanonicalUrl } from '@/lib/brandConfig';
+import { ErrorSeverity, handleError } from '@/lib/errorHandler';
 import { safeWebUrl } from '@/lib/hotelBooking';
 
 const VENUE_TYPES = [
@@ -58,14 +61,14 @@ const CAPACITY_OPTIONS = [
 /**
  * Honeypot field name. Hidden from people and assistive tech; a bot that fills
  * every input fills this one too, and submit then stops before the insert.
- * Client-side only, like the rest of this form's checks (plan-stay WP3 item 3):
- * the anon INSERT on rfp_submissions stays open until D6.
+ * Deliberately meaningless (plan-stay-pass2 WP3 item 8): it was
+ * "company_website", which browser autofill fills for real people.
  */
-const HONEYPOT_NAME = 'company_website';
+const HONEYPOT_NAME = 'hp_ref';
 
-/** What the form says after a send. It promises no reply time: nothing reads these rows yet (D6). */
-const RFP_RECEIVED =
-  'Request received. For anything time-sensitive, contact the venue directly through its website.';
+function prefersReducedMotion(): boolean {
+  return typeof window !== 'undefined' && window.matchMedia?.('(prefers-reduced-motion: reduce)').matches === true;
+}
 
 interface RfpFieldProps {
   id: string;
@@ -138,8 +141,8 @@ function RfpField({
 }
 
 interface VenueCardProps {
-  venue: MeetingVenue;
-  onRequest: (venue: MeetingVenue) => void;
+  venue: MeetingVenueCard;
+  onRequest: (venue: MeetingVenueCard) => void;
 }
 
 function VenueCard({ venue, onRequest }: VenueCardProps) {
@@ -149,7 +152,7 @@ function VenueCard({ venue, onRequest }: VenueCardProps) {
       <CardContent className="p-5">
         <h3 className="text-lg font-semibold mb-2">{venue.name}</h3>
         {venue.description && (
-          <p className="text-sm text-muted-foreground mb-3 line-clamp-2">{venue.description}</p>
+          <p className="text-sm text-muted-foreground mb-3 line-clamp-2">{withCurrentVenueNames(venue.description)}</p>
         )}
         <div className="flex items-center gap-2 flex-wrap mb-3">
           {venue.venue_type && <Badge variant="secondary">{getVenueTypeLabel(venue.venue_type)}</Badge>}
@@ -195,11 +198,16 @@ export default function GroupTravel() {
   const minCapacity = CAPACITY_OPTIONS.some((c) => c.value === rawCapacity) ? rawCapacity : 0;
 
   const { data: venues, isLoading, isError, error, refetch } = useMeetingVenues({ venueType, minCapacity });
-  const submitRfp = useSubmitRfp();
+  const { submitContactForm, loading: sending } = useContactForm();
 
   const [rfpForm, setRfpForm] = useState<RfpFormValues>(EMPTY_RFP_FORM);
   const [rfpErrors, setRfpErrors] = useState<RfpErrors>({});
   const [honeypot, setHoneypot] = useState('');
+  /** The address a sent request will be answered at; set only after a send. */
+  const [sentTo, setSentTo] = useState<string | null>(null);
+  const [sendFailed, setSendFailed] = useState(false);
+  /** "Added X to your request", read out when a card's button fills the form. */
+  const [addedNote, setAddedNote] = useState('');
   const eventNameRef = useRef<HTMLDivElement>(null);
 
   const updateField = (field: keyof RfpFormValues, value: string) => {
@@ -207,24 +215,33 @@ export default function GroupTravel() {
     if (rfpErrors[field]) setRfpErrors((prev) => ({ ...prev, [field]: undefined }));
   };
 
-  const requestVenue = (venue: MeetingVenue) => {
+  const requestVenue = (venue: MeetingVenueCard) => {
     const line = `Interested in: ${venue.name}`;
+    setSentTo(null);
     setRfpForm((prev) => {
       if (prev.venue_requirements.includes(line)) return prev;
       const next = prev.venue_requirements ? `${line}\n${prev.venue_requirements}` : line;
       return { ...prev, venue_requirements: next.slice(0, RFP_MAX_LENGTH.venue_requirements) };
     });
+    setAddedNote(`Added ${venue.name} to your request.`);
     const section = document.getElementById('rfp');
-    section?.scrollIntoView({ behavior: 'smooth', block: 'start' });
+    section?.scrollIntoView({ behavior: prefersReducedMotion() ? 'auto' : 'smooth', block: 'start' });
     eventNameRef.current?.querySelector('input')?.focus({ preventScroll: true });
   };
 
   const handleRfpSubmit = async (e: FormEvent<HTMLFormElement>) => {
     e.preventDefault();
+    setSendFailed(false);
     if (honeypot) {
-      // A person never sees the field. Say the same thing a real send says and
-      // write nothing.
-      toast.success(RFP_RECEIVED);
+      // A person never sees the field, so this is almost always a bot. Log it
+      // at warning level (no toast from handleError), write nothing, and show
+      // the bot the same confirmation a real send gets.
+      handleError(
+        new Error('RFP honeypot field was filled'),
+        { component: 'GroupTravel', action: 'rfpHoneypot' },
+        ErrorSeverity.WARNING,
+      );
+      setSentTo(rfpForm.contact_email.trim() || null);
       setRfpForm(EMPTY_RFP_FORM);
       setHoneypot('');
       return;
@@ -237,13 +254,17 @@ export default function GroupTravel() {
       document.getElementById(`rfp-${firstInvalid}`)?.focus();
       return;
     }
-    try {
-      await submitRfp.mutateAsync(toRfpSubmission(rfpForm));
-      toast.success(RFP_RECEIVED);
+    // Into contact_submissions, where the admin inbox reads it (plan-stay-pass2
+    // WP3 item 1). useContactForm toasts the result itself; the inline lines
+    // below are what stays on screen.
+    const contact = toRfpContact(rfpForm);
+    const ok = await submitContactForm(contact, { sourcePage: RFP_SOURCE_PAGE });
+    if (ok) {
+      setSentTo(contact.email);
+      setAddedNote('');
       setRfpForm(EMPTY_RFP_FORM);
-    } catch {
-      // useSubmitRfp's onError has already passed this to handleError.
-      toast.error('Your request did not go through. Please try again.');
+    } else {
+      setSendFailed(true);
     }
   };
 
@@ -367,16 +388,29 @@ export default function GroupTravel() {
             </div>
             <Card className="max-w-2xl">
               <CardContent className="p-6">
+                {sentTo && (
+                  <div role="status" className="mb-6 space-y-2">
+                    <p className="font-medium">Your request is with us.</p>
+                    <p className="text-sm text-muted-foreground max-w-prose">
+                      We&apos;ll reply to {sentTo}. We don&apos;t promise a reply time, so for anything urgent,
+                      contact the venue directly.
+                    </p>
+                  </div>
+                )}
+                {/* Always in the DOM so the live region exists before it has anything to say. */}
+                <p role="status" className="text-sm font-medium [&:not(:empty)]:mb-4">
+                  {addedNote}
+                </p>
                 <form onSubmit={handleRfpSubmit} noValidate className="space-y-4" aria-labelledby="rfp-heading">
                   <p className="text-sm text-muted-foreground max-w-prose">
                     Tell us about your event: dates, headcount and what the room needs. We don&apos;t promise a
-                    reply time, so for anything urgent, contact the venue directly through its website above.
+                    reply time, so for anything urgent, contact the venue directly.
                   </p>
                   {/* Honeypot. Off-screen rather than display:none, which some bots skip. */}
                   <div aria-hidden="true" className="absolute -left-[10000px] w-px h-px overflow-hidden">
-                    <label htmlFor="rfp-company-website">Company website</label>
+                    <label htmlFor="rfp-hp-ref">Leave this empty</label>
                     <input
-                      id="rfp-company-website"
+                      id="rfp-hp-ref"
                       name={HONEYPOT_NAME}
                       type="text"
                       tabIndex={-1}
@@ -462,8 +496,13 @@ export default function GroupTravel() {
                       {...fieldProps}
                     />
                   </div>
-                  <Button type="submit" className="w-full min-h-11" disabled={submitRfp.isPending}>
-                    {submitRfp.isPending ? 'Submitting...' : 'Submit RFP'}
+                  {sendFailed && (
+                    <p role="alert" className="text-sm text-destructive">
+                      Your request did not go through. Please try again.
+                    </p>
+                  )}
+                  <Button type="submit" className="w-full min-h-11" disabled={sending}>
+                    {sending ? 'Submitting...' : 'Submit RFP'}
                   </Button>
                 </form>
               </CardContent>

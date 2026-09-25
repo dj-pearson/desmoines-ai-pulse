@@ -12,6 +12,8 @@ import {
   MIN_VOTES_FOR_RANKING,
   type Vote,
   type VoteResult,
+  type VotingCategory,
+  type VotingPhase,
 } from '@/hooks/useVoting';
 import { VotingBooth } from '@/components/VotingBooth';
 import { Card, CardContent } from '@/components/ui/card';
@@ -19,11 +21,43 @@ import { Badge } from '@/components/ui/badge';
 import { Skeleton } from '@/components/ui/skeleton';
 import { ErrorState } from '@/components/ui/error-state';
 import { Trophy, ArrowLeft, Medal, PenLine, Store } from 'lucide-react';
-import { RouteCanonical } from '@/components/RouteCanonical';
 import ItemListSchema from '@/components/schema/ItemListSchema';
 import { getCanonicalUrl } from '@/lib/brandConfig';
+import SEOHead from '@/components/SEOHead';
+import { pluralVotes, rankingSchemaName } from '@/lib/votingStatus';
 
 const MEDAL_CLASSES = ['text-yellow-500', 'text-gray-500', 'text-amber-700'];
+
+/** Search snippets cut at about 160 characters. */
+const META_DESCRIPTION_MAX = 160;
+
+/**
+ * The meta description, from what the page actually shows: the vote count,
+ * the voting window and, once the category is ranked, the leader. The
+ * editorial description is appended only while the whole thing fits.
+ */
+function categoryMetaDescription(
+  category: VotingCategory,
+  phase: VotingPhase,
+  totalVotes: number,
+  leaderName: string | null,
+): string {
+  const parts: string[] = [];
+  const start = formatVotingDate(category.voting_start);
+  const end = formatVotingDate(category.voting_end);
+  if (phase === 'upcoming') {
+    parts.push(start ? `Voting for ${category.name} in Des Moines opens ${start}.` : `Voting for ${category.name} in Des Moines opens soon.`);
+  } else {
+    parts.push(`${pluralVotes(totalVotes)} cast for ${category.name} in Des Moines.`);
+    if (leaderName) parts.push(phase === 'closed' ? `Top pick: ${leaderName}.` : `Leading: ${leaderName}.`);
+    if (phase === 'open' && end) parts.push(`Voting closes ${end}.`);
+    if (phase === 'closed' && end) parts.push(`Voting closed ${end}.`);
+  }
+  let text = parts.join(' ');
+  const extra = category.description?.trim();
+  if (extra && text.length + 1 + extra.length <= META_DESCRIPTION_MAX) text = `${text} ${extra}`;
+  return text;
+}
 
 function isUsersPick(result: VoteResult, vote: Vote | null | undefined): boolean {
   if (!vote) return false;
@@ -47,38 +81,67 @@ export default function BestOfCategory() {
   const endLabel = formatVotingDate(category?.voting_end);
   // Below the minimum the list is counts only: no percentages, no medals.
   const ranked = totalVotes >= MIN_VOTES_FOR_RANKING;
-  const resultsHeading = phase === 'closed' ? 'Final results' : 'Live results';
+  const resultsHeading =
+    phase === 'closed' ? 'Final results' : phase === 'upcoming' ? 'Results' : 'Live results';
 
-  // WEB-SEO-035 AC3. Only the ranked entries that HAVE a page, and in rank
-  // order, so numberOfItems and the positions match what a crawler reads off
-  // the list above. Custom write-ins are not addressable and are left out of
-  // both the links and the schema.
-  const schemaItems = results
-    .filter((r) => r.url && r.name)
-    .map((r, index) => ({
-      name: r.name as string,
-      url: getCanonicalUrl(r.url as string),
-      position: index + 1,
-      ...(r.image_url ? { image: r.image_url } : {}),
-    }));
+  // WEB-SEO-035 AC3, tightened in Plan & Stay pass 2 (WP5 item 4). The page
+  // withholds a ranking below MIN_VOTES_FOR_RANKING, so the schema does too:
+  // an ItemList is a ranking claim a crawler reads without the caveat.
+  // Only entries that HAVE a page are listed; write-ins are not addressable.
+  // `position` is the rank shown on the page, so a write-in at #1 leaves the
+  // first listed place at position 2 rather than renumbering it.
+  const schemaItems = ranked
+    ? results
+        .map((r, index) => ({ r, rank: index + 1 }))
+        .filter(({ r }) => r.url && r.name)
+        .map(({ r, rank }) => ({
+          name: r.name as string,
+          url: getCanonicalUrl(r.url as string),
+          position: rank,
+          ...(r.image_url ? { image: r.image_url } : {}),
+        }))
+    : [];
+
+  const canonicalPath = `/best-of/${categorySlug ?? ''}`;
+  const notFound = !isLoading && !isError && !category;
+  const leaderName = ranked && results[0]?.name ? results[0].name : null;
 
   return (
     <>
       {/* WEB-SEO-035. This page had NO canonical at all, so every /best-of/
           category inherited the SPA shell's - each one declaring itself a
-          duplicate of the home page. That is why the family was held out of
-          the sitemaps. Unlike the detail pages, this one is not in a loading
-          branch: nothing else here emits a canonical, so there is no second
-          tag for it to collide with. */}
-      <RouteCanonical path={`/best-of/${categorySlug ?? ''}`} />
-      <Helmet>
-        <title>{category ? `${category.name} - Des Best` : 'Des Best'} | Des Moines Insider</title>
-        <meta name="description" content={category?.description || 'Vote for the best of Des Moines'} />
-      </Helmet>
-      {schemaItems.length > 0 && (
+          duplicate of the home page. One head manager, mounted in every
+          branch: the canonical comes from the route param, so it is there
+          before the fetch resolves (the prerender can capture a loading
+          page), and once the category loads the same tag carries breadcrumbs
+          and a description built from the page's own numbers. */}
+      <SEOHead
+        title={category ? `${category.name} - Des Best` : 'Des Best'}
+        description={
+          category
+            ? categoryMetaDescription(category, phase, totalVotes, leaderName)
+            : 'Vote for the best of Des Moines.'
+        }
+        url={canonicalPath}
+        canonicalUrl={getCanonicalUrl(canonicalPath)}
+        breadcrumbs={
+          category
+            ? [
+                { name: 'Home', url: '/' },
+                { name: 'Des Best', url: '/best-of' },
+                { name: category.name, url: canonicalPath },
+              ]
+            : undefined
+        }
+        // Below the minimum the page is a handful of raw counts: keep it out
+        // of the index until it says something, and let crawlers follow its
+        // links meanwhile. A category that doesn't exist is noindexed too.
+        robots={notFound || (category && !ranked) ? 'noindex, follow' : 'index, follow'}
+      />
+      {category && schemaItems.length > 0 && (
         <ItemListSchema
-          name={category ? `Best ${category.name} in Des Moines` : 'Des Best rankings'}
-          description={category?.description || undefined}
+          name={rankingSchemaName(category.name)}
+          description={category.description || undefined}
           items={schemaItems}
         />
       )}
@@ -104,7 +167,6 @@ export default function BestOfCategory() {
           ) : !category ? (
             <>
               <Helmet>
-                <meta name="robots" content="noindex, follow" />
                 <meta name="googlebot" content="noindex, follow" />
               </Helmet>
               <h1 className="text-2xl font-bold mb-2">Category not found</h1>
@@ -231,7 +293,7 @@ export default function BestOfCategory() {
                                         {result.name}
                                       </Link>
                                     ) : (
-                                      <p className="font-medium truncate">{result.name || 'Unknown'}</p>
+                                      <p className="font-medium truncate">{result.name || 'Name unavailable'}</p>
                                     )}
                                     {mine && (
                                       <Badge variant="secondary" className="flex-shrink-0">

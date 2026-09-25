@@ -8,7 +8,14 @@
  */
 import { describe, it, expect } from 'vitest';
 import {
+  AIRPORT_TO_DOWNTOWN,
   DART_FARES,
+  DSM_AIRPORT_POINT,
+  SKYWALK,
+  STRAIGHT_LINE_ORIGIN,
+  formatStraightLine,
+  straightLineMiles,
+  straightLineTable,
   TRANSIT_FACT_SETS,
   VERIFICATION_MAX_AGE_DAYS,
   daysSinceVerified,
@@ -108,4 +115,34 @@ describe('the registry stays fresh', () => {
       ).toBe(false);
     },
   );
+});
+
+describe('straight-line distances (plan-stay-pass2 WP3 item 3)', () => {
+  it('measures from the named downtown point', () => {
+    expect(STRAIGHT_LINE_ORIGIN.slug).toBe('downtown');
+    expect(straightLineMiles(STRAIGHT_LINE_ORIGIN, STRAIGHT_LINE_ORIGIN)).toBe(0);
+  });
+
+  it('computes the airport from its reference point, not a typed figure', () => {
+    // Haversine from (41.587, -93.625) to (41.534, -93.663) is 4.16 mi.
+    expect(straightLineMiles(STRAIGHT_LINE_ORIGIN, DSM_AIRPORT_POINT)).toBe(4.2);
+    expect(AIRPORT_TO_DOWNTOWN.summary).toContain('4.2 mi straight line');
+  });
+
+  it('says straight line every time it prints a distance', () => {
+    expect(formatStraightLine(3)).toBe('3.0 mi straight line');
+  });
+
+  it('lists places nearest first, without downtown itself, and never a drive time', () => {
+    const rows = straightLineTable();
+    expect(rows.length).toBeGreaterThan(3);
+    expect(rows.map((r) => r.destination)).not.toContain('Downtown');
+    for (let i = 1; i < rows.length; i++) expect(rows[i].miles).toBeGreaterThanOrEqual(rows[i - 1].miles);
+    expect(rows.find((r) => r.destination === 'East Village')?.miles).toBeLessThan(1);
+  });
+
+  it('prints no unsourced length for the skywalk or drive time for the airport', () => {
+    expect(SKYWALK.summary).not.toMatch(/\d\s*miles?/);
+    expect(AIRPORT_TO_DOWNTOWN.summary).not.toMatch(/minutes?/);
+  });
 });

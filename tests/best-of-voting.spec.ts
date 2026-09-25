@@ -63,6 +63,8 @@ interface Setup {
   results?: Record<string, Array<{ entity_type: string; entity_id: string | null; custom_entry: string | null; vote_count: number }>>;
   winners?: Array<{ category_id: string; category_name: string; entity_id: string; vote_count: number }>;
   userVote?: Record<string, unknown> | null;
+  /** The voter's own-ballot read fails, so the booth can't tell whether they voted. */
+  userVoteFails?: boolean;
   failVote?: boolean;
 }
 
@@ -160,6 +162,7 @@ async function setup(page: Page, opts: Setup = {}): Promise<VoteLog> {
   await page.route('**/rest/v1/votes**', async (route) => {
     const req = route.request();
     if (req.method() === 'GET' || req.method() === 'HEAD') {
+      if (opts.userVoteFails) return json(route, { code: 'XX000', message: 'backend down' }, 500);
       const wantsObject = (req.headers()['accept'] || '').includes('application/vnd.pgrst.object');
       const vote = opts.userVote ?? null;
       if (wantsObject) return vote ? json(route, vote) : json(route, { code: 'PGRST116', message: 'no rows' }, 406);
@@ -219,7 +222,10 @@ test.describe('Best-of voting (Plan & Stay WP5)', () => {
 
     const list = page.getByRole('list').filter({ hasText: 'Best Pizza' });
     await expect(list).toBeVisible({ timeout: 15_000 });
-    await expect(list.getByText('Leading: Jazz Kitchen (20 votes)')).toBeVisible();
+    // voting_winners skips write-ins, so the index names the top LISTED place
+    // (pass 2, WP5 item 2).
+    await expect(list.getByText('Top listed place: Jazz Kitchen (20 votes)')).toBeVisible();
+    await expect(list.getByText(/Leading/)).toHaveCount(0);
     await expect(list.getByText('Best Coffee')).toBeVisible();
     await expect(list.getByText('No votes yet').first()).toBeVisible();
     await expect(list.getByText('Closed Jan 31, 2026').first()).toBeAttached();
@@ -302,10 +308,12 @@ test.describe('Best-of voting (Plan & Stay WP5)', () => {
     await expect.poll(() => page.evaluate(() => localStorage.getItem('pendingVote'))).toBeNull();
   });
 
-  test('changing a vote is one upsert, and a failed one leaves the old vote alone', async ({ page }) => {
+  // Pass 2, WP5 item 1. The UPDATE policy isn't applied yet (D14), so the booth
+  // must not offer a change production would refuse. VOTE_CHANGE_AVAILABLE in
+  // src/lib/votingStatus.ts is false until it is.
+  test('a voter with a vote sees it as final: no Change button, no "change it" copy', async ({ page }) => {
     await seedSession(page);
     const log = await setup(page, {
-      failVote: true,
       results: {
         [PIZZA.id]: [{ entity_type: 'restaurant', entity_id: RESTAURANT_1, custom_entry: null, vote_count: 1 }],
       },
@@ -325,18 +333,80 @@ test.describe('Best-of voting (Plan & Stay WP5)', () => {
     await expect(page.getByText('Your vote:')).toBeVisible({ timeout: 15_000 });
     await expect(page.getByText('Fixture Restaurant 1').first()).toBeVisible();
     await expect(page.getByRole('list').filter({ hasText: 'Fixture Restaurant 1' }).getByText('Your vote', { exact: true })).toBeVisible();
+    await expect(page.getByText(/Votes are final for this round/).first()).toBeVisible();
 
-    await page.getByRole('button', { name: 'Change' }).click();
+    await expect(page.getByRole('button', { name: 'Change' })).toHaveCount(0);
+    await expect(page.getByRole('searchbox')).toHaveCount(0);
+    await expect(page.getByText(/change it/i)).toHaveCount(0);
+    await expect(page.getByText(/one vote per person/i)).toHaveCount(0);
+    await expect(page.getByText('One vote per account in Best Pizza.', { exact: false })).toBeVisible();
+    expect(log.writes).toHaveLength(0);
+  });
+
+  test('a stashed pick is not confirmed over an existing vote', async ({ page }) => {
+    await page.addInitScript(
+      ({ categoryId, entityId }) => {
+        try {
+          localStorage.setItem(
+            'pendingVote',
+            JSON.stringify({
+              categoryId,
+              categorySlug: 'best-pizza',
+              entityType: 'restaurant',
+              entityId,
+              name: 'Jazz Kitchen',
+              savedAt: Date.now(),
+            }),
+          );
+        } catch {
+          /* private mode */
+        }
+      },
+      { categoryId: PIZZA.id, entityId: JAZZ_KITCHEN },
+    );
+    await seedSession(page);
+    const log = await setup(page, {
+      results: {
+        [PIZZA.id]: [{ entity_type: 'restaurant', entity_id: RESTAURANT_1, custom_entry: null, vote_count: 1 }],
+      },
+      userVote: {
+        id: 'd0000000-0000-4000-8000-000000000001',
+        category_id: PIZZA.id,
+        entity_type: 'restaurant',
+        entity_id: RESTAURANT_1,
+        custom_entry: null,
+        user_id: USER_ID,
+        created_at: '2026-09-01T00:00:00Z',
+      },
+    });
+
+    await page.goto('/best-of/best-pizza', { waitUntil: 'domcontentloaded' });
+
+    await expect(page.getByText(/but you'd already voted for/)).toBeVisible({ timeout: 15_000 });
+    await expect(page.getByRole('button', { name: /Confirm vote/ })).toHaveCount(0);
+    await page.getByRole('button', { name: 'Dismiss' }).click();
+    await expect(page.getByText('Your vote:')).toBeVisible();
+    await expect.poll(() => page.evaluate(() => localStorage.getItem('pendingVote'))).toBeNull();
+    expect(log.writes).toHaveLength(0);
+  });
+
+  test('a refused write is one upsert, and 42501 says the earlier vote still counts', async ({ page }) => {
+    await seedSession(page);
+    // The own-ballot read fails, so the booth offers a ballot to someone who
+    // may already have voted; production answers the upsert with 42501.
+    const log = await setup(page, { failVote: true, userVoteFails: true });
+
+    await page.goto('/best-of/best-pizza', { waitUntil: 'domcontentloaded' });
+    await expect(page.getByText(/We couldn't check whether you've already voted/)).toBeVisible({ timeout: 30_000 });
+
     await page.getByRole('searchbox', { name: /search for a place/i }).fill('Jazz');
     await page.getByRole('button', { name: /Jazz Kitchen/ }).click();
 
-    await expect(page.getByText('Vote not saved').first()).toBeVisible({ timeout: 10_000 });
-    expect(log.writes, 'a vote change is a single request').toHaveLength(1);
+    await expect(page.getByText("We couldn't change your vote. Your earlier vote still counts.").first()).toBeVisible({ timeout: 10_000 });
+    expect(log.writes, 'a vote is a single request').toHaveLength(1);
     expect(log.writes[0].method).toBe('POST');
+    expect(decodeURIComponent(log.writes[0].url)).toContain('on_conflict=category_id,user_id');
     expect(log.writes.some((w) => w.method === 'DELETE'), 'no delete may precede the write').toBe(false);
-
-    await page.getByRole('button', { name: 'Keep my current vote' }).click();
-    await expect(page.getByText('Your vote:')).toBeVisible();
   });
 
   test('the category page passes axe (WCAG 2 A/AA) with a ranked leaderboard', async ({ page }) => {

@@ -74,12 +74,25 @@ async function installSceneUpdates(page: Page, table = ROWS, seen: URL[] = []) {
     // Type is the one filter honoured, so the filtered-empty case can be
     // reached; dates are deliberately not.
     const rows = type ? table.filter((r) => r.update_type === type) : table;
+    // The chip counts are count-only HEAD requests (pass 2 WP4 item 8): a
+    // count in content-range and no body.
+    if (route.request().method() === 'HEAD') {
+      return route.fulfill({
+        status: 200,
+        headers: {
+          'access-control-allow-origin': '*',
+          'access-control-expose-headers': 'content-range',
+          'content-range': `*/${rows.length}`,
+        },
+        body: '',
+      });
+    }
     return json(route, rows);
   });
   await page.route('**/rest/v1/restaurants**', (route) => {
     const url = new URL(route.request().url());
-    if ((url.searchParams.get('select') || '').replace(/\s/g, '') === 'id,slug') {
-      return json(route, [{ id: RESTAURANT_ID, slug: 'fixture-bistro' }]);
+    if ((url.searchParams.get('select') || '').replace(/\s/g, '') === 'id,slug,status,is_merged') {
+      return json(route, [{ id: RESTAURANT_ID, slug: 'fixture-bistro', status: 'open', is_merged: false }]);
     }
     return route.fallback();
   });

@@ -42,6 +42,30 @@ export interface SceneUpdate {
   publish_date: string;
   /** The restaurant's slug when entity_type is 'restaurant' and one exists. */
   entity_slug?: string | null;
+  /**
+   * For a restaurant update: whether the restaurant row still stands on its
+   * own. `missing` (not returned, or the lookup failed), `merged` (folded into
+   * another row) and `closed` (status says so) come from the slug lookup.
+   */
+  entity_state?: 'ok' | 'missing' | 'merged' | 'closed';
+}
+
+/**
+ * The in-app page a scene update points at, or null when there is none worth
+ * linking (pass 2 WP4 items 7 and 13). A restaurant links only by slug and
+ * only when its row came back and is not merged: an id link to a row that is
+ * gone rendered "Restaurant not found" at a /restaurants/<uuid> URL.
+ */
+export function sceneUpdateHref(update: SceneUpdate): string | null {
+  if (!update.entity_id || !update.entity_type) return null;
+  if (update.entity_type === 'restaurant') {
+    if (update.entity_state === 'missing' || update.entity_state === 'merged') return null;
+    return update.entity_slug ? `/restaurants/${update.entity_slug}` : null;
+  }
+  if (update.entity_type === 'attraction') {
+    return `/attractions/${update.entity_id}`;
+  }
+  return null;
 }
 
 export const SCENE_UPDATES_PAGE_SIZE = 20;
@@ -63,13 +87,24 @@ function isPublishedBy(row: { publish_date: string | null }, nowMs: number): boo
   return Number.isFinite(t) && t <= nowMs;
 }
 
+/** The restaurants.status value that means the place is not operating (the column's CHECK allows one). */
+const CLOSED_RESTAURANT_STATUSES = new Set(['closed']);
+
+interface RestaurantLookupRow {
+  id: string;
+  slug: string | null;
+  status: string | null;
+  is_merged: boolean | null;
+}
+
 /**
- * Restaurant detail pages live at /restaurants/:slug. The id still resolves
- * (RestaurantDetails falls back to it), but it is not the canonical URL, so
- * look the slugs up in one query. A failure here costs a prettier link, not
- * the feed, so it degrades to the id instead of failing the page.
+ * Restaurant detail pages live at /restaurants/:slug, so look the rows up in
+ * one query: slug for the link, status for "Now closed", is_merged so a
+ * merged duplicate is not linked. A failed lookup costs the links, not the
+ * feed: every restaurant row is treated as missing and renders unlinked,
+ * rather than as an id URL that may not resolve.
  */
-async function attachRestaurantSlugs(rows: SceneUpdate[]): Promise<SceneUpdate[]> {
+async function attachRestaurantState(rows: SceneUpdate[]): Promise<SceneUpdate[]> {
   const ids = [
     ...new Set(
       rows
@@ -79,22 +114,29 @@ async function attachRestaurantSlugs(rows: SceneUpdate[]): Promise<SceneUpdate[]
   ];
   if (ids.length === 0) return rows;
 
-  const { data, error } = await supabase.from('restaurants').select('id, slug').in('id', ids);
+  const { data, error } = await supabase
+    .from('restaurants')
+    .select('id, slug, status, is_merged')
+    .in('id', ids);
   if (error) {
-    log.warn('attachRestaurantSlugs', 'Restaurant slug lookup failed; linking by id', {
+    log.warn('attachRestaurantState', 'Restaurant lookup failed; rendering restaurant updates unlinked', {
       error: error.message,
     });
-    return rows;
   }
-  const slugById = new Map<string, string>();
-  for (const r of (data ?? []) as Array<{ id: string; slug: string | null }>) {
-    if (r.slug) slugById.set(r.id, r.slug);
-  }
-  return rows.map((r) =>
-    r.entity_type === 'restaurant' && r.entity_id
-      ? { ...r, entity_slug: slugById.get(r.entity_id) ?? null }
-      : r,
-  );
+  const byId = new Map<string, RestaurantLookupRow>();
+  for (const r of (error ? [] : data ?? []) as RestaurantLookupRow[]) byId.set(r.id, r);
+
+  return rows.map((r) => {
+    if (r.entity_type !== 'restaurant' || !r.entity_id) return r;
+    const found = byId.get(r.entity_id);
+    if (!found) return { ...r, entity_slug: null, entity_state: 'missing' as const };
+    const state = found.is_merged
+      ? ('merged' as const)
+      : CLOSED_RESTAURANT_STATUSES.has((found.status ?? '').trim().toLowerCase())
+        ? ('closed' as const)
+        : ('ok' as const);
+    return { ...r, entity_slug: found.slug, entity_state: state };
+  });
 }
 
 /**
@@ -156,47 +198,71 @@ export function useSceneUpdates(filters?: { type?: SceneUpdateType }) {
           : null;
 
       const visible = raw.filter((r) => isPublishedBy(r, nowMs)) as SceneUpdate[];
-      return { rows: await attachRestaurantSlugs(visible), next };
+      return { rows: await attachRestaurantState(visible), next };
     },
     getNextPageParam: (lastPage) => lastPage.next,
     staleTime: 2 * 60 * 1000,
   });
 }
 
+export interface SceneUpdateTypeCounts {
+  counts: Partial<Record<SceneUpdateType, number>>;
+  latest: string | null;
+}
+
 /**
- * How many published rows each update_type has, from one query.
+ * How many published rows each update_type has, and the newest publish date.
  *
- * Four of the six chips used to be types nothing in the repo ever writes, so
- * they could only ever lead to an empty list (WP6 item 1). The page renders a
- * chip only for a type with rows. The table is small and one column wide;
- * the cap keeps a runaway ingest from turning this into a large download.
+ * One count-only HEAD request per known type plus one single-row read for the
+ * date, in parallel (pass 2 WP4 item 8). This used to download up to 2,000
+ * rows to count them in the browser. Any failure rejects the whole query, and
+ * the page then shows every chip rather than none.
  */
 export function useSceneUpdateTypeCounts() {
   return useQuery({
     queryKey: ['scene-updates', 'type-counts'],
-    queryFn: async (): Promise<{ counts: Partial<Record<SceneUpdateType, number>>; latest: string | null }> => {
+    queryFn: async (): Promise<SceneUpdateTypeCounts> => {
       const nowMs = Date.now();
-      const { data, error } = await supabase
-        .from('scene_updates')
-        .select('update_type, publish_date')
-        .eq('is_published', true)
-        .lte('publish_date', new Date(nowMs).toISOString())
-        .order('publish_date', { ascending: false })
-        .limit(2000);
+      const nowIso = new Date(nowMs).toISOString();
 
-      if (error) {
-        log.warn('useSceneUpdateTypeCounts', 'Failed to count scene updates', { error: error.message });
+      const countFor = async (type: SceneUpdateType): Promise<[SceneUpdateType, number]> => {
+        const { count, error } = await supabase
+          .from('scene_updates')
+          .select('id', { count: 'exact', head: true })
+          .eq('is_published', true)
+          .lte('publish_date', nowIso)
+          .eq('update_type', type);
+        if (error) throw error;
+        return [type, count ?? 0];
+      };
+
+      const latestRow = async (): Promise<string | null> => {
+        const { data, error } = await supabase
+          .from('scene_updates')
+          .select('publish_date')
+          .eq('is_published', true)
+          .lte('publish_date', nowIso)
+          .order('publish_date', { ascending: false })
+          .limit(1);
+        if (error) throw error;
+        const row = ((data ?? []) as Array<{ publish_date: string | null }>)[0];
+        return row && isPublishedBy(row, nowMs) ? row.publish_date : null;
+      };
+
+      try {
+        const [pairs, latest] = await Promise.all([
+          Promise.all(SCENE_UPDATE_TYPES.map((t) => countFor(t.value))),
+          latestRow(),
+        ]);
+        const counts: Partial<Record<SceneUpdateType, number>> = {};
+        for (const [type, n] of pairs) counts[type] = n;
+        return { counts, latest };
+      } catch (error) {
+        log.warn('useSceneUpdateTypeCounts', 'Failed to count scene updates', {
+          error: error instanceof Error ? error.message : String(error),
+        });
         throw error;
       }
-
-      const counts: Partial<Record<SceneUpdateType, number>> = {};
-      let latest: string | null = null;
-      for (const row of (data ?? []) as Array<{ update_type: string; publish_date: string | null }>) {
-        if (!isPublishedBy(row, nowMs) || !isSceneUpdateType(row.update_type)) continue;
-        counts[row.update_type] = (counts[row.update_type] ?? 0) + 1;
-        if (!latest) latest = row.publish_date;
-      }
-      return { counts, latest };
     },
     staleTime: 2 * 60 * 1000,
   });

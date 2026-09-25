@@ -1,6 +1,6 @@
 /**
- * plan-stay WP3: /visitors-guide is the guide, and the /group-travel lead form
- * promises nothing it cannot keep.
+ * plan-stay WP3: /visitors-guide is the guide. The /group-travel half of
+ * this file moved to tests/group-travel.spec.ts in pass 2.
  *
  * Before this, /visitors-guide said "Check your email for the download link!"
  * when no code sends that email and there is no PDF, and "Your free guide is
@@ -30,25 +30,67 @@ async function failTable(page: Page, table: string) {
   );
 }
 
-const VENUE = {
-  id: '30000000-0000-0000-0000-000000000001',
-  name: 'Fixture Hall',
-  slug: 'fixture-hall',
-  venue_type: 'conference_center',
-  max_capacity: 800,
-  min_capacity: 20,
-  sq_footage: 12000,
-  amenities: [],
-  catering: 'in_house',
-  av_equipment: true,
-  website: 'https://fixture-hall.example.com',
-  contact_email: null,
-  image_url: null,
-  description: 'A venue supplied by tests/visitors-guide.spec.ts.',
-  latitude: 41.59,
-  longitude: -93.62,
-  created_at: '2026-01-01T00:00:00Z',
-};
+
+/** Saturday 3 October 2026, 3 PM Central (CDT, UTC-5). */
+const SATURDAY_3PM = new Date('2026-10-03T20:00:00Z');
+
+function event(id: number, title: string, date: string, end_date: string | null = null) {
+  return {
+    id: `31000000-0000-0000-0000-${String(id).padStart(12, '0')}`,
+    title,
+    date,
+    end_date,
+    event_start_utc: date,
+    event_start_local: null,
+    event_timezone: 'America/Chicago',
+    category: 'Music',
+    venue: 'Fixture Venue',
+    location: 'Des Moines',
+    city: 'Des Moines',
+    price: null,
+    image_url: null,
+    is_featured: false,
+    is_sponsored: false,
+    sponsored_until: null,
+    latitude: null,
+    longitude: null,
+    source_url: null,
+    original_description: null,
+    enhanced_description: null,
+    is_enhanced: false,
+    writeup_generated_at: null,
+    created_at: '2026-09-01T00:00:00Z',
+    updated_at: '2026-09-01T00:00:00Z',
+  };
+}
+
+const FRIDAY_SHOW = event(1, 'Friday Finished Show', '2026-10-03T00:00:00Z'); // Fri 7 PM CDT
+const SATURDAY_MORNING = event(2, 'Saturday Morning Run', '2026-10-03T14:00:00Z'); // Sat 9 AM, no end
+const SATURDAY_NIGHT = event(3, 'Saturday Night Show', '2026-10-04T00:30:00Z'); // Sat 7:30 PM
+const SUNDAY_MARKET = event(4, 'Sunday Market', '2026-10-04T15:00:00Z'); // Sun 10 AM
+const FESTIVAL = event(5, 'Fall Fixture Festival', '2026-10-02T22:00:00Z', '2026-10-05T01:00:00Z'); // Fri 5 PM to Sun 8 PM
+
+function restaurant(id: number, name: string, opening: string) {
+  return {
+    id: `32000000-0000-0000-0000-${String(id).padStart(12, '0')}`,
+    slug: name.toLowerCase().replace(/\s+/g, '-'),
+    name,
+    cuisine: 'American',
+    status: 'active',
+    opening,
+    is_merged: false,
+    latitude: null,
+    longitude: null,
+  };
+}
+
+const RESTAURANTS = [
+  restaurant(1, 'Dinner Place', 'Daily 11am-10pm'),
+  restaurant(2, 'Late Bar', 'Daily 4pm-2am'),
+  restaurant(3, 'Lunch Only', 'Daily 11am-2pm'),
+  restaurant(4, 'All Day Diner', 'Daily 7am-10pm'),
+  restaurant(5, 'Corner Cafe', 'Daily 8am-9pm'),
+];
 
 test.describe('/visitors-guide', () => {
   test('links to our own listings and promises no delivery', async ({ page }) => {
@@ -66,12 +108,66 @@ test.describe('/visitors-guide', () => {
     await expect(page.getByRole('heading', { name: 'Get the weekly Des Moines picks' })).toBeVisible();
   });
 
-  test('shows this weekend from the events rows', async ({ page }) => {
+  /*
+   * plan-stay-pass2 WP3 item 2. The module asked for Friday 00:00 to Sunday
+   * with limit 6 and no ongoing rows, so on Saturday afternoon its six slots
+   * were Friday's finished shows and a Fri-Sun festival was missing. Clock
+   * pinned to Saturday 3 PM Central; the fake backend does not filter, so the
+   * finished rows really do reach the page and the page has to drop them.
+   */
+  test('on Saturday afternoon, lists only what is still ahead, festival included', async ({ page }) => {
+    await page.clock.setFixedTime(SATURDAY_3PM);
+    await installFixtureBackend(page);
+    await page.route('**/rest/v1/events*', (route) => {
+      const url = decodeURIComponent(route.request().url());
+      // The ongoing read asks for rows that started before the window.
+      const rows = /[?&]date=lt\./.test(url) ? [FESTIVAL] : [FRIDAY_SHOW, SATURDAY_MORNING, SATURDAY_NIGHT, SUNDAY_MARKET];
+      return route.fulfill({ status: 200, contentType: 'application/json', headers: CORS, body: JSON.stringify(rows) });
+    });
+    await page.goto('/visitors-guide');
+    const weekend = page.getByRole('region', { name: 'This weekend' });
+    await expect(weekend.getByRole('link', { name: SATURDAY_NIGHT.title })).toBeVisible();
+    await expect(weekend.getByRole('link', { name: SUNDAY_MARKET.title })).toBeVisible();
+    await expect(weekend.getByRole('link', { name: FESTIVAL.title })).toBeVisible();
+    await expect(weekend.getByText(/Ongoing, through Oct 4/)).toBeVisible();
+    await expect(weekend.getByText(FRIDAY_SHOW.title)).toHaveCount(0);
+    await expect(weekend.getByText(SATURDAY_MORNING.title)).toHaveCount(0);
+  });
+
+  test('the prerendered page carries the heading and link, not a frozen list', async ({ page }) => {
+    await page.addInitScript(() => {
+      (window as { __DMI_PRERENDER__?: boolean }).__DMI_PRERENDER__ = true;
+    });
     await installFixtureBackend(page);
     await page.goto('/visitors-guide');
     const weekend = page.getByRole('region', { name: 'This weekend' });
     await expect(weekend).toBeVisible();
-    expect(await weekend.locator('a[href^="/events/"]').count()).toBeGreaterThan(0);
+    await expect(weekend.locator('a[href="/events/this-weekend"]')).toBeVisible();
+    await expect(weekend.locator('li')).toHaveCount(0);
+  });
+
+  test('open now lists three restaurants with their closing time', async ({ page }) => {
+    await page.clock.setFixedTime(SATURDAY_3PM);
+    await installFixtureBackend(page);
+    await page.route('**/rest/v1/restaurants*', (route) =>
+      route.fulfill({ status: 200, contentType: 'application/json', headers: CORS, body: JSON.stringify(RESTAURANTS) }),
+    );
+    await page.goto('/visitors-guide');
+    const heading = page.getByRole('heading', { name: 'Open now' });
+    await heading.scrollIntoViewIfNeeded();
+    const list = page.locator('[data-open-now-list]');
+    await expect(list.locator('li')).toHaveCount(3);
+    await expect(list).toContainText('closes 10 PM');
+    await expect(list).not.toContainText('Lunch Only');
+    await expect(page.locator('a[href="/restaurants/open-now"]').first()).toBeAttached();
+  });
+
+  test('links into the trip planner and names no arena by its old name', async ({ page }) => {
+    await installFixtureBackend(page);
+    await page.goto('/visitors-guide');
+    await expect(page.getByRole('link', { name: 'pick your dates' })).toHaveAttribute('href', '/trip-planner');
+    await expect(page.getByText(/mi straight line from downtown/).first()).toBeVisible();
+    await expect(page.getByText(/Wells Fargo Arena/)).toHaveCount(0);
   });
 
   test('hides the weekend module when events fail, and keeps the rest', async ({ page }) => {
@@ -84,73 +180,3 @@ test.describe('/visitors-guide', () => {
   });
 });
 
-test.describe('/group-travel', () => {
-  test('a venue outage reads as an error with retry, not as no matches', async ({ page }) => {
-    await installFixtureBackend(page);
-    await failTable(page, 'meeting_venues');
-    await page.goto('/group-travel');
-    await expect(page.getByText("Venues didn't load")).toBeVisible();
-    await expect(page.getByRole('button', { name: /Try again/ })).toBeVisible();
-    await expect(page.getByText('No venues match your filters.')).toHaveCount(0);
-  });
-
-  test('marketing stat tiles and the reply-time promise are gone', async ({ page }) => {
-    await installFixtureBackend(page);
-    await page.goto('/group-travel');
-    await expect(page.getByRole('heading', { level: 1 })).toBeVisible();
-    await expect(page.getByText(/30% Below/i)).toHaveCount(0);
-    await expect(page.getByText(/80% of US/i)).toHaveCount(0);
-    await expect(page.getByText(/2 business days/i)).toHaveCount(0);
-  });
-
-  test('venue filters live in the URL', async ({ page }) => {
-    await installFixtureBackend(page);
-    await page.goto('/group-travel?type=hotel&capacity=250');
-    await expect(page.getByRole('combobox', { name: 'Venue type' })).toContainText('Hotels');
-    await expect(page.getByRole('combobox', { name: 'Minimum capacity' })).toContainText('250+');
-  });
-
-  test('"Request this venue" pre-fills the RFP', async ({ page }) => {
-    await installFixtureBackend(page);
-    await page.route('**/rest/v1/meeting_venues*', (route) =>
-      route.fulfill({ status: 200, contentType: 'application/json', headers: CORS, body: JSON.stringify([VENUE]) }),
-    );
-    await page.goto('/group-travel');
-    await expect(page.getByRole('link', { name: 'Visit Fixture Hall website' })).toHaveAttribute(
-      'href',
-      // safeWebUrl hands back the parsed URL's href, which normalises the
-      // bare origin to a trailing slash.
-      new URL(VENUE.website).href,
-    );
-    await page.getByRole('button', { name: 'Request Fixture Hall' }).click();
-    await expect(page.getByLabel('Venue Requirements')).toHaveValue(/Interested in: Fixture Hall/);
-  });
-
-  test('client-side checks block a bad email before any request', async ({ page }) => {
-    await installFixtureBackend(page);
-    let inserts = 0;
-    await page.route('**/rest/v1/rfp_submissions*', (route) => {
-      inserts += 1;
-      return route.fulfill({ status: 201, headers: CORS, body: '' });
-    });
-    await page.goto('/group-travel');
-    await page.getByLabel('Event Name *').fill('Retreat');
-    await page.getByLabel('Contact Name *').fill('Pat Doe');
-    await page.getByLabel('Contact Email *').fill('not-an-email');
-    await page.getByRole('button', { name: 'Submit RFP' }).click();
-    await expect(page.getByLabel('Contact Email *')).toHaveAttribute('aria-invalid', 'true');
-    expect(inserts).toBe(0);
-  });
-
-  test('a failed insert shows an error, never a success', async ({ page }) => {
-    await installFixtureBackend(page);
-    await failTable(page, 'rfp_submissions');
-    await page.goto('/group-travel');
-    await page.getByLabel('Event Name *').fill('Retreat');
-    await page.getByLabel('Contact Name *').fill('Pat Doe');
-    await page.getByLabel('Contact Email *').fill('pat@example.com');
-    await page.getByRole('button', { name: 'Submit RFP' }).click();
-    await expect(page.getByText(/did not go through/)).toBeVisible();
-    await expect(page.getByText(/Request received/)).toHaveCount(0);
-  });
-});

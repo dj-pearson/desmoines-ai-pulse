@@ -121,10 +121,23 @@ describe("buildTripICS", () => {
 });
 
 describe("tripWindowProblem", () => {
+  // Pinned so the fixtures don't go stale on Oct 12.
+  const TODAY = "2026-09-25";
+
   it("accepts a real window and names what's wrong otherwise", () => {
-    expect(tripWindowProblem("2026-10-09", "2026-10-11")).toBeNull();
-    expect(tripWindowProblem("2026-10-11", "2026-10-09")).toMatch(/before/);
-    expect(tripWindowProblem("2026-10-01", "2026-10-15")).toMatch(/14 days/);
-    expect(tripWindowProblem("", "2026-10-09")).toMatch(/Pick/);
+    expect(tripWindowProblem("2026-10-09", "2026-10-11", TODAY)).toBeNull();
+    expect(tripWindowProblem("2026-10-11", "2026-10-09", TODAY)).toMatch(/before/);
+    expect(tripWindowProblem("2026-10-01", "2026-10-15", TODAY)).toMatch(/14 days/);
+    expect(tripWindowProblem("", "2026-10-09", TODAY)).toMatch(/Pick/);
+  });
+
+  it("refuses a window that has already ended (plan-stay-pass2 WP1 item 3)", () => {
+    expect(tripWindowProblem("2020-01-01", "2020-01-03", TODAY)).toBe("Pick dates from today on.");
+    expect(tripWindowProblem("2026-09-23", "2026-09-24", TODAY)).toBe("Pick dates from today on.");
+  });
+
+  it("keeps a window that started earlier but runs through today", () => {
+    expect(tripWindowProblem("2026-09-24", "2026-09-26", TODAY)).toBeNull();
+    expect(tripWindowProblem("2026-09-25", "2026-09-25", TODAY)).toBeNull();
   });
 });

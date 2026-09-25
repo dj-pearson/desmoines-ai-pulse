@@ -4,6 +4,7 @@
  * browser download helper.
  */
 import { centralWallClock, clockMinutes } from "@/lib/dateOnly";
+import { addCentralDays } from "@/lib/timezone";
 import type { TripPlan, TripPlanItem } from "@/hooks/useTripPlanner";
 
 function pad(n: number): string {
@@ -87,16 +88,84 @@ export function dayItems(items: TripPlanItem[], dayNumber: number): TripPlanItem
     .sort((a, b) => a.order_index - b.order_index);
 }
 
-/** Build a full .ics document for a set of items. */
-export function buildTripICS(trip: TripPlan, items: TripPlanItem[]): string {
+function calendarDocument(events: string[]): string {
   return [
     "BEGIN:VCALENDAR",
     "VERSION:2.0",
     "PRODID:-//Des Moines Insider//Trip Planner//EN",
     "CALSCALE:GREGORIAN",
-    ...items.map((i) => buildEvent(trip, i)),
+    ...events,
     "END:VCALENDAR",
   ].join("\r\n");
+}
+
+/** Build a full .ics document for a set of items. */
+export function buildTripICS(trip: TripPlan, items: TripPlanItem[]): string {
+  return calendarDocument(items.map((i) => buildEvent(trip, i)));
+}
+
+/**
+ * One listed event for the free trip calendar (plan-stay-pass2 WP1 item 6).
+ * "timed" carries real instants; "all-day" carries Central calendar days,
+ * both inclusive, for an event with no published time or one that runs
+ * across several days.
+ */
+export type CalendarEntry =
+  | {
+      kind: "timed";
+      uid: string;
+      title: string;
+      start: Date;
+      end: Date;
+      location?: string | null;
+      description?: string | null;
+      url?: string | null;
+    }
+  | {
+      kind: "all-day";
+      uid: string;
+      title: string;
+      /** yyyy-MM-dd, Central. */
+      firstDay: string;
+      /** yyyy-MM-dd, Central, inclusive. */
+      lastDay: string;
+      location?: string | null;
+      description?: string | null;
+      url?: string | null;
+    };
+
+/** yyyy-MM-dd -> YYYYMMDD, the iCal DATE form. */
+function toICSDay(day: string): string {
+  return day.slice(0, 10).replace(/-/g, "");
+}
+
+function buildEntry(entry: CalendarEntry, stamp: Date): string {
+  // DTEND on an all-day event is exclusive, so the day after the last one.
+  const dates =
+    entry.kind === "timed"
+      ? [`DTSTART:${toICSDate(entry.start)}`, `DTEND:${toICSDate(entry.end)}`]
+      : [
+          `DTSTART;VALUE=DATE:${toICSDay(entry.firstDay)}`,
+          `DTEND;VALUE=DATE:${toICSDay(addCentralDays(entry.lastDay.slice(0, 10), 1))}`,
+        ];
+  return [
+    "BEGIN:VEVENT",
+    `UID:${entry.uid}@desmoinesinsider`,
+    `DTSTAMP:${toICSDate(stamp)}`,
+    ...dates,
+    `SUMMARY:${escapeICS(entry.title || "Event")}`,
+    entry.location ? `LOCATION:${escapeICS(entry.location)}` : "",
+    entry.description ? `DESCRIPTION:${escapeICS(entry.description)}` : "",
+    entry.url ? `URL:${entry.url}` : "",
+    "END:VEVENT",
+  ]
+    .filter(Boolean)
+    .join("\r\n");
+}
+
+/** A full .ics document for listed events, timed or all-day. */
+export function buildEventsICS(entries: readonly CalendarEntry[], stamp: Date = new Date()): string {
+  return calendarDocument(entries.map((e) => buildEntry(e, stamp)));
 }
 
 /** Trigger a client-side download of an .ics file. */

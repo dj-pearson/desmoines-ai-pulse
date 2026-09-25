@@ -109,7 +109,6 @@ const BASELINE = new Set([
   'components/SEOTools.tsx',
   'components/schema/FAQSchema.tsx',
   'components/schema/TouristTripSchema.tsx',
-  'pages/ArticleDetails.tsx',
   'pages/SeasonalGuide.tsx',
 ]);
 

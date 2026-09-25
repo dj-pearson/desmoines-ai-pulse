@@ -1,5 +1,13 @@
 import { describe, it, expect } from "vitest";
-import { bookingProviderName, hotelRateLabel, resolveBooking, safeWebUrl } from "@/lib/hotelBooking";
+import {
+  affiliateDestination,
+  bookingHost,
+  bookingProviderName,
+  hotelClassStars,
+  hotelRateLabel,
+  resolveBooking,
+  safeWebUrl,
+} from "@/lib/hotelBooking";
 
 describe("resolveBooking", () => {
   it("prefers a safe affiliate URL and marks it sponsored", () => {
@@ -11,8 +19,9 @@ describe("resolveBooking", () => {
     expect(b).toEqual({
       href: "https://www.expedia.com/h123",
       isAffiliate: true,
-      label: "Book via Expedia",
+      label: "Book on expedia.com",
       rel: "sponsored noopener noreferrer",
+      host: "expedia.com",
     });
   });
 
@@ -40,12 +49,78 @@ describe("resolveBooking", () => {
     expect(resolveBooking({ affiliate_url: "", website: "https://h.example.com" })?.label).toBe("Hotel website");
   });
 
-  it("labels an affiliate link with no provider generically", () => {
-    expect(resolveBooking({ affiliate_url: "https://partner.example.com/x" })?.label).toBe("Book via our partner");
+  it("names the partner host when the affiliate URL is not a network redirect", () => {
+    expect(resolveBooking({ affiliate_url: "https://partner.example.com/x" })?.label).toBe("Book on partner.example.com");
+  });
+});
+
+const HILTON = "https://www.hilton.com/en/hotels/dsmdtqq-hilton-des-moines-downtown/";
+const AWIN = `https://www.awin1.com/cread.php?awinmid=1&awinaffid=2&clickref=desmoines-insider&ued=${encodeURIComponent(HILTON)}`;
+const CJ = `https://www.anrdoezrs.net/click-1-2?sid=desmoines-insider&url=${encodeURIComponent("https://www.ihg.com/holidayinn/hotels/us/en/des-moines/dsmia/hoteldetail")}`;
+const PARTNERIZE = "https://prf.hn/click/camref:abc/pubref:desmoines-insider/destination:https://www.marriott.com/en-us/hotels/dsmmc-des-moines-marriott-downtown/overview/";
+
+describe("resolveBooking names the host, not the network (pass 2 item 2)", () => {
+  it("decodes an Awin ued", () => {
+    expect(affiliateDestination(AWIN)).toBe(HILTON);
+    const b = resolveBooking({ affiliate_url: AWIN, affiliate_provider: "Awin", website: "https://example.com" });
+    expect(b?.label).toBe("Book on hilton.com");
+    expect(b?.rel).toContain("sponsored");
+    expect(b?.href).toBe(AWIN);
+  });
+
+  it("decodes a CJ url", () => {
+    const b = resolveBooking({ affiliate_url: CJ, affiliate_provider: "Commission Junction" });
+    expect(b?.label).toBe("Book on ihg.com");
+  });
+
+  it("decodes a raw Partnerize destination", () => {
+    const b = resolveBooking({ affiliate_url: PARTNERIZE, affiliate_provider: "Partnerize" });
+    expect(b?.label).toBe("Book on marriott.com");
+  });
+
+  it("decodes an encoded Partnerize destination", () => {
+    const url = `https://prf.hn/click/camref:abc/destination:${encodeURIComponent("https://www.marriott.com/x?y=1")}`;
+    expect(bookingHost(affiliateDestination(url))).toBe("marriott.com");
+  });
+
+  it("falls back to the website host when the redirect has no destination", () => {
+    const b = resolveBooking({
+      affiliate_url: "https://www.awin1.com/cread.php?awinmid=1&awinaffid=2",
+      affiliate_provider: "Awin",
+      website: "https://www.hyatt.com/en-US/hotel/iowa/x",
+    });
+    expect(b?.label).toBe("Book on hyatt.com");
+  });
+
+  it("never names a network, even with nothing to fall back to", () => {
+    const b = resolveBooking({ affiliate_url: "https://www.awin1.com/cread.php?awinmid=1", affiliate_provider: "Awin" });
+    expect(b?.label).toBe("Book with our partner");
+    expect(b?.label).not.toMatch(/Awin|Commission Junction|Partnerize/);
+  });
+
+  it("refuses a javascript: destination inside a redirect", () => {
+    const url = `https://www.awin1.com/cread.php?ued=${encodeURIComponent("javascript:alert(1)")}`;
+    expect(affiliateDestination(url)).toBeNull();
+    expect(resolveBooking({ affiliate_url: url })?.label).toBe("Book with our partner");
+  });
+});
+
+describe("hotelClassStars", () => {
+  it("prints only a curated class", () => {
+    expect(hotelClassStars({ star_rating: 4, google_place_id: null })).toBe(4);
+    expect(hotelClassStars({ star_rating: 4.5, google_place_id: "ChIJ123" })).toBeNull();
+    expect(hotelClassStars({ star_rating: 0, google_place_id: null })).toBeNull();
+    expect(hotelClassStars({ star_rating: null })).toBeNull();
   });
 });
 
 describe("bookingProviderName", () => {
+  it("maps affiliate networks to null", () => {
+    expect(bookingProviderName("Awin")).toBeNull();
+    expect(bookingProviderName("Commission Junction")).toBeNull();
+    expect(bookingProviderName("Partnerize")).toBeNull();
+  });
+
   it("maps known providers and passes unknown ones through", () => {
     expect(bookingProviderName("booking.com")).toBe("Booking.com");
     expect(bookingProviderName("  Hotels.com ")).toBe("Hotels.com");

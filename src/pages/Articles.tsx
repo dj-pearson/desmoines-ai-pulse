@@ -1,6 +1,6 @@
 import React, { useState, useEffect, useMemo } from 'react';
 import { Link } from 'react-router-dom';
-import { usePublishedArticles } from '@/hooks/useArticles';
+import { formatInTimeZone } from 'date-fns-tz';
 import { Card, CardDescription, CardTitle } from '@/components/ui/card';
 import { Badge } from '@/components/ui/badge';
 import { Button } from '@/components/ui/button';
@@ -20,11 +20,26 @@ import { SpriteIcon } from "@/components/ui/SpriteIcon";
 import { useUrlFilters } from '@/hooks/useUrlFilters';
 import NoIndexMeta from '@/components/schema/NoIndexMeta';
 import { OptimizedImage } from "@/components/OptimizedImage";
-import { AIDisclosureBadge } from '@/components/AIDisclosureBadge';
-import { aiDisclosureText, isAiArticle } from '@/lib/articleHubs';
+import {
+  VIEW_COUNTS_LIVE,
+  effectiveArticleSort,
+  usePublishedArticleCategories,
+  usePublishedArticles,
+} from '@/hooks/useArticles';
+import { aiBadgeLabel, isAiArticle } from '@/lib/articleHubs';
+import { handleError } from '@/lib/errorHandler';
+import { DES_MOINES_TIME_ZONE } from '@/lib/restaurantHours';
 
 /** Cards that get the entrance animation; the rest appear without a delay. */
 const STAGGERED_CARDS = 6;
+
+const FILTERS_PANEL_ID = 'articles-filters';
+
+/** Publish dates in Central time, not the reader's zone (pass 2 WP4 item 11). */
+function formatDate(dateString: string | null | undefined): string {
+  const t = Date.parse(dateString ?? '');
+  return Number.isFinite(t) ? formatInTimeZone(t, DES_MOINES_TIME_ZONE, 'MMMM d, yyyy') : '';
+}
 
 const Articles: React.FC = () => {
   // URL-synced filters (WEB-UX-035). These were local React state, so a
@@ -34,7 +49,9 @@ const Articles: React.FC = () => {
   const { getStr, setParam } = useUrlFilters();
   const urlSearch = getStr('q', '');
   const selectedCategory = getStr('category', 'all');
-  const sortBy = getStr('sort', 'newest');
+  // ?sort=popular still parses (old links), but reads as newest while view
+  // counts are off, and the Select shows what the list is actually sorted by.
+  const sortBy = effectiveArticleSort(getStr('sort', 'newest'));
 
   const setSelectedCategory = (v: string) => setParam('category', v, { def: 'all' });
   const setSortBy = (v: string) => setParam('sort', v, { def: 'newest' });
@@ -75,21 +92,15 @@ const Articles: React.FC = () => {
   const articles = useMemo(() => data?.pages.flatMap((p) => p.rows) ?? [], [data]);
   const total = data?.pages[0]?.total ?? articles.length;
 
-  // Categories come from the rows loaded so far, plus the selected one so an
-  // active filter never disappears from its own dropdown.
+  // Every published category from one lean query (pass 2 WP4 item 5), plus the
+  // selected one so an active filter never disappears from its own dropdown.
+  // Until that query answers, the loaded rows stand in.
+  const { data: allCategories } = usePublishedArticleCategories();
   const categories = useMemo(() => {
-    const set = new Set(articles.map((a) => a.category).filter(Boolean));
+    const set = new Set<string>(allCategories ?? articles.map((a) => a.category).filter(Boolean));
     if (selectedCategory !== 'all') set.add(selectedCategory);
     return Array.from(set).sort((x, y) => x.localeCompare(y));
-  }, [articles, selectedCategory]);
-
-  const formatDate = (dateString: string) => {
-    return new Date(dateString).toLocaleDateString('en-US', {
-      year: 'numeric',
-      month: 'long',
-      day: 'numeric'
-    });
-  };
+  }, [allCategories, articles, selectedCategory]);
 
   // No separate loading return. It was an early return above the page's own
   // <h1>, so a slow response left the document with an sr-only stand-in and no
@@ -97,31 +108,30 @@ const Articles: React.FC = () => {
   // they were waiting for had arrived. The skeleton moved down into the grid,
   // which is the only part that has nothing to show yet. WEB-CI-028 AC2.
 
-  // Only a failed first page replaces the page. A failed "Load more" keeps
+  // A failed first page no longer replaces the page (pass 2 WP4 item 11): the
+  // header, search and filters stay, so the reader can change what they asked
+  // for, and the error sits where the cards would. A failed "Load more" keeps
   // the rows already on screen (TanStack keeps `data` and sets `error`).
-  if (error && articles.length === 0) {
-    return (
-      <>
-        {/* WEB-A11Y-002: same as EventsPage - this early return drops the
-            page's own <h1>, and a transient failure must not be indexed. */}
-        <NoIndexMeta />
-        <Header />
-        <div className="min-h-screen bg-background">
-          <div className="container mx-auto px-4 py-8">
-            <h1 className="sr-only">Des Moines stories and insights</h1>
-            <ErrorState error={error} onRetry={() => { void refetch(); }} />
-          </div>
-        </div>
-        <Footer />
-      </>
-    );
-  }
+  const listFailed = Boolean(error) && articles.length === 0;
+
+  useEffect(() => {
+    if (error) {
+      handleError(error, {
+        component: 'Articles',
+        action: 'load',
+        metadata: { search: urlSearch, category: selectedCategory, sort: sortBy },
+      });
+    }
+    // eslint-disable-next-line react-hooks/exhaustive-deps -- once per failure, not per filter keystroke
+  }, [error]);
 
   return (
     <>
-      <SEOHead 
+      {/* A transient failure must not be indexed (WEB-A11Y-002). */}
+      {listFailed && <NoIndexMeta />}
+      <SEOHead
         title="Articles & Insights | Des Moines Insider"
-        description="Discover comprehensive articles and insights about Des Moines events, attractions, dining, and local experiences. Stay informed with our latest content."
+        description="Articles about Des Moines events, attractions, dining and local things to do, each linked to what's on now."
         keywords={['Des Moines articles', 'local insights', 'events guide', 'attractions', 'dining']}
       />
       <Header />
@@ -174,6 +184,8 @@ const Articles: React.FC = () => {
                   size="sm"
                   onClick={() => setShowFilters(!showFilters)}
                   className="gap-2"
+                  aria-expanded={showFilters}
+                  aria-controls={FILTERS_PANEL_ID}
                 >
                   <Filter className="h-4 w-4" />
                   Filters
@@ -186,8 +198,9 @@ const Articles: React.FC = () => {
                     size="sm"
                     onClick={() => setViewMode('grid')}
                     className="rounded-r-none"
-                    aria-label="Switch to grid view"
-                    title="Switch to grid view"
+                    aria-label="Grid view"
+                    aria-pressed={viewMode === 'grid'}
+                    title="Grid view"
                   >
                     <Grid className="h-4 w-4" />
                   </Button>
@@ -196,8 +209,9 @@ const Articles: React.FC = () => {
                     size="sm"
                     onClick={() => setViewMode('list')}
                     className="rounded-l-none"
-                    aria-label="Switch to list view"
-                    title="Switch to list view"
+                    aria-label="List view"
+                    aria-pressed={viewMode === 'list'}
+                    title="List view"
                   >
                     <List className="h-4 w-4" />
                   </Button>
@@ -207,7 +221,7 @@ const Articles: React.FC = () => {
 
             {/* Expandable Filters */}
             {showFilters && (
-              <div className="mt-4 p-4 bg-muted/30 rounded-lg border animate-fade-in">
+              <div id={FILTERS_PANEL_ID} className="mt-4 p-4 bg-muted/30 rounded-lg border animate-fade-in">
                 <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
                   <div>
                     <label htmlFor="articles-category" className="text-sm font-medium mb-2 block">Category</label>
@@ -235,7 +249,8 @@ const Articles: React.FC = () => {
                       <SelectContent>
                         <SelectItem value="newest">Newest First</SelectItem>
                         <SelectItem value="oldest">Oldest First</SelectItem>
-                        <SelectItem value="popular">Most Popular</SelectItem>
+                        {/* Only once views are counted (pass 2 WP4 item 3, D13). */}
+                        {VIEW_COUNTS_LIVE && <SelectItem value="popular">Most Popular</SelectItem>}
                         <SelectItem value="title">Alphabetical</SelectItem>
                       </SelectContent>
                     </Select>
@@ -266,7 +281,9 @@ const Articles: React.FC = () => {
           {/* Results Info */}
           <div className="mb-6 flex items-center justify-between text-sm text-muted-foreground">
             <span aria-live="polite">
-              {loading
+              {listFailed
+                ? ''
+                : loading
                 ? 'Loading articles...'
                 : urlSearch || selectedCategory !== 'all'
                   ? `Found ${total} article${total !== 1 ? 's' : ''}${urlSearch ? ` for "${urlSearch}"` : ''}`
@@ -281,7 +298,9 @@ const Articles: React.FC = () => {
           </div>
 
           {/* Articles Grid/List */}
-          {loading ? (
+          {listFailed ? (
+            <ErrorState error={error} onRetry={() => { void refetch(); }} />
+          ) : loading ? (
             <CardsGridSkeleton count={6} label="Loading articles..." />
           ) : articles.length === 0 ? (
             (urlSearch || selectedCategory !== 'all') ? (
@@ -319,99 +338,115 @@ const Articles: React.FC = () => {
                   // Only the first six animate in; a stagger across a page of
                   // 12 (and every "Load more" after it) left later cards
                   // invisible for over half a second.
-                  className={`group hover:shadow-lg transition-all duration-300 hover-scale ${
+                  className={`group relative hover:shadow-lg transition-all duration-300 hover-scale ${
                     index < STAGGERED_CARDS ? 'animate-fade-in' : ''
                   } ${
                     viewMode === 'list' ? 'flex flex-col md:flex-row overflow-hidden' : 'overflow-hidden'
                   }`}
                   style={index < STAGGERED_CARDS ? { animationDelay: `${index * 50}ms` } : undefined}
                 >
-                  <Link to={`/articles/${article.slug}`} className="block h-full">
-                    {article.featured_image_url && (
-                      <div className={`overflow-hidden ${
-                        viewMode === 'list' ? 'md:w-64 md:flex-shrink-0' : 'aspect-video'
-                      }`}>
-                        <OptimizedImage
-                          src={article.featured_image_url}
-                          alt={article.title}
-                          className="object-cover transition-transform duration-300 group-hover:scale-105"
-                          // The height lived on the img, and in list mode the
-                          // wrapper above sets none (it only fixes a width), so
-                          // both variants move onto the component's container.
-                          containerClassName={`w-full ${
-                            viewMode === 'list' ? 'h-48 md:h-full' : 'h-full'
-                          }`}
-                          // The first row of a three-column grid. Chrome does not start a lazy
-                          // image's fetch until layout has run, so the LCP candidate on a listing
-                          // page must not be lazy (WEB-SEO-032).
-                          priority={index < 3}
-                          sizes={viewMode === 'list' ? '(max-width: 768px) 100vw, 256px' : '(max-width: 640px) 100vw, (max-width: 1024px) 50vw, 33vw'}
-                        />
-                      </div>
-                    )}
-                    
-                    <div className="p-6 flex-1">
-                      {/* Category and AI disclosure. Read time is gone from the
-                          card until articles.word_count is confirmed in
-                          production: the only way to compute it was to ship
-                          every article body to the list. */}
-                      <div className="flex flex-wrap items-center gap-2 mb-3">
-                        <Badge variant="secondary" className="text-xs">
-                          {article.category}
+                  {article.featured_image_url && (
+                    <div className={`overflow-hidden ${
+                      viewMode === 'list' ? 'md:w-64 md:flex-shrink-0' : 'aspect-video'
+                    }`}>
+                      <OptimizedImage
+                        src={article.featured_image_url}
+                        alt=""
+                        className="object-cover transition-transform duration-300 group-hover:scale-105"
+                        // The height lived on the img, and in list mode the
+                        // wrapper above sets none (it only fixes a width), so
+                        // both variants move onto the component's container.
+                        containerClassName={`w-full ${
+                          viewMode === 'list' ? 'h-48 md:h-full' : 'h-full'
+                        }`}
+                        // The first row of a three-column grid. Chrome does not start a lazy
+                        // image's fetch until layout has run, so the LCP candidate on a listing
+                        // page must not be lazy (WEB-SEO-032).
+                        priority={index < 3}
+                        sizes={viewMode === 'list' ? '(max-width: 768px) 100vw, 256px' : '(max-width: 640px) 100vw, (max-width: 1024px) 50vw, 33vw'}
+                      />
+                    </div>
+                  )}
+
+                  <div className="p-6 flex-1">
+                    {/* Category and AI disclosure. Read time is gone from the
+                        card until articles.word_count is confirmed in
+                        production: the only way to compute it was to ship
+                        every article body to the list. */}
+                    <div className="flex flex-wrap items-center gap-2 mb-3">
+                      <Badge variant="secondary" className="text-xs">
+                        {article.category}
+                      </Badge>
+                      {/* A short label on the card; the full disclosure is on
+                          the article page (pass 2 WP4 item 4). */}
+                      {isAiArticle(article) && (
+                        <Badge
+                          variant="outline"
+                          role="note"
+                          aria-label={aiBadgeLabel(article)}
+                          className="gap-1 border-primary/30 bg-primary/10 text-xs text-primary"
+                        >
+                          <SpriteIcon name="sparkles" className="h-3 w-3" aria-hidden="true" />
+                          {aiBadgeLabel(article)}
                         </Badge>
-                        {isAiArticle(article) && (
-                          <AIDisclosureBadge
-                            label={article.is_auto_published ? "AI-written" : "AI-assisted"}
-                            tooltip={aiDisclosureText(article) ?? undefined}
-                          />
-                        )}
+                      )}
+                      {VIEW_COUNTS_LIVE && (
                         <span className="text-xs text-muted-foreground flex items-center gap-1">
-                          <Eye className="h-3 w-3" />
+                          <Eye className="h-3 w-3" aria-hidden="true" />
                           {article.view_count || 0}
                         </span>
-                      </div>
-                      
-                      {/* Title */}
-                      <CardTitle className="hover:text-primary transition-colors mb-3 line-clamp-2">
-                        {article.title}
-                      </CardTitle>
-                      
-                      {/* Excerpt */}
-                      {article.excerpt && (
-                        <CardDescription className="line-clamp-3 mb-4">
-                          {article.excerpt}
-                        </CardDescription>
                       )}
-
-                      {/* Tags */}
-                      {article.tags && article.tags.length > 0 && (
-                        <div className="flex flex-wrap gap-1 mb-4">
-                          {article.tags.slice(0, 3).map((tag) => (
-                            <Badge key={tag} variant="outline" className="text-xs">
-                              {tag}
-                            </Badge>
-                          ))}
-                          {article.tags.length > 3 && (
-                            <Badge variant="outline" className="text-xs">
-                              +{article.tags.length - 3}
-                            </Badge>
-                          )}
-                        </div>
-                      )}
-
-                      {/* Footer */}
-                      <div className="flex items-center justify-between text-sm text-muted-foreground">
-                        <div className="flex items-center gap-1">
-                          <SpriteIcon name="calendar" className="h-3 w-3" />
-                          {formatDate(article.published_at || article.created_at)}
-                        </div>
-                        
-                        <span className="text-primary font-medium group-hover:underline" aria-hidden="true">
-                          Read more →
-                        </span>
-                      </div>
                     </div>
-                  </Link>
+
+                    {/* The link is the title, and its ::after covers the card,
+                        so the whole card is clickable while the link's name is
+                        just the title (pass 2 WP4 item 9). */}
+                    <CardTitle className="mb-3 line-clamp-2">
+                      <Link
+                        to={`/articles/${article.slug}`}
+                        className="transition-colors hover:text-primary after:absolute after:inset-0 after:rounded-lg focus-visible:outline-none focus-visible:after:ring-2 focus-visible:after:ring-ring focus-visible:after:ring-offset-2 focus-visible:after:ring-offset-background"
+                      >
+                        {article.title}
+                      </Link>
+                    </CardTitle>
+
+                    {/* Excerpt */}
+                    {article.excerpt && (
+                      <CardDescription className="line-clamp-3 mb-4">
+                        {article.excerpt}
+                      </CardDescription>
+                    )}
+
+                    {/* Tags */}
+                    {article.tags && article.tags.length > 0 && (
+                      <div className="flex flex-wrap gap-1 mb-4">
+                        {article.tags.slice(0, 3).map((tag) => (
+                          <Badge key={tag} variant="outline" className="text-xs">
+                            {tag}
+                          </Badge>
+                        ))}
+                        {article.tags.length > 3 && (
+                          <Badge variant="outline" className="text-xs">
+                            +{article.tags.length - 3}
+                          </Badge>
+                        )}
+                      </div>
+                    )}
+
+                    {/* Footer */}
+                    <div className="flex items-center justify-between text-sm text-muted-foreground">
+                      <div className="flex items-center gap-1">
+                        <SpriteIcon name="calendar" className="h-3 w-3" />
+                        <time dateTime={article.published_at || article.created_at}>
+                          {formatDate(article.published_at || article.created_at)}
+                        </time>
+                      </div>
+
+                      <span className="text-primary font-medium group-hover:underline" aria-hidden="true">
+                        Read more
+                      </span>
+                    </div>
+                  </div>
                 </Card>
               ))}
             </div>
@@ -459,7 +494,7 @@ const Articles: React.FC = () => {
               },
               {
                 question: "Is AI used to write the articles?",
-                answer: "Some of them. Articles written by AI and published automatically after quality checks carry an \"AI-written\" label and a note saying no editor reviewed them. Articles drafted with AI and edited by our team before publishing carry an \"AI-assisted\" label. Either way, check dates, prices and hours with the venue before you rely on them."
+                answer: "Some of them. Articles written by AI and published automatically after quality checks carry an \"AI-written\" label and a note saying no editor reviewed them. Articles drafted by AI and then published by a person on our team carry an \"AI-assisted\" label. Either way, check dates, prices and hours with the venue before you rely on them."
               },
               {
                 question: "How current is the information in an article?",

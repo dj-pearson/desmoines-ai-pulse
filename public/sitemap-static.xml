@@ -380,4 +380,19 @@
     <changefreq>monthly</changefreq>
     <priority>0.7</priority>
   </url>
+
+  <!-- Plan & Stay pass 2 (WP6 item 2). /group-travel is prerendered;
+       /whats-new is SITEMAP_ONLY until the D4 feed cleanup lands. -->
+  <url>
+    <loc>https://desmoinesinsider.com/group-travel</loc>
+    <lastmod>2026-09-25</lastmod>
+    <changefreq>monthly</changefreq>
+    <priority>0.6</priority>
+  </url>
+  <url>
+    <loc>https://desmoinesinsider.com/whats-new</loc>
+    <lastmod>2026-09-25</lastmod>
+    <changefreq>daily</changefreq>
+    <priority>0.6</priority>
+  </url>
 </urlset>

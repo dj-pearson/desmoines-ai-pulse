@@ -9,7 +9,7 @@
  */
 import { differenceInCalendarDays, format, isValid, parseISO } from "date-fns";
 import { fromZonedTime } from "date-fns-tz";
-import { addCentralDays, CENTRAL_TIMEZONE } from "@/lib/timezone";
+import { addCentralDays, centralDateOf, CENTRAL_TIMEZONE } from "@/lib/timezone";
 
 const DATE_ONLY_RE = /^\d{4}-\d{2}-\d{2}$/;
 
@@ -62,10 +62,16 @@ export function clockMinutes(hhmm: string | null | undefined): number | null {
 /** Longest window the trip planner lists. Past two weeks it stops being a trip. */
 export const MAX_TRIP_WINDOW_DAYS = 14;
 
-/** Why a from/to pair can't be a trip window, or null when it can. */
-export function tripWindowProblem(from: string, to: string): string | null {
+/**
+ * Why a from/to pair can't be a trip window, or null when it can. `today` is
+ * the Central calendar day (injectable for tests); a window that has already
+ * ended is refused, so a stale shared link doesn't list last year's events.
+ * A window that started earlier but runs through today is still a trip.
+ */
+export function tripWindowProblem(from: string, to: string, today: string = centralDateOf()): string | null {
   if (!isDateOnly(from) || !isDateOnly(to)) return "Pick a start and an end date.";
   if (to < from) return "The end date is before the start date.";
+  if (to < today) return "Pick dates from today on.";
   if (dateOnlySpanDays(from, to) > MAX_TRIP_WINDOW_DAYS) {
     return `Pick ${MAX_TRIP_WINDOW_DAYS} days or fewer.`;
   }

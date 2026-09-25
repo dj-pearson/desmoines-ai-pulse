@@ -70,19 +70,77 @@ test('the airport route text is the same in the body and the FAQ, and names no r
   await expect(page.getByText(/\$18-22/)).toHaveCount(0);
 });
 
-test('garages carry directions, not unsourced rates', async ({ page }) => {
+/*
+ * plan-stay-pass2 WP3 item 4. The garage cards named two places that were not
+ * garages ("Civic Center Garage" was the theater's address) and cited nothing.
+ * With no checked list, the page points at the city and ParkDSM instead.
+ */
+test('parking points at the city, not an unsourced garage list', async ({ page }) => {
   await page.goto('/getting-around');
-  const directions = page.getByRole('link', { name: /^Directions to / });
-  await expect.poll(() => directions.count()).toBeGreaterThan(0);
-  await expect(directions.first()).toHaveAttribute('href', /google\.com\/maps\/dir\/\?api=1&destination=-?\d/);
+  await expect(page.getByRole('heading', { name: /Parking/ })).toBeVisible();
+  await expect(page.getByRole('link', { name: /^Directions to / })).toHaveCount(0);
+  await expect(page.getByText('Civic Center Garage')).toHaveCount(0);
+  await expect(page.getByRole('link', { name: /City of Des Moines parking/ })).toHaveAttribute('href', /dsm\.city/);
   await expect(page.getByText(/\$\d+\/hr/)).toHaveCount(0);
 });
 
-test('links on to hotels and tonight\'s events', async ({ page }) => {
+test('links on to hotels, venues, tonight\'s events and the planner', async ({ page }) => {
   await page.goto('/getting-around');
   await expect(page.getByRole('link', { name: /Parking for tonight's events/ })).toHaveAttribute('href', '/events/today');
-  await expect(page.getByRole('link', { name: /Hotels near Wells Fargo Arena/ })).toHaveAttribute(
+  // Current name on the link, old slug in the URL (plan-stay-pass2 WP3 item 5).
+  await expect(page.getByRole('link', { name: /Hotels near Casey's Center/ })).toHaveAttribute(
     'href',
     '/stay?near=wells-fargo-arena',
   );
+  await expect(page.getByRole('link', { name: /Events at Casey's Center/ })).toHaveAttribute(
+    'href',
+    '/music/venues/wells-fargo-arena',
+  );
+  await expect(page.getByRole('link', { name: 'Pick your dates' })).toHaveAttribute('href', '/trip-planner');
+  await expect(page.getByText(/Wells Fargo Arena/)).toHaveCount(0);
+});
+
+/*
+ * plan-stay-pass2 WP3 item 3, the acceptance line: no $, "min" or "mi" figure
+ * sits outside a sourced fact set, except distances the page computes and
+ * labels "straight line". The typed drive-time table ("Jordan Creek Mall,
+ * 15 min, 10.5 mi") and the skywalk's "more than 4 miles" were both in that
+ * state.
+ */
+test('every price, time and distance is sourced or computed', async ({ page }) => {
+  await page.goto('/getting-around');
+  await expect(page.getByRole('heading', { name: 'Getting Around Des Moines' })).toBeVisible();
+
+  const orphans = await page.locator('[data-page-body="getting-around"]').evaluate((root) => {
+    const figure = /\$\s?\d|\d\s*(?:min|mins|minutes|mi|miles)\b/i;
+    const found: string[] = [];
+    const walker = document.createTreeWalker(root, NodeFilter.SHOW_TEXT);
+    let node = walker.nextNode();
+    while (node) {
+      const text = node.textContent ?? '';
+      if (figure.test(text)) {
+        const set = node.parentElement?.closest('[data-fact-set]');
+        const sourced = !!set && /(Checked against|Last checked) /.test(set.textContent ?? '');
+        // A computed distance says so every time; strip those and look again.
+        const rest = text.replace(/\d+(?:\.\d+)? mi straight line/g, '');
+        if (!sourced && figure.test(rest)) found.push(text.trim());
+      }
+      node = walker.nextNode();
+    }
+    return found;
+  });
+  expect(orphans).toEqual([]);
+  await expect(page.getByText(/more than 4 miles/)).toHaveCount(0);
+});
+
+test('the distance table is computed, labelled and has header semantics', async ({ page }) => {
+  await page.goto('/getting-around');
+  const table = page.locator('table[data-distance-table="straight-line"]');
+  await expect(table).toBeVisible();
+  await expect(table.locator('caption')).toHaveText(/Straight-line distance from downtown/);
+  await expect(table.locator('thead th[scope="col"]')).toHaveCount(2);
+  expect(await table.locator('tbody th[scope="row"]').count()).toBeGreaterThan(3);
+  await expect(table.locator('tbody td').first()).toHaveText(/^\d+\.\d mi straight line$/);
+  await expect(table.getByText(/Drive Time/i)).toHaveCount(0);
+  await expect(page.getByRole('link', { name: 'Plan a bus trip with DART' })).toHaveAttribute('href', /ridedart\.com/);
 });

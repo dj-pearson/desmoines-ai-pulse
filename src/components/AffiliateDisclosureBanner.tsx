@@ -1,10 +1,19 @@
 import { Link } from "react-router-dom";
-import { Info } from "lucide-react";
 
 interface AffiliateDisclosureBannerProps {
   variant?: "inline" | "banner";
 }
 
+/**
+ * The disclosure above hotel lists and pages (plan-stay-pass2 WP2 items 4-5).
+ *
+ * It was a bordered paragraph of three sentences, one of which ("This does
+ * not influence our recommendations") sat over a Featured strip nobody
+ * explained. On a 390px phone it pushed every hotel card below the fold. It is
+ * one line now, and the link says what the reader actually wants to know:
+ * how Featured is chosen. Each booking link still carries its own
+ * AFFILIATE_DISCLOSURE next to it.
+ */
 export default function AffiliateDisclosureBanner({ variant = "banner" }: AffiliateDisclosureBannerProps) {
   if (variant === "inline") {
     return (
@@ -19,17 +28,14 @@ export default function AffiliateDisclosureBanner({ variant = "banner" }: Affili
   }
 
   return (
-    <div className="bg-muted/50 border border-border rounded-lg px-4 py-3 flex items-start gap-3 text-sm">
-      <Info className="h-4 w-4 text-muted-foreground mt-0.5 flex-shrink-0" />
-      <p className="text-muted-foreground">
-        <strong className="text-foreground">Affiliate Disclosure:</strong>{" "}
-        Some links on this page are affiliate links, meaning we may earn a commission
-        if you make a booking at no additional cost to you. This does not influence
-        our recommendations.{" "}
-        <Link to="/affiliate-disclosure" className="text-primary hover:underline">
-          Learn more
-        </Link>
-      </p>
-    </div>
+    <p className="text-xs text-muted-foreground">
+      Some booking links earn us a commission, at no cost to you.{" "}
+      <Link
+        to="/affiliate-disclosure#featured"
+        className="inline-flex min-h-6 items-center underline underline-offset-2 hover:text-foreground"
+      >
+        How we choose Featured
+      </Link>
+    </p>
   );
 }

@@ -76,27 +76,53 @@ export function primaryHubForArticle(article: ArticleLike): HubKey | null {
 export interface AiFlags {
   is_auto_published?: boolean | null;
   generated_from_suggestion_id?: string | null;
+  /**
+   * Written only by `ai-article-pipeline` (it is in the 2026-08-24 snapshot).
+   * A score means the pipeline drafted the piece, whether or not it went on
+   * to publish it itself (Plan & Stay pass 2 WP4 item 4).
+   */
+  quality_score?: number | null;
 }
 
 /**
- * Whether an article gets the AI badge. `ai-article-pipeline` publishes with
- * is_auto_published and no human step; `generate-article` is meant to set
+ * Whether an article gets the AI badge. `ai-article-pipeline` sets
+ * quality_score on everything it drafts and is_auto_published on what it
+ * publishes with no human step; `generate-article` is meant to set
  * generated_from_suggestion_id, though no writer does yet (D7 adds a real
- * column). Either one is enough.
+ * column). Any one is enough.
  */
 export function isAiArticle(article: AiFlags): boolean {
-  return Boolean(article.is_auto_published || article.generated_from_suggestion_id);
+  return Boolean(
+    article.is_auto_published ||
+      article.generated_from_suggestion_id ||
+      (article.quality_score !== null && article.quality_score !== undefined),
+  );
 }
 
-export const AI_AUTO_PUBLISHED_NOTICE =
-  "Written by AI and published automatically after quality checks; not reviewed by an editor. Treat factual claims as a starting point and check dates, prices and hours with the venue before you rely on them.";
+/** The short visible label for an AI article's badge. */
+export function aiBadgeLabel(article: AiFlags): "AI-written" | "AI-assisted" {
+  return article.is_auto_published ? "AI-written" : "AI-assisted";
+}
 
-export const AI_ASSISTED_NOTICE =
-  "This article was drafted with the help of an AI model trained on public data and reviewed by a human editor before publishing. Treat factual claims as a starting point, not a final source. If you're making a decision (reservations, travel, purchases), verify with the venue or original source first.";
+const CHECK_WITH_VENUE =
+  "Treat factual claims as a starting point and check dates, prices and hours with the venue before you rely on them.";
+
+export const AI_AUTO_PUBLISHED_NOTICE = `Written by AI and published automatically after quality checks; not reviewed by an editor. ${CHECK_WITH_VENUE}`;
+
+/** A pipeline draft that a person published: the pipeline scored it, it did not publish it. */
+export const AI_SCORED_NOTICE = `Drafted by AI, scored by automated checks, and published by a person on our team. ${CHECK_WITH_VENUE}`;
+
+/**
+ * Suggestion-generated drafts. The first pass said "trained on public data"
+ * and "reviewed by a human editor"; nothing records either, so neither is
+ * claimed.
+ */
+export const AI_ASSISTED_NOTICE = `Drafted with the help of an AI model. ${CHECK_WITH_VENUE}`;
 
 /** The disclosure body for an AI article, or null for one that is not. */
 export function aiDisclosureText(article: AiFlags): string | null {
   if (article.is_auto_published) return AI_AUTO_PUBLISHED_NOTICE;
+  if (article.quality_score !== null && article.quality_score !== undefined) return AI_SCORED_NOTICE;
   if (article.generated_from_suggestion_id) return AI_ASSISTED_NOTICE;
   return null;
 }
@@ -163,4 +189,80 @@ export function relatedArticles<T extends ScoredArticle>(
     .sort((a, b) => b.score - a.score || a.index - b.index)
     .slice(0, limit)
     .map((s) => s.c);
+}
+
+// ---------------------------------------------------------------------------
+// "Places to try" from a food article (Plan & Stay pass 2 WP4 item 6).
+// ---------------------------------------------------------------------------
+
+function words(value: string): string[] {
+  return value
+    .toLowerCase()
+    .split(/[^a-z0-9']+/)
+    .filter(Boolean);
+}
+
+/**
+ * True when a restaurant's free-text cuisine shares a whole word with one of
+ * the article's tags: tag "pizza" matches "Pizza, Italian", tag "bbq" matches
+ * "BBQ", and "bar" does not match "Barbecue".
+ */
+export function cuisineMatchesTags(cuisine: string | null | undefined, tags: readonly string[] | null | undefined): boolean {
+  if (!cuisine || !tags || tags.length === 0) return false;
+  const cuisineWords = new Set(words(cuisine));
+  return tags.some((tag) => {
+    const tw = words(tag);
+    return tw.length > 0 && tw.every((w) => cuisineWords.has(w));
+  });
+}
+
+/**
+ * Cuisine matches first, then the input order (which is popularity, best
+ * first). Stable, so two matches keep their popularity order.
+ */
+export function preferCuisineMatches<T extends { cuisine?: string | null }>(
+  rows: readonly T[],
+  tags: readonly string[] | null | undefined,
+): T[] {
+  return rows
+    .map((row, index) => ({ row, index, match: cuisineMatchesTags(row.cuisine, tags) ? 0 : 1 }))
+    .sort((a, b) => a.match - b.match || a.index - b.index)
+    .map((s) => s.row);
+}
+
+// ---------------------------------------------------------------------------
+// Links inside an article body (Plan & Stay pass 2 WP4 item 12).
+// ---------------------------------------------------------------------------
+
+export type ArticleHref =
+  | { kind: "internal"; path: string }
+  | { kind: "external"; href: string }
+  | { kind: "other"; href: string };
+
+/**
+ * How a markdown link renders. A site path, or an absolute URL on the site's
+ * own host, is an in-app route. Another http(s) host is external and gets
+ * rel="nofollow noopener". Anything else (mailto:, tel:, a fragment) is left
+ * as a plain anchor.
+ */
+export function classifyArticleHref(href: string | null | undefined, siteOrigin: string): ArticleHref {
+  const raw = (href ?? "").trim();
+  if (raw.startsWith("/") && !raw.startsWith("//")) return { kind: "internal", path: raw };
+  let url: URL;
+  try {
+    url = new URL(raw.startsWith("//") ? `https:${raw}` : raw);
+  } catch {
+    return { kind: "other", href: raw };
+  }
+  if (url.protocol !== "http:" && url.protocol !== "https:") return { kind: "other", href: raw };
+  let siteHost = "";
+  try {
+    siteHost = new URL(siteOrigin).host.replace(/^www\./, "");
+  } catch {
+    siteHost = "";
+  }
+  if (siteHost && url.host.replace(/^www\./, "") === siteHost) {
+    return { kind: "internal", path: `${url.pathname}${url.search}${url.hash}` || "/" };
+  }
+  return { kind: "external", href: url.toString() };
 }

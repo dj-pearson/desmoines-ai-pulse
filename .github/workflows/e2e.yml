@@ -88,6 +88,10 @@ jobs:
       # (docs/page-plans/explore-pass2.md WP6): tests/explore-section-links.spec.ts,
       # tests/discover-map-time.spec.ts, tests/attraction-detail.spec.ts,
       # tests/playground-detail.spec.ts and tests/team-venue-trail-detail.spec.ts.
+      # The Plan & Stay second pass joined the same way
+      # (docs/page-plans/plan-stay-pass2.md WP6): tests/trip-planner-pass2.spec.ts,
+      # tests/stay-pass2.spec.ts, tests/group-travel.spec.ts,
+      # tests/articles-pass2.spec.ts and tests/best-of-pass2.spec.ts.
       - name: Run smoke suite against a production build
         run: npm run test:smoke
 
