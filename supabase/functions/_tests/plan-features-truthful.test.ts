@@ -205,7 +205,34 @@ const VIP_ENFORCED: Record<string, [file: string, proof: RegExp, why: string][]>
     ],
   ],
   unlimited_trip_plans: [
-    ['supabase/functions/generate-itinerary/index.ts', /vip: -1,/, 'generate-itinerary gives vip no cap'],
+    ['supabase/functions/generate-itinerary/index.ts', /vip: -1,/, 'generate-itinerary gives vip no monthly cap'],
+    [
+      'supabase/migrations/20261001000001_ai_usage_quotas.sql',
+      /\('vip', 'itinerary', 20\)/,
+      'consume_ai_quota caps vip at 20 plans a day, as the line says',
+    ],
+  ],
+  // NON_CORE_REVIEW_2026-09 WP7: the two VIP benefits built when the owner chose
+  // to give the tier real value rather than cut or retire it.
+  ask_pulse_daily: [
+    [
+      'supabase/migrations/20261001000001_ai_usage_quotas.sql',
+      /\('insider', 'discover-chat', 50\)[\s\S]*\('vip', 'discover-chat', 200\)/,
+      'the daily discover-chat caps are insider 50 and vip 200',
+    ],
+    [
+      'supabase/functions/discover-chat/index.ts',
+      /feature: ['"]discover-chat['"]/,
+      'discover-chat charges each request to that quota',
+    ],
+  ],
+  support_queue_first: [
+    ['supabase/functions/_shared/supportPriority.ts', /normal: "high"/, 'a vip ticket moves up one priority step'],
+    [
+      'supabase/functions/_shared/agents/ticket-classifier.ts',
+      /priorityForTier\(derivePriority\(/,
+      'the scheduled classifier applies it',
+    ],
   ],
 };
 

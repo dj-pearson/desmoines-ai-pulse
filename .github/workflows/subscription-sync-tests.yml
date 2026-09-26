@@ -485,3 +485,5 @@ jobs:
       # the Supabase client is a stub.
       - run: deno test supabase/functions/_shared/aiQuota.test.ts
       - run: deno test supabase/functions/discover-chat/conversation.test.ts
+      # VIP support tickets move up one priority step, never into urgent (WP7).
+      - run: deno test supabase/functions/_shared/supportPriority.test.ts

@@ -115,10 +115,11 @@ an action only the owner can take.
 
 ### WP7 - VIP benefits (owner chose "build benefits", 2026-09-26)
 
-- [ ] Higher AI quotas for VIP (discover-chat 200/day vs 50, support-chat 100, itinerary 20/day) stated in `planBenefits.ts`
-- [ ] Priority support: VIP tickets land at the front of the queue
-- [ ] Ad-free browsing for VIP (house and affiliate ad slots hidden)
-- [ ] Copy: "Unlimited AI trip plans" becomes the real daily cap
+- [x] Ask Pulse (discover-chat) 200 questions/day vs Insider 50, stated in `planBenefits.ts` and tied to the quota seed by the truthfulness test
+- [x] VIP support tickets move up one priority step in the classifier (`_shared/supportPriority.ts`), never into urgent
+- [x] Ad-free browsing: already an Insider benefit, so VIP has it; no change
+- [x] Trip plan copy states the real cap: no monthly cap, up to 20 a day
+- [owner] Price check: VIP now adds Ask Pulse 4x, support queue position and unlimited saved searches over Insider at $12.99
 
 ### WP5 - Admin
 
