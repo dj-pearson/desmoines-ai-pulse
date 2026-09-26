@@ -20,13 +20,14 @@ import { retrieveKb } from "../_shared/kbRetrieve.ts";
 import { getAIConfig, getAnthropicApiKey } from "../_shared/aiConfig.ts";
 import { fetchWithTimeout } from "../_shared/fetchWithTimeout.ts";
 import { crisisMessageText, crisisPayload, detectCrisisIntent } from "../_shared/crisisSupport.ts";
+import { anthropicCostUsd } from "../_shared/providerUsage.ts";
+import { capHistory, type Msg } from "./history.ts";
 
 const AGENT_KEY = "support-chat";
 const HUMAN_RE = /\b(speak|talk|connect|escalate|transfer)\b.{0,20}\b(human|person|agent|representative|rep|someone|support team)\b|\bhuman\b.{0,10}\bplease\b/i;
 
 // deno-lint-ignore no-explicit-any
 type Client = any;
-interface Msg { role: "user" | "assistant"; content: string; }
 
 function j(body: unknown, status: number, headers: Record<string, string>): Response {
   return new Response(JSON.stringify(body), { status, headers: { ...headers, "Content-Type": "application/json" } });
@@ -46,7 +47,7 @@ async function draft(supabaseUrl: string, supabaseKey: string, history: Msg[], p
     const res = await fetchWithTimeout("https://api.anthropic.com/v1/messages", {
       method: "POST",
       headers: { "Content-Type": "application/json", "x-api-key": apiKey, "anthropic-version": config.anthropic_version },
-      body: JSON.stringify({ model: config.default_model, max_tokens: 700, temperature: 0.2, system, messages: history.slice(-8) }),
+      body: JSON.stringify({ model: config.lightweight_model, max_tokens: 700, temperature: 0.2, system, messages: history.slice(-8) }),
       signal: AbortSignal.timeout(30_000),
     }, 60_000);
     if (!res.ok) return null;
@@ -54,7 +55,7 @@ async function draft(supabaseUrl: string, supabaseKey: string, history: Msg[], p
     const text: string = (data.content ?? []).map((b: { text?: string }) => b.text ?? "").join("");
     const parsed = JSON.parse(text.slice(text.indexOf("{"), text.lastIndexOf("}") + 1));
     const usage = data.usage ?? {};
-    const costUsd = (usage.input_tokens ?? 0) * (3 / 1_000_000) + (usage.output_tokens ?? 0) * (15 / 1_000_000);
+    const costUsd = anthropicCostUsd(config.lightweight_model, usage);
     return {
       reply: String(parsed.reply ?? "").slice(0, 4000),
       canAnswer: parsed.canAnswer === true,
@@ -100,7 +101,7 @@ Deno.serve(async (req) => {
   if (req.method !== "POST") return j({ error: "Method not allowed" }, 405, corsHeaders);
 
   // Anti-abuse rate limit (same pattern as discover-chat).
-  const rl = await checkRateLimitPersistent(req, { endpoint: "support-chat", windowMs: 15 * 60 * 1000, max: 40, message: "Too many support requests. Please slow down." });
+  const rl = await checkRateLimitPersistent(req, { endpoint: "support-chat", windowMs: 15 * 60 * 1000, max: 15, message: "Too many support requests. Please slow down." });
   if (!rl.success && rl.response) return addRateLimitHeaders(rl.response, rl);
 
   const supabaseUrl = Deno.env.get("SUPABASE_URL") ?? "";
@@ -116,9 +117,7 @@ Deno.serve(async (req) => {
   }
 
   const body = await req.json().catch(() => ({}));
-  const history: Msg[] = Array.isArray(body.messages)
-    ? body.messages.filter((m: Msg) => m && (m.role === "user" || m.role === "assistant") && typeof m.content === "string").slice(-12)
-    : [];
+  const history: Msg[] = capHistory(body.messages);
   const wantsHuman = body.talkToHuman === true;
   const lastUser = [...history].reverse().find((m) => m.role === "user")?.content ?? "";
   if (history.length === 0 && !wantsHuman) return j({ error: "messages required" }, 400, corsHeaders);

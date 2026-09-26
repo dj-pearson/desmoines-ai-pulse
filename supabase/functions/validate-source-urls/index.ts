@@ -4,6 +4,12 @@ import { validateURLForSSRF } from '../_shared/validation.ts';
 import { runJob } from '../_shared/jobRunner.ts';
 import { fetchWithTimeout } from '../_shared/fetchWithTimeout.ts';
 import { getAnthropicApiKey } from '../_shared/aiConfig.ts';
+import { requireAdminOrApiKey } from '../_shared/apiKeyAuth.ts';
+
+// This function rewrites events.source_url with the service role and spends
+// Claude calls, so it is cron/admin only. The weekly cron sends the
+// service-role bearer and JobHealthPanel sends an admin JWT; both pass.
+const MAX_LIMIT = 100;
 
 const corsHeaders = {
   'Access-Control-Allow-Origin': '*',
@@ -265,6 +271,9 @@ serve(async (req) => {
     return new Response('ok', { headers: corsHeaders });
   }
 
+  const authFailure = await requireAdminOrApiKey(req, corsHeaders);
+  if (authFailure) return authFailure;
+
   try {
     const supabaseUrl = Deno.env.get('SUPABASE_URL')!;
     const supabaseKey = Deno.env.get('SUPABASE_SERVICE_ROLE_KEY')!;
@@ -275,10 +284,8 @@ serve(async (req) => {
 
     // Parse request body for configuration
     const body = await req.json().catch(() => ({}));
-    const {
-      limit = 50,  // Process 50 events at a time
-      useAI = !!claudeApiKey,  // Use AI if API key available
-    } = body;
+    const limit = Math.min(Math.max(Number(body.limit) || 50, 1), MAX_LIMIT);
+    const useAI = body.useAI === undefined ? !!claudeApiKey : body.useAI === true && !!claudeApiKey;
 
     // Find events with aggregator URLs that are happening in the future
     // NARROW TO AGGREGATORS IN THE QUERY, NOT AFTER IT.
