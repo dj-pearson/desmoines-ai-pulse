@@ -11,6 +11,12 @@ import { createClient } from 'https://esm.sh/@supabase/supabase-js@2';
 import { checkRateLimitPersistent } from "../_shared/rateLimit.ts";
 import { getCorsHeaders, isOriginAllowed } from "../_shared/cors.ts";
 import { fetchWithTimeout } from "../_shared/fetchWithTimeout.ts";
+import { guardAi, type QuotaClient } from "../_shared/aiQuota.ts";
+import { resolveEntitledTier } from "../_shared/entitlements.ts";
+import { openAiCostUsd } from "../_shared/providerUsage.ts";
+
+// The model this function prices and records its spend against.
+const RECS_MODEL = 'gpt-4o-mini';
 
 const supabaseUrl = Deno.env.get('SUPABASE_URL')!;
 const supabaseKey = Deno.env.get('SUPABASE_SERVICE_ROLE_KEY')!;
@@ -130,8 +136,30 @@ serve(async (req) => {
     let aiRecommendations = [];
     let confidence = 0.5; // Default confidence
     let reasoning = "Based on interest preferences";
+    // Set when the daily AI quota or budget refused the model call; the
+    // rule-based ranking below answers instead. Additive response field.
+    let aiSkipped: string | undefined;
 
+    // Daily AI quota and OpenAI budget (WP1). Asked only when the model would
+    // be called. A refusal is not an error here: the rule-based ranking below
+    // is the same answer a user with no feedback history gets.
+    let aiGuard: Awaited<ReturnType<typeof guardAi>> | null = null;
     if (openAIApiKey && feedback && feedback.length > 0) {
+      const tier = await resolveEntitledTier(supabase, userId);
+      aiGuard = await guardAi(supabase as unknown as QuotaClient, req, {
+        feature: 'personalized-recs',
+        provider: 'openai',
+        tier,
+        userId,
+        source: 'personalized-recommendations',
+      });
+      if (!aiGuard.ok) {
+        aiSkipped = aiGuard.decision.code;
+        console.warn(`personalized-recommendations: ${aiSkipped}, rule-based ranking instead`);
+      }
+    }
+
+    if (aiGuard?.ok && openAIApiKey && feedback && feedback.length > 0) {
       try {
         // Prepare data for AI analysis
         const userPreferences = {
@@ -190,7 +218,7 @@ serve(async (req) => {
             'Content-Type': 'application/json',
           },
           body: JSON.stringify({
-            model: 'gpt-4o-mini',
+            model: RECS_MODEL,
             messages: [
               { role: 'system', content: 'You are a sophisticated event recommendation AI. Provide accurate JSON responses.' },
               { role: 'user', content: prompt }
@@ -202,6 +230,16 @@ serve(async (req) => {
 
         if (response.ok) {
           const aiData = await response.json();
+          // Booked before parsing: an answer that does not parse was still
+          // billed. Awaited because the isolate dies with the response.
+          await aiGuard.settle({
+            costUsd: openAiCostUsd(RECS_MODEL, aiData?.usage ?? {}),
+            model: RECS_MODEL,
+            extra: {
+              prompt_tokens: aiData?.usage?.prompt_tokens ?? 0,
+              completion_tokens: aiData?.usage?.completion_tokens ?? 0,
+            },
+          });
           const aiContent = aiData.choices[0].message.content;
           
           try {
@@ -297,7 +335,8 @@ serve(async (req) => {
       confidence,
       reasoning,
       totalAvailableEvents: allEvents.length,
-      userFeedbackCount: feedback?.length || 0
+      userFeedbackCount: feedback?.length || 0,
+      ...(aiSkipped ? { aiSkipped } : {}),
     }), {
       headers: { ...corsHeaders, 'Content-Type': 'application/json' },
     });
