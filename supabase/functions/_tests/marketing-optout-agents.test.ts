@@ -39,9 +39,9 @@
 import { strict as assert } from "node:assert";
 import type { AgentRunContext } from "../_shared/agentRun.ts";
 
-// Before importing anything that reads them. sendNurtureEmail POSTs to Resend
-// when RESEND_API_KEY is set, and scoreOutput POSTs to Anthropic.
-for (const k of ["RESEND_API_KEY", "CLAUDE_API", "ANTHROPIC_API_KEY", "CLAUDE_API_KEY"]) {
+// Before importing anything that reads them. sendNurtureEmail POSTs to SES or
+// Resend when their keys are set, and scoreOutput POSTs to Anthropic.
+for (const k of ["RESEND_API_KEY", "AWS_SES_ACCESS_KEY_ID", "AWS_SES_SECRET_ACCESS_KEY", "CLAUDE_API", "ANTHROPIC_API_KEY", "CLAUDE_API_KEY"]) {
   try { Deno.env.delete(k); } catch { /* --allow-env not granted for this name */ }
 }
 

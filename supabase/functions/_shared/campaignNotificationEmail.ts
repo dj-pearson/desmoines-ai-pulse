@@ -19,7 +19,7 @@
  */
 import { escapeHtml } from "./escapeHtml.ts";
 import { renderEmail } from "./emailLayout.ts";
-import { fetchWithTimeout } from "./fetchWithTimeout.ts";
+import { sendEmail } from "./email.ts";
 
 export interface CampaignEmailContent {
   title: string;
@@ -124,11 +124,21 @@ export function buildCampaignEmailBodyText(content: CampaignEmailContent): strin
 export async function sendCampaignEmail(params: {
   to: string;
   content: CampaignEmailContent;
+  /**
+   * Ignored. The provider is chosen by _shared/email.ts from the environment
+   * (SES, else Resend). Still accepted so callers that pass it keep compiling;
+   * the SendGrid fallback is gone.
+   */
   resendApiKey?: string;
+  /** Ignored, see resendApiKey. */
   sendgridApiKey?: string;
-  fromEmail: string;
+  fromEmail?: string;
+  /** Service-role client, for suppression and email_log. Optional. */
+  // deno-lint-ignore no-explicit-any
+  supabase?: any;
+  userId?: string | null;
 }): Promise<boolean> {
-  const { to, content, resendApiKey, sendgridApiKey, fromEmail } = params;
+  const { to, content, fromEmail } = params;
   if (!to) return false;
 
   const rendered = renderEmail({
@@ -138,53 +148,19 @@ export async function sendCampaignEmail(params: {
     recipient: { email: to },
   });
 
-  if (resendApiKey) {
-    try {
-      const res = await fetchWithTimeout("https://api.resend.com/emails", {
-        method: "POST",
-        headers: {
-          Authorization: `Bearer ${resendApiKey}`,
-          "Content-Type": "application/json",
-        },
-        body: JSON.stringify({
-          from: fromEmail,
-          to: [to],
-          subject: content.title,
-          html: rendered.html,
-          text: rendered.text,
-        }),
-      });
-      return res.ok;
-    } catch (err) {
-      console.error("Resend email failed:", err);
-      return false;
-    }
-  }
-
-  if (sendgridApiKey) {
-    try {
-      const res = await fetchWithTimeout("https://api.sendgrid.com/v3/mail/send", {
-        method: "POST",
-        headers: {
-          Authorization: `Bearer ${sendgridApiKey}`,
-          "Content-Type": "application/json",
-        },
-        body: JSON.stringify({
-          personalizations: [{ to: [{ email: to }] }],
-          from: { email: fromEmail },
-          subject: content.title,
-          content: [
-            { type: "text/plain", value: rendered.text },
-            { type: "text/html", value: rendered.html },
-          ],
-        }),
-      });
-      return res.ok || res.status === 202;
-    } catch (err) {
-      console.error("SendGrid email failed:", err);
-      return false;
-    }
-  }
-
-  return false;
+  const res = await sendEmail(
+    {
+      to,
+      subject: content.title,
+      html: rendered.html,
+      text: rendered.text,
+      category: "transactional",
+      template: `campaign_${content.notificationType}`,
+      from: fromEmail,
+      userId: params.userId ?? null,
+      ref: { type: "campaign", id: content.campaignId },
+    },
+    { supabase: params.supabase },
+  );
+  return res.ok;
 }
