@@ -349,7 +349,7 @@ export function EventQuickView({ event, open, onOpenChange }: EventQuickViewProp
                     className="font-medium text-primary underline underline-offset-2"
                   >
                     {favoriteResult.kind === "guest-cap"
-                      ? "Sign up free to keep saving"
+                      ? "Sign up free to save this one too"
                       : "Sign up free to keep them"}
                   </Link>
                 )}

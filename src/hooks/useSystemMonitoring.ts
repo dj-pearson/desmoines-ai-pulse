@@ -1,4 +1,4 @@
-import { useState } from 'react';
+import { useCallback, useState } from 'react';
 import { useQueryClient } from '@tanstack/react-query';
 import { supabase } from '@/integrations/supabase/client';
 import { storage } from '@/lib/safeStorage';
@@ -6,284 +6,107 @@ import { createLogger } from '@/lib/logger';
 
 const log = createLogger('useSystemMonitoring');
 
-interface SystemStatus {
-  server: 'healthy' | 'warning' | 'critical';
-  database: 'healthy' | 'warning' | 'critical';
-  storage: 'healthy' | 'warning' | 'critical';
-  network: 'healthy' | 'warning' | 'critical';
-  uptime: string;
-  lastBackup: string;
-  activeConnections: number;
-  systemLoad: number;
-  memoryUsage: number;
-  diskUsage: number;
+/**
+ * What System Controls can actually observe from the browser (non-core review
+ * WP5).
+ *
+ * This hook used to report CPU load, memory, disk and "active connections" as
+ * Math.random() values, "uptime" as the time since the newest cron_logs row,
+ * and the same row as "last backup". It also offered restart-web-server and
+ * refresh-cdn-cache (no such functions), a backup (system-backup answers 501,
+ * not implemented) and optimize_database_performance (it runs VACUUM inside a
+ * function, which Postgres refuses, so it can never succeed). All of that is
+ * gone. What is left is measured.
+ */
+export interface SystemStatus {
+  /** Whether a trivial read of `events` succeeded; null before the first check. */
+  databaseReachable: boolean | null;
+  /** Round trip of that read, as the browser saw it. */
+  databaseLatencyMs: number | null;
+  /** Newest cron_logs row, if any. */
+  lastJob: { at: string; message: string; failed: boolean } | null;
+  checkedAt: string | null;
 }
 
-interface SystemSettings {
-  cachingEnabled: boolean;
-  compressionEnabled: boolean;
-  cdnEnabled: boolean;
-  autoBackup: boolean;
-  backupFrequency: string;
-  maxFileSize: number;
-  sessionTimeout: number;
-  debugMode: boolean;
-  apiRateLimit: number;
-  emailNotifications: boolean;
-  smsNotifications: boolean;
-  webhookUrl: string;
-  maintenanceMessage: string;
+/**
+ * Keys that System Controls and Application Settings wrote. Nothing ever read
+ * them, and adminApplicationSettings could hold an SMTP password typed into a
+ * form that saved it only to this browser. Cleared on load and by
+ * clearCache so they don't outlive the screens.
+ */
+export const RETIRED_SETTINGS_KEYS = ['adminSystemSettings', 'adminApplicationSettings'] as const;
+
+export function clearRetiredSettings(): void {
+  for (const key of RETIRED_SETTINGS_KEYS) storage.remove(key);
 }
 
 export function useSystemMonitoring() {
   const queryClient = useQueryClient();
   const [systemStatus, setSystemStatus] = useState<SystemStatus>({
-    server: 'healthy',
-    database: 'healthy',
-    storage: 'healthy',
-    network: 'healthy',
-    uptime: 'Loading...',
-    lastBackup: 'Loading...',
-    activeConnections: 0,
-    systemLoad: 0,
-    memoryUsage: 0,
-    diskUsage: 0,
+    databaseReachable: null,
+    databaseLatencyMs: null,
+    lastJob: null,
+    checkedAt: null,
   });
-
-  const [settings, setSettings] = useState<SystemSettings>({
-    cachingEnabled: true,
-    compressionEnabled: true,
-    cdnEnabled: true,
-    autoBackup: true,
-    backupFrequency: 'daily',
-    maxFileSize: 10,
-    sessionTimeout: 30,
-    debugMode: false,
-    apiRateLimit: 1000,
-    emailNotifications: true,
-    smsNotifications: false,
-    webhookUrl: '',
-    maintenanceMessage: 'The site is temporarily down for maintenance. Please check back soon.',
-  });
-
   const [isLoading, setIsLoading] = useState(false);
 
-  const loadSystemStatus = async () => {
-    try {
-      // Check database health by querying a simple table
-      const { error: dbError } = await supabase.from('events').select('count').limit(1);
-      const dbStatus = dbError ? 'critical' : 'healthy';
-      
-      // Get cron logs for system activity
-      const { data: cronLogs } = await supabase
-        .from('cron_logs')
-        .select('*')
-        .order('created_at', { ascending: false })
-        .limit(1);
+  // useCallback: the component's effect depends on this, and a new function
+  // per render re-ran the effect, reloaded, re-rendered and re-ran it again.
+  const loadSystemStatus = useCallback(async () => {
+    const started = performance.now();
+    const { error: dbError } = await supabase
+      .from('events')
+      .select('id', { count: 'exact', head: true })
+      .limit(1);
+    const latency = Math.round(performance.now() - started);
 
-      // Calculate uptime based on earliest cron log or system start
-      const startTime = cronLogs?.[0]?.created_at || new Date().toISOString();
-      const uptime = calculateUptime(startTime);
-
-      setSystemStatus(prev => ({
-        ...prev,
-        database: dbStatus,
-        server: dbStatus === 'healthy' ? 'healthy' : 'warning',
-        storage: 'healthy', // Storage through Supabase is managed
-        network: 'healthy', // CDN status
-        uptime,
-        lastBackup: cronLogs?.[0]?.created_at ? formatLastBackup(cronLogs[0].created_at) : 'Unknown',
-        activeConnections: Math.floor(Math.random() * 50) + 100,
-        systemLoad: Math.floor(Math.random() * 30) + 20,
-        memoryUsage: Math.floor(Math.random() * 20) + 60,
-        diskUsage: Math.floor(Math.random() * 15) + 35,
-      }));
-    } catch (error) {
-      console.error("Failed to load system status:", error);
-      setSystemStatus(prev => ({
-        ...prev,
-        server: 'warning',
-        database: 'warning',
-      }));
+    const { data: cronLogs, error: cronError } = await supabase
+      .from('cron_logs')
+      .select('created_at, message, error_details')
+      .order('created_at', { ascending: false })
+      .limit(1);
+    if (cronError) {
+      log.warn('loadSystemStatus', 'cron_logs read failed', { error: cronError.message });
     }
-  };
+    const newest = cronLogs?.[0];
 
-  const loadSystemSettings = async () => {
-    try {
-      // For now, use safeStorage (in production this would be from database)
-      const savedSettings = storage.get<typeof settings>('adminSystemSettings');
-      if (savedSettings) {
-        setSettings(savedSettings);
-      }
-    } catch (error) {
-      log.error('loadSystemSettings', 'Failed to load system settings', { error: String(error) });
-    }
-  };
-
-  const saveSystemSettings = async () => {
-    setIsLoading(true);
-    try {
-      // Save to safeStorage (in production this would also save to database)
-      storage.set('adminSystemSettings', settings);
-      return { success: true };
-    } catch (error) {
-      log.error('saveSystemSettings', 'Failed to save system settings', { error: String(error) });
-      return { success: false, error };
-    } finally {
-      setIsLoading(false);
-    }
-  };
+    setSystemStatus({
+      databaseReachable: !dbError,
+      databaseLatencyMs: dbError ? null : latency,
+      lastJob: newest?.created_at
+        ? { at: newest.created_at, message: newest.message, failed: !!newest.error_details }
+        : null,
+      checkedAt: new Date().toISOString(),
+    });
+  }, []);
 
   /**
    * Clears every cache this application actually has (XPLAT-008 AC1).
    *
-   * IT USED TO POST TO clear-system-cache, WHICH HAS NEVER EXISTED - no
-   * directory in supabase/functions/, and an anon POST to it answers 404. So
-   * "Clear All Cache" reported failure every time it was pressed.
-   *
-   * IMPLEMENTING THAT FUNCTION WOULD HAVE BEEN WORSE THAN REMOVING IT, and the
-   * reason is the useful part: THERE IS NO SERVER-SIDE CACHE FOR IT TO CLEAR.
-   * Nothing in the database caches (no table matches %cache%), and the caches
-   * that do exist are module-scope Maps inside individual edge functions -
-   * _shared/robots.ts's per-origin robots.txt cache, _shared/aiConfig.ts's
-   * config cache. Each edge function runs in its own isolate, so an HTTP call
-   * to one function cannot reach another function's memory. A clear-system-cache
-   * endpoint could only ever have cleared its own isolate and returned 200, and
-   * the button would have reported "All cached data has been cleared
-   * successfully" while clearing nothing. A green light over a no-op is worse
-   * than the red one this replaces.
-   *
-   * What is left is real and is what an admin pressing this wants: drop the
-   * client's query cache so every subsequent read refetches from the server,
-   * and drop the locally cached admin settings so they are re-read too.
+   * There is no server-side cache to clear: nothing in the database caches,
+   * and the caches that exist are module-scope Maps inside individual edge
+   * functions, each in its own isolate, which an HTTP call to another function
+   * cannot reach. So this drops the client's query cache, so every read
+   * refetches, and the retired local settings.
    */
-  const clearCache = async () => {
+  const clearCache = useCallback(async () => {
     setIsLoading(true);
     try {
       queryClient.clear();
-      storage.remove('adminSystemSettings');
-      return { success: true };
+      clearRetiredSettings();
+      return { success: true as const };
     } catch (error) {
       log.error('clearCache', 'Failed to clear cache', { error: String(error) });
-      return { success: false, error };
+      return { success: false as const, error };
     } finally {
       setIsLoading(false);
     }
-  };
-
-  const runBackup = async () => {
-    setIsLoading(true);
-    try {
-      // Trigger database backup via edge function
-      const { error } = await supabase.functions.invoke('system-backup', {
-        body: { action: 'full_backup' }
-      });
-
-      if (error) throw error;
-
-      // Update last backup time
-      setSystemStatus(prev => ({ 
-        ...prev, 
-        lastBackup: 'Just now' 
-      }));
-
-      return { success: true };
-    } catch (error) {
-      console.error("Failed to run backup:", error);
-      return { success: false, error };
-    } finally {
-      setIsLoading(false);
-    }
-  };
-
-  const optimizeDatabase = async () => {
-    setIsLoading(true);
-    try {
-      // Call the database optimization function
-      const { data, error } = await supabase.rpc('optimize_database_performance');
-      
-      if (error) throw error;
-      return { success: true, data };
-    } catch (error) {
-      console.error("Failed to optimize database:", error);
-      return { success: false, error };
-    } finally {
-      setIsLoading(false);
-    }
-  };
-
-  const restartService = async (service: string) => {
-    setIsLoading(true);
-    try {
-      // Call appropriate edge function based on service
-      let functionName = '';
-      switch (service.toLowerCase()) {
-        case 'web server':
-          functionName = 'restart-web-server';
-          break;
-        case 'cdn':
-          functionName = 'refresh-cdn-cache';
-          break;
-        default:
-          throw new Error(`Unknown service: ${service}`);
-      }
-
-      const { error } = await supabase.functions.invoke(functionName, {
-        body: { service }
-      });
-
-      if (error) throw error;
-      return { success: true };
-    } catch (error) {
-      console.error(`Failed to restart ${service}:`, error);
-      return { success: false, error };
-    } finally {
-      setIsLoading(false);
-    }
-  };
-
-  // Helper functions
-  const calculateUptime = (startTime: string): string => {
-    const start = new Date(startTime);
-    const now = new Date();
-    const diff = now.getTime() - start.getTime();
-    
-    const days = Math.floor(diff / (1000 * 60 * 60 * 24));
-    const hours = Math.floor((diff % (1000 * 60 * 60 * 24)) / (1000 * 60 * 60));
-    const minutes = Math.floor((diff % (1000 * 60 * 60)) / (1000 * 60));
-    
-    return `${days}d ${hours}h ${minutes}m`;
-  };
-
-  const formatLastBackup = (timestamp: string): string => {
-    const backupTime = new Date(timestamp);
-    const now = new Date();
-    const diff = now.getTime() - backupTime.getTime();
-    
-    const hours = Math.floor(diff / (1000 * 60 * 60));
-    const minutes = Math.floor((diff % (1000 * 60 * 60)) / (1000 * 60));
-    
-    if (hours > 24) {
-      const days = Math.floor(hours / 24);
-      return `${days} day${days !== 1 ? 's' : ''} ago`;
-    } else if (hours > 0) {
-      return `${hours} hour${hours !== 1 ? 's' : ''} ago`;
-    } else {
-      return `${minutes} minute${minutes !== 1 ? 's' : ''} ago`;
-    }
-  };
+  }, [queryClient]);
 
   return {
     systemStatus,
-    settings,
     isLoading,
-    setSettings,
     loadSystemStatus,
-    loadSystemSettings,
-    saveSystemSettings,
     clearCache,
-    runBackup,
-    optimizeDatabase,
-    restartService,
   };
 }

@@ -28,16 +28,18 @@ const lifecycleSql = await read(
   'supabase/migrations/20260902000003_campaign_lifecycle_schedule_and_atomic_approval.sql',
 );
 /**
- * process_campaign_lifecycle was REPLACED by 20260920000004, which adds the
- * seven-day renewal window (WEB-ADS-011 AC3). The assertions below have to read
- * the newest definition or they validate a body the database no longer has -
- * green, and measuring nothing.
+ * process_campaign_lifecycle was REPLACED by 20260920000004, which added the
+ * seven-day renewal window (WEB-ADS-011 AC3), and again by 20261003000003,
+ * which writes the lifecycle notices and moves the dates to America/Chicago
+ * (NON_CORE_REVIEW WP3). The assertions below have to read the newest
+ * definition or they validate a body the database no longer has - green, and
+ * measuring nothing.
  *
  * scripts/__tests__/campaign-renewal.test.mjs fails when a migration newer than
  * any path named in this file redefines the function, so the next replacement
  * is caught here rather than discovered later.
  */
-const lifecycleFnSql = await read('supabase/migrations/20260920000004_campaign_renewal.sql');
+const lifecycleFnSql = await read('supabase/migrations/20261003000003_campaign_lifecycle_notices_central.sql');
 const hook = await read('src/hooks/useAdminCampaigns.ts');
 const types = await read('src/integrations/supabase/types.ts');
 
@@ -92,7 +94,38 @@ Deno.test('process_campaign_lifecycle still activates only through activate_camp
   assert(/information_schema\.columns/.test(body), 'the renewal_eligible write must be guarded: the column is not in any migration');
   // WEB-ADS-011 AC3: flagged seven days BEFORE the end, not only on completion.
   // Renewing a campaign that has already finished buys a gap in coverage.
-  assert(/end_date::date <= CURRENT_DATE \+ 7/.test(body), 'the renewal window must be flagged before the end');
+  assert(
+    /end_date::date <= \(now\(\) AT TIME ZONE 'America\/Chicago'\)::date \+ 7/.test(body),
+    'the renewal window must be flagged before the end',
+  );
+});
+
+Deno.test('process_campaign_lifecycle runs on the Central calendar', () => {
+  const body = functionBody(lifecycleFnSql, 'process_campaign_lifecycle');
+  assert(/v_today date := \(now\(\) AT TIME ZONE 'America\/Chicago'\)::date;/.test(body));
+  const code = body.replace(/--[^\n]*/g, '');
+  assert(!/CURRENT_DATE/.test(code), 'no comparison may use the UTC date');
+  assert(/c\.start_date::date <= v_today/.test(code), 'activation on the Central start date');
+  assert(/end_date::date < v_today/.test(code), 'completion after the Central end date');
+});
+
+Deno.test('process_campaign_lifecycle writes each advertiser notice once, flagged for email', () => {
+  const body = functionBody(lifecycleFnSql, 'process_campaign_lifecycle');
+  for (const type of ['campaign_activated', 'campaign_completed', 'campaign_expiring_soon', 'creative_deadline_warning']) {
+    const insert = new RegExp(
+      `INSERT INTO public\\.campaign_notifications[\\s\\S]*?'${type}'[\\s\\S]*?n\\.notification_type = '${type}'`,
+    );
+    assert(insert.test(body), `${type} must be inserted, guarded by NOT EXISTS on its own type`);
+  }
+  // Every notice insert names email_pending and sets it true.
+  const inserts = body.match(/INSERT INTO public\.campaign_notifications[\s\S]*?\);\n/g) ?? [];
+  assertEquals(inserts.length, 4);
+  for (const ins of inserts) {
+    assert(/email_pending\)/.test(ins) && /\btrue\s*\n\s*FROM public\.campaigns c/.test(ins), 'email_pending = true on every lifecycle notice');
+    assert(/c\.user_id IS NOT NULL/.test(ins), 'no notice without a recipient');
+  }
+  assert(/ADD COLUMN IF NOT EXISTS email_pending boolean/.test(lifecycleFnSql));
+  assert(/ADD COLUMN IF NOT EXISTS emailed_at timestamptz/.test(lifecycleFnSql));
 });
 
 Deno.test('approve_campaign_creative is one admin-only transaction that routes through activate_campaign', () => {

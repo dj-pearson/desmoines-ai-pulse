@@ -14,6 +14,7 @@ import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { ErrorState } from "@/components/ui/error-state";
 import { useToast } from "@/hooks/use-toast";
 import PreferencesManager from "@/components/PreferencesManager";
+import { InviteFriendsCard } from "@/components/account/InviteFriendsCard";
 import { User, Mail, Phone, Settings, Save, Edit, Trophy } from "lucide-react";
 import { useSocialFeatures } from "@/hooks/useSocialFeatures";
 import { useGamification } from "@/hooks/useGamification";
@@ -405,6 +406,8 @@ export default function Profile() {
                 </ul>
               </CardContent>
             </Card>
+
+            <InviteFriendsCard />
           </TabsContent>
 
           <TabsContent value="activity" className="mt-6">

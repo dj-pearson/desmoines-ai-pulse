@@ -61,6 +61,9 @@ on:
       - 'src/components/UpgradeModal.tsx'
       - 'src/pages/SubscriptionSuccess.tsx'
       - 'src/pages/SubscriptionPortal.tsx'
+      # NON_CORE_REVIEW_2026-09 WP4: Terms lists plan features from
+      # planBenefits.ts and the same test now scans it.
+      - 'src/pages/Terms.tsx'
 
 concurrency:
   group: subscription-sync-${{ github.head_ref }}
@@ -93,6 +96,10 @@ jobs:
           deno-version: v2.x
       - run: deno test --allow-read supabase/functions/_tests/cross-platform-sync.test.ts
       - run: deno test supabase/functions/_tests/version-check.test.ts
+      # Role precedence for isAdminUserId and assign-role, including the
+      # two-row user that .maybeSingle() used to deny. --allow-read is for the
+      # src/lib/roles.ts comparison.
+      - run: deno test --allow-read supabase/functions/_shared/roles.test.ts
       # Reads the iOS/Android sources as well as the edge function, so the
       # client/server deletion contract can't drift again (XPLAT-001).
       # XPLAT-011. Asserts docstring, implementation and all three clients agree
@@ -364,6 +371,38 @@ jobs:
       # from the campaign row rather than the request body, and triage leaving a
       # submission pending when publish_submission is unavailable.
       - run: deno test --allow-read supabase/functions/_tests/campaign-write-guards.test.ts
+      # NON_CORE_REVIEW WP3 item 1. A late or replayed checkout.session.completed
+      # moved an active campaign back to pending_creative and re-sent the
+      # payment email; an unpaid (async) session advanced too. Pins the
+      # paid-only rule, the draft/pending_payment scope and the zero-row stop.
+      - run: deno test --allow-read supabase/functions/_tests/campaign-payment-transition.test.ts
+      # WP3. get_active_ads served the lowest campaign id in a placement every
+      # time and switched days at 7pm Central. Pins the random pick, Central
+      # dates and the unchanged signature the apps call.
+      - run: deno test --allow-read supabase/functions/_tests/campaign-ad-serving.test.ts
+      # WP3. Checkout took start dates in the past; the lead time lived only in
+      # the browser. Pins the Central-date rule, the renewal exemption and the
+      # server constant matching src/lib/businessCopy.ts.
+      - run: deno test --allow-read supabase/functions/_tests/campaign-start-date.test.ts
+      # WP3. Refunds were capped at the list price with no memory of earlier
+      # refunds, and any refund ended the campaign. Pins the Stripe-charge cap,
+      # full-only 'refunded', the replay guard and the admin page's request.
+      - run: deno test --allow-read supabase/functions/_tests/campaign-refund-cap.test.ts
+      # WP3 / D15. The admin review page rendered an advertiser's link_url as a
+      # raw href (stored XSS against the reviewer). Pins the safe-URL render
+      # and the NOT VALID http(s) CHECK.
+      - run: deno test --allow-read supabase/functions/_tests/campaign-creative-link-url.test.ts
+      # WP3. The admin price override wrote a total checkout ignored, and
+      # getCurrentPricing fell back to hardcoded rates. Pins both gone.
+      - run: deno test --allow-read supabase/functions/_tests/campaign-no-client-price.test.ts
+      # WP3. Admin status changes went straight from the browser with no audit
+      # or notice. Pins admin_set_campaign_status: admin-only, three
+      # transitions, reason, audit row, advertiser notice, and the pages using it.
+      - run: deno test --allow-read supabase/functions/_tests/admin-campaign-status.test.ts
+      # WP3 / D12. Sponsored-listing links were a browser INSERT checked only
+      # for campaign ownership. Pins the draft-only, one-per-placement RPC, the
+      # old policy left for a later release, and /advertise using the RPC.
+      - run: deno test --allow-read supabase/functions/_tests/sponsored-listing-link-guard.test.ts
       - run: deno test --allow-read supabase/functions/send-campaign-notification/decision.test.ts
       - run: deno test --allow-read supabase/functions/triage-event-submission/logic.test.ts
       # WEB-ADS-002. Impressions and clicks were inserted from the browser into
@@ -472,3 +511,32 @@ jobs:
       - run: deno test supabase/functions/nlp-search/handler.test.ts
       # Saved-search alert matching and the email it builds (WP5).
       - run: deno test --allow-read supabase/functions/_shared/savedSearchMatch.test.ts
+      # support-chat is anon-callable; these caps are what bound one request's
+      # input tokens.
+      - run: deno test supabase/functions/support-chat/history.test.ts
+      # The Ticketmaster scraper keeps source_url the real page and puts the
+      # affiliate redirect in affiliate_url (plan WP6).
+      - run: deno test supabase/functions/scrape-ticketmaster-events/links.test.ts
+      # Daily AI quota and spend guard (NON_CORE_REVIEW_2026-09 WP1). Offline:
+      # the Supabase client is a stub.
+      - run: deno test supabase/functions/_shared/aiQuota.test.ts
+      - run: deno test supabase/functions/discover-chat/conversation.test.ts
+      # VIP support tickets move up one priority step, never into urgent (WP7).
+      - run: deno test supabase/functions/_shared/supportPriority.test.ts
+      # Email on SES (WP2, docs/plans/NON_CORE_REVIEW_2026-09.md). SigV4 is
+      # checked against the AWS published test vectors; sendEmail against a
+      # stubbed fetch and DB, so nothing here can send mail.
+      - run: deno test supabase/functions/_shared/awsSigV4.test.ts
+      - run: deno test --allow-env supabase/functions/_shared/email.test.ts
+      - run: deno test --allow-env supabase/functions/_shared/emailTemplates.test.ts
+      - run: deno test supabase/functions/email-unsubscribe/handler.test.ts
+      # ses-events: real RSA verification over signed fixtures, strict
+      # certificate host and topic checks, and the suppression writes.
+      - run: deno test --allow-read supabase/functions/_shared/sesEvents.test.ts
+      - run: deno test --allow-read supabase/functions/ses-events/handler.test.ts
+      # Campaign notices written with email_pending: claim before send, release
+      # on failure, never mail one notice twice.
+      - run: deno test supabase/functions/send-campaign-emails/handler.test.ts
+      # Subscription started/cancelled and the admin paid-campaign alert: never
+      # throw into the webhook, no stale "access until" date.
+      - run: deno test --allow-env supabase/functions/_shared/billingEmails.test.ts

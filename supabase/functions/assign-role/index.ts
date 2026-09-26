@@ -18,9 +18,17 @@
 import { serve } from 'https://deno.land/std@0.168.0/http/server.ts';
 import { createClient } from 'https://esm.sh/@supabase/supabase-js@2.39.3';
 import { getCorsHeaders, handleCors } from '../_shared/cors.ts';
+import {
+  decideRoleChange,
+  highestRole,
+  isRole,
+  planRoleWrite,
+  ROLE_PRECEDENCE,
+  type Role,
+  type RoleRow,
+} from '../_shared/roles.ts';
 
-type Role = 'user' | 'moderator' | 'admin' | 'root_admin';
-const VALID_ROLES: Role[] = ['user', 'moderator', 'admin', 'root_admin'];
+const VALID_ROLES: readonly Role[] = ROLE_PRECEDENCE;
 
 function json(body: unknown, status = 200, corsHeaders: Record<string, string> = {}): Response {
   return new Response(JSON.stringify(body), {
@@ -64,7 +72,9 @@ serve(async (req) => {
   const callerId = callerRes.user.id;
 
   // 2) Confirm caller is admin/root_admin server-side (user_roles then profiles)
-  const callerRole = await resolveRole(admin, callerId);
+  const caller = await readRoles(admin, callerId);
+  if (!caller) return json({ error: 'Failed to read roles' }, 500, corsHeaders);
+  const callerRole = caller.role;
   if (callerRole !== 'admin' && callerRole !== 'root_admin') {
     return json({ error: 'Admin role required' }, 403, corsHeaders);
   }
@@ -80,48 +90,46 @@ serve(async (req) => {
   const role = payload.role as Role | undefined;
 
   if (!targetUserId) return json({ error: 'targetUserId is required' }, 400, corsHeaders);
-  if (!role || !VALID_ROLES.includes(role)) {
+  if (!isRole(role)) {
     return json({ error: `role must be one of: ${VALID_ROLES.join(', ')}` }, 400, corsHeaders);
   }
 
-  // 3) Hierarchy: only root_admin may grant admin/root_admin.
-  if ((role === 'root_admin' || role === 'admin') && callerRole !== 'root_admin') {
-    return json({ error: 'Only a root_admin can assign admin or root_admin roles' }, 403, corsHeaders);
-  }
-  // Nobody can change their OWN role (no self-escalation / self-lockout).
-  if (targetUserId === callerId) {
-    return json({ error: 'You cannot change your own role' }, 403, corsHeaders);
-  }
+  // The target's current rows decide both the hierarchy check and the write.
+  // A failed read refuses rather than guesses: read as "no rows", it would
+  // take the INSERT branch and add a second grant (WEB-BE-032 AC2), and it
+  // would rank the target as 'user' and let an admin past the check below.
+  const target = await readRoles(admin, targetUserId);
+  if (!target) return json({ error: 'Failed to assign role' }, 500, corsHeaders);
+  const oldRole = target.role;
 
-  // Capture the previous role for the audit trail.
-  const oldRole = await resolveRole(admin, targetUserId);
+  // 3) Hierarchy (_shared/roles.ts): only root_admin grants admin or
+  // root_admin, nobody changes their own role, and an admin cannot change the
+  // role of an admin or root_admin.
+  const decision = decideRoleChange({
+    callerId,
+    callerRole,
+    targetId: targetUserId,
+    current: oldRole,
+    next: role,
+  });
+  if (!decision.ok) return json({ error: decision.reason }, 403, corsHeaders);
 
   // 4) Write with the service client. assigned_by = verified caller, so the
-  // existing validate_role_assignment trigger re-checks against a trustworthy
-  // actor (not a client-supplied value).
-  const { data: existing, error: existingErr } = await admin
-    .from('user_roles')
-    .select('id')
-    .eq('user_id', targetUserId)
-    .maybeSingle();
-
-  // This read decides UPDATE vs INSERT on the authorization table. A dropped
-  // error reads as "no row yet" and takes the INSERT branch, writing a SECOND
-  // role row for a user who already has one - so which role applies then
-  // depends on read order (WEB-BE-032 AC2). Refuse rather than guess; the
-  // caller can retry.
-  if (existingErr) {
-    console.error('[assign-role] existing-role read failed:', existingErr.message);
-    return json({ error: 'Failed to assign role' }, 500, corsHeaders);
+  // validate_role_assignment trigger re-checks against a trustworthy actor.
+  // A user can hold several rows; the new role becomes their only one, or the
+  // strongest leftover row would still win.
+  const plan = planRoleWrite(target.rows, role);
+  let writeErr: { message: string } | null = null;
+  if (plan.deleteIds.length > 0) {
+    ({ error: writeErr } = await admin.from('user_roles').delete().in('id', plan.deleteIds));
   }
-
-  let writeErr;
-  if (existing?.id) {
+  if (!writeErr && plan.updateId) {
     ({ error: writeErr } = await admin
       .from('user_roles')
       .update({ role, assigned_by: callerId, assigned_at: new Date().toISOString() })
-      .eq('id', existing.id));
-  } else {
+      .eq('id', plan.updateId));
+  }
+  if (!writeErr && plan.insert) {
     ({ error: writeErr } = await admin
       .from('user_roles')
       .insert({ user_id: targetUserId, role, assigned_by: callerId }));
@@ -156,24 +164,26 @@ serve(async (req) => {
   return json({ success: true, targetUserId, role, previousRole: oldRole }, 200, corsHeaders);
 });
 
-/** Resolve a user's effective role from user_roles, falling back to profiles. */
-async function resolveRole(
+/**
+ * A user's role rows and effective role: the strongest user_roles row, or
+ * profiles.user_role when there are no rows. Returns null when user_roles
+ * cannot be read, because every caller of this makes an authorization
+ * decision and "unknown" must not turn into "user".
+ */
+async function readRoles(
   admin: ReturnType<typeof createClient>,
   userId: string,
-): Promise<Role> {
-  // Both reads below fail closed to 'user', the least privileged role, which
-  // is the right direction and is unchanged. They now log: a read failure used
-  // to demote a caller with no server-side signal, reaching them as a flat 403
-  // indistinguishable from a real denial (WEB-BE-032 AC2).
-  const { data: roleRow, error: roleErr } = await admin
+): Promise<{ role: Role; rows: RoleRow[] } | null> {
+  const { data, error: roleErr } = await admin
     .from('user_roles')
-    .select('role')
-    .eq('user_id', userId)
-    .order('created_at', { ascending: false })
-    .limit(1)
-    .maybeSingle();
-  if (roleErr) console.warn(`[assign-role] user_roles read failed for ${userId}: ${roleErr.message}`);
-  if (roleRow?.role && VALID_ROLES.includes(roleRow.role as Role)) return roleRow.role as Role;
+    .select('id, role')
+    .eq('user_id', userId);
+  if (roleErr) {
+    console.error(`[assign-role] user_roles read failed for ${userId}: ${roleErr.message}`);
+    return null;
+  }
+  const rows = (data ?? []) as RoleRow[];
+  if (rows.length > 0) return { role: highestRole(rows), rows };
 
   const { data: profile, error: profileErr } = await admin
     .from('profiles')
@@ -181,8 +191,6 @@ async function resolveRole(
     .eq('user_id', userId)
     .maybeSingle();
   if (profileErr) console.warn(`[assign-role] profiles read failed for ${userId}: ${profileErr.message}`);
-  if (profile?.user_role && VALID_ROLES.includes(profile.user_role as Role)) {
-    return profile.user_role as Role;
-  }
-  return 'user';
+  const legacy = (profile as { user_role?: unknown } | null)?.user_role;
+  return { role: isRole(legacy) ? legacy : 'user', rows };
 }

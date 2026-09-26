@@ -49,13 +49,54 @@ import { buildEventOffers, isEventAccessibleForFree, parseEventPrice } from '@/l
 import { DEFAULT_EVENT_HOURS } from '@/lib/eventTiming';
 
 /**
- * The event's outbound source link, or null when it is missing, not http(s)
- * (a scraped `javascript:` URL), or flagged broken by the link checker. The
- * detail page and the JSON-LD offer both read this, so they cannot disagree.
+ * Affiliate redirect hosts that carry the real destination in their `u` query
+ * parameter. ticketmaster.evyy.net is Impact's tracking domain for the
+ * Ticketmaster programme; scrape-ticketmaster-events builds these links.
+ */
+export const AFFILIATE_REDIRECT_HOSTS: readonly string[] = ['ticketmaster.evyy.net'];
+
+/** The link's host without "www.", or null for a missing or non-http link. */
+export function linkHost(url: string | null | undefined): string | null {
+  if (!isHttpUrl(url)) return null;
+  try {
+    return new URL(url as string).hostname.replace(/^www\./, '').toLowerCase();
+  } catch {
+    return null;
+  }
+}
+
+/** True when the link goes through one of AFFILIATE_REDIRECT_HOSTS. */
+export function isAffiliateRedirect(url: string | null | undefined): boolean {
+  const host = linkHost(url);
+  return host !== null && AFFILIATE_REDIRECT_HOSTS.includes(host);
+}
+
+/**
+ * Where an affiliate redirect lands: the decoded `u` parameter, or null when
+ * the link is not a known redirect or `u` is missing or not http(s).
+ */
+export function affiliateTarget(url: string | null | undefined): string | null {
+  if (!isAffiliateRedirect(url)) return null;
+  try {
+    const target = new URL(url as string).searchParams.get('u');
+    return isHttpUrl(target) ? target : null;
+  } catch {
+    return null;
+  }
+}
+
+/**
+ * The event's real ticket or listing page, or null when it is missing, not
+ * http(s) (a scraped `javascript:` URL), or flagged broken by the link
+ * checker. The JSON-LD offer reads this. Rows the Ticketmaster scraper wrote
+ * before events.affiliate_url existed hold the affiliate redirect in
+ * source_url; for those this is the page the redirect lands on, so the
+ * structured data names Ticketmaster rather than a tracking domain.
  */
 export function eventTicketUrl(event: { source_url?: string | null; source_url_broken?: boolean | null }): string | null {
   if (event.source_url_broken) return null;
-  return isHttpUrl(event.source_url) ? event.source_url : null;
+  if (!isHttpUrl(event.source_url)) return null;
+  return affiliateTarget(event.source_url) ?? event.source_url;
 }
 
 /**
@@ -76,16 +117,6 @@ export const TICKETING_HOSTS: readonly string[] = [
   'iowa.gleague.nba.com',
 ];
 
-/** The link's host without "www.", or null for a missing or non-http link. */
-export function linkHost(url: string | null | undefined): string | null {
-  if (!isHttpUrl(url)) return null;
-  try {
-    return new URL(url as string).hostname.replace(/^www\./, '').toLowerCase();
-  } catch {
-    return null;
-  }
-}
-
 function isTicketingHost(host: string): boolean {
   return TICKETING_HOSTS.some((h) => host === h || host.endsWith(`.${h}`));
 }
@@ -96,6 +127,10 @@ export interface EventOutboundLink {
   label: string;
   /** True only when the label promises tickets. */
   sellsTickets: boolean;
+  /** True when href is an affiliate link, which needs a disclosure beside it. */
+  sponsored: boolean;
+  /** The anchor's rel; "sponsored" is added for an affiliate link. */
+  rel: string;
 }
 
 /**
@@ -103,22 +138,39 @@ export interface EventOutboundLink {
  * tickets" is a promise that the link sells them, so it needs both a stated
  * paid price (fixed or a range) and a ticketing host. Anything else names the
  * host, so a reader knows they are going to a listing, not a box office. null
- * when there is no usable link (eventTicketUrl).
+ * when there is no usable link.
+ *
+ * An affiliate link (events.affiliate_url, or an old row whose source_url is
+ * the redirect) is preferred when there is one, and is judged by where it
+ * lands: the host comes from the decoded `u` parameter, so a Ticketmaster
+ * redirect reads "Get tickets" rather than "Event listing on
+ * ticketmaster.evyy.net". A row the link checker flagged broken shows no
+ * button at all, as before.
  */
 export function eventOutboundLink(event: {
   source_url?: string | null;
   source_url_broken?: boolean | null;
+  affiliate_url?: string | null;
   price?: string | null;
 }): EventOutboundLink | null {
-  const href = eventTicketUrl(event);
-  const host = linkHost(href);
+  if (event.source_url_broken) return null;
+  const affiliateHref = isHttpUrl(event.affiliate_url)
+    ? event.affiliate_url
+    : isAffiliateRedirect(event.source_url)
+      ? (event.source_url as string)
+      : null;
+  const href = affiliateHref ?? eventTicketUrl(event);
+  const destination = affiliateHref ? (affiliateTarget(affiliateHref) ?? affiliateHref) : href;
+  const host = linkHost(destination);
   if (!href || !host) return null;
+  const sponsored = affiliateHref !== null;
+  const rel = sponsored ? 'sponsored noopener noreferrer' : 'noopener noreferrer';
   const kind = parseEventPrice(event.price).kind;
   const paid = kind === 'fixed' || kind === 'range';
   if (paid && isTicketingHost(host)) {
-    return { href, label: 'Get tickets', sellsTickets: true };
+    return { href, label: 'Get tickets', sellsTickets: true, sponsored, rel };
   }
-  return { href, label: `Event listing on ${host}`, sellsTickets: false };
+  return { href, label: `Event listing on ${host}`, sellsTickets: false, sponsored, rel };
 }
 
 export function eventPageUrl(event: Event): string {

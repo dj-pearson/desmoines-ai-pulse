@@ -120,9 +120,9 @@ export function CreativeUploadForm({
       newErrors.linkUrl = "Destination URL is required";
     } else if (!toSafeExternalUrl(formData.linkUrl)) {
       // Same rule AdBanner applies when it renders the creative, so a URL this
-      // form accepts is one the ad will actually open. The server-side CHECK
-      // on campaign_creatives.link_url is still to come; until then this is
-      // the only gate, and AdBanner's render-time guard is the backstop.
+      // form accepts is one the ad will actually open. The database refuses
+      // anything else too (campaign_creatives_link_url_http, 20261003000004);
+      // AdBanner's render-time guard covers rows older than that CHECK.
       newErrors.linkUrl = "Enter a full web address starting with https:// or http://";
     }
 

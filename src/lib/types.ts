@@ -12,6 +12,12 @@ export interface Event {
   price?: string;
   image_url?: string;
   source_url?: string;
+  /**
+   * The affiliate redirect for the same page (scrape-ticketmaster-events).
+   * source_url stays the real page; eventOutboundLink prefers this for the
+   * button and marks it sponsored.
+   */
+  affiliate_url?: string | null;
   is_enhanced?: boolean;
   is_featured?: boolean;
   is_sponsored?: boolean;

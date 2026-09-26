@@ -22,7 +22,7 @@ import { createClient } from "https://esm.sh/@supabase/supabase-js@2.45.0";
 import { handleCors, getCorsHeaders, isOriginAllowed } from "../_shared/cors.ts";
 import { escapeHtml } from "../_shared/escapeHtml.ts";
 import { renderEmail, SITE_URL } from "../_shared/emailLayout.ts";
-import { fetchWithTimeout } from "../_shared/fetchWithTimeout.ts";
+import { sendEmail } from "../_shared/email.ts";
 
 type EventType =
   | "new_device_login"
@@ -202,39 +202,35 @@ serve(async (req) => {
       recipient: { email: recipientEmail },
     });
 
-    const resendKey = Deno.env.get("RESEND_API_KEY");
-    if (!resendKey) {
-      // Soft-fail: log so the alert is recorded in application logs even if
-      // delivery is unconfigured, but don't break the calling client flow.
-      console.warn("send-security-notification: RESEND_API_KEY not configured");
+    const sent = await sendEmail(
+      {
+        to: recipientEmail,
+        from: "Des Moines Insider Security <security@desmoinesinsider.com>",
+        subject: meta.subject,
+        html: rendered.html,
+        text: rendered.text,
+        category: "transactional",
+        template: `security_${body.event_type}`,
+        userId: authResult.user.id,
+      },
+      { supabase },
+    );
+
+    if (!sent.ok && (sent.provider === "none" || (sent.suppressed?.length ?? 0) > 0)) {
+      // Soft-fail: nothing to send with, or the address hard-bounced before.
+      // The client flow that triggered this must not break over it.
+      console.warn(`send-security-notification: not sent (${sent.error})`);
       return new Response(
-        JSON.stringify({ success: false, reason: "email_transport_not_configured" }),
+        JSON.stringify({
+          success: false,
+          reason: sent.provider === "none" ? "email_transport_not_configured" : "recipient_suppressed",
+        }),
         { status: 200, headers: { ...corsHeaders, "Content-Type": "application/json" } }
       );
     }
 
-    const resendResponse = await fetchWithTimeout("https://api.resend.com/emails", {
-      method: "POST",
-      headers: {
-        "Content-Type": "application/json",
-        Authorization: `Bearer ${resendKey}`,
-      },
-      body: JSON.stringify({
-        from: "Des Moines Insider Security <security@desmoinesinsider.com>",
-        to: [recipientEmail],
-        subject: meta.subject,
-        html: rendered.html,
-        text: rendered.text,
-        tags: [
-          { name: "type", value: "security_notification" },
-          { name: "event_type", value: body.event_type },
-        ],
-      }),
-    });
-
-    if (!resendResponse.ok) {
-      const errData = await resendResponse.text();
-      console.error("Resend failed:", resendResponse.status, errData);
+    if (!sent.ok) {
+      console.error("send-security-notification: provider refused:", sent.error);
       return new Response(
         JSON.stringify({ error: "Failed to send security notification" }),
         { status: 502, headers: { ...corsHeaders, "Content-Type": "application/json" } }

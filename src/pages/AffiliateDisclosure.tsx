@@ -22,7 +22,7 @@ export default function AffiliateDisclosure() {
         <title>Affiliate Disclosure | Des Moines Insider</title>
         <meta
           name="description"
-          content="Des Moines Insider affiliate disclosure. Learn how we earn commissions through hotel booking links and other affiliate partnerships."
+          content="Des Moines Insider affiliate disclosure. How we earn commissions through hotel booking links, Ticketmaster ticket links and banner ads."
         />
       </Helmet>
 
@@ -78,6 +78,12 @@ export default function AffiliateDisclosure() {
                 A hotel outside these brands gets a plain link to its own website, and we earn
                 nothing from it. Some banner ads on the site are also affiliate links.
               </p>
+              <p className="mt-3">
+                On event pages, a ticket link to <strong className="text-foreground">Ticketmaster</strong>{" "}
+                can be an affiliate link through the Impact network. It opens the same Ticketmaster
+                event page at the same price, by way of Impact&apos;s tracking domain
+                (ticketmaster.evyy.net). Other ticket and event links are plain links.
+              </p>
             </section>
 
             <section id="featured" className="scroll-mt-24">
@@ -105,7 +111,8 @@ export default function AffiliateDisclosure() {
                 A booking button names the site it opens, for example &quot;Book on hilton.com&quot;.
                 When that button is an affiliate link it says so right next to it, and it is marked
                 with <code>rel=&quot;sponsored&quot;</code> in the HTML. A link that reads &quot;Hotel
-                website&quot; is not an affiliate link.
+                website&quot; is not an affiliate link. An affiliate ticket button on an event page
+                carries the same note and the same marking.
               </p>
             </section>
 

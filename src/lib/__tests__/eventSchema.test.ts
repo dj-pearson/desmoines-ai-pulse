@@ -1,10 +1,12 @@
 import { describe, it, expect } from 'vitest';
 import {
+  affiliateTarget,
   buildEventJsonLd,
   buildEventItemList,
   eventEndIso,
   eventOutboundLink,
   eventStartIso,
+  eventTicketUrl,
   LIST_DESCRIPTION_MAX,
 } from '@/lib/eventSchema';
 import type { Event } from '@/lib/types';
@@ -235,6 +237,8 @@ describe('eventOutboundLink (events-pass2 WP4 item 5)', () => {
       href: 'https://www.catchdesmoines.com/event/x/123/',
       label: 'Event listing on catchdesmoines.com',
       sellsTickets: false,
+      sponsored: false,
+      rel: 'noopener noreferrer',
     });
   });
 
@@ -262,6 +266,52 @@ describe('eventOutboundLink (events-pass2 WP4 item 5)', () => {
     expect(eventOutboundLink({ price: '$25', source_url: 'javascript:alert(1)' })).toBeNull();
     expect(
       eventOutboundLink({ price: '$25', source_url: 'https://www.ticketmaster.com/e/1', source_url_broken: true }),
+    ).toBeNull();
+  });
+});
+
+describe('Ticketmaster affiliate links (WP6)', () => {
+  const target = 'https://www.ticketmaster.com/some-show-waukee-iowa-10-12-2026/event/0600632DE1A4';
+  const redirect = `https://ticketmaster.evyy.net/c/6430290/264167/4272?u=${encodeURIComponent(target)}`;
+
+  it('decodes the redirect target', () => {
+    expect(affiliateTarget(redirect)).toBe(target);
+    expect(affiliateTarget(target)).toBeNull();
+    expect(affiliateTarget('https://ticketmaster.evyy.net/c/1/2/3?u=javascript%3Aalert(1)')).toBeNull();
+  });
+
+  it('reads Get tickets, marked sponsored, for affiliate_url', () => {
+    const link = eventOutboundLink({ price: '$35', source_url: target, affiliate_url: redirect });
+    expect(link).toEqual({
+      href: redirect,
+      label: 'Get tickets',
+      sellsTickets: true,
+      sponsored: true,
+      rel: 'sponsored noopener noreferrer',
+    });
+  });
+
+  it('prefers affiliate_url over a non-affiliate source_url', () => {
+    const link = eventOutboundLink({
+      price: 'Varies',
+      source_url: 'https://www.vibrantmusichall.com/shows',
+      affiliate_url: redirect,
+    });
+    expect(link?.href).toBe(redirect);
+    expect(link?.label).toBe('Event listing on ticketmaster.com');
+    expect(link?.sponsored).toBe(true);
+  });
+
+  it('treats an old row whose source_url is the redirect as an affiliate link', () => {
+    const link = eventOutboundLink({ price: '$35', source_url: redirect });
+    expect(link?.label).toBe('Get tickets');
+    expect(link?.sponsored).toBe(true);
+    expect(eventTicketUrl({ source_url: redirect })).toBe(target);
+  });
+
+  it('shows nothing when the checker flagged the link broken', () => {
+    expect(
+      eventOutboundLink({ price: '$35', source_url: target, affiliate_url: redirect, source_url_broken: true }),
     ).toBeNull();
   });
 });

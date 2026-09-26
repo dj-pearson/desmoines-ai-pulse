@@ -61,7 +61,10 @@ export const AFFILIATE_PARTNERS: AffiliatePartner[] = [
   },
 ];
 
-/** Returns only partners flagged as active */
+/**
+ * Returns only partners flagged as active. `isActive` above is the only
+ * switch: the admin page shows it read-only (plan WP6).
+ */
 export function getActiveAffiliatePartners(): AffiliatePartner[] {
   return AFFILIATE_PARTNERS.filter((p) => p.isActive);
 }

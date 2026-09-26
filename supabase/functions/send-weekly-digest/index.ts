@@ -4,11 +4,10 @@
 import { serve } from "https://deno.land/std@0.168.0/http/server.ts";
 import { createClient } from "https://esm.sh/@supabase/supabase-js@2";
 import { escapeHtml } from "../_shared/escapeHtml.ts";
-import { renderEmail } from "../_shared/emailLayout.ts";
-import { fetchWithTimeout } from "../_shared/fetchWithTimeout.ts";
+import { listUnsubscribeHeaders, renderEmail } from "../_shared/emailLayout.ts";
+import { sendEmail } from "../_shared/email.ts";
 import { requireAdminOrApiKey } from "../_shared/apiKeyAuth.ts";
 
-const RESEND_API_KEY = Deno.env.get("RESEND_API_KEY");
 const SUPABASE_URL = Deno.env.get("SUPABASE_URL")!;
 const SUPABASE_SERVICE_ROLE_KEY = Deno.env.get("SUPABASE_SERVICE_ROLE_KEY")!;
 const SITE_URL = "https://desmoinesinsider.com";
@@ -175,31 +174,23 @@ async function sendDigestEmail(recipient: Recipient, supabase: any) {
       },
     });
 
-    // Send email via Resend
-    const resendResponse = await fetchWithTimeout("https://api.resend.com/emails", {
-      method: "POST",
-      headers: {
-        "Content-Type": "application/json",
-        "Authorization": `Bearer ${RESEND_API_KEY}`,
-      },
-      body: JSON.stringify({
+    const sent = await sendEmail(
+      {
+        to: recipient.email,
         from: "Des Moines Insider <events@desmoinesinsider.com>",
-        to: [recipient.email],
-        subject: subject,
+        subject,
         html: rendered.html,
         text: rendered.text,
-        headers: rendered.listUnsubscribe
-          ? {
-              "List-Unsubscribe": rendered.listUnsubscribe,
-              "List-Unsubscribe-Post": rendered.listUnsubscribePost ?? "",
-            }
-          : undefined,
-      }),
-    });
+        category: "marketing",
+        template: "weekly_digest",
+        headers: listUnsubscribeHeaders(rendered),
+        userId: recipient.user_id,
+      },
+      { supabase },
+    );
 
-    if (!resendResponse.ok) {
-      const errorData = await resendResponse.text();
-      throw new Error(`Resend API error: ${errorData}`);
+    if (!sent.ok) {
+      throw new Error(`Digest not sent: ${sent.error}`);
     }
 
     // Log successful send

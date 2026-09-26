@@ -4671,6 +4671,7 @@ export type Database = {
       }
       events: {
         Row: {
+          affiliate_url: string | null
           ai_writeup: string | null
           archived_at: string | null
           category: string
@@ -4731,6 +4732,7 @@ export type Database = {
           writeup_prompt_used: string | null
         }
         Insert: {
+          affiliate_url?: string | null
           ai_writeup?: string | null
           archived_at?: string | null
           category?: string
@@ -4791,6 +4793,7 @@ export type Database = {
           writeup_prompt_used?: string | null
         }
         Update: {
+          affiliate_url?: string | null
           ai_writeup?: string | null
           archived_at?: string | null
           category?: string
@@ -13113,6 +13116,7 @@ export type Database = {
         Args: { delete_after_days?: number }
         Returns: Json
       }
+      attribute_referral: { Args: { p_code: string }; Returns: string }
       attractions_within_radius: {
         Args: {
           center_lat: number
@@ -13877,6 +13881,14 @@ export type Database = {
         }[]
       }
       get_level_from_xp: { Args: { xp: number }; Returns: number }
+      get_my_referral_stats: {
+        Args: never
+        Returns: {
+          referral_code: string
+          signed_up: number
+          subscribed: number
+        }[]
+      }
       get_next_optimal_posting_time: {
         Args: { base_time?: string }
         Returns: string

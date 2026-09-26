@@ -22,8 +22,19 @@ export interface GuestFavorite {
   savedAt: number;
 }
 
-/** Max items an anonymous visitor may save before the signup prompt. */
-export const GUEST_FAVORITE_CAP = 3;
+/**
+ * Max items an anonymous visitor may save before the signup prompt.
+ *
+ * Kept one below the free plan's favorites limit (subscription_plans.limits,
+ * 3 today). At 3 and 3, "create a free account to save more" led to an account
+ * that could save nothing more, and the tap that hit the wall - stashed for
+ * replay after sign-up - was refused by enforce_favorites_limit. At 2, the two
+ * guest saves migrate and the stashed third one lands. If the free limit
+ * changes, keep this below it.
+ *
+ * Guests who saved 3 under the old cap keep them; the cap only stops new adds.
+ */
+export const GUEST_FAVORITE_CAP = 2;
 
 const STORAGE_KEY = "dmi-guest-favorites-v1";
 
@@ -89,6 +100,27 @@ export function toggleGuestFavorite(
   const next = [...current, { type, id, savedAt: Date.now() }];
   write(next);
   return { action: "added", count: next.length };
+}
+
+const GUEST_TYPES: readonly GuestFavoriteType[] = [
+  "event",
+  "restaurant",
+  "attraction",
+  "hotel",
+  "playground",
+];
+
+/**
+ * The favorite a guest tapped at the cap, from the payload FavoriteButton
+ * stashes with stashPendingAction. Null for anything that is not one: the
+ * payload comes back out of storage, so its shape is not guaranteed.
+ */
+export function stashedFavorite(payload: unknown): GuestFavorite | null {
+  if (!payload || typeof payload !== "object") return null;
+  const { type, id } = payload as { type?: unknown; id?: unknown };
+  if (typeof id !== "string" || id.length === 0) return null;
+  if (!GUEST_TYPES.includes(type as GuestFavoriteType)) return null;
+  return { type: type as GuestFavoriteType, id, savedAt: Date.now() };
 }
 
 /** Clear all guest favorites (call after migrating them to a real account). */

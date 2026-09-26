@@ -34,16 +34,23 @@ import { getAIConfig, getAnthropicApiKey } from '../_shared/aiConfig.ts';
 import { sanitizePostgrestPattern } from '../_shared/validation.ts';
 import { runToolLoop, type ToolSchema, type RunToolLoopResult } from '../_shared/agentRuntime.ts';
 import { resolveEntitledTier } from '../_shared/entitlements.ts';
-import { recordProviderUsage } from '../_shared/providerUsage.ts';
+import { guardAi, type QuotaClient } from '../_shared/aiQuota.ts';
+import { clampConversation } from './conversation.ts';
 
 // ---------------------------------------------------------------------------
-// Tier-gated daily quotas — mirror web /trip-planner gating
+// Tier-gated daily quotas
+//
+// The quota that decides is ai_quota_limits (feature 'discover-chat'),
+// enforced atomically by consume_ai_quota through guardAi. These numbers only
+// fill usage.remaining when that check fails open and the legacy counter is
+// all there is. VIP was unlimited here; it is 200 a day now (WP1 of
+// docs/plans/NON_CORE_REVIEW_2026-09.md).
 // ---------------------------------------------------------------------------
 
 const DAILY_QUOTAS: Record<'free' | 'insider' | 'vip', number> = {
   free: 5,
   insider: 50,
-  vip: -1, // unlimited
+  vip: 200,
 };
 
 // ---------------------------------------------------------------------------
@@ -228,40 +235,30 @@ async function execTool(
 // past_due grace window (the old local version only counted status=active,
 // under-throttling trialing/grace users to the free quota).
 
-async function consumeQuota(
-  supabase: SupabaseLike,
-  userId: string,
-  tier: 'free' | 'insider' | 'vip',
-): Promise<{ allowed: boolean; remaining: number | 'unlimited' }> {
-  const limit = DAILY_QUOTAS[tier];
-  if (limit === -1) return { allowed: true, remaining: 'unlimited' };
-
-  const today = new Date().toISOString().slice(0, 10);
-  const { data: existing } = await supabase
-    .from('discover_chat_usage')
-    .select('count')
-    .eq('user_id', userId)
-    .eq('usage_date', today)
-    .maybeSingle();
-
-  const currentCount = (existing as { count?: number } | null)?.count ?? 0;
-  if (currentCount >= limit) {
-    return { allowed: false, remaining: 0 };
+/**
+ * Keep discover_chat_usage counting for one more release (CLAUDE.md
+ * deprecation flow). It no longer decides anything: this read-then-write let
+ * two concurrent requests both see N and both pass, which is why the gate
+ * moved to consume_ai_quota. Returns the new count, or null if the write
+ * failed. Retire it, and this table's writer, in the release after next.
+ */
+async function mirrorLegacyUsage(supabase: SupabaseLike, userId: string): Promise<number | null> {
+  try {
+    const today = new Date().toISOString().slice(0, 10);
+    const { data: existing } = await supabase
+      .from('discover_chat_usage')
+      .select('count')
+      .eq('user_id', userId)
+      .eq('usage_date', today)
+      .maybeSingle();
+    const next = ((existing as { count?: number } | null)?.count ?? 0) + 1;
+    const { error } = await supabase
+      .from('discover_chat_usage')
+      .upsert({ user_id: userId, usage_date: today, count: next }, { onConflict: 'user_id,usage_date' });
+    return error ? null : next;
+  } catch {
+    return null;
   }
-
-  // Upsert atomically — relies on UNIQUE(user_id, usage_date)
-  await supabase
-    .from('discover_chat_usage')
-    .upsert(
-      {
-        user_id: userId,
-        usage_date: today,
-        count: currentCount + 1,
-      },
-      { onConflict: 'user_id,usage_date' },
-    );
-
-  return { allowed: true, remaining: limit - (currentCount + 1) };
 }
 
 // ---------------------------------------------------------------------------
@@ -413,19 +410,23 @@ serve(async (req) => {
     );
   }
 
-  // Tier + per-day quota
+  // Tier + per-day quota, taken atomically by consume_ai_quota. The 429 body
+  // keeps error, tier and upgradeHint and adds code, limit and retryAfter; it
+  // is also the answer when the provider's daily budget or kill switch has
+  // stopped AI spend (code ai_budget_paused, upgradeHint null).
   const tier = await resolveEntitledTier(supabase, userId);
-  const quota = await consumeQuota(supabase, userId, tier);
-  if (!quota.allowed) {
-    return new Response(
-      JSON.stringify({
-        error: 'Daily Ask Pulse limit reached',
-        tier,
-        upgradeHint: tier === 'free' ? 'insider' : tier === 'insider' ? 'vip' : null,
-      }),
-      { status: 429, headers: { ...corsHeaders, 'Content-Type': 'application/json' } },
-    );
-  }
+  const quota = await guardAi(supabase as unknown as QuotaClient, req, {
+    feature: 'discover-chat',
+    provider: 'anthropic',
+    tier,
+    userId,
+    headers: corsHeaders,
+  });
+  if (!quota.ok) return quota.response;
+
+  const legacyCount = await mirrorLegacyUsage(supabase, userId);
+  const remaining: number | 'unlimited' = quota.remaining ??
+    (legacyCount !== null ? Math.max(0, DAILY_QUOTAS[tier] - legacyCount) : 'unlimited');
 
   // Resolve model from centralized config
   const aiConfig = await getAIConfig(
@@ -434,8 +435,10 @@ serve(async (req) => {
   );
   const model = aiConfig.default_model;
 
-  // Append a location hint as a system-level user message if we have one
-  const conversation: Array<{ role: string; content: unknown }> = messages.map((m) => ({
+  // Append a location hint as a system-level user message if we have one.
+  // The crisis check above saw the whole conversation; the model sees the
+  // clamped one.
+  const conversation: Array<{ role: string; content: unknown }> = clampConversation(messages).map((m) => ({
     role: m.role,
     content: m.content,
   }));
@@ -460,15 +463,14 @@ serve(async (req) => {
   // AOS-MANAGE-005: this function calls Claude without going through runAgent,
   // so nothing else books what it spends. Awaited rather than fired and
   // forgotten - Deno kills the isolate when the response resolves, and a
-  // detached insert would be dropped mid-flight most of the time.
+  // detached insert would be dropped mid-flight most of the time. settle()
+  // writes provider_usage and the ai_usage_daily subject and global rows.
   if (result.spend && result.spend.costUsd > 0) {
-    await recordProviderUsage(supabase, {
-      provider: 'anthropic',
+    await quota.settle({
       costUsd: result.spend.costUsd,
-      source: 'discover-chat',
       model,
       usage: result.spend.usage,
-      extra: { tier, outcome: 'error' in result ? 'error' : 'ok' },
+      extra: { outcome: 'error' in result ? 'error' : 'ok' },
     });
   }
 
@@ -484,7 +486,7 @@ serve(async (req) => {
     JSON.stringify({
       picks: result.picks,
       followUpSuggestions: result.followUpSuggestions,
-      usage: { remaining: quota.remaining, tier },
+      usage: { remaining, tier },
     }),
     { status: 200, headers: { ...corsHeaders, 'Content-Type': 'application/json' } },
   );

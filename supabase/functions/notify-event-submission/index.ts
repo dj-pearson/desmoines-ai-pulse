@@ -13,7 +13,7 @@ import { serve } from "https://deno.land/std@0.190.0/http/server.ts";
 import { createClient } from "https://esm.sh/@supabase/supabase-js@2.45.0";
 import { handleCors, getCorsHeaders, isOriginAllowed } from "../_shared/cors.ts";
 import { escapeHtml } from "../_shared/escapeHtml.ts";
-import { fetchWithTimeout } from "../_shared/fetchWithTimeout.ts";
+import { adminAlertEmail, sendEmail } from "../_shared/email.ts";
 import { checkRateLimit } from "../_shared/rateLimit.ts";
 import { isAdminUserId } from "../_shared/apiKeyAuth.ts";
 
@@ -216,10 +216,8 @@ serve(async (req) => {
       submitterAddress = owner?.user?.email ?? null;
     }
 
-    const resendApiKey = Deno.env.get("RESEND_API_KEY");
-    const sendgridApiKey = Deno.env.get("SENDGRID_API_KEY");
     const fromEmail = Deno.env.get("NOTIFICATION_FROM_EMAIL") || "noreply@desmoinesinsider.com";
-    const adminEmail = Deno.env.get("ADMIN_NOTIFICATION_EMAIL") || "admin@desmoinesinsider.com";
+    const adminEmail = adminAlertEmail() || "admin@desmoinesinsider.com";
     const siteUrl = Deno.env.get("VITE_SITE_URL") || "https://desmoinesinsider.com";
 
     let recipientEmail: string;
@@ -332,50 +330,20 @@ serve(async (req) => {
     // Send email
     let emailSent = false;
     if (recipientEmail) {
-      if (resendApiKey) {
-        try {
-          const res = await fetchWithTimeout("https://api.resend.com/emails", {
-            method: "POST",
-            headers: {
-              Authorization: `Bearer ${resendApiKey}`,
-              "Content-Type": "application/json",
-            },
-            body: JSON.stringify({
-              from: fromEmail,
-              to: [recipientEmail],
-              subject: emailSubject,
-              html: emailHtml,
-            }),
-          });
-          emailSent = res.ok;
-          if (!res.ok) {
-            console.error("Resend error:", await res.text());
-          }
-        } catch (err) {
-          console.error("Resend email failed:", err);
-        }
-      } else if (sendgridApiKey) {
-        try {
-          const res = await fetchWithTimeout("https://api.sendgrid.com/v3/mail/send", {
-            method: "POST",
-            headers: {
-              Authorization: `Bearer ${sendgridApiKey}`,
-              "Content-Type": "application/json",
-            },
-            body: JSON.stringify({
-              personalizations: [{ to: [{ email: recipientEmail }] }],
-              from: { email: fromEmail },
-              subject: emailSubject,
-              content: [{ type: "text/html", value: emailHtml }],
-            }),
-          });
-          emailSent = res.ok || res.status === 202;
-        } catch (err) {
-          console.error("SendGrid email failed:", err);
-        }
-      } else {
-        console.warn("No email provider configured (RESEND_API_KEY or SENDGRID_API_KEY)");
-      }
+      const sent = await sendEmail(
+        {
+          to: recipientEmail,
+          from: fromEmail,
+          subject: emailSubject,
+          html: emailHtml,
+          category: "transactional",
+          template: notificationType,
+          ref: { type: "event_submission", id: String(eventId) },
+        },
+        { supabase },
+      );
+      emailSent = sent.ok;
+      if (!sent.ok) console.error(`[notify-event-submission] ${notificationType} not sent: ${sent.error}`);
     }
 
     return new Response(

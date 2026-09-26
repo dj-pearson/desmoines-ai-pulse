@@ -4,6 +4,7 @@ import { useAuth } from "./useAuth";
 import { useToast } from "./use-toast";
 import { useGamification } from "./useGamification";
 import { useSubscription } from "./useSubscription";
+import { useSavedCount } from "./useSavedCount";
 import { isPlanLimitError, planLimitMessage } from "@/lib/planLimitError";
 
 export function useFavorites() {
@@ -84,6 +85,7 @@ export function useFavorites() {
     },
     onSettled: () => {
       queryClient.invalidateQueries({ queryKey: favoritesQueryKey });
+      queryClient.invalidateQueries({ queryKey: ["saved-count"] });
     },
   });
 
@@ -126,16 +128,24 @@ export function useFavorites() {
     },
     onSettled: () => {
       queryClient.invalidateQueries({ queryKey: favoritesQueryKey });
+      queryClient.invalidateQueries({ queryKey: ["saved-count"] });
     },
   });
 
+  // The server caps events and places together (enforce_favorites_limit
+  // counts user_event_interactions + content_favorites), so the client has to
+  // count the same way or "N left" is wrong for anyone with a saved place.
+  // Until the total loads, this hook's own list is a lower bound.
+  const savedCount = useSavedCount();
+  const totalSaved = Math.max(savedCount.count ?? 0, favoritedEvents.length);
+
   // Check if user can add more favorites
   const canAddFavorite = (): boolean => {
-    return canPerformAction("favorite", favoritedEvents.length);
+    return canPerformAction("favorite", totalSaved);
   };
 
   // Get remaining favorites quota
-  const remainingFavorites = getRemainingQuota("favorite", favoritedEvents.length);
+  const remainingFavorites = getRemainingQuota("favorite", totalSaved);
 
   // Toggle favorite
   const toggleFavorite = (eventId: string): { success: boolean; needsUpgrade: boolean } => {

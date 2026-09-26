@@ -155,6 +155,42 @@ const PENDING_MIGRATIONS = [
   // exists the read 42703s, which create-campaign-checkout logs and falls back
   // from to the email lookup - the behaviour that shipped before this.
   { table: 'profiles', column: 'stripe_customer_id', migration: '20260920000006' },
+  // Daily AI quotas and spend ceiling (NON_CORE_REVIEW_2026-09 WP1). guardAi
+  // fails open on PGRST202 with a warning, so the four AI endpoints behave as
+  // before in the pending window; AiSpendTile says the table is missing.
+  { rpc: 'consume_ai_quota', migration: '20261001000001' },
+  { rpc: 'settle_ai_usage', migration: '20261001000001' },
+  { table: 'ai_usage_daily', migration: '20261001000001' },
+  { table: 'ai_global_budget', migration: '20261001000001' },
+  // Admin audit writes with the actor taken from auth.uid() (non-core review
+  // WP5). src/lib/adminAudit.ts falls back to the direct insert on PGRST202,
+  // so no audit row is lost before this is applied.
+  { rpc: 'record_admin_audit', migration: '20261005000002' },
+  // Email log and suppression list (NON_CORE_REVIEW_2026-09 WP2). sendEmail
+  // treats a missing table as "not suppressed" / "not logged" and still sends,
+  // so mail keeps flowing in the pending window.
+  { table: 'email_suppressions', migration: '20261002000001' },
+  { table: 'email_log', migration: '20261002000001' },
+  // Notices the database writes for email (WP3). Only send-campaign-emails
+  // reads them, and its cron (20261003000007) is ordered after the columns.
+  { table: 'campaign_notifications', column: 'email_pending', migration: '20261003000003' },
+  { table: 'campaign_notifications', column: 'emailed_at', migration: '20261003000003' },
+  // What a checkout actually charged (NON_CORE_REVIEW WP6 item 3). Written by
+  // stripe-webhook and verify-campaign-payment in a separate best-effort UPDATE
+  // that logs PGRST204 until applied; AdminRefunds retries its list without
+  // amount_paid_cents on 42703.
+  { table: 'campaigns', column: 'amount_paid_cents', migration: '20261003000001' },
+  { table: 'campaigns', column: 'amount_discount_cents', migration: '20261003000001' },
+  { table: 'campaigns', column: 'promotion_code', migration: '20261003000001' },
+  { table: 'user_subscriptions', column: 'amount_paid_cents', migration: '20261003000001' },
+  { table: 'user_subscriptions', column: 'amount_discount_cents', migration: '20261003000001' },
+  { table: 'user_subscriptions', column: 'promotion_code', migration: '20261003000001' },
+  // Admin pause / resume / cancel (NON_CORE_REVIEW WP3). useAdminCampaigns
+  // reports PGRST202 as "not switched on yet" rather than failing silently.
+  { rpc: 'admin_set_campaign_status', migration: '20261003000005' },
+  // Checked sponsored-listing link (WP3, D12). linkSponsoredListing falls back
+  // to the direct insert on PGRST202, so /advertise works in the window.
+  { rpc: 'link_sponsored_listing', migration: '20261003000006' },
 ];
 
 const isPending = (table, column) =>

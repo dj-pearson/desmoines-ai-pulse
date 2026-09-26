@@ -1,8 +1,8 @@
 /**
  * WEB-LEGAL-012. profiles.communication_preferences is a SHARED JSONB bag and
  * this screen owns three of its keys. Two other writers keep their own -
- * useUserPreferences.ts writes taste_preferences, use-user-preferences.ts
- * writes ui_preferences - and the lifecycle classifier reads `marketing` and
+ * useUserPreferences.ts writes taste_preferences, and existing rows
+ * still carry ui_preferences from a since-deleted hook - and the lifecycle classifier reads `marketing` and
  * `email` out of it to derive messagingAllowed, which gates every nurture,
  * re-engagement, churn, milestone and outreach agent.
  *

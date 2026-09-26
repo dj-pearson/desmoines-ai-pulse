@@ -231,9 +231,10 @@ serve(async (req) => {
           notificationType,
           siteUrl: Deno.env.get("VITE_SITE_URL") || "https://desmoinesinsider.com",
         },
-        resendApiKey: Deno.env.get("RESEND_API_KEY") ?? undefined,
-        sendgridApiKey: Deno.env.get("SENDGRID_API_KEY") ?? undefined,
         fromEmail: Deno.env.get("NOTIFICATION_FROM_EMAIL") || "noreply@desmoinesinsider.com",
+        // Suppression list and email_log; the provider comes from the
+        // environment in _shared/email.ts.
+        supabase,
       });
     }
 

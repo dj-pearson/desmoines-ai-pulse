@@ -93,6 +93,10 @@ const SURFACES = [
   'src/lib/planBenefits.ts',
   // The site-wide "View Plans" band, on every page including /pricing.
   'src/components/Footer.tsx',
+  // Its "Subscription Features" list promised VIP priority support and early
+  // access after every other surface had dropped them. It renders from
+  // planBenefits.ts now; reading it here keeps a typed-out list from returning.
+  'src/pages/Terms.tsx',
 ];
 
 /**
@@ -124,6 +128,13 @@ const WITHDRAWN = [
   'BEST VALUE',
   'Best Value',
 ];
+
+Deno.test('the Terms page lists plan features from planBenefits.ts', async () => {
+  const terms = await read('src/pages/Terms.tsx');
+  assert(/benefitsFor\(/.test(terms), 'Terms.tsx must render plan features with benefitsFor()');
+  assert(/displayPrice\(/.test(terms), 'Terms.tsx must show prices from displayPrice()');
+  assertFalse(/\$\d+\.\d\d\/month/.test(terms), 'Terms.tsx types out a price instead of reading the plan row');
+});
 
 Deno.test('no premium surface sells anything that was withdrawn', async () => {
   for (const file of SURFACES) {
@@ -194,7 +205,34 @@ const VIP_ENFORCED: Record<string, [file: string, proof: RegExp, why: string][]>
     ],
   ],
   unlimited_trip_plans: [
-    ['supabase/functions/generate-itinerary/index.ts', /vip: -1,/, 'generate-itinerary gives vip no cap'],
+    ['supabase/functions/generate-itinerary/index.ts', /vip: -1,/, 'generate-itinerary gives vip no monthly cap'],
+    [
+      'supabase/migrations/20261001000001_ai_usage_quotas.sql',
+      /\('vip', 'itinerary', 20\)/,
+      'consume_ai_quota caps vip at 20 plans a day, as the line says',
+    ],
+  ],
+  // NON_CORE_REVIEW_2026-09 WP7: the two VIP benefits built when the owner chose
+  // to give the tier real value rather than cut or retire it.
+  ask_pulse_daily: [
+    [
+      'supabase/migrations/20261001000001_ai_usage_quotas.sql',
+      /\('insider', 'discover-chat', 50\)[\s\S]*\('vip', 'discover-chat', 200\)/,
+      'the daily discover-chat caps are insider 50 and vip 200',
+    ],
+    [
+      'supabase/functions/discover-chat/index.ts',
+      /feature: ['"]discover-chat['"]/,
+      'discover-chat charges each request to that quota',
+    ],
+  ],
+  support_queue_first: [
+    ['supabase/functions/_shared/supportPriority.ts', /normal: "high"/, 'a vip ticket moves up one priority step'],
+    [
+      'supabase/functions/_shared/agents/ticket-classifier.ts',
+      /priorityForTier\(derivePriority\(/,
+      'the scheduled classifier applies it',
+    ],
   ],
 };
 

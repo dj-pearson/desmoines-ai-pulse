@@ -25,7 +25,7 @@ const DEFAULT_SITE_URL = "https://desmoinesinsider.com";
  * why tsconfig.scripts.json could not type-check it. Under Deno nothing here
  * changes: Deno.env exists, and env access still needs --allow-env.
  */
-function envVar(name: string): string | undefined {
+export function envVar(name: string): string | undefined {
   return (globalThis as { Deno?: { env?: { get(key: string): string | undefined } } })
     .Deno?.env?.get(name);
 }

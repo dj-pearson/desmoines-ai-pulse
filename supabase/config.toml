@@ -363,3 +363,57 @@ verify_jwt = false
 # draft from real stats + the price list. Auth via requireAdminOrApiKey.
 [functions.generate-proposal]
 verify_jwt = false
+
+# WP2 email: RFC 8058 one-click unsubscribe target named in every marketing
+# email's List-Unsubscribe header. A mailbox provider's POST carries no bearer;
+# the 48-hex unsubscribe token in the URL is the credential, as it is for the
+# /unsubscribe page. Uses the anon key and one anon-granted RPC, nothing else.
+[functions.email-unsubscribe]
+verify_jwt = false
+
+# WP2 email: SES bounce / complaint / delivery events from SNS. SNS sends no
+# bearer; every message's SNS signature is verified and the topic must match
+# SES_SNS_TOPIC_ARN, or it is refused (ses-events/index.ts).
+[functions.ses-events]
+verify_jwt = false
+
+# ---------------------------------------------------------------------------
+# Supabase Auth mail through Amazon SES (WP2). Applies to `supabase start`, and
+# to the hosted project only if someone runs `supabase config push`; the
+# hosted project's SMTP settings are otherwise set in the dashboard (Auth >
+# SMTP), see docs/plans/NON_CORE_REVIEW_2026-09.md "Owner steps".
+#
+# enabled = false keeps local development on the built-in mail catcher, so a
+# local sign-up never sends real mail. Set it to true with these in the env:
+#   SES_SMTP_HOST      email-smtp.<AWS_SES_REGION>.amazonaws.com
+#                      (config.toml only substitutes a whole value, so the
+#                      region cannot be spliced into the host string here)
+#   SES_SMTP_USER      SES SMTP username (IAM SMTP credentials, not the API key)
+#   SES_SMTP_PASSWORD  SES SMTP password
+# site_url / additional_redirect_urls are deliberately not set here: the
+# hosted redirect list may hold callback URLs this file does not know about
+# (mobile apps, preview deploys), and a push from this file would replace it.
+[auth.email.smtp]
+enabled = false
+host = "env(SES_SMTP_HOST)"
+port = 587
+user = "env(SES_SMTP_USER)"
+pass = "env(SES_SMTP_PASSWORD)"
+admin_email = "hello@desmoinesinsider.com"
+sender_name = "Des Moines Insider"
+
+[auth.email.template.confirmation]
+subject = "Confirm your Des Moines Insider account"
+content_path = "./supabase/templates/confirmation.html"
+
+[auth.email.template.recovery]
+subject = "Reset your Des Moines Insider password"
+content_path = "./supabase/templates/recovery.html"
+
+[auth.email.template.email_change]
+subject = "Confirm your new email for Des Moines Insider"
+content_path = "./supabase/templates/email_change.html"
+
+[auth.email.template.magic_link]
+subject = "Your Des Moines Insider sign-in link"
+content_path = "./supabase/templates/magic_link.html"

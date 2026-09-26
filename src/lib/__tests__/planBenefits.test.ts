@@ -76,7 +76,7 @@ describe('benefitsFor', () => {
   it('lists the server quota once the planner runs', () => {
     planner.available = true;
     expect(texts('insider')).toContain('AI trip plans (5 a month)');
-    expect(texts('vip')).toContain('Unlimited AI trip plans');
+    expect(texts('vip')).toContain('AI trip plans with no monthly cap (up to 20 a day)');
     expect(TRIP_PLANNER_MONTHLY_QUOTA).toEqual({ insider: 5, vip: -1 });
     const plannerLine = benefitsFor('insider').find((b) => b.key === 'trip_planner');
     expect(plannerLine?.href).toBe('/trip-planner');
@@ -100,6 +100,8 @@ describe('benefitsFor', () => {
     expect(benefitsFor('vip').map((b) => b.key)).toEqual([
       'everything_in_insider',
       'unlimited_saved_searches',
+      'ask_pulse_daily',
+      'support_queue_first',
     ]);
     const all = (['free', 'insider', 'vip'] as const).flatMap((p) => texts(p)).join('\n');
     for (const gone of [/early access/i, /priority support/i, /concierge/i, /VIP perks/i, /best value/i]) {

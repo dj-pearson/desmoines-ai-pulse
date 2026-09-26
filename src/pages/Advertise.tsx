@@ -16,11 +16,10 @@ import { PlatformMetrics } from "@/components/advertising/PlatformMetrics";
 import { PlacementRow } from "@/components/advertising/PlacementRow";
 import { AdvertiseSummaryBar } from "@/components/advertising/AdvertiseSummaryBar";
 import type { SummaryQuoteState } from "@/components/advertising/AdvertiseSummaryBar";
-import { useCampaigns, useRateCard, lowestDailyRate } from "@/hooks/useCampaigns";
+import { useCampaigns, useRateCard, lowestDailyRate, linkSponsoredListing } from "@/hooks/useCampaigns";
 import { useCampaignQuote } from "@/hooks/useCampaignQuote";
 import { useToast } from "@/hooks/use-toast";
 import { useAuth } from "@/hooks/useAuth";
-import { supabase } from "@/integrations/supabase/client";
 import { cn } from "@/lib/utils";
 import { handleError } from "@/lib/errorHandler";
 import { PLACEMENT_SPECS } from "@/lib/placementSpecs";
@@ -305,7 +304,7 @@ export default function Advertise() {
       // The draft is already saved; bring the whole query string back so a
       // deep-linked listing survives the trip too.
       const back = `${location.pathname}${location.search}`;
-      navigate(`/auth?redirect=${encodeURIComponent(back)}`);
+      navigate(`/auth?mode=signup&redirect=${encodeURIComponent(back)}`);
       return;
     }
 
@@ -364,11 +363,10 @@ export default function Advertise() {
       }
 
       if (hasSponsoredListing && linkedListing) {
-        const { error: linkError } = await supabase.from("sponsored_listing_links").insert({
-          campaign_id: campaignId,
-          listing_type: linkedListing.type,
-          listing_id: linkedListing.id,
-        });
+        // Through link_sponsored_listing (draft only, one per placement,
+        // listing must exist); linkSponsoredListing falls back to the old
+        // insert only while that RPC is not deployed.
+        const { error: linkError } = await linkSponsoredListing(campaignId, linkedListing.type, linkedListing.id);
         if (linkError) {
           // A paid sponsored campaign with no link never activates, so stop
           // here and take the draft back out.

@@ -139,3 +139,42 @@ Deno.test('the profile page can now edit what signup promised', async () => {
   const manager = await read('src/components/PreferencesManager.tsx');
   assert(/communication_preferences/.test(manager));
 });
+
+/**
+ * The tests above pin 20260902000011, but Postgres runs whichever migration
+ * defined handle_new_user last. A later CREATE OR REPLACE that dropped the
+ * consent call or the error handler would pass everything above. This reads
+ * the newest definition and checks what every version has to keep.
+ */
+Deno.test('the newest handle_new_user keeps what every version must', async () => {
+  const dir = new URL('supabase/migrations/', REPO);
+  const files: string[] = [];
+  for await (const entry of Deno.readDir(dir)) {
+    if (entry.isFile && entry.name.endsWith('.sql')) files.push(entry.name);
+  }
+  files.sort();
+  let latest: { file: string; body: string } | null = null;
+  for (const file of files) {
+    const sql = await read(`supabase/migrations/${file}`);
+    const fn = sql.match(/CREATE OR REPLACE FUNCTION public\.handle_new_user\(\)[\s\S]*?\n\$\$;/);
+    if (fn) latest = { file, body: fn[0] };
+  }
+  assert(latest, 'no migration defines handle_new_user');
+  const { file, body } = latest;
+
+  assert(/PERFORM public\.record_signup_consent\(NEW\.id, meta\);/.test(body), `${file} dropped the consent write`);
+  assert(
+    /EXCEPTION WHEN OTHERS THEN\s*\n\s*RAISE WARNING[^\n]*\n\s*RETURN NEW;\s*\nEND;\s*\n\$\$;$/.test(body),
+    `${file}: the outer handler must still warn and return NEW`,
+  );
+  for (const field of ["'phone'", "'location'", "'interests'", "'communication_preferences'"]) {
+    assert(body.includes(field), `${file} no longer carries ${field} from the metadata`);
+  }
+  // NON_CORE_REVIEW_2026-09 WP4: Google sign-ups send full_name / name, not
+  // first_name, and the digest preference is seeded from marketing consent.
+  assert(/'full_name'/.test(body) && /'name'/.test(body), `${file} must map OAuth full_name / name`);
+  assert(
+    /INSERT INTO public\.user_email_preferences[\s\S]*'email_marketing_consent'[\s\S]*ON CONFLICT \(user_id\) DO NOTHING/.test(body),
+    `${file} must seed user_email_preferences from marketing consent without overwriting a row`,
+  );
+});

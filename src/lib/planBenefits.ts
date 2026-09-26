@@ -36,6 +36,17 @@ export interface Benefit {
 export const TRIP_PLANNER_MONTHLY_QUOTA = { insider: 5, vip: -1 } as const;
 
 /**
+ * Daily AI caps per tier. Mirror the ai_quota_limits seed in
+ * supabase/migrations/20261001000001, which consume_ai_quota enforces; the
+ * truthfulness test fails if they drift. "ask_pulse" is discover-chat, the Ask
+ * Pulse assistant in the iOS and Android apps.
+ */
+export const AI_DAILY_QUOTA = {
+  ask_pulse: { insider: 50, vip: 200 },
+  trip_plans: { insider: 3, vip: 20 },
+} as const;
+
+/**
  * Shown only while the subscription_plans rows are loading, so the first paint
  * has a price. Matches the seeded rows (20251126000000). Display only.
  */
@@ -93,9 +104,14 @@ const INSIDER_BENEFITS: PlanLine[] = [
   },
   { key: "write_reviews", text: () => "Write reviews and ratings" },
   { key: "ad_free", text: () => "Ad-free browsing" },
-  // Kept verbatim pending Search plan D2 (docs/page-plans/search.md). Not this
-  // plan's call; Search WP4 Stage B removes or keeps this line.
-  { key: "advanced_filters", text: () => "Advanced search filters" },
+  // Kept verbatim pending Search plan D2 (docs/page-plans/search.md). Linked
+  // from /search since NON_CORE_REVIEW_2026-09 WP4; before that nothing on the
+  // site led to /search/advanced, so the benefit was unreachable.
+  {
+    key: "advanced_filters",
+    href: "/search/advanced",
+    text: () => "Advanced search filters",
+  },
   {
     key: "trip_planner",
     href: "/trip-planner",
@@ -115,12 +131,22 @@ const VIP_BENEFITS: PlanLine[] = [
     key: "unlimited_trip_plans",
     href: "/trip-planner",
     needsPlanner: true,
-    text: () => quotaLine(TRIP_PLANNER_MONTHLY_QUOTA.vip),
+    text: () => quotaLine(TRIP_PLANNER_MONTHLY_QUOTA.vip, AI_DAILY_QUOTA.trip_plans.vip),
+  },
+  {
+    key: "ask_pulse_daily",
+    text: () =>
+      `Ask Pulse in the app: ${AI_DAILY_QUOTA.ask_pulse.vip} questions a day (Insider: ${AI_DAILY_QUOTA.ask_pulse.insider})`,
+  },
+  {
+    key: "support_queue_first",
+    text: () => "Your support requests are answered ahead of the standard queue",
   },
 ];
 
-function quotaLine(quota: number): string {
-  return quota === -1 ? "Unlimited AI trip plans" : `AI trip plans (${quota} a month)`;
+function quotaLine(monthly: number, daily?: number): string {
+  if (monthly === -1) return `AI trip plans with no monthly cap (up to ${daily} a day)`;
+  return `AI trip plans (${monthly} a month)`;
 }
 
 const LINES: Record<PlanName, PlanLine[]> = {
