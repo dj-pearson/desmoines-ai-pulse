@@ -123,12 +123,42 @@ an action only the owner can take.
 
 ### WP5 - Admin
 
-- [ ] `isAdminUserId` and `assign-role` read all `user_roles` rows
-- [ ] `assign-role` refuses to change a role at or above the caller's
-- [ ] `security_audit_logs` inserts only via service role (after moving browser writers to an RPC)
-- [ ] `newsletter_subscribers` admin policies via `is_admin()`
-- [ ] Remove fake metrics and dead buttons from System Controls
-- [ ] User list reads `user_roles`
+- [x] `isAdminUserId` and `assign-role` read all `user_roles` rows (`_shared/roles.ts`, Deno test incl. the two-row user)
+- [x] `assign-role` refuses to change a role at or above the caller's; `validate_role_assignment` ranks the assigner by strongest row and checks `OLD.role` (`20261005000001`)
+- [x] `record_admin_audit` RPC, actor from `auth.uid()` (`20261005000002`); newsletter, event submissions, `useAuditLog`, `useSecurityAudit` write through `src/lib/adminAudit.ts`
+- [ ] **Next release:** drop the two `WITH CHECK (true)` INSERT policies on `security_audit_logs` (see below)
+- [x] `newsletter_subscribers` admin SELECT/UPDATE policies via `is_admin()` (`20261005000003`); the manager reports 0-row updates
+- [x] System Controls: random metrics, restart/CDN/backup/optimize buttons and localStorage-only settings removed; Application Settings tab removed
+- [x] User list reads `user_roles` (strongest per user), 50 per page; root_admin now sees root_admin options
+- [x] Analytics: CRM tab hidden (its `crm_contacts`/`crm_deals`/`crm_tasks`/`crm_segments` tables don't exist); `/admin/crm` unchanged
+- [owner] Apply `20261005000001-3`
+
+**Next-release tightening for `security_audit_logs`.** Not shipped with the
+RPC, because dropping a policy is a tightening and the writers move in this
+release. Once `20261005000002` is live and this release's web build has
+replaced the old one:
+
+```sql
+DROP POLICY IF EXISTS "System can insert security audit logs" ON public.security_audit_logs;
+DROP POLICY IF EXISTS "Service role can insert audit logs" ON public.security_audit_logs;
+```
+
+Edge functions write with the service role, which bypasses RLS, so they are
+unaffected. Before shipping it, remove the PGRST202 fallback insert in
+`src/lib/adminAudit.ts` and check what still inserts from the browser:
+`src/lib/security/middleware.ts` `logSecurityEvent` writes for any user (and
+has never stored a row: it sends severity `'info'`, which the CHECK refuses),
+so it loses nothing, but it should be deleted or moved server-side in the same
+change. Also worth doing then: revoke `EXECUTE` on
+`optimize_database_performance()` from `PUBLIC`. It is SECURITY DEFINER with
+no caller check; it fails today only because it runs `VACUUM` inside a
+function.
+
+The `security_audit_logs_event_type_check` constraint now includes
+`role_assignment`. A migration from another package that redefines it has to
+keep that value. `delete-user-account` still writes `account_deletion`
+through `writeAuditLog`, which the constraint refuses, so that audit row is
+never stored.
 
 ### WP6 - Promotions, affiliates, referrals
 

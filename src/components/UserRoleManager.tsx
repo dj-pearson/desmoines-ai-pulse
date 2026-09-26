@@ -1,36 +1,42 @@
-import { useState, useEffect } from "react";
-import { useUserRole, UserRole } from "@/hooks/useUserRole";
+import { useState, useEffect, useCallback } from "react";
+import { useAuthState } from "@/contexts/AuthContext";
+import { useUserRole, UserRole, ManagedUser, USERS_PAGE_SIZE } from "@/hooks/useUserRole";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { Skeleton } from "@/components/ui/skeleton";
 import { useToast } from "@/hooks/use-toast";
-import { Shield, Crown, UserCheck, AlertTriangle } from "lucide-react";
+import { Shield, Crown, UserCheck, AlertTriangle, ChevronLeft, ChevronRight } from "lucide-react";
 import { SpriteIcon } from "@/components/ui/SpriteIcon";
 
-interface UserProfile {
-  user_id: string;
-  first_name: string | null;
-  last_name: string | null;
-  email: string | null;
-  user_role: UserRole;
-  created_at: string;
-}
-
 export default function UserRoleManager() {
-  const { isRootAdmin, canManageUsers, getAllUsers, assignRole } = useUserRole();
+  // The signed-in user has to be passed in: useUserRole() with no user
+  // resolves 'user', so a root_admin was offered only the moderator options.
+  const { user: currentUser } = useAuthState();
+  const {
+    isRootAdmin,
+    canManageUsers,
+    getAllUsers,
+    assignRole,
+    isLoading: roleLoading,
+  } = useUserRole(currentUser);
   const { toast } = useToast();
-  const [users, setUsers] = useState<UserProfile[]>([]);
+  const [users, setUsers] = useState<ManagedUser[]>([]);
+  const [page, setPage] = useState(0);
+  const [total, setTotal] = useState(0);
   const [isLoading, setIsLoading] = useState(true);
   const [isUpdating, setIsUpdating] = useState<string | null>(null);
+  const mayManage = !roleLoading && canManageUsers();
+  const totalPages = Math.max(1, Math.ceil(total / USERS_PAGE_SIZE));
 
-  const fetchUsers = async () => {
+  const fetchUsers = useCallback(async () => {
     try {
       setIsLoading(true);
-      const userData = await getAllUsers();
-      setUsers(userData as UserProfile[]);
-    } catch (error) {
+      const result = await getAllUsers(page);
+      setUsers(result.users);
+      setTotal(result.total);
+    } catch {
       toast({
         title: "Error",
         description: "Failed to fetch users",
@@ -39,17 +45,18 @@ export default function UserRoleManager() {
     } finally {
       setIsLoading(false);
     }
-  };
+    // getAllUsers is recreated every render; page is the only real input.
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [page]);
 
   const handleRoleChange = async (userId: string, newRole: UserRole) => {
     try {
       setIsUpdating(userId);
       await assignRole(userId, newRole);
       
-      // Update local state
-      setUsers(prev => prev.map(user => 
-        user.user_id === userId 
-          ? { ...user, user_role: newRole }
+      setUsers(prev => prev.map(user =>
+        user.user_id === userId
+          ? { ...user, role: newRole }
           : user
       ));
 
@@ -58,9 +65,10 @@ export default function UserRoleManager() {
         description: `User role has been updated to ${newRole}`,
       });
     } catch (error) {
+      // assign-role says why it refused (e.g. an admin changing an admin).
       toast({
-        title: "Error",
-        description: "Failed to update user role",
+        title: "Role not changed",
+        description: error instanceof Error ? error.message : "Failed to update user role",
         variant: "destructive",
       });
     } finally {
@@ -105,13 +113,15 @@ export default function UserRoleManager() {
     return ['user', 'moderator'];
   };
 
+  // canManageUsers is a function, so `if (canManageUsers)` was always true and,
+  // as an effect dependency, changed every render and refetched in a loop.
   useEffect(() => {
-    if (canManageUsers) {
+    if (mayManage) {
       fetchUsers();
     }
-  }, [canManageUsers]);
+  }, [mayManage, fetchUsers]);
 
-  if (!canManageUsers) {
+  if (!roleLoading && !mayManage) {
     return (
       <Card className="p-6">
         <div className="text-center">
@@ -172,15 +182,15 @@ export default function UserRoleManager() {
             <div key={user.user_id} className="flex items-center justify-between p-4 border rounded-lg">
               <div className="flex items-center gap-3">
                 <div className="h-10 w-10 bg-primary/10 rounded-full flex items-center justify-center">
-                  {getRoleIcon(user.user_role)}
+                  {getRoleIcon(user.role)}
                 </div>
                 <div>
                   <div className="flex items-center gap-2">
                     <span className="font-medium">
                       {user.first_name} {user.last_name}
                     </span>
-                    <Badge variant={getRoleBadgeVariant(user.user_role)}>
-                      {user.user_role.replace('_', ' ')}
+                    <Badge variant={getRoleBadgeVariant(user.role)}>
+                      {user.role.replace('_', ' ')}
                     </Badge>
                   </div>
                   <p className="text-sm text-neutral-500">{user.email}</p>
@@ -189,15 +199,15 @@ export default function UserRoleManager() {
 
               <div className="flex items-center gap-2">
                 <Select
-                  value={user.user_role}
+                  value={user.role}
                   onValueChange={(value: UserRole) => handleRoleChange(user.user_id, value)}
-                  disabled={isUpdating === user.user_id || getAvailableRoles(user.user_role).length === 1}
+                  disabled={isUpdating === user.user_id || getAvailableRoles(user.role).length === 1}
                 >
                   <SelectTrigger className="w-32">
                     <SelectValue />
                   </SelectTrigger>
                   <SelectContent>
-                    {getAvailableRoles(user.user_role).map((role) => (
+                    {getAvailableRoles(user.role).map((role) => (
                       <SelectItem key={role} value={role}>
                         <div className="flex items-center gap-2">
                           {getRoleIcon(role)}
@@ -214,6 +224,34 @@ export default function UserRoleManager() {
               </div>
             </div>
           ))}
+
+          {total > USERS_PAGE_SIZE && (
+            <div className="flex items-center justify-between pt-2">
+              <p className="text-sm text-muted-foreground">
+                Page {page + 1} of {totalPages} ({total} users)
+              </p>
+              <div className="flex gap-2">
+                <Button
+                  variant="outline"
+                  size="sm"
+                  onClick={() => setPage((p) => Math.max(0, p - 1))}
+                  disabled={page === 0 || isLoading}
+                >
+                  <ChevronLeft className="h-4 w-4" />
+                  Previous
+                </Button>
+                <Button
+                  variant="outline"
+                  size="sm"
+                  onClick={() => setPage((p) => Math.min(totalPages - 1, p + 1))}
+                  disabled={page >= totalPages - 1 || isLoading}
+                >
+                  Next
+                  <ChevronRight className="h-4 w-4" />
+                </Button>
+              </div>
+            </div>
+          )}
 
           {users.length === 0 && (
             <div className="text-center py-8">

@@ -49,6 +49,7 @@ import {
 import { useDebounce } from "@/hooks/useDebounce";
 import { supabase } from "@/integrations/supabase/client";
 import type { Database } from "@/integrations/supabase/types";
+import { recordAdminAudit } from "@/lib/adminAudit";
 import { handleError } from "@/lib/errorHandler";
 import { cn } from "@/lib/utils";
 import { toast } from "sonner";
@@ -240,31 +241,41 @@ export default function NewsletterSubscribersManager() {
       } else if (next === "active") {
         patch.unsubscribed_at = null;
       }
-      const { error } = await supabase
+      // .select("id") returns the rows the update actually touched. RLS that
+      // denies an UPDATE does not error, it matches nothing, so without this
+      // a refused change was reported as done.
+      const { data: updated, error } = await supabase
         .from("newsletter_subscribers")
         .update(patch)
-        .in("id", ids);
+        .in("id", ids)
+        .select("id");
       if (error) throw error;
+      const changed = (updated ?? []).map((r) => r.id);
 
-      // Audit trail
-      const { data: user } = await supabase.auth.getUser();
-      await supabase
-        .from("security_audit_logs")
-        .insert(
-          ids.map((id) => ({
-            event_type: "admin_action",
-            identifier: user.user?.email ?? "admin",
-            severity: "low",
-            action: `newsletter:${next}`,
-            resource: `newsletter_subscribers:${id}`,
-            user_id: user.user?.id ?? null,
-            details: { count: ids.length },
-          })),
+      if (changed.length === 0) {
+        toast.error(
+          "No subscribers were updated. Your account may not have permission to change them.",
         );
+        setBulkUnsub(false);
+        return;
+      }
 
-      toast.success(
-        `${ids.length} subscriber${ids.length === 1 ? "" : "s"} → ${next}`,
-      );
+      // One row per action, not per subscriber: the ids are in details.
+      await recordAdminAudit({
+        action: `newsletter:${next}`,
+        resource: "newsletter_subscribers",
+        details: { ids: changed, count: changed.length, requested: ids.length },
+      });
+
+      if (changed.length < ids.length) {
+        toast.warning(
+          `${changed.length} of ${ids.length} subscribers set to ${next}. The rest were not changed.`,
+        );
+      } else {
+        toast.success(
+          `${changed.length} subscriber${changed.length === 1 ? "" : "s"} set to ${next}`,
+        );
+      }
       setSelected(new Set());
       setBulkUnsub(false);
       await load();

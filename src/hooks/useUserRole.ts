@@ -1,6 +1,7 @@
 import { useState, useEffect, useCallback } from "react";
 import { supabase } from "@/integrations/supabase/client";
 import { createLogger } from "@/lib/logger";
+import { highestRole, isUserRole } from "@/lib/roles";
 import { User } from "@supabase/supabase-js";
 
 const logger = createLogger('useUserRole');
@@ -16,6 +17,19 @@ export interface UserRoleData {
   created_at: string;
   updated_at: string;
 }
+
+/** One row of the admin user list, with the role the user actually holds. */
+export interface ManagedUser {
+  user_id: string;
+  first_name: string | null;
+  last_name: string | null;
+  email: string | null;
+  created_at: string;
+  /** Strongest user_roles row; profiles.user_role only when there are none. */
+  role: UserRole;
+}
+
+export const USERS_PAGE_SIZE = 50;
 
 interface RoleState {
   userRole: UserRole;
@@ -52,22 +66,19 @@ export function useUserRole(user?: User | null) {
       try {
         logger.debug('fetchUserRole', 'checking for user ID', { userId: user.id });
 
-        // Check user_roles table first (authoritative source)
-        const { data: roleData, error: roleError } = await supabase
+        // Every user_roles row, ranked (src/lib/roles.ts). The newest row is
+        // not the role: an admin later given a moderator row read as moderator.
+        const { data: roleRows, error: roleError } = await supabase
           .from("user_roles")
           .select("role")
-          .eq("user_id", user.id)
-          .order("created_at", { ascending: false })
-          .limit(1)
-          .maybeSingle();
+          .eq("user_id", user.id);
 
-        logger.debug('fetchUserRole', 'user_roles query result', { roleData, roleError });
+        logger.debug('fetchUserRole', 'user_roles query result', { roleRows, roleError });
 
-        if (!roleError && roleData?.role) {
-          logger.debug('fetchUserRole', 'Found role in user_roles', { role: roleData.role });
+        if (!roleError && roleRows && roleRows.length > 0) {
           if (isMounted) {
             setState({
-              userRole: roleData.role as UserRole,
+              userRole: highestRole(roleRows),
               isLoading: false,
               error: null,
             });
@@ -146,25 +157,69 @@ export function useUserRole(user?: User | null) {
     }
   };
 
-  const getAllUsers = async () => {
+  /**
+   * One page of users with the role each actually holds.
+   *
+   * This read profiles.user_role, which is the legacy fallback, not the
+   * authoritative column: a user granted a role through assign-role (which
+   * writes user_roles) still showed as 'user', and changing the dropdown from
+   * that wrong starting point was how an admin could be "demoted" without
+   * anyone meaning to. It also loaded every profile in one request.
+   */
+  const getAllUsers = async (
+    page = 0,
+  ): Promise<{ users: ManagedUser[]; total: number }> => {
     try {
-      const { data, error } = await supabase
+      const from = page * USERS_PAGE_SIZE;
+      const { data: profiles, error, count } = await supabase
         .from("profiles")
-        .select(`
-          user_id,
-          first_name,
-          last_name,
-          email,
-          user_role,
-          created_at
-        `)
-        .order("created_at", { ascending: false });
+        .select("user_id, first_name, last_name, email, user_role, created_at", {
+          count: "exact",
+        })
+        .order("created_at", { ascending: false })
+        .range(from, from + USERS_PAGE_SIZE - 1);
 
       if (error) throw error;
+      const rows = profiles ?? [];
+      const ids = rows.map((p) => p.user_id).filter((id): id is string => !!id);
 
-      return data || [];
+      const rolesByUser = new Map<string, { role: unknown }[]>();
+      if (ids.length > 0) {
+        const { data: roleRows, error: roleError } = await supabase
+          .from("user_roles")
+          .select("user_id, role")
+          .in("user_id", ids);
+        // A failed read must not show everyone as 'user': the dropdown would
+        // then offer an admin the wrong starting point for every row.
+        if (roleError) throw roleError;
+        for (const r of roleRows ?? []) {
+          const list = rolesByUser.get(r.user_id) ?? [];
+          list.push({ role: r.role });
+          rolesByUser.set(r.user_id, list);
+        }
+      }
+
+      const users: ManagedUser[] = rows.map((p) => {
+        const grants = rolesByUser.get(p.user_id);
+        const role: UserRole =
+          grants && grants.length > 0
+            ? highestRole(grants)
+            : isUserRole(p.user_role)
+              ? p.user_role
+              : "user";
+        return {
+          user_id: p.user_id,
+          first_name: p.first_name,
+          last_name: p.last_name,
+          email: p.email,
+          created_at: p.created_at,
+          role,
+        };
+      });
+
+      return { users, total: count ?? users.length };
     } catch (error) {
-      logger.error('getAllUsers', 'Error fetching all users', { error });
+      logger.error('getAllUsers', 'Error fetching users', { error });
       throw error;
     }
   };

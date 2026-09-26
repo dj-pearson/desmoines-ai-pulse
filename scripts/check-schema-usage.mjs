@@ -162,6 +162,10 @@ const PENDING_MIGRATIONS = [
   { rpc: 'settle_ai_usage', migration: '20261001000001' },
   { table: 'ai_usage_daily', migration: '20261001000001' },
   { table: 'ai_global_budget', migration: '20261001000001' },
+  // Admin audit writes with the actor taken from auth.uid() (non-core review
+  // WP5). src/lib/adminAudit.ts falls back to the direct insert on PGRST202,
+  // so no audit row is lost before this is applied.
+  { rpc: 'record_admin_audit', migration: '20261005000002' },
 ];
 
 const isPending = (table, column) =>
