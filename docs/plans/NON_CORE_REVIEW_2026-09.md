@@ -208,4 +208,4 @@ These need access this session does not have.
    `send-campaign-emails`, `ses-events`, `email-unsubscribe`. Changed: see the
    PR file list.
 4. **Migrations.** `supabase db push` after `npm run check-schema:probe`.
-5. **VIP decision.** Build a VIP benefit, cut the price, or withdraw the tier.
+5. **VIP price check.** Decided 2026-09-26: build benefits (WP7, done). Confirm $12.99 still fits what VIP now adds.
