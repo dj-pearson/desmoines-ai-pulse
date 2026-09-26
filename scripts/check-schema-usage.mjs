@@ -155,6 +155,16 @@ const PENDING_MIGRATIONS = [
   // exists the read 42703s, which create-campaign-checkout logs and falls back
   // from to the email lookup - the behaviour that shipped before this.
   { table: 'profiles', column: 'stripe_customer_id', migration: '20260920000006' },
+  // What a checkout actually charged (NON_CORE_REVIEW WP6 item 3). Written by
+  // stripe-webhook and verify-campaign-payment in a separate best-effort UPDATE
+  // that logs PGRST204 until applied; AdminRefunds retries its list without
+  // amount_paid_cents on 42703.
+  { table: 'campaigns', column: 'amount_paid_cents', migration: '20261003000001' },
+  { table: 'campaigns', column: 'amount_discount_cents', migration: '20261003000001' },
+  { table: 'campaigns', column: 'promotion_code', migration: '20261003000001' },
+  { table: 'user_subscriptions', column: 'amount_paid_cents', migration: '20261003000001' },
+  { table: 'user_subscriptions', column: 'amount_discount_cents', migration: '20261003000001' },
+  { table: 'user_subscriptions', column: 'promotion_code', migration: '20261003000001' },
 ];
 
 const isPending = (table, column) =>

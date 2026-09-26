@@ -2247,8 +2247,6 @@ export type Database = {
       }
       campaigns: {
         Row: {
-          amount_discount_cents: number | null
-          amount_paid_cents: number | null
           approval_notes: string | null
           auto_renew: boolean | null
           created_at: string
@@ -2256,7 +2254,6 @@ export type Database = {
           id: string
           name: string
           original_campaign_id: string | null
-          promotion_code: string | null
           rejected_reason: string | null
           renewal_eligible: boolean | null
           start_date: string | null
@@ -2269,8 +2266,6 @@ export type Database = {
           user_id: string
         }
         Insert: {
-          amount_discount_cents?: number | null
-          amount_paid_cents?: number | null
           approval_notes?: string | null
           auto_renew?: boolean | null
           created_at?: string
@@ -2278,7 +2273,6 @@ export type Database = {
           id?: string
           name: string
           original_campaign_id?: string | null
-          promotion_code?: string | null
           rejected_reason?: string | null
           renewal_eligible?: boolean | null
           start_date?: string | null
@@ -2291,8 +2285,6 @@ export type Database = {
           user_id: string
         }
         Update: {
-          amount_discount_cents?: number | null
-          amount_paid_cents?: number | null
           approval_notes?: string | null
           auto_renew?: boolean | null
           created_at?: string
@@ -2300,7 +2292,6 @@ export type Database = {
           id?: string
           name?: string
           original_campaign_id?: string | null
-          promotion_code?: string | null
           rejected_reason?: string | null
           renewal_eligible?: boolean | null
           start_date?: string | null
@@ -12131,8 +12122,6 @@ export type Database = {
       }
       user_subscriptions: {
         Row: {
-          amount_discount_cents: number | null
-          amount_paid_cents: number | null
           apple_original_transaction_id: string | null
           apple_product_id: string | null
           apple_transaction_id: string | null
@@ -12148,7 +12137,6 @@ export type Database = {
           id: string
           plan_id: string
           platform: string
-          promotion_code: string | null
           status: string | null
           stripe_customer_id: string | null
           stripe_subscription_id: string | null
@@ -12158,8 +12146,6 @@ export type Database = {
           user_id: string
         }
         Insert: {
-          amount_discount_cents?: number | null
-          amount_paid_cents?: number | null
           apple_original_transaction_id?: string | null
           apple_product_id?: string | null
           apple_transaction_id?: string | null
@@ -12175,7 +12161,6 @@ export type Database = {
           id?: string
           plan_id: string
           platform?: string
-          promotion_code?: string | null
           status?: string | null
           stripe_customer_id?: string | null
           stripe_subscription_id?: string | null
@@ -12185,8 +12170,6 @@ export type Database = {
           user_id: string
         }
         Update: {
-          amount_discount_cents?: number | null
-          amount_paid_cents?: number | null
           apple_original_transaction_id?: string | null
           apple_product_id?: string | null
           apple_transaction_id?: string | null
@@ -12202,7 +12185,6 @@ export type Database = {
           id?: string
           plan_id?: string
           platform?: string
-          promotion_code?: string | null
           status?: string | null
           stripe_customer_id?: string | null
           stripe_subscription_id?: string | null
