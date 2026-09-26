@@ -118,12 +118,16 @@ an action only the owner can take.
 
 ### WP6 - Promotions, affiliates, referrals
 
-- [ ] Ticketmaster affiliate links: `rel="sponsored"`, disclosure, correct button label
-- [ ] Remove the unbacked "20% off" promise and email-derived referral codes
-- [ ] Record `amount_paid`, `amount_discount`, promotion code on campaigns and subscriptions
-- [ ] Referral codes on profiles, `?ref` capture through sign-up and OAuth, `attribute_referral` RPC, locked-down RLS
-- [ ] Affiliate partner toggle stored server-side
+- [x] Ticketmaster affiliate links: `rel="sponsored"`, disclosure next to the button, "Get tickets" from the decoded `u` target; Ticketmaster via Impact on /affiliate-disclosure
+- [x] Scraper stops overwriting `events.source_url`: `events.affiliate_url` (`20261006000001`), preferred for the button; detail read retries without the column on 42703 until the migration is applied
+- [x] Remove the unbacked "20% off" promise, the zero-filled ReferralTracker and email-derived referral codes (random, `src/lib/referralCode.ts`)
+- [ ] Record `amount_paid`, `amount_discount`, promotion code on campaigns and subscriptions (ads work package owns stripe-webhook)
+- [x] Referral codes on profiles (BEFORE INSERT trigger + backfill, `20261006000002`), `?ref` capture (`useReferralCapture`, 30 days), `attribute_referral` / `get_my_referral_stats` RPCs, "Invite friends" card on /profile
+- [ ] Next release: drop the `referrals` INSERT policy "Users can create referrals" (`auth.uid() = referrer_id`), which lets a user insert rows naming themselves referrer and inflate their count. Nothing in web or mobile inserts directly; attribution goes through the RPC. A tightening, so not in the release that adds the RPC
+- [x] Affiliate partner toggle: removed, not moved server-side. It wrote the admin's own localStorage and nothing read it. A server flag would add a request to every ad-bearing page (home first view is capped at 4). The admin card now says the switch is `isActive` in `src/lib/affiliateAds.ts`. `useAffiliateAd` no longer writes storage inside `useMemo`
 - [ ] `/go/:slug` redirect with click logging (later)
+- [owner] Referral rewards: nothing is granted and no copy promises anything. Decide whether an invite earns something (and what, via a Stripe promotion code server-side) before any copy mentions one
+- [owner] Deploy order: apply `20261006000001` before deploying `scrape-ticketmaster-events`, or its update fails with 42703 on `affiliate_url`
 
 ## Owner steps
 
