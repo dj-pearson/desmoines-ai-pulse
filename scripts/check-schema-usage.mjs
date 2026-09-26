@@ -165,6 +165,9 @@ const PENDING_MIGRATIONS = [
   { table: 'user_subscriptions', column: 'amount_paid_cents', migration: '20261003000001' },
   { table: 'user_subscriptions', column: 'amount_discount_cents', migration: '20261003000001' },
   { table: 'user_subscriptions', column: 'promotion_code', migration: '20261003000001' },
+  // Admin pause / resume / cancel (NON_CORE_REVIEW WP3). useAdminCampaigns
+  // reports PGRST202 as "not switched on yet" rather than failing silently.
+  { rpc: 'admin_set_campaign_status', migration: '20261003000005' },
 ];
 
 const isPending = (table, column) =>

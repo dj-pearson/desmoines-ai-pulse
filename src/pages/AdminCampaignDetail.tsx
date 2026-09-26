@@ -1,7 +1,7 @@
 import { useState, useEffect } from "react";
 import { useTabState } from "@/hooks/useTabState";
 import { useParams, useNavigate } from "react-router-dom";
-import { useAdminCampaigns, CampaignWithUser } from "@/hooks/useAdminCampaigns";
+import { useAdminCampaigns, CampaignWithUser, type AdminCampaignAction } from "@/hooks/useAdminCampaigns";
 import { useDocumentTitle } from "@/hooks/useDocumentTitle";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
@@ -18,6 +18,34 @@ import { CreativePreview } from "@/components/advertising/CreativePreview";
 import { SpriteIcon } from "@/components/ui/SpriteIcon";
 import { toSafeExternalUrl } from "@/lib/capacitorUtils";
 
+/** Statuses admin_set_campaign_status can cancel from (20261003000005). */
+const CANCELLABLE_STATUSES: string[] = [
+  "draft",
+  "pending_payment",
+  "pending_creative",
+  "pending_review",
+  "active",
+  "paused",
+];
+
+const STATUS_ACTION_COPY: Record<AdminCampaignAction, { title: string; body: string; button: string }> = {
+  paused: {
+    title: "Pause campaign",
+    body: "Ads stop now. The days left are kept and restart when you resume. The advertiser gets your reason.",
+    button: "Pause",
+  },
+  active: {
+    title: "Resume campaign",
+    body: "Ads start again today and run for the days that were left. The advertiser gets your note.",
+    button: "Resume",
+  },
+  cancelled: {
+    title: "Cancel campaign",
+    body: "Ads stop and the campaign ends for good. This does not refund anything; issue a refund from Refunds if they paid. The advertiser gets your reason.",
+    button: "Cancel campaign",
+  },
+};
+
 export default function AdminCampaignDetail() {
   const { campaignId } = useParams<{ campaignId: string }>();
   const navigate = useNavigate();
@@ -25,7 +53,7 @@ export default function AdminCampaignDetail() {
     getCampaignById,
     approveCreative,
     rejectCreative,
-    updateCampaignStatus,
+    setCampaignStatus,
   } = useAdminCampaigns();
   useDocumentTitle("Campaign Details");
 
@@ -38,6 +66,9 @@ export default function AdminCampaignDetail() {
     validTabs: ["pending", "approved"],
   });
   const [rejectionReason, setRejectionReason] = useState("");
+  const [statusAction, setStatusAction] = useState<AdminCampaignAction | null>(null);
+  const [statusReason, setStatusReason] = useState("");
+  const [statusSaving, setStatusSaving] = useState(false);
 
   useEffect(() => {
     if (campaignId) {
@@ -75,6 +106,18 @@ export default function AdminCampaignDetail() {
     }
   };
 
+  const handleStatusChange = async () => {
+    if (!campaignId || !statusAction || !statusReason.trim()) return;
+    setStatusSaving(true);
+    const success = await setCampaignStatus(campaignId, statusAction, statusReason.trim());
+    setStatusSaving(false);
+    if (success) {
+      setStatusAction(null);
+      setStatusReason("");
+      await loadCampaign();
+    }
+  };
+
   const formatCurrency = (amount: number) => {
     return new Intl.NumberFormat('en-US', {
       style: 'currency',
@@ -100,6 +143,7 @@ export default function AdminCampaignDetail() {
       cancelled: "bg-red-500",
       rejected: "bg-red-600",
       refunded: "bg-purple-500",
+      paused: "bg-amber-600",
     };
     return colors[status] || "bg-gray-500";
   };
@@ -158,9 +202,28 @@ export default function AdminCampaignDetail() {
               Campaign ID: {campaign.id.slice(0, 8).toUpperCase()}
             </p>
           </div>
-          <Badge className={getStatusColor(campaign.status)}>
-            {campaign.status.replace('_', ' ').toUpperCase()}
-          </Badge>
+          <div className="flex flex-col items-end gap-2">
+            <Badge className={getStatusColor(campaign.status)}>
+              {campaign.status.replace('_', ' ').toUpperCase()}
+            </Badge>
+            <div className="flex flex-wrap justify-end gap-2">
+              {campaign.status === "active" && (
+                <Button size="sm" variant="outline" onClick={() => setStatusAction("paused")}>
+                  Pause
+                </Button>
+              )}
+              {campaign.status === "paused" && (
+                <Button size="sm" variant="outline" onClick={() => setStatusAction("active")}>
+                  Resume
+                </Button>
+              )}
+              {CANCELLABLE_STATUSES.includes(campaign.status) && (
+                <Button size="sm" variant="destructive" onClick={() => setStatusAction("cancelled")}>
+                  Cancel campaign
+                </Button>
+              )}
+            </div>
+          </div>
         </div>
       </div>
 
@@ -438,6 +501,49 @@ export default function AdminCampaignDetail() {
               Reject Creative
             </Button>
           </DialogFooter>
+        </DialogContent>
+      </Dialog>
+
+      {/* Pause / resume / cancel, through admin_set_campaign_status */}
+      <Dialog
+        open={statusAction !== null}
+        onOpenChange={(open) => {
+          if (!open) {
+            setStatusAction(null);
+            setStatusReason("");
+          }
+        }}
+      >
+        <DialogContent>
+          {statusAction && (
+            <>
+              <DialogHeader>
+                <DialogTitle>{STATUS_ACTION_COPY[statusAction].title}</DialogTitle>
+                <DialogDescription>{STATUS_ACTION_COPY[statusAction].body}</DialogDescription>
+              </DialogHeader>
+              <div>
+                <Label htmlFor="status-reason">Reason (sent to the advertiser)</Label>
+                <Textarea
+                  id="status-reason"
+                  value={statusReason}
+                  onChange={(e) => setStatusReason(e.target.value)}
+                  rows={3}
+                />
+              </div>
+              <DialogFooter>
+                <Button variant="outline" onClick={() => setStatusAction(null)} disabled={statusSaving}>
+                  Back
+                </Button>
+                <Button
+                  variant={statusAction === "cancelled" ? "destructive" : "default"}
+                  onClick={handleStatusChange}
+                  disabled={!statusReason.trim() || statusSaving}
+                >
+                  {statusSaving ? "Saving..." : STATUS_ACTION_COPY[statusAction].button}
+                </Button>
+              </DialogFooter>
+            </>
+          )}
         </DialogContent>
       </Dialog>
     </div>

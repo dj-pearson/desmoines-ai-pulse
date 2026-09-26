@@ -34,6 +34,9 @@ export const REFUND_REASON_CATEGORIES = [
 ] as const;
 export type RefundReasonCategory = (typeof REFUND_REASON_CATEGORIES)[number];
 
+/** The statuses admin_set_campaign_status accepts: pause, resume, cancel. */
+export type AdminCampaignAction = "paused" | "active" | "cancelled";
+
 /** The values `campaigns.status` can actually hold, from the generated enum. */
 export type CampaignStatus = Database["public"]["Enums"]["campaign_status"];
 
@@ -365,6 +368,49 @@ export function useAdminCampaigns() {
     }
   };
 
+  /**
+   * Pause, resume or cancel through admin_set_campaign_status
+   * (20261003000005): one transaction that checks is_admin(), allows only
+   * active->paused, paused->active and pre-completion->cancelled, writes an
+   * admin_action_logs row and tells the advertiser. The reason is required
+   * and ends up in their notice. Cancelling does not refund.
+   */
+  const setCampaignStatus = async (
+    campaignId: string,
+    status: AdminCampaignAction,
+    reason: string
+  ): Promise<boolean> => {
+    try {
+      const { error } = await supabase.rpc(
+        "admin_set_campaign_status" as never,
+        { p_campaign_id: campaignId, p_status: status, p_reason: reason } as never
+      );
+      if (error) {
+        if (error.code === "PGRST202") {
+          throw new Error("Status changes are not switched on yet (migration 20261003000005 is not applied).");
+        }
+        // "admin_set_campaign_status: only an active campaign can be paused (...)"
+        throw new Error(error.message.replace(/^admin_set_campaign_status:\s*/, ""));
+      }
+      toast({
+        title: "Campaign updated",
+        description:
+          status === "paused" ? "Paused. The advertiser has been told."
+          : status === "active" ? "Resumed. The advertiser has been told."
+          : "Cancelled. The advertiser has been told; refund it separately if they paid.",
+      });
+      await fetchCampaigns();
+      return true;
+    } catch (err) {
+      toast({
+        variant: "destructive",
+        title: "Status not changed",
+        description: err instanceof Error ? err.message : "Failed to change the campaign status",
+      });
+      return false;
+    }
+  };
+
   const updateCampaignStatus = async (
     campaignId: string,
     status: CampaignStatus,
@@ -481,6 +527,7 @@ export function useAdminCampaigns() {
     approveCreative,
     rejectCreative,
     updateCampaignStatus,
+    setCampaignStatus,
     processRefund,
   };
 }
