@@ -123,7 +123,7 @@ export function paymentRecordFromSession(session: CheckoutSessionLike): PaymentR
   };
 }
 
-// ── Refunds ──────────────────────────────────────────────────────────────
+// --- Refunds ---
 
 export interface RefundInput {
   /** What the customer was charged, in cents, from Stripe. */

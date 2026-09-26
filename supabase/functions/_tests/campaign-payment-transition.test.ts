@@ -91,7 +91,7 @@ Deno.test('verify-campaign-payment reports the row status, not a constant', asyn
   assert(/\.eq\("status", "pending_payment"\)\s*\.select\("status"\)/.test(src), 'its own write is still scoped to pending_payment');
 });
 
-// ── WP6 item 3: what was paid is recorded ─────────────────────────────────
+// --- WP6 item 3: what was paid is recorded ---
 
 Deno.test('the record carries Stripe cents, the discount and the code', () => {
   const rec = paymentRecordFromSession({
