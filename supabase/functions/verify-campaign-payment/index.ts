@@ -164,12 +164,15 @@ serve(async (req) => {
           currentStatus = advanced[0].status as string;
         } else {
           // The webhook moved it between our read and our write.
-          const { data: fresh } = await supabase
+          const { data: fresh, error: freshError } = await supabase
             .from("campaigns")
             .select("status")
             .eq("id", campaignId)
             .maybeSingle();
-          if (fresh?.status) currentStatus = fresh.status as string;
+          // Best effort: on a failed re-read we report the status we read
+          // first, which is stale by one step at most.
+          if (freshError) console.error("Failed to re-read campaign status:", freshError);
+          else if (fresh?.status) currentStatus = fresh.status as string;
         }
       }
 

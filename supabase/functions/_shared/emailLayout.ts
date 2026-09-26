@@ -21,7 +21,7 @@
  */
 
 import { escapeHtml } from "./escapeHtml.ts";
-import { getSiteUrl } from "./siteUrl.ts";
+import { envVar, getSiteUrl } from "./siteUrl.ts";
 
 /** Public-facing site URL used for building unsubscribe links. */
 export const SITE_URL = getSiteUrl();
@@ -106,7 +106,7 @@ export function buildOneClickUnsubscribeUrl(
 
 function readSupabaseUrl(): string | undefined {
   try {
-    return Deno.env.get("SUPABASE_URL") || undefined;
+    return envVar("SUPABASE_URL") || undefined;
   } catch {
     return undefined;
   }

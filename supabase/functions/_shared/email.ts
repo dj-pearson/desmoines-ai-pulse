@@ -30,6 +30,7 @@
  */
 import { signRequest } from "./awsSigV4.ts";
 import { fetchWithTimeout } from "./fetchWithTimeout.ts";
+import { envVar } from "./siteUrl.ts";
 
 export type EmailCategory = "transactional" | "marketing";
 
@@ -76,9 +77,12 @@ export type EmailProviderConfig =
 
 export const DEFAULT_FROM = "Des Moines Insider <hello@desmoinesinsider.com>";
 
+// Through globalThis (siteUrl.ts envVar): campaignNotificationEmail.ts imports
+// this module and is loaded by an offline tsx test and type-checked by
+// tsconfig.scripts.json, where `Deno` is not a binding.
 export const denoEnv: EnvReader = (key) => {
   try {
-    return Deno.env.get(key) || undefined;
+    return envVar(key) || undefined;
   } catch {
     return undefined;
   }

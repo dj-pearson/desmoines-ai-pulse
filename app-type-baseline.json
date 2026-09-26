@@ -1,5 +1,5 @@
 {
-  "total": 64,
+  "total": 61,
   "files": {
     "src/components/AIConfigurationManager.tsx": 2,
     "src/components/ScrapingJobManager.tsx": 2,
@@ -26,7 +26,6 @@
     "src/hooks/useSessionTimeout.ts": 2,
     "src/lib/consentLog.ts": 1,
     "src/pages/AdminCampaignDetail.tsx": 4,
-    "src/pages/AdminContent.tsx": 2,
-    "src/pages/AdminRefunds.tsx": 3
+    "src/pages/AdminContent.tsx": 2
   }
 }

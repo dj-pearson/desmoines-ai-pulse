@@ -4,12 +4,10 @@
  *
  * WHY THIS IS WORTH A CHECK. A collision is invisible at every call site: the
  * import looks right, the name reads right, and which implementation you get is
- * decided by the import PATH. Three exist in src/hooks today and all three are
- * live, each pair reading different data:
+ * decided by the import PATH. Two exist in src/hooks today and both are live,
+ * each pair reading different data. (A third, useUserPreferences, ended when
+ * the unimported use-user-preferences.ts was deleted, 2026-09.)
  *
- *   useUserPreferences     use-user-preferences.ts holds ui_preferences,
- *                          useUserPreferences.ts holds taste_preferences.
- *                          WEB-QA-015 AC2 is the merge.
  *   useRestaurantOpenings  useSupabase.ts reads `restaurants` (and is what the
  *                          public RestaurantOpenings.tsx renders from);
  *                          useRestaurantOpenings.ts reads `restaurant_openings`
@@ -37,7 +35,6 @@ import { join } from 'node:path';
 
 /** Collisions that exist, each with the story that resolves it. */
 const ALLOWED = new Map([
-  ['useUserPreferences', 'WEB-QA-015 AC2 merges the two preference bags'],
   ['useRestaurantOpenings', 'WEB-BE-054 decides which table openings live in'],
   ['useTrending', 'one TanStack, one useState/useEffect; the second is invisible to PrerenderSignal'],
 ]);
