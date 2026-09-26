@@ -1,7 +1,23 @@
-import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
-import { supabase } from "@/integrations/supabase/client";
-import { useAuth } from "./useAuth";
-import { fromUnknownTable } from "@/integrations/supabase/unknownTable";
+import { useCallback } from "react";
+
+/**
+ * Metered-usage billing hook. Currently a fixed empty state, on purpose.
+ *
+ * It used to read `usage_events` and call `get_current_usage` /
+ * `record_usage_event`. None of the three exists in production (42P01 /
+ * PGRST202; migration 20260110000001 is ledgered and produced nothing), so
+ * every mount fired two failing requests and every recordUsage() threw. No
+ * page mounts a consumer today (UsageDisplay and UsageIndicator are exported
+ * and unused), and no plan meters usage.
+ *
+ * AI usage IS counted now, server-side, in ai_usage_daily (migration
+ * 20261001000001) by the edge functions that spend it. That table is admin
+ * read only, so it is not a source for this hook. If metered billing is ever
+ * built, give it a user-readable view over ai_usage_daily and read that here.
+ *
+ * The exported shapes are unchanged so UsageDisplay keeps compiling and
+ * renders nothing (it returns null for an empty currentUsage).
+ */
 
 export type UsageEventType =
   | "api_call"
@@ -45,162 +61,63 @@ export interface RecordUsageParams {
   idempotencyKey?: string;
 }
 
+const NO_QUOTAS: UsageQuota[] = [];
+const NO_EVENTS: UsageEvent[] = [];
+
 export function useUsage() {
-  const { user } = useAuth();
-  const queryClient = useQueryClient();
+  // Resolves to null: there is nowhere to record to. Kept async so a caller
+  // that awaits it keeps working.
+  const recordUsage = useCallback(async (_params: RecordUsageParams): Promise<null> => {
+    if (import.meta.env.DEV) {
+      console.debug("[useUsage] recordUsage is a no-op: usage_events does not exist");
+    }
+    return null;
+  }, []);
 
-  // Fetch current period usage
-  const {
-    data: currentUsage = [],
-    isLoading: usageLoading,
-    error: usageError,
-    refetch: refetchUsage,
-  } = useQuery({
-    queryKey: ["current-usage", user?.id],
-    queryFn: async () => {
-      if (!user) return [];
-
-      const { data, error } = await supabase.rpc("get_current_usage", {
-        p_user_id: user.id,
-      });
-
-      if (error) throw error;
-      return (data || []) as UsageQuota[];
-    },
-    enabled: !!user,
-    staleTime: 60 * 1000, // 1 minute
-  });
-
-  // Fetch recent usage events
-  const { data: recentEvents = [], isLoading: eventsLoading } = useQuery({
-    queryKey: ["usage-events", user?.id],
-    queryFn: async () => {
-      if (!user) return [];
-
-      const { data, error } = await fromUnknownTable("usage_events")
-        .select("*")
-        .eq("user_id", user.id)
-        .order("created_at", { ascending: false })
-        .limit(100);
-
-      if (error) throw error;
-      return data as UsageEvent[];
-    },
-    enabled: !!user,
-    staleTime: 30 * 1000, // 30 seconds
-  });
-
-  // Record usage event mutation
-  const recordUsage = useMutation({
-    mutationFn: async ({
-      eventType,
-      eventName,
-      quantity = 1,
-      metadata = {},
-      idempotencyKey,
-    }: RecordUsageParams) => {
-      if (!user) throw new Error("User not authenticated");
-
-      const { data, error } = await supabase.rpc("record_usage_event", {
-        p_user_id: user.id,
-        p_event_type: eventType,
-        p_event_name: eventName,
-        p_quantity: quantity,
-        p_metadata: metadata,
-        p_idempotency_key: idempotencyKey,
-      });
-
-      if (error) throw error;
-      return data;
-    },
-    onSuccess: () => {
-      queryClient.invalidateQueries({ queryKey: ["current-usage"] });
-      queryClient.invalidateQueries({ queryKey: ["usage-events"] });
-    },
-  });
-
-  // Helper to check if usage is within limit
-  const isWithinLimit = (eventType: UsageEventType): boolean => {
-    const quota = currentUsage.find((q) => q.event_type === eventType);
-    if (!quota) return true; // No quota defined = unlimited
-    if (quota.monthly_limit === null) return true; // Null = unlimited
-    return quota.total_quantity < quota.monthly_limit;
-  };
-
-  // Helper to get remaining quota
-  const getRemainingQuota = (
-    eventType: UsageEventType
-  ): number | "unlimited" => {
-    const quota = currentUsage.find((q) => q.event_type === eventType);
-    if (!quota) return "unlimited";
-    if (quota.monthly_limit === null) return "unlimited";
-    return Math.max(0, quota.monthly_limit - quota.total_quantity);
-  };
-
-  // Helper to get usage percentage
-  const getUsagePercentage = (eventType: UsageEventType): number => {
-    const quota = currentUsage.find((q) => q.event_type === eventType);
-    if (!quota || quota.monthly_limit === null) return 0;
-    return Math.min(100, (quota.total_quantity / quota.monthly_limit) * 100);
-  };
-
-  // Get total overage cost for current period
-  const getTotalOverageCost = (): number => {
-    return currentUsage.reduce((sum, quota) => sum + quota.overage_cost, 0);
-  };
-
-  // Get usage by type
-  const getUsageByType = (eventType: UsageEventType): UsageQuota | undefined => {
-    return currentUsage.find((q) => q.event_type === eventType);
-  };
+  const refetchUsage = useCallback(async () => ({ data: NO_QUOTAS }), []);
 
   return {
     // Data
-    currentUsage,
-    recentEvents,
+    currentUsage: NO_QUOTAS,
+    recentEvents: NO_EVENTS,
 
     // Loading states
-    isLoading: usageLoading || eventsLoading,
-    usageLoading,
-    eventsLoading,
+    isLoading: false,
+    usageLoading: false,
+    eventsLoading: false,
 
     // Error
-    usageError,
+    usageError: null as Error | null,
 
     // Actions
-    recordUsage: recordUsage.mutateAsync,
+    recordUsage,
     refetchUsage,
 
     // Mutation state
-    isRecording: recordUsage.isPending,
+    isRecording: false,
 
-    // Helpers
-    isWithinLimit,
-    getRemainingQuota,
-    getUsagePercentage,
-    getTotalOverageCost,
-    getUsageByType,
+    // Helpers: with no quotas defined, everything is within limit.
+    isWithinLimit: (_eventType: UsageEventType): boolean => true,
+    getRemainingQuota: (_eventType: UsageEventType): number | "unlimited" => "unlimited",
+    getUsagePercentage: (_eventType: UsageEventType): number => 0,
+    getTotalOverageCost: (): number => 0,
+    getUsageByType: (_eventType: UsageEventType): UsageQuota | undefined => undefined,
   };
 }
 
 /**
- * Track AI generation usage
- * Use this hook to easily track AI-related usage events
+ * Track AI generation usage. A no-op for the reason above; the edge functions
+ * that call a model count their own usage server-side.
  */
 export function useAIUsage() {
-  const { recordUsage, isWithinLimit, getRemainingQuota, getUsagePercentage } =
-    useUsage();
+  const { recordUsage, isWithinLimit, getRemainingQuota, getUsagePercentage } = useUsage();
 
-  const trackAIGeneration = async (
-    eventName: string,
-    metadata?: Record<string, unknown>
-  ) => {
+  const trackAIGeneration = async (eventName: string, metadata?: Record<string, unknown>) => {
     return recordUsage({
       eventType: "ai_generation",
       eventName,
       quantity: 1,
       metadata,
-      idempotencyKey: `ai-gen-${Date.now()}-${Math.random().toString(36).slice(2)}`,
     });
   };
 
