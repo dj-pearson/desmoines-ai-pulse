@@ -1,7 +1,7 @@
 import { useState, useEffect } from "react";
 import { useTabState } from "@/hooks/useTabState";
 import { useParams, useNavigate } from "react-router-dom";
-import { useAdminCampaigns, CampaignWithUser } from "@/hooks/useAdminCampaigns";
+import { useAdminCampaigns, CampaignWithUser, type AdminCampaignAction } from "@/hooks/useAdminCampaigns";
 import { useDocumentTitle } from "@/hooks/useDocumentTitle";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
@@ -9,7 +9,6 @@ import { Badge } from "@/components/ui/badge";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { Dialog, DialogContent, DialogDescription, DialogFooter, DialogHeader, DialogTitle } from "@/components/ui/dialog";
 import { Textarea } from "@/components/ui/textarea";
-import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { Alert, AlertDescription } from "@/components/ui/alert";
 import { Skeleton } from "@/components/ui/skeleton";
@@ -17,6 +16,35 @@ import { ArrowLeft, Check, X, DollarSign, User, Image as ImageIcon, AlertCircle 
 import { CampaignCreative } from "@/hooks/useCampaigns";
 import { CreativePreview } from "@/components/advertising/CreativePreview";
 import { SpriteIcon } from "@/components/ui/SpriteIcon";
+import { toSafeExternalUrl } from "@/lib/capacitorUtils";
+
+/** Statuses admin_set_campaign_status can cancel from (20261003000005). */
+const CANCELLABLE_STATUSES: string[] = [
+  "draft",
+  "pending_payment",
+  "pending_creative",
+  "pending_review",
+  "active",
+  "paused",
+];
+
+const STATUS_ACTION_COPY: Record<AdminCampaignAction, { title: string; body: string; button: string }> = {
+  paused: {
+    title: "Pause campaign",
+    body: "Ads stop now. The days left are kept and restart when you resume. The advertiser gets your reason.",
+    button: "Pause",
+  },
+  active: {
+    title: "Resume campaign",
+    body: "Ads start again today and run for the days that were left. The advertiser gets your note.",
+    button: "Resume",
+  },
+  cancelled: {
+    title: "Cancel campaign",
+    body: "Ads stop and the campaign ends for good. This does not refund anything; issue a refund from Refunds if they paid. The advertiser gets your reason.",
+    button: "Cancel campaign",
+  },
+};
 
 export default function AdminCampaignDetail() {
   const { campaignId } = useParams<{ campaignId: string }>();
@@ -25,8 +53,7 @@ export default function AdminCampaignDetail() {
     getCampaignById,
     approveCreative,
     rejectCreative,
-    updateCampaignStatus,
-    createPricingOverride,
+    setCampaignStatus,
   } = useAdminCampaigns();
   useDocumentTitle("Campaign Details");
 
@@ -39,9 +66,9 @@ export default function AdminCampaignDetail() {
     validTabs: ["pending", "approved"],
   });
   const [rejectionReason, setRejectionReason] = useState("");
-  const [overrideDialogOpen, setOverrideDialogOpen] = useState(false);
-  const [overridePrice, setOverridePrice] = useState("");
-  const [overrideReason, setOverrideReason] = useState("");
+  const [statusAction, setStatusAction] = useState<AdminCampaignAction | null>(null);
+  const [statusReason, setStatusReason] = useState("");
+  const [statusSaving, setStatusSaving] = useState(false);
 
   useEffect(() => {
     if (campaignId) {
@@ -79,24 +106,14 @@ export default function AdminCampaignDetail() {
     }
   };
 
-  const handleApplyPricingOverride = async () => {
-    if (!campaignId || !overridePrice || !overrideReason) return;
-
-    const price = parseFloat(overridePrice);
-    if (isNaN(price) || price <= 0) {
-      return;
-    }
-
-    const success = await createPricingOverride(
-      campaignId,
-      price,
-      overrideReason
-    );
-
+  const handleStatusChange = async () => {
+    if (!campaignId || !statusAction || !statusReason.trim()) return;
+    setStatusSaving(true);
+    const success = await setCampaignStatus(campaignId, statusAction, statusReason.trim());
+    setStatusSaving(false);
     if (success) {
-      setOverrideDialogOpen(false);
-      setOverridePrice("");
-      setOverrideReason("");
+      setStatusAction(null);
+      setStatusReason("");
       await loadCampaign();
     }
   };
@@ -126,6 +143,7 @@ export default function AdminCampaignDetail() {
       cancelled: "bg-red-500",
       rejected: "bg-red-600",
       refunded: "bg-purple-500",
+      paused: "bg-amber-600",
     };
     return colors[status] || "bg-gray-500";
   };
@@ -184,9 +202,28 @@ export default function AdminCampaignDetail() {
               Campaign ID: {campaign.id.slice(0, 8).toUpperCase()}
             </p>
           </div>
-          <Badge className={getStatusColor(campaign.status)}>
-            {campaign.status.replace('_', ' ').toUpperCase()}
-          </Badge>
+          <div className="flex flex-col items-end gap-2">
+            <Badge className={getStatusColor(campaign.status)}>
+              {campaign.status.replace('_', ' ').toUpperCase()}
+            </Badge>
+            <div className="flex flex-wrap justify-end gap-2">
+              {campaign.status === "active" && (
+                <Button size="sm" variant="outline" onClick={() => setStatusAction("paused")}>
+                  Pause
+                </Button>
+              )}
+              {campaign.status === "paused" && (
+                <Button size="sm" variant="outline" onClick={() => setStatusAction("active")}>
+                  Resume
+                </Button>
+              )}
+              {CANCELLABLE_STATUSES.includes(campaign.status) && (
+                <Button size="sm" variant="destructive" onClick={() => setStatusAction("cancelled")}>
+                  Cancel campaign
+                </Button>
+              )}
+            </div>
+          </div>
         </div>
       </div>
 
@@ -233,14 +270,12 @@ export default function AdminCampaignDetail() {
             <p className="text-2xl font-bold">
               {formatCurrency(campaign.total_cost || 0)}
             </p>
-            <Button
-              variant="link"
-              size="sm"
-              className="p-0 h-auto"
-              onClick={() => setOverrideDialogOpen(true)}
-            >
-              Apply pricing override
-            </Button>
+            {/* The "Apply pricing override" link that was here wrote
+                total_cost, which create-campaign-checkout recomputes from the
+                rate card and ignores. A discount is a Stripe promotion code. */}
+            <p className="text-xs text-muted-foreground">
+              List price from the rate card. Discounts are Stripe promotion codes.
+            </p>
           </CardContent>
         </Card>
       </div>
@@ -323,17 +358,28 @@ export default function AdminCampaignDetail() {
                           <p className="text-sm text-muted-foreground mb-2">
                             {creative.description}
                           </p>
-                          {creative.link_url && (
-                            <a
-                              href={creative.link_url}
-                              target="_blank"
-                              rel="noopener noreferrer"
-                              className="text-sm text-primary hover:underline inline-flex items-center gap-1"
-                            >
-                              {creative.link_url}
-                              <SpriteIcon name="external-link" className="h-3 w-3" />
-                            </a>
-                          )}
+                          {/* The advertiser typed this URL. A javascript: or
+                              data: value in an href runs in the reviewer's
+                              session on click, so only an http(s) URL becomes
+                              a link; anything else is shown as text to reject. */}
+                          {creative.link_url && (() => {
+                            const safeHref = toSafeExternalUrl(creative.link_url);
+                            return safeHref ? (
+                              <a
+                                href={safeHref}
+                                target="_blank"
+                                rel="noopener noreferrer nofollow"
+                                className="text-sm text-primary hover:underline inline-flex items-center gap-1 break-all"
+                              >
+                                {creative.link_url}
+                                <SpriteIcon name="external-link" className="h-3 w-3" />
+                              </a>
+                            ) : (
+                              <p className="text-sm text-destructive break-all">
+                                Not a web address, so it is not linked: <code>{creative.link_url}</code>
+                              </p>
+                            );
+                          })()}
                           <div className="mt-2 text-xs text-muted-foreground">
                             <p>CTA: "{creative.cta_text}"</p>
                             <p>Size: {creative.dimensions_width}×{creative.dimensions_height}px</p>
@@ -458,50 +504,46 @@ export default function AdminCampaignDetail() {
         </DialogContent>
       </Dialog>
 
-      {/* Pricing Override Dialog */}
-      <Dialog open={overrideDialogOpen} onOpenChange={setOverrideDialogOpen}>
+      {/* Pause / resume / cancel, through admin_set_campaign_status */}
+      <Dialog
+        open={statusAction !== null}
+        onOpenChange={(open) => {
+          if (!open) {
+            setStatusAction(null);
+            setStatusReason("");
+          }
+        }}
+      >
         <DialogContent>
-          <DialogHeader>
-            <DialogTitle>Apply Pricing Override</DialogTitle>
-            <DialogDescription>
-              Set a custom price for this campaign. Original price: {formatCurrency(campaign.total_cost || 0)}
-            </DialogDescription>
-          </DialogHeader>
-          <div className="space-y-4">
-            <div>
-              <Label htmlFor="override-price">New Price</Label>
-              <Input
-                id="override-price"
-                type="number"
-                step="0.01"
-                min="0"
-                placeholder="0.00"
-                value={overridePrice}
-                onChange={(e) => setOverridePrice(e.target.value)}
-              />
-            </div>
-            <div>
-              <Label htmlFor="override-reason">Reason</Label>
-              <Textarea
-                id="override-reason"
-                placeholder="e.g., Promotional discount, Non-profit rate, etc."
-                value={overrideReason}
-                onChange={(e) => setOverrideReason(e.target.value)}
-                rows={3}
-              />
-            </div>
-          </div>
-          <DialogFooter>
-            <Button variant="outline" onClick={() => setOverrideDialogOpen(false)}>
-              Cancel
-            </Button>
-            <Button
-              onClick={handleApplyPricingOverride}
-              disabled={!overridePrice || !overrideReason.trim()}
-            >
-              Apply Override
-            </Button>
-          </DialogFooter>
+          {statusAction && (
+            <>
+              <DialogHeader>
+                <DialogTitle>{STATUS_ACTION_COPY[statusAction].title}</DialogTitle>
+                <DialogDescription>{STATUS_ACTION_COPY[statusAction].body}</DialogDescription>
+              </DialogHeader>
+              <div>
+                <Label htmlFor="status-reason">Reason (sent to the advertiser)</Label>
+                <Textarea
+                  id="status-reason"
+                  value={statusReason}
+                  onChange={(e) => setStatusReason(e.target.value)}
+                  rows={3}
+                />
+              </div>
+              <DialogFooter>
+                <Button variant="outline" onClick={() => setStatusAction(null)} disabled={statusSaving}>
+                  Back
+                </Button>
+                <Button
+                  variant={statusAction === "cancelled" ? "destructive" : "default"}
+                  onClick={handleStatusChange}
+                  disabled={!statusReason.trim() || statusSaving}
+                >
+                  {statusSaving ? "Saving..." : STATUS_ACTION_COPY[statusAction].button}
+                </Button>
+              </DialogFooter>
+            </>
+          )}
         </DialogContent>
       </Dialog>
     </div>

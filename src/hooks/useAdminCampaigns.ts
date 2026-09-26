@@ -21,6 +21,22 @@ interface ApproveCreativeResult {
 
 const log = createLogger('useAdminCampaigns');
 
+/** process-stripe-refund's ALLOWED_REASONS (ADMIN-REFUND-001). */
+export const REFUND_REASON_CATEGORIES = [
+  "duplicate_charge",
+  "user_request",
+  "campaign_cancelled",
+  "fraud",
+  "technical_issue",
+  "content_takedown",
+  "accidental_purchase",
+  "other",
+] as const;
+export type RefundReasonCategory = (typeof REFUND_REASON_CATEGORIES)[number];
+
+/** The statuses admin_set_campaign_status accepts: pause, resume, cancel. */
+export type AdminCampaignAction = "paused" | "active" | "cancelled";
+
 /** The values `campaigns.status` can actually hold, from the generated enum. */
 export type CampaignStatus = Database["public"]["Enums"]["campaign_status"];
 
@@ -352,6 +368,49 @@ export function useAdminCampaigns() {
     }
   };
 
+  /**
+   * Pause, resume or cancel through admin_set_campaign_status
+   * (20261003000005): one transaction that checks is_admin(), allows only
+   * active->paused, paused->active and pre-completion->cancelled, writes an
+   * admin_action_logs row and tells the advertiser. The reason is required
+   * and ends up in their notice. Cancelling does not refund.
+   */
+  const setCampaignStatus = async (
+    campaignId: string,
+    status: AdminCampaignAction,
+    reason: string
+  ): Promise<boolean> => {
+    try {
+      const { error } = await supabase.rpc(
+        "admin_set_campaign_status" as never,
+        { p_campaign_id: campaignId, p_status: status, p_reason: reason } as never
+      );
+      if (error) {
+        if (error.code === "PGRST202") {
+          throw new Error("Status changes are not switched on yet (migration 20261003000005 is not applied).");
+        }
+        // "admin_set_campaign_status: only an active campaign can be paused (...)"
+        throw new Error(error.message.replace(/^admin_set_campaign_status:\s*/, ""));
+      }
+      toast({
+        title: "Campaign updated",
+        description:
+          status === "paused" ? "Paused. The advertiser has been told."
+          : status === "active" ? "Resumed. The advertiser has been told."
+          : "Cancelled. The advertiser has been told; refund it separately if they paid.",
+      });
+      await fetchCampaigns();
+      return true;
+    } catch (err) {
+      toast({
+        variant: "destructive",
+        title: "Status not changed",
+        description: err instanceof Error ? err.message : "Failed to change the campaign status",
+      });
+      return false;
+    }
+  };
+
   const updateCampaignStatus = async (
     campaignId: string,
     status: CampaignStatus,
@@ -399,82 +458,21 @@ export function useAdminCampaigns() {
     }
   };
 
-  const createPricingOverride = async (
-    campaignId: string,
-    overridePrice: number,
-    reason: string,
-    notes?: string,
-    expiresAt?: string
-  ): Promise<boolean> => {
-    try {
-      const { data: { user }, error: authError } = await supabase.auth.getUser();
-      if (authError) throw authError;
-      if (!user) throw new Error("Not signed in - an admin action must be attributable");
-
-      // Get original campaign price. The error is surfaced rather than
-      // collapsed into "Campaign not found" - a permissions failure and a
-      // missing row need different responses from the admin reading the toast.
-      const { data: campaign, error: campaignError } = await supabase
-        .from("campaigns")
-        .select("total_cost")
-        .eq("id", campaignId)
-        .single();
-
-      if (campaignError && campaignError.code !== 'PGRST116') throw campaignError;
-      if (!campaign) throw new Error("Campaign not found");
-
-      const { error } = await supabase
-        .from("pricing_overrides")
-        .insert({
-          campaign_id: campaignId,
-          admin_user_id: user.id,
-          original_price: campaign.total_cost,
-          override_price: overridePrice,
-          reason,
-          notes,
-          expires_at: expiresAt || null,
-        });
-
-      if (error) throw error;
-
-      // Update campaign total cost. THROWS: the pricing_overrides row is
-      // already written, so discarding a failure here left the override
-      // recorded and the campaign still billing at the old price, under a toast
-      // reading "Campaign price updated to $X".
-      const { error: costError } = await supabase
-        .from("campaigns")
-        .update({ total_cost: overridePrice })
-        .eq("id", campaignId);
-
-      if (costError) throw costError;
-
-      toast({
-        title: "Pricing override applied",
-        description: `Campaign price updated to $${overridePrice.toFixed(2)}.`,
-      });
-
-      await fetchCampaigns();
-      return true;
-    } catch (err) {
-      const message = err instanceof Error ? err.message : "Failed to apply pricing override";
-      toast({
-        variant: "destructive",
-        title: "Override failed",
-        description: message,
-      });
-      return false;
-    }
-  };
-
+  /**
+   * Refund through process-stripe-refund, which caps the amount at what Stripe
+   * says was paid minus earlier refunds, ends the campaign only on a full
+   * refund, and notifies the advertiser itself. `amount` omitted means "the
+   * rest". `refundReason` is the ADMIN-REFUND-001 category the function
+   * requires; without it every call was a 400.
+   */
   const processRefund = async (
     campaignId: string,
-    amount: number,
+    amount: number | null,
     reason: string,
+    refundReason: RefundReasonCategory,
     policyViolation?: string
   ): Promise<boolean> => {
     try {
-      // Call the process-stripe-refund edge function which handles
-      // Stripe refund creation, DB record, and campaign status update
       const { data, error: refundError } = await supabase.functions.invoke(
         "process-stripe-refund",
         {
@@ -482,6 +480,8 @@ export function useAdminCampaigns() {
             campaignId,
             amount,
             reason,
+            refundReason,
+            refundReasonNotes: reason,
             policyViolation: policyViolation || null,
           },
         }
@@ -493,35 +493,12 @@ export function useAdminCampaigns() {
         throw new Error(data?.error || "Refund processing failed");
       }
 
-      // Notification lookup only, and deliberately NOT thrown: Stripe has
-      // already refunded by this point. Turning a lookup failure into "Refund
-      // failed" would tell an admin to retry a refund that succeeded.
-      const { data: campaign, error: campaignError } = await supabase
-        .from("campaigns")
-        .select("user_id, name")
-        .eq("id", campaignId)
-        .single();
-
-      if (campaignError) {
-        log.error('processRefund', 'Refund succeeded but the advertiser could not be notified', {
-          campaignId,
-          error: campaignError,
-        });
-      }
-
-      if (campaign) {
-        notifyAdvertiser(
-          campaignId,
-          campaign.name,
-          campaign.user_id,
-          'campaign_refunded',
-          { amount, reason }
-        );
-      }
-
+      const refunded = Number(data.amount ?? amount ?? 0);
       toast({
-        title: "Refund processed",
-        description: `Refund of $${amount.toFixed(2)} has been processed through Stripe. ID: ${data.refundId}`,
+        title: data.duplicate ? "Refund already issued" : "Refund processed",
+        description: data.duplicate
+          ? `Stripe already has this refund (${data.refundId}); nothing new was sent.`
+          : `Refunded $${refunded.toFixed(2)} through Stripe${data.full ? "; the campaign has ended" : ""}. ID: ${data.refundId}`,
       });
 
       await fetchCampaigns();
@@ -550,7 +527,7 @@ export function useAdminCampaigns() {
     approveCreative,
     rejectCreative,
     updateCampaignStatus,
-    createPricingOverride,
+    setCampaignStatus,
     processRefund,
   };
 }

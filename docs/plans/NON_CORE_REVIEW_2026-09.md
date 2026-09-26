@@ -91,15 +91,19 @@ an action only the owner can take.
 
 ### WP3 - Self-service ads
 
-- [ ] Webhook: only advance `draft`/`pending_payment`, require `payment_status = 'paid'`
-- [ ] `get_active_ads`: random eligible campaign, Central dates
-- [ ] Checkout: reject start dates before today + lead time (Central)
-- [ ] Refunds: cap at paid minus prior refunds, `refunded` only when full, notify advertiser; fix the admin refunds page
-- [ ] Lifecycle cron sends activated / expiring / completed notices server-side
-- [ ] `link_url` rendered through `toSafeExternalUrl`; DB CHECK for http(s)
-- [ ] Sponsored-listing link guard (draft only, one per placement)
-- [ ] Remove the client price override (it never reached checkout)
-- [ ] Admin campaign status action (pause / cancel) through an RPC with audit and notice
+- [x] Webhook: only advance `draft`/`pending_payment`, require `payment_status = 'paid'`; no notices on a zero-row update. The campaign `payments` upsert is dropped, not backed by a new table: `20260110000000` is in the ledger and the table is still absent, so another `CREATE TABLE IF NOT EXISTS` answers nothing until someone learns why. The subscription invoice path still upserts into it, and the fraud monitor, invoice PDF and digest read it; that is a separate decision
+- [x] `get_active_ads`: random eligible campaign, Central dates (`20261003000002`)
+- [x] Checkout: reject start dates before today + lead time (Central); renewals only need "not in the past"
+- [x] Refunds: cap at the Stripe charge minus prior refunds, `refunded` only when full, notify advertiser; admin refunds page lists campaigns and sends `campaignId` + `refundReason`
+- [x] Lifecycle cron writes activated / expiring / completed / creative-deadline notices on Central dates (`20261003000003`). Rows carry `email_pending = true`; sending them is WP2's
+- [x] `link_url` rendered through `toSafeExternalUrl`; `CHECK ... NOT VALID` for http(s) (`20261003000004`)
+- [x] Sponsored-listing link guard: `link_sponsored_listing` RPC (draft only, one per placement, listing exists), `/advertise` switched (`20261003000006`)
+- [ ] Later release: drop the "Users can insert own sponsored links" INSERT policy once no supported client inserts directly (a tightening, so not in the release that adds the RPC)
+- [ ] Later release: `VALIDATE CONSTRAINT campaign_creatives_link_url_http` after checking existing rows
+- [x] Remove the client price override (it never reached checkout); `placementTotalPrice` and the hardcoded rate fallback are gone
+- [x] Admin campaign status action (pause / resume / cancel) through `admin_set_campaign_status` with audit and notice (`20261003000005`); End Early uses it
+- [x] `verify-campaign-payment` returns the campaign's real status
+- [owner] `20261003000004` and `20261003000005` add CHECKs, so the PR needs the `migration-override` label
 - [owner] Apply `20260928000001-3` (campaign write guards, pricing enum fix, public bucket)
 
 ### WP4 - Sign-up and benefits
@@ -167,7 +171,7 @@ never stored.
 - [x] Ticketmaster affiliate links: `rel="sponsored"`, disclosure next to the button, "Get tickets" from the decoded `u` target; Ticketmaster via Impact on /affiliate-disclosure
 - [x] Scraper stops overwriting `events.source_url`: `events.affiliate_url` (`20261006000001`), preferred for the button; detail read retries without the column on 42703 until the migration is applied
 - [x] Remove the unbacked "20% off" promise, the zero-filled ReferralTracker and email-derived referral codes (random, `src/lib/referralCode.ts`)
-- [ ] Record `amount_paid`, `amount_discount`, promotion code on campaigns and subscriptions (ads work package owns stripe-webhook)
+- [x] Record `amount_paid`, `amount_discount`, promotion code on campaigns and subscriptions (`20261003000001`, written by stripe-webhook; nothing reads the subscription columns yet)
 - [x] Referral codes on profiles (BEFORE INSERT trigger + backfill, `20261006000002`), `?ref` capture (`useReferralCapture`, 30 days), `attribute_referral` / `get_my_referral_stats` RPCs, "Invite friends" card on /profile
 - [ ] Next release: drop the `referrals` INSERT policy "Users can create referrals" (`auth.uid() = referrer_id`), which lets a user insert rows naming themselves referrer and inflate their count. Nothing in web or mobile inserts directly; attribution goes through the RPC. A tightening, so not in the release that adds the RPC
 - [x] Affiliate partner toggle: removed, not moved server-side. It wrote the admin's own localStorage and nothing read it. A server flag would add a request to every ad-bearing page (home first view is capped at 4). The admin card now says the switch is `isActive` in `src/lib/affiliateAds.ts`. `useAffiliateAd` no longer writes storage inside `useMemo`

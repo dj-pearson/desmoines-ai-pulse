@@ -15,7 +15,6 @@ import { Search, Filter, Eye, DollarSign, User, Settings, Megaphone, XCircle, Ho
 import { AdRateManager } from "@/components/admin/AdRateManager";
 import { AffiliatePartnersManager } from "@/components/admin/AffiliatePartnersManager";
 import { supabase } from "@/integrations/supabase/client";
-import { useToast } from "@/hooks/use-toast";
 import { SponsoredBadge } from "@/components/SponsoredBadge";
 import { SpriteIcon } from "@/components/ui/SpriteIcon";
 
@@ -57,8 +56,7 @@ const statusLabels: Record<string, string> = {
 
 export default function AdminCampaigns() {
   const navigate = useNavigate();
-  const { campaigns, isLoading, fetchCampaigns } = useAdminCampaigns();
-  const { toast } = useToast();
+  const { campaigns, isLoading, fetchCampaigns, setCampaignStatus } = useAdminCampaigns();
   useDocumentTitle("Campaign Management");
   const [activeTab, setActiveTab] = useTabState("campaigns", {
     validTabs: ["campaigns", "sponsored", "rates", "affiliates"],
@@ -141,40 +139,26 @@ export default function AdminCampaigns() {
     fetchSponsoredListings();
   }, [fetchSponsoredListings]);
 
+  /**
+   * End a sponsorship by cancelling its campaign through
+   * admin_set_campaign_status. That is one transaction with an audit row and
+   * a notice to the advertiser; the campaigns status trigger clears the
+   * listing's flag unless another active campaign still pays for it. This
+   * used to write is_sponsored = false and status = 'cancelled' from the
+   * browser as two unrelated updates, un-sponsoring listings other campaigns
+   * had paid for and telling nobody.
+   */
   const handleEndSponsorshipEarly = async (row: SponsoredListingRow) => {
     setEndingId(row.id);
     try {
-      // Clear is_sponsored on the listing
-      const table = row.listing_type === 'event' ? 'events' : 'restaurants';
-      const { error: listingError } = await supabase
-        .from(table)
-        .update({ is_sponsored: false, sponsored_until: null })
-        .eq('id', row.listing_id);
-
-      if (listingError) throw listingError;
-
-      // Mark the campaign as cancelled
-      const { error: campaignError } = await supabase
-        .from('campaigns')
-        .update({ status: 'cancelled' })
-        .eq('id', row.campaign_id);
-
-      if (campaignError) throw campaignError;
-
-      toast({
-        title: 'Sponsorship Ended',
-        description: `"${row.listing_name}" is no longer sponsored.`,
-      });
-
-      // Refresh lists
+      const ok = await setCampaignStatus(
+        row.campaign_id,
+        'cancelled',
+        `Sponsorship of "${row.listing_name}" ended early by an admin.`,
+      );
+      if (!ok) return;
       fetchSponsoredListings();
       applyFilters();
-    } catch (err) {
-      toast({
-        title: 'Error',
-        description: 'Failed to end sponsorship. Please try again.',
-        variant: 'destructive',
-      });
     } finally {
       setEndingId(null);
     }
@@ -487,7 +471,7 @@ export default function AdminCampaigns() {
                 Sponsored Listings
               </CardTitle>
               <CardDescription>
-                Active and historical sponsored listing campaigns. Use "End Early" to immediately remove a sponsorship badge and cancel the campaign.
+                Active and historical sponsored listing campaigns. Use "End Early" to cancel the campaign, which removes the badge and tells the advertiser. It does not refund.
               </CardDescription>
             </CardHeader>
             <CardContent>

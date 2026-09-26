@@ -18,6 +18,15 @@ import { sendCampaignEmail } from "../_shared/campaignNotificationEmail.ts";
 import { buildTrialNotice, planAmount } from "../_shared/trialNotice.ts";
 import { getSiteUrl } from "../_shared/siteUrl.ts";
 import {
+  campaignPaymentDecision,
+  PAID_CAMPAIGN_STATUS,
+  PAYABLE_CAMPAIGN_STATUSES,
+  paymentRecordFromSession,
+  promotionCodeOf,
+  shouldAnnouncePayment,
+  type CheckoutSessionLike,
+} from "../_shared/campaignPayment.ts";
+import {
   isSecondLiveSubscription,
   resolvePlanForSubscription,
   statusAfterInvoicePaid,
@@ -231,7 +240,7 @@ async function handleCheckoutSessionCompleted(
 
   if (metadata.campaignId) {
     // Campaign one-time payment
-    await handleCampaignPayment(supabase, session, metadata.campaignId);
+    await handleCampaignPayment(supabase, stripe, session, metadata.campaignId);
   } else if (session.mode === "subscription" && metadata.userId && metadata.planId) {
     // Subscription signup
     await handleSubscriptionPayment(supabase, stripe, session, metadata.userId, metadata.planId);
@@ -325,15 +334,86 @@ async function handleCheckoutSessionExpired(
   console.log(`Campaign ${campaignId} returned to draft after checkout expiry.`);
 }
 
+/** The two Stripe calls recordCheckoutPayment makes, structurally. */
+interface PromotionCodeReader {
+  checkout: { sessions: { retrieve(id: string, params?: { expand?: string[] }): Promise<unknown> } };
+  promotionCodes: { retrieve(id: string): Promise<{ code?: string | null }> };
+}
+
+/**
+ * Write amount_paid_cents, amount_discount_cents and promotion_code onto the
+ * row a checkout paid for (NON_CORE_REVIEW WP6 item 3).
+ *
+ * BEST EFFORT, AND A SEPARATE UPDATE ON PURPOSE. The columns arrive with
+ * 20261003000001; until that is applied this write fails with 42703/PGRST204.
+ * Folding them into the status UPDATE would make that failure throw, Stripe
+ * would redeliver forever, and a paid campaign or subscription would never be
+ * recorded at all. Here it is logged and the event still succeeds.
+ *
+ * The code the customer typed is not on the completed event: the session is
+ * re-read with total_details.breakdown expanded, which gives the promotion
+ * code's id, and the id is resolved to its code. Either lookup failing leaves
+ * the id (or null), never blocks the amounts.
+ */
+async function recordCheckoutPayment(
+  supabase: ReturnType<typeof createClient>,
+  stripe: PromotionCodeReader,
+  session: CheckoutSessionLike,
+  table: "campaigns" | "user_subscriptions",
+  match: Record<string, string>,
+) {
+  const record = paymentRecordFromSession(session);
+
+  if ((record.amount_discount_cents ?? 0) > 0 && !record.promotion_code) {
+    try {
+      const expanded = await stripe.checkout.sessions.retrieve(session.id, {
+        expand: ["total_details.breakdown"],
+      });
+      const promoId = promotionCodeOf(expanded as unknown as CheckoutSessionLike);
+      record.promotion_code = promoId;
+      if (promoId && promoId.startsWith("promo_")) {
+        const promo = await stripe.promotionCodes.retrieve(promoId);
+        if (promo?.code) record.promotion_code = promo.code;
+      }
+    } catch (lookupError) {
+      console.warn(`Could not read the promotion code for checkout ${session.id}:`, lookupError);
+    }
+  }
+
+  const { error } = await supabase.from(table).update(record).match(match);
+  if (error) {
+    console.error(
+      `Payment amounts not recorded on ${table} for checkout ${session.id} ` +
+        `(${error.code ?? "no code"}: ${error.message}). Apply 20261003000001 if this is 42703/PGRST204.`,
+    );
+  }
+}
+
 /**
  * Handle campaign payment completion
  */
 async function handleCampaignPayment(
   supabase: ReturnType<typeof createClient>,
+  stripe: PromotionCodeReader,
   session: Stripe.Checkout.Session,
   campaignId: string
 ) {
   console.log("Processing campaign payment:", campaignId);
+
+  // WP3 item 1. checkout.session.completed also fires for an async payment
+  // method (ACH, some wallets) with payment_status 'unpaid': the session is
+  // done, the money is not. Advancing on it started a campaign nobody had paid
+  // for. checkout.session.async_payment_succeeded is not subscribed, so such a
+  // payment is settled by verify-campaign-payment when the advertiser returns,
+  // or by an admin; logging it loudly is the hand-off.
+  const decision = campaignPaymentDecision(session, campaignId);
+  if (!decision.advance) {
+    console.error(
+      `Campaign ${campaignId}: checkout ${session.id} completed with payment_status ` +
+        `'${session.payment_status}' - not advancing. Check the payment in Stripe.`,
+    );
+    return;
+  }
 
   // Get campaign details for payment logging.
   //
@@ -361,44 +441,49 @@ async function handleCampaignPayment(
     console.error(`Campaign ${campaignId} not found while processing its payment.`);
   }
 
-  const { error } = await supabase
+  // WP3 item 1 (business plan D9). The update used to match on session id
+  // alone, so a late or redelivered event dragged an ACTIVE campaign back to
+  // pending_creative and took its ads down. Only the two unpaid statuses may
+  // advance, and .select tells us whether anything did.
+  const { data: advanced, error } = await supabase
     .from("campaigns")
     .update({
-      status: "pending_creative",
+      status: PAID_CAMPAIGN_STATUS,
       stripe_payment_intent_id: session.payment_intent as string,
     })
     .eq("id", campaignId)
-    .eq("stripe_session_id", session.id);
+    .eq("stripe_session_id", session.id)
+    .in("status", [...PAYABLE_CAMPAIGN_STATUSES])
+    .select("id");
 
   if (error) {
     console.error("Failed to update campaign:", error);
     throw error;
   }
 
-  // Log payment to payments table
-  const amountPaid = (session.amount_total || 0) / 100;
-  const paymentData = {
-    user_id: campaign?.user_id || null,
-    stripe_payment_intent_id: session.payment_intent as string,
-    amount: amountPaid,
-    currency: session.currency || 'usd',
-    payment_type: 'campaign' as const,
-    status: 'succeeded' as const,
-    campaign_id: campaignId,
-    description: `Advertising Campaign - ${campaign?.name || 'Campaign'}`,
-    paid_at: new Date().toISOString(),
-  };
+  // WP6 item 3. What was charged after any promotion code. Written whether or
+  // not this delivery advanced the row: verify-campaign-payment may have moved
+  // it first, and the amounts belong to this session either way.
+  await recordCheckoutPayment(supabase, stripe, session, "campaigns", {
+    id: campaignId,
+    stripe_session_id: session.id,
+  });
 
-  const { error: paymentError } = await supabase
-    .from("payments")
-    .upsert(paymentData, {
-      onConflict: 'stripe_payment_intent_id',
-      ignoreDuplicates: false,
-    });
-
-  if (paymentError) {
-    console.error("Failed to log campaign payment:", paymentError);
+  if (!shouldAnnouncePayment(advanced?.length ?? 0)) {
+    // Already moved on: verify-campaign-payment got there first, or this is a
+    // late delivery for a campaign that is active, cancelled or refunded, or a
+    // newer checkout owns the row. The confirmation was sent when it advanced.
+    console.log(
+      `Campaign ${campaignId} was not draft/pending_payment for session ${session.id} - ` +
+        `left as is, no notices sent.`,
+    );
+    return;
   }
+
+  // The payments upsert that was here is gone: that table is not in
+  // production (scripts/db-snapshot.json), so every write failed and was
+  // logged. See NON_CORE_REVIEW_2026-09.md WP3.
+  const amountPaid = (session.amount_total || 0) / 100;
 
   // Send payment confirmation to the advertiser: the stored notification AND an
   // email.
@@ -603,6 +688,13 @@ async function handleSubscriptionPayment(
       throw error;
     }
   }
+
+  // WP6 item 3: the first charge and any promotion code. After the row write,
+  // never inside it; see recordCheckoutPayment.
+  await recordCheckoutPayment(supabase, stripe, session, "user_subscriptions", {
+    user_id: userId,
+    stripe_subscription_id: subscriptionId,
+  });
 
   console.log("Subscription payment processed successfully for user:", userId);
 }

@@ -79,25 +79,37 @@ export interface RateCardEntry {
 }
 
 /**
- * The price of N days of a placement, mirroring calculate_campaign_pricing().
+ * Link the listing a sponsored_listing placement pays for (NON_CORE_REVIEW WP3).
  *
- * WEB-ADS-003. The /advertise summary used to total a hardcoded daily rate with
- * no volume discount while the stored campaign came from the RPC with one, so
- * the page said $70 and the row said $66.50. Two formulas for one price is a
- * bug generator, so this one follows the SQL exactly, including the fact that
- * the SQL rounds the TOTAL once rather than multiplying a rounded daily rate.
+ * Goes through link_sponsored_listing (20261003000006), which refuses a
+ * campaign that is not a draft, has no sponsored_listing placement or already
+ * has its listing, and a listing that does not exist. The direct INSERT it
+ * replaces checked only that the caller owned the campaign.
  *
- * This is for display. Nothing here decides what is charged: the trigger on
- * campaign_placements and create-campaign-checkout do that, from the same rate
- * card, on the server.
+ * PGRST202 means the RPC is not deployed yet. Only then does this fall back to
+ * the old INSERT, so sponsored purchases keep working in the window between
+ * this web release and the migration. Any other error is the RPC refusing,
+ * and is returned as is.
  */
-export function placementTotalPrice(rate: RateCardEntry, days: number): number {
-  const discount =
-    days >= 30 ? (rate.discount_30_day ?? 15)
-    : days >= 14 ? (rate.discount_14_day ?? 10)
-    : days >= 7 ? (rate.discount_7_day ?? 5)
-    : 0;
-  return Math.round(rate.base_daily_rate * (1 - discount / 100) * days * 100) / 100;
+export async function linkSponsoredListing(
+  campaignId: string,
+  listingType: string,
+  listingId: string,
+): Promise<{ error: Error | null }> {
+  const { error } = await supabase.rpc("link_sponsored_listing" as never, {
+    p_campaign_id: campaignId,
+    p_listing_type: listingType,
+    p_listing_id: listingId,
+  } as never);
+  if (!error) return { error: null };
+  if (error.code !== "PGRST202") return { error: new Error(error.message) };
+
+  const { error: insertError } = await supabase.from("sponsored_listing_links").insert({
+    campaign_id: campaignId,
+    listing_type: listingType,
+    listing_id: listingId,
+  });
+  return { error: insertError ? new Error(insertError.message) : null };
 }
 
 /** Fetch the ad rate card (including CPM rates) — callable without authentication. */
@@ -206,49 +218,30 @@ export function useCampaigns(options: UseCampaignsOptions = {}) {
     await queryClient.invalidateQueries({ queryKey: ["campaigns", user?.id] });
   };
 
+  /**
+   * The rate card's price for a placement, from calculate_campaign_pricing.
+   *
+   * It used to fall back to hardcoded rates ($10/$5/$5/$15 a day, no volume
+   * discount) on any error or empty answer. That number went into
+   * campaigns.total_cost, which the pricing trigger and
+   * create-campaign-checkout then disagreed with: a second formula for one
+   * price (WEB-ADS-003's shape). An error is now an error, and the campaign is
+   * not created on a guess.
+   */
   const getCurrentPricing = async (
     placementType: 'top_banner' | 'featured_spot' | 'below_fold' | 'sponsored_listing',
     daysCount: number
   ): Promise<PricingInfo> => {
-    const defaultPrices: Record<string, number> = {
-      top_banner: 10,
-      featured_spot: 5,
-      below_fold: 5,
-      sponsored_listing: 15,
-    };
+    const { data, error } = await supabase.rpc("calculate_campaign_pricing", {
+      p_placement_type: placementType,
+      p_days_count: daysCount,
+    });
 
-    // sponsored_listing is priced from the rate card like everything else
-    // since WEB-ADS-003 seeded its row; it no longer needs a special case.
-
-    try {
-      const { data, error } = await supabase.rpc("calculate_campaign_pricing", {
-        p_placement_type: placementType,
-        p_days_count: daysCount,
-      });
-
-      if (error) throw error;
-      if (!data || data.length === 0) {
-        const dailyPrice = defaultPrices[placementType];
-        return {
-          daily_price: dailyPrice,
-          total_price: dailyPrice * daysCount,
-          base_price: dailyPrice,
-          traffic_multiplier: 1.0,
-          demand_multiplier: 1.0,
-        };
-      }
-
-      return data[0];
-    } catch (err) {
-      const dailyPrice = defaultPrices[placementType];
-      return {
-        daily_price: dailyPrice,
-        total_price: dailyPrice * daysCount,
-        base_price: dailyPrice,
-        traffic_multiplier: 1.0,
-        demand_multiplier: 1.0,
-      };
+    if (error) throw error;
+    if (!data || data.length === 0) {
+      throw new Error(`No price on the rate card for ${placementType}`);
     }
+    return data[0];
   };
 
   const createCampaign = async (campaignData: {

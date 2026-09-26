@@ -30,7 +30,6 @@ import {
   DialogFooter,
   DialogHeader,
   DialogTitle,
-  DialogTrigger,
 } from "@/components/ui/dialog";
 import {
   Select,
@@ -39,19 +38,9 @@ import {
   SelectTrigger,
   SelectValue,
 } from "@/components/ui/select";
-import {
-  AlertDialog,
-  AlertDialogAction,
-  AlertDialogCancel,
-  AlertDialogContent,
-  AlertDialogDescription,
-  AlertDialogFooter,
-  AlertDialogHeader,
-  AlertDialogTitle,
-} from "@/components/ui/alert-dialog";
 import { Skeleton } from "@/components/ui/skeleton";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
-import { ArrowLeft, RefreshCw, DollarSign, AlertCircle, CheckCircle, Search, Filter, Plus, Eye, RotateCcw } from "lucide-react";
+import { ArrowLeft, RefreshCw, DollarSign, AlertCircle, CheckCircle, Search, Filter, RotateCcw } from "lucide-react";
 import { supabase } from "@/integrations/supabase/client";
 import { format } from "date-fns";
 import { toast } from "sonner";
@@ -65,7 +54,6 @@ import {
 } from "recharts";
 import { Download } from "lucide-react";
 import { SpriteIcon } from "@/components/ui/SpriteIcon";
-import { fromUnknownTable } from "@/integrations/supabase/unknownTable";
 
 // ADMIN-REFUND-001: structured taxonomy for finance reporting.
 const REFUND_REASON_OPTIONS = [
@@ -81,6 +69,11 @@ const REFUND_REASON_OPTIONS = [
 
 type RefundReason = (typeof REFUND_REASON_OPTIONS)[number]["value"];
 
+/**
+ * A row process-stripe-refund wrote. Its status is "completed" when Stripe
+ * answered succeeded and "pending" while the refund settles; there is no
+ * approval step, because the refund is made in the same call that records it.
+ */
 interface Refund {
   id: string;
   campaign_id: string | null;
@@ -89,7 +82,7 @@ interface Refund {
   reason: string | null;
   refund_reason: RefundReason | null;
   refund_reason_notes: string | null;
-  status: "pending" | "approved" | "processed" | "rejected";
+  status: string;
   stripe_refund_id: string | null;
   processed_at: string | null;
   created_at: string;
@@ -99,24 +92,80 @@ interface Refund {
     total_cost: number;
     user_id: string;
   };
-  admin?: {
-    full_name: string | null;
-    username: string | null;
-  };
 }
 
-interface Payment {
+/**
+ * A paid campaign that may still have money to return.
+ *
+ * Read from campaigns, not payments: payments is not in production, so this
+ * tab listed nothing, and its request sent an id the function never reads.
+ * `paid` is amount_paid_cents when the webhook recorded it (20261003000001),
+ * otherwise the list price. Either way it is an estimate for the dialog;
+ * process-stripe-refund caps the amount against the Stripe charge itself.
+ */
+interface RefundableCampaign {
   id: string;
-  user_id: string;
-  amount: number;
-  currency: string;
-  payment_type: string;
+  name: string;
   status: string;
-  description: string | null;
-  stripe_payment_intent_id: string | null;
-  refunded_amount: number;
   created_at: string;
-  paid_at: string | null;
+  paid: number;
+  paidIsListPrice: boolean;
+  refunded: number;
+}
+
+interface CampaignRefundRow {
+  id: string;
+  name: string;
+  status: string;
+  created_at: string;
+  total_cost: number | null;
+  amount_paid_cents?: number | null;
+  refunds: Array<{ amount: number | null; status: string | null }> | null;
+}
+
+/** Statuses with no money taken, or nothing left to give back. */
+const NOT_REFUNDABLE = "(draft,pending_payment,refunded)";
+
+async function fetchRefundableCampaigns(search: string): Promise<RefundableCampaign[]> {
+  const run = (withPaid: boolean) => {
+    const columns = withPaid
+      ? "id, name, status, created_at, total_cost, amount_paid_cents, refunds(amount, status)"
+      : "id, name, status, created_at, total_cost, refunds(amount, status)";
+    let query = supabase
+      .from("campaigns")
+      .select(columns)
+      .not("stripe_payment_intent_id", "is", null)
+      .not("status", "in", NOT_REFUNDABLE)
+      .order("created_at", { ascending: false })
+      .limit(50);
+    const term = search.trim();
+    if (term) query = query.ilike("name", `%${term}%`);
+    return query;
+  };
+
+  let { data, error } = await run(true);
+  // 42703 until 20261003000001 is applied: list at the list price instead.
+  if (error?.code === "42703") ({ data, error } = await run(false));
+  if (error) throw error;
+
+  return ((data ?? []) as unknown as CampaignRefundRow[])
+    .map((row) => {
+      const recorded = row.amount_paid_cents;
+      const paid = typeof recorded === "number" ? recorded / 100 : Number(row.total_cost ?? 0);
+      const refunded = (row.refunds ?? [])
+        .filter((r) => r.status !== "failed")
+        .reduce((sum, r) => sum + Number(r.amount ?? 0), 0);
+      return {
+        id: row.id,
+        name: row.name,
+        status: row.status,
+        created_at: row.created_at,
+        paid,
+        paidIsListPrice: typeof recorded !== "number",
+        refunded,
+      };
+    })
+    .filter((c) => c.paid - c.refunded > 0.005);
 }
 
 export default function AdminRefunds() {
@@ -127,14 +176,13 @@ export default function AdminRefunds() {
     validTabs: ["refunds", "new-refund"],
   });
   const [searchQuery, setSearchQuery] = useState("");
-  const [statusFilter, setStatusFilter] = useState<string>("all");
-  const [selectedPayment, setSelectedPayment] = useState<Payment | null>(null);
+  const [statusFilter, setStatusFilter] = useState<"all" | "pending" | "completed" | "failed">("all");
+  const [selectedCampaign, setSelectedCampaign] = useState<RefundableCampaign | null>(null);
   const [refundAmount, setRefundAmount] = useState("");
   const [refundReason, setRefundReason] = useState("");
   // ADMIN-REFUND-001: required structured taxonomy alongside free-text reason.
   const [refundReasonCategory, setRefundReasonCategory] = useState<RefundReason | "">("");
   const [isRefundDialogOpen, setIsRefundDialogOpen] = useState(false);
-  const [confirmRefund, setConfirmRefund] = useState<Refund | null>(null);
 
   // Fetch refunds
   const { data: refunds = [], isLoading: refundsLoading } = useQuery({
@@ -158,105 +206,63 @@ export default function AdminRefunds() {
     },
   });
 
-  // Fetch eligible payments for refund
-  const { data: eligiblePayments = [], isLoading: paymentsLoading } = useQuery({
-    queryKey: ["admin-refund-eligible-payments", searchQuery],
-    queryFn: async () => {
-      let query = fromUnknownTable("payments")
-        .select("*")
-        .eq("status", "succeeded")
-        .order("created_at", { ascending: false })
-        .limit(50);
-
-      if (searchQuery) {
-        query = query.or(
-          `stripe_payment_intent_id.ilike.%${searchQuery}%,description.ilike.%${searchQuery}%`
-        );
-      }
-
-      const { data, error } = await query;
-      if (error) throw error;
-      return (data as Payment[]).filter(
-        (p) => p.amount - (p.refunded_amount || 0) > 0
-      );
-    },
+  // Paid campaigns with a balance left to refund
+  const { data: refundableCampaigns = [], isLoading: campaignsLoading } = useQuery({
+    queryKey: ["admin-refundable-campaigns", searchQuery],
+    queryFn: () => fetchRefundableCampaigns(searchQuery),
   });
 
-  // Process refund mutation
+  // Process refund mutation. The body is the one process-stripe-refund
+  // reads: campaignId and the structured refundReason are both required, and
+  // this page sent neither (a payments row id instead), so every refund here
+  // was a 400.
   const processRefund = useMutation({
     mutationFn: async ({
-      paymentId,
+      campaignId,
       amount,
       reason,
       refundReason,
-      refundReasonNotes,
     }: {
-      paymentId: string;
+      campaignId: string;
       amount: number;
       reason: string;
       refundReason: RefundReason;
-      refundReasonNotes?: string;
     }) => {
       const { data, error } = await supabase.functions.invoke(
         "process-stripe-refund",
         {
           body: {
-            paymentId,
+            campaignId,
             amount,
             reason,
             refundReason,
-            refundReasonNotes,
+            refundReasonNotes: reason,
           },
         }
       );
 
       if (error) throw error;
-      return data;
+      if (!data?.success) throw new Error(data?.error || "Refund processing failed");
+      return data as { duplicate?: boolean; full?: boolean; amount?: number };
     },
-    onSuccess: () => {
+    onSuccess: (data) => {
       queryClient.invalidateQueries({ queryKey: ["admin-refunds"] });
-      queryClient.invalidateQueries({ queryKey: ["admin-refund-eligible-payments"] });
+      queryClient.invalidateQueries({ queryKey: ["admin-refundable-campaigns"] });
       setIsRefundDialogOpen(false);
-      setSelectedPayment(null);
+      setSelectedCampaign(null);
       setRefundAmount("");
       setRefundReason("");
       setRefundReasonCategory("");
-      toast.success("Refund processed successfully");
+      if (data?.duplicate) {
+        toast.info("Stripe already had this refund; nothing new was sent.");
+      } else if (data?.full) {
+        toast.success("Refunded in full. The campaign has ended and the advertiser was emailed.");
+      } else {
+        toast.success("Partial refund issued. The campaign keeps running; the advertiser was emailed.");
+      }
     },
     onError: (error) => {
       toast.error(`Failed to process refund: ${error.message}`);
-    },
-  });
-
-  // Approve pending refund
-  const approveRefund = useMutation({
-    mutationFn: async (refundId: string) => {
-      const { error } = await supabase
-        .from("refunds")
-        .update({ status: "approved" })
-        .eq("id", refundId);
-
-      if (error) throw error;
-    },
-    onSuccess: () => {
-      queryClient.invalidateQueries({ queryKey: ["admin-refunds"] });
-      toast.success("Refund approved");
-    },
-  });
-
-  // Reject pending refund
-  const rejectRefund = useMutation({
-    mutationFn: async (refundId: string) => {
-      const { error } = await supabase
-        .from("refunds")
-        .update({ status: "rejected" })
-        .eq("id", refundId);
-
-      if (error) throw error;
-    },
-    onSuccess: () => {
-      queryClient.invalidateQueries({ queryKey: ["admin-refunds"] });
-      toast.success("Refund rejected");
     },
   });
 
@@ -279,15 +285,11 @@ export default function AdminRefunds() {
         variant: "secondary",
         icon: <SpriteIcon name="clock" className="h-3 w-3 mr-1" />,
       },
-      approved: {
+      completed: {
         variant: "default",
         icon: <CheckCircle className="h-3 w-3 mr-1" />,
       },
-      processed: {
-        variant: "default",
-        icon: <CheckCircle className="h-3 w-3 mr-1" />,
-      },
-      rejected: {
+      failed: {
         variant: "destructive",
         icon: <AlertCircle className="h-3 w-3 mr-1" />,
       },
@@ -306,21 +308,20 @@ export default function AdminRefunds() {
     );
   };
 
-  const handleInitiateRefund = (payment: Payment) => {
-    setSelectedPayment(payment);
-    setRefundAmount(
-      String(payment.amount - (payment.refunded_amount || 0))
-    );
+  const availableOf = (c: RefundableCampaign) => Math.max(0, c.paid - c.refunded);
+
+  const handleInitiateRefund = (campaign: RefundableCampaign) => {
+    setSelectedCampaign(campaign);
+    setRefundAmount(availableOf(campaign).toFixed(2));
     setRefundReason("");
     setIsRefundDialogOpen(true);
   };
 
   const handleProcessRefund = () => {
-    if (!selectedPayment) return;
+    if (!selectedCampaign) return;
 
     const amount = parseFloat(refundAmount);
-    const maxRefundable =
-      selectedPayment.amount - (selectedPayment.refunded_amount || 0);
+    const maxRefundable = availableOf(selectedCampaign);
 
     if (isNaN(amount) || amount <= 0) {
       toast.error("Please enter a valid refund amount");
@@ -342,22 +343,20 @@ export default function AdminRefunds() {
     }
 
     processRefund.mutate({
-      paymentId: selectedPayment.id,
+      campaignId: selectedCampaign.id,
       amount,
       reason: refundReason,
       refundReason: refundReasonCategory,
-      refundReasonNotes: refundReason,
     });
   };
 
   // Summary stats
   const stats = {
     pending: refunds.filter((r) => r.status === "pending").length,
-    approved: refunds.filter((r) => r.status === "approved").length,
-    processed: refunds.filter((r) => r.status === "processed").length,
+    completed: refunds.filter((r) => r.status === "completed").length,
     totalRefunded: refunds
-      .filter((r) => r.status === "processed")
-      .reduce((sum, r) => sum + r.amount, 0),
+      .filter((r) => r.status === "completed" || r.status === "pending")
+      .reduce((sum, r) => sum + Number(r.amount), 0),
   };
 
   // ADMIN-REFUND-001: 90-day reasons breakdown.
@@ -467,12 +466,12 @@ export default function AdminRefunds() {
 
       <div className="container mx-auto px-4 py-6">
         {/* Stats Cards */}
-        <div className="grid gap-4 md:grid-cols-4 mb-6">
+        <div className="grid gap-4 md:grid-cols-3 mb-6">
           <Card>
             <CardContent className="pt-6">
               <div className="flex items-center justify-between">
                 <div>
-                  <p className="text-sm text-muted-foreground">Pending</p>
+                  <p className="text-sm text-muted-foreground">Settling at Stripe</p>
                   <p className="text-2xl font-bold">{stats.pending}</p>
                 </div>
                 <SpriteIcon name="clock" className="h-8 w-8 text-yellow-500" />
@@ -483,19 +482,8 @@ export default function AdminRefunds() {
             <CardContent className="pt-6">
               <div className="flex items-center justify-between">
                 <div>
-                  <p className="text-sm text-muted-foreground">Approved</p>
-                  <p className="text-2xl font-bold">{stats.approved}</p>
-                </div>
-                <CheckCircle className="h-8 w-8 text-blue-500" />
-              </div>
-            </CardContent>
-          </Card>
-          <Card>
-            <CardContent className="pt-6">
-              <div className="flex items-center justify-between">
-                <div>
-                  <p className="text-sm text-muted-foreground">Processed</p>
-                  <p className="text-2xl font-bold">{stats.processed}</p>
+                  <p className="text-sm text-muted-foreground">Completed</p>
+                  <p className="text-2xl font-bold">{stats.completed}</p>
                 </div>
                 <CheckCircle className="h-8 w-8 text-green-500" />
               </div>
@@ -573,25 +561,27 @@ export default function AdminRefunds() {
 
         <Tabs value={activeTab} onValueChange={setActiveTab} className="mt-6">
           <TabsList className="mb-6">
-            <TabsTrigger value="refunds">Refund Requests</TabsTrigger>
+            <TabsTrigger value="refunds">Refunds issued</TabsTrigger>
             <TabsTrigger value="new-refund">Issue New Refund</TabsTrigger>
           </TabsList>
 
-          {/* Refund Requests Tab */}
+          {/* Refund history. Advertiser requests arrive as support tickets
+              (request_campaign_refund); every row here is a refund Stripe
+              has already been asked to make. */}
           <TabsContent value="refunds">
             <Card>
               <CardHeader>
                 <div className="flex items-center justify-between">
                   <div>
-                    <CardTitle>Refund Requests</CardTitle>
+                    <CardTitle>Refunds issued</CardTitle>
                     <CardDescription>
-                      Review and process refund requests
+                      Every refund sent to Stripe from this page or the API
                     </CardDescription>
                   </div>
                   <div className="flex items-center gap-2">
                     <Select
                       value={statusFilter}
-                      onValueChange={setStatusFilter}
+                      onValueChange={(v) => setStatusFilter(v as typeof statusFilter)}
                     >
                       <SelectTrigger className="w-[150px]">
                         <Filter className="h-4 w-4 mr-2" />
@@ -599,10 +589,9 @@ export default function AdminRefunds() {
                       </SelectTrigger>
                       <SelectContent>
                         <SelectItem value="all">All Status</SelectItem>
-                        <SelectItem value="pending">Pending</SelectItem>
-                        <SelectItem value="approved">Approved</SelectItem>
-                        <SelectItem value="processed">Processed</SelectItem>
-                        <SelectItem value="rejected">Rejected</SelectItem>
+                        <SelectItem value="pending">Settling</SelectItem>
+                        <SelectItem value="failed">Failed</SelectItem>
+                        <SelectItem value="completed">Completed</SelectItem>
                       </SelectContent>
                     </Select>
                   </div>
@@ -618,7 +607,7 @@ export default function AdminRefunds() {
                 ) : refunds.length === 0 ? (
                   <div className="text-center py-8 text-muted-foreground">
                     <RotateCcw className="h-12 w-12 mx-auto mb-4 opacity-50" />
-                    <p>No refund requests found</p>
+                    <p>No refunds found</p>
                   </div>
                 ) : (
                   <Table>
@@ -629,7 +618,7 @@ export default function AdminRefunds() {
                         <TableHead>Amount</TableHead>
                         <TableHead>Reason</TableHead>
                         <TableHead>Status</TableHead>
-                        <TableHead className="text-right">Actions</TableHead>
+                        <TableHead className="text-right">Stripe refund</TableHead>
                       </TableRow>
                     </TableHeader>
                     <TableBody>
@@ -649,38 +638,9 @@ export default function AdminRefunds() {
                           </TableCell>
                           <TableCell>{getStatusBadge(refund.status)}</TableCell>
                           <TableCell className="text-right">
-                            {refund.status === "pending" && (
-                              <div className="flex justify-end gap-2">
-                                <Button
-                                  size="sm"
-                                  variant="outline"
-                                  onClick={() => approveRefund.mutate(refund.id)}
-                                  disabled={approveRefund.isPending}
-                                >
-                                  Approve
-                                </Button>
-                                <Button
-                                  size="sm"
-                                  variant="ghost"
-                                  className="text-destructive"
-                                  onClick={() => rejectRefund.mutate(refund.id)}
-                                  disabled={rejectRefund.isPending}
-                                >
-                                  Reject
-                                </Button>
-                              </div>
-                            )}
-                            {refund.status === "approved" && (
-                              <Button
-                                size="sm"
-                                onClick={() => setConfirmRefund(refund)}
-                              >
-                                Process Refund
-                              </Button>
-                            )}
-                            {refund.status === "processed" && (
+                            {refund.stripe_refund_id && (
                               <span className="text-sm text-muted-foreground">
-                                {refund.stripe_refund_id?.slice(0, 12)}...
+                                {refund.stripe_refund_id.slice(0, 12)}...
                               </span>
                             )}
                           </TableCell>
@@ -699,7 +659,8 @@ export default function AdminRefunds() {
               <CardHeader>
                 <CardTitle>Issue New Refund</CardTitle>
                 <CardDescription>
-                  Search for a payment and issue a refund
+                  Paid campaigns with money left to return. Stripe checks the
+                  amount against the actual charge before anything is sent.
                 </CardDescription>
               </CardHeader>
               <CardContent>
@@ -707,7 +668,8 @@ export default function AdminRefunds() {
                   <div className="relative">
                     <Search className="absolute left-3 top-1/2 -translate-y-1/2 h-4 w-4 text-muted-foreground" />
                     <Input
-                      placeholder="Search by payment ID or description..."
+                      placeholder="Search by campaign name..."
+                      aria-label="Search campaigns by name"
                       value={searchQuery}
                       onChange={(e) => setSearchQuery(e.target.value)}
                       className="pl-10"
@@ -715,18 +677,18 @@ export default function AdminRefunds() {
                   </div>
                 </div>
 
-                {paymentsLoading ? (
+                {campaignsLoading ? (
                   <div className="space-y-4">
                     {[1, 2, 3].map((i) => (
                       <Skeleton key={i} className="h-16" />
                     ))}
                   </div>
-                ) : eligiblePayments.length === 0 ? (
+                ) : refundableCampaigns.length === 0 ? (
                   <div className="text-center py-8 text-muted-foreground">
                     <DollarSign className="h-12 w-12 mx-auto mb-4 opacity-50" />
-                    <p>No eligible payments found</p>
+                    <p>No refundable campaigns found</p>
                     <p className="text-sm">
-                      Only succeeded payments with remaining balance can be refunded
+                      Only paid campaigns with a balance left can be refunded
                     </p>
                   </div>
                 ) : (
@@ -734,46 +696,44 @@ export default function AdminRefunds() {
                     <TableHeader>
                       <TableRow>
                         <TableHead>Date</TableHead>
-                        <TableHead>Description</TableHead>
-                        <TableHead>Type</TableHead>
-                        <TableHead>Amount</TableHead>
+                        <TableHead>Campaign</TableHead>
+                        <TableHead>Status</TableHead>
+                        <TableHead>Paid</TableHead>
                         <TableHead>Refunded</TableHead>
                         <TableHead>Available</TableHead>
                         <TableHead className="text-right">Actions</TableHead>
                       </TableRow>
                     </TableHeader>
                     <TableBody>
-                      {eligiblePayments.map((payment) => (
-                        <TableRow key={payment.id}>
+                      {refundableCampaigns.map((campaign) => (
+                        <TableRow key={campaign.id}>
                           <TableCell>
-                            {format(new Date(payment.created_at), "MMM d, yyyy")}
+                            {format(new Date(campaign.created_at), "MMM d, yyyy")}
                           </TableCell>
                           <TableCell className="max-w-[200px] truncate">
-                            {payment.description || payment.stripe_payment_intent_id?.slice(0, 15) || "Payment"}
+                            {campaign.name}
                           </TableCell>
                           <TableCell>
                             <Badge variant="outline" className="capitalize">
-                              {payment.payment_type}
+                              {campaign.status.replace(/_/g, " ")}
                             </Badge>
                           </TableCell>
                           <TableCell>
-                            {formatCurrency(payment.amount, payment.currency)}
+                            {formatCurrency(campaign.paid)}
+                            {campaign.paidIsListPrice && (
+                              <span className="block text-xs text-muted-foreground">list price</span>
+                            )}
                           </TableCell>
                           <TableCell>
-                            {payment.refunded_amount > 0
-                              ? formatCurrency(payment.refunded_amount)
-                              : "-"}
+                            {campaign.refunded > 0 ? formatCurrency(campaign.refunded) : "-"}
                           </TableCell>
                           <TableCell className="font-medium text-green-600">
-                            {formatCurrency(
-                              payment.amount - (payment.refunded_amount || 0),
-                              payment.currency
-                            )}
+                            {formatCurrency(availableOf(campaign))}
                           </TableCell>
                           <TableCell className="text-right">
                             <Button
                               size="sm"
-                              onClick={() => handleInitiateRefund(payment)}
+                              onClick={() => handleInitiateRefund(campaign)}
                             >
                               <RotateCcw className="h-4 w-4 mr-2" />
                               Refund
@@ -796,32 +756,32 @@ export default function AdminRefunds() {
           <DialogHeader>
             <DialogTitle>Issue Refund</DialogTitle>
             <DialogDescription>
-              Process a refund for this payment
+              A refund of the whole balance ends the campaign. A partial
+              refund leaves it running. Either way the advertiser is emailed.
             </DialogDescription>
           </DialogHeader>
-          {selectedPayment && (
+          {selectedCampaign && (
             <div className="space-y-4">
               <div className="p-4 bg-muted rounded-lg">
                 <div className="grid grid-cols-2 gap-4 text-sm">
                   <div>
-                    <span className="text-muted-foreground">Original Amount:</span>
+                    <span className="text-muted-foreground">
+                      {selectedCampaign.paidIsListPrice ? "List price:" : "Paid:"}
+                    </span>
                     <p className="font-medium">
-                      {formatCurrency(selectedPayment.amount)}
+                      {formatCurrency(selectedCampaign.paid)}
                     </p>
                   </div>
                   <div>
                     <span className="text-muted-foreground">Already Refunded:</span>
                     <p className="font-medium">
-                      {formatCurrency(selectedPayment.refunded_amount || 0)}
+                      {formatCurrency(selectedCampaign.refunded)}
                     </p>
                   </div>
                   <div>
                     <span className="text-muted-foreground">Available to Refund:</span>
                     <p className="font-medium text-green-600">
-                      {formatCurrency(
-                        selectedPayment.amount -
-                          (selectedPayment.refunded_amount || 0)
-                      )}
+                      {formatCurrency(availableOf(selectedCampaign))}
                     </p>
                   </div>
                 </div>
@@ -836,10 +796,7 @@ export default function AdminRefunds() {
                     type="number"
                     step="0.01"
                     min="0.01"
-                    max={
-                      selectedPayment.amount -
-                      (selectedPayment.refunded_amount || 0)
-                    }
+                    max={availableOf(selectedCampaign)}
                     value={refundAmount}
                     onChange={(e) => setRefundAmount(e.target.value)}
                     className="pl-10"
@@ -913,52 +870,6 @@ export default function AdminRefunds() {
         </DialogContent>
       </Dialog>
 
-      {/* Confirm Refund Dialog for approved refunds */}
-      <AlertDialog
-        open={!!confirmRefund}
-        onOpenChange={() => setConfirmRefund(null)}
-      >
-        <AlertDialogContent>
-          <AlertDialogHeader>
-            <AlertDialogTitle>Process Approved Refund?</AlertDialogTitle>
-            <AlertDialogDescription>
-              This will process a refund of{" "}
-              <strong>{confirmRefund && formatCurrency(confirmRefund.amount)}</strong>{" "}
-              to the customer. This action cannot be undone.
-            </AlertDialogDescription>
-          </AlertDialogHeader>
-          <AlertDialogFooter>
-            <AlertDialogCancel>Cancel</AlertDialogCancel>
-            <AlertDialogAction
-              onClick={() => {
-                if (confirmRefund?.campaign_id) {
-                  // For campaign refunds, use the existing process-stripe-refund function
-                  supabase.functions
-                    .invoke("process-stripe-refund", {
-                      body: {
-                        campaignId: confirmRefund.campaign_id,
-                        amount: confirmRefund.amount,
-                        reason: confirmRefund.reason || "Approved refund",
-                      },
-                    })
-                    .then(() => {
-                      queryClient.invalidateQueries({
-                        queryKey: ["admin-refunds"],
-                      });
-                      toast.success("Refund processed successfully");
-                    })
-                    .catch((error) => {
-                      toast.error(`Failed to process refund: ${error.message}`);
-                    });
-                }
-                setConfirmRefund(null);
-              }}
-            >
-              Process Refund
-            </AlertDialogAction>
-          </AlertDialogFooter>
-        </AlertDialogContent>
-      </AlertDialog>
     </div>
   );
 }
