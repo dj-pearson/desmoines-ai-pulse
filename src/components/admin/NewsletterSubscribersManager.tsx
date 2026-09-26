@@ -49,6 +49,7 @@ import {
 import { useDebounce } from "@/hooks/useDebounce";
 import { supabase } from "@/integrations/supabase/client";
 import type { Database } from "@/integrations/supabase/types";
+import { recordAdminAudit } from "@/lib/adminAudit";
 import { handleError } from "@/lib/errorHandler";
 import { cn } from "@/lib/utils";
 import { toast } from "sonner";
@@ -246,21 +247,12 @@ export default function NewsletterSubscribersManager() {
         .in("id", ids);
       if (error) throw error;
 
-      // Audit trail
-      const { data: user } = await supabase.auth.getUser();
-      await supabase
-        .from("security_audit_logs")
-        .insert(
-          ids.map((id) => ({
-            event_type: "admin_action",
-            identifier: user.user?.email ?? "admin",
-            severity: "low",
-            action: `newsletter:${next}`,
-            resource: `newsletter_subscribers:${id}`,
-            user_id: user.user?.id ?? null,
-            details: { count: ids.length },
-          })),
-        );
+      // One row per action, not per subscriber: the ids are in details.
+      await recordAdminAudit({
+        action: `newsletter:${next}`,
+        resource: "newsletter_subscribers",
+        details: { ids, count: ids.length },
+      });
 
       toast.success(
         `${ids.length} subscriber${ids.length === 1 ? "" : "s"} → ${next}`,

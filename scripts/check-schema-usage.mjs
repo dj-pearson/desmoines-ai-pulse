@@ -155,6 +155,10 @@ const PENDING_MIGRATIONS = [
   // exists the read 42703s, which create-campaign-checkout logs and falls back
   // from to the email lookup - the behaviour that shipped before this.
   { table: 'profiles', column: 'stripe_customer_id', migration: '20260920000006' },
+  // Admin audit writes with the actor taken from auth.uid() (non-core review
+  // WP5). src/lib/adminAudit.ts falls back to the direct insert on PGRST202,
+  // so no audit row is lost before this is applied.
+  { rpc: 'record_admin_audit', migration: '20261005000002' },
 ];
 
 const isPending = (table, column) =>

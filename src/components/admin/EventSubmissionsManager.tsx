@@ -67,6 +67,7 @@ import {
 import { Textarea } from "@/components/ui/textarea";
 import { useDebounce } from "@/hooks/useDebounce";
 import { supabase } from "@/integrations/supabase/client";
+import { recordAdminAudit } from "@/lib/adminAudit";
 import { handleError } from "@/lib/errorHandler";
 import { createLogger } from "@/lib/logger";
 import { cn } from "@/lib/utils";
@@ -383,19 +384,11 @@ export default function EventSubmissionsManager() {
         .in("id", idsToPatch);
       if (error) throw error;
 
-      await supabase
-        .from("security_audit_logs")
-        .insert(
-          idsToPatch.map((id) => ({
-            event_type: "admin_action",
-            identifier: user.user?.email ?? "admin",
-            severity: "low",
-            action: `event_submission:${next}`,
-            resource: `user_submitted_events:${id}`,
-            user_id: user.user?.id ?? null,
-            details: { notes: notes ?? null },
-          })),
-        );
+      await recordAdminAudit({
+        action: `event_submission:${next}`,
+        resource: "user_submitted_events",
+        details: { ids: idsToPatch, notes: notes ?? null },
+      });
 
       // WEB-ADS-008: TELL THE SUBMITTER.
       //
