@@ -25,8 +25,8 @@ import { createClient } from "https://esm.sh/@supabase/supabase-js@2";
 import { getCorsHeaders, handleCors } from "../_shared/cors.ts";
 import { requireAdminOrApiKey } from "../_shared/apiKeyAuth.ts";
 import { runJob } from "../_shared/jobRunner.ts";
-import { renderEmail, SITE_URL } from "../_shared/emailLayout.ts";
-import { fetchWithTimeout } from "../_shared/fetchWithTimeout.ts";
+import { listUnsubscribeHeaders, renderEmail, SITE_URL } from "../_shared/emailLayout.ts";
+import { resolveEmailProvider, sendEmail } from "../_shared/email.ts";
 import { hasFeatureAccess, resolveEntitledTiers } from "../_shared/entitlements.ts";
 import {
   type AlertEvent,
@@ -34,7 +34,6 @@ import {
   alertWindowStart,
   buildEmail,
   deepLink,
-  deliverDigest,
   type DeliveryOutcome,
   matchesSavedSearch,
   searchIdsToAdvance,
@@ -42,7 +41,6 @@ import {
   upcomingFloorIso,
 } from "../_shared/savedSearchMatch.ts";
 
-const RESEND_API_KEY = Deno.env.get("RESEND_API_KEY");
 const MAX_EVENTS_PER_SEARCH = 8;
 
 /**
@@ -184,8 +182,8 @@ serve(async (req) => {
     if (userIds.length > 0) {
       // Matches are waiting and nothing can send them. Advancing the window
       // here would drop them for good, so the run fails and alerts instead.
-      if (!RESEND_API_KEY) {
-        throw new Error(`RESEND_API_KEY is not set; ${userIds.length} user(s) have matches pending`);
+      if (resolveEmailProvider().kind === "none") {
+        throw new Error(`no email provider configured; ${userIds.length} user(s) have matches pending`);
       }
 
       const { data: profiles, error: profilesError } = await supabase
@@ -272,26 +270,34 @@ serve(async (req) => {
           recipient: { email, unsubscribeToken: token, preferencesPath: "/dashboard?tab=saved-searches" },
         });
 
-        const outcome = await deliverDigest(
-          () =>
-            fetchWithTimeout("https://api.resend.com/emails", {
-              method: "POST",
-              headers: { "Content-Type": "application/json", Authorization: `Bearer ${RESEND_API_KEY}` },
-              body: JSON.stringify({
-                from: "Des Moines Insider <events@desmoinesinsider.com>",
-                to: [email],
-                subject: `${totalNew} new event${totalNew === 1 ? "" : "s"} matching your saved search${
-                  allGroups.length === 1 ? "" : "es"
-                }`,
-                html: rendered.html,
-                text: rendered.text,
-                headers: rendered.listUnsubscribe
-                  ? { "List-Unsubscribe": rendered.listUnsubscribe, "List-Unsubscribe-Post": rendered.listUnsubscribePost ?? "" }
-                  : undefined,
-              }),
-            }),
-          (detail) => console.error(`[saved-search-alerts] send failed for user ${uid}: ${detail}`),
+        const sent = await sendEmail(
+          {
+            to: email,
+            from: "Des Moines Insider <events@desmoinesinsider.com>",
+            subject: `${totalNew} new event${totalNew === 1 ? "" : "s"} matching your saved search${
+              allGroups.length === 1 ? "" : "es"
+            }`,
+            html: rendered.html,
+            text: rendered.text,
+            category: "marketing",
+            template: "saved_search_alert",
+            headers: listUnsubscribeHeaders(rendered),
+            userId: uid,
+          },
+          { supabase },
         );
+        // A suppressed address (bounced, complained, unsubscribed) is not a
+        // failure to retry tomorrow: it would hold the window forever.
+        const outcome: DeliveryOutcome = sent.ok
+          ? "sent"
+          : (sent.suppressed?.length ?? 0) > 0
+          ? "skipped"
+          : "failed";
+        if (outcome === "failed") console.error(`[saved-search-alerts] send failed for user ${uid}: ${sent.error}`);
+        if (outcome === "skipped") {
+          outcomes.set(uid, outcome);
+          continue;
+        }
         outcomes.set(uid, outcome);
         if (outcome === "sent") emailsSent++;
         else failed++;
@@ -327,7 +333,7 @@ serve(async (req) => {
       sendFailures: failed,
       searchesAdvanced: ids.length,
       searchesHeldForRetry: searches.length - ids.length,
-      resendConfigured: !!RESEND_API_KEY,
+      emailProvider: resolveEmailProvider().kind,
     });
     return {
       searches: searches.length,

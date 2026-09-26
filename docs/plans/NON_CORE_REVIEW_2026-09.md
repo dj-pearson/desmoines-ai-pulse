@@ -70,21 +70,23 @@ an action only the owner can take.
 - [x] `ai_usage_daily` + `ai_quota_limits` + `ai_global_budget`, atomic `consume_ai_quota` / `settle_ai_usage` RPCs (migration `20261001000001`, not applied; per-subject daily $ cap via feature `'*'`)
 - [x] `_shared/aiQuota.ts` guard, honouring `provider_budgets.paused` and the global kill switch
 - [x] Guard nlp-search, discover-chat (atomic quota, VIP 200/day not unlimited), personalized-recommendations, generate-itinerary
-- [ ] Record usage in the unrecorded callers: nlp-search and personalized-recommendations now record; test-ai-model, ai-crawler and support-chat were outside this pass
+- [ ] Record usage in the unrecorded callers: nlp-search and personalized-recommendations now record; support-chat records through `guardAi`; test-ai-model and ai-crawler still do not
 - [x] Admin: AI spend by feature and today's global budget (`AiSpendTile` in AgentControlPlane)
 - [x] `useUsage` no longer queries `usage_events` / `record_usage_event` (missing in prod); returns an empty state
-- [owner] VIP trip plans: the plan copy says "Unlimited AI trip plans" and the new daily cap is 20. Keep it as fair use or say so in the copy
+- [x] VIP trip plan copy now states the 20/day cap (WP7)
 - [x] support-chat behind `guardAi` (drafting path only; "talk to a human" stays unmetered)
 
 ### WP2 - Email on Amazon SES
 
-- [ ] `_shared/awsSigV4.ts` + `_shared/email.ts` (SES v2 API), tested against AWS SigV4 vectors
-- [ ] `email_log` and `email_suppressions` tables
-- [ ] Repoint shared senders (nurture, campaign notifications, ops alerts) and fix List-Unsubscribe
-- [ ] Repoint the remaining edge functions
-- [ ] `ses-events` (SNS bounce/complaint → suppression) and `email-unsubscribe` (RFC 8058 one-click POST)
-- [ ] `[auth]` SMTP block in `supabase/config.toml` for Supabase Auth mail through SES
-- [ ] Missing transactional mail: subscription started/cancelled, admin new-campaign alert
+- [x] `_shared/awsSigV4.ts` + `_shared/email.ts` (SES v2 API), tested against AWS SigV4 vectors (get-vanilla, post-vanilla, query-order, IAM signing key). Falls back to Resend while SES secrets are unset
+- [x] `email_log` and `email_suppressions` tables (`20261002000001`); the unsubscribe RPC also writes a suppression, with a backfill (`20261002000002`)
+- [x] Repoint shared senders (nurture, campaign notifications without SendGrid, ops/job alerts, outreach) and fix List-Unsubscribe (on the message now, not the HTTP request)
+- [x] Repoint the remaining edge functions in scope. Newsletter campaigns now get the CAN-SPAM layout and a per-subscriber token; the weekly digest stores its bare body instead of one rendered for a placeholder recipient
+- [x] `ses-events` (SNS signature + topic allowlist, permanent bounce/complaint → suppression) and `email-unsubscribe` (RFC 8058 one-click POST, GET → /unsubscribe page)
+- [x] `[auth.email.smtp]` block and four auth templates in `supabase/config.toml` (`enabled = false` locally; hosted SMTP is set in the dashboard)
+- [ ] Missing transactional mail: builders exist in `_shared/emailTemplates.ts` (subscription started/cancelled, admin new-campaign alert); stripe-webhook (ads work package) still has to call them with `sendEmail`
+- [ ] Still on their own Resend call, outside this package: `send-seo-notification`, `agent-billing-selfservice` / `_shared/agents/billing-selfservice.ts`, `agent-outreach`. `stripe-webhook` and `send-campaign-notification` use `sendCampaignEmail` but pass no `supabase`, so they skip suppression and `email_log`
+- [ ] Outreach and nurture mail carry only the mailto List-Unsubscribe: those recipients have no `newsletter_subscribers` token for the one-click URL
 - [owner] SES setup: see "Owner steps" below
 
 ### WP3 - Self-service ads
@@ -182,7 +184,14 @@ These need access this session does not have.
    SNS topic for Bounce/Complaint/Delivery. Create an IAM user limited to
    `ses:SendEmail` and `ses:SendRawEmail`. Set Supabase secrets
    `AWS_SES_REGION`, `AWS_SES_ACCESS_KEY_ID`, `AWS_SES_SECRET_ACCESS_KEY`,
-   `SES_FROM_ADDRESS`, `SES_CONFIGURATION_SET`, `ADMIN_ALERT_EMAIL`.
+   `SES_FROM_ADDRESS`, `SES_CONFIGURATION_SET`, `ADMIN_ALERT_EMAIL`, and
+   `SES_SNS_TOPIC_ARN` (ses-events refuses every message until it is set).
+   Subscribe `https://<project>.supabase.co/functions/v1/ses-events` to the
+   topic over HTTPS with raw message delivery off; the function confirms the
+   subscription itself. Apply `20261002000001-2`, then deploy
+   `email-unsubscribe`, `ses-events` and the repointed functions (without the
+   tables they still send, but skip suppression and `email_log`). Once SES
+   sends, remove `RESEND_API_KEY` and retire `resend-webhook`.
 2. **Supabase Auth SMTP.** Dashboard → Auth → SMTP: host
    `email-smtp.<region>.amazonaws.com`, port 587, the SES SMTP credentials.
    `config.toml` only applies locally.

@@ -17,10 +17,9 @@ import {
   isOriginAllowed,
 } from "../_shared/cors.ts";
 import { checkRateLimit, addRateLimitHeaders } from "../_shared/rateLimit.ts";
-import { fetchWithTimeout } from "../_shared/fetchWithTimeout.ts";
+import { sendEmail } from "../_shared/email.ts";
 import { requireAdminOrApiKey, type AdminCaller } from "../_shared/apiKeyAuth.ts";
 
-const RESEND_API_KEY = Deno.env.get("RESEND_API_KEY");
 const SUPPORT_FROM =
   Deno.env.get("SUPPORT_FROM")
     ?? Deno.env.get("NEWSLETTER_FROM")
@@ -52,10 +51,6 @@ serve(async (req) => {
   }
 
   try {
-    if (!RESEND_API_KEY) {
-      throw new Error("RESEND_API_KEY is not configured");
-    }
-
     const supabase = createClient(
       Deno.env.get("SUPABASE_URL") ?? "",
       Deno.env.get("SUPABASE_SERVICE_ROLE_KEY") ?? "",
@@ -109,25 +104,22 @@ serve(async (req) => {
       ? submission.subject
       : `Re: ${submission.subject ?? "Your message to Des Moines Insider"}`;
 
-    const r = await fetchWithTimeout("https://api.resend.com/emails", {
-      method: "POST",
-      headers: {
-        "Content-Type": "application/json",
-        Authorization: `Bearer ${RESEND_API_KEY}`,
-      },
-      body: JSON.stringify({
+    // Transactional: a reply to a message the person sent us.
+    const sent = await sendEmail(
+      {
+        to: submission.email,
         from: SUPPORT_FROM,
-        to: [submission.email],
         subject: replySubject,
         html: body_html,
-      }),
-    });
-    if (!r.ok) {
-      const text = await r.text();
-      throw new Error(`Resend ${r.status}: ${text.slice(0, 200)}`);
-    }
-    const sendResp = await r.json().catch(() => ({} as { id?: string }));
-    const messageId = typeof sendResp.id === "string" ? sendResp.id : null;
+        category: "transactional",
+        template: "feedback_reply",
+        ref: { type: "contact_submission", id: String(submission_id) },
+      },
+      { supabase },
+    );
+    if (!sent.ok) throw new Error(`Reply not sent: ${sent.error}`);
+    // Column name predates SES; it holds whichever provider's id sent it.
+    const messageId = sent.messageId ?? null;
 
     const { error: insertError } = await supabase
       .from("feedback_replies")

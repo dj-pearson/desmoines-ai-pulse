@@ -14,10 +14,10 @@
  * Consolidated into `agent-runner` (was `agent-outreach/index.ts`).
  */
 import { scoreOutput } from "../scoreOutput.ts";
-import { fetchWithTimeout } from "../fetchWithTimeout.ts";
 import { createApproval } from "../agentApprovals.ts";
 import { writeAgentAudit } from "../auditLog.ts";
-import { renderEmail } from "../emailLayout.ts";
+import { listUnsubscribeHeaders, renderEmail } from "../emailLayout.ts";
+import { sendEmail } from "../email.ts";
 import type { AgentRun } from "./types.ts";
 
 const AGENT_KEY = "outreach-sequencer";
@@ -50,7 +50,6 @@ async function suppressed(supabase: Client, email: string): Promise<boolean> {
 
 export const run: AgentRun = async (ctx, { supabase }) => {
   const from = Deno.env.get("OUTREACH_FROM") || Deno.env.get("NURTURE_FROM") || "Des Moines Insider <partnerships@desmoinesinsider.com>";
-  const apiKey = Deno.env.get("RESEND_API_KEY");
 
   const now = Date.now();
 
@@ -124,17 +123,27 @@ export const run: AgentRun = async (ctx, { supabase }) => {
       category: "marketing",
     });
 
-    let status = "skipped", messageId: string | null = null;
-    if (apiKey) {
-      try {
-        const headers: Record<string, string> = { Authorization: `Bearer ${apiKey}`, "Content-Type": "application/json" };
-        if (rendered.listUnsubscribe) headers["List-Unsubscribe"] = rendered.listUnsubscribe;
-        if (rendered.listUnsubscribePost) headers["List-Unsubscribe-Post"] = rendered.listUnsubscribePost;
-        const res = await fetchWithTimeout("https://api.resend.com/emails", { method: "POST", headers, body: JSON.stringify({ from, to: [email], subject, html: rendered.html, text: rendered.text }) });
-        const jb = await res.json().catch(() => ({}));
-        if (res.ok) { status = "queued"; messageId = jb?.id ?? null; sent++; } else status = "failed";
-      } catch { status = "failed"; }
-    }
+    // List-Unsubscribe goes on the message now; it used to be set on the
+    // HTTP request to Resend, which put it on nothing.
+    const res = await sendEmail(
+      {
+        to: email,
+        from,
+        subject,
+        html: rendered.html,
+        text: rendered.text,
+        category: "marketing",
+        template: `outreach_step_${nextStep}`,
+        headers: listUnsubscribeHeaders(rendered),
+        ref: { type: "crm_lead", id: l.id },
+      },
+      { supabase },
+    );
+    let status: string;
+    const messageId: string | null = res.messageId ?? null;
+    if (res.ok) { status = "queued"; sent++; }
+    else if (res.provider === "none" || (res.suppressed?.length ?? 0) > 0) status = "skipped";
+    else status = "failed";
 
     await supabase.from("outreach_sends").insert({ lead_id: l.id, step: nextStep, email, resend_message_id: messageId, status });
     if (nextStep === 1) await supabase.from("crm_leads").update({ status: "contacted" }).eq("id", l.id);

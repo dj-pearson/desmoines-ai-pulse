@@ -2,7 +2,9 @@
  * Send Newsletter Campaign
  *
  * Admin-only one-off newsletter dispatch. Resolves the chosen segment
- * against newsletter_subscribers (status='active'), sends via Resend,
+ * against newsletter_subscribers (status='active'), sends each subscriber
+ * their own copy through _shared/email.ts (SES, or Resend until SES is
+ * configured) inside the CAN-SPAM layout with their own unsubscribe token,
  * and writes a newsletter_campaigns row.
  *
  * Actions (POST body { action, ... }):
@@ -25,10 +27,10 @@ import {
   isOriginAllowed,
 } from "../_shared/cors.ts";
 import { checkRateLimit, addRateLimitHeaders } from "../_shared/rateLimit.ts";
-import { fetchWithTimeout } from "../_shared/fetchWithTimeout.ts";
+import { sendEmail } from "../_shared/email.ts";
+import { newsletterEmail } from "../_shared/emailTemplates.ts";
 import { requireAdminOrApiKey, type AdminCaller } from "../_shared/apiKeyAuth.ts";
 
-const RESEND_API_KEY = Deno.env.get("RESEND_API_KEY");
 const FROM_ADDRESS = Deno.env.get("NEWSLETTER_FROM")
   ?? "Des Moines Insider <events@desmoinesinsider.com>";
 
@@ -36,51 +38,53 @@ interface Segment {
   sources?: string[];
 }
 
+interface Recipient {
+  email: string;
+  first_name: string | null;
+  unsubscribe_token: string | null;
+}
+
 async function resolveSegment(
   supabase: ReturnType<typeof createClient>,
   segment: Segment,
-): Promise<{ email: string; first_name: string | null }[]> {
+): Promise<Recipient[]> {
   let q = supabase
     .from("newsletter_subscribers")
-    .select("email, first_name")
+    .select("email, first_name, unsubscribe_token")
     .eq("status", "active");
   if (segment.sources && segment.sources.length > 0) {
     q = q.in("source", segment.sources);
   }
   const { data, error } = await q;
   if (error) throw error;
-  return (data ?? []) as { email: string; first_name: string | null }[];
+  return (data ?? []) as Recipient[];
 }
 
 async function sendOne(
-  to: string,
+  // deno-lint-ignore no-explicit-any
+  supabase: any,
+  to: { email: string; unsubscribe_token?: string | null },
   subject: string,
   bodyHtml: string,
+  preheader: string | null,
+  campaignId: string | null,
 ): Promise<{ message_id: string | null }> {
-  if (!RESEND_API_KEY) {
-    throw new Error("RESEND_API_KEY is not configured");
-  }
-  const r = await fetchWithTimeout("https://api.resend.com/emails", {
-    method: "POST",
-    headers: {
-      "Content-Type": "application/json",
-      Authorization: `Bearer ${RESEND_API_KEY}`,
-    },
-    body: JSON.stringify({
-      from: FROM_ADDRESS,
-      to: [to],
+  const res = await sendEmail(
+    newsletterEmail({
+      recipient: { email: to.email, unsubscribeToken: to.unsubscribe_token ?? null },
       subject,
-      html: bodyHtml,
+      bodyHtml,
+      preheader,
+      from: FROM_ADDRESS,
+      template: campaignId ? "newsletter_campaign" : "newsletter_test",
+      ref: campaignId ? { type: "newsletter_campaign", id: campaignId } : null,
     }),
-  });
-  if (!r.ok) {
-    const text = await r.text();
-    throw new Error(`Resend ${r.status}: ${text.slice(0, 200)}`);
-  }
-  // Resend returns { id } on success; capture it so the webhook can
-  // correlate later engagement events to this recipient.
-  const body = await r.json().catch(() => ({} as { id?: string }));
-  return { message_id: typeof body.id === "string" ? body.id : null };
+    { supabase },
+  );
+  if (!res.ok) throw new Error(res.error ?? "send failed");
+  // The provider's id, so ses-events / resend-webhook can correlate later
+  // delivery and engagement events to this recipient.
+  return { message_id: res.messageId ?? null };
 }
 
 serve(async (req) => {
@@ -148,7 +152,7 @@ serve(async (req) => {
     }
 
     if (action === "send_test") {
-      const { subject, body_html } = body;
+      const { subject, body_html, preheader } = body;
       if (!subject || !body_html) {
         return new Response(
           JSON.stringify({ error: "subject and body_html required" }),
@@ -167,7 +171,7 @@ serve(async (req) => {
           },
         );
       }
-      await sendOne(user.email, `[TEST] ${subject}`, body_html);
+      await sendOne(supabase, { email: user.email }, `[TEST] ${subject}`, body_html, preheader ?? null, null);
       return new Response(
         JSON.stringify({ ok: true, sent_to: user.email }),
         {
@@ -239,12 +243,12 @@ serve(async (req) => {
         status: string;
         error_message: string | null;
       }> = [];
-      // Cap concurrency to be polite to Resend.
+      // Cap concurrency to stay under the provider's send rate.
       const batchSize = 5;
       for (let i = 0; i < recipients.length; i += batchSize) {
         const batch = recipients.slice(i, i + batchSize);
         const settled = await Promise.allSettled(
-          batch.map((r) => sendOne(r.email, subject, body_html)),
+          batch.map((r) => sendOne(supabase, r, subject, body_html, preheader ?? null, campaign.id)),
         );
         settled.forEach((s, idx) => {
           const recipient = batch[idx];
