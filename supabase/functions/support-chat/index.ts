@@ -22,6 +22,8 @@ import { fetchWithTimeout } from "../_shared/fetchWithTimeout.ts";
 import { crisisMessageText, crisisPayload, detectCrisisIntent } from "../_shared/crisisSupport.ts";
 import { anthropicCostUsd } from "../_shared/providerUsage.ts";
 import { capHistory, type Msg } from "./history.ts";
+import { guardAi, type QuotaClient } from "../_shared/aiQuota.ts";
+import { resolveEntitledTier } from "../_shared/entitlements.ts";
 
 const AGENT_KEY = "support-chat";
 const HUMAN_RE = /\b(speak|talk|connect|escalate|transfer)\b.{0,20}\b(human|person|agent|representative|rep|someone|support team)\b|\bhuman\b.{0,10}\bplease\b/i;
@@ -134,9 +136,28 @@ Deno.serve(async (req) => {
     );
   }
 
+  // Daily quota (plan WP1). An explicit "talk to a human" request never calls
+  // the model, so only the drafting path is metered. Denial is a 429 rather
+  // than an escalation: an over-quota caller must not be able to fill the
+  // ticket queue instead.
+  const wantsHumanNow = wantsHuman || HUMAN_RE.test(lastUser);
+  let settleAi: ((costUsd: number) => Promise<void>) | null = null;
+  if (!wantsHumanNow) {
+    const tier = userId ? await resolveEntitledTier(supabase, userId) : "anon";
+    const guard = await guardAi(supabase as QuotaClient, req, {
+      feature: "support-chat",
+      provider: "anthropic",
+      tier,
+      userId,
+      headers: corsHeaders,
+    });
+    if (!guard.ok) return guard.response;
+    settleAi = (costUsd) => guard.settle({ costUsd });
+  }
+
   const ledger = await runAgent(AGENT_KEY, async (ctx) => {
     // Explicit "talk to a human" (button or phrasing) → escalate immediately.
-    if (wantsHuman || HUMAN_RE.test(lastUser)) {
+    if (wantsHumanNow) {
       const ticketId = await openTicket(supabase, userId, history, "user requested a human");
       ctx.escalated(1);
       ctx.summary("in-app chat escalated (human requested)");
@@ -153,7 +174,10 @@ Deno.serve(async (req) => {
     } catch { /* retrieval down → low confidence */ }
 
     const d = await draft(supabaseUrl, supabaseKey, history, passages);
-    if (d) ctx.cost(d.costUsd);
+    if (d) {
+      ctx.cost(d.costUsd);
+      if (settleAi) await settleAi(d.costUsd);
+    }
 
     if (!d || !d.canAnswer) {
       const ticketId = await openTicket(supabase, userId, history, !d ? "assistant unavailable" : "could not resolve from KB");

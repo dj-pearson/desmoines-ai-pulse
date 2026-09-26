@@ -74,7 +74,7 @@ an action only the owner can take.
 - [x] Admin: AI spend by feature and today's global budget (`AiSpendTile` in AgentControlPlane)
 - [x] `useUsage` no longer queries `usage_events` / `record_usage_event` (missing in prod); returns an empty state
 - [owner] VIP trip plans: the plan copy says "Unlimited AI trip plans" and the new daily cap is 20. Keep it as fair use or say so in the copy
-- [ ] support-chat is seeded in `ai_quota_limits` but not yet behind `guardAi`
+- [x] support-chat behind `guardAi` (drafting path only; "talk to a human" stays unmetered)
 
 ### WP2 - Email on Amazon SES
 
