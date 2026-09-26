@@ -84,8 +84,10 @@ an action only the owner can take.
 - [x] Repoint the remaining edge functions in scope. Newsletter campaigns now get the CAN-SPAM layout and a per-subscriber token; the weekly digest stores its bare body instead of one rendered for a placeholder recipient
 - [x] `ses-events` (SNS signature + topic allowlist, permanent bounce/complaint → suppression) and `email-unsubscribe` (RFC 8058 one-click POST, GET → /unsubscribe page)
 - [x] `[auth.email.smtp]` block and four auth templates in `supabase/config.toml` (`enabled = false` locally; hosted SMTP is set in the dashboard)
-- [ ] Missing transactional mail: builders exist in `_shared/emailTemplates.ts` (subscription started/cancelled, admin new-campaign alert); stripe-webhook (ads work package) still has to call them with `sendEmail`
-- [ ] Still on their own Resend call, outside this package: `send-seo-notification`, `agent-billing-selfservice` / `_shared/agents/billing-selfservice.ts`, `agent-outreach`. `stripe-webhook` and `send-campaign-notification` use `sendCampaignEmail` but pass no `supabase`, so they skip suppression and `email_log`
+- [x] Missing transactional mail: stripe-webhook sends subscription started / cancelled and the admin paid-campaign alert (`_shared/billingEmails.ts`, never throws into the webhook)
+- [x] Campaign notices the database writes (`email_pending`) are mailed by `send-campaign-emails`, cron every 15 min (`20261003000007`)
+- [x] `agent-outreach` sends through `sendEmail` (matching its shared twin); `stripe-webhook` and `send-campaign-notification` pass the service client, so suppression and `email_log` apply
+- [ ] `send-seo-notification` still calls Resend directly; it has no caller, so retire it through the deprecation flow rather than port it
 - [ ] Outreach and nurture mail carry only the mailto List-Unsubscribe: those recipients have no `newsletter_subscribers` token for the one-click URL
 - [owner] SES setup: see "Owner steps" below
 
@@ -95,7 +97,7 @@ an action only the owner can take.
 - [x] `get_active_ads`: random eligible campaign, Central dates (`20261003000002`)
 - [x] Checkout: reject start dates before today + lead time (Central); renewals only need "not in the past"
 - [x] Refunds: cap at the Stripe charge minus prior refunds, `refunded` only when full, notify advertiser; admin refunds page lists campaigns and sends `campaignId` + `refundReason`
-- [x] Lifecycle cron writes activated / expiring / completed / creative-deadline notices on Central dates (`20261003000003`). Rows carry `email_pending = true`; sending them is WP2's
+- [x] Lifecycle cron writes activated / expiring / completed / creative-deadline notices on Central dates (`20261003000003`). Rows carry `email_pending = true`; `send-campaign-emails` mails them
 - [x] `link_url` rendered through `toSafeExternalUrl`; `CHECK ... NOT VALID` for http(s) (`20261003000004`)
 - [x] Sponsored-listing link guard: `link_sponsored_listing` RPC (draft only, one per placement, listing exists), `/advertise` switched (`20261003000006`)
 - [ ] Later release: drop the "Users can insert own sponsored links" INSERT policy once no supported client inserts directly (a tightening, so not in the release that adds the RPC)
@@ -199,5 +201,11 @@ These need access this session does not have.
 2. **Supabase Auth SMTP.** Dashboard → Auth → SMTP: host
    `email-smtp.<region>.amazonaws.com`, port 587, the SES SMTP credentials.
    `config.toml` only applies locally.
-3. **Migrations.** `supabase db push` after `npm run check-schema:probe`.
-4. **VIP decision.** Build a VIP benefit, cut the price, or withdraw the tier.
+3. **Deploy edge functions by hand.** `scripts/check-cron-targets.mjs` reports
+   that the Deploy Edge Functions workflow has never succeeded
+   (`SUPABASE_ACCESS_TOKEN` is unset on the Scrape environment), so nothing
+   in this branch reaches production until deployed. New functions:
+   `send-campaign-emails`, `ses-events`, `email-unsubscribe`. Changed: see the
+   PR file list.
+4. **Migrations.** `supabase db push` after `npm run check-schema:probe`.
+5. **VIP decision.** Build a VIP benefit, cut the price, or withdraw the tier.

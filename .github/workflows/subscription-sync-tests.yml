@@ -537,3 +537,6 @@ jobs:
       # Campaign notices written with email_pending: claim before send, release
       # on failure, never mail one notice twice.
       - run: deno test supabase/functions/send-campaign-emails/handler.test.ts
+      # Subscription started/cancelled and the admin paid-campaign alert: never
+      # throw into the webhook, no stale "access until" date.
+      - run: deno test --allow-env supabase/functions/_shared/billingEmails.test.ts

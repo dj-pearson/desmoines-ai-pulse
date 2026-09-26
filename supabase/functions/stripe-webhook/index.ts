@@ -17,6 +17,13 @@ import { sendNurtureEmail } from "../_shared/sendNurtureEmail.ts";
 import { sendCampaignEmail } from "../_shared/campaignNotificationEmail.ts";
 import { buildTrialNotice, planAmount } from "../_shared/trialNotice.ts";
 import { getSiteUrl } from "../_shared/siteUrl.ts";
+import { sendEmail } from "../_shared/email.ts";
+import {
+  type BillingEmailDeps,
+  sendAdminNewCampaign,
+  sendSubscriptionCancelled,
+  sendSubscriptionStarted,
+} from "../_shared/billingEmails.ts";
 import {
   campaignPaymentDecision,
   PAID_CAMPAIGN_STATUS,
@@ -539,9 +546,11 @@ async function handleCampaignPayment(
           notificationType: "payment_received",
           siteUrl: getSiteUrl(),
         },
-        resendApiKey: Deno.env.get("RESEND_API_KEY") ?? undefined,
-        sendgridApiKey: Deno.env.get("SENDGRID_API_KEY") ?? undefined,
         fromEmail: Deno.env.get("NOTIFICATION_FROM_EMAIL") || "noreply@desmoinesinsider.com",
+        // Suppression list and email_log (the provider is chosen by
+        // _shared/email.ts from the environment).
+        supabase,
+        userId: campaign.user_id,
       });
       if (!sent) {
         console.error(`Payment confirmation email was not accepted for campaign ${campaignId}.`);
@@ -576,7 +585,47 @@ async function handleCampaignPayment(
     );
   }
 
+  // And by email: the in-app rows above are only seen by an admin who opens
+  // the dashboard, and a paid campaign waits on their creative review.
+  await sendAdminNewCampaign(billingEmailDeps(supabase), {
+    campaignId,
+    campaignName: campaign?.name || "Campaign",
+    amountPaid,
+  });
+
   console.log("Campaign payment processed successfully:", campaignId);
+}
+
+/**
+ * The lookups billingEmails.ts needs, over the service client. Each returns
+ * null on error rather than throwing; the helpers never throw either.
+ */
+function billingEmailDeps(supabase: ReturnType<typeof createClient>): BillingEmailDeps {
+  return {
+    async emailForUser(userId) {
+      const { data, error } = await supabase.auth.admin.getUserById(userId);
+      if (error) {
+        console.error(`[billing-email] user lookup failed: ${error.message}`);
+        return null;
+      }
+      return data?.user?.email ?? null;
+    },
+    async planName(planId) {
+      const { data, error } = await supabase
+        .from("subscription_plans")
+        .select("name, display_name")
+        .eq("id", planId)
+        .maybeSingle();
+      if (error) {
+        console.error(`[billing-email] plan lookup failed: ${error.message}`);
+        return null;
+      }
+      const row = data as { name?: string | null; display_name?: string | null } | null;
+      return row?.display_name || row?.name || null;
+    },
+    send: (input) => sendEmail(input, { supabase }),
+    siteUrl: getSiteUrl(),
+  };
 }
 
 /**
@@ -696,6 +745,14 @@ async function handleSubscriptionPayment(
     stripe_subscription_id: subscriptionId,
   });
 
+  // Confirmation from us, not only Stripe's receipt. Best effort: the row is
+  // written, and a mail failure must not make Stripe redeliver.
+  await sendSubscriptionStarted(billingEmailDeps(supabase), {
+    userId,
+    planId,
+    trialEnd: (subscription as { trial_end?: number | null }).trial_end ?? null,
+  });
+
   console.log("Subscription payment processed successfully for user:", userId);
 }
 
@@ -774,14 +831,26 @@ async function handleSubscriptionDeleted(
   console.log("Subscription deleted:", subscription.id);
 
   // Stripe's own end time, not the time this delivery ran (WP5 item 5).
-  const { error } = await supabase
+  const { data: ended, error } = await supabase
     .from("user_subscriptions")
     .update(subscriptionDeletedPatch(subscription as unknown as StripeSubscriptionLike))
-    .eq("stripe_subscription_id", subscription.id);
+    .eq("stripe_subscription_id", subscription.id)
+    .select("user_id, plan_id");
 
   if (error) {
     console.error("Failed to update subscription:", error);
     throw error;
+  }
+
+  // Tell the member. Only when a row matched: an event for a subscription we
+  // never recorded has nobody to mail. Redeliveries stop at the event ledger.
+  const row = (ended ?? [])[0] as { user_id?: string | null; plan_id?: string | null } | undefined;
+  if (row?.user_id) {
+    await sendSubscriptionCancelled(billingEmailDeps(supabase), {
+      userId: row.user_id,
+      planId: row.plan_id ?? null,
+      accessUntil: (subscription as { current_period_end?: number | null }).current_period_end ?? null,
+    });
   }
 }
 
