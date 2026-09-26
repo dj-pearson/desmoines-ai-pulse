@@ -66,7 +66,7 @@ export interface RenderEmailOptions {
 export interface RenderedEmail {
   html: string;
   text: string;
-  /** List-Unsubscribe header value. Set on the outbound email via Resend. */
+  /** List-Unsubscribe message header. Pass through listUnsubscribeHeaders() to sendEmail. */
   listUnsubscribe?: string;
   /** List-Unsubscribe-Post header value (enables one-click per RFC 8058). */
   listUnsubscribePost?: string;
@@ -84,6 +84,46 @@ export function buildUnsubscribeUrl(recipient: EmailRecipient): string {
     )}`;
   }
   return `${SITE_URL}${recipient.preferencesPath ?? "/profile?tab=settings"}`;
+}
+
+/**
+ * The RFC 8058 one-click endpoint: the email-unsubscribe edge function, which
+ * accepts the POST a mailbox provider sends when someone presses the inbox
+ * "Unsubscribe" button. The /unsubscribe page on the site cannot take that POST
+ * (Cloudflare Pages serves the SPA shell), so the header points here while the
+ * footer link keeps pointing at the page a person reads.
+ *
+ * Null without a token or without SUPABASE_URL, in which case the header
+ * carries only the mailto form.
+ */
+export function buildOneClickUnsubscribeUrl(
+  unsubscribeToken: string | null | undefined,
+  supabaseUrl: string | undefined = readSupabaseUrl(),
+): string | null {
+  if (!unsubscribeToken || !supabaseUrl) return null;
+  return `${supabaseUrl.replace(/\/+$/, "")}/functions/v1/email-unsubscribe?token=${encodeURIComponent(unsubscribeToken)}`;
+}
+
+function readSupabaseUrl(): string | undefined {
+  try {
+    return Deno.env.get("SUPABASE_URL") || undefined;
+  } catch {
+    return undefined;
+  }
+}
+
+/** List-Unsubscribe mailto target. Mail to it is read by a person today. */
+export const MAILTO_UNSUBSCRIBE = `<mailto:${POSTAL_ADDRESS.unsubscribeEmail}?subject=unsubscribe>`;
+
+/**
+ * The message headers for sendEmail's `headers`, from a rendered email. Empty
+ * for transactional mail.
+ */
+export function listUnsubscribeHeaders(rendered: RenderedEmail): Record<string, string> {
+  const h: Record<string, string> = {};
+  if (rendered.listUnsubscribe) h["List-Unsubscribe"] = rendered.listUnsubscribe;
+  if (rendered.listUnsubscribePost) h["List-Unsubscribe-Post"] = rendered.listUnsubscribePost;
+  return h;
 }
 
 function renderMarketingFooterHtml(recipient: EmailRecipient): string {
@@ -201,13 +241,16 @@ export function renderEmail(opts: RenderEmailOptions): RenderedEmail {
   const text = `${opts.bodyText}\n\n${footerText}\n`;
 
   if (category === "marketing") {
-    const unsubscribeUrl = buildUnsubscribeUrl(opts.recipient);
+    // RFC 2369 / RFC 8058: mailto and https variants enable the inbox-level
+    // one-click "Unsubscribe" button in Gmail / Apple Mail / Outlook. The
+    // https target must accept a POST, so it is the edge function, and
+    // List-Unsubscribe-Post is only claimed when there is one.
+    const oneClick = buildOneClickUnsubscribeUrl(opts.recipient.unsubscribeToken);
+    if (!oneClick) return { html, text, listUnsubscribe: MAILTO_UNSUBSCRIBE };
     return {
       html,
       text,
-      // RFC 2369 / RFC 8058: mailto and https variants enable the inbox-level
-      // one-click "Unsubscribe" button in Gmail / Apple Mail / Outlook.
-      listUnsubscribe: `<mailto:${POSTAL_ADDRESS.unsubscribeEmail}?subject=unsubscribe>, <${unsubscribeUrl}>`,
+      listUnsubscribe: `${MAILTO_UNSUBSCRIBE}, <${oneClick}>`,
       listUnsubscribePost: "List-Unsubscribe=One-Click",
     };
   }

@@ -472,3 +472,8 @@ jobs:
       - run: deno test supabase/functions/nlp-search/handler.test.ts
       # Saved-search alert matching and the email it builds (WP5).
       - run: deno test --allow-read supabase/functions/_shared/savedSearchMatch.test.ts
+      # Email on SES (WP2, docs/plans/NON_CORE_REVIEW_2026-09.md). SigV4 is
+      # checked against the AWS published test vectors; sendEmail against a
+      # stubbed fetch and DB, so nothing here can send mail.
+      - run: deno test supabase/functions/_shared/awsSigV4.test.ts
+      - run: deno test --allow-env supabase/functions/_shared/email.test.ts
