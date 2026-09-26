@@ -4671,6 +4671,7 @@ export type Database = {
       }
       events: {
         Row: {
+          affiliate_url: string | null
           ai_writeup: string | null
           archived_at: string | null
           category: string
@@ -4731,6 +4732,7 @@ export type Database = {
           writeup_prompt_used: string | null
         }
         Insert: {
+          affiliate_url?: string | null
           ai_writeup?: string | null
           archived_at?: string | null
           category?: string
@@ -4791,6 +4793,7 @@ export type Database = {
           writeup_prompt_used?: string | null
         }
         Update: {
+          affiliate_url?: string | null
           ai_writeup?: string | null
           archived_at?: string | null
           category?: string

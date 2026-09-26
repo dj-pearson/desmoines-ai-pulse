@@ -475,3 +475,6 @@ jobs:
       # support-chat is anon-callable; these caps are what bound one request's
       # input tokens.
       - run: deno test supabase/functions/support-chat/history.test.ts
+      # The Ticketmaster scraper keeps source_url the real page and puts the
+      # affiliate redirect in affiliate_url (plan WP6).
+      - run: deno test supabase/functions/scrape-ticketmaster-events/links.test.ts

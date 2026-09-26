@@ -132,7 +132,21 @@ export function pickSlugCandidate<C extends SlugCandidate>(slug: string, candida
  * scripts/db-snapshot.json (plan D5), and selecting a missing column is a
  * 42703 on every detail view.
  */
-export const EVENT_DETAIL_COLUMNS = `${EVENT_LIST_COLUMNS}, seo_title, seo_description, seo_keywords, seo_h1, geo_summary, geo_key_facts, geo_faq, ai_writeup, writeup_prompt_used, source_url_broken, source_url_checked_at, recurrence_parent_id, merged_into, is_recurring_instance`;
+const EVENT_DETAIL_BASE_COLUMNS = `${EVENT_LIST_COLUMNS}, seo_title, seo_description, seo_keywords, seo_h1, geo_summary, geo_key_facts, geo_faq, ai_writeup, writeup_prompt_used, source_url_broken, source_url_checked_at, recurrence_parent_id, merged_into, is_recurring_instance`;
+
+/**
+ * affiliate_url (the Ticketmaster redirect, plan WP6) arrives with migration
+ * 20261006000001, which is not in scripts/db-snapshot.json. Until it is
+ * applied PostgREST answers 42703 for the whole select, so fetchFullEvent
+ * retries once without it rather than blanking every detail page. Drop the
+ * fallback once check-schema:probe shows the column in production.
+ */
+export const EVENT_DETAIL_COLUMNS = `${EVENT_DETAIL_BASE_COLUMNS}, affiliate_url`;
+
+/** 42703 naming affiliate_url: the migration above has not reached this database. */
+function isMissingAffiliateColumn(error: { code?: string; message?: string } | null): boolean {
+  return error?.code === "42703" && (error.message ?? "").includes("affiliate_url");
+}
 
 /** What the unpublish columns say about a row the visible lookup didn't return. */
 export interface UnlistedRow {
@@ -184,13 +198,19 @@ async function fetchFullEvent(
   id: string,
   { visibleOnly = true }: { visibleOnly?: boolean } = {}
 ): Promise<Event | null> {
-  const base = supabase.from("events").select(EVENT_DETAIL_COLUMNS);
-  // The non-visible read serves only the archived render (classifyUnlisted),
-  // so it asks for archived rows by name rather than dropping the switch.
-  const query = visibleOnly
-    ? applyEventVisibility(base)
-    : base.neq("is_hidden", true).not("archived_at", "is", null);
-  const { data: full, error: fullError } = await query.eq("id", id).maybeSingle();
+  const read = (columns: string) => {
+    const base = supabase.from("events").select(columns);
+    // The non-visible read serves only the archived render (classifyUnlisted),
+    // so it asks for archived rows by name rather than dropping the switch.
+    const query = visibleOnly
+      ? applyEventVisibility(base)
+      : base.neq("is_hidden", true).not("archived_at", "is", null);
+    return query.eq("id", id).maybeSingle();
+  };
+  let { data: full, error: fullError } = await read(EVENT_DETAIL_COLUMNS);
+  if (isMissingAffiliateColumn(fullError)) {
+    ({ data: full, error: fullError } = await read(EVENT_DETAIL_BASE_COLUMNS));
+  }
 
   if (fullError) {
     log.error("fetchEventBySlug", "Could not load the matched event", {
