@@ -269,10 +269,13 @@ These override anything else in this file. Read before doing work.
 ### Money is decided on the server
 
 Nothing the browser computes may reach a row that says what someone is charged.
-For advertisers, `placementTotalPrice()` in `src/hooks/useCampaigns.ts` mirrors
-`calculate_campaign_pricing()` for DISPLAY ONLY; the trigger on
-`campaign_placements` and `create-campaign-checkout` decide the amount, from the
-same rate card, server-side. WEB-ADS-003 is what happens when that slips: the
+For advertisers, `useCampaignQuote()` in `src/hooks/useCampaignQuote.ts` shows
+the total by calling `calculate_campaign_pricing()` itself, the same call
+`create-campaign-checkout` makes, so the page has no formula of its own; the
+trigger on `campaign_placements` and `create-campaign-checkout` decide the
+amount, server-side. There is no admin price override: a discount is a Stripe
+promotion code, and what was actually paid is recorded on the campaign
+(`amount_paid_cents`). WEB-ADS-003 is what happens when that slips: the
 summary totalled a hardcoded daily rate with no volume discount while the stored
 row came from the RPC with one, so the page said $70 and the row said $66.50.
 Two formulas for one price is a bug generator. Same rule for subscriptions -

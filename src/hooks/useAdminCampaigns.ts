@@ -412,73 +412,6 @@ export function useAdminCampaigns() {
     }
   };
 
-  const createPricingOverride = async (
-    campaignId: string,
-    overridePrice: number,
-    reason: string,
-    notes?: string,
-    expiresAt?: string
-  ): Promise<boolean> => {
-    try {
-      const { data: { user }, error: authError } = await supabase.auth.getUser();
-      if (authError) throw authError;
-      if (!user) throw new Error("Not signed in - an admin action must be attributable");
-
-      // Get original campaign price. The error is surfaced rather than
-      // collapsed into "Campaign not found" - a permissions failure and a
-      // missing row need different responses from the admin reading the toast.
-      const { data: campaign, error: campaignError } = await supabase
-        .from("campaigns")
-        .select("total_cost")
-        .eq("id", campaignId)
-        .single();
-
-      if (campaignError && campaignError.code !== 'PGRST116') throw campaignError;
-      if (!campaign) throw new Error("Campaign not found");
-
-      const { error } = await supabase
-        .from("pricing_overrides")
-        .insert({
-          campaign_id: campaignId,
-          admin_user_id: user.id,
-          original_price: campaign.total_cost,
-          override_price: overridePrice,
-          reason,
-          notes,
-          expires_at: expiresAt || null,
-        });
-
-      if (error) throw error;
-
-      // Update campaign total cost. THROWS: the pricing_overrides row is
-      // already written, so discarding a failure here left the override
-      // recorded and the campaign still billing at the old price, under a toast
-      // reading "Campaign price updated to $X".
-      const { error: costError } = await supabase
-        .from("campaigns")
-        .update({ total_cost: overridePrice })
-        .eq("id", campaignId);
-
-      if (costError) throw costError;
-
-      toast({
-        title: "Pricing override applied",
-        description: `Campaign price updated to $${overridePrice.toFixed(2)}.`,
-      });
-
-      await fetchCampaigns();
-      return true;
-    } catch (err) {
-      const message = err instanceof Error ? err.message : "Failed to apply pricing override";
-      toast({
-        variant: "destructive",
-        title: "Override failed",
-        description: message,
-      });
-      return false;
-    }
-  };
-
   /**
    * Refund through process-stripe-refund, which caps the amount at what Stripe
    * says was paid minus earlier refunds, ends the campaign only on a full
@@ -548,7 +481,6 @@ export function useAdminCampaigns() {
     approveCreative,
     rejectCreative,
     updateCampaignStatus,
-    createPricingOverride,
     processRefund,
   };
 }

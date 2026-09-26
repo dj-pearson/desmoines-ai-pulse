@@ -9,7 +9,6 @@ import { Badge } from "@/components/ui/badge";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { Dialog, DialogContent, DialogDescription, DialogFooter, DialogHeader, DialogTitle } from "@/components/ui/dialog";
 import { Textarea } from "@/components/ui/textarea";
-import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { Alert, AlertDescription } from "@/components/ui/alert";
 import { Skeleton } from "@/components/ui/skeleton";
@@ -27,7 +26,6 @@ export default function AdminCampaignDetail() {
     approveCreative,
     rejectCreative,
     updateCampaignStatus,
-    createPricingOverride,
   } = useAdminCampaigns();
   useDocumentTitle("Campaign Details");
 
@@ -40,9 +38,6 @@ export default function AdminCampaignDetail() {
     validTabs: ["pending", "approved"],
   });
   const [rejectionReason, setRejectionReason] = useState("");
-  const [overrideDialogOpen, setOverrideDialogOpen] = useState(false);
-  const [overridePrice, setOverridePrice] = useState("");
-  const [overrideReason, setOverrideReason] = useState("");
 
   useEffect(() => {
     if (campaignId) {
@@ -76,28 +71,6 @@ export default function AdminCampaignDetail() {
       setRejectDialogOpen(false);
       setRejectionReason("");
       setSelectedCreative(null);
-      await loadCampaign();
-    }
-  };
-
-  const handleApplyPricingOverride = async () => {
-    if (!campaignId || !overridePrice || !overrideReason) return;
-
-    const price = parseFloat(overridePrice);
-    if (isNaN(price) || price <= 0) {
-      return;
-    }
-
-    const success = await createPricingOverride(
-      campaignId,
-      price,
-      overrideReason
-    );
-
-    if (success) {
-      setOverrideDialogOpen(false);
-      setOverridePrice("");
-      setOverrideReason("");
       await loadCampaign();
     }
   };
@@ -234,14 +207,12 @@ export default function AdminCampaignDetail() {
             <p className="text-2xl font-bold">
               {formatCurrency(campaign.total_cost || 0)}
             </p>
-            <Button
-              variant="link"
-              size="sm"
-              className="p-0 h-auto"
-              onClick={() => setOverrideDialogOpen(true)}
-            >
-              Apply pricing override
-            </Button>
+            {/* The "Apply pricing override" link that was here wrote
+                total_cost, which create-campaign-checkout recomputes from the
+                rate card and ignores. A discount is a Stripe promotion code. */}
+            <p className="text-xs text-muted-foreground">
+              List price from the rate card. Discounts are Stripe promotion codes.
+            </p>
           </CardContent>
         </Card>
       </div>
@@ -465,53 +436,6 @@ export default function AdminCampaignDetail() {
               disabled={!rejectionReason.trim()}
             >
               Reject Creative
-            </Button>
-          </DialogFooter>
-        </DialogContent>
-      </Dialog>
-
-      {/* Pricing Override Dialog */}
-      <Dialog open={overrideDialogOpen} onOpenChange={setOverrideDialogOpen}>
-        <DialogContent>
-          <DialogHeader>
-            <DialogTitle>Apply Pricing Override</DialogTitle>
-            <DialogDescription>
-              Set a custom price for this campaign. Original price: {formatCurrency(campaign.total_cost || 0)}
-            </DialogDescription>
-          </DialogHeader>
-          <div className="space-y-4">
-            <div>
-              <Label htmlFor="override-price">New Price</Label>
-              <Input
-                id="override-price"
-                type="number"
-                step="0.01"
-                min="0"
-                placeholder="0.00"
-                value={overridePrice}
-                onChange={(e) => setOverridePrice(e.target.value)}
-              />
-            </div>
-            <div>
-              <Label htmlFor="override-reason">Reason</Label>
-              <Textarea
-                id="override-reason"
-                placeholder="e.g., Promotional discount, Non-profit rate, etc."
-                value={overrideReason}
-                onChange={(e) => setOverrideReason(e.target.value)}
-                rows={3}
-              />
-            </div>
-          </div>
-          <DialogFooter>
-            <Button variant="outline" onClick={() => setOverrideDialogOpen(false)}>
-              Cancel
-            </Button>
-            <Button
-              onClick={handleApplyPricingOverride}
-              disabled={!overridePrice || !overrideReason.trim()}
-            >
-              Apply Override
             </Button>
           </DialogFooter>
         </DialogContent>

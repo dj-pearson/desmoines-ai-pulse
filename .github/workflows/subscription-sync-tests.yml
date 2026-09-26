@@ -385,6 +385,9 @@ jobs:
       # raw href (stored XSS against the reviewer). Pins the safe-URL render
       # and the NOT VALID http(s) CHECK.
       - run: deno test --allow-read supabase/functions/_tests/campaign-creative-link-url.test.ts
+      # WP3. The admin price override wrote a total checkout ignored, and
+      # getCurrentPricing fell back to hardcoded rates. Pins both gone.
+      - run: deno test --allow-read supabase/functions/_tests/campaign-no-client-price.test.ts
       - run: deno test --allow-read supabase/functions/send-campaign-notification/decision.test.ts
       - run: deno test --allow-read supabase/functions/triage-event-submission/logic.test.ts
       # WEB-ADS-002. Impressions and clicks were inserted from the browser into
