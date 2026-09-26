@@ -304,3 +304,98 @@ Deno.test("OPTIONS is answered by the CORS preflight", async () => {
   const res = await handleSearch(new Request("https://fn.test/nlp-search", { method: "OPTIONS" }), h.deps);
   assertEquals(res.status, 204);
 });
+
+// ---------------------------------------------------------------------------
+// Daily AI quota (NON_CORE_REVIEW_2026-09 WP1)
+// ---------------------------------------------------------------------------
+
+Deno.test("an exhausted AI quota degrades to keyword search without calling the model", async () => {
+  const h = harness();
+  const asked: (string | null)[] = [];
+  h.deps.aiGate = (_req, userId) => {
+    asked.push(userId);
+    return Promise.resolve({ allowed: false, code: "quota_exceeded" });
+  };
+  const res = await handleSearch(post({ query: "jazz tonight" }, { Authorization: "Bearer jwt" }), h.deps);
+  assertEquals(res.status, 200);
+  const body = await res.json();
+  assertEquals(body.degraded, true);
+  assertEquals(body.code, "quota_exceeded");
+  assertEquals(body.matchType, "keyword");
+  assertEquals(h.fetchCalls, 0);
+  assertEquals(asked, ["user-1"]);
+});
+
+Deno.test("a paused AI budget degrades the same way", async () => {
+  const h = harness();
+  h.deps.aiGate = () => Promise.resolve({ allowed: false, code: "ai_budget_paused" });
+  const body = await (await handleSearch(post({ query: "jazz tonight" }), h.deps)).json();
+  assertEquals(body.code, "ai_budget_paused");
+  assertEquals(h.fetchCalls, 0);
+});
+
+Deno.test("an allowed call settles the model's reported usage", async () => {
+  const h = harness({
+    fetch: () =>
+      Promise.resolve(
+        new Response(
+          JSON.stringify({
+            content: [{ type: "text", text: JSON.stringify({ contentTypes: ["events"], keywords: ["jazz"], confidence: 0.9 }) }],
+            usage: { input_tokens: 400, output_tokens: 60 },
+          }),
+          { status: 200 },
+        ),
+      ),
+  });
+  const settled: { model: string; usage: unknown }[] = [];
+  h.deps.aiGate = () =>
+    Promise.resolve({
+      allowed: true,
+      settle: (model, usage) => {
+        settled.push({ model, usage });
+        return Promise.resolve();
+      },
+    });
+  const body = await (await handleSearch(post({ query: "jazz tonight" }), h.deps)).json();
+  assertEquals(body.matchType, "understood");
+  assertEquals(settled, [{ model: "haiku-test", usage: { input_tokens: 400, output_tokens: 60 } }]);
+});
+
+Deno.test("a billed answer that does not parse is still settled", async () => {
+  const h = harness({
+    fetch: () =>
+      Promise.resolve(
+        new Response(
+          JSON.stringify({ content: [{ type: "text", text: "no json here" }], usage: { input_tokens: 400, output_tokens: 5 } }),
+          { status: 200 },
+        ),
+      ),
+  });
+  let settles = 0;
+  h.deps.aiGate = () =>
+    Promise.resolve({
+      allowed: true,
+      settle: () => {
+        settles++;
+        return Promise.resolve();
+      },
+    });
+  const body = await (await handleSearch(post({ query: "jazz tonight" }), h.deps)).json();
+  assertEquals(body.degraded, true);
+  assertEquals(settles, 1);
+});
+
+Deno.test("a caller-supplied intent spends nothing and is not charged to the quota", async () => {
+  const h = harness();
+  let asked = 0;
+  h.deps.aiGate = () => {
+    asked++;
+    return Promise.resolve({ allowed: false, code: "quota_exceeded" });
+  };
+  const body = await (await handleSearch(
+    post({ query: "jazz tonight", intent: { contentTypes: ["events"], keywords: ["jazz"], confidence: 0.9 } }),
+    h.deps,
+  )).json();
+  assertEquals(asked, 0);
+  assert(!("degraded" in body), "not degraded");
+});

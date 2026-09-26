@@ -67,11 +67,14 @@ an action only the owner can take.
 - [x] support-chat: 2k/message and 12k/history caps, 15 req/15 min, lightweight model
 - [x] search-new-hotels: admin or API key, clamp radius
 - [x] validate-source-urls: admin or API key, clamp limit
-- [ ] `ai_usage_daily` + `ai_quota_limits` + `ai_global_budget`, atomic `consume_ai_quota` / `settle_ai_usage` RPCs
-- [ ] `_shared/aiQuota.ts` guard, honouring `provider_budgets.paused` and the global kill switch
-- [ ] Guard nlp-search, discover-chat (atomic quota, VIP 200/day not unlimited), personalized-recommendations, generate-itinerary
-- [ ] Record usage in the unrecorded callers
-- [ ] Admin: AI spend by feature and today's global budget
+- [x] `ai_usage_daily` + `ai_quota_limits` + `ai_global_budget`, atomic `consume_ai_quota` / `settle_ai_usage` RPCs (migration `20261001000001`, not applied; per-subject daily $ cap via feature `'*'`)
+- [x] `_shared/aiQuota.ts` guard, honouring `provider_budgets.paused` and the global kill switch
+- [x] Guard nlp-search, discover-chat (atomic quota, VIP 200/day not unlimited), personalized-recommendations, generate-itinerary
+- [ ] Record usage in the unrecorded callers: nlp-search and personalized-recommendations now record; test-ai-model, ai-crawler and support-chat were outside this pass
+- [x] Admin: AI spend by feature and today's global budget (`AiSpendTile` in AgentControlPlane)
+- [x] `useUsage` no longer queries `usage_events` / `record_usage_event` (missing in prod); returns an empty state
+- [owner] VIP trip plans: the plan copy says "Unlimited AI trip plans" and the new daily cap is 20. Keep it as fair use or say so in the copy
+- [ ] support-chat is seeded in `ai_quota_limits` but not yet behind `guardAi`
 
 ### WP2 - Email on Amazon SES
 

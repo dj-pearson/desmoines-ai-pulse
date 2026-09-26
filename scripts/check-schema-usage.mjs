@@ -155,6 +155,13 @@ const PENDING_MIGRATIONS = [
   // exists the read 42703s, which create-campaign-checkout logs and falls back
   // from to the email lookup - the behaviour that shipped before this.
   { table: 'profiles', column: 'stripe_customer_id', migration: '20260920000006' },
+  // Daily AI quotas and spend ceiling (NON_CORE_REVIEW_2026-09 WP1). guardAi
+  // fails open on PGRST202 with a warning, so the four AI endpoints behave as
+  // before in the pending window; AiSpendTile says the table is missing.
+  { rpc: 'consume_ai_quota', migration: '20261001000001' },
+  { rpc: 'settle_ai_usage', migration: '20261001000001' },
+  { table: 'ai_usage_daily', migration: '20261001000001' },
+  { table: 'ai_global_budget', migration: '20261001000001' },
 ];
 
 const isPending = (table, column) =>

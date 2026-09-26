@@ -20,6 +20,9 @@ import {
 } from "../_shared/aiConfig.ts";
 import { addCorsHeaders, getCorsHeaders, handleCors, isOriginAllowed } from "../_shared/cors.ts";
 import { checkRateLimitPersistent } from "../_shared/rateLimit.ts";
+import { guardAi, type QuotaClient } from "../_shared/aiQuota.ts";
+import { resolveEntitledTier } from "../_shared/entitlements.ts";
+import { anthropicCostUsd } from "../_shared/providerUsage.ts";
 import { handleSearch, type SearchClient, type SearchDeps } from "./search.ts";
 
 function allowedOrigin(req: Request): string | undefined {
@@ -82,6 +85,23 @@ const deps: SearchDeps = {
       model: config.lightweight_model,
       body,
       extractText: extractClaudeText,
+    };
+  },
+  aiGate: async (req, userId) => {
+    // Tier from the same entitlement check the paywall uses; anon when there
+    // is no verified user. resolveEntitledTier answers 'free' on any error.
+    const tier = userId ? await resolveEntitledTier(serviceClient, userId) : "anon";
+    const guard = await guardAi(serviceClient as unknown as QuotaClient, req, {
+      feature: "nlp-search",
+      provider: "anthropic",
+      tier,
+      userId,
+    });
+    if (!guard.ok) return { allowed: false, code: guard.decision.code };
+    return {
+      allowed: true,
+      settle: (model, usage) =>
+        guard.settle({ costUsd: anthropicCostUsd(model, usage), model, usage }),
     };
   },
   waitUntil: edgeRuntime ? (p) => edgeRuntime.waitUntil(p) : undefined,

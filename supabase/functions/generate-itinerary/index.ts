@@ -7,7 +7,8 @@ import { checkRateLimitPersistent } from "../_shared/rateLimit.ts";
 import { resolveEntitledTier, hasFeatureAccess } from "../_shared/entitlements.ts";
 import { getCorsHeaders, isOriginAllowed } from "../_shared/cors.ts";
 import { fetchWithTimeout } from "../_shared/fetchWithTimeout.ts";
-import { recordAnthropicUsage } from "../_shared/providerUsage.ts";
+import { anthropicCostUsd } from "../_shared/providerUsage.ts";
+import { denialBody, guardAi, type QuotaClient } from "../_shared/aiQuota.ts";
 
 // Monthly trip-planner quota per tier (matches the web useSubscription copy /
 // WEB-FEAT-011). -1 = unlimited. Enforced server-side so the client gate can't
@@ -437,6 +438,35 @@ IMPORTANT:
 
 Return ONLY the JSON object, no additional text.`;
 
+    // DAILY cap and provider budget (WP1 of NON_CORE_REVIEW_2026-09), on top
+    // of the monthly count above. Taken here, after every check that can
+    // reject the request for free, so a bad date never costs a plan. The
+    // monthly count reads trip_plans rows and so never sees a call that was
+    // billed and then failed; this counter is taken before the call and does.
+    const quota = await guardAi(supabaseClient as unknown as QuotaClient, req, {
+      feature: 'itinerary',
+      provider: 'anthropic',
+      tier,
+      userId: user.id,
+      source: 'generate-itinerary',
+      headers: corsHeaders,
+    });
+    if (!quota.ok) {
+      const body = denialBody(quota.decision, 'itinerary', tier, new Date());
+      if (quota.decision.code === 'quota_exceeded') {
+        body.error = `You've reached today's limit of ${quota.decision.limit ?? 'AI'} trip plans. It resets at midnight Central.`;
+        body.period = 'day';
+      }
+      return new Response(JSON.stringify(body), {
+        status: 429,
+        headers: {
+          ...corsHeaders,
+          'Content-Type': 'application/json',
+          'Retry-After': String(body.retryAfter),
+        },
+      });
+    }
+
     // Call Claude Sonnet for intelligent planning
     const config = await getAIConfig(supabaseUrl, supabaseServiceKey);
     const headers = await getClaudeHeaders(claudeApiKey, supabaseUrl, supabaseServiceKey);
@@ -472,11 +502,15 @@ Return ONLY the JSON object, no additional text.`;
     // that cost money and delivered nothing are exactly the ones the budget
     // watchdog never sees. That is the WEB-QA-005 case: billed, thrown away,
     // invisible.
-    await recordAnthropicUsage(supabaseClient, {
-      source: "generate-itinerary",
-      model: String(requestBody.model ?? config.default_model),
+    //
+    // settle() writes provider_usage as before, plus the ai_usage_daily subject
+    // and global rows the daily budget is checked against.
+    const billedModel = String(requestBody.model ?? config.default_model);
+    await quota.settle({
+      costUsd: anthropicCostUsd(billedModel, aiResult?.usage ?? {}),
+      model: billedModel,
       usage: aiResult?.usage ?? {},
-      extra: { tier, days: numDays },
+      extra: { days: numDays },
     });
 
     const extracted = extractClaudeText(aiResult);
