@@ -444,7 +444,9 @@ export default function Auth() {
           </h1>
           <CardDescription>
             {tab === "signup"
-              ? "Save events, restaurants and searches to your account."
+              ? // Not "and searches": saved searches are Insider (free
+                // saved_searches is 0 in subscription_plans.limits).
+                "Save events, restaurants and places to your account."
               : "Welcome back to Des Moines Insider."}
           </CardDescription>
         </CardHeader>
