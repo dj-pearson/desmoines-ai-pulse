@@ -25,6 +25,7 @@ import {
   logSecurityEvent,
   type SecurityContext,
 } from "../_shared/securityLayers.ts";
+import { campaignStartProblem, centralDateOf } from "../_shared/campaignDates.ts";
 
 serve(async (req) => {
   // Handle CORS preflight
@@ -164,6 +165,24 @@ serve(async (req) => {
           status: 400,
           headers: { ...corsHeaders, "Content-Type": "application/json" },
         }
+      );
+    }
+
+    // WP3: the lead time /advertise shows, enforced where the money is taken.
+    // The page refused a start sooner than MIN_LEAD_TIME_DAYS out and nothing
+    // behind it did, so an old draft could be paid for with days already gone.
+    // Before Stripe is touched, so a refused campaign opens no session.
+    const startCheck = campaignStartProblem(campaign.start_date, centralDateOf(), {
+      isRenewal: Boolean(campaign.original_campaign_id),
+    });
+    if (!startCheck.ok) {
+      return new Response(
+        JSON.stringify({
+          error: startCheck.message,
+          code: startCheck.code,
+          earliestStart: startCheck.earliestStart,
+        }),
+        { status: 400, headers: { ...corsHeaders, "Content-Type": "application/json" } },
       );
     }
 

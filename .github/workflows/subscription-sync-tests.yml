@@ -373,6 +373,10 @@ jobs:
       # time and switched days at 7pm Central. Pins the random pick, Central
       # dates and the unchanged signature the apps call.
       - run: deno test --allow-read supabase/functions/_tests/campaign-ad-serving.test.ts
+      # WP3. Checkout took start dates in the past; the lead time lived only in
+      # the browser. Pins the Central-date rule, the renewal exemption and the
+      # server constant matching src/lib/businessCopy.ts.
+      - run: deno test --allow-read supabase/functions/_tests/campaign-start-date.test.ts
       - run: deno test --allow-read supabase/functions/send-campaign-notification/decision.test.ts
       - run: deno test --allow-read supabase/functions/triage-event-submission/logic.test.ts
       # WEB-ADS-002. Impressions and clicks were inserted from the browser into
