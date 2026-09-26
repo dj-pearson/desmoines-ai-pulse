@@ -93,6 +93,10 @@ const SURFACES = [
   'src/lib/planBenefits.ts',
   // The site-wide "View Plans" band, on every page including /pricing.
   'src/components/Footer.tsx',
+  // Its "Subscription Features" list promised VIP priority support and early
+  // access after every other surface had dropped them. It renders from
+  // planBenefits.ts now; reading it here keeps a typed-out list from returning.
+  'src/pages/Terms.tsx',
 ];
 
 /**
@@ -124,6 +128,13 @@ const WITHDRAWN = [
   'BEST VALUE',
   'Best Value',
 ];
+
+Deno.test('the Terms page lists plan features from planBenefits.ts', async () => {
+  const terms = await read('src/pages/Terms.tsx');
+  assert(/benefitsFor\(/.test(terms), 'Terms.tsx must render plan features with benefitsFor()');
+  assert(/displayPrice\(/.test(terms), 'Terms.tsx must show prices from displayPrice()');
+  assertFalse(/\$\d+\.\d\d\/month/.test(terms), 'Terms.tsx types out a price instead of reading the plan row');
+});
 
 Deno.test('no premium surface sells anything that was withdrawn', async () => {
   for (const file of SURFACES) {
