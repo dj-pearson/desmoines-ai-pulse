@@ -14,6 +14,7 @@
 
 import { createClient } from 'https://esm.sh/@supabase/supabase-js@2.39.3';
 import { classifyCaller, expectedSecrets, isMachineCaller, presentedCredentials, timingSafeEqual } from "./callerKind.ts";
+import { highestRole, isFullAdmin } from './roles.ts';
 
 // Re-exported: several functions import it from here and the implementation
 // moved to a module with no remote imports so it could be tested (WEB-BE-047).
@@ -113,13 +114,16 @@ export async function isAdminUserId(
   userId: string,
   label = 'isAdminUserId',
 ): Promise<boolean> {
-  const { data: roleRow, error: roleErr } = await supabase
+  // Every row, not .maybeSingle(): user_roles is unique on (user_id, role),
+  // so a user can hold two grants, and maybeSingle errored (PGRST116) on
+  // exactly those users - an admin who also had a 'user' row was denied.
+  const { data: roleRows, error: roleErr } = await supabase
     .from('user_roles')
     .select('role')
-    .eq('user_id', userId)
-    .maybeSingle();
+    .eq('user_id', userId);
 
-  if (roleRow?.role && ADMIN_ROLE_VALUES.has(roleRow.role)) return true;
+  const strongest = highestRole(roleRows);
+  if (isFullAdmin(strongest)) return true;
 
   const { data: profile, error: profileErr } = await supabase
     .from('profiles')
@@ -132,7 +136,7 @@ export async function isAdminUserId(
   // Surface exactly why the check rejected so the data can be fixed.
   console.error(`[${label}] admin check failed`, {
     userId,
-    user_roles_role: roleRow?.role ?? null,
+    user_roles_roles: (roleRows ?? []).map((r: { role?: unknown }) => r?.role ?? null),
     user_roles_error: roleErr?.message ?? null,
     profiles_user_role: profile?.user_role ?? null,
     profiles_error: profileErr?.message ?? null,

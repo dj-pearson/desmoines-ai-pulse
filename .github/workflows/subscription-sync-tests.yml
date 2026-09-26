@@ -93,6 +93,10 @@ jobs:
           deno-version: v2.x
       - run: deno test --allow-read supabase/functions/_tests/cross-platform-sync.test.ts
       - run: deno test supabase/functions/_tests/version-check.test.ts
+      # Role precedence for isAdminUserId and assign-role, including the
+      # two-row user that .maybeSingle() used to deny. --allow-read is for the
+      # src/lib/roles.ts comparison.
+      - run: deno test --allow-read supabase/functions/_shared/roles.test.ts
       # Reads the iOS/Android sources as well as the edge function, so the
       # client/server deletion contract can't drift again (XPLAT-001).
       # XPLAT-011. Asserts docstring, implementation and all three clients agree
