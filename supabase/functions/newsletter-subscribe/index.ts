@@ -38,10 +38,9 @@ import { handleCors, getCorsHeaders, isOriginAllowed } from "../_shared/cors.ts"
 import { checkRateLimit, addRateLimitHeaders } from "../_shared/rateLimit.ts";
 import { renderEmail } from "../_shared/emailLayout.ts";
 import { getSiteUrl } from "../_shared/siteUrl.ts";
-import { fetchWithTimeout } from "../_shared/fetchWithTimeout.ts";
+import { sendEmail } from "../_shared/email.ts";
 import { escapeHtml } from "../_shared/escapeHtml.ts";
 
-const RESEND_API_KEY = Deno.env.get("RESEND_API_KEY");
 const FROM_ADDRESS = "Des Moines Insider <hello@desmoinesinsider.com>";
 
 /** Do not mail the same address again inside this window, however often it asks. */
@@ -250,40 +249,39 @@ serve(async (req) => {
       );
     }
 
-    if (!RESEND_API_KEY) {
-      // The row is pending and will never be confirmed, which is the correct
-      // resting state for "we could not ask". Loud in the logs, generic to the
-      // caller - a missing key is not theirs to know about.
-      console.error("[newsletter-subscribe] RESEND_API_KEY is not set - no confirmation sent");
-      return ok();
-    }
-
     const confirmUrl = `${getSiteUrl()}/newsletter/confirm?token=${confirmToken}`;
     const rendered = buildConfirmEmail(email, confirmUrl, firstName);
 
-    const response = await fetchWithTimeout("https://api.resend.com/emails", {
-      method: "POST",
-      headers: {
-        "Content-Type": "application/json",
-        Authorization: `Bearer ${RESEND_API_KEY}`,
-      },
-      body: JSON.stringify({
+    const sent = await sendEmail(
+      {
+        to: email,
         from: FROM_ADDRESS,
-        to: [email],
         subject: "Confirm your Des Moines Insider subscription",
         html: rendered.html,
         text: rendered.text,
-      }),
-    });
+        category: "transactional",
+        template: "newsletter_confirm",
+      },
+      { supabase },
+    );
 
-    if (!response.ok) {
+    if (!sent.ok && sent.provider === "none") {
+      // The row is pending and will never be confirmed, which is the correct
+      // resting state for "we could not ask". Loud in the logs, generic to the
+      // caller - a missing key is not theirs to know about.
+      console.error("[newsletter-subscribe] no email provider configured - no confirmation sent");
+      return ok();
+    }
+
+    if (!sent.ok) {
       // Clear the send timestamp so the cooldown does not lock the address out
-      // of a retry it never got the benefit of.
+      // of a retry it never got the benefit of. A suppressed (bounced)
+      // address lands here too and says nothing different to the caller.
       await supabase
         .from("newsletter_subscribers")
         .update({ confirm_sent_at: null })
         .eq("email", email);
-      console.error("[newsletter-subscribe] Resend rejected the send", await response.text());
+      console.error("[newsletter-subscribe] confirmation not sent:", sent.error);
     }
 
     return ok();

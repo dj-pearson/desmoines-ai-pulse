@@ -17,8 +17,8 @@ import { createClient } from 'https://esm.sh/@supabase/supabase-js@2';
 import Stripe from 'https://esm.sh/stripe@14.21.0';
 import { handleCors, getCorsHeaders } from '../_shared/cors.ts';
 import { runJob } from '../_shared/jobRunner.ts';
-import { renderEmail, SITE_URL } from '../_shared/emailLayout.ts';
-import { fetchWithTimeout } from '../_shared/fetchWithTimeout.ts';
+import { listUnsubscribeHeaders, renderEmail, SITE_URL } from '../_shared/emailLayout.ts';
+import { sendEmail } from '../_shared/email.ts';
 import { requireAdminOrApiKey } from "../_shared/apiKeyAuth.ts";
 import {
   DAY_MS,
@@ -34,29 +34,37 @@ import {
 // deno-lint-ignore no-explicit-any
 type Supa = any;
 
-const RESEND_API_KEY = Deno.env.get('RESEND_API_KEY');
 const FROM = 'Des Moines Insider <billing@desmoinesinsider.com>';
 const DAY = DAY_MS;
 
-async function sendEmail(
+async function sendLifecycleEmail(
+  // deno-lint-ignore no-explicit-any
+  supabase: any,
   to: string,
+  userId: string,
+  template: string,
   subject: string,
   bodyHtml: string,
   bodyText: string,
   category: 'transactional' | 'marketing',
 ): Promise<boolean> {
-  if (!RESEND_API_KEY || !to) return false;
-  const { html, text } = renderEmail({ bodyHtml, bodyText, recipient: { email: to }, category });
-  try {
-    const res = await fetchWithTimeout('https://api.resend.com/emails', {
-      method: 'POST',
-      headers: { 'Content-Type': 'application/json', Authorization: `Bearer ${RESEND_API_KEY}` },
-      body: JSON.stringify({ from: FROM, to: [to], subject, html, text }),
-    });
-    return res.ok;
-  } catch {
-    return false;
-  }
+  if (!to) return false;
+  const rendered = renderEmail({ bodyHtml, bodyText, recipient: { email: to }, category });
+  const res = await sendEmail(
+    {
+      to,
+      from: FROM,
+      subject,
+      html: rendered.html,
+      text: rendered.text,
+      category,
+      template: `subscription_${template}`,
+      headers: listUnsubscribeHeaders(rendered),
+      userId,
+    },
+    { supabase },
+  );
+  return res.ok;
 }
 
 /**
@@ -220,7 +228,7 @@ Deno.serve(async (req) => {
         const message = lifecycleEmail(action, emailCtx);
         const send = () =>
           message
-            ? sendEmail(email, message.subject, message.html, message.text, message.category)
+            ? sendLifecycleEmail(supabase, email, userId, action.kind, message.subject, message.html, message.text, message.category)
             : Promise.resolve(false);
 
         switch (action.kind) {

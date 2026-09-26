@@ -54,7 +54,7 @@ import { createClient } from 'https://esm.sh/@supabase/supabase-js@2';
 import { handleCors, getCorsHeaders } from '../_shared/cors.ts';
 import { checkRateLimit } from '../_shared/rateLimit.ts';
 import { renderEmail } from '../_shared/emailLayout.ts';
-import { fetchWithTimeout } from '../_shared/fetchWithTimeout.ts';
+import { sendEmail } from '../_shared/email.ts';
 
 // WEB-SEC-006 thresholds, as amended by WEB-SEC-027: lock on >5 failures from
 // one IP within a 10-minute detection window; the lockout lasts 15 minutes.
@@ -331,12 +331,6 @@ async function onLockout(supabase: any, ctx: {
     const recipient = profile?.email;
     if (!recipient) return; // no account -> send nothing (non-enumeration)
 
-    const resendKey = Deno.env.get('RESEND_API_KEY');
-    if (!resendKey) {
-      console.warn('[check-login-attempt] RESEND_API_KEY not set; skipping lockout email');
-      return;
-    }
-
     const bodyHtml =
       `<h1>Unusual sign-in activity</h1>` +
       `<p>We detected multiple failed sign-in attempts on your Des Moines Insider account and have temporarily locked sign-in for about 15 minutes to protect it.</p>` +
@@ -354,18 +348,18 @@ async function onLockout(supabase: any, ctx: {
       recipient: { email: recipient },
     });
 
-    await fetchWithTimeout('https://api.resend.com/emails', {
-      method: 'POST',
-      headers: { 'Content-Type': 'application/json', Authorization: `Bearer ${resendKey}` },
-      body: JSON.stringify({
+    await sendEmail(
+      {
+        to: recipient,
         from: 'Des Moines Insider Security <security@desmoinesinsider.com>',
-        to: [recipient],
         subject: 'Unusual sign-in activity on your account',
         html: rendered.html,
         text: rendered.text,
-        tags: [{ name: 'type', value: 'security_notification' }, { name: 'event_type', value: 'account_lockout' }],
-      }),
-    });
+        category: 'transactional',
+        template: 'account_lockout',
+      },
+      { supabase },
+    );
   } catch (err) {
     console.error('[check-login-attempt] lockout email failed:', err);
   }
