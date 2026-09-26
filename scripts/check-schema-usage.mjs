@@ -171,6 +171,10 @@ const PENDING_MIGRATIONS = [
   // so mail keeps flowing in the pending window.
   { table: 'email_suppressions', migration: '20261002000001' },
   { table: 'email_log', migration: '20261002000001' },
+  // Notices the database writes for email (WP3). Only send-campaign-emails
+  // reads them, and its cron (20261003000007) is ordered after the columns.
+  { table: 'campaign_notifications', column: 'email_pending', migration: '20261003000003' },
+  { table: 'campaign_notifications', column: 'emailed_at', migration: '20261003000003' },
   // What a checkout actually charged (NON_CORE_REVIEW WP6 item 3). Written by
   // stripe-webhook and verify-campaign-payment in a separate best-effort UPDATE
   // that logs PGRST204 until applied; AdminRefunds retries its list without
