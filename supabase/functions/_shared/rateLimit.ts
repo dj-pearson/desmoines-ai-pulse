@@ -14,6 +14,11 @@
 
 import { createClient } from 'https://esm.sh/@supabase/supabase-js@2';
 import { classifyCaller, expectedSecrets, isMachineCaller, presentedCredentials } from "./callerKind.ts";
+import { getClientIp } from "./clientIp.ts";
+
+// getClientIp lives in clientIp.ts (no imports) so offline-tested modules can
+// share it. Re-exported for callers that already import this file.
+export { getClientIp };
 
 // In-memory fallback store (used when DB is unavailable)
 interface RateLimitStore {
@@ -65,32 +70,6 @@ export interface RateLimitResult {
   remaining: number;
   resetTime: number;
   response?: Response;
-}
-
-/**
- * Resolve the trusted client IP.
- *
- * SECURITY: `X-Forwarded-For` is a client-controllable header — the LEFTMOST
- * entry is whatever the caller wrote, so keying on it lets an attacker forge a
- * fresh identity per request and evade the limit entirely. We therefore prefer
- * Cloudflare's `CF-Connecting-IP` (set by the trusted edge in front of
- * Supabase), then `X-Real-IP`, and only fall back to the RIGHTMOST XFF entry
- * (the hop appended by the trusted proxy, not the spoofable client value).
- */
-function getClientIp(req: Request): string {
-  const cf = req.headers.get('cf-connecting-ip');
-  if (cf) return cf.trim();
-
-  const realIp = req.headers.get('x-real-ip');
-  if (realIp) return realIp.trim();
-
-  const forwarded = req.headers.get('x-forwarded-for');
-  if (forwarded) {
-    const parts = forwarded.split(',').map((s) => s.trim()).filter(Boolean);
-    if (parts.length) return parts[parts.length - 1]; // rightmost = trusted hop
-  }
-
-  return 'unknown';
 }
 
 /**
