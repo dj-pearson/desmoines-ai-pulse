@@ -73,7 +73,28 @@ export interface AppliedFilter {
 
 export type MatchType = "understood" | "keyword";
 export type ErrorCode = "ai_unavailable" | "bad_request" | "internal";
-export type DegradedCode = "ai_timeout" | "ai_unavailable";
+/**
+ * quota_exceeded and ai_budget_paused (WP1 of NON_CORE_REVIEW_2026-09) are
+ * additive: the caller's daily AI allowance or the provider's daily budget is
+ * spent, so the query runs as a keyword search instead of a model parse.
+ */
+export type DegradedCode = "ai_timeout" | "ai_unavailable" | "quota_exceeded" | "ai_budget_paused";
+
+/** Token counts off the model response, for pricing. */
+export interface ModelUsage {
+  input_tokens?: number;
+  output_tokens?: number;
+  cache_read_input_tokens?: number;
+  cache_creation_input_tokens?: number;
+}
+
+/**
+ * What deps.aiGate answers before a model call. index.ts backs it with
+ * _shared/aiQuota.ts guardAi; `settle` books what the call cost.
+ */
+export type AiGate =
+  | { allowed: true; settle: (model: string, usage: ModelUsage) => Promise<void> }
+  | { allowed: false; code: "quota_exceeded" | "ai_budget_paused" };
 
 export interface PgError {
   code?: string;
@@ -135,6 +156,11 @@ export interface SearchDeps {
   rateLimit: (req: Request, userId: string | null) => Promise<Response | null>;
   /** null when no Anthropic key is configured. */
   loadAi: (prompt: string) => Promise<AiSetup | null>;
+  /**
+   * Daily AI quota and spend check, asked only when the model would be
+   * called. Absent means no quota (tests that are not about quotas).
+   */
+  aiGate?: (req: Request, userId: string | null) => Promise<AiGate>;
   /** EdgeRuntime.waitUntil when the runtime has it; otherwise the insert is awaited. */
   waitUntil?: (promise: Promise<unknown>) => void;
   /** Model deadline. 3.5s in production; tests shorten it. */
@@ -358,6 +384,8 @@ async function parseWithModel(
   deps: SearchDeps,
   query: string,
   types: ContentType[],
+  /** Called once the model has answered 2xx, i.e. once the call is billed, even if the body is unusable. */
+  onBilled?: (model: string, usage: ModelUsage) => void,
 ): Promise<{ intent: ParsedSearchIntent; model: string }> {
   const timeoutMs = deps.aiTimeoutMs ?? AI_TIMEOUT_MS;
   const controller = new AbortController();
@@ -382,7 +410,10 @@ async function parseWithModel(
       await res.body?.cancel();
       throw new AiFailure("ai_unavailable", `model answered ${res.status}`);
     }
-    const extracted = setup.extractText(await res.json());
+    const json = await res.json();
+    const usage = (json as { usage?: ModelUsage } | null)?.usage;
+    onBilled?.(setup.model, usage && typeof usage === "object" ? usage : {});
+    const extracted = setup.extractText(json);
     if (!extracted.ok) throw new AiFailure("ai_unavailable", `model response ${extracted.reason}`);
     const match = extracted.text.match(/\{[\s\S]*\}/);
     if (!match) throw new AiFailure("ai_unavailable", "no JSON in model response");
@@ -784,17 +815,39 @@ export async function handleSearch(req: Request, deps: SearchDeps): Promise<Resp
       intent = coerceIntent(body.intent, requestedTypes, query);
       source = "given";
     } else {
-      try {
-        const parsed = await parseWithModel(deps, query, requestedTypes);
-        intent = parsed.intent;
-        modelUsed = parsed.model;
-        source = "model";
-      } catch (err) {
-        degradedCode = err instanceof AiFailure ? err.code : "ai_unavailable";
-        console.warn(`nlp-search: model unavailable (${degradedCode}), keyword search instead`);
+      // Daily quota and provider budget (WP1). A refusal does not fail the
+      // search: it runs as a keyword search, the same as a model outage.
+      const gate = deps.aiGate ? await deps.aiGate(req, userId) : null;
+      if (gate && !gate.allowed) {
+        degradedCode = gate.code;
+        console.warn(`nlp-search: ${gate.code}, keyword search instead`);
         intent = { ...coerceIntent({}, requestedTypes, query), confidence: 0 };
         degraded = true;
         source = "fallback";
+      } else {
+        let billed: { model: string; usage: ModelUsage } | null = null;
+        try {
+          const parsed = await parseWithModel(deps, query, requestedTypes, (model, usage) => {
+            billed = { model, usage };
+          });
+          intent = parsed.intent;
+          modelUsed = parsed.model;
+          source = "model";
+        } catch (err) {
+          degradedCode = err instanceof AiFailure ? err.code : "ai_unavailable";
+          console.warn(`nlp-search: model unavailable (${degradedCode}), keyword search instead`);
+          intent = { ...coerceIntent({}, requestedTypes, query), confidence: 0 };
+          degraded = true;
+          source = "fallback";
+        }
+        // Settled on the failure path too: an answer we could not parse was
+        // still billed.
+        const spent = billed as { model: string; usage: ModelUsage } | null;
+        if (gate?.allowed && spent) {
+          const settling = gate.settle(spent.model, spent.usage);
+          if (deps.waitUntil) deps.waitUntil(settling);
+          else await settling;
+        }
       }
     }
 
