@@ -5,24 +5,25 @@ import { useDocumentTitle } from "@/hooks/useDocumentTitle";
 import AdminNav from "@/components/admin/AdminNav";
 import UserRoleManager from "@/components/UserRoleManager";
 import AdminSystemControls from "@/components/AdminSystemControls";
-import AdminApplicationSettings from "@/components/AdminApplicationSettings";
 import JobHealthPanel from "@/components/admin/JobHealthPanel";
 import WebVitalsPanel from "@/components/admin/WebVitalsPanel";
 import SubscriptionEventsPanel from "@/components/admin/SubscriptionEventsPanel";
 import {
   Users,
   Server,
-  Cog,
   Activity,
   Gauge,
 } from "lucide-react";
 
+// There was a "Settings" tab (AdminApplicationSettings): site name, SMTP
+// credentials, moderation, analytics IDs, 2FA policy and more, all saved to the
+// admin's own localStorage and read by nothing. Removed rather than kept as a
+// form that confirmed changes it never made (non-core review WP5).
 const SYSTEM_TABS = [
   { id: "users", label: "User Management", icon: Users },
   { id: "jobs", label: "Job Health", icon: Activity },
   { id: "vitals", label: "Web Vitals", icon: Gauge },
   { id: "system", label: "System Controls", icon: Server },
-  { id: "settings", label: "Settings", icon: Cog },
 ];
 
 const SYSTEM_TAB_IDS = SYSTEM_TABS.map((tab) => tab.id);
@@ -95,8 +96,6 @@ export default function AdminSystem() {
         )}
 
         {canManageUsers() && activeTab === "system" && <AdminSystemControls />}
-
-        {activeTab === "settings" && <AdminApplicationSettings />}
       </div>
     </div>
   );
