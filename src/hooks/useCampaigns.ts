@@ -78,6 +78,40 @@ export interface RateCardEntry {
   discount_30_day: number;
 }
 
+/**
+ * Link the listing a sponsored_listing placement pays for (NON_CORE_REVIEW WP3).
+ *
+ * Goes through link_sponsored_listing (20261003000006), which refuses a
+ * campaign that is not a draft, has no sponsored_listing placement or already
+ * has its listing, and a listing that does not exist. The direct INSERT it
+ * replaces checked only that the caller owned the campaign.
+ *
+ * PGRST202 means the RPC is not deployed yet. Only then does this fall back to
+ * the old INSERT, so sponsored purchases keep working in the window between
+ * this web release and the migration. Any other error is the RPC refusing,
+ * and is returned as is.
+ */
+export async function linkSponsoredListing(
+  campaignId: string,
+  listingType: string,
+  listingId: string,
+): Promise<{ error: Error | null }> {
+  const { error } = await supabase.rpc("link_sponsored_listing" as never, {
+    p_campaign_id: campaignId,
+    p_listing_type: listingType,
+    p_listing_id: listingId,
+  } as never);
+  if (!error) return { error: null };
+  if (error.code !== "PGRST202") return { error: new Error(error.message) };
+
+  const { error: insertError } = await supabase.from("sponsored_listing_links").insert({
+    campaign_id: campaignId,
+    listing_type: listingType,
+    listing_id: listingId,
+  });
+  return { error: insertError ? new Error(insertError.message) : null };
+}
+
 /** Fetch the ad rate card (including CPM rates) — callable without authentication. */
 export async function fetchRateCard(): Promise<RateCardEntry[]> {
   const { data, error } = await supabase

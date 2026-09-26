@@ -392,6 +392,10 @@ jobs:
       # or notice. Pins admin_set_campaign_status: admin-only, three
       # transitions, reason, audit row, advertiser notice, and the pages using it.
       - run: deno test --allow-read supabase/functions/_tests/admin-campaign-status.test.ts
+      # WP3 / D12. Sponsored-listing links were a browser INSERT checked only
+      # for campaign ownership. Pins the draft-only, one-per-placement RPC, the
+      # old policy left for a later release, and /advertise using the RPC.
+      - run: deno test --allow-read supabase/functions/_tests/sponsored-listing-link-guard.test.ts
       - run: deno test --allow-read supabase/functions/send-campaign-notification/decision.test.ts
       - run: deno test --allow-read supabase/functions/triage-event-submission/logic.test.ts
       # WEB-ADS-002. Impressions and clicks were inserted from the browser into

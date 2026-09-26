@@ -168,6 +168,9 @@ const PENDING_MIGRATIONS = [
   // Admin pause / resume / cancel (NON_CORE_REVIEW WP3). useAdminCampaigns
   // reports PGRST202 as "not switched on yet" rather than failing silently.
   { rpc: 'admin_set_campaign_status', migration: '20261003000005' },
+  // Checked sponsored-listing link (WP3, D12). linkSponsoredListing falls back
+  // to the direct insert on PGRST202, so /advertise works in the window.
+  { rpc: 'link_sponsored_listing', migration: '20261003000006' },
 ];
 
 const isPending = (table, column) =>
