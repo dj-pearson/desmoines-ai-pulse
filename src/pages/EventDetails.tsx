@@ -565,7 +565,7 @@ export default function EventDetails() {
                           <a
                             href={outbound.href}
                             target="_blank"
-                            rel="noopener noreferrer"
+                            rel={outbound.rel}
                             onClick={trackClick}
                           >
                             <SpriteIcon name="external-link" className="h-4 w-4 mr-2" />
@@ -586,6 +586,20 @@ export default function EventDetails() {
                         onShare={trackShare}
                       />
                     </div>
+                    {/* An affiliate ticket link says so next to the button
+                        (FTC; plan WP6). The sticky bar carries the same rel. */}
+                    {outbound?.sponsored && (
+                      <p className="text-xs text-muted-foreground">
+                        Affiliate link: we may earn a commission if you buy tickets, at no extra
+                        cost to you.{" "}
+                        <Link
+                          to="/affiliate-disclosure"
+                          className="inline-flex min-h-6 items-center underline underline-offset-2 hover:text-foreground"
+                        >
+                          How this works
+                        </Link>
+                      </p>
+                    )}
 
                     {/* Other dates of the same event (events-pass2 WP4 item 13,
                         bet 4). On a past event's page this is where the next
@@ -900,6 +914,7 @@ export default function EventDetails() {
                 href: outbound.href,
                 icon: "external",
                 isExternal: true,
+                rel: outbound.rel,
               }
             : isUpcoming
             ? {
