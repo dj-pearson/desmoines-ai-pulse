@@ -477,3 +477,9 @@ jobs:
       # stubbed fetch and DB, so nothing here can send mail.
       - run: deno test supabase/functions/_shared/awsSigV4.test.ts
       - run: deno test --allow-env supabase/functions/_shared/email.test.ts
+      - run: deno test --allow-env supabase/functions/_shared/emailTemplates.test.ts
+      - run: deno test supabase/functions/email-unsubscribe/handler.test.ts
+      # ses-events: real RSA verification over signed fixtures, strict
+      # certificate host and topic checks, and the suppression writes.
+      - run: deno test --allow-read supabase/functions/_shared/sesEvents.test.ts
+      - run: deno test --allow-read supabase/functions/ses-events/handler.test.ts
