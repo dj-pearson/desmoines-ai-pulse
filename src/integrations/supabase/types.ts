@@ -13116,6 +13116,7 @@ export type Database = {
         Args: { delete_after_days?: number }
         Returns: Json
       }
+      attribute_referral: { Args: { p_code: string }; Returns: string }
       attractions_within_radius: {
         Args: {
           center_lat: number
@@ -13880,6 +13881,14 @@ export type Database = {
         }[]
       }
       get_level_from_xp: { Args: { xp: number }; Returns: number }
+      get_my_referral_stats: {
+        Args: never
+        Returns: {
+          referral_code: string
+          signed_up: number
+          subscribed: number
+        }[]
+      }
       get_next_optimal_posting_time: {
         Args: { base_time?: string }
         Returns: string

@@ -17,6 +17,7 @@ import { ProtectedRoute } from "@/components/ProtectedRoute";
 import BottomNav from "@/components/BottomNav";
 import { AuthProvider } from "@/contexts/AuthContext";
 import { GuestFavoriteMigrator } from "@/components/GuestFavoriteMigrator";
+import { ReferralCapture } from "@/components/ReferralCapture";
 import { PrerenderSignal } from "@/components/PrerenderSignal";
 import { GlobalUpgradeModal } from "@/components/GlobalUpgradeModal";
 import { AccessibilityProvider } from "@/contexts/AccessibilityContext";
@@ -399,6 +400,7 @@ const App = () => (
       <AuthProvider>
         <SessionManager />
         <GuestFavoriteMigrator />
+        <ReferralCapture />
         {/* Publishes data-queries-settled on <html> for scripts/prerender.mjs.
             Renders nothing and does no work in a browser beyond one attribute. */}
         <PrerenderSignal />
