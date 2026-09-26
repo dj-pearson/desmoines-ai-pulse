@@ -102,13 +102,23 @@ an action only the owner can take.
 
 ### WP4 - Sign-up and benefits
 
-- [ ] Guest favorites cap below the free plan so signing up is worth something
-- [ ] Sign-up headline and Terms page match `planBenefits.ts`; Terms added to the truthfulness test
-- [ ] Resend confirmation keeps the callback redirect
-- [ ] `handle_new_user` maps OAuth `full_name` / `name`
-- [ ] Deletion 409 links to `/subscription`; `/advertise` sends new users to the sign-up tab
-- [ ] Seed `user_email_preferences` at sign-up from marketing consent
-- [owner] VIP has one benefit over Insider (unlimited saved searches) at 2.6x the price
+- [x] Guest favorites cap below the free plan so signing up is worth something (guest 3 -> 2, free stays 3; the tap that hit the wall is replayed after sign-up)
+- [x] Client "N left" counts favorites across events and places, as enforce_favorites_limit does
+- [x] Sign-up headline and Terms page match `planBenefits.ts`; Terms added to the truthfulness test
+- [x] `/search/advanced` linked from `/search`
+- [x] Resend confirmation keeps the callback redirect, and carries the captcha token
+- [x] `handle_new_user` maps OAuth `full_name` / `name` (`20261004000001`, names-only backfill)
+- [x] Deletion 409 links to `/subscription`; `/advertise` and AdvertiseButton send new users to the sign-up tab
+- [x] Seed `user_email_preferences` at sign-up from marketing consent (same migration)
+- [x] Unused WelcomeModal / OnboardingModal deleted
+- [owner] Apply `20261004000001`
+
+### WP7 - VIP benefits (owner chose "build benefits", 2026-09-26)
+
+- [ ] Higher AI quotas for VIP (discover-chat 200/day vs 50, support-chat 100, itinerary 20/day) stated in `planBenefits.ts`
+- [ ] Priority support: VIP tickets land at the front of the queue
+- [ ] Ad-free browsing for VIP (house and affiliate ad slots hidden)
+- [ ] Copy: "Unlimited AI trip plans" becomes the real daily cap
 
 ### WP5 - Admin
 

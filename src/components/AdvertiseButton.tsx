@@ -8,7 +8,7 @@ export function AdvertiseButton() {
 
   const handleAdvertiseClick = () => {
     if (!isAuthenticated) {
-      navigate("/auth?redirect=/advertise");
+      navigate("/auth?mode=signup&redirect=%2Fadvertise");
     } else {
       navigate("/advertise");
     }
