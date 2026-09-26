@@ -23,8 +23,8 @@ import { runAgent } from "../_shared/agentRun.ts";
 import { scoreOutput } from "../_shared/scoreOutput.ts";
 import { createApproval } from "../_shared/agentApprovals.ts";
 import { writeAgentAudit } from "../_shared/auditLog.ts";
-import { renderEmail } from "../_shared/emailLayout.ts";
-import { fetchWithTimeout } from "../_shared/fetchWithTimeout.ts";
+import { listUnsubscribeHeaders, renderEmail } from "../_shared/emailLayout.ts";
+import { sendEmail } from "../_shared/email.ts";
 
 const AGENT_KEY = "outreach-sequencer";
 const BATCH = 100;
@@ -72,7 +72,6 @@ Deno.serve(async (req) => {
     Deno.env.get("SUPABASE_SERVICE_ROLE_KEY")!,
   );
   const from = Deno.env.get("OUTREACH_FROM") || Deno.env.get("NURTURE_FROM") || "Des Moines Insider <partnerships@desmoinesinsider.com>";
-  const apiKey = Deno.env.get("RESEND_API_KEY");
 
   const ledger = await runAgent(AGENT_KEY, async (ctx) => {
     const now = Date.now();
@@ -147,17 +146,27 @@ Deno.serve(async (req) => {
         category: "marketing",
       });
 
-      let status = "skipped", messageId: string | null = null;
-      if (apiKey) {
-        try {
-          const headers: Record<string, string> = { Authorization: `Bearer ${apiKey}`, "Content-Type": "application/json" };
-          if (rendered.listUnsubscribe) headers["List-Unsubscribe"] = rendered.listUnsubscribe;
-          if (rendered.listUnsubscribePost) headers["List-Unsubscribe-Post"] = rendered.listUnsubscribePost;
-          const res = await fetchWithTimeout("https://api.resend.com/emails", { method: "POST", headers, body: JSON.stringify({ from, to: [email], subject, html: rendered.html, text: rendered.text }) });
-          const jb = await res.json().catch(() => ({}));
-          if (res.ok) { status = "queued"; messageId = jb?.id ?? null; sent++; } else status = "failed";
-        } catch { status = "failed"; }
-      }
+      // Same send as _shared/agents/outreach-sequencer.ts (the scheduled copy):
+      // SES via sendEmail, List-Unsubscribe on the message, suppression checked.
+      const res = await sendEmail(
+        {
+          to: email,
+          from,
+          subject,
+          html: rendered.html,
+          text: rendered.text,
+          category: "marketing",
+          template: `outreach_step_${nextStep}`,
+          headers: listUnsubscribeHeaders(rendered),
+          ref: { type: "crm_lead", id: l.id },
+        },
+        { supabase },
+      );
+      let status: string;
+      const messageId: string | null = res.messageId ?? null;
+      if (res.ok) { status = "queued"; sent++; }
+      else if (res.provider === "none" || (res.suppressed?.length ?? 0) > 0) status = "skipped";
+      else status = "failed";
 
       await supabase.from("outreach_sends").insert({ lead_id: l.id, step: nextStep, email, resend_message_id: messageId, status });
       if (nextStep === 1) await supabase.from("crm_leads").update({ status: "contacted" }).eq("id", l.id);
