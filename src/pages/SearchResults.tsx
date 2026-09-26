@@ -1,5 +1,5 @@
 import { useCallback, useEffect, useMemo, useState } from "react";
-import { useSearchParams } from "react-router-dom";
+import { Link, useSearchParams } from "react-router-dom";
 import { Search } from "lucide-react";
 import Header from "@/components/Header";
 import Footer from "@/components/Footer";
@@ -386,6 +386,20 @@ export default function SearchResults() {
                 Search
               </Button>
             </form>
+            {/* The only way in to /search/advanced, which is the Insider
+                "Advanced search filters" benefit. Shown to everyone: the page
+                itself locks the filters behind PremiumGate for free accounts,
+                so a guest who follows this sees what the benefit is. No tier
+                check here, which would cost /search a subscription read. */}
+            <p className="mt-2 text-sm text-muted-foreground">
+              <Link
+                to={q ? `/search/advanced?q=${encodeURIComponent(q)}` : "/search/advanced"}
+                className="inline-flex min-h-11 items-center font-medium text-primary underline underline-offset-2"
+              >
+                Advanced filters
+              </Link>{" "}
+              by category, date, rating and area, for Insider members.
+            </p>
           </div>
 
           {!q && (

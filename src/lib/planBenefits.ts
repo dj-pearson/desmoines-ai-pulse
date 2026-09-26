@@ -93,9 +93,14 @@ const INSIDER_BENEFITS: PlanLine[] = [
   },
   { key: "write_reviews", text: () => "Write reviews and ratings" },
   { key: "ad_free", text: () => "Ad-free browsing" },
-  // Kept verbatim pending Search plan D2 (docs/page-plans/search.md). Not this
-  // plan's call; Search WP4 Stage B removes or keeps this line.
-  { key: "advanced_filters", text: () => "Advanced search filters" },
+  // Kept verbatim pending Search plan D2 (docs/page-plans/search.md). Linked
+  // from /search since NON_CORE_REVIEW_2026-09 WP4; before that nothing on the
+  // site led to /search/advanced, so the benefit was unreachable.
+  {
+    key: "advanced_filters",
+    href: "/search/advanced",
+    text: () => "Advanced search filters",
+  },
   {
     key: "trip_planner",
     href: "/trip-planner",

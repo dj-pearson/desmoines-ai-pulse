@@ -61,6 +61,9 @@ on:
       - 'src/components/UpgradeModal.tsx'
       - 'src/pages/SubscriptionSuccess.tsx'
       - 'src/pages/SubscriptionPortal.tsx'
+      # NON_CORE_REVIEW_2026-09 WP4: Terms lists plan features from
+      # planBenefits.ts and the same test now scans it.
+      - 'src/pages/Terms.tsx'
 
 concurrency:
   group: subscription-sync-${{ github.head_ref }}

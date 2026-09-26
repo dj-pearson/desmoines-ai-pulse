@@ -246,7 +246,9 @@ function GuestFavoriteButton({
           }
           toast("Sign up free to keep saving", {
             id: "guest-fav-wall",
-            description: `You've saved ${GUEST_FAVORITE_CAP} items as a guest. Create a free account to save more.`,
+            // True because useGuestFavoriteMigration replays the stashed tap
+            // after sign-up, and the guest cap sits below the free plan limit.
+            description: `You've saved ${GUEST_FAVORITE_CAP} items as a guest. Create a free account and this one is saved too.`,
             action: { label: "Sign up", onClick: () => goToSignup() },
           });
         }

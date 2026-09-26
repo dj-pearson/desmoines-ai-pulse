@@ -111,7 +111,7 @@ async function performDeletion(
       JSON.stringify({
         error: "We could not read your subscription, so the account was not deleted. Nothing has been changed. Please try again.",
         code: "SUBSCRIPTION_LOOKUP_FAILED",
-        manage_subscription_url: "/profile?tab=subscription",
+        manage_subscription_url: "/subscription",
       }),
       { status: 503, headers: { ...corsHeaders, "Content-Type": "application/json" } },
     );
@@ -134,7 +134,7 @@ async function performDeletion(
         code: "BILLING_TEARDOWN_FAILED",
         // The user's own subscription is still live, so tell them where it is
         // rather than leaving them to find out from a statement.
-        manage_subscription_url: "/profile?tab=subscription",
+        manage_subscription_url: "/subscription",
       }),
       { status: 409, headers: { ...corsHeaders, "Content-Type": "application/json" } },
     );
