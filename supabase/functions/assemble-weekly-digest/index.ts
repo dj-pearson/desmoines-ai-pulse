@@ -18,8 +18,8 @@
  *   5. schedule — insert a newsletter_campaigns row (status='scheduled',
  *      scheduled_for=now(), campaign_type='weekly_digest'). The existing
  *      dispatch-scheduled-newsletters cron picks it up within ~1 minute and
- *      sends it through the identical Resend path, so unsubscribe/compliance
- *      handling and delivery webhooks are unchanged.
+ *      sends it through the same path as every campaign, which wraps the body
+ *      in the marketing layout with each subscriber's own unsubscribe token.
  *
  * Actions (POST body { action }):
  *   - 'assemble' (default; cron)  → run the pipeline above (jobRunner-wrapped).
@@ -307,21 +307,28 @@ async function activeSubscriberCount(supabase: SupabaseClient): Promise<number> 
 async function assembleDigest(supabase: SupabaseClient): Promise<{
   content: DigestContent;
   subject: string;
+  /** The digest body alone. This is what the campaign row stores. */
   bodyHtml: string;
   bodyText: string;
+  /** bodyHtml inside the marketing layout, for the admin preview only. */
+  previewHtml: string;
 }> {
   const content = await gatherContent(supabase);
   const subject = buildSubject(content);
-  // Generic recipient: the dispatch path sends one body_html to all
-  // recipients, so the unsubscribe link is the token-less preferences page
-  // (identical to the manual send_now path).
-  const rendered = renderEmail({
-    bodyHtml: buildBodyHtml(content),
-    bodyText: buildBodyText(content),
+  const bodyHtml = buildBodyHtml(content);
+  const bodyText = buildBodyText(content);
+  // The campaign row stores the body WITHOUT the layout.
+  // dispatch-scheduled-newsletters wraps it per recipient, so each subscriber's
+  // footer and List-Unsubscribe carry their own token. This used to store the
+  // body already rendered for a placeholder recipient, so every copy of the
+  // digest had the same token-less unsubscribe link and no one-click target.
+  const preview = renderEmail({
+    bodyHtml,
+    bodyText,
     recipient: { email: 'subscriber@desmoinesinsider.com' },
     category: 'marketing',
   });
-  return { content, subject, bodyHtml: rendered.html, bodyText: rendered.text };
+  return { content, subject, bodyHtml, bodyText, previewHtml: preview.html };
 }
 
 Deno.serve(async (req) => {
@@ -343,13 +350,13 @@ Deno.serve(async (req) => {
   // --- preview: assemble only, no campaign row, no jobRunner ----------------
   if (action === 'preview') {
     try {
-      const { content, subject, bodyHtml } = await assembleDigest(supabase);
+      const { content, subject, previewHtml } = await assembleDigest(supabase);
       const recipients = await activeSubscriberCount(supabase);
       return new Response(
         JSON.stringify({
           ok: true,
           subject,
-          body_html: bodyHtml,
+          body_html: previewHtml,
           recipient_count: recipients,
           counts: {
             events: content.events.length,
