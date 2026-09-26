@@ -210,7 +210,7 @@ Deno.test("settle books the cost once, to ai_usage_daily and provider_usage", as
     source: "generate-itinerary",
   });
   assert(r.ok);
-  await r.settle({ costUsd: 0.12, model: "claude-sonnet-4-6", usage: { input_tokens: 10, output_tokens: 5 } });
+  await r.settle({ costUsd: 0.12, model: "test-model", usage: { input_tokens: 10, output_tokens: 5 } });
   await r.settle({ costUsd: 0.12 });
 
   const settles = s.rpcs.filter((c) => c.fn === "settle_ai_usage");
