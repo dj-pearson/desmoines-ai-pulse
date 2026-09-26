@@ -21,6 +21,19 @@ interface ApproveCreativeResult {
 
 const log = createLogger('useAdminCampaigns');
 
+/** process-stripe-refund's ALLOWED_REASONS (ADMIN-REFUND-001). */
+export const REFUND_REASON_CATEGORIES = [
+  "duplicate_charge",
+  "user_request",
+  "campaign_cancelled",
+  "fraud",
+  "technical_issue",
+  "content_takedown",
+  "accidental_purchase",
+  "other",
+] as const;
+export type RefundReasonCategory = (typeof REFUND_REASON_CATEGORIES)[number];
+
 /** The values `campaigns.status` can actually hold, from the generated enum. */
 export type CampaignStatus = Database["public"]["Enums"]["campaign_status"];
 
@@ -466,15 +479,21 @@ export function useAdminCampaigns() {
     }
   };
 
+  /**
+   * Refund through process-stripe-refund, which caps the amount at what Stripe
+   * says was paid minus earlier refunds, ends the campaign only on a full
+   * refund, and notifies the advertiser itself. `amount` omitted means "the
+   * rest". `refundReason` is the ADMIN-REFUND-001 category the function
+   * requires; without it every call was a 400.
+   */
   const processRefund = async (
     campaignId: string,
-    amount: number,
+    amount: number | null,
     reason: string,
+    refundReason: RefundReasonCategory,
     policyViolation?: string
   ): Promise<boolean> => {
     try {
-      // Call the process-stripe-refund edge function which handles
-      // Stripe refund creation, DB record, and campaign status update
       const { data, error: refundError } = await supabase.functions.invoke(
         "process-stripe-refund",
         {
@@ -482,6 +501,8 @@ export function useAdminCampaigns() {
             campaignId,
             amount,
             reason,
+            refundReason,
+            refundReasonNotes: reason,
             policyViolation: policyViolation || null,
           },
         }
@@ -493,35 +514,12 @@ export function useAdminCampaigns() {
         throw new Error(data?.error || "Refund processing failed");
       }
 
-      // Notification lookup only, and deliberately NOT thrown: Stripe has
-      // already refunded by this point. Turning a lookup failure into "Refund
-      // failed" would tell an admin to retry a refund that succeeded.
-      const { data: campaign, error: campaignError } = await supabase
-        .from("campaigns")
-        .select("user_id, name")
-        .eq("id", campaignId)
-        .single();
-
-      if (campaignError) {
-        log.error('processRefund', 'Refund succeeded but the advertiser could not be notified', {
-          campaignId,
-          error: campaignError,
-        });
-      }
-
-      if (campaign) {
-        notifyAdvertiser(
-          campaignId,
-          campaign.name,
-          campaign.user_id,
-          'campaign_refunded',
-          { amount, reason }
-        );
-      }
-
+      const refunded = Number(data.amount ?? amount ?? 0);
       toast({
-        title: "Refund processed",
-        description: `Refund of $${amount.toFixed(2)} has been processed through Stripe. ID: ${data.refundId}`,
+        title: data.duplicate ? "Refund already issued" : "Refund processed",
+        description: data.duplicate
+          ? `Stripe already has this refund (${data.refundId}); nothing new was sent.`
+          : `Refunded $${refunded.toFixed(2)} through Stripe${data.full ? "; the campaign has ended" : ""}. ID: ${data.refundId}`,
       });
 
       await fetchCampaigns();

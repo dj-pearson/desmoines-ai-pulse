@@ -377,6 +377,10 @@ jobs:
       # the browser. Pins the Central-date rule, the renewal exemption and the
       # server constant matching src/lib/businessCopy.ts.
       - run: deno test --allow-read supabase/functions/_tests/campaign-start-date.test.ts
+      # WP3. Refunds were capped at the list price with no memory of earlier
+      # refunds, and any refund ended the campaign. Pins the Stripe-charge cap,
+      # full-only 'refunded', the replay guard and the admin page's request.
+      - run: deno test --allow-read supabase/functions/_tests/campaign-refund-cap.test.ts
       - run: deno test --allow-read supabase/functions/send-campaign-notification/decision.test.ts
       - run: deno test --allow-read supabase/functions/triage-event-submission/logic.test.ts
       # WEB-ADS-002. Impressions and clicks were inserted from the browser into

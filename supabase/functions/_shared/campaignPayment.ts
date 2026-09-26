@@ -122,3 +122,79 @@ export function paymentRecordFromSession(session: CheckoutSessionLike): PaymentR
     promotion_code: promotionCodeOf(session),
   };
 }
+
+// ── Refunds ──────────────────────────────────────────────────────────────
+
+export interface RefundInput {
+  /** What the customer was charged, in cents, from Stripe. */
+  paidCents: number;
+  /** What has been refunded already, in cents, from Stripe. */
+  refundedCents: number;
+  /** The admin's requested amount in dollars; null or undefined means "the rest". */
+  requestedDollars?: number | null;
+}
+
+export type RefundDecision =
+  | { ok: true; amountCents: number; full: boolean; remainingAfterCents: number }
+  | { ok: false; error: string; maxCents: number };
+
+/**
+ * How much may be refunded, and whether the refund ends the campaign.
+ *
+ * The cap is what Stripe says was charged minus what Stripe says was already
+ * returned. A promotion code lowers the first; an earlier partial refund
+ * raises the second. Only a refund that brings the balance to zero is "full",
+ * and only a full refund may mark the campaign refunded: a goodwill partial
+ * refund on a running campaign must not take its ads down.
+ */
+export function refundDecision(input: RefundInput): RefundDecision {
+  const paid = Math.max(0, Math.round(input.paidCents));
+  const refunded = Math.max(0, Math.round(input.refundedCents));
+  const max = Math.max(0, paid - refunded);
+
+  if (max === 0) {
+    return { ok: false, error: "Nothing left to refund on this payment.", maxCents: 0 };
+  }
+
+  const requested = input.requestedDollars;
+  const amountCents =
+    requested === null || requested === undefined ? max : Math.round(Number(requested) * 100);
+
+  if (!Number.isFinite(amountCents) || amountCents <= 0) {
+    return { ok: false, error: "Refund amount must be more than zero.", maxCents: max };
+  }
+  if (amountCents > max) {
+    return {
+      ok: false,
+      error: `Refund amount is more than what is left. Maximum refundable: $${(max / 100).toFixed(2)}`,
+      maxCents: max,
+    };
+  }
+
+  const remainingAfterCents = max - amountCents;
+  return { ok: true, amountCents, full: remainingAfterCents === 0, remainingAfterCents };
+}
+
+/** What the advertiser is told. A partial refund says the campaign keeps running. */
+export function refundNoticeText(args: {
+  campaignName: string;
+  amount: number;
+  full: boolean;
+}): { title: string; message: string } {
+  const name = args.campaignName || "your campaign";
+  const amount = `$${args.amount.toFixed(2)}`;
+  if (args.full) {
+    return {
+      title: `Refund issued: ${name}`,
+      message:
+        `We've refunded ${amount} for "${name}", the full amount paid. The campaign has ended. ` +
+        `Refunds usually reach your card in 5 to 10 business days.`,
+    };
+  }
+  return {
+    title: `Partial refund issued: ${name}`,
+    message:
+      `We've refunded ${amount} of what you paid for "${name}". The campaign keeps running as scheduled. ` +
+      `Refunds usually reach your card in 5 to 10 business days.`,
+  };
+}
