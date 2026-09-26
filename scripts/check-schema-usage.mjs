@@ -166,6 +166,11 @@ const PENDING_MIGRATIONS = [
   // WP5). src/lib/adminAudit.ts falls back to the direct insert on PGRST202,
   // so no audit row is lost before this is applied.
   { rpc: 'record_admin_audit', migration: '20261005000002' },
+  // Email log and suppression list (NON_CORE_REVIEW_2026-09 WP2). sendEmail
+  // treats a missing table as "not suppressed" / "not logged" and still sends,
+  // so mail keeps flowing in the pending window.
+  { table: 'email_suppressions', migration: '20261002000001' },
+  { table: 'email_log', migration: '20261002000001' },
 ];
 
 const isPending = (table, column) =>

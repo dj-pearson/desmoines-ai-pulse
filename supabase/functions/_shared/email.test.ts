@@ -154,6 +154,11 @@ Deno.test("suppression read failure: marketing fails closed, transactional sends
   assertEquals((await sendEmail({ ...marketing, category: "transactional" }, { env: envOf(SES_ENV), fetch: t.f, supabase: stubDb([], { message: "timeout" }).client })).ok, true);
   const n = stubFetch(200, { MessageId: "n" });
   assertEquals((await sendEmail(marketing, { env: envOf(SES_ENV), fetch: n.f, supabase: stubDb([], { code: "42P01", message: "no table" }).client })).ok, true);
+  // supabase-js goes through PostgREST, which reports a missing table as
+  // PGRST205. Treating that as a read failure blocked every newsletter until
+  // the migration was applied.
+  const p = stubFetch(200, { MessageId: "p" });
+  assertEquals((await sendEmail(marketing, { env: envOf(SES_ENV), fetch: p.f, supabase: stubDb([], { code: "PGRST205", message: "Could not find the table" }).client })).ok, true);
 });
 
 Deno.test("Resend fallback when SES is not configured", async () => {

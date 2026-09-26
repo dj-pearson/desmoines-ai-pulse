@@ -226,6 +226,16 @@ export function isBlocked(reason: string | null | undefined, category: EmailCate
   return reason !== "unsubscribe";
 }
 
+/**
+ * A table that does not exist yet. Postgres says 42P01; PostgREST, which is
+ * what supabase-js talks to, says PGRST205 before the query ever reaches
+ * Postgres. Checking only 42P01 would make every marketing send fail closed in
+ * the window between deploying these functions and applying 20261002000001.
+ */
+export function isMissingTable(error: { code?: string } | null | undefined): boolean {
+  return error?.code === "42P01" || error?.code === "PGRST205";
+}
+
 async function suppressedRecipients(
   supabase: DbClient,
   recipients: string[],
@@ -238,9 +248,9 @@ async function suppressedRecipients(
       .select("email, reason")
       .in("email", recipients.map(normalizeEmail));
     if (error) {
-      // 42P01: the migration has not been applied yet. Nothing can be on a list
-      // that does not exist, so send; anything else is a read we could not do.
-      if (error.code === "42P01") return { blocked, failClosed: false };
+      // The migration has not been applied yet. Nothing can be on a list that
+      // does not exist, so send; anything else is a read we could not do.
+      if (isMissingTable(error)) return { blocked, failClosed: false };
       console.warn(`[email] suppression check failed: ${error.message}`);
       // Marketing fails closed: mailing someone who asked us to stop is worse
       // than a newsletter that goes out an hour late. Transactional fails open.
@@ -278,7 +288,7 @@ async function writeLog(
         error: fields.error ? fields.error.slice(0, 500) : null,
       })),
     );
-    if (error && error.code !== "42P01") console.warn(`[email] email_log insert failed: ${error.message}`);
+    if (error && !isMissingTable(error)) console.warn(`[email] email_log insert failed: ${error.message}`);
   } catch (err) {
     console.warn(`[email] email_log insert threw: ${err instanceof Error ? err.message : String(err)}`);
   }
