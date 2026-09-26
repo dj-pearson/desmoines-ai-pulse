@@ -18,6 +18,12 @@ import { sendCampaignEmail } from "../_shared/campaignNotificationEmail.ts";
 import { buildTrialNotice, planAmount } from "../_shared/trialNotice.ts";
 import { getSiteUrl } from "../_shared/siteUrl.ts";
 import {
+  campaignPaymentDecision,
+  PAID_CAMPAIGN_STATUS,
+  PAYABLE_CAMPAIGN_STATUSES,
+  shouldAnnouncePayment,
+} from "../_shared/campaignPayment.ts";
+import {
   isSecondLiveSubscription,
   resolvePlanForSubscription,
   statusAfterInvoicePaid,
@@ -335,6 +341,21 @@ async function handleCampaignPayment(
 ) {
   console.log("Processing campaign payment:", campaignId);
 
+  // WP3 item 1. checkout.session.completed also fires for an async payment
+  // method (ACH, some wallets) with payment_status 'unpaid': the session is
+  // done, the money is not. Advancing on it started a campaign nobody had paid
+  // for. checkout.session.async_payment_succeeded is not subscribed, so such a
+  // payment is settled by verify-campaign-payment when the advertiser returns,
+  // or by an admin; logging it loudly is the hand-off.
+  const decision = campaignPaymentDecision(session, campaignId);
+  if (!decision.advance) {
+    console.error(
+      `Campaign ${campaignId}: checkout ${session.id} completed with payment_status ` +
+        `'${session.payment_status}' - not advancing. Check the payment in Stripe.`,
+    );
+    return;
+  }
+
   // Get campaign details for payment logging.
   //
   // WEB-BE-032: the error was discarded, and this is NOT the best-effort read it
@@ -361,44 +382,41 @@ async function handleCampaignPayment(
     console.error(`Campaign ${campaignId} not found while processing its payment.`);
   }
 
-  const { error } = await supabase
+  // WP3 item 1 (business plan D9). The update used to match on session id
+  // alone, so a late or redelivered event dragged an ACTIVE campaign back to
+  // pending_creative and took its ads down. Only the two unpaid statuses may
+  // advance, and .select tells us whether anything did.
+  const { data: advanced, error } = await supabase
     .from("campaigns")
     .update({
-      status: "pending_creative",
+      status: PAID_CAMPAIGN_STATUS,
       stripe_payment_intent_id: session.payment_intent as string,
     })
     .eq("id", campaignId)
-    .eq("stripe_session_id", session.id);
+    .eq("stripe_session_id", session.id)
+    .in("status", [...PAYABLE_CAMPAIGN_STATUSES])
+    .select("id");
 
   if (error) {
     console.error("Failed to update campaign:", error);
     throw error;
   }
 
-  // Log payment to payments table
-  const amountPaid = (session.amount_total || 0) / 100;
-  const paymentData = {
-    user_id: campaign?.user_id || null,
-    stripe_payment_intent_id: session.payment_intent as string,
-    amount: amountPaid,
-    currency: session.currency || 'usd',
-    payment_type: 'campaign' as const,
-    status: 'succeeded' as const,
-    campaign_id: campaignId,
-    description: `Advertising Campaign - ${campaign?.name || 'Campaign'}`,
-    paid_at: new Date().toISOString(),
-  };
-
-  const { error: paymentError } = await supabase
-    .from("payments")
-    .upsert(paymentData, {
-      onConflict: 'stripe_payment_intent_id',
-      ignoreDuplicates: false,
-    });
-
-  if (paymentError) {
-    console.error("Failed to log campaign payment:", paymentError);
+  if (!shouldAnnouncePayment(advanced?.length ?? 0)) {
+    // Already moved on: verify-campaign-payment got there first, or this is a
+    // late delivery for a campaign that is active, cancelled or refunded, or a
+    // newer checkout owns the row. The confirmation was sent when it advanced.
+    console.log(
+      `Campaign ${campaignId} was not draft/pending_payment for session ${session.id} - ` +
+        `left as is, no notices sent.`,
+    );
+    return;
   }
+
+  // The payments upsert that was here is gone: that table is not in
+  // production (scripts/db-snapshot.json), so every write failed and was
+  // logged. See NON_CORE_REVIEW_2026-09.md WP3.
+  const amountPaid = (session.amount_total || 0) / 100;
 
   // Send payment confirmation to the advertiser: the stored notification AND an
   // email.
