@@ -3,6 +3,8 @@ import { supabase } from "@/integrations/supabase/client";
 import { useAuth } from "./useAuth";
 import { useToast } from "./use-toast";
 import { useSubscription } from "./useSubscription";
+import { useSavedCount } from "./useSavedCount";
+import { isPlanLimitError, planLimitMessage } from "@/lib/planLimitError";
 import { STALE_TIME } from "@/lib/queryConfig";
 
 /**
@@ -11,8 +13,8 @@ import { STALE_TIME } from "@/lib/queryConfig";
  * useFavorites() / user_event_interactions. (WEB-UX-010)
  *
  * Mirrors useFavorites: optimistic add/remove, owner-only via RLS, and the
- * subscription favorites limit (per content type for now; the cross-type cap is
- * unified in WEB-FEAT-001).
+ * subscription favorites limit, counted across events and every content type
+ * because that is how enforce_favorites_limit counts it.
  */
 export type FavoriteContentType =
   | "restaurant"
@@ -83,9 +85,18 @@ export function useContentFavorites(contentType: FavoriteContentType) {
       ]);
       return { previous };
     },
-    onError: (_e, _id, context) => {
+    onError: (error, _id, context) => {
       if (context?.previous)
         queryClient.setQueryData(queryKey, context.previous);
+      // The trigger refused it: a stale count let the tap through. Say so
+      // rather than calling a plan limit a failure.
+      if (isPlanLimitError(error)) {
+        toast({
+          title: "Favorite limit reached",
+          description: planLimitMessage(error, "Upgrade to Insider for unlimited favorites."),
+        });
+        return;
+      }
       toast({
         title: "Error",
         description: "Failed to add to favorites",
@@ -95,6 +106,7 @@ export function useContentFavorites(contentType: FavoriteContentType) {
     onSettled: () => {
       queryClient.invalidateQueries({ queryKey });
       queryClient.invalidateQueries({ queryKey: [favoritedListQueryKey(contentType)] });
+      queryClient.invalidateQueries({ queryKey: ["saved-count"] });
     },
   });
 
@@ -130,13 +142,18 @@ export function useContentFavorites(contentType: FavoriteContentType) {
     onSettled: () => {
       queryClient.invalidateQueries({ queryKey });
       queryClient.invalidateQueries({ queryKey: [favoritedListQueryKey(contentType)] });
+      queryClient.invalidateQueries({ queryKey: ["saved-count"] });
     },
   });
 
   const isFavorited = (contentId: string) => favoritedIds.includes(contentId);
 
-  const canAddFavorite = () =>
-    canPerformAction("favorite", favoritedIds.length);
+  // One cap across events and all place types, as the server counts it. This
+  // hook's own list (one type) is the floor until the total loads.
+  const savedCount = useSavedCount();
+  const totalSaved = Math.max(savedCount.count ?? 0, favoritedIds.length);
+
+  const canAddFavorite = () => canPerformAction("favorite", totalSaved);
 
   /** Toggle; returns whether an upgrade is needed when the free cap is hit. */
   const toggleFavorite = (
@@ -173,7 +190,7 @@ export function useContentFavorites(contentType: FavoriteContentType) {
     toggleFavorite,
     isToggling: addMutation.isPending || removeMutation.isPending,
     canAddFavorite: canAddFavorite(),
-    remainingFavorites: getRemainingQuota("favorite", favoritedIds.length),
+    remainingFavorites: getRemainingQuota("favorite", totalSaved),
     isPremium,
     favoritesLimit: limits.favorites,
   };
