@@ -84,6 +84,13 @@ Deno.test('the webhook wires the decision into its UPDATE and stops on zero rows
   assertFalse(/\.from\("payments"\)/.test(fn), 'the payments upsert targets a table production does not have');
 });
 
+Deno.test('verify-campaign-payment reports the row status, not a constant', async () => {
+  const src = await read('supabase/functions/verify-campaign-payment/index.ts');
+  assertFalse(/status: "pending_creative",\s*campaignId,/.test(src), 'the hardcoded answer is gone');
+  assert(/status: currentStatus,/.test(src));
+  assert(/\.eq\("status", "pending_payment"\)\s*\.select\("status"\)/.test(src), 'its own write is still scoped to pending_payment');
+});
+
 // ── WP6 item 3: what was paid is recorded ─────────────────────────────────
 
 Deno.test('the record carries Stripe cents, the discount and the code', () => {
