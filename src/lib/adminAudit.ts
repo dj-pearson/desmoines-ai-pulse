@@ -64,7 +64,11 @@ export async function recordAdminAudit(entry: AdminAuditEntry): Promise<boolean>
       return false;
     }
 
-    const { data: auth } = await supabase.auth.getUser();
+    const { data: auth, error: authError } = await supabase.auth.getUser();
+    if (authError) {
+      log.warn("recordAdminAudit", "no session for fallback insert", { error: authError.message });
+      return false;
+    }
     const actor = auth.user?.id ?? null;
     const { error: insertError } = await supabase.from("security_audit_logs").insert({
       event_type: eventType,
