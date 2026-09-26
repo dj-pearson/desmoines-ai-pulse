@@ -1,6 +1,12 @@
 /**
- * Event Promotion Planner - Social Sharing Component
- * Viral growth mechanics and referral system
+ * Event Promotion Planner - share buttons.
+ *
+ * The referral box that used to sit here promised "both you and your
+ * referral get 20% off featured event listings". Nothing grants that: no
+ * coupon, no Stripe promotion code, no check at checkout (plan WP6). It is
+ * gone, along with ReferralTracker, which rendered hardcoded zeros for
+ * shares, sign-ups and "$0 earned". The code still rides on the share link as
+ * ?ref so a future reward has something to count.
  */
 
 import { useState } from 'react';
@@ -56,7 +62,7 @@ export function SocialShare({ referralCode, onShare }: SocialShareProps) {
           Share This Tool
         </CardTitle>
         <CardDescription>
-          Help fellow event organizers and unlock rewards
+          Send the planner to someone else who is running an event
         </CardDescription>
       </CardHeader>
       <CardContent className="space-y-4">
@@ -109,22 +115,6 @@ export function SocialShare({ referralCode, onShare }: SocialShareProps) {
             </DialogContent>
           </Dialog>
         </div>
-
-        {/* Referral Incentive */}
-        {referralCode && (
-          <div className="bg-gradient-to-r from-blue-50 to-purple-50 border border-blue-200 rounded-lg p-4">
-            <h4 className="font-semibold text-sm mb-2">🎁 Your Referral Code</h4>
-            <div className="flex gap-2 mb-2">
-              <Input value={referralCode} readOnly className="font-mono text-sm" />
-              <Button size="sm" onClick={handleCopyLink}>
-                {copied ? <Check className="h-4 w-4" /> : <Copy className="h-4 w-4" />}
-              </Button>
-            </div>
-            <p className="text-xs text-gray-600">
-              Share this code and both you and your referral get 20% off featured event listings!
-            </p>
-          </div>
-        )}
 
         {/* Pre-populated Share Messages */}
         <div className="border-t pt-4">
@@ -182,33 +172,5 @@ function ShareMessage({ text, onCopy }: ShareMessageProps) {
         {copied ? <Check className="h-3 w-3" /> : <Copy className="h-3 w-3" />}
       </Button>
     </div>
-  );
-}
-
-// Referral tracking component
-export function ReferralTracker({ referralCode }: { referralCode: string }) {
-  // This would integrate with your backend to track referrals
-  return (
-    <Card>
-      <CardHeader>
-        <CardTitle className="text-base">Your Referral Stats</CardTitle>
-      </CardHeader>
-      <CardContent>
-        <div className="grid grid-cols-3 gap-4 text-center">
-          <div>
-            <div className="text-2xl font-bold text-primary">0</div>
-            <div className="text-xs text-gray-600">Shares</div>
-          </div>
-          <div>
-            <div className="text-2xl font-bold text-green-600">0</div>
-            <div className="text-xs text-gray-600">Sign-ups</div>
-          </div>
-          <div>
-            <div className="text-2xl font-bold text-blue-600">$0</div>
-            <div className="text-xs text-gray-600">Earned</div>
-          </div>
-        </div>
-      </CardContent>
-    </Card>
   );
 }

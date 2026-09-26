@@ -22,13 +22,15 @@
 import { supabase } from '@/integrations/supabase/client';
 import type { EmailCaptureData } from '@/types/event-promotion';
 import { createLogger } from '@/lib/logger';
+import { generateReferralCode } from '@/lib/referralCode';
 
 const logger = createLogger('emailIntegration');
 
 /**
- * Save email capture to database
+ * Save email capture to database. Returns the visitor's new referral code,
+ * which the page puts on its share link.
  */
-export async function saveEmailCapture(data: EmailCaptureData): Promise<void> {
+export async function saveEmailCapture(data: EmailCaptureData): Promise<string> {
   const { error } = await supabase.from('event_promotion_email_captures').insert({
     email: data.email,
     event_name: data.eventName,
@@ -44,8 +46,8 @@ export async function saveEmailCapture(data: EmailCaptureData): Promise<void> {
     throw new Error('Failed to save email capture');
   }
 
-  // Generate referral code
-  const referralCode = generateReferralCode(data.email);
+  // Random, not derived from the address (plan WP6; see lib/referralCode).
+  const referralCode = generateReferralCode();
   await createReferral(data.email, referralCode);
 
   // Queue the sequence rows when they asked for reminders. Nothing sends them
@@ -53,6 +55,8 @@ export async function saveEmailCapture(data: EmailCaptureData): Promise<void> {
   if (data.sendReminders) {
     await initializeEmailSequence(data);
   }
+
+  return referralCode;
 }
 
 /**
@@ -116,12 +120,6 @@ async function initializeEmailSequence(data: EmailCaptureData): Promise<void> {
   }
 }
 
-/**
- * Generate referral code from email
- */
-function generateReferralCode(email: string): string {
-  return btoa(email).substring(0, 8).toUpperCase();
-}
 
 
 

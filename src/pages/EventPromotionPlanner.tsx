@@ -92,7 +92,7 @@ export default function EventPromotionPlanner() {
       // went nowhere - the visitor unlocked the timeline and we kept nothing.
       // Stored before anything else in this handler, so a failure to keep it
       // cannot be hidden by the unlock succeeding.
-      await saveEmailCapture(data);
+      const code = await saveEmailCapture(data);
 
       // The modal takes a tick-box agreement; consent_records is where we have
       // to be able to demonstrate it (GDPR Art. 7). logConsent never throws.
@@ -109,8 +109,7 @@ export default function EventPromotionPlanner() {
       setUserEmail(data.email);
       setShowEmailModal(false);
 
-      // Generate referral code
-      const code = generateReferralCode(data.email);
+      // The code saveEmailCapture stored: random, not derived from the email.
       setReferralCode(code);
       trackReferralGenerated(code);
 
@@ -495,7 +494,3 @@ function StepCard({ number, title, description }: { number: string; title: strin
   );
 }
 
-// Utility function
-function generateReferralCode(email: string): string {
-  return btoa(email).substring(0, 8).toUpperCase();
-}
