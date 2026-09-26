@@ -67,7 +67,8 @@ interface AuthActions {
   updatePassword: (newPassword: string) => Promise<{ success: boolean; error?: string }>;
   /** Starts a double-confirmation email change and alerts the current address (WEB-AUTH-012). */
   updateEmail: (newEmail: string) => Promise<{ success: boolean; error?: string }>;
-  resendVerification: (email: string) => Promise<{ success: boolean; error?: string }>;
+  /** captchaToken optional for the same reason as login's (WEB-SEC-029). */
+  resendVerification: (email: string, captchaToken?: string) => Promise<{ success: boolean; error?: string }>;
   getSessionExpiresAt: () => number | null;
   /** Epoch ms this session began, or null when it cannot be determined (WEB-AUTH-007). */
   getSessionStartedAt: () => number | null;
@@ -188,6 +189,15 @@ async function checkServerLockout(
   } catch {
     return null;
   }
+}
+
+/**
+ * Where a sign-up confirmation link sends the person (WEB-AUTH-005): through
+ * /auth/callback, which waits for the session and renders a failed link, and
+ * on to /auth/verified. Used by signup and by resend so the two cannot differ.
+ */
+function confirmationRedirectUrl(): string {
+  return `${window.location.origin}/auth/callback?redirect=${encodeURIComponent("/auth/verified")}`;
 }
 
 export function AuthProvider({ children }: { children: ReactNode }) {
@@ -765,7 +775,7 @@ export function AuthProvider({ children }: { children: ReactNode }) {
           // it forwards here only once one exists. The confirmed user still ends
           // up on the same welcome page, and a broken link now stops one screen
           // earlier, where it can be explained.
-          emailRedirectTo: `${window.location.origin}/auth/callback?redirect=${encodeURIComponent("/auth/verified")}`,
+          emailRedirectTo: confirmationRedirectUrl(),
           data: metadata
         }
       });
@@ -1082,11 +1092,16 @@ export function AuthProvider({ children }: { children: ReactNode }) {
   }, []);
 
   // Resend verification email
-  const resendVerification = useCallback(async (email: string): Promise<{ success: boolean; error?: string }> => {
+  const resendVerification = useCallback(async (email: string, captchaToken?: string): Promise<{ success: boolean; error?: string }> => {
     try {
       const { error } = await supabase.auth.resend({
         type: 'signup',
         email,
+        // Without emailRedirectTo the resent link fell back to the project's
+        // Site URL and skipped /auth/callback, so a resent confirmation landed
+        // somewhere that could not exchange the code or show a failure. Same
+        // URL as signup's, from the same function.
+        options: { emailRedirectTo: confirmationRedirectUrl(), captchaToken },
       });
 
       if (error) {

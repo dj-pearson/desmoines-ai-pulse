@@ -279,8 +279,9 @@ export default function Auth() {
   // callers: the email-sent panel and the unconfirmed-address note.
   const handleResendVerification = async (email: string) => {
     setIsResending(true);
+    const captcha = takeCaptchaToken();
     try {
-      const result = await resendVerificationContext(email);
+      const result = await resendVerificationContext(email, captcha.token);
       if (!result.success) {
         const copy = authErrorCopy(undefined, result.error, "Couldn't send the email");
         toast({ title: copy.title, description: copy.description, variant: "destructive" });
@@ -288,6 +289,7 @@ export default function Auth() {
       }
       toast({ title: "Sent", description: "A new link is on its way. Check spam if it doesn't show up." });
     } finally {
+      captcha.done();
       setIsResending(false);
     }
   };
