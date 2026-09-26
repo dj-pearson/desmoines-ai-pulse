@@ -475,3 +475,4 @@ jobs:
       # Daily AI quota and spend guard (NON_CORE_REVIEW_2026-09 WP1). Offline:
       # the Supabase client is a stub.
       - run: deno test supabase/functions/_shared/aiQuota.test.ts
+      - run: deno test supabase/functions/discover-chat/conversation.test.ts
