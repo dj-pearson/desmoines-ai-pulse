@@ -305,7 +305,7 @@ export default function Advertise() {
       // The draft is already saved; bring the whole query string back so a
       // deep-linked listing survives the trip too.
       const back = `${location.pathname}${location.search}`;
-      navigate(`/auth?redirect=${encodeURIComponent(back)}`);
+      navigate(`/auth?mode=signup&redirect=${encodeURIComponent(back)}`);
       return;
     }
 
