@@ -17,6 +17,7 @@ import { ArrowLeft, Check, X, DollarSign, User, Image as ImageIcon, AlertCircle 
 import { CampaignCreative } from "@/hooks/useCampaigns";
 import { CreativePreview } from "@/components/advertising/CreativePreview";
 import { SpriteIcon } from "@/components/ui/SpriteIcon";
+import { toSafeExternalUrl } from "@/lib/capacitorUtils";
 
 export default function AdminCampaignDetail() {
   const { campaignId } = useParams<{ campaignId: string }>();
@@ -323,17 +324,28 @@ export default function AdminCampaignDetail() {
                           <p className="text-sm text-muted-foreground mb-2">
                             {creative.description}
                           </p>
-                          {creative.link_url && (
-                            <a
-                              href={creative.link_url}
-                              target="_blank"
-                              rel="noopener noreferrer"
-                              className="text-sm text-primary hover:underline inline-flex items-center gap-1"
-                            >
-                              {creative.link_url}
-                              <SpriteIcon name="external-link" className="h-3 w-3" />
-                            </a>
-                          )}
+                          {/* The advertiser typed this URL. A javascript: or
+                              data: value in an href runs in the reviewer's
+                              session on click, so only an http(s) URL becomes
+                              a link; anything else is shown as text to reject. */}
+                          {creative.link_url && (() => {
+                            const safeHref = toSafeExternalUrl(creative.link_url);
+                            return safeHref ? (
+                              <a
+                                href={safeHref}
+                                target="_blank"
+                                rel="noopener noreferrer nofollow"
+                                className="text-sm text-primary hover:underline inline-flex items-center gap-1 break-all"
+                              >
+                                {creative.link_url}
+                                <SpriteIcon name="external-link" className="h-3 w-3" />
+                              </a>
+                            ) : (
+                              <p className="text-sm text-destructive break-all">
+                                Not a web address, so it is not linked: <code>{creative.link_url}</code>
+                              </p>
+                            );
+                          })()}
                           <div className="mt-2 text-xs text-muted-foreground">
                             <p>CTA: "{creative.cta_text}"</p>
                             <p>Size: {creative.dimensions_width}×{creative.dimensions_height}px</p>
