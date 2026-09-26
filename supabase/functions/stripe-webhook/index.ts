@@ -21,7 +21,10 @@ import {
   campaignPaymentDecision,
   PAID_CAMPAIGN_STATUS,
   PAYABLE_CAMPAIGN_STATUSES,
+  paymentRecordFromSession,
+  promotionCodeOf,
   shouldAnnouncePayment,
+  type CheckoutSessionLike,
 } from "../_shared/campaignPayment.ts";
 import {
   isSecondLiveSubscription,
@@ -237,7 +240,7 @@ async function handleCheckoutSessionCompleted(
 
   if (metadata.campaignId) {
     // Campaign one-time payment
-    await handleCampaignPayment(supabase, session, metadata.campaignId);
+    await handleCampaignPayment(supabase, stripe, session, metadata.campaignId);
   } else if (session.mode === "subscription" && metadata.userId && metadata.planId) {
     // Subscription signup
     await handleSubscriptionPayment(supabase, stripe, session, metadata.userId, metadata.planId);
@@ -331,11 +334,67 @@ async function handleCheckoutSessionExpired(
   console.log(`Campaign ${campaignId} returned to draft after checkout expiry.`);
 }
 
+/** The two Stripe calls recordCheckoutPayment makes, structurally. */
+interface PromotionCodeReader {
+  checkout: { sessions: { retrieve(id: string, params?: { expand?: string[] }): Promise<unknown> } };
+  promotionCodes: { retrieve(id: string): Promise<{ code?: string | null }> };
+}
+
+/**
+ * Write amount_paid_cents, amount_discount_cents and promotion_code onto the
+ * row a checkout paid for (NON_CORE_REVIEW WP6 item 3).
+ *
+ * BEST EFFORT, AND A SEPARATE UPDATE ON PURPOSE. The columns arrive with
+ * 20261003000001; until that is applied this write fails with 42703/PGRST204.
+ * Folding them into the status UPDATE would make that failure throw, Stripe
+ * would redeliver forever, and a paid campaign or subscription would never be
+ * recorded at all. Here it is logged and the event still succeeds.
+ *
+ * The code the customer typed is not on the completed event: the session is
+ * re-read with total_details.breakdown expanded, which gives the promotion
+ * code's id, and the id is resolved to its code. Either lookup failing leaves
+ * the id (or null), never blocks the amounts.
+ */
+async function recordCheckoutPayment(
+  supabase: ReturnType<typeof createClient>,
+  stripe: PromotionCodeReader,
+  session: CheckoutSessionLike,
+  table: "campaigns" | "user_subscriptions",
+  match: Record<string, string>,
+) {
+  const record = paymentRecordFromSession(session);
+
+  if ((record.amount_discount_cents ?? 0) > 0 && !record.promotion_code) {
+    try {
+      const expanded = await stripe.checkout.sessions.retrieve(session.id, {
+        expand: ["total_details.breakdown"],
+      });
+      const promoId = promotionCodeOf(expanded as unknown as CheckoutSessionLike);
+      record.promotion_code = promoId;
+      if (promoId && promoId.startsWith("promo_")) {
+        const promo = await stripe.promotionCodes.retrieve(promoId);
+        if (promo?.code) record.promotion_code = promo.code;
+      }
+    } catch (lookupError) {
+      console.warn(`Could not read the promotion code for checkout ${session.id}:`, lookupError);
+    }
+  }
+
+  const { error } = await supabase.from(table).update(record).match(match);
+  if (error) {
+    console.error(
+      `Payment amounts not recorded on ${table} for checkout ${session.id} ` +
+        `(${error.code ?? "no code"}: ${error.message}). Apply 20261003000001 if this is 42703/PGRST204.`,
+    );
+  }
+}
+
 /**
  * Handle campaign payment completion
  */
 async function handleCampaignPayment(
   supabase: ReturnType<typeof createClient>,
+  stripe: PromotionCodeReader,
   session: Stripe.Checkout.Session,
   campaignId: string
 ) {
@@ -401,6 +460,14 @@ async function handleCampaignPayment(
     console.error("Failed to update campaign:", error);
     throw error;
   }
+
+  // WP6 item 3. What was charged after any promotion code. Written whether or
+  // not this delivery advanced the row: verify-campaign-payment may have moved
+  // it first, and the amounts belong to this session either way.
+  await recordCheckoutPayment(supabase, stripe, session, "campaigns", {
+    id: campaignId,
+    stripe_session_id: session.id,
+  });
 
   if (!shouldAnnouncePayment(advanced?.length ?? 0)) {
     // Already moved on: verify-campaign-payment got there first, or this is a
@@ -621,6 +688,13 @@ async function handleSubscriptionPayment(
       throw error;
     }
   }
+
+  // WP6 item 3: the first charge and any promotion code. After the row write,
+  // never inside it; see recordCheckoutPayment.
+  await recordCheckoutPayment(supabase, stripe, session, "user_subscriptions", {
+    user_id: userId,
+    stripe_subscription_id: subscriptionId,
+  });
 
   console.log("Subscription payment processed successfully for user:", userId);
 }

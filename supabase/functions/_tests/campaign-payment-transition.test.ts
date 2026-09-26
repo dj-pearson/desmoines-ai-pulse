@@ -19,6 +19,8 @@ import {
   campaignPaymentDecision,
   PAID_CAMPAIGN_STATUS,
   PAYABLE_CAMPAIGN_STATUSES,
+  paymentRecordFromSession,
+  promotionCodeOf,
   shouldAnnouncePayment,
 } from '../_shared/campaignPayment.ts';
 
@@ -80,4 +82,54 @@ Deno.test('the webhook wires the decision into its UPDATE and stops on zero rows
   const notify = fn.indexOf('campaign_notifications');
   assert(guard > update && notify > guard, 'no notification may be written before the zero-row check');
   assertFalse(/\.from\("payments"\)/.test(fn), 'the payments upsert targets a table production does not have');
+});
+
+// ── WP6 item 3: what was paid is recorded ─────────────────────────────────
+
+Deno.test('the record carries Stripe cents, the discount and the code', () => {
+  const rec = paymentRecordFromSession({
+    id: 'cs_1',
+    amount_total: 6650,
+    total_details: {
+      amount_discount: 350,
+      breakdown: { discounts: [{ amount: 350, discount: { promotion_code: { id: 'promo_1', code: 'SPRING5' } } }] },
+    },
+  });
+  assertEquals(rec, { amount_paid_cents: 6650, amount_discount_cents: 350, promotion_code: 'SPRING5' });
+});
+
+Deno.test('an unexpanded promotion code is kept as its id, and no discount is null not zero', () => {
+  assertEquals(
+    promotionCodeOf({ id: 'cs_2', total_details: { breakdown: { discounts: [{ discount: { promotion_code: 'promo_9' } }] } } }),
+    'promo_9',
+  );
+  assertEquals(promotionCodeOf({ id: 'cs_3', discounts: [{ promotion_code: 'promo_8' }] }), 'promo_8');
+  const bare = paymentRecordFromSession({ id: 'cs_4', amount_total: 7000 });
+  assertEquals(bare, { amount_paid_cents: 7000, amount_discount_cents: null, promotion_code: null });
+  // A fully discounted checkout is 0, which is a real amount.
+  assertEquals(paymentRecordFromSession({ id: 'cs_5', amount_total: 0 }).amount_paid_cents, 0);
+});
+
+Deno.test('the columns are additive and written outside the status update', async () => {
+  const sql = await read('supabase/migrations/20261003000001_record_amount_paid.sql');
+  for (const table of ['campaigns', 'user_subscriptions']) {
+    for (const col of ['amount_paid_cents integer', 'amount_discount_cents integer', 'promotion_code text']) {
+      assert(
+        new RegExp(`ALTER TABLE public\\.${table}[\\s\\S]*?ADD COLUMN IF NOT EXISTS ${col}`).test(sql),
+        `${table}.${col} must be added`,
+      );
+    }
+  }
+  assertFalse(/NOT NULL|DEFAULT/i.test(sql.replace(/--[^\n]*/g, '')), 'nullable, no default');
+
+  const src = await read('supabase/functions/stripe-webhook/index.ts');
+  const helper = src.slice(
+    src.indexOf('async function recordCheckoutPayment('),
+    src.indexOf('async function handleCampaignPayment('),
+  );
+  assert(helper.length > 0, 'recordCheckoutPayment must exist');
+  assert(/if \(error\) \{\s*console\.error\(/.test(helper), 'a failed record is logged');
+  assertFalse(/throw /.test(helper), 'and never thrown: Stripe would redeliver a processed payment forever');
+  assert(/recordCheckoutPayment\(supabase, stripe, session, "campaigns"/.test(src));
+  assert(/recordCheckoutPayment\(supabase, stripe, session, "user_subscriptions"/.test(src));
 });

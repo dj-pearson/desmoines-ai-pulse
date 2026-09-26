@@ -78,3 +78,47 @@ export function campaignPaymentDecision(
 export function shouldAnnouncePayment(matchedRows: number): boolean {
   return matchedRows > 0;
 }
+
+/** The columns the webhook writes to record what was actually charged. */
+export interface PaymentRecord {
+  amount_paid_cents: number | null;
+  amount_discount_cents: number | null;
+  promotion_code: string | null;
+}
+
+function codeOf(
+  value: string | { id?: string | null; code?: string | null } | null | undefined,
+): string | null {
+  if (!value) return null;
+  if (typeof value === "string") return value;
+  return value.code ?? value.id ?? null;
+}
+
+/**
+ * The promotion code a session used: the customer-facing code when the
+ * session was retrieved with the promotion code expanded, its id otherwise.
+ */
+export function promotionCodeOf(session: CheckoutSessionLike): string | null {
+  for (const d of session.total_details?.breakdown?.discounts ?? []) {
+    const code = codeOf(d?.discount?.promotion_code);
+    if (code) return code;
+  }
+  for (const d of session.discounts ?? []) {
+    const code = codeOf(d?.promotion_code);
+    if (code) return code;
+  }
+  return null;
+}
+
+/** Cents, as Stripe reports them. Null when Stripe did not say. */
+function cents(value: number | null | undefined): number | null {
+  return typeof value === "number" && Number.isFinite(value) ? Math.round(value) : null;
+}
+
+export function paymentRecordFromSession(session: CheckoutSessionLike): PaymentRecord {
+  return {
+    amount_paid_cents: cents(session.amount_total),
+    amount_discount_cents: cents(session.total_details?.amount_discount),
+    promotion_code: promotionCodeOf(session),
+  };
+}

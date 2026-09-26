@@ -16,6 +16,7 @@ import Stripe from "https://esm.sh/stripe@14.21.0";
 import { createClient } from "https://esm.sh/@supabase/supabase-js@2.45.0";
 import { handleCors, getCorsHeaders, isOriginAllowed } from "../_shared/cors.ts";
 import { checkRateLimit, addRateLimitHeaders } from "../_shared/rateLimit.ts";
+import { paymentRecordFromSession, type CheckoutSessionLike } from "../_shared/campaignPayment.ts";
 
 serve(async (req) => {
   // Handle CORS preflight
@@ -155,6 +156,23 @@ serve(async (req) => {
         if (updateError) {
           console.error("Failed to update campaign:", updateError);
         }
+      }
+
+      // WP6 item 3, the same record the webhook writes, in case this call
+      // gets there first. Amounts only: they are the same whoever writes them,
+      // while the promotion code needs a lookup the webhook does, and writing
+      // the bare id here could overwrite the code it resolved. Best effort
+      // until 20261003000001 is applied.
+      const { amount_paid_cents, amount_discount_cents } = paymentRecordFromSession(
+        session as unknown as CheckoutSessionLike,
+      );
+      const { error: recordError } = await supabase
+        .from("campaigns")
+        .update({ amount_paid_cents, amount_discount_cents })
+        .eq("id", campaignId)
+        .eq("stripe_session_id", session.id);
+      if (recordError) {
+        console.warn("[verify-campaign-payment] amounts not recorded:", recordError.message);
       }
 
       const response = new Response(
