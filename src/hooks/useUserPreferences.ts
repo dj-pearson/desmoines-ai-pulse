@@ -24,8 +24,9 @@ const log = createLogger('useUserPreferences');
  * The JSONB sub-key inside `profiles.communication_preferences` that carries
  * these preferences.
  *
- * DELIBERATELY NOT `ui_preferences`, which src/hooks/use-user-preferences.ts
- * already owns in the same column. Two hooks with the same name and different
+ * DELIBERATELY NOT `ui_preferences`, which the since-deleted
+ * use-user-preferences.ts hook wrote to the same column; existing rows still
+ * carry it. Two hooks with the same name and different
  * shapes writing one key would silently overwrite each other; separate keys
  * plus the read-before-write merge below keeps both intact (WEB-QA-015).
  */
@@ -35,7 +36,7 @@ const SERVER_KEY = 'taste_preferences';
  * Writes `prefs` into the account's JSONB bag under SERVER_KEY.
  *
  * Reads the current bag first and spreads it, so the sibling key
- * use-user-preferences.ts owns survives this update. Never throws: a sync
+ * ui_preferences left in existing rows survives this update. Never throws: a sync
  * failure must not block a settings change the user already sees applied.
  */
 async function writeToServer(userId: string, prefs: UserPreferences): Promise<void> {

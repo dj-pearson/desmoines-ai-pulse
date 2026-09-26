@@ -90,7 +90,17 @@ console.log('\nthe email body');
 }
 
 console.log('\nthe send itself');
-{
+// The provider now comes from the environment (_shared/email.ts: SES, else
+// Resend), not from a resendApiKey argument. Under tsx there is no Deno global,
+// so these blocks install one that holds only RESEND_API_KEY, which is the
+// transitional state until the SES secrets are set.
+const withResendEnv = async (fn) => {
+  const had = 'Deno' in globalThis;
+  const prev = globalThis.Deno;
+  globalThis.Deno = { env: { get: (k) => (k === 'RESEND_API_KEY' ? 'rk-test' : undefined) } };
+  try { return await fn(); } finally { if (had) globalThis.Deno = prev; else delete globalThis.Deno; }
+};
+await withResendEnv(async () => {
   const calls = [];
   const realFetch = globalThis.fetch;
   globalThis.fetch = async (url, init) => { calls.push({ url: String(url), init }); return new Response('{}', { status: 200 }); };
@@ -110,14 +120,14 @@ console.log('\nthe send itself');
   } finally {
     globalThis.fetch = realFetch;
   }
-}
+});
 {
   // No key configured is the state this container and any un-provisioned
   // environment is in. It must report false rather than claim a send.
   const sent = await sendCampaignEmail({ to: 'a@b.test', content, fromEmail: 'noreply@x.test' });
   check('no provider key means not sent, not "sent"', sent === false);
 }
-{
+await withResendEnv(async () => {
   const realFetch = globalThis.fetch;
   globalThis.fetch = async () => { throw new Error('network down'); };
   try {
@@ -128,7 +138,7 @@ console.log('\nthe send itself');
   } finally {
     globalThis.fetch = realFetch;
   }
-}
+});
 {
   const sent = await sendCampaignEmail({ to: '', content, resendApiKey: 'rk', fromEmail: 'n@x.test' });
   check('an advertiser with no address on file is not a send', sent === false);

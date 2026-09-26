@@ -45,7 +45,8 @@ export function readOptIn(bag: unknown, key: ConsentKey): boolean {
  * rest of the shared bag.
  *
  * communication_preferences IS A SHARED BAG. useUserPreferences.ts keeps
- * taste_preferences in it, use-user-preferences.ts keeps ui_preferences, and
+ * taste_preferences in it, existing rows still carry ui_preferences (from a
+ * since-deleted use-user-preferences.ts hook), and
  * the lifecycle classifier reads `marketing`, `email` and `email_notifications`
  * out of it. A PostgREST update of a JSONB column REPLACES it, so this reads the
  * current bag and merges. A failed read fails the save: treating it as an empty
