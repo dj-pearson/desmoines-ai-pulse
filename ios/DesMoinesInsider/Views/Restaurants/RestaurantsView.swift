@@ -6,6 +6,7 @@ struct RestaurantsView: View {
     @State private var toast: ToastMessage?
     @State private var showScrollToTop = false
     @State private var showDiscover = false
+    @Environment(\.scenePhase) private var scenePhase
 
     var body: some View {
         NavigationStack {
@@ -22,7 +23,16 @@ struct RestaurantsView: View {
 
                         // Stale-data error note (we have data but a refresh failed).
                         if let error = viewModel.errorMessage, !viewModel.restaurants.isEmpty {
-                            errorBanner(error)
+                            errorBanner(viewModel.lastFetchFailed ? "Couldn't update - showing earlier results" : error)
+                        }
+
+                        // A search with no exact hits shows close matches
+                        // (IOS-DD-RESTAURANTS-13).
+                        if viewModel.isFuzzyFallback {
+                            Text("No exact matches for \"\(viewModel.searchText)\". Showing close matches.")
+                                .font(.caption)
+                                .foregroundStyle(.secondary)
+                                .frame(maxWidth: .infinity, alignment: .leading)
                         }
 
                         // Content
@@ -34,6 +44,18 @@ struct RestaurantsView: View {
                             ErrorStateView(message: error) {
                                 Task { await viewModel.refresh() }
                             }
+                            .padding(.top, 40)
+                        } else if viewModel.restaurants.isEmpty && (viewModel.isLoadingMore || viewModel.isAutoFilling) {
+                            // Open Now is still checking further pages; "No
+                            // Restaurants Found" here would be premature
+                            // (IOS-DD-RESTAURANTS-04).
+                            HStack(spacing: 10) {
+                                ProgressView()
+                                Text("Checking more restaurants...")
+                                    .font(.subheadline)
+                                    .foregroundStyle(.secondary)
+                            }
+                            .frame(maxWidth: .infinity)
                             .padding(.top, 40)
                         } else if viewModel.restaurants.isEmpty {
                             EmptyStateView(
@@ -72,8 +94,10 @@ struct RestaurantsView: View {
                                             AdTrackingService.shared.logSponsoredClick(listingType: "restaurant", listingId: restaurant.id)
                                         }
                                     })
-                                    .task {
-                                        await viewModel.loadMoreIfNeeded(currentItem: restaurant)
+                                    .onAppear {
+                                        // Owned by the view model so a reset
+                                        // can cancel it (IOS-DD-RESTAURANTS-02).
+                                        viewModel.loadMoreIfNeeded(currentItem: restaurant)
                                     }
 
                                     // Native in-feed ad card at deterministic
@@ -89,6 +113,9 @@ struct RestaurantsView: View {
                                         .padding()
                                 }
                             }
+                            // A readable column on iPad (IOS-DD-RESTAURANTS-12).
+                            .frame(maxWidth: 720)
+                            .frame(maxWidth: .infinity)
                         }
                     }
                     .padding(.horizontal)
@@ -114,14 +141,14 @@ struct RestaurantsView: View {
                 }
             } // ScrollViewReader
             .refreshable {
-                await viewModel.refresh()
-                if viewModel.errorMessage == nil {
+                let succeeded = await viewModel.refresh()
+                if succeeded {
                     UINotificationFeedbackGenerator().notificationOccurred(.success)
                 } else {
                     UINotificationFeedbackGenerator().notificationOccurred(.error)
                 }
             }
-            .reloadOnReconnect(if: viewModel.restaurants.isEmpty) { await viewModel.refresh() }
+            .reloadOnReconnect(if: viewModel.restaurants.isEmpty) { _ = await viewModel.refresh() }
             .navigationTitle("Dining")
             .searchable(
                 text: $viewModel.searchText,
@@ -162,6 +189,11 @@ struct RestaurantsView: View {
             .task {
                 await viewModel.loadInitialData()
             }
+            // Open Now is evaluated against the clock; a list filtered before
+            // the app went to the background is stale when it returns.
+            .onChange(of: scenePhase) { _, phase in
+                if phase == .active { viewModel.reevaluateClientFilters() }
+            }
             .toastOverlay(message: $toast)
         }
     }
@@ -193,19 +225,27 @@ struct RestaurantsView: View {
     // MARK: - Filter Entry Point (IOS-AUDIT-UX-007)
 
     /// Filter glyph in the toolbar with a count badge so the number of active
-    /// filters is visible without scrolling to the sticky filter bar. Tapping
-    /// clears all filters (mirrors the "Clear all" chip affordance).
+    /// filters is visible without scrolling to the sticky filter bar. It opens
+    /// a menu with an explicit Clear (IOS-DD-RESTAURANTS-08): a single tap on
+    /// a filter icon used to wipe every filter, search and sort included.
     private var filterToolbarButton: some View {
-        Button {
-            UIImpactFeedbackGenerator(style: .light).impactOccurred()
-            viewModel.clearFilters()
+        let n = viewModel.activeFilterCount
+        return Menu {
+            Button(role: .destructive) {
+                UIImpactFeedbackGenerator(style: .light).impactOccurred()
+                viewModel.clearFilters()
+                toast = .info("Filters cleared", icon: "line.3.horizontal.decrease.circle")
+            } label: {
+                Label("Clear \(n) filter\(n == 1 ? "" : "s")", systemImage: "xmark.circle")
+            }
         } label: {
             Image(systemName: "line.3.horizontal.decrease.circle")
                 .overlay(alignment: .topTrailing) {
-                    FilterCountBadge(count: viewModel.activeFilterCount)
+                    FilterCountBadge(count: n)
                 }
         }
-        .accessibilityLabel("Filters, \(viewModel.activeFilterCount) active")
+        .accessibilityLabel("\(n) filters active")
+        .accessibilityHint("Opens a menu to clear them")
     }
 
     // MARK: - Sort Menu (in toolbar)
@@ -247,7 +287,7 @@ struct RestaurantsView: View {
     private var activeChips: some View {
         ScrollView(.horizontal, showsIndicators: false) {
             HStack(spacing: 6) {
-                Text("\(viewModel.restaurants.count) results")
+                Text(viewModel.resultCountText)
                     .font(.caption.weight(.medium))
                     .foregroundStyle(.secondary)
 
@@ -256,8 +296,14 @@ struct RestaurantsView: View {
                         viewModel.showOpenNowOnly = false
                     }
                 }
+                if viewModel.newOpeningsOnly {
+                    FilterChipView(text: "New & coming soon", icon: "sparkles", tint: .orange) {
+                        viewModel.newOpeningsOnly = false
+                    }
+                }
+                // Only sponsored rows are featured now (IOS-DD-RESTAURANTS-08).
                 if viewModel.featuredOnly {
-                    FilterChipView(text: "Featured", icon: "sparkles", tint: .orange) {
+                    FilterChipView(text: "Sponsored", icon: "megaphone", tint: .orange) {
                         viewModel.featuredOnly = false
                     }
                 }

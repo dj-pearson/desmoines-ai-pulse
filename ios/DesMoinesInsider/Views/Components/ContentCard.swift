@@ -36,6 +36,10 @@ struct CardPill: Identifiable, Hashable {
     let text: String
     let tint: Color
     var filled: Bool = true
+    /// When set, only the icon takes this colour and the text is `.primary`.
+    /// System yellow or green text on white is far below 4.5:1
+    /// (IOS-DD-RESTAURANTS-12).
+    var iconTint: Color? = nil
 
     static func == (lhs: CardPill, rhs: CardPill) -> Bool { lhs.id == rhs.id }
     func hash(into hasher: inout Hasher) { hasher.combine(id) }
@@ -408,7 +412,13 @@ private struct PillView: View {
 
     var body: some View {
         Group {
-            if let icon = pill.icon {
+            if let icon = pill.icon, let iconTint = pill.iconTint {
+                Label {
+                    Text(pill.text).foregroundStyle(.primary)
+                } icon: {
+                    Image(systemName: icon).foregroundStyle(iconTint)
+                }
+            } else if let icon = pill.icon {
                 Label(pill.text, systemImage: icon)
             } else {
                 Text(pill.text)
@@ -715,18 +725,13 @@ extension Restaurant {
     var cardData: ContentCardData {
         var pills: [CardPill] = []
         if let price = priceRange, !price.isEmpty {
-            pills.append(CardPill(icon: nil, text: price, tint: .green, filled: false))
+            pills.append(CardPill(icon: nil, text: price, tint: .secondary, filled: false))
         }
         if let rating {
-            pills.append(CardPill(icon: "star.fill", text: String(format: "%.1f", rating), tint: .yellow, filled: false))
+            pills.append(CardPill(icon: "star.fill", text: String(format: "%.1f", rating), tint: .primary, filled: false, iconTint: .yellow))
         }
-        if let isOpen = isOpenNow() {
-            pills.append(CardPill(
-                icon: isOpen ? "clock.badge.checkmark" : "clock.badge.xmark",
-                text: isOpen ? "Open" : "Closed",
-                tint: isOpen ? .green : .red,
-                filled: false
-            ))
+        if let pill = statusPill {
+            pills.append(pill)
         }
 
         var data = ContentCardData(
@@ -737,7 +742,7 @@ extension Restaurant {
             placeholderTint: .orange,
             pills: pills,
             favorite: .managed(kind: .restaurant, id: id, title: name),
-            accessibilityLabel: "\(name), \(cuisine ?? "restaurant"), \(ratingText)"
+            accessibilityLabel: cardAccessibilityLabel
         )
         data.isSponsored = isActivelySponsored
         data.awardBadge = BestOfWinners.shared.winnerLabel(forEntityId: id)
@@ -748,6 +753,37 @@ extension Restaurant {
             data.metaSecondary = CardMetaLine(icon: "mappin", text: displayLocation)
         }
         return data
+    }
+
+    /// Lifecycle first (New / opening date / Closed), else the hours line
+    /// (IOS-DD-RESTAURANTS-01 / 06). Nothing when the hours are unknown: a
+    /// wrong "Open" costs more trust than a missing one.
+    private var statusPill: CardPill? {
+        switch lifecycle {
+        case .newlyOpened:
+            return CardPill(icon: "sparkles", text: "New", tint: .primary, filled: false, iconTint: .orange)
+        case .openingSoon:
+            return CardPill(icon: "calendar", text: openingLabel ?? "Opening soon", tint: .primary, filled: false, iconTint: .orange)
+        case .closedPermanently:
+            return CardPill(icon: "xmark.octagon", text: "Closed", tint: .primary, filled: false, iconTint: .red)
+        case .open, .closedTemporarily:
+            break
+        }
+        let status = openStatus()
+        guard let line = status.line else { return nil }
+        let icon: String
+        let tint: Color
+        switch status {
+        case .open:
+            icon = "clock.badge.checkmark"; tint = .green
+        case .closingSoon:
+            icon = "clock.badge.exclamationmark"; tint = .orange
+        case .closed:
+            icon = "clock.badge.xmark"; tint = .red
+        case .unknown:
+            return nil
+        }
+        return CardPill(icon: icon, text: line, tint: .primary, filled: false, iconTint: tint)
     }
 }
 

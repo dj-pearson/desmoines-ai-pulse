@@ -66,19 +66,6 @@ extension PaywallContext {
         recommendedTier: .insider
     )
 
-    static let diningTips = PaywallContext(
-        id: "dining_tips",
-        icon: "fork.knife",
-        headline: "Eat like a local",
-        subheadline: "Get dining tips, must-order dishes and reservation know-how for every restaurant.",
-        benefits: [
-            "Must-order dishes & menu tips",
-            "When to go and how to get a table",
-            "Local favorites the guides skip",
-        ],
-        recommendedTier: .insider
-    )
-
     static let writeReviews = PaywallContext(
         id: "write_reviews",
         icon: "star.bubble.fill",

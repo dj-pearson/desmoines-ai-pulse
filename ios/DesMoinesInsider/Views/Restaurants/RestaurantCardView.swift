@@ -14,7 +14,19 @@ struct RestaurantCardView: View {
     }
 
     var body: some View {
-        ContentCard(restaurant.cardData, variant: .listRow, toast: $toast)
+        ContentCard(cardData, variant: .listRow, toast: $toast)
+    }
+
+    /// The shared card data plus the distance when location is known
+    /// (IOS-DD-RESTAURANTS-12). Detail showed it; the list did not.
+    private var cardData: ContentCardData {
+        var data = restaurant.cardData
+        if let coordinate = restaurant.coordinate,
+           let distance = LocationService.shared.formattedDistance(from: coordinate) {
+            let area = (restaurant.city?.isEmpty == false ? restaurant.city : nil) ?? restaurant.displayLocation
+            data.metaSecondary = CardMetaLine(icon: "location", text: area.isEmpty ? distance : "\(distance) - \(area)")
+        }
+        return data
     }
 }
 

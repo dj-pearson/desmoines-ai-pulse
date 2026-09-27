@@ -5,7 +5,7 @@ import os
 ///
 /// Supported URL patterns:
 /// - `desmoinesinsider.com/events/:id` → Event detail
-/// - `desmoinesinsider.com/restaurants/:id` → Restaurant detail
+/// - `desmoinesinsider.com/restaurants/:id-or-slug` → Restaurant detail
 /// - `desmoinesinsider.com/attractions/:id` → Attraction detail
 /// - `com.desmoines.aipulse://event/:id` → Event detail (custom scheme)
 /// - `com.desmoines.aipulse://restaurant/:id` → Restaurant detail (custom scheme)
@@ -128,6 +128,20 @@ final class DeepLinkHandler {
         UUID(uuidString: id) != nil
     }
 
+    /// Path segments under /restaurants/ that are landing pages on the web.
+    static let reservedRestaurantSegments: Set<String> = ["open-now", "new", "dietary"]
+
+    /// A UUID, or a lowercase slug of at most 120 characters that is not a
+    /// reserved landing page. Universal links only; the custom scheme stays
+    /// UUID-only.
+    static func restaurantLinkId(_ raw: String) -> String? {
+        if UUID(uuidString: raw) != nil { return raw }
+        guard raw.count <= 120,
+              !reservedRestaurantSegments.contains(raw),
+              raw.range(of: "^[a-z0-9]+(?:-[a-z0-9]+)*$", options: .regularExpression) != nil else { return nil }
+        return raw
+    }
+
     /// Validates and returns the ID, or nil if invalid (logging the rejection).
     private func validatedId(_ id: String, source: String) -> String? {
         if isValidId(id) { return id }
@@ -162,8 +176,12 @@ final class DeepLinkHandler {
             guard let id = validatedId(rawId, source: "universal-link") else { return .tab(.home) }
             return .event(id: id)
         case "restaurants":
-            guard let id = validatedId(rawId, source: "universal-link") else { return .tab(.restaurants) }
-            return .restaurant(id: id)
+            // The web's canonical restaurant URL is /restaurants/:slug, so a
+            // shared link is usually a slug (IOS-DD-RESTAURANTS-09). Landing
+            // pages such as /restaurants/open-now are not restaurants.
+            if let id = Self.restaurantLinkId(rawId) { return .restaurant(id: id) }
+            AppLogger.nav.warning("Rejected invalid restaurant link: \(rawId.prefix(50))")
+            return .tab(.restaurants)
         case "attractions":
             guard let id = validatedId(rawId, source: "universal-link") else { return .tab(.home) }
             return .attraction(id: id)

@@ -144,7 +144,7 @@ struct HomeView: View {
             } // ScrollViewReader
             .refreshable {
                 async let eventsRefresh: () = viewModel.refresh()
-                async let restaurantsRefresh: () = restaurantsVM.refresh()
+                async let restaurantsRefresh: Bool = restaurantsVM.refresh()
                 async let attractionsRefresh: () = attractionsVM.refresh()
                 async let weekendRefresh: () = weekendVM.refresh()
                 async let tonightRefresh: () = tonightVM.refresh()
@@ -162,7 +162,7 @@ struct HomeView: View {
             // never replaced (IOS-DD-EVENTS-08).
             .reloadOnReconnect(if: viewModel.events.isEmpty || viewModel.servedFromStaleCache) {
                 async let eventsRefresh: () = viewModel.refresh()
-                async let restaurantsRefresh: () = restaurantsVM.refresh()
+                async let restaurantsRefresh: Bool = restaurantsVM.refresh()
                 async let attractionsRefresh: () = attractionsVM.refresh()
                 async let weekendRefresh: () = weekendVM.refresh()
                 async let tonightRefresh: () = tonightVM.refresh()

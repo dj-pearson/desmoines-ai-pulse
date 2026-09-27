@@ -34,6 +34,26 @@ final class DeepLinkHandlerTests: XCTestCase {
         XCTAssertEqual(dest, .restaurant(id: "550e8400-e29b-41d4-a716-446655440000"))
     }
 
+    // MARK: - Restaurant slugs (IOS-DD-RESTAURANTS-09)
+
+    func testRestaurantSlugUniversalLinkOpensTheRestaurant() {
+        let url = URL(string: "https://desmoinesinsider.com/restaurants/zombie-burger-drink-lab")!
+        XCTAssertTrue(handler.handle(url))
+        XCTAssertEqual(handler.consumeDestination(), .restaurant(id: "zombie-burger-drink-lab"))
+    }
+
+    func testRestaurantLandingPageOpensTheTab() {
+        let url = URL(string: "https://desmoinesinsider.com/restaurants/open-now")!
+        XCTAssertTrue(handler.handle(url))
+        XCTAssertEqual(handler.consumeDestination(), .tab(.restaurants))
+    }
+
+    func testMalformedRestaurantSlugOpensTheTab() {
+        let url = URL(string: "https://desmoinesinsider.com/restaurants/Bad%20Slug")!
+        XCTAssertTrue(handler.handle(url))
+        XCTAssertEqual(handler.consumeDestination(), .tab(.restaurants))
+    }
+
     func testInvalidIDUniversalLinkFallsBackToTab() {
         let url = URL(string: "https://desmoinesinsider.com/events/not-a-uuid")!
         let result = handler.handle(url)
