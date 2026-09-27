@@ -81,8 +81,11 @@ extension DiscoverViewModel {
         mode: DiscoverMode = .events,
         filter: DiscoverFilterContext = .init(),
         lockMode: Bool = false,
-        events: FakeDiscoverEvents = FakeDiscoverEvents(),
-        restaurants: FakeDiscoverRestaurants = FakeDiscoverRestaurants(),
+        // Optional rather than `= FakeDiscoverEvents()`: a default argument is
+        // evaluated outside this function's main-actor isolation, and the
+        // fakes' initializers are main-actor isolated (Xcode 26 error).
+        events: FakeDiscoverEvents? = nil,
+        restaurants: FakeDiscoverRestaurants? = nil,
         swiped: @escaping @MainActor (SwipeInteractionService.ItemType, String) -> Bool = { _, _ in false },
         saveFavorite: @escaping @MainActor (SwipeItem) async throws -> Bool = { _ in true },
         removeFavorite: @escaping @MainActor (SwipeItem) async -> Void = { _ in }
@@ -91,8 +94,8 @@ extension DiscoverViewModel {
             mode: mode,
             filter: filter,
             lockMode: lockMode,
-            eventsService: events,
-            restaurantsService: restaurants,
+            eventsService: events ?? FakeDiscoverEvents(),
+            restaurantsService: restaurants ?? FakeDiscoverRestaurants(),
             hasSwiped: swiped,
             saveFavorite: saveFavorite,
             removeFavorite: removeFavorite
