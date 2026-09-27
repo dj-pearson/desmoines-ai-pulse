@@ -532,6 +532,9 @@ jobs:
       - run: deno test supabase/functions/_shared/aiQuota.test.ts
       - run: deno test supabase/functions/discover-chat/conversation.test.ts
       - run: deno test supabase/functions/discover-chat/picks.test.ts
+      # Trip planner request validation, Central-time windows and item
+      # sanitizing (IOS-DD-TRIP-PLANNER-06/08). Offline.
+      - run: deno test supabase/functions/generate-itinerary/planning.test.ts
       - run: deno test --allow-read supabase/functions/_tests/swipe-session-hardening.test.ts
       - run: deno test --allow-read supabase/functions/_tests/surprise-pick-honesty.test.ts
       # The map's nearby RPCs: visibility, clamps, no featured ranking (IOS-DD-MAP-01/02/03).

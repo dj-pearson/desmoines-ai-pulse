@@ -126,6 +126,10 @@ struct DashboardView: View {
         SectionContainer(title: "Your itineraries", systemImage: "map.fill") {
             if isLoading {
                 ProgressView().padding(.horizontal)
+            } else if tripService.availability == .paused {
+                // Storage is missing on the server; say so rather than invite
+                // a plan that can only fail (IOS-DD-TRIP-PLANNER-01).
+                EmptyHint(text: TripPlannerAvailability.pausedMessage, actionTitle: nil, action: nil)
             } else if trips.isEmpty {
                 EmptyHint(
                     text: "Plan an AI itinerary for your next Des Moines outing.",
@@ -340,7 +344,9 @@ struct DashboardView: View {
 
     private func loadTrips() async {
         isLoading = true
-        trips = await tripService.fetchTrips()
+        // fetchTrips throws since IOS-DD-TRIP-PLANNER-04; the dashboard keeps
+        // its quiet empty state, and a missing table shows the paused hint.
+        trips = (try? await tripService.fetchTrips()) ?? []
         isLoading = false
     }
 

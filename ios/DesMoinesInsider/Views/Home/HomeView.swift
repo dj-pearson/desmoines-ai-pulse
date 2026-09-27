@@ -74,10 +74,17 @@ struct HomeView: View {
                         )
                         .padding(.top, 12)
 
-                        // Trip Planner Home entry point (IOS-PARITY-001).
-                        TripPlannerHomeCard { showTripPlanner = true }
+                        // Trip Planner Home entry point (IOS-PARITY-001). Hidden
+                        // while trip storage is missing on the server, so Home
+                        // does not promote a feature that can only fail
+                        // (IOS-DD-TRIP-PLANNER-01).
+                        if TripPlannerService.shared.availability != .paused {
+                            TripPlannerHomeCard(isFreeTier: StoreKitService.shared.currentTier == .free) {
+                                showTripPlanner = true
+                            }
                             .padding(.horizontal)
                             .padding(.top, 10)
+                        }
 
                         // Smart Presets — one-tap event scenarios
                         EventSmartPresets(viewModel: viewModel)
@@ -243,7 +250,8 @@ struct HomeView: View {
                 async let attractionsLoad: () = attractionsVM.loadInitialData()
                 async let weekendLoad: () = weekendVM.loadInitialData()
                 async let tonightLoad: () = tonightVM.loadInitialData()
-                _ = await (eventsLoad, restaurantsLoad, attractionsLoad, weekendLoad, tonightLoad)
+                async let tripAvailability: () = TripPlannerService.shared.refreshAvailability()
+                _ = await (eventsLoad, restaurantsLoad, attractionsLoad, weekendLoad, tonightLoad, tripAvailability)
                 // IOS-PARITY-005 — warm the Best-Of winners cache so award
                 // badges surface on cards across the app (fail-soft).
                 await BestOfViewModel.refreshWinners()

@@ -9,6 +9,14 @@ import { getCorsHeaders, isOriginAllowed } from "../_shared/cors.ts";
 import { fetchWithTimeout } from "../_shared/fetchWithTimeout.ts";
 import { anthropicCostUsd } from "../_shared/providerUsage.ts";
 import { denialBody, guardAi, type QuotaClient } from "../_shared/aiQuota.ts";
+import {
+  centralEventWindow,
+  centralMonthStartUtc,
+  centralToday,
+  sanitizeItems,
+  stringList,
+  validateTripRequest,
+} from "./planning.ts";
 
 // Monthly trip-planner quota per tier (matches the web useSubscription copy /
 // WEB-FEAT-011). -1 = unlimited. Enforced server-side so the client gate can't
@@ -49,6 +57,7 @@ interface TripPlannerRequest {
     dietaryRestrictions?: string[];
     mustSee?: string[];             // Specific places they want to include
     avoidCategories?: string[];     // Categories to avoid
+    neighborhood?: string;          // Optional area focus (IOS-DD-TRIP-PLANNER-08)
   };
   // XPLAT-010 AC3: `existingTripId` used to be declared here as "existing trip
   // plan to update/enhance". It was removed 2026-08-22 because the capability
@@ -111,7 +120,12 @@ serve(async (req) => {
     const { data: { user }, error: authError } = await supabaseClient.auth.getUser(token);
 
     if (authError || !user) {
-      throw new Error('Authentication required');
+      // 401 rather than the generic 500 the thrown error became, so a client
+      // can tell "sign in again" from "try again" (IOS-DD-TRIP-PLANNER-08).
+      return new Response(
+        JSON.stringify({ success: false, error: 'Sign in to plan a trip.', code: 'sign_in_required' }),
+        { status: 401, headers: { ...corsHeaders, 'Content-Type': 'application/json' } },
+      );
     }
 
     // PROD-SUB-001: enforce the Trip Planner paywall SERVER-side. The web/iOS
@@ -156,10 +170,15 @@ serve(async (req) => {
     // Fail-open on a transient error is still right - never block a paying user
     // on our own bug - so this closes exactly one case and leaves that intact:
     // the table not existing, where continuing is guaranteed to cost money and
-    // end in the same error. head:true so it costs a count and no rows.
+    // end in the same error.
+    //
+    // A GET of at most one id, NOT head:true. PostgREST answers a HEAD on a
+    // missing relation with a bodyless 404, and postgrest-js turns a bodyless
+    // 404 into a 204 with error null, so the head probe never saw 42P01 and
+    // every call still went to the model (IOS-DD-TRIP-PLANNER-02).
     const { error: storageProbeError } = await supabaseClient
       .from('trip_plans')
-      .select('id', { count: 'exact', head: true })
+      .select('id')
       .limit(1);
 
     // 42P01 is Postgres; PGRST205 is PostgREST's schema-cache equivalent. Both
@@ -183,24 +202,69 @@ serve(async (req) => {
       );
     }
 
-    // Monthly quota per tier (Insider 5 / VIP unlimited). Counts itineraries
-    // this calendar month from trip_plans (no new table needed). Returns a
-    // structured 429 the web client surfaces as an upgrade prompt.
+    // Parse and validate BEFORE anything is counted or billed
+    // (IOS-DD-TRIP-PLANNER-08). Dates are rejected with a 400 and a code;
+    // preference fields are clamped, never rejected.
+    let rawBody: unknown;
+    try {
+      rawBody = await req.json();
+    } catch {
+      return new Response(
+        JSON.stringify({ success: false, error: 'The request body is not valid JSON.', code: 'invalid_body' }),
+        { status: 400, headers: { ...corsHeaders, 'Content-Type': 'application/json' } },
+      );
+    }
+    const validation = validateTripRequest(rawBody, centralToday(new Date()));
+    if (!validation.ok) {
+      return new Response(
+        JSON.stringify({ success: false, error: validation.error, code: validation.code }),
+        { status: 400, headers: { ...corsHeaders, 'Content-Type': 'application/json' } },
+      );
+    }
+    const { startDate, endDate, numDays, preferences } = validation.value;
+
+    // Crisis check on the free-text preference fields (WEB-LEGAL-005). The
+    // itinerary planner is mostly structured input, but mustSee and the other
+    // string arrays are typed by the user and reach the model. Checked before
+    // any model call; nothing is logged or stored. Run on the RAW fields, so
+    // the clamping above can never cut the phrase that matters.
+    const rawPrefs = ((rawBody as { preferences?: Record<string, unknown> })?.preferences ?? {}) as Record<string, unknown>;
+    const rawList = (v: unknown): string[] => Array.isArray(v) ? v.filter((x): x is string => typeof x === 'string') : [];
+    const freeText = [
+      ...rawList(rawPrefs.mustSee),
+      ...rawList(rawPrefs.interests),
+      ...rawList(rawPrefs.accessibilityNeeds),
+      ...rawList(rawPrefs.dietaryRestrictions),
+      ...(typeof rawPrefs.neighborhood === 'string' ? [rawPrefs.neighborhood] : []),
+    ];
+    if (freeText.some((t) => detectCrisisIntent(t))) {
+      return new Response(
+        JSON.stringify(crisisPayload()),
+        { status: 200, headers: { ...corsHeaders, 'Content-Type': 'application/json' } },
+      );
+    }
+
+    // Monthly quota per tier (Insider 5 / VIP unlimited). Counts GENERATIONS
+    // this Central-time month from the trip_plan_generations ledger
+    // (IOS-DD-TRIP-PLANNER-06). It used to count trip_plans rows, which the
+    // owner can delete, so deleting a plan refunded it; and it used the UTC
+    // month, so a plan made on the evening of the 31st counted against the
+    // next month. Returns a structured 429 clients surface as an upgrade prompt.
     const monthlyQuota = TRIP_PLANNER_MONTHLY_QUOTA[tier];
+    let usedThisMonth: number | null = null;
     if (monthlyQuota !== -1) {
-      const monthStart = new Date();
-      monthStart.setUTCDate(1);
-      monthStart.setUTCHours(0, 0, 0, 0);
-      const { count: usedThisMonth, error: quotaErr } = await supabaseClient
-        .from('trip_plans')
+      const monthStart = centralMonthStartUtc(new Date());
+      const { count, error: quotaErr } = await supabaseClient
+        .from('trip_plan_generations')
         .select('id', { count: 'exact', head: true })
         .eq('user_id', user.id)
-        .eq('ai_generated', true)
         .gte('created_at', monthStart.toISOString());
+      usedThisMonth = count ?? 0;
 
       // Fail open on a quota-count error — never block a paying user on our bug.
       if (quotaErr) {
         console.warn('[generate-itinerary] monthly quota count failed, allowing:', quotaErr.message);
+        usedThisMonth = null;
       } else if ((usedThisMonth ?? 0) >= monthlyQuota) {
         return new Response(
           JSON.stringify({
@@ -218,77 +282,49 @@ serve(async (req) => {
       }
     }
 
-    const {
-      startDate,
-      endDate,
-      preferences = {},
-    }: TripPlannerRequest = await req.json();
-
-    // Crisis check on the free-text preference fields (WEB-LEGAL-005). The
-    // itinerary planner is mostly structured input, but mustSee and the other
-    // string arrays are typed by the user and reach the model. Checked before
-    // any model call; nothing is logged or stored.
-    const freeText = [
-      ...(Array.isArray(preferences.mustSee) ? preferences.mustSee : []),
-      ...(Array.isArray(preferences.interests) ? preferences.interests : []),
-      ...(Array.isArray(preferences.accessibilityNeeds) ? preferences.accessibilityNeeds : []),
-      ...(Array.isArray(preferences.dietaryRestrictions) ? preferences.dietaryRestrictions : []),
-    ];
-    if (freeText.some((t) => detectCrisisIntent(t))) {
-      return new Response(
-        JSON.stringify(crisisPayload()),
-        { status: 200, headers: { ...corsHeaders, 'Content-Type': 'application/json' } },
-      );
-    }
-
-    // Validate dates
-    const start = new Date(startDate);
-    const end = new Date(endDate);
-    if (isNaN(start.getTime()) || isNaN(end.getTime())) {
-      throw new Error('Invalid date format. Use YYYY-MM-DD');
-    }
-    if (end < start) {
-      throw new Error('End date must be after start date');
-    }
-
-    const numDays = Math.ceil((end.getTime() - start.getTime()) / (1000 * 60 * 60 * 24)) + 1;
-    if (numDays > 14) {
-      throw new Error('Trip cannot exceed 14 days');
-    }
-
     console.log(`Generating ${numDays}-day itinerary from ${startDate} to ${endDate}`);
 
-    // Fetch available events during the trip dates
-    const { data: events, error: eventsError } = await supabaseClient
-      .from('events')
-      .select('id, title, enhanced_description, original_description, date, location, venue, category, price, image_url, latitude, longitude')
-      .gte('date', startDate)
-      .lte('date', endDate + 'T23:59:59')
-      .order('date', { ascending: true })
-      .limit(100);
+    // The trip's Des Moines days as UTC instants: events.date is a timestamptz,
+    // and the bare-date comparison ran the window in UTC (IOS-DD-TRIP-PLANNER-08).
+    const eventWindow = centralEventWindow(startDate, endDate);
 
+    // The three reads are independent, so they run together. Each applies the
+    // same visibility the listing pages do: no archived, hidden or merged
+    // events, no merged restaurants, no inactive attractions.
+    const [eventsResult, restaurantsResult, attractionsResult] = await Promise.all([
+      supabaseClient
+        .from('events')
+        .select('id, title, enhanced_description, original_description, date, event_start_local, location, venue, category, price, image_url, latitude, longitude')
+        .gte('date', eventWindow.fromIso)
+        .lt('date', eventWindow.toIso)
+        .is('archived_at', null)
+        .not('is_hidden', 'is', true)
+        .not('is_merged', 'is', true)
+        .order('date', { ascending: true })
+        .limit(100),
+      supabaseClient
+        .from('restaurants')
+        // `hours` DROPPED: restaurants has no opening-hours column, so asking for it
+        // failed the whole select with 42703 and the planner got zero restaurants.
+        .select('id, name, description, cuisine, location, price_range, rating, image_url, latitude, longitude')
+        .not('is_merged', 'is', true)
+        .order('rating', { ascending: false, nullsFirst: false })
+        .limit(50),
+      supabaseClient
+        .from('attractions')
+        // category -> type (attractions stores the kind in `type`), and admission ->
+        // is_free, the only cost signal the table carries. `hours` DOES exist here,
+        // unlike on restaurants, so it stays.
+        .select('id, name, description, type, location, hours, is_free, website, image_url, latitude, longitude')
+        .not('is_active', 'is', false)
+        .limit(50),
+    ]);
+
+    const { data: events, error: eventsError } = eventsResult;
+    const { data: restaurants, error: restaurantsError } = restaurantsResult;
+    const { data: attractions, error: attractionsError } = attractionsResult;
     if (eventsError) console.error('Error fetching events:', eventsError);
-
-    // Fetch restaurants
-    const { data: restaurants, error: restaurantsError } = await supabaseClient
-      .from('restaurants')
-      // `hours` DROPPED: restaurants has no opening-hours column, so asking for it
-      // failed the whole select with 42703 and the planner got zero restaurants.
-      .select('id, name, description, cuisine, location, price_range, rating, image_url, latitude, longitude')
-      .order('rating', { ascending: false, nullsFirst: false })
-      .limit(50);
-
     if (restaurantsError) console.error('Error fetching restaurants:', restaurantsError);
-
-    // Fetch attractions
-    const { data: attractions, error: attractionsError } = await supabaseClient
-      .from('attractions')
-      // category -> type (attractions stores the kind in `type`), and admission ->
-      // is_free, the only cost signal the table carries. `hours` DOES exist here,
-      // unlike on restaurants, so it stays.
-      .select('id, name, description, type, location, hours, is_free, website, image_url, latitude, longitude')
-      .limit(50);
-
     if (attractionsError) console.error('Error fetching attractions:', attractionsError);
 
     // Build context for AI
@@ -297,6 +333,9 @@ serve(async (req) => {
       title: e.title,
       description: (e.enhanced_description || e.original_description || '').substring(0, 200),
       date: e.date,
+      // Des Moines wall-clock start, so the model plans around the real
+      // showtime rather than a UTC instant.
+      startsLocal: e.event_start_local,
       location: e.location,
       venue: e.venue,
       category: e.category,
@@ -337,7 +376,12 @@ serve(async (req) => {
       dietaryRestrictions: preferences.dietaryRestrictions || [],
       mustSee: preferences.mustSee || [],
       avoidCategories: preferences.avoidCategories || [],
+      neighborhood: preferences.neighborhood ?? null,
     };
+
+    const neighborhoodLine = preferences.neighborhood
+      ? `\n- Prefer stops in or near ${preferences.neighborhood}.`
+      : '';
 
     // Build the AI prompt
     const itineraryPrompt = `You are an expert Des Moines, Iowa travel planner creating a personalized itinerary.
@@ -345,7 +389,7 @@ serve(async (req) => {
 TRIP DETAILS:
 - Start Date: ${startDate} (${new Date(startDate).toLocaleDateString('en-US', { weekday: 'long' })})
 - End Date: ${endDate} (${new Date(endDate).toLocaleDateString('en-US', { weekday: 'long' })})
-- Number of Days: ${numDays}
+- Number of Days: ${numDays}${neighborhoodLine}
 
 USER PREFERENCES:
 ${JSON.stringify(prefsContext, null, 2)}
@@ -441,8 +485,9 @@ Return ONLY the JSON object, no additional text.`;
     // DAILY cap and provider budget (WP1 of NON_CORE_REVIEW_2026-09), on top
     // of the monthly count above. Taken here, after every check that can
     // reject the request for free, so a bad date never costs a plan. The
-    // monthly count reads trip_plans rows and so never sees a call that was
-    // billed and then failed; this counter is taken before the call and does.
+    // monthly count reads the trip_plan_generations ledger, written only once
+    // a plan is saved, so it never sees a call that was billed and then
+    // failed; this counter is taken before the call and does.
     const quota = await guardAi(supabaseClient as unknown as QuotaClient, req, {
       feature: 'itinerary',
       provider: 'anthropic',
@@ -533,6 +578,21 @@ Return ONLY the JSON object, no additional text.`;
       throw new Error('Failed to generate itinerary. Please try again.');
     }
 
+    // Keep only listings the model was actually given, with types the table
+    // accepts (IOS-DD-TRIP-PLANNER-08). A hallucinated id used to fail the FK
+    // and roll back a plan that had already been billed.
+    const knownIds = {
+      event: new Set<string>((events || []).map((e) => String(e.id))),
+      restaurant: new Set<string>((restaurants || []).map((r) => String(r.id))),
+      attraction: new Set<string>((attractions || []).map((a) => String(a.id))),
+    };
+    const sanitizedItems = sanitizeItems(generatedItinerary.items, knownIds, numDays);
+    if (sanitizedItems.length === 0) {
+      throw new Error('Generated itinerary had no usable stops');
+    }
+    const tips = stringList(generatedItinerary.tips);
+    const packingList = stringList(generatedItinerary.packingList);
+
     // Generate share code
     const shareCode = await supabaseClient.rpc('generate_trip_share_code').then(r => r.data).catch(() => null);
 
@@ -551,6 +611,9 @@ Return ONLY the JSON object, no additional text.`;
         share_code: shareCode,
         ai_generated: true,
         total_estimated_cost: generatedItinerary.totalEstimatedCost,
+        // Stored so a reopened trip still shows them (IOS-DD-TRIP-PLANNER-17).
+        tips,
+        packing_list: packingList,
       })
       .select()
       .single();
@@ -561,7 +624,7 @@ Return ONLY the JSON object, no additional text.`;
     }
 
     // Insert itinerary items
-    const itemsToInsert = generatedItinerary.items.map((item, idx) => ({
+    const itemsToInsert = sanitizedItems.map((item) => ({
       trip_plan_id: tripPlan.id,
       day_number: item.dayNumber,
       order_index: item.orderIndex,
@@ -569,14 +632,14 @@ Return ONLY the JSON object, no additional text.`;
       event_id: item.contentType === 'event' ? item.contentId : null,
       restaurant_id: item.contentType === 'restaurant' ? item.contentId : null,
       attraction_id: item.contentType === 'attraction' ? item.contentId : null,
-      custom_title: item.customTitle || null,
-      custom_description: item.customDescription || null,
-      custom_location: item.customLocation || null,
-      start_time: item.startTime || null,
-      end_time: item.endTime || null,
-      duration_minutes: item.durationMinutes || null,
-      notes: item.notes || null,
-      estimated_cost: item.estimatedCost || null,
+      custom_title: item.customTitle,
+      custom_description: item.customDescription,
+      custom_location: item.customLocation,
+      start_time: item.startTime,
+      end_time: item.endTime,
+      duration_minutes: item.durationMinutes,
+      notes: item.notes,
+      estimated_cost: item.estimatedCost,
       booking_url: null,
       is_confirmed: false,
       ai_suggested: true,
@@ -611,9 +674,23 @@ Return ONLY the JSON object, no additional text.`;
       });
     }
 
+    // Record the generation in the ledger the monthly quota counts
+    // (IOS-DD-TRIP-PLANNER-06). The owner cannot delete from it, so deleting
+    // a plan no longer returns it to the allowance. A failure here is logged
+    // and the user still gets the plan they were billed for.
+    const { error: ledgerError } = await supabaseClient
+      .from('trip_plan_generations')
+      .insert({ user_id: user.id, trip_plan_id: tripPlan.id });
+    if (ledgerError) {
+      console.error('[generate-itinerary] could not record the generation:', ledgerError);
+    }
+
     // Fetch the complete itinerary with item details
-    const { data: fullItinerary } = await supabaseClient
+    const { data: fullItinerary, error: itineraryError } = await supabaseClient
       .rpc('get_trip_itinerary', { p_trip_id: tripPlan.id });
+    if (itineraryError) {
+      console.error('[generate-itinerary] get_trip_itinerary failed; returning the plan without items:', itineraryError);
+    }
 
     console.log(`Successfully generated ${numDays}-day itinerary: ${tripPlan.title}`);
 
@@ -622,12 +699,17 @@ Return ONLY the JSON object, no additional text.`;
       tripPlan: {
         ...tripPlan,
         items: fullItinerary || [],
-        tips: generatedItinerary.tips,
-        packingList: generatedItinerary.packingList,
+        tips: tips ?? [],
+        packingList: packingList ?? [],
       },
+      // Additive: this month's count including this plan, and the tier's
+      // limit (-1 unlimited), so a client can update its meter without a
+      // second request.
+      used: (usedThisMonth ?? 0) + 1,
+      limit: monthlyQuota,
       metadata: {
         numDays,
-        numItems: generatedItinerary.items.length,
+        numItems: sanitizedItems.length,
         modelUsed: config.default_model,
         eventsAvailable: events?.length || 0,
         restaurantsAvailable: restaurants?.length || 0,

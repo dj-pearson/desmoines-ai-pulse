@@ -201,23 +201,35 @@ async function execTool(
 
     case 'search_restaurants': {
       const limit = Math.min((input.limit as number | undefined) ?? 10, 20);
-      let q = supabase
-        .from('restaurants')
-        // price_level -> price_range, and `hours` is dropped entirely: restaurants
-        // has no opening-hours column, so asking for it failed the whole select.
-        .select('id, name, description, cuisine, price_range, location, image_url, business_status, status')
-        .not('is_merged', 'is', true)
-        .limit(limit)
-        .order('rating', { ascending: false });
+      // price_level -> price_range, and `hours` is dropped entirely: restaurants
+      // has no opening-hours column, so asking for it failed the whole select.
+      // business_status arrives with migration 20260919000009. Until it is
+      // applied, selecting it answers 42703 and Ask Pulse could never suggest a
+      // restaurant, so retry without it (same fallback as get-sponsored-pick).
+      const withStatus = 'id, name, description, cuisine, price_range, location, image_url, business_status, status';
+      const withoutStatus = 'id, name, description, cuisine, price_range, location, image_url, status';
+      // deno-lint-ignore no-explicit-any
+      const restaurantQuery = (columns: string): any => {
+        let q = supabase
+          .from('restaurants')
+          .select(columns)
+          .not('is_merged', 'is', true)
+          .limit(limit)
+          .order('rating', { ascending: false });
 
-      if (input.cuisine) q = q.ilike('cuisine', `%${sanitizePostgrestPattern(input.cuisine as string)}%`);
-      if (input.priceLevel) q = q.eq('price_range', input.priceLevel as string);
-      if (input.query) {
-        const term = sanitizePostgrestPattern(input.query as string);
-        q = q.or(`name.ilike.%${term}%,description.ilike.%${term}%`);
+        if (input.cuisine) q = q.ilike('cuisine', `%${sanitizePostgrestPattern(input.cuisine as string)}%`);
+        if (input.priceLevel) q = q.eq('price_range', input.priceLevel as string);
+        if (input.query) {
+          const term = sanitizePostgrestPattern(input.query as string);
+          q = q.or(`name.ilike.%${term}%,description.ilike.%${term}%`);
+        }
+        return q;
+      };
+
+      let { data, error } = await restaurantQuery(withStatus);
+      if (error?.code === '42703') {
+        ({ data, error } = await restaurantQuery(withoutStatus));
       }
-
-      const { data, error } = await q;
       if (error) return { error: error.message };
       // Closed places are not recommendations (same rule as get-sponsored-pick).
       const open = ((data ?? []) as Array<{ business_status?: string | null; status?: string | null }>)
