@@ -73,15 +73,38 @@ actor AttractionsService {
         try await withRetry { [self] in try await _fetchAttractions(query: query) }
     }
 
+    /// The `or=` value for a text search over name, type, location and
+    /// description, or nil when there is nothing to search for. Trimmed and
+    /// capped at 100 characters; each branch goes through
+    /// `EventsService.ilikeContains` (IOS-DD-SEARCH-01).
+    ///
+    /// It used to interpolate the raw text: "Blank Park Zoo, Des Moines" split
+    /// the clause at the comma and PostgREST answered 400, which Search showed
+    /// as no attractions; "_" matched every row; "x%,rating.gte.0" added a
+    /// branch of its own.
+    static func searchOrFilter(_ raw: String) -> String? {
+        let trimmed = raw.trimmingCharacters(in: .whitespacesAndNewlines)
+        guard !trimmed.isEmpty else { return nil }
+        let pattern = EventsService.ilikeContains(String(trimmed.prefix(100)))
+        return ["name", "type", "location", "description"]
+            .map { "\($0).ilike.\(pattern)" }
+            .joined(separator: ",")
+    }
+
     private func _fetchAttractions(query: AttractionsQuery) async throws -> AttractionsResponse {
         let client = try db()
+        // is_active is the admin soft-delete (20260520000004); the web list
+        // filters it too (useAttractions.ts). IOS-DD-SEARCH-01.
         var request = client
             .from("attractions")
             .select("*", head: false, count: .exact)
+            .eq("is_active", value: true)
 
-        // Search (multi-field ILIKE — matches web pattern)
-        if let search = query.searchText, !search.isEmpty {
-            request = request.or("name.ilike.%\(search)%,type.ilike.%\(search)%,location.ilike.%\(search)%")
+        // Search (multi-field ILIKE). The text is quoted and LIKE-escaped, so a
+        // comma, paren, '%' or '_' in it is matched literally rather than
+        // ending the or= clause or matching everything (IOS-DD-SEARCH-01).
+        if let search = query.searchText, let filter = Self.searchOrFilter(search) {
+            request = request.or(filter)
         }
 
         // Type filter. `types` wins when both are supplied.
@@ -166,6 +189,7 @@ actor AttractionsService {
         let attractions: [Attraction] = try await client
             .from("attractions")
             .select()
+            .eq("is_active", value: true)
             .gte("latitude", value: box.minLat)
             .lte("latitude", value: box.maxLat)
             .gte("longitude", value: box.minLng)
@@ -212,6 +236,7 @@ actor AttractionsService {
             let attractions: [Attraction] = try await client
                 .from("attractions")
                 .select()
+                .eq("is_active", value: true)
                 .in("type", values: types)
                 .order("is_featured", ascending: false)
                 .order("rating", ascending: false, nullsFirst: false)
@@ -225,9 +250,10 @@ actor AttractionsService {
 
 /// What SearchViewModel needs from AttractionsService (IOS-AUDIT-TEST-006).
 ///
-/// One method. There is no fuzzy fallback for attractions, which is itself worth
-/// noticing: an attractions search that returns nothing returns nothing, while
-/// events and restaurants get a second, looser attempt.
+/// One method. There is no fuzzy fallback for attractions: an attractions search
+/// that returns nothing returns nothing, while events and restaurants get a
+/// second, looser attempt. The search text is escaped by `searchOrFilter` and
+/// soft-deleted (`is_active = false`) rows are excluded (IOS-DD-SEARCH-01).
 protocol AttractionSearchProviding: Sendable {
     func fetchAttractions(query: AttractionsService.AttractionsQuery) async throws -> AttractionsService.AttractionsResponse
 }

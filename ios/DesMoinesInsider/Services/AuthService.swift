@@ -323,6 +323,10 @@ final class AuthService {
         FavoritesService.shared.reset()
         RecentlyViewedService.shared.clear()
         SearchHistoryService.shared.clearAll()
+        // The next account on this device must not see the previous one's
+        // saved search names and queries, or have its quota counted against
+        // them (IOS-DD-SEARCH-12).
+        SavedSearchesViewModel.shared.reset()
         EmailPreferencesService.shared.reset()
         // Spotlight + QueryCache are actor-isolated; fire-and-forget detached tasks.
         Task.detached {
