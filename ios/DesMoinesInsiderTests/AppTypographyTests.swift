@@ -21,11 +21,22 @@ final class AppTypographyTests: XCTestCase {
         }
     }
 
+    /// UIKit's caption2 curve holds 11pt from xSmall through large on purpose:
+    /// 11pt is the smallest size iOS renders body-adjacent text at. A style
+    /// declared at that floor can't shrink further, so it only has to hold.
+    private let legibilityFloor: CGFloat = 11
+
     func testEveryStyleShrinksBelowDefault() {
         for style in allStyles {
-            XCTAssertLessThan(style.pointSize(for: .xSmall),
-                              style.pointSize(for: .large),
-                              "\(style) ignores the smallest text setting")
+            let atSmallest = style.pointSize(for: .xSmall)
+            let atDefault = style.pointSize(for: .large)
+            if style.spec.size <= legibilityFloor {
+                XCTAssertEqual(atSmallest, atDefault, accuracy: 0.01,
+                               "\(style) sits at the floor and should hold there")
+            } else {
+                XCTAssertLessThan(atSmallest, atDefault,
+                                  "\(style) ignores the smallest text setting")
+            }
         }
     }
 
