@@ -56,4 +56,56 @@ final class EventTimeTests: XCTestCase {
         let now = Date(timeIntervalSince1970: 1_790_521_200) // 2026-09-27 15:00Z
         XCTAssertTrue(e.happeningNow(at: now))
     }
+
+    // MARK: - isOver (IOS-DD-SAVED-10)
+
+    private func at(_ iso: String) -> Date {
+        // swiftlint:disable:next force_unwrapping
+        ISO8601DateFormatter().date(from: iso)!
+    }
+
+    /// Wednesday 2026-09-30 12:00 CDT.
+    private var wednesdayNoon: Date { at("2026-09-30T17:00:00Z") }
+
+    func testATimedEventThatStartedTwentyMinutesAgoIsNotOver() {
+        XCTAssertFalse(event(date: "2026-09-30T16:40:00Z").isOver(at: wednesdayNoon))
+    }
+
+    func testATimedEventThreeHoursAndAMinuteOldIsOver() {
+        XCTAssertTrue(event(date: "2026-09-30T13:59:00Z").isOver(at: wednesdayNoon))
+    }
+
+    func testAMultiDayRunEndingTomorrowIsNotOver() {
+        var e = event(date: "2026-09-28T17:00:00Z")
+        e.endDate = "2026-10-01T17:00:00Z"
+        XCTAssertFalse(e.isOver(at: wednesdayNoon))
+    }
+
+    func testAnUntimedEventTodayAtElevenPmIsNotOver() {
+        // 04:00Z on Oct 1 is 23:00 CDT on Sep 30.
+        XCTAssertFalse(event(date: "2026-10-01T04:00:00Z", timeTbd: true).isOver(at: wednesdayNoon))
+    }
+
+    func testYesterdaysUntimedEventIsOver() {
+        XCTAssertTrue(event(date: "2026-09-29T23:00:00Z", timeTbd: true).isOver(at: wednesdayNoon))
+    }
+
+    func testAnEventWithNoDateIsNotOver() {
+        XCTAssertFalse(event(date: "").isOver(at: wednesdayNoon))
+    }
+
+    func testAMidnightEndDateCoversThatWholeDay() {
+        // Ends "Sep 30" as a date: 05:00Z is 00:00 CDT.
+        var e = event(date: "2026-09-28T15:00:00Z")
+        e.endDate = "2026-09-30T05:00:00Z"
+        XCTAssertFalse(e.isOver(at: wednesdayNoon))
+    }
+
+    // MARK: - Saved row date text (IOS-DD-SAVED-11)
+
+    func testCardDateTextSaysTimeTBAForAnUntimedEvent() {
+        let e = event(date: "2026-10-05T00:00:00Z", timeTbd: true)
+        let date = e.parsedDate ?? Date()
+        XCTAssertTrue(e.cardDateText(date).hasSuffix(" - Time TBA"))
+    }
 }

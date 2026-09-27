@@ -49,6 +49,14 @@ struct CardPill: Identifiable, Hashable {
 /// route to the right FavoritesService method.
 enum FavoritableKind {
     case event, restaurant, attraction
+
+    var favoriteKind: FavoriteKind {
+        switch self {
+        case .event: return .event
+        case .restaurant: return .restaurant
+        case .attraction: return .attraction
+        }
+    }
 }
 
 /// The favorite affordance. `.managed` self-toggles through FavoritesService
@@ -111,17 +119,21 @@ struct ContentCard: View {
     var decorative: Bool = false
 
     @Binding var toast: ToastMessage?
+    /// Whether the host passed a toast binding. Without one, favorite
+    /// feedback goes to AppToastCenter (IOS-DD-SAVED-15).
+    private let hasToastBinding: Bool
 
     init(
         _ data: ContentCardData,
         variant: Variant = .standard,
         decorative: Bool = false,
-        toast: Binding<ToastMessage?> = .constant(nil)
+        toast: Binding<ToastMessage?>? = nil
     ) {
         self.data = data
         self.variant = variant
         self.decorative = decorative
-        self._toast = toast
+        self._toast = toast ?? .constant(nil)
+        self.hasToastBinding = toast != nil
     }
 
     var body: some View {
@@ -202,7 +214,7 @@ struct ContentCard: View {
     @ViewBuilder
     private func favoriteButton(style: CardFavoriteButton.Style) -> some View {
         if !decorative, let favorite = data.favorite {
-            CardFavoriteButton(favorite: favorite, style: style, toast: $toast)
+            CardFavoriteButton(favorite: favorite, style: style, toast: $toast, hasToastBinding: hasToastBinding)
         }
     }
 
@@ -298,6 +310,21 @@ struct ContentCard: View {
             ZStack(alignment: .topTrailing) {
                 image(width: 180, height: 110, corner: 12, scrim: false)
                 favoriteButton(style: .overlay).padding(8)
+            }
+            // Only events carry urgency; the Dashboard "Coming up" strip
+            // uses this variant for them (IOS-DD-SAVED-26).
+            .overlay(alignment: .bottomLeading) {
+                if let urgency = data.urgency {
+                    Text(urgency)
+                        .font(.caption2.bold())
+                        .foregroundStyle(.white)
+                        .lineLimit(1)
+                        .padding(.horizontal, 8)
+                        .padding(.vertical, 3)
+                        .background(PremiumTokens.urgencyFill, in: Capsule())
+                        .padding(8)
+                        .accessibilityHidden(true)
+                }
             }
 
             Text(data.title)
@@ -483,15 +510,26 @@ struct AwardBadge: View {
 
 // MARK: - Shared favorite button
 
+@MainActor
 struct CardFavoriteButton: View {
     enum Style { case overlay, inline }
 
     let favorite: CardFavorite
     var style: Style = .inline
     @Binding var toast: ToastMessage?
+    /// False when the card was built with the default `.constant(nil)`.
+    var hasToastBinding = true
 
     @State private var favorites = FavoritesService.shared
+    @State private var auth = AuthService.shared
     @State private var burst = false
+
+    /// A save for this card is on the network; the heart dims and further
+    /// taps are ignored (IOS-DD-SAVED-05).
+    private var isInFlight: Bool {
+        guard case .managed(let kind, let id, _) = favorite else { return false }
+        return favorites.isInFlight(kind: kind.favoriteKind, id: id)
+    }
 
     private var isFavorited: Bool {
         switch favorite {
@@ -526,6 +564,7 @@ struct CardFavoriteButton: View {
                             Circle().fill(.ultraThinMaterial)
                         }
                     }
+                    .opacity(isInFlight ? 0.5 : 1)
             }
         }
         .buttonStyle(.plain)
@@ -544,31 +583,55 @@ struct CardFavoriteButton: View {
     }
 
     private func tapped() {
-        if !isFavorited { burst.toggle() }
-
         switch favorite {
         case .external(_, _, let onToggle):
+            if !isFavorited { burst.toggle() }
             onToggle()
         case .managed(let kind, let id, _):
+            // Guests get sign-in, not a celebration and then an error
+            // (IOS-DD-SAVED-15).
+            guard auth.isAuthenticated else {
+                NotificationCenter.default.post(name: .favoritesSignInRequired, object: nil)
+                return
+            }
+            guard !favorites.isInFlight(kind: kind.favoriteKind, id: id) else { return }
             let wasFavorited = isFavorited
             Task {
                 do {
+                    let nowSaved: Bool
                     switch kind {
-                    case .event:      _ = try await favorites.toggleFavorite(eventId: id)
-                    case .restaurant: _ = try await favorites.toggleRestaurantFavorite(restaurantId: id)
-                    case .attraction: _ = try await favorites.toggleFavoriteAttraction(attractionId: id)
+                    case .event:      nowSaved = try await favorites.toggleFavorite(eventId: id)
+                    case .restaurant: nowSaved = try await favorites.toggleRestaurantFavorite(restaurantId: id)
+                    case .attraction: nowSaved = try await favorites.toggleFavoriteAttraction(attractionId: id)
                     }
-                    toast = wasFavorited
-                        ? .info("Removed from saved", icon: "heart")
-                        : .success("Saved!", icon: "heart.fill")
+                    // The burst plays once the save has landed, not before.
+                    // It carries its own haptic; a second one here doubled it.
+                    if nowSaved && !wasFavorited {
+                        burst.toggle()
+                    }
+                    show(nowSaved
+                        ? .success("Saved!", icon: "heart.fill")
+                        : .info("Removed from saved", icon: "heart"))
                 } catch {
+                    UINotificationFeedbackGenerator().notificationOccurred(.error)
                     // The favorites cap shows the upsell paywall app-wide
                     // (IOS-SUB-011); skip the redundant error toast for it.
                     if !FavoritesService.isLimitReached(error) {
-                        toast = .error(error.localizedDescription, icon: "exclamationmark.triangle")
+                        show(.error(error.localizedDescription, icon: "exclamationmark.triangle"))
                     }
                 }
             }
+        }
+    }
+
+    /// Cards built without a toast binding (Search, saved-search results,
+    /// Attractions) used to drop every message; those go to the app-wide
+    /// toast instead (IOS-DD-SAVED-15).
+    private func show(_ message: ToastMessage) {
+        if hasToastBinding {
+            toast = message
+        } else {
+            AppToastCenter.shared.show(message)
         }
     }
 }
@@ -693,8 +756,9 @@ extension Event {
     }
 
     /// The card's date line in Des Moines time, with " - Time TBA" instead of
-    /// a placeholder time (IOS-DD-EVENTS-05).
-    private func cardDateText(_ date: Date) -> String {
+    /// a placeholder time (IOS-DD-EVENTS-05). Internal so the Saved rows and
+    /// the shared plan text use it too (IOS-DD-SAVED-11).
+    func cardDateText(_ date: Date) -> String {
         let day = DesMoinesTime.style(.dateTime.weekday(.abbreviated).month(.abbreviated).day())
         guard hasSpecificTime else { return date.formatted(day) + " - Time TBA" }
         return date.formatted(DesMoinesTime.style(.dateTime.weekday(.abbreviated).month(.abbreviated).day().hour().minute()))
@@ -757,8 +821,9 @@ extension Restaurant {
 
     /// Lifecycle first (New / opening date / Closed), else the hours line
     /// (IOS-DD-RESTAURANTS-01 / 06). Nothing when the hours are unknown: a
-    /// wrong "Open" costs more trust than a missing one.
-    private var statusPill: CardPill? {
+    /// wrong "Open" costs more trust than a missing one. Internal so the Saved
+    /// row shows the same status (IOS-DD-SAVED-27).
+    var statusPill: CardPill? {
         switch lifecycle {
         case .newlyOpened:
             return CardPill(icon: "sparkles", text: "New", tint: .primary, filled: false, iconTint: .orange)

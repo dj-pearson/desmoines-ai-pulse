@@ -44,6 +44,18 @@ struct MainTabView: View {
     /// presenter instead of per-call-site sheets.
     @State private var showFavoritesPaywall = false
 
+    /// When the cap is hit while past events hold slots, offer to clear them
+    /// before the paywall (IOS-DD-SAVED-17). PaywallView has no secondary
+    /// action, so the choice is an alert.
+    @State private var showCapChoice = false
+    @State private var capPastCount = 0
+
+    /// A guest tapped a heart (IOS-DD-SAVED-15).
+    @State private var showSignInSheet = false
+
+    /// App-wide toast for cards built without a toast binding.
+    @State private var toastCenter = AppToastCenter.shared
+
     /// Post-onboarding soft paywall (IOS-SUB-013) — engagement-triggered +
     /// frequency-capped by SoftPaywallService, presented from one place here.
     @State private var softPaywallContext: PaywallContext?
@@ -171,11 +183,34 @@ struct MainTabView: View {
             InterstitialAdView()
         }
         .onReceive(NotificationCenter.default.publisher(for: .favoritesLimitReached)) { _ in
-            showFavoritesPaywall = true
+            let past = FavoritesService.shared.pastEventFavoriteCount
+            if past > 0 {
+                capPastCount = past
+                showCapChoice = true
+            } else {
+                showFavoritesPaywall = true
+            }
         }
         .sheet(isPresented: $showFavoritesPaywall) {
             PaywallView(context: .unlimitedFavorites)
         }
+        .alert("You've used your free saves", isPresented: $showCapChoice) {
+            Button("Clear past events") {
+                SavedTabRouter.shared.segment = .events
+                DeepLinkHandler.shared.open(.tab(.favorites))
+            }
+            Button("Go unlimited") { showFavoritesPaywall = true }
+            Button("Not now", role: .cancel) {}
+        } message: {
+            Text("\(capPastCount) of your saves \(capPastCount == 1 ? "is a past event" : "are past events"). Clear them in Saved or go unlimited.")
+        }
+        .onReceive(NotificationCenter.default.publisher(for: .favoritesSignInRequired)) { _ in
+            showSignInSheet = true
+        }
+        .sheet(isPresented: $showSignInSheet) {
+            NavigationStack { AuthView() }
+        }
+        .toastOverlay(message: $toastCenter.message)
         .onReceive(NotificationCenter.default.publisher(for: .softPaywallTriggered)) { note in
             let id = note.userInfo?["context"] as? String ?? "unlimited_favorites"
             softPaywallContext = Self.softContext(for: id)
@@ -217,7 +252,11 @@ struct MainTabView: View {
         case .restaurant(let id): deepLinkPresentation = .restaurant(id)
         case .attraction(let id): deepLinkPresentation = .attraction(id)
         case .discover(let d): deepLinkPresentation = .discover(d)
-        case .tab(let tab): selectedTab = tab
+        case .tab(let tab):
+            selectedTab = tab
+            // On iPad the sidebar may sit on Dashboard while selectedTab is
+            // already this tab, so no onChange would move it (IOS-DD-SAVED-19).
+            if sidebarSelection != .tab(tab) { sidebarSelection = .tab(tab) }
         }
     }
 

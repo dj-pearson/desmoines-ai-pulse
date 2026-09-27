@@ -6,15 +6,17 @@ import SwiftUI
 /// variant) so events, restaurants and attractions share one card layer.
 struct RestaurantCardView: View {
     let restaurant: Restaurant
-    @Binding var toast: ToastMessage?
+    /// Nil when the host has no toast; ContentCard then uses AppToastCenter
+    /// rather than a `.constant(nil)` that drops every message (IOS-DD-SAVED-15).
+    private let toast: Binding<ToastMessage?>?
 
-    init(restaurant: Restaurant, toast: Binding<ToastMessage?> = .constant(nil)) {
+    init(restaurant: Restaurant, toast: Binding<ToastMessage?>? = nil) {
         self.restaurant = restaurant
-        self._toast = toast
+        self.toast = toast
     }
 
     var body: some View {
-        ContentCard(cardData, variant: .listRow, toast: $toast)
+        ContentCard(cardData, variant: .listRow, toast: toast)
     }
 
     /// The shared card data plus the distance when location is known

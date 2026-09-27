@@ -133,6 +133,15 @@ final class AuthService {
                         // sign-in to a different account in the same session)
                         // immediately reflects the new account's entitlements.
                         await StoreKitService.shared.refreshBackendTier()
+                        // Hearts were empty after an in-app sign-in until the
+                        // Saved tab or Dashboard opened, and a tap could insert
+                        // a duplicate (IOS-DD-SAVED-21). Only on a real sign-in:
+                        // launch (.initialSession) is loaded by the app file,
+                        // and token refreshes change nothing. Not awaited, so
+                        // `isLoading` below does not wait on four more queries.
+                        if event == .signedIn {
+                            Task { await FavoritesService.shared.loadFavorites() }
+                        }
                     }
                 case .signedOut:
                     self.currentUser = nil
@@ -143,6 +152,11 @@ final class AuthService {
                     // Drop the cached backend tier so the next account never
                     // briefly inherits the previous account's entitlement.
                     StoreKitService.shared.clearBackendTier()
+                    // A server-initiated sign-out (revoked session, expiry)
+                    // never went through signOut(), so the next account
+                    // inherited favorites, history and caches
+                    // (IOS-DD-SAVED-20). Idempotent with signOut's own call.
+                    self.purgeLocalUserState()
                 default:
                     break
                 }
@@ -202,17 +216,7 @@ final class AuthService {
             BiometricAuthService.shared.reset()
 
             SessionTimeoutService.shared.stopTracking()
-            SearchHistoryService.shared.clearAll()
-            FavoritesService.shared.reset()
-            // Clear the Dashboard "Jump back in" rail so the next person on a
-            // shared device can't see what the previous user browsed.
-            RecentlyViewedService.shared.clear()
-
-            // Spotlight + QueryCache are actor-isolated; fire-and-forget detached tasks.
-            Task.detached {
-                await SpotlightService.shared.removeAllItems()
-                await QueryCache.shared.clearAll()
-            }
+            purgeLocalUserState()
 
             // Keychain wipe is last so any service that needs to read its own
             // tokens during cleanup (e.g. session tracking timestamps) has a chance.
@@ -220,6 +224,22 @@ final class AuthService {
         }
 
         try await supabase.auth.signOut()
+    }
+
+    /// Clears what the signed-in user left on the device: in-memory favorites
+    /// and the guest favorites store, search history, the Dashboard "Jump back
+    /// in" rail (so the next person on a shared device can't see what the
+    /// previous user browsed), Spotlight and the query cache. Called from
+    /// signOut() and from the `.signedOut` listener event (IOS-DD-SAVED-20).
+    private func purgeLocalUserState() {
+        FavoritesService.shared.reset()
+        RecentlyViewedService.shared.clear()
+        SearchHistoryService.shared.clearAll()
+        // Spotlight + QueryCache are actor-isolated; fire-and-forget detached tasks.
+        Task.detached {
+            await SpotlightService.shared.removeAllItems()
+            await QueryCache.shared.clearAll()
+        }
     }
 
     func resetPassword(email: String) async throws {

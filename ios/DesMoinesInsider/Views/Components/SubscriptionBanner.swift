@@ -192,9 +192,22 @@ struct FavoritesLimitBanner: View {
     @State private var showSubscription = false
 
     private var maxFavorites: Int { SubscriptionTier.free.maxFavorites }
-    private var isAtLimit: Bool { currentCount >= maxFavorites }
-    private var isNearLimit: Bool { currentCount >= maxFavorites - 10 }
-    private var progress: Double { min(Double(currentCount) / Double(maxFavorites), 1.0) }
+    private var isAtLimit: Bool { Self.isAtLimit(count: currentCount, max: maxFavorites) }
+    private var isNearLimit: Bool { Self.isNearLimit(count: currentCount, max: maxFavorites) }
+    private var progress: Double {
+        guard maxFavorites > 0 else { return 0 }
+        return min(Double(currentCount) / Double(maxFavorites), 1.0)
+    }
+
+    /// One slot left or none. `max - 10` was left over from a larger cap and,
+    /// with a cap of 3, made every count "near" (IOS-DD-SAVED-16).
+    static func isNearLimit(count: Int, max: Int) -> Bool {
+        max > 0 && count >= max - 1
+    }
+
+    static func isAtLimit(count: Int, max: Int) -> Bool {
+        max > 0 && count >= max
+    }
 
     var body: some View {
         // Only show for free users who have saved items

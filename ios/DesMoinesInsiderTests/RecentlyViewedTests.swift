@@ -56,4 +56,17 @@ final class RecentlyViewedTests: XCTestCase {
         XCTAssertEqual(event.systemImage, "calendar")
         XCTAssertEqual(restaurant.systemImage, "fork.knife")
     }
+
+    /// IOS-DD-SAVED-26: the Dashboard rail labels each card with its type.
+    func testTypeLabelNamesEachKind() {
+        func item(_ type: String) -> RecentlyViewedService.RecentItem {
+            RecentlyViewedService.RecentItem(type: type, itemId: "1", title: "x", imageUrl: nil)
+        }
+        XCTAssertEqual(item("event").typeLabel, "Event")
+        XCTAssertEqual(item("restaurant").typeLabel, "Restaurant")
+        XCTAssertEqual(item("attraction").typeLabel, "Place")
+        XCTAssertEqual(item("article").typeLabel, "Guide")
+        XCTAssertEqual(item("hotel").typeLabel, "Hotel")
+        XCTAssertEqual(item("playground").typeLabel, "Item")
+    }
 }

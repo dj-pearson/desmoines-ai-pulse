@@ -176,6 +176,35 @@ struct Event: Identifiable, Codable, Hashable {
 
     var isHappeningNow: Bool { happeningNow() }
 
+    /// Whether the event has ended (IOS-DD-SAVED-10). The Saved tab filed
+    /// anything that had started as "Past event", including a show on right
+    /// now, an untimed event today and a festival in its second day.
+    ///
+    /// Timed: over at end_date, else three hours after the start (the web's
+    /// rule, as in `happeningNow`). Untimed: over at the start of the Des
+    /// Moines day after its last day. An end_date at exactly 00:00:00 Central
+    /// is a date with no time, so the whole of that day counts. No date means
+    /// not over.
+    func isOver(at now: Date, calendar: Calendar = DesMoinesTime.calendar) -> Bool {
+        guard let start = parsedDate else { return false }
+        func dayAfter(_ date: Date) -> Date {
+            calendar.date(byAdding: .day, value: 1, to: calendar.startOfDay(for: date)) ?? date
+        }
+        var end: Date
+        if hasSpecificTime {
+            end = parsedEndDate ?? start.addingTimeInterval(3 * 3600)
+        } else {
+            end = dayAfter(parsedEndDate ?? start)
+        }
+        if let endDate = parsedEndDate {
+            let parts = calendar.dateComponents([.hour, .minute, .second], from: endDate)
+            if parts.hour == 0, parts.minute == 0, parts.second == 0 {
+                end = max(end, dayAfter(endDate))
+            }
+        }
+        return end <= now
+    }
+
     var urgencyLabel: String? {
         urgency(at: Date(), calendar: DesMoinesTime.calendar)
     }
