@@ -16,57 +16,69 @@ struct FavoritesView: View {
     @State private var showClearPastConfirm = false
     @Environment(\.horizontalSizeClass) private var sizeClass
 
+    // body is split into three parts because as one expression it exceeded
+    // the type checker's time limit in Xcode 26 (iOS CI, FavoritesView:19).
     var body: some View {
         NavigationStack(path: $navigationPath) {
-            Group {
-                if !viewModel.isAuthenticated {
-                    signInPrompt
-                } else if viewModel.isInitialLoading {
-                    loadingView
-                } else if !viewModel.hasAnyFavorites && !NetworkMonitor.shared.isConnected {
-                    ScrollView {
-                        EmptyStateView(
-                            icon: "wifi.slash",
-                            title: "You're Offline",
-                            message: "Your saved items couldn't be loaded. Check your internet connection and try again.",
-                            actionTitle: "Retry",
-                            action: { Task { await viewModel.refresh() } }
-                        )
-                        .padding(.top, 60)
-                    }
-                } else if !viewModel.hasAnyFavorites && viewModel.loadError != nil {
-                    // A failed load used to fall through to "No Saved Items",
-                    // telling people their saves were gone (IOS-DD-SAVED-12).
-                    ScrollView {
-                        EmptyStateView(
-                            icon: "exclamationmark.triangle",
-                            title: "Couldn't load your saved items",
-                            message: "Your saves are safe. Check your connection and try again.",
-                            actionTitle: "Try Again",
-                            action: { Task { await viewModel.refresh() } }
-                        )
-                        .padding(.top, 60)
-                    }
-                } else if !viewModel.hasAnyFavorites {
-                    ScrollView {
-                        VStack(spacing: 24) {
-                            EmptyStateView(
-                                icon: "heart",
-                                title: "No Saved Items",
-                                message: "Events, restaurants, places and guides you save will appear here.",
-                                actionTitle: "Find something this weekend",
-                                action: { DeepLinkHandler.shared.open(.tab(.home)) }
-                            )
+            lifecycle(navigationChrome(stateContent))
+        }
+    }
 
-                            SubscriptionBanner(style: .compact)
-                                .padding(.horizontal, 24)
-                        }
-                        .padding(.top, 40)
-                    }
-                } else {
-                    savedContent
-                }
+    /// Which screen the tab is showing: sign-in, loading, offline, error,
+    /// empty, or the saved plan.
+    @ViewBuilder
+    private var stateContent: some View {
+        if !viewModel.isAuthenticated {
+            signInPrompt
+        } else if viewModel.isInitialLoading {
+            loadingView
+        } else if !viewModel.hasAnyFavorites && !NetworkMonitor.shared.isConnected {
+            ScrollView {
+                EmptyStateView(
+                    icon: "wifi.slash",
+                    title: "You're Offline",
+                    message: "Your saved items couldn't be loaded. Check your internet connection and try again.",
+                    actionTitle: "Retry",
+                    action: { Task { await viewModel.refresh() } }
+                )
+                .padding(.top, 60)
             }
+        } else if !viewModel.hasAnyFavorites && viewModel.loadError != nil {
+            // A failed load used to fall through to "No Saved Items",
+            // telling people their saves were gone (IOS-DD-SAVED-12).
+            ScrollView {
+                EmptyStateView(
+                    icon: "exclamationmark.triangle",
+                    title: "Couldn't load your saved items",
+                    message: "Your saves are safe. Check your connection and try again.",
+                    actionTitle: "Try Again",
+                    action: { Task { await viewModel.refresh() } }
+                )
+                .padding(.top, 60)
+            }
+        } else if !viewModel.hasAnyFavorites {
+            ScrollView {
+                VStack(spacing: 24) {
+                    EmptyStateView(
+                        icon: "heart",
+                        title: "No Saved Items",
+                        message: "Events, restaurants, places and guides you save will appear here.",
+                        actionTitle: "Find something this weekend",
+                        action: { DeepLinkHandler.shared.open(.tab(.home)) }
+                    )
+
+                    SubscriptionBanner(style: .compact)
+                        .padding(.horizontal, 24)
+                }
+                .padding(.top, 40)
+            }
+        } else {
+            savedContent
+        }
+    }
+
+    private func navigationChrome<Content: View>(_ content: Content) -> some View {
+        content
             .background(Color(.systemGroupedBackground))
             .navigationTitle("Saved")
             .toolbar {
@@ -97,6 +109,10 @@ struct FavoritesView: View {
             .navigationDestination(for: Article.self) { article in
                 ArticleDetailView(article: article)
             }
+    }
+
+    private func lifecycle<Content: View>(_ content: Content) -> some View {
+        content
             // Load once; after that only reconcile, so a pop or a tab switch no
             // longer swaps the list for a full-screen spinner (IOS-DD-SAVED-13).
             .task {
@@ -144,7 +160,6 @@ struct FavoritesView: View {
                 }
             }
             .animation(.spring(response: 0.35, dampingFraction: 0.8), value: undoState != nil)
-        }
     }
 
     private var pastCount: Int {
