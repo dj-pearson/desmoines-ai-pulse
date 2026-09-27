@@ -211,16 +211,26 @@ struct ContentCard: View {
             HStack(spacing: 6) {
                 ForEach(shown) { PillView(pill: $0) }
                 Spacer(minLength: 0)
+                // White bold text on a filled capsule, as EventDetailHeader
+                // does: orange caption text on white was about 2.2:1
+                // (IOS-DD-EVENTS-25).
                 if let urgency = data.urgency {
                     Label(urgency, systemImage: "clock.badge.exclamationmark")
                         .font(.caption.bold())
-                        .foregroundStyle(.orange)
+                        .foregroundStyle(.white)
                         .lineLimit(1)
+                        .padding(.horizontal, 7)
+                        .padding(.vertical, 2)
+                        .background(PremiumTokens.urgencyFill, in: Capsule())
                 }
                 if data.isFeatured {
                     Label("Featured", systemImage: "star.fill")
-                        .font(.caption2.weight(.semibold))
-                        .foregroundStyle(.orange)
+                        .font(.caption2.bold())
+                        .foregroundStyle(.white)
+                        .lineLimit(1)
+                        .padding(.horizontal, 7)
+                        .padding(.vertical, 2)
+                        .background(PremiumTokens.urgencyFill, in: Capsule())
                 }
             }
         }
@@ -244,6 +254,23 @@ struct ContentCard: View {
                 image(width: 260, height: 150, corner: 14, scrim: true)
                     .glassCard(cornerRadius: 14, material: .regularMaterial, elevation: PremiumTokens.elevation4)
                 favoriteButton(style: .overlay).padding(10)
+            }
+            // "Happening now" / "Today" on the rail cards too, so the Tonight
+            // rail says which shows are already on (IOS-DD-EVENTS-18). Bottom
+            // leading: the top-leading corner already holds the category,
+            // sponsored and award badges.
+            .overlay(alignment: .bottomLeading) {
+                if let urgency = data.urgency {
+                    Text(urgency)
+                        .font(.caption2.bold())
+                        .foregroundStyle(.white)
+                        .lineLimit(1)
+                        .padding(.horizontal, 8)
+                        .padding(.vertical, 3)
+                        .background(PremiumTokens.urgencyFill, in: Capsule())
+                        .padding(10)
+                        .accessibilityHidden(true)
+                }
             }
 
             Text(data.title)
@@ -548,13 +575,13 @@ private struct CardDateBadge: View {
 
     var body: some View {
         VStack(spacing: 1) {
-            Text(date.formatted(.dateTime.weekday(.short)).uppercased())
+            Text(date.formatted(DesMoinesTime.style(.dateTime.weekday(.short))).uppercased())
                 .font(.system(size: labelSize, weight: .bold))
                 .foregroundStyle(Color.accentColor)
-            Text(date.formatted(.dateTime.day()))
+            Text(date.formatted(DesMoinesTime.style(.dateTime.day())))
                 .font(.system(size: daySize, weight: .bold))
                 .foregroundStyle(.primary)
-            Text(date.formatted(.dateTime.month(.abbreviated)).uppercased())
+            Text(date.formatted(DesMoinesTime.style(.dateTime.month(.abbreviated))).uppercased())
                 .font(.system(size: labelSize, weight: .medium))
                 .foregroundStyle(.secondary)
         }
@@ -649,20 +676,31 @@ extension Event {
         )
         data.isSponsored = isActivelySponsored
         if let date = parsedDate {
-            data.metaPrimary = CardMetaLine(
-                icon: "clock",
-                text: date.formatted(.dateTime.weekday(.abbreviated).month(.abbreviated).day().hour().minute())
-            )
+            data.metaPrimary = CardMetaLine(icon: "clock", text: cardDateText(date))
         }
         data.metaSecondary = CardMetaLine(icon: "mappin", text: displayLocation)
         return data
+    }
+
+    /// The card's date line in Des Moines time, with " - Time TBA" instead of
+    /// a placeholder time (IOS-DD-EVENTS-05).
+    private func cardDateText(_ date: Date) -> String {
+        let day = DesMoinesTime.style(.dateTime.weekday(.abbreviated).month(.abbreviated).day())
+        guard hasSpecificTime else { return date.formatted(day) + " - Time TBA" }
+        return date.formatted(DesMoinesTime.style(.dateTime.weekday(.abbreviated).month(.abbreviated).day().hour().minute()))
+            + DesMoinesTime.zoneSuffix(at: date)
     }
 
     /// Full label for the standalone (standard) card.
     private var eventCardAccessibilityLabel: String {
         var parts: [String] = [title]
         if let date = parsedDate {
-            parts.append(date.formatted(.dateTime.weekday(.wide).month(.wide).day().hour().minute()))
+            if hasSpecificTime {
+                parts.append(date.formatted(DesMoinesTime.style(.dateTime.weekday(.wide).month(.wide).day().hour().minute()))
+                    + (DesMoinesTime.deviceDiffersFromCentral(at: date) ? " Central time" : ""))
+            } else {
+                parts.append(date.formatted(DesMoinesTime.style(.dateTime.weekday(.wide).month(.wide).day())) + ", time to be announced")
+            }
         }
         parts.append(displayLocation)
         if isFree { parts.append("Free event") }

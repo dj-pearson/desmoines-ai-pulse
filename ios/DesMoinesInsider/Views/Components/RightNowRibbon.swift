@@ -12,7 +12,11 @@ struct RightNowRibbon: View {
     @State private var weather = WeatherService.shared
     @State private var location = LocationService.shared
     @State private var template: Template?
-    @State private var isLoading = false
+    /// Bumped when the app returns to the foreground so the copy is chosen
+    /// again; it used to be picked only when the latitude changed, so "Lunch
+    /// spots open right now" could still be up at 9pm (IOS-DD-EVENTS-24).
+    @State private var refreshToken = 0
+    @Environment(\.scenePhase) private var scenePhase
 
     /// Caller hooks: tapping the ribbon opens DiscoverView with these.
     let onTap: (DiscoverFilterContext, DiscoverMode) -> Void
@@ -58,18 +62,33 @@ struct RightNowRibbon: View {
                 EmptyView()
             }
         }
-        .task(id: location.userLocation?.coordinate.latitude ?? 0) {
+        // Re-run when the location bucket, the hour or the foreground token
+        // changes. task(id:) cancels the previous run, which is the only
+        // de-duplication needed: the old `guard !isLoading` made the re-fire
+        // that carried the first location fix exit immediately while the
+        // cancelled first run returned nothing, so the ribbon stayed hidden.
+        .task(id: RibbonKey(
+            latBucket: Int(((location.userLocation?.coordinate.latitude) ?? 0) * 10),
+            hour: Calendar.current.component(.hour, from: Date()),
+            token: refreshToken
+        )) {
             await refresh()
         }
+        .onChange(of: scenePhase) { _, phase in
+            if phase == .active { refreshToken &+= 1 }
+        }
+    }
+
+    /// What the ribbon's content depends on.
+    private struct RibbonKey: Hashable {
+        let latBucket: Int
+        let hour: Int
+        let token: Int
     }
 
     // MARK: - Refresh
 
     private func refresh() async {
-        guard !isLoading else { return }
-        isLoading = true
-        defer { isLoading = false }
-
         // The in-app location toggle gates the THIRD-PARTY call, on top of the OS
         // permission checked below (IOS-AUDIT-SEC-010 AC3). This is the only
         // request that leaves coordinates with a host that is not ours -
@@ -105,6 +124,7 @@ struct RightNowRibbon: View {
         }
 
         guard let snap = await weather.refresh(for: loc) else { return }
+        guard !Task.isCancelled else { return }
 
         // Pick a template based on the weather + time of day.
         let now = Date()
@@ -148,8 +168,9 @@ extension RightNowRibbon {
             let temp = snapshot.temperatureF
             let cond = snapshot.conditions
 
-            // Hot + clear → patios
-            if temp >= 70, cond == .clear {
+            // Hot + clear → patios, in daylight only: "sunny" at 11pm is
+            // wrong on its face (IOS-DD-EVENTS-24).
+            if temp >= 70, cond == .clear, (7..<19).contains(hour) {
                 return patios()
             }
             // Cold + wet → cozy
@@ -221,8 +242,10 @@ extension RightNowRibbon {
 
         private static func liveMusic() -> Template {
             var ctx = DiscoverFilterContext()
-            ctx.eventCategory = nil // Music category resolved server-side via search
-            ctx.datePreset = .today
+            // The headline promises music tonight; this opened every event
+            // today (IOS-DD-EVENTS-24).
+            ctx.eventCategory = .music
+            ctx.datePreset = .tonight
             return Template(
                 id: "live_music",
                 systemIcon: "music.note",

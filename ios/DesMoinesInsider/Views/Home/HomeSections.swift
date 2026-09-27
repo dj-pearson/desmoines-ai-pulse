@@ -16,6 +16,8 @@ import SwiftUI
 /// `fromBlog` is intentionally omitted from `allCases` until the native
 /// Articles hub lands (IOS-PARITY-002); adding it there will surface the rail.
 enum HomeRail: String, CaseIterable, Identifiable {
+    /// What's on tonight (IOS-DD-EVENTS-18). First, and hidden when empty.
+    case tonight
     case forYou
     case featured
     case popularRestaurants
@@ -152,6 +154,7 @@ struct HomeRailsView: View {
     let restaurantsVM: RestaurantsViewModel
     let attractionsVM: AttractionsViewModel
     let weekendVM: EventsViewModel
+    let tonightVM: EventsViewModel
     let onSeeAll: (HomeRail) -> Void
     var order: [HomeRail] = HomeRail.allCases
 
@@ -169,9 +172,26 @@ struct HomeRailsView: View {
         }
     }
 
+    /// "Tonight" from 3pm to 3am, "Today" before that, so the morning rail
+    /// does not promise an evening.
+    nonisolated static func tonightTitle(hour: Int) -> String {
+        hour >= 15 || hour < 3 ? "Tonight" : "Today"
+    }
+
     @ViewBuilder
     private func railView(_ rail: HomeRail) -> some View {
         switch rail {
+        case .tonight:
+            HomeEventRail(
+                title: Self.tonightTitle(hour: DesMoinesTime.calendar.component(.hour, from: Date())),
+                systemImage: "moon.stars.fill",
+                tint: .indigo,
+                events: tonightVM.events,
+                isLoading: tonightVM.isLoading || !tonightVM.hasLoadedOnce,
+                hideWhenEmpty: true,
+                seeAll: { onSeeAll(.tonight) }
+            )
+
         case .forYou:
             // ForYouRail renders its own header + refresh affordance.
             ForYouRail()
@@ -182,7 +202,10 @@ struct HomeRailsView: View {
                 systemImage: "star.fill",
                 tint: .orange,
                 events: eventsVM.featuredEvents,
-                isLoading: eventsVM.isLoading,
+                isLoading: eventsVM.isLoading || !eventsVM.hasLoadedOnce,
+                // Featured is often empty since 20260902000004 cleared the
+                // random is_featured flags; an empty titled rail is noise.
+                hideWhenEmpty: true,
                 seeAll: { onSeeAll(.featured) }
             )
 
@@ -206,7 +229,10 @@ struct HomeRailsView: View {
                 systemImage: "calendar",
                 tint: .blue,
                 events: weekendVM.events,
-                isLoading: weekendVM.isLoading,
+                // Not loaded yet reads as loading, so the rail no longer flashes
+                // "Nothing here right now" before its first fetch
+                // (IOS-DD-EVENTS-12).
+                isLoading: weekendVM.isLoading || !weekendVM.hasLoadedOnce,
                 seeAll: { onSeeAll(.thisWeekend) }
             )
         }
@@ -224,9 +250,15 @@ struct HomeRailHeader: View {
 
     var body: some View {
         HStack {
-            Label(title, systemImage: systemImage)
-                .font(.headline)
-                .foregroundStyle(tint)
+            // The tint colours the icon only; orange or purple headline text on
+            // white failed contrast (IOS-DD-EVENTS-25).
+            Label {
+                Text(title).foregroundStyle(.primary)
+            } icon: {
+                Image(systemName: systemImage).foregroundStyle(tint)
+            }
+            .font(.headline)
+            .accessibilityAddTraits(.isHeader)
             Spacer()
             if let seeAll {
                 Button {
@@ -255,6 +287,9 @@ struct HomeEventRail: View {
     var tint: Color
     let events: [Event]
     let isLoading: Bool
+    /// Render nothing, header included, when loaded and empty
+    /// (IOS-DD-EVENTS-12).
+    var hideWhenEmpty: Bool = false
     let seeAll: (() -> Void)?
 
     /// Sponsored listings surfaced to the front of the rail (IOS-ADS-011);
@@ -264,6 +299,14 @@ struct HomeEventRail: View {
     }
 
     var body: some View {
+        if hideWhenEmpty && !isLoading && events.isEmpty {
+            EmptyView()
+        } else {
+            content
+        }
+    }
+
+    private var content: some View {
         VStack(alignment: .leading, spacing: 12) {
             HomeRailHeader(title: title, systemImage: systemImage, tint: tint,
                            seeAll: events.isEmpty ? nil : seeAll)
@@ -302,9 +345,11 @@ struct HomeEventRail: View {
     }
 
     private func railAccessibilityLabel(_ event: Event) -> String {
-        event.isActivelySponsored
-            ? "Sponsored. \(event.featuredCardAccessibilityLabel)"
-            : event.featuredCardAccessibilityLabel
+        // The card's urgency pill is hidden from VoiceOver, so its words
+        // ("Happening now", "Today") go in the label (IOS-DD-EVENTS-18).
+        var label = event.featuredCardAccessibilityLabel
+        if let urgency = event.urgencyLabel { label = "\(urgency). " + label }
+        return event.isActivelySponsored ? "Sponsored. " + label : label
     }
 }
 

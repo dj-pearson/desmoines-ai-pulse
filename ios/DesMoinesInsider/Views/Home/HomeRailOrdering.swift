@@ -99,14 +99,19 @@ enum HomeRailOrdering {
 
     private static func contentType(of rail: HomeRail) -> ContentType? {
         switch rail {
-        case .forYou: return nil
+        case .tonight, .forYou: return nil
         case .featured, .thisWeekend: return .event
         case .popularRestaurants: return .restaurant
         case .trendingAttractions: return .attraction
         }
     }
 
+    /// Tonight always leads (IOS-DD-EVENTS-18): "what's on tonight" is the
+    /// question Home answers first, whatever else the user favours.
+    static let tonightRank = -20
+
     private static func rank(_ rail: HomeRail, typeRank: [ContentType: Int], forYouRank: Int) -> Int {
+        if rail == .tonight { return tonightRank }
         guard let type = contentType(of: rail) else { return forYouRank }
         return typeRank[type] ?? 0
     }

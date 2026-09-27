@@ -47,6 +47,13 @@ final class DeepLinkHandler {
         return false
     }
 
+    /// In-app routing through the same path a link takes, e.g. Home's
+    /// "Popular Restaurants > See all" switching to the Dining tab
+    /// (IOS-DD-EVENTS-11). MainTabView observes pendingDestination.
+    func open(_ destination: Destination) {
+        pendingDestination = destination
+    }
+
     func consumeDestination() -> Destination? {
         defer { pendingDestination = nil }
         return pendingDestination

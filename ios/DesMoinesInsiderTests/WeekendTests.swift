@@ -62,4 +62,61 @@ final class WeekendTests: XCTestCase {
     func testDayTitlesAndOrder() {
         XCTAssertEqual(WeekendWindow.Day.allCases.map(\.title), ["Friday", "Saturday", "Sunday"])
     }
+
+    // MARK: - DateFilterPreset.thisWeekend shares the window (IOS-DD-EVENTS-04)
+
+    private var centralCalendar: Calendar { DesMoinesTime.calendar }
+
+    private func ct(_ year: Int, _ month: Int, _ day: Int, hour: Int = 0) -> Date {
+        var comps = DateComponents()
+        comps.year = year; comps.month = month; comps.day = day; comps.hour = hour
+        return centralCalendar.date(from: comps)!
+    }
+
+    private func assertWeekend(now: Date, file: StaticString = #filePath, line: UInt = #line) {
+        let range = DateFilterPreset.thisWeekend.range(now: now, calendar: centralCalendar)
+        XCTAssertEqual(range.start, ct(2026, 9, 25), "Friday 00:00 CT", file: file, line: line)
+        XCTAssertEqual(range.end, ct(2026, 9, 28), "Monday 00:00 CT", file: file, line: line)
+    }
+
+    func testThisWeekendOnSundayIsTheCurrentWeekendNotNextSaturday() {
+        assertWeekend(now: ct(2026, 9, 27, hour: 10))
+    }
+
+    func testThisWeekendMidweekIsTheComingFridayToMonday() {
+        assertWeekend(now: ct(2026, 9, 23, hour: 12))
+    }
+
+    func testThisWeekendOnFridayEveningIncludesFriday() {
+        assertWeekend(now: ct(2026, 9, 25, hour: 20))
+    }
+
+    func testThisWeekendOnSaturday() {
+        assertWeekend(now: ct(2026, 9, 26, hour: 12))
+    }
+
+    // MARK: - DateFilterPreset.tonight (IOS-DD-EVENTS-18)
+
+    func testTonightAtEightPMStartsThreeHoursBackAndRunsTo3AM() {
+        let range = DateFilterPreset.tonight.range(now: ct(2026, 9, 27, hour: 20), calendar: centralCalendar)
+        XCTAssertEqual(range.start, ct(2026, 9, 27, hour: 17))
+        XCTAssertEqual(range.end, ct(2026, 9, 28, hour: 3))
+    }
+
+    func testTonightInTheMorningStartsThreeHoursBack() {
+        let range = DateFilterPreset.tonight.range(now: ct(2026, 9, 27, hour: 9), calendar: centralCalendar)
+        XCTAssertEqual(range.start, ct(2026, 9, 27, hour: 6))
+        XCTAssertEqual(range.end, ct(2026, 9, 28, hour: 3))
+    }
+
+    func testTonightJustAfterMidnightDoesNotReachIntoYesterday() {
+        let range = DateFilterPreset.tonight.range(now: ct(2026, 9, 27, hour: 1), calendar: centralCalendar)
+        XCTAssertEqual(range.start, ct(2026, 9, 27))
+    }
+
+    func testTonightTitleFollowsTheClock() {
+        XCTAssertEqual(HomeRailsView.tonightTitle(hour: 9), "Today")
+        XCTAssertEqual(HomeRailsView.tonightTitle(hour: 18), "Tonight")
+        XCTAssertEqual(HomeRailsView.tonightTitle(hour: 1), "Tonight")
+    }
 }

@@ -82,14 +82,17 @@ final class ForYouService {
                 swipeCount = response.count ?? 0
             }
 
-            if swipeCount >= 5 {
-                source = .forYou
+            // Saves are a signal too: three saved events is enough to
+            // personalize without five swipes first (IOS-DD-EVENTS-20).
+            let savedCount = FavoritesService.shared.favoriteEventIds.count
+            var personalized: [Recommendation] = []
+            if swipeCount >= 5 || savedCount >= 3 {
                 struct Params: Encodable {
                     let p_user_lat: Double?
                     let p_user_lon: Double?
                     let p_limit: Int
                 }
-                let rows: [Recommendation] = try await client
+                let rows: [Recommendation]? = try? await client
                     .rpc("get_personalized_recommendations", params: Params(
                         p_user_lat: nil,
                         p_user_lon: nil,
@@ -97,7 +100,14 @@ final class ForYouService {
                     ))
                     .execute()
                     .value
-                recommendations = rows
+                personalized = rows ?? []
+            }
+
+            // An empty personalized answer falls back to trending rather than
+            // leaving the rail blank.
+            if !personalized.isEmpty {
+                source = .forYou
+                recommendations = personalized
             } else {
                 source = .trending
                 struct TrendingParams: Encodable { let p_limit: Int }

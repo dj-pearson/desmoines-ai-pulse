@@ -79,8 +79,11 @@ struct EventDetailActions: View {
                 }
             }
 
-            // Remind Me — uses icon + colour + text for state (no colour-only reliance)
-            if event.parsedDate != nil {
+            // Remind Me — uses icon + colour + text for state (no colour-only reliance).
+            // Hidden once the event has started and is not still on: there is
+            // nothing left to remind about (IOS-DD-EVENTS-14). A set reminder
+            // stays visible so it can be cancelled.
+            if let start = event.parsedDate, isReminderSet || start >= Date() || event.isHappeningNow {
                 Button {
                     UIImpactFeedbackGenerator(style: .medium).impactOccurred()
                     onToggleReminder()
@@ -106,7 +109,9 @@ struct EventDetailActions: View {
                 .accessibilityHint(
                     isReminderSet
                         ? "Removes your notification"
-                        : "Sends a notification 1 hour before the event"
+                        : (event.hasSpecificTime
+                            ? "Sends a notification before the event starts"
+                            : "Sends a notification that morning")
                 )
                 .accessibilitySelected(isReminderSet)
             }

@@ -59,7 +59,9 @@ final class ReviewsViewModel {
 
     private func loadReviews() async {
         do {
-            reviews = try await service.fetchRatings(contentType: contentType, contentId: contentId)
+            reviews = try await service.fetchRatings(
+                contentType: contentType, contentId: contentId, currentUserId: currentUserId
+            )
         } catch {
             errorMessage = error.localizedDescription
         }

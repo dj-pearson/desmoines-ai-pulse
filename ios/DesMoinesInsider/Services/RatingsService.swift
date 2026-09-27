@@ -21,15 +21,24 @@ actor RatingsService {
 
     // MARK: - Read
 
-    /// All reviews for a piece of content, newest first, with author profile.
-    func fetchRatings(contentType: String, contentId: String) async throws -> [UserRating] {
+    /// Reviews for a piece of content, newest first, with author profile.
+    ///
+    /// Approved reviews only, plus the signed-in user's own in any state so
+    /// they can see (and edit) what they wrote while it waits for moderation
+    /// (IOS-DD-EVENTS-16, WEB-AUTO-009). The web filters the same way.
+    func fetchRatings(contentType: String, contentId: String, currentUserId: String? = nil) async throws -> [UserRating] {
         try await withRetry { [self] in
             let client = try db()
+            var visibility = "moderation_status.eq.approved"
+            if let currentUserId, UUID(uuidString: currentUserId) != nil {
+                visibility += ",user_id.eq.\(currentUserId)"
+            }
             let ratings: [UserRating] = try await client
                 .from("user_ratings")
                 .select("*, profiles:user_id (first_name, last_name)")
                 .eq("content_type", value: contentType)
                 .eq("content_id", value: contentId)
+                .or(visibility)
                 .order("created_at", ascending: false)
                 .execute()
                 .value
@@ -52,6 +61,17 @@ actor RatingsService {
 
     // MARK: - Write (auth required)
 
+    /// The moderation state a new or edited review is written with, as the web
+    /// sends it (src/hooks/useRatings.ts): a review with text waits for the
+    /// moderate-content job; a bare star rating is approved. The column
+    /// defaults to 'approved', so leaving it out published every review
+    /// immediately (IOS-DD-EVENTS-16). The server trigger in
+    /// 20261007000001 enforces the same rule whatever a client sends.
+    static func moderationStatus(for reviewText: String?) -> String {
+        let text = reviewText?.trimmingCharacters(in: .whitespacesAndNewlines) ?? ""
+        return text.isEmpty ? "approved" : "pending"
+    }
+
     /// Insert or update the user's review (upsert on the unique key, matching
     /// the web onConflict "user_id,content_type,content_id").
     func submitRating(contentType: String, contentId: String, userId: String, rating: Int, reviewText: String?) async throws {
@@ -62,13 +82,15 @@ actor RatingsService {
             let content_id: String
             let rating: String
             let review_text: String?
+            let moderation_status: String
         }
         let row = Row(
             user_id: userId,
             content_type: contentType,
             content_id: contentId,
             rating: String(max(1, min(5, rating))),
-            review_text: reviewText?.isEmpty == true ? nil : reviewText
+            review_text: reviewText?.isEmpty == true ? nil : reviewText,
+            moderation_status: Self.moderationStatus(for: reviewText)
         )
         try await client
             .from("user_ratings")

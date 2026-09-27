@@ -47,12 +47,17 @@ actor EventsService {
 
     private func _fetchEvents(query: EventsQuery) async throws -> EventsResponse {
         let client = try db()
-        let today = DateParser.toISO( Calendar.current.startOfDay(for: Date()))
 
+        // Visibility first, then the filters (IOS-DD-EVENTS-02). The old floor
+        // was `date >= local start of today`, which listed events that ended
+        // this morning and hid a festival in its second day; notOverFilter is
+        // the web's rule and goes into the or-groups below.
         var request = client
             .from("events")
             .select("*", head: false, count: .exact)
-            .gte("date", value: today)
+            .neq("is_merged", value: true)
+            .neq("is_hidden", value: true)
+            .is("archived_at", value: nil)
 
         // Full-text search
         if let search = query.searchText, !search.isEmpty {
@@ -79,21 +84,31 @@ actor EventsService {
             request = request.eq("is_featured", value: true)
         }
 
-        // City filter (partial match on city or location via OR)
+        // Every or-group goes out as ONE `or=` param. Two separate `or=` params
+        // (cities, then free) is what this used to send; combineOrGroups nests
+        // them the way the web does (eventsHubQuery.ts).
+        var orGroups = [Self.notOverFilter(now: Date())]
+
+        // Area filter (IOS-DD-EVENTS-07): the web's exact city / bbox clauses.
+        // A value that is not a known area (an older saved filter) keeps the old
+        // substring match, quoted so a comma or paren cannot break the tree.
         if let cities = query.cities, !cities.isEmpty {
-            let orClauses = cities.flatMap { city -> [String] in
-                let escaped = city.replacingOccurrences(of: "%", with: "\\%")
-                return [
-                    "city.ilike.%\(escaped)%",
-                    "location.ilike.%\(escaped)%",
-                ]
+            let clauses = cities.sorted().map { value -> String in
+                if let area = LocationArea(rawValue: value) { return area.filterClause }
+                let pattern = Self.ilikeContains(value)
+                return "city.ilike.\(pattern),location.ilike.\(pattern)"
             }
-            request = request.or(orClauses.joined(separator: ","))
+            orGroups.append(clauses.joined(separator: ","))
         }
 
-        // Free events only (matches null/free/$0 price, same as web app)
+        // Free events only - the web's definition (IOS-DD-EVENTS-06). A null
+        // price is "not listed", not free.
         if query.freeOnly {
-            request = request.or("price.is.null,price.ilike.%free%,price.ilike.%$0%")
+            orGroups.append(Self.freePriceFilter)
+        }
+
+        if let combined = Self.combineOrGroups(orGroups) {
+            request = request.or(combined)
         }
 
         // Sort + Paginate + Execute (transforms must come after all filters).
@@ -101,12 +116,16 @@ actor EventsService {
         // — Supabase's PostgrestTransformBuilder doesn't expose a stable public
         // type name to declare a `var sorted:` of, so we duplicate the
         // pagination/execute block per case.
+        //
+        // Every case ends on `id` so offset paging over equal dates is stable;
+        // without it a tie could land on two pages, or none (IOS-DD-EVENTS-03).
         let data: Data
         let count: Int?
         switch query.sortBy {
         case .soonest:
             let r = try await request
                 .order("date", ascending: true)
+                .order("id", ascending: true)
                 .range(from: query.offset, to: query.offset + query.limit - 1)
                 .execute()
             data = r.data; count = r.count
@@ -114,18 +133,24 @@ actor EventsService {
             let r = try await request
                 .order("is_featured", ascending: false)
                 .order("date", ascending: true)
+                .order("id", ascending: true)
                 .range(from: query.offset, to: query.offset + query.limit - 1)
                 .execute()
             data = r.data; count = r.count
         case .popularity:
+            // trending_score is what calculate_trending_scores maintains and what
+            // the web's For You rail ranks by; popularity_score is only
+            // recomputed by an UPDATE trigger (IOS-DD-EVENTS-22).
             let r = try await request
-                .order("popularity_score", ascending: false, nullsFirst: false)
+                .order("trending_score", ascending: false, nullsFirst: false)
                 .order("date", ascending: true)
+                .order("id", ascending: true)
                 .range(from: query.offset, to: query.offset + query.limit - 1)
                 .execute()
             data = r.data; count = r.count
         }
-        let events = try JSONDecoder().decode([Event].self, from: data)
+        // One bad row no longer fails the page (IOS-DD-EVENTS-23).
+        let events = try JSONDecoder().decode(LossyEventArray.self, from: data).events
         let total = count ?? events.count
 
         return EventsResponse(
@@ -133,6 +158,78 @@ actor EventsService {
             totalCount: total,
             hasMore: query.offset + query.limit < total
         )
+    }
+
+    // MARK: - Filter strings (IOS-DD-EVENTS-02 / 06 / 07)
+
+    /// A timed event that started this long ago may still be on.
+    static let recentStartGrace: TimeInterval = 2 * 3600
+
+    /// Mirrors src/lib/eventPrice.ts FREE_PRICE_FILTER byte for byte: says
+    /// "free" and names no non-zero dollar amount, or is exactly $0 / 0.
+    static let freePriceFilter = "and(price.ilike.%free%,price.not.match.[$] *[1-9]),price.eq.$0,price.eq.0"
+
+    /// "Not over yet", three arms, as notOverFilter in
+    /// src/components/events/eventsHubQuery.ts: started in the last two hours
+    /// or later; a run whose end_date is still ahead; or today's untimed
+    /// marker (19:31:58 Central), matched exactly so an untimed row stays
+    /// listed all day.
+    static func notOverFilter(now: Date) -> String {
+        let since = DateParser.toISO(now.addingTimeInterval(-recentStartGrace))
+        return "date.gte.\(since),end_date.gte.\(DateParser.toISO(now)),date.eq.\(DateParser.toISO(untimedMarkerToday(now: now)))"
+    }
+
+    /// Today's Central date at 19:31:58 Central, as an instant.
+    static func untimedMarkerToday(now: Date) -> Date {
+        let calendar = DesMoinesTime.calendar
+        var parts = calendar.dateComponents([.year, .month, .day], from: now)
+        parts.hour = 19
+        parts.minute = 31
+        parts.second = 58
+        return calendar.date(from: parts) ?? now
+    }
+
+    /// Several or-groups as one `or=` value. PostgREST reads a second `or=`
+    /// param as a second filter on the same key, which is not what anyone
+    /// meant; this is the web's `and(or(a),or(b))` nesting.
+    static func combineOrGroups(_ groups: [String]) -> String? {
+        switch groups.count {
+        case 0: return nil
+        case 1: return groups[0]
+        default: return "and(" + groups.map { "or(\($0))" }.joined(separator: ",") + ")"
+        }
+    }
+
+    /// A value for a PostgREST logic tree, double-quoted so a comma, paren or
+    /// dot in it cannot end the clause. Inside quotes PostgREST reads `\X` as
+    /// a literal X (QueryParams.hs pQuotedValue), so backslash and double
+    /// quote are escaped once here. For an eq-style comparison; an ilike
+    /// pattern goes through `ilikeContains`.
+    static func postgrestQuoted(_ s: String) -> String {
+        "\"" + quoteEscaped(s) + "\""
+    }
+
+    /// `"%<s>%"`: a quoted ilike "contains" pattern, the wildcards outside the
+    /// escaping. The text is LIKE-escaped first (`%` -> `\%`, `_` -> `\_`,
+    /// `\` -> `\\`) and then quote-escaped, because PostgREST strips one
+    /// level of backslashes from a quoted value before Postgres sees the
+    /// pattern. Escaping only once, as this first did, reached Postgres as a
+    /// bare `%` wildcard.
+    static func ilikeContains(_ s: String) -> String {
+        "\"%" + quoteEscaped(likeEscaped(s)) + "%\""
+    }
+
+    /// LIKE's own escaping, default escape character `\`.
+    private static func likeEscaped(_ s: String) -> String {
+        s.replacingOccurrences(of: "\\", with: "\\\\")
+            .replacingOccurrences(of: "%", with: "\\%")
+            .replacingOccurrences(of: "_", with: "\\_")
+    }
+
+    /// Escaping for a PostgREST double-quoted value.
+    private static func quoteEscaped(_ s: String) -> String {
+        s.replacingOccurrences(of: "\\", with: "\\\\")
+            .replacingOccurrences(of: "\"", with: "\\\"")
     }
 
     // MARK: - Fetch Events in a Date Range (IOS-PARITY-004)
@@ -149,6 +246,9 @@ actor EventsService {
             let events: [Event] = try await client
                 .from("events")
                 .select()
+                .neq("is_merged", value: true)
+                .neq("is_hidden", value: true)
+                .is("archived_at", value: nil)
                 .gte("date", value: startStr)
                 .lt("date", value: endStr)
                 .order("date", ascending: true)
@@ -164,10 +264,16 @@ actor EventsService {
     func fetchEvent(id: String) async throws -> Event {
         try await withRetry { [self] in
             let client = try db()
+            // Visible only (IOS-DD-EVENTS-02): a merged, hidden or archived row
+            // answers PGRST116, which the detail screen reports as "no longer
+            // available" instead of showing it as live.
             let event: Event = try await client
                 .from("events")
                 .select()
                 .eq("id", value: id)
+                .neq("is_merged", value: true)
+                .neq("is_hidden", value: true)
+                .is("archived_at", value: nil)
                 .single()
                 .execute()
                 .value
@@ -184,14 +290,16 @@ actor EventsService {
         guard !terms.isEmpty else { return [] }
         return try await withRetry { [self] in
             let client = try db()
-            let today = DateParser.toISO(Calendar.current.startOfDay(for: Date()))
-            let orClause = terms
-                .map { "category.ilike.%\($0.replacingOccurrences(of: "%", with: "\\%"))%" }
+            let categoryGroup = terms
+                .map { "category.ilike.\(Self.ilikeContains($0))" }
                 .joined(separator: ",")
+            let orClause = Self.combineOrGroups([Self.notOverFilter(now: Date()), categoryGroup]) ?? categoryGroup
             let events: [Event] = try await client
                 .from("events")
                 .select()
-                .gte("date", value: today)
+                .neq("is_merged", value: true)
+                .neq("is_hidden", value: true)
+                .is("archived_at", value: nil)
                 .or(orClause)
                 .order("date", ascending: true)
                 .limit(limit)
@@ -252,7 +360,6 @@ actor EventsService {
 
     private func fetchNearbyEventsViaTable(latitude: Double, longitude: Double, radiusMiles: Double, limit: Int) async throws -> [Event] {
         let client = try db()
-        let today = DateParser.toISO( Calendar.current.startOfDay(for: Date()))
 
         // IOS-AUDIT-PERF-027: the bounding box goes BEFORE the limit. Without it
         // this took the next `limit` events by date across all 1,246 rows and then
@@ -263,7 +370,10 @@ actor EventsService {
         let events: [Event] = try await client
             .from("events")
             .select()
-            .gte("date", value: today)
+            .neq("is_merged", value: true)
+            .neq("is_hidden", value: true)
+            .is("archived_at", value: nil)
+            .or(Self.notOverFilter(now: Date()))
             .gte("latitude", value: box.minLat)
             .lte("latitude", value: box.maxLat)
             .gte("longitude", value: box.minLng)
@@ -286,13 +396,15 @@ actor EventsService {
 
     func fetchFeaturedEvents(limit: Int = 10) async throws -> [Event] {
         let client = try db()
-        let today = DateParser.toISO( Calendar.current.startOfDay(for: Date()))
 
         let events: [Event] = try await client
             .from("events")
             .select()
             .eq("is_featured", value: true)
-            .gte("date", value: today)
+            .neq("is_merged", value: true)
+            .neq("is_hidden", value: true)
+            .is("archived_at", value: nil)
+            .or(Self.notOverFilter(now: Date()))
             .order("date", ascending: true)
             .limit(limit)
             .execute()
@@ -304,19 +416,41 @@ actor EventsService {
 
     func fetchRelatedEvents(eventId: String, category: String, limit: Int = 6) async throws -> [Event] {
         let client = try db()
-        let today = DateParser.toISO( Calendar.current.startOfDay(for: Date()))
 
         let events: [Event] = try await client
             .from("events")
             .select()
             .eq("category", value: category)
             .neq("id", value: eventId)
-            .gte("date", value: today)
+            .neq("is_merged", value: true)
+            .neq("is_hidden", value: true)
+            .is("archived_at", value: nil)
+            .or(Self.notOverFilter(now: Date()))
             .order("date", ascending: true)
             .limit(limit)
             .execute()
             .value
         return events
+    }
+
+    // MARK: - View counting (IOS-DD-EVENTS-22)
+
+    /// Ids already counted this app session.
+    private var recordedViewIds: Set<String> = []
+
+    /// Whether a view of `eventId` should be sent: true the first time per
+    /// session, false after. Split out so the dedupe is testable offline.
+    func shouldRecord(_ eventId: String) -> Bool {
+        recordedViewIds.insert(eventId).inserted
+    }
+
+    /// Counts one view of an event through the same RPC the web's
+    /// useViewTracking calls, so iOS traffic feeds view_count and the trending
+    /// score. Fire-and-forget: a failure is not the user's problem.
+    func recordView(eventId: String) async {
+        guard shouldRecord(eventId), let client = try? db() else { return }
+        struct Params: Encodable { let event_id: String }
+        _ = try? await client.rpc("increment_event_view", params: Params(event_id: eventId)).execute()
     }
 }
 
@@ -371,3 +505,13 @@ extension EventSearchProviding {
 }
 
 extension EventsService: EventSearchProviding {}
+
+/// What the Home feed's EventsViewModel needs (IOS-DD-EVENTS-03): a page, the
+/// fuzzy fallback for a search with no hits (IOS-DD-EVENTS-19), and the
+/// featured rail. Inherits the search role rather than widening
+/// EventPageProviding, so the Discover and Search fakes stay as they are.
+protocol EventFeedProviding: EventSearchProviding {
+    func fetchFeaturedEvents(limit: Int) async throws -> [Event]
+}
+
+extension EventsService: EventFeedProviding {}

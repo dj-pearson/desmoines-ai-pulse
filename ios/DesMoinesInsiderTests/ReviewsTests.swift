@@ -45,4 +45,15 @@ final class ReviewsTests: XCTestCase {
         XCTAssertEqual(agg.averageRating, 4.3)
         XCTAssertEqual(agg.totalRatings, 17)
     }
+
+    // MARK: - Moderation state (IOS-DD-EVENTS-16)
+
+    func testABareRatingIsApproved() {
+        XCTAssertEqual(RatingsService.moderationStatus(for: nil), "approved")
+        XCTAssertEqual(RatingsService.moderationStatus(for: "  "), "approved")
+    }
+
+    func testAReviewWithTextWaitsForModeration() {
+        XCTAssertEqual(RatingsService.moderationStatus(for: "Great"), "pending")
+    }
 }

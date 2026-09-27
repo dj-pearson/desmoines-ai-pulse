@@ -47,7 +47,10 @@ struct Restaurant: Identifiable, Codable, Hashable {
 
     /// Whether this listing currently carries an active paid sponsorship
     /// (IOS-ADS-011). Mirrors the web, which keys off the `is_sponsored` flag.
-    var isActivelySponsored: Bool { isSponsored == true }
+    /// Bounded by sponsored_until, same rule as Event (IOS-DD-EVENTS-13).
+    var isActivelySponsored: Bool {
+        Event.sponsorshipIsActive(isSponsored: isSponsored, sponsoredUntil: sponsoredUntil)
+    }
 
     // MARK: - Open/Closed Status
 

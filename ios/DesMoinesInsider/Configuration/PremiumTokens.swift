@@ -16,6 +16,14 @@ enum PremiumTokens {
     static let elevation8: CGFloat = 8
     static let elevation16: CGFloat = 16
 
+    // MARK: - Status fills
+
+    /// Fill for white caption text such as "Today" or "Featured"
+    /// (IOS-DD-EVENTS-25). System orange behind white text is about 2.2:1;
+    /// this burnt orange (#B85400) is about 4.9:1, which clears WCAG AA for
+    /// small bold text.
+    static let urgencyFill = Color(red: 184 / 255, green: 84 / 255, blue: 0)
+
     // MARK: - Corner Radii
 
     static let cornerSm: CGFloat = 8

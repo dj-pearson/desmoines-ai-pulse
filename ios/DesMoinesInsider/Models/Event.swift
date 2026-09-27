@@ -30,9 +30,22 @@ struct Event: Identifiable, Codable, Hashable {
     var createdAt: String?
     var updatedAt: String?
     /// First-party sponsored-listing flag (IOS-ADS-011). Set by the backend
-    /// while a paid sponsorship is active; `sponsored_until` is informational.
+    /// while a paid sponsorship is active; see `isActivelySponsored` for how
+    /// `sponsored_until` bounds it.
     var isSponsored: Bool?
     var sponsoredUntil: String?
+    /// When a multi-day run ends (end_date, 20260316000002). Nil for a
+    /// single-sitting event (IOS-DD-EVENTS-02).
+    var endDate: String?
+    /// The source said the start time is not announced (time_tbd,
+    /// 20260902000016).
+    var timeTbd: Bool?
+    /// Which ingest path wrote the row, e.g. "seatgeek" or "user_submission".
+    var source: String?
+    /// GEO content the web detail page already renders (IOS-DD-EVENTS-21).
+    var geoSummary: String?
+    var geoKeyFacts: [String]?
+    var geoFaq: [EventFAQ]?
 
     enum CodingKeys: String, CodingKey {
         case id, title, date, location, venue, city, category, price
@@ -55,6 +68,12 @@ struct Event: Identifiable, Codable, Hashable {
         case updatedAt = "updated_at"
         case isSponsored = "is_sponsored"
         case sponsoredUntil = "sponsored_until"
+        case endDate = "end_date"
+        case timeTbd = "time_tbd"
+        case source
+        case geoSummary = "geo_summary"
+        case geoKeyFacts = "geo_key_facts"
+        case geoFaq = "geo_faq"
     }
 
     // MARK: - Computed Properties
@@ -64,12 +83,28 @@ struct Event: Identifiable, Codable, Hashable {
     }
 
     /// Whether this listing currently carries an active paid sponsorship
-    /// (IOS-ADS-011). Mirrors the web, which keys off the `is_sponsored` flag
-    /// the backend maintains; `sponsored_until` is exposed for display/debugging.
-    var isActivelySponsored: Bool { isSponsored == true }
+    /// (IOS-ADS-011). The flag alone used to decide it, so a sponsorship whose
+    /// `sponsored_until` had passed kept the badge and the top slot until a
+    /// backend job cleared the flag. The web honours the date; so does this
+    /// (IOS-DD-EVENTS-13). No date, or one that does not parse, means the flag
+    /// stands.
+    var isActivelySponsored: Bool {
+        Self.sponsorshipIsActive(isSponsored: isSponsored, sponsoredUntil: sponsoredUntil)
+    }
+
+    /// Shared by Event, Restaurant and Attraction so the three rails agree.
+    static func sponsorshipIsActive(isSponsored: Bool?, sponsoredUntil: String?, now: Date = Date()) -> Bool {
+        guard isSponsored == true else { return false }
+        guard let sponsoredUntil, let until = DateParser.parse(sponsoredUntil) else { return true }
+        return until > now
+    }
 
     var parsedDate: Date? {
         DateParser.parse(date)
+    }
+
+    var parsedEndDate: Date? {
+        DateParser.parse(endDate)
     }
 
     var coordinate: CLLocationCoordinate2D? {
@@ -79,9 +114,24 @@ struct Event: Identifiable, Codable, Hashable {
         return CLLocationCoordinate2D(latitude: lat, longitude: lng)
     }
 
+    /// One definition of free, mirroring src/lib/eventPrice.ts isFreePrice
+    /// (IOS-DD-EVENTS-06). Nil means the price is not listed, which is not the
+    /// same as free: selling a null price as free is the bug the web retired.
+    ///
+    /// Text that says "free" is free unless it also names a non-zero dollar
+    /// amount ("Free parking, $40 tickets"). Otherwise only a zero amount is.
+    static func isFreePrice(_ price: String?) -> Bool? {
+        guard let price else { return nil }
+        let text = price.trimmingCharacters(in: .whitespacesAndNewlines)
+        guard !text.isEmpty else { return nil }
+        if text.range(of: "free", options: .caseInsensitive) != nil {
+            return text.range(of: #"\$ *[1-9]"#, options: .regularExpression) == nil
+        }
+        return text.range(of: #"^\$?0(\.0+)?$"#, options: .regularExpression) != nil
+    }
+
     var isFree: Bool {
-        guard let price = price?.lowercased() else { return false }
-        return price == "free" || price == "$0" || price == "0" || price.isEmpty
+        Event.isFreePrice(price) == true
     }
 
     var displayDescription: String {
@@ -93,16 +143,55 @@ struct Event: Identifiable, Codable, Hashable {
         return venueCityStr.isEmpty ? (location ?? "Des Moines") : venueCityStr
     }
 
+    /// Whether the row carries a real start time, mirroring src/lib/timezone.ts
+    /// hasSpecificTime (IOS-DD-EVENTS-05). False for an explicit time_tbd, for
+    /// SeatGeek's 03:30 placeholder, and for the 19:31:58 no-time marker, so
+    /// none of them prints as a showtime or drives a reminder.
+    var hasSpecificTime: Bool {
+        if timeTbd == true { return false }
+        let fromSeatGeek = [source, sourceUrl].contains { value in
+            value?.range(of: "seatgeek", options: .caseInsensitive) != nil
+        }
+        if fromSeatGeek, let start = parsedDate,
+           DesMoinesTime.localTimeString(start) == DesMoinesTime.seatGeekPlaceholder {
+            return false
+        }
+        if let local = eventStartLocal, let tIndex = local.firstIndex(of: "T") {
+            let time = String(local[local.index(after: tIndex)...].prefix(8))
+            return time != DesMoinesTime.noTimeMarker
+        }
+        if let start = parsedDate, DesMoinesTime.localTimeString(start) == DesMoinesTime.noTimeMarker {
+            return false
+        }
+        return true
+    }
+
+    /// Started and not over. A row with no end_date is assumed to run three
+    /// hours, as the web does.
+    func happeningNow(at now: Date = Date()) -> Bool {
+        guard let start = parsedDate, hasSpecificTime else { return false }
+        let end = parsedEndDate ?? start.addingTimeInterval(3 * 3600)
+        return start <= now && now < end
+    }
+
+    var isHappeningNow: Bool { happeningNow() }
+
     var urgencyLabel: String? {
+        urgency(at: Date(), calendar: DesMoinesTime.calendar)
+    }
+
+    /// Day words in Des Moines time, so "Today" means today in Des Moines
+    /// rather than on the phone's clock (IOS-DD-EVENTS-05).
+    func urgency(at now: Date, calendar: Calendar = DesMoinesTime.calendar) -> String? {
         guard let eventDate = parsedDate else { return nil }
-        let calendar = Calendar.current
-        let now = Date()
+        if happeningNow(at: now) { return "Happening now" }
 
-        if calendar.isDateInToday(eventDate) { return "Today" }
-        if calendar.isDateInTomorrow(eventDate) { return "Tomorrow" }
-
-        let days = calendar.dateComponents([.day], from: calendar.startOfDay(for: now), to: calendar.startOfDay(for: eventDate)).day ?? 0
-        if days > 0 && days <= 7 { return "In \(days) days" }
+        let today = calendar.startOfDay(for: now)
+        let eventDay = calendar.startOfDay(for: eventDate)
+        let days = calendar.dateComponents([.day], from: today, to: eventDay).day ?? 0
+        if days == 0 { return "Today" }
+        if days == 1 { return "Tomorrow" }
+        if days > 1 && days <= 7 { return "In \(days) days" }
         return nil
     }
 
@@ -120,11 +209,97 @@ struct Event: Identifiable, Codable, Hashable {
     var featuredCardAccessibilityLabel: String {
         var parts: [String] = [title, eventCategory.displayName]
         if let date = parsedDate {
-            parts.append(date.formatted(.dateTime.weekday(.wide).month(.wide).day()))
+            parts.append(date.formatted(DesMoinesTime.style(.dateTime.weekday(.wide).month(.wide).day())))
         }
         if isFree { parts.append("Free event") }
         else if let price, !price.isEmpty { parts.append(price) }
         return parts.joined(separator: ". ")
+    }
+}
+
+// MARK: - FAQ
+
+/// One entry of `events.geo_faq` (jsonb).
+struct EventFAQ: Codable, Hashable {
+    let question: String
+    let answer: String
+}
+
+// MARK: - Tolerant decoding (IOS-DD-EVENTS-23)
+
+extension Event {
+    /// title and date are nullable in the table (baseline_tables.sql) with no
+    /// later NOT NULL, and a page decodes as one array, so a single null title
+    /// used to fail the whole feed. They now fall back instead. geo_faq is
+    /// jsonb, so a shape other than [{question, answer}] becomes nil rather
+    /// than failing the row.
+    ///
+    /// In an extension so the memberwise initialiser the previews use survives.
+    init(from decoder: Decoder) throws {
+        let c = try decoder.container(keyedBy: CodingKeys.self)
+        id = try c.decode(String.self, forKey: .id)
+        title = try c.decodeIfPresent(String.self, forKey: .title) ?? "Untitled event"
+        date = try c.decodeIfPresent(String.self, forKey: .date) ?? ""
+        location = try c.decodeIfPresent(String.self, forKey: .location)
+        venue = try c.decodeIfPresent(String.self, forKey: .venue)
+        city = try c.decodeIfPresent(String.self, forKey: .city)
+        category = try c.decodeIfPresent(String.self, forKey: .category)
+        price = try c.decodeIfPresent(String.self, forKey: .price)
+        description = try c.decodeIfPresent(String.self, forKey: .description)
+        enhancedDescription = try c.decodeIfPresent(String.self, forKey: .enhancedDescription)
+        originalDescription = try c.decodeIfPresent(String.self, forKey: .originalDescription)
+        imageUrl = try c.decodeIfPresent(String.self, forKey: .imageUrl)
+        sourceUrl = try c.decodeIfPresent(String.self, forKey: .sourceUrl)
+        isFeatured = try c.decodeIfPresent(Bool.self, forKey: .isFeatured)
+        isEnhanced = try c.decodeIfPresent(Bool.self, forKey: .isEnhanced)
+        latitude = try c.decodeIfPresent(Double.self, forKey: .latitude)
+        longitude = try c.decodeIfPresent(Double.self, forKey: .longitude)
+        aiWriteup = try c.decodeIfPresent(String.self, forKey: .aiWriteup)
+        eventStartUtc = try c.decodeIfPresent(String.self, forKey: .eventStartUtc)
+        eventStartLocal = try c.decodeIfPresent(String.self, forKey: .eventStartLocal)
+        eventTimezone = try c.decodeIfPresent(String.self, forKey: .eventTimezone)
+        isRecurring = try c.decodeIfPresent(Bool.self, forKey: .isRecurring)
+        seoTitle = try c.decodeIfPresent(String.self, forKey: .seoTitle)
+        seoDescription = try c.decodeIfPresent(String.self, forKey: .seoDescription)
+        seoKeywords = try? c.decodeIfPresent([String].self, forKey: .seoKeywords)
+        createdAt = try c.decodeIfPresent(String.self, forKey: .createdAt)
+        updatedAt = try c.decodeIfPresent(String.self, forKey: .updatedAt)
+        isSponsored = try c.decodeIfPresent(Bool.self, forKey: .isSponsored)
+        sponsoredUntil = try c.decodeIfPresent(String.self, forKey: .sponsoredUntil)
+        endDate = try c.decodeIfPresent(String.self, forKey: .endDate)
+        timeTbd = try c.decodeIfPresent(Bool.self, forKey: .timeTbd)
+        source = try c.decodeIfPresent(String.self, forKey: .source)
+        geoSummary = try c.decodeIfPresent(String.self, forKey: .geoSummary)
+        geoKeyFacts = try? c.decodeIfPresent([String].self, forKey: .geoKeyFacts)
+        geoFaq = try? c.decodeIfPresent([EventFAQ].self, forKey: .geoFaq)
+    }
+}
+
+/// A page of events that drops rows that cannot decode instead of failing the
+/// page (IOS-DD-EVENTS-23). A row with no id is the only thing Event itself
+/// still refuses.
+struct LossyEventArray: Decodable {
+    let events: [Event]
+    let droppedCount: Int
+
+    private struct AnyDecodableEvent: Decodable {
+        let event: Event?
+        init(from decoder: Decoder) throws {
+            event = try? Event(from: decoder)
+        }
+    }
+
+    init(from decoder: Decoder) throws {
+        let rows = try [AnyDecodableEvent](from: decoder)
+        let decoded = rows.compactMap(\.event)
+        let dropped = rows.count - decoded.count
+        events = decoded
+        droppedCount = dropped
+        // A local, not self.droppedCount: the log interpolation is an escaping
+        // autoclosure, which cannot capture self inside a struct initialiser.
+        if dropped > 0 {
+            AppLogger.general.warning("Dropped \(dropped) undecodable event row(s)")
+        }
     }
 }
 
@@ -138,7 +313,7 @@ extension Event {
         location: "Court Avenue, Des Moines",
         venue: "Historic Court District",
         city: "Des Moines",
-        category: "Food & Drink",
+        category: "Food",
         price: "Free",
         description: "The Downtown Des Moines Farmers' Market is one of the largest in the country. Browse fresh produce, artisan goods, and enjoy live entertainment.",
         imageUrl: nil,
@@ -153,7 +328,7 @@ extension Event {
               location: "Simon Estes Amphitheater", venue: "Simon Estes Amphitheater", city: "Des Moines",
               category: "Music", price: "$15", isFeatured: false, latitude: 41.584, longitude: -93.629),
         Event(id: "preview-3", title: "Des Moines Art Festival", date: ISO8601DateFormatter().string(from: Date().addingTimeInterval(172800)),
-              location: "Western Gateway Park", city: "Des Moines", category: "Art & Culture", price: "Free",
+              location: "Western Gateway Park", city: "Des Moines", category: "Arts", price: "Free",
               isFeatured: true, latitude: 41.587, longitude: -93.639),
     ]
 }
