@@ -157,9 +157,11 @@ actor AttractionsService {
     /// It has not misbehaved yet only because the table is small: 22 attractions,
     /// 17 geocoded, against a limit of 50, so the client-side filter has been
     /// seeing everything. The 23rd row past the limit is when it starts lying.
-    func fetchNearbyAttractions(latitude: Double, longitude: Double, limit: Int = 50) async throws -> [Attraction] {
+    ///
+    /// `radiusMiles` lets the map's "Search this area" ask for the visible
+    /// region (IOS-DD-MAP-05); the RPC clamps it to 50.
+    func fetchNearbyAttractions(latitude: Double, longitude: Double, radiusMiles: Double = Config.defaultSearchRadiusMiles, limit: Int = 50) async throws -> [Attraction] {
         let client = try db()
-        let radiusMiles = Config.defaultSearchRadiusMiles
 
         struct RadiusParams: Encodable {
             let center_lat: Double

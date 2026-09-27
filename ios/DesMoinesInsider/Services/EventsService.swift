@@ -327,22 +327,30 @@ actor EventsService {
 
     // MARK: - Nearby Events
 
-    func fetchNearbyEvents(latitude: Double, longitude: Double, radiusMiles: Double = 30, limit: Int = 50) async throws -> [Event] {
+    /// `until` caps the start date (IOS-DD-MAP-01), so the map can ask for
+    /// the nearest events of the next two weeks rather than the nearest 50 on
+    /// any date. The RPC takes it as the optional `p_until`; a backend without
+    /// migration 20261013000001 rejects the extra argument, and the table
+    /// path below applies it instead.
+    func fetchNearbyEvents(latitude: Double, longitude: Double, radiusMiles: Double = 30, limit: Int = 50, until: Date? = nil) async throws -> [Event] {
         // Try PostGIS RPC first for optimal performance
-        if let rpcResults = try? await fetchNearbyEventsViaRPC(latitude: latitude, longitude: longitude, radiusMiles: radiusMiles, limit: limit),
+        if let rpcResults = try? await fetchNearbyEventsViaRPC(latitude: latitude, longitude: longitude, radiusMiles: radiusMiles, limit: limit, until: until),
            !rpcResults.isEmpty {
             return rpcResults
         }
         // Fallback: direct table query with client-side distance filtering
-        return try await fetchNearbyEventsViaTable(latitude: latitude, longitude: longitude, radiusMiles: radiusMiles, limit: limit)
+        return try await fetchNearbyEventsViaTable(latitude: latitude, longitude: longitude, radiusMiles: radiusMiles, limit: limit, until: until)
     }
 
-    private func fetchNearbyEventsViaRPC(latitude: Double, longitude: Double, radiusMiles: Double, limit: Int) async throws -> [Event] {
+    private func fetchNearbyEventsViaRPC(latitude: Double, longitude: Double, radiusMiles: Double, limit: Int, until: Date? = nil) async throws -> [Event] {
         struct NearbyParams: Encodable {
             let user_lat: Double
             let user_lon: Double
             let radius_meters: Int
             let search_limit: Int
+            /// Omitted when nil (synthesized Encodable uses encodeIfPresent),
+            /// so the four-argument call older backends know is unchanged.
+            let p_until: String?
         }
 
         let client = try db()
@@ -351,14 +359,15 @@ actor EventsService {
                 user_lat: latitude,
                 user_lon: longitude,
                 radius_meters: Int(radiusMiles * 1609.34),
-                search_limit: limit
+                search_limit: limit,
+                p_until: until.map { DateParser.toISO($0) }
             ))
             .execute()
             .value
         return events
     }
 
-    private func fetchNearbyEventsViaTable(latitude: Double, longitude: Double, radiusMiles: Double, limit: Int) async throws -> [Event] {
+    private func fetchNearbyEventsViaTable(latitude: Double, longitude: Double, radiusMiles: Double, limit: Int, until: Date? = nil) async throws -> [Event] {
         let client = try db()
 
         // IOS-AUDIT-PERF-027: the bounding box goes BEFORE the limit. Without it
@@ -367,7 +376,7 @@ actor EventsService {
         // an empty list while events in radius sat past the cutoff.
         let box = GeoBoundingBox(centerLat: latitude, centerLng: longitude, radiusMiles: radiusMiles)
 
-        let events: [Event] = try await client
+        var query = client
             .from("events")
             .select()
             .neq("is_merged", value: true)
@@ -378,6 +387,10 @@ actor EventsService {
             .lte("latitude", value: box.maxLat)
             .gte("longitude", value: box.minLng)
             .lte("longitude", value: box.maxLng)
+        if let until {
+            query = query.lte("date", value: DateParser.toISO(until))
+        }
+        let events: [Event] = try await query
             .order("date", ascending: true)
             .limit(limit)
             .execute()

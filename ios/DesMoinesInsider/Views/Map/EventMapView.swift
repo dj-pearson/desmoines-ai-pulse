@@ -2,180 +2,253 @@ import SwiftUI
 import MapKit
 
 /// Map view showing nearby events, restaurants, and attractions with color-coded pins
-/// and search functionality.
+/// and search functionality, plus a list alternative (IOS-DD-MAP-12).
 struct EventMapView: View {
+    enum DisplayMode: String, CaseIterable, Identifiable {
+        case map = "Map"
+        case list = "List"
+        var id: String { rawValue }
+    }
+
     @State private var viewModel = MapViewModel()
+    @State private var locationService = LocationService.shared
     @State private var navigationPath = NavigationPath()
-    @State private var isSearchFocused = false
+    @State private var mode: DisplayMode = .map
+    @State private var didPickInitialMode = false
     /// Cluster whose members are being disambiguated in a sheet (IOS-AUDIT-UX-027).
     @State private var disambiguationCluster: MapCluster?
     @State private var currentRegion = MKCoordinateRegion(
         center: CLLocationCoordinate2D(latitude: Config.defaultLatitude, longitude: Config.defaultLongitude),
         span: MKCoordinateSpan(latitudeDelta: 0.15, longitudeDelta: 0.15)
     )
-    /// Clusters computed off the render path (IOS-AUDIT-PERF-014). Recomputed
-    /// only when the zoom bucket or annotation set changes — never per camera
-    /// frame. Clustering depends on `region.span` (grid size) not the center,
-    /// so panning never invalidates them.
-    @State private var clusters: [MapCluster] = []
+    /// What the map draws, computed off the render path (IOS-AUDIT-PERF-014).
+    /// Recomputed when the annotations change, the zoom level changes, or the
+    /// centre moves more than half a screen (only pins near the screen are
+    /// drawn now, IOS-DD-MAP-08) - never per camera frame.
+    @State private var renderItems: [MapPinItem] = []
     @State private var lastZoomBucket: Int = .min
+    @State private var lastRenderCenter: CLLocationCoordinate2D?
+
+    @Environment(\.scenePhase) private var scenePhase
+    @Environment(\.openURL) private var openURL
+    @Environment(\.accessibilityReduceMotion) private var reduceMotion
 
     var body: some View {
         NavigationStack(path: $navigationPath) {
-            ZStack {
-                // Map layer
+            screen
+                .navigationTitle("Explore")
+                .navigationBarTitleDisplayMode(.inline)
+                .toolbar { modeToolbar }
+                .navigationDestination(for: Event.self) { event in
+                    EventDetailView(event: event)
+                }
+                .navigationDestination(for: MapDestination.self) { destination in
+                    destinationView(destination)
+                }
+                .modifier(lifecycle)
+        }
+    }
+
+    // MARK: - Screen
+
+    private var screen: some View {
+        ZStack {
+            if mode == .map {
                 mapContent
-
-                // Overlays
-                VStack(spacing: 0) {
-                    // Search bar
-                    searchBar
-                        .padding(.horizontal)
-                        .padding(.top, 8)
-
-                    Spacer()
-
-                    // Error / empty state overlay
-                    if let error = viewModel.errorMessage, viewModel.isEmpty {
-                        errorOverlay(message: error)
-                    }
-
-                    Spacer()
-
-                    // Loading indicator
-                    if viewModel.isLoading {
-                        loadingOverlay
-                    }
-
-                    // Pin count badge
-                    if viewModel.totalPinCount > 0 {
-                        pinCountBadge
-                            .padding(.bottom, 4)
-                    }
-                }
-
-                // Toggle controls (top-right, below search)
-                VStack {
-                    Spacer().frame(height: 60)
-                    HStack {
-                        Spacer()
-                        toggleControls
-                    }
-                    Spacer()
-                }
+            } else {
+                MapListView(viewModel: viewModel)
             }
-            .safeAreaInset(edge: .bottom) {
-                VStack(spacing: 8) {
-                    // Time-slider (IOS-DISCOVER-2026-004) — only when no
-                    // selection popup is showing, otherwise the slider would
-                    // crowd the bottom sheet.
-                    if viewModel.selectedEvent == nil
-                        && viewModel.selectedRestaurant == nil
-                        && viewModel.selectedAttraction == nil
-                    {
-                        MapTimeSlider(
-                            mapTime: $viewModel.mapTime,
-                            eventCount: viewModel.eventAnnotations.count,
-                            restaurantCount: viewModel.restaurantAnnotations.count,
-                        )
-                        .padding(.horizontal)
-                        .padding(.bottom, 4)
-                    }
-
-                    if let event = viewModel.selectedEvent {
-                        eventPopup(event)
-                    } else if let restaurant = viewModel.selectedRestaurant {
-                        restaurantPopup(restaurant)
-                    } else if let attraction = viewModel.selectedAttraction {
-                        attractionPopup(attraction)
-                    }
+            if !viewModel.isLoading {
+                MapOverlayView(viewModel: viewModel) {
+                    Task { await viewModel.loadRegion(currentRegion) }
                 }
-            }
-            .navigationTitle("Explore")
-            .navigationBarTitleDisplayMode(.inline)
-            .navigationDestination(for: Event.self) { event in
-                EventDetailView(event: event)
-            }
-            .task {
-                await viewModel.loadNearbyContent()
             }
         }
+        .safeAreaInset(edge: .top) { topControls }
+        .safeAreaInset(edge: .bottom) { bottomControls }
+    }
+
+    private var lifecycle: MapLifecycleModifier {
+        MapLifecycleModifier(
+            viewModel: viewModel,
+            authorizationStatus: locationService.authorizationStatus,
+            scenePhase: scenePhase,
+            onFirstAppear: pickInitialMode
+        )
+    }
+
+    /// List by default under VoiceOver, once, at first appearance.
+    private func pickInitialMode() {
+        guard !didPickInitialMode else { return }
+        didPickInitialMode = true
+        if UIAccessibility.isVoiceOverRunning { mode = .list }
+    }
+
+    @ToolbarContentBuilder
+    private var modeToolbar: some ToolbarContent {
+        ToolbarItem(placement: .topBarTrailing) {
+            Picker("View as", selection: $mode) {
+                ForEach(DisplayMode.allCases) { m in
+                    Text(m.rawValue).tag(m)
+                }
+            }
+            .pickerStyle(.segmented)
+            .fixedSize()
+        }
+    }
+
+    @ViewBuilder
+    private func destinationView(_ destination: MapDestination) -> some View {
+        switch destination {
+        case .event(let event): EventDetailView(event: event)
+        case .restaurant(let restaurant): RestaurantDetailView(restaurant: restaurant)
+        case .attraction(let attraction): AttractionDetailView(attraction: attraction)
+        }
+    }
+
+    // MARK: - Top and bottom controls
+
+    private var topControls: some View {
+        VStack(spacing: 8) {
+            searchBar
+                .padding(.horizontal)
+            MapFilterChips(viewModel: viewModel)
+            locationNoticeChip
+            if offersSearchThisArea {
+                searchThisAreaButton
+            }
+        }
+        .padding(.top, 8)
+        .padding(.bottom, 4)
+    }
+
+    private var offersSearchThisArea: Bool {
+        mode == .map
+            && viewModel.searchText.isEmpty
+            && viewModel.activeQuery == nil
+            && !viewModel.isLoading
+            && viewModel.shouldOfferSearchThisArea(for: currentRegion)
+    }
+
+    private var searchThisAreaButton: some View {
+        Button {
+            Task { await viewModel.loadRegion(currentRegion) }
+        } label: {
+            Label("Search this area", systemImage: "magnifyingglass")
+                .font(.footnote.weight(.semibold))
+                .padding(.horizontal, 14)
+                .padding(.vertical, 8)
+                .background(.regularMaterial, in: Capsule())
+        }
+        .buttonStyle(.plain)
+        .minHitTarget()
+    }
+
+    @ViewBuilder
+    private var locationNoticeChip: some View {
+        switch viewModel.locationNotice {
+        case .none:
+            EmptyView()
+        case .denied:
+            noticeChip("Showing downtown Des Moines. Turn on location") {
+                if let url = URL(string: UIApplication.openSettingsURLString) { openURL(url) }
+            }
+        case .farAway(let miles):
+            noticeChip("You're \(miles) mi from Des Moines. Showing downtown.", action: nil)
+        }
+    }
+
+    private func noticeChip(_ text: String, action: (() -> Void)?) -> some View {
+        HStack(spacing: 4) {
+            if let action {
+                Button(text, action: action)
+                    .font(.caption.weight(.semibold))
+                    .accessibilityHint("Opens Settings")
+            } else {
+                Text(text).font(.caption.weight(.semibold))
+            }
+            Button {
+                viewModel.dismissLocationNotice()
+            } label: {
+                Image(systemName: "xmark")
+                    .font(.caption2.weight(.bold))
+            }
+            .minHitTarget()
+            .accessibilityLabel("Dismiss")
+        }
+        .padding(.leading, 12)
+        .glassChip(cornerRadius: 999, material: .regularMaterial)
+        .padding(.horizontal)
+    }
+
+    private var bottomControls: some View {
+        VStack(spacing: 8) {
+            statusRow
+            if let destination = viewModel.selectedDestination, mode == .map {
+                MapPlacePopup(
+                    model: .make(for: destination, distanceText: destination.coordinate.flatMap { viewModel.distanceText(to: $0) }),
+                    onOpen: { navigationPath.append(destination) },
+                    onClose: { viewModel.clearSelection() }
+                )
+            } else {
+                // Hidden while a popup shows, otherwise the slider would crowd it.
+                MapTimeSlider(
+                    chip: $viewModel.timeChip,
+                    eventCount: viewModel.eventAnnotations.count,
+                    restaurantOpenCount: viewModel.restaurantAnnotations.count,
+                    restaurantUnknownCount: viewModel.restaurantsHiddenUnknownHours
+                )
+                .padding(.horizontal)
+                .padding(.bottom, 4)
+            }
+        }
+    }
+
+    @ViewBuilder
+    private var statusRow: some View {
+        if viewModel.isLoading {
+            loadingOverlay
+        } else if case .partial(let failed) = viewModel.overlay {
+            retryChip(Self.failedText(failed))
+        } else if viewModel.overlay == .offline && viewModel.totalPinCount > 0 {
+            retryChip("Offline. Showing earlier results")
+        } else if viewModel.totalPinCount > 0 && mode == .map {
+            pinCountBadge
+        }
+    }
+
+    static func failedText(_ kinds: Set<MapCluster.Kind>) -> String {
+        let names = MapCluster.Kind.allCases.filter { kinds.contains($0) }.map { kind -> String in
+            switch kind {
+            case .event: return "Events"
+            case .restaurant: return "Dining"
+            case .attraction: return "Places"
+            }
+        }
+        return names.joined(separator: " and ") + " couldn't load"
+    }
+
+    private func retryChip(_ text: String) -> some View {
+        Button {
+            Task { await viewModel.retry() }
+        } label: {
+            Text("\(text) · Retry")
+                .font(.caption.weight(.semibold))
+                .padding(.horizontal, 12)
+                .padding(.vertical, 7)
+                .glassChip(cornerRadius: 999, material: .regularMaterial)
+        }
+        .buttonStyle(.plain)
+        .minHitTarget()
     }
 
     // MARK: - Map Content
 
     private var mapContent: some View {
         Map(position: $viewModel.cameraPosition) {
-            // User location
             UserAnnotation()
-
-            if viewModel.shouldCluster {
-                // Dense map (>clusterThreshold pins): aggregate into grid
-                // clusters that zoom the user in when tapped. Read from cached
-                // @State (recomputed off the render path) — not recomputed here
-                // on every camera frame (IOS-AUDIT-PERF-014).
-                ForEach(clusters) { cluster in
-                    Annotation("\(cluster.count) places", coordinate: cluster.coordinate) {
-                        Button {
-                            // Small clusters: list the members so co-located pins
-                            // (which more zoom can't separate) stay selectable.
-                            // Large clusters: zoom to break them up first
-                            // (IOS-AUDIT-UX-027).
-                            if cluster.count <= 25 {
-                                disambiguationCluster = cluster
-                            } else {
-                                zoomTo(cluster: cluster)
-                            }
-                        } label: {
-                            ClusterMapPin(count: cluster.count, tint: cluster.tintColor)
-                        }
-                        .accessibilityLabel("\(cluster.count) places here. Tap to choose one or zoom in.")
-                    }
-                }
-            } else {
-                // Event markers
-                ForEach(viewModel.eventAnnotations) { annotation in
-                    Annotation(annotation.event.title, coordinate: annotation.coordinate) {
-                        Button {
-                            viewModel.clearSelection()
-                            viewModel.selectedEvent = annotation.event
-                        } label: {
-                            EventMapPin(
-                                category: annotation.event.eventCategory,
-                                isSelected: viewModel.selectedEvent?.id == annotation.event.id
-                            )
-                        }
-                    }
-                }
-
-                // Restaurant markers
-                ForEach(viewModel.restaurantAnnotations) { annotation in
-                    Annotation(annotation.restaurant.name, coordinate: annotation.coordinate) {
-                        Button {
-                            viewModel.clearSelection()
-                            viewModel.selectedRestaurant = annotation.restaurant
-                        } label: {
-                            RestaurantMapPin(
-                                isSelected: viewModel.selectedRestaurant?.id == annotation.restaurant.id
-                            )
-                        }
-                    }
-                }
-
-                // Attraction markers
-                ForEach(viewModel.attractionAnnotations) { annotation in
-                    Annotation(annotation.attraction.name, coordinate: annotation.coordinate) {
-                        Button {
-                            viewModel.clearSelection()
-                            viewModel.selectedAttraction = annotation.attraction
-                        } label: {
-                            AttractionMapPin(
-                                type: annotation.attraction.attractionType,
-                                isSelected: viewModel.selectedAttraction?.id == annotation.attraction.id
-                            )
-                        }
-                    }
-                }
+            ForEach(renderItems) { item in
+                mapItem(item)
             }
         }
         .mapStyle(.standard(elevation: .realistic))
@@ -184,153 +257,180 @@ struct EventMapView: View {
             MapCompass()
             MapScaleView()
         }
-        .onMapCameraChange { context in
+        .onMapCameraChange(frequency: .onEnd) { context in
             currentRegion = context.region
-            refreshClustersIfNeeded()
+            viewModel.cameraDidChange(to: context.region)
+            refreshRenderItems(force: false)
         }
-        .onChange(of: viewModel.totalPinCount) { _, _ in
-            // Data reloaded — force a recompute regardless of zoom bucket.
-            lastZoomBucket = .min
-            refreshClustersIfNeeded()
+        .onChange(of: viewModel.annotationsVersion) { _, _ in
+            refreshRenderItems(force: true)
         }
-        .onChange(of: viewModel.shouldCluster) { _, _ in
-            lastZoomBucket = .min
-            refreshClustersIfNeeded()
-        }
+        .onAppear { refreshRenderItems(force: true) }
         .sheet(item: $disambiguationCluster) { cluster in
             ClusterDisambiguationSheet(members: viewModel.members(in: cluster)) { member in
-                viewModel.clearSelection()
-                switch member {
-                case .event(let e): viewModel.selectedEvent = e
-                case .restaurant(let r): viewModel.selectedRestaurant = r
-                case .attraction(let a): viewModel.selectedAttraction = a
-                }
-                disambiguationCluster = nil
+                select(member)
             }
             .presentationDetents([.medium, .large])
         }
     }
 
-    /// Zoom into a cluster — halves the visible span so the pins separate out.
-    private func zoomTo(cluster: MapCluster) {
-        UIImpactFeedbackGenerator(style: .light).impactOccurred()
-        let newSpan = MKCoordinateSpan(
-            latitudeDelta: max(currentRegion.span.latitudeDelta / 2.5, 0.005),
-            longitudeDelta: max(currentRegion.span.longitudeDelta / 2.5, 0.005)
-        )
-        withAnimation {
-            viewModel.cameraPosition = .region(MKCoordinateRegion(
-                center: cluster.coordinate,
-                span: newSpan
-            ))
+    @MapContentBuilder
+    private func mapItem(_ item: MapPinItem) -> some MapContent {
+        switch item {
+        case .event(let annotation):
+            Annotation(annotation.event.title, coordinate: annotation.coordinate) {
+                eventPin(annotation)
+            }
+        case .restaurant(let annotation):
+            Annotation(annotation.restaurant.name, coordinate: annotation.coordinate) {
+                restaurantPin(annotation)
+            }
+        case .attraction(let annotation):
+            Annotation(annotation.attraction.name, coordinate: annotation.coordinate) {
+                attractionPin(annotation)
+            }
+        case .cluster(let cluster):
+            Annotation("\(cluster.count) places", coordinate: cluster.coordinate) {
+                clusterButton(cluster)
+            }
         }
     }
 
-    /// Recomputes clusters only when the zoom bucket changes (clusters depend on
-    /// span, not center) or the data reloaded — keeping the O(n) bucketing off
-    /// the per-frame render/pan path (IOS-AUDIT-PERF-014).
-    private func refreshClustersIfNeeded() {
-        guard viewModel.shouldCluster else {
-            if !clusters.isEmpty { clusters = [] }
-            return
+    private func eventPin(_ annotation: EventAnnotation) -> some View {
+        let isSelected = viewModel.selectedEvent?.id == annotation.id
+        return Button {
+            viewModel.select(.event(annotation.event))
+        } label: {
+            EventMapPin(category: annotation.event.eventCategory, isSelected: isSelected, isTonight: annotation.isTonight)
         }
-        // Quantize zoom to an integer level so panning (constant span) is a no-op
-        // and zooming only recomputes at integer steps.
+        .accessibilityLabel(MapPinLabel.event(annotation.event, distance: viewModel.distanceText(to: annotation.coordinate)))
+        .accessibilityAddTraits(isSelected ? .isSelected : [])
+        .accessibilityHint("Shows details below the map")
+    }
+
+    private func restaurantPin(_ annotation: RestaurantAnnotation) -> some View {
+        let isSelected = viewModel.selectedRestaurant?.id == annotation.id
+        return Button {
+            viewModel.select(.restaurant(annotation.restaurant))
+        } label: {
+            RestaurantMapPin(isSelected: isSelected)
+        }
+        .accessibilityLabel(MapPinLabel.restaurant(annotation.restaurant, distance: viewModel.distanceText(to: annotation.coordinate)))
+        .accessibilityAddTraits(isSelected ? .isSelected : [])
+        .accessibilityHint("Shows details below the map")
+    }
+
+    private func attractionPin(_ annotation: AttractionAnnotation) -> some View {
+        let isSelected = viewModel.selectedAttraction?.id == annotation.id
+        return Button {
+            viewModel.select(.attraction(annotation.attraction))
+        } label: {
+            AttractionMapPin(type: annotation.attraction.attractionType, isSelected: isSelected)
+        }
+        .accessibilityLabel(MapPinLabel.attraction(annotation.attraction, distance: viewModel.distanceText(to: annotation.coordinate)))
+        .accessibilityAddTraits(isSelected ? .isSelected : [])
+        .accessibilityHint("Shows details below the map")
+    }
+
+    private func clusterButton(_ cluster: MapCluster) -> some View {
+        Button {
+            // List the members when the bubble is small, the map is already
+            // zoomed in, or they share one spot (zoom can never split those);
+            // otherwise zoom to break it up (IOS-DD-MAP-08).
+            if MapClustering.shouldListMembers(cluster, latitudeSpan: currentRegion.span.latitudeDelta) {
+                disambiguationCluster = cluster
+            } else {
+                zoomTo(cluster: cluster)
+            }
+        } label: {
+            ClusterMapPin(count: cluster.count, tint: cluster.tintColor)
+        }
+        .accessibilityLabel(cluster.accessibilityLabel)
+    }
+
+    /// Zoom into a cluster - divides the visible span so the pins separate out.
+    private func zoomTo(cluster: MapCluster) {
+        UIImpactFeedbackGenerator(style: .light).impactOccurred()
+        let newSpan = MKCoordinateSpan(
+            latitudeDelta: max(currentRegion.span.latitudeDelta / 2.5, MapClustering.minimumZoomSpan),
+            longitudeDelta: max(currentRegion.span.longitudeDelta / 2.5, MapClustering.minimumZoomSpan)
+        )
+        withAnimation(reduceMotion ? nil : .default) {
+            viewModel.cameraPosition = .region(MKCoordinateRegion(center: cluster.coordinate, span: newSpan))
+        }
+    }
+
+    /// A sheet pick selects the member and centres on it.
+    private func select(_ member: MapMember) {
+        viewModel.select(member.destination)
+        let span = min(currentRegion.span.latitudeDelta, 0.01)
+        withAnimation(reduceMotion ? nil : .default) {
+            viewModel.cameraPosition = .region(MKCoordinateRegion(
+                center: member.coordinate,
+                span: MKCoordinateSpan(latitudeDelta: span, longitudeDelta: span)
+            ))
+        }
+        disambiguationCluster = nil
+    }
+
+    private func refreshRenderItems(force: Bool) {
+        // Quantize zoom to an integer level so small zooms are a no-op.
         let delta = max(currentRegion.span.latitudeDelta, 0.0001)
         let bucket = Int((log2(1.0 / delta)).rounded())
-        guard bucket != lastZoomBucket || clusters.isEmpty else { return }
+        var movedFar = true
+        if let last = lastRenderCenter {
+            movedFar = abs(last.latitude - currentRegion.center.latitude) > currentRegion.span.latitudeDelta * 0.5
+                || abs(last.longitude - currentRegion.center.longitude) > currentRegion.span.longitudeDelta * 0.5
+        }
+        guard force || bucket != lastZoomBucket || movedFar else { return }
         lastZoomBucket = bucket
-        clusters = viewModel.clusters(for: currentRegion)
+        lastRenderCenter = currentRegion.center
+        renderItems = MapClustering.items(viewModel.clusterPoints, region: currentRegion).compactMap { item -> MapPinItem? in
+            switch item {
+            case .cluster(let cluster):
+                return .cluster(cluster)
+            case .single(let id, let kind, _):
+                switch kind {
+                case .event: return viewModel.eventIndex[id].map(MapPinItem.event)
+                case .restaurant: return viewModel.restaurantIndex[id].map(MapPinItem.restaurant)
+                case .attraction: return viewModel.attractionIndex[id].map(MapPinItem.attraction)
+                }
+            }
+        }
     }
 
     // MARK: - Search Bar
 
     private var searchBar: some View {
         HStack(spacing: 8) {
-            HStack(spacing: 8) {
-                Image(systemName: "magnifyingglass")
-                    .foregroundStyle(.secondary)
-                    .font(.subheadline)
-
-                TextField("Search events, dining, attractions...", text: $viewModel.searchText)
-                    .textFieldStyle(.plain)
-                    .font(.subheadline)
-                    .submitLabel(.search)
-                    .onSubmit {
-                        Task { await viewModel.search() }
-                    }
-
-                if !viewModel.searchText.isEmpty {
-                    Button {
-                        viewModel.searchText = ""
-                        Task { await viewModel.search() }
-                    } label: {
-                        Image(systemName: "xmark.circle.fill")
-                            .foregroundStyle(.secondary)
-                            .font(.subheadline)
-                    }
-                }
-            }
-            .padding(.horizontal, 14)
-            .padding(.vertical, 12)
-            .glassBar(cornerRadius: PremiumTokens.cornerMd, material: .ultraThickMaterial, elevation: PremiumTokens.elevation4)
-        }
-    }
-
-    // MARK: - Toggle Controls
-
-    private var toggleControls: some View {
-        VStack(spacing: 6) {
-            Toggle(isOn: $viewModel.showEvents) {
-                Label("Events", systemImage: "calendar")
-            }
-            .toggleStyle(.button)
-            .tint(viewModel.showEvents ? .blue : .gray)
-
-            Toggle(isOn: $viewModel.showRestaurants) {
-                Label("Dining", systemImage: "fork.knife")
-            }
-            .toggleStyle(.button)
-            .tint(viewModel.showRestaurants ? .orange : .gray)
-
-            Toggle(isOn: $viewModel.showAttractions) {
-                Label("Places", systemImage: "mappin.and.ellipse")
-            }
-            .toggleStyle(.button)
-            .tint(viewModel.showAttractions ? .green : .gray)
-        }
-        .font(.caption)
-        .padding(10)
-        .glassBar(cornerRadius: PremiumTokens.cornerMd, material: .ultraThinMaterial, elevation: PremiumTokens.elevation4)
-        .padding(.trailing)
-    }
-
-    // MARK: - Error Overlay
-
-    private func errorOverlay(message: String) -> some View {
-        VStack(spacing: 12) {
-            Image(systemName: "map.fill")
-                .font(.largeTitle)
+            Image(systemName: "magnifyingglass")
                 .foregroundStyle(.secondary)
-
-            Text(message)
                 .font(.subheadline)
-                .foregroundStyle(.secondary)
-                .multilineTextAlignment(.center)
+                .accessibilityHidden(true)
 
-            Button {
-                Task { await viewModel.retry() }
-            } label: {
-                Label("Try Again", systemImage: "arrow.clockwise")
-                    .font(.subheadline.weight(.medium))
+            TextField("Search events, dining, attractions...", text: $viewModel.searchText)
+                .textFieldStyle(.plain)
+                .font(.subheadline)
+                .submitLabel(.search)
+                .onSubmit {
+                    Task { await viewModel.search() }
+                }
+
+            if !viewModel.searchText.isEmpty {
+                Button {
+                    Task { await viewModel.clearSearch() }
+                } label: {
+                    Image(systemName: "xmark.circle.fill")
+                        .foregroundStyle(.secondary)
+                        .font(.subheadline)
+                }
+                .minHitTarget()
+                .accessibilityLabel("Clear search")
             }
-            .buttonStyle(.borderedProminent)
-            .controlSize(.small)
         }
-        .padding(20)
-        .background(.ultraThickMaterial, in: RoundedRectangle(cornerRadius: 16))
-        .shadow(radius: 8)
-        .padding(.horizontal, 40)
+        .padding(.horizontal, 14)
+        .padding(.vertical, 12)
+        .glassBar(cornerRadius: PremiumTokens.cornerMd, material: .ultraThickMaterial, elevation: PremiumTokens.elevation4)
     }
 
     // MARK: - Pin Count Badge
@@ -339,209 +439,17 @@ struct EventMapView: View {
         HStack(spacing: 6) {
             Image(systemName: "mappin.circle.fill")
                 .font(.caption)
-            Text("\(viewModel.totalPinCount) places")
+                .accessibilityHidden(true)
+            Text("^[\(viewModel.totalPinCount) place](inflect: true)")
                 .font(.caption2.weight(.semibold))
+            if viewModel.searchResultsOutsideArea > 0 {
+                Text("· \(viewModel.searchResultsOutsideArea) more results elsewhere")
+                    .font(.caption2)
+            }
         }
         .padding(.horizontal, 12)
         .padding(.vertical, 7)
         .glassChip(cornerRadius: 999, material: .ultraThinMaterial)
-    }
-
-    // MARK: - Event Popup
-
-    private func eventPopup(_ event: Event) -> some View {
-        HStack(spacing: 12) {
-            CachedAsyncImage(url: event.imageUrl) {
-                ZStack {
-                    Rectangle().fill(event.eventCategory.color.opacity(0.15))
-                    Image(systemName: event.eventCategory.icon)
-                        .foregroundStyle(event.eventCategory.color.opacity(0.5))
-                }
-            }
-            .frame(width: 64, height: 64)
-            .clipShape(RoundedRectangle(cornerRadius: 10))
-
-            VStack(alignment: .leading, spacing: 4) {
-                Text(event.title)
-                    .font(.subheadline.weight(.semibold))
-                    .lineLimit(1)
-
-                if let date = event.parsedDate {
-                    Text(date.formatted(.dateTime.month(.abbreviated).day().hour().minute()))
-                        .font(.caption)
-                        .foregroundStyle(.secondary)
-                }
-
-                Text(event.displayLocation)
-                    .font(.caption2)
-                    .foregroundStyle(.tertiary)
-                    .lineLimit(1)
-            }
-            .accessibilityElement(children: .combine)
-
-            Spacer()
-
-            Button {
-                navigationPath.append(event)
-            } label: {
-                Image(systemName: "chevron.right.circle.fill")
-                    .font(.title2)
-                    .foregroundStyle(Color.accentColor)
-            }
-            .minHitTarget()
-            .accessibilityLabel("Open \(event.title)")
-
-            Button {
-                viewModel.selectedEvent = nil
-            } label: {
-                Image(systemName: "xmark.circle.fill")
-                    .font(.title3)
-                    .foregroundStyle(.secondary)
-            }
-            .minHitTarget()
-            .accessibilityLabel("Close")
-        }
-        .padding(14)
-        .background(.ultraThickMaterial, in: RoundedRectangle(cornerRadius: 16))
-        .shadow(radius: 8)
-        .padding()
-        .transition(.move(edge: .bottom).combined(with: .opacity))
-    }
-
-    // MARK: - Restaurant Popup
-
-    private func restaurantPopup(_ restaurant: Restaurant) -> some View {
-        HStack(spacing: 12) {
-            CachedAsyncImage(url: restaurant.imageUrl) {
-                ZStack {
-                    Rectangle().fill(Color.orange.opacity(0.1))
-                    Image(systemName: "fork.knife")
-                        .foregroundStyle(.orange.opacity(0.4))
-                }
-            }
-            .frame(width: 64, height: 64)
-            .clipShape(RoundedRectangle(cornerRadius: 10))
-
-            VStack(alignment: .leading, spacing: 4) {
-                Text(restaurant.name)
-                    .font(.subheadline.weight(.semibold))
-                    .lineLimit(1)
-
-                HStack(spacing: 6) {
-                    if let cuisine = restaurant.cuisine {
-                        Text(cuisine)
-                            .font(.caption)
-                            .foregroundStyle(.secondary)
-                    }
-                    if let rating = restaurant.rating {
-                        HStack(spacing: 2) {
-                            Image(systemName: "star.fill")
-                                .font(.system(size: 9))
-                                .foregroundStyle(.yellow)
-                            Text(String(format: "%.1f", rating))
-                                .font(.caption2)
-                        }
-                    }
-                }
-
-                Text(restaurant.displayLocation)
-                    .font(.caption2)
-                    .foregroundStyle(.tertiary)
-                    .lineLimit(1)
-            }
-            .accessibilityElement(children: .combine)
-
-            Spacer()
-
-            if let url = restaurant.callURL {
-                Link(destination: url) {
-                    Image(systemName: "phone.circle.fill")
-                        .font(.title2)
-                        .foregroundStyle(.green)
-                }
-                .minHitTarget()
-                .accessibilityLabel("Call \(restaurant.name)")
-            }
-
-            Button {
-                viewModel.selectedRestaurant = nil
-            } label: {
-                Image(systemName: "xmark.circle.fill")
-                    .font(.title3)
-                    .foregroundStyle(.secondary)
-            }
-            .minHitTarget()
-            .accessibilityLabel("Close")
-        }
-        .padding(14)
-        .background(.ultraThickMaterial, in: RoundedRectangle(cornerRadius: 16))
-        .shadow(radius: 8)
-        .padding()
-        .transition(.move(edge: .bottom).combined(with: .opacity))
-    }
-
-    // MARK: - Attraction Popup
-
-    private func attractionPopup(_ attraction: Attraction) -> some View {
-        HStack(spacing: 12) {
-            CachedAsyncImage(url: attraction.imageUrl) {
-                ZStack {
-                    Rectangle().fill(Color.green.opacity(0.1))
-                    Image(systemName: attraction.attractionType.icon)
-                        .foregroundStyle(.green.opacity(0.4))
-                }
-            }
-            .frame(width: 64, height: 64)
-            .clipShape(RoundedRectangle(cornerRadius: 10))
-
-            VStack(alignment: .leading, spacing: 4) {
-                Text(attraction.name)
-                    .font(.subheadline.weight(.semibold))
-                    .lineLimit(1)
-
-                Text(attraction.attractionType.displayName)
-                    .font(.caption)
-                    .foregroundStyle(.secondary)
-
-                if let rating = attraction.rating {
-                    HStack(spacing: 2) {
-                        Image(systemName: "star.fill")
-                            .font(.system(size: 9))
-                            .foregroundStyle(.yellow)
-                        Text(String(format: "%.1f", rating))
-                            .font(.caption2)
-                    }
-                }
-            }
-            .accessibilityElement(children: .combine)
-
-            Spacer()
-
-            if let url = attraction.websiteURL {
-                Link(destination: url) {
-                    Image(systemName: "safari")
-                        .font(.title2)
-                        .foregroundStyle(Color.accentColor)
-                }
-                .minHitTarget()
-                .accessibilityLabel("Open \(attraction.name) website")
-            }
-
-            Button {
-                viewModel.selectedAttraction = nil
-            } label: {
-                Image(systemName: "xmark.circle.fill")
-                    .font(.title3)
-                    .foregroundStyle(.secondary)
-            }
-            .minHitTarget()
-            .accessibilityLabel("Close")
-        }
-        .padding(14)
-        .background(.ultraThickMaterial, in: RoundedRectangle(cornerRadius: 16))
-        .shadow(radius: 8)
-        .padding()
-        .transition(.move(edge: .bottom).combined(with: .opacity))
     }
 
     // MARK: - Loading
@@ -560,24 +468,100 @@ struct EventMapView: View {
     }
 }
 
+// MARK: - Render items resolved to annotations
+
+/// A MapRenderItem with its annotation looked up, so the Map builder is a
+/// plain switch with no optional lookups.
+private enum MapPinItem: Identifiable {
+    case event(EventAnnotation)
+    case restaurant(RestaurantAnnotation)
+    case attraction(AttractionAnnotation)
+    case cluster(MapCluster)
+
+    var id: String {
+        switch self {
+        case .event(let a): return "event-\(a.id)"
+        case .restaurant(let a): return "restaurant-\(a.id)"
+        case .attraction(let a): return "attraction-\(a.id)"
+        case .cluster(let c): return "cluster-\(c.id)"
+        }
+    }
+}
+
+// MARK: - Lifecycle
+
+/// Loading, foreground and permission hooks, split out of EventMapView.body
+/// to keep that expression small.
+private struct MapLifecycleModifier: ViewModifier {
+    let viewModel: MapViewModel
+    let authorizationStatus: CLAuthorizationStatus
+    let scenePhase: ScenePhase
+    let onFirstAppear: () -> Void
+
+    func body(content: Content) -> some View {
+        content
+            // First appearance loads; later ones only refresh stale data
+            // (IOS-DD-MAP-04).
+            .task { await viewModel.loadIfNeeded() }
+            .onAppear(perform: onFirstAppear)
+            .onChange(of: scenePhase) { _, phase in
+                if phase == .active {
+                    Task { await viewModel.sceneBecameActive() }
+                }
+            }
+            // "Allow" answered after the first load: reload around the user
+            // (IOS-DD-MAP-06). Not while a search is showing, which the
+            // nearby reload would replace under a field still holding the query.
+            .onChange(of: authorizationStatus) { old, new in
+                if viewModel.hasLoadedOnce, viewModel.activeQuery == nil,
+                   !LocationService.isAuthorized(old), LocationService.isAuthorized(new) {
+                    Task { await viewModel.reloadNearMe() }
+                }
+            }
+            // One haptic and one VoiceOver count per filter change
+            // (IOS-DD-MAP-13).
+            .onChange(of: viewModel.filterSignature) { _, _ in
+                UISelectionFeedbackGenerator().selectionChanged()
+                AccessibilityNotification.Announcement("\(viewModel.totalPinCount) places shown").post()
+            }
+    }
+}
+
 // MARK: - Custom Map Pins
 
 private struct EventMapPin: View {
     let category: EventCategory
     var isSelected: Bool = false
+    /// On now or later today: white ring and a dot (IOS-DD-MAP-13). Static,
+    /// so nothing moves under Reduce Motion.
+    var isTonight: Bool = false
     // Drop the selection spring under Reduce Motion (IOS-AUDIT-UX-047).
     @Environment(\.accessibilityReduceMotion) private var reduceMotion
 
     var body: some View {
         ZStack {
             Circle()
-                .fill(category.color)
+                .fill(MapPalette.event)
                 .frame(width: isSelected ? 40 : 32, height: isSelected ? 40 : 32)
-                .shadow(color: category.color.opacity(0.4), radius: isSelected ? 6 : 3)
+                .shadow(color: MapPalette.event.opacity(0.4), radius: isSelected ? 6 : 3)
+
+            if isTonight {
+                Circle()
+                    .strokeBorder(Color.white, lineWidth: 2)
+                    .frame(width: isSelected ? 40 : 32, height: isSelected ? 40 : 32)
+            }
 
             Image(systemName: category.icon)
                 .font(.system(size: isSelected ? 16 : 12, weight: .semibold))
                 .foregroundStyle(.white)
+        }
+        .overlay(alignment: .topTrailing) {
+            if isTonight {
+                Circle()
+                    .fill(Color.yellow)
+                    .frame(width: 9, height: 9)
+                    .overlay(Circle().strokeBorder(Color.white, lineWidth: 1.5))
+            }
         }
         .animation(reduceMotion ? nil : .spring(response: 0.3), value: isSelected)
     }
@@ -590,9 +574,9 @@ private struct RestaurantMapPin: View {
     var body: some View {
         ZStack {
             Circle()
-                .fill(Color.orange)
+                .fill(MapPalette.restaurant)
                 .frame(width: isSelected ? 38 : 30, height: isSelected ? 38 : 30)
-                .shadow(color: .orange.opacity(0.4), radius: isSelected ? 6 : 3)
+                .shadow(color: MapPalette.restaurant.opacity(0.4), radius: isSelected ? 6 : 3)
 
             Image(systemName: "fork.knife")
                 .font(.system(size: isSelected ? 14 : 11, weight: .semibold))
@@ -643,9 +627,9 @@ private struct AttractionMapPin: View {
     var body: some View {
         ZStack {
             Circle()
-                .fill(Color.green)
+                .fill(MapPalette.attraction)
                 .frame(width: isSelected ? 38 : 30, height: isSelected ? 38 : 30)
-                .shadow(color: .green.opacity(0.4), radius: isSelected ? 6 : 3)
+                .shadow(color: MapPalette.attraction.opacity(0.4), radius: isSelected ? 6 : 3)
 
             Image(systemName: type.icon)
                 .font(.system(size: isSelected ? 14 : 11, weight: .semibold))
@@ -684,7 +668,7 @@ private struct ClusterDisambiguationSheet: View {
                             .foregroundStyle(.tertiary)
                     }
                 }
-                .accessibilityHint("Opens this place")
+                .accessibilityHint("Shows it on the map")
             }
             .navigationTitle("\(members.count) places here")
             .navigationBarTitleDisplayMode(.inline)

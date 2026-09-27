@@ -385,55 +385,85 @@ actor RestaurantsService {
 
     // MARK: - Nearby Restaurants
 
+    /// Nearest restaurants, full rows where the backend has
+    /// `restaurants_within_radius_v2` (IOS-DD-MAP-02).
+    ///
+    /// Only a thrown RPC falls back to the table. An empty answer is an
+    /// answer: falling back on [] used to run the unbounded table query below
+    /// for every quiet area of the map.
     func fetchNearbyRestaurants(latitude: Double, longitude: Double, radiusMiles: Double = 25, limit: Int = 100) async throws -> [Restaurant] {
-        // Try PostGIS RPC first for optimal performance
-        if let rpcResults = try? await fetchNearbyRestaurantsViaRPC(latitude: latitude, longitude: longitude, radiusMiles: radiusMiles, limit: limit),
-           !rpcResults.isEmpty {
-            return rpcResults
+        do {
+            return try await fetchNearbyRestaurantsViaRPC(latitude: latitude, longitude: longitude, radiusMiles: radiusMiles, limit: limit)
+        } catch is CancellationError {
+            throw CancellationError()
+        } catch {
+            // Fallback: direct table query with client-side distance filtering
+            return try await fetchNearbyRestaurantsViaTable(latitude: latitude, longitude: longitude, radiusMiles: radiusMiles, limit: limit)
         }
-        // Fallback: direct table query with client-side distance filtering
-        return try await fetchNearbyRestaurantsViaTable(latitude: latitude, longitude: longitude, radiusMiles: radiusMiles, limit: limit)
     }
 
+    private struct NearbyParams: Encodable {
+        let center_lat: Double
+        let center_lng: Double
+        let radius_miles: Double
+        let limit_count: Int
+    }
+
+    /// v2 returns full rows (photo, hours, phone, sponsorship) and excludes
+    /// merged and permanently closed restaurants; v1 is the narrow projection
+    /// a backend without migration 20261013000001 still has.
     private func fetchNearbyRestaurantsViaRPC(latitude: Double, longitude: Double, radiusMiles: Double, limit: Int) async throws -> [Restaurant] {
-        struct NearbyParams: Encodable {
-            let center_lat: Double
-            let center_lng: Double
-            let radius_miles: Double
-            let limit_count: Int
-        }
-
         let client = try db()
-        let restaurants: [Restaurant] = try await client
-            .rpc("restaurants_within_radius", params: NearbyParams(
-                center_lat: latitude,
-                center_lng: longitude,
-                radius_miles: radiusMiles,
-                limit_count: limit
-            ))
-            .execute()
-            .value
-        return restaurants
+        let params = NearbyParams(center_lat: latitude, center_lng: longitude, radius_miles: radiusMiles, limit_count: limit)
+        do {
+            let restaurants: [Restaurant] = try await client
+                .rpc("restaurants_within_radius_v2", params: params)
+                .execute()
+                .value
+            return restaurants
+        } catch is CancellationError {
+            throw CancellationError()
+        } catch {
+            let restaurants: [Restaurant] = try await client
+                .rpc("restaurants_within_radius", params: params)
+                .execute()
+                .value
+            return restaurants
+        }
     }
 
+    /// IOS-AUDIT-PERF-027, as for events and attractions: the bounding box and
+    /// the merge filter go BEFORE the limit. This took the first `limit` rows
+    /// of the whole table in no order and then filtered by distance, so which
+    /// restaurants survived was arbitrary (IOS-DD-MAP-02).
     private func fetchNearbyRestaurantsViaTable(latitude: Double, longitude: Double, radiusMiles: Double, limit: Int) async throws -> [Restaurant] {
         let client = try db()
+        let box = GeoBoundingBox(centerLat: latitude, centerLng: longitude, radiusMiles: radiusMiles)
         let restaurants: [Restaurant] = try await client
             .from("restaurants")
             .select()
-            .not("latitude", operator: .is, value: "null")
-            .not("longitude", operator: .is, value: "null")
+            .neq("is_merged", value: true)
+            .gte("latitude", value: box.minLat)
+            .lte("latitude", value: box.maxLat)
+            .gte("longitude", value: box.minLng)
+            .lte("longitude", value: box.maxLng)
             .limit(limit)
             .execute()
             .value
 
+        // The box is a square around a circle, so the corners still need the
+        // exact distance check; nearest first, like the RPC.
         let center = CLLocation(latitude: latitude, longitude: longitude)
         let radiusMeters = radiusMiles * 1609.34
-        return restaurants.filter { restaurant in
-            guard let coord = restaurant.coordinate else { return false }
-            let loc = CLLocation(latitude: coord.latitude, longitude: coord.longitude)
-            return center.distance(from: loc) <= radiusMeters
-        }
+        return restaurants
+            .compactMap { restaurant -> (Restaurant, Double)? in
+                guard let coord = restaurant.coordinate else { return nil }
+                let loc = CLLocation(latitude: coord.latitude, longitude: coord.longitude)
+                let distance = center.distance(from: loc)
+                return distance <= radiusMeters ? (restaurant, distance) : nil
+            }
+            .sorted { $0.1 < $1.1 }
+            .map(\.0)
     }
 
     // MARK: - Fuzzy Search Fallback
