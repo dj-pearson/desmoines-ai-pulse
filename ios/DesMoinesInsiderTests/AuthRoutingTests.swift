@@ -36,6 +36,13 @@ final class AuthRoutingTests: XCTestCase {
         var resetCount = 0
         var appleCount = 0
 
+        /// What signUp returns (IOS-DD-ACCOUNT-01). Confirmation-on is the
+        /// production default, so no session comes back.
+        var signUpOutcome: AuthService.SignUpOutcome = .checkInbox
+        var lastSignUpInterests: [String]?
+        var lastSignUpEmailOptIn: Bool?
+        var resentEmails: [String] = []
+
         /// Thrown by every call when set.
         var nextError: Error?
 
@@ -48,8 +55,16 @@ final class AuthRoutingTests: XCTestCase {
             try throwIfNeeded()
         }
 
-        func signUp(email: String, password: String, firstName: String?, lastName: String?, interests: [String]?) async throws {
+        func signUp(email: String, password: String, firstName: String?, lastName: String?, interests: [String], emailOptIn: Bool) async throws -> AuthService.SignUpOutcome {
             signUpCount += 1
+            lastSignUpInterests = interests
+            lastSignUpEmailOptIn = emailOptIn
+            try throwIfNeeded()
+            return signUpOutcome
+        }
+
+        func resend(email: String) async throws {
+            resentEmails.append(email)
             try throwIfNeeded()
         }
 
@@ -78,9 +93,33 @@ final class AuthRoutingTests: XCTestCase {
     private static let mismatchedConfirmation = validPassword + "-different"
     private static let rejectedPassword = "not-the-right-one"
 
+    /// Interest picks live in a throwaway suite, not the real defaults.
+    private static let suiteName = "AuthRoutingTests.interests"
+    private var interestDefaults: UserDefaults!
+    /// signUp writes ConsentService.emailConsent; restore what the runner had.
+    private var savedEmailConsent: Any?
+
+    override func setUp() {
+        super.setUp()
+        interestDefaults = UserDefaults(suiteName: Self.suiteName)
+        interestDefaults.removePersistentDomain(forName: Self.suiteName)
+        savedEmailConsent = UserDefaults.standard.object(forKey: "gdpr_consent_email")
+    }
+
+    override func tearDown() {
+        interestDefaults.removePersistentDomain(forName: Self.suiteName)
+        if let savedEmailConsent {
+            UserDefaults.standard.set(savedEmailConsent, forKey: "gdpr_consent_email")
+        } else {
+            UserDefaults.standard.removeObject(forKey: "gdpr_consent_email")
+        }
+        super.tearDown()
+    }
+
     private func makeViewModel() -> (AuthViewModel, FakeAuth) {
         let fake = FakeAuth()
-        return (AuthViewModel(auth: fake), fake)
+        let prefs = InterestPreferences(defaults: interestDefaults)
+        return (AuthViewModel(auth: fake, interestPreferences: prefs), fake)
     }
 
     // MARK: - Sign in: guards run before the service is touched
@@ -122,7 +161,9 @@ final class AuthRoutingTests: XCTestCase {
         XCTAssertEqual(vm.password, "")
     }
 
-    func testFailedSignInSurfacesTheServiceMessageAsAnError() async {
+    /// Wrong credentials get fixed copy, not the server's text
+    /// (IOS-DD-ACCOUNT-06).
+    func testFailedSignInSurfacesMappedCopyAsAnError() async {
         let (vm, fake) = makeViewModel()
         fake.nextError = FakeAuth.Failure(message: "Invalid login credentials")
         vm.email = "a@b.com"
@@ -130,7 +171,7 @@ final class AuthRoutingTests: XCTestCase {
         await vm.signIn()
 
         XCTAssertTrue(vm.showError)
-        XCTAssertEqual(vm.errorMessage, "Invalid login credentials")
+        XCTAssertEqual(vm.errorMessage, "Email or password is incorrect.")
         XCTAssertFalse(vm.showInfo, "a failure must never route to the neutral info alert")
         XCTAssertFalse(vm.isSigningIn)
         XCTAssertEqual(vm.email, "a@b.com", "a failed sign-in keeps the form so the user can retry")
@@ -228,7 +269,7 @@ final class AuthRoutingTests: XCTestCase {
         vm.password = Self.validPassword
         vm.confirmPassword = Self.validPassword
         vm.firstName = "Ada"
-        vm.selectedInterests = ["Food"]
+        vm.emailOptIn = true
         await vm.signUp()
 
         XCTAssertEqual(fake.signUpCount, 1)
@@ -238,7 +279,98 @@ final class AuthRoutingTests: XCTestCase {
         XCTAssertFalse(vm.isSigningUp)
         XCTAssertEqual(vm.email, "")
         XCTAssertEqual(vm.firstName, "")
-        XCTAssertTrue(vm.selectedInterests.isEmpty)
+        XCTAssertFalse(vm.emailOptIn)
+    }
+
+    // MARK: - IOS-DD-ACCOUNT-01: sign-up outcome
+
+    /// No session back is the normal confirmation-on path, and also what a
+    /// reused address gets. It must read as success, keep the address for
+    /// Resend, and show no error.
+    func testSignUpWithoutSessionShowsCheckInboxAndNoError() async {
+        let (vm, fake) = makeViewModel()
+        fake.signUpOutcome = .checkInbox
+        vm.email = "new@b.com"
+        vm.password = Self.validPassword
+        vm.confirmPassword = Self.validPassword
+        await vm.signUp()
+
+        XCTAssertTrue(vm.showVerificationAlert)
+        XCTAssertFalse(vm.showError)
+        XCTAssertEqual(vm.pendingVerificationEmail, "new@b.com")
+    }
+
+    func testSignUpWithSessionDoesNotAskForTheInbox() async {
+        let (vm, fake) = makeViewModel()
+        fake.signUpOutcome = .signedIn
+        vm.email = "new@b.com"
+        vm.password = Self.validPassword
+        vm.confirmPassword = Self.validPassword
+        await vm.signUp()
+
+        XCTAssertFalse(vm.showVerificationAlert)
+        XCTAssertFalse(vm.showError)
+        XCTAssertNil(vm.pendingVerificationEmail)
+    }
+
+    /// Interests come from the onboarding picks, normalized to web ids.
+    func testSignUpSendsInterestIdsAndOptIn() async {
+        let (vm, fake) = makeViewModel()
+        InterestPreferences(defaults: interestDefaults).local = ["Music", "Business", "food"]
+        vm.email = "a@b.com"
+        vm.password = Self.validPassword
+        vm.confirmPassword = Self.validPassword
+        vm.emailOptIn = true
+        await vm.signUp()
+
+        XCTAssertEqual(fake.lastSignUpInterests, ["music", "networking", "food"])
+        XCTAssertEqual(fake.lastSignUpEmailOptIn, true)
+    }
+
+    // MARK: - IOS-DD-ACCOUNT-06: unconfirmed email
+
+    /// "Email not confirmed" means the password was right. It must not count
+    /// toward the lockout, and it must leave the address for Resend.
+    func testEmailNotConfirmedDoesNotCountTowardLockout() async {
+        let (vm, fake) = makeViewModel()
+        fake.nextError = NSError(
+            domain: "AuthError",
+            code: 400,
+            userInfo: [NSLocalizedDescriptionKey: "Email not confirmed"]
+        )
+        vm.email = "a@b.com"
+        vm.password = Self.validPassword
+        for _ in 0..<5 {
+            await vm.signIn()
+        }
+
+        XCTAssertFalse(vm.isLockedOut)
+        XCTAssertEqual(fake.signInCount, 5)
+        XCTAssertEqual(vm.pendingVerificationEmail, "a@b.com")
+        XCTAssertFalse(vm.showError)
+    }
+
+    func testResendCallsFakeWithTypedEmail() async {
+        let (vm, fake) = makeViewModel()
+        fake.nextError = NSError(
+            domain: "AuthError",
+            code: 400,
+            userInfo: [NSLocalizedDescriptionKey: "Email not confirmed"]
+        )
+        vm.email = "a@b.com"
+        vm.password = Self.validPassword
+        await vm.signIn()
+
+        fake.nextError = nil
+        await vm.resendVerification()
+
+        XCTAssertEqual(fake.resentEmails, ["a@b.com"])
+        XCTAssertTrue(vm.showInfo)
+        XCTAssertEqual(vm.resendCooldownRemaining, 60)
+
+        // Inside the cooldown a second tap is not sent.
+        await vm.resendVerification()
+        XCTAssertEqual(fake.resentEmails.count, 1)
     }
 
     func testFailedSignUpDoesNotRaiseTheVerificationAlert() async {
@@ -251,6 +383,7 @@ final class AuthRoutingTests: XCTestCase {
 
         XCTAssertFalse(vm.showVerificationAlert, "a failed sign-up must not tell the user to check their inbox")
         XCTAssertTrue(vm.showError)
+        // Unclassified server text still passes through (AuthFailure.other).
         XCTAssertEqual(vm.errorMessage, "Email already registered")
     }
 
@@ -266,7 +399,7 @@ final class AuthRoutingTests: XCTestCase {
 
         XCTAssertEqual(fake.resetCount, 1)
         XCTAssertTrue(vm.showInfo)
-        XCTAssertEqual(vm.infoMessage, "Password reset email sent. Check your inbox.")
+        XCTAssertEqual(vm.infoMessage, "Password reset email sent. Open the link on this iPhone to choose a new password.")
         XCTAssertFalse(vm.showError)
         XCTAssertNil(vm.errorMessage)
     }
@@ -278,19 +411,23 @@ final class AuthRoutingTests: XCTestCase {
         await vm.resetPassword()
 
         XCTAssertTrue(vm.showError)
-        XCTAssertEqual(vm.errorMessage, "Rate limit exceeded")
+        XCTAssertEqual(vm.errorMessage, "Too many attempts. Wait a minute and try again.")
         XCTAssertFalse(vm.showInfo)
         XCTAssertNil(vm.infoMessage)
     }
 
-    func testResetWithNoEmailErrorsWithoutCallingTheService() async {
+    /// No address typed is guidance, not a failure (IOS-DD-ACCOUNT-15).
+    func testForgotPasswordWithEmptyEmailSetsHintNotError() async {
         let (vm, fake) = makeViewModel()
         await vm.resetPassword()
 
-        XCTAssertTrue(vm.showError)
-        XCTAssertEqual(vm.errorMessage, "Please enter your email address.")
+        XCTAssertFalse(vm.showError)
+        XCTAssertNotNil(vm.emailFieldHint)
         XCTAssertFalse(vm.showInfo)
         XCTAssertEqual(fake.resetCount, 0)
+
+        vm.email = "a"
+        XCTAssertNil(vm.emailFieldHint, "typing clears the hint")
     }
 
     // MARK: - Apple Sign-In dismissals (IOS-AUDIT-UX-029)

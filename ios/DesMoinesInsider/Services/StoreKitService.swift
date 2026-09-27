@@ -1,6 +1,7 @@
 import Foundation
 import os
 import StoreKit
+import UIKit
 
 /// Manages In-App Purchases via StoreKit 2.
 /// Handles product loading, purchasing, restoring, and entitlement verification.
@@ -111,6 +112,28 @@ final class StoreKitService {
     var currentTier: SubscriptionTier {
         let local = localTier
         return Self.tierRank(local) >= Self.tierRank(backendTier) ? local : backendTier
+    }
+
+    /// True when this Apple ID holds an Insider/VIP subscription. Deleting the
+    /// account does not cancel it (Apple bills it, not us), so the deletion
+    /// alerts say so (IOS-DD-ACCOUNT-08).
+    var hasAppStoreSubscription: Bool { localTier != .free }
+
+    /// Opens Apple's manage-subscriptions sheet on the foreground scene, or the
+    /// App Store subscriptions page when there is no scene or the sheet fails.
+    func showManageSubscriptions() async {
+        if let scene = UIApplication.shared.connectedScenes
+            .first(where: { $0.activationState == .foregroundActive }) as? UIWindowScene {
+            do {
+                try await AppStore.showManageSubscriptions(in: scene)
+                return
+            } catch {
+                AppLogger.storekit.warning("showManageSubscriptions failed: \(error.localizedDescription)")
+            }
+        }
+        if let url = URL(string: "https://apps.apple.com/account/subscriptions") {
+            _ = await UIApplication.shared.open(url)
+        }
     }
 
     /// Tier resolved from local StoreKit entitlements only. Server-revoked

@@ -33,6 +33,18 @@ final class AuthService {
     private(set) var isAdmin = false
     private(set) var isLoading = true
 
+    /// Set when a cold launch found an admin session already past its
+    /// timeout and signed it out (IOS-DD-ACCOUNT-02). The app shell shows it
+    /// in the "Signed Out" alert and clears it.
+    var launchSignOutMessage: String?
+
+    /// True while the user arrived through a password-recovery link and has
+    /// not chosen a new password yet (IOS-DD-ACCOUNT-07). Routes the app to
+    /// SetNewPasswordView.
+    private(set) var needsPasswordReset = false
+
+    private static let pendingRecoveryKey = "pending_password_recovery_at"
+
     /// True when the signed-in user's email has not yet been confirmed.
     /// Apple Sign-In users are treated as verified (Apple pre-verifies the
     /// email before returning it to us).
@@ -120,15 +132,41 @@ final class AuthService {
             guard let self else { return }
             for await (event, session) in supabase.auth.authStateChanges {
                 switch event {
-                case .initialSession, .signedIn, .tokenRefreshed:
+                case .initialSession, .signedIn, .tokenRefreshed, .passwordRecovery:
+                    // An admin session that timed out while the app was closed
+                    // is signed out BEFORE any authenticated UI renders. This
+                    // used to run in the app's launch .task, which raced this
+                    // listener and usually read timestamps it had just reset
+                    // (IOS-DD-ACCOUNT-02).
+                    if event == .initialSession, session?.user != nil,
+                       SessionTimeoutService.shared.expireIfStaleOnLaunch() {
+                        try? await self.signOut()
+                        self.launchSignOutMessage = "Your session expired while the app was closed. Please sign in again."
+                        self.isLoading = false
+                        continue
+                    }
                     self.currentUser = session?.user
                     self.isAuthenticated = session?.user != nil
+                    if event == .passwordRecovery {
+                        // Implicit-flow recovery links say so. PKCE links arrive
+                        // as .signedIn and are caught by noteAuthCallback.
+                        self.needsPasswordReset = true
+                    }
                     if let userId = session?.user.id.uuidString {
                         await self.fetchProfile(userId: userId)
                         await self.checkAdminRole(userId: userId)
-                        // Begin enforcing the documented idle/absolute timeouts.
-                        // Restart on tokenRefreshed so admin-role changes apply.
-                        SessionTimeoutService.shared.startTracking(isAdmin: self.isAdmin)
+                        // Admin-only timeouts. Only a real sign-in starts a new
+                        // absolute clock; a launch keeps the persisted one and a
+                        // token refresh only re-applies the role
+                        // (IOS-DD-ACCOUNT-02).
+                        switch event {
+                        case .signedIn, .passwordRecovery:
+                            SessionTimeoutService.shared.startTracking(isAdmin: self.isAdmin, resetClock: true)
+                        case .initialSession:
+                            SessionTimeoutService.shared.startTracking(isAdmin: self.isAdmin, resetClock: false)
+                        default:
+                            SessionTimeoutService.shared.updateRole(isAdmin: self.isAdmin)
+                        }
                         // Re-resolve the backend tier so a fresh sign-in (or a
                         // sign-in to a different account in the same session)
                         // immediately reflects the new account's entitlements.
@@ -141,6 +179,10 @@ final class AuthService {
                         // `isLoading` below does not wait on four more queries.
                         if event == .signedIn {
                             Task { await FavoritesService.shared.loadFavorites() }
+                            // Onboarding picks and a pre-sign-in email opt-in
+                            // reach the account (IOS-DD-ACCOUNT-04 / -10).
+                            await self.syncOnboardingInterestsIfNeeded()
+                            Task { await self.syncEmailConsentIfNeeded(userId: userId) }
                         }
                     }
                 case .signedOut:
@@ -175,28 +217,72 @@ final class AuthService {
         )
         currentUser = session.user
         isAuthenticated = true
+        // Signing in with a password proves the user knows it, so a recovery
+        // flag left by a link that never completed must not route them to
+        // "choose a new password" (IOS-DD-ACCOUNT-07).
+        needsPasswordReset = false
+        // And a marker left by that request must not turn the next auth
+        // callback within the hour (Google, an email confirmation) into a
+        // "choose a new password" screen.
+        UserDefaults.standard.removeObject(forKey: Self.pendingRecoveryKey)
     }
 
-    func signUp(email: String, password: String, firstName: String?, lastName: String?, interests: [String]?) async throws {
+    /// What the sign-up screen should say next (IOS-DD-ACCOUNT-01).
+    enum SignUpOutcome: Equatable {
+        /// A session came back (email confirmation is off): the user is in.
+        case signedIn
+        /// No session: a confirmation mail is on its way. A reused address
+        /// also lands here (Supabase answers it with a user that has no
+        /// identities and no session), so the screen reads the same for a new
+        /// and an existing address and does not reveal which it was.
+        case checkInbox
+    }
+
+    /// Creates the account. The profile row, interests and the email opt-in
+    /// are written by the `handle_new_user` trigger from the metadata sent
+    /// here (20261004000001), in the same transaction as the auth user.
+    ///
+    /// This used to insert the profile itself afterwards. The trigger had
+    /// already made the row and `user_id` is UNIQUE, so that insert failed
+    /// (23505 with a session, RLS as anon without one) and every email
+    /// sign-up showed an error for an account that had just been created
+    /// (IOS-DD-ACCOUNT-01).
+    func signUp(
+        email: String,
+        password: String,
+        firstName: String?,
+        lastName: String?,
+        interests: [String],
+        emailOptIn: Bool
+    ) async throws -> SignUpOutcome {
         guard let supabase else { throw AuthError.notConfigured }
+        var data: [String: AnyJSON] = [
+            "first_name": firstName.map { .string($0) } ?? .null,
+            "last_name": lastName.map { .string($0) } ?? .null,
+            // record_signup_consent and the digest seed both read this key.
+            "consent": .object(["email_marketing_consent": .bool(emailOptIn)]),
+        ]
+        let ids = InterestCatalog.normalize(interests)
+        if !ids.isEmpty {
+            data["interests"] = .array(ids.map { AnyJSON.string($0) })
+        }
         let response = try await supabase.auth.signUp(
             email: email,
             password: password,
-            data: [
-                "first_name": firstName.map { .string($0) } ?? .null,
-                "last_name": lastName.map { .string($0) } ?? .null,
-            ]
+            data: data
         )
+        guard let session = response.session else { return .checkInbox }
+        currentUser = session.user
+        isAuthenticated = true
+        return .signedIn
+    }
 
-        // Create profile (response.user is non-optional in Supabase Swift SDK 2.x)
-        let user = response.user
-        try await createProfile(
-            userId: user.id.uuidString,
-            email: email,
-            firstName: firstName,
-            lastName: lastName,
-            interests: interests
-        )
+    /// Resends the sign-up confirmation to an address typed on the sign-in
+    /// screen (no session exists yet, so resendVerificationEmail cannot be
+    /// used). GoTrue answers the same whether or not the address exists.
+    func resend(email: String) async throws {
+        guard let supabase else { throw AuthError.notConfigured }
+        try await supabase.auth.resend(email: email, type: .signup)
     }
 
     func signOut() async throws {
@@ -210,6 +296,8 @@ final class AuthService {
             currentProfile = nil
             isAuthenticated = false
             isAdmin = false
+            needsPasswordReset = false
+            UserDefaults.standard.removeObject(forKey: Self.pendingRecoveryKey)
 
             // BiometricAuthService.reset() reads its Keychain entry to disable —
             // run it BEFORE KeychainService.deleteAll() so the log line is accurate.
@@ -235,6 +323,7 @@ final class AuthService {
         FavoritesService.shared.reset()
         RecentlyViewedService.shared.clear()
         SearchHistoryService.shared.clearAll()
+        EmailPreferencesService.shared.reset()
         // Spotlight + QueryCache are actor-isolated; fire-and-forget detached tasks.
         Task.detached {
             await SpotlightService.shared.removeAllItems()
@@ -245,6 +334,40 @@ final class AuthService {
     func resetPassword(email: String) async throws {
         guard let supabase else { throw AuthError.notConfigured }
         try await supabase.auth.resetPasswordForEmail(email)
+        // Under PKCE the recovery link comes back as an ordinary
+        // `<bundle>://auth-callback?code=` URL and the SDK emits .signedIn, not
+        // .passwordRecovery, so remember that a reset is pending and recognise
+        // the callback in noteAuthCallback (IOS-DD-ACCOUNT-07).
+        UserDefaults.standard.set(Date(), forKey: Self.pendingRecoveryKey)
+    }
+
+    /// Called from onOpenURL BEFORE the SDK handles the URL.
+    func noteAuthCallback(_ url: URL) {
+        let markedAt = UserDefaults.standard.object(forKey: Self.pendingRecoveryKey) as? Date
+        guard Self.isRecoveryCallback(url: url, markedAt: markedAt, now: Date()) else { return }
+        needsPasswordReset = true
+        UserDefaults.standard.removeObject(forKey: Self.pendingRecoveryKey)
+    }
+
+    /// An auth callback within an hour of requesting a reset (the link's own
+    /// lifetime) is treated as the recovery link.
+    static func isRecoveryCallback(url: URL, markedAt: Date?, now: Date) -> Bool {
+        guard url.absoluteString.contains("auth-callback"), let markedAt else { return false }
+        let age = now.timeIntervalSince(markedAt)
+        return age >= 0 && age < 60 * 60
+    }
+
+    /// Sets a new password for the signed-in (recovery) session.
+    func updatePassword(_ newPassword: String) async throws {
+        guard let supabase else { throw AuthError.notConfigured }
+        _ = try await supabase.auth.update(user: UserAttributes(password: newPassword))
+        needsPasswordReset = false
+    }
+
+    /// "Not now" on the set-password screen. The recovery session is already
+    /// a full session, so the user simply carries on signed in.
+    func dismissPasswordReset() {
+        needsPasswordReset = false
     }
 
     // MARK: - Apple Sign-In Nonce
@@ -343,49 +466,33 @@ final class AuthService {
         }
     }
 
-    private func createProfile(userId: String, email: String, firstName: String?, lastName: String?, interests: [String]?) async throws {
+    /// Makes sure the profile row exists. handle_new_user creates it for
+    /// every account made since the trigger landed; this covers older
+    /// accounts, and does nothing when the row is there (ON CONFLICT DO
+    /// NOTHING). Mirrors src/hooks/useProfile.ts.
+    private func ensureProfileRow(userId: String) async throws {
         guard let supabase else { throw AuthError.notConfigured }
-        struct NewProfile: Encodable {
+        struct ProfileSeed: Encodable {
             let user_id: String
-            let email: String
-            let first_name: String?
-            let last_name: String?
-            let interests: [String]?
+            let email: String?
         }
-
         try await supabase
             .from("profiles")
-            .insert(NewProfile(
-                user_id: userId,
-                email: email,
-                first_name: firstName,
-                last_name: lastName,
-                interests: interests
-            ))
+            .upsert(
+                ProfileSeed(user_id: userId, email: currentUser?.email),
+                onConflict: "user_id",
+                returning: .minimal,
+                ignoreDuplicates: true
+            )
             .execute()
     }
 
-    func updateProfile(firstName: String?, lastName: String?, phone: String?, location: String?, interests: [String]?) async throws {
+    func updateProfile(firstName: String?, lastName: String?, phone: String?, location: String?, interests: [String]) async throws {
         guard let supabase else { throw AuthError.notConfigured }
         guard let userId = currentUser?.id.uuidString else { return }
 
-        // Ensure the profile row exists before updating
         if currentProfile == nil {
-            try await createProfile(
-                userId: userId,
-                email: currentUser?.email ?? "",
-                firstName: firstName,
-                lastName: lastName,
-                interests: interests
-            )
-        }
-
-        struct ProfileUpdate: Encodable {
-            let first_name: String?
-            let last_name: String?
-            let phone: String?
-            let location: String?
-            let interests: [String]?
+            try await ensureProfileRow(userId: userId)
         }
 
         try await supabase
@@ -395,7 +502,7 @@ final class AuthService {
                 last_name: lastName,
                 phone: phone,
                 location: location,
-                interests: interests
+                interests: InterestCatalog.normalize(interests)
             ))
             .eq("user_id", value: userId)
             .execute()
@@ -403,30 +510,90 @@ final class AuthService {
         await fetchProfile(userId: userId)
     }
 
+    /// PATCHes `interests` only (IOS-DD-ACCOUNT-04).
+    func updateInterests(_ ids: [String]) async throws {
+        guard let supabase else { throw AuthError.notConfigured }
+        guard let userId = currentUser?.id.uuidString else { return }
+        struct InterestsPatch: Encodable { let interests: [String] }
+
+        if currentProfile == nil {
+            try await ensureProfileRow(userId: userId)
+        }
+        try await supabase
+            .from("profiles")
+            .update(InterestsPatch(interests: InterestCatalog.normalize(ids)))
+            .eq("user_id", value: userId)
+            .execute()
+        await fetchProfile(userId: userId)
+    }
+
+    /// Copies the interests picked in onboarding to a profile that has none.
+    /// Only when the profile was actually fetched: a failed fetch leaves
+    /// `currentProfile` nil, and treating that as "no interests" would
+    /// overwrite interests chosen on the web.
+    private func syncOnboardingInterestsIfNeeded() async {
+        guard let profile = currentProfile,
+              InterestCatalog.normalize(profile.interests).isEmpty else { return }
+        let local = InterestPreferences.shared.local
+        guard !local.isEmpty else { return }
+        do {
+            try await updateInterests(local)
+        } catch {
+            AppLogger.auth.warning("Could not copy onboarding interests to the profile")
+        }
+    }
+
+    /// An email opt-in given on the consent screen before signing in is
+    /// written to the digest preference once per account (IOS-DD-ACCOUNT-10).
+    /// Once, so turning the digest off on the web is not undone by the next
+    /// sign-in here.
+    private func syncEmailConsentIfNeeded(userId: String) async {
+        let consent = ConsentService.shared
+        guard consent.hasCompletedConsent, consent.emailConsent else { return }
+        let marker = "email_consent_synced_v1.\(userId)"
+        guard !UserDefaults.standard.bool(forKey: marker) else { return }
+        do {
+            try await EmailPreferencesService.shared.setWeeklyDigest(true)
+            UserDefaults.standard.set(true, forKey: marker)
+        } catch {
+            AppLogger.auth.warning("Could not sync email consent to the digest preference")
+        }
+    }
+
     // MARK: - Admin Check
 
     private func checkAdminRole(userId: String) async {
         guard let supabase else { return }
-        // Check user_roles table first (matches web AuthContext pattern)
+        // Check user_roles table first (matches web AuthContext pattern). A
+        // user can hold several rows (20261005000001), and `.single()` failed
+        // on those with PGRST116, falling through to the profile column
+        // (IOS-DD-ACCOUNT-13).
         do {
             struct RoleRow: Decodable {
                 let role: String
             }
-            let row: RoleRow = try await supabase
+            let rows: [RoleRow] = try await supabase
                 .from("user_roles")
                 .select("role")
                 .eq("user_id", value: userId)
-                .single()
                 .execute()
                 .value
-            isAdmin = row.role == "admin" || row.role == "root_admin"
-            return
+            if !rows.isEmpty {
+                isAdmin = Self.isAdmin(roles: rows.map(\.role))
+                return
+            }
         } catch {}
 
         // Fallback: check profiles table
         if let profile = currentProfile {
             isAdmin = profile.role == .admin || profile.role == .rootAdmin
+        } else {
+            isAdmin = false
         }
+    }
+
+    static func isAdmin(roles: [String]) -> Bool {
+        roles.contains { $0 == "admin" || $0 == "root_admin" }
     }
 
     // MARK: - Error Types
@@ -467,10 +634,42 @@ protocol AuthProviding: AnyObject {
     var currentProfile: UserProfile? { get }
 
     func signIn(email: String, password: String) async throws
-    func signUp(email: String, password: String, firstName: String?, lastName: String?, interests: [String]?) async throws
+    func signUp(email: String, password: String, firstName: String?, lastName: String?, interests: [String], emailOptIn: Bool) async throws -> AuthService.SignUpOutcome
+    func resend(email: String) async throws
     func signInWithApple(credential: ASAuthorizationAppleIDCredential) async throws
     func signOut() async throws
     func resetPassword(email: String) async throws
 }
 
 extension AuthService: AuthProviding {}
+
+// MARK: - Profile PATCH body
+
+/// The profile fields the app edits (IOS-DD-ACCOUNT-09).
+///
+/// Encodes EVERY key, nil as JSON null. The synthesized Encodable skips nil
+/// keys, so a field the user cleared was simply left out of the PATCH and
+/// the old value stayed on the server while the app said "Profile Updated".
+/// Only these columns: the web writes the same set (useProfile.ts
+/// WRITABLE_COLUMNS minus communication_preferences), and the server guards
+/// the rest (20261010000001).
+struct ProfileUpdate: Encodable {
+    let first_name: String?
+    let last_name: String?
+    let phone: String?
+    let location: String?
+    let interests: [String]
+
+    enum CodingKeys: String, CodingKey {
+        case first_name, last_name, phone, location, interests
+    }
+
+    func encode(to encoder: Encoder) throws {
+        var container = encoder.container(keyedBy: CodingKeys.self)
+        try container.encode(first_name, forKey: .first_name)
+        try container.encode(last_name, forKey: .last_name)
+        try container.encode(phone, forKey: .phone)
+        try container.encode(location, forKey: .location)
+        try container.encode(interests, forKey: .interests)
+    }
+}

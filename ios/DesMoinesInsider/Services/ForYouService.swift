@@ -19,7 +19,9 @@ final class ForYouService {
         let venue: String?
         let isFeatured: Bool?
         let recommendationScore: Double?
-        let recommendationReason: String?
+        /// `var` so the cold-start rerank can say why a row moved up
+        /// (IOS-DD-ACCOUNT-04).
+        var recommendationReason: String?
 
         enum CodingKeys: String, CodingKey {
             case id, title, date, category, venue
@@ -115,7 +117,16 @@ final class ForYouService {
                     .rpc("get_trending_events", params: TrendingParams(p_limit: limit))
                     .execute()
                     .value
-                recommendations = rows
+                // Trending is the same list for everyone. Until the user has
+                // swiped or saved enough to personalize, the interests they
+                // picked in onboarding (or on their profile) float matching
+                // events to the front (IOS-DD-ACCOUNT-04).
+                recommendations = InterestCatalog.rerank(
+                    rows,
+                    interestIds: InterestPreferences.shared.effectiveInterests(
+                        profile: AuthService.shared.currentProfile
+                    )
+                )
             }
         } catch {
             #if DEBUG

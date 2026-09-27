@@ -208,7 +208,7 @@ struct MainTabView: View {
             showSignInSheet = true
         }
         .sheet(isPresented: $showSignInSheet) {
-            NavigationStack { AuthView() }
+            NavigationStack { AuthView(isModal: true) }
         }
         .toastOverlay(message: $toastCenter.message)
         .onReceive(NotificationCenter.default.publisher(for: .softPaywallTriggered)) { note in
