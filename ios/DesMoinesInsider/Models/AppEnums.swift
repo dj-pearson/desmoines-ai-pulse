@@ -432,28 +432,26 @@ enum SubscriptionTier: String, Codable {
                 "View ratings & reviews",
                 "Weekly email digest",
             ]
+        // Only what iOS delivers (IOS-DD-MONETIZATION-11). The XP
+        // multipliers, early access, advanced filters and the five VIP lines
+        // had no implementation on iOS; WEB-FEAT-016 removed the same lines
+        // on web. VIP keeps the two differences that are real: the trip
+        // quota in TripPlannerView and the saved-search cap enforced by
+        // entitled_plan_limit.
         case .insider:
             return [
                 "Everything in Free, plus:",
-                "AI Trip Planner (5 trips/month)",
+                "AI Trip Planner (5 itineraries/month)",
                 "Unlimited favorites",
-                "Advanced filters (distance, price, rating)",
                 "Write reviews & ratings",
-                "Saved searches & event alerts",
+                "Saved searches & event alerts (up to 10)",
                 "Ad-free experience",
-                "Early access to events",
-                "2x XP earning rate",
             ]
         case .vip:
             return [
                 "Everything in Insider, plus:",
                 "Unlimited AI Trip Planner",
-                "VIP-exclusive events",
-                "Restaurant reservation help",
-                "SMS alerts",
-                "Monthly local business perks",
-                "Concierge support",
-                "3x XP earning rate",
+                "Unlimited saved searches & alerts",
             ]
         }
     }

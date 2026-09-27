@@ -11,6 +11,7 @@ struct ReviewsSection: View {
     @State private var viewModel: ReviewsViewModel
     @State private var showComposer = false
     @State private var showPaywall = false
+    @State private var showSignIn = false
     @State private var reportTarget: UserRating?
     @State private var showDeleteConfirmation = false
     @State private var toast: ToastMessage?
@@ -73,6 +74,9 @@ struct ReviewsSection: View {
         .sheet(isPresented: $showPaywall) {
             PaywallView(context: .writeReviews)
         }
+        .sheet(isPresented: $showSignIn) {
+            NavigationStack { AuthView(isModal: true) }
+        }
         .confirmationDialog("Report this review?", isPresented: Binding(
             get: { reportTarget != nil }, set: { if !$0 { reportTarget = nil } }
         ), titleVisibility: .visible) {
@@ -127,7 +131,11 @@ struct ReviewsSection: View {
     @ViewBuilder
     private var writeButton: some View {
         Button {
-            if !viewModel.isAuthenticated || !viewModel.canWriteReviews {
+            // Signed out is a sign-in problem, not a plan problem: a paying
+            // Insider who was signed out got a paywall (IOS-DD-MONETIZATION-14).
+            if !viewModel.isAuthenticated {
+                showSignIn = true
+            } else if !viewModel.canWriteReviews {
                 showPaywall = true
             } else {
                 showComposer = true

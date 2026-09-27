@@ -18,8 +18,9 @@ struct RestaurantsView: View {
                         // Smart Presets — one-tap filter combos
                         RestaurantSmartPresets(viewModel: viewModel)
 
-                        // Ad banner for free users (hidden for subscribers)
-                        AdSlot(.detail)
+                        // No ad above the results: Dining opened on an ad before
+                        // any restaurant. The in-feed slots below remain
+                        // (IOS-DD-MONETIZATION-09).
 
                         // Stale-data error note (we have data but a refresh failed).
                         if let error = viewModel.errorMessage, !viewModel.restaurants.isEmpty {

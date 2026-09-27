@@ -36,6 +36,9 @@ struct TripPlannerView: View {
     @State private var errorMessage: String?
     @State private var generatedTrip: TripPlan?
     @State private var paywallContext: PaywallContext?
+    /// Set by the paywall on a purchase; the blocked generate() resumes once
+    /// the sheet is gone, so the result cover is not presented over it.
+    @State private var resumeGenerateAfterPaywall = false
 
     @Environment(\.dismiss) private var dismiss
 
@@ -81,8 +84,15 @@ struct TripPlannerView: View {
                     }
             }
         }
-        .sheet(item: $paywallContext) { ctx in
-            PaywallView(context: ctx)
+        .sheet(item: $paywallContext, onDismiss: {
+            // Resume the itinerary the user asked for once they have paid;
+            // generate() re-checks both gates against the refreshed tier
+            // (IOS-DD-MONETIZATION-22).
+            guard resumeGenerateAfterPaywall else { return }
+            resumeGenerateAfterPaywall = false
+            Task { await generate() }
+        }) { ctx in
+            PaywallView(context: ctx, onPurchased: { resumeGenerateAfterPaywall = true })
         }
         .task { await reload() }
     }
@@ -267,13 +277,12 @@ struct TripPlannerView: View {
     private func generate() async {
         errorMessage = nil
 
-        // Gate 1: feature access (free → paywall). Prefer the gentler,
-        // frequency-capped soft paywall on the attempt; fall back to the hard
-        // gate when it's on cooldown (IOS-AUDIT-FEAT-032).
+        // Gate 1: feature access (free → paywall). Presented from here: the
+        // soft paywall posted to the root presenter, which cannot present
+        // over this sheet, so the tap did nothing (IOS-DD-MONETIZATION-13).
         guard storeKit.hasFeature(.tripPlanner) else {
-            if !SoftPaywallService.shared.considerAfterTripPlannerAttempt() {
-                paywallContext = .tripPlanner
-            }
+            SoftPaywallService.shared.noteTripPlannerAttempt()
+            paywallContext = .tripPlanner
             return
         }
         // Gate 2: monthly quota (exhausted → paywall to upgrade).

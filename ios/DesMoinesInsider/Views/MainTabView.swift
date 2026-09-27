@@ -63,7 +63,18 @@ struct MainTabView: View {
     /// Frequency-capped interstitial (IOS-ADS-012), free-tier only, evaluated at
     /// the tab-switch navigation boundary by InterstitialAdService.
     @State private var storeKit = StoreKitService.shared
-    @State private var showInterstitial = false
+    /// Presented only once a live paid creative has been fetched
+    /// (IOS-DD-MONETIZATION-08).
+    @State private var interstitialCampaign: CampaignAdService.CampaignCreative?
+    /// True for the one selectedTab change made by a deep link or intent.
+    /// Those are not the user browsing between tabs, so no interstitial.
+    @State private var programmaticTabChange = false
+
+    /// Whether a tab change may even ask for an interstitial. Free tier only,
+    /// and never for a switch the app made itself.
+    static func shouldAskForInterstitial(isFree: Bool, programmatic: Bool) -> Bool {
+        isFree && !programmatic
+    }
 
     /// UI-test deep link target for Fastlane Snapshot (IOS-COMPLY-005). Set once
     /// on launch from `--uiTestScreen` so screenshots can land on Discover, Trip
@@ -171,16 +182,21 @@ struct MainTabView: View {
             }
             // Navigating between tabs is real activity — reset the idle timer.
             SessionTimeoutService.shared.recordActivity()
+            let programmatic = programmaticTabChange
+            programmaticTabChange = false
             // Major navigation boundary. Free tier only; the service enforces the
             // session cap, the "not on first sessions" rule and the min interval.
-            guard storeKit.currentTier == .free else { return }
-            if InterstitialAdService.shared.shouldPresentAtBoundary() {
+            // Only paid inventory gets a full-screen unit.
+            guard Self.shouldAskForInterstitial(isFree: storeKit.currentTier == .free, programmatic: programmatic) else { return }
+            guard InterstitialAdService.shared.shouldPresentAtBoundary() else { return }
+            Task {
+                guard let creative = await CampaignAdService.shared.creative(for: .featuredSpot) else { return }
                 InterstitialAdService.shared.markPresented()
-                showInterstitial = true
+                interstitialCampaign = creative
             }
         }
-        .fullScreenCover(isPresented: $showInterstitial) {
-            InterstitialAdView()
+        .fullScreenCover(item: $interstitialCampaign) { campaign in
+            InterstitialAdView(campaign: campaign)
         }
         .onReceive(NotificationCenter.default.publisher(for: .favoritesLimitReached)) { _ in
             let past = FavoritesService.shared.pastEventFavoriteCount
@@ -212,11 +228,14 @@ struct MainTabView: View {
         }
         .toastOverlay(message: $toastCenter.message)
         .onReceive(NotificationCenter.default.publisher(for: .softPaywallTriggered)) { note in
-            let id = note.userInfo?["context"] as? String ?? "unlimited_favorites"
-            softPaywallContext = Self.softContext(for: id)
+            let id = note.userInfo?["context"] as? String ?? "favorites_soft"
+            softPaywallContext = Self.softContext(for: id, userInfo: note.userInfo)
         }
         .sheet(item: $softPaywallContext) { ctx in
+            // The frequency cap is recorded when the paywall is actually on
+            // screen, not when it was requested (IOS-DD-MONETIZATION-13).
             PaywallView(context: ctx)
+                .onAppear { SoftPaywallService.shared.recordPresentation(source: ctx.id) }
         }
         .sheet(item: $askPulseLaunch) { launch in
             AskPulseView(initialQuery: launch.query)
@@ -253,6 +272,9 @@ struct MainTabView: View {
         case .attraction(let id): deepLinkPresentation = .attraction(id)
         case .discover(let d): deepLinkPresentation = .discover(d)
         case .tab(let tab):
+            // Only flag a change that will fire onChange; an unchanged tab
+            // would leave the flag set and swallow the next real tap.
+            if selectedTab != tab { programmaticTabChange = true }
             selectedTab = tab
             // On iPad the sidebar may sit on Dashboard while selectedTab is
             // already this tab, so no onChange would move it (IOS-DD-SAVED-19).
@@ -273,15 +295,20 @@ struct MainTabView: View {
             _ = intentDispatcher.consume()
             askPulseLaunch = AskPulseLaunch(query: query)
         case .findRestaurants, .findEvents:
-            if selectedTab != .search { selectedTab = .search }
+            if selectedTab != .search {
+                programmaticTabChange = true
+                selectedTab = .search
+            }
         }
     }
 
     /// Maps a SoftPaywallService context id to its PaywallContext preset.
-    private static func softContext(for id: String) -> PaywallContext {
+    /// Favorites maps to the progress nudge ("2 of 3 used"), not the
+    /// at-the-limit paywall (IOS-DD-MONETIZATION-13).
+    static func softContext(for id: String, userInfo: [AnyHashable: Any]?) -> PaywallContext {
         switch id {
         case "trip_planner": return .tripPlanner
-        default: return .unlimitedFavorites
+        default: return .favoritesProgress(used: userInfo?["used"] as? Int ?? 2)
         }
     }
 
@@ -428,7 +455,10 @@ struct MainTabView: View {
 /// screen inside a dismissable NavigationStack. Discover destinations render
 /// their native surface directly. Falls back to an error+retry state if the
 /// content can't be fetched (e.g. offline or deleted), never crashing.
-private struct DeepLinkResolverView: View {
+/// Internal (was private) so SponsoredPickCard can present it from inside
+/// its own sheet, where DeepLinkHandler's root presenter cannot reach
+/// (IOS-DD-MONETIZATION-19).
+struct DeepLinkResolverView: View {
     let presentation: MainTabView.DeepLinkPresentation
 
     @Environment(\.dismiss) private var dismiss

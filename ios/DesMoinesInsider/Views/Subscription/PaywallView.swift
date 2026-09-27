@@ -25,20 +25,44 @@ struct PaywallContext: Identifiable, Equatable {
 }
 
 // MARK: - Tailored contexts (one per gated surface)
+//
+// Every line here must describe something iOS actually delivers
+// (IOS-DD-MONETIZATION-11/-12). PaywallCopyTests fails on the phrases that
+// used to sell features with no implementation.
 
 extension PaywallContext {
     static let unlimitedFavorites = PaywallContext(
         id: "unlimited_favorites",
         icon: "heart.fill",
         headline: "Save everything you love",
-        subheadline: "You've reached the free limit of 3 saved items. Go Insider for unlimited favorites.",
+        subheadline: "You've reached the free limit of \(SubscriptionTier.free.maxFavorites) saved items. Go Insider for unlimited favorites.",
         benefits: [
             "Unlimited saved events, restaurants & attractions",
-            "Sync your saves across all your devices",
+            // Was "Sync your saves across all your devices", which free
+            // signed-in accounts already get.
+            "Keep past favorites without deleting them",
             "Never lose track of a place again",
         ],
         recommendedTier: .insider
     )
+
+    /// Soft nudge while the user is still UNDER the free limit
+    /// (IOS-DD-MONETIZATION-13). The soft paywall used to present
+    /// `unlimitedFavorites` after the second save, which told the user they
+    /// had "reached the free limit of 3".
+    static func favoritesProgress(used: Int, limit: Int = SubscriptionTier.free.maxFavorites) -> PaywallContext {
+        PaywallContext(
+            id: "favorites_soft",
+            icon: "heart.fill",
+            headline: "Building a list?",
+            subheadline: "You've used \(used) of \(limit) free saves. Insider saves are unlimited.",
+            benefits: [
+                "Unlimited saved events, restaurants & attractions",
+                "Plan a whole weekend without clearing old saves",
+            ],
+            recommendedTier: .insider
+        )
+    }
 
     static let tripPlanner = PaywallContext(
         id: "trip_planner",
@@ -49,19 +73,6 @@ extension PaywallContext {
             "AI-built itineraries tuned to your tastes",
             "5 trips / month on Insider, unlimited on VIP",
             "Mix events, dining and attractions automatically",
-        ],
-        recommendedTier: .insider
-    )
-
-    static let insiderTips = PaywallContext(
-        id: "insider_tips",
-        icon: "lightbulb.fill",
-        headline: "Unlock insider tips",
-        subheadline: "Local-only tips, the best times to go, and what not to miss — for every event.",
-        benefits: [
-            "Insider tips on events across the city",
-            "Know the best time to arrive & beat the crowd",
-            "Local secrets you won't find anywhere else",
         ],
         recommendedTier: .insider
     )
@@ -105,21 +116,10 @@ extension PaywallContext {
         recommendedTier: .insider
     )
 
-    static let advancedFilters = PaywallContext(
-        id: "advanced_filters",
-        icon: "slider.horizontal.3",
-        headline: "Filter like a pro",
-        subheadline: "Narrow results by distance, price, rating and more to find exactly what you want.",
-        benefits: [
-            "Distance radius, price & minimum-rating filters",
-            "Combine advanced facets in one search",
-            "Find the perfect spot, faster",
-        ],
-        recommendedTier: .insider
-    )
-
     /// First-session onboarding upsell (IOS-SUB-013). Presented with annual
-    /// preselected so the 7-day free trial is the headline moment.
+    /// preselected so a free trial, when one exists, is the headline moment.
+    /// Without an eligible trial the header swaps to
+    /// `PaywallView.headline(for:hasTrial:)` (IOS-DD-MONETIZATION-21).
     static let onboarding = PaywallContext(
         id: "onboarding",
         icon: "sparkles",
@@ -128,7 +128,7 @@ extension PaywallContext {
         benefits: [
             "Unlimited saved favorites",
             "AI Trip Planner itineraries",
-            "Advanced filters & insider tips",
+            "Saved searches & event alerts",
             "Ad-free browsing",
         ],
         recommendedTier: .insider
@@ -156,7 +156,7 @@ extension PaywallContext {
         benefits: [
             "No banner or in-feed ads, anywhere",
             "A faster, cleaner browsing experience",
-            "Support independent local journalism",
+            "Plus unlimited saves and the AI Trip Planner",
         ],
         recommendedTier: .insider
     )
@@ -181,13 +181,26 @@ extension PaywallContext {
 
 struct PaywallView: View {
     let context: PaywallContext
+    /// Called after a successful purchase or restore, before dismissing, so
+    /// the surface that was blocked can resume what the user was doing
+    /// (IOS-DD-MONETIZATION-22). Defaulted so existing call sites compile.
+    var onPurchased: (() -> Void)?
 
     @Environment(\.dismiss) private var dismiss
+    @Environment(\.dynamicTypeSize) private var dynamicTypeSize
     @State private var storeKit = StoreKitService.shared
     @State private var selectedTier: SubscriptionTier
     @State private var selectedPeriod: StoreKitService.SubscriptionPeriod = .monthly
     @State private var isPurchasing = false
+    @State private var isRestoring = false
     @State private var errorMessage: String?
+    /// Non-error outcomes such as Ask to Buy ("pending approval"), shown in
+    /// secondary color rather than red (IOS-DD-MONETIZATION-14).
+    @State private var infoMessage: String?
+    @State private var showSignIn = false
+    /// Set after the first loadProducts finishes, so the "couldn't load
+    /// plans" row does not flash on the first frame before loading starts.
+    @State private var didAttemptLoad = false
     /// Set once a purchase/restore succeeds so `onDisappear` doesn't log a
     /// "dismiss" (abandon) event on top of the conversion.
     @State private var didConvert = false
@@ -197,72 +210,140 @@ struct PaywallView: View {
 
     private let analytics = AnalyticsService.shared
 
-    init(context: PaywallContext, preferredPeriod: StoreKitService.SubscriptionPeriod = .monthly) {
+    init(
+        context: PaywallContext,
+        preferredPeriod: StoreKitService.SubscriptionPeriod = .monthly,
+        onPurchased: (() -> Void)? = nil
+    ) {
         self.context = context
+        self.onPurchased = onPurchased
         let recommended: SubscriptionTier = context.recommendedTier == .free ? .insider : context.recommendedTier
         _selectedTier = State(initialValue: recommended)
         _selectedPeriod = State(initialValue: preferredPeriod)
     }
 
+    // MARK: Pure helpers (unit-tested in PaywallCopyTests)
+
+    /// Local rank so these helpers stay free of StoreKitService's main-actor
+    /// isolation. Same order as `StoreKitService.rank`.
+    private static func order(_ tier: SubscriptionTier) -> Int {
+        switch tier {
+        case .free: return 0
+        case .insider: return 1
+        case .vip: return 2
+        }
+    }
+
+    /// The tier to preselect. The paywall used to preselect the recommended
+    /// tier even when the user already held it, which left a gray,
+    /// unexplained CTA (IOS-DD-MONETIZATION-14). nil means there is nothing
+    /// left to buy.
+    static func initialTier(recommended: SubscriptionTier, current: SubscriptionTier) -> SubscriptionTier? {
+        let target: SubscriptionTier = recommended == .free ? .insider : recommended
+        if order(current) < order(target) { return target }
+        if order(current) < order(.vip) { return .vip }
+        return nil
+    }
+
+    /// Onboarding promised "free for 7 days" with no eligible trial
+    /// (IOS-DD-MONETIZATION-21).
+    static func headline(for context: PaywallContext, hasTrial: Bool) -> String {
+        if context.id == PaywallContext.onboarding.id && !hasTrial {
+            return "Get more out of Des Moines Insider"
+        }
+        return context.headline
+    }
+
+    static func subheadline(for context: PaywallContext, hasTrial: Bool, currentTier: SubscriptionTier) -> String {
+        if context.id == PaywallContext.onboarding.id && !hasTrial {
+            return "Unlock the full Des Moines Insider experience. Cancel anytime."
+        }
+        // An Insider who used the monthly quota is shown VIP, the only
+        // answer that helps.
+        if context.id == PaywallContext.tripPlanner.id && currentTier == .insider {
+            return "You've used all \(SubscriptionTier.insider.maxTripPlansPerMonth) Insider itineraries this month. VIP is unlimited."
+        }
+        return context.subheadline
+    }
+
+    // MARK: Body
+
     var body: some View {
         NavigationStack {
-            ScrollView {
-                VStack(spacing: 20) {
-                    header
-                    benefitsList
-                    tierSelector
-                    if periods.count > 1 { periodToggle }
-                    if let errorMessage {
-                        Label(errorMessage, systemImage: "exclamationmark.triangle.fill")
-                            .font(.caption)
-                            .foregroundStyle(.red)
-                            .frame(maxWidth: .infinity, alignment: .leading)
-                    }
+            scrollContent
+                .safeAreaInset(edge: .bottom) { purchaseFooter }
+                .navigationTitle("Go Premium")
+                .navigationBarTitleDisplayMode(.inline)
+                .toolbar { closeToolbarItem }
+                .task { await initialLoad() }
+                .onChange(of: selectedTier) { _, _ in
+                    clampPeriod()
+                    Task { await refreshTrialCopy() }
                 }
-                .padding()
-                .padding(.bottom, 160) // room for the pinned footer
-            }
-            .safeAreaInset(edge: .bottom) { purchaseFooter }
-            .navigationTitle("Go Premium")
-            .navigationBarTitleDisplayMode(.inline)
-            .toolbar {
-                ToolbarItem(placement: .topBarTrailing) {
-                    // Prominent, labeled close (IOS-AUDIT-UX-011); toolbar items
-                    // already satisfy the 44pt hit-target minimum.
-                    Button {
-                        dismiss()
-                    } label: {
-                        Image(systemName: "xmark.circle.fill")
-                            .font(.title2)
-                            .symbolRenderingMode(.hierarchical)
-                            .foregroundStyle(.secondary)
-                    }
-                    .accessibilityLabel("Close")
+                .onChange(of: selectedPeriod) { _, _ in
+                    Task { await refreshTrialCopy() }
                 }
-            }
-            .task {
-                await storeKit.loadProducts()
-                // Validate the initial preferredPeriod against the periods that
-                // actually loaded, so selectedPeriod can't stay .annual while the
-                // toggle is hidden and the price falls back to monthly
-                // (IOS-AUDIT-UX-028).
-                clampPeriod()
-                await refreshTrialCopy()
-            }
-            .onChange(of: selectedTier) { _, _ in
-                clampPeriod()
-                Task { await refreshTrialCopy() }
-            }
-            .onChange(of: selectedPeriod) { _, _ in
-                Task { await refreshTrialCopy() }
-            }
-            .onAppear {
-                analytics.trackPaywallPresented(context: context.id, tier: selectedTier.rawValue)
-            }
-            .onDisappear {
-                if !didConvert { analytics.trackPaywallDismissed(context: context.id) }
-            }
+                .onAppear {
+                    analytics.trackPaywallPresented(context: context.id, tier: selectedTier.rawValue)
+                }
+                .onDisappear {
+                    if !didConvert { analytics.trackPaywallDismissed(context: context.id) }
+                }
+                .sheet(isPresented: $showSignIn) {
+                    NavigationStack { AuthView(isModal: true) }
+                }
         }
+    }
+
+    private var scrollContent: some View {
+        ScrollView {
+            VStack(spacing: 20) {
+                header
+                benefitsList
+                tierSelector
+                if periods.count > 1 { periodToggle }
+                productLoadNotice
+                messages
+                // At accessibility sizes the pinned footer would cover most of
+                // the screen, so the fine print scrolls instead
+                // (IOS-DD-MONETIZATION-18).
+                if dynamicTypeSize.isAccessibilitySize {
+                    finePrint
+                }
+            }
+            .padding()
+        }
+    }
+
+    private var closeToolbarItem: some ToolbarContent {
+        ToolbarItem(placement: .topBarTrailing) {
+            // Prominent, labeled close (IOS-AUDIT-UX-011); toolbar items
+            // already satisfy the 44pt hit-target minimum.
+            Button {
+                dismiss()
+            } label: {
+                Image(systemName: "xmark.circle.fill")
+                    .font(.title2)
+                    .symbolRenderingMode(.hierarchical)
+                    .foregroundStyle(.secondary)
+            }
+            .accessibilityLabel("Close")
+        }
+    }
+
+    @MainActor
+    private func initialLoad() async {
+        if let tier = Self.initialTier(recommended: context.recommendedTier, current: storeKit.currentTier) {
+            selectedTier = tier
+        }
+        await storeKit.loadProducts()
+        didAttemptLoad = true
+        // Validate the initial preferredPeriod against the periods that
+        // actually loaded, so selectedPeriod can't stay .annual while the
+        // toggle is hidden and the price falls back to monthly
+        // (IOS-AUDIT-UX-028).
+        clampPeriod()
+        await refreshTrialCopy()
     }
 
     // MARK: Header
@@ -274,11 +355,11 @@ struct PaywallView: View {
                 .foregroundStyle(Color.accentColor.gradient)
                 .accessibilityHidden(true)
 
-            Text(context.headline)
+            Text(Self.headline(for: context, hasTrial: trialCopy != nil))
                 .font(.title2.bold())
                 .multilineTextAlignment(.center)
 
-            Text(context.subheadline)
+            Text(Self.subheadline(for: context, hasTrial: trialCopy != nil, currentTier: storeKit.currentTier))
                 .font(.subheadline)
                 .foregroundStyle(.secondary)
                 .multilineTextAlignment(.center)
@@ -304,6 +385,51 @@ struct PaywallView: View {
         .padding(16)
         .frame(maxWidth: .infinity, alignment: .leading)
         .background(Color(.secondarySystemBackground), in: RoundedRectangle(cornerRadius: 14))
+    }
+
+    // MARK: Messages
+
+    @ViewBuilder
+    private var messages: some View {
+        if let errorMessage {
+            Label(errorMessage, systemImage: "exclamationmark.triangle.fill")
+                .font(.caption)
+                .foregroundStyle(.red)
+                .frame(maxWidth: .infinity, alignment: .leading)
+        }
+        if let infoMessage {
+            Label(infoMessage, systemImage: "clock")
+                .font(.caption)
+                .foregroundStyle(.secondary)
+                .frame(maxWidth: .infinity, alignment: .leading)
+        }
+    }
+
+    /// Products failed to load: say so and offer a retry instead of prices
+    /// that silently read as blank (IOS-DD-MONETIZATION-14).
+    @ViewBuilder
+    private var productLoadNotice: some View {
+        if didAttemptLoad && !storeKit.isLoading && storeKit.products.isEmpty {
+            HStack(spacing: 10) {
+                Image(systemName: "wifi.exclamationmark")
+                    .foregroundStyle(.secondary)
+                    .accessibilityHidden(true)
+                Text("Couldn't load plans. Check your connection.")
+                    .font(.footnote)
+                    .foregroundStyle(.secondary)
+                    .frame(maxWidth: .infinity, alignment: .leading)
+                Button("Retry") {
+                    Task {
+                        await storeKit.loadProducts()
+                        clampPeriod()
+                        await refreshTrialCopy()
+                    }
+                }
+                .font(.footnote.weight(.semibold))
+            }
+            .padding(12)
+            .background(Color(.secondarySystemBackground), in: RoundedRectangle(cornerRadius: 12))
+        }
     }
 
     // MARK: Tier selector
@@ -332,17 +458,11 @@ struct PaywallView: View {
                 VStack(alignment: .leading, spacing: 2) {
                     HStack(spacing: 6) {
                         Text(tier.displayName).font(.headline)
-                        if tier == context.recommendedTier {
-                            Text("Recommended")
-                                .font(.caption2.weight(.bold))
-                                .foregroundStyle(.white)
-                                .padding(.horizontal, 6).padding(.vertical, 2)
-                                .background(tint, in: Capsule())
+                        if tier == context.recommendedTier && !isCurrent {
+                            recommendedBadge(for: tier)
                         }
                     }
-                    Text(priceText(for: tier))
-                        .font(.subheadline.weight(.medium))
-                        .foregroundStyle(.secondary)
+                    priceLabel(for: tier)
                 }
                 Spacer()
                 if isCurrent {
@@ -359,20 +479,55 @@ struct PaywallView: View {
             .background(Color(.secondarySystemBackground), in: RoundedRectangle(cornerRadius: 14))
             .overlay(
                 RoundedRectangle(cornerRadius: 14)
-                    .strokeBorder(isSelected ? tint : Color.clear, lineWidth: 2)
+                    .strokeBorder(isSelected && !isCurrent ? tint : Color.clear, lineWidth: 2)
             )
         }
         .buttonStyle(.plain)
-        .accessibilityLabel("\(tier.displayName), \(priceText(for: tier))")
+        // A plan the user already holds can't be bought again (IOS-DD-MONETIZATION-14).
+        .disabled(isCurrent)
+        .accessibilityLabel("\(tier.displayName), \(priceText(for: tier))\(isCurrent ? ", your current plan" : "")")
         .accessibilityAddTraits(isSelected ? .isSelected : [])
+    }
+
+    /// White on PremiumTokens.urgencyFill (about 4.9:1) rather than system
+    /// orange (about 2.2:1) (IOS-DD-MONETIZATION-18).
+    private func recommendedBadge(for tier: SubscriptionTier) -> some View {
+        Text("Recommended")
+            .font(.caption2.weight(.bold))
+            .foregroundStyle(.white)
+            .padding(.horizontal, 6).padding(.vertical, 2)
+            .background(tier == .vip ? Color.purple : PremiumTokens.urgencyFill, in: Capsule())
+    }
+
+    @ViewBuilder
+    private func priceLabel(for tier: SubscriptionTier) -> some View {
+        let text = priceText(for: tier)
+        if text.isEmpty && storeKit.isLoading {
+            Text("Loading")
+                .font(.subheadline.weight(.medium))
+                .redacted(reason: .placeholder)
+        } else {
+            Text(text)
+                .font(.subheadline.weight(.medium))
+                .foregroundStyle(.secondary)
+        }
     }
 
     // MARK: Period toggle (with annual savings badge — IOS-SUB-012)
 
+    @ViewBuilder
     private var periodToggle: some View {
-        HStack(spacing: 10) {
-            ForEach(periods) { period in
-                periodButton(period)
+        if dynamicTypeSize.isAccessibilitySize {
+            VStack(spacing: 10) {
+                ForEach(periods) { period in
+                    periodButton(period)
+                }
+            }
+        } else {
+            HStack(spacing: 10) {
+                ForEach(periods) { period in
+                    periodButton(period)
+                }
             }
         }
     }
@@ -386,9 +541,9 @@ struct PaywallView: View {
             UIImpactFeedbackGenerator(style: .light).impactOccurred()
             selectedPeriod = period
         } label: {
-            // Both buttons use the same two-line structure and a fixed height so
-            // they stay even regardless of which tier is selected or whether the
-            // savings badge is present.
+            // Both buttons use the same two-line structure and a minimum height
+            // so they stay even; minHeight (not a fixed height) lets large
+            // Dynamic Type grow them (IOS-DD-MONETIZATION-18).
             VStack(spacing: 3) {
                 Text(period.label)
                     .font(.subheadline.weight(.semibold))
@@ -397,7 +552,7 @@ struct PaywallView: View {
                         .font(.caption2.weight(.bold))
                         .foregroundStyle(.white)
                         .padding(.horizontal, 6).padding(.vertical, 2)
-                        .background(Color.green, in: Capsule())
+                        .background(PremiumTokens.savingsFill, in: Capsule())
                 } else {
                     Text(period == .annual ? "Billed yearly" : "Billed monthly")
                         .font(.caption2)
@@ -405,7 +560,7 @@ struct PaywallView: View {
                 }
             }
             .frame(maxWidth: .infinity)
-            .frame(height: 60)
+            .frame(minHeight: 60)
             .background(Color(.secondarySystemBackground), in: RoundedRectangle(cornerRadius: 12))
             .overlay(
                 RoundedRectangle(cornerRadius: 12)
@@ -429,27 +584,78 @@ struct PaywallView: View {
                     .multilineTextAlignment(.center)
             }
 
-            Button(action: { Task { await purchase() } }) {
-                Group {
-                    if isPurchasing {
-                        ProgressView().tint(.white)
-                    } else if trialCopy != nil {
-                        Text("Start Free Trial")
-                    } else if let product = selectedProduct {
-                        Text("Continue — \(product.displayPrice)\(selectedPeriod.shortSuffix)")
-                    } else {
-                        Text("Continue")
-                    }
-                }
-                .font(.headline)
-                .frame(maxWidth: .infinity)
-                .padding(.vertical, 14)
-                .background(canPurchase ? Color.accentColor : Color.gray, in: RoundedRectangle(cornerRadius: 14))
-                .foregroundStyle(.white)
+            if !AuthService.shared.isAuthenticated {
+                signInPrompt
             }
-            .disabled(!canPurchase || isPurchasing)
-            .accessibilityLabel(trialCopy != nil ? "Start free trial of \(selectedTier.displayName)" : "Subscribe to \(selectedTier.displayName)")
 
+            if isAlreadyTopTier {
+                topTierRow
+            } else {
+                purchaseButton
+            }
+
+            if !dynamicTypeSize.isAccessibilitySize {
+                finePrint
+            }
+        }
+        .padding(.horizontal)
+        .padding(.top, 10)
+        .padding(.bottom, 8)
+        .background(.bar)
+    }
+
+    /// Signed-out purchases work on this device only until the user signs
+    /// in, so say so, without blocking the purchase (guideline 5.1.1)
+    /// (IOS-DD-MONETIZATION-04).
+    private var signInPrompt: some View {
+        VStack(spacing: 2) {
+            Text("Sign in after you subscribe so your plan also works on the website and your other devices.")
+                .font(.caption)
+                .foregroundStyle(.secondary)
+                .multilineTextAlignment(.center)
+            Button("Sign in") { showSignIn = true }
+                .font(.caption.weight(.semibold))
+                .frame(minHeight: 44)
+        }
+    }
+
+    private var purchaseButton: some View {
+        Button(action: { Task { await purchase() } }) {
+            Group {
+                if isPurchasing {
+                    ProgressView().tint(.white)
+                } else if trialCopy != nil {
+                    Text("Start Free Trial")
+                } else if let product = selectedProduct {
+                    Text("Continue — \(product.displayPrice)\(selectedPeriod.shortSuffix)")
+                } else {
+                    Text("Continue")
+                }
+            }
+            .font(.headline)
+            .frame(maxWidth: .infinity)
+            .padding(.vertical, 14)
+            .background(canPurchase ? Color.accentColor : Color.gray, in: RoundedRectangle(cornerRadius: 14))
+            .foregroundStyle(.white)
+        }
+        .disabled(!canPurchase || isBusy)
+        .accessibilityLabel(trialCopy != nil ? "Start free trial of \(selectedTier.displayName)" : "Subscribe to \(selectedTier.displayName)")
+    }
+
+    /// Already VIP: nothing to buy, so no dead CTA.
+    private var topTierRow: some View {
+        VStack(spacing: 8) {
+            Label("You're on VIP", systemImage: "crown.fill")
+                .font(.headline)
+                .foregroundStyle(.purple)
+            Button("Close") { dismiss() }
+                .font(.subheadline.weight(.semibold))
+                .frame(maxWidth: .infinity, minHeight: 44)
+        }
+    }
+
+    private var finePrint: some View {
+        VStack(spacing: 8) {
             Text(autoRenewDisclosure)
                 .font(.caption2)
                 .foregroundStyle(.secondary)
@@ -461,11 +667,18 @@ struct PaywallView: View {
             Button {
                 Task { await restore() }
             } label: {
-                Text("Restore Purchases")
-                    .font(.subheadline.weight(.semibold))
-                    .foregroundStyle(Color.accentColor)
-                    .frame(maxWidth: .infinity, minHeight: 44)
+                Group {
+                    if isRestoring {
+                        ProgressView()
+                    } else {
+                        Text("Restore Purchases")
+                            .font(.subheadline.weight(.semibold))
+                            .foregroundStyle(Color.accentColor)
+                    }
+                }
+                .frame(maxWidth: .infinity, minHeight: 44)
             }
+            .disabled(isBusy)
             .accessibilityLabel("Restore previous purchases")
 
             HStack(spacing: 16) {
@@ -475,13 +688,15 @@ struct PaywallView: View {
             .font(.caption.weight(.medium))
             .foregroundStyle(.secondary)
         }
-        .padding(.horizontal)
-        .padding(.top, 10)
-        .padding(.bottom, 8)
-        .background(.bar)
     }
 
     // MARK: - Derived state
+
+    private var isBusy: Bool { isPurchasing || isRestoring }
+
+    private var isAlreadyTopTier: Bool {
+        Self.initialTier(recommended: context.recommendedTier, current: storeKit.currentTier) == nil
+    }
 
     private var periods: [StoreKitService.SubscriptionPeriod] {
         let available = storeKit.availablePeriods(for: selectedTier)
@@ -576,6 +791,7 @@ struct PaywallView: View {
             return
         }
         errorMessage = nil
+        infoMessage = nil
         isPurchasing = true
         analytics.trackPaywallPurchaseStart(context: context.id, productId: product.id)
         do {
@@ -583,8 +799,10 @@ struct PaywallView: View {
             isPurchasing = false
             if transaction != nil {
                 analytics.trackPaywallPurchaseComplete(context: context.id, productId: product.id)
-                didConvert = true
-                dismiss()
+                completeConversion()
+            } else if let pending = storeKit.errorMessage {
+                // Ask to Buy / SCA: not an error, just not done yet.
+                infoMessage = pending
             }
         } catch {
             isPurchasing = false
@@ -595,12 +813,13 @@ struct PaywallView: View {
     @MainActor
     private func restore() async {
         analytics.trackPaywallRestore(context: context.id)
-        isPurchasing = true
+        errorMessage = nil
+        infoMessage = nil
+        isRestoring = true
         await storeKit.restorePurchases()
-        isPurchasing = false
+        isRestoring = false
         if storeKit.currentTier != .free {
-            didConvert = true
-            dismiss()
+            completeConversion()
         } else if let storeError = storeKit.errorMessage {
             // A real restore failure (e.g. AppStore.sync network error) — don't
             // mask it as "nothing to restore" (IOS-AUDIT-UX-028).
@@ -608,6 +827,17 @@ struct PaywallView: View {
         } else {
             errorMessage = "No active subscription found to restore."
         }
+    }
+
+    /// The moment someone pays is the one to acknowledge
+    /// (IOS-DD-MONETIZATION-22).
+    @MainActor
+    private func completeConversion() {
+        didConvert = true
+        UINotificationFeedbackGenerator().notificationOccurred(.success)
+        AppToastCenter.shared.show(.success("Welcome to \(storeKit.currentTier.displayName)"))
+        onPurchased?()
+        dismiss()
     }
 }
 

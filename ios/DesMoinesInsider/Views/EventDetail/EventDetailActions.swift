@@ -3,64 +3,42 @@ import SwiftUI
 /// Action button row: calendar, external link, and reminder.
 struct EventDetailActions: View {
     let event: Event
-    let hasPremiumAccess: Bool
     let calendarAdded: Bool
     let isReminderSet: Bool
     let onAddToCalendar: () -> Void
-    let onShowSubscription: () -> Void
     let onToggleReminder: () -> Void
 
     var body: some View {
         VStack(spacing: 10) {
             HStack(spacing: 12) {
-                // Add to Calendar — Insider+ feature
+                // Add to Calendar. Free for everyone: it was locked behind an
+                // "insider tips" paywall that never mentioned calendars, and
+                // calendar is not a PremiumFeature (IOS-DD-MONETIZATION-12).
                 if event.parsedDate != nil {
-                    if hasPremiumAccess {
-                        Button {
-                            UIImpactFeedbackGenerator(style: .medium).impactOccurred()
-                            onAddToCalendar()
-                        } label: {
-                            Label(
-                                calendarAdded ? "Added to Calendar" : "Add to Calendar",
-                                systemImage: calendarAdded ? "checkmark.circle.fill" : "calendar.badge.plus"
-                            )
-                            .font(.subheadline.weight(.medium))
-                            .frame(maxWidth: .infinity)
-                            .padding(.vertical, 12)
-                            .background(
-                                calendarAdded ? Color.green : Color.accentColor,
-                                in: RoundedRectangle(cornerRadius: 12)
-                            )
-                            .foregroundStyle(.white)
-                        }
-                        .disabled(calendarAdded)
-                        .accessibilityLabel(
-                            calendarAdded
-                                ? "\(event.title) added to calendar"
-                                : "Add \(event.title) to your calendar"
+                    Button {
+                        UIImpactFeedbackGenerator(style: .medium).impactOccurred()
+                        onAddToCalendar()
+                    } label: {
+                        Label(
+                            calendarAdded ? "Added to Calendar" : "Add to Calendar",
+                            systemImage: calendarAdded ? "checkmark.circle.fill" : "calendar.badge.plus"
                         )
-                        .accessibilityHint(calendarAdded ? "" : "Adds event to your iOS Calendar app")
-                    } else {
-                        // Locked calendar button for free users
-                        Button {
-                            UIImpactFeedbackGenerator(style: .light).impactOccurred()
-                            onShowSubscription()
-                        } label: {
-                            HStack(spacing: 6) {
-                                Image(systemName: "lock.fill")
-                                    .font(.caption)
-                                Text("Add to Calendar")
-                                    .font(.subheadline.weight(.medium))
-                                PremiumBadge()
-                            }
-                            .frame(maxWidth: .infinity)
-                            .padding(.vertical, 12)
-                            .background(Color(.systemGray5), in: RoundedRectangle(cornerRadius: 12))
-                            .foregroundStyle(.secondary)
-                        }
-                        .accessibilityLabel("Add to Calendar — requires Insider subscription")
-                        .accessibilityHint("Tap to upgrade to Insider for calendar integration")
+                        .font(.subheadline.weight(.medium))
+                        .frame(maxWidth: .infinity)
+                        .padding(.vertical, 12)
+                        .background(
+                            calendarAdded ? Color.green : Color.accentColor,
+                            in: RoundedRectangle(cornerRadius: 12)
+                        )
+                        .foregroundStyle(.white)
                     }
+                    .disabled(calendarAdded)
+                    .accessibilityLabel(
+                        calendarAdded
+                            ? "\(event.title) added to calendar"
+                            : "Add \(event.title) to your calendar"
+                    )
+                    .accessibilityHint(calendarAdded ? "" : "Adds event to your iOS Calendar app")
                 }
 
                 // External Link — content-supplied, so restrict to safe web
@@ -123,11 +101,9 @@ struct EventDetailActions: View {
 #Preview {
     EventDetailActions(
         event: .preview,
-        hasPremiumAccess: true,
         calendarAdded: false,
         isReminderSet: false,
         onAddToCalendar: {},
-        onShowSubscription: {},
         onToggleReminder: {}
     )
 }

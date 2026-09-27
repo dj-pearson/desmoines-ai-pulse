@@ -7,8 +7,10 @@ import SwiftUI
 // `SponsoredPick` and a `surface`:
 //   • Impression is logged on real viewability (≥50% for ≥1s, IOS-ADS-014) and
 //     deduped per session via AdTrackingService.
-//   • Tap logs a sponsored click and opens the listing in the in-app browser
-//     (Guideline-friendly), mirroring AdBannerView's sponsored handling.
+//   • Tap logs a sponsored click and opens the listing's native detail screen
+//     (IOS-DD-MONETIZATION-19). It used to open the website in a web view. The
+//     card presents the resolver itself because it lives inside sheets (Ask
+//     Pulse, Surprise Me), where DeepLinkHandler's root presenter cannot reach.
 //
 // Free-tier gating is owned upstream (SponsoredPickService returns nil for
 // premium), so this card simply renders whatever pick it's given.
@@ -17,13 +19,13 @@ struct SponsoredPickCard: View {
     let surface: SponsoredPickService.Surface
 
     private let service = SponsoredPickService.shared
-    @State private var browseTarget: AdTarget?
+    @State private var native: MainTabView.DeepLinkPresentation?
 
     var body: some View {
         Button {
             UIImpactFeedbackGenerator(style: .light).impactOccurred()
             service.logClick(pick, surface: surface)
-            if let url = listingURL { browseTarget = AdTarget(url: url) }
+            native = Self.presentation(for: pick)
         } label: {
             HStack(spacing: 12) {
                 thumbnail
@@ -47,7 +49,7 @@ struct SponsoredPickCard: View {
                 }
 
                 Spacer(minLength: 0)
-                Image(systemName: "arrow.up.right")
+                Image(systemName: "chevron.right")
                     .font(.caption.weight(.bold))
                     .foregroundStyle(Color.accentColor)
                     .accessibilityHidden(true)
@@ -68,15 +70,8 @@ struct SponsoredPickCard: View {
         .accessibilityLabel("Sponsored: \(pick.title). \(pick.reason)")
         .accessibilityHint("Opens this sponsored listing")
         .accessibilityAddTraits(.isLink)
-        .sheet(item: $browseTarget) { target in
-            NavigationStack {
-                WebViewPage(title: "Sponsored", url: target.url)
-                    .toolbar {
-                        ToolbarItem(placement: .topBarTrailing) {
-                            Button("Done") { browseTarget = nil }
-                        }
-                    }
-            }
+        .sheet(item: $native) { presentation in
+            DeepLinkResolverView(presentation: presentation)
         }
     }
 
@@ -100,9 +95,12 @@ struct SponsoredPickCard: View {
         }
     }
 
-    /// Canonical web URL for the sponsored listing (public route).
-    private var listingURL: URL? {
-        let path = pick.itemType == "event" ? "events" : "restaurants"
-        return URL(string: "\(Config.siteURL.absoluteString)/\(path)/\(pick.itemId)")
+    /// The native screen for a pick; nil for a type this build cannot show.
+    static func presentation(for pick: SponsoredPickService.SponsoredPick) -> MainTabView.DeepLinkPresentation? {
+        switch pick.itemType {
+        case "event": return .event(pick.itemId)
+        case "restaurant": return .restaurant(pick.itemId)
+        default: return nil
+        }
     }
 }

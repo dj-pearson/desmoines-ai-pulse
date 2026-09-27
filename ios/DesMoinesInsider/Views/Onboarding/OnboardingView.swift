@@ -19,6 +19,11 @@ struct OnboardingView: View {
     /// Once the user passes the value pages, we show the trial step.
     @State private var showTrialStep = false
     @State private var showOnboardingPaywall = false
+    /// Whether an eligible free trial actually exists. The step promised
+    /// "free for 7 days" while the monthly SKUs carry no intro offer and the
+    /// annual ones may be missing (IOS-DD-MONETIZATION-21). Defaults to false
+    /// so nothing promises a trial before StoreKit has answered.
+    @State private var trialAvailable = false
     @Environment(\.accessibilityReduceMotion) private var reduceMotion
 
     private let analytics = AnalyticsService.shared
@@ -169,11 +174,13 @@ struct OnboardingView: View {
                     .foregroundStyle(Color.accentColor.gradient)
                     .accessibilityHidden(true)
 
-                Text("Try Insider free for 7 days")
+                Text(trialAvailable ? "Try Insider free for 7 days" : "Go further with Insider")
                     .font(.title.bold())
                     .multilineTextAlignment(.center)
 
-                Text("Unlock the full experience. Cancel anytime — no charge during your trial.")
+                Text(trialAvailable
+                     ? "Unlock the full experience. Cancel anytime — no charge during your trial."
+                     : "Unlimited saves, the AI Trip Planner and no ads. Cancel anytime.")
                     .font(.subheadline)
                     .foregroundStyle(.secondary)
                     .multilineTextAlignment(.center)
@@ -182,7 +189,7 @@ struct OnboardingView: View {
                 VStack(alignment: .leading, spacing: 12) {
                     trialBullet("heart.fill", "Unlimited saved favorites")
                     trialBullet("map.fill", "AI Trip Planner itineraries")
-                    trialBullet("slider.horizontal.3", "Advanced filters & insider tips")
+                    trialBullet("bell.badge.fill", "Saved searches & event alerts")
                     trialBullet("eye.slash.fill", "Ad-free browsing")
                 }
                 .padding(.horizontal, 40)
@@ -193,14 +200,16 @@ struct OnboardingView: View {
                         analytics.trackOnboardingTrial(action: "start_tapped")
                         showOnboardingPaywall = true
                     } label: {
-                        Text("Start Free Trial")
+                        Text(trialAvailable ? "Start Free Trial" : "See Insider plans")
                             .fontWeight(.semibold)
                             .frame(maxWidth: .infinity)
                             .padding(.vertical, 14)
                             .background(Color.accentColor, in: RoundedRectangle(cornerRadius: 14))
                             .foregroundStyle(.white)
                     }
-                    .accessibilityHint("Opens the subscription options with a free trial")
+                    .accessibilityHint(trialAvailable
+                                       ? "Opens the subscription options with a free trial"
+                                       : "Opens the subscription options")
 
                     Button("Maybe later") {
                         analytics.trackOnboardingTrial(action: "skipped")
@@ -217,6 +226,11 @@ struct OnboardingView: View {
             .padding(.bottom, 40)
         }
         .scrollBounceBehavior(.basedOnSize)
+        .task {
+            let storeKit = StoreKitService.shared
+            await storeKit.loadProducts()
+            trialAvailable = await storeKit.isFreeTrialAvailable(for: .insider)
+        }
     }
 
     private func trialBullet(_ icon: String, _ text: String) -> some View {

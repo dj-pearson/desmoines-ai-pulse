@@ -6,6 +6,9 @@ import StoreKit
 struct SubscriptionBanner: View {
     @State private var storeKit = StoreKitService.shared
     @State private var showSubscription = false
+    /// Plan details for a subscriber billed outside the App Store
+    /// (IOS-DD-MONETIZATION-16).
+    @State private var showPlanInfo = false
 
     /// Compact mode shows a single-line banner; full mode shows a richer card.
     var style: Style = .full
@@ -26,6 +29,13 @@ struct SubscriptionBanner: View {
         }
         .sheet(isPresented: $showSubscription) {
             SubscriptionView()
+        }
+        .sheet(isPresented: $showPlanInfo) {
+            PlanInfoSheet(
+                tier: storeKit.currentTier,
+                subscriptions: storeKit.crossPlatformSubscriptions
+            )
+            .presentationDetents([.medium])
         }
     }
 
@@ -57,7 +67,7 @@ struct SubscriptionBanner: View {
                 VStack(alignment: .leading, spacing: 2) {
                     Text("Free Plan")
                         .font(.headline)
-                    Text("Unlock unlimited favorites, AI Trip Planner, advanced filters & more")
+                    Text("Unlock unlimited favorites, the AI Trip Planner, saved searches and an ad-free app")
                         .font(.caption)
                         .foregroundStyle(.secondary)
                         .lineLimit(2)
@@ -84,7 +94,14 @@ struct SubscriptionBanner: View {
 
     private var subscribedCard: some View {
         Button {
-            showSubscription = true
+            // "Manage your subscription" opened a purchase store, where a
+            // web or Android subscriber could buy a second, duplicate plan
+            // (IOS-DD-MONETIZATION-16).
+            if storeKit.hasAppStoreSubscription {
+                Task { await storeKit.showManageSubscriptions() }
+            } else {
+                showPlanInfo = true
+            }
         } label: {
             HStack(spacing: 12) {
                 ZStack {
@@ -189,7 +206,7 @@ struct SubscriptionBanner: View {
 struct FavoritesLimitBanner: View {
     let currentCount: Int
     @State private var storeKit = StoreKitService.shared
-    @State private var showSubscription = false
+    @State private var paywallContext: PaywallContext?
 
     private var maxFavorites: Int { SubscriptionTier.free.maxFavorites }
     private var isAtLimit: Bool { Self.isAtLimit(count: currentCount, max: maxFavorites) }
@@ -222,7 +239,12 @@ struct FavoritesLimitBanner: View {
 
                     if isNearLimit {
                         Button {
-                            showSubscription = true
+                            // Under the cap, say how many are used; the
+                            // "reached the limit" copy is for at the cap
+                            // (IOS-DD-MONETIZATION-13).
+                            paywallContext = isAtLimit
+                                ? .unlimitedFavorites
+                                : .favoritesProgress(used: currentCount)
                         } label: {
                             Text("Go Unlimited")
                                 .font(.caption.bold())
@@ -264,9 +286,51 @@ struct FavoritesLimitBanner: View {
                 Color(.systemGray6),
                 in: RoundedRectangle(cornerRadius: 12)
             )
-            .sheet(isPresented: $showSubscription) {
-                PaywallView(context: .unlimitedFavorites)
+            .sheet(item: $paywallContext) { context in
+                PaywallView(context: context)
             }
+        }
+    }
+}
+
+// MARK: - Plan info (non-App Store subscribers)
+
+/// Where a subscription billed by the website or Google Play is managed. No
+/// purchase controls and no external links (guideline 3.1.1).
+private struct PlanInfoSheet: View {
+    let tier: SubscriptionTier
+    let subscriptions: [StoreKitService.CrossPlatformSubscription]
+
+    @Environment(\.dismiss) private var dismiss
+
+    var body: some View {
+        NavigationStack {
+            VStack(alignment: .leading, spacing: 12) {
+                Text("\(tier.displayName) plan")
+                    .font(.title3.bold())
+                ForEach(subscriptions) { sub in
+                    Label(Self.billingLine(for: sub.platform), systemImage: sub.platform == .web ? "globe" : "smartphone")
+                        .font(.subheadline)
+                }
+                Text("Manage or cancel it where you bought it.")
+                    .font(.subheadline)
+                    .foregroundStyle(.secondary)
+                Spacer(minLength: 0)
+            }
+            .padding()
+            .frame(maxWidth: .infinity, alignment: .leading)
+            .toolbar {
+                ToolbarItem(placement: .confirmationAction) {
+                    Button("Done") { dismiss() }
+                }
+            }
+        }
+    }
+
+    static func billingLine(for platform: StoreKitService.CrossPlatformSubscription.Platform) -> String {
+        switch platform {
+        case .web: return "Billed through the website"
+        case .android: return "Billed through Google Play"
         }
     }
 }

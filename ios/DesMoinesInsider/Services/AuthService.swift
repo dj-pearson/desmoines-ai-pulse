@@ -171,6 +171,13 @@ final class AuthService {
                         // sign-in to a different account in the same session)
                         // immediately reflects the new account's entitlements.
                         await StoreKitService.shared.refreshBackendTier()
+                        // A purchase made signed-out, or whose sync failed,
+                        // reaches the account now (IOS-DD-MONETIZATION-04).
+                        // Once per user per launch, never a transfer, and not
+                        // awaited so launch does not wait on Apple.
+                        if event == .signedIn || event == .initialSession {
+                            Task { await StoreKitService.shared.syncEntitlementsAfterSignIn(userId: userId) }
+                        }
                         // Hearts were empty after an in-app sign-in until the
                         // Saved tab or Dashboard opened, and a tap could insert
                         // a duplicate (IOS-DD-SAVED-21). Only on a real sign-in:

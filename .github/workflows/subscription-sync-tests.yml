@@ -410,6 +410,16 @@ jobs:
       # advertiser dashboard read zero. Pins the server-side write path, the bot
       # filter, idempotency, and the frequency cap being switched on.
       - run: deno test --allow-read supabase/functions/_tests/ad-event-tracking.test.ts
+      # IOS-DD-MONETIZATION-01. verify-apple-receipt granted an active VIP row
+      # to any signed-in caller without asking Apple. It now answers 410 and
+      # must never write a subscription row again.
+      - run: deno test --allow-read supabase/functions/_tests/verify-apple-receipt-inert.test.ts
+      # IOS-DD-MONETIZATION-02. One Apple subscription unlocked every account
+      # that validated it. Pins the appAccountToken / explicit-Restore rules.
+      - run: deno test supabase/functions/_shared/appleOwnership.test.ts
+      # IOS-DD-MONETIZATION-19. Sponsored picks used a UTC flight date and could
+      # point at past events and closed restaurants, with invented social proof.
+      - run: deno test supabase/functions/_shared/sponsoredPickFilters.test.ts
       # WEB-FEAT-013. The double-charge guards used .single() on a query that
       # matches one row PER PLATFORM, so they nulled out for exactly the users
       # already paying twice, and a cross-tier upgrade opened a SECOND Stripe

@@ -83,7 +83,15 @@ final class CampaignAdService {
 
         guard let client = supabase, !Config.isUITesting else { return nil }
 
-        struct Params: Encodable { let p_placement_type: String }
+        // The session and user switch on get_active_ads' own frequency caps
+        // (5 minutes per session, 10 a day per user). Sending only the
+        // placement left both off (IOS-DD-MONETIZATION-07). Additive: the RPC
+        // has had these parameters, with NULL defaults, all along.
+        struct Params: Encodable {
+            let p_placement_type: String
+            let p_session_id: String
+            let p_user_id: String?
+        }
         struct Row: Decodable {
             let campaign_id: String?
             let creative_id: String?
@@ -96,7 +104,11 @@ final class CampaignAdService {
 
         do {
             let rows: [Row] = try await client
-                .rpc("get_active_ads", params: Params(p_placement_type: key))
+                .rpc("get_active_ads", params: Params(
+                    p_placement_type: key,
+                    p_session_id: AdTrackingService.shared.currentSessionId,
+                    p_user_id: AuthService.shared.currentUser?.id.uuidString
+                ))
                 .execute()
                 .value
 

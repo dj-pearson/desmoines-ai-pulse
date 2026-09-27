@@ -2,21 +2,27 @@ import SwiftUI
 
 // MARK: - IOS-ADS-012 · Interstitial ad
 //
-// A dismissible full-screen promo shown rarely at a navigation boundary (see
+// A dismissible full-screen ad shown rarely at a navigation boundary (see
 // `InterstitialAdService` for the cap). Free-tier only — the caller gates on
-// tier. Shows a live campaign creative when one is available, otherwise a house
-// ad promoting Insider, so it always doubles as a conversion surface
-// (IOS-ADS-013). Honors Reduce Motion and always offers an immediate Close, so
-// it never blocks the user.
+// tier and only presents when a paid campaign creative is actually live.
+//
+// IOS-DD-MONETIZATION-08: this used to fetch its creative after appearing,
+// fade the whole screen (Close included) in once the fetch finished, log a
+// billable impression for campaigns it never drew (text-only creatives), and,
+// when nothing was sold, turn into a full-screen house paywall selling features
+// iOS does not have. Unsold inventory now shows nothing full-screen; the
+// caller fetches first and passes the creative in.
+//
+// Honors Reduce Motion and always offers an immediate Close, so it never
+// blocks the user.
 struct InterstitialAdView: View {
+    let campaign: CampaignAdService.CampaignCreative
+
     @Environment(\.dismiss) private var dismiss
     @Environment(\.accessibilityReduceMotion) private var reduceMotion
 
-    @State private var campaign: CampaignAdService.CampaignCreative?
     @State private var impressionId: String?
-    @State private var showStore = false
     @State private var browseTarget: AdTarget?
-    @State private var didLoad = false
     @State private var appeared = false
 
     private let tracking = AdTrackingService.shared
@@ -26,46 +32,32 @@ struct InterstitialAdView: View {
             Color(.systemBackground).ignoresSafeArea()
 
             VStack(spacing: 20) {
+                // Outside any animation: Close is there from the first frame.
                 topBar
                 Spacer(minLength: 0)
-                if let campaign, campaign.imageUrl != nil {
-                    campaignBody(campaign)
-                } else {
-                    houseBody
-                }
+                campaignBody
+                    .opacity(appeared || reduceMotion ? 1 : 0)
+                    .animation(reduceMotion ? nil : .easeOut(duration: 0.25), value: appeared)
+                    // Billed only once the creative is actually on screen.
+                    .trackAdViewability {
+                        Task {
+                            impressionId = await tracking.logImpression(
+                                campaignId: campaign.campaignId,
+                                creativeId: campaign.creativeId,
+                                placement: "interstitial"
+                            )
+                        }
+                    }
                 Spacer(minLength: 0)
             }
             .padding()
-            .opacity(appeared || reduceMotion ? 1 : 0)
-            .animation(reduceMotion ? nil : .easeOut(duration: 0.25), value: appeared)
         }
-        .task {
-            guard !didLoad else { return }
-            didLoad = true
-            campaign = await CampaignAdService.shared.creative(for: .featuredSpot)
-            if let campaign {
-                impressionId = await tracking.logImpression(
-                    campaignId: campaign.campaignId,
-                    creativeId: campaign.creativeId,
-                    placement: "interstitial"
-                )
-            } else {
-                tracking.logHouseImpression(variant: "interstitial_upgrade", placement: "interstitial")
-            }
-            appeared = true
-        }
-        // Inline store rather than PaywallView — see hotfix cf8ddd7 (PaywallView
-        // drops the Insider annual SKU from its period toggle).
-        .sheet(isPresented: $showStore) { SubscriptionView() }
+        .onAppear { appeared = true }
         .sheet(item: $browseTarget) { target in
-            NavigationStack {
-                WebViewPage(title: "Sponsored", url: target.url)
-                    .toolbar {
-                        ToolbarItem(placement: .topBarTrailing) {
-                            Button("Done") { browseTarget = nil }
-                        }
-                    }
-            }
+            // Advertiser landing pages open in Safari with its address bar
+            // (IOS-DD-MONETIZATION-20).
+            SafariView(url: target.url)
+                .ignoresSafeArea()
         }
     }
 
@@ -89,58 +81,45 @@ struct InterstitialAdView: View {
         }
     }
 
-    private func campaignBody(_ creative: CampaignAdService.CampaignCreative) -> some View {
-        VStack(spacing: 16) {
-            CachedAsyncImage(url: creative.imageUrl) {
-                RoundedRectangle(cornerRadius: 16)
-                    .fill(Color(.systemGray6))
-                    .overlay { ProgressView() }
-            }
-            .aspectRatio(4.0 / 3.0, contentMode: .fit)
-            .clipShape(RoundedRectangle(cornerRadius: 16))
+    private var hasImage: Bool {
+        guard let url = campaign.imageUrl else { return false }
+        return !url.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty
+    }
 
-            if let title = creative.title, !title.isEmpty {
-                Text(title).font(.title3.bold()).multilineTextAlignment(.center)
+    private var campaignBody: some View {
+        VStack(spacing: 16) {
+            if hasImage {
+                CachedAsyncImage(url: campaign.imageUrl) {
+                    RoundedRectangle(cornerRadius: 16)
+                        .fill(Color(.systemGray6))
+                        .overlay { ProgressView() }
+                }
+                .aspectRatio(4.0 / 3.0, contentMode: .fit)
+                .clipShape(RoundedRectangle(cornerRadius: 16))
             }
-            if let desc = creative.description, !desc.isEmpty {
+
+            if let title = campaign.displayTitle {
+                Text(title)
+                    .font(hasImage ? .title3.bold() : .title2.bold())
+                    .multilineTextAlignment(.center)
+            }
+            if let desc = campaign.description, !desc.isEmpty {
                 Text(desc).font(.subheadline).foregroundStyle(.secondary).multilineTextAlignment(.center)
             }
-            if let url = creative.targetURL {
+            if let url = campaign.targetURL {
                 Button {
                     Task {
                         await tracking.logClick(
-                            campaignId: creative.campaignId,
-                            creativeId: creative.creativeId,
+                            campaignId: campaign.campaignId,
+                            creativeId: campaign.creativeId,
                             impressionId: impressionId
                         )
                     }
                     browseTarget = AdTarget(url: url)
                 } label: {
-                    ctaLabel(creative.ctaText ?? "Learn More")
+                    ctaLabel(campaign.ctaText ?? "Learn More")
                 }
-                .accessibilityLabel("\(creative.title ?? "Sponsored"). \(creative.ctaText ?? "Learn more")")
-            }
-        }
-    }
-
-    private var houseBody: some View {
-        VStack(spacing: 16) {
-            Image(systemName: "sparkles")
-                .font(.system(size: 52))
-                .foregroundStyle(Color.accentColor.gradient)
-                .accessibilityHidden(true)
-            Text("Go ad-free with Insider")
-                .font(.title2.bold())
-                .multilineTextAlignment(.center)
-            Text("Remove ads and unlock the AI Trip Planner, advanced filters, unlimited saves and insider tips.")
-                .font(.subheadline)
-                .foregroundStyle(.secondary)
-                .multilineTextAlignment(.center)
-            Button {
-                tracking.logHouseClick(variant: "interstitial_upgrade", placement: "interstitial")
-                showStore = true
-            } label: {
-                ctaLabel("See Plans")
+                .accessibilityLabel("\(campaign.title ?? "Sponsored"). \(campaign.ctaText ?? "Learn more")")
             }
         }
     }
@@ -156,5 +135,13 @@ struct InterstitialAdView: View {
 }
 
 #Preview {
-    InterstitialAdView()
+    InterstitialAdView(campaign: .init(
+        campaignId: "c1",
+        creativeId: "cr1",
+        title: "Sample sponsor",
+        description: "A text-only creative.",
+        imageUrl: nil,
+        linkUrl: "https://example.com",
+        ctaText: "Visit"
+    ))
 }

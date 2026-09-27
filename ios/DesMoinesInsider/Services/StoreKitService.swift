@@ -1,6 +1,7 @@
 import Foundation
 import os
 import StoreKit
+import Supabase
 import UIKit
 
 /// Manages In-App Purchases via StoreKit 2.
@@ -61,6 +62,54 @@ final class StoreKitService {
     /// populate this set — those keep the grace period. Cleared when the same
     /// product later validates successfully or leaves StoreKit entitlements.
     private(set) var serverRevokedProductIDs: Set<String> = []
+
+    /// Why the server last refused this device's App Store subscription, when
+    /// the refusal is one the user can act on. `.accountMismatch` drives the
+    /// "belongs to another account" notice in SubscriptionView
+    /// (IOS-DD-MONETIZATION-03).
+    private(set) var serverRejectionReason: ReceiptRejection?
+
+    /// How a non-2xx answer from validate-ios-receipt is handled. The server
+    /// answers every `valid:false` with a 4xx, so before this the revocation
+    /// branch below (IOS-AUDIT-SEC-011) only ran on a 200 that never came
+    /// (IOS-DD-MONETIZATION-03).
+    enum ReceiptRejection: Equatable {
+        /// Apple says the receipt is not good (revoked, wrong bundle/product).
+        case definitive(reason: String)
+        /// The subscription is bound to a different Des Moines Insider account.
+        case accountMismatch
+        /// Worth retrying with backoff (5xx, 429, 408).
+        case transient
+        /// Keep the local entitlement and try again on a later launch.
+        case grace
+    }
+
+    /// Server reasons that mean Apple itself rejected the transaction. Any
+    /// other 403 (e.g. "userId does not match authenticated user") is about
+    /// our session, not the receipt, and must not revoke.
+    private static let definitiveRejectionReasons: Set<String> = [
+        "Transaction has been revoked",
+        "Bundle ID mismatch",
+        "Product ID mismatch",
+    ]
+
+    /// Pure classification of a validate-ios-receipt failure. The status codes
+    /// are the server's shipped contract and are not changed.
+    /// 404 stays `.grace`: it is also what a sandbox/production race or a
+    /// local .storekit build produces.
+    static func classifyValidationFailure(statusCode: Int, body: Data?) -> ReceiptRejection {
+        let reason = body.flatMap { try? JSONDecoder().decode(ValidationResponse.self, from: $0) }?.reason
+        if statusCode == 409 || reason == "owned_by_another_account" {
+            return .accountMismatch
+        }
+        if statusCode == 403, let reason, definitiveRejectionReasons.contains(reason) {
+            return .definitive(reason: reason)
+        }
+        if statusCode >= 500 || statusCode == 429 || statusCode == 408 {
+            return .transient
+        }
+        return .grace
+    }
 
     /// True when a locally-present StoreKit entitlement has been revoked by the
     /// server. UI can surface a "subscription could not be verified" state.
@@ -289,7 +338,10 @@ final class StoreKitService {
         errorMessage = nil
 
         do {
-            let result = try await product.purchase()
+            // Bind the purchase to the signed-in account so the server can
+            // refuse it on any other account (IOS-DD-MONETIZATION-02).
+            let uid = try? await supabase?.auth.session.user.id
+            let result = try await product.purchase(options: Self.purchaseOptions(for: uid))
 
             switch result {
             case .success(let verification):
@@ -321,6 +373,61 @@ final class StoreKitService {
         }
     }
 
+    /// Purchase options for the signed-in account: the user id as
+    /// `appAccountToken`, which Apple returns inside the signed transaction.
+    /// Signed out, there is nothing to bind to and the set is empty.
+    static func purchaseOptions(for userId: UUID?) -> Set<Product.PurchaseOption> {
+        var options: Set<Product.PurchaseOption> = []
+        if let userId {
+            options.insert(.appAccountToken(userId))
+        }
+        return options
+    }
+
+    /// Finishes and syncs a purchase made through a StoreKit view
+    /// (SubscriptionStoreView), whose completion handler used to only dismiss.
+    /// Idempotent with the Transaction.updates listener: finishing twice and
+    /// validating twice are both harmless (IOS-DD-MONETIZATION-05).
+    /// Returns true when the purchase succeeded.
+    func handleCompletedPurchase(_ result: Result<Product.PurchaseResult, Error>) async -> Bool {
+        switch result {
+        case .success(.success(let verification)):
+            do {
+                let transaction = try checkVerified(verification)
+                await transaction.finish()
+                await updatePurchasedProducts()
+                await syncEntitlementToBackend(transaction: transaction, productId: transaction.productID)
+                await refreshBackendTier()
+                return true
+            } catch {
+                AppLogger.storekit.error("Store view purchase failed verification: \(error.localizedDescription)")
+                errorMessage = StoreError.purchaseFailed.localizedDescription
+                return false
+            }
+        case .success(.pending):
+            errorMessage = "Purchase is pending approval."
+            return false
+        case .success:
+            // .userCancelled and any future case.
+            return false
+        case .failure(let error):
+            AppLogger.storekit.error("Store view purchase error: \(error.localizedDescription)")
+            return false
+        }
+    }
+
+    // MARK: - Free trial (IOS-DD-MONETIZATION-21)
+
+    /// True only when the tier's annual SKU carries a free-trial introductory
+    /// offer AND this Apple ID is still eligible for it. Onboarding promised
+    /// "7 days free" without asking either question.
+    func isFreeTrialAvailable(for tier: SubscriptionTier) async -> Bool {
+        guard let subscription = product(for: tier, period: .annual)?.subscription,
+              let offer = subscription.introductoryOffer,
+              offer.paymentMode == .freeTrial else { return false }
+        return await subscription.isEligibleForIntroOffer
+    }
+
     // MARK: - Restore Purchases
 
     func restorePurchases() async {
@@ -330,7 +437,10 @@ final class StoreKitService {
         do {
             try await AppStore.sync()
             await updatePurchasedProducts()
-            await syncAllEntitlementsToBackend()
+            // Restore is the one deliberate "move it to this account" action,
+            // so it is the only caller that asks for a transfer
+            // (IOS-DD-MONETIZATION-02).
+            await syncAllEntitlementsToBackend(transfer: true)
             await refreshBackendTier()
         } catch {
             errorMessage = StoreError.restoreFailed.localizedDescription
@@ -473,22 +583,63 @@ final class StoreKitService {
     private static let baseRetryDelay: TimeInterval = 1.0
 
     /// Syncs all current subscription entitlements to the backend.
-    /// Called after restore so user_subscriptions stays in sync across devices and web.
-    private func syncAllEntitlementsToBackend() async {
+    /// Called after restore (transfer: true) and after sign-in (transfer:
+    /// false) so user_subscriptions stays in sync across devices and web.
+    func syncAllEntitlementsToBackend(transfer: Bool) async {
         for await result in Transaction.currentEntitlements {
             if let transaction = try? checkVerified(result),
                Self.productIDs.contains(transaction.productID) {
-                await syncEntitlementToBackend(transaction: transaction, productId: transaction.productID)
+                await syncEntitlementToBackend(
+                    transaction: transaction,
+                    productId: transaction.productID,
+                    transfer: transfer
+                )
             }
         }
+    }
+
+    // MARK: - Sync after sign-in (IOS-DD-MONETIZATION-04)
+
+    /// User ids already synced in this launch. Once per user per launch keeps
+    /// sign-in well inside validate-ios-receipt's 30-per-15-minutes limit.
+    @ObservationIgnored private var syncedForUserThisLaunch: Set<String> = []
+
+    /// A purchase made while signed out, or whose sync failed, was never sent
+    /// to the server again: finished transactions are not re-emitted by
+    /// Transaction.updates, and the full sync only ran from Restore. The
+    /// website, Android and every server-gated feature then saw Free.
+    /// Never transfers: taking a subscription from another account is only
+    /// done on an explicit Restore.
+    func syncEntitlementsAfterSignIn(userId: String) async {
+        if purchasedProductIDs.isEmpty {
+            // At launch this can run before init's entitlement read finishes.
+            await updatePurchasedProducts()
+        }
+        guard Self.shouldSyncAfterSignIn(
+            userId: userId,
+            alreadySynced: syncedForUserThisLaunch,
+            hasAppStoreSubscription: hasAppStoreSubscription
+        ) else { return }
+        syncedForUserThisLaunch.insert(userId)
+        await syncAllEntitlementsToBackend(transfer: false)
+        await refreshBackendTier()
+    }
+
+    static func shouldSyncAfterSignIn(
+        userId: String,
+        alreadySynced: Set<String>,
+        hasAppStoreSubscription: Bool
+    ) -> Bool {
+        hasAppStoreSubscription && !alreadySynced.contains(userId)
     }
 
     /// Sends the transaction to the server-side `validate-ios-receipt` edge function for
     /// verification with Apple's App Store Server API v2. Retries up to 3 times with
     /// exponential backoff (1s, 2s, 4s) on transient errors (5xx, network failures).
-    /// On validation failure, logs a warning but does NOT revoke local entitlements
-    /// (grace period approach).
-    private func syncEntitlementToBackend(transaction: Transaction, productId: String) async {
+    /// A definitive rejection (see `classifyValidationFailure`) revokes the local
+    /// entitlement; anything else keeps it (grace period approach).
+    /// `transfer` is only true from Restore (IOS-DD-MONETIZATION-02).
+    private func syncEntitlementToBackend(transaction: Transaction, productId: String, transfer: Bool = false) async {
         guard let client = supabase else { return }
         if Config.isUITesting { return }
 
@@ -509,13 +660,16 @@ final class StoreKitService {
             let originalTransactionId: String
             let productId: String
             let userId: String
+            /// Additive request field; the server defaults it to false.
+            let transfer: Bool
         }
 
         let payload = ValidationPayload(
             transactionId: String(transaction.id),
             originalTransactionId: String(transaction.originalID),
             productId: productId,
-            userId: userId
+            userId: userId,
+            transfer: transfer
         )
 
         var lastError: Error?
@@ -534,6 +688,7 @@ final class StoreKitService {
                     // Clear any prior revocation for this product (e.g. the user
                     // re-subscribed after a refund).
                     serverRevokedProductIDs.remove(productId)
+                    serverRejectionReason = nil
                     return
                 } else {
                     // Server *definitively* rejected the receipt (refunded /
@@ -547,6 +702,31 @@ final class StoreKitService {
                     serverRevokedProductIDs.insert(productId)
                     return
                 }
+            } catch let functionsError as FunctionsError {
+                // Every `valid:false` arrives here as a non-2xx
+                // (IOS-DD-MONETIZATION-03).
+                lastError = functionsError
+                guard case let .httpError(code, data) = functionsError else { break }
+                switch Self.classifyValidationFailure(statusCode: code, body: data) {
+                case .definitive(let reason):
+                    AppLogger.storekit.warning("Server rejected receipt (\(code)); revoking local entitlement for \(productId): reason=\(reason)")
+                    serverRevokedProductIDs.insert(productId)
+                    return
+                case .accountMismatch:
+                    AppLogger.storekit.warning("App Store subscription for \(productId) belongs to another account")
+                    serverRevokedProductIDs.insert(productId)
+                    serverRejectionReason = .accountMismatch
+                    return
+                case .transient:
+                    if attempt < Self.maxRetries - 1 {
+                        let delay = Self.baseRetryDelay * pow(2.0, Double(attempt))
+                        try? await Task.sleep(nanoseconds: UInt64(delay * 1_000_000_000))
+                        continue
+                    }
+                case .grace:
+                    break
+                }
+                break
             } catch {
                 lastError = error
                 let isTransient = Self.isTransientError(error)
@@ -595,21 +775,28 @@ final class StoreKitService {
         struct SubRow: Decodable {
             let status: String?
             let platform: String?
+            let current_period_end: String?
             let plan: PlanRef?
         }
 
         do {
             let rows: [SubRow] = try await client
                 .from("user_subscriptions")
-                .select("status, platform, plan:subscription_plans(name)")
+                .select("status, platform, current_period_end, plan:subscription_plans(name)")
                 .eq("user_id", value: userId)
-                .eq("status", value: "active")
+                // Same set the server entitles (IOS-DD-MONETIZATION-06); the
+                // past_due window is applied per row below.
+                .in("status", values: ["active", "trialing", "past_due"])
                 .execute()
                 .value
 
             var maxTier: SubscriptionTier = .free
             var breakdown: [CrossPlatformSubscription] = []
             for row in rows {
+                guard Self.isRowEntitled(
+                    status: row.status,
+                    currentPeriodEnd: Self.parseTimestamp(row.current_period_end)
+                ) else { continue }
                 // Match by substring (not exact equality) so backend plan names
                 // like "VIP Annual" / "Insider Monthly" still resolve to the right
                 // tier instead of silently downgrading to .free.
@@ -642,6 +829,48 @@ final class StoreKitService {
     func clearBackendTier() {
         backendTier = .free
         crossPlatformSubscriptions = []
+        syncedForUserThisLaunch = []
+        serverRejectionReason = nil
+    }
+
+    // MARK: - Row entitlement (IOS-DD-MONETIZATION-06)
+
+    /// Days a `past_due` row stays entitled after `current_period_end`. Must
+    /// match GRACE_PERIOD_DAYS in supabase/functions/_shared/entitlements.ts.
+    static let pastDueGraceDays = 14
+
+    /// Direct port of `isSubscriptionRowEntitled` in _shared/entitlements.ts.
+    /// iOS read only `status = 'active'`, so a web trial or a past_due
+    /// subscriber still in grace looked Free on iPhone while the website and
+    /// the server-gated features treated them as paid.
+    static func isRowEntitled(status: String?, currentPeriodEnd: Date?, now: Date = Date()) -> Bool {
+        switch status {
+        case "active", "trialing":
+            return true
+        case "past_due":
+            guard let end = currentPeriodEnd,
+                  let graceEnd = Calendar(identifier: .gregorian)
+                    .date(byAdding: .day, value: pastDueGraceDays, to: end) else { return false }
+            return now <= graceEnd
+        default:
+            return false
+        }
+    }
+
+    /// Postgres timestamptz as PostgREST returns it, with or without
+    /// fractional seconds.
+    static func parseTimestamp(_ raw: String?) -> Date? {
+        guard let raw, !raw.isEmpty else { return nil }
+        let withFraction = ISO8601DateFormatter()
+        withFraction.formatOptions = [.withInternetDateTime, .withFractionalSeconds]
+        if let date = withFraction.date(from: raw) { return date }
+        let plain = ISO8601DateFormatter()
+        plain.formatOptions = [.withInternetDateTime]
+        if let date = plain.date(from: raw) { return date }
+        // PostgREST sends microseconds; drop the fraction rather than depend
+        // on how many digits the fractional parser accepts.
+        let trimmed = raw.replacingOccurrences(of: #"\.\d+"#, with: "", options: .regularExpression)
+        return plain.date(from: trimmed)
     }
 
     /// Determines whether an error is transient (5xx / network) and worth retrying.

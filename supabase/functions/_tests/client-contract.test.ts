@@ -106,6 +106,17 @@ const MULTI_CLIENT = [
     ],
   },
   {
+    // IOS-DD-MONETIZATION-07: iOS moved off direct, RLS-refused inserts into
+    // ad_impressions / ad_clicks and onto the endpoint the web uses.
+    fn: 'track-ad-event/index.ts',
+    documentedActions: [],
+    requestFields: ['kind', 'campaign_id', 'creative_id', 'session_id', 'client_event_id'],
+    clients: [
+      'ios/DesMoinesInsider/Services/AdTrackingService.swift',
+      'src/lib/tracking.ts',
+    ],
+  },
+  {
     fn: 'version-check/index.ts',
     documentedActions: [],
     requestFields: ['platform', 'version'],

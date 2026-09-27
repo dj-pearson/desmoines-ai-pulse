@@ -7,16 +7,10 @@ struct EventDetailView: View {
     @State private var viewModel = EventDetailViewModel()
     @State private var showShareSheet = false
     @State private var showImageViewer = false
-    @State private var showSubscription = false
     @State private var notifications = LocalNotificationService.shared
-    @State private var storeKit = StoreKitService.shared
     @State private var auth = AuthService.shared
     @State private var toast: ToastMessage?
     @Environment(\.accessibilityReduceMotion) private var reduceMotion
-
-    private var hasPremiumAccess: Bool {
-        storeKit.currentTier == .insider || storeKit.currentTier == .vip
-    }
 
     /// The event actually rendered.
     ///
@@ -45,20 +39,15 @@ struct EventDetailView: View {
 
                 EventDetailActions(
                     event: displayEvent,
-                    hasPremiumAccess: hasPremiumAccess,
                     calendarAdded: viewModel.calendarAdded,
                     isReminderSet: notifications.isReminderSet(for: event.id),
                     onAddToCalendar: { Task { await viewModel.addToCalendar() } },
-                    onShowSubscription: { showSubscription = true },
                     onToggleReminder: { Task { await toggleReminder() } }
                 )
 
-                EventDetailInsiderTips(
-                    event: displayEvent,
-                    hasPremiumAccess: hasPremiumAccess,
-                    currentTier: storeKit.currentTier,
-                    onShowSubscription: { showSubscription = true }
-                )
+                // The "Insider Tips" paywall block was a client-side switch on
+                // category sold as local secrets; EventDetailGoodToKnow above
+                // shows the real content free (IOS-DD-MONETIZATION-12).
 
                 // "Promote this listing" advertiser funnel (IOS-ADS-016) — shown
                 // to admins/owners who manage listings. Opens the web campaign
@@ -122,9 +111,6 @@ struct EventDetailView: View {
                 isPresented: $showImageViewer,
                 accessibilityDescription: "Photo of \(displayEvent.title)",
             )
-        }
-        .sheet(isPresented: $showSubscription) {
-            PaywallView(context: .insiderTips)
         }
         .toastOverlay(message: $toast)
         .task {
