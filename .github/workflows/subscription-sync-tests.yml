@@ -531,6 +531,9 @@ jobs:
       # the Supabase client is a stub.
       - run: deno test supabase/functions/_shared/aiQuota.test.ts
       - run: deno test supabase/functions/discover-chat/conversation.test.ts
+      - run: deno test supabase/functions/discover-chat/picks.test.ts
+      - run: deno test --allow-read supabase/functions/_tests/swipe-session-hardening.test.ts
+      - run: deno test --allow-read supabase/functions/_tests/surprise-pick-honesty.test.ts
       # VIP support tickets move up one priority step, never into urgent (WP7).
       - run: deno test supabase/functions/_shared/supportPriority.test.ts
       # Email on SES (WP2, docs/plans/NON_CORE_REVIEW_2026-09.md). SigV4 is

@@ -17,7 +17,7 @@ final class PaywallCopyTests: XCTestCase {
 
     private static var presets: [PaywallContext] {
         [
-            .unlimitedFavorites, .favoritesProgress(used: 2), .tripPlanner, .writeReviews,
+            .unlimitedFavorites, .favoritesProgress(used: 2), .tripPlanner, .askPulse, .writeReviews,
             .savedSearches, .customAlerts, .onboarding, .winBack, .adFree,
             .generic(tier: .insider, feature: PremiumFeature.writeReviews.marketingBlurb),
             .generic(tier: .vip, feature: PremiumFeature.vipEvents.marketingBlurb),

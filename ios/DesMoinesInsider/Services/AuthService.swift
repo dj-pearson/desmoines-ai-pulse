@@ -335,6 +335,11 @@ final class AuthService {
         // them (IOS-DD-SEARCH-12).
         SavedSearchesViewModel.shared.reset()
         EmailPreferencesService.shared.reset()
+        // Swipe history and the unsent swipe queue. reset() was documented as
+        // the sign-out hook and nothing called it, so the next account on the
+        // device inherited the deck history and uploaded the previous user's
+        // queued swipes under its own id (IOS-DD-DISCOVER-09).
+        SwipeInteractionService.shared.reset()
         // Spotlight + QueryCache are actor-isolated; fire-and-forget detached tasks.
         Task.detached {
             await SpotlightService.shared.removeAllItems()

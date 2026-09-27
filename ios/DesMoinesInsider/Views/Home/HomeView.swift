@@ -197,7 +197,9 @@ struct HomeView: View {
                 let override = ribbonDiscoverContext
                 DiscoverView(
                     initialFilter: override?.0 ?? discoverFilterFromEvents(),
-                    initialMode: override?.1 ?? .events,
+                    // Events only when a Home filter narrowed it; otherwise the
+                    // full mix, as the hub's Swipe tile opens (IOS-DD-DISCOVER-05).
+                    initialMode: override?.1 ?? (viewModel.activeFilterCount > 0 ? .events : .mixed),
                     lockMode: override == nil && viewModel.activeFilterCount > 0,
                     onClose: { showDiscover = false }
                 )

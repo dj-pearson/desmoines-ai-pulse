@@ -77,6 +77,23 @@ extension PaywallContext {
         recommendedTier: .insider
     )
 
+    /// Ask Pulse's daily question limit (IOS-DD-DISCOVER-14). The numbers are
+    /// ai_quota_limits for discover-chat (20261001000001): free 5, insider 50,
+    /// vip 200.
+    static let askPulse = PaywallContext(
+        id: "ask_pulse",
+        icon: "sparkles",
+        headline: "Ask Pulse more",
+        // Tier-neutral: an Insider who hits 50 sees this too, and the
+        // tier picker already moves them to VIP.
+        subheadline: "Ask Pulse questions reset each night. Free gets 5 a day, Insider 50, VIP 200.",
+        benefits: [
+            "50 Ask Pulse questions a day on Insider",
+            "200 a day on VIP",
+        ],
+        recommendedTier: .insider
+    )
+
     static let writeReviews = PaywallContext(
         id: "write_reviews",
         icon: "star.bubble.fill",
