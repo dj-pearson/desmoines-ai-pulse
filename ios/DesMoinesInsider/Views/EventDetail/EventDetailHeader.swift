@@ -68,6 +68,20 @@ struct EventDetailHeader: View {
 
     // MARK: - Date & Time
 
+    /// The day, in Des Moines time (IOS-DD-EVENTS-05).
+    private func dayText(_ date: Date) -> String {
+        date.formatted(DesMoinesTime.style(.dateTime.weekday(.wide).month(.wide).day().year()))
+    }
+
+    /// The start time in Des Moines time, " CT" appended when the phone is on
+    /// another zone; "Time TBA" when the row has no real start time, which
+    /// used to print as 7:31 PM (the no-time marker) or 3:30 AM (SeatGeek).
+    private func timeText(_ date: Date) -> String {
+        guard event.hasSpecificTime else { return "Time TBA" }
+        return date.formatted(DesMoinesTime.style(.dateTime.hour().minute()))
+            + DesMoinesTime.zoneSuffix(at: date)
+    }
+
     @ViewBuilder
     private var dateTimeSection: some View {
         // Date & Time — grouped so VoiceOver reads it as one element
@@ -80,9 +94,9 @@ struct EventDetailHeader: View {
                     .accessibilityHidden(true)
 
                 VStack(alignment: .leading, spacing: 2) {
-                    Text(date.formatted(.dateTime.weekday(.wide).month(.wide).day().year()))
+                    Text(dayText(date))
                         .font(.subheadline.weight(.semibold))
-                    Text(date.formatted(.dateTime.hour().minute()))
+                    Text(timeText(date))
                         .font(.subheadline)
                         .foregroundStyle(.secondary)
                 }
@@ -96,13 +110,12 @@ struct EventDetailHeader: View {
                         .foregroundStyle(.white)
                         .padding(.horizontal, 10)
                         .padding(.vertical, 4)
-                        .background(Color.orange, in: Capsule())
+                        .background(PremiumTokens.urgencyFill, in: Capsule())
                 }
             }
             .accessibilityElement(children: .combine)
             .accessibilityLabel({
-                var label = date.formatted(.dateTime.weekday(.wide).month(.wide).day().year())
-                    + ", " + date.formatted(.dateTime.hour().minute())
+                var label = dayText(date) + ", " + timeText(date)
                 if let urgency = event.urgencyLabel { label += ". \(urgency)" }
                 return label
             }())

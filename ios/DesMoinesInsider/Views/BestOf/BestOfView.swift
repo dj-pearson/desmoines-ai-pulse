@@ -43,6 +43,9 @@ struct BestOfView: View {
                             .buttonStyle(.plain)
                         }
                     }
+                    // Returning from a category re-reads the ballot so a new
+                    // vote shows its check mark (IOS-DD-GUIDES-10).
+                    .onAppear { Task { await viewModel.refreshVoted() } }
                 }
             }
             .padding(.horizontal)
@@ -62,9 +65,24 @@ struct BestOfView: View {
             Text("Cast your pick in each category and watch the leaderboard update.")
                 .font(.subheadline)
                 .foregroundStyle(.secondary)
+            ballotProgressView
         }
         .frame(maxWidth: .infinity, alignment: .leading)
         .accessibilityElement(children: .combine)
+    }
+
+    @ViewBuilder
+    private var ballotProgressView: some View {
+        let progress = viewModel.ballotProgress
+        if viewModel.isSignedIn && progress.total > 0 {
+            VStack(alignment: .leading, spacing: 4) {
+                Text("Your ballot: \(progress.voted) of \(progress.total)")
+                    .font(.caption.weight(.semibold))
+                ProgressView(value: Double(progress.voted), total: Double(progress.total))
+                    .tint(.green)
+            }
+            .padding(.top, 6)
+        }
     }
 
     private func categoryRow(_ category: VotingCategory) -> some View {
@@ -85,7 +103,12 @@ struct BestOfView: View {
                 Text(category.name)
                     .font(.subheadline.weight(.semibold))
                     .foregroundStyle(.primary)
-                    .lineLimit(1)
+                    .lineLimit(2)
+                if !category.isVotingOpen {
+                    Text("Closed")
+                        .font(.caption2.weight(.semibold))
+                        .foregroundStyle(.secondary)
+                }
                 if let description = category.description, !description.isEmpty {
                     Text(description)
                         .font(.caption)
@@ -96,10 +119,14 @@ struct BestOfView: View {
 
             Spacer(minLength: 0)
 
+            if hasVoted(category) {
+                Image(systemName: "checkmark.seal.fill")
+                    .foregroundStyle(.green)
+            }
             VStack(spacing: 2) {
                 Text("\(category.voteCount)")
                     .font(.subheadline.weight(.bold))
-                Text("votes")
+                Text(category.voteCount == 1 ? "vote" : "votes")
                     .font(.caption2)
                     .foregroundStyle(.secondary)
             }
@@ -108,8 +135,19 @@ struct BestOfView: View {
         .padding(14)
         .background(Color(.secondarySystemGroupedBackground), in: RoundedRectangle(cornerRadius: 16))
         .accessibilityElement(children: .combine)
-        .accessibilityLabel("\(category.name). \(category.voteCount) votes")
+        .accessibilityLabel(rowAccessibilityLabel(category))
         .accessibilityHint("Opens the category to vote and see rankings")
+    }
+
+    private func hasVoted(_ category: VotingCategory) -> Bool {
+        viewModel.votedCategoryIds.contains(category.id)
+    }
+
+    private func rowAccessibilityLabel(_ category: VotingCategory) -> String {
+        var label = "\(category.name). \(category.voteCount) \(category.voteCount == 1 ? "vote" : "votes")"
+        if hasVoted(category) { label += ". You voted" }
+        if !category.isVotingOpen { label += ". Closed" }
+        return label
     }
 
     private var categorySkeleton: some View {

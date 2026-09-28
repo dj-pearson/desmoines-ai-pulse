@@ -57,15 +57,19 @@ final class PushNotificationService: NSObject {
 
     // MARK: - Sync Token
 
+    /// The register-device-token body. `action` is omitted for a register, so
+    /// an older function sees the shape it always did; "unregister" deletes
+    /// this device's row for the signed-in user (IOS-DD-PLATFORM-19).
+    struct TokenPayload: Encodable {
+        let deviceToken: String
+        let platform: String
+        var action: String?
+    }
+
     private func syncTokenToBackend(token: String) async {
         guard let client = supabase else { return }
 
         do {
-            struct TokenPayload: Encodable {
-                let deviceToken: String
-                let platform: String
-            }
-
             _ = try await client.functions.invoke(
                 "register-device-token",
                 options: .init(
@@ -76,6 +80,32 @@ final class PushNotificationService: NSObject {
         } catch {
             AppLogger.network.error("Failed to sync device token: \(error.localizedDescription)")
         }
+    }
+
+    /// Re-sends the stored token, e.g. after a sign-in, so the token moves to
+    /// the account now using this device.
+    func resyncIfRegistered() async {
+        guard let token = deviceToken else { return }
+        await syncTokenToBackend(token: token)
+    }
+
+    /// Removes this device's token from the signed-in account. Called by
+    /// AuthService.signOut before the session ends; failures are logged and
+    /// never block the sign-out.
+    func unregisterFromBackend() async {
+        guard let client = supabase, let token = deviceToken else { return }
+        do {
+            _ = try await client.functions.invoke(
+                "register-device-token",
+                options: .init(
+                    method: .post,
+                    body: TokenPayload(deviceToken: token, platform: "ios", action: "unregister")
+                )
+            )
+        } catch {
+            AppLogger.network.error("Failed to unregister device token: \(error.localizedDescription)")
+        }
+        isRegistered = false
     }
 
     // MARK: - Check Permission Status

@@ -1,4 +1,5 @@
 import SwiftUI
+import StoreKit
 
 /// The single-screen UI for the Des Moines Insider App Clip.
 ///
@@ -7,18 +8,13 @@ struct ClipRootView: View {
     let invocationURL: URL?
 
     @State private var viewModel = ClipEventsViewModel()
+    /// The system App Store overlay for the parent app (IOS-DD-PLATFORM-04).
+    /// It needs no App Store id: an App Clip's overlay always offers its
+    /// parent. The numeric id (TODO(REL), still the 0000000000 sentinel) is
+    /// Config.appStoreId in the app target, which the Clip cannot see.
+    @State private var showAppOverlay = false
+    @State private var didOfferOverlay = false
 
-    // App Store product URLs require the numeric app ID (id1234567890), not the
-    // bundle id — the previous "/app/id/com.desmoines.aipulse" never resolved
-    // (IOS-AUDIT-FEAT-031). TODO(REL): set the real id once App Store Connect
-    // assigns it; until then the primary CTA points at the website so it always
-    // resolves.
-    private static let appStoreAppID = "0000000000"
-    private var appStoreURL: URL {
-        Self.appStoreAppID == "0000000000"
-            ? fullAppURL
-            : URL(string: "https://apps.apple.com/app/id\(Self.appStoreAppID)") ?? fullAppURL
-    }
     private let fullAppURL = URL(string: "https://desmoinesinsider.com")!
 
     var body: some View {
@@ -52,8 +48,19 @@ struct ClipRootView: View {
                 }
             }
         }
-        .task {
+        // Keyed on the URL: the Clip app sets invocationURL after the first
+        // frame, and a plain .task never saw it (IOS-DD-PLATFORM-04).
+        .task(id: invocationURL) {
             await viewModel.loadEvents(invocationURL: invocationURL)
+        }
+        .onChange(of: viewModel.hasLoadedOnce) { _, loaded in
+            // Offer the full app once, after something is on screen.
+            guard loaded, !didOfferOverlay else { return }
+            didOfferOverlay = true
+            showAppOverlay = true
+        }
+        .appStoreOverlay(isPresented: $showAppOverlay) {
+            SKOverlay.AppClipConfiguration(position: .bottom)
         }
     }
 
@@ -71,7 +78,7 @@ struct ClipRootView: View {
                 .multilineTextAlignment(.center)
                 .padding(.horizontal, 32)
 
-            Text("Today's featured events — no sign-in required")
+            Text("Coming up in Des Moines - no sign-in required")
                 .font(.subheadline)
                 .foregroundStyle(.secondary)
                 .multilineTextAlignment(.center)
@@ -82,18 +89,14 @@ struct ClipRootView: View {
 
     @ViewBuilder
     private var eventsSection: some View {
-        if viewModel.isLoading {
+        if viewModel.isLoading && viewModel.events.isEmpty {
             ProgressView()
                 .frame(maxWidth: .infinity)
                 .padding(.top, 40)
-        } else if let error = viewModel.errorMessage {
-            Text(error)
-                .foregroundStyle(.secondary)
-                .padding(.top, 40)
+        } else if let error = viewModel.errorMessage, viewModel.events.isEmpty {
+            errorState(error)
         } else if viewModel.events.isEmpty {
-            Text("No featured events today.")
-                .foregroundStyle(.secondary)
-                .padding(.top, 40)
+            emptyState
         } else {
             VStack(spacing: 12) {
                 ForEach(viewModel.events) { event in
@@ -107,15 +110,40 @@ struct ClipRootView: View {
         }
     }
 
+    private func errorState(_ message: String) -> some View {
+        VStack(spacing: 12) {
+            Text(message)
+                .foregroundStyle(.secondary)
+            Button("Try again") {
+                Task { await viewModel.loadEvents(invocationURL: invocationURL, force: true) }
+            }
+            .buttonStyle(.bordered)
+        }
+        .padding(.top, 40)
+    }
+
+    private var emptyState: some View {
+        VStack(spacing: 12) {
+            Text("Nothing listed right now")
+                .foregroundStyle(.secondary)
+            Link("Browse the website", destination: fullAppURL)
+                .font(.subheadline.weight(.semibold))
+        }
+        .padding(.top, 40)
+    }
+
     private var ctaSection: some View {
         VStack(spacing: 12) {
             Text("Want events, restaurants & more?")
                 .font(.subheadline)
                 .foregroundStyle(.secondary)
 
-            // Opens App Store page; falls back to website if app not yet published
-            Link(destination: appStoreURL) {
-                Label("Get Des Moines Insider — Free", systemImage: "arrow.down.app.fill")
+            // The system overlay for the parent app (IOS-DD-PLATFORM-04); the
+            // website link below stays as the way out before the app is live.
+            Button {
+                showAppOverlay = true
+            } label: {
+                Label("Get the full app - Free", systemImage: "arrow.down.app.fill")
                     .font(.body.bold())
                     .frame(maxWidth: .infinity)
                     .padding(.vertical, 14)

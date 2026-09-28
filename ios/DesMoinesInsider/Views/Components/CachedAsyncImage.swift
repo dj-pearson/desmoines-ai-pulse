@@ -53,6 +53,10 @@ struct CachedAsyncImage<Placeholder: View>: View {
     @State private var thumbnail: UIImage?
     @State private var isLoading = true
     @State private var loadFailed = false
+    /// The URL the state above belongs to (IOS-DD-PLATFORM-13).
+    @State private var loadedURL: String?
+    /// Retries a failed image when the connection comes back.
+    @State private var network = NetworkMonitor.shared
     @Environment(\.accessibilityReduceMotion) private var reduceMotion
 
     var body: some View {
@@ -86,6 +90,9 @@ struct CachedAsyncImage<Placeholder: View>: View {
         .task(id: url) {
             await loadImage()
         }
+        .onChange(of: network.isConnected) { _, isConnected in
+            if isConnected && loadFailed { retry() }
+        }
         .imageAccessibility(label: accessibilityLabel, failed: loadFailed)
     }
 
@@ -113,8 +120,26 @@ struct CachedAsyncImage<Placeholder: View>: View {
         Task { await loadImage() }
     }
 
+    /// The memory-cache key: a downsampled bitmap and a full-resolution one
+    /// are different images, so the zoomable viewer no longer gets the
+    /// screen-width copy a card cached (IOS-DD-PLATFORM-13).
+    static func cacheKey(_ urlString: String, maxPixels: CGFloat?) -> String {
+        maxPixels.map { "\(urlString)#\(Int($0))" } ?? "\(urlString)#full"
+    }
+
     private func loadImage() async {
-        guard let urlString = url, let url = URL(string: urlString) else {
+        // A recycled view given a new (or no) URL must not keep showing the
+        // previous image (IOS-DD-PLATFORM-13).
+        if loadedURL != url {
+            image = nil
+            thumbnail = nil
+            loadFailed = false
+            loadedURL = url
+        }
+        // Web URLs only: URLSession would happily read a file: URL from a
+        // content row.
+        guard let urlString = url, let url = URL(string: urlString), url.isSafeWebLink else {
+            loadFailed = false
             isLoading = false
             return
         }
@@ -125,8 +150,10 @@ struct CachedAsyncImage<Placeholder: View>: View {
         // suspension point.
         let maxPixels: CGFloat? = downsamples ? await DeviceMetrics.nativePixelWidth : nil
 
+        let memoryKey = Self.cacheKey(urlString, maxPixels: maxPixels)
+
         // 1. Memory cache (instant)
-        if let cached = ImageCache.shared.getFromMemory(urlString) {
+        if let cached = ImageCache.shared.getFromMemory(memoryKey) {
             image = cached
             isLoading = false
             return
@@ -134,7 +161,7 @@ struct CachedAsyncImage<Placeholder: View>: View {
 
         // 2. Disk cache (fast) — decode at display size on read
         if let diskCached = await ImageCache.shared.getFromDisk(urlString, maxPixelSize: maxPixels) {
-            ImageCache.shared.setMemory(diskCached, for: urlString, cost: diskCached.approxMemoryCost)
+            ImageCache.shared.setMemory(diskCached, for: memoryKey, cost: diskCached.approxMemoryCost)
             image = diskCached
             isLoading = false
             return
@@ -172,7 +199,7 @@ struct CachedAsyncImage<Placeholder: View>: View {
                     thumbnail = blurUp
                 }
 
-                ImageCache.shared.setMemory(uiImage, for: urlString, cost: uiImage.approxMemoryCost)
+                ImageCache.shared.setMemory(uiImage, for: memoryKey, cost: uiImage.approxMemoryCost)
                 let ttl = Self.cacheTTL(from: response)
                 // Store the ORIGINAL bytes on disk (full quality); we re-decode
                 // at the display cap on read.

@@ -6,15 +6,17 @@ import SwiftUI
 /// variant) so the visual + accessibility logic lives in exactly one place.
 struct EventCardView: View {
     let event: Event
-    @Binding var toast: ToastMessage?
+    /// Nil when the host has no toast; ContentCard then uses AppToastCenter
+    /// rather than a `.constant(nil)` that drops every message (IOS-DD-SAVED-15).
+    private let toast: Binding<ToastMessage?>?
 
-    init(event: Event, toast: Binding<ToastMessage?> = .constant(nil)) {
+    init(event: Event, toast: Binding<ToastMessage?>? = nil) {
         self.event = event
-        self._toast = toast
+        self.toast = toast
     }
 
     var body: some View {
-        ContentCard(event.cardData, variant: .standard, toast: $toast)
+        ContentCard(event.cardData, variant: .standard, toast: toast)
     }
 }
 

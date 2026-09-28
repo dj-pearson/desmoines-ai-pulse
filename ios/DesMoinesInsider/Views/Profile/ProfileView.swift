@@ -3,7 +3,9 @@ import SwiftUI
 /// Profile view with user info, settings, and sign out.
 struct ProfileView: View {
     @State private var viewModel = ProfileViewModel()
+    @State private var storeKit = StoreKitService.shared
     @State private var showSettings = false
+    @Environment(\.openURL) private var openURL
 
     var body: some View {
         NavigationStack {
@@ -18,6 +20,25 @@ struct ProfileView: View {
             .sheet(isPresented: $showSettings) {
                 SettingsView()
             }
+            // On the Group, not the signed-in List: it is shown after the
+            // deletion has signed the user out (IOS-DD-ACCOUNT-08).
+            .alert("Account Deleted", isPresented: .init(
+                get: { viewModel.postDeletionNotice != nil },
+                set: { if !$0 { viewModel.postDeletionNotice = nil } }
+            )) {
+                Button("Manage Subscription") {
+                    Task { await storeKit.showManageSubscriptions() }
+                }
+                Button("OK", role: .cancel) {}
+            } message: {
+                Text(viewModel.postDeletionNotice ?? "")
+            }
+        }
+        // The view model outlives a sign-out, so the form is reloaded (and
+        // emptied) whenever the account changes, as FavoritesViewModel.clear()
+        // does for Saved (IOS-DD-ACCOUNT-09).
+        .onChange(of: viewModel.isAuthenticated) { _, _ in
+            viewModel.loadProfile()
         }
     }
 
@@ -67,6 +88,26 @@ struct ProfileView: View {
                     .listRowBackground(Color.clear)
             }
 
+            // Interests first: they are what For You is ranked by, so they are
+            // the part of the profile worth filling in (IOS-DD-ACCOUNT-09).
+            // Ids from InterestCatalog, plus a chip for any id this build does
+            // not know so a save never drops it (IOS-DD-ACCOUNT-03).
+            Section {
+                LazyVGrid(columns: [GridItem(.adaptive(minimum: 140), spacing: 8)], spacing: 8) {
+                    ForEach(InterestCatalog.all) { option in
+                        interestChip(id: option.id, label: option.label, icon: option.icon)
+                    }
+                    ForEach(viewModel.unknownInterestIds, id: \.self) { id in
+                        interestChip(id: id, label: InterestCatalog.label(for: id), icon: "tag")
+                    }
+                }
+                .padding(.vertical, 4)
+            } header: {
+                Text("Interests")
+            } footer: {
+                Text("Picks shape For You on Home.")
+            }
+
             // Edit Profile
             Section("Personal Info") {
                 TextField("First Name", text: $viewModel.firstName)
@@ -74,43 +115,6 @@ struct ProfileView: View {
                 TextField("Phone", text: $viewModel.phone)
                     .keyboardType(.phonePad)
                 TextField("Location", text: $viewModel.location)
-            }
-
-            // Interests
-            Section("Interests") {
-                LazyVGrid(columns: [GridItem(.adaptive(minimum: 90), spacing: 8)], spacing: 8) {
-                    ForEach(AuthViewModel.availableInterests, id: \.self) { interest in
-                        Button {
-                            if viewModel.selectedInterests.contains(interest) {
-                                viewModel.selectedInterests.remove(interest)
-                            } else {
-                                viewModel.selectedInterests.insert(interest)
-                            }
-                        } label: {
-                            Text(interest)
-                                .font(.caption.weight(.medium))
-                                .padding(.horizontal, 12)
-                                .padding(.vertical, 8)
-                                .frame(maxWidth: .infinity)
-                                .background(
-                                    viewModel.selectedInterests.contains(interest)
-                                        ? Color.accentColor.opacity(0.15)
-                                        : Color(.systemGray6)
-                                )
-                                .foregroundStyle(
-                                    viewModel.selectedInterests.contains(interest)
-                                        ? Color.accentColor
-                                        : .primary
-                                )
-                                .clipShape(Capsule())
-                        }
-                        .buttonStyle(.plain)
-                    .minHitTarget()
-                    .accessibilityAddTraits(viewModel.selectedInterests.contains(interest) ? .isSelected : [])
-                    .accessibilityLabel(interest)
-                    }
-                }
-                .padding(.vertical, 4)
             }
 
             // Save
@@ -128,7 +132,7 @@ struct ProfileView: View {
                 .buttonStyle(.brandPrimary)
                 .listRowInsets(EdgeInsets(top: 6, leading: 8, bottom: 6, trailing: 8))
                 .listRowBackground(Color.clear)
-                .disabled(viewModel.isSaving)
+                .disabled(viewModel.isSaving || !viewModel.isDirty)
             }
 
             // For Businesses — advertiser-acquisition funnel (IOS-ADS-016).
@@ -185,16 +189,19 @@ struct ProfileView: View {
         // The phone field uses .phonePad (no return key); without this the user
         // can be stranded with the keyboard covering Save (IOS-AUDIT-UX-039).
         .scrollDismissesKeyboard(.interactively)
-        .alert("Profile Updated", isPresented: $viewModel.showSaveSuccess) {
-            Button("OK", role: .cancel) {}
-        }
+        .toastOverlay(message: $viewModel.toast)
         .alert("Delete Account?", isPresented: $viewModel.showDeleteConfirmation) {
             Button("Delete", role: .destructive) {
                 Task { await viewModel.deleteAccount() }
             }
+            if storeKit.hasAppStoreSubscription {
+                Button("Manage Subscription") {
+                    Task { await storeKit.showManageSubscriptions() }
+                }
+            }
             Button("Cancel", role: .cancel) {}
         } message: {
-            Text("This will permanently delete your account, favorites, and all associated data. This action cannot be undone.")
+            Text(AccountDeletionService.confirmationMessage(hasAppStoreSubscription: storeKit.hasAppStoreSubscription))
         }
         // IOS-AUDIT-BUG-018 AC3: a failed deletion gets a retry. Gated on
         // deletionFailed because this alert is shared with profile-save errors,
@@ -207,7 +214,13 @@ struct ProfileView: View {
                 set: { if !$0 { viewModel.clearError() } }
             )
         ) {
-            if viewModel.deletionFailed {
+            if viewModel.lastDeletionError?.offersManageSubscription == true {
+                // The server refused because a subscription is still live;
+                // retrying cannot help until it is dealt with.
+                Button("Manage Subscription") {
+                    openURL(Config.siteURL.appendingPathComponent("subscription"))
+                }
+            } else if viewModel.deletionFailed {
                 Button("Try Again") {
                     Task { await viewModel.deleteAccount() }
                 }
@@ -222,6 +235,35 @@ struct ProfileView: View {
         .onChange(of: viewModel.profile?.userId) { _, _ in
             viewModel.loadProfile()
         }
+        // Same account, new interests: the onboarding-interest sync at
+        // sign-in refetches after the form has already loaded. Keyed on the
+        // interests, not updated_at, because profiles has no updated_at
+        // trigger.
+        .onChange(of: viewModel.profile?.interests) { _, _ in
+            viewModel.profileRefreshed()
+        }
+    }
+
+    private func interestChip(id: String, label: String, icon: String) -> some View {
+        let isSelected = viewModel.selectedInterests.contains(id)
+        return Button {
+            viewModel.toggleInterest(id)
+        } label: {
+            Label(label, systemImage: icon)
+                .font(.caption.weight(.medium))
+                .lineLimit(2)
+                .multilineTextAlignment(.leading)
+                .padding(.horizontal, 12)
+                .padding(.vertical, 8)
+                .frame(maxWidth: .infinity, alignment: .leading)
+                .background(isSelected ? Color.accentColor.opacity(0.15) : Color(.systemGray6))
+                .foregroundStyle(isSelected ? Color.accentColor : .primary)
+                .clipShape(RoundedRectangle(cornerRadius: 12))
+        }
+        .buttonStyle(.plain)
+        .minHitTarget()
+        .accessibilityAddTraits(isSelected ? .isSelected : [])
+        .accessibilityLabel(label)
     }
 
     // MARK: - Guest Content

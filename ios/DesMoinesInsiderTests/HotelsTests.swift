@@ -105,14 +105,70 @@ final class HotelsTests: XCTestCase {
 
     func testSortOptionsCoverWebCases() {
         let labels = HotelsService.Sort.allCases.map(\.rawValue)
-        XCTAssertEqual(labels, ["Featured", "Price: Low", "Price: High", "Top rated", "Name"])
+        XCTAssertEqual(labels, ["Featured", "Price: Low", "Price: High", "Hotel class", "Name"])
+    }
+
+    // MARK: Book URL safety (IOS-DD-GUIDES-18)
+
+    func testBookURLRejectsNonWebScheme() {
+        let hotel = makeHotel(affiliate: "httpx://x.com", website: nil)
+        XCTAssertNil(hotel.bookURL)
+        XCTAssertFalse(hotel.hasAffiliate)
+    }
+
+    func testUnparseableAffiliateFallsBackToWebsiteWithoutAffiliateLabel() {
+        let hotel = makeHotel(affiliate: "javascript:alert(1)", website: "hilton.com")
+        XCTAssertEqual(hotel.bookURL?.host, "hilton.com")
+        XCTAssertFalse(hotel.hasAffiliate)
+    }
+
+    func testUppercaseSchemeAccepted() {
+        let hotel = makeHotel(affiliate: "HTTPS://X.COM", website: nil)
+        XCTAssertNotNil(hotel.bookURL)
+        XCTAssertTrue(hotel.hasAffiliate)
+    }
+
+    // MARK: Call + directions (IOS-DD-GUIDES-19)
+
+    func testDirectionsURLFallsBackToAddress() {
+        var hotel = makeHotel(affiliate: nil, website: nil)
+        hotel.address = "206 6th Ave"
+        XCTAssertNil(hotel.coordinate)
+        let url = hotel.directionsURL
+        XCTAssertNotNil(url)
+        XCTAssertTrue(url?.absoluteString.contains("daddr=206%206th%20Ave") == true, url?.absoluteString ?? "nil")
+    }
+
+    func testDirectionsEncodesAmpersandInName() {
+        var hotel = makeHotel(affiliate: nil, website: nil, name: "B&B Inn")
+        hotel.address = "1 Main St"
+        let items = URLComponents(url: hotel.directionsURL!, resolvingAgainstBaseURL: false)?.queryItems ?? []
+        XCTAssertEqual(items.first { $0.name == "q" }?.value, "B&B Inn")
+        XCTAssertEqual(items.count, 2)
+    }
+
+    func testDialURLFromPhone() {
+        var hotel = makeHotel(affiliate: nil, website: nil)
+        XCTAssertNil(hotel.dialURL)
+        hotel.phone = "(515) 619-8403"
+        XCTAssertEqual(hotel.dialURL?.scheme, "tel")
+    }
+
+    // MARK: List copy (IOS-DD-GUIDES-17)
+
+    func testResultsCopyPluralises() {
+        XCTAssertEqual(HotelsViewModel.resultsCopy(1), "1 place to stay")
+        XCTAssertEqual(HotelsViewModel.resultsCopy(0), "0 places to stay")
+        XCTAssertEqual(HotelsViewModel.resultsCopy(12), "12 places to stay")
     }
 
     // MARK: - Helpers
 
-    private func makeHotel(affiliate: String?, website: String?, provider: String? = nil) -> Hotel {
+    private func makeHotel(
+        affiliate: String?, website: String?, provider: String? = nil, name: String = "Test Hotel"
+    ) -> Hotel {
         Hotel(
-            id: "t", name: "Test Hotel", slug: "test-hotel",
+            id: "t", name: name, slug: "test-hotel",
             description: nil, shortDescription: nil,
             address: nil, city: "Des Moines", state: "IA", area: nil,
             phone: nil, website: website,

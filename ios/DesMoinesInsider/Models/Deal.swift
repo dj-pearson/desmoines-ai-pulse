@@ -75,8 +75,52 @@ struct Deal: Identifiable, Codable, Hashable {
 
     var isFeaturedDeal: Bool { isFeatured == true }
 
-    /// Featured deals are the natural sponsored surface (IOS-ADS-011).
-    var isSponsored: Bool { isFeatured == true }
+    /// No deal is sponsored: `deals` has no paid or campaign column
+    /// (20260228000001), and is_featured is an editorial pick the web labels
+    /// "Featured". Calling it sponsored broke the honest-sponsored rule
+    /// (IOS-DD-GUIDES-13). Base this on a campaign column when one exists.
+    var isSponsored: Bool { false }
+
+    // MARK: - Validity
+
+    var endsDate: Date? { Article.parseTimestamp(endDate) }
+
+    /// "Ends in 5h" within a day, "Ends Fri" within a week, else "Ends Oct 3".
+    /// Nil with no end date or once it has passed (IOS-DD-GUIDES-12).
+    func endsText(now: Date = Date(), calendar: Calendar = DesMoinesTime.calendar) -> String? {
+        guard let end = endsDate, end > now else { return nil }
+        let interval = end.timeIntervalSince(now)
+        if interval <= 24 * 3600 {
+            let hours = max(1, Int((interval / 3600).rounded(.up)))
+            return "Ends in \(hours)h"
+        }
+        if interval <= 7 * 24 * 3600 {
+            return "Ends \(Self.format(end, "EEE", calendar: calendar))"
+        }
+        return "Ends \(Self.format(end, "MMM d", calendar: calendar))"
+    }
+
+    /// The date window in words for the detail sheet.
+    var validityText: String? {
+        let calendar = DesMoinesTime.calendar
+        let start = Article.parseTimestamp(startDate)
+        if let start, start > Date() {
+            let from = "Starts \(Self.format(start, "MMM d", calendar: calendar))"
+            guard let end = endsDate else { return from }
+            return "\(from), valid through \(Self.format(end, "MMM d, yyyy", calendar: calendar))"
+        }
+        guard let end = endsDate else { return nil }
+        return "Valid through \(Self.format(end, "MMM d, yyyy", calendar: calendar))"
+    }
+
+    private static func format(_ date: Date, _ pattern: String, calendar: Calendar) -> String {
+        let f = DateFormatter()
+        f.locale = Locale(identifier: "en_US_POSIX")
+        f.calendar = calendar
+        f.timeZone = calendar.timeZone
+        f.dateFormat = pattern
+        return f.string(from: date)
+    }
 
     // MARK: - Recurrence schedule
 
@@ -111,8 +155,11 @@ struct Deal: Identifiable, Codable, Hashable {
     }
 
     /// Whether the deal is live right now (within date window and, if recurring,
-    /// today + current time match the schedule).
-    func isActiveNow(_ now: Date = Date(), calendar: Calendar = .current) -> Bool {
+    /// today + current time match the schedule). The schedule is Des Moines
+    /// wall-clock time, so the default calendar is Central, not the phone's
+    /// zone: a traveller on Eastern time saw happy hour end an hour early
+    /// (IOS-DD-GUIDES-11).
+    func isActiveNow(_ now: Date = Date(), calendar: Calendar = DesMoinesTime.calendar) -> Bool {
         if let startStr = startDate, let start = Article.parseTimestamp(startStr), now < start { return false }
         if let endStr = endDate, let end = Article.parseTimestamp(endStr), now > end { return false }
         guard isRecurring else { return true }

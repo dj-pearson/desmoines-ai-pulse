@@ -12,7 +12,17 @@
           "/articles/*",
           "/neighborhoods/*",
           "/search",
-          "/search/*"
+          "/search/*",
+          "/stay",
+          "/stay/*",
+          "/attractions",
+          "/weekend",
+          "/deals",
+          "/best-of",
+          "/best-of/*",
+          "/music",
+          "/sports",
+          "/outdoors"
         ]
       }
     ]

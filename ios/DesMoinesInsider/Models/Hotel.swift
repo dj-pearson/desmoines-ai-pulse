@@ -70,17 +70,31 @@ struct Hotel: Identifiable, Codable, Hashable {
             .joined(separator: ", ")
     }
 
-    var hasAffiliate: Bool {
-        guard let url = affiliateUrl?.trimmingCharacters(in: .whitespaces) else { return false }
-        return !url.isEmpty
+    /// The affiliate link, only when it is a real http(s) URL with a host.
+    /// `hasPrefix("http")` let "httpx://x" and "http//x" through, and
+    /// SFSafariViewController raises on a non-web scheme (IOS-DD-GUIDES-18).
+    var affiliateBookURL: URL? {
+        affiliateUrl?.safeWebURL.flatMap { $0.host?.isEmpty == false ? $0 : nil }
     }
 
-    /// Where the "Book" CTA goes: the affiliate URL when present (revenue),
+    /// Whether the Book CTA really goes to the affiliate. Drives the
+    /// "affiliate link" disclosure, which must not show over a fallback to the
+    /// hotel's own site.
+    var hasAffiliate: Bool { affiliateBookURL != nil }
+
+    /// Where the "Book" CTA goes: the affiliate URL when usable (revenue),
     /// otherwise the hotel's own website. `nil` when neither exists.
     var bookURL: URL? {
-        if let affiliate = affiliateUrl, let url = normalizedURL(affiliate) { return url }
-        if let site = website, let url = normalizedURL(site) { return url }
-        return nil
+        affiliateBookURL ?? websiteURL.flatMap { $0.host?.isEmpty == false ? $0 : nil }
+    }
+
+    /// tel: URL for the Call row (the shared Restaurant helper, IOS-DD-GUIDES-19).
+    var dialURL: URL? { phone.flatMap(Restaurant.dialURL) }
+
+    /// Apple Maps directions: coordinates when known, else the address. The
+    /// seeded hotels have no coordinates, so directions used to never show.
+    var directionsURL: URL? {
+        Restaurant.directionsURL(name: name, coordinate: coordinate, address: fullAddress, base: MapPopupModel.mapsBase)
     }
 
     /// Safe http/https website URL only (IOS-AUDIT-SEC-002) — an unsafe scheme
@@ -157,15 +171,6 @@ struct Hotel: Identifiable, Codable, Hashable {
 
     func hash(into hasher: inout Hasher) { hasher.combine(id) }
     static func == (lhs: Hotel, rhs: Hotel) -> Bool { lhs.id == rhs.id }
-
-    // MARK: - Helpers
-
-    private func normalizedURL(_ raw: String) -> URL? {
-        let trimmed = raw.trimmingCharacters(in: .whitespaces)
-        guard !trimmed.isEmpty else { return nil }
-        if trimmed.hasPrefix("http") { return URL(string: trimmed) }
-        return URL(string: "https://\(trimmed)")
-    }
 }
 
 // MARK: - Unified content-card adapter (IOS-IA-003)

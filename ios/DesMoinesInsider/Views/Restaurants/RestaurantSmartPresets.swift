@@ -2,73 +2,63 @@ import SwiftUI
 
 // MARK: - Preset Definitions
 
-/// One-tap filter scenarios. Mirrors the web app's RestaurantSmartPresets.
+/// One-tap filter scenarios. Date Night, Casual, Brunch and Healthy are the
+/// web's RESTAURANT_PRESETS (src/lib/restaurantPresets.ts) with the same
+/// filters; Open Now and New & coming soon are iOS additions
+/// (IOS-DD-RESTAURANTS-07). Brunch used to filter nothing, Family and With
+/// Kids were the same query, and Late Night / Happy Hour / Quick Lunch were
+/// all just Open Now.
 enum RestaurantPreset: String, CaseIterable, Identifiable {
     case openNow
     case dateNight
-    case quickLunch
-    case familyFriendly
-    case lateNight
+    case casual
     case brunch
-    case happyHour
     case healthy
-    case withKids
+    case newOpenings
 
     var id: String { rawValue }
 
     var label: String {
         switch self {
-        case .openNow:        return "Open Now"
-        case .dateNight:      return "Date Night"
-        case .quickLunch:     return "Quick Lunch"
-        case .familyFriendly: return "Family"
-        case .lateNight:      return "Late Night"
-        case .brunch:         return "Brunch"
-        case .happyHour:      return "Happy Hour"
-        case .healthy:        return "Healthy"
-        case .withKids:       return "With Kids"
+        case .openNow:     return "Open Now"
+        case .dateNight:   return "Date Night"
+        case .casual:      return "Casual ($-$$)"
+        case .brunch:      return "Brunch"
+        case .healthy:     return "Healthy"
+        case .newOpenings: return "New & coming soon"
         }
     }
 
     var subtitle: String {
         switch self {
-        case .openNow:        return "Eat right now"
-        case .dateNight:      return "Upscale & romantic"
-        case .quickLunch:     return "Fast & affordable"
-        case .familyFriendly: return "Great for kids"
-        case .lateNight:      return "Open late"
-        case .brunch:         return "Weekend vibes"
-        case .happyHour:      return "Drinks & deals"
-        case .healthy:        return "Vegan & fresh"
-        case .withKids:       return "Kid approved"
+        case .openNow:     return "Eat right now"
+        case .dateNight:   return "$$$ and up, 4+ stars"
+        case .casual:      return "$ and $$"
+        case .brunch:      return "Cafes and breakfast spots"
+        case .healthy:     return "Vegetarian, vegan, salads"
+        case .newOpenings: return "Just opened or on the way"
         }
     }
 
     var systemImage: String {
         switch self {
-        case .openNow:        return "clock.fill"
-        case .dateNight:      return "heart.fill"
-        case .quickLunch:     return "bolt.fill"
-        case .familyFriendly: return "person.2.fill"
-        case .lateNight:      return "moon.fill"
-        case .brunch:         return "cup.and.saucer.fill"
-        case .happyHour:      return "wineglass.fill"
-        case .healthy:        return "leaf.fill"
-        case .withKids:       return "figure.2.and.child.holdinghands"
+        case .openNow:     return "clock.fill"
+        case .dateNight:   return "heart.fill"
+        case .casual:      return "fork.knife"
+        case .brunch:      return "cup.and.saucer.fill"
+        case .healthy:     return "leaf.fill"
+        case .newOpenings: return "sparkles"
         }
     }
 
     var gradient: [Color] {
         switch self {
-        case .openNow:        return [Color(red: 0.06, green: 0.72, blue: 0.51), Color(red: 0.02, green: 0.55, blue: 0.42)]
-        case .dateNight:      return [Color(red: 0.95, green: 0.27, blue: 0.45), Color(red: 0.86, green: 0.14, blue: 0.47)]
-        case .quickLunch:     return [Color(red: 1.00, green: 0.60, blue: 0.18), Color(red: 0.97, green: 0.38, blue: 0.11)]
-        case .familyFriendly: return [Color(red: 0.24, green: 0.51, blue: 0.96), Color(red: 0.02, green: 0.71, blue: 0.83)]
-        case .lateNight:      return [Color(red: 0.31, green: 0.27, blue: 0.90), Color(red: 0.55, green: 0.21, blue: 0.93)]
-        case .brunch:         return [Color(red: 0.98, green: 0.75, blue: 0.14), Color(red: 0.96, green: 0.55, blue: 0.11)]
-        case .happyHour:      return [Color(red: 0.55, green: 0.36, blue: 0.96), Color(red: 0.66, green: 0.33, blue: 0.97)]
-        case .healthy:        return [Color(red: 0.06, green: 0.72, blue: 0.51), Color(red: 0.09, green: 0.64, blue: 0.29)]
-        case .withKids:       return [Color(red: 0.02, green: 0.65, blue: 0.95), Color(red: 0.24, green: 0.51, blue: 0.96)]
+        case .openNow:     return [Color(red: 0.06, green: 0.72, blue: 0.51), Color(red: 0.02, green: 0.55, blue: 0.42)]
+        case .dateNight:   return [Color(red: 0.95, green: 0.27, blue: 0.45), Color(red: 0.86, green: 0.14, blue: 0.47)]
+        case .casual:      return [Color(red: 1.00, green: 0.60, blue: 0.18), Color(red: 0.97, green: 0.38, blue: 0.11)]
+        case .brunch:      return [Color(red: 0.98, green: 0.75, blue: 0.14), Color(red: 0.96, green: 0.55, blue: 0.11)]
+        case .healthy:     return [Color(red: 0.06, green: 0.72, blue: 0.51), Color(red: 0.09, green: 0.64, blue: 0.29)]
+        case .newOpenings: return [Color(red: 0.93, green: 0.35, blue: 0.20), Color(red: 0.80, green: 0.22, blue: 0.16)]
         }
     }
 
@@ -76,46 +66,70 @@ enum RestaurantPreset: String, CaseIterable, Identifiable {
 
     var priceRanges: [String] {
         switch self {
-        case .dateNight:      return ["$$$", "$$$$"]
-        case .quickLunch:     return ["$", "$$"]
-        case .familyFriendly, .withKids: return ["$", "$$"]
-        default:              return []
+        case .dateNight: return ["$$$", "$$$$"]
+        case .casual:    return ["$", "$$"]
+        case .openNow, .brunch, .healthy, .newOpenings: return []
+        }
+    }
+
+    /// Cuisine facet values, matched case-sensitively as the web does.
+    var cuisines: [String] {
+        switch self {
+        case .brunch:  return ["Cafe", "Brunch", "Breakfast"]
+        case .healthy: return ["Vegetarian", "Vegan", "Health Food", "Salad"]
+        case .openNow, .dateNight, .casual, .newOpenings: return []
         }
     }
 
     var minRating: Double {
         switch self {
         case .dateNight: return 4.0
-        default: return 0
+        case .openNow, .casual, .brunch, .healthy, .newOpenings: return 0
         }
     }
 
     var openNow: Bool {
-        switch self {
-        case .openNow, .quickLunch, .lateNight, .happyHour: return true
-        default: return false
-        }
+        self == .openNow
+    }
+
+    var newOpeningsOnly: Bool {
+        self == .newOpenings
     }
 
     var dietary: [String] {
-        switch self {
-        case .healthy: return ["vegan", "vegetarian"]
-        default: return []
-        }
+        []
     }
 
     var sortBy: RestaurantSortOption {
         switch self {
         case .dateNight, .brunch, .healthy: return .rating
-        default: return .popularity
+        case .openNow, .casual, .newOpenings: return .popularity
         }
+    }
+
+    /// Presets that would change the result set given today's cuisine facet
+    /// (availableRestaurantPresets on the web). A cuisine preset keeps only
+    /// cuisines that exist and is dropped when none do, or while the facet is
+    /// still loading, so a chip never returns nothing.
+    static func available(cuisines present: [String]) -> [(preset: RestaurantPreset, cuisines: [String])] {
+        let have = Set(present)
+        var out: [(preset: RestaurantPreset, cuisines: [String])] = []
+        for preset in allCases {
+            if preset.cuisines.isEmpty {
+                out.append((preset, []))
+                continue
+            }
+            let kept = preset.cuisines.filter { have.contains($0) }
+            if !kept.isEmpty { out.append((preset, kept)) }
+        }
+        return out
     }
 }
 
 // MARK: - Smart Presets Row
 
 /// Horizontal scroll row of one-tap smart filter presets.
-/// Tap a preset to apply it; tap again to clear. Mirrors the web experience.
+/// Tap a preset to apply it; tap again to clear.
 struct RestaurantSmartPresets: View {
     @Bindable var viewModel: RestaurantsViewModel
 
@@ -132,7 +146,7 @@ struct RestaurantSmartPresets: View {
 
             ScrollView(.horizontal, showsIndicators: false) {
                 HStack(spacing: 10) {
-                    ForEach(RestaurantPreset.allCases) { preset in
+                    ForEach(RestaurantPreset.available(cuisines: viewModel.availableCuisines).map { $0.preset }) { preset in
                         presetPill(preset)
                     }
                 }

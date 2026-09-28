@@ -33,6 +33,7 @@ const read = (rel: string) => Deno.readTextFile(new URL(rel, REPO));
 
 const MIGRATION = await read('supabase/migrations/20260918000001_enforce_plan_limits.sql');
 const ALERTS = await read('supabase/functions/saved-search-alerts/index.ts');
+const HARDENING = await read('supabase/migrations/20261009000001_favorites_cap_hardening.sql');
 
 // --------------------------------------------------------------------------
 // The triggers
@@ -66,6 +67,26 @@ Deno.test('the refusal is typed, not a message the UI has to string-match', () =
   assert(/HINT = 'upgrade_required'/.test(MIGRATION));
   assert(/DETAIL = 'favorites'/.test(MIGRATION));
   assert(/DETAIL = 'saved_searches'/.test(MIGRATION));
+});
+
+Deno.test('the favorites cap holds under concurrency, updates and the legacy table (IOS-DD-SAVED-06)', () => {
+  // Latest definition of enforce_favorites_limit() is the hardening migration.
+  assert(/CREATE OR REPLACE FUNCTION public\.enforce_favorites_limit\(\)/.test(HARDENING));
+  assert(
+    /pg_advisory_xact_lock\(hashtextextended\('favorites:' \|\| v_uid::text, 0\)\)/.test(HARDENING),
+    'concurrent inserts for one user must serialise',
+  );
+  assert(/count\(DISTINCT event_id\)/.test(HARDENING), 'duplicate event rows count once');
+  assert(/BEFORE UPDATE OF interaction_type, user_id ON public\.user_event_interactions/.test(HARDENING));
+  assert(/BEFORE UPDATE OF user_id ON public\.content_favorites/.test(HARDENING));
+  // A ::text cast on user_event_interactions.user_id would defeat its index.
+  assert(!/user_id::text = v_uid::text AND interaction_type/.test(HARDENING));
+  assert(/to_regclass\('public\.user_restaurant_interactions'\) IS NOT NULL/.test(HARDENING));
+  assert(/BEFORE INSERT ON public\.user_restaurant_interactions/.test(HARDENING));
+  // Same typed refusal the clients key off.
+  assert(/ERRCODE = 'PT402'/.test(HARDENING));
+  assert(/HINT = 'upgrade_required'/.test(HARDENING));
+  assert(/IF v_limit < 0 THEN/.test(HARDENING), 'unlimited still short-circuits');
 });
 
 Deno.test('-1 means unlimited and beats any finite limit', () => {

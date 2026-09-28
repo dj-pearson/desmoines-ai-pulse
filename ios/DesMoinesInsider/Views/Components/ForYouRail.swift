@@ -8,11 +8,36 @@ import SwiftUI
 struct ForYouRail: View {
     @State private var service = ForYouService.shared
 
+    /// The first refresh has finished, so an empty list means "nothing to
+    /// show" rather than "not asked yet".
+    @State private var hasLoaded = false
+
     var body: some View {
+        Group {
+            // Nothing to recommend: no header over an empty space
+            // (IOS-DD-EVENTS-20). A zero-height view rather than EmptyView so
+            // the `.task` below still has something on screen to run from.
+            if hasLoaded && service.recommendations.isEmpty && !service.isLoading {
+                Color.clear.frame(height: 0)
+            } else {
+                rail
+            }
+        }
+        .navigationDestination(for: ForYouService.Recommendation.self) { rec in
+            ForYouRecommendationDetailView(recommendation: rec)
+        }
+        .task {
+            await service.refresh()
+            hasLoaded = true
+        }
+    }
+
+    private var rail: some View {
         VStack(alignment: .leading, spacing: 8) {
             HStack {
                 Text(headerTitle)
                     .font(.headline)
+                    .accessibilityAddTraits(.isHeader)
                 Spacer()
                 Button {
                     UIImpactFeedbackGenerator(style: .light).impactOccurred()
@@ -28,13 +53,9 @@ struct ForYouRail: View {
             .padding(.horizontal)
 
             if service.recommendations.isEmpty {
-                if service.isLoading {
-                    ProgressView()
-                        .frame(maxWidth: .infinity, alignment: .center)
-                        .padding()
-                } else {
-                    EmptyView()
-                }
+                ProgressView()
+                    .frame(maxWidth: .infinity, alignment: .center)
+                    .padding()
             } else {
                 ScrollView(.horizontal, showsIndicators: false) {
                     HStack(spacing: 12) {
@@ -53,10 +74,6 @@ struct ForYouRail: View {
                 }
             }
         }
-        .navigationDestination(for: ForYouService.Recommendation.self) { rec in
-            ForYouRecommendationDetailView(recommendation: rec)
-        }
-        .task { await service.refresh() }
     }
 
     private var headerTitle: String {
@@ -67,8 +84,34 @@ struct ForYouRail: View {
     }
 }
 
-private struct ForYouCard: View {
+struct ForYouCard: View {
     let rec: ForYouService.Recommendation
+
+    /// "Sat, Oct 4, 7:00 PM - Wooly's": when and where, which the card never
+    /// showed although the RPC returns both (IOS-DD-EVENTS-20). Des Moines
+    /// time.
+    nonisolated static func secondaryLine(date: String?, venue: String?) -> String? {
+        var parts: [String] = []
+        if let parsed = DateParser.parse(date) {
+            parts.append(parsed.formatted(DesMoinesTime.style(
+                .dateTime.weekday(.abbreviated).month(.abbreviated).day().hour().minute()
+            )))
+        }
+        if let venue = venue?.trimmingCharacters(in: .whitespacesAndNewlines), !venue.isEmpty {
+            parts.append(venue)
+        }
+        return parts.isEmpty ? nil : parts.joined(separator: " - ")
+    }
+
+    /// The reason, unless it only repeats the rail's own "Trending now"
+    /// header.
+    nonisolated static func visibleReason(_ reason: String?) -> String? {
+        guard let reason = reason?.trimmingCharacters(in: .whitespacesAndNewlines),
+              !reason.isEmpty,
+              reason.caseInsensitiveCompare("Trending now") != .orderedSame
+        else { return nil }
+        return reason
+    }
 
     var body: some View {
         VStack(alignment: .leading, spacing: 6) {
@@ -89,7 +132,14 @@ private struct ForYouCard: View {
                 .multilineTextAlignment(.leading)
                 .foregroundStyle(.primary)
 
-            if let reason = rec.recommendationReason {
+            if let line = Self.secondaryLine(date: rec.date, venue: rec.venue) {
+                Text(line)
+                    .font(.caption)
+                    .foregroundStyle(.secondary)
+                    .lineLimit(1)
+            }
+
+            if let reason = Self.visibleReason(rec.recommendationReason) {
                 Text(reason)
                     .font(.caption)
                     .foregroundStyle(.secondary)
@@ -98,7 +148,11 @@ private struct ForYouCard: View {
         }
         .frame(width: 200, alignment: .leading)
         .accessibilityElement(children: .combine)
-        .accessibilityLabel("\(rec.title ?? "Event"). \(rec.recommendationReason ?? "")")
+        .accessibilityLabel(
+            [rec.title ?? "Event", Self.secondaryLine(date: rec.date, venue: rec.venue), Self.visibleReason(rec.recommendationReason)]
+                .compactMap { $0 }
+                .joined(separator: ". ")
+        )
     }
 }
 

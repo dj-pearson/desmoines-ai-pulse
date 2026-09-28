@@ -17,50 +17,82 @@ struct SurpriseMeView: View {
     @State private var saveErrorMessage: String?
     @State private var isSaving = false
     @State private var revealed = false
+    /// The pick resolved to its model, for the when/where line and the
+    /// detail push (IOS-DD-DISCOVER-17).
+    @State private var resolved: SurpriseResolved?
+    /// Items shown recently, sent as p_exclude_ids so a re-roll does not hand
+    /// back the same thing.
+    @State private var recentIds: [UUID] = []
+    @State private var path = NavigationPath()
+    @State private var toast: ToastMessage?
+    @State private var showSignIn = false
+    @State private var pendingSave: SurpriseMeService.Pick?
+    @State private var auth = AuthService.shared
+    @State private var hasRolled = false
 
     var body: some View {
-        NavigationStack {
-            ZStack {
-                LinearGradient(
-                    colors: [Color.purple.opacity(0.15), Color.accentColor.opacity(0.05)],
-                    startPoint: .top,
-                    endPoint: .bottom,
-                )
-                .ignoresSafeArea()
+        NavigationStack(path: $path) {
+            stage
+                .navigationTitle("Surprise Me")
+                .navigationBarTitleDisplayMode(.inline)
+                .toolbar {
+                    ToolbarItem(placement: .topBarLeading) {
+                        Button("Close") { dismiss() }
+                    }
+                }
+                // Once per presentation. The root reappears when a pushed
+                // detail pops, and a bare .task re-rolled the pick then.
+                .task {
+                    guard !hasRolled else { return }
+                    hasRolled = true
+                    await load()
+                }
+                .navigationDestination(for: Event.self) { EventDetailView(event: $0) }
+                .navigationDestination(for: Restaurant.self) { RestaurantDetailView(restaurant: $0) }
+                .toastOverlay(message: $toast)
+                // Favorites need an account. The alert used to be a dead end with
+                // only OK; MainTabView's sign-in sheet cannot present over this
+                // full-screen cover, so this one is local (IOS-DD-DISCOVER-08).
+                .sheet(isPresented: $showSignIn, onDismiss: resumeSaveAfterSignIn) {
+                    NavigationStack { AuthView(isModal: true) }
+                }
+                .alert("Couldn't Save", isPresented: .init(
+                    get: { saveErrorMessage != nil },
+                    set: { if !$0 { saveErrorMessage = nil } }
+                )) {
+                    Button("OK", role: .cancel) {}
+                } message: {
+                    Text(saveErrorMessage ?? "")
+                }
+        }
+    }
 
-                if isLoading {
-                    loadingState
-                } else if let sponsoredPick {
-                    sponsoredReveal(for: sponsoredPick)
-                } else if let pick {
-                    revealCard(for: pick)
-                } else if let errorMessage {
-                    errorState(errorMessage)
-                } else {
-                    // IOS-AUDIT-UX-051 AC1. Reachable whenever service.surprise
-                    // RETURNS nil rather than throwing - a successful call that
-                    // simply found nothing. Without this branch the ZStack renders
-                    // only its gradient, so the screen looks like a failed load the
-                    // user cannot retry, on a feature whose entire purpose is to
-                    // hand them something.
-                    noResultState
-                }
-            }
-            .navigationTitle("Surprise Me")
-            .navigationBarTitleDisplayMode(.inline)
-            .toolbar {
-                ToolbarItem(placement: .topBarLeading) {
-                    Button("Close") { dismiss() }
-                }
-            }
-            .task { await load() }
-            .alert("Couldn't Save", isPresented: .init(
-                get: { saveErrorMessage != nil },
-                set: { if !$0 { saveErrorMessage = nil } }
-            )) {
-                Button("OK", role: .cancel) {}
-            } message: {
-                Text(saveErrorMessage ?? "")
+    /// The background and whichever state is current.
+    private var stage: some View {
+        ZStack {
+            LinearGradient(
+                colors: [Color.purple.opacity(0.15), Color.accentColor.opacity(0.05)],
+                startPoint: .top,
+                endPoint: .bottom,
+            )
+            .ignoresSafeArea()
+
+            if isLoading {
+                loadingState
+            } else if let sponsoredPick {
+                sponsoredReveal(for: sponsoredPick)
+            } else if let pick {
+                revealCard(for: pick)
+            } else if let errorMessage {
+                errorState(errorMessage)
+            } else {
+                // IOS-AUDIT-UX-051 AC1. Reachable whenever service.surprise
+                // RETURNS nil rather than throwing - a successful call that
+                // simply found nothing. Without this branch the ZStack renders
+                // only its gradient, so the screen looks like a failed load the
+                // user cannot retry, on a feature whose entire purpose is to
+                // hand them something.
+                noResultState
             }
         }
     }
@@ -84,55 +116,21 @@ struct SurpriseMeView: View {
 
     private func revealCard(for pick: SurpriseMeService.Pick) -> some View {
         VStack(spacing: 16) {
-            heroImage(url: pick.imageUrl)
-                .frame(maxWidth: .infinity)
-                .frame(height: 220)
-                .clipShape(RoundedRectangle(cornerRadius: 16))
-                .padding(.horizontal)
-
-            VStack(alignment: .leading, spacing: 8) {
-                Text(pick.itemType.capitalized)
-                    .font(.caption.weight(.bold))
-                    .foregroundStyle(.secondary)
-                Text(pick.title ?? "Tonight's pick")
-                    .font(.title2.bold())
-                Text(pick.reason)
-                    .font(.body)
-                    .foregroundStyle(.primary)
+            Button {
+                openDetails(pick)
+            } label: {
+                revealSummary(for: pick)
             }
-            .frame(maxWidth: .infinity, alignment: .leading)
-            .padding(.horizontal)
+            .buttonStyle(.plain)
+            // Not .disabled: that dims the whole reveal while offline.
+            .allowsHitTesting(resolved != nil)
+            .accessibilityHint(resolved == nil ? "" : "Opens details")
 
             Spacer()
 
-            VStack(spacing: 10) {
-                Button {
-                    save(pick)
-                } label: {
-                    Label(isSaving ? "Saving…" : "Save it — let's go",
-                          systemImage: isSaving ? "hourglass" : "checkmark.circle.fill")
-                        .frame(maxWidth: .infinity)
-                        .padding(.vertical, 14)
-                        .background(Color.accentColor, in: RoundedRectangle(cornerRadius: 14))
-                        .foregroundStyle(.white)
-                        .font(.headline)
-                }
-                .disabled(isSaving)
-                .accessibilityHint("Saves this pick to your favorites and closes the surprise screen")
-
-                Button {
-                    tryAnother(pick)
-                } label: {
-                    Label("Try another", systemImage: "arrow.clockwise")
-                        .frame(maxWidth: .infinity)
-                        .padding(.vertical, 12)
-                        .foregroundStyle(.primary)
-                        .font(.subheadline.weight(.semibold))
-                }
-                .accessibilityHint("Rolls a new surprise pick")
-            }
-            .padding(.horizontal)
-            .padding(.bottom, 20)
+            revealActions(for: pick)
+                .padding(.horizontal)
+                .padding(.bottom, 20)
         }
         .scaleEffect(revealed ? 1.0 : 0.92)
         .opacity(revealed ? 1.0 : 0)
@@ -147,6 +145,97 @@ struct SurpriseMeView: View {
             }
             UINotificationFeedbackGenerator().notificationOccurred(.success)
         }
+    }
+
+    /// Image, type, title, when/where, and the reason. The reveal used to
+    /// show only the type, a title and the reason, with no way in
+    /// (IOS-DD-DISCOVER-17).
+    private func revealSummary(for pick: SurpriseMeService.Pick) -> some View {
+        VStack(spacing: 16) {
+            heroImage(url: pick.imageUrl)
+                .frame(maxWidth: .infinity)
+                .frame(height: 220)
+                .clipShape(RoundedRectangle(cornerRadius: 16))
+                .padding(.horizontal)
+
+            VStack(alignment: .leading, spacing: 8) {
+                Text(pick.itemType.capitalized)
+                    .font(.caption.weight(.bold))
+                    .foregroundStyle(.secondary)
+                Text(displayTitle(pick))
+                    .font(.title2.bold())
+                    .foregroundStyle(.primary)
+                if let meta = resolved?.metaLine, !meta.isEmpty {
+                    Text(meta)
+                        .font(.subheadline.weight(.medium))
+                        .foregroundStyle(.secondary)
+                }
+                Text(pick.reason)
+                    .font(.body)
+                    .foregroundStyle(.primary)
+            }
+            .frame(maxWidth: .infinity, alignment: .leading)
+            .multilineTextAlignment(.leading)
+            .padding(.horizontal)
+        }
+        .contentShape(Rectangle())
+    }
+
+    private func revealActions(for pick: SurpriseMeService.Pick) -> some View {
+        VStack(spacing: 10) {
+            Button {
+                save(pick)
+            } label: {
+                Label(isSaving ? "Saving..." : "Save it",
+                      systemImage: isSaving ? "hourglass" : "heart.fill")
+                    .frame(maxWidth: .infinity)
+                    .padding(.vertical, 14)
+                    .background(Color.accentColor, in: RoundedRectangle(cornerRadius: 14))
+                    .foregroundStyle(.white)
+                    .font(.headline)
+            }
+            .disabled(isSaving)
+            .accessibilityHint("Saves this pick to your favorites")
+
+            HStack(spacing: 10) {
+                if resolved != nil {
+                    Button {
+                        openDetails(pick)
+                    } label: {
+                        Label("See details", systemImage: "info.circle")
+                            .frame(maxWidth: .infinity)
+                    }
+                    .buttonStyle(.bordered)
+                }
+                if let url = SurpriseResolved.shareURL(for: pick) {
+                    ShareLink(
+                        item: url,
+                        subject: Text(displayTitle(pick)),
+                        message: Text("Des Moines Insider picked \(displayTitle(pick)) for me")
+                    ) {
+                        Label("Share", systemImage: "square.and.arrow.up")
+                            .frame(maxWidth: .infinity)
+                    }
+                    .buttonStyle(.bordered)
+                }
+            }
+            .font(.subheadline.weight(.semibold))
+
+            Button {
+                tryAnother(pick)
+            } label: {
+                Label("Try another", systemImage: "arrow.clockwise")
+                    .frame(maxWidth: .infinity)
+                    .padding(.vertical, 12)
+                    .foregroundStyle(.primary)
+                    .font(.subheadline.weight(.semibold))
+            }
+            .accessibilityHint("Rolls a new surprise pick")
+        }
+    }
+
+    private func displayTitle(_ pick: SurpriseMeService.Pick) -> String {
+        resolved?.title ?? pick.title ?? "Your pick"
     }
 
     /// Labeled sponsored reveal (IOS-ADS-015) — shown occasionally instead of an
@@ -201,10 +290,12 @@ struct SurpriseMeView: View {
                 .font(.system(size: 48))
                 .foregroundStyle(.secondary)
                 .accessibilityHidden(true)
-            Text("Nothing to surprise you with right now.")
+            Text("Nothing new to surprise you with right now.")
                 .font(.headline)
                 .multilineTextAlignment(.center)
-            Text("Try again in a moment, or widen your search radius in Settings.")
+            // There is no radius setting; the copy sent people looking for one
+            // (IOS-DD-DISCOVER-17).
+            Text("Try again later.")
                 .font(.subheadline)
                 .foregroundStyle(.secondary)
                 .multilineTextAlignment(.center)
@@ -248,11 +339,15 @@ struct SurpriseMeView: View {
 
     // MARK: - Actions
 
-    private func load(forceOrganic: Bool = false) async {
+    private func load(forceOrganic: Bool = false, isRetry: Bool = false) async {
         isLoading = true
         errorMessage = nil
         revealed = false
         sponsoredPick = nil
+        // A failed re-roll used to leave the previous pick on screen, because
+        // the body checks `pick` before `errorMessage` (IOS-DD-DISCOVER-17).
+        pick = nil
+        resolved = nil
         rollCount += 1
 
         // Every Nth roll, try a labeled sponsored result instead (capped, never
@@ -267,11 +362,77 @@ struct SurpriseMeView: View {
         }
 
         do {
-            pick = try await service.surprise(at: LocationService.shared.userLocation)
+            guard let next = try await service.surprise(
+                at: LocationService.shared.userLocation,
+                excluding: recentIds
+            ) else {
+                isLoading = false
+                return
+            }
+            remember(next.itemId)
+            switch await resolve(next) {
+            case .found(let model):
+                pick = next
+                resolved = model
+            case .unreachable:
+                // Offline or similar: still show the pick, without the extras.
+                pick = next
+            case .gone:
+                // Hidden, merged or closed since the RPC chose it. One silent
+                // re-roll; after that, the no-result state.
+                if !isRetry {
+                    await load(forceOrganic: true, isRetry: true)
+                    return
+                }
+            }
         } catch {
             errorMessage = error.localizedDescription
         }
         isLoading = false
+    }
+
+    private func remember(_ id: UUID) {
+        recentIds.removeAll { $0 == id }
+        recentIds.append(id)
+        if recentIds.count > 10 { recentIds.removeFirst(recentIds.count - 10) }
+    }
+
+    private enum Resolution {
+        case found(SurpriseResolved)
+        case gone
+        case unreachable
+    }
+
+    private func resolve(_ pick: SurpriseMeService.Pick) async -> Resolution {
+        let id = pick.itemId.uuidString
+        do {
+            switch pick.itemType.lowercased() {
+            case "event":
+                return .found(.event(try await EventsService.shared.fetchEvent(id: id)))
+            case "restaurant":
+                let restaurant = try await RestaurantsService.shared.fetchRestaurant(id: id)
+                if restaurant.isMerged == true
+                    || restaurant.lifecycle == .closedPermanently
+                    || restaurant.lifecycle == .closedTemporarily {
+                    return .gone
+                }
+                return .found(.restaurant(restaurant))
+            default:
+                return .unreachable
+            }
+        } catch {
+            // fetchEvent answers PGRST116 for a merged, hidden or archived row.
+            return FavoritesService.errorCode(error) == "PGRST116" ? .gone : .unreachable
+        }
+    }
+
+    private func openDetails(_ pick: SurpriseMeService.Pick) {
+        guard let resolved else { return }
+        Task { try? await service.track(pick: pick, outcome: .opened) }
+        switch resolved {
+        case .event(let event): path.append(event)
+        case .restaurant(let restaurant): path.append(restaurant)
+        }
     }
 
     private func save(_ pick: SurpriseMeService.Pick) {
@@ -279,8 +440,9 @@ struct SurpriseMeView: View {
         Task { await performSave(pick) }
     }
 
-    /// Adds the pick to the user's favorites (matching its item type) and only
-    /// then reports success and dismisses (IOS-AUDIT-FEAT-013). Guards against
+    /// Adds the pick to the user's favorites (matching its item type) and
+    /// reports success with a toast, keeping the pick on screen so See details
+    /// is the next step (IOS-DD-DISCOVER-17). It used to dismiss. Guards against
     /// toggling an already-saved item back off. The free-tier favorites cap
     /// surfaces the app-level upsell paywall via a notification, so on that path
     /// we dismiss without an extra error alert.
@@ -312,17 +474,29 @@ struct SurpriseMeView: View {
             }
 
             UINotificationFeedbackGenerator().notificationOccurred(.success)
+            toast = .success("Saved to your favorites")
             try? await service.track(pick: pick, outcome: .saved)
-            dismiss()
         } catch {
             if FavoritesService.isLimitReached(error) {
-                // The app-level favorites paywall is already presenting.
+                // The app-level favorites paywall presents from the tab shell,
+                // which it cannot do over this cover.
                 dismiss()
+            } else if case FavoritesService.FavoritesError.notAuthenticated = error {
+                pendingSave = pick
+                showSignIn = true
             } else {
                 UINotificationFeedbackGenerator().notificationOccurred(.error)
                 saveErrorMessage = error.localizedDescription
             }
         }
+    }
+
+    /// Finishes the save that asked for sign-in, if the user did sign in.
+    private func resumeSaveAfterSignIn() {
+        guard let pick = pendingSave else { return }
+        pendingSave = nil
+        guard auth.isAuthenticated else { return }
+        Task { await performSave(pick) }
     }
 
     private func tryAnother(_ pick: SurpriseMeService.Pick) {
@@ -331,6 +505,47 @@ struct SurpriseMeView: View {
             try? await service.track(pick: pick, outcome: .tried_another)
             await load()
         }
+    }
+}
+
+/// A Surprise Me pick resolved to its model (IOS-DD-DISCOVER-17).
+enum SurpriseResolved {
+    case event(Event)
+    case restaurant(Restaurant)
+
+    var title: String {
+        switch self {
+        case .event(let e): return e.title
+        case .restaurant(let r): return r.name
+        }
+    }
+
+    /// When and where for an event (Des Moines day and time, venue, Free);
+    /// open status, price and cuisine for a restaurant.
+    var metaLine: String {
+        var parts: [String] = []
+        switch self {
+        case .event(let e):
+            if let date = e.parsedDate { parts.append(e.cardDateText(date)) }
+            parts.append(e.displayLocation)
+            if e.isFree { parts.append("Free") }
+        case .restaurant(let r):
+            if let line = r.openStatus().line { parts.append(line) }
+            if let price = r.priceRange, !price.isEmpty { parts.append(price) }
+            if let cuisine = r.cuisine, !cuisine.isEmpty { parts.append(cuisine) }
+        }
+        return parts.joined(separator: " - ")
+    }
+
+    static func shareURL(for pick: SurpriseMeService.Pick) -> URL? {
+        let section: String
+        switch pick.itemType.lowercased() {
+        case "event": section = "events"
+        case "restaurant": section = "restaurants"
+        case "attraction": section = "attractions"
+        default: return nil
+        }
+        return Config.siteURL.appendingPathComponent(section).appendingPathComponent(pick.itemId.uuidString.lowercased())
     }
 }
 

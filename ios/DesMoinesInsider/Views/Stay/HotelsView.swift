@@ -22,45 +22,8 @@ struct HotelsView: View {
 
     private var content: some View {
         ScrollView {
-            VStack(spacing: 14) {
-                if let error = viewModel.errorMessage {
-                    errorBanner(error)
-                }
-
-                if viewModel.isLoading && viewModel.hotels.isEmpty {
-                    ForEach(0..<5, id: \.self) { _ in ContentCardSkeleton(.listRow) }
-                } else if viewModel.hotels.isEmpty {
-                    EmptyStateView(
-                        icon: "bed.double",
-                        title: "No Hotels Found",
-                        message: viewModel.activeFilterCount > 0
-                            ? "Try adjusting your filters to see more places to stay."
-                            : "Check back soon for places to stay in Des Moines.",
-                        actionTitle: viewModel.activeFilterCount > 0 ? "Clear Filters" : nil,
-                        action: viewModel.activeFilterCount > 0 ? { viewModel.clearFilters() } : nil
-                    )
-                    .padding(.top, 40)
-                } else {
-                    LazyVStack(spacing: 12) {
-                        ForEach(Array(viewModel.hotels.enumerated()), id: \.element.id) { index, hotel in
-                            NavigationLink(value: hotel) {
-                                ContentCard(hotel.cardData, variant: .listRow)
-                            }
-                            .buttonStyle(.plain)
-                            .task { await viewModel.loadMoreIfNeeded(currentItem: hotel) }
-
-                            if index == AdConfig.inFeedFirstSlot - 1 {
-                                AdSlot(.feed)
-                            }
-                        }
-
-                        if viewModel.isLoadingMore {
-                            ProgressView().frame(maxWidth: .infinity).padding()
-                        }
-                    }
-                }
-            }
-            .padding(.horizontal)
+            listBody
+                .padding(.horizontal)
         }
         .safeAreaInset(edge: .top, spacing: 0) {
             StickyFilterBar {
@@ -68,17 +31,17 @@ struct HotelsView: View {
                     areaChips.padding(.horizontal, 14)
                 }
                 priceAndRatingRow.padding(.horizontal, 14)
-                if viewModel.activeFilterCount > 0 {
+                if viewModel.activeFilterCount > 0 || viewModel.hasActiveSearch {
                     activeChips.padding(.horizontal, 14)
                 }
             }
         }
         .refreshable {
-            await viewModel.refresh()
+            let ok = await viewModel.refresh()
             // Reflect the real outcome instead of always firing success (UX-015).
-            UINotificationFeedbackGenerator()
-                .notificationOccurred(viewModel.errorMessage == nil ? .success : .error)
+            UINotificationFeedbackGenerator().notificationOccurred(ok ? .success : .error)
         }
+        .reloadOnReconnect(if: viewModel.hotels.isEmpty) { _ = await viewModel.refresh() }
         .navigationTitle("Where to Stay")
         .searchable(
             text: $viewModel.searchText,
@@ -90,6 +53,86 @@ struct HotelsView: View {
         }
         .navigationDestination(for: Hotel.self) { HotelDetailView(hotel: $0) }
         .task { await viewModel.loadInitialData() }
+    }
+
+    // MARK: - List
+
+    /// One state at a time: an error with nothing loaded is only an error
+    /// with Retry, never also "No Hotels Found / check back soon"
+    /// (IOS-DD-GUIDES-17).
+    @ViewBuilder
+    private var listBody: some View {
+        VStack(spacing: 14) {
+            if let error = viewModel.errorMessage, viewModel.hotels.isEmpty, !viewModel.isLoading {
+                errorState(error)
+            } else if viewModel.isLoading && viewModel.hotels.isEmpty {
+                ForEach(0..<5, id: \.self) { _ in ContentCardSkeleton(.listRow) }
+            } else if viewModel.hotels.isEmpty {
+                emptyState
+            } else {
+                if let error = viewModel.errorMessage {
+                    errorBanner(error)
+                }
+                hotelList
+            }
+        }
+    }
+
+    @ViewBuilder
+    private var emptyState: some View {
+        if viewModel.hasActiveSearch {
+            EmptyStateView(
+                icon: "magnifyingglass",
+                title: "No stays match \"\(viewModel.searchText.trimmingCharacters(in: .whitespaces))\"",
+                message: "Try a different name or neighborhood.",
+                actionTitle: "Clear search",
+                action: { viewModel.searchText = "" }
+            )
+            .padding(.top, 40)
+        } else {
+            EmptyStateView(
+                icon: "bed.double",
+                title: "No Hotels Found",
+                message: viewModel.activeFilterCount > 0
+                    ? "Try adjusting your filters to see more places to stay."
+                    : "Check back soon for places to stay in Des Moines.",
+                actionTitle: viewModel.activeFilterCount > 0 ? "Clear Filters" : nil,
+                action: viewModel.activeFilterCount > 0 ? { viewModel.clearFilters() } : nil
+            )
+            .padding(.top, 40)
+        }
+    }
+
+    private var hotelList: some View {
+        LazyVStack(spacing: 12) {
+            ForEach(Array(viewModel.hotels.enumerated()), id: \.element.id) { index, hotel in
+                NavigationLink(value: hotel) {
+                    ContentCard(hotel.cardData, variant: .listRow)
+                }
+                .buttonStyle(.plain)
+                .task { await viewModel.loadMoreIfNeeded(currentItem: hotel) }
+
+                if index == AdConfig.inFeedFirstSlot - 1 {
+                    AdSlot(.feed)
+                }
+            }
+
+            if viewModel.isLoadingMore {
+                ProgressView().frame(maxWidth: .infinity).padding()
+            }
+        }
+    }
+
+    private func errorState(_ error: String) -> some View {
+        ContentUnavailableView {
+            Label("Couldn't load places to stay", systemImage: "wifi.exclamationmark")
+        } description: {
+            Text(error)
+        } actions: {
+            Button("Retry") { Task { await viewModel.refresh() } }
+                .buttonStyle(.borderedProminent)
+        }
+        .padding(.top, 40)
     }
 
     // MARK: - Area chips
@@ -173,7 +216,7 @@ struct HotelsView: View {
     private var activeChips: some View {
         ScrollView(.horizontal, showsIndicators: false) {
             HStack(spacing: 6) {
-                Text("\(viewModel.hotels.count) results")
+                Text(HotelsViewModel.resultsCopy(viewModel.totalCount))
                     .font(.caption.weight(.medium))
                     .foregroundStyle(.secondary)
 

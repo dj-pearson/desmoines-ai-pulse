@@ -22,6 +22,9 @@ struct DiscoverHubView: View {
     /// NavigationStack supplied by the presenter (e.g. pushed from Home).
     var ownsNavigationStack: Bool = true
 
+    @Environment(\.horizontalSizeClass) private var sizeClass
+    @State private var presented: PlayDestination?
+
     var body: some View {
         if ownsNavigationStack {
             NavigationStack {
@@ -34,23 +37,27 @@ struct DiscoverHubView: View {
 
     private var content: some View {
         ScrollView {
-            // Adaptive columns (IOS-IA-005): 2 across on iPhone, more on iPad /
-            // landscape where there's room — no stretched phone layout.
-            LazyVGrid(columns: [GridItem(.adaptive(minimum: 160), spacing: 14)],
-                      spacing: 14) {
-                ForEach(DiscoverDestination.allCases) { dest in
-                    NavigationLink(value: dest) {
-                        DiscoverTile(destination: dest)
-                    }
-                    .buttonStyle(.plain)
-                    .simultaneousGesture(TapGesture().onEnded {
-                        UIImpactFeedbackGenerator(style: .light).impactOccurred()
-                    })
-                }
+            VStack(alignment: .leading, spacing: 18) {
+                playRow
+                destinationGrid
             }
             .padding(16)
         }
         .navigationTitle("Discover")
+        .fullScreenCover(item: fullScreenBinding) { destination in
+            switch destination {
+            case .swipe:
+                DiscoverView(initialMode: .mixed, onClose: { presented = nil })
+            case .surprise:
+                SurpriseMeView()
+            case .askPulse:
+                // Presented by the sheet below; never routed here.
+                AskPulseView()
+            }
+        }
+        .sheet(isPresented: askPulseBinding) {
+            AskPulseView()
+        }
         .navigationDestination(for: DiscoverDestination.self) { dest in
             dest.destinationView
         }
@@ -61,6 +68,134 @@ struct DiscoverHubView: View {
         .navigationDestination(for: Attraction.self) { AttractionDetailView(attraction: $0) }
         .navigationDestination(for: Article.self) { ArticleDetailView(article: $0) }
         .navigationDestination(for: Hotel.self) { HotelDetailView(hotel: $0) }
+    }
+
+    /// The discovery games (IOS-DD-DISCOVER-19). The hub is the iPad sidebar's
+    /// Discover item and had no way into any of them. Side by side on regular
+    /// width, stacked wide tiles on compact.
+    @ViewBuilder
+    private var playRow: some View {
+        if sizeClass == .regular {
+            HStack(spacing: 14) { playTiles }
+        } else {
+            VStack(spacing: 10) { playTiles }
+        }
+    }
+
+    private var playTiles: some View {
+        ForEach(PlayDestination.allCases) { destination in
+            Button {
+                UIImpactFeedbackGenerator(style: .light).impactOccurred()
+                presented = destination
+            } label: {
+                PlayTile(destination: destination)
+            }
+            .buttonStyle(.plain)
+        }
+    }
+
+    private var destinationGrid: some View {
+        // Adaptive columns (IOS-IA-005): 2 across on iPhone, more on iPad /
+        // landscape where there's room — no stretched phone layout.
+        LazyVGrid(columns: [GridItem(.adaptive(minimum: 160), spacing: 14)],
+                  spacing: 14) {
+            ForEach(DiscoverDestination.allCases) { dest in
+                NavigationLink(value: dest) {
+                    DiscoverTile(destination: dest)
+                }
+                .buttonStyle(.plain)
+                .simultaneousGesture(TapGesture().onEnded {
+                    UIImpactFeedbackGenerator(style: .light).impactOccurred()
+                })
+            }
+        }
+    }
+
+    /// Swipe and Surprise Me are full-screen, as Home presents them.
+    private var fullScreenBinding: Binding<PlayDestination?> {
+        Binding(
+            get: { presented == .askPulse ? nil : presented },
+            set: { presented = $0 }
+        )
+    }
+
+    /// Ask Pulse is a sheet, as on Home.
+    private var askPulseBinding: Binding<Bool> {
+        Binding(
+            get: { presented == .askPulse },
+            set: { if !$0 { presented = nil } }
+        )
+    }
+}
+
+// MARK: - Play destinations
+
+/// The hub's discovery games (IOS-DD-DISCOVER-19). Group Session stays out
+/// while GroupSessionFeature is off.
+enum PlayDestination: String, CaseIterable, Identifiable {
+    case swipe
+    case surprise
+    case askPulse
+
+    var id: String { rawValue }
+
+    var title: String {
+        switch self {
+        case .swipe: return "Swipe"
+        case .surprise: return "Surprise me"
+        case .askPulse: return "Ask Pulse"
+        }
+    }
+
+    var subtitle: String {
+        switch self {
+        case .swipe: return "Save or skip, one card at a time"
+        case .surprise: return "One pick, no scrolling"
+        case .askPulse: return "Say what you're in the mood for"
+        }
+    }
+
+    var systemImage: String {
+        switch self {
+        case .swipe: return "rectangle.stack.fill"
+        case .surprise: return "die.face.5"
+        case .askPulse: return "sparkles"
+        }
+    }
+}
+
+private struct PlayTile: View {
+    let destination: PlayDestination
+
+    var body: some View {
+        HStack(spacing: 14) {
+            Image(systemName: destination.systemImage)
+                .font(.title2)
+                .foregroundStyle(Color.accentColor)
+                .frame(width: 32)
+                .accessibilityHidden(true)
+            VStack(alignment: .leading, spacing: 2) {
+                Text(destination.title)
+                    .font(.headline)
+                    .foregroundStyle(.primary)
+                Text(destination.subtitle)
+                    .font(.subheadline)
+                    .foregroundStyle(.secondary)
+                    .multilineTextAlignment(.leading)
+            }
+            Spacer(minLength: 0)
+            Image(systemName: "chevron.right")
+                .font(.footnote.weight(.semibold))
+                .foregroundStyle(.tertiary)
+                .accessibilityHidden(true)
+        }
+        .padding(16)
+        .frame(maxWidth: .infinity, alignment: .leading)
+        .background(Color.accentColor.opacity(0.1), in: RoundedRectangle(cornerRadius: 14))
+        .contentShape(RoundedRectangle(cornerRadius: 14))
+        .accessibilityElement(children: .ignore)
+        .accessibilityLabel("\(destination.title). \(destination.subtitle)")
+        .accessibilityAddTraits(.isButton)
     }
 }
 
