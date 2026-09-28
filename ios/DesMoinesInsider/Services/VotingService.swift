@@ -8,6 +8,13 @@ import Supabase
 actor VotingService {
     static let shared = VotingService()
 
+    /// Whether the booth may offer to change a vote. Mirrors
+    /// VOTE_CHANGE_AVAILABLE in src/lib/votingStatus.ts: changing a vote is an
+    /// upsert that needs the FOR UPDATE policy in 20260930000003, which is
+    /// written but not applied, so every change fails with 42501. Flip this in
+    /// the same PR that applies that migration (IOS-DD-GUIDES-07).
+    static let voteChangeAvailable = false
+
     private let supabase: SupabaseClient? = SupabaseService.shared.client
 
     enum ServiceError: LocalizedError {
@@ -87,12 +94,13 @@ actor VotingService {
         // that survives the policy change and starts failing then, on a
         // release nobody connects to this one.
         //
-        // An RPC failure now yields an empty leaderboard rather than raw
-        // ballots, which is the correct direction to fail.
-        let rows: [ResultRow] = (try? await client
+        // An RPC failure is thrown, not turned into an empty board: an outage
+        // used to read as "0 total votes" with nothing to retry
+        // (IOS-DD-GUIDES-09). Still never a raw-ballot fallback.
+        let rows: [ResultRow] = try await client
             .rpc("voting_results", params: ResultsParams(p_category_id: categoryId))
             .execute()
-            .value) ?? []
+            .value
         var results: [VoteResult] = rows.map {
             VoteResult(
                 entityType: $0.entity_type,
@@ -157,6 +165,21 @@ actor VotingService {
             .execute()
             .value
         return votes.first
+    }
+
+    /// Category ids the user has a vote in, for the hub's ballot progress
+    /// (IOS-DD-GUIDES-10). The votes SELECT policy lets a voter read their own
+    /// rows either way. Fails soft to an empty set.
+    func fetchVotedCategoryIds(userId: String) async -> Set<String> {
+        guard let client = try? db() else { return [] }
+        struct Row: Decodable { let category_id: String }
+        let rows: [Row]? = try? await client
+            .from("votes")
+            .select("category_id")
+            .eq("user_id", value: userId)
+            .execute()
+            .value
+        return Set((rows ?? []).map(\.category_id))
     }
 
     // MARK: - Cast vote (one per category per user)
@@ -224,10 +247,13 @@ actor VotingService {
 
     // MARK: - Winners (for award badges, IOS-PARITY-005)
 
-    /// Builds the entityId → category-name map for the current #1 (entity-backed)
-    /// pick in each active category. Custom write-ins can't badge a listing card,
-    /// so only entity_id winners are included. Fails soft to an empty map.
-    /// Server-side since WEB-SEC-025 step 2.
+    /// Builds the entityId → category-name map for the outright winner of each
+    /// FINISHED round, via voting_award_winners() (20261015000002, default
+    /// minimum of 5 votes, ties award nothing). It used voting_winners(), which
+    /// crowns the leader of an open round after a single vote; that RPC stays
+    /// as the web's "current leaders" (IOS-DD-GUIDES-08). Custom write-ins
+    /// can't badge a listing card, so only entity_id winners are included.
+    /// Fails closed to an empty map: no badge is better than a wrong one.
     ///
     /// This was the widest read of the ballot table in the app: unlike the
     /// leaderboard it was not scoped to a category, so it pulled every vote
@@ -235,9 +261,8 @@ actor VotingService {
     /// dozen entries. It also fetched the category list purely to resolve
     /// names, which the RPC now joins.
     ///
-    /// Ties resolve by entity_id in SQL. Dictionary.max(by:) resolved them by
-    /// whatever order the hash table yielded, which was not stable between
-    /// launches.
+    /// A tie at the top awards nothing (SQL). Dictionary.max(by:) once
+    /// resolved ties by hash order, which was not stable between launches.
     func fetchWinners() async -> [String: String] {
         guard let client = try? db() else { return [:] }
 
@@ -246,7 +271,7 @@ actor VotingService {
             let entity_id: String
         }
         let rows: [WinnerRow] = (try? await client
-            .rpc("voting_winners")
+            .rpc("voting_award_winners")
             .execute()
             .value) ?? []
 

@@ -7,6 +7,8 @@ import os
 /// - `desmoinesinsider.com/events/:id` → Event detail
 /// - `desmoinesinsider.com/restaurants/:id-or-slug` → Restaurant detail
 /// - `desmoinesinsider.com/attractions/:id-or-slug` → Attraction detail
+/// - `desmoinesinsider.com/stay/:id-or-slug` → Hotel detail
+/// - `desmoinesinsider.com/articles/:id-or-slug` → Article reader
 /// - `com.desmoines.aipulse://event/:id` → Event detail (custom scheme)
 /// - `com.desmoines.aipulse://restaurant/:id` → Restaurant detail (custom scheme)
 /// - `com.desmoines.aipulse://auth-callback` → Auth callback (handled by Supabase)
@@ -21,6 +23,10 @@ final class DeepLinkHandler {
         case event(id: String)
         case restaurant(id: String)
         case attraction(id: String)
+        /// A UUID or a lowercase slug (IOS-DD-GUIDES-22).
+        case hotel(id: String)
+        /// A UUID or a lowercase slug (IOS-DD-GUIDES-22).
+        case article(id: String)
         case tab(MainTabView.Tab)
         /// A Discover-hub parity surface (IOS-IA-002), e.g. trip planner, deals.
         case discover(DiscoverDestination)
@@ -39,12 +45,19 @@ final class DeepLinkHandler {
             return false
         }
 
-        if let destination = parseUniversalLink(url) ?? parseCustomScheme(url) {
+        if let destination = self.destination(for: url) {
             pendingDestination = destination
             return true
         }
 
         return false
+    }
+
+    /// Where a URL leads, without routing there. The article reader uses it to
+    /// open a site link natively in its own sheet (IOS-DD-GUIDES-21), which
+    /// must not also trigger the root presenter via pendingDestination.
+    func destination(for url: URL) -> Destination? {
+        parseUniversalLink(url) ?? parseCustomScheme(url)
     }
 
     /// In-app routing through the same path a link takes, e.g. Home's
@@ -92,11 +105,11 @@ final class DeepLinkHandler {
         let type = String(identifier[..<dash])
         let rawId = String(identifier[identifier.index(after: dash)...])
         switch type {
-        case "event", "restaurant", "attraction":
+        case "event", "restaurant", "attraction", "hotel", "article":
+            // SpotlightService indexes hotel-<id> and article-<id> too; those
+            // used to open the app to nothing (IOS-DD-GUIDES-22).
             return routeTyped(type: type, rawId: rawId)
         default:
-            // article/hotel are indexed but have no detail destination yet —
-            // open the app without crashing rather than route to the wrong place.
             AppLogger.nav.warning("Unrouted Spotlight identifier type: \(type)")
             return false
         }
@@ -113,6 +126,12 @@ final class DeepLinkHandler {
         case "attraction":
             guard let id = validatedId(rawId, source: "notification") else { return false }
             pendingDestination = .attraction(id: id)
+        case "hotel":
+            guard let id = validatedId(rawId, source: "notification") else { return false }
+            pendingDestination = .hotel(id: id)
+        case "article":
+            guard let id = validatedId(rawId, source: "notification") else { return false }
+            pendingDestination = .article(id: id)
         default:
             return false
         }
@@ -150,6 +169,12 @@ final class DeepLinkHandler {
         guard raw.count <= 120,
               raw.range(of: "^[a-z0-9]+(?:-[a-z0-9]+)*$", options: .regularExpression) != nil else { return nil }
         return raw
+    }
+
+    /// A UUID, or a lowercase slug of at most 120 characters, for /stay/ and
+    /// /articles/ links (the same rule as attractionLinkId).
+    static func slugOrUUID(_ raw: String) -> String? {
+        attractionLinkId(raw)
     }
 
     /// Validates and returns the ID, or nil if invalid (logging the rejection).
@@ -198,6 +223,15 @@ final class DeepLinkHandler {
             if let id = Self.attractionLinkId(rawId) { return .attraction(id: id) }
             AppLogger.nav.warning("Rejected invalid attraction link: \(rawId.prefix(50))")
             return .tab(.home)
+        case "stay":
+            // /stay/<slug> is the web's hotel page (IOS-DD-GUIDES-22).
+            if let id = Self.slugOrUUID(rawId) { return .hotel(id: id) }
+            AppLogger.nav.warning("Rejected invalid hotel link: \(rawId.prefix(50))")
+            return .discover(.stay)
+        case "articles":
+            if let id = Self.slugOrUUID(rawId) { return .article(id: id) }
+            AppLogger.nav.warning("Rejected invalid article link: \(rawId.prefix(50))")
+            return .discover(.articles)
         default:
             // Discover-hub parity surfaces (IOS-IA-002): the path's first
             // component is itself the slug, e.g. /trip-planner, /deals.

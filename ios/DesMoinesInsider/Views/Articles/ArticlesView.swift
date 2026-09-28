@@ -27,11 +27,13 @@ struct ArticlesView: View {
             VStack(spacing: 14) {
                 if let error = viewModel.errorMessage {
                     errorBanner(error)
+                } else if viewModel.showingStaleResults && !viewModel.articles.isEmpty {
+                    staleBanner
                 }
 
                 if viewModel.isLoading && viewModel.articles.isEmpty {
                     ForEach(0..<5, id: \.self) { _ in ContentCardSkeleton(.listRow) }
-                } else if viewModel.articles.isEmpty {
+                } else if viewModel.articles.isEmpty && viewModel.errorMessage == nil {
                     EmptyStateView(
                         icon: "doc.richtext",
                         title: "No Guides Found",
@@ -77,12 +79,13 @@ struct ArticlesView: View {
             }
         }
         .refreshable {
-            await viewModel.refresh()
-            // Reflect the real outcome instead of always firing success (UX-015).
-            UINotificationFeedbackGenerator()
-                .notificationOccurred(viewModel.errorMessage == nil ? .success : .error)
+            let ok = await viewModel.refresh()
+            // Reflect the real outcome instead of always firing success
+            // (UX-015), including a failed update over older rows
+            // (IOS-DD-GUIDES-15).
+            UINotificationFeedbackGenerator().notificationOccurred(ok ? .success : .error)
         }
-        .reloadOnReconnect(if: viewModel.articles.isEmpty) { await viewModel.refresh() }
+        .reloadOnReconnect(if: viewModel.articles.isEmpty) { _ = await viewModel.refresh() }
         .navigationTitle("Articles & Guides")
         .navigationBarTitleDisplayMode(.large)
         .searchable(
@@ -168,6 +171,22 @@ struct ArticlesView: View {
                 Text("Retry")
                     .font(.caption.bold())
                     .foregroundStyle(Color.accentColor)
+            }
+        }
+        .padding(12)
+        .background(Color(.systemGray6), in: RoundedRectangle(cornerRadius: 10))
+    }
+
+    /// The last refresh failed; these rows are from the previous load.
+    private var staleBanner: some View {
+        HStack(spacing: 10) {
+            Image(systemName: "wifi.exclamationmark").foregroundStyle(.orange)
+            Text("Couldn't update. Showing saved guides.")
+                .font(.caption)
+                .foregroundStyle(.secondary)
+            Spacer()
+            Button { Task { await viewModel.refresh() } } label: {
+                Text("Retry").font(.caption.bold()).foregroundStyle(Color.accentColor)
             }
         }
         .padding(12)

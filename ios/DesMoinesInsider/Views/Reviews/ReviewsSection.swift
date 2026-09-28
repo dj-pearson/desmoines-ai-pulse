@@ -35,24 +35,7 @@ struct ReviewsSection: View {
         VStack(alignment: .leading, spacing: 14) {
             header
             writeButton
-
-            if viewModel.isLoading && viewModel.reviews.isEmpty {
-                ProgressView().frame(maxWidth: .infinity).padding(.vertical, 8)
-            } else if let error = viewModel.errorMessage, viewModel.reviews.isEmpty {
-                // Retryable error state (IOS-COMPLY-004) — never a dead end.
-                errorRetry(error)
-            } else if viewModel.reviews.isEmpty {
-                Text("No reviews yet. Be the first to share your take!")
-                    .font(.subheadline)
-                    .foregroundStyle(.secondary)
-            } else {
-                ForEach(viewModel.reviews.prefix(visibleCount)) { review in
-                    reviewRow(review)
-                }
-                if viewModel.reviews.count > visibleCount {
-                    showAllButton(remaining: viewModel.reviews.count - visibleCount)
-                }
-            }
+            listContent
         }
         .frame(maxWidth: .infinity, alignment: .leading)
         .padding()
@@ -64,7 +47,8 @@ struct ReviewsSection: View {
         .sheet(isPresented: $showComposer) {
             ReviewComposer(
                 existing: viewModel.userReview,
-                isSubmitting: viewModel.isSubmitting
+                isSubmitting: viewModel.isSubmitting,
+                errorMessage: viewModel.actionError
             ) { rating, text in
                 let ok = await viewModel.submit(rating: rating, reviewText: text)
                 if ok { showComposer = false }
@@ -83,12 +67,7 @@ struct ReviewsSection: View {
             Button("Report as inappropriate", role: .destructive) {
                 if let target = reportTarget {
                     // Confirm the outcome instead of fire-and-forget (UX-023).
-                    Task {
-                        let ok = await viewModel.report(target)
-                        toast = ok
-                            ? .success("Thanks — we'll review this.")
-                            : .error(viewModel.errorMessage ?? "Couldn't submit your report.")
-                    }
+                    Task { await sendReport(target) }
                 }
                 reportTarget = nil
             }
@@ -102,12 +81,55 @@ struct ReviewsSection: View {
                     let ok = await viewModel.deleteOwnReview()
                     toast = ok
                         ? .success("Your review was deleted.")
-                        : .error(viewModel.errorMessage ?? "Couldn't delete your review.")
+                        : .error(viewModel.actionError ?? "Couldn't delete your review.")
                 }
             }
             Button("Cancel", role: .cancel) {}
         }
         .toastOverlay(message: $toast)
+    }
+
+    // MARK: - List
+
+    @ViewBuilder
+    private var listContent: some View {
+        if viewModel.isLoading && viewModel.reviews.isEmpty {
+            ProgressView().frame(maxWidth: .infinity).padding(.vertical, 8)
+        } else if let error = viewModel.loadError, viewModel.reviews.isEmpty {
+            // Retryable error state (IOS-COMPLY-004) — never a dead end. Only
+            // a failed load lands here; a failed post shows in the composer
+            // (IOS-DD-GUIDES-04).
+            errorRetry(error)
+        } else if viewModel.reviews.isEmpty {
+            Text(emptyCopy)
+                .font(.subheadline)
+                .foregroundStyle(.secondary)
+        } else {
+            ForEach(viewModel.reviews.prefix(visibleCount)) { review in
+                reviewRow(review)
+            }
+            if viewModel.reviews.count > visibleCount {
+                showAllButton(remaining: viewModel.reviews.count - visibleCount)
+            }
+        }
+    }
+
+    /// A signed-in free user can't write one, so don't invite them to.
+    private var emptyCopy: String {
+        viewModel.isAuthenticated && !viewModel.canWriteReviews
+            ? "No reviews yet. Insiders can write the first one."
+            : "No reviews yet. Be the first to share your take!"
+    }
+
+    private func sendReport(_ target: UserRating) async {
+        switch await viewModel.report(target) {
+        case .sent:
+            toast = .success("Thanks — we'll review this.")
+        case .needsSignIn:
+            showSignIn = true
+        case .failed(let message):
+            toast = .error(message)
+        }
     }
 
     // MARK: - Header
@@ -124,6 +146,15 @@ struct ReviewsSection: View {
                 }
             }
         }
+        .accessibilityElement(children: .ignore)
+        .accessibilityLabel(headerAccessibilityLabel)
+        .accessibilityAddTraits(.isHeader)
+    }
+
+    private var headerAccessibilityLabel: String {
+        guard let avg = viewModel.averageRating else { return "Reviews" }
+        let count = viewModel.reviewCount
+        return "Reviews. Average \(String(format: "%.1f", avg)) out of 5 from \(count) rating\(count == 1 ? "" : "s")"
     }
 
     // MARK: - Write button (gated)
@@ -212,7 +243,15 @@ struct ReviewsSection: View {
                             showDeleteConfirmation = true
                         }
                     } else {
-                        Button("Report", systemImage: "flag") { reportTarget = review }
+                        Button("Report", systemImage: "flag") {
+                            // report_review needs an account; ask for one up
+                            // front instead of failing after the dialog.
+                            if viewModel.isAuthenticated {
+                                reportTarget = review
+                            } else {
+                                showSignIn = true
+                            }
+                        }
                     }
                 } label: {
                     Image(systemName: "ellipsis")
@@ -234,17 +273,38 @@ struct ReviewsSection: View {
                 if let date = review.formattedDate {
                     Text("· \(date)").font(.caption).foregroundStyle(.secondary)
                 }
-                if review.isVerified == true {
-                    Label("Verified", systemImage: "checkmark.seal.fill")
-                        .font(.caption2).foregroundStyle(.green)
-                }
+            }
+
+            if isOwn, let note = Self.moderationNote(review.moderationStatus) {
+                Label(note.text, systemImage: note.icon)
+                    .font(.caption)
+                    .foregroundStyle(note.isRejected ? Color.orange : Color.secondary)
             }
         }
         .padding(12)
         .frame(maxWidth: .infinity, alignment: .leading)
         .background(Color(.secondarySystemGroupedBackground), in: RoundedRectangle(cornerRadius: 12))
         .accessibilityElement(children: .combine)
-        .accessibilityLabel("\(review.ratingValue) star review by \(isOwn ? "you" : review.authorName). \(review.reviewText ?? "")")
+        .accessibilityLabel(rowAccessibilityLabel(review, isOwn: isOwn))
+    }
+
+    private func rowAccessibilityLabel(_ review: UserRating, isOwn: Bool) -> String {
+        var label = "\(review.ratingValue) star review by \(isOwn ? "you" : review.authorName). \(review.reviewText ?? "")"
+        if isOwn, let note = Self.moderationNote(review.moderationStatus) {
+            label += " \(note.text)"
+        }
+        return label
+    }
+
+    /// The author's own review while it waits for, or after it fails,
+    /// moderation. Without this a pending review looked published to the
+    /// only person who can see it (IOS-DD-GUIDES-04).
+    private static func moderationNote(_ status: String?) -> (text: String, icon: String, isRejected: Bool)? {
+        switch status {
+        case "pending": return ("Pending review - only you can see this", "clock", false)
+        case "rejected": return ("Not published", "exclamationmark.circle", true)
+        default: return nil
+        }
     }
 
     private func stars(_ value: Int) -> some View {
@@ -264,15 +324,18 @@ struct ReviewsSection: View {
 private struct ReviewComposer: View {
     let existing: UserRating?
     let isSubmitting: Bool
+    let errorMessage: String?
     let onSubmit: (Int, String) async -> Bool
 
     @Environment(\.dismiss) private var dismiss
     @State private var rating: Int
     @State private var text: String
 
-    init(existing: UserRating?, isSubmitting: Bool, onSubmit: @escaping (Int, String) async -> Bool) {
+    init(existing: UserRating?, isSubmitting: Bool, errorMessage: String?,
+         onSubmit: @escaping (Int, String) async -> Bool) {
         self.existing = existing
         self.isSubmitting = isSubmitting
+        self.errorMessage = errorMessage
         self.onSubmit = onSubmit
         _rating = State(initialValue: existing?.ratingValue ?? 0)
         _text = State(initialValue: existing?.reviewText ?? "")
@@ -281,25 +344,15 @@ private struct ReviewComposer: View {
     var body: some View {
         NavigationStack {
             Form {
-                Section("Your rating") {
-                    HStack(spacing: 8) {
-                        ForEach(1...5, id: \.self) { i in
-                            Button {
-                                UIImpactFeedbackGenerator(style: .light).impactOccurred()
-                                rating = i
-                            } label: {
-                                Image(systemName: i <= rating ? "star.fill" : "star")
-                                    .font(.title2)
-                                    .foregroundStyle(i <= rating ? .yellow : .gray.opacity(0.4))
-                            }
-                            .buttonStyle(.plain)
-                            // 44pt target so the required rating isn't mis-tapped
-                            // (IOS-AUDIT-UX-040).
-                            .minHitTarget()
-                            .accessibilityLabel("\(i) star\(i == 1 ? "" : "s")")
-                        }
+                if let errorMessage {
+                    Section {
+                        Label(errorMessage, systemImage: "exclamationmark.triangle.fill")
+                            .font(.footnote)
+                            .foregroundStyle(.red)
                     }
-                    .frame(maxWidth: .infinity)
+                }
+                Section("Your rating") {
+                    starPicker
                 }
                 Section("Your review (optional)") {
                     TextField("Share what you thought…", text: $text, axis: .vertical)
@@ -317,10 +370,46 @@ private struct ReviewComposer: View {
                 }
                 ToolbarItem(placement: .confirmationAction) {
                     Button("Post") {
-                        Task { _ = await onSubmit(rating, text.trimmingCharacters(in: .whitespacesAndNewlines)) }
+                        Task {
+                            let ok = await onSubmit(rating, text.trimmingCharacters(in: .whitespacesAndNewlines))
+                            if !ok { UINotificationFeedbackGenerator().notificationOccurred(.error) }
+                        }
                     }
                     .disabled(rating == 0 || isSubmitting)
                 }
+            }
+        }
+    }
+
+    /// Per-star buttons for touch; one adjustable element for VoiceOver, so
+    /// the chosen rating is announced and swipe up/down changes it
+    /// (IOS-DD-GUIDES-05).
+    private var starPicker: some View {
+        HStack(spacing: 8) {
+            ForEach(1...5, id: \.self) { i in
+                Button {
+                    UIImpactFeedbackGenerator(style: .light).impactOccurred()
+                    rating = i
+                } label: {
+                    Image(systemName: i <= rating ? "star.fill" : "star")
+                        .font(.title2)
+                        .foregroundStyle(i <= rating ? .yellow : .gray.opacity(0.4))
+                }
+                .buttonStyle(.plain)
+                // 44pt target so the required rating isn't mis-tapped
+                // (IOS-AUDIT-UX-040).
+                .minHitTarget()
+            }
+        }
+        .frame(maxWidth: .infinity)
+        .accessibilityElement(children: .ignore)
+        .accessibilityLabel("Your rating")
+        .accessibilityValue(rating == 0 ? "No rating" : "\(rating) of 5 stars")
+        .accessibilityAdjustableAction { direction in
+            switch direction {
+            case .increment: rating = min(5, rating + 1)
+            case .decrement: rating = max(1, rating - 1)
+            @unknown default: break
             }
         }
     }

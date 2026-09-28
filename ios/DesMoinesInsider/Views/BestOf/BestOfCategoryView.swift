@@ -5,6 +5,10 @@ import SwiftUI
 /// account creation). Votes are optimistic and revert on failure.
 struct BestOfCategoryView: View {
     @State private var viewModel: BestOfCategoryViewModel
+    /// Leaderboard shows the top 10 until the user asks for more.
+    @State private var showAll = false
+    /// A tapped leaderboard row, opened in place (the SponsoredPickCard pattern).
+    @State private var resolverTarget: MainTabView.DeepLinkPresentation?
 
     init(category: VotingCategory) {
         _viewModel = State(wrappedValue: BestOfCategoryViewModel(category: category))
@@ -29,6 +33,14 @@ struct BestOfCategoryView: View {
         .navigationBarTitleDisplayMode(.inline)
         .refreshable { await viewModel.refresh() }
         .task { await viewModel.load() }
+        .sheet(item: $resolverTarget) { DeepLinkResolverView(presentation: $0) }
+    }
+
+    private var category: VotingCategory { viewModel.category }
+
+    /// The page on the web for this category, shared from results and picks.
+    private var shareURL: URL {
+        Config.siteURL.appendingPathComponent("best-of").appendingPathComponent(category.slug)
     }
 
     // MARK: - Header
@@ -39,9 +51,19 @@ struct BestOfCategoryView: View {
             if let description = viewModel.category.description, !description.isEmpty {
                 Text(description).font(.subheadline).foregroundStyle(.secondary)
             }
-            Text("\(viewModel.totalVotes) total vote\(viewModel.totalVotes == 1 ? "" : "s")")
-                .font(.caption.weight(.medium))
-                .foregroundStyle(.secondary)
+            HStack(spacing: 8) {
+                Text("\(viewModel.totalVotes) total vote\(viewModel.totalVotes == 1 ? "" : "s")")
+                    .font(.caption.weight(.medium))
+                    .foregroundStyle(.secondary)
+                if category.isVotingOpen, let closes = category.closesAt {
+                    Text("Voting closes \(closes.formatted(.dateTime.month(.abbreviated).day()))")
+                        .font(.caption.weight(.semibold))
+                        .padding(.horizontal, 8)
+                        .padding(.vertical, 3)
+                        .background(Color.accentColor.opacity(0.12), in: Capsule())
+                        .foregroundStyle(Color.accentColor)
+                }
+            }
         }
         .frame(maxWidth: .infinity, alignment: .leading)
         .padding(.top, 4)
@@ -50,56 +72,146 @@ struct BestOfCategoryView: View {
 
     // MARK: - Voting booth
 
+    /// Closed round: final results. Open round: the booth, or once the user
+    /// has voted and changes aren't possible, just their pick
+    /// (IOS-DD-GUIDES-07/09).
     @ViewBuilder
     private var votingBooth: some View {
-        VStack(alignment: .leading, spacing: 12) {
-            if !viewModel.isAuthenticated {
-                signInPrompt
-            } else {
-                if let vote = viewModel.userVote {
-                    // Name the current pick so the user knows what they voted for,
-                    // and how to change it (IOS-AUDIT-UX-031). Vote itself has no
-                    // display name — resolve it from the leaderboard row, falling
-                    // back to a custom write-in or generic copy.
-                    let pickName = viewModel.results.first { $0.id == vote.resultKey }?.displayName
-                        ?? vote.customEntry
-                    Label(pickName.map { "You voted for \($0) — search or write in to change." }
-                            ?? "You've voted — search or write in to change your pick.",
-                          systemImage: "checkmark.seal.fill")
-                        .font(.footnote.weight(.medium))
-                        .foregroundStyle(.green)
+        if !category.isVotingOpen {
+            finalResultsCard
+        } else {
+            VStack(alignment: .leading, spacing: 12) {
+                if !viewModel.isAuthenticated {
+                    signInPrompt
+                } else if let vote = viewModel.userVote, !VotingService.voteChangeAvailable {
+                    votedFinal(vote)
+                } else {
+                    openBooth
                 }
+            }
+            .padding(16)
+            .background(Color(.secondarySystemGroupedBackground), in: RoundedRectangle(cornerRadius: 16))
+        }
+    }
 
-                if let error = viewModel.errorMessage {
-                    Label(error, systemImage: "exclamationmark.triangle.fill")
-                        .font(.footnote)
-                        .foregroundStyle(.red)
-                }
+    private func pickName(for vote: Vote) -> String? {
+        viewModel.results.first { $0.id == vote.resultKey }?.displayName ?? vote.customEntry
+    }
 
-                searchField
-                if viewModel.isSearching {
-                    ProgressView().frame(maxWidth: .infinity).padding(.vertical, 4)
-                }
-                ForEach(viewModel.searchResults) { nominee in
-                    Button {
-                        Task {
-                            await viewModel.castVote(
-                                entityType: nominee.type, entityId: nominee.id, customEntry: nil,
-                                displayName: nominee.name, imageUrl: nominee.imageUrl
-                            )
-                        }
-                    } label: {
-                        nomineeRow(nominee)
-                    }
-                    .buttonStyle(.plain)
-                    .disabled(viewModel.isVoting)
-                }
+    @ViewBuilder
+    private func votedFinal(_ vote: Vote) -> some View {
+        let name = viewModel.justVotedFor ?? pickName(for: vote)
+        Label(name.map { "You voted for \($0). Votes are final for this round." }
+                ?? "You've voted. Votes are final for this round.",
+              systemImage: "checkmark.seal.fill")
+            .font(.footnote.weight(.medium))
+            .foregroundStyle(.green)
+        if viewModel.justVotedWriteIn {
+            Text("Write-ins appear on the board once 3 people pick them.")
+                .font(.caption)
+                .foregroundStyle(.secondary)
+        }
+        if let name {
+            sharePickLink(name)
+        }
+    }
 
-                writeInRow
+    private func sharePickLink(_ pick: String) -> some View {
+        ShareLink(
+            item: shareURL,
+            message: Text("I voted \(pick) for \(category.name) in Des Moines")
+        ) {
+            Label("Share my pick", systemImage: "square.and.arrow.up")
+                .font(.subheadline.weight(.semibold))
+        }
+    }
+
+    @ViewBuilder
+    private var openBooth: some View {
+        if let vote = viewModel.userVote {
+            // Name the current pick so the user knows what they voted for,
+            // and how to change it (IOS-AUDIT-UX-031). Only reached when vote
+            // changes are available (VotingService.voteChangeAvailable).
+            Label(pickName(for: vote).map { "You voted for \($0) — search or write in to change." }
+                    ?? "You've voted — search or write in to change your pick.",
+                  systemImage: "checkmark.seal.fill")
+                .font(.footnote.weight(.medium))
+                .foregroundStyle(.green)
+            if let just = viewModel.justVotedFor {
+                sharePickLink(just)
             }
         }
+
+        if let error = viewModel.errorMessage {
+            Label(error, systemImage: "exclamationmark.triangle.fill")
+                .font(.footnote)
+                .foregroundStyle(.red)
+        }
+
+        searchField
+        if viewModel.isSearching {
+            ProgressView().frame(maxWidth: .infinity).padding(.vertical, 4)
+        }
+        ForEach(viewModel.searchResults) { nominee in
+            Button {
+                Task {
+                    await vote(entityType: nominee.type, entityId: nominee.id, customEntry: nil,
+                               displayName: nominee.name, imageUrl: nominee.imageUrl)
+                }
+            } label: {
+                nomineeRow(nominee)
+            }
+            .buttonStyle(.plain)
+            .disabled(viewModel.isVoting)
+        }
+
+        writeInRow
+    }
+
+    /// Casts through the view model and confirms with a haptic.
+    @discardableResult
+    private func vote(entityType: String, entityId: String?, customEntry: String?,
+                      displayName: String, imageUrl: String?) async -> Bool {
+        let ok = await viewModel.castVote(
+            entityType: entityType, entityId: entityId, customEntry: customEntry,
+            displayName: displayName, imageUrl: imageUrl
+        )
+        UINotificationFeedbackGenerator().notificationOccurred(ok ? .success : .error)
+        return ok
+    }
+
+    // MARK: - Final results (closed round)
+
+    private var finalResultsCard: some View {
+        let winner = viewModel.results.first?.displayName
+        return VStack(alignment: .leading, spacing: 10) {
+            Label("Voting closed", systemImage: "trophy.fill")
+                .font(.headline)
+                .foregroundStyle(Color(red: 0.96, green: 0.76, blue: 0.20))
+            Text("Final results")
+                .font(.caption.weight(.semibold))
+                .foregroundStyle(.secondary)
+            if viewModel.isLoading && viewModel.results.isEmpty {
+                ProgressView()
+            } else {
+                Text(winner ?? (viewModel.loadError != nil ? "Results unavailable" : "No winner this round"))
+                    .font(.title2.bold())
+                    .fixedSize(horizontal: false, vertical: true)
+                if let winner {
+                    ShareLink(
+                        item: shareURL,
+                        message: Text("\(winner) won \(category.name) in Des Moines")
+                    ) {
+                        Label("Share the winner", systemImage: "square.and.arrow.up")
+                            .font(.subheadline.weight(.semibold))
+                    }
+                }
+            }
+        }
+        .frame(maxWidth: .infinity, alignment: .leading)
         .padding(16)
         .background(Color(.secondarySystemGroupedBackground), in: RoundedRectangle(cornerRadius: 16))
+        .accessibilityElement(children: .contain)
     }
 
     private var signInPrompt: some View {
@@ -172,13 +284,18 @@ struct BestOfCategoryView: View {
             HStack(spacing: 8) {
                 TextField("Enter a place name…", text: $writeIn)
                     .textInputAutocapitalization(.words)
+                    // votes_guard keeps 80 characters; stop typing there
+                    // rather than silently truncating (IOS-DD-GUIDES-06).
+                    .onChange(of: writeIn) { _, value in
+                        if value.count > 80 { writeIn = String(value.prefix(80)) }
+                    }
                     .padding(10)
                     .background(Color(.tertiarySystemFill), in: RoundedRectangle(cornerRadius: 10))
                 Button("Vote") {
                     let entry = writeIn.trimmingCharacters(in: .whitespaces)
                     guard !entry.isEmpty else { return }
                     Task {
-                        let ok = await viewModel.castVote(
+                        let ok = await vote(
                             entityType: "custom", entityId: nil, customEntry: entry,
                             displayName: entry, imageUrl: nil
                         )
@@ -204,17 +321,70 @@ struct BestOfCategoryView: View {
     private var leaderboard: some View {
         if viewModel.isLoading && viewModel.results.isEmpty {
             ProgressView().frame(maxWidth: .infinity).padding()
-        } else if !viewModel.results.isEmpty {
+        } else {
             VStack(alignment: .leading, spacing: 12) {
-                Label("Current Rankings", systemImage: "trophy.fill")
+                Label(category.isVotingOpen ? "Current Rankings" : "Final Rankings", systemImage: "trophy.fill")
                     .font(.title3.bold())
                     .foregroundStyle(.primary)
                     .accessibilityAddTraits(.isHeader)
-
-                ForEach(Array(viewModel.results.enumerated()), id: \.element.id) { index, result in
-                    leaderboardRow(result, rank: index)
-                }
+                leaderboardRows
             }
+        }
+    }
+
+    @ViewBuilder
+    private var leaderboardRows: some View {
+        if viewModel.loadError != nil && viewModel.results.isEmpty {
+            leaderboardError
+        } else if viewModel.results.isEmpty {
+            Text("No votes yet - be the first to pick the best \(category.subjectName).")
+                .font(.subheadline)
+                .foregroundStyle(.secondary)
+        } else {
+            let visible = VoteResult.visible(viewModel.results, showAll: showAll)
+            ForEach(Array(visible.enumerated()), id: \.element.id) { index, result in
+                leaderboardEntry(result, rank: index)
+            }
+            if !showAll && viewModel.results.count > visible.count {
+                Button("Show all \(viewModel.results.count)") { showAll = true }
+                    .font(.subheadline.weight(.semibold))
+            }
+        }
+    }
+
+    private var leaderboardError: some View {
+        HStack(spacing: 10) {
+            Image(systemName: "exclamationmark.triangle.fill").foregroundStyle(.yellow)
+            Text("Couldn't load the rankings.")
+                .font(.subheadline)
+                .foregroundStyle(.secondary)
+            Spacer()
+            Button("Retry") { Task { await viewModel.refresh() } }
+                .font(.subheadline.bold())
+        }
+        .padding(12)
+        .background(Color(.secondarySystemGroupedBackground), in: RoundedRectangle(cornerRadius: 12))
+    }
+
+    /// Restaurant and attraction rows open the listing; write-ins and events
+    /// stay plain rows.
+    @ViewBuilder
+    private func leaderboardEntry(_ result: VoteResult, rank: Int) -> some View {
+        if let target = Self.presentation(for: result) {
+            Button { resolverTarget = target } label: { leaderboardRow(result, rank: rank) }
+                .buttonStyle(.plain)
+                .accessibilityHint("Opens the listing")
+        } else {
+            leaderboardRow(result, rank: rank)
+        }
+    }
+
+    nonisolated static func presentation(for result: VoteResult) -> MainTabView.DeepLinkPresentation? {
+        guard let id = result.entityId else { return nil }
+        switch result.entityType {
+        case "restaurant": return .restaurant(id)
+        case "attraction": return .attraction(id)
+        default: return nil
         }
     }
 
@@ -237,7 +407,7 @@ struct BestOfCategoryView: View {
 
             VStack(alignment: .leading, spacing: 5) {
                 HStack(spacing: 6) {
-                    Text(result.displayName).font(.subheadline.weight(.semibold)).lineLimit(1)
+                    Text(result.displayName).font(.subheadline.weight(.semibold)).lineLimit(2)
                     if isMyPick {
                         Text("Your pick")
                             .font(.caption2.weight(.bold))
@@ -260,7 +430,7 @@ struct BestOfCategoryView: View {
             Text("\(pct)%")
                 .font(.caption.weight(.medium))
                 .foregroundStyle(.secondary)
-                .frame(width: 38, alignment: .trailing)
+                .fixedSize()
         }
         .padding(12)
         .background(Color(.secondarySystemGroupedBackground), in: RoundedRectangle(cornerRadius: 12))
@@ -269,7 +439,7 @@ struct BestOfCategoryView: View {
                 .strokeBorder(isMyPick ? Color.accentColor.opacity(0.6) : .clear, lineWidth: 1.5)
         )
         .accessibilityElement(children: .combine)
-        .accessibilityLabel("Rank \(rank + 1), \(result.displayName), \(result.voteCount) votes, \(pct) percent\(isMyPick ? ", your pick" : "")")
+        .accessibilityLabel("Rank \(rank + 1), \(result.displayName), \(result.voteCount) vote\(result.voteCount == 1 ? "" : "s"), \(pct) percent\(isMyPick ? ", your pick" : "")")
     }
 
     @ViewBuilder

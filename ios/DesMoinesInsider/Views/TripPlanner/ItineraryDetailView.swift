@@ -291,6 +291,8 @@ struct ItineraryDetailView: View {
         case .event(let id): return .event(id)
         case .restaurant(let id): return .restaurant(id)
         case .attraction(let id): return .attraction(id)
+        case .hotel(let id): return .hotel(id)
+        case .article(let id): return .article(id)
         case .tab, .discover: return nil
         }
     }

@@ -21,13 +21,21 @@ actor RatingsService {
 
     // MARK: - Read
 
-    /// Reviews for a piece of content, newest first, with author profile.
+    /// The columns the list reads. Explicit rather than `*`, and no
+    /// `profiles:user_id (...)` embed: user_ratings has no FK to profiles, so
+    /// PostgREST answered that embed with PGRST200 and failed the whole list
+    /// (WEB-QA-034 on the web; IOS-DD-GUIDES-02 here). `is_verified` is not
+    /// requested because no migration creates it.
+    static let ratingColumns =
+        "id, content_type, content_id, user_id, rating, review_text, moderation_status, created_at, updated_at"
+
+    /// Reviews for a piece of content, newest first, with short author names.
     ///
     /// Approved reviews only, plus the signed-in user's own in any state so
     /// they can see (and edit) what they wrote while it waits for moderation
     /// (IOS-DD-EVENTS-16, WEB-AUTO-009). The web filters the same way.
     func fetchRatings(contentType: String, contentId: String, currentUserId: String? = nil) async throws -> [UserRating] {
-        try await withRetry { [self] in
+        var ratings: [UserRating] = try await withRetry { [self] in
             let client = try db()
             var visibility = "moderation_status.eq.approved"
             if let currentUserId, UUID(uuidString: currentUserId) != nil {
@@ -35,7 +43,7 @@ actor RatingsService {
             }
             let ratings: [UserRating] = try await client
                 .from("user_ratings")
-                .select("*, profiles:user_id (first_name, last_name)")
+                .select(Self.ratingColumns)
                 .eq("content_type", value: contentType)
                 .eq("content_id", value: contentId)
                 .or(visibility)
@@ -44,6 +52,32 @@ actor RatingsService {
                 .value
             return ratings
         }
+        let names = await authorNames(for: ratings.map(\.userId))
+        for i in ratings.indices {
+            ratings[i].authorDisplayName = names[ratings[i].userId]
+        }
+        return ratings
+    }
+
+    /// Best-effort short names ("Dana M.") from review_author_names(). A
+    /// failure leaves every row as "Local reviewer"; it never fails the list.
+    private func authorNames(for userIds: [String]) async -> [String: String] {
+        var seen = Set<String>()
+        let ids = userIds.filter { UUID(uuidString: $0) != nil && seen.insert($0).inserted }
+        guard !ids.isEmpty, let client = try? db() else { return [:] }
+        struct NameRow: Decodable {
+            let user_id: String
+            let display_name: String?
+        }
+        let rows: [NameRow]? = try? await client
+            .rpc("review_author_names", params: ["p_user_ids": Array(ids.prefix(100))])
+            .execute()
+            .value
+        var names: [String: String] = [:]
+        for row in rows ?? [] {
+            if let name = row.display_name, !name.isEmpty { names[row.user_id] = name }
+        }
+        return names
     }
 
     func fetchAggregate(contentType: String, contentId: String) async -> ContentRatingAggregate? {
@@ -105,18 +139,19 @@ actor RatingsService {
 
     // MARK: - Moderation
 
-    /// Report a review for abuse (rating_abuse_reports). Fail-soft is up to the
-    /// caller; we throw so the UI can confirm success.
-    func reportRating(ratingId: String, reportedBy: String, reason: String) async throws {
+    /// The shared report path the web (useRatings.ts) and Android use. It
+    /// flags the review in content_moderation for an admin. The old insert
+    /// into rating_abuse_reports went to a table no migration creates and no
+    /// moderator reads (IOS-DD-GUIDES-03).
+    static let reportRPCName = "report_review"
+    static let reportRPCParam = "p_rating_id"
+
+    /// Report a review. Throws so the UI can confirm success. The RPC raises
+    /// 28000 when signed out and 'review_not_found' for a stale id.
+    func reportRating(ratingId: String) async throws {
         let client = try db()
-        struct Row: Encodable {
-            let rating_id: String
-            let reported_by: String
-            let reason: String
-        }
         try await client
-            .from("rating_abuse_reports")
-            .insert(Row(rating_id: ratingId, reported_by: reportedBy, reason: reason))
+            .rpc(Self.reportRPCName, params: [Self.reportRPCParam: ratingId])
             .execute()
     }
 }

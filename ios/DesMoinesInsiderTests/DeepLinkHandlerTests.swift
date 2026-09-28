@@ -106,10 +106,47 @@ final class DeepLinkHandlerTests: XCTestCase {
     }
 
     func testSpotlightUnknownTypeIsNotRouted() {
-        // article/hotel have no detail destination yet — must not crash or
-        // route to the wrong screen.
-        XCTAssertFalse(handler.handleSpotlightIdentifier("article-550e8400-e29b-41d4-a716-446655440000"))
+        // A type with no detail destination must not crash or route to the
+        // wrong screen.
+        XCTAssertFalse(handler.handleSpotlightIdentifier("neighborhood-550e8400-e29b-41d4-a716-446655440000"))
         XCTAssertNil(handler.consumeDestination())
+    }
+
+    // MARK: - Hotels and articles (IOS-DD-GUIDES-22)
+
+    func testSpotlightHotelRoutes() {
+        let id = "550e8400-e29b-41d4-a716-446655440000"
+        XCTAssertTrue(handler.handleSpotlightIdentifier("hotel-\(id)"))
+        XCTAssertEqual(handler.consumeDestination(), .hotel(id: id))
+    }
+
+    func testSpotlightArticleRoutes() {
+        let id = "550e8400-e29b-41d4-a716-446655440000"
+        XCTAssertTrue(handler.handleSpotlightIdentifier("article-\(id)"))
+        XCTAssertEqual(handler.consumeDestination(), .article(id: id))
+    }
+
+    func testStaySlugUniversalLink() {
+        XCTAssertTrue(handler.handle(URL(string: "https://desmoinesinsider.com/stay/surety-hotel")!))
+        XCTAssertEqual(handler.consumeDestination(), .hotel(id: "surety-hotel"))
+    }
+
+    func testArticlesSlugUniversalLink() {
+        XCTAssertTrue(handler.handle(URL(string: "https://desmoinesinsider.com/articles/best-patios-2026")!))
+        XCTAssertEqual(handler.consumeDestination(), .article(id: "best-patios-2026"))
+    }
+
+    func testBadArticleSegmentFallsBackToArticlesHub() {
+        XCTAssertTrue(handler.handle(URL(string: "https://desmoinesinsider.com/articles/Not%20A%20Slug")!))
+        XCTAssertEqual(handler.consumeDestination(), .discover(.articles))
+    }
+
+    // MARK: - destination(for:) (IOS-DD-GUIDES-21)
+
+    func testDestinationForURLDoesNotSetPending() {
+        let url = URL(string: "https://desmoinesinsider.com/restaurants/zombie-burger")!
+        XCTAssertEqual(handler.destination(for: url), .restaurant(id: "zombie-burger"))
+        XCTAssertNil(handler.pendingDestination)
     }
 
     // MARK: - Custom Scheme

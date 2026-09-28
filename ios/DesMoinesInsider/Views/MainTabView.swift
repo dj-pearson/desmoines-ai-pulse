@@ -117,6 +117,10 @@ struct MainTabView: View {
         case event(String)
         case restaurant(String)
         case attraction(String)
+        /// UUID or slug (IOS-DD-GUIDES-22).
+        case hotel(String)
+        /// UUID or slug (IOS-DD-GUIDES-22).
+        case article(String)
         case discover(DiscoverDestination)
 
         var id: String {
@@ -124,6 +128,8 @@ struct MainTabView: View {
             case .event(let id): return "event-\(id)"
             case .restaurant(let id): return "restaurant-\(id)"
             case .attraction(let id): return "attraction-\(id)"
+            case .hotel(let id): return "hotel-\(id)"
+            case .article(let id): return "article-\(id)"
             case .discover(let d): return "discover-\(d.rawValue)"
             }
         }
@@ -270,6 +276,8 @@ struct MainTabView: View {
         case .event(let id): deepLinkPresentation = .event(id)
         case .restaurant(let id): deepLinkPresentation = .restaurant(id)
         case .attraction(let id): deepLinkPresentation = .attraction(id)
+        case .hotel(let id): deepLinkPresentation = .hotel(id)
+        case .article(let id): deepLinkPresentation = .article(id)
         case .discover(let d): deepLinkPresentation = .discover(d)
         case .tab(let tab):
             // Only flag a change that will fire onChange; an unchanged tab
@@ -470,6 +478,8 @@ struct DeepLinkResolverView: View {
         case event(Event)
         case restaurant(Restaurant)
         case attraction(Attraction)
+        case hotel(Hotel)
+        case article(Article)
     }
 
     var body: some View {
@@ -496,7 +506,7 @@ struct DeepLinkResolverView: View {
         switch presentation {
         case .discover(let destination):
             destination.destinationView
-        case .event, .restaurant, .attraction:
+        case .event, .restaurant, .attraction, .hotel, .article:
             switch phase {
             case .loading:
                 ProgressView("Loading…")
@@ -515,6 +525,10 @@ struct DeepLinkResolverView: View {
                 RestaurantDetailView(restaurant: restaurant)
             case .attraction(let attraction):
                 AttractionDetailView(attraction: attraction)
+            case .hotel(let hotel):
+                HotelDetailView(hotel: hotel)
+            case .article(let article):
+                ArticleDetailView(article: article)
             }
         }
     }
@@ -535,6 +549,24 @@ struct DeepLinkResolverView: View {
             phase = .loading
             do { phase = .attraction(try await AttractionsService.shared.fetchAttraction(id: id)) }
             catch { phase = .failed }
+        case .hotel(let id):
+            phase = .loading
+            do {
+                if UUID(uuidString: id) != nil {
+                    phase = .hotel(try await HotelsService.shared.fetchHotel(id: id))
+                } else {
+                    phase = .hotel(try await HotelsService.shared.fetchHotel(slug: id))
+                }
+            } catch { phase = .failed }
+        case .article(let id):
+            phase = .loading
+            do {
+                if UUID(uuidString: id) != nil {
+                    phase = .article(try await ArticlesService.shared.fetchArticle(id: id))
+                } else {
+                    phase = .article(try await ArticlesService.shared.fetchArticle(slug: id))
+                }
+            } catch { phase = .failed }
         }
     }
 }
