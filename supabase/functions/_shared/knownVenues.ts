@@ -119,3 +119,22 @@ export function venueCoordinates(
   if (latitude === 0 && longitude === 0) return {};
   return { latitude, longitude };
 }
+
+/**
+ * PURE. The coordinates to spread into an event row: the matched known venue's
+ * pair when it has a whole one, else the pair the source itself published
+ * (Catch Des Moines ld+json geo), else {}.
+ *
+ * The known venue wins because its pair is curated; the source's is whatever
+ * the listing's editor pinned. But a source pair is far better than none for a
+ * venue known_venues has never heard of, which is most one-off venues.
+ */
+export function ingestCoordinates(
+  venue: Pick<KnownVenue, "latitude" | "longitude"> | null,
+  source: { latitude?: number | null; longitude?: number | null } | null,
+): { latitude: number; longitude: number } | Record<string, never> {
+  const fromVenue = venueCoordinates(venue);
+  if ("latitude" in fromVenue) return fromVenue;
+  if (!source) return {};
+  return venueCoordinates({ latitude: source.latitude ?? null, longitude: source.longitude ?? null });
+}

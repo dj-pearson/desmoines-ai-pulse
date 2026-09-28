@@ -13,6 +13,7 @@
  *   npx tsx scripts/reclaim-venue-images.ts            # DRY RUN, the default
  *   npx tsx scripts/reclaim-venue-images.ts --apply    # actually change things
  *   npx tsx scripts/reclaim-venue-images.ts --venue "Hoyt Sherman Place"
+ *   npx tsx scripts/reclaim-venue-images.ts --source-only  # skip aggregator rows
  *
  * Needs SUPABASE_URL and SUPABASE_SERVICE_ROLE_KEY.
  *
@@ -31,7 +32,10 @@
  *
  * ── WHAT IT WILL NOT DO ───────────────────────────────────────────────────────
  *
- * - It will not touch an event whose source is an aggregator.
+ * - It will not touch an aggregator's event (Catch Des Moines, SeatGeek,
+ *   Eventbrite) unless the event's own venue matches a known venue that has a
+ *   default image - the same rule ingest applies (venueImage.ts). Pass
+ *   --source-only for the old behaviour: single-venue sources only.
  * - It will not touch a venue with no image_url set. Set those first; a dry run
  *   with none set reports zero and changes nothing.
  * - It will not delete an event, or a known_venues row, or anything in a bucket
@@ -55,8 +59,12 @@ import {
   EVENT_SOURCE_PROFILES,
   type EventSourceProfile,
 } from '../supabase/functions/_shared/eventSourceProfiles.ts';
+// The matcher ingest uses to pick a venue image and coordinates. Imported, not
+// copied, for the same reason as the profiles above; it has no imports either.
+import { matchKnownVenue } from '../supabase/functions/_shared/venueMatch.ts';
 
 const APPLY = process.argv.includes('--apply');
+const SOURCE_ONLY = process.argv.includes('--source-only');
 const VENUE_FILTER = (() => {
   const i = process.argv.indexOf('--venue');
   return i !== -1 ? process.argv[i + 1] : null;
@@ -115,6 +123,36 @@ export function venueForSourceUrl(raw: string): string | null {
   return profileForUrl(raw)?.venue?.name ?? null;
 }
 
+export interface VenueImageRow {
+  name: string;
+  aliases: string[] | null;
+  image_url: string;
+}
+
+/**
+ * The venue whose default image an event should use, or null. The source's
+ * venue first (a single-venue site), then the event's own venue text matched
+ * against the venues that have an image - which is how a Vibrant show listed
+ * by Catch Des Moines resolves. Mirrors resolveEventImage() in venueImage.ts.
+ */
+export function venueImageForEvent(
+  e: { source_url: string | null; venue: string | null },
+  venues: readonly VenueImageRow[],
+  opts: { sourceOnly?: boolean } = {},
+): { canonical: string; imageUrl: string; via: 'source' | 'venue' } | null {
+  const sourceVenue = e.source_url ? venueForSourceUrl(e.source_url) : null;
+  if (sourceVenue) {
+    const key = sourceVenue.toLowerCase().trim();
+    const row = venues.find(
+      (v) => v.name.toLowerCase().trim() === key || (v.aliases ?? []).some((a) => a.toLowerCase().trim() === key),
+    );
+    if (row) return { canonical: row.name, imageUrl: row.image_url, via: 'source' };
+  }
+  if (opts.sourceOnly || !e.venue) return null;
+  const match = matchKnownVenue(e.venue, venues);
+  return match ? { canonical: match.venue.name, imageUrl: match.venue.image_url, via: 'venue' } : null;
+}
+
 async function main() {
   const supabase = client();
   console.log(APPLY ? '=== APPLY ===\n' : '=== DRY RUN (nothing will change) ===\n');
@@ -126,39 +164,46 @@ async function main() {
     .not('image_url', 'is', null);
   if (venuesError) throw new Error(`known_venues read failed: ${venuesError.message}`);
 
-  const venueImage = new Map<string, { canonical: string; imageUrl: string }>();
-  for (const v of (venues ?? []) as { name: string; aliases: string[] | null; image_url: string }[]) {
-    if (VENUE_FILTER && v.name !== VENUE_FILTER) continue;
-    venueImage.set(v.name.toLowerCase().trim(), { canonical: v.name, imageUrl: v.image_url });
-    for (const a of v.aliases ?? []) {
-      if (a) venueImage.set(a.toLowerCase().trim(), { canonical: v.name, imageUrl: v.image_url });
-    }
-  }
+  const venueRows = ((venues ?? []) as VenueImageRow[]).filter(
+    (v) => v.image_url && (!VENUE_FILTER || v.name === VENUE_FILTER),
+  );
 
-  if (venueImage.size === 0) {
+  if (venueRows.length === 0) {
     console.log('No venue has known_venues.image_url set, so there is nothing to repoint.');
     console.log('Set one per venue first - this script is inert until then.');
     return;
   }
-  console.log(`${venueImage.size} venue name/alias key(s) carry a default image.\n`);
+  console.log(`${venueRows.length} venue(s) carry a default image.\n`);
 
-  // ── 2. Events from single-venue sources ────────────────────────────────────
-  const { data: events, error: eventsError } = await supabase
-    .from('events')
-    .select('id, title, source_url, image_url')
-    .not('source_url', 'is', null);
-  if (eventsError) throw new Error(`events read failed: ${eventsError.message}`);
+  // ── 2. Events at those venues ──────────────────────────────────────────────
+  //
+  // Paged: events is well past PostgREST's default 1000-row cap, and a silent
+  // truncation here would under-report without saying so.
+  const events: { id: string; source_url: string | null; venue: string | null; image_url: string | null }[] = [];
+  for (let from = 0; ; from += 1000) {
+    const { data, error } = await supabase
+      .from('events')
+      .select('id, source_url, venue, image_url')
+      .order('id')
+      .range(from, from + 999);
+    if (error) throw new Error(`events read failed: ${error.message}`);
+    events.push(...((data ?? []) as typeof events));
+    if (!data || data.length < 1000) break;
+  }
 
   const targets: { id: string; from: string | null; to: string; venue: string }[] = [];
   const perVenue = new Map<string, number>();
-  for (const e of (events ?? []) as { id: string; source_url: string; image_url: string | null }[]) {
-    const venueName = venueForSourceUrl(e.source_url);
-    if (!venueName) continue; // aggregator: leave alone
-    const hit = venueImage.get(venueName.toLowerCase().trim());
-    if (!hit) continue; // venue has no default set
+  let viaVenue = 0;
+  for (const e of events) {
+    const hit = venueImageForEvent(e, venueRows, { sourceOnly: SOURCE_ONLY });
+    if (!hit) continue; // aggregator at an unknown venue, or venue has no default
     if (e.image_url === hit.imageUrl) continue; // already repointed
     targets.push({ id: e.id, from: e.image_url, to: hit.imageUrl, venue: hit.canonical });
     perVenue.set(hit.canonical, (perVenue.get(hit.canonical) ?? 0) + 1);
+    if (hit.via === 'venue') viaVenue++;
+  }
+  if (viaVenue > 0) {
+    console.log(`${viaVenue} of these come from aggregators, matched on the event's venue (--source-only skips them).`);
   }
 
   console.log(`${targets.length} event(s) to repoint:`);

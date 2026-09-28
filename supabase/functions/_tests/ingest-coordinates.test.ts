@@ -70,7 +70,7 @@ Deno.test('ai-crawler sets coordinates at ingest', async () => {
   const src = codeOnly(await read('supabase/functions/ai-crawler/index.ts'));
   assert.match(
     src,
-    /venueCoordinates\(venueMatches\[idx\]/,
+    /ingestCoordinates\(venueMatches\[idx\]/,
     'ai-crawler must spread the matched venue coordinates into the events row',
   );
   assert.match(

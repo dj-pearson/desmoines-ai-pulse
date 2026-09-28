@@ -89,7 +89,7 @@ Deno.test('the adapter does not stamp a constant category', async () => {
   // literal would pass every mapping test above, because the mapper would
   // still be correct - it just would not be called.
   const src = await Deno.readTextFile(
-    new URL('supabase/functions/_shared/domain-adapters/catchdesmoines.ts', REPO),
+    new URL('supabase/functions/_shared/domain-adapters/catchdesmoinesParse.ts', REPO),
   );
   const code = src.replace(/\/\*[\s\S]*?\*\//g, '').replace(/^[ \t]*\/\/[^\n]*$/gm, '');
 

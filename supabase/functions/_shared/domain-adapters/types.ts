@@ -27,6 +27,13 @@ export interface AdapterEvent {
   price?: string;
   source_url?: string;
   image_url?: string | null;
+  /**
+   * Coordinates the SOURCE published (Catch Des Moines ld+json geo). Used at
+   * ingest only when no known venue matched: a known venue's pair is curated,
+   * this one is whatever the listing's editor pinned. Both or neither.
+   */
+  latitude?: number;
+  longitude?: number;
 }
 
 export interface AdapterResult {

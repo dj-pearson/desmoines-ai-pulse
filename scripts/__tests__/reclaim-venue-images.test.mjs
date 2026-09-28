@@ -17,7 +17,7 @@
  * deleted by the same run. Those cases are asserted explicitly rather than
  * left to follow from the venue cases passing.
  */
-import { venueForSourceUrl, profileForUrl } from '../reclaim-venue-images.ts';
+import { venueForSourceUrl, profileForUrl, venueImageForEvent } from '../reclaim-venue-images.ts';
 
 let failures = 0;
 const check = (name, cond, detail = '') => {
@@ -110,6 +110,24 @@ for (const url of [
     venueNameForSourceUrl(url) === venueForSourceUrl(url),
     `edge=${venueNameForSourceUrl(url)} script=${venueForSourceUrl(url)}`,
   );
+}
+
+// An aggregator's event at a venue with a default image is repointed too, the
+// same rule ingest applies in venueImage.ts. --source-only restores the old
+// single-venue-sources-only behaviour.
+console.log('\naggregator events resolve by their own venue');
+{
+  const rows = [
+    { name: 'Vibrant Music Hall', aliases: ['Vibrant', 'VMH'], image_url: 'https://m/vibrant.webp' },
+    { name: 'Hoyt Sherman Place', aliases: ['Hoyt Sherman'], image_url: 'https://m/hoyt.webp' },
+  ];
+  const cdm = { source_url: 'https://www.etix.com/ticket/p/1', venue: 'Vibrant Music Hall' };
+  const hit = venueImageForEvent(cdm, rows);
+  check('Catch Des Moines show at Vibrant -> Vibrant image', hit?.imageUrl === 'https://m/vibrant.webp' && hit?.via === 'venue', JSON.stringify(hit));
+  check('--source-only leaves it alone', venueImageForEvent(cdm, rows, { sourceOnly: true }) === null);
+  check('unknown venue -> null', venueImageForEvent({ source_url: 'https://seatgeek.com/x', venue: 'Some Taproom' }, rows) === null);
+  const src = venueImageForEvent({ source_url: 'https://www.hoytsherman.org/events/x', venue: null }, rows);
+  check('single-venue source still resolves with no venue text', src?.imageUrl === 'https://m/hoyt.webp' && src?.via === 'source', JSON.stringify(src));
 }
 
 console.log(`\n${failures} failure(s)`);
