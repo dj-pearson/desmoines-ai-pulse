@@ -80,7 +80,8 @@ The implementer's plan listed only the items above; rejected findings were not p
 
 - Apply `supabase/migrations/20261015000005_device_tokens.sql`, then deploy `register-device-token`,
   `log-error` and `agent-runner` (error-triage). If a `device_tokens` table already exists in production
-  without a unique `device_token`, the migration skips it and the new upsert fails: check first.
+  without a unique `device_token`, the migration collapses duplicate tokens and adds the unique index
+  the new upsert needs.
 - Set the real Team ID in `public/.well-known/apple-app-site-association` and `ios/project.yml`
   `DEVELOPMENT_TEAM` (IOS-AUDIT-REL-006), then make `scripts/check-aasa.mjs` fail on `TEAM_ID_HERE`.
   Universal links, including every route above, do nothing until then.
