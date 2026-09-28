@@ -102,4 +102,8 @@ The implementer's plan listed only the items above; rejected findings were not p
   (it failed before too: the table did not exist). Fix on the web side by calling
   `register-device-token` instead of writing the table, which also gets the move-to-latest-owner rule.
   The migration adds own-row INSERT and UPDATE policies so that a correct direct write would work.
+- `EventSlug.pick` now resolves a dateless slug to the soonest same-title event, as the web's
+  `pickSlugCandidate` does (reminder and digest emails build them). The app's callers only fetch
+  candidates inside a slug's date window, so a dateless link still falls back; resolving it needs a
+  title query in `EventsService` and the App Clip.
 

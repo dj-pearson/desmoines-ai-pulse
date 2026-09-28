@@ -52,12 +52,15 @@ enum EventSlug {
     ///    than one is ambiguous, nil);
     /// 3. a retitled row: exactly one candidate on the slug's day, and it
     ///    shares a word of 3+ characters with the slug.
-    /// A dateless slug returns nil here.
+    /// A dateless slug (reminder and digest emails still build them) takes
+    /// the soonest candidate whose title slug matches exactly, as the web does.
     static func pick(_ slug: String, from candidates: [Candidate]) -> Candidate? {
         if let exact = candidates.first(where: { Self.slug(title: $0.title, start: $0.start) == slug }) {
             return exact
         }
-        guard let date = parseDate(slug) else { return nil }
+        guard let date = parseDate(slug) else {
+            return soonest(candidates.filter { titleSlug($0.title) == slug })
+        }
         let titlePart = titlePart(slug)
 
         let sameTitle = candidates.filter { titleSlug($0.title) == titlePart }
@@ -70,6 +73,19 @@ enum EventSlug {
         let sameDay = candidates.filter { Self.slug(title: $0.title, start: $0.start).hasSuffix(suffix) }
         let overlapping = sameDay.filter { !significantWords(titleSlug($0.title)).isDisjoint(with: wanted) }
         return sameDay.count == 1 && overlapping.count == 1 ? overlapping[0] : nil
+    }
+
+    /// Earliest start first; a candidate with no start sorts last, and ties
+    /// keep input order (the web's soonest/startMs).
+    private static func soonest(_ candidates: [Candidate]) -> Candidate? {
+        var best: Candidate?
+        for candidate in candidates {
+            guard let current = best else { best = candidate; continue }
+            let a = candidate.start ?? .distantFuture
+            let b = current.start ?? .distantFuture
+            if a < b { best = candidate }
+        }
+        return best
     }
 
     private static func significantWords(_ titleSlug: String) -> Set<String> {

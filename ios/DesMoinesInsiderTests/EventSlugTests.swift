@@ -43,8 +43,6 @@ final class EventSlugTests: XCTestCase {
 
     // MARK: - Picking
 
-    private let jazz = EventSlug.Candidate(id: "a1", title: "Jazz in the Park", start: nil)
-
     func testExactSlugIsPicked() {
         let row = EventSlug.Candidate(id: "a1", title: "Jazz in the Park", start: date("2026-09-08T23:00:00Z"))
         let other = EventSlug.Candidate(id: "b2", title: "Trivia Night", start: date("2026-09-08T23:00:00Z"))
@@ -73,8 +71,17 @@ final class EventSlugTests: XCTestCase {
         XCTAssertNil(EventSlug.pick("jazz-night-2026-09-24", from: [other]))
     }
 
-    func testADatelessSlugReturnsNil() {
-        XCTAssertNil(EventSlug.pick("jazz-in-the-park", from: [jazz]))
+    /// Reminder and digest emails build dateless slugs; the web resolves them
+    /// to the soonest same-title occurrence (useEventBySlug pickSlugCandidate).
+    func testADatelessSlugPicksTheSoonestSameTitleEvent() {
+        let later = EventSlug.Candidate(id: "late", title: "Jazz in the Park", start: date("2026-10-09T23:00:00Z"))
+        let sooner = EventSlug.Candidate(id: "soon", title: "Jazz in the Park", start: date("2026-10-02T23:00:00Z"))
+        XCTAssertEqual(EventSlug.pick("jazz-in-the-park", from: [later, sooner])?.id, "soon")
+    }
+
+    func testADatelessSlugWithNoTitleMatchReturnsNil() {
+        let other = EventSlug.Candidate(id: "a2", title: "Pottery Class", start: date("2026-10-02T23:00:00Z"))
+        XCTAssertNil(EventSlug.pick("jazz-in-the-park", from: [other]))
     }
 
     // MARK: - Link segments
