@@ -52,5 +52,23 @@ CREATE POLICY device_tokens_delete_own ON public.device_tokens
   FOR DELETE TO authenticated
   USING (user_id = auth.uid());
 
+-- A signed-in client may write only its own rows. Moving a token between
+-- users stays with register-device-token (service_role); the UPDATE policy's
+-- USING clause means a client can never touch a row another user holds.
+-- src/hooks/usePushNotifications.ts upserts here directly, and
+-- check-upsert-update-policy requires an UPDATE policy for that. (It also
+-- writes token/is_active, which this table does not have - a pre-existing
+-- web bug, noted in docs/ios-deep-dive/12-platform.md.)
+DROP POLICY IF EXISTS device_tokens_insert_own ON public.device_tokens;
+CREATE POLICY device_tokens_insert_own ON public.device_tokens
+  FOR INSERT TO authenticated
+  WITH CHECK (user_id = auth.uid());
+
+DROP POLICY IF EXISTS device_tokens_update_own ON public.device_tokens;
+CREATE POLICY device_tokens_update_own ON public.device_tokens
+  FOR UPDATE TO authenticated
+  USING (user_id = auth.uid())
+  WITH CHECK (user_id = auth.uid());
+
 REVOKE ALL ON public.device_tokens FROM anon;
-GRANT SELECT, DELETE ON public.device_tokens TO authenticated;
+GRANT SELECT, INSERT, UPDATE, DELETE ON public.device_tokens TO authenticated;

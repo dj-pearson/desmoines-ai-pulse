@@ -10,7 +10,13 @@
  * defines each function, so a later rewrite is held to the same rules.
  */
 
-import { assert, assertMatch } from 'https://deno.land/std@0.208.0/assert/mod.ts';
+import { assert } from 'https://deno.land/std@0.208.0/assert/mod.ts';
+
+// Local rather than std's assertMatch: the repo's edge type-check resolves
+// std/assert through a stub that exports assert but not assertMatch.
+function assertMatch(actual: string, expected: RegExp, msg?: string): void {
+  assert(expected.test(actual), msg ?? `expected ${String(expected)} to match`);
+}
 
 const REPO = new URL('../../../', import.meta.url);
 const MIGRATIONS = new URL('supabase/migrations/', REPO);

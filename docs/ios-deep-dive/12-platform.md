@@ -93,3 +93,13 @@ The implementer's plan listed only the items above; rejected findings were not p
   `LATEST_APP_VERSION` is set when a build is released on the App Store rather than when develop bumps
   the version; until then it would tell users to install a build they cannot get.
 - Keep Fastlane Snapshot on the Debug test configuration: `--uitesting` is ignored in Release.
+
+## Found after the pass
+
+- `src/hooks/usePushNotifications.ts` upserts `device_tokens` with columns `token` and `is_active` and
+  `onConflict: 'token'`. The table this pass creates has `device_token` and no `is_active`, matching
+  what `register-device-token` has always written. Web push registration therefore fails with 42703
+  (it failed before too: the table did not exist). Fix on the web side by calling
+  `register-device-token` instead of writing the table, which also gets the move-to-latest-owner rule.
+  The migration adds own-row INSERT and UPDATE policies so that a correct direct write would work.
+
