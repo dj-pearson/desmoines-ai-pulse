@@ -54,6 +54,34 @@ final class DeepLinkHandlerTests: XCTestCase {
         XCTAssertEqual(handler.consumeDestination(), .tab(.restaurants))
     }
 
+    // MARK: - Attraction slugs (IOS-DD-BROWSE-12)
+
+    func testAttractionSlugUniversalLinkOpensTheAttraction() {
+        let url = URL(string: "https://desmoinesinsider.com/attractions/blank-park-zoo")!
+        XCTAssertTrue(handler.handle(url))
+        XCTAssertEqual(handler.consumeDestination(), .attraction(id: "blank-park-zoo"))
+    }
+
+    func testAttractionUUIDUniversalLinkStillWorks() {
+        let id = "550e8400-e29b-41d4-a716-446655440000"
+        XCTAssertTrue(handler.handle(URL(string: "https://desmoinesinsider.com/attractions/\(id)")!))
+        XCTAssertEqual(handler.consumeDestination(), .attraction(id: id))
+    }
+
+    func testMalformedAttractionSlugsFallBackToHome() {
+        for path in ["Bad%20Slug", "a--b", String(repeating: "a", count: 121)] {
+            let url = URL(string: "https://desmoinesinsider.com/attractions/\(path)")!
+            XCTAssertTrue(handler.handle(url), path)
+            XCTAssertEqual(handler.consumeDestination(), .tab(.home), path)
+        }
+    }
+
+    func testAttractionLinkIdBounds() {
+        XCTAssertEqual(DeepLinkHandler.attractionLinkId(String(repeating: "a", count: 120)), String(repeating: "a", count: 120))
+        XCTAssertNil(DeepLinkHandler.attractionLinkId(String(repeating: "a", count: 121)))
+        XCTAssertNil(DeepLinkHandler.attractionLinkId("-zoo"))
+    }
+
     func testInvalidIDUniversalLinkFallsBackToTab() {
         let url = URL(string: "https://desmoinesinsider.com/events/not-a-uuid")!
         let result = handler.handle(url)

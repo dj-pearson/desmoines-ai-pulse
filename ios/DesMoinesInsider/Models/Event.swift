@@ -244,6 +244,16 @@ struct Event: Identifiable, Codable, Hashable {
         else if let price, !price.isEmpty { parts.append(price) }
         return parts.joined(separator: ". ")
     }
+
+    /// Label for a rail NavigationLink wrapping a decorative card. The card's
+    /// urgency pill is hidden from VoiceOver, so its words ("Happening now",
+    /// "Today") go in the label (IOS-DD-EVENTS-18), and a paid placement says
+    /// so first. Shared by Home and the Weekend guide (IOS-DD-BROWSE-07).
+    var railAccessibilityLabel: String {
+        var label = featuredCardAccessibilityLabel
+        if let urgency = urgencyLabel { label = "\(urgency). " + label }
+        return isActivelySponsored ? "Sponsored. " + label : label
+    }
 }
 
 // MARK: - FAQ

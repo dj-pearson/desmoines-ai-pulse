@@ -2,11 +2,15 @@ import Foundation
 
 /// The Fri–Sun window for the "This Weekend" guide (IOS-PARITY-004). Mirrors the
 /// web `/weekend` curation (EventsThisWeekend.tsx): the weekend is anchored to
-/// Friday 00:00 and runs through Sunday end-of-day. On Sat/Sun it refers to the
-/// CURRENT weekend (Friday is in the recent past); mid-week it's the upcoming
-/// weekend. Pure value type so the date math is unit-testable.
+/// Friday 00:00 Central and runs through Sunday end-of-day Central. On Sat/Sun
+/// it refers to the CURRENT weekend (Friday is in the recent past); mid-week
+/// it's the upcoming weekend. Pure value type so the date math is unit-testable.
+///
+/// Every default calendar is `DesMoinesTime.calendar` (IOS-DD-BROWSE-01). The
+/// device calendar put a phone in London on Saturday while Des Moines was
+/// still on Friday evening, and bucketed a Friday 7:31 PM show into Saturday.
 struct WeekendWindow: Equatable {
-    /// Friday 00:00 (local).
+    /// Friday 00:00 Central.
     let fridayStart: Date
     /// Saturday 00:00.
     let saturdayStart: Date
@@ -30,7 +34,7 @@ struct WeekendWindow: Equatable {
     }
 
     /// Builds the window for `now` (defaults to the current date).
-    static func current(now: Date = Date(), calendar: Calendar = .current) -> WeekendWindow {
+    static func current(now: Date = Date(), calendar: Calendar = DesMoinesTime.calendar) -> WeekendWindow {
         let startOfToday = calendar.startOfDay(for: now)
         // weekday: 1 = Sunday … 7 = Saturday. Convert to 0=Sun … 6=Sat.
         let day = calendar.component(.weekday, from: now) - 1
@@ -44,23 +48,26 @@ struct WeekendWindow: Equatable {
     }
 
     /// Which weekend day a given event date falls on (nil if outside the window).
-    func day(for date: Date, calendar: Calendar = .current) -> Day? {
+    func day(for date: Date, calendar: Calendar = DesMoinesTime.calendar) -> Day? {
         if calendar.isDate(date, inSameDayAs: fridayStart) { return .friday }
         if calendar.isDate(date, inSameDayAs: saturdayStart) { return .saturday }
         if calendar.isDate(date, inSameDayAs: sundayStart) { return .sunday }
         return nil
     }
 
-    /// Friendly range label, e.g. "June 6 – 8".
-    var rangeLabel: String {
-        let monthDay = Date.FormatStyle.dateTime.month(.wide).day()
-        let dayOnly = Date.FormatStyle.dateTime.day()
+    /// Friendly range label, e.g. "June 6 - 8", in Central time. A distinct
+    /// base name from `rangeLabel`, so `window.rangeLabel` can never resolve
+    /// to an unapplied method reference.
+    func rangeText(calendar: Calendar = DesMoinesTime.calendar) -> String {
+        let monthDay = DesMoinesTime.style(.dateTime.month(.wide).day())
+        let dayOnly = DesMoinesTime.style(.dateTime.day())
         let startStr = fridayStart.formatted(monthDay)
-        // If Friday and Sunday share a month, show "June 6 – 8"; else full both.
-        let calendar = Calendar.current
+        // If Friday and Sunday share a month, show "June 6 - 8"; else full both.
         if calendar.component(.month, from: fridayStart) == calendar.component(.month, from: sundayStart) {
-            return "\(startStr) – \(sundayStart.formatted(dayOnly))"
+            return "\(startStr) - \(sundayStart.formatted(dayOnly))"
         }
-        return "\(startStr) – \(sundayStart.formatted(monthDay))"
+        return "\(startStr) - \(sundayStart.formatted(monthDay))"
     }
+
+    var rangeLabel: String { rangeText(calendar: DesMoinesTime.calendar) }
 }

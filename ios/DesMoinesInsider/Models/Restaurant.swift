@@ -328,6 +328,13 @@ struct Restaurant: Identifiable, Codable, Hashable {
         if rating != nil { parts.append("Rated \(ratingText)") }
         return parts.joined(separator: ". ")
     }
+
+    /// Label for a rail NavigationLink wrapping a decorative card: the compact
+    /// label, led by "Sponsored. " for a live paid placement. One copy for
+    /// Home, Weekend, Neighborhoods and the hubs (IOS-DD-BROWSE-07).
+    var railAccessibilityLabel: String {
+        isActivelySponsored ? "Sponsored. \(compactCardAccessibilityLabel)" : compactCardAccessibilityLabel
+    }
 }
 
 // MARK: - Preview Helpers

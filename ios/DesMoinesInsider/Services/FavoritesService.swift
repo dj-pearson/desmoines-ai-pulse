@@ -631,7 +631,8 @@ final class FavoritesService {
     }
 
     /// Every favorite Attraction for `ids`, chunked. The attractions table has
-    /// no merged or hidden flag.
+    /// no merged or hidden flag; `is_active = false` is its soft delete, so a
+    /// deactivated save drops out the way a deleted row does (IOS-DD-BROWSE-12).
     func fetchFavoriteAttractions(ids: [String]) async throws -> [Attraction] {
         var collected: [Attraction] = []
         for chunk in Self.chunks(Array(ids.prefix(Self.maxFetchIds)), size: Self.fetchChunkSize) {
@@ -641,6 +642,7 @@ final class FavoritesService {
                     .from("attractions")
                     .select()
                     .in("id", values: chunk)
+                    .eq("is_active", value: true)
                     .order("name", ascending: true)
                     .execute()
                     .value

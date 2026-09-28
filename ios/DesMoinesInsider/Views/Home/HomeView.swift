@@ -231,7 +231,7 @@ struct HomeView: View {
             }
             .navigationDestination(for: HomeDestination.self) { destination in
                 switch destination {
-                case .attractions: AttractionsView()
+                case .attractions: AttractionsView(ownsNavigationStack: false)
                 case .discoverHub:
                     // Pushed within Home's NavigationStack, so the hub borrows
                     // this ambient stack rather than nesting its own.

@@ -6,7 +6,7 @@ import os
 /// Supported URL patterns:
 /// - `desmoinesinsider.com/events/:id` → Event detail
 /// - `desmoinesinsider.com/restaurants/:id-or-slug` → Restaurant detail
-/// - `desmoinesinsider.com/attractions/:id` → Attraction detail
+/// - `desmoinesinsider.com/attractions/:id-or-slug` → Attraction detail
 /// - `com.desmoines.aipulse://event/:id` → Event detail (custom scheme)
 /// - `com.desmoines.aipulse://restaurant/:id` → Restaurant detail (custom scheme)
 /// - `com.desmoines.aipulse://auth-callback` → Auth callback (handled by Supabase)
@@ -142,6 +142,16 @@ final class DeepLinkHandler {
         return raw
     }
 
+    /// A UUID, or a lowercase slug of at most 120 characters: the web's
+    /// canonical attraction URL is /attractions/<slug> (IOS-DD-BROWSE-12).
+    /// Universal links only; the custom scheme stays UUID-only.
+    static func attractionLinkId(_ raw: String) -> String? {
+        if UUID(uuidString: raw) != nil { return raw }
+        guard raw.count <= 120,
+              raw.range(of: "^[a-z0-9]+(?:-[a-z0-9]+)*$", options: .regularExpression) != nil else { return nil }
+        return raw
+    }
+
     /// Validates and returns the ID, or nil if invalid (logging the rejection).
     private func validatedId(_ id: String, source: String) -> String? {
         if isValidId(id) { return id }
@@ -183,8 +193,11 @@ final class DeepLinkHandler {
             AppLogger.nav.warning("Rejected invalid restaurant link: \(rawId.prefix(50))")
             return .tab(.restaurants)
         case "attractions":
-            guard let id = validatedId(rawId, source: "universal-link") else { return .tab(.home) }
-            return .attraction(id: id)
+            // A shared attraction link is a slug (IOS-DD-BROWSE-12); it used
+            // to fail the UUID check and land on Home.
+            if let id = Self.attractionLinkId(rawId) { return .attraction(id: id) }
+            AppLogger.nav.warning("Rejected invalid attraction link: \(rawId.prefix(50))")
+            return .tab(.home)
         default:
             // Discover-hub parity surfaces (IOS-IA-002): the path's first
             // component is itself the slug, e.g. /trip-planner, /deals.

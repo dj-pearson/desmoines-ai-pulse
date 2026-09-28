@@ -194,18 +194,28 @@ actor VotingService {
     // MARK: - Nominee search
 
     /// Search restaurants + attractions by name to vote for (mirrors VotingBooth).
+    ///
+    /// The text is trimmed, stripped of `*` (PostgREST reads it as `%`),
+    /// capped at 100 characters and LIKE-escaped, so "__" or "%%" no longer
+    /// matches every row; soft-deleted attractions are left out
+    /// (IOS-DD-BROWSE-13).
     func searchNominees(query: String, limitPerType: Int = 5) async -> [VoteNominee] {
-        guard query.count >= 2, let client = try? db() else { return [] }
+        let q = String(query.trimmingCharacters(in: .whitespacesAndNewlines)
+            .replacingOccurrences(of: "*", with: "")
+            .prefix(100))
+        guard q.count >= 2, let client = try? db() else { return [] }
         struct NamedRow: Decodable { let id: String; let name: String; let image_url: String? }
+        let pattern = EventsService.likeContainsPattern(q)
 
         var nominees: [VoteNominee] = []
         if let rows: [NamedRow] = try? await client
-            .from("restaurants").select("id, name, image_url").ilike("name", pattern: "%\(query)%")
+            .from("restaurants").select("id, name, image_url").ilike("name", pattern: pattern)
             .limit(limitPerType).execute().value {
             nominees += rows.map { VoteNominee(id: $0.id, name: $0.name, type: "restaurant", imageUrl: $0.image_url) }
         }
         if let rows: [NamedRow] = try? await client
-            .from("attractions").select("id, name, image_url").ilike("name", pattern: "%\(query)%")
+            .from("attractions").select("id, name, image_url").ilike("name", pattern: pattern)
+            .eq("is_active", value: true)
             .limit(limitPerType).execute().value {
             nominees += rows.map { VoteNominee(id: $0.id, name: $0.name, type: "attraction", imageUrl: $0.image_url) }
         }

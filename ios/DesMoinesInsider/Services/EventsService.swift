@@ -219,6 +219,14 @@ actor EventsService {
         "\"%" + quoteEscaped(likeEscaped(s)) + "%\""
     }
 
+    /// `%<s>%` for a plain `.ilike(column, pattern:)` filter, LIKE-escaped
+    /// and NOT quoted (IOS-DD-BROWSE-13). Outside a logic tree PostgREST
+    /// passes the value to Postgres as is, so one level of escaping is right
+    /// here; the quoted `ilikeContains` form is for `or=`/`and=` trees only.
+    static func likeContainsPattern(_ s: String) -> String {
+        "%" + likeEscaped(s) + "%"
+    }
+
     /// LIKE's own escaping, default escape character `\`.
     private static func likeEscaped(_ s: String) -> String {
         s.replacingOccurrences(of: "\\", with: "\\\\")
@@ -232,31 +240,47 @@ actor EventsService {
             .replacingOccurrences(of: "\"", with: "\\\"")
     }
 
-    // MARK: - Fetch Events in a Date Range (IOS-PARITY-004)
+    // MARK: - Weekend events (IOS-PARITY-004, IOS-DD-BROWSE-04)
 
-    /// Fetches events whose `date` falls in `[start, end)`, ordered soonest
-    /// first. Unlike `fetchEvents`, this does NOT floor at "today" — the
-    /// "This Weekend" screen shows the whole Fri–Sun window even mid-weekend,
-    /// matching the web `/weekend` curation.
-    func fetchEventsInRange(start: Date, end: Date, limit: Int = 100) async throws -> [Event] {
+    /// Every visible event that is on at some point this weekend: it starts
+    /// in `[Friday, Monday)`, or it started earlier and its end_date reaches
+    /// Friday (a festival or an exhibit still running). Unlike `fetchEvents`
+    /// this does NOT floor at "now": the guide shows the whole Fri-Sun window
+    /// even mid-weekend, matching the web `/weekend` curation.
+    ///
+    /// The old range query took `date` in the window only, so a three-day
+    /// festival that opened Thursday vanished from its own weekend; it cut at
+    /// 100 rows with no way for the screen to say so; it had no id tiebreak;
+    /// and one undecodable row failed the whole weekend. `truncated` is true
+    /// when the limit was reached.
+    func fetchWeekendEvents(window: WeekendWindow, limit: Int = 250) async throws -> (events: [Event], truncated: Bool) {
         try await withRetry { [self] in
             let client = try db()
-            let startStr = DateParser.toISO(start)
-            let endStr = DateParser.toISO(end)
-            let events: [Event] = try await client
+            let response = try await client
                 .from("events")
                 .select()
                 .neq("is_merged", value: true)
                 .neq("is_hidden", value: true)
                 .is("archived_at", value: nil)
-                .gte("date", value: startStr)
-                .lt("date", value: endStr)
+                .lt("date", value: DateParser.toISO(window.mondayStart))
+                .or(Self.weekendOverlapFilter(window))
                 .order("date", ascending: true)
+                .order("id", ascending: true)
                 .limit(limit)
                 .execute()
-                .value
-            return events
+            // Truncation counts the rows the server sent, dropped ones
+            // included: a page that hit the limit is cut however many decoded.
+            let page = try JSONDecoder().decode(LossyEventArray.self, from: response.data)
+            return (events: page.events, truncated: page.events.count + page.droppedCount >= limit)
         }
+    }
+
+    /// Starts on or after Friday 00:00 Central, or ends on or after it.
+    /// Together with `date < Monday` that is "on at some point this weekend".
+    /// Unquoted, like `notOverFilter`: the values are ISO timestamps.
+    static func weekendOverlapFilter(_ w: WeekendWindow) -> String {
+        let friday = DateParser.toISO(w.fridayStart)
+        return "date.gte.\(friday),end_date.gte.\(friday)"
     }
 
     // MARK: - Fetch Single Event
@@ -281,31 +305,37 @@ actor EventsService {
         }
     }
 
-    // MARK: - Fetch by Category Terms (IOS-PARITY-006 content hubs)
+    // MARK: - Fetch by or-group (IOS-PARITY-006 content hubs, IOS-DD-BROWSE-22)
 
-    /// Upcoming events whose `category` matches ANY of the given terms (case-
-    /// insensitive), soonest first. Mirrors the web hubs' `.or(category.ilike…)`
-    /// curation (Music/Sports/Outdoors).
-    func fetchEventsByCategoryTerms(_ terms: [String], limit: Int = 20) async throws -> [Event] {
-        guard !terms.isEmpty else { return [] }
+    /// Upcoming visible events matching a hub's or-group (`ContentHub.eventOrGroup`),
+    /// soonest first, with `id` as the tiebreak. `until` caps the start date
+    /// (exclusive) so a hub can ask for the next two weeks rather than the
+    /// next N rows on any date (IOS-DD-BROWSE-23).
+    ///
+    /// Replaces the category-terms ilike version: since 20260919000003
+    /// events.category holds exactly the canonical EventCategory values, so
+    /// most of those terms could never match.
+    func fetchEventsByOrGroup(_ group: String, limit: Int = 20, until: Date? = nil) async throws -> [Event] {
+        guard !group.isEmpty else { return [] }
         return try await withRetry { [self] in
             let client = try db()
-            let categoryGroup = terms
-                .map { "category.ilike.\(Self.ilikeContains($0))" }
-                .joined(separator: ",")
-            let orClause = Self.combineOrGroups([Self.notOverFilter(now: Date()), categoryGroup]) ?? categoryGroup
-            let events: [Event] = try await client
+            let orClause = Self.combineOrGroups([Self.notOverFilter(now: Date()), group]) ?? group
+            var request = client
                 .from("events")
                 .select()
                 .neq("is_merged", value: true)
                 .neq("is_hidden", value: true)
                 .is("archived_at", value: nil)
                 .or(orClause)
+            if let until {
+                request = request.lt("date", value: DateParser.toISO(until))
+            }
+            let response = try await request
                 .order("date", ascending: true)
+                .order("id", ascending: true)
                 .limit(limit)
                 .execute()
-                .value
-            return events
+            return try JSONDecoder().decode(LossyEventArray.self, from: response.data).events
         }
     }
 

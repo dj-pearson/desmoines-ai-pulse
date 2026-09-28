@@ -49,4 +49,32 @@ final class AttractionsSearchFilterTests: XCTestCase {
     func testTrimsBeforeBuilding() {
         XCTAssertEqual(AttractionsService.searchOrFilter("  zoo "), expected("zoo"))
     }
+
+    // MARK: - Plain ilike pattern (IOS-DD-BROWSE-13)
+
+    func testLikeContainsPatternEscapesWildcardsWithoutQuoting() {
+        XCTAssertEqual(EventsService.likeContainsPattern("a_b%c"), "%a\\_b\\%c%")
+        XCTAssertEqual(EventsService.likeContainsPattern("x"), "%x%")
+    }
+
+    // MARK: - Sort and boolean filters (IOS-DD-BROWSE-16)
+
+    @MainActor
+    func testRecommendedIsTheDefaultSort() {
+        XCTAssertEqual(AttractionsViewModel.SortOption.featured.serviceSort, .featured)
+        XCTAssertEqual(AttractionsService.AttractionsQuery().sortBy, .featured)
+    }
+
+    func testBooleanFiltersSendOnlyTrue() {
+        var q = AttractionsService.AttractionsQuery()
+        XCTAssertTrue(AttractionsService.booleanFilters(q).isEmpty)
+        q.isFree = true
+        let pairs = AttractionsService.booleanFilters(q)
+        XCTAssertEqual(pairs.map(\.0), ["is_free"])
+        XCTAssertEqual(pairs.map(\.1), [true])
+        q.isFree = false
+        q.isKidFriendly = true
+        q.isIndoor = true
+        XCTAssertEqual(AttractionsService.booleanFilters(q).map(\.0), ["is_kid_friendly", "is_indoor"])
+    }
 }

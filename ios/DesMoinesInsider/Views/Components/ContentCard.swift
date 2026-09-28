@@ -855,8 +855,15 @@ extension Restaurant {
 extension Attraction {
     var cardData: ContentCardData {
         var pills: [CardPill] = []
+        // Free only when the row says so; null is unknown (IOS-DD-BROWSE-09).
+        if isFree == true {
+            pills.append(CardPill(icon: "gift", text: "Free", tint: .primary, filled: false, iconTint: .green))
+        }
         if let rating {
             pills.append(CardPill(icon: "star.fill", text: String(format: "%.1f", rating), tint: .yellow, filled: false))
+        }
+        if let pill = openStatusPill {
+            pills.append(pill)
         }
 
         var data = ContentCardData(
@@ -871,11 +878,38 @@ extension Attraction {
             accessibilityLabel: compactCardAccessibilityLabel
         )
         data.awardBadge = BestOfWinners.shared.winnerLabel(forEntityId: id)
-        data.metaPrimary = CardMetaLine(icon: attractionType.icon, text: attractionType.displayName)
+        // The paid placement is labelled like Event and Restaurant (IOS-DD-BROWSE-09).
+        data.isSponsored = isActivelySponsored
+        data.metaPrimary = CardMetaLine(icon: attractionType.icon, text: typeLabel)
         if let location, !location.isEmpty {
             data.metaSecondary = CardMetaLine(icon: "mappin", text: location)
         }
         return data
+    }
+
+    /// The stored type when it is not one of the nine known ones ("Park/Art"),
+    /// instead of "Other".
+    var typeLabel: String {
+        let raw = type.trimmingCharacters(in: .whitespacesAndNewlines)
+        if attractionType == .other, !raw.isEmpty { return raw }
+        return attractionType.displayName
+    }
+
+    /// Today's hours as a pill, styled like the restaurant one; nothing when
+    /// unknown (IOS-DD-BROWSE-10).
+    var openStatusPill: CardPill? {
+        let status = openStatus()
+        guard let line = status.line else { return nil }
+        switch status {
+        case .open:
+            return CardPill(icon: "clock.badge.checkmark", text: line, tint: .primary, filled: false, iconTint: .green)
+        case .closingSoon:
+            return CardPill(icon: "clock.badge.exclamationmark", text: line, tint: .primary, filled: false, iconTint: .orange)
+        case .closed:
+            return CardPill(icon: "clock.badge.xmark", text: line, tint: .primary, filled: false, iconTint: .red)
+        case .unknown:
+            return nil
+        }
     }
 }
 

@@ -323,7 +323,7 @@ struct HomeEventRail: View {
                                 FeaturedEventCard(event: event)
                             }
                             .buttonStyle(.plain)
-                            .accessibilityLabel(railAccessibilityLabel(event))
+                            .accessibilityLabel(event.railAccessibilityLabel)
                             .accessibilityHint("Double-tap to view event details")
                             .onAppear {
                                 if event.isActivelySponsored {
@@ -344,13 +344,6 @@ struct HomeEventRail: View {
         .padding(.vertical, 8)
     }
 
-    private func railAccessibilityLabel(_ event: Event) -> String {
-        // The card's urgency pill is hidden from VoiceOver, so its words
-        // ("Happening now", "Today") go in the label (IOS-DD-EVENTS-18).
-        var label = event.featuredCardAccessibilityLabel
-        if let urgency = event.urgencyLabel { label = "\(urgency). " + label }
-        return event.isActivelySponsored ? "Sponsored. " + label : label
-    }
 }
 
 // MARK: - Restaurant rail
@@ -382,7 +375,7 @@ struct HomeRestaurantRail: View {
                                 CompactRestaurantCard(restaurant: restaurant)
                             }
                             .buttonStyle(.plain)
-                            .accessibilityLabel(railAccessibilityLabel(restaurant))
+                            .accessibilityLabel(restaurant.railAccessibilityLabel)
                             .accessibilityHint("Double-tap to view restaurant details")
                             .onAppear {
                                 if restaurant.isActivelySponsored {
@@ -403,11 +396,6 @@ struct HomeRestaurantRail: View {
         .padding(.vertical, 8)
     }
 
-    private func railAccessibilityLabel(_ restaurant: Restaurant) -> String {
-        restaurant.isActivelySponsored
-            ? "Sponsored. \(restaurant.compactCardAccessibilityLabel)"
-            : restaurant.compactCardAccessibilityLabel
-    }
 }
 
 // MARK: - Attraction rail
@@ -434,7 +422,7 @@ struct HomeAttractionRail: View {
                                 CompactAttractionCard(attraction: attraction)
                             }
                             .buttonStyle(.plain)
-                            .accessibilityLabel(attraction.compactCardAccessibilityLabel)
+                            .accessibilityLabel(attraction.railAccessibilityLabel)
                             .accessibilityHint("Double-tap to view attraction details")
                         }
                     }
