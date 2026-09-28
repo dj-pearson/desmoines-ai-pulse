@@ -41,7 +41,7 @@ import { recordAnthropicUsage } from "../_shared/providerUsage.ts";
 import { sanitizeLikeInput } from "../_shared/validation.ts";
 import { runJob } from "../_shared/jobRunner.ts";
 import { normalizeCategory } from "../_shared/eventCategories.ts";
-import { findKnownVenue, venueCoordinates } from "../_shared/knownVenues.ts";
+import { findKnownVenue, ingestCoordinates } from "../_shared/knownVenues.ts";
 import type { SourceCounts } from "../_shared/ingestionHealth.ts";
 
 const corsHeaders = {
@@ -1391,12 +1391,14 @@ async function insertData(
       // event, so there is nothing to gain by downloading and storing a
       // near-duplicate per event. resolveEventImage returns skipFetch for those
       // and fetchAndStoreImage is never called: no egress, no storage object, no
-      // media_assets row. Aggregators - Catch Des Moines, SeatGeek, Eventbrite -
-      // have no declared venue and keep the per-event path unchanged.
+      // media_assets row. An aggregator's event (Catch Des Moines, SeatGeek,
+      // Eventbrite) takes the same saving when the venue it names has a default
+      // image, and keeps the per-event path otherwise.
       const imageResults = await Promise.all(
         batchWithIds.map(async (item) => {
           const resolved = await resolveEventImage(supabase, {
             sourceUrl: item.source_url || "",
+            venueText: category === "events" ? item.venue || item.location || null : null,
             scrapedImageUrl: item.image_url,
           });
           if (resolved.skipFetch) {
@@ -1478,7 +1480,9 @@ async function insertData(
                 // WEB-BE-050. Spread, so a venue with no usable pair adds
                 // nothing rather than writing nulls over a column a later pass
                 // might fill. Both or neither - see venueCoordinates.
-                ...venueCoordinates(venueMatches[idx] ?? null),
+                // No known-venue pair: fall back to the one the source
+                // published (Catch Des Moines ld+json geo), still both or neither.
+                ...ingestCoordinates(venueMatches[idx] ?? null, item),
                 price: item.price?.substring(0, 50) || "See website",
                 source_url: item.source_url || "",
                 image_url: resolvedImageUrl || null,

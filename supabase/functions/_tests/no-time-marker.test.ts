@@ -65,7 +65,7 @@ Deno.test('the shared producers carry no evening-time literal at all', async () 
 
   for (const rel of [
     'supabase/functions/_shared/jsonLdEvents.ts',
-    'supabase/functions/_shared/domain-adapters/catchdesmoines.ts',
+    'supabase/functions/_shared/domain-adapters/catchdesmoinesParse.ts',
   ]) {
     const src = stripComments(await read(rel));
     for (const re of banned) {
@@ -130,7 +130,7 @@ Deno.test('the adapter hands a date-only value straight through', async () => {
   // Emitting the date alone is what lets the shared parser stamp the marker.
   // Emitting "<date> 19:00:00" instead would parse as a real showtime.
   const src = stripComments(
-    await read('supabase/functions/_shared/domain-adapters/catchdesmoines.ts'),
+    await read('supabase/functions/_shared/domain-adapters/catchdesmoinesParse.ts'),
   );
   assert.ok(
     /if\s*\(m\[2\]\s*===\s*undefined\)\s*return\s+date;/.test(src),

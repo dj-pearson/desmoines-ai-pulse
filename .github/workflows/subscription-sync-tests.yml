@@ -197,6 +197,10 @@ jobs:
       # still derives rather than stamps, and that both writers use one
       # vocabulary, read from the Python crawler's own prompt.
       - run: deno test --allow-read supabase/functions/_tests/catchdesmoines-category.test.ts
+      # The detail page's street address, geo pair, image (array, object or
+      # og:image) and external-link fallbacks, and that x.com excludes x.com
+      # and not dropbox.com.
+      - run: deno test --allow-read supabase/functions/_tests/catchdesmoines-detail.test.ts
       # WEB-BE-037. Four ingestion paths had four answers for "the source
       # published a day but no time" (19:31:58, 19:30, 19:00, 19:00), plus two
       # prompt instructions telling the model to invent 7 PM - so the same event
@@ -277,6 +281,9 @@ jobs:
       # RAISE NOTICEd. Pins both-or-neither coordinates, the (0,0) refusal, and
       # that both scrapers go through _shared/knownVenues.ts.
       - run: deno test --allow-read supabase/functions/_tests/ingest-coordinates.test.ts
+      # A show at a venue with a default image takes it whichever site listed
+      # it (a Vibrant show via Catch Des Moines), so no per-event download.
+      - run: deno test --allow-read supabase/functions/_tests/venue-image-by-event-venue.test.ts
       # WEB-BE-047. firecrawl-scraper allows 10 requests per 15 minutes keyed by
       # client IP; scrape-events invokes it once per scraping job from ONE
       # egress address, and 15 jobs are seeded - so the scraper throttled its

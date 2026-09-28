@@ -16,7 +16,7 @@ import { getAIConfig, buildClaudeRequest, getClaudeHeaders, getAnthropicApiKey }
 import { validateURLForSSRF } from "../_shared/validation.ts";
 import { checkRateLimitPersistent } from "../_shared/rateLimit.ts";
 import { tryDomainAdapter } from "../_shared/domain-adapters/index.ts";
-import { findKnownVenue, type KnownVenue } from "../_shared/knownVenues.ts";
+import { findKnownVenue, ingestCoordinates, type KnownVenue } from "../_shared/knownVenues.ts";
 import { extractEventsFromJsonLd } from "../_shared/jsonLdEvents.ts";
 import { requireAdminOrApiKey } from "../_shared/apiKeyAuth.ts";
 import { fetchAndStoreImage, CONTENT_TYPE_MAP } from "../_shared/imageStorage.ts";
@@ -660,10 +660,15 @@ serve(async (req) => {
                   } else if (knownVenue.city) {
                     eventLocation = `${knownVenue.city}, ${knownVenue.state || 'IA'}`;
                   }
+                }
 
-                  // Use coordinates from known venue
-                  eventLatitude = knownVenue.latitude;
-                  eventLongitude = knownVenue.longitude;
+                // The known venue's pair when it has a whole one, else the pair
+                // the source published (Catch Des Moines carries geo for venues
+                // known_venues has never heard of), else none. Both or neither.
+                const coords = ingestCoordinates(knownVenue, item);
+                if ('latitude' in coords) {
+                  eventLatitude = coords.latitude;
+                  eventLongitude = coords.longitude;
                 }
 
                 transformedData = {
@@ -858,6 +863,7 @@ serve(async (req) => {
                 if (!existingHasImage) {
                   const healResolved = await resolveEventImage(supabase, {
                     sourceUrl: existingItem.source_url || item.source_url || "",
+                    venueText: transformedData.venue,
                     scrapedImageUrl: item.image_url,
                   });
                   if (healResolved.skipFetch && healResolved.imageUrl) {
@@ -936,10 +942,12 @@ serve(async (req) => {
               // A single-venue source reuses one venue image for every event, so
               // there is nothing to gain from downloading a near-duplicate per
               // event: skipFetch means no egress, no storage object and no
-              // media_assets row. Aggregators (Catch Des Moines, SeatGeek,
-              // Eventbrite) declare no venue and keep the per-event path.
+              // media_assets row. An aggregator's event (Catch Des Moines,
+              // SeatGeek, Eventbrite) takes the same saving when the venue it
+              // names has a default image, and keeps its own artwork otherwise.
               const resolvedImage = await resolveEventImage(supabase, {
                 sourceUrl: item.source_url || "",
+                venueText: category === 'events' ? transformedData.venue : null,
                 scrapedImageUrl: item.image_url,
               });
               if (resolvedImage.skipFetch) {
