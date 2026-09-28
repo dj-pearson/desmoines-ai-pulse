@@ -1,5 +1,6 @@
 import Foundation
 import Network
+import UIKit
 
 /// Monitors network connectivity and publishes changes to SwiftUI views.
 @MainActor
@@ -32,8 +33,21 @@ final class NetworkMonitor {
         monitor.cancel()
     }
 
+    /// What VoiceOver hears on a connectivity edge, or nil when nothing
+    /// changed (IOS-DD-PLATFORM-14). The banner alone was silent.
+    nonisolated static func announcement(wasConnected: Bool, isConnected: Bool) -> String? {
+        switch (wasConnected, isConnected) {
+        case (true, false): return "No internet connection. Showing saved content."
+        case (false, true): return "Back online"
+        default: return nil
+        }
+    }
+
     private func handlePathUpdate(_ path: NWPath) {
         let connected = path.status == .satisfied
+        if let message = Self.announcement(wasConnected: isConnected, isConnected: connected) {
+            UIAccessibility.post(notification: .announcement, argument: message)
+        }
 
         if !connected {
             wasOffline = true

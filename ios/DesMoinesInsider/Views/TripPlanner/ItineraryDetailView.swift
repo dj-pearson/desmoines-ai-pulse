@@ -293,7 +293,7 @@ struct ItineraryDetailView: View {
         case .attraction(let id): return .attraction(id)
         case .hotel(let id): return .hotel(id)
         case .article(let id): return .article(id)
-        case .tab, .discover: return nil
+        case .tab, .discover, .search, .web: return nil
         }
     }
 

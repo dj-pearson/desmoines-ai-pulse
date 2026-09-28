@@ -164,6 +164,10 @@ final class AttractionsViewModel {
             totalCount = response.totalCount
             hasMore = response.hasMore
             hasLoadedOnce = true
+            // Spotlight routes attraction-<id>; index the first page
+            // (IOS-DD-PLATFORM-08).
+            let page = response.attractions
+            Task { await SpotlightService.shared.indexAttractions(page) }
         } catch {
             guard generation == loadGeneration else { return }
             // Leaving the screen, or a newer search, is not a failure.

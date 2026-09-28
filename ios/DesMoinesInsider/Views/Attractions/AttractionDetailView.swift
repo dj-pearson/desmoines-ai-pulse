@@ -46,6 +46,8 @@ struct AttractionDetailView: View {
             RecentlyViewedService.shared.record(
                 type: "attraction", id: attraction.id, title: attraction.name, imageUrl: attraction.imageUrl
             )
+            // As ArticleDetailView does (IOS-DD-PLATFORM-08).
+            await SpotlightService.shared.indexAttractions([attraction])
         }
     }
 

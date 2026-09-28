@@ -53,6 +53,25 @@ enum Config {
     static let siteURL = URL(string: "https://desmoinesinsider.com")!
     static let supportEmail = "support@desmoinesinsider.com"
 
+    /// The App Store id. TODO(REL): still the 0000000000 sentinel until the
+    /// app is listed; set it together with IOS_APP_STORE_ID in
+    /// supabase/functions/version-check/index.ts. The App Clip does not need
+    /// it: its SKOverlay.AppClipConfiguration always offers the parent app
+    /// (IOS-DD-PLATFORM-04 / -21).
+    static let appStoreId = "0000000000"
+
+    /// The unassigned-id sentinel; an App Store URL ending in it is a dead page.
+    static let appStoreIdPlaceholder = "0000000000"
+
+    /// The app's App Store page once appStoreId is real, else the website, so
+    /// the force-update screen's button always leads somewhere before the
+    /// server supplies a storeUrl (IOS-DD-PLATFORM-09 / -21).
+    static var appStoreURL: URL {
+        guard appStoreId != appStoreIdPlaceholder,
+              let url = URL(string: "https://apps.apple.com/app/id\(appStoreId)") else { return siteURL }
+        return url
+    }
+
     /// Marketing version (CFBundleShortVersionString), e.g. "1.2.0". Sent to the
     /// `version-check` edge function on launch (IOS-AUDIT-REL-001).
     static var appVersion: String {
@@ -92,13 +111,24 @@ enum Config {
     // MARK: - Testing
 
     /// `true` when the app is launched by XCUITest (Fastlane Snapshot, etc.).
-    static let isUITesting: Bool = ProcessInfo.processInfo.arguments.contains("--uitesting")
+    /// Debug builds only: the flag switches off the auth listener (and with it
+    /// the biometric gate), the version check, ads and entitlement sync, so a
+    /// Release binary must not honour it (IOS-DD-PLATFORM-16). Snapshot runs
+    /// the Debug test configuration.
+    static let isUITesting: Bool = {
+        #if DEBUG
+        return ProcessInfo.processInfo.arguments.contains("--uitesting")
+        #else
+        return false
+        #endif
+    }()
 
     /// Optional screen for Fastlane Snapshot to deep-link into for App Store
     /// screenshots (IOS-COMPLY-005). Passed as `--uiTestScreen <name>`, e.g.
     /// "discover", "tripPlanner", "paywall", or "hub". Only meaningful under
     /// `isUITesting`; returns nil when absent.
     static var uiTestScreen: String? {
+        guard isUITesting else { return nil }
         let args = ProcessInfo.processInfo.arguments
         guard let idx = args.firstIndex(of: "--uiTestScreen"), idx + 1 < args.count else { return nil }
         return args[idx + 1]

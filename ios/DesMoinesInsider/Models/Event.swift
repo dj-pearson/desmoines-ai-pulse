@@ -186,7 +186,15 @@ struct Event: Identifiable, Codable, Hashable {
     /// is a date with no time, so the whole of that day counts. No date means
     /// not over.
     func isOver(at now: Date, calendar: Calendar = DesMoinesTime.calendar) -> Bool {
-        guard let start = parsedDate else { return false }
+        guard let end = effectiveEnd(calendar: calendar) else { return false }
+        return end <= now
+    }
+
+    /// The moment `isOver` turns true, or nil with no parseable start. Shared
+    /// with Spotlight expiry so a multi-day festival is not dropped after its
+    /// first evening (IOS-DD-PLATFORM-08).
+    func effectiveEnd(calendar: Calendar = DesMoinesTime.calendar) -> Date? {
+        guard let start = parsedDate else { return nil }
         func dayAfter(_ date: Date) -> Date {
             calendar.date(byAdding: .day, value: 1, to: calendar.startOfDay(for: date)) ?? date
         }
@@ -202,7 +210,7 @@ struct Event: Identifiable, Codable, Hashable {
                 end = max(end, dayAfter(endDate))
             }
         }
-        return end <= now
+        return end
     }
 
     var urgencyLabel: String? {

@@ -305,6 +305,80 @@ actor EventsService {
         }
     }
 
+    /// Shaped like PostgREST's "0 rows" answer so EventDetailViewModel.isNotFound
+    /// (which reads a `code` child) treats an unresolvable slug the same way.
+    struct SlugNotFound: Error {
+        let code: String? = "PGRST116"
+    }
+
+    /// Resolves a web event slug, /events/<title>-<yyyy-mm-dd> (IOS-DD-PLATFORM-01).
+    /// Fetches the visible rows in the slug's Central day window and picks one
+    /// the way the web's pickSlugCandidate does; throws SlugNotFound otherwise.
+    func fetchEvent(slug: String) async throws -> Event {
+        guard let date = EventSlug.parseDate(slug), let window = EventSlug.dayWindow(date) else {
+            throw SlugNotFound()
+        }
+        struct Row: Decodable {
+            let id: String
+            let title: String?
+            let date: String?
+            let eventStartUtc: String?
+            enum CodingKeys: String, CodingKey {
+                case id, title, date
+                case eventStartUtc = "event_start_utc"
+            }
+        }
+        let rows: [Row] = try await withRetry { [self] in
+            let client = try db()
+            let found: [Row] = try await client
+                .from("events")
+                .select("id,title,date,event_start_utc")
+                .neq("is_merged", value: true)
+                .neq("is_hidden", value: true)
+                .is("archived_at", value: nil)
+                .gte("date", value: DateParser.toISO(window.from))
+                .lt("date", value: DateParser.toISO(window.to))
+                .limit(50)
+                .execute()
+                .value
+            return found
+        }
+        let candidates = rows.map {
+            EventSlug.Candidate(id: $0.id, title: $0.title, start: DateParser.parse($0.eventStartUtc ?? $0.date))
+        }
+        guard let match = EventSlug.pick(slug, from: candidates) else { throw SlugNotFound() }
+        return try await fetchEvent(id: match.id)
+    }
+
+    /// The row a merged duplicate now points at, read without the visibility
+    /// filters, or nil (IOS-DD-PLATFORM-03). A link to a merged event follows
+    /// this instead of reporting "no longer available".
+    func fetchMergedSurvivorId(id: String) async -> String? {
+        struct Row: Decodable {
+            let id: String
+            let isMerged: Bool?
+            let mergedInto: String?
+            let isHidden: Bool?
+            enum CodingKeys: String, CodingKey {
+                case id
+                case isMerged = "is_merged"
+                case mergedInto = "merged_into"
+                case isHidden = "is_hidden"
+            }
+        }
+        guard let client = try? db() else { return nil }
+        let rows: [Row]? = try? await client
+            .from("events")
+            .select("id,is_merged,merged_into,is_hidden")
+            .eq("id", value: id)
+            .limit(1)
+            .execute()
+            .value
+        guard let row = rows?.first, row.isMerged == true, row.isHidden != true,
+              let survivor = row.mergedInto, survivor != id else { return nil }
+        return survivor
+    }
+
     // MARK: - Fetch by or-group (IOS-PARITY-006 content hubs, IOS-DD-BROWSE-22)
 
     /// Upcoming visible events matching a hub's or-group (`ContentHub.eventOrGroup`),

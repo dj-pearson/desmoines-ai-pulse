@@ -22,6 +22,9 @@ final class PulseIntentDispatcher {
         case findRestaurants(cuisine: String?, area: String?, openNow: Bool)
         case findEvents(category: String?, datePreset: String?)
         case askPulse(query: String)
+        /// Free text from a /search?q= link or an /events/<landing> page
+        /// (IOS-DD-PLATFORM-02).
+        case searchText(String)
     }
 
     var pending: Pending?
@@ -198,6 +201,9 @@ extension PulseIntentDispatcher.Pending {
                 filters.datePreset = SearchQueryParser.parse(datePreset).filters.datePreset
             }
             return (filters, text, .events)
+
+        case .searchText(let text):
+            return (SearchFilters(), Self.clean(text) ?? "", .events)
 
         case .askPulse:
             return nil

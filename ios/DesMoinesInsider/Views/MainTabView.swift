@@ -6,6 +6,11 @@ import SwiftUI
 /// On iPad (regular width): sidebar navigation with list items for each section.
 struct MainTabView: View {
     @Environment(\.horizontalSizeClass) private var sizeClass
+    @Environment(\.accessibilityReduceMotion) private var reduceMotion
+
+    /// Drives the offline banner's insert/remove animation from the container
+    /// that hosts it, so the transition actually runs (IOS-DD-PLATFORM-14).
+    @State private var network = NetworkMonitor.shared
 
     // Haptic on tab change lives in `.onChange(of: selectedTab)` below, not in a
     // `didSet`: SwiftUI mutates this through the `$selectedTab` binding on a real
@@ -122,6 +127,9 @@ struct MainTabView: View {
         /// UUID or slug (IOS-DD-GUIDES-22).
         case article(String)
         case discover(DiscoverDestination)
+        /// A first-party page with no native screen, in SafariView
+        /// (IOS-DD-PLATFORM-02).
+        case web(URL)
 
         var id: String {
             switch self {
@@ -131,6 +139,7 @@ struct MainTabView: View {
             case .hotel(let id): return "hotel-\(id)"
             case .article(let id): return "article-\(id)"
             case .discover(let d): return "discover-\(d.rawValue)"
+            case .web(let url): return "web-\(url.absoluteString)"
             }
         }
     }
@@ -148,6 +157,8 @@ struct MainTabView: View {
                 OfflineBanner()
                 SubscriptionStatusBanner()
             }
+            .animation(reduceMotion ? nil : Animation.spring(duration: 0.35), value: network.isConnected)
+            .animation(reduceMotion ? nil : Animation.spring(duration: 0.35), value: network.showReconnected)
         }
         .tint(Color.accentColor)
         // Reset the idle-timeout timer on any touch/scroll within the authed UI
@@ -178,7 +189,7 @@ struct MainTabView: View {
             routeIntent(pending)
         }
         .sheet(item: $deepLinkPresentation) { presentation in
-            DeepLinkResolverView(presentation: presentation)
+            deepLinkSheet(presentation)
         }
         .onChange(of: selectedTab) { oldTab, newTab in
             // Light haptic on every tab change (fires for real tab-bar taps too,
@@ -273,12 +284,18 @@ struct MainTabView: View {
     private func routeDeepLink() {
         guard let destination = deepLink.consumeDestination() else { return }
         switch destination {
-        case .event(let id): deepLinkPresentation = .event(id)
-        case .restaurant(let id): deepLinkPresentation = .restaurant(id)
-        case .attraction(let id): deepLinkPresentation = .attraction(id)
-        case .hotel(let id): deepLinkPresentation = .hotel(id)
-        case .article(let id): deepLinkPresentation = .article(id)
-        case .discover(let d): deepLinkPresentation = .discover(d)
+        case .event(let id): present(.event(id))
+        case .restaurant(let id): present(.restaurant(id))
+        case .attraction(let id): present(.attraction(id))
+        case .hotel(let id): present(.hotel(id))
+        case .article(let id): present(.article(id))
+        case .discover(let d): present(.discover(d))
+        case .web(let url): present(.web(url))
+        case .search(let query):
+            // Through the intent path, so Search applies it the way it
+            // applies a Siri search (IOS-DD-PLATFORM-02), once any sheet is
+            // out of the way so the results are not hidden behind it.
+            TopPresenter.dismissAll { intentDispatcher.pending = .searchText(query) }
         case .tab(let tab):
             // Only flag a change that will fire onChange; an unchanged tab
             // would leave the flag set and swallow the next real tap.
@@ -287,6 +304,30 @@ struct MainTabView: View {
             // On iPad the sidebar may sit on Dashboard while selectedTab is
             // already this tab, so no onChange would move it (IOS-DD-SAVED-19).
             if sidebarSelection != .tab(tab) { sidebarSelection = .tab(tab) }
+        }
+    }
+
+    /// Presents a deep-link destination even when a sheet or cover is already
+    /// up. SwiftUI refuses a second presentation, so the link used to be
+    /// consumed and dropped (IOS-DD-PLATFORM-07). The root presenters are
+    /// cleared, anything UIKit still has presented is dismissed, and the
+    /// destination is presented once that finishes.
+    private func present(_ value: DeepLinkPresentation) {
+        showFavoritesPaywall = false
+        showSignInSheet = false
+        softPaywallContext = nil
+        askPulseLaunch = nil
+        interstitialCampaign = nil
+        deepLinkPresentation = nil
+        TopPresenter.dismissAll { deepLinkPresentation = value }
+    }
+
+    @ViewBuilder
+    private func deepLinkSheet(_ presentation: DeepLinkPresentation) -> some View {
+        if case .web(let url) = presentation {
+            SafariView(url: url).ignoresSafeArea()
+        } else {
+            DeepLinkResolverView(presentation: presentation)
         }
     }
 
@@ -302,11 +343,14 @@ struct MainTabView: View {
             // Own this payload — consume so SearchView doesn't also see it.
             _ = intentDispatcher.consume()
             askPulseLaunch = AskPulseLaunch(query: query)
-        case .findRestaurants, .findEvents:
+        case .findRestaurants, .findEvents, .searchText:
             if selectedTab != .search {
                 programmaticTabChange = true
                 selectedTab = .search
             }
+            // iPad: the sidebar can sit on Dashboard while selectedTab is
+            // already Search (IOS-DD-SAVED-19).
+            if sidebarSelection != .tab(.search) { sidebarSelection = .tab(.search) }
         }
     }
 
@@ -400,6 +444,27 @@ struct MainTabView: View {
 
     @State private var sidebarSelection: SidebarSelection? = .tab(.home)
 
+    /// Sidebar panes the user has opened. Each stays mounted, hidden, so its
+    /// view model, scroll position and navigation stack survive a switch; the
+    /// detail pane used to build a fresh HomeView() and so on every time
+    /// (IOS-DD-PLATFORM-06).
+    @State private var visitedSidebar: Set<SidebarSelection> = [.tab(.home)]
+
+    /// A stable order for the mounted panes, so ForEach identity never
+    /// shuffles as panes are added.
+    static func sidebarIndex(_ selection: SidebarSelection) -> Int {
+        switch selection {
+        case .tab(let tab): return Tab.allCases.firstIndex(of: tab) ?? 0
+        case .discover: return 100
+        case .tripPlanner: return 101
+        case .dashboard: return 102
+        }
+    }
+
+    static var allSidebarSelections: [SidebarSelection] {
+        Tab.allCases.map { SidebarSelection.tab($0) } + [.discover, .tripPlanner, .dashboard]
+    }
+
     private var iPadLayout: some View {
         NavigationSplitView {
             List(selection: $sidebarSelection) {
@@ -413,7 +478,7 @@ struct MainTabView: View {
                 Section("Explore") {
                     Label("Discover", systemImage: "square.grid.2x2.fill")
                         .tag(SidebarSelection.discover)
-                    Label("Trip Planner", systemImage: "map.fill")
+                    Label("Trip Planner", systemImage: "point.topleft.down.to.point.bottomright.curvepath")
                         .tag(SidebarSelection.tripPlanner)
                     Label("Dashboard", systemImage: "rectangle.stack.person.crop")
                         .tag(SidebarSelection.dashboard)
@@ -427,6 +492,7 @@ struct MainTabView: View {
         // Keep the sidebar and `selectedTab` (used by deep links + the
         // interstitial boundary) in sync, without feedback loops.
         .onChange(of: sidebarSelection) { _, newValue in
+            if let newValue { visitedSidebar.insert(newValue) }
             if let newValue, case .tab(let tab) = newValue, tab != selectedTab { selectedTab = tab }
         }
         .onChange(of: selectedTab) { _, newTab in
@@ -434,9 +500,27 @@ struct MainTabView: View {
         }
     }
 
-    @ViewBuilder
+    private var mountedPanes: [SidebarSelection] {
+        visitedSidebar.union([sidebarSelection ?? .tab(.home)])
+            .sorted { Self.sidebarIndex($0) < Self.sidebarIndex($1) }
+    }
+
     private var detailPane: some View {
-        switch sidebarSelection ?? .tab(.home) {
+        let current = sidebarSelection ?? .tab(.home)
+        return ZStack {
+            ForEach(mountedPanes, id: \.self) { selection in
+                pane(for: selection)
+                    .opacity(selection == current ? 1 : 0)
+                    .allowsHitTesting(selection == current)
+                    .accessibilityHidden(selection != current)
+                    .zIndex(selection == current ? 1 : 0)
+            }
+        }
+    }
+
+    @ViewBuilder
+    private func pane(for selection: SidebarSelection) -> some View {
+        switch selection {
         case .tab(let tab): tabContent(for: tab)
         case .discover: DiscoverHubView()
         case .tripPlanner: TripPlannerView(ownsNavigationStack: true)
@@ -461,8 +545,9 @@ struct MainTabView: View {
 
 /// Resolves a deep-linked id to its model and presents the matching detail
 /// screen inside a dismissable NavigationStack. Discover destinations render
-/// their native surface directly. Falls back to an error+retry state if the
-/// content can't be fetched (e.g. offline or deleted), never crashing.
+/// their native surface directly. A listing that is gone (hidden, merged,
+/// archived, or a slug nothing matches) says so, and a failed fetch offers a
+/// retry that also runs on reconnect (IOS-DD-PLATFORM-03).
 /// Internal (was private) so SponsoredPickCard can present it from inside
 /// its own sheet, where DeepLinkHandler's root presenter cannot reach
 /// (IOS-DD-MONETIZATION-19).
@@ -471,16 +556,34 @@ struct DeepLinkResolverView: View {
 
     @Environment(\.dismiss) private var dismiss
     @State private var phase: Phase = .loading
+    @State private var websiteTarget: AdTarget?
 
     private enum Phase {
         case loading
-        case failed
+        case unavailable
+        case offline
         case event(Event)
         case restaurant(Restaurant)
         case attraction(Attraction)
         case hotel(Hotel)
         case article(Article)
     }
+
+    /// How a failed resolve reads to the user.
+    enum Kind: Equatable {
+        case unavailable
+        case offline
+    }
+
+    /// PGRST116 (no visible row, or a slug nothing matched) is "no longer
+    /// available"; anything else is treated as a connection problem that a
+    /// retry can fix. It used to be "offline" for both.
+    static func phase(for error: Error) -> Kind {
+        EventDetailViewModel.isNotFound(error) ? .unavailable : .offline
+    }
+
+    /// Longest chain of merges followed for one link.
+    static let maxMergeHops = 3
 
     var body: some View {
         NavigationStack {
@@ -499,6 +602,7 @@ struct DeepLinkResolverView: View {
                 }
         }
         .task { await resolve() }
+        .sheet(item: $websiteTarget) { SafariView(url: $0.url).ignoresSafeArea() }
     }
 
     @ViewBuilder
@@ -506,68 +610,161 @@ struct DeepLinkResolverView: View {
         switch presentation {
         case .discover(let destination):
             destination.destinationView
+        case .web(let url):
+            SafariView(url: url).ignoresSafeArea()
         case .event, .restaurant, .attraction, .hotel, .article:
-            switch phase {
-            case .loading:
-                ProgressView("Loading…")
-                    .frame(maxWidth: .infinity, maxHeight: .infinity)
-            case .failed:
-                ContentUnavailableView {
-                    Label("Couldn’t open this link", systemImage: "wifi.exclamationmark")
-                } description: {
-                    Text("The content may have moved or you’re offline.")
-                } actions: {
-                    Button("Try Again") { Task { await resolve() } }
-                }
-            case .event(let event):
-                EventDetailView(event: event)
-            case .restaurant(let restaurant):
-                RestaurantDetailView(restaurant: restaurant)
-            case .attraction(let attraction):
-                AttractionDetailView(attraction: attraction)
-            case .hotel(let hotel):
-                HotelDetailView(hotel: hotel)
-            case .article(let article):
-                ArticleDetailView(article: article)
+            phaseContent
+        }
+    }
+
+    @ViewBuilder
+    private var phaseContent: some View {
+        switch phase {
+        case .loading:
+            ProgressView("Loading…")
+                .frame(maxWidth: .infinity, maxHeight: .infinity)
+        case .unavailable:
+            unavailableView
+        case .offline:
+            offlineView
+        case .event(let event):
+            EventDetailView(event: event)
+        case .restaurant(let restaurant):
+            RestaurantDetailView(restaurant: restaurant)
+        case .attraction(let attraction):
+            AttractionDetailView(attraction: attraction)
+        case .hotel(let hotel):
+            HotelDetailView(hotel: hotel)
+        case .article(let article):
+            ArticleDetailView(article: article)
+        }
+    }
+
+    private var unavailableView: some View {
+        ContentUnavailableView {
+            Label("This listing is no longer available", systemImage: "calendar.badge.exclamationmark")
+        } description: {
+            Text("It may have ended, moved or been merged with another listing.")
+        } actions: {
+            Button("See what's on") {
+                dismiss()
+                DeepLinkHandler.shared.open(.tab(fallbackTab))
             }
+            .buttonStyle(.borderedProminent)
+            if let url = websiteURL {
+                Button("Open on website") { websiteTarget = AdTarget(url: url) }
+            }
+        }
+    }
+
+    private var offlineView: some View {
+        ContentUnavailableView {
+            Label("Couldn’t open this link", systemImage: "wifi.exclamationmark")
+        } description: {
+            Text("Check your connection and try again.")
+        } actions: {
+            Button("Try Again") { Task { await resolve() } }
+        }
+        .reloadOnReconnect(if: true) { await resolve() }
+    }
+
+    private var fallbackTab: MainTabView.Tab {
+        if case .restaurant = presentation { return .restaurants }
+        return .home
+    }
+
+    /// The web page for this link, or nil when there is none to build.
+    private var websiteURL: URL? {
+        let path: String
+        switch presentation {
+        case .event(let id): path = "events/\(id)"
+        case .restaurant(let id): path = "restaurants/\(id)"
+        case .attraction(let id): path = "attractions/\(id)"
+        case .hotel(let id): path = "stay/\(id)"
+        case .article(let id): path = "articles/\(id)"
+        case .discover, .web: return nil
+        }
+        return URL(string: path, relativeTo: Config.siteURL)?.absoluteURL
+    }
+
+    /// The identifier SpotlightService indexed this listing under.
+    private var spotlightIdentifier: String? {
+        switch presentation {
+        case .event(let id): return "event-\(id)"
+        case .restaurant(let id): return "restaurant-\(id)"
+        case .attraction(let id): return "attraction-\(id)"
+        case .hotel(let id): return "hotel-\(id)"
+        case .article(let id): return "article-\(id)"
+        case .discover, .web: return nil
         }
     }
 
     private func resolve() async {
         switch presentation {
-        case .discover:
+        case .discover, .web:
             return // rendered directly
-        case .event(let id):
-            phase = .loading
-            do { phase = .event(try await EventsService.shared.fetchEvent(id: id)) }
-            catch { phase = .failed }
-        case .restaurant(let id):
-            phase = .loading
-            do { phase = .restaurant(try await RestaurantsService.shared.fetchRestaurant(id: id)) }
-            catch { phase = .failed }
-        case .attraction(let id):
-            phase = .loading
-            do { phase = .attraction(try await AttractionsService.shared.fetchAttraction(id: id)) }
-            catch { phase = .failed }
-        case .hotel(let id):
-            phase = .loading
-            do {
-                if UUID(uuidString: id) != nil {
-                    phase = .hotel(try await HotelsService.shared.fetchHotel(id: id))
-                } else {
-                    phase = .hotel(try await HotelsService.shared.fetchHotel(slug: id))
-                }
-            } catch { phase = .failed }
-        case .article(let id):
-            phase = .loading
-            do {
-                if UUID(uuidString: id) != nil {
-                    phase = .article(try await ArticlesService.shared.fetchArticle(id: id))
-                } else {
-                    phase = .article(try await ArticlesService.shared.fetchArticle(slug: id))
-                }
-            } catch { phase = .failed }
+        case .event, .restaurant, .attraction, .hotel, .article:
+            break
         }
+        phase = .loading
+        do {
+            phase = try await fetch()
+        } catch {
+            switch Self.phase(for: error) {
+            case .offline:
+                phase = .offline
+            case .unavailable:
+                phase = .unavailable
+                // A Spotlight result for a row that is gone would keep
+                // leading here.
+                if let identifier = spotlightIdentifier {
+                    await SpotlightService.shared.removeItem(identifier: identifier)
+                }
+            }
+        }
+    }
+
+    private func fetch() async throws -> Phase {
+        switch presentation {
+        case .event(let id):
+            return .event(try await fetchEvent(id: id))
+        case .restaurant(let id):
+            return .restaurant(try await RestaurantsService.shared.fetchRestaurant(id: id))
+        case .attraction(let id):
+            return .attraction(try await AttractionsService.shared.fetchAttraction(id: id))
+        case .hotel(let id):
+            if UUID(uuidString: id) != nil {
+                return .hotel(try await HotelsService.shared.fetchHotel(id: id))
+            }
+            return .hotel(try await HotelsService.shared.fetchHotel(slug: id))
+        case .article(let id):
+            if UUID(uuidString: id) != nil {
+                return .article(try await ArticlesService.shared.fetchArticle(id: id))
+            }
+            return .article(try await ArticlesService.shared.fetchArticle(slug: id))
+        case .discover, .web:
+            return .loading
+        }
+    }
+
+    /// A UUID, else a web slug (IOS-DD-PLATFORM-01). A UUID that answers
+    /// not-found follows merged_into up to maxMergeHops times, so a link to a
+    /// merged duplicate opens the surviving listing.
+    private func fetchEvent(id: String) async throws -> Event {
+        guard UUID(uuidString: id) != nil else {
+            return try await EventsService.shared.fetchEvent(slug: id)
+        }
+        var current = id
+        for _ in 0..<Self.maxMergeHops {
+            do {
+                return try await EventsService.shared.fetchEvent(id: current)
+            } catch {
+                guard Self.phase(for: error) == .unavailable,
+                      let survivor = await EventsService.shared.fetchMergedSurvivorId(id: current) else { throw error }
+                current = survivor
+            }
+        }
+        return try await EventsService.shared.fetchEvent(id: current)
     }
 }
 

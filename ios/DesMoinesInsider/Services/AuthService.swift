@@ -180,12 +180,22 @@ final class AuthService {
                         }
                         // Hearts were empty after an in-app sign-in until the
                         // Saved tab or Dashboard opened, and a tap could insert
-                        // a duplicate (IOS-DD-SAVED-21). Only on a real sign-in:
-                        // launch (.initialSession) is loaded by the app file,
-                        // and token refreshes change nothing. Not awaited, so
-                        // `isLoading` below does not wait on four more queries.
-                        if event == .signedIn {
+                        // a duplicate (IOS-DD-SAVED-21). On a real sign-in and
+                        // at launch (.initialSession): the app file's launch
+                        // task read isAuthenticated before this listener had
+                        // settled, so a cold launch often loaded nothing
+                        // (IOS-DD-PLATFORM-12). Token refreshes change nothing.
+                        // Not awaited, so `isLoading` below does not wait on
+                        // four more queries.
+                        if event == .signedIn || event == .initialSession {
                             Task { await FavoritesService.shared.loadFavorites() }
+                        }
+                        if event == .signedIn {
+                            // A token registered before this sign-in moves to
+                            // this account (IOS-DD-PLATFORM-19).
+                            if Config.enablePushNotifications {
+                                Task { await PushNotificationService.shared.resyncIfRegistered() }
+                            }
                             // Onboarding picks and a pre-sign-in email opt-in
                             // reach the account (IOS-DD-ACCOUNT-04 / -10).
                             await self.syncOnboardingInterestsIfNeeded()
@@ -316,6 +326,13 @@ final class AuthService {
             // Keychain wipe is last so any service that needs to read its own
             // tokens during cleanup (e.g. session tracking timestamps) has a chance.
             KeychainService.shared.deleteAll()
+        }
+
+        // Drop this device's push token from the account while the JWT is
+        // still valid, so the next person on the phone does not receive this
+        // user's alerts (IOS-DD-PLATFORM-19). Never blocks sign-out.
+        if Config.enablePushNotifications {
+            await PushNotificationService.shared.unregisterFromBackend()
         }
 
         try await supabase.auth.signOut()

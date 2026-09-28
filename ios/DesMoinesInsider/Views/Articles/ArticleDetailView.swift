@@ -11,6 +11,10 @@ struct ArticleDetailView: View {
     @State private var browseTarget: AdTarget?
     /// A site link in the body opened as its native screen (IOS-DD-GUIDES-21).
     @State private var nativeTarget: MainTabView.DeepLinkPresentation?
+    /// A third-party link in the body, in SafariView so the reader sees the
+    /// real address; it used to load in WebViewPage titled with the article
+    /// category (IOS-DD-PLATFORM-11).
+    @State private var externalTarget: AdTarget?
     @State private var showShareSheet = false
     @State private var toast: String?
 
@@ -73,6 +77,7 @@ struct ArticleDetailView: View {
             }
         }
         .sheet(item: $nativeTarget) { DeepLinkResolverView(presentation: $0) }
+        .sheet(item: $externalTarget) { SafariView(url: $0.url).ignoresSafeArea() }
         .sheet(isPresented: $showShareSheet) {
             ShareSheet(items: [shareText, article.webURL])
         }
@@ -244,7 +249,7 @@ struct ArticleDetailView: View {
                 browseTarget = AdTarget(url: siteURL)
             }
         case .external(let externalURL):
-            browseTarget = AdTarget(url: externalURL)
+            externalTarget = AdTarget(url: externalURL)
         case .drop:
             AppLogger.nav.warning("Dropped unsafe article link (scheme: \(url.scheme ?? "nil"))")
         }
@@ -261,7 +266,8 @@ struct ArticleDetailView: View {
         case .hotel(let id): return .hotel(id)
         case .article(let id): return .article(id)
         case .discover(let d): return .discover(d)
-        case .tab: return nil
+        // The reader's own browse fallback handles these (IOS-DD-PLATFORM-02).
+        case .tab, .search, .web: return nil
         }
     }
 

@@ -22,6 +22,12 @@ struct DesMoinesInsiderApp: App {
     @AppStorage("appLaunchCount") private var launchCount = 0
     @AppStorage("themeMode") private var themeModeRaw: String = ThemeMode.system.rawValue
     @State private var showJailbreakWarning = false
+    /// The app version whose jailbreak warning was acknowledged, so the alert
+    /// shows once per version instead of on every launch (IOS-DD-PLATFORM-15).
+    @AppStorage("jailbreakWarningAckVersion") private var jailbreakAckVersion = ""
+    /// The signed-in launch work (review prompt, push prompt) runs once per
+    /// process, after auth has settled (IOS-DD-PLATFORM-12).
+    @State private var didRunAuthedLaunchWork = false
     /// Starts true when the user turned the lock on (the flag is only ever set
     /// while signed in), so the lock is in place before the first
     /// authenticated frame. It used to be set at the end of the launch .task,
@@ -67,22 +73,13 @@ struct DesMoinesInsiderApp: App {
                     OnboardingView(hasCompletedOnboarding: $hasCompletedOnboarding)
                 } else if consent.needsConsentPrompt && !consentCompleted {
                     ConsentView { consentCompleted = true }
-                } else if awaitingBiometric && authService.isAuthenticated {
-                    BiometricLockView {
-                        awaitingBiometric = false
-                    }
                 } else if authService.isAuthenticated && authService.needsPasswordReset {
                     // Arrived through a reset link (IOS-DD-ACCOUNT-07).
-                    SetNewPasswordView()
+                    locked(SetNewPasswordView())
                 } else if authService.isAuthenticated && authService.needsEmailVerification {
-                    VerifyEmailView()
+                    locked(VerifyEmailView())
                 } else {
-                    MainTabView()
-                        .safeAreaInset(edge: .top, spacing: 0) {
-                            SessionTimeoutBanner(state: sessionTimeout.sessionState) {
-                                sessionTimeout.recordActivity()
-                            }
-                        }
+                    locked(mainContent)
                 }
             }
             // App-switcher snapshot cover. The lock re-engages on .background,
@@ -95,7 +92,7 @@ struct DesMoinesInsiderApp: App {
                 }
             }
             .alert("Security Warning", isPresented: $showJailbreakWarning) {
-                Button("I Understand", role: .cancel) {}
+                Button("I Understand", role: .cancel) { jailbreakAckVersion = Config.appVersion }
             } message: {
                 Text("This device may have been modified. Your data could be at risk. We recommend using an unmodified device for the best security.")
             }
@@ -132,6 +129,11 @@ struct DesMoinesInsiderApp: App {
                     // Center, the Face ID sheet) never gets here.
                     if biometricService.isEnabled && authService.isAuthenticated {
                         awaitingBiometric = true
+                        // The lock is an overlay now, so MainTabView keeps its
+                        // tabs and stacks, but a sheet sits above any overlay:
+                        // close sheets so none is readable behind the lock
+                        // (IOS-DD-PLATFORM-05).
+                        TopPresenter.dismissPresented()
                     }
                 case .active:
                     // Admin sessions: judge the time spent away before counting
@@ -139,6 +141,9 @@ struct DesMoinesInsiderApp: App {
                     if authService.isAuthenticated {
                         sessionTimeout.noteForeground()
                     }
+                    // A long-lived process never re-ran the minimum-version
+                    // gate; at most every six hours (IOS-DD-PLATFORM-09).
+                    Task { await versionCheck.checkIfStale() }
                 default:
                     break
                 }
@@ -173,58 +178,92 @@ struct DesMoinesInsiderApp: App {
                 // Install crash/non-fatal capture handlers as early as possible so
                 // an early-launch crash is still recorded (IOS-AUDIT-FEAT-010).
                 CrashReportingService.shared.configure()
-                if authService.isAuthenticated, let uid = authService.currentUser?.id.uuidString {
-                    CrashReportingService.shared.setUserId(uid)
-                }
-
-                // Drain whatever the previous run recorded. Every crash since
-                // IOS-AUDIT-FEAT-010 has been captured to disk and never sent
-                // anywhere; this is the upload half (XPLAT-004 AC1). Silent on
-                // failure, and records survive a failed attempt.
-                await CrashUploader.uploadPending()
-
-                // Launch-time minimum-supported-version gate (IOS-AUDIT-REL-001).
-                // Fails open, so a backend hiccup never blocks a supported build.
-                await versionCheck.checkOnLaunch()
 
                 // One-time migration of Keychain items to the stricter
-                // WhenUnlockedThisDeviceOnly accessibility flag. Runs before
-                // any Keychain reads (BiometricAuthService, session checks).
+                // WhenUnlockedThisDeviceOnly accessibility flag. First, so it
+                // runs ahead of this task's own Keychain work; the auth
+                // listener may already have read the session.
                 KeychainService.shared.migrateAccessibilityIfNeeded()
 
-                // Prune expired cache entries on launch
-                await QueryCache.shared.pruneExpired()
+                // Housekeeping nothing on screen waits for (XPLAT-004 AC1,
+                // IOS-ADS-014). Main-actor services, so a low-priority Task
+                // rather than a detached one. It runs once this task suspends,
+                // which is inside the version check's request below.
+                Task(priority: .utility) {
+                    await CrashUploader.uploadPending()
+                    await QueryCache.shared.pruneExpired()
+                    await AdTrackingService.shared.flushPendingEvents()
+                }
 
-                // Flush any ad telemetry that queued while offline (IOS-ADS-014).
-                await AdTrackingService.shared.flushPendingEvents()
-
-                // Jailbreak check (soft warning, non-blocking)
-                if JailbreakDetector.isJailbroken {
+                // Jailbreak check (soft warning, non-blocking), once per
+                // version (IOS-DD-PLATFORM-15).
+                if Self.shouldWarnJailbreak(
+                    isJailbroken: JailbreakDetector.isJailbroken,
+                    ackVersion: jailbreakAckVersion,
+                    current: Config.appVersion
+                ) {
                     showJailbreakWarning = true
                 }
 
                 // The cold-launch timeout check moved into AuthService's
                 // .initialSession handler, and the biometric gate is set at
                 // init (IOS-DD-ACCOUNT-02 / -05). Both raced the auth listener
-                // from here.
+                // from here. Favorites load there too now; the signed-in
+                // launch work waits for auth below (IOS-DD-PLATFORM-12).
 
-                if authService.isAuthenticated {
-                    await favoritesService.loadFavorites()
-
-                    // Request review after engagement thresholds
-                    await requestReviewIfEligible()
-                }
-
-                // Deliberate, one-time push-permission prompt after onboarding
-                // (IOS-AUDIT-FEAT-001) — not only when a saved-search alert is
-                // enabled. Gated on the feature flag; never re-prompts a user
-                // who already decided.
-                if Config.enablePushNotifications, hasCompletedOnboarding, authService.isAuthenticated {
-                    await PushNotificationService.shared.requestPermissionIfAppropriate()
-                }
+                // Launch-time minimum-supported-version gate (IOS-AUDIT-REL-001).
+                // Fails open, so a backend hiccup never blocks a supported build.
+                // Its request goes out before the housekeeping above runs: it
+                // used to wait behind the crash upload, so a blocked build
+                // showed the app for a while before the force-update screen
+                // (IOS-DD-PLATFORM-12). Awaited directly on the main actor; an
+                // `async let` would read the main-actor `versionCheck` from a
+                // nonisolated child task.
+                await versionCheck.checkOnLaunch()
+            }
+            .task(id: authService.isLoading) {
+                await runAuthedLaunchWorkIfReady()
             }
             } // ThemeCrossfadeContainer
         }
+    }
+
+    // MARK: - Biometric lock (IOS-DD-PLATFORM-05)
+
+    private var mainContent: some View {
+        MainTabView()
+            .safeAreaInset(edge: .top, spacing: 0) {
+                SessionTimeoutBanner(state: sessionTimeout.sessionState) {
+                    sessionTimeout.recordActivity()
+                }
+            }
+    }
+
+    /// Whether the biometric lock covers the app.
+    nonisolated static func shouldShowLock(awaiting: Bool, authenticated: Bool) -> Bool {
+        awaiting && authenticated
+    }
+
+    /// The lock sits OVER the signed-in content rather than replacing it. As
+    /// its own branch it tore MainTabView down on every trip to the
+    /// background, losing open sheets, navigation stacks and view models.
+    @ViewBuilder
+    private func locked<V: View>(_ content: V) -> some View {
+        let isLocked = Self.shouldShowLock(awaiting: awaitingBiometric, authenticated: authService.isAuthenticated)
+        content
+            .allowsHitTesting(!isLocked)
+            .accessibilityHidden(isLocked)
+            .overlay {
+                if isLocked {
+                    BiometricLockView { awaitingBiometric = false }
+                        .transition(.opacity)
+                }
+            }
+    }
+
+    /// Jailbroken and not yet acknowledged for this app version.
+    nonisolated static func shouldWarnJailbreak(isJailbroken: Bool, ackVersion: String, current: String) -> Bool {
+        isJailbroken && ackVersion != current
     }
 
     // MARK: - Signed-out message
@@ -247,22 +286,51 @@ struct DesMoinesInsiderApp: App {
         }
     }
 
+    // MARK: - Signed-in launch work (IOS-DD-PLATFORM-12)
+
+    /// Runs once auth has settled signed in. The launch .task read
+    /// isAuthenticated before the auth listener had answered, so on a cold
+    /// launch this usually saw "signed out" and skipped it.
+    private func runAuthedLaunchWorkIfReady() async {
+        guard !didRunAuthedLaunchWork, !authService.isLoading, authService.isAuthenticated else { return }
+        didRunAuthedLaunchWork = true
+
+        if let uid = authService.currentUser?.id.uuidString {
+            CrashReportingService.shared.setUserId(uid)
+        }
+
+        // Deliberate, one-time push-permission prompt after onboarding
+        // (IOS-AUDIT-FEAT-001) — not only when a saved-search alert is
+        // enabled. Gated on the feature flag; never re-prompts a user
+        // who already decided.
+        if Config.enablePushNotifications, hasCompletedOnboarding {
+            await PushNotificationService.shared.requestPermissionIfAppropriate()
+        }
+
+        // Request review after engagement thresholds. Favorites are loading
+        // from the auth listener; the review check sleeps two seconds before
+        // it counts them.
+        await requestReviewIfEligible()
+    }
+
     // MARK: - App Review
 
     private func requestReviewIfEligible() async {
-        // Require at least 3 launches and 1+ favorites before prompting
-        guard launchCount >= 3,
-              favoritesService.favoriteEventIds.count + favoritesService.favoriteRestaurantIds.count >= 1
-        else { return }
+        guard launchCount >= 3 else { return }
 
         // Only prompt once (AppStore rate-limits this, but we gate on our side too)
         guard !UserDefaults.standard.bool(forKey: "hasRequestedReview") else { return }
 
         // Delay slightly so the app is fully visible. Structured + cancellable
         // with the view's .task — no fire-and-forget asyncAfter on the launch
-        // path (IOS-AUDIT-PERF-013).
+        // path (IOS-AUDIT-PERF-013). Also gives the auth listener's favorites
+        // load (IOS-DD-PLATFORM-12) time to land before the check below.
         try? await Task.sleep(for: .seconds(2))
         guard !Task.isCancelled else { return }
+
+        // Require 1+ favorites before prompting
+        guard favoritesService.favoriteEventIds.count + favoritesService.favoriteRestaurantIds.count >= 1
+        else { return }
 
         // Only prompt when a foreground-active scene still exists, and only mark
         // as requested once we actually show it.

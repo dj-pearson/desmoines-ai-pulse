@@ -68,4 +68,13 @@ final class PulseIntentRoutingTests: XCTestCase {
     func testAskPulseQueryIsCapped() {
         XCTAssertEqual(AskPulseIntent.resolvedQuery(String(repeating: "a", count: 500)).count, 300)
     }
+
+    // MARK: - Search links (IOS-DD-PLATFORM-02)
+
+    func testSearchTextRoutesToEventsWithTheText() throws {
+        let route = try XCTUnwrap(PulseIntentDispatcher.Pending.searchText("jazz").searchRoute)
+        XCTAssertEqual(route.text, "jazz")
+        XCTAssertEqual(route.tab, .events)
+        XCTAssertTrue(route.filters.isEmpty)
+    }
 }
