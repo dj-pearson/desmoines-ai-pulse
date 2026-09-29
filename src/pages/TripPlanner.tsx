@@ -54,7 +54,7 @@ import {
   toggleShortlist,
   writeStoredShortlist,
 } from "@/lib/tripShortlist";
-import { AI_PLANNER_AVAILABLE, AI_PLANNER_PAUSED_MESSAGE } from "@/lib/tripPlannerStatus";
+import { AI_PLANNER_AVAILABLE, AI_PLANNER_PAUSED_MESSAGE, TRIP_SHARE_AVAILABLE } from "@/lib/tripPlannerStatus";
 import { TRIP_PLANNER_MONTHLY_QUOTA } from "@/lib/planBenefits";
 
 const DiscoverMapCanvas = lazy(() => import("@/components/map/DiscoverMapCanvas"));
@@ -783,8 +783,8 @@ function ItineraryView({
         </div>
         <div className="flex flex-wrap gap-2">
           {/* Share publishes to /trips/shared/:code, which doesn't exist yet
-              (plan-stay D10), and trip storage is itself behind D1. */}
-          {AI_PLANNER_AVAILABLE && (
+              (plan-stay D10, TP-25). */}
+          {TRIP_SHARE_AVAILABLE && (
             <Button variant="outline" className="min-h-11" onClick={() => void handleShare()}>
               <SpriteIcon name="share-2" className="mr-1 h-4 w-4" />
               Share

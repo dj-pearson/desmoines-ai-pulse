@@ -208,9 +208,10 @@ test.describe('/pricing (pricing plan WP2)', () => {
     for (const phrase of ['ai trip planner', 'thousands']) {
       expect(text, `"${phrase}" must not be on /pricing`).not.toContain(phrase);
     }
-    // src/lib/tripPlannerStatus.ts has AI_PLANNER_AVAILABLE = false, so no
-    // tier may list trip plans at all.
-    expect(text).not.toContain('trip plans');
+    // AI_PLANNER_AVAILABLE is true, so the trip plan lines come from
+    // planBenefits.ts with the quota generate-itinerary enforces.
+    expect(text).toContain('ai trip plans (5 a month)');
+    expect(text).toContain('ai trip plans with no monthly cap (up to 20 a day)');
   });
 
   test('a 403 email_verification_required is shown with a resend action on the first click', async ({ page }) => {
