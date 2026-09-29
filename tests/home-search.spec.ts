@@ -13,7 +13,8 @@ import { installFixtureBackend } from './support/fixtureBackend';
  *     the detail pages' own slugs, above a "Search everything" row.
  *  4. Escape closes the suggestions from inside the panel and they stay
  *     closed when focus returns to the input.
- *  5. While the AI planner is paused the hero says nothing about AI.
+ *  5. While the AI planner runs (AI_PLANNER_AVAILABLE) the hero links it with
+ *     its Insider badge.
  *
  * The suggestion queries are answered here, after installFixtureBackend, and
  * only for requests that carry an ilike filter; everything else falls through
@@ -156,10 +157,11 @@ test('a search is offered again as a recent search', async ({ page }) => {
   await expect(page.locator('a[data-search-chip]').first()).toHaveText('pizza by the slice');
 });
 
-test('the hero says nothing about AI while the planner is paused', async ({ page }) => {
+test('the hero links the AI planner with its Insider badge while the planner runs', async ({ page }) => {
   await heroInput(page);
   const hero = page.locator('section').filter({ has: page.getByRole('heading', { level: 1 }) }).first();
-  await expect(hero.getByRole('link', { name: 'Visiting? Plan your dates' })).toHaveAttribute('href', '/trip-planner');
-  await expect(hero).not.toContainText(/\bAI\b/);
-  await expect(hero).not.toContainText('Insider');
+  const planner = hero.getByRole('link', { name: /AI Plan My Night/ });
+  await expect(planner).toHaveAttribute('href', '/trip-planner');
+  await expect(planner).toContainText('Insider');
+  await expect(hero.getByRole('link', { name: 'Visiting? Plan your dates' })).toHaveCount(0);
 });

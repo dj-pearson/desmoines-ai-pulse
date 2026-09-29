@@ -10,8 +10,10 @@ import { installFixtureBackend } from './support/fixtureBackend';
  * 2. ?from=2026-10-09&to=2026-10-11 restores the window: events listed under
  *    their Central day, at least three hotels nearest-first with a
  *    straight-line label, and a "See all" link into /stay?near=.
- * 3. The page makes no auth, subscription or trip-storage request, and with
- *    AI_PLANNER_AVAILABLE=false no Generate, Share or My Trips control renders.
+ * 3. Signed out, the page makes no auth, user-subscription or trip-storage
+ *    request. The AI planner (AI_PLANNER_AVAILABLE) renders Generate and My
+ *    Trips; Generate sends a signed-out visitor to sign in, and Share stays
+ *    hidden (TRIP_SHARE_AVAILABLE, no public share page yet).
  *
  * Events, hotels and venues are answered here, registered AFTER
  * installFixtureBackend so these handlers win. The events handler does not
@@ -145,7 +147,7 @@ async function installWindow(page: Page): Promise<string[]> {
     const url = req.url();
     if (
       /\/auth\/v1\/(user|token)/.test(url) ||
-      /\/rest\/v1\/(subscription_plans|user_subscriptions|trip_plans|trip_plan_items)/.test(url) ||
+      /\/rest\/v1\/(user_subscriptions|trip_plans|trip_plan_items)/.test(url) ||
       /\/functions\/v1\/generate-itinerary/.test(url)
     ) {
       forbidden.push(`${req.method()} ${url}`);
@@ -206,7 +208,7 @@ test.describe('/trip-planner date window', () => {
     await expect(page).toHaveURL(/from=2026-10-09&to=2026-10-11/);
     await expect(days.first()).toHaveText('Friday, October 9');
 
-    expect(forbidden, 'no auth, subscription or trip-storage request').toEqual([]);
+    expect(forbidden, 'no auth, user-subscription or trip-storage request').toEqual([]);
   });
 
   test('submitting new dates mirrors them into the URL', async ({ page }) => {
@@ -219,15 +221,25 @@ test.describe('/trip-planner date window', () => {
     await expect(dayHeadings(page)).toHaveText(['Saturday, October 10']);
   });
 
-  test('with the AI planner paused, no Generate, Share or My Trips control renders', async ({ page }) => {
-    await installWindow(page);
+  test('signed out, the AI planner offers Generate and My Trips, and Generate asks for sign-in', async ({ page }) => {
+    const forbidden = await installWindow(page);
     await page.goto('/trip-planner?from=2026-10-09&to=2026-10-11');
     await expect(dayHeadings(page).first()).toBeVisible();
 
-    await expect(page.getByText(/AI itineraries are paused/)).toBeVisible();
-    await expect(page.getByRole('button', { name: /generate/i })).toHaveCount(0);
+    await expect(page.getByText(/AI itineraries are paused/)).toHaveCount(0);
+    await expect(page.getByRole('heading', { name: 'Turn this into an itinerary' })).toBeVisible();
+    await expect(page.getByRole('tab', { name: /my trips/i })).toBeVisible();
     await expect(page.getByRole('button', { name: /share/i })).toHaveCount(0);
-    await expect(page.getByRole('tab', { name: /my trips/i })).toHaveCount(0);
     await expect(page.getByText(/\$4\.99|\$12\.99/)).toHaveCount(0);
+
+    const generate = page.getByRole('button', { name: 'Generate itinerary' });
+    await expect(generate).toBeEnabled({ timeout: 15_000 });
+    await generate.click();
+    await expect(page).toHaveURL(/\/auth\?redirect=/);
+    expect(decodeURIComponent(new URL(page.url()).searchParams.get('redirect') ?? '')).toBe(
+      '/trip-planner?from=2026-10-09&to=2026-10-11',
+    );
+
+    expect(forbidden, 'no auth, user-subscription or trip-storage request').toEqual([]);
   });
 });
