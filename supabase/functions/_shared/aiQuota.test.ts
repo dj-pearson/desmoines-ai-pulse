@@ -2,6 +2,8 @@
 // Offline: the Supabase client is a stub that records RPC calls and inserts.
 import { assert, assertEquals } from "https://deno.land/std@0.208.0/assert/mod.ts";
 import {
+  type AiGuardDenied,
+  type AiGuardResult,
   denialBody,
   guardAi,
   interpretConsume,
@@ -11,6 +13,16 @@ import {
   secondsUntilCentralMidnight,
 } from "./aiQuota.ts";
 import { openAiCostUsd } from "./providerUsage.ts";
+
+/**
+ * Asserts a denial and returns it typed as one. tsconfig.edge.json has
+ * strictNullChecks off, so `assert(!r.ok)` does not narrow the union and
+ * `r.response` fails type-check:edge.
+ */
+function denied(r: AiGuardResult): AiGuardDenied {
+  assert(!r.ok);
+  return r as AiGuardDenied;
+}
 
 type RpcResult = { data: unknown; error: { message?: string; code?: string } | null };
 
@@ -158,11 +170,11 @@ Deno.test("guardAi turns a refusal into a 429 with CORS headers and Retry-After"
     userId: "u1",
     headers: { "Access-Control-Allow-Origin": "https://example.test" },
   });
-  assert(!r.ok);
-  assertEquals(r.response.status, 429);
-  assertEquals(r.response.headers.get("Access-Control-Allow-Origin"), "https://example.test");
-  assert(Number(r.response.headers.get("Retry-After")) >= 60);
-  const body = await r.response.json();
+  const d = denied(r);
+  assertEquals(d.response.status, 429);
+  assertEquals(d.response.headers.get("Access-Control-Allow-Origin"), "https://example.test");
+  assert(Number(d.response.headers.get("Retry-After")) >= 60);
+  const body = await d.response.json();
   assertEquals(body.code, "quota_exceeded");
   assertEquals(body.upgradeHint, "insider");
 });
@@ -170,8 +182,8 @@ Deno.test("guardAi turns a refusal into a 429 with CORS headers and Retry-After"
 Deno.test("guardAi fails CLOSED on a budget pause from the RPC", async () => {
   const s = stub({ consume: { data: { allowed: false, code: "ai_budget_paused", reason: "provider_paused" }, error: null } });
   const r = await guardAi(s.client, req(), { feature: "itinerary", provider: "anthropic", tier: "vip", userId: "u1" });
-  assert(!r.ok);
-  assertEquals((await r.response.json()).code, "ai_budget_paused");
+  const d = denied(r);
+  assertEquals((await d.response.json()).code, "ai_budget_paused");
 });
 
 Deno.test("guardAi fails OPEN when the RPC errors and the budget is not paused", async () => {
@@ -196,8 +208,8 @@ Deno.test("guardAi fails OPEN when the RPC throws and the paused read errors too
 Deno.test("guardAi still honours provider_budgets.paused when the RPC is unavailable", async () => {
   const s = stub({ consume: { data: null, error: { code: "PGRST202", message: "function not found" } }, paused: true });
   const r = await guardAi(s.client, req(), { feature: "discover-chat", provider: "anthropic", tier: "vip", userId: "u1" });
-  assert(!r.ok);
-  assertEquals(r.decision.reason, "provider_paused");
+  const d = denied(r);
+  assertEquals(d.decision.reason, "provider_paused");
 });
 
 Deno.test("settle books the cost once, to ai_usage_daily and provider_usage", async () => {
