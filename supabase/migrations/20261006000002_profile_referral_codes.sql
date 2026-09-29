@@ -100,6 +100,15 @@ CREATE TRIGGER profiles_referral_code_default
 
 -- 4) Backfill, one row per statement so each uniqueness check sees the codes
 --    already written.
+--
+--    validate_profile_user_id is disabled around the loop only. It rejects any
+--    UPDATE to a row whose user_role is not 'user' unless auth.uid() is an
+--    admin, even when user_role is unchanged, and a migration has no
+--    auth.uid(), so the first admin profile aborted the whole push. The
+--    migration runs in one transaction, so a failure here rolls back the
+--    DISABLE as well; the trigger cannot be left off.
+ALTER TABLE public.profiles DISABLE TRIGGER validate_profile_user_id;
+
 DO $$
 DECLARE
   r record;
@@ -110,6 +119,8 @@ BEGIN
     WHERE id = r.id AND referral_code IS NULL;
   END LOOP;
 END $$;
+
+ALTER TABLE public.profiles ENABLE TRIGGER validate_profile_user_id;
 
 -- 5) One attribution per referred user. Built only when the table holds no
 --    duplicates already (nothing has written to it, but a failed index would
