@@ -112,7 +112,10 @@ await withResendEnv(async () => {
       fromEmail: 'noreply@desmoinesinsider.com',
     });
     check('a 200 from the provider is a send', sent === true);
-    check('it went to Resend', calls[0]?.url.includes('api.resend.com'), calls[0]?.url);
+    const resendHost = (() => {
+      try { return calls[0]?.url ? new URL(calls[0].url).hostname : ''; } catch { return ''; }
+    })();
+    check('it went to Resend', resendHost === 'api.resend.com', calls[0]?.url);
     const body = JSON.parse(calls[0].init.body);
     check('addressed to the advertiser', Array.isArray(body.to) && body.to[0] === 'advertiser@example.com', JSON.stringify(body.to));
     check('with the notification title as the subject', body.subject === content.title, body.subject);
