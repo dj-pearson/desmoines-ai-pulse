@@ -96,7 +96,7 @@ const CURRENT_VENUE_NAMES: Readonly<Record<string, string>> = {
 export function currentVenueName(name: string): string;
 export function currentVenueName(name: string | null | undefined): string | null;
 export function currentVenueName(name: string | null | undefined): string | null {
-  if (!name) return name ?? null;
+  if (name == null) return null;
   return CURRENT_VENUE_NAMES[normaliseVenueName(name)] ?? name;
 }
 
