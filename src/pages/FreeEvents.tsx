@@ -304,7 +304,7 @@ export default function FreeEvents() {
               <div>
                 <h3 className="font-semibold mb-2">Bringing kids?</h3>
                 <p className="text-sm text-muted-foreground">
-                  The <Link to="/events/kids" className="text-primary hover:underline font-semibold">kids and family events</Link> page lists family events and marks the free ones.
+                  The <Link to="/events/kids" className="text-primary underline underline-offset-2 font-semibold">kids and family events</Link> page lists family events and marks the free ones.
                 </p>
               </div>
               <div>

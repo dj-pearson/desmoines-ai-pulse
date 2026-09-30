@@ -223,7 +223,7 @@ export default function EventsByLocation() {
               <h1 className="text-2xl font-bold mb-4">Location Not Found</h1>
               <p className="text-muted-foreground">
                 The location you're looking for doesn't exist.
-                <Link to="/events" className="text-primary hover:underline ml-1">
+                <Link to="/events" className="text-primary underline underline-offset-2 ml-1">
                   Browse all events
                 </Link>
               </p>
@@ -422,12 +422,12 @@ export default function EventsByLocation() {
                 back later or browse events in nearby areas.
               </p>
               <div className="flex justify-center gap-4">
-                <Link to="/events" className="text-primary hover:underline">
+                <Link to="/events" className="text-primary underline underline-offset-2">
                   All Des Moines Events
                 </Link>
                 <Link
                   to="/events/this-weekend"
-                  className="text-primary hover:underline"
+                  className="text-primary underline underline-offset-2"
                 >
                   This Weekend's Events
                 </Link>

@@ -317,10 +317,10 @@ export default function EventsToday() {
                 Check back tomorrow or browse upcoming events happening this week.
               </p>
               <div className="flex justify-center gap-4">
-                <Link to="/events/this-weekend" className="text-primary hover:underline">
+                <Link to="/events/this-weekend" className="text-primary underline underline-offset-2">
                   This Weekend's Events
                 </Link>
-                <Link to="/events" className="text-primary hover:underline">
+                <Link to="/events" className="text-primary underline underline-offset-2">
                   All Upcoming Events
                 </Link>
               </div>
