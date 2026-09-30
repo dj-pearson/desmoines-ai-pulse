@@ -1,7 +1,7 @@
 import { serve } from "https://deno.land/std@0.168.0/http/server.ts"
 import { createClient } from 'https://esm.sh/@supabase/supabase-js@2.7.1'
 import { handleCors, getCorsHeaders, isOriginAllowed } from "../_shared/cors.ts";
-import { requireApiKey } from "../_shared/apiKeyAuth.ts";
+import { requireAdminOrApiKey } from "../_shared/apiKeyAuth.ts";
 import { checkRateLimit } from "../_shared/rateLimit.ts";
 import { writeAuditLog, auditIp } from "../_shared/auditLog.ts";
 import { fetchWithTimeout } from '../_shared/fetchWithTimeout.ts';
@@ -82,8 +82,10 @@ serve(async (req) => {
   const origin = req.headers.get("origin") || "";
   const corsHeaders = getCorsHeaders(isOriginAllowed(origin) ? origin : undefined);
 
-  // Require API key authentication (SEC-013)
-  const authResponse = requireApiKey(req, corsHeaders);
+  // API key or admin auth (SEC-013). This was requireApiKey alone, which only
+  // accepts EDGE_FUNCTION_API_KEY, so the admin bulk updater
+  // (useBulkRestaurantUpdate.ts), which sends the admin's JWT, always got a 401.
+  const authResponse = await requireAdminOrApiKey(req, corsHeaders);
   if (authResponse) return authResponse;
 
   // Rate limiting: 5 requests per 15 minutes (SEC-013)
@@ -107,7 +109,10 @@ serve(async (req) => {
 
     const supabase = createClient(supabaseUrl, supabaseKey)
 
-    const { batchSize = 10, forceUpdate = false, clearEnhanced = false } = await req.json()
+    const { batchSize: rawBatchSize = 10, forceUpdate = false, clearEnhanced = false } = await req.json()
+    // Each row is a paid Google Places lookup, and batchSize went straight into
+    // .limit(). 50 is the admin form's own max (RestaurantBulkUpdater.tsx).
+    const batchSize = Math.min(Math.max(Math.floor(Number(rawBatchSize)) || 10, 1), 50)
 
     console.log(`Starting bulk restaurant update with batch size: ${batchSize}, forceUpdate: ${forceUpdate}, clearEnhanced: ${clearEnhanced}`)
 
