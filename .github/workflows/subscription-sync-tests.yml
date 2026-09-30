@@ -258,6 +258,9 @@ jobs:
       # plan_id moves only through an exact price match and an unknown price
       # leaves it out of the patch.
       - run: deno test --allow-read supabase/functions/_tests/stripe-plan-from-price.test.ts
+      # A retried subscription.updated arriving after .deleted wrote active over
+      # canceled. Pins the live retrieve in handleSubscriptionUpdated.
+      - run: deno test --allow-read supabase/functions/_tests/stripe-subscription-updated-live-state.test.ts
       # WEB-BE-043 AC6. The ingestion functions were the one class of automation
       # with no job ledger, so a source going dark was invisible: SeatGeek - 375
       # events, the largest single source - stopped ingesting on 2026-08-21 and
