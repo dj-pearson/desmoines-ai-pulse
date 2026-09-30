@@ -44,7 +44,9 @@ export default defineConfig({
   // Axe is deterministic against a fixed DOM, so a retry only ever papers over
   // a navigation flake. One retry in CI, none locally.
   retries: process.env.CI ? 1 : 0,
-  reporter: 'list',
+  // An HTML report on CI, so a red required lane leaves something to open;
+  // `list` alone wrote nothing and the artifact upload found no files.
+  reporter: process.env.CI ? [['list'], ['html', { open: 'never' }]] : 'list',
   timeout: 60_000,
 
   use: {

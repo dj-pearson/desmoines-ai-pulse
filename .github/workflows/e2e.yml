@@ -28,8 +28,10 @@ name: E2E (critical suites)
 # crashes from missing named exports — only reproduce once bundled.
 
 on:
+  # release/** as well, so the release ruleset can require the smoke and axe
+  # lanes; a required check whose workflow never triggers blocks forever.
   pull_request:
-    branches: [main, develop]
+    branches: [main, develop, "release/**"]
   workflow_dispatch:
 
 concurrency:
@@ -100,7 +102,10 @@ jobs:
         uses: actions/upload-artifact@v4
         with:
           name: playwright-smoke-report
-          path: playwright-report/
+          # test-results/ holds the traces and screenshots of failed tests.
+          path: |
+            playwright-report/
+            test-results/
           retention-days: 7
           if-no-files-found: ignore
 
@@ -198,7 +203,10 @@ jobs:
 
           name: playwright-a11y-axe-report
 
-          path: playwright-report/
+          # test-results/ holds the traces and screenshots of failed tests.
+          path: |
+            playwright-report/
+            test-results/
 
           retention-days: 7
 
@@ -267,6 +275,9 @@ jobs:
         uses: actions/upload-artifact@v4
         with:
           name: playwright-report
-          path: playwright-report/
+          # test-results/ holds the traces and screenshots of failed tests.
+          path: |
+            playwright-report/
+            test-results/
           retention-days: 7
           if-no-files-found: ignore
