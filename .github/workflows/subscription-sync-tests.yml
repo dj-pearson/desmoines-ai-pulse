@@ -94,6 +94,16 @@ jobs:
       - uses: denoland/setup-deno@v1
         with:
           deno-version: v2.x
+      # Deno 2 reads the root package.json and then resolves `node:` type
+      # references from node_modules/@types/node. With no node_modules every
+      # suite that imports node:assert died at type-check with "Could not find
+      # @types/node", which stopped this job before most suites ran, on every
+      # run for weeks. --ignore-scripts: nothing here needs postinstall hooks.
+      - uses: actions/setup-node@v4
+        with:
+          node-version-file: .nvmrc
+          cache: npm
+      - run: npm ci --ignore-scripts --no-audit --no-fund
       - run: deno test --allow-read supabase/functions/_tests/cross-platform-sync.test.ts
       - run: deno test supabase/functions/_tests/version-check.test.ts
       # Role precedence for isAdminUserId and assign-role, including the
@@ -507,7 +517,9 @@ jobs:
       - run: deno test supabase/functions/_shared/eventPageDiscovery.test.ts
       - run: deno test supabase/functions/_shared/htmlContentWindow.test.ts
       - run: deno test supabase/functions/_shared/domain-adapters/dispatch.test.ts
-      - run: deno test supabase/functions/_shared/domain-adapters/tribeEvents.test.ts
+      # --allow-env: fetchAllowed reads SCRAPER_IGNORE_ROBOTS before fetching,
+      # and without the permission that read throws inside the adapter.
+      - run: deno test --allow-env supabase/functions/_shared/domain-adapters/tribeEvents.test.ts
       - run: deno test supabase/functions/_shared/domain-adapters/venueProfile.test.ts
       # Menu-scraping invariants — see docs/scraping/MENU_SCRAPER.md.
       # All fixture-based; no network access needed.

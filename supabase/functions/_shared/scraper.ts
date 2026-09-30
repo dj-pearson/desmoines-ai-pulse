@@ -164,7 +164,7 @@ async function scrapeWithBrowserless(
     console.error(`❌ Browserless error:`, error);
     return {
       success: false,
-      error: error.message,
+      error: error instanceof Error ? error.message : String(error),
       backend: 'browserless',
       duration: Date.now() - startTime,
     };
@@ -226,7 +226,7 @@ async function scrapeWithBrowserlessContent(
     console.error(`❌ Browserless /content error:`, error);
     return {
       success: false,
-      error: error.message,
+      error: error instanceof Error ? error.message : String(error),
       backend: 'browserless',
       duration: Date.now() - startTime,
     };
@@ -291,7 +291,7 @@ async function scrapeWithFetch(
     console.error(`❌ Fetch error:`, error);
     return {
       success: false,
-      error: error.message,
+      error: error instanceof Error ? error.message : String(error),
       backend: 'fetch',
       duration: Date.now() - startTime,
     };
@@ -361,7 +361,11 @@ async function scrapeWithPuppeteer(
       
       // Get page content
       const html = await page.content();
-      const text = await page.evaluate(() => document.body.innerText);
+      // Runs in the browser, where `document` exists; Deno's type check has no
+      // DOM lib, so reach it through globalThis rather than widening the lib.
+      const text = await page.evaluate(
+        () => (globalThis as unknown as { document: { body: { innerText: string } } }).document.body.innerText,
+      );
       
       console.log(`✅ Puppeteer scraped ${html.length} chars HTML, ${text.length} chars text`);
       
@@ -383,7 +387,7 @@ async function scrapeWithPuppeteer(
     console.error(`❌ Puppeteer error:`, error);
     return {
       success: false,
-      error: error.message,
+      error: error instanceof Error ? error.message : String(error),
       backend: 'puppeteer',
       duration: Date.now() - startTime,
     };
@@ -474,7 +478,7 @@ async function scrapeWithFirecrawl(
     console.error(`❌ Firecrawl error:`, error);
     return {
       success: false,
-      error: error.message,
+      error: error instanceof Error ? error.message : String(error),
       backend: 'firecrawl',
       duration: Date.now() - startTime,
     };

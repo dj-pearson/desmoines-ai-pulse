@@ -143,14 +143,29 @@ Deno.test('every display surface honours the flag through one function', async (
   const marker = code.indexOf('NO_TIME_MARKER');
   assert(flag > 0 && marker > 0 && flag < marker, 'the explicit flag wins over the sentinel');
 
+  // The display surfaces now label times through eventTiming.ts, and the
+  // JSON-LD through eventSchema.ts; those two are where the check is called.
   for (const rel of [
-    'src/components/EnhancedEventSEO.tsx',
-    'src/components/SocialEventCard.tsx',
-    'src/pages/EventDetails.tsx',
+    'src/lib/eventTiming.ts',
+    'src/lib/eventSchema.ts',
   ]) {
     const src = await read(rel);
     assert(/hasSpecificTime/.test(src), `${rel} must go through the shared check`);
   }
+  for (const rel of ['src/components/SocialEventCard.tsx', 'src/pages/EventDetails.tsx']) {
+    const src = await read(rel);
+    assert(
+      /eventTimeLabel/.test(src) && /from ['"]@\/lib\/eventTiming['"]/.test(src),
+      `${rel} must label times through eventTiming`,
+    );
+  }
+  // EnhancedEventSEO no longer formats times itself: its startDate and its
+  // event:start_time meta both come from eventSchema.ts, checked above.
+  const seo = await read('src/components/EnhancedEventSEO.tsx');
+  assert(
+    /import \{[^}]*\beventStartIso\b[^}]*\} from "@\/lib\/eventSchema"/.test(seo),
+    'EnhancedEventSEO must take its start time from eventSchema',
+  );
 });
 
 Deno.test('the adapter module still loads', () => {

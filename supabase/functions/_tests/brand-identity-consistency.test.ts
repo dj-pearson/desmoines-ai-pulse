@@ -23,12 +23,11 @@ const codeOnly = (src: string) =>
 Deno.test('sameAs comes from BRAND and is omitted when there is nothing to claim', async () => {
   // An empty sameAs array is itself a claim -- "this organisation has no
   // profiles" -- so the property is dropped rather than emitted empty.
+  // SEOEnhancedHead.tsx and EventSchema.tsx are deleted, and Index.tsx no
+  // longer emits an Organization node, so these are the emitters today.
   for (const rel of [
     'src/components/SEOHead.tsx',
-    'src/components/SEOEnhancedHead.tsx',
     'src/components/EnhancedLocalSEO.tsx',
-    'src/components/EventSchema.tsx',
-    'src/pages/Index.tsx',
   ]) {
     const src = codeOnly(await read(rel));
     assert(
@@ -75,7 +74,9 @@ Deno.test('hasMenu is claimed only where a menu exists', async () => {
   // one had been captured or not -- and where one had, the claim was a second
   // Menu node competing with the real one.
   const rd = codeOnly(await read('src/pages/RestaurantDetails.tsx'));
-  assertFalse(/hasMenu:/.test(rd), 'the unconditional claim must be gone');
+  // `hasMenu:` survives as a page-title flag (restaurantPageTitle's input),
+  // which is not a claim. The claim was a JSON-LD value pointing at #menu.
+  assertFalse(/hasMenu:\s*[`'"]/.test(rd), 'the unconditional claim must be gone');
 
   // The real owner renders only when a menu with sections exists.
   const section = codeOnly(await read('src/components/RestaurantMenuSection.tsx'));
@@ -115,8 +116,16 @@ Deno.test('event pages emit no head-only FAQPage', async () => {
   assertFalse(/FAQPage/.test(seo), 'no FAQPage may be built here');
   assertFalse(/faqSchema/.test(seo));
 
+  // EventDetails now renders the event's own FAQ visibly, and only when it has
+  // one: shown AND marked up, which is the condition the removed FAQPage never
+  // met. What must not come back is markup without a visible section.
   const details = codeOnly(await read('src/pages/EventDetails.tsx'));
-  assertFalse(/<FAQSection/.test(details), 'and none was added to carry it');
+  if (/<FAQSection/.test(details)) {
+    assert(
+      /\{readGeoFaq\(event\.geo_faq\)\.length > 0 && \(/.test(details),
+      'the FAQ section must render only when the event has questions',
+    );
+  }
 
   // The drift guard has to agree, or it fails on a component that no longer emits.
   const guard = codeOnly(await read('scripts/check-duplicate-schema.mjs'));

@@ -48,8 +48,15 @@ Deno.test('every ingest site that writes is_featured writes false', async () => 
   const expected: Record<string, number> = {
     'ai-crawler/index.ts': 1,
     'firecrawl-scraper/index.ts': 4,
-    'scrape-events/index.ts': 2,
   };
+  // scrape-events used to insert rows itself (2 sites). It now only drives
+  // scraping_jobs and hands each job to firecrawl-scraper, which is counted
+  // above. If it ever writes events again it has to come back into this list.
+  const scrapeEvents = await Deno.readTextFile(new URL('scrape-events/index.ts', FUNCTIONS));
+  assert(
+    !/\.from\(["']events["']\)/.test(scrapeEvents),
+    'scrape-events writes events again: add it back to the is_featured: false count',
+  );
   for (const [rel, count] of Object.entries(expected)) {
     const text = await Deno.readTextFile(new URL(rel, FUNCTIONS));
     const literalFalse = text.match(/is_featured\s*[:=]\s*false\b/g) ?? [];

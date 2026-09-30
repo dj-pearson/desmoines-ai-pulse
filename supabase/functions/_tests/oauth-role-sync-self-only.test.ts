@@ -114,10 +114,26 @@ Deno.test('the only client caller passes its own id', async () => {
   // This is what makes tightening the function safe: one caller, and it already
   // passes auth.uid(). If it ever changes, the guard turns a working call into
   // a 42501.
-  const hook = await read('src/hooks/useAdminAuth.ts');
-  const call = hook.slice(hook.indexOf("'sync_oauth_user_role'"));
-  assert(
-    /\{ p_user_id: user\.id \}/.test(call.slice(0, 200)),
-    'useAdminAuth must pass the signed-in user id',
-  );
+  // The call moved from useAdminAuth into AuthContext's single role resolver.
+  // Find it wherever it is: every .rpc('sync_oauth_user_role', ...) in src/.
+  const callers: string[] = [];
+  const walk = async (dir: URL) => {
+    for await (const e of Deno.readDir(dir)) {
+      const child = new URL(e.name + (e.isDirectory ? '/' : ''), dir);
+      if (e.isDirectory) await walk(child);
+      else if (/\.tsx?$/.test(e.name) && e.name !== 'types.ts') {
+        const src = await Deno.readTextFile(child);
+        let i = src.indexOf("'sync_oauth_user_role'");
+        while (i !== -1) {
+          if (/\.rpc\(\s*$/.test(src.slice(Math.max(0, i - 40), i))) callers.push(src.slice(i, i + 200));
+          i = src.indexOf("'sync_oauth_user_role'", i + 1);
+        }
+      }
+    }
+  };
+  await walk(new URL('src/', REPO));
+  assert(callers.length >= 1, 'no client caller of sync_oauth_user_role found; the scan is broken');
+  for (const call of callers) {
+    assert(/\{ p_user_id: user\.id \}/.test(call), 'every caller must pass the signed-in user id');
+  }
 });
