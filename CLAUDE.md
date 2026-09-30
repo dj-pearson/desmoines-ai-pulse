@@ -240,7 +240,8 @@ are gone; the fourteen DOM-measuring tests survive as `layout-integrity.spec.ts`
 npm run dev                 # http://localhost:8080
 # validate is ~30 offline checks, then eslint, then the app-project type
 # ratchet. It runs NO tests - `npm test` and the Deno suites are separate.
-# About 3m30s, most of it the type ratchet at the end.
+# About 3m30s cold, most of it the type ratchet; about 35s warm, because
+# tsc and eslint cache under node_modules/.cache (rm -rf it to go cold).
 npm run validate            # checks + lint + type-check (no tests)
 npm run validate:strict     # strict variant
 npm test                    # all Playwright tests (not part of validate)
