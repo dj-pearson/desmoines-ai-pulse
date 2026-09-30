@@ -25,6 +25,8 @@ import { AccessibilityWidget } from "@/components/AccessibilityWidget";
 import { SessionManager } from "@/components/auth/SessionManager";
 import { OfflineBanner } from "@/components/OfflineBanner";
 
+const CHUNK_RELOAD_COOLDOWN_MS = 60_000;
+
 /**
  * Wrapper around React.lazy that retries once on chunk load failure,
  * then does a hard page reload to pick up the latest deployment.
@@ -35,13 +37,19 @@ function lazyWithRetry(
 ) {
   return lazy(() =>
     importFn().catch((error) => {
-      const hasReloaded = sessionStore.getString("chunk_reload");
-      if (!hasReloaded) {
-        sessionStore.setString("chunk_reload", "1");
+      // The flag holds when we last reloaded for a stale chunk. It used to be
+      // a bare "1" that was removed only by a second failure, so after one
+      // successful recovery the next stale chunk in the same tab skipped the
+      // reload and went straight to the error card. A timestamp allows one
+      // reload per minute: enough to recover after every deploy, never a loop
+      // (clearing it on any successful import would be one, since chunks that
+      // did load would keep resetting it while the broken one kept failing).
+      const lastReload = Number(sessionStore.getString("chunk_reload")) || 0;
+      if (Date.now() - lastReload > CHUNK_RELOAD_COOLDOWN_MS) {
+        sessionStore.setString("chunk_reload", String(Date.now()));
         window.location.reload();
         return new Promise(() => {}); // never resolves; reload will take over
       }
-      sessionStore.remove("chunk_reload");
       throw error; // let the error boundary handle it
     })
   );
