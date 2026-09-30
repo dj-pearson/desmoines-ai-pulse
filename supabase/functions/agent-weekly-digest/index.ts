@@ -19,6 +19,7 @@ import { requireAdminOrApiKey } from "../_shared/apiKeyAuth.ts";
 import { runAgent } from "../_shared/agentRun.ts";
 import { scoreOutput } from "../_shared/scoreOutput.ts";
 import { sendNurtureEmail } from "../_shared/sendNurtureEmail.ts";
+import { hasMarketingConsent } from "../_shared/marketingConsent.ts";
 
 const AGENT_KEY = "weekly-digest-personal";
 const BATCH = 300;
@@ -85,7 +86,7 @@ Deno.serve(async (req) => {
     let sent = 0, skippedEmpty = 0, skippedCap = 0, gated = 0, skippedConsent = 0;
 
     for (const p of rows) {
-      if (p.lifecycle_signals?.messagingAllowed === false) { skippedConsent++; continue; }
+      if (!hasMarketingConsent(p.lifecycle_signals)) { skippedConsent++; continue; }
 
       // Frequency cap.
       const { data: recent, error: recentError } = await supabase

@@ -16,6 +16,7 @@ import { scoreOutput } from "../scoreOutput.ts";
 import { sendNurtureEmail } from "../sendNurtureEmail.ts";
 import { recentlyMessaged, shouldAgeOut } from "../nurtureCoordination.ts";
 import type { AgentRun } from "./types.ts";
+import { hasMarketingConsent } from "../marketingConsent.ts";
 
 const AGENT_KEY = "dormant-reengagement";
 const KIND = "reengagement";
@@ -83,7 +84,7 @@ export const run: AgentRun = async (ctx, { supabase }) => {
   let sent = 0, coordSkipped = 0, capped = 0, agedOut = 0, gated = 0, noConsent = 0;
 
   for (const p of rows) {
-    if (p.lifecycle_signals?.messagingAllowed === false) { noConsent++; continue; }
+    if (!hasMarketingConsent(p.lifecycle_signals)) { noConsent++; continue; }
 
     // Age-out repeatedly-unresponsive users.
     if (await shouldAgeOut(supabase, p.user_id, KIND, MAX_ATTEMPTS)) {

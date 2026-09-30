@@ -19,6 +19,7 @@ import { sendNurtureEmail } from "../sendNurtureEmail.ts";
 import { createApproval } from "../agentApprovals.ts";
 import { writeAgentAudit } from "../auditLog.ts";
 import type { AgentRun } from "./types.ts";
+import { hasMarketingConsent } from "../marketingConsent.ts";
 
 const AGENT_KEY = "churn-winback";
 const BATCH = 200;
@@ -108,7 +109,7 @@ export const run: AgentRun = async (ctx, { supabase }) => {
 
     // Win-back play only for high-risk, consented users, respecting frequency.
     if (score < HIGH_RISK) continue;
-    if (signals.messagingAllowed === false) { skipped++; continue; }
+    if (!hasMarketingConsent(signals)) { skipped++; continue; }
     const { data: recent, error: recentError } = await supabase
       .from("winback_interventions")
       .select("created_at")
