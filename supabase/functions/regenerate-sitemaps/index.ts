@@ -221,19 +221,19 @@ async function buildSitemaps(supabase: Supa) {
       .not("slug", "is", null)
       .order("updated_at", { ascending: false });
     if (error) throw new Error(`hotels read failed: ${error.message}`);
-    const urls: SitemapUrl[] = [
-      { loc: `${BASE_URL}/stay`, lastmod: now, changefreq: "weekly", priority: "0.8" },
-      // The cast matches every other block here. supabase-js infers `never` for
-      // this query's row type under the version skew documented in WEB-CI-030.
-      ...((data ?? []) as any[])
-        .filter((h: any) => !!h.slug)
-        .map((h: any) => ({
-          loc: `${BASE_URL}/stay/${h.slug}`,
-          lastmod: (h.updated_at || now).split("T")[0],
-          changefreq: "weekly",
-          priority: "0.6",
-        })),
-    ];
+    // The cast matches every other block here. supabase-js infers `never` for
+    // this query's row type under the version skew documented in WEB-CI-030.
+    const urls: SitemapUrl[] = ((data ?? []) as any[])
+      .filter((h: any) => !!h.slug)
+      .map((h: any) => ({
+        loc: `${BASE_URL}/stay/${h.slug}`,
+        lastmod: (h.updated_at || now).split("T")[0],
+        changefreq: "weekly",
+        priority: "0.6",
+      }));
+    // /stay itself is in sitemap-static.xml; listing it here too reports it
+    // twice. Only as the empty-set fallback, like the articles block above.
+    if (urls.length === 0) urls.push({ loc: `${BASE_URL}/stay`, lastmod: now, changefreq: "weekly", priority: "0.8" });
     sitemaps["sitemap-hotels.xml"] = buildXml(urls);
   }
 

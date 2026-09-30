@@ -519,9 +519,12 @@ async function generateHotelsSitemap(): Promise<number | null> {
       priority: '0.6',
     }));
 
-  // The hub, always, and alone if there is nothing else. An empty urlset is
-  // valid XML and a Search Console warning; the hub is a real page either way.
-  urls.unshift({ loc: `${baseUrl}/stay`, lastmod: currentDate, changefreq: 'weekly', priority: '0.8' });
+  // The hub only as the empty-set fallback, as for venues/trails/teams below:
+  // /stay is already in sitemap-static.xml, and a URL in two sitemaps fails
+  // check-sitemap-duplicates. An empty urlset would be a Search Console warning.
+  if (urls.length === 0) {
+    urls.push({ loc: `${baseUrl}/stay`, lastmod: currentDate, changefreq: 'weekly', priority: '0.8' });
+  }
 
   const written = writeSitemap('sitemap-hotels.xml', urls, 'hotels');
   console.log(`✅ Hotels sitemap generated: ${written} URLs`);
