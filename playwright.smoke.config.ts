@@ -200,7 +200,9 @@ export default defineConfig({
   fullyParallel: true,
   forbidOnly: !!process.env.CI,
   retries: process.env.CI ? 2 : 0,
-  reporter: 'list',
+  // An HTML report on CI, so a red required lane leaves something to open;
+  // `list` alone wrote nothing and the artifact upload found no files.
+  reporter: process.env.CI ? [['list'], ['html', { open: 'never' }]] : 'list',
   timeout: 60_000,
 
   use: {
