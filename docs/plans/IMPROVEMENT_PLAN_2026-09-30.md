@@ -5,14 +5,22 @@ security, data and SEO, testing/CI/mobile). Every item cites the file it was fou
 in. None of it was probed against production, so each item's first step is to
 confirm the problem still exists.
 
-Work the items in order, one branch and one PR per item. Tick the box when the PR
-merges.
+Planned as one branch and one PR per item; see Status for how it actually landed.
 
 ## Status (2026-09-30)
 
-Every item has a PR except 14, which needed no code. All PRs target `main`, per the decision to branch off `main`.
+Shipped. Every item except 14 was built as its own PR (#420-#439), then all
+twenty were merged into one branch and landed on `main` as **#440**. The per-item
+PRs are closed and their branches kept; the table records which one carried each
+item, so `git log` on that branch shows the change in isolation.
 
-**Merge #435 first.** Required CI was red on `main` in six places before any of this work started, so every PR below shows red until #435 lands and `main` is merged into it. #438 and #439 are stacked on #435.
+Still open after #440:
+
+- `supabase db push` for migrations 20261015000006 and 20261015000007.
+- Deploy the changed edge functions (listed in #440's deploy notes).
+- Apply the ruleset changes from item 18 in GitHub; the JSON in `.github/rulesets/` does nothing until it is applied.
+- Item 14 needs database access to merge the 10 duplicate groups.
+- Merge `main` back into `develop`.
 
 | # | Item | PR | Notes |
 |---|---|---|---|
