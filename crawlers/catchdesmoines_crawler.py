@@ -22,6 +22,7 @@ import logging
 import os
 import re
 import sys
+import time
 from datetime import datetime
 from typing import Optional
 from dateutil import parser as date_parser
@@ -223,6 +224,18 @@ MAX_EXTRACTION_CHARS = 60000
 # same way whether it was blocked or broken.
 ROBOTS_TIMEOUT_SECONDS = 5
 ROBOTS_USER_AGENT = "*"  # the crawler presents a browser UA, so it matches the wildcard group
+# WEB-BE-051. Five pages of twelve was about 60 events, a few days of the
+# calendar, so a show months out appeared only once it was close, and the
+# month pages (WEB-SEO-041) had nothing to list. Twenty pages is about 240.
+DEFAULT_MAX_PAGES = 20
+# The job has a hard timeout and a render plus a model call per page, plus a
+# detail fetch per new event. Work that does not fit is deferred to the next
+# daily run rather than lost: every run walks from page 0, and duplicates are
+# skipped before any detail fetch, so tomorrow resumes where today stopped.
+DEFAULT_TIME_BUDGET_MINUTES = 30
+# Share of the budget the listing walk may spend before processing starts.
+LIST_BUDGET_SHARE = 0.5
+
 DEFAULT_LIST_DELAY_SECONDS = 2.0
 DEFAULT_DETAIL_DELAY_SECONDS = 1.0
 
@@ -333,12 +346,38 @@ def clean_html_for_extraction(html: str) -> str:
     return cleaned
 
 
+def page_adds_new_events(events: list, seen_detail_urls: set) -> bool:
+    """Record this page's detail links; True when at least one is new.
+
+    An event with no detail_url cannot be compared, so it counts as new: a
+    page of those is not proof the listing ended.
+    """
+    added = False
+    for event in events:
+        url = (event.get("detail_url") or "").strip().rstrip("/").lower()
+        if not url:
+            added = True
+            continue
+        if url not in seen_detail_urls:
+            seen_detail_urls.add(url)
+            added = True
+    return added
+
+
 class CatchDesMoinesCrawler:
     """Crawler for catchdesmoines.com events."""
 
-    def __init__(self, dry_run: bool = False, max_pages: int = 5):
+    def __init__(
+        self,
+        dry_run: bool = False,
+        max_pages: int = DEFAULT_MAX_PAGES,
+        time_budget_minutes: float = DEFAULT_TIME_BUDGET_MINUTES,
+    ):
         self.dry_run = dry_run
         self.max_pages = max_pages
+        self.time_budget_seconds = time_budget_minutes * 60
+        # Events extracted but left for the next run because the budget ran out.
+        self.events_deferred: int = 0
         self.supabase: Optional[Client] = None
         self.anthropic_client: Optional[anthropic.Anthropic] = None
         self.events_found: list = []
@@ -870,6 +909,7 @@ Return ONLY the JSON array. No other text."""
             "metadata": {
                 "runner": "github-actions",
                 "maxPages": self.max_pages,
+                "deferred": self.events_deferred,
                 # The shape supabase/functions/_shared/ingestionHealth.ts reads.
                 "sources": {
                     "catchdesmoines.com": {
@@ -901,9 +941,17 @@ Return ONLY the JSON array. No other text."""
         self._init_clients()
 
         all_events = []
+        seen_detail_urls: set = set()
+        run_start = time.monotonic()
+        list_deadline = run_start + self.time_budget_seconds * LIST_BUDGET_SHARE
+        run_deadline = run_start + self.time_budget_seconds
 
         # Crawl event listing pages
         for page in range(self.max_pages):
+            if page > 0 and time.monotonic() > list_deadline:
+                logger.info(f"Listing budget spent after {page} page(s); processing what was found")
+                break
+
             html = await self.crawl_events_list(page)
 
             if not html:
@@ -926,6 +974,13 @@ Return ONLY the JSON array. No other text."""
                     logger.info(f"No more events found on page {page + 1}")
                 break
 
+            # Past the end of the calendar the listing repeats or empties. A
+            # page that adds no detail link this run has not already seen is
+            # the end, whatever max_pages says.
+            if page > 0 and not page_adds_new_events(events, seen_detail_urls):
+                logger.info(f"Page {page + 1} added no new events; end of the listing")
+                break
+
             all_events.extend(events)
             logger.info(f"Total events found so far: {len(all_events)}")
 
@@ -937,6 +992,13 @@ Return ONLY the JSON array. No other text."""
 
         # Process each event
         for i, event in enumerate(all_events):
+            if time.monotonic() > run_deadline:
+                self.events_deferred = len(all_events) - i
+                logger.warning(
+                    f"Time budget spent; deferring {self.events_deferred} event(s) to the next run"
+                )
+                break
+
             logger.info(f"Processing event {i + 1}/{len(all_events)}: {event.get('title')}")
 
             # Check for duplicates
@@ -978,6 +1040,7 @@ Return ONLY the JSON array. No other text."""
         logger.info(f"Duplicates skipped: {self.duplicates_skipped}")
         logger.info(f"Duplicate-check errors (skipped): {self.duplicate_check_errors}")
         logger.info(f"Extraction errors: {self.extraction_errors}")
+        logger.info(f"Deferred to next run: {self.events_deferred}")
         logger.info("=" * 60)
 
         return {
@@ -988,6 +1051,7 @@ Return ONLY the JSON array. No other text."""
             # Reported apart from duplicates so an operator can tell "already
             # there" from "could not find out" (WEB-BE-048).
             "duplicate_check_errors": self.duplicate_check_errors,
+            "deferred": self.events_deferred,
         }
 
 
@@ -997,7 +1061,13 @@ async def main():
 
     parser = argparse.ArgumentParser(description="CatchDesMoines Event Crawler")
     parser.add_argument("--dry-run", action="store_true", help="Don't insert into database")
-    parser.add_argument("--max-pages", type=int, default=5, help="Maximum pages to crawl")
+    parser.add_argument("--max-pages", type=int, default=DEFAULT_MAX_PAGES, help="Maximum pages to crawl")
+    parser.add_argument(
+        "--time-budget-minutes",
+        type=float,
+        default=DEFAULT_TIME_BUDGET_MINUTES,
+        help="Stop starting new work after this long; the rest waits for the next run",
+    )
     args = parser.parse_args()
 
     # Load environment variables from .env file if present
@@ -1007,7 +1077,11 @@ async def main():
     except ImportError:
         pass
 
-    crawler = CatchDesMoinesCrawler(dry_run=args.dry_run, max_pages=args.max_pages)
+    crawler = CatchDesMoinesCrawler(
+        dry_run=args.dry_run,
+        max_pages=args.max_pages,
+        time_budget_minutes=args.time_budget_minutes,
+    )
     try:
         result = await crawler.run()
     except Exception:

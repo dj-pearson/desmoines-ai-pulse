@@ -42,4 +42,4 @@ COPY catchdesmoines_crawler.py event_detail.py venue_match.py ./
 
 # Default command
 ENTRYPOINT ["python", "catchdesmoines_crawler.py"]
-CMD ["--max-pages", "5"]
+CMD ["--max-pages", "20"]
