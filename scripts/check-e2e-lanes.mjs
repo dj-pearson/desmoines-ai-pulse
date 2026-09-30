@@ -84,7 +84,7 @@ const orphans = specs.filter((name) => {
   // The name is bounded by anything but a word character OR a hyphen. \b alone
   // treats "-" as a boundary, so `restaurants-hub` counted as wired because a
   // workflow names restaurants-hub-payload.test.ts - a Deno test, not the spec.
-  const escaped = name.replace(/[-]/g, '\\-');
+  const escaped = name.replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
   return !new RegExp(`(?<![\\w-])${escaped}(?![\\w-])`).test(laneText);
 });
 
