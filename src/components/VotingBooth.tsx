@@ -320,7 +320,7 @@ export function VotingBooth({ category, results = [] }: VotingBoothProps) {
         )}
 
         {checkingVote && (
-          <div className="space-y-2" aria-busy="true" aria-label="Checking your vote">
+          <div className="space-y-2" role="status" aria-busy="true" aria-label="Checking your vote">
             <Skeleton className="h-11 w-full" />
             <Skeleton className="h-5 w-40" />
           </div>

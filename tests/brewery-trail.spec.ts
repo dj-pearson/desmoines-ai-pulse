@@ -70,9 +70,25 @@ const json = (route: Route, body: unknown, status = 200) =>
     body: JSON.stringify(body),
   });
 
+/**
+ * supabase-js stores the session under `sb-<project-ref>-auth-token`, and the
+ * ref is a BUILD-TIME value: the placeholder locally, the real host in CI. This
+ * spec hard-coded the placeholder, so in CI the session was never found, the
+ * page rendered signed out, and every signed-in test failed while passing
+ * locally. Same helper as submission-live-link.spec.ts.
+ */
+function authStorageKey(): string {
+  const url = process.env.VITE_SUPABASE_URL || 'https://placeholder.supabase.co';
+  try {
+    return `sb-${new URL(url).hostname.split('.')[0]}-auth-token`;
+  } catch {
+    return 'sb-placeholder-auth-token';
+  }
+}
+
 async function seedSession(page: Page) {
   await page.addInitScript(
-    ({ userId }) => {
+    ({ userId, storageKey }) => {
       const session = {
         access_token: 'test-access-token',
         refresh_token: 'test-refresh-token',
@@ -90,7 +106,7 @@ async function seedSession(page: Page) {
         },
       };
       try {
-        localStorage.setItem('sb-placeholder-auth-token', JSON.stringify(session));
+        localStorage.setItem(storageKey, JSON.stringify(session));
         localStorage.setItem(
           'cookie-consent',
           JSON.stringify({ version: '2026-04-13', timestamp: new Date().toISOString(), essential: true, preferences: true, analytics: false, advertising: false }),
@@ -99,7 +115,7 @@ async function seedSession(page: Page) {
         /* private mode */
       }
     },
-    { userId: USER_ID },
+    { userId: USER_ID, storageKey: authStorageKey() },
   );
   await page.route('**/auth/v1/**', (route) =>
     route.request().url().includes('/user')

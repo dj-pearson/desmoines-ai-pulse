@@ -196,7 +196,7 @@ export default function SubscriptionPortal() {
           <h1 className="mb-6 text-3xl font-bold text-foreground">Subscription and billing</h1>
 
           {loading ? (
-            <div className="space-y-4" aria-busy="true" aria-label="Loading your subscription">
+            <div className="space-y-4" role="status" aria-busy="true" aria-label="Loading your subscription">
               <Skeleton className="h-40 w-full" />
               <Skeleton className="h-24 w-full" />
             </div>

@@ -83,7 +83,7 @@ function buildFaqs(diet: Diet | null): FAQItem[] {
 
 function ListSkeleton() {
   return (
-    <div className="grid gap-6 md:grid-cols-2 lg:grid-cols-3" aria-busy="true" aria-label="Loading restaurants">
+    <div className="grid gap-6 md:grid-cols-2 lg:grid-cols-3" role="status" aria-busy="true" aria-label="Loading restaurants">
       {Array.from({ length: 6 }, (_, i) => (
         <div key={i} className="animate-pulse">
           <div className="h-48 bg-muted rounded-xl mb-4" />

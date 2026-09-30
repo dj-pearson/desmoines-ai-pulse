@@ -154,7 +154,7 @@ export function AdvertiseTab() {
         </CardHeader>
         <CardContent>
           {isLoading ? (
-            <div className="space-y-3" aria-busy="true" aria-label="Loading your campaigns">
+            <div className="space-y-3" role="status" aria-busy="true" aria-label="Loading your campaigns">
               <Skeleton className="h-20 w-full rounded-xl" />
               <Skeleton className="h-20 w-full rounded-xl" />
             </div>

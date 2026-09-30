@@ -47,7 +47,7 @@ function TaproomsThisWeek({ events, pending }: { events: BreweryEvent[]; pending
   if (pending) {
     // Fixed height, so the grid below does not jump when the list arrives.
     return (
-      <div className="my-10 max-w-3xl" aria-busy="true" aria-label="Loading taproom events">
+      <div className="my-10 max-w-3xl" role="status" aria-busy="true" aria-label="Loading taproom events">
         <Skeleton className="h-8 w-64 mb-4" />
         <Skeleton className="h-40 rounded-xl" />
       </div>
@@ -359,7 +359,7 @@ export default function BreweryTrail() {
                   onRetry={() => void checkinsQuery.refetch()}
                 />
               ) : !checkinsReady || !breweriesLoaded ? (
-                <Skeleton className="h-36 rounded-xl" aria-label="Loading your passport" />
+                <Skeleton className="h-36 rounded-xl" role="status" aria-label="Loading your passport" />
               ) : totalBreweries > 0 ? (
                 <Card>
                   <CardContent className="p-6">

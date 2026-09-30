@@ -61,7 +61,7 @@ export function YourWeek() {
       </div>
 
       {weekLoading ? (
-        <div className="space-y-2" aria-busy="true" aria-label="Loading your week">
+        <div className="space-y-2" role="status" aria-busy="true" aria-label="Loading your week">
           <Skeleton className="h-12 w-full bg-muted" />
           <Skeleton className="h-12 w-full bg-muted" />
           <Skeleton className="h-12 w-4/5 bg-muted" />

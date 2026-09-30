@@ -368,7 +368,7 @@ export default function DateNightEvents() {
               <div>
                 <h3 className="font-semibold mb-2">Work back from the start time</h3>
                 <p className="text-sm text-muted-foreground">
-                  Every card shows the start time in Central. Leave time for dinner and parking; <Link to="/restaurants/open-now" className="text-primary hover:underline font-semibold">restaurants open now</Link> shows what is serving.
+                  Every card shows the start time in Central. Leave time for dinner and parking; <Link to="/restaurants/open-now" className="text-primary underline underline-offset-2 font-semibold">restaurants open now</Link> shows what is serving.
                 </p>
               </div>
               <div>
@@ -380,13 +380,13 @@ export default function DateNightEvents() {
               <div>
                 <h3 className="font-semibold mb-2">Think past Saturday</h3>
                 <p className="text-sm text-muted-foreground">
-                  The <Link to="/events/this-weekend" className="text-primary hover:underline">this weekend</Link> list runs Friday through Sunday, and the full <Link to="/events" className="text-primary hover:underline">events calendar</Link> covers weeknights.
+                  The <Link to="/events/this-weekend" className="text-primary underline underline-offset-2">this weekend</Link> list runs Friday through Sunday, and the full <Link to="/events" className="text-primary underline underline-offset-2">events calendar</Link> covers weeknights.
                 </p>
               </div>
               <div>
                 <h3 className="font-semibold mb-2">Keep it free</h3>
                 <p className="text-sm text-muted-foreground">
-                  See <Link to="/events/free" className="text-primary hover:underline">free events</Link> for evenings that cost nothing to get in.
+                  See <Link to="/events/free" className="text-primary underline underline-offset-2">free events</Link> for evenings that cost nothing to get in.
                 </p>
               </div>
             </div>
