@@ -593,6 +593,10 @@ jobs:
       # separates a site visitor from nobody and nothing more. Two functions were
       # reachable that way: one dispatched mail, one started a paid geocoding
       # batch. Baselined; this stops the list growing.
+      # Every Deno suite under supabase/functions is named on a deno test line.
+      - name: No Deno suite is run by no lane
+        run: node scripts/check-deno-lanes.mjs
+
       - name: Service-role functions verify their caller
         run: node scripts/check-edge-auth.mjs
 
