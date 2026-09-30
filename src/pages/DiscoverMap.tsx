@@ -30,6 +30,8 @@ import { createSlug } from '@/lib/slug';
 import { centralHour, createEventSlugWithCentralTime, hasSpecificTime } from '@/lib/timezone';
 import { cn } from '@/lib/utils';
 import { getCanonicalUrl } from '@/lib/brandConfig';
+import { toJsonLd } from '@/lib/jsonLd';
+import { collectionPageJsonLd } from '@/lib/collectionPageJsonLd';
 import type { MapBounds, MapEntity, MapEntityType, MapFlyTo } from '@/components/map/DiscoverMapCanvas';
 
 const logger = createLogger('DiscoverMap');
@@ -1081,6 +1083,16 @@ export default function DiscoverMap() {
           name="twitter:description"
           content="See what's on tonight and what's open now in Des Moines. Browse events, restaurants, attractions, playgrounds and trails on one map."
         />
+        <script type="application/ld+json">
+          {toJsonLd(
+            collectionPageJsonLd({
+              name: 'Discover Map - Explore Des Moines',
+              description:
+                "See what's on tonight and what's open now in Des Moines. Browse events, restaurants, attractions, playgrounds and trails on one map.",
+              path: '/map',
+            }),
+          )}
+        </script>
       </Helmet>
       {/* WEB-SEO-004: the UI is map-first with no natural place for a visible
           title, so the h1 is screen-reader only. */}

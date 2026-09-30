@@ -91,6 +91,7 @@ async function checkRateLimitDB(
   endpoint: string,
   windowMs: number,
   max: number,
+  message: string,
 ): Promise<RateLimitResult | null> {
   try {
     const supabaseUrl = Deno.env.get('SUPABASE_URL');
@@ -120,10 +121,10 @@ async function checkRateLimitDB(
         remaining: 0,
         resetTime,
         response: new Response(
-          JSON.stringify({
-            error: 'Too many requests, please try again later.',
-            retryAfter,
-          }),
+          // The caller's message, as the in-memory path already sends. This
+          // used to be a fixed string, so moving an endpoint to the persistent
+          // limiter silently changed what its 429 said.
+          JSON.stringify({ error: message, retryAfter }),
           {
             status: 429,
             headers: {
@@ -253,7 +254,7 @@ export async function checkRateLimitPersistent(
   const clientId = getClientIdentifier(req, options.userId);
 
   // Try database-backed rate limiting first
-  const dbResult = await checkRateLimitDB(clientId, endpoint, windowMs, max);
+  const dbResult = await checkRateLimitDB(clientId, endpoint, windowMs, max, message);
   if (dbResult) return dbResult;
 
   // FAIL OPEN: a DB-lookup miss/outage must never break the product. The

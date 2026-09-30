@@ -3,6 +3,7 @@ import { Headset, Loader2, Send, Sparkles } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Input } from "@/components/ui/input";
+import { Link } from "react-router-dom";
 import { cn } from "@/lib/utils";
 import { useSupportChat } from "@/hooks/useSupportChat";
 
@@ -68,6 +69,11 @@ export default function SupportChat() {
                 {m.sources && m.sources.length > 0 && (
                   <p className="mt-1 text-xs opacity-70">Sources: {m.sources.join("; ")}</p>
                 )}
+                {m.failed && (
+                  <Link to="/contact" className="mt-1 inline-block text-xs font-medium underline underline-offset-2">
+                    Open the contact form
+                  </Link>
+                )}
                 {m.escalated && (
                   <p className="mt-1 text-xs font-medium text-amber-600">Connected to our support team.</p>
                 )}
@@ -114,6 +120,12 @@ export default function SupportChat() {
           >
             <Headset className="mr-2 h-4 w-4" aria-hidden="true" /> Talk to a human
           </Button>
+          <p className="mt-1 text-center text-xs text-muted-foreground">
+            Prefer email?{" "}
+            <Link to="/contact" className="underline underline-offset-2">
+              Use the contact form
+            </Link>
+          </p>
         </div>
       </CardContent>
     </Card>

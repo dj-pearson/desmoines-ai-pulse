@@ -123,13 +123,21 @@ serve(async (req) => {
       }
     ];
 
+    // Events that started within 7 days, or are still running, stay listed.
+    const SITEMAP_EVENT_CUTOFF = new Date(Date.now() - 7 * 24 * 60 * 60 * 1000).toISOString().split("T")[0];
+
     // Generate events sitemap
     const eventsUrls: SitemapUrl[] = [];
     try {
       const { data: events, error } = await supabase
         .from("events")
         .select("id, title, date, updated_at, created_at, event_start_utc")
-        .gte("date", new Date().toISOString().split("T")[0])
+      // THE SAME FOUR PREDICATES AS scripts/generate-dynamic-sitemaps.ts, which
+      // writes the same file at build time; sitemap-event-filters.test.mjs
+      // holds all three writers to them. This one filtered `date >= today`, which
+      // dropped a festival or exhibit still running, and had no is_merged filter.
+        .or(`date.gte.${SITEMAP_EVENT_CUTOFF},end_date.gte.${SITEMAP_EVENT_CUTOFF}`)
+        .neq("is_merged", true)
         .neq("is_hidden", true) // Exclude soft-hidden stale events (WEB-AUTO-006)
         // WEB-BE-034: and the other unpublish switch. Without it an archived
         // event stayed in sitemap-events.xml and kept being crawled.

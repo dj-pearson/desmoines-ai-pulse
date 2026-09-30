@@ -300,7 +300,9 @@ test.describe('/advertise builder on a phone', () => {
     await page.getByRole('checkbox', { name: 'Top Banner' }).click();
     await page.getByRole('button', { name: 'Sign in to continue' }).click();
 
-    await expect(page).toHaveURL(/\/auth\?redirect=/);
+    // The builder now opens the sign-up tab (mode=signup); what matters is that
+    // the redirect back to the draft survives, checked just below.
+    await expect(page).toHaveURL(/\/auth\?(?:.*&)?redirect=/);
     const redirect = new URL(page.url()).searchParams.get('redirect');
     expect(redirect).toBe(`/advertise?listing_type=restaurant&listing_id=${RESTAURANT_ID}`);
 

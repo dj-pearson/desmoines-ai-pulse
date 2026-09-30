@@ -41,10 +41,6 @@ const BASELINE = new Map([
   ['components/account/SubmissionTimeline.tsx', 1],
   // Handed off to Business, same fix.
   ['components/business/YourEvents.tsx', 1],
-  // A canonical built from the id, in SEOGenerator. Nothing in src/ imports
-  // seoUtils today (SEOTools.tsx declares its own unrelated SEOGenerator
-  // interface); delete the file or fix the line, then drop this entry.
-  ['lib/seoUtils.ts', 1],
 ]);
 
 const SRC = path.resolve('src');

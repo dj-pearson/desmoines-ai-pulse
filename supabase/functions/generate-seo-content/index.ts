@@ -12,7 +12,7 @@ import { createClient } from 'https://esm.sh/@supabase/supabase-js@2';
 import { getAIConfig, buildLightweightClaudeRequest, getClaudeHeaders, getAnthropicApiKey, extractClaudeText } from "../_shared/aiConfig.ts";
 import { checkRateLimit } from "../_shared/rateLimit.ts";
 import { handleCors, getCorsHeaders, isOriginAllowed } from "../_shared/cors.ts";
-import { requireApiKey } from "../_shared/apiKeyAuth.ts";
+import { requireAdminOrApiKey } from "../_shared/apiKeyAuth.ts";
 
 serve(async (req) => {
   const corsResponse = handleCors(req);
@@ -21,8 +21,10 @@ serve(async (req) => {
   const origin = req.headers.get("origin") || "";
   const corsHeaders = getCorsHeaders(isOriginAllowed(origin) ? origin : undefined);
 
-  // Require API key or admin auth (SEC-029)
-  const authResponse = requireApiKey(req, corsHeaders);
+  // API key or admin auth (SEC-029). This was requireApiKey alone, which only
+  // accepts EDGE_FUNCTION_API_KEY, so the admin SEO tool (SEOTools.tsx), which
+  // sends the admin's JWT, got a 401 on every click.
+  const authResponse = await requireAdminOrApiKey(req, corsHeaders);
   if (authResponse) return authResponse;
 
   // Rate limit: 10 AI requests per 15 minutes per client

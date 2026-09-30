@@ -78,6 +78,11 @@ function eventSlug(title: string, ev: { date?: string | null; event_start_utc?: 
 
 const today = () => new Date().toISOString().split("T")[0];
 
+/** Events that started within this many days, or are still running, stay listed. */
+const SITEMAP_EVENT_GRACE_DAYS = 7;
+const sitemapEventCutoff = () =>
+  new Date(Date.now() - SITEMAP_EVENT_GRACE_DAYS * 24 * 60 * 60 * 1000).toISOString().split("T")[0];
+
 function buildXml(urls: SitemapUrl[]): string {
   const body = urls
     .map(
@@ -109,6 +114,13 @@ async function buildSitemaps(supabase: Supa) {
     const { data, error } = await supabase
       .from("events")
       .select("id, title, date, event_start_utc, updated_at")
+      // THE SAME FOUR PREDICATES AS scripts/generate-dynamic-sitemaps.ts, which
+      // writes the same file at build time; sitemap-event-filters.test.mjs
+      // holds all three writers to them. This one had no cutoff at all and no
+      // is_merged filter, so a merged duplicate (a soft-404 once merged) and
+      // every past event back to the table's start were submitted to Google.
+      .or(`date.gte.${sitemapEventCutoff()},end_date.gte.${sitemapEventCutoff()}`)
+      .neq("is_merged", true)
       .neq("is_hidden", true)
       // WEB-BE-034: and the other unpublish switch. Without it an archived
       // event stayed in sitemap-events.xml and kept being crawled.
@@ -221,19 +233,19 @@ async function buildSitemaps(supabase: Supa) {
       .not("slug", "is", null)
       .order("updated_at", { ascending: false });
     if (error) throw new Error(`hotels read failed: ${error.message}`);
-    const urls: SitemapUrl[] = [
-      { loc: `${BASE_URL}/stay`, lastmod: now, changefreq: "weekly", priority: "0.8" },
-      // The cast matches every other block here. supabase-js infers `never` for
-      // this query's row type under the version skew documented in WEB-CI-030.
-      ...((data ?? []) as any[])
-        .filter((h: any) => !!h.slug)
-        .map((h: any) => ({
-          loc: `${BASE_URL}/stay/${h.slug}`,
-          lastmod: (h.updated_at || now).split("T")[0],
-          changefreq: "weekly",
-          priority: "0.6",
-        })),
-    ];
+    // The cast matches every other block here. supabase-js infers `never` for
+    // this query's row type under the version skew documented in WEB-CI-030.
+    const urls: SitemapUrl[] = ((data ?? []) as any[])
+      .filter((h: any) => !!h.slug)
+      .map((h: any) => ({
+        loc: `${BASE_URL}/stay/${h.slug}`,
+        lastmod: (h.updated_at || now).split("T")[0],
+        changefreq: "weekly",
+        priority: "0.6",
+      }));
+    // /stay itself is in sitemap-static.xml; listing it here too reports it
+    // twice. Only as the empty-set fallback, like the articles block above.
+    if (urls.length === 0) urls.push({ loc: `${BASE_URL}/stay`, lastmod: now, changefreq: "weekly", priority: "0.8" });
     sitemaps["sitemap-hotels.xml"] = buildXml(urls);
   }
 

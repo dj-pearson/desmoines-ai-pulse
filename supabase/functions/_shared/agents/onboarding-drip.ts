@@ -13,6 +13,7 @@
 import { scoreOutput } from "../scoreOutput.ts";
 import { sendNurtureEmail } from "../sendNurtureEmail.ts";
 import type { AgentRun } from "./types.ts";
+import { hasMarketingConsent } from "../marketingConsent.ts";
 
 const AGENT_KEY = "onboarding-drip";
 const BATCH = 200;
@@ -76,8 +77,8 @@ export const run: AgentRun = async (ctx, { supabase }) => {
 
   for (const p of rows) {
     // Consent gate — the lifecycle classifier already computed messagingAllowed.
-    const allowed = (p.lifecycle_signals as { messagingAllowed?: boolean } | null)?.messagingAllowed;
-    if (allowed === false) { skipped++; continue; }
+    // Fails closed: a user the classifier has not reached has no recorded consent.
+    if (!hasMarketingConsent(p.lifecycle_signals)) { skipped++; continue; }
 
     // Prior onboarding sends for this user.
     const { data: priorSends, error: priorSendsError } = await supabase

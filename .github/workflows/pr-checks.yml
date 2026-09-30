@@ -34,10 +34,10 @@ jobs:
       - name: Checkout code
         uses: actions/checkout@v4
 
-      - name: Set up Node.js 20
+      - name: Set up Node.js (from .nvmrc)
         uses: actions/setup-node@v4
         with:
-          node-version: 20
+          node-version-file: .nvmrc
           cache: npm
 
       - name: Install dependencies
@@ -401,8 +401,8 @@ jobs:
       # WEB-SEO-017 AC3. sitemap-events carried 413 <loc> entries for 397
       # distinct URLs and sitemap-playgrounds 69 for 67 (measured 2026-08-27).
       # generate-dynamic-sitemaps now collapses repeats, but it is not the only
-      # writer of these files -- generate-sitemap.js and the regenerate-sitemaps
-      # edge function also produce them -- so a dedupe in one writer is not a
+      # writer of these files -- the regenerate-sitemaps and generate-sitemaps
+      # edge functions also produce them -- so a dedupe in one writer is not a
       # guarantee about the artifact. This checks the artifact.
       - name: No sitemap advertises the same URL twice
         run: npm run check-sitemap-duplicates
@@ -527,7 +527,7 @@ jobs:
       - uses: actions/checkout@v4
       - uses: actions/setup-node@v4
         with:
-          node-version: 20
+          node-version-file: .nvmrc
           cache: npm
       - run: npm ci
       - name: tsconfig.app.json ratchet
@@ -544,10 +544,15 @@ jobs:
       - name: Checkout code
         uses: actions/checkout@v4
 
-      - name: Set up Node.js 20
+      # check-migration-safety and check-migration-order both compare against
+      # the base branch; the default checkout has only the merge ref.
+      - name: Fetch the base branch
+        run: git fetch --no-tags --depth=1 origin "${GITHUB_BASE_REF:-main}:refs/remotes/origin/${GITHUB_BASE_REF:-main}"
+
+      - name: Set up Node.js (from .nvmrc)
         uses: actions/setup-node@v4
         with:
-          node-version: 20
+          node-version-file: .nvmrc
 
       # THESE TWO WERE WRITTEN TO BLOCK A REGRESSION AT REVIEW TIME AND COULD NOT.
       # Both live in rls-config-audit.yml, which runs on a daily cron and on
@@ -561,6 +566,16 @@ jobs:
       # from an empty table, which is how 33 dead tables stayed invisible.
       - name: No new discarded Supabase errors
         run: node scripts/check-discarded-supabase-errors.mjs
+
+      # supabase db push refuses a migration older than one already applied,
+      # and the repo holds migrations dated ahead of the calendar, so a file
+      # stamped with today's date sorts before main's newest.
+      - name: New migrations sort after the base branch's newest
+        run: node scripts/check-migration-order.mjs
+
+      # LATEST_APP_VERSION is hand-maintained; it must match the iOS project.
+      - name: App version constants agree with the iOS project
+        run: node scripts/check-app-versions.mjs
 
       # Every AOS agent exists twice - as an agent-* edge function and as a
       # _shared/agents module - and both are deployable. Three fixes landed on
@@ -593,6 +608,10 @@ jobs:
       # separates a site visitor from nobody and nothing more. Two functions were
       # reachable that way: one dispatched mail, one started a paid geocoding
       # batch. Baselined; this stops the list growing.
+      # Every Deno suite under supabase/functions is named on a deno test line.
+      - name: No Deno suite is run by no lane
+        run: node scripts/check-deno-lanes.mjs
+
       - name: Service-role functions verify their caller
         run: node scripts/check-edge-auth.mjs
 

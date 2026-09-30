@@ -15,6 +15,7 @@
 import { createClient } from 'https://esm.sh/@supabase/supabase-js@2.39.3';
 import { classifyCaller, expectedSecrets, isMachineCaller, presentedCredentials, timingSafeEqual } from "./callerKind.ts";
 import { highestRole, isFullAdmin } from './roles.ts';
+import { runtimeEnvironment } from './runtimeEnvironment.ts';
 
 // Re-exported: several functions import it from here and the implementation
 // moved to a module with no remote imports so it could be tested (WEB-BE-047).
@@ -41,7 +42,8 @@ export function validateApiKey(req: Request): ApiKeyAuthResult {
   // Fail closed in production: reject all requests when API key is not configured.
   // In development, allow with a warning for ease of testing.
   if (!expectedKey) {
-    const env = Deno.env.get('ENVIRONMENT') || 'development';
+    // Unset ENVIRONMENT now reads as production (see runtimeEnvironment.ts).
+    const env = runtimeEnvironment();
     if (env === 'production') {
       console.error('EDGE_FUNCTION_API_KEY is not configured in production — rejecting request');
       return { success: false, error: 'API key authentication is not configured' };

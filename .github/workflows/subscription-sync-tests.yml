@@ -40,6 +40,8 @@ on:
       # automation_job_runs (WEB-BE-043) - nothing inside Supabase can observe
       # an external process - so a change to it has to run the health suite.
       - 'crawlers/catchdesmoines_crawler.py'
+      - 'crawlers/venue_match.py'
+      - 'crawlers/event_detail.py'
       # CLAUDE.md is asserted by ingest-coordinates.test.ts (WEB-BE-050).
       - 'CLAUDE.md'
       # The canonical category vocabulary and its browser mirror (WEB-BE-049).
@@ -77,7 +79,7 @@ jobs:
       - uses: actions/checkout@v4
       - uses: actions/setup-node@v4
         with:
-          node-version: 20
+          node-version-file: .nvmrc
           cache: npm
       - run: npm ci
       - run: npx vitest run src/hooks/__tests__/useSubscription.test.ts
@@ -94,6 +96,16 @@ jobs:
       - uses: denoland/setup-deno@v1
         with:
           deno-version: v2.x
+      # Deno 2 reads the root package.json and then resolves `node:` type
+      # references from node_modules/@types/node. With no node_modules every
+      # suite that imports node:assert died at type-check with "Could not find
+      # @types/node", which stopped this job before most suites ran, on every
+      # run for weeks. --ignore-scripts: nothing here needs postinstall hooks.
+      - uses: actions/setup-node@v4
+        with:
+          node-version-file: .nvmrc
+          cache: npm
+      - run: npm ci --ignore-scripts --no-audit --no-fund
       - run: deno test --allow-read supabase/functions/_tests/cross-platform-sync.test.ts
       - run: deno test supabase/functions/_tests/version-check.test.ts
       # Role precedence for isAdminUserId and assign-role, including the
@@ -248,6 +260,9 @@ jobs:
       # plan_id moves only through an exact price match and an unknown price
       # leaves it out of the patch.
       - run: deno test --allow-read supabase/functions/_tests/stripe-plan-from-price.test.ts
+      # A retried subscription.updated arriving after .deleted wrote active over
+      # canceled. Pins the live retrieve in handleSubscriptionUpdated.
+      - run: deno test --allow-read supabase/functions/_tests/stripe-subscription-updated-live-state.test.ts
       # WEB-BE-043 AC6. The ingestion functions were the one class of automation
       # with no job ledger, so a source going dark was invisible: SeatGeek - 375
       # events, the largest single source - stopped ingesting on 2026-08-21 and
@@ -474,6 +489,18 @@ jobs:
       - run: deno test --allow-read supabase/functions/_tests/event-social-fanout.test.ts
       - run: deno test --allow-read supabase/functions/_tests/list-hooks-query-cache.test.ts
       - run: deno test --allow-read supabase/functions/_tests/oauth-role-sync-self-only.test.ts
+      # get_pending_reminders returned user emails to anon: GRANT to service_role
+      # never revoked the default PUBLIC grant. Pins the revoke and no client caller.
+      - run: deno test --allow-read supabase/functions/_tests/reminder-rpcs-service-role-only.test.ts
+      # Admin tools invoked with a user JWT were gated by requireApiKey and 401'd
+      # on every click. Fails when a web-invoked function is key-only again.
+      - run: deno test --allow-read supabase/functions/_tests/web-invoked-functions-accept-admin.test.ts
+      # An unset ENVIRONMENT defaulted to development: no API-key check and
+      # lovable.dev allowed. Pins "missing means production".
+      - run: deno test --allow-read --allow-env supabase/functions/_tests/environment-fails-closed.test.ts
+      # Mail and money endpoints were limited per isolate only, and the limiter
+      # table was never cleaned. Pins the persistent limiter and the cleanup cron.
+      - run: deno test --allow-read supabase/functions/_tests/persistent-rate-limits.test.ts
       - run: deno test --allow-read supabase/functions/_tests/deal-redemption-ledger.test.ts
       - run: deno test --allow-read supabase/functions/_tests/event-visibility-both-switches.test.ts
       - run: deno test --allow-read supabase/functions/_tests/consent-record-user-binding.test.ts
@@ -507,7 +534,9 @@ jobs:
       - run: deno test supabase/functions/_shared/eventPageDiscovery.test.ts
       - run: deno test supabase/functions/_shared/htmlContentWindow.test.ts
       - run: deno test supabase/functions/_shared/domain-adapters/dispatch.test.ts
-      - run: deno test supabase/functions/_shared/domain-adapters/tribeEvents.test.ts
+      # --allow-env: fetchAllowed reads SCRAPER_IGNORE_ROBOTS before fetching,
+      # and without the permission that read throws inside the adapter.
+      - run: deno test --allow-env supabase/functions/_shared/domain-adapters/tribeEvents.test.ts
       - run: deno test supabase/functions/_shared/domain-adapters/venueProfile.test.ts
       # Menu-scraping invariants — see docs/scraping/MENU_SCRAPER.md.
       # All fixture-based; no network access needed.
@@ -565,3 +594,19 @@ jobs:
       # Subscription started/cancelled and the admin paid-campaign alert: never
       # throw into the webhook, no stale "access until" date.
       - run: deno test --allow-env supabase/functions/_shared/billingEmails.test.ts
+      # Eleven suites that no lane ran until scripts/check-deno-lanes.mjs (now
+      # in validate) looked. fetchWithTimeout hung after passing - its server
+      # held a request open through shutdown - which nothing had noticed.
+      # agent-performance-review imports an index.ts that calls Deno.serve at
+      # module load, hence --allow-net.
+      - run: deno test --allow-read --allow-env supabase/functions/_shared/agentPolicy.test.ts
+      - run: deno test --allow-read --allow-env supabase/functions/_shared/eventSourceOwnership.test.ts
+      - run: deno test --allow-net supabase/functions/_shared/fetchWithTimeout.test.ts
+      - run: deno test --allow-read --allow-env supabase/functions/_shared/postgrestErrors.test.ts
+      - run: deno test --allow-read --allow-env supabase/functions/_shared/prompts/prompts.test.ts
+      - run: deno test --allow-read --allow-env supabase/functions/_shared/validation.test.ts
+      - run: deno test --allow-read --allow-env supabase/functions/_shared/weatherPolicy.test.ts
+      - run: deno test --allow-read --allow-env --allow-net supabase/functions/_tests/agent-performance-review.test.ts
+      - run: deno test --allow-read --allow-env supabase/functions/_tests/error-policy.test.ts
+      - run: deno test --allow-read --allow-env supabase/functions/_tests/executive-digest.test.ts
+      - run: deno test --allow-read --allow-env supabase/functions/_tests/scraper-user-agent.test.ts

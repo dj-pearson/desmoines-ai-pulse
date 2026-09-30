@@ -179,7 +179,7 @@ export default function KidsEvents() {
           </p>
 
           <p className="text-base text-muted-foreground max-w-3xl">
-            {freeScope} Looking for somewhere to play instead? See the <Link to="/playgrounds" className="text-primary hover:underline font-semibold">Des Moines playgrounds guide</Link>.
+            {freeScope} Looking for somewhere to play instead? See the <Link to="/playgrounds" className="text-primary underline underline-offset-2 font-semibold">Des Moines playgrounds guide</Link>.
           </p>
         </div>
 
@@ -314,19 +314,19 @@ export default function KidsEvents() {
               <div>
                 <h3 className="font-semibold mb-2">Have an indoor backup</h3>
                 <p className="text-sm text-muted-foreground">
-                  Iowa weather changes quickly. On a wet weekend, the <Link to="/events/this-weekend" className="text-primary hover:underline">this weekend</Link> list puts indoor events first.
+                  Iowa weather changes quickly. On a wet weekend, the <Link to="/events/this-weekend" className="text-primary underline underline-offset-2">this weekend</Link> list puts indoor events first.
                 </p>
               </div>
               <div>
                 <h3 className="font-semibold mb-2">Stay on budget</h3>
                 <p className="text-sm text-muted-foreground">
-                  {freeScope} See all <Link to="/events/free" className="text-primary hover:underline font-semibold">free events in Des Moines</Link>.
+                  {freeScope} See all <Link to="/events/free" className="text-primary underline underline-offset-2 font-semibold">free events in Des Moines</Link>.
                 </p>
               </div>
               <div>
                 <h3 className="font-semibold mb-2">Get outside</h3>
                 <p className="text-sm text-muted-foreground">
-                  Between events, the <Link to="/playgrounds" className="text-primary hover:underline">playgrounds guide</Link> shows where to play near you.
+                  Between events, the <Link to="/playgrounds" className="text-primary underline underline-offset-2">playgrounds guide</Link> shows where to play near you.
                 </p>
               </div>
             </div>

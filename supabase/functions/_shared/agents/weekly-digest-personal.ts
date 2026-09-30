@@ -13,6 +13,7 @@
 import { scoreOutput } from "../scoreOutput.ts";
 import { sendNurtureEmail } from "../sendNurtureEmail.ts";
 import type { AgentRun } from "./types.ts";
+import { hasMarketingConsent } from "../marketingConsent.ts";
 
 const AGENT_KEY = "weekly-digest-personal";
 const BATCH = 300;
@@ -58,7 +59,7 @@ export const run: AgentRun = async (ctx, { supabase }) => {
   let sent = 0, skippedEmpty = 0, skippedCap = 0, gated = 0, skippedConsent = 0;
 
   for (const p of rows) {
-    if (p.lifecycle_signals?.messagingAllowed === false) { skippedConsent++; continue; }
+    if (!hasMarketingConsent(p.lifecycle_signals)) { skippedConsent++; continue; }
 
     // Frequency cap.
     const { data: recent, error: recentError } = await supabase

@@ -240,7 +240,7 @@ export default function Profile() {
   return (
     <div className="min-h-screen bg-background">
       <Header />
-      <main className="mx-auto max-w-4xl space-y-6 px-4 py-6 sm:px-6">
+      <div data-account-body className="mx-auto max-w-4xl space-y-6 px-4 py-6 sm:px-6">
         <Breadcrumbs
           items={[
             { label: "Home", href: "/" },
@@ -418,7 +418,7 @@ export default function Profile() {
             <SettingsTab />
           </TabsContent>
         </Tabs>
-      </main>
+      </div>
       <Footer />
     </div>
   );

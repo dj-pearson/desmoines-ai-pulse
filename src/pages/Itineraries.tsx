@@ -8,6 +8,8 @@ import { Badge } from '@/components/ui/badge';
 import { Skeleton } from '@/components/ui/skeleton';
 import { Heart, Users, Palette, Dumbbell, Utensils, Compass } from "lucide-react";
 import { getCanonicalUrl } from '@/lib/brandConfig';
+import { toJsonLd } from '@/lib/jsonLd';
+import { collectionPageJsonLd } from '@/lib/collectionPageJsonLd';
 import { SpriteIcon } from "@/components/ui/SpriteIcon";
 import { OptimizedImage } from "@/components/OptimizedImage";
 
@@ -52,6 +54,16 @@ export default function Itineraries() {
         <meta property="og:url" content={getCanonicalUrl('/itineraries')} />
         <meta name="twitter:title" content="Curated Itineraries — Des Moines Trip Plans | Des Moines Insider" />
         <meta name="twitter:description" content="Browse curated Des Moines itineraries for weekends, date days, family fun, food tours, and art walks. Printable checklists included." />
+        <script type="application/ld+json">
+          {toJsonLd(
+            collectionPageJsonLd({
+              name: 'Des Moines Trip Plans & Itineraries',
+              description:
+                'Browse curated Des Moines itineraries for weekends, date days, family fun, food tours, and art walks. Printable checklists included.',
+              path: '/itineraries',
+            }),
+          )}
+        </script>
       </Helmet>
       <div className="min-h-screen bg-background">
         <Header />

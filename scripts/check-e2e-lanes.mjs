@@ -63,7 +63,16 @@ const LANE_FILES = [
   join(ROOT, 'playwright.screenshots.config.ts'),
 ].filter((f) => existsSync(f));
 
-const laneText = LANE_FILES.map((f) => readFileSync(f, 'utf8')).join('\n');
+/**
+ * Comments stripped first. A spec named only in a comment is not run by the
+ * lane; performance.spec.ts counted as covered because two workflows mention
+ * it in a comment, so this reported 3 orphans when there were 4.
+ */
+function codeOf(file, text) {
+  if (file.endsWith('.yml')) return text.replace(/(^|\s)#.*$/gm, '$1');
+  return text.replace(/\/\*[\s\S]*?\*\//g, '').replace(/(^|[^:])\/\/.*$/gm, '$1');
+}
+const laneText = LANE_FILES.map((f) => codeOf(f, readFileSync(f, 'utf8'))).join('\n');
 
 const orphans = specs.filter((name) => {
   // A lane names a spec either by path (tests/foo.spec.ts) or inside a

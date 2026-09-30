@@ -24,6 +24,7 @@ import { ExploreSectionLinks } from '@/components/explore/ExploreSectionLinks';
 import { Tag } from 'lucide-react';
 import { getCanonicalUrl } from '@/lib/brandConfig';
 import { toJsonLd } from '@/lib/jsonLd';
+import { collectionPageJsonLd } from '@/lib/collectionPageJsonLd';
 import { useUrlFilters } from '@/hooks/useUrlFilters';
 
 const CATEGORIES = [
@@ -185,6 +186,9 @@ export default function Deals() {
         <meta property="og:url" content={getCanonicalUrl('/deals')} />
         <meta name="twitter:title" content={PAGE_TITLE} />
         <meta name="twitter:description" content={PAGE_DESCRIPTION} />
+        <script type="application/ld+json">
+          {toJsonLd(collectionPageJsonLd({ name: PAGE_TITLE, description: PAGE_DESCRIPTION, path: '/deals' }))}
+        </script>
         {allDeals && allDeals.length > 0 && (
           <script type="application/ld+json">{toJsonLd(buildOffersJsonLd(allDeals, links))}</script>
         )}

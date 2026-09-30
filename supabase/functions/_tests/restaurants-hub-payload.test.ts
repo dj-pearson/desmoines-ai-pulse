@@ -97,8 +97,13 @@ Deno.test('paid placement survives the smaller page', async () => {
   assert(/!filters\.sponsoredOnly &&/.test(hook));
 
   const page = codeOnly(await read('src/pages/Restaurants.tsx'));
-  assert(/sponsoredOnly: true, limit: SPONSORED_CAP/.test(page));
-  assert(/page !== 1 \|\| sponsoredRestaurants\.length === 0/.test(page), 'first page only');
+  // Pass 2 WP1 item 8: a pool of matching sponsors in one request, SPONSORED_CAP
+  // of them picked with the daily seed, and the query skipped where nothing is
+  // boosted (desktop pages 2+).
+  assert(/sponsoredOnly: true, limit: SPONSOR_POOL/.test(page));
+  assert(/pickDailySponsors\(sponsoredPool\.filter\(isSponsoredActive\), rotationSeed, SPONSORED_CAP\)/.test(page));
+  assert(/\{ enabled: boostsSponsored \}/.test(page), 'the pool query runs only where it is shown');
+  assert(/if \(!boostsSponsored \|\| sponsoredRestaurants\.length === 0\) return restaurants;/.test(page));
   // A sponsored restaurant also present in this page's rotation must appear
   // once, at the top, not twice.
   assert(/boostedIds\.has\(r\.id\)/.test(page), 'de-duplicated');
@@ -109,9 +114,11 @@ Deno.test('every visible count reads the total, not the page', async () => {
   // "Showing 1-30 of 30" and announce "Found 30 restaurants" to a screen
   // reader while the header said 480.
   const page = codeOnly(await read('src/pages/Restaurants.tsx'));
-  assert(/const totalPages = Math\.ceil\(\(totalCount \|\| 0\) \/ ITEMS_PER_PAGE\)/.test(page));
-  assert(/page \* ITEMS_PER_PAGE < \(totalCount \|\| 0\)/.test(page), 'load-more bound');
+  assert(/const total = totalCount \|\| 0;/.test(page));
+  assert(/const totalPages = Math\.ceil\(total \/ ITEMS_PER_PAGE\)/.test(page));
+  assert(/page < totalPages/.test(page), 'load-more bound');
   assert(/const count = totalCount \|\| 0;/.test(page), 'the screen-reader announcement');
+  assert(/of \$\{total\} restaurants/.test(page), 'the results line reads the total');
   assertFalse(
     /of \$\{restaurants\.length\} restaurants/.test(page),
     'the results line must not count the fetched array',

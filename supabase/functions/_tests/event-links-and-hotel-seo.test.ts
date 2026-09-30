@@ -25,14 +25,14 @@ const LINK_SITES = [
   'src/pages/TeamDetail.tsx',
   'src/pages/SportsHub.tsx',
   'src/pages/MusicHub.tsx',
-  'src/pages/EventsNearMe.tsx',
-  'src/pages/Enhanced404.tsx',
   'src/components/ForYouRail.tsx',
   'src/components/NLPSearchBar.tsx',
   'src/components/TonightRail.tsx',
   'src/lib/dashboardItems.ts',
-  'src/components/SmartEventCard.tsx',
 ];
+
+// EventsNearMe now renders SocialEventCard and builds no event link of its own;
+// Enhanced404.tsx and SmartEventCard.tsx are deleted.
 
 Deno.test('no event link is built from a bare id', async () => {
   // useEventBySlug matches a date-suffixed slug, so an id-based link is a
@@ -49,6 +49,9 @@ Deno.test('no event link is built from a bare id', async () => {
 Deno.test('every event link goes through the shared slug builder', async () => {
   for (const rel of LINK_SITES) {
     const src = codeOnly(await read(rel));
+    // A file that no longer builds an event link itself (NLPSearchBar now
+    // renders prebuilt hrefs) has nothing to route through the builder.
+    if (!/\/events\/\$\{/.test(src)) continue;
     assert(
       /createEventSlugWithCentralTime/.test(src),
       `${rel} must build its event links the same way every other surface does`,
@@ -60,19 +63,8 @@ Deno.test('every event link goes through the shared slug builder', async () => {
   }
 });
 
-Deno.test('the card that gated on a non-existent column links again', async () => {
-  // SmartEventCard declared `slug?: string` and gated both its link and its
-  // share on it. public.events has no slug column and nothing set the prop, so
-  // the card rendered its unlinked branch for every event and refused every
-  // share -- neither of which looks like a failure.
-  const src = codeOnly(await read('src/components/SmartEventCard.tsx'));
-  assert(
-    /const eventSlug = event\.slug \|\| createEventSlugWithCentralTime\(event\.title, event\)/.test(src),
-    'the slug must be derived, with the prop kept as an override',
-  );
-  assert(/to=\{`\/events\/\$\{eventSlug\}`\}/.test(src));
-  assert(/slug: eventSlug,/.test(src), 'and sharing must use the same value');
-});
+// SmartEventCard, the card that gated its link on a non-existent slug column,
+// is deleted; its test went with it.
 
 Deno.test('the slug builder tolerates a null title', async () => {
   // One converted site already guards its title as possibly null, so a crash on
@@ -94,7 +86,8 @@ Deno.test('the four detail pages carry a canonical after the fetch, not only dur
   ]) {
     const src = codeOnly(await read(rel));
     const count = (src.match(/<RouteCanonical path=/g) || []).length;
-    assertEquals(count, 2, `${rel} needs a canonical in both the loading and the loaded branch`);
+    // Loading, loaded, and now not-found as well: at least the first two.
+    assert(count >= 2, `${rel} needs a canonical in both the loading and the loaded branch`);
     assert(src.includes(path), `${rel} must canonicalise its own route`);
   }
 });

@@ -89,7 +89,7 @@ export function SubmissionsTab() {
       </CardHeader>
       <CardContent>
         {isLoading ? (
-          <div className="space-y-3" aria-busy="true" aria-label="Loading your submissions">
+          <div className="space-y-3" role="status" aria-busy="true" aria-label="Loading your submissions">
             <Skeleton className="h-28 w-full rounded-xl" />
             <Skeleton className="h-28 w-full rounded-xl" />
           </div>

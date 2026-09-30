@@ -89,6 +89,16 @@ Deno.test('ingest-events sets coordinates at ingest', async () => {
   );
 });
 
+Deno.test('the Python Catch Des Moines crawler sets coordinates at ingest', async () => {
+  // The daily GitHub Actions crawler writes events with a service-role key, so
+  // nothing on the TypeScript side ever saw its rows. It matched no venue and
+  // wrote no coordinates until crawlers/venue_match.py.
+  const src = (await read('crawlers/catchdesmoines_crawler.py')).replace(/^\s*#.*$/gm, '');
+  assert.ok(/match_known_venue\(self\._record_venue\(event\), self\.known_venues\)/.test(src));
+  assert.ok(/ingest_coordinates\(venue, detail\.get\("source_coordinates"\)\)/.test(src));
+  assert.ok(/event_record\.update\(self\._detail_record_fields\(event, parsed_dt\)\)/.test(src));
+});
+
 Deno.test('the stub trigger no longer claims to geocode', async () => {
   // auto_geocode_location() only ever RAISE NOTICEd. Its geom half is real, so
   // the function could not simply be dropped - the fix is to say what it does.

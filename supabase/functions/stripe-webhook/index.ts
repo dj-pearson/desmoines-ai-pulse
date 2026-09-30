@@ -171,7 +171,7 @@ serve(async (req) => {
 
       case "customer.subscription.updated": {
         const subscription = event.data.object as Stripe.Subscription;
-        await handleSubscriptionUpdated(supabase, subscription);
+        await handleSubscriptionUpdated(supabase, stripe, subscription);
         break;
       }
 
@@ -773,9 +773,19 @@ async function handleSubscriptionCreated(
  */
 async function handleSubscriptionUpdated(
   supabase: ReturnType<typeof createClient>,
-  subscription: Stripe.Subscription
+  stripe: Stripe,
+  eventSubscription: Stripe.Subscription
 ) {
-  console.log("Subscription updated:", subscription.id);
+  console.log("Subscription updated:", eventSubscription.id);
+
+  // The event payload is a snapshot from when Stripe created the event, and
+  // Stripe neither orders deliveries nor stops retrying for three days. An
+  // "updated" (status active) retried after "deleted" would write active over
+  // canceled and hand out premium for free. The event-id ledger cannot stop it
+  // because the two events have different ids. So write what Stripe says NOW,
+  // the same way handleInvoicePaymentSucceeded does. Throws on failure so
+  // Stripe redelivers rather than us falling back to the stale snapshot.
+  const subscription = await stripe.subscriptions.retrieve(eventSubscription.id);
 
   // WP5 item 1: a plan change arrives here and nowhere else. The price on the
   // subscription is looked up in our own catalogue and plan_id moves only when

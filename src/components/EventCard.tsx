@@ -21,7 +21,7 @@ import { AIDisclosureBadge } from "@/components/AIDisclosureBadge";
 import EventFeedback from "@/components/EventFeedback";
 import ShareDialog from "@/components/ShareDialog";
 import { FavoriteButton } from "@/components/FavoriteButton";
-import { SocialProofBadge, ViewCountBadge } from "@/components/SocialProofBadge";
+import { SocialProofBadge } from "@/components/SocialProofBadge";
 import { useFeedback } from "@/hooks/useFeedback";
 import { useAuth } from "@/hooks/useAuth";
 import { useViewTracking } from "@/hooks/useViewTracking";
@@ -65,7 +65,7 @@ interface EventCardProps {
 function EventCardComponent({ event, onViewDetails, priority = false }: EventCardProps) {
   const { isAuthenticated } = useAuth();
   const { trackInteraction } = useFeedback();
-  const { viewData, trackView } = useViewTracking(event.id);
+  const { trackView } = useViewTracking(event.id);
   const [isNew, setIsNew] = useState(false);
   const [imageError, setImageError] = useState(false);
 
@@ -77,9 +77,6 @@ function EventCardComponent({ event, onViewDetails, priority = false }: EventCar
       setIsNew(daysSinceCreated <= 7);
     }
   }, [event.created_at]);
-
-  // Determine if trending based on view data
-  const isTrending = viewData.trending_score > 70 || viewData.recent_views > 100;
 
   // EXPIRY IS PART OF BEING SPONSORED. This card read `event.is_sponsored`
   // directly in three places, so an event whose sponsored_until had already
@@ -152,8 +149,7 @@ function EventCardComponent({ event, onViewDetails, priority = false }: EventCar
         <div className="absolute top-2 left-2 right-2 flex items-start justify-between gap-2">
           <div className="flex flex-col gap-2">
             {sponsoredActive && <SponsoredBadge />}
-            {!sponsoredActive && isTrending && <SocialProofBadge type="trending" count={viewData.recent_views} size="sm" />}
-            {!sponsoredActive && isNew && !isTrending && <SocialProofBadge type="new" size="sm" />}
+            {!sponsoredActive && isNew && <SocialProofBadge type="new" size="sm" />}
           </div>
 
           {/* Distance Badge (only shown in Near Me mode) */}
@@ -206,11 +202,6 @@ function EventCardComponent({ event, onViewDetails, priority = false }: EventCar
             </div>
           )}
         </div>
-
-        {/* Social Proof - View Count */}
-        {viewData.recent_views > 20 && (
-          <ViewCountBadge viewCount={viewData.recent_views} timeframe="last hour" />
-        )}
 
         <div className="flex items-center justify-between pt-2">
           <div className="flex gap-2 flex-wrap">

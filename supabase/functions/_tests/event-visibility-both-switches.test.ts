@@ -25,6 +25,7 @@ const read = (rel: string) => Deno.readTextFile(new URL(rel, REPO));
 
 /** Every file that reads events for a user-visible or crawler-visible surface. */
 const EVENT_READ_SURFACES = [
+  'src/lib/eventQuery.ts', // applyEventVisibility itself
   'src/hooks/useEvents.ts',
   'src/hooks/useEventBySlug.ts',
   'src/hooks/useSupabase.ts',
@@ -36,13 +37,19 @@ const EVENT_READ_SURFACES = [
   'src/hooks/useHomeSnapshot.ts',
   'src/components/SearchAutocomplete.tsx',
   'src/pseo/components/sections/PseoLiveListings.tsx',
-  'src/lib/sitemap.ts',
-  'src/lib/sitemapEnhanced.ts',
   'scripts/generate-dynamic-sitemaps.ts',
+  'supabase/functions/regenerate-sitemaps/index.ts',
+  'supabase/functions/generate-sitemaps/index.ts',
 ];
 
 const HIDDEN = /\.neq\((["'])is_hidden\1,\s*true\)/g;
-const ARCHIVED = /\.is\((["'])archived_at\1,\s*null\)/g;
+// Any explicit archived_at predicate counts: `.is('archived_at', null)`, and
+// the forms useEventBySlug uses to ask for archived rows BY NAME for its
+// archived-page render (classifyUnlisted) - `.not('archived_at', 'is', null)`
+// and `archived_at.not.is.null` inside an .or(). Those decide about the switch;
+// the defect this test exists for is a query that forgets it.
+const ARCHIVED =
+  /\.is\((["'])archived_at\1,\s*null\)|\.not\((["'])archived_at\2,\s*(["'])is\3,\s*null\)|\barchived_at\.(?:not\.)?is\.null\b/g;
 
 /**
  * Strip comments before counting.
@@ -66,7 +73,10 @@ Deno.test('every is_hidden filter is matched by an archived_at filter', async ()
     const src = codeOnly(await read(rel));
     const hidden = (src.match(HIDDEN) || []).length;
     const archived = (src.match(ARCHIVED) || []).length;
-    assert(hidden > 0, `${rel} should still filter is_hidden`);
+    // applyEventVisibility (src/lib/eventQuery.ts) filters both switches in one
+    // place; several surfaces moved to it and have no raw is_hidden left.
+    const wrapped = /\bapplyEventVisibility\s*\(/.test(src);
+    assert(hidden > 0 || wrapped, `${rel} should still filter is_hidden, directly or via applyEventVisibility`);
     assertEquals(
       archived,
       hidden,
@@ -79,7 +89,13 @@ Deno.test('every is_hidden filter is matched by an archived_at filter', async ()
 Deno.test('the two sitemap generators filter both', async () => {
   // The crawler-facing half, and the one that matters most: a sitemap entry for
   // a retired event invites a crawl of a page that should be gone.
-  for (const rel of ['src/lib/sitemap.ts', 'src/lib/sitemapEnhanced.ts', 'scripts/generate-dynamic-sitemaps.ts']) {
+  // src/lib/sitemap.ts and sitemapEnhanced.ts are gone; these are the writers
+  // of sitemap-events.xml today.
+  for (const rel of [
+    'scripts/generate-dynamic-sitemaps.ts',
+    'supabase/functions/regenerate-sitemaps/index.ts',
+    'supabase/functions/generate-sitemaps/index.ts',
+  ]) {
     const src = codeOnly(await read(rel));
     assert(ARCHIVED.test(src), `${rel} must exclude archived events`);
     ARCHIVED.lastIndex = 0;

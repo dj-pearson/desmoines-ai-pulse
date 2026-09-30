@@ -181,7 +181,7 @@ function LazyDateSelector({
 }) {
   return (
     <Suspense
-      fallback={<div className="h-11 rounded-xl bg-muted animate-pulse" aria-label="Loading date picker" />}
+      fallback={<div className="h-11 rounded-xl bg-muted animate-pulse" role="status" aria-label="Loading date picker" />}
     >
       <InteractiveDateSelector onDateChange={onDateChange} className={className} />
     </Suspense>

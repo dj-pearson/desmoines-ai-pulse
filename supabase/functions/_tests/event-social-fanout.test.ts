@@ -111,29 +111,43 @@ Deno.test('the card only falls back when there is genuinely nothing batched', as
 Deno.test('the ids fed to the batch are the ids that get rendered', async () => {
   // A mismatch here is silent: the batch returns rows for events the page does
   // not show, and every card it does show falls back to an individual fetch.
-  const pairs: Array<[string, string]> = [
-    ['src/pages/FreeEvents.tsx', 'freeEvents'],
-    ['src/pages/KidsEvents.tsx', 'kidsEvents'],
-    ['src/pages/DateNightEvents.tsx', 'dateEvents'],
-    ['src/pages/EventsByLocation.tsx', 'visibleEvents'],
-    ['src/pages/EventsToday.tsx', 'todaysEvents'],
+  // What matters is that the two arrays are the SAME one, not what it is
+  // called: FreeEvents moved from freeEvents to a capped visibleEvents for
+  // both, which kept the invariant and broke a test that pinned the name.
+  const pages = [
+    'src/pages/FreeEvents.tsx',
+    'src/pages/KidsEvents.tsx',
+    'src/pages/DateNightEvents.tsx',
+    'src/pages/EventsByLocation.tsx',
+    'src/pages/EventsToday.tsx',
   ];
-  for (const [page, arr] of pairs) {
+  for (const page of pages) {
     const src = await read(page);
+    const batch =
+      src.match(/const batchSocialIds = useMemo\(\(\) => \((\w+) \?\? \[\]\)/) ??
+      src.match(/const batchSocialIds = useMemo\(\(\) => (\w+)\.map\(\(\w+\) => \w+\.id\)/);
+    assert(batch, `${page} must derive batchSocialIds from the array it renders`);
+    const arr = batch[1];
+    // EventsToday renders by group; its array is exactly the groups flattened.
+    const flattenedGroups =
+      new RegExp(`const ${arr} = useMemo\\(\\(\\) => groups\\.flatMap\\(\\(group\\) => group\\.events\\)`).test(src) &&
+      /\{group\.events\.map\(\(event\) => /.test(src);
     assert(
-      new RegExp(`const batchSocialIds = useMemo\\(\\(\\) => \\(${arr} \\?\\? \\[\\]\\)`).test(src),
-      `${page} must key the batch on ${arr}, the array it maps over`,
-    );
-    assert(
-      new RegExp(`\\{${arr}\\.map\\(\\(event\\) => \\(`).test(src),
-      `${page} must still render from ${arr}`,
+      new RegExp(`\\{${arr}\\.map\\(\\(event(?:, \\w+)?\\) => \\(`).test(src) || flattenedGroups,
+      `${page} keys the batch on ${arr} but does not render from it`,
     );
   }
 
-  // This one caps the rendered list, so the batch has to cap identically.
+  // This one renders by day, with past days collapsed. The batch has to cover
+  // exactly the days that are open, events and still-running alike.
   const weekend = await read('src/pages/EventsThisWeekend.tsx');
   assert(
-    /const batchSocialIds = useMemo\(\(\) => \(filteredEvents\.slice\(0, VISIBLE_EVENTS\) \?\? \[\]\)/.test(weekend),
-    'EventsThisWeekend renders a slice, so the batch must use the same slice',
+    /const batchSocialIds = useMemo\(\(\) => renderedEvents\.map\(\(e\) => e\.id\)/.test(weekend),
+    'EventsThisWeekend must batch the events it renders',
   );
+  assert(
+    /\.filter\(\(day\) => day\.phase !== "past" \|\| openPast\.has\(day\.id\)\)\s*\.flatMap\(\(day\) => \[\.\.\.day\.events, \.\.\.day\.running\]\)/.test(weekend),
+    'renderedEvents must be the open days, events and running both',
+  );
+  assert(/\{day\.events\.map\(/.test(weekend) && /\{day\.running\.map\(/.test(weekend));
 });

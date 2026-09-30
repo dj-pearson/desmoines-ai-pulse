@@ -147,7 +147,7 @@ Deno.test('the hook shows the function answer rather than inventing one', () => 
 
 Deno.test('the public signup endpoint is rate limited, since no caller can be verified', () => {
   assert(/\[functions\.newsletter-subscribe\]\s*\nverify_jwt = false/.test(CONFIG));
-  assert(/checkRateLimit\(req, \{/.test(FN));
+  assert(/await checkRateLimitPersistent\(req, \{/.test(FN), "persistent, so the limit holds across isolates");
   assert(/max: 5,/.test(FN));
 });
 
