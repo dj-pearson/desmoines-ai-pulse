@@ -544,6 +544,10 @@ jobs:
       - name: Checkout code
         uses: actions/checkout@v4
 
+      # check-migration-order compares new files against the base branch.
+      - name: Fetch the base branch for the migration-order check
+        run: git fetch --no-tags --depth=1 origin "${GITHUB_BASE_REF:-main}:refs/remotes/origin/${GITHUB_BASE_REF:-main}"
+
       - name: Set up Node.js 20
         uses: actions/setup-node@v4
         with:
@@ -561,6 +565,16 @@ jobs:
       # from an empty table, which is how 33 dead tables stayed invisible.
       - name: No new discarded Supabase errors
         run: node scripts/check-discarded-supabase-errors.mjs
+
+      # supabase db push refuses a migration older than one already applied,
+      # and the repo holds migrations dated ahead of the calendar, so a file
+      # stamped with today's date sorts before main's newest.
+      - name: New migrations sort after the base branch's newest
+        run: node scripts/check-migration-order.mjs
+
+      # LATEST_APP_VERSION is hand-maintained; it must match the iOS project.
+      - name: App version constants agree with the iOS project
+        run: node scripts/check-app-versions.mjs
 
       # Every AOS agent exists twice - as an agent-* edge function and as a
       # _shared/agents module - and both are deployable. Three fixes landed on
