@@ -56,7 +56,7 @@ export function RestaurantsHubGuide({ restaurantCount, cuisineCount }: CountProp
           Sunday brunch fills up from about 9 to 11 AM in the East Village and along Ingersoll.
           Happy hours are common downtown, but times and offers vary by venue, so check with the
           restaurant. For vegetarian, vegan or gluten-free options, start with the{" "}
-          <Link to="/restaurants/dietary" className="text-primary underline-offset-4 hover:underline">
+          <Link to="/restaurants/dietary" className="text-primary underline underline-offset-4">
             dietary guide
           </Link>{" "}
           and call ahead about shared prep surfaces.
@@ -68,13 +68,13 @@ export function RestaurantsHubGuide({ restaurantCount, cuisineCount }: CountProp
           {cuisineCount > 0 && <li>{cuisineCount} cuisines, each with its own filter</li>}
           <li>
             New and announced openings on{" "}
-            <Link to="/restaurants/new" className="text-primary underline-offset-4 hover:underline">
+            <Link to="/restaurants/new" className="text-primary underline underline-offset-4">
               one dated list
             </Link>
           </li>
           <li>
             What's serving right now, by listed hours, on{" "}
-            <Link to="/restaurants/open-now" className="text-primary underline-offset-4 hover:underline">
+            <Link to="/restaurants/open-now" className="text-primary underline underline-offset-4">
               the open-now page
             </Link>
           </li>
