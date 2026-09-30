@@ -484,6 +484,9 @@ jobs:
       - run: deno test --allow-read supabase/functions/_tests/event-social-fanout.test.ts
       - run: deno test --allow-read supabase/functions/_tests/list-hooks-query-cache.test.ts
       - run: deno test --allow-read supabase/functions/_tests/oauth-role-sync-self-only.test.ts
+      # get_pending_reminders returned user emails to anon: GRANT to service_role
+      # never revoked the default PUBLIC grant. Pins the revoke and no client caller.
+      - run: deno test --allow-read supabase/functions/_tests/reminder-rpcs-service-role-only.test.ts
       - run: deno test --allow-read supabase/functions/_tests/deal-redemption-ledger.test.ts
       - run: deno test --allow-read supabase/functions/_tests/event-visibility-both-switches.test.ts
       - run: deno test --allow-read supabase/functions/_tests/consent-record-user-binding.test.ts
