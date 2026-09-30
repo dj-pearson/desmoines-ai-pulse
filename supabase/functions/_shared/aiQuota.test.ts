@@ -9,6 +9,7 @@ import {
   type QuotaClient,
   quotaSubject,
   secondsUntilCentralMidnight,
+  type AiGuardDenied,
 } from "./aiQuota.ts";
 import { openAiCostUsd } from "./providerUsage.ts";
 
@@ -159,10 +160,13 @@ Deno.test("guardAi turns a refusal into a 429 with CORS headers and Retry-After"
     headers: { "Access-Control-Allow-Origin": "https://example.test" },
   });
   assert(!r.ok);
-  assertEquals(r.response.status, 429);
-  assertEquals(r.response.headers.get("Access-Control-Allow-Origin"), "https://example.test");
-  assert(Number(r.response.headers.get("Retry-After")) >= 60);
-  const body = await r.response.json();
+  // tsconfig.edge.json has strictNullChecks off, which disables narrowing on
+  // the ok: true/false discriminant, so name the branch explicitly.
+  const denied = r as AiGuardDenied;
+  assertEquals(denied.response.status, 429);
+  assertEquals(denied.response.headers.get("Access-Control-Allow-Origin"), "https://example.test");
+  assert(Number(denied.response.headers.get("Retry-After")) >= 60);
+  const body = await denied.response.json();
   assertEquals(body.code, "quota_exceeded");
   assertEquals(body.upgradeHint, "insider");
 });
@@ -171,7 +175,10 @@ Deno.test("guardAi fails CLOSED on a budget pause from the RPC", async () => {
   const s = stub({ consume: { data: { allowed: false, code: "ai_budget_paused", reason: "provider_paused" }, error: null } });
   const r = await guardAi(s.client, req(), { feature: "itinerary", provider: "anthropic", tier: "vip", userId: "u1" });
   assert(!r.ok);
-  assertEquals((await r.response.json()).code, "ai_budget_paused");
+  // tsconfig.edge.json has strictNullChecks off, which disables narrowing on
+  // the ok: true/false discriminant, so name the branch explicitly.
+  const denied = r as AiGuardDenied;
+  assertEquals((await denied.response.json()).code, "ai_budget_paused");
 });
 
 Deno.test("guardAi fails OPEN when the RPC errors and the budget is not paused", async () => {
@@ -197,7 +204,10 @@ Deno.test("guardAi still honours provider_budgets.paused when the RPC is unavail
   const s = stub({ consume: { data: null, error: { code: "PGRST202", message: "function not found" } }, paused: true });
   const r = await guardAi(s.client, req(), { feature: "discover-chat", provider: "anthropic", tier: "vip", userId: "u1" });
   assert(!r.ok);
-  assertEquals(r.decision.reason, "provider_paused");
+  // tsconfig.edge.json has strictNullChecks off, which disables narrowing on
+  // the ok: true/false discriminant, so name the branch explicitly.
+  const denied = r as AiGuardDenied;
+  assertEquals(denied.decision.reason, "provider_paused");
 });
 
 Deno.test("settle books the cost once, to ai_usage_daily and provider_usage", async () => {
