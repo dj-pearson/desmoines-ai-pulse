@@ -259,7 +259,7 @@ supabase secrets set KEY=value        # set secret
 npm run crawl-events:apply            # crawl + apply events
 npm run convert-timezones:apply       # convert event timezones
 tsx scripts/backfill-coordinates.ts   # backfill lat/lng
-node scripts/generate-sitemap.js
+npm run generate-sitemaps            # all sitemaps; also runs inside npm run build
 ```
 
 ## Critical Rules
