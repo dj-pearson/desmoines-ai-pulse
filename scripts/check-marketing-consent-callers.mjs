@@ -67,7 +67,7 @@ export function classify(src) {
   const transactional = [...code.matchAll(/category:\s*["']transactional["']/g)].length;
   // The two opt-out mechanisms, and the ledger one agent consults instead.
   const gates = [];
-  if (/messagingAllowed/.test(code)) gates.push('messagingAllowed');
+  if (/messagingAllowed|\bhasMarketingConsent\s*\(/.test(code)) gates.push('messagingAllowed');
   if (/outreach_suppression/.test(code)) gates.push('outreach_suppression');
   if (/user_email_preferences/.test(code)) gates.push('user_email_preferences');
 

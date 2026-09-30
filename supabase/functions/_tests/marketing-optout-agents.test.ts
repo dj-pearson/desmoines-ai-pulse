@@ -285,6 +285,56 @@ Deno.test("milestone: milestone-recognition DOES reach the send path for an opte
   assert.equal(out.gated, 1, "should have reached the quality gate");
 });
 
+// ─── never classified: no recorded consent ───────────────────────────────────
+//
+// lifecycle_signals is written by the lifecycle classifier, a cron job. A user
+// it has not reached (or every user, while that job is failing) has no
+// messagingAllowed at all. The gates used to test `=== false`, so a missing
+// value read as consent. It is not. `{}` is a profile the classifier never
+// scored; `null` is one with no signals column value.
+
+const NEVER_CLASSIFIED: Row[] = [{}, null as unknown as Row];
+
+Deno.test("never classified: onboarding-drip does not mail", async () => {
+  for (const signals of NEVER_CLASSIFIED) {
+    const { client, rec } = makeClient(onboardingFixtures(signals));
+    const { ctx } = makeCtx();
+    const out = await onboardingDrip(ctx, { supabase: client, req: new Request("http://x"), body: {} }) as Row;
+    assert.equal(out.skipped, 1, `signals=${JSON.stringify(signals)} must be skipped for consent`);
+    assert.deepEqual(sendLedgerInserts(rec), []);
+  }
+});
+
+Deno.test("never classified: dormant-reengagement does not mail", async () => {
+  for (const signals of NEVER_CLASSIFIED) {
+    const { client, rec } = makeClient(dormantFixtures(signals));
+    const { ctx, read } = makeCtx();
+    await dormantReengagement(ctx, { supabase: client, req: new Request("http://x"), body: {} });
+    assert.equal(read().meta.noConsent, 1, `signals=${JSON.stringify(signals)}`);
+    assert.deepEqual(sendLedgerInserts(rec), []);
+  }
+});
+
+Deno.test("never classified: churn-winback does not mail", async () => {
+  // Activity signals present, consent absent: scored, but never asked.
+  const { client, rec } = makeClient(churnFixtures({}));
+  const { ctx, read } = makeCtx();
+  await churnWinback(ctx, { supabase: client, req: new Request("http://x"), body: {} });
+  assert.equal(read().meta.skipped, 1);
+  assert.deepEqual(sendLedgerInserts(rec), []);
+});
+
+Deno.test("never classified: milestone-recognition records the milestone but does not email", async () => {
+  for (const signals of NEVER_CLASSIFIED) {
+    const { client, rec } = makeClient(milestoneFixtures(signals));
+    const { ctx } = makeCtx();
+    const out = await milestoneRecognition(ctx, { supabase: client, req: new Request("http://x"), body: {} }) as Row;
+    assert.equal(out.recognized, 1);
+    assert.equal(out.gated, 0, `signals=${JSON.stringify(signals)} reached the quality gate`);
+    assert.deepEqual(sendLedgerInserts(rec), []);
+  }
+});
+
 // ─── outreach: outreach-sequencer ────────────────────────────────────────────
 //
 // Different population, different control. This one mails a business contact

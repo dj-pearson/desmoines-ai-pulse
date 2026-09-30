@@ -25,6 +25,7 @@ import { scoreOutput } from "../_shared/scoreOutput.ts";
 import { sendNurtureEmail } from "../_shared/sendNurtureEmail.ts";
 import { createApproval } from "../_shared/agentApprovals.ts";
 import { writeAgentAudit } from "../_shared/auditLog.ts";
+import { hasMarketingConsent } from "../_shared/marketingConsent.ts";
 
 const AGENT_KEY = "churn-winback";
 const BATCH = 200;
@@ -135,7 +136,7 @@ Deno.serve(async (req) => {
 
       // Win-back play only for high-risk, consented users, respecting frequency.
       if (score < HIGH_RISK) continue;
-      if (signals.messagingAllowed === false) { skipped++; continue; }
+      if (!hasMarketingConsent(signals)) { skipped++; continue; }
       const { data: recent, error: recentError } = await supabase
         .from("winback_interventions")
         .select("created_at")

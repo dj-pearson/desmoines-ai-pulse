@@ -112,8 +112,11 @@ Deno.test('win-back goes only to members who have not opted out of marketing', (
 Deno.test('an unreadable profile is not consent', () => {
   assert.equal(marketingAllowedFrom({ messagingAllowed: true }, false), false);
   assert.equal(marketingAllowedFrom({ messagingAllowed: false }, true), false);
-  assert.equal(marketingAllowedFrom({}, true), true);
-  assert.equal(marketingAllowedFrom(null, true), true);
+  assert.equal(marketingAllowedFrom({ messagingAllowed: true }, true), true);
+  // Missing signals are not consent either: the classifier that writes them is
+  // a cron, and while it is not running every user would read as opted in.
+  assert.equal(marketingAllowedFrom({}, true), false);
+  assert.equal(marketingAllowedFrom(null, true), false);
 });
 
 Deno.test('emails name the member\'s own plan and link where it is managed', () => {

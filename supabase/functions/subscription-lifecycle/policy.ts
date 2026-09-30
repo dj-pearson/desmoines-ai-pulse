@@ -23,6 +23,7 @@
 import { GRACE_PERIOD_DAYS, isSubscriptionRowEntitled } from "../_shared/entitlements.ts";
 import { escapeHtml } from "../_shared/escapeHtml.ts";
 import { manageAtForPlatform, STORE_MANAGE_URLS } from "../_shared/siteUrl.ts";
+import { hasMarketingConsent } from "../_shared/marketingConsent.ts";
 
 export { GRACE_PERIOD_DAYS };
 
@@ -136,8 +137,8 @@ export function marketingAllowedFrom(
   profileReadOk: boolean,
 ): boolean {
   if (!profileReadOk) return false;
-  const signals = lifecycleSignals as { messagingAllowed?: boolean } | null | undefined;
-  return signals?.messagingAllowed !== false;
+  // Missing signals are not consent either (see _shared/marketingConsent.ts).
+  return hasMarketingConsent(lifecycleSignals);
 }
 
 /**
