@@ -10,8 +10,8 @@ export function PseoBreadcrumbs({ items }: PseoBreadcrumbsProps) {
 
   return (
     <nav aria-label="Breadcrumb" className="flex items-center gap-1 text-sm text-muted-foreground">
-      <Link to="/" className="flex items-center hover:text-foreground transition-colors">
-        <Home className="h-4 w-4" />
+      <Link to="/" aria-label="Home" className="flex items-center hover:text-foreground transition-colors">
+        <Home className="h-4 w-4" aria-hidden="true" />
       </Link>
       {items.map((item, index) => (
         <span key={item.url} className="flex items-center gap-1">
