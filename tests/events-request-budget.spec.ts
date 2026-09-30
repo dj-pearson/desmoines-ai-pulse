@@ -21,9 +21,9 @@ import { installFixtureBackend } from './support/fixtureBackend';
  *                     event_attendees, event_live_stats, subscription_plans,
  *                     fn:weather
  *   /events/today  4  events, event_attendees, event_live_stats, fn:weather
- *   detail        11  events x5, get_content_view_stats x4 (one per related
- *                     EventCard: useViewTracking has no batch form), venues,
- *                     restaurants
+ *   detail         7  events x5, venues, restaurants. It was 11 until
+ *                     useViewTracking stopped fetching get_content_view_stats
+ *                     once per related EventCard (2026-09-30).
  *
  * Each ceiling is the measured count, not the count plus headroom. A new read
  * on first view should be a decision somebody makes in this file, not
@@ -40,7 +40,7 @@ import { installFixtureBackend } from './support/fixtureBackend';
 const CEILINGS: Record<string, number> = {
   '/events': 10,
   '/events/today': 4,
-  '/events/jazz-night-at-the-fixture-2026-10-01': 11,
+  '/events/jazz-night-at-the-fixture-2026-10-01': 7,
 };
 
 /** Fri 2026-09-25 12:00 CDT. The fixture events (Oct 1) are upcoming. */
@@ -120,9 +120,7 @@ const ROWS = [
  *   failed client-side with PGRST116, which then fired log-error - a request
  *   the real page does not make. An id filter gets the row it names.
  * - `limit` is honoured, so the detail page's related-events rail renders the
- *   4 cards RELATED_EVENTS_LIMIT asks for, not 12. Each EventCard makes its
- *   own get_content_view_stats call (useViewTracking), so an ignored limit
- *   turned 4 real requests into 12 fake ones.
+ *   4 cards RELATED_EVENTS_LIMIT asks for, not 12.
  */
 function answerEvents(page: Page) {
   return page.route('**/rest/v1/events?**', (route) => {
@@ -199,6 +197,8 @@ test.describe('events first-view request budget', () => {
       if (process.env.EVENTS_BUDGET_REPORT) console.log(`[events-budget] ${path}: ${total} -> ${detail}`);
 
       expect(counts.get('fn:nlp-search') ?? 0, `nlp-search called on first view of ${path}: ${detail}`).toBe(0);
+      // One RPC per card whose result could never render. Must not come back.
+      expect(counts.get('rpc:get_content_view_stats') ?? 0, `per-card view stats on ${path}: ${detail}`).toBe(0);
       expect(total, `first view of ${path} made ${total} Supabase requests: ${detail}`).toBeLessThanOrEqual(ceiling);
     });
   }
