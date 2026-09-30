@@ -14,7 +14,14 @@ function assert(cond: boolean, msg: string): void {
 
 Deno.test('aborts a hung upstream with FetchTimeoutError', async () => {
   // Server that never responds — the request hangs until we time out.
-  const server = Deno.serve({ port: 0, onListen: () => {} }, () => new Promise<Response>(() => {}));
+  // Held open until the test releases it. A handler that never settles also
+  // makes server.shutdown() wait for it forever, so this test used to hang
+  // after the assertion it exists for (which is why no CI lane ran it).
+  let release: () => void = () => {};
+  const server = Deno.serve(
+    { port: 0, onListen: () => {} },
+    () => new Promise<Response>((resolve) => (release = () => resolve(new Response('late')))),
+  );
   const port = (server.addr as Deno.NetAddr).port;
 
   const start = Date.now();
@@ -26,6 +33,7 @@ Deno.test('aborts a hung upstream with FetchTimeoutError', async () => {
   }
   const elapsed = Date.now() - start;
 
+  release();
   await server.shutdown();
 
   assert(caught instanceof FetchTimeoutError, 'should throw FetchTimeoutError');

@@ -594,3 +594,19 @@ jobs:
       # Subscription started/cancelled and the admin paid-campaign alert: never
       # throw into the webhook, no stale "access until" date.
       - run: deno test --allow-env supabase/functions/_shared/billingEmails.test.ts
+      # Eleven suites that no lane ran until scripts/check-deno-lanes.mjs (now
+      # in validate) looked. fetchWithTimeout hung after passing - its server
+      # held a request open through shutdown - which nothing had noticed.
+      # agent-performance-review imports an index.ts that calls Deno.serve at
+      # module load, hence --allow-net.
+      - run: deno test --allow-read --allow-env supabase/functions/_shared/agentPolicy.test.ts
+      - run: deno test --allow-read --allow-env supabase/functions/_shared/eventSourceOwnership.test.ts
+      - run: deno test --allow-net supabase/functions/_shared/fetchWithTimeout.test.ts
+      - run: deno test --allow-read --allow-env supabase/functions/_shared/postgrestErrors.test.ts
+      - run: deno test --allow-read --allow-env supabase/functions/_shared/prompts/prompts.test.ts
+      - run: deno test --allow-read --allow-env supabase/functions/_shared/validation.test.ts
+      - run: deno test --allow-read --allow-env supabase/functions/_shared/weatherPolicy.test.ts
+      - run: deno test --allow-read --allow-env --allow-net supabase/functions/_tests/agent-performance-review.test.ts
+      - run: deno test --allow-read --allow-env supabase/functions/_tests/error-policy.test.ts
+      - run: deno test --allow-read --allow-env supabase/functions/_tests/executive-digest.test.ts
+      - run: deno test --allow-read --allow-env supabase/functions/_tests/scraper-user-agent.test.ts
