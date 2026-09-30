@@ -83,7 +83,12 @@ const MAX_ERROR_LINES = 25;
 function collectErrors() {
   let output = '';
   try {
-    output = execSync(`npx tsc --project ${project.tsconfig} --noEmit`, {
+    // --incremental with the build info under node_modules/.cache: a warm run
+    // re-checks only what changed. The type-check was ~2 of validate's ~3.5
+    // minutes, cold every time. The cache never changes the result, only how
+    // long it takes; delete node_modules/.cache/tsc to force a cold run.
+    const buildInfo = `node_modules/.cache/tsc/${projectName}.tsbuildinfo`;
+    output = execSync(`npx tsc --project ${project.tsconfig} --noEmit --incremental --tsBuildInfoFile ${buildInfo}`, {
       cwd: ROOT,
       encoding: 'utf8',
       stdio: ['ignore', 'pipe', 'pipe'],
