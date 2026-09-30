@@ -40,6 +40,8 @@ on:
       # automation_job_runs (WEB-BE-043) - nothing inside Supabase can observe
       # an external process - so a change to it has to run the health suite.
       - 'crawlers/catchdesmoines_crawler.py'
+      - 'crawlers/venue_match.py'
+      - 'crawlers/event_detail.py'
       # CLAUDE.md is asserted by ingest-coordinates.test.ts (WEB-BE-050).
       - 'CLAUDE.md'
       # The canonical category vocabulary and its browser mirror (WEB-BE-049).
