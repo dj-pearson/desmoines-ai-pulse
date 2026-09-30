@@ -48,7 +48,7 @@
  * Exit codes: 0 = held or improved, 1 = regressed.
  */
 
-import { execSync } from 'node:child_process';
+import { execFileSync } from 'node:child_process';
 import { readFileSync, writeFileSync, existsSync } from 'node:fs';
 import { dirname, join } from 'node:path';
 import { fileURLToPath } from 'node:url';
@@ -63,7 +63,7 @@ const PROJECTS = {
 
 const projectArgIndex = process.argv.indexOf('--project');
 const projectName = projectArgIndex === -1 ? 'strict' : process.argv[projectArgIndex + 1];
-const project = PROJECTS[projectName];
+const project = Object.hasOwn(PROJECTS, projectName) ? PROJECTS[projectName] : undefined;
 if (!project) {
   console.error(
     `[ratchet] unknown project "${projectName}". Known: ${Object.keys(PROJECTS).join(', ')}`
@@ -88,7 +88,11 @@ function collectErrors() {
     // minutes, cold every time. The cache never changes the result, only how
     // long it takes; delete node_modules/.cache/tsc to force a cold run.
     const buildInfo = `node_modules/.cache/tsc/${projectName}.tsbuildinfo`;
-    output = execSync(`npx tsc --project ${project.tsconfig} --noEmit --incremental --tsBuildInfoFile ${buildInfo}`, {
+    // No shell: run the local tsc through node with an argument list, so
+    // nothing from argv is ever parsed as a command line.
+    const tsc = join(ROOT, 'node_modules', 'typescript', 'bin', 'tsc');
+    const args = [tsc, '--project', project.tsconfig, '--noEmit', '--incremental', '--tsBuildInfoFile', buildInfo];
+    output = execFileSync(process.execPath, args, {
       cwd: ROOT,
       encoding: 'utf8',
       stdio: ['ignore', 'pipe', 'pipe'],
