@@ -493,6 +493,9 @@ jobs:
       # Admin tools invoked with a user JWT were gated by requireApiKey and 401'd
       # on every click. Fails when a web-invoked function is key-only again.
       - run: deno test --allow-read supabase/functions/_tests/web-invoked-functions-accept-admin.test.ts
+      # An unset ENVIRONMENT defaulted to development: no API-key check and
+      # lovable.dev allowed. Pins "missing means production".
+      - run: deno test --allow-read --allow-env supabase/functions/_tests/environment-fails-closed.test.ts
       - run: deno test --allow-read supabase/functions/_tests/deal-redemption-ledger.test.ts
       - run: deno test --allow-read supabase/functions/_tests/event-visibility-both-switches.test.ts
       - run: deno test --allow-read supabase/functions/_tests/consent-record-user-binding.test.ts
