@@ -9,7 +9,8 @@
  * false empty state stood until the visitor reloaded.
  *
  * This flags a page that clears its list inside a catch or an error branch
- * without also recording the failure. The fix is useReloadableFetch +
+ * without also recording the failure. The fix is to fetch through TanStack
+ * Query (as every page this was written for now does) and render
  * <ErrorState error={...} onRetry={...} /> from @/components/ui/error-state,
  * so the failure and the genuine empty result are different states and the
  * failure has a way out that is not a page reload.
@@ -115,8 +116,7 @@ answers the visitor's question with something the page never found out.
 
 Destructure isError/error/refetch from the query and render
 <ErrorState error={error} onRetry={() => void refetch()} /> ahead of the empty
-branch. These pages already have all three to hand; they do not need
-useReloadableFetch.
+branch. These pages already have all three to hand.
 `);
 }
 
@@ -132,9 +132,10 @@ console.error(`
 ${hits.length} occurrence(s). Clearing the list inside a failure block tells the
 visitor there is nothing on, when the truth is the page could not find out.
 
-Use useReloadableFetch from @/hooks/useReloadableFetch and render
-<ErrorState error={loadError} onRetry={retry} /> ahead of the empty state, so
-a failure is distinguishable from an empty result and has a Retry that is not
-a page reload.
+Move the fetch into a TanStack useQuery and render
+<ErrorState error={error} onRetry={() => void refetch()} /> ahead of the empty
+state, so a failure is distinguishable from an empty result and has a Retry
+that is not a page reload. (useReloadableFetch, the effect-based version of
+this, was deleted once all seven pages it served had moved to TanStack.)
 `);
 process.exit(1);

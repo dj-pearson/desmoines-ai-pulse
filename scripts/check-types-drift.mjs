@@ -38,7 +38,7 @@
  *
  *   node scripts/check-types-drift.mjs
  */
-import { readFileSync, existsSync } from 'node:fs';
+import { readFileSync, existsSync, readdirSync } from 'node:fs';
 import { join, dirname, resolve } from 'node:path';
 import { fileURLToPath } from 'node:url';
 
@@ -126,14 +126,66 @@ console.log(
     '.'
 );
 
-if (ghostTables.length === 0 && ghostColumns.length === 0) {
-  console.log('OK The generated types claim nothing production does not have.');
+/**
+ * A ghost that a migration in this repo creates is a different fact from one
+ * nothing creates. The snapshot is refreshed by hand (it needs production
+ * credentials), so every migration merged after it produces "ghosts" that are
+ * only the snapshot being old, and a check that fails every PR for that gets
+ * switched off. Those are listed as UNVERIFIED - `npm run check-schema:probe`
+ * or a snapshot refresh settles them - and only a ghost with no migration
+ * behind it fails. That is the WEB-QA-017 shape: types that name something
+ * nothing ever created.
+ */
+const MIGRATIONS_DIR = join(ROOT, 'supabase', 'migrations');
+const migrationSql = existsSync(MIGRATIONS_DIR)
+  ? readdirSync(MIGRATIONS_DIR)
+      .filter((f) => f.endsWith('.sql'))
+      .map((f) => ({ file: f, sql: readFileSync(join(MIGRATIONS_DIR, f), 'utf8') }))
+  : [];
+const reIdent = (name) => name.replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
+function migrationFor(table, column) {
+  const t = reIdent(table);
+  for (const { file, sql } of migrationSql) {
+    if (column === undefined) {
+      if (new RegExp(`CREATE TABLE (?:IF NOT EXISTS )?(?:public\\.)?"?${t}"?\\b`, 'i').test(sql)) return file;
+    } else if (
+      new RegExp(`ALTER TABLE (?:ONLY )?(?:IF EXISTS )?(?:public\\.)?"?${t}"?\\b[\\s\\S]*?ADD COLUMN (?:IF NOT EXISTS )?"?${reIdent(column)}"?\\b`, 'i').test(sql)
+    ) {
+      return file;
+    }
+  }
+  return null;
+}
+
+const unverified = [];
+const unexplainedTables = [];
+const unexplainedColumns = [];
+for (const t of ghostTables) {
+  const file = migrationFor(t);
+  if (file) unverified.push(`table   ${t}  (${file})`);
+  else unexplainedTables.push(t);
+}
+for (const c of ghostColumns) {
+  const [table, column] = c.split('.');
+  const file = migrationFor(table, column);
+  if (file) unverified.push(`column  ${c}  (${file})`);
+  else unexplainedColumns.push(c);
+}
+
+if (unverified.length > 0) {
+  console.log(`\n! ${unverified.length} name(s) are newer than the ${snapshot.capturedAt} snapshot but a migration creates them:`);
+  for (const u of unverified) console.log(`  ${u}`);
+  console.log('  Unverified, not failed: run `npm run check-schema:probe`, or refresh scripts/db-snapshot.json.');
+}
+
+if (unexplainedTables.length === 0 && unexplainedColumns.length === 0) {
+  console.log('OK The generated types claim nothing that neither production nor a migration has.');
   process.exit(0);
 }
 
-console.error(`\nX ${ghostTables.length} table(s) and ${ghostColumns.length} column(s) exist only in types.ts:`);
-for (const t of ghostTables) console.error(`  table   ${t}`);
-for (const c of ghostColumns) console.error(`  column  ${c}`);
+console.error(`\nX ${unexplainedTables.length} table(s) and ${unexplainedColumns.length} column(s) exist only in types.ts, and no migration creates them:`);
+for (const t of unexplainedTables) console.error(`  table   ${t}`);
+for (const c of unexplainedColumns) console.error(`  column  ${c}`);
 console.error(
   '\n  Code selecting these TYPE-CHECKS and PASSES check-schema-usage, because\n' +
     '  types.ts is what that check compares against. PostgREST answers 42P01 or\n' +
