@@ -15,7 +15,7 @@ import { serve } from "https://deno.land/std@0.190.0/http/server.ts";
 import Stripe from "https://esm.sh/stripe@14.21.0";
 import { createClient } from "https://esm.sh/@supabase/supabase-js@2.45.0";
 import { handleCors, getCorsHeaders, isOriginAllowed } from "../_shared/cors.ts";
-import { checkRateLimit, addRateLimitHeaders } from "../_shared/rateLimit.ts";
+import { checkRateLimitPersistent, addRateLimitHeaders } from "../_shared/rateLimit.ts";
 import { requireAdminOrApiKey, type AdminCaller } from "../_shared/apiKeyAuth.ts";
 import { refundDecision, refundNoticeText } from "../_shared/campaignPayment.ts";
 import { sendCampaignEmail } from "../_shared/campaignNotificationEmail.ts";
@@ -31,9 +31,12 @@ serve(async (req) => {
   const corsHeaders = getCorsHeaders(isOriginAllowed(origin) ? origin : undefined);
 
   // Rate limiting (strict - 5 refunds per 15 minutes)
-  const rateLimit = checkRateLimit(req, {
+  // Persistent, same limit as before. The in-memory counter was per isolate,
+  // so a burst spread across cold starts and instances never reached it.
+  const rateLimit = await checkRateLimitPersistent(req, {
     windowMs: 15 * 60 * 1000,
     max: 5,
+    endpoint: "process-stripe-refund",
     message: "Too many refund attempts. Please try again later.",
   });
 

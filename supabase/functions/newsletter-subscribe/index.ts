@@ -29,13 +29,13 @@
  * anyone unsubscribe a stranger by typing their address into the signup form.
  *
  * Auth: verify_jwt=false; no caller identity exists to check. Bounded by
- * checkRateLimit (5 per 15 minutes per IP).
+ * checkRateLimitPersistent (5 per 15 minutes per IP).
  */
 
 import { serve } from "https://deno.land/std@0.190.0/http/server.ts";
 import { createClient } from "https://esm.sh/@supabase/supabase-js@2.45.0";
 import { handleCors, getCorsHeaders, isOriginAllowed } from "../_shared/cors.ts";
-import { checkRateLimit, addRateLimitHeaders } from "../_shared/rateLimit.ts";
+import { checkRateLimitPersistent, addRateLimitHeaders } from "../_shared/rateLimit.ts";
 import { renderEmail } from "../_shared/emailLayout.ts";
 import { getSiteUrl } from "../_shared/siteUrl.ts";
 import { sendEmail } from "../_shared/email.ts";
@@ -142,9 +142,12 @@ serve(async (req) => {
 
   // The only thing standing between this and a mail cannon, since there is no
   // caller to authenticate.
-  const rateLimit = checkRateLimit(req, {
+  // Persistent, same limit as before. The in-memory counter was per isolate,
+  // so a burst spread across cold starts and instances never reached it.
+  const rateLimit = await checkRateLimitPersistent(req, {
     windowMs: 15 * 60 * 1000,
     max: 5,
+    endpoint: "newsletter-subscribe",
     message: "Too many signup attempts. Please try again in a few minutes.",
   });
   if (!rateLimit.success && rateLimit.response) {
