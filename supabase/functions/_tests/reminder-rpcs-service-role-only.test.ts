@@ -23,13 +23,12 @@ const SIGNATURES = [
 Deno.test('both functions are revoked from PUBLIC, anon and authenticated', async () => {
   const sql = await read(MIGRATION);
   for (const sig of SIGNATURES) {
-    const escaped = sig.replace(/[.()]/g, '\\$&');
     assert(
-      new RegExp(`REVOKE EXECUTE ON FUNCTION ${escaped} FROM PUBLIC, anon, authenticated;`).test(sql),
+      sql.includes(`REVOKE EXECUTE ON FUNCTION ${sig} FROM PUBLIC, anon, authenticated;`),
       `${sig} must be revoked from all three; revoking anon alone leaves PUBLIC`,
     );
     assert(
-      new RegExp(`GRANT EXECUTE ON FUNCTION ${escaped} TO service_role;`).test(sql),
+      sql.includes(`GRANT EXECUTE ON FUNCTION ${sig} TO service_role;`),
       `${sig} must stay callable by send-event-reminders`,
     );
   }
