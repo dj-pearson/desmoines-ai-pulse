@@ -474,6 +474,9 @@ jobs:
       - run: deno test --allow-read supabase/functions/_tests/event-social-fanout.test.ts
       - run: deno test --allow-read supabase/functions/_tests/list-hooks-query-cache.test.ts
       - run: deno test --allow-read supabase/functions/_tests/oauth-role-sync-self-only.test.ts
+      # Mail and money endpoints were limited per isolate only, and the limiter
+      # table was never cleaned. Pins the persistent limiter and the cleanup cron.
+      - run: deno test --allow-read supabase/functions/_tests/persistent-rate-limits.test.ts
       - run: deno test --allow-read supabase/functions/_tests/deal-redemption-ledger.test.ts
       - run: deno test --allow-read supabase/functions/_tests/event-visibility-both-switches.test.ts
       - run: deno test --allow-read supabase/functions/_tests/consent-record-user-binding.test.ts
