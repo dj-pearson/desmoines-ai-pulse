@@ -7,6 +7,8 @@ export interface ChatMessage {
   content: string;
   sources?: string[];
   escalated?: boolean;
+  /** The request failed; the UI offers the contact form in its place. */
+  failed?: boolean;
 }
 
 interface ChatResponse {
@@ -45,7 +47,13 @@ export function useSupportChat() {
       setMessages((prev) => [...prev, assistant]);
     } catch (e) {
       handleError(e, { component: "useSupportChat", action: "call" });
-      setMessages((prev) => [...prev, { role: "assistant", content: "Something went wrong. Please try again or use the contact form." }]);
+      // Flagged so the chat can render a real link to /contact. The text alone
+      // named a form it gave no way to reach, and "Talk to a human" goes
+      // through this same function, so it failed the same way.
+      setMessages((prev) => [
+        ...prev,
+        { role: "assistant", content: "Something went wrong. Please try again, or send us a message instead.", failed: true },
+      ]);
     } finally {
       setLoading(false);
     }
