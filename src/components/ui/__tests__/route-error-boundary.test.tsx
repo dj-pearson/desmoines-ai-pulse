@@ -23,11 +23,11 @@ function Boom(): JSX.Element {
 function renderAt(path: string) {
   return render(
     <MemoryRouter initialEntries={[path]}>
-      <Link to="/fine">go to fine</Link>
+      <Link to="/events">go to events</Link>
       <RouteErrorBoundary>
         <Routes>
           <Route path="/broken" element={<Boom />} />
-          <Route path="/fine" element={<p>fine page</p>} />
+          <Route path="/events" element={<p>events page</p>} />
         </Routes>
       </RouteErrorBoundary>
     </MemoryRouter>,
@@ -49,9 +49,9 @@ describe("RouteErrorBoundary", () => {
 
   it("clears the error when the route changes", () => {
     renderAt("/broken");
-    fireEvent.click(screen.getByText("go to fine"));
+    fireEvent.click(screen.getByText("go to events"));
     expect(screen.queryByText("This page encountered an error")).toBeNull();
-    expect(screen.getByText("fine page")).toBeTruthy();
+    expect(screen.getByText("events page")).toBeTruthy();
   });
 });
 
