@@ -58,11 +58,11 @@ BEGIN
       -- calls strictly worse than the current loud one.
       IF v_url IS NULL OR v_key IS NULL THEN
         RAISE EXCEPTION
-          'executive-digest not run: % not set at the database level',
+          'executive-digest not run: vault secret % is missing',
           CASE
-            WHEN v_url IS NULL AND v_key IS NULL THEN 'app.settings.supabase_url and app.settings.service_role_key'
-            WHEN v_url IS NULL THEN 'app.settings.supabase_url'
-            ELSE 'app.settings.service_role_key'
+            WHEN v_url IS NULL AND v_key IS NULL THEN 'supabase_url and service_role_key'
+            WHEN v_url IS NULL THEN 'supabase_url'
+            ELSE 'service_role_key'
           END;
       END IF;
 

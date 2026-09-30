@@ -114,9 +114,27 @@ for (const block of jsonLd) {
 // Headings only. A name appearing in a nav link or a paragraph is not the same
 // as the page having a section about it, and the nav link is the thing that
 // would survive if the section were deleted.
+// Strips to a fixed point rather than in one pass, which is what CodeQL's
+// incomplete-multi-character-sanitization rule asks for. Being honest about the
+// strength of this: /<[^>]+>/g already handles the usual `<<script>script>` and
+// `<scr<b>ipt>` splices, because [^>]+ consumes `<` freely, and no input was
+// found where the second iteration changes the result. It is kept because it
+// cannot be wrong and the rule is cheap to satisfy. The real reason this was
+// never an injection surface is below: the extracted text is compared against
+// destination names for a build gate and is never rendered anywhere.
+function stripTags(value) {
+  let previous;
+  let current = value;
+  do {
+    previous = current;
+    current = current.replace(/<[^>]+>/g, '');
+  } while (current !== previous);
+  return current;
+}
+
 const headings = new Set(
   [...html.matchAll(/<h[1-4][^>]*>([\s\S]*?)<\/h[1-4]>/g)].map(([, inner]) =>
-    inner.replace(/<[^>]+>/g, '').replace(/&#x27;|&apos;/g, "'").replace(/&amp;/g, '&').trim(),
+    stripTags(inner).replace(/&#x27;|&apos;/g, "'").replace(/&amp;/g, '&').trim(),
   ),
 );
 

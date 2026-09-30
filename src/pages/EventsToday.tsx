@@ -14,39 +14,20 @@ import { Link } from "react-router-dom";
 import { BRAND, getCanonicalUrl } from "@/lib/brandConfig";
 import { Breadcrumbs } from "@/components/ui/breadcrumbs";
 import { formatCount } from "@/lib/pluralize";
-import { useWeather, reorderForWeather } from "@/hooks/useWeather";
-import { useNow } from "@/hooks/useNow";
-import {
-  useEventLanding,
-  useWindowIndoorFlags,
-  groupTodayEvents,
-  countFree,
-  countStartingAfter5pm,
-  formatCentralDate,
-  hourLabel,
-  type LandingEvent,
-} from "@/hooks/useEventLanding";
-import NoIndexMeta from "@/components/schema/NoIndexMeta";
-import { EventsLandingLinks } from "@/components/events/EventsLandingLinks";
-import { EVENING_START_HOUR } from "@/lib/tonightPairings";
-import { WeatherNotice } from "@/components/WeatherNotice";
-import { ErrorState } from "@/components/ui/error-state";
-import { SkeletonGroup } from "@/components/ui/skeleton";
-import { EVENTS_UPDATE_ANSWER } from "@/content/eventsCopy";
+import { Event } from "@/lib/types";
 
-/**
- * Same render cap as the weekend and month landings (WEB-PERF-023). A busy
- * day can pass it; the overflow link opens today on the hub, where every
- * event is reachable.
- */
-const VISIBLE_EVENTS = 36;
-
-/** Row cap for today's window. At the cap the count reads "N+". */
-const FETCH_LIMIT = 200;
-
-const EMPTY: LandingEvent[] = [];
-
-export default function EventsToday() {
+interface EventItem {
+  id: string;
+  title: string;
+  date: string;
+  location: string;
+  venue: string | null;
+  price: string | null;
+  category: string;
+  enhanced_description: string | null;
+  original_description: string | null;
+  image_url: string | null;
+  event_start_utc: string | null;
   /**
    * WEB-SEO-031: this was a useState/useEffect fetch, and PrerenderSignal
    * (which counts TanStack queries in flight) could not see it, so the
@@ -113,23 +94,23 @@ export default function EventsToday() {
       .filter((group) => group.events.length > 0);
   }, [grouped]);
 
-  const visibleEvents = useMemo(() => groups.flatMap((group) => group.events), [groups]);
-  const hiddenCount = listed.length - visibleEvents.length;
+  // The row shape and the shared Event type disagree about absence: PostgREST
+  // returns null for an unset column, while Event marks the same fields
+  // optional, which is `undefined`. Passing one as the other is the whole of
+  // the strict-mode failure here, so narrow it once rather than at each use.
+  const eventsAsCards: Event[] = todaysEvents.map((e) => ({
+    ...e,
+    venue: e.venue ?? undefined,
+    price: e.price ?? undefined,
+    enhanced_description: e.enhanced_description ?? undefined,
+    original_description: e.original_description ?? undefined,
+    image_url: e.image_url ?? undefined,
+    event_start_utc: e.event_start_utc ?? undefined,
+    updated_at: e.updated_at ?? undefined,
+  }));
 
-  // The day the rows were fetched for, under the h1, as the weekend page does.
-  // Absolute, so it is still true in prerendered HTML read later that day.
-  const dayLabel =
-    todayWindow && !isLoading && !loadError
-      ? formatCentralDate(todayWindow.startDay, "EEEE, MMMM d, yyyy")
-      : null;
-
-  /**
-   * WEB-SEO-031: the title and description used to interpolate `new Date()`,
-   * which in the prerendered HTML is the build clock, frozen. The date lives in
-   * <ListFreshness> instead, computed from the rows.
-   */
-  const pageTitle = `Events Today in Des Moines | ${BRAND.name}`;
-  const pageDescription = `Find events happening today in Des Moines and suburbs. See times, locations, and details for today's activities and entertainment.`;
+  const pageTitle = `Events Today in Des Moines - ${format(new Date(), "MMMM d, yyyy")} | ${BRAND.name}`;
+  const pageDescription = `Find events happening today, ${format(new Date(), "MMMM d, yyyy")}, in Des Moines and suburbs. See times, locations, and details for today's activities and entertainment.`;
 
   const breadcrumbs = [
     { name: "Events", url: "/events" },
@@ -181,9 +162,8 @@ export default function EventsToday() {
       />
       {/* The schema describes what the page shows: the capped list. */}
       <EventListJsonLd
-        events={visibleEvents}
-        maxItems={VISIBLE_EVENTS}
-        listName="Events Today in Des Moines"
+        events={eventsAsCards}
+        listName={`Events Today in Des Moines - ${format(new Date(), "MMMM d, yyyy")}`}
         listDescription={pageDescription}
         listUrl={getCanonicalUrl('/events/today')}
       />
@@ -268,33 +248,11 @@ export default function EventsToday() {
                 </CardContent>
               </Card>
             ))}
-          </SkeletonGroup>
-        ) : visibleEvents.length > 0 ? (
-          <>
-            {groups.map((group) => (
-              <section key={group.id} aria-labelledby={`today-${group.id}`} className="mb-8">
-                <h2 id={`today-${group.id}`} className="text-2xl font-bold mb-4">
-                  {group.label}{" "}
-                  <span className="text-base font-normal text-muted-foreground">
-                    ({formatCount(group.total, "event")})
-                  </span>
-                </h2>
-                <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
-                  {group.events.map((event) => {
-                    const index = cardIndex++;
-                    return (
-                      <SocialEventCard
-                        priority={index < 3}
-                        key={event.id}
-                        event={event}
-                        socialData={batchSocialData?.[event.id]}
-                        socialDataPending={batchSocialPending}
-                        onViewDetails={() => {}}
-                      />
-                    );
-                  })}
-                </div>
-              </section>
+          </div>
+        ) : todaysEvents.length > 0 ? (
+          <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6 mb-8">
+            {eventsAsCards.map((event) => (
+              <SocialEventCard key={event.id} event={event} onViewDetails={() => {}} />
             ))}
 
             {hiddenCount > 0 && (
