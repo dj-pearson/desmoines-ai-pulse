@@ -264,10 +264,11 @@ test.describe('account settings (account plan WP5)', () => {
       if (path.endsWith('settings')) {
         await expect(page.getByText('Your consent history')).toBeVisible();
       }
-      // The page's own <main>, not <body>: the site footer's newsletter blurb
+      // The page's own body, not <body>: the site footer's newsletter blurb
       // (not this plan's file) says "AI-powered", which is not a claim this
-      // page makes.
-      expect(await page.locator('main main').innerText(), path).not.toMatch(banned);
+      // page makes. This was `main main`, which relied on the page nesting a
+      // second <main> inside App's; that landmark is gone.
+      expect(await page.locator('[data-account-body]').innerText(), path).not.toMatch(banned);
     }
 
     // The account email comes from the auth user, not the stale profiles.email.

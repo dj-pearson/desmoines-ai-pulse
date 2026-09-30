@@ -438,7 +438,7 @@ export default function Auth() {
   const showOAuth = view === "form";
 
   return (
-    <main className="min-h-screen bg-background flex items-start justify-center px-4 py-8 sm:items-center">
+    <div className="min-h-screen bg-background flex items-start justify-center px-4 py-8 sm:items-center">
       <Card className="w-full max-w-md">
         <CardHeader className="space-y-1 text-center">
           <h1 className="text-2xl font-bold tracking-tight">
@@ -574,6 +574,6 @@ export default function Auth() {
         onSuccess={handleMFASuccess}
         onCancel={handleMFACancel}
       />
-    </main>
+    </div>
   );
 }
