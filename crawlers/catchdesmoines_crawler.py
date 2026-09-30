@@ -30,6 +30,12 @@ from urllib.robotparser import RobotFileParser
 from urllib.parse import urlsplit
 from urllib.request import urlopen
 
+# Sibling modules, stdlib only (test_venue_match.py / test_event_detail.py run
+# them before the dependency install).
+sys.path.insert(0, os.path.dirname(os.path.abspath(__file__)))
+from event_detail import detail_fields, parse_end_date  # noqa: E402
+from venue_match import ingest_coordinates, match_known_venue  # noqa: E402
+
 # Configure logging
 logging.basicConfig(
     level=logging.INFO,
@@ -354,6 +360,9 @@ class CatchDesMoinesCrawler:
         # Set at the top of run(); the heartbeat row needs a start as well as a
         # finish or "how long did this take" is unanswerable after the fact.
         self.started_at: Optional[str] = None
+        # known_venues rows (46 today), loaded once per run in _init_clients.
+        # Empty means no venue coordinates this run, never a crash.
+        self.known_venues: list = []
 
     def _init_clients(self):
         """Initialize Supabase and Anthropic clients."""
@@ -371,6 +380,42 @@ class CatchDesMoinesCrawler:
         self.supabase = create_client(supabase_url, supabase_key)
         self.anthropic_client = anthropic.Anthropic(api_key=anthropic_key)
         logger.info("Initialized Supabase and Anthropic clients")
+        self._load_known_venues()
+
+    def _load_known_venues(self) -> None:
+        """Load known_venues once. A failed read is logged and leaves the list
+        empty: the rows still insert, just without venue coordinates, which is
+        what happened on every run before this existed."""
+        try:
+            result = self.supabase.table("known_venues").select(
+                "id, name, aliases, latitude, longitude"
+            ).eq("is_active", True).execute()
+            self.known_venues = result.data or []
+            logger.info(f"Loaded {len(self.known_venues)} known venue(s)")
+        except Exception as e:
+            logger.warning(f"Could not load known_venues; no venue coordinates this run: {e}")
+            self.known_venues = []
+
+    def _detail_record_fields(self, event: dict, parsed_dt: datetime) -> dict:
+        """image_url, end_date and coordinates for the row (WEB-BE-050).
+
+        CLAUDE.md requires every ingestion path to match a known venue and
+        take its coordinates at ingest. The edge scrapers did; this crawler,
+        the one that runs daily, wrote none of these, so its rows had no map
+        pin, no image (Event JSON-LD fell back to og-default.png) and no end.
+        """
+        detail = event.get("_detail") or {}
+        out = {}
+        if detail.get("image_url"):
+            out["image_url"] = detail["image_url"]
+        end_date = parse_end_date(detail.get("end_date_raw"), parsed_dt)
+        if end_date:
+            out["end_date"] = end_date
+        venue = match_known_venue(self._record_venue(event), self.known_venues)
+        if venue is None and detail.get("place_name"):
+            venue = match_known_venue(detail["place_name"], self.known_venues)
+        out.update(ingest_coordinates(venue, detail.get("source_coordinates")))
+        return out
 
     async def crawl_events_list(self, page: int = 0) -> str:
         """Crawl the events listing page."""
@@ -757,6 +802,7 @@ Return ONLY the JSON array. No other text."""
                 "created_at": now,
                 "updated_at": now,
             }
+            event_record.update(self._detail_record_fields(event, parsed_dt))
 
             result = self.supabase.table("events").insert(event_record).execute()
 
@@ -908,6 +954,8 @@ Return ONLY the JSON array. No other text."""
             if detail_url:
                 detail_result = await self.crawl_event_detail(detail_url)
                 event["source_url"] = detail_result.get("source_url", detail_url)
+                if detail_result.get("html"):
+                    event["_detail"] = detail_fields(detail_result["html"])
 
                 # Delay between detail requests. Was a hardcoded 1s, which is
                 # below the Crawl-delay: 2 catchdesmoines.com publishes.

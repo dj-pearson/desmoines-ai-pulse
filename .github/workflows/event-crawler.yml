@@ -78,6 +78,12 @@ jobs:
       - name: Check the LIKE escaping and the duplicate-check failure policy
         run: python crawlers/test_like_escape.py
 
+      # Fifth. The crawler fetched every detail page and wrote no image_url,
+      # coordinates or end_date from it, and matched no known venue, which
+      # CLAUDE.md requires of every ingestion path (WEB-BE-050).
+      - name: Check detail-page fields and known-venue matching
+        run: python crawlers/test_event_detail.py
+
       - name: Install dependencies
         run: |
           python -m pip install --upgrade pip
