@@ -474,6 +474,9 @@ jobs:
       - run: deno test --allow-read supabase/functions/_tests/event-social-fanout.test.ts
       - run: deno test --allow-read supabase/functions/_tests/list-hooks-query-cache.test.ts
       - run: deno test --allow-read supabase/functions/_tests/oauth-role-sync-self-only.test.ts
+      # Admin tools invoked with a user JWT were gated by requireApiKey and 401'd
+      # on every click. Fails when a web-invoked function is key-only again.
+      - run: deno test --allow-read supabase/functions/_tests/web-invoked-functions-accept-admin.test.ts
       - run: deno test --allow-read supabase/functions/_tests/deal-redemption-ledger.test.ts
       - run: deno test --allow-read supabase/functions/_tests/event-visibility-both-switches.test.ts
       - run: deno test --allow-read supabase/functions/_tests/consent-record-user-binding.test.ts
