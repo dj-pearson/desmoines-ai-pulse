@@ -191,7 +191,7 @@ ratchets the list.
 
 | Lane | Config | Specs | Required? |
 |---|---|---|---|
-| Smoke | `playwright.smoke.config.ts`, against a production build | route-smoke, cookie-consent, backend-down, touch-targets, page-headings, search-request-loop, request-budget, turnstile-inert, subscription-checkout, search-filters, url-filter-state, sticky-filter-chips | **Yes** — no `continue-on-error` |
+| Smoke | `playwright.smoke.config.ts`, against a production build | the `testMatch` list in that config (about 87 specs on 2026-09-30; read the config, not this row) | **Yes** — no `continue-on-error` |
 | Accessibility (axe) | `playwright.a11y.config.ts`, against a production build | the axe block only | **Yes** |
 | Broad suites | `playwright.config.ts` | accessibility, links-and-buttons, forms, mobile-responsive | No — `continue-on-error: true` |
 
@@ -252,7 +252,9 @@ npm run build:analyze       # bundle analysis
 
 # Database
 supabase db push                      # apply migrations
-supabase migration new <name>         # new migration
+supabase migration new <name>         # new migration; rename it to sort after
+                                      # the newest file (the repo is dated ahead,
+                                      # see npm run check-migration-order)
 supabase functions deploy <name>      # deploy edge function
 supabase secrets set KEY=value        # set secret
 
@@ -402,7 +404,7 @@ Define and maintain a `MIN_SUPPORTED_APP_VERSION` constant per platform (recomme
 
 **This is implemented** — `supabase/functions/_shared/minSupportedVersions.ts` (`MIN_SUPPORTED_APP_VERSION`, `LATEST_APP_VERSION`, `compareVersions`/`isBelowMinimum`/`isUpdateAvailable`) and `supabase/functions/version-check/index.ts`. iOS gates in `App/DesMoinesInsiderApp.swift` via `VersionCheckService` → `ForceUpdateView`; Android in `MainActivity.kt` → `ForceUpdateScreen`. Both fail open on error, which is deliberate — a version-check outage must not brick the apps. Covered in CI by `subscription-sync-tests.yml` (Deno) and `VersionCheckTests.swift`.
 
-Two known gaps: the iOS App Store URL in `version-check/index.ts` is still the `id0000000000` placeholder, so the escape button on a force-upgrade screen currently goes nowhere; and `LATEST_APP_VERSION` is hand-maintained with no release hook, so it drifts silently (drift only produces false "update available" banners, which is why nobody notices).
+Two known gaps: the iOS App Store id in `version-check/index.ts` is still the `0000000000` sentinel, so the force-upgrade button falls back to the website instead of the store listing (set it together with `ClipRootView.swift`); and `LATEST_APP_VERSION` is hand-maintained, though `npm run check-app-versions` now fails when its iOS value differs from `MARKETING_VERSION` in `ios/project.yml` (Android's gradle version is patched at release, so it is not checked).
 
 ### 4. On-disk / client-stored state
 
