@@ -91,7 +91,7 @@ describe("eventPageTitle", () => {
   });
 
   it("carries no brand suffix", () => {
-    expect(eventPageTitle(ev())).not.toMatch(/Insider|Events$/);
+    expect(eventPageTitle(ev())).not.toMatch(/(?:Insider|Events)$/);
   });
 });
 
