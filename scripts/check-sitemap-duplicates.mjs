@@ -10,8 +10,8 @@
  *
  * generate-dynamic-sitemaps.ts now collapses repeats in the single function
  * every generator funnels through, so the checked-in files are clean today.
- * This exists because that is not the only writer: scripts/generate-sitemap.js
- * and the regenerate-sitemaps edge function also produce these files, and a
+ * This exists because that is not the only writer: the regenerate-sitemaps and
+ * generate-sitemaps edge functions also produce these files, and a
  * dedupe in one writer is not a guarantee about the artifact.
  *
  * DEDUPING IS NOT A FIX FOR THE DUPLICATE ROWS behind the repeats. See
