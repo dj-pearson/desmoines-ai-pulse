@@ -111,7 +111,11 @@ const singleQuoted = await rewrite(
   `<html><head><meta property='og:url' content='https://desmoinesinsider.com/'></head></html>`,
   PAGE,
 );
-ck('single-quoted og:url is still rewritten', singleQuoted.includes(PAGE), singleQuoted);
+ck(
+  'single-quoted og:url is still rewritten',
+  singleQuoted.includes(`property="og:url" content="${PAGE}"`),
+  singleQuoted,
+);
 
 // A shell with nothing to rewrite must come through unchanged rather than empty.
 const nothingToDo = `<html><head><title>x</title></head><body>y</body></html>`;
