@@ -384,7 +384,7 @@ export default function UserDashboard() {
     <div className="min-h-screen bg-background">
       <Header />
 
-      <main className="container mx-auto mobile-padding py-4 md:py-6">
+      <div className="container mx-auto mobile-padding py-4 md:py-6">
         <div className="mb-3 flex items-center gap-2">
           <User className="h-5 w-5 text-primary" aria-hidden="true" />
           <h1 className="text-xl font-bold">Your account</h1>
@@ -471,7 +471,7 @@ export default function UserDashboard() {
             <SettingsSummary />
           </TabsContent>
         </Tabs>
-      </main>
+      </div>
     </div>
   );
 }

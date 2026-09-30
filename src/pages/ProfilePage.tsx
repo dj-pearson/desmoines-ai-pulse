@@ -92,7 +92,7 @@ function MyEventsContent() {
       <div className="min-h-screen bg-background">
         <Header />
 
-        <main className="container mx-auto max-w-3xl px-4 py-6 md:py-8">
+        <div className="container mx-auto max-w-3xl px-4 py-6 md:py-8">
           <Breadcrumbs
             className="mb-4"
             items={[
@@ -194,7 +194,7 @@ function MyEventsContent() {
               )}
             </TabsContent>
           </Tabs>
-        </main>
+        </div>
 
         <Footer />
       </div>
