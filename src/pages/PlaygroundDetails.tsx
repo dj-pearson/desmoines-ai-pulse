@@ -29,6 +29,7 @@ import { SpriteIcon } from "@/components/ui/SpriteIcon";
 import { OptimizedImage } from "@/components/OptimizedImage";
 import { DETAIL_STALE_TIME, detailQueryKey } from "@/lib/detailQueryKeys";
 import { isInMetro } from "@/lib/geo";
+import { splashPadReason, toddlerReason } from "@/lib/playgroundHub";
 import { AttractionEventsRail } from "@/components/attractions/AttractionEventsRail";
 import {
   formatMilesAway,
@@ -495,12 +496,20 @@ export default function PlaygroundDetails() {
           )}
 
           {/* SEO-014 / SEO-015: the family cluster, linked in both directions.
-              /events/kids links back here. */}
+              /events/kids links back here. SEO-042: a playground the hub
+              lists under splash pads or toddler picks links to that list,
+              decided by the same functions that built it. */}
           <RelatedLinks
             title="More for families"
             variant="inline"
             className="mb-2 text-center"
             links={[
+              ...(splashPadReason(playground)
+                ? [{ title: "More Des Moines splash pads", href: "/playgrounds#splash-pads" }]
+                : []),
+              ...(toddlerReason(playground)
+                ? [{ title: "Best playgrounds for toddlers", href: "/playgrounds#best-by-age" }]
+                : []),
               { title: "Kids and family events", href: "/events/kids" },
               { title: "Events with free admission", href: "/events/free" },
               { title: "This weekend", href: "/events/this-weekend" },

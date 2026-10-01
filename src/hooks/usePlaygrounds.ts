@@ -8,6 +8,7 @@ import { queryKeys } from "@/lib/queryKeys";
 import { STALE_TIME, GC_TIME } from "@/lib/queryConfig";
 import { PLAYGROUND_LIST_COLUMNS } from "@/lib/listColumns";
 import { handleError } from "@/lib/errorHandler";
+import { suburbFromLocation } from "@/lib/playgroundMeta";
 
 type Playground = Database["public"]["Tables"]["playgrounds"]["Row"];
 
@@ -48,44 +49,9 @@ export type PlaygroundCard = Pick<
   | "has_restrooms"
 > & { distanceMiles: number | null };
 
-/**
- * The suburb a `location` string names, or null when it names none we can
- * read.
- *
- * The old rule took the second-to-last comma segment, which is right for
- * "123 Main St, Ankeny" and wrong for the Places shape
- * "123 Main St, Ankeny, IA 50023, USA", where it yields "IA 50023". This walks
- * back from the end past country, state and ZIP segments and takes the first
- * segment that looks like a place name. A segment that starts with a digit is
- * a street address, never a suburb.
- *
- * Whatever it returns is a substring of `location`, so the ilike filter the
- * dropdown drives always matches at least the row it came from.
- */
-export function suburbFromLocation(location: string | null | undefined): string | null {
-  if (!location) return null;
-  const parts = location
-    .split(",")
-    .map((p) => p.trim())
-    .filter(Boolean);
-  const isTail = (seg: string) =>
-    /^(usa|us|united states)$/i.test(seg) ||
-    /^(ia|iowa)(\s+\d{5}(-\d{4})?)?$/i.test(seg) ||
-    /^\d{5}(-\d{4})?$/.test(seg);
-  let end = parts.length - 1;
-  while (end >= 0 && isTail(parts[end])) end--;
-  if (end < 0) return null;
-  // A lone segment with no state after it ("Gray's Lake Park") could be a
-  // place or a suburb and nothing in the string says which. "Ankeny, IA" is
-  // fine: the state segment says what precedes it is a city.
-  if (end === 0 && parts.length === 1) return null;
-  const candidate = parts[end]
-    .replace(/\s+(ia|iowa)(\s+\d{5}(-\d{4})?)?$/i, "")
-    .replace(/\s+\d{5}(-\d{4})?$/, "")
-    .trim();
-  if (!candidate || /^\d/.test(candidate)) return null;
-  return candidate;
-}
+// Moved to src/lib/playgroundMeta.ts (SEO-042) so the title builder can use it
+// without importing the Supabase client; re-exported for existing callers.
+export { suburbFromLocation };
 
 /**
  * Escape a value for a PostgREST array literal: `{"Splash Pad","Swings"}`.
