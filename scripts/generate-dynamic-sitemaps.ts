@@ -740,6 +740,28 @@ async function generateArticlesSitemap(): Promise<number | null> {
 }
 
 /**
+ * pSEO paths with measured Search Console impressions (SEO-029), committed by
+ * scripts/generate-pseo-demand-routes.mjs because the build host cannot read
+ * gsc_page_performance. Missing or unreadable is loud, not fatal: the sitemap
+ * falls back to the shippable set alone, which is what it was before.
+ */
+function readPseoDemandRoutes(): string[] {
+  const file = join(process.cwd(), 'scripts', 'pseo-demand-routes.json');
+  try {
+    const parsed = JSON.parse(readFileSync(file, 'utf8')) as { routes?: Record<string, unknown> };
+    const routes = Object.keys(parsed.routes ?? {}).filter((p) => /^(\/[a-z0-9-]+){1,2}$/.test(p));
+    if (routes.length === 0) throw new Error('no routes in the file');
+    return routes.sort();
+  } catch (error) {
+    console.warn(
+      `⚠️ scripts/pseo-demand-routes.json unusable (${(error as Error).message}). pSEO pages with ` +
+        'impressions outside the shippable set will be left out of sitemap-pseo.xml and keep serving the homepage.'
+    );
+    return [];
+  }
+}
+
+/**
  * pSEO pages (WEB-SEO-013).
  *
  * src/pseo/ contains a complete programmatic-SEO system — taxonomy, ten page
@@ -819,7 +841,7 @@ async function generatePseoSitemap(): Promise<number | null> {
   // reads as full coverage.
   if (excluded > 0) {
     console.warn(
-      `⚠️ ${excluded} published pSEO page(s) excluded: below AC5's inventory floor, ` +
+      `⚠️ ${excluded} published pSEO page(s) outside the shippable set: below AC5's inventory floor, ` +
         `or a duplicate of another URL's listing (${shippable.shadowed.length} duplicates). ` +
         'Run `npm run check-pseo-inventory` for the per-page verdict.'
     );
@@ -833,7 +855,28 @@ async function generatePseoSitemap(): Promise<number | null> {
     );
   }
 
-  const urls = shippable.canonical.map((slug: string) => {
+  // SEO-029: plus every published page Search Console has already shown to
+  // searchers. Measured 2026-09-30 as Googlebot, 74 of 87 such URLs returned
+  // the homepage's title and H1: each had a published row, none was in this
+  // sitemap, so the prerender never reached it and Cloudflare served the SPA
+  // fallback (the prerendered homepage). Keeping an indexed, ranking page out of
+  // the sitemap does not un-index it; it only keeps it broken. The doorway
+  // filter above still governs every page nobody has found yet.
+  const demandRoutes = readPseoDemandRoutes();
+  const demandAdded = demandRoutes.filter((slug) => bySlug.has(slug) && !shippable.canonical.includes(slug));
+  const demandUnpublished = demandRoutes.filter((slug) => !bySlug.has(slug));
+  if (demandUnpublished.length > 0) {
+    console.warn(
+      `⚠️ ${demandUnpublished.length} pSEO path(s) with measured impressions have no published row, so they ` +
+        `are not submitted and will 404: ${demandUnpublished.slice(0, 10).join(', ')}`
+    );
+  }
+  console.log(
+    `🧩 pSEO sitemap: ${shippable.canonical.length} shippable + ${demandAdded.length} published with measured impressions ` +
+      `(scripts/pseo-demand-routes.json)`
+  );
+
+  const urls = [...shippable.canonical, ...demandAdded].map((slug: string) => {
     const page = bySlug.get(slug) as { updated_at?: string; published_at?: string } | undefined;
     return {
       loc: `${baseUrl}${slug.startsWith('/') ? slug : `/${slug}`}`,

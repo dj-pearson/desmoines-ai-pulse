@@ -1,0 +1,351 @@
+{
+  "$comment": "SEO-029. pSEO paths with measured Search Console impressions. Published ones are submitted in sitemap-pseo.xml and prerendered in an unbudgeted, fail-the-build pass. Regenerate with node scripts/generate-pseo-demand-routes.mjs [--csv Pages.csv]. Never edit by hand.",
+  "generatedAt": "2026-10-01",
+  "windowDays": 365,
+  "sources": [
+    "gsc_page_performance",
+    "csv:desmoinesinsider.com-Performance-on-Search-2026-09-30/Pages.csv"
+  ],
+  "routes": {
+    "/asian/december": {
+      "impressions": 4,
+      "published": true
+    },
+    "/asian/downtown": {
+      "impressions": 38,
+      "published": true
+    },
+    "/asian/east-village": {
+      "impressions": 202,
+      "published": true
+    },
+    "/asian/fall": {
+      "impressions": 17,
+      "published": true
+    },
+    "/asian/spring": {
+      "impressions": 25,
+      "published": true
+    },
+    "/asian/this-weekend": {
+      "impressions": 10,
+      "published": true
+    },
+    "/asian/valley-junction": {
+      "impressions": 79,
+      "published": true
+    },
+    "/asian/winter": {
+      "impressions": 68,
+      "published": true
+    },
+    "/bbq/ankeny": {
+      "impressions": 67,
+      "published": true
+    },
+    "/bbq/august": {
+      "impressions": 11,
+      "published": true
+    },
+    "/bbq/december": {
+      "impressions": 9,
+      "published": true
+    },
+    "/bbq/downtown": {
+      "impressions": 7,
+      "published": true
+    },
+    "/bbq/fall": {
+      "impressions": 13,
+      "published": true
+    },
+    "/bbq/spring": {
+      "impressions": 13,
+      "published": true
+    },
+    "/bbq/summer": {
+      "impressions": 5,
+      "published": true
+    },
+    "/bbq/this-weekend": {
+      "impressions": 38,
+      "published": true
+    },
+    "/bbq/today": {
+      "impressions": 25,
+      "published": true
+    },
+    "/bbq/valley-junction": {
+      "impressions": 30,
+      "published": true
+    },
+    "/bbq/west-des-moines": {
+      "impressions": 18,
+      "published": true
+    },
+    "/bbq/winter": {
+      "impressions": 3,
+      "published": true
+    },
+    "/brunch/ankeny": {
+      "impressions": 33,
+      "published": true
+    },
+    "/brunch/december": {
+      "impressions": 1,
+      "published": true
+    },
+    "/brunch/downtown": {
+      "impressions": 78,
+      "published": true
+    },
+    "/brunch/east-village": {
+      "impressions": 53,
+      "published": true
+    },
+    "/brunch/this-weekend": {
+      "impressions": 8,
+      "published": true
+    },
+    "/brunch/today": {
+      "impressions": 19,
+      "published": true
+    },
+    "/brunch/valley-junction": {
+      "impressions": 92,
+      "published": true
+    },
+    "/brunch/west-des-moines": {
+      "impressions": 56,
+      "published": true
+    },
+    "/festivals/ankeny": {
+      "impressions": 10,
+      "published": true
+    },
+    "/festivals/august": {
+      "impressions": 34,
+      "published": true
+    },
+    "/festivals/december": {
+      "impressions": 56,
+      "published": true
+    },
+    "/festivals/east-village": {
+      "impressions": 19,
+      "published": true
+    },
+    "/festivals/spring": {
+      "impressions": 4,
+      "published": true
+    },
+    "/festivals/summer": {
+      "impressions": 30,
+      "published": true
+    },
+    "/festivals/today": {
+      "impressions": 1,
+      "published": true
+    },
+    "/festivals/valley-junction": {
+      "impressions": 119,
+      "published": true
+    },
+    "/festivals/west-des-moines": {
+      "impressions": 6,
+      "published": true
+    },
+    "/festivals/winter": {
+      "impressions": 17,
+      "published": true
+    },
+    "/guide/ankeny": {
+      "impressions": 20,
+      "published": true
+    },
+    "/guide/downtown": {
+      "impressions": 22,
+      "published": true
+    },
+    "/guide/west-des-moines": {
+      "impressions": 18,
+      "published": true
+    },
+    "/italian/downtown": {
+      "impressions": 90,
+      "published": true
+    },
+    "/italian/east-village": {
+      "impressions": 48,
+      "published": true
+    },
+    "/italian/this-weekend": {
+      "impressions": 5,
+      "published": true
+    },
+    "/italian/today": {
+      "impressions": 11,
+      "published": true
+    },
+    "/italian/west-des-moines": {
+      "impressions": 26,
+      "published": true
+    },
+    "/live-music/ankeny": {
+      "impressions": 14,
+      "published": true
+    },
+    "/live-music/december": {
+      "impressions": 8,
+      "published": true
+    },
+    "/live-music/fall": {
+      "impressions": 4,
+      "published": true
+    },
+    "/live-music/spring": {
+      "impressions": 3,
+      "published": true
+    },
+    "/live-music/today": {
+      "impressions": 2,
+      "published": true
+    },
+    "/live-music/west-des-moines": {
+      "impressions": 6,
+      "published": true
+    },
+    "/mexican/ankeny": {
+      "impressions": 78,
+      "published": true
+    },
+    "/mexican/august": {
+      "impressions": 32,
+      "published": true
+    },
+    "/mexican/december": {
+      "impressions": 2,
+      "published": true
+    },
+    "/mexican/downtown": {
+      "impressions": 89,
+      "published": true
+    },
+    "/mexican/east-village": {
+      "impressions": 40,
+      "published": true
+    },
+    "/mexican/fall": {
+      "impressions": 22,
+      "published": true
+    },
+    "/mexican/spring": {
+      "impressions": 21,
+      "published": true
+    },
+    "/mexican/summer": {
+      "impressions": 5,
+      "published": true
+    },
+    "/mexican/this-weekend": {
+      "impressions": 2,
+      "published": true
+    },
+    "/mexican/today": {
+      "impressions": 6,
+      "published": true
+    },
+    "/mexican/valley-junction": {
+      "impressions": 43,
+      "published": true
+    },
+    "/mexican/winter": {
+      "impressions": 11,
+      "published": true
+    },
+    "/things-to-do/ankeny": {
+      "impressions": 645,
+      "published": true
+    },
+    "/things-to-do/asian": {
+      "impressions": 8,
+      "published": true
+    },
+    "/things-to-do/august": {
+      "impressions": 58,
+      "published": true
+    },
+    "/things-to-do/brunch": {
+      "impressions": 27,
+      "published": true
+    },
+    "/things-to-do/budget": {
+      "impressions": 252,
+      "published": true
+    },
+    "/things-to-do/date-night": {
+      "impressions": 215,
+      "published": true
+    },
+    "/things-to-do/december": {
+      "impressions": 124,
+      "published": true
+    },
+    "/things-to-do/downtown": {
+      "impressions": 172,
+      "published": true
+    },
+    "/things-to-do/east-village": {
+      "impressions": 1208,
+      "published": true
+    },
+    "/things-to-do/fall": {
+      "impressions": 81,
+      "published": true
+    },
+    "/things-to-do/families": {
+      "impressions": 307,
+      "published": true
+    },
+    "/things-to-do/festivals": {
+      "impressions": 555,
+      "published": true
+    },
+    "/things-to-do/foodies": {
+      "impressions": 10,
+      "published": true
+    },
+    "/things-to-do/italian": {
+      "impressions": 11,
+      "published": true
+    },
+    "/things-to-do/live-music": {
+      "impressions": 127,
+      "published": true
+    },
+    "/things-to-do/mexican": {
+      "impressions": 9,
+      "published": true
+    },
+    "/things-to-do/summer": {
+      "impressions": 18,
+      "published": true
+    },
+    "/things-to-do/this-weekend": {
+      "impressions": 7,
+      "published": true
+    },
+    "/things-to-do/today": {
+      "impressions": 1,
+      "published": true
+    },
+    "/things-to-do/west-des-moines": {
+      "impressions": 107,
+      "published": true
+    },
+    "/things-to-do/winter": {
+      "impressions": 94,
+      "published": true
+    }
+  }
+}
