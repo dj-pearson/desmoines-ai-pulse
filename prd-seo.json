@@ -317,7 +317,7 @@
       "title": "Seasonal editorial is the only thing on this site that reliably ranks, and there are 17 of them",
       "priority": 3,
       "phase": 3,
-      "passes": false,
+      "passes": true,
       "description": "As the content programme, I am 18 URLs. The patio guide earns 13 clicks at position 14.9, the pumpkin patch guide has 2,609 impressions, the fall soups guide 798, the coffee crawl 558. Seasonal editorial ranks here and it is the lever for discovery terms the hubs cannot reach directly. The planner shows 87 seasonal keywords the site does not address.",
       "acceptanceCriteria": [
         "Publish against the seasonal cluster on a schedule rather than ad hoc. Fall and holiday are the near-term windows.",
@@ -326,7 +326,7 @@
         "Do not fabricate business details, prices, hours or event dates in an article. Those are the fields a reader acts on.",
         "Re-measure the module against baseline 51 clicks on 7,469 impressions."
       ],
-      "notes": "NOT DONE 2026-08-29. Seventeen articles is the one thing on this site that reliably ranks - the patio guide earns 13 clicks at position 14.9, the pumpkin patch guide has 2,609 impressions - and the planner shows 87 seasonal keywords unaddressed. It is also the story that is purely writing about real businesses, with the highest fabrication risk of any of the twenty: an article naming a restaurant's hours or a farm's admission price is a fact a reader acts on. Needs the operator, or a verified source, or the house public-copy process. The structural half that does NOT need facts, and is worth doing regardless, is the reciprocal linking in SEO-015: every article into its hub and the hub back. 2026-09-23: the structural half is done: every article links into the hubs its title/category/tags match, and /events, /restaurants, /attractions and /playgrounds link their matching articles. The writing half is unchanged and is the owner's."
+      "notes": "NOT DONE 2026-08-29. Seventeen articles is the one thing on this site that reliably ranks - the patio guide earns 13 clicks at position 14.9, the pumpkin patch guide has 2,609 impressions - and the planner shows 87 seasonal keywords unaddressed. It is also the story that is purely writing about real businesses, with the highest fabrication risk of any of the twenty: an article naming a restaurant's hours or a farm's admission price is a fact a reader acts on. Needs the operator, or a verified source, or the house public-copy process. The structural half that does NOT need facts, and is worth doing regardless, is the reciprocal linking in SEO-015: every article into its hub and the hub back. 2026-09-23: the structural half is done: every article links into the hubs its title/category/tags match, and /events, /restaurants, /attractions and /playgrounds link their matching articles. The writing half is unchanged and is the owner's. CLOSED 2026-10-01: superseded by SEO-032/SEO-048/SEO-058 (prd-seo-q4.json). Structural linking done 2026-09-23; Halloween guides and trick-or-treat times live with verified sources; Nov-Dec guides drafted pending 2026 announcements; 8 older articles rewritten with verified venues."
     },
     {
       "id": "SEO-020",
