@@ -28,6 +28,7 @@ import {
 import { resolveEventImage } from "../_shared/venueImage.ts";
 import { runJob } from "../_shared/jobRunner.ts";
 import { normalizeCategory } from "../_shared/eventCategories.ts";
+import { checkEventTitle } from "../_shared/scheduleTitleGuard.ts";
 import {
   centralCalendarDate,
   createDedupIndex,
@@ -488,6 +489,16 @@ serve(async (req) => {
         const parsed = parseEventDateTime(String(item.date));
         if (!parsed?.event_start_utc) return true;
         return centralCalendarDate(parsed.event_start_utc) >= todayCentral;
+      });
+
+      // SEO-031. A page heading ("Schedule") or a bare team name ("Iowa Cubs")
+      // is not an event; both reached the public calendar from milb.com/iowa.
+      // See _shared/scheduleTitleGuard.ts.
+      const teamSchedule = isSportsScheduleDomain(url);
+      filteredItems = filteredItems.filter((item) => {
+        const verdict = checkEventTitle(item.title, teamSchedule);
+        if (!verdict.ok) console.warn(`⚠️ Skipping event: ${verdict.reason} (${url})`);
+        return verdict.ok;
       });
     }
 

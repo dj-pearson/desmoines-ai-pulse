@@ -155,6 +155,12 @@
 /sitemap*.xml
   Cache-Control: public, max-age=3600
 
+# SEO-031: rebuilt on every build by scripts/generate-rss.ts. It was served as
+# application/xml, which some readers open as a page instead of subscribing.
+/rss.xml
+  Cache-Control: public, max-age=3600
+  Content-Type: application/rss+xml; charset=utf-8
+
 # API Routes - Short cache for dynamic content
 /api/*
   Cache-Control: public, max-age=300

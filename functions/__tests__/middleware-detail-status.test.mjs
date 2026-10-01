@@ -311,6 +311,18 @@ await atest('a closed row resolves to a shell (its noindex is in the shell rules
   assert.equal(detailResponsePlan(outcome, 'restaurant', 'closed-co', ORIGIN, NOW).action, 'shell');
 });
 
+await atest('a hidden event is a miss, not a shell (SEO-031)', async () => {
+  // /events/schedule-2026-09-26: a "Schedule" row for an Iowa Cubs game that
+  // was never played. RLS still serves hidden rows to anon; only the query
+  // filter keeps the shell from answering 200.
+  const row = { id: 's', title: 'Schedule', date: '2026-09-27T00:00:00Z', event_start_utc: '2026-09-27T00:00:00Z', is_hidden: true };
+  const calls = fakePostgrest((pq) => (pq.startsWith('events?') && !pq.includes('is_hidden=not.is.true') ? [row] : []));
+  const outcome = await resolveEntity(SB, 'anon', 'event', 'schedule-2026-09-26');
+  assert.ok(calls.length > 0 && calls.every((c) => c.includes('is_hidden=not.is.true')), 'every event query filters hidden rows');
+  assert.equal(outcome.kind, 'not-found');
+  assert.equal(detailResponsePlan(outcome, 'event', 'schedule-2026-09-26', ORIGIN, NOW).status, 404);
+});
+
 globalThis.fetch = realFetch;
 
 test('the handler serves the unavailable plan uncached and self-canonical', () => {
