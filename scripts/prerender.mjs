@@ -64,7 +64,8 @@ import {
   stripPrerenderSignal,
   strictGateFailures,
 } from './lazy-preload-patterns.mjs';
-import { CANONICAL_ELSEWHERE, PRERENDER_ROUTES } from './prerender-routes.mjs';
+import { PRERENDER_ROUTES } from './prerender-routes.mjs';
+import { expectedCanonicalFor, readPseoCanonicalElsewhere } from './pseo-canonical-elsewhere.mjs';
 import { prerenderOutputPath } from './prerender-output.mjs';
 import { orderEntityRoutes, pinFirst, MONTH_PAGE_ROUTE } from './prerender-order.mjs';
 import process from 'node:process';
@@ -430,6 +431,13 @@ function collectPseoRoutes() {
   // own title and its noindex. Written by scripts/generate-dynamic-sitemaps.ts
   // (PSEO_NOINDEX_ROUTES_FILE in scripts/lib/pseoCoverage.ts); absent means the
   // sitemap step could not measure the rule, which it already warned about.
+  //
+  // SEO-066 kept SEO-064's noindex duplicates (/bbq/today -> canonical
+  // /restaurants) in this pass rather than excluding them. Excluded, they get
+  // the same fallback: an indexable homepage with a self-canonical from
+  // functions/_middleware.ts, which is the duplicate SEO-064 set out to remove.
+  // The gate checks them against their declared target instead
+  // (scripts/pseo-canonical-elsewhere.mjs).
   const noindexFile = path.join(process.cwd(), 'scripts', '.generated', 'pseo-noindex-routes.json');
   if (fs.existsSync(noindexFile)) {
     try {
@@ -659,6 +667,11 @@ const duplicateJsonLdRoutes = [];
   // which the hub pass overwrites with the prerendered homepage. The homepage
   // title is appended once the hub pass has written it.
   const forbiddenTitles = [shellTitle];
+
+  // SEO-066: pSEO duplicates SEO-064 holds at noindex canonical their parent
+  // (/bbq/today -> /restaurants). Without this map the gate demanded a
+  // self-canonical from them and the pSEO pass failed the build on all 26.
+  const pseoCanonicalElsewhere = readPseoCanonicalElsewhere(warn);
 
   // SEO-001: routes the strict gate refused, with the reason. Reported at the
   // end rather than only thrown, because a rejection is the interesting output
@@ -958,7 +971,7 @@ const duplicateJsonLdRoutes = [];
           html,
           route,
           forbiddenTitles,
-          CANONICAL_ELSEWHERE[route] ?? route,
+          expectedCanonicalFor(route, pseoCanonicalElsewhere),
         );
         if (failures.length > 0) {
           strictRejections.push(`${route}: ${failures.join('; ')}`);
