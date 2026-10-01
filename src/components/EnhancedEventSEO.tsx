@@ -1,9 +1,17 @@
 import { Helmet } from "react-helmet-async";
 import { Event } from "@/lib/types";
-import { createEventSlugWithCentralTime, hasSpecificTime, formatEventDate, formatInCentralTime } from "@/lib/timezone";
+import { createEventSlugWithCentralTime } from "@/lib/timezone";
 import { BRAND } from "@/lib/brandConfig";
 import { ogImageUrl } from "@/lib/ogImage";
-import { buildEventOffers, isEventAccessibleForFree } from "@/lib/eventOffers";
+import { buildEventJsonLd, eventStartIso } from "@/lib/eventSchema";
+import { toJsonLd } from "@/lib/jsonLd";
+import {
+  eventImageAlt,
+  eventKeywords,
+  eventMetaDescription,
+  eventPageTitle,
+  isStaleEvent,
+} from "@/lib/eventMeta";
 
 interface EnhancedEventSEOProps {
   event: Event;
@@ -13,258 +21,110 @@ interface EnhancedEventSEOProps {
   // now derived from the event's own start date below, so the component no
   // longer depends on the caller computing it correctly.
   viewMode?: "list" | "detail";
+  /**
+   * The coordinates the page itself uses: the event's, else its matched
+   * venue's. geo.position and ICBM are omitted when there are none, rather
+   * than claiming downtown Des Moines for a Waukee event (events-pass2 WP4
+   * item 9).
+   */
+  latitude?: number | null;
+  longitude?: number | null;
+  /** Archived rows render as past events and ask to leave the index. */
+  noindex?: boolean;
+}
+
+function coord(value: number | string | null | undefined): number | null {
+  if (value === null || value === undefined || value === "") return null;
+  const n = Number(value);
+  return Number.isFinite(n) && n !== 0 ? n : null;
 }
 
 export default function EnhancedEventSEO({
   event,
-  viewMode = "detail"
+  viewMode = "detail",
+  latitude,
+  longitude,
+  noindex = false,
 }: EnhancedEventSEOProps) {
 
-  const getOptimizedTitle = () => {
-    const showTime = hasSpecificTime(event);
-    const dateStr = formatInCentralTime(
-      event.event_start_local || event.event_start_utc || event.date,
-      showTime ? "EEEE, MMMM d 'at' h:mm a" : "EEEE, MMMM d, yyyy"
-    );
+  // Both live in src/lib/eventMeta.ts, which records why: the title read the
+  // offset-less event_start_local first and so carried a showtime five hours
+  // early in the UTC prerender, and the description said "Des Moines" and
+  // "Free admission" for rows that were neither.
+  const getOptimizedTitle = () =>
+    viewMode === "list" ? `${event.title} | ${BRAND.city} Events` : eventPageTitle(event);
 
-    if (viewMode === "list") {
-      return `${event.title} - ${dateStr} | ${BRAND.city} Events`;
-    }
+  const getGEODescription = () => eventMetaDescription(event);
 
-    const venue = event.venue ? ` at ${event.venue}` : '';
-    return `${event.title}${venue} - ${dateStr} | ${BRAND.city}, ${BRAND.state} Events`;
-  };
-
-  const getGEODescription = () => {
-    const description = event.enhanced_description || event.original_description || '';
-    const venue = event.venue || event.location || BRAND.city;
-    const dateStr = formatEventDate(event);
-    const price = event.price ? ` Tickets: ${event.price}.` : ' Free admission.';
-    const category = event.category?.toLowerCase() || 'event';
-
-    if (description.length > 50) {
-      return `${event.title} is a ${category} happening ${dateStr} at ${venue} in ${BRAND.city}, ${BRAND.state}. ${description.substring(0, 150).trim()}...${price} Find local ${BRAND.city} events and activities.`;
-    }
-
-    return `Join ${event.title}, a ${category} event happening ${dateStr} at ${venue} in ${BRAND.city}, ${BRAND.state}.${price} Discover what's happening in ${BRAND.city} this week.`;
-  };
-
-  const getLocalKeywords = () => {
-    const base = [
-      event.title,
-      `${event.title} ${BRAND.city}`,
-      `${BRAND.city} ${event.category}`,
-      `${event.category} events ${BRAND.city}`,
-      `${BRAND.city} events`,
-      `things to do ${BRAND.city}`,
-      `things to do in ${BRAND.city} ${BRAND.state}`,
-      `${BRAND.state} events`,
-      `${BRAND.region} events`,
-      `${BRAND.city} activities`,
-      `events near me ${BRAND.city}`,
-      `what to do in ${BRAND.city}`,
-      `${BRAND.city} ${BRAND.state} events today`,
-      `${BRAND.city} weekend events`,
-    ];
-
-    if (event.venue) {
-      base.push(`${event.venue} events`, `${event.venue} ${BRAND.city}`, `events at ${event.venue}`);
-    }
-
-    if (event.location && !event.location.includes(BRAND.city)) {
-      base.push(`${event.location} events`);
-    }
-
-    if (event.city && event.city !== BRAND.city) {
-      base.push(`${event.city} events`, `things to do ${event.city} Iowa`);
-    }
-
-    const month = formatInCentralTime(
-      event.event_start_local || event.event_start_utc || event.date,
-      "MMMM"
-    );
-    const year = formatInCentralTime(
-      event.event_start_local || event.event_start_utc || event.date,
-      "yyyy"
-    );
-    const dayOfWeek = formatInCentralTime(
-      event.event_start_local || event.event_start_utc || event.date,
-      "EEEE"
-    );
-
-    base.push(
-      `${BRAND.city} events ${month} ${year}`,
-      `${dayOfWeek} events ${BRAND.city}`,
-      `this weekend ${BRAND.city}`,
-      `tonight ${BRAND.city}`,
-      `${event.category.toLowerCase()} ${BRAND.city} ${month}`,
-    );
-
-    return base.filter(Boolean);
-  };
+  // Absolute words only, and no crash on a null category (eventMeta.ts).
+  const keywords = eventKeywords(event);
 
   const eventUrl = `${BRAND.baseUrl}/events/${createEventSlugWithCentralTime(event.title, event)}`;
   // Branded dynamic OG card (WEB-FEAT-008); falls back to the item photo / default.
   const ogImage = ogImageUrl("event", event.id) || event.image_url || `${BRAND.baseUrl}${BRAND.ogImage}`;
 
-  // Use actual event description for schema (Google penalizes keyword-stuffed descriptions)
-  const schemaDescription = event.enhanced_description || event.original_description || `${event.title} - ${event.category} event in ${event.city || BRAND.city}, ${BRAND.state}`;
-
-  const offers = buildEventOffers(event.price);
-  const accessibleForFree = isEventAccessibleForFree(event.price);
-
-  // Primary Event Schema - Google Events compliant
-  // Required: name, startDate, location
-  // Recommended: endDate, eventStatus, eventAttendanceMode, image, description, offers, organizer, performer
-  const startDateISO = event.event_start_utc || (typeof event.date === 'string' ? event.date : event.date.toISOString());
-  // Estimate endDate as startDate + 3 hours if no explicit end_date
-  const startMs = new Date(startDateISO).getTime();
-  const endDateISO = event.end_date
-    ? event.end_date
-    : new Date(startMs + 3 * 60 * 60 * 1000).toISOString();
-
   // WEB-SEO-009: retire long-past events from the index instead of accumulating
-  // them forever. Previously every event page emitted an unconditional
-  // "index, follow", so concluded listings never aged out.
-  //
-  // The 30-day threshold is deliberately LATER than the 7-day GRACE_DAYS in
-  // scripts/generate-dynamic-sitemaps.ts. Between day 7 and day 30 an event is
-  // still indexable but no longer submitted — it keeps ranking for
-  // "did X happen" style queries and for recurring-event research while it is
-  // still plausibly useful, then drops out. Keep "follow" throughout so the
-  // internal links on the page continue to pass.
-  const STALE_EVENT_NOINDEX_DAYS = 30;
-  const daysSinceEvent = Number.isFinite(startMs)
-    ? (Date.now() - startMs) / 86_400_000
-    : 0;
-  const isStaleEvent = daysSinceEvent > STALE_EVENT_NOINDEX_DAYS;
-  const robotsDirective = isStaleEvent
+  // them forever. Measured from the event's END since events-pass2 WP4 item
+  // 12, so a two-month exhibit is not dropped while it is still open; see
+  // isStaleEvent in eventMeta.ts. Keep "follow" throughout so the internal
+  // links on the page continue to pass.
+  const isStale = noindex || isStaleEvent(event);
+  const lat = coord(latitude) ?? coord(event.latitude);
+  const lng = coord(longitude) ?? coord(event.longitude);
+  const hasGeo = lat !== null && lng !== null;
+  const city = event.city?.trim() || null;
+  const robotsDirective = isStale
     ? "noindex, follow"
     : "index, follow, max-snippet:-1, max-image-preview:large, max-video-preview:-1";
 
+  // WEB-SEO-021. This built its OWN Event node, a second one, and it had
+  // drifted: addressLocality was `event.city || BRAND.city`, so a Waukee
+  // trivia night published as taking place in Des Moines on its detail page
+  // while the list pages had it right. That is the SEO-007 locality bug,
+  // reintroduced on roughly 525 URLs by a copy nobody remembered was a copy.
+  //
+  // src/lib/eventSchema.ts documents itself as "the single Event JSON-LD
+  // builder" (SEO-002/007). It is now the only one. Everything the old block
+  // explained in comments lives there and applies to every surface at once:
+  //   SEO-009  a concluded event is EventScheduled with a past endDate, never
+  //            EventPostponed
+  //   SEO-010  organizer and performer are omitted rather than fabricated -- we
+  //            are an aggregator and the table has no such column
+  //   SEO-018  a price range becomes an AggregateOffer, and an unreadable price
+  //            drops the property instead of asserting zero
+  //
+  // inLanguage and mainEntityOfPage are added here rather than in the builder
+  // because they describe THIS PAGE, and the builder is also used to produce
+  // nodes nested inside an ItemList, where a mainEntityOfPage pointing at the
+  // list would be wrong.
+  const eventJsonLd = buildEventJsonLd(event, { withContext: true });
   const eventSchema = {
-    "@context": "https://schema.org",
-    "@type": "Event",
-    "@id": eventUrl,
-    "name": event.title,
-    "description": schemaDescription,
-    "startDate": startDateISO,
-    "endDate": endDateISO,
-    // WEB-SEO-009: this used to emit EventPostponed for anything not upcoming.
-    // EventPostponed means "moved to a date not yet announced" — a concluded
-    // event is not postponed, it happened. schema.org expresses "this is over"
-    // as EventScheduled with a past endDate, which is what we now do. Asserting
-    // a false status on every past event (hundreds of URLs, all left
-    // index,follow) undermines trust in all of our Event markup.
-    // Real postponements/cancellations should come from event data, not from
-    // whether the date has passed; there is no such field today, so we do not
-    // guess.
-    "eventStatus": "https://schema.org/EventScheduled",
-    "eventAttendanceMode": "https://schema.org/OfflineEventAttendanceMode",
-    "location": {
-      "@type": "Place",
-      "name": event.venue || event.location || `${BRAND.city} Area`,
-      "address": {
-        "@type": "PostalAddress",
-        "streetAddress": event.location || "",
-        "addressLocality": event.city || BRAND.city,
-        "addressRegion": BRAND.state,
-        "addressCountry": BRAND.country,
-      },
-      ...(event.latitude && event.longitude && {
-        "geo": {
-          "@type": "GeoCoordinates",
-          "latitude": event.latitude,
-          "longitude": event.longitude
-        }
-      }),
-    },
-    // WEB-SEO-010: organizer and performer are deliberately omitted.
-    //
-    // This block used to hardcode Des Moines Insider as the organizer of every
-    // event and, when a venue was known, name the VENUE as the performer —
-    // so a touring Broadway show was published as organized by us and
-    // performed by the building it played in. Both are false. We are an
-    // aggregator: the `events` table has no organizer, performer, artist or
-    // promoter column, so there is no truthful value to emit here.
-    //
-    // Neither field is required by Google's Event structured data guidance,
-    // and omitting a field is strictly better than fabricating one — an
-    // aggregator inserting itself as organizer is a recognisable
-    // scraped-content spam signal. The venue is already correctly expressed as
-    // the Place in `location` above.
-    //
-    // If organizer/performer are ever captured during ingestion, add them back
-    // conditionally — never with a fallback.
-    "image": event.image_url
-      ? [event.image_url]
-      : [`${BRAND.baseUrl}${BRAND.ogImage}`],
-    "url": eventUrl,
-    // WEB-SEO-018: a range becomes an AggregateOffer, and an unreadable price
-    // ("Varies") drops both properties rather than asserting a price of 0.
-    ...(offers && {
-      "offers": {
-        ...offers,
-        "url": event.source_url || eventUrl,
-        "validFrom": event.created_at || new Date().toISOString(),
-      },
-    }),
-    ...(accessibleForFree !== undefined && { "isAccessibleForFree": accessibleForFree }),
-    "inLanguage": "en-US",
-    "mainEntityOfPage": { "@type": "WebPage", "@id": eventUrl },
+    ...eventJsonLd,
+    inLanguage: "en-US",
+    mainEntityOfPage: { "@type": "WebPage", "@id": eventJsonLd.url },
   };
 
-  // FAQ Schema for Voice Search & AI Chatbots
-  const faqSchema = {
-    "@context": "https://schema.org",
-    "@type": "FAQPage",
-    "mainEntity": [
-      {
-        "@type": "Question",
-        "name": `When is ${event.title}?`,
-        "acceptedAnswer": {
-          "@type": "Answer",
-          "text": `${event.title} takes place ${formatEventDate(event)} at ${event.venue || event.location || BRAND.city} in ${BRAND.city}, ${BRAND.state}.`
-        }
-      },
-      {
-        "@type": "Question",
-        "name": `Where is ${event.title} located?`,
-        "acceptedAnswer": {
-          "@type": "Answer",
-          "text": `${event.title} is held at ${event.venue || event.location || BRAND.city}, ${event.city || BRAND.city}, ${BRAND.state}.${event.latitude && event.longitude ? ` The venue is located at coordinates ${event.latitude}, ${event.longitude}. You can get directions via Google Maps.` : ''}`
-        }
-      },
-      {
-        "@type": "Question",
-        "name": `How much does ${event.title} cost?`,
-        "acceptedAnswer": {
-          "@type": "Answer",
-          "text": accessibleForFree === true
-            ? `${event.title} is a free event in ${BRAND.city}, ${BRAND.state}. No ticket purchase is required.`
-            : accessibleForFree === undefined
-              ? `Ticket pricing for ${event.title} is set by the organiser. Visit the official event page for current prices and availability.`
-              : `Tickets for ${event.title} are ${event.price}. Visit the official event page for ticket information and availability.`
-        }
-      },
-      {
-        "@type": "Question",
-        "name": `What type of event is ${event.title}?`,
-        "acceptedAnswer": {
-          "@type": "Answer",
-          "text": `${event.title} is a ${event.category.toLowerCase()} event in ${BRAND.city}, ${BRAND.state}. It's part of the vibrant ${event.category.toLowerCase()} scene in the ${BRAND.region}.`
-        }
-      },
-      {
-        "@type": "Question",
-        "name": `How do I get to ${event.title}?`,
-        "acceptedAnswer": {
-          "@type": "Answer",
-          "text": `${event.title} is located at ${event.venue || event.location || BRAND.city} in ${event.city || BRAND.city}, ${BRAND.state}. ${BRAND.city} is easily accessible by car via I-235 and I-80. Downtown parking is available in public garages and street parking. Public transit via DART bus routes also serves the area.`
-        }
-      }
-    ]
-  };
+  // WEB-SEO-022. A FIVE-QUESTION FAQPage USED TO BE BUILT HERE AND IT IS GONE.
+  //
+  // Nothing on the page ever showed it. EventDetails renders no FAQSection, so
+  // the markup existed only in the head -- and Google's structured-data policy
+  // requires FAQ content to be visible on the page it is emitted from.
+  // EnhancedLocalSEO.tsx:277-305 already records why this pattern was removed
+  // from every other surface; event pages were the copy that survived.
+  //
+  // The answers were also not true of the events they described. Every one of
+  // roughly 525 event pages asserted the same directions -- two named
+  // interstates, downtown parking, a bus route -- for a barn dance in Waukee as
+  // readily as for a show downtown, and one question quoted raw latitude and
+  // longitude at the reader. That is fabricated content in a format search
+  // engines read as a factual claim by the site.
+  //
+  // NOT REPLACED WITH A VISIBLE SECTION, though AC2 allows it. The only fields
+  // that could honestly answer these questions -- date, venue, price -- are
+  // already on the page, already in the Event JSON-LD, and already in the meta
+  // description. A visible FAQ restating them would exist to carry the markup
+  // rather than to answer anything, which is the same defect with a <details>
+  // element around it.
 
   // Speakable Schema for Voice Assistants (Google Assistant, Alexa, Siri)
   const speakableSchema = {
@@ -274,7 +134,11 @@ export default function EnhancedEventSEO({
     "name": getOptimizedTitle(),
     "speakable": {
       "@type": "SpeakableSpecification",
-      "cssSelector": ["article h1", "article [itemprop='description']", "article [itemprop='startDate']", "article [itemprop='location']"]
+      // #event-summary is the one sentence that answers what, when, where and
+      // price. The old selectors named microdata attributes, and one of them
+      // (description) sat outside the <article> it was scoped to, so it
+      // matched nothing.
+      "cssSelector": ["article h1", "#event-summary"]
     },
     "url": eventUrl
   };
@@ -284,23 +148,24 @@ export default function EnhancedEventSEO({
       {/* Core Meta */}
       <title>{getOptimizedTitle()}</title>
       <meta name="description" content={getGEODescription()} />
-      <meta name="keywords" content={getLocalKeywords().join(", ")} />
+      <meta name="keywords" content={keywords.join(", ")} />
       <link rel="canonical" href={eventUrl} />
 
       {/* Geographic Meta for Local SEO */}
       <meta name="geo.region" content={`US-${BRAND.stateAbbr}`} />
-      <meta name="geo.placename" content={`${BRAND.city}, ${BRAND.state}`} />
-      <meta name="geo.position" content="41.5868;-93.6250" />
-      <meta name="ICBM" content="41.5868, -93.6250" />
+      {city && <meta name="geo.placename" content={`${city}, ${BRAND.state}`} />}
+      {hasGeo && <meta name="geo.position" content={`${lat};${lng}`} />}
+      {hasGeo && <meta name="ICBM" content={`${lat}, ${lng}`} />}
       <meta name="DC.title" content={getOptimizedTitle()} />
 
       {/* Event-Specific Meta for AI Parsers (ChatGPT, Perplexity, Google AI) */}
       <meta name="event:title" content={event.title} />
       <meta name="event:description" content={getGEODescription()} />
-      <meta name="event:start_time" content={event.event_start_utc || (typeof event.date === 'string' ? event.date : event.date.toISOString())} />
+      {/* Same value as the JSON-LD startDate: a date only when no time was published. */}
+      <meta name="event:start_time" content={eventStartIso(event)} />
       <meta name="event:location" content={event.venue || event.location || `${BRAND.city}, ${BRAND.state}`} />
-      <meta name="event:category" content={event.category} />
-      <meta name="event:city" content={event.city || BRAND.city} />
+      {event.category && <meta name="event:category" content={event.category} />}
+      {city && <meta name="event:city" content={city} />}
       <meta name="event:state" content={BRAND.state} />
       <meta name="event:country" content="United States" />
       {event.image_url && <meta name="event:image" content={event.image_url} />}
@@ -310,20 +175,20 @@ export default function EnhancedEventSEO({
           robotsDirective flips to noindex,follow once the event is long past
           (WEB-SEO-009). */}
       <meta name="robots" content={robotsDirective} />
-      <meta name="googlebot" content={isStaleEvent ? "noindex, follow" : "index, follow"} />
-      <meta name="bingbot" content={isStaleEvent ? "noindex, follow" : "index, follow"} />
+      <meta name="googlebot" content={isStale ? "noindex, follow" : "index, follow"} />
+      <meta name="bingbot" content={isStale ? "noindex, follow" : "index, follow"} />
 
       {/* Open Graph for Social + AI */}
       <meta property="og:type" content="event" />
       <meta property="og:title" content={getOptimizedTitle()} />
       <meta property="og:description" content={getGEODescription()} />
-      <meta property="og:locality" content={event.city || BRAND.city} />
+      {city && <meta property="og:locality" content={city} />}
       <meta property="og:region" content={BRAND.state} />
       <meta property="og:country-name" content="United States" />
       <meta property="og:image" content={ogImage} />
       <meta property="og:image:width" content="1200" />
       <meta property="og:image:height" content="630" />
-      <meta property="og:image:alt" content={`${event.title} - ${event.category} event in ${BRAND.city}`} />
+      <meta property="og:image:alt" content={eventImageAlt(event)} />
       <meta property="og:url" content={eventUrl} />
       <meta property="og:site_name" content={BRAND.name} />
 
@@ -335,9 +200,8 @@ export default function EnhancedEventSEO({
       <meta name="twitter:site" content={BRAND.twitter} />
 
       {/* Structured Data - Event Schema (primary for Google Events indexing) */}
-      <script type="application/ld+json">{JSON.stringify(eventSchema)}</script>
-      <script type="application/ld+json">{JSON.stringify(faqSchema)}</script>
-      <script type="application/ld+json">{JSON.stringify(speakableSchema)}</script>
+      <script type="application/ld+json">{toJsonLd(eventSchema)}</script>
+      <script type="application/ld+json">{toJsonLd(speakableSchema)}</script>
     </Helmet>
   );
 }

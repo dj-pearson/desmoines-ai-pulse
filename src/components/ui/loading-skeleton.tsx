@@ -249,6 +249,82 @@ export function DashboardSkeleton() {
   );
 }
 
+/**
+ * One dashboard card's placeholder, laid out like DashboardCard in
+ * AllInclusiveDashboard: 16:9 image, then a 40px badge-and-save row, the
+ * when/where line, a two-line title and a two-line description.
+ */
+function DashboardCardSkeleton() {
+  return (
+    <div className="flex h-full flex-col overflow-hidden rounded-xl border border-border bg-card">
+      <Skeleton className="aspect-video w-full rounded-none" />
+      <div className="flex flex-1 flex-col gap-2 p-4">
+        <div className="flex h-10 items-center justify-between">
+          <Skeleton className="h-5 w-20 rounded-full" />
+          <Skeleton className="h-8 w-8 rounded-md" />
+        </div>
+        <Skeleton className="h-5 w-2/3" />
+        <Skeleton className="h-6 w-5/6 md:h-7" />
+        <Skeleton className="h-10 w-full" />
+      </div>
+    </div>
+  );
+}
+
+/**
+ * A dashboard group's reserved slot (home pass-2 WP3 item 9): three cards on
+ * the grid the real group uses. A group shows this while its own query loads,
+ * so a table that answers late fills its slot instead of pushing the groups
+ * below it down.
+ */
+export function DashboardGroupSkeleton() {
+  return (
+    <div className="grid grid-cols-1 gap-6 md:grid-cols-2 lg:grid-cols-3" aria-hidden="true">
+      {Array.from({ length: 3 }).map((_, i) => (
+        <DashboardCardSkeleton key={i} />
+      ))}
+    </div>
+  );
+}
+
+/**
+ * Placeholder for the home "Explore Des Moines" block: heading, tab row and
+ * five groups of three cards, the shape the block has once every group has
+ * rows (home pass-2 WP3 item 9). Laid out on the same section/container/grid
+ * classes as AllInclusiveDashboard so the swap to real content does not move
+ * the page. Also the Suspense fallback on Index.
+ */
+export function DashboardGridSkeleton() {
+  return (
+    <section className="py-8 md:py-16 bg-muted/30">
+      <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8">
+        <SkeletonGroup label="Loading Explore Des Moines..." className="space-y-6 md:space-y-8">
+          <div className="space-y-3">
+            <Skeleton className="h-8 w-64 md:h-9 md:w-80" />
+            <Skeleton className="h-5 w-full max-w-md" />
+          </div>
+          <div className="flex gap-2 overflow-hidden">
+            {Array.from({ length: 6 }).map((_, i) => (
+              <Skeleton key={i} className="h-11 w-24 flex-shrink-0 rounded-md" />
+            ))}
+          </div>
+          <div className="space-y-10 md:space-y-12">
+            {Array.from({ length: 5 }).map((_, i) => (
+              <div key={i}>
+                <div className="mb-4 flex items-baseline justify-between gap-4">
+                  <Skeleton className="h-7 w-40" />
+                  <Skeleton className="h-5 w-32" />
+                </div>
+                <DashboardGroupSkeleton />
+              </div>
+            ))}
+          </div>
+        </SkeletonGroup>
+      </div>
+    </section>
+  );
+}
+
 // Form skeleton
 export function FormSkeleton({ fields = 4 }: { fields?: number }) {
   return (
@@ -301,13 +377,61 @@ export function PageLoadingOverlay({ message = "Loading..." }: { message?: strin
       aria-busy="true"
     >
       <div className="text-center space-y-4">
-        <div
-          className="animate-spin rounded-full h-8 w-8 border-b-2 border-primary mx-auto motion-reduce:animate-pulse"
-          aria-hidden="true"
-        ></div>
+        <Spinner size="lg" className="mx-auto" />
         <p className="text-sm text-muted-foreground animate-pulse motion-reduce:animate-none">{message}</p>
       </div>
     </div>
+  );
+}
+
+export type SpinnerSize = "sm" | "default" | "lg" | "xl";
+
+const SPINNER_SIZES: Record<SpinnerSize, string> = {
+  sm: "h-4 w-4",
+  default: "h-6 w-6",
+  lg: "h-8 w-8",
+  xl: "h-12 w-12",
+};
+
+/**
+ * The spinner ring, with no ARIA of its own (WEB-UX-034).
+ *
+ * TWELVE COPIES of the same hand-rolled spinner - a spin animation on a
+ * rounded box with a single thick bottom border - were pasted across the admin
+ * and CMS screens. (The class string is not written out here: quoting it made
+ * impeccable's border-accent-on-rounded rule fire on this very comment.)
+ * A single thick border on one
+ * edge of a rounded box is what impeccable's border-accent-on-rounded rule
+ * flags, and it was the largest group in the report - not because twelve
+ * screens each made a design choice, but because one snippet was copied twelve
+ * times. A full ring with a tinted top reads as a spinner at any angle; a
+ * bottom-only border reads as a rounded box with a stray edge until it moves.
+ *
+ * This is the visual half only. It is aria-hidden, so it can sit inside a
+ * container that already carries role="status" without announcing twice -
+ * which PageLoadingOverlay above does. Use LoadingSpinner when the spinner is
+ * the whole status region.
+ */
+export function Spinner({
+  size = "default",
+  tone = "primary",
+  className = "",
+}: {
+  size?: SpinnerSize;
+  /** "current" inherits the surrounding text colour, for spinners inside buttons. */
+  tone?: "primary" | "current";
+  className?: string;
+}) {
+  const ring =
+    tone === "current"
+      ? "border-current border-t-transparent"
+      : "border-muted border-t-primary";
+
+  return (
+    <div
+      className={`animate-spin rounded-full border-2 motion-reduce:animate-pulse ${ring} ${SPINNER_SIZES[size]} ${className}`}
+      aria-hidden="true"
+    />
   );
 }
 
@@ -317,26 +441,17 @@ export function LoadingSpinner({
   className = "",
   label = "Loading..."
 }: {
-  size?: "sm" | "default" | "lg";
+  size?: SpinnerSize;
   className?: string;
   label?: string;
 }) {
-  const sizeClasses = {
-    sm: "h-4 w-4",
-    default: "h-6 w-6",
-    lg: "h-8 w-8"
-  };
-
   return (
     <div
       role="status"
       aria-live="polite"
       className="inline-flex items-center justify-center"
     >
-      <div
-        className={`animate-spin rounded-full border-2 border-muted border-t-primary motion-reduce:animate-pulse ${sizeClasses[size]} ${className}`}
-        aria-hidden="true"
-      />
+      <Spinner size={size} className={className} />
       <span className="sr-only">{label}</span>
     </div>
   );

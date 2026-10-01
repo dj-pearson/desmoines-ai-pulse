@@ -5,19 +5,57 @@ import SwiftUI
 // A non-intrusive top banner that appears only when the user's subscription
 // needs attention — expiring (auto-renew off), billing retry, grace period, or
 // lapsed. It deep-links to Apple's subscription management for payment/renewal
-// issues, and presents the win-back paywall for lapsed users. Dismissible for
-// the session so it never nags.
+// issues, and presents the win-back paywall for lapsed users.
+//
+// IOS-DD-MONETIZATION-15: dismissal lived in @State, so the banner came back
+// every launch; it showed "Your subscription ended" to people entitled through
+// the web or Android; `.expired` never aged out; "See offer" promised a
+// discount the full-price win-back paywall did not have; and the manage
+// action left the app although StoreKit's sheet exists. Dismissal is now
+// remembered per state and expiry, and `visibleState` decides what is shown.
 struct SubscriptionStatusBanner: View {
     @State private var storeKit = StoreKitService.shared
-    @State private var dismissedState: StoreKitService.SubscriptionRenewalState?
+    @State private var dismissedKey: String?
     @State private var showWinBack = false
-    @Environment(\.openURL) private var openURL
 
-    /// Apple's canonical subscription-management deep link.
-    private let manageURL = URL(string: "https://apps.apple.com/account/subscriptions")!
+    /// Days a lapsed subscription keeps its win-back banner.
+    static let expiredBannerDays = 30
+    /// How close to expiry an auto-renew-off subscription starts nagging.
+    static let expiringSoonDays = 7
+
+    /// Which renewal state, if any, deserves a banner right now. Pure so it
+    /// can be tested without StoreKit.
+    static func visibleState(
+        _ state: StoreKitService.SubscriptionRenewalState,
+        expiry: Date?,
+        currentTier: SubscriptionTier,
+        now: Date = Date()
+    ) -> StoreKitService.SubscriptionRenewalState? {
+        switch state {
+        case .expired:
+            // Entitled elsewhere (web, Android): nothing ended for them.
+            guard currentTier == .free, let expiry else { return nil }
+            let age = now.timeIntervalSince(expiry)
+            return age <= Double(expiredBannerDays) * 86_400 ? .expired : nil
+        case .expiringSoon:
+            guard let expiry else { return nil }
+            let remaining = expiry.timeIntervalSince(now)
+            return remaining <= Double(expiringSoonDays) * 86_400 ? .expiringSoon : nil
+        case .billingRetry, .grace:
+            return state
+        case .active, .none:
+            return nil
+        }
+    }
+
+    /// UserDefaults key for "dismissed this state for this expiry". A new
+    /// expiry (renewal, new lapse) is a new key, so it can show again.
+    static func dismissalKey(stateKey: String, expiry: Date?) -> String {
+        "renewalBanner.dismissed.\(stateKey).\(Int(expiry?.timeIntervalSince1970 ?? 0))"
+    }
 
     var body: some View {
-        if let config = bannerConfig, dismissedState != storeKit.renewalState {
+        if let config = bannerConfig, !isDismissed(config) {
             HStack(spacing: 10) {
                 Image(systemName: config.icon)
                     .font(.caption.weight(.semibold))
@@ -39,7 +77,9 @@ struct SubscriptionStatusBanner: View {
                     .minHitTarget()
 
                 Button {
-                    dismissedState = storeKit.renewalState
+                    let key = Self.dismissalKey(stateKey: config.stateKey, expiry: storeKit.renewalExpiryDate)
+                    UserDefaults.standard.set(true, forKey: key)
+                    dismissedKey = key
                     AnalyticsService.shared.trackRenewalBanner(action: "dismiss", state: config.stateKey)
                 } label: {
                     Image(systemName: "xmark")
@@ -79,14 +119,28 @@ struct SubscriptionStatusBanner: View {
         let isWinBack: Bool
     }
 
+    private func isDismissed(_ config: BannerConfig) -> Bool {
+        let key = Self.dismissalKey(stateKey: config.stateKey, expiry: storeKit.renewalExpiryDate)
+        return dismissedKey == key || UserDefaults.standard.bool(forKey: key)
+    }
+
+    /// Billing-retry red darkened so white caption text clears 4.5:1
+    /// (IOS-DD-MONETIZATION-18).
+    private static let billingRetryFill = Color(red: 0.70, green: 0.11, blue: 0.11)
+
     private var bannerConfig: BannerConfig? {
-        switch storeKit.renewalState {
+        guard let state = Self.visibleState(
+            storeKit.renewalState,
+            expiry: storeKit.renewalExpiryDate,
+            currentTier: storeKit.currentTier
+        ) else { return nil }
+        switch state {
         case .expiringSoon:
             return BannerConfig(
                 icon: "calendar.badge.exclamationmark",
                 message: "Your subscription is set to expire. Turn auto-renew back on to keep your perks.",
                 actionTitle: "Renew",
-                color: .orange,
+                color: PremiumTokens.urgencyFill,
                 stateKey: "expiring_soon",
                 isWinBack: false
             )
@@ -95,7 +149,7 @@ struct SubscriptionStatusBanner: View {
                 icon: "creditcard.trianglebadge.exclamationmark",
                 message: "There was a problem with your payment. Update it to keep your subscription.",
                 actionTitle: "Update",
-                color: .red,
+                color: Self.billingRetryFill,
                 stateKey: "billing_retry",
                 isWinBack: false
             )
@@ -104,7 +158,7 @@ struct SubscriptionStatusBanner: View {
                 icon: "exclamationmark.circle",
                 message: "We couldn't renew your subscription. Update payment before access ends.",
                 actionTitle: "Update",
-                color: .orange,
+                color: PremiumTokens.urgencyFill,
                 stateKey: "grace",
                 isWinBack: false
             )
@@ -112,7 +166,7 @@ struct SubscriptionStatusBanner: View {
             return BannerConfig(
                 icon: "arrow.uturn.backward.circle",
                 message: "Your subscription ended. Come back and pick up where you left off.",
-                actionTitle: "See offer",
+                actionTitle: "Resubscribe",
                 color: .accentColor,
                 stateKey: "expired",
                 isWinBack: true
@@ -127,7 +181,7 @@ struct SubscriptionStatusBanner: View {
         if config.isWinBack {
             showWinBack = true
         } else {
-            openURL(manageURL)
+            Task { await storeKit.showManageSubscriptions() }
         }
     }
 }

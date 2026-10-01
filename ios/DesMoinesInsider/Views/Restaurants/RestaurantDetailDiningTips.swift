@@ -1,135 +1,99 @@
 import SwiftUI
 
-/// Insider Dining Tips section — shows premium content or upgrade prompt.
-struct RestaurantDetailDiningTips: View {
+/// The row's own local guide: `geo_summary` and `geo_key_facts`
+/// (IOS-DD-RESTAURANTS-11). Free, as on the web (RestaurantDetails.tsx), with
+/// the same AI-assisted disclosure, and absent when the row has neither.
+///
+/// This replaced a paywalled "Insider Dining Tip" that was a switch on price
+/// range and a cuisine substring, so every $$ Italian place got the same
+/// sentence under a promise of "exclusive recommendations for this
+/// restaurant".
+struct RestaurantLocalGuide: View {
     let restaurant: Restaurant
-    let hasPremiumAccess: Bool
-    let currentTier: SubscriptionTier
-    @Binding var showSubscription: Bool
+
+    @State private var showDisclosure = false
+
+    static let maxFacts = 6
+
+    /// Trimmed, non-empty facts, at most `maxFacts`.
+    static func facts(for restaurant: Restaurant) -> [String] {
+        let trimmed = (restaurant.geoKeyFacts ?? []).compactMap { fact -> String? in
+            guard let value = fact?.trimmingCharacters(in: .whitespacesAndNewlines), !value.isEmpty else { return nil }
+            return value
+        }
+        return Array(trimmed.prefix(maxFacts))
+    }
+
+    static func summary(for restaurant: Restaurant) -> String? {
+        guard let value = restaurant.geoSummary?.trimmingCharacters(in: .whitespacesAndNewlines), !value.isEmpty else { return nil }
+        return value
+    }
+
+    static func hasContent(_ restaurant: Restaurant) -> Bool {
+        summary(for: restaurant) != nil || !facts(for: restaurant).isEmpty
+    }
 
     var body: some View {
-        if hasPremiumAccess {
-            premiumContent
-        } else {
-            upgradePrompt
-        }
-    }
-
-    // MARK: - Premium Content
-
-    private var premiumContent: some View {
-        VStack(alignment: .leading, spacing: 10) {
-            HStack(spacing: 8) {
-                Image(systemName: "star.circle.fill")
-                    .font(.title3)
-                    .foregroundStyle(.orange)
-                Text("Insider Dining Tip")
-                    .font(.headline)
-                    .foregroundStyle(.orange)
-                Spacer()
-                PremiumBadge(tier: currentTier == .vip ? .vip : .insider)
-            }
-
-            Text(diningTipText)
-                .font(.subheadline)
-                .foregroundStyle(.secondary)
-                .lineSpacing(3)
-        }
-        .padding()
-        .background(Color.orange.opacity(0.06), in: RoundedRectangle(cornerRadius: 16))
-        .padding(.horizontal)
-        .padding(.top, 8)
-    }
-
-    // MARK: - Upgrade Prompt
-
-    private var upgradePrompt: some View {
-        Button {
-            showSubscription = true
-        } label: {
-            HStack(spacing: 10) {
-                Image(systemName: "lock.fill")
-                    .font(.subheadline)
-                    .foregroundStyle(.orange)
-
-                VStack(alignment: .leading, spacing: 2) {
-                    Text("Insider Dining Tips")
-                        .font(.subheadline.weight(.semibold))
-                        .foregroundStyle(.primary)
-                    Text("Upgrade to see exclusive recommendations for this restaurant")
-                        .font(.caption)
-                        .foregroundStyle(.secondary)
-                        .lineLimit(2)
+        if Self.hasContent(restaurant) {
+            VStack(alignment: .leading, spacing: 10) {
+                HStack(spacing: 8) {
+                    Text("Local dining guide")
+                        .font(.title3.bold())
+                        .accessibilityAddTraits(.isHeader)
+                    Spacer(minLength: 0)
+                    Button {
+                        showDisclosure = true
+                    } label: {
+                        Label("AI-assisted", systemImage: "info.circle")
+                            .font(.caption2.weight(.semibold))
+                            .foregroundStyle(.secondary)
+                            .padding(.horizontal, 8)
+                            .padding(.vertical, 4)
+                            .background(Color(.systemGray5), in: Capsule())
+                    }
+                    .buttonStyle(.plain)
+                    .accessibilityHint("Explains how this guide was written")
+                    .popover(isPresented: $showDisclosure) {
+                        Text("Drafted with AI from public information. Check hours, prices and details with the restaurant.")
+                            .font(.subheadline)
+                            .padding()
+                            .frame(maxWidth: 280)
+                            .presentationCompactAdaptation(.popover)
+                    }
                 }
 
-                Spacer()
+                if let summary = Self.summary(for: restaurant) {
+                    Text(summary)
+                        .font(.body)
+                        .foregroundStyle(.secondary)
+                        .lineSpacing(3)
+                }
 
-                Image(systemName: "chevron.right")
-                    .font(.caption)
-                    .foregroundStyle(.tertiary)
+                let facts = Self.facts(for: restaurant)
+                if !facts.isEmpty {
+                    VStack(alignment: .leading, spacing: 6) {
+                        ForEach(Array(facts.enumerated()), id: \.offset) { _, fact in
+                            HStack(alignment: .firstTextBaseline, spacing: 8) {
+                                Image(systemName: "circle.fill")
+                                    .font(.system(size: 5))
+                                    .foregroundStyle(.secondary)
+                                    .accessibilityHidden(true)
+                                Text(fact)
+                                    .font(.subheadline)
+                            }
+                        }
+                    }
+                }
             }
-            .padding(14)
-            .background(Color.orange.opacity(0.06), in: RoundedRectangle(cornerRadius: 14))
-            .overlay(
-                RoundedRectangle(cornerRadius: 14)
-                    .stroke(Color.orange.opacity(0.15), lineWidth: 1)
-            )
+            .frame(maxWidth: .infinity, alignment: .leading)
+            .padding()
         }
-        .buttonStyle(.plain)
-        .padding(.horizontal)
-        .padding(.top, 8)
-        .accessibilityLabel("Unlock Insider Dining Tips by upgrading to a premium plan")
-    }
-
-    // MARK: - Dining Tip Generation
-
-    /// Generates a contextual dining tip based on restaurant attributes.
-    private var diningTipText: String {
-        var tips: [String] = []
-
-        if let price = restaurant.priceRange {
-            switch price {
-            case "$":
-                tips.append("Great value spot! Perfect for a casual meal without breaking the bank.")
-            case "$$":
-                tips.append("Moderately priced with generous portions — a solid pick for date night or group dinners.")
-            case "$$$":
-                tips.append("Upscale dining experience. Reservations recommended, especially on weekends.")
-            case "$$$$":
-                tips.append("Fine dining at its best. Consider the tasting menu for the full experience.")
-            default:
-                break
-            }
-        }
-
-        if let cuisine = restaurant.cuisine {
-            let lower = cuisine.lowercased()
-            if lower.contains("italian") || lower.contains("pizza") {
-                tips.append("Ask about daily pasta specials — they're often not on the menu.")
-            } else if lower.contains("mexican") || lower.contains("taco") {
-                tips.append("Try the house salsa and ask if they have off-menu specials.")
-            } else if lower.contains("bbq") || lower.contains("barbecue") {
-                tips.append("Get there early — the best cuts sell out fast!")
-            } else if lower.contains("asian") || lower.contains("sushi") || lower.contains("chinese") || lower.contains("thai") {
-                tips.append("Don't skip the appetizers — they're often the hidden gems here.")
-            } else if lower.contains("breakfast") || lower.contains("brunch") {
-                tips.append("Weekend brunch gets busy. Arrive before 10 AM or expect a wait.")
-            }
-        }
-
-        if tips.isEmpty {
-            tips.append("Local favorite! Ask your server for their personal recommendation — you won't be disappointed.")
-        }
-
-        return tips.joined(separator: " ")
     }
 }
 
 #Preview {
-    RestaurantDetailDiningTips(
-        restaurant: .preview,
-        hasPremiumAccess: true,
-        currentTier: .insider,
-        showSubscription: .constant(false)
-    )
+    var restaurant = Restaurant.preview
+    restaurant.geoSummary = "A horror-themed burger bar in the East Village."
+    restaurant.geoKeyFacts = ["Late-night kitchen on weekends", "Craft cocktails"]
+    return RestaurantLocalGuide(restaurant: restaurant)
 }

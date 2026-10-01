@@ -139,6 +139,10 @@ struct VerifyEmailView: View {
                 }
             }
         }
+        // The background is black whatever the theme, so .secondary has to
+        // resolve for dark or it is near-invisible in light mode
+        // (IOS-DD-ACCOUNT-14).
+        .environment(\.colorScheme, .dark)
         // Poll for verification while the screen is shown AND the app is in the
         // foreground; the app shell routes away automatically once
         // needsEmailVerification flips false. Keying the task on scenePhase

@@ -230,7 +230,7 @@ export default function WeekendGuideManager() {
                       size="sm"
                     >
                       <a
-                        href="/weekend"
+                        href="/events/this-weekend"
                         target="_blank"
                         rel="noopener noreferrer"
                         className="flex items-center gap-1"

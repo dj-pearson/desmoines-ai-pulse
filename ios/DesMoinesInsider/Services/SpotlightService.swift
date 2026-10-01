@@ -104,7 +104,7 @@ actor SpotlightService {
 
             if let date = event.parsedDate {
                 attributes.startDate = date
-                attributes.endDate = date.addingTimeInterval(Self.assumedDurationSeconds)
+                attributes.endDate = event.parsedEndDate ?? date.addingTimeInterval(Self.assumedDurationSeconds)
             }
             // An event with an unparseable date gets NO expiration, on purpose.
             // Guessing one would delete a listing we cannot date, and an
@@ -132,9 +132,7 @@ actor SpotlightService {
             // Set on the item rather than the attribute set: this is the
             // property CSSearchableIndex actually honours when deciding to drop
             // an item on its own.
-            if let date = event.parsedDate {
-                item.expirationDate = Self.expiration(for: date)
-            }
+            item.expirationDate = Self.expiration(for: event)
             return item
         }
 
@@ -162,25 +160,27 @@ actor SpotlightService {
     /// that runs short more often than long.
     static let expiryGraceSeconds: TimeInterval = 6 * 3600
 
-    /// When Spotlight should drop an event that starts at `date`.
-    static func expiration(for date: Date) -> Date {
-        date.addingTimeInterval(assumedDurationSeconds + expiryGraceSeconds)
+    /// When Spotlight should drop an event: the end Event.isOver uses (end_date,
+    /// else start + 3h for a timed event, the Central day after for an
+    /// untimed one) plus the grace. It used to be start + 2h + 6h, so a
+    /// three-day festival left Spotlight on its first night
+    /// (IOS-DD-PLATFORM-08). Nil for an undated event.
+    static func expiration(for event: Event) -> Date? {
+        event.effectiveEnd().map { $0.addingTimeInterval(expiryGraceSeconds) }
     }
 
     /// Split a batch into the events worth indexing and the identifiers of the
     /// ones that are already past.
     ///
     /// `now` is a parameter so the boundary can be tested rather than waited
-    /// for. An event with no parseable date is always indexed and never pruned.
+    /// for. An event with no parseable date is always indexed and never pruned
+    /// (isOver is false without a start). Over means Event.isOver, the rule
+    /// the Saved tab uses (IOS-DD-PLATFORM-08).
     static func partition(_ events: [Event], now: Date) -> (fresh: [Event], expired: [String]) {
         var fresh: [Event] = []
         var expired: [String] = []
         for event in events {
-            guard let date = event.parsedDate else {
-                fresh.append(event)
-                continue
-            }
-            if expiration(for: date) <= now {
+            if event.isOver(at: now) {
                 expired.append("event-\(event.id)")
             } else {
                 fresh.append(event)
@@ -229,6 +229,45 @@ actor SpotlightService {
             try await CSSearchableIndex.default().indexSearchableItems(changed)
         } catch {
             AppLogger.general.error("Spotlight indexing error (restaurants): \(error.localizedDescription)")
+        }
+    }
+
+    // MARK: - Index Attractions (IOS-DD-PLATFORM-08)
+
+    /// DeepLinkHandler routes attraction-<id>, but nothing indexed one.
+    func indexAttractions(_ attractions: [Attraction]) async {
+        let items = attractions.filter { $0.isActive != false }.map { attraction -> CSSearchableItem in
+            let attributes = CSSearchableItemAttributeSet(contentType: .content)
+            attributes.title = attraction.name
+            attributes.contentDescription = attraction.description
+            attributes.keywords = [attraction.type, "attraction", "things to do"]
+                .filter { !$0.isEmpty }
+
+            if let location = attraction.location {
+                attributes.namedLocation = location
+            }
+            if let lat = attraction.latitude, let lng = attraction.longitude {
+                attributes.latitude = NSNumber(value: lat)
+                attributes.longitude = NSNumber(value: lng)
+            }
+            if let imageUrl = attraction.imageUrl {
+                attributes.thumbnailURL = URL(string: imageUrl)
+            }
+
+            return CSSearchableItem(
+                uniqueIdentifier: "attraction-\(attraction.id)",
+                domainIdentifier: "com.desmoines.aipulse.attractions",
+                attributeSet: attributes
+            )
+        }
+
+        let changed = changedOnly(items)
+        guard !changed.isEmpty else { return }
+
+        do {
+            try await CSSearchableIndex.default().indexSearchableItems(changed)
+        } catch {
+            AppLogger.general.error("Spotlight indexing error (attractions): \(error.localizedDescription)")
         }
     }
 
@@ -302,6 +341,13 @@ actor SpotlightService {
     }
 
     // MARK: - Remove
+
+    /// Drops one item, e.g. a listing a Spotlight tap found no longer
+    /// available (IOS-DD-PLATFORM-03).
+    func removeItem(identifier: String) async {
+        try? await CSSearchableIndex.default().deleteSearchableItems(withIdentifiers: [identifier])
+        forgetSignatures([identifier])
+    }
 
     func removeAllItems() async {
         do {

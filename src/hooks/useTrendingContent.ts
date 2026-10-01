@@ -1,5 +1,6 @@
 import { useState, useEffect } from 'react';
 import { supabase } from '@/integrations/supabase/client';
+import { ANALYTICS_SCAN_LIMIT, fetchVisibleContent, isTrendingContentType } from '@/lib/trendingContent';
 import { createLogger } from '@/lib/logger';
 
 const logger = createLogger('useTrendingContent');
@@ -85,15 +86,12 @@ export function useTrending(options: TrendingOptions = {}) {
         }
         await Promise.all(
           Array.from(idsByType.entries()).map(async ([type, ids]) => {
+            if (!isTrendingContentType(type)) return;
             try {
-              const tableName = getTableName(type);
-              const { data: rows } = await supabase
-                .from(tableName as never)
-                .select('*')
-                .in('id', ids);
-              (rows as Array<Record<string, unknown>> | null)?.forEach((row) => {
-                contentByKey.set(`${type}:${row.id as string}`, row);
-              });
+              // Visible rows only: past, hidden, merged and inactive rows come
+              // back absent and the item is dropped below. This was select('*')
+              // with no filter, so a long-past event could list as trending.
+              for (const [key, row] of await fetchVisibleContent(type, ids)) contentByKey.set(key, row);
             } catch (_contentError) {
               logger.debug('fetchTrendingItems', 'Could not batch-fetch content', { type });
             }
@@ -101,7 +99,9 @@ export function useTrending(options: TrendingOptions = {}) {
         );
       }
 
-      const enrichedItems: TrendingItem[] = trendingData.map((item) => ({
+      const enrichedItems: TrendingItem[] = trendingData
+        .filter((item) => !includeContent || contentByKey.has(`${item.content_type}:${item.content_id}`))
+        .map((item) => ({
         id: item.id || `${item.content_type}-${item.content_id}`,
         contentType: item.content_type,
         contentId: item.content_id,
@@ -129,7 +129,10 @@ export function useTrending(options: TrendingOptions = {}) {
       let query = supabase
         .from('user_analytics')
         .select('content_type, content_id, event_type')
-        .gte('created_at', timeThreshold);
+        .gte('created_at', timeThreshold)
+        // Newest first and bounded; this scanned the whole window unbounded.
+        .order('created_at', { ascending: false })
+        .limit(ANALYTICS_SCAN_LIMIT);
 
       if (contentType) {
         query = query.eq('content_type', contentType);
@@ -202,20 +205,6 @@ export function useTrending(options: TrendingOptions = {}) {
     }
   };
 
-  const getTableName = (contentType: string): string => {
-    switch (contentType) {
-      case 'event':
-        return 'events';
-      case 'restaurant':
-        return 'restaurants';
-      case 'attraction':
-        return 'attractions';
-      case 'playground':
-        return 'playgrounds';
-      default:
-        return 'events';
-    }
-  };
 
   const generateTrendingReason = (item: Record<string, unknown>, window: string): string => {
     const score = (item[`score_${window}`] as number) || (item.score as number) || 0;

@@ -1,8 +1,8 @@
-import { useParams, Link, useNavigate } from "react-router-dom";
+import { useParams, Link, useNavigate, Navigate } from "react-router-dom";
+import { lazy, Suspense, useEffect, useMemo, useState, type ReactNode } from "react";
+import { OptimizedImage } from "@/components/OptimizedImage";
 import { Helmet } from "react-helmet-async";
 import { useEventBySlug } from "@/hooks/useEventBySlug";
-import { useEvents } from "@/hooks/useEvents";
-import { RatingSystem } from "@/components/RatingSystem";
 import Header from "@/components/Header";
 import Footer from "@/components/Footer";
 import ShareDialog from "@/components/ShareDialog";
@@ -10,23 +10,25 @@ import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Breadcrumbs } from "@/components/ui/breadcrumbs";
-import SEOHead from "@/components/SEOHead";
 import { RouteCanonical } from "@/components/RouteCanonical";
 import EnhancedEventSEO from "@/components/EnhancedEventSEO";
 import AIWriteup from "@/components/AIWriteup";
-import { EventPhotoUpload } from "@/components/EventPhotoUpload";
-import { EventCheckIn } from "@/components/EventCheckIn";
 import EventCard from "@/components/EventCard";
 import EventHotelCallout from "@/components/EventHotelCallout";
-import { EventReminderSettings } from "@/components/EventReminderSettings";
+import { LazySection } from "@/components/LazySection";
 import {
+  centralDateOf,
+  centralHour,
+  centralWeekday,
   createEventSlugWithCentralTime,
   formatEventDate,
+  formatEventPart,
   formatInCentralTime,
-  hasSpecificTime,
 } from "@/lib/timezone";
-import { ArrowLeft, DollarSign, CalendarPlus, Tag, Info, ChevronRight, Navigation } from "lucide-react";
-import { downloadICS, getGoogleCalendarUrl } from "@/lib/calendar";
+import { ArrowLeft, Tag, ChevronRight, Navigation, RotateCw } from "lucide-react";
+import { AddToCalendarButton } from "@/components/AddToCalendarButton";
+import { useCalendarExport } from "@/hooks/use-calendar-export";
+import { toIcsEvent } from "@/lib/icsEvent";
 import { FavoriteButton } from "@/components/FavoriteButton";
 import { BRAND, getCanonicalUrl } from "@/lib/brandConfig";
 import { BreadcrumbListSchema } from "@/components/schema/BreadcrumbListSchema";
@@ -34,27 +36,206 @@ import { useContentTracking } from "@/hooks/useContentTracking";
 import { useRecordRecentView } from "@/hooks/useRecentlyViewedFeed";
 import { StickyMobileCTA } from "@/components/StickyMobileCTA";
 import { LastUpdatedBadge } from "@/components/LastUpdatedBadge";
-import { NearbyContent } from "@/components/NearbyContent";
+import { DinnerBeforeShow, NearbyContent } from "@/components/NearbyContent";
 import { LazyLocationMap } from "@/components/LazyLocationMap";
-import { eventPriceContent } from "@/lib/eventOffers";
+import { eventSummary } from "@/lib/eventMeta";
+import { readGeoFaq } from "@/lib/restaurantMeta";
+import { FAQSection } from "@/components/FAQSection";
+import { matchVenue, formatMiles } from "@/lib/venuePages";
+import { useVenueMatchRows } from "@/hooks/useVenues";
 import { SpriteIcon } from "@/components/ui/SpriteIcon";
+import { useRelatedEvents, useSameNightNearby, useEventSeries } from "@/hooks/useRelatedEvents";
+import { useDinnerBeforeShow } from "@/hooks/useDinnerBeforeShow";
+import {
+  eventRunLabel,
+  eventTimeLabel,
+  eventTiming,
+  type EventTimingTone,
+} from "@/lib/eventTiming";
+import { eventOutboundLink } from "@/lib/eventSchema";
+import { eventPriceLabel, isFreePrice } from "@/lib/eventPrice";
+import { findEventArea, isInBBox } from "@/lib/eventAreas";
+import { handleError } from "@/lib/errorHandler";
+import { EVENING_START_HOUR, type TonightEvent } from "@/lib/tonightPairings";
+import { EventProvenance } from "@/components/events/EventProvenance";
+import { AIDisclosureBadge } from "@/components/AIDisclosureBadge";
 
-/** Upcoming events fetched to populate the related/nearby rails (3 shown each). */
-const RELATED_POOL_SIZE = 50;
+// Below-the-fold widgets that each fire their own requests on mount. React.lazy
+// defers the chunk; LazySection defers the mount until the reader scrolls near
+// them (events plan WP8 item 9).
+const EventCheckIn = lazy(() =>
+  import("@/components/EventCheckIn").then((m) => ({ default: m.EventCheckIn }))
+);
+const RatingSystem = lazy(() =>
+  import("@/components/RatingSystem").then((m) => ({ default: m.RatingSystem }))
+);
+const EventReminderSettings = lazy(() =>
+  import("@/components/EventReminderSettings").then((m) => ({ default: m.EventReminderSettings }))
+);
+
+/**
+ * Badge fills. White text needs a -700 shade to clear 4.5:1; the -500 fills
+ * this page used (orange, emerald, amber) all failed axe.
+ */
+const TONE_CLASS: Record<EventTimingTone, string> = {
+  now: "bg-emerald-700 text-white",
+  today: "bg-red-700 text-white",
+  soon: "bg-orange-700 text-white",
+  later: "bg-indigo-700 text-white",
+  past: "",
+};
+
+/** Venues whose visitors want the parking and transit page. */
+const GETTING_AROUND_AREAS = ["downtown", "east-village"];
+
+function toCoord(value: number | string | null | undefined): number | null {
+  if (value === null || value === undefined || value === "") return null;
+  const n = Number(value);
+  return Number.isFinite(n) && n !== 0 ? n : null;
+}
+
+/**
+ * A location string that is only a city and state ("Des Moines, IA"), which
+ * the Where row already prints on its own line (events-pass2 WP4 item 15).
+ */
+function isCityOnly(location: string | null | undefined, city: string | null | undefined): boolean {
+  const loc = (location ?? "").trim().toLowerCase().replace(/\s+/g, " ");
+  if (!loc) return true;
+  if (city && loc === city.trim().toLowerCase()) return true;
+  // One place name, then the state: no street number, no second comma.
+  return /^[a-z .'-]+,? (ia|iowa)( \d{5})?$/.test(loc);
+}
+
+/** "a Music event" / "an Outdoor event" / "an event". */
+function withArticle(category: string | null): string {
+  if (!category) return "an event";
+  return `${/^[aeiou]/i.test(category) ? "an" : "a"} ${category} event`;
+}
+
+interface DeferredWidgetProps {
+  minHeight: number;
+  label: string;
+  children: ReactNode;
+}
+
+/** Fixed-height box until mounted, so the deferred widgets add no layout shift. */
+function DeferredWidget({ minHeight, label, children }: DeferredWidgetProps) {
+  const reserve = <div style={{ minHeight }} aria-hidden="true" />;
+  return (
+    <LazySection minHeight={minHeight} label={label} placeholder={reserve}>
+      <Suspense fallback={reserve}>{children}</Suspense>
+    </LazySection>
+  );
+}
+
+interface FactRowProps {
+  term: string;
+  children: ReactNode;
+}
+
+function FactRow({ term, children }: FactRowProps) {
+  return (
+    <div className="grid grid-cols-[5.5rem_1fr] gap-3 py-3 first:pt-0 last:pb-0">
+      <dt className="text-sm font-semibold text-foreground">{term}</dt>
+      <dd className="text-sm text-muted-foreground">{children}</dd>
+    </div>
+  );
+}
+
+function EventLoadingState({ slug }: { slug: string | undefined }) {
+  return (
+    <div className="min-h-screen bg-background">
+      {/* SEO-028: the canonical cannot wait for the fetch. See RouteCanonical. */}
+      <RouteCanonical path={`/events/${slug}`} />
+      <Header />
+      <div className="container mx-auto px-4 py-8">
+        <div className="animate-pulse space-y-6">
+          <div className="h-6 bg-muted rounded w-1/4" />
+          <div className="h-72 md:h-96 bg-muted rounded-2xl" />
+          <div className="grid grid-cols-1 lg:grid-cols-3 gap-8">
+            <div className="lg:col-span-2 space-y-4">
+              <div className="h-10 bg-muted rounded w-3/4" />
+              <div className="h-6 bg-muted rounded w-1/2" />
+              <div className="space-y-2">
+                <div className="h-4 bg-muted rounded" />
+                <div className="h-4 bg-muted rounded w-5/6" />
+                <div className="h-4 bg-muted rounded w-4/6" />
+              </div>
+            </div>
+            <div className="space-y-4">
+              <div className="h-48 bg-muted rounded-xl" />
+              <div className="h-32 bg-muted rounded-xl" />
+            </div>
+          </div>
+        </div>
+      </div>
+      <Footer />
+    </div>
+  );
+}
 
 export default function EventDetails() {
   const { slug } = useParams<{ slug: string }>();
   const navigate = useNavigate();
-  // Targeted, date-windowed lookup — see useEventBySlug for why the old
+  // The hero is dropped entirely when its image fails, rather than hidden by
+  // mutating the DOM from an onError handler (WEB-PERF-037).
+  const [heroFailed, setHeroFailed] = useState(false);
+  const now = new Date();
+  // Targeted, date-windowed lookup - see useEventBySlug for why the old
   // fetch-everything-then-Array.find approach 404'd listed events (WEB-QA-002).
-  const { event, isLoading } = useEventBySlug(slug);
+  // It also resolves a bare UUID and a stale slug; the canonical redirect is
+  // below (events plan WP8 item 2).
+  // `archived`: the archive sweep retired the row; it renders as a past event
+  // with noindex (events-pass2 WP4 item 11). A merged duplicate arrives here
+  // as its survivor and is redirected below.
+  const { event, archived, isLoading, error, refetch, isFetching } = useEventBySlug(slug);
+  // Used by the sticky action bar below; the inline control uses
+  // AddToCalendarButton, which owns its own export handlers.
+  const { downloadIcsFile } = useCalendarExport();
+  // SEO-018: the venue page this event links to, when its venue is a known one.
+  // Six columns, not select('*') (events-pass2 WP4 item 16).
+  const { data: venueRows } = useVenueMatchRows();
 
-  // Only feeds the "related"/"nearby" rails below — bounded on purpose, since
-  // those render at most 3 items each and never need the full upcoming set.
-  const { events: relatedPool } = useEvents({ limit: RELATED_POOL_SIZE });
+  // A client-side move to another event reuses this component; a failed hero
+  // on the last one must not hide this one's (events-pass2 WP4 item 15).
+  useEffect(() => {
+    setHeroFailed(false);
+  }, [event?.id]);
 
   // Track page view and content interactions
   const { trackShare, trackClick } = useContentTracking(event?.id, 'event');
+
+  const venuePage = event ? matchVenue(event.venue || event.location, venueRows ?? []) : null;
+  // Event coordinates first, then the matched venue's (WP8 item 8).
+  const latitude = toCoord(event?.latitude) ?? toCoord(venuePage?.latitude);
+  const longitude = toCoord(event?.longitude) ?? toCoord(venuePage?.longitude);
+
+  const timing = event ? eventTiming(event, now) : null;
+  const isUpcoming = timing ? !timing.isOver && !archived : false;
+
+  // The rails wait for the event (WP8 item 7). Each hook takes null until then.
+  const { events: relatedEvents } = useRelatedEvents(event);
+  const { events: sameNight } = useSameNightNearby(isUpcoming ? event : null, latitude, longitude, now);
+  // Other dates of the same event (events-pass2 WP4 item 13).
+  const { events: seriesDates } = useEventSeries(event);
+
+  const dinnerEvent = useMemo<TonightEvent | null>(
+    () =>
+      event
+        ? {
+            id: event.id,
+            title: event.title,
+            date: event.date,
+            event_start_utc: event.event_start_utc,
+            event_start_local: event.event_start_local,
+            time_tbd: (event as { time_tbd?: boolean | null }).time_tbd ?? null,
+            latitude,
+            longitude,
+          }
+        : null,
+    [event, latitude, longitude]
+  );
+  const { picks: dinnerPicks } = useDinnerBeforeShow(dinnerEvent);
 
   // Record into the unified recently-viewed feed (WEB-FEAT-007).
   useRecordRecentView(
@@ -70,51 +251,34 @@ export default function EventDetails() {
       : null,
   );
 
-  const relatedEvents = event
-    ? relatedPool
-        .filter((e) =>
-          e.id !== event.id &&
-          e.category === event.category &&
-          new Date(e.date) >= new Date()
-        )
-        .slice(0, 3)
-    : [];
+  // A failed request is reported, not dressed up as a 404 (WP8 item 3).
+  useEffect(() => {
+    if (error) handleError(error, { component: "EventDetails", action: "load event" });
+  }, [error]);
 
-  // Nearby events (different category, same timeframe)
-  const nearbyEvents = event
-    ? relatedPool
-        .filter((e) =>
-          e.id !== event.id &&
-          e.category !== event.category &&
-          new Date(e.date) >= new Date()
-        )
-        .slice(0, 3)
-    : [];
+  if (isLoading) return <EventLoadingState slug={slug} />;
 
-  if (isLoading) {
+  if (error && !event) {
     return (
       <div className="min-h-screen bg-background">
-        {/* SEO-028: the canonical cannot wait for the fetch. See RouteCanonical. */}
+        {/* No robots meta. The event may exist; a noindex here would drop a
+            live page from the index because the backend blinked. */}
         <RouteCanonical path={`/events/${slug}`} />
         <Header />
-        <div className="container mx-auto px-4 py-8">
-          <div className="animate-pulse space-y-6">
-            <div className="h-6 bg-muted rounded w-1/4" />
-            <div className="h-72 md:h-96 bg-muted rounded-2xl" />
-            <div className="grid grid-cols-1 lg:grid-cols-3 gap-8">
-              <div className="lg:col-span-2 space-y-4">
-                <div className="h-10 bg-muted rounded w-3/4" />
-                <div className="h-6 bg-muted rounded w-1/2" />
-                <div className="space-y-2">
-                  <div className="h-4 bg-muted rounded" />
-                  <div className="h-4 bg-muted rounded w-5/6" />
-                  <div className="h-4 bg-muted rounded w-4/6" />
-                </div>
-              </div>
-              <div className="space-y-4">
-                <div className="h-48 bg-muted rounded-xl" />
-                <div className="h-32 bg-muted rounded-xl" />
-              </div>
+        <div className="container mx-auto px-4 py-16">
+          <div className="text-center space-y-4 max-w-md mx-auto" role="alert">
+            <h1 className="text-2xl font-bold">We couldn't load this event</h1>
+            <p className="text-muted-foreground">
+              Something went wrong on our side while fetching it. Try again in a moment.
+            </p>
+            <div className="flex gap-3 justify-center">
+              <Button onClick={() => void refetch()} disabled={isFetching}>
+                <RotateCw className="h-4 w-4 mr-2" aria-hidden="true" />
+                {isFetching ? "Retrying..." : "Retry"}
+              </Button>
+              <Button onClick={() => navigate("/events")} variant="outline">
+                Browse Events
+              </Button>
             </div>
           </div>
         </div>
@@ -126,13 +290,17 @@ export default function EventDetails() {
   if (!event) {
     return (
       <>
-        <SEOHead
-          title="Event Not Found - Des Moines Events"
-          description="The event you're looking for could not be found. Browse all upcoming events in Des Moines, Iowa."
-          type="website"
-        />
+        {/* NO SEOHead HERE (WEB-SEO-040). It emits
+            robots="index, follow, max-image-preview:large, ..." unconditionally,
+            so this branch published TWO conflicting robots metas - one asking
+            for indexing and one refusing it - on the same page. Google resolves
+            a conflict by taking the most restrictive, so the outcome happened to
+            be right, but publishing both is a coin toss dressed as a decision.
+            A page that does not exist needs the refusal and nothing else.
+            Only a successful empty answer reaches here; errors render above. */}
         <Helmet>
           <meta name="robots" content="noindex, follow" />
+          <meta name="googlebot" content="noindex, follow" />
         </Helmet>
         <div className="min-h-screen bg-background">
           <Header />
@@ -162,36 +330,80 @@ export default function EventDetails() {
     );
   }
 
-  const eventDate = new Date(event.date);
-  const isUpcoming = eventDate >= new Date();
-  // Canonical ticket-link guard: only actionable when present AND not flagged
-  // broken (WEB-AUTO link-checker). Use this everywhere a ticket CTA renders.
-  const ticketUrl =
-    event.source_url &&
-    !(event as { source_url_broken?: boolean }).source_url_broken
-      ? event.source_url
-      : null;
   const eventSlug = createEventSlugWithCentralTime(event.title, event);
+  // /events/<uuid> and stale slugs land here; send them to the one URL that
+  // is canonical, so shares and bookmarks converge (WP8 item 2).
+  if (slug && slug !== eventSlug) {
+    return <Navigate replace to={`/events/${eventSlug}`} />;
+  }
+
+  // One guarded link for every CTA: http(s) only, not flagged broken by the
+  // link checker (WP8 item 5). "Get tickets" only for a paid price on a
+  // ticketing host; otherwise the button names where it goes, "Event listing
+  // on catchdesmoines.com" (events-pass2 WP4 item 5). The sticky bar uses the
+  // same value.
+  const outbound = eventOutboundLink(event);
+  const ticketUrl = outbound?.href ?? null;
+  const free = isFreePrice(event.price);
+  const category = event.category?.trim() || null;
   const eventUrl = `${BRAND.baseUrl}/events/${eventSlug}`;
-  const isFree = !event.price || event.price.toLowerCase().includes('free') || event.price === '$0';
-  const showTime = hasSpecificTime(event);
-  const dateSource = event.event_start_utc || event.event_start_local || event.date;
-
-  // Get formatted date parts for the hero display
+  const showTime = timing?.hasTime ?? false;
+  // "Aug 13 - Aug 23", "7:00 - 10:00 PM CT" or "Runs through Sun, Aug 23"
+  // whenever end_date is at or after the start (events-pass2 WP4 item 7).
+  const runLabel = eventRunLabel(event, now);
+  // Evening or daytime, on the Central clock. An untimed row's hour is a
+  // placeholder, so it counts as neither: no dinner advice, "that day".
+  const startHour = timing?.hasTime && timing.start ? centralHour(timing.start) : null;
+  const isEvening = startHour !== null && startHour >= EVENING_START_HOUR;
+  // Dinner advice whose time has passed isn't advice (events-pass2 WP4 item 8).
+  const freshDinnerPicks = isUpcoming && isEvening
+    ? dinnerPicks.filter((pick) => pick.dinnerAt.getTime() > now.getTime())
+    : [];
+  // Hotels when someone would book one (events-pass2 WP4 item 17): a run over
+  // more than one Central day, a Friday or Saturday night, or a venue with a
+  // recorded capacity. Anything else gets a single link.
+  const startDay = timing?.start ? centralDateOf(timing.start) : null;
+  const endMs = event.end_date ? Date.parse(event.end_date) : NaN;
+  const multiDay =
+    startDay !== null &&
+    Number.isFinite(endMs) &&
+    endMs >= (timing?.start?.getTime() ?? Infinity) &&
+    centralDateOf(new Date(endMs)) > startDay;
+  const weekendNight = startDay !== null && [5, 6].includes(centralWeekday(startDay));
+  const bigVenue = (venuePage?.capacity ?? 0) > 0;
+  const showHotelList = multiDay || weekendNight || bigVenue;
+  const otherDates = seriesDates.filter((d) => d.id !== event.id);
+  const aboutFallback = `${event.title} is ${withArticle(category)}${
+    event.venue ? ` at ${event.venue}` : ""
+  } in ${event.city?.trim() || `the ${BRAND.city} area`}.`;
+  // UTC first; `date` is also an instant. event_start_local carries no offset.
+  const dateSource = event.event_start_utc || event.date;
   const fullDate = formatEventDate(event);
-  const dayOfWeek = formatInCentralTime(dateSource, 'EEEE');
-  const monthDay = formatInCentralTime(dateSource, 'MMMM d, yyyy');
-  const timeStr = showTime ? formatInCentralTime(dateSource, 'h:mm a') : null;
-
-  // Determine days until event for urgency
-  const daysUntil = Math.ceil((eventDate.getTime() - Date.now()) / (1000 * 60 * 60 * 24));
-  const urgencyLabel = daysUntil === 0 ? "Today" : daysUntil === 1 ? "Tomorrow" : daysUntil <= 7 ? `In ${daysUntil} days` : null;
+  const monthDay = formatInCentralTime(dateSource, 'EEEE, MMMM d, yyyy');
+  const hasCoords = latitude !== null && longitude !== null;
+  const directionsUrl = hasCoords
+    ? `https://www.google.com/maps/dir/?api=1&destination=${latitude},${longitude}`
+    : `https://www.google.com/maps/search/?api=1&query=${encodeURIComponent(
+        [event.venue, event.location, `${event.city || BRAND.city}, IA`].filter(Boolean).join(", ")
+      )}`;
+  const inGettingAroundArea =
+    hasCoords &&
+    GETTING_AROUND_AREAS.some((slugName) => {
+      const area = findEventArea(slugName);
+      return area?.kind === "bbox" && isInBBox(latitude, longitude, area.bbox);
+    });
+  const venueAddress =
+    venuePage?.address && venuePage.address !== event.location ? venuePage.address : null;
+  const addToCalendar = () => downloadIcsFile(toIcsEvent(event));
 
   return (
     <>
       <EnhancedEventSEO
         event={event}
         viewMode="detail"
+        latitude={latitude}
+        longitude={longitude}
+        noindex={archived}
       />
 
       <BreadcrumbListSchema
@@ -206,18 +418,17 @@ export default function EventDetails() {
         <Header />
 
         {/* Hero Image Section */}
-        {event.image_url && (
+        {event.image_url && !heroFailed && (
           <div className="relative h-48 sm:h-64 md:h-80 lg:h-96 overflow-hidden bg-slate-900">
-            <img
+            {/* WEB-PERF-037. State, not a DOM mutation from onError. */}
+            <OptimizedImage
               src={event.image_url}
-              alt={`${event.title} - ${event.category} event in ${event.city || 'Des Moines'}, Iowa`}
-              className="w-full h-full object-cover opacity-60"
-              loading="eager"
-              decoding="async"
-              onError={(e) => {
-                const target = e.target as HTMLImageElement;
-                target.parentElement!.style.display = 'none';
-              }}
+              alt={`${event.title} - ${category ? `${category} event` : "event"} in ${event.city || 'Des Moines'}, Iowa`}
+              className="object-cover opacity-60"
+              containerClassName="absolute inset-0"
+              priority
+              sizes="(max-width: 768px) 100vw, 1024px"
+              onError={() => setHeroFailed(true)}
             />
             <div className="absolute inset-0 bg-gradient-to-t from-background via-background/50 to-transparent" />
           </div>
@@ -226,12 +437,13 @@ export default function EventDetails() {
         <div className="container mx-auto px-4">
           {/* Content starts overlapping hero image */}
           <div className={event.image_url ? '-mt-32 relative z-10' : 'pt-8'}>
-            {/* Breadcrumbs */}
             <Breadcrumbs
               items={[
                 { label: "Home", href: "/" },
                 { label: "Events", href: "/events" },
-                { label: event.category, href: `/events?category=${encodeURIComponent(event.category)}` },
+                ...(category
+                  ? [{ label: category, href: `/events?category=${encodeURIComponent(category)}` }]
+                  : []),
                 { label: event.title }
               ]}
             />
@@ -239,145 +451,203 @@ export default function EventDetails() {
             <div className="grid grid-cols-1 lg:grid-cols-3 gap-8 mt-4">
               {/* Main Content Column */}
               <div className="lg:col-span-2 space-y-6">
-                {/* Event Header Card */}
-                <article className="bg-card rounded-2xl shadow-lg border overflow-hidden" itemScope itemType="https://schema.org/Event">
+                {/* NO MICRODATA HERE. The JSON-LD node from EnhancedEventSEO is
+                    the one Event on this page; an itemScope Event here was
+                    counted as a second, incomplete one. */}
+                <article className="bg-card rounded-2xl shadow-lg overflow-hidden">
                   <div className="p-6 md:p-8">
                     {/* Badges Row */}
                     <div className="flex flex-wrap items-center gap-2 mb-4">
-                      {isUpcoming && urgencyLabel && (
-                        <Badge className={`${daysUntil === 0 ? 'bg-red-500' : daysUntil <= 2 ? 'bg-orange-500' : 'bg-indigo-500'} text-white border-0`}>
-                          {urgencyLabel}
-                        </Badge>
+                      {timing?.label && timing.tone === "past" && (
+                        <Badge variant="secondary">Past event</Badge>
                       )}
-                      {!isUpcoming && (
-                        <Badge variant="secondary">Past Event</Badge>
+                      {timing?.label && timing.tone && timing.tone !== "past" && (
+                        <Badge className={`${TONE_CLASS[timing.tone]} border-0`}>{timing.label}</Badge>
                       )}
-                      <Badge variant="outline">{event.category}</Badge>
+                      {category && <Badge variant="outline">{category}</Badge>}
                       {event.is_featured && (
-                        <Badge className="bg-amber-500 text-white border-0">
+                        <Badge className="bg-amber-700 text-white border-0">
                           <SpriteIcon name="sparkles" className="h-3 w-3 mr-1" />
                           Featured
                         </Badge>
                       )}
-                      {isFree && (
-                        <Badge className="bg-emerald-500 text-white border-0">Free Event</Badge>
+                      {free === true && (
+                        <Badge className="bg-emerald-700 text-white border-0">Free</Badge>
                       )}
                     </div>
 
-                    {/* Title */}
-                    <h1 className="text-2xl md:text-3xl lg:text-4xl font-extrabold text-foreground mb-4 leading-tight" itemProp="name">
+                    <h1 className="text-2xl md:text-3xl lg:text-4xl font-extrabold text-foreground mb-4 leading-tight">
                       {event.title}
                     </h1>
 
-                    {/* Key Details Row */}
-                    <div className="grid grid-cols-1 sm:grid-cols-2 gap-3 mb-6">
-                      <div className="flex items-start gap-3 p-3 rounded-xl bg-muted/50">
-                        <div className="p-2 rounded-lg bg-primary/10">
-                          <SpriteIcon name="calendar" className="h-5 w-5 text-primary" />
-                        </div>
-                        <div>
-                          <p className="font-semibold text-foreground text-sm">{dayOfWeek}</p>
-                          <p className="text-sm text-muted-foreground" itemProp="startDate" content={event.event_start_utc || (typeof event.date === 'string' ? event.date : event.date.toISOString())}>
+                    {/* The answer-first sentence: what, when, where, price, from
+                        the row alone (src/lib/eventMeta.ts). The Speakable node
+                        points at it by id. */}
+                    <p id="event-summary" className="text-base text-muted-foreground mb-5 max-w-prose">
+                      {eventSummary({ ...event, source_url: ticketUrl ?? undefined }, now)}
+                    </p>
+
+                    {/* One fact list (WP8 item 10). This replaced an icon-tile
+                        grid and a "Things To Know" section that said the same
+                        four things twice. */}
+                    <dl className="mb-6 divide-y rounded-xl bg-muted/50 p-4">
+                      <FactRow term="When">
+                        {showTime ? (
+                          <>{fullDate} CT</>
+                        ) : (
+                          <>
                             {monthDay}
-                          </p>
-                          {timeStr && (
-                            <p className="text-sm text-muted-foreground">{timeStr} CT</p>
-                          )}
-                        </div>
-                      </div>
-
-                      <div className="flex items-start gap-3 p-3 rounded-xl bg-muted/50">
-                        <div className="p-2 rounded-lg bg-primary/10">
-                          <SpriteIcon name="map-pin" className="h-5 w-5 text-primary" />
-                        </div>
-                        <div itemProp="location" itemScope itemType="https://schema.org/Place">
-                          {event.venue && (
-                            <p className="font-semibold text-foreground text-sm" itemProp="name">{event.venue}</p>
-                          )}
-                          <p className="text-sm text-muted-foreground" itemProp="address">{event.location}</p>
-                          {event.city && (
-                            <p className="text-sm text-muted-foreground">{event.city}, Iowa</p>
-                          )}
-                        </div>
-                      </div>
-
-                      {event.price && (
-                        <div className="flex items-start gap-3 p-3 rounded-xl bg-muted/50">
-                          <div className="p-2 rounded-lg bg-primary/10">
-                            <SpriteIcon name="ticket" className="h-5 w-5 text-primary" />
-                          </div>
-                          <div>
-                            <p className="font-semibold text-foreground text-sm">Admission</p>
-                            {/* WEB-SEO-018: microdata `price` takes one number
-                                only, so a range or an unreadable string drops
-                                the Offer scope and shows the text alone. The
-                                JSON-LD on this page still carries the full
-                                AggregateOffer. */}
-                            {eventPriceContent(event.price) ? (
-                              <p className="text-sm text-muted-foreground" itemProp="offers" itemScope itemType="https://schema.org/Offer">
-                                <span itemProp="price" content={eventPriceContent(event.price)}>{event.price}</span>
-                                <meta itemProp="priceCurrency" content="USD" />
-                              </p>
+                            {/* "Time not listed", or "All day" for a dated run. */}
+                            <span className="block">{eventTimeLabel(event)}</span>
+                          </>
+                        )}
+                        {runLabel && <span className="block">{runLabel}</span>}
+                        <EventProvenance event={event} className="mt-1 block text-xs text-muted-foreground" />
+                      </FactRow>
+                      <FactRow term="Where">
+                        {event.venue && (
+                          <span className="block font-medium text-foreground">
+                            {venuePage ? (
+                              <Link to={`/music/venues/${venuePage.slug}`} className="hover:underline">
+                                {event.venue}
+                              </Link>
                             ) : (
-                              <p className="text-sm text-muted-foreground">{event.price}</p>
+                              event.venue
                             )}
-                          </div>
-                        </div>
-                      )}
-
-                      <div className="flex items-start gap-3 p-3 rounded-xl bg-muted/50">
-                        <div className="p-2 rounded-lg bg-primary/10">
-                          <Tag className="h-5 w-5 text-primary" />
-                        </div>
-                        <div>
-                          <p className="font-semibold text-foreground text-sm">Category</p>
-                          <Link
-                            to={`/events?category=${encodeURIComponent(event.category)}`}
-                            className="text-sm text-primary hover:underline"
+                          </span>
+                        )}
+                        {event.location && event.location !== event.venue && !isCityOnly(event.location, event.city) && (
+                          <span className="block">{event.location}</span>
+                        )}
+                        {venueAddress && <span className="block">{venueAddress}</span>}
+                        <span className="block">{event.city || BRAND.city}, Iowa</span>
+                        <span className="mt-1 flex flex-wrap gap-x-4 gap-y-1">
+                          <a
+                            href={directionsUrl}
+                            target="_blank"
+                            rel="noopener noreferrer"
+                            className="inline-flex min-h-11 items-center text-primary hover:underline"
                           >
-                            {event.category} Events
+                            {hasCoords ? "Directions" : "Find it on Google Maps"}
+                          </a>
+                          {inGettingAroundArea && (
+                            <Link to="/getting-around" className="inline-flex min-h-11 items-center text-primary hover:underline">
+                              Parking and transit downtown
+                            </Link>
+                          )}
+                          {venuePage && (
+                            <Link
+                              to={`/music/venues/${venuePage.slug}`}
+                              className="inline-flex min-h-11 items-center text-primary hover:underline"
+                            >
+                              More events at {venuePage.name}
+                            </Link>
+                          )}
+                        </span>
+                      </FactRow>
+                      <FactRow term="Price">{eventPriceLabel(event.price)}</FactRow>
+                      {category && (
+                        <FactRow term="Category">
+                          <Link
+                            to={`/events?category=${encodeURIComponent(category)}`}
+                            className="text-primary hover:underline"
+                          >
+                            {category} events
                           </Link>
-                        </div>
-                      </div>
-                    </div>
+                        </FactRow>
+                      )}
+                    </dl>
 
                     {/* Quick Actions Row */}
                     <div className="flex flex-wrap gap-2 pb-2">
-                      {event.source_url && !(event as { source_url_broken?: boolean }).source_url_broken && (
+                      {outbound && (
                         <Button asChild size="sm">
-                          <a href={event.source_url} target="_blank" rel="noopener noreferrer">
+                          <a
+                            href={outbound.href}
+                            target="_blank"
+                            rel={outbound.rel}
+                            onClick={trackClick}
+                          >
                             <SpriteIcon name="external-link" className="h-4 w-4 mr-2" />
-                            Official Page
+                            {outbound.label}
+                            <span className="sr-only"> (opens in a new tab)</span>
                           </a>
                         </Button>
                       )}
                       {isUpcoming && (
-                        <Button variant="outline" size="sm" onClick={() => downloadICS(event)}>
-                          <CalendarPlus className="h-4 w-4 mr-2" />
-                          Add to Calendar
-                        </Button>
+                        // WEB-FEAT-026: Google, Outlook and Apple, with correct UTC.
+                        <AddToCalendarButton event={event} variant="outline" size="sm" />
                       )}
                       <FavoriteButton eventId={event.id} size="sm" variant="outline" />
                       <ShareDialog
                         title={event.title}
                         description={event.enhanced_description || event.original_description || `Check out ${event.title} in Des Moines`}
-                        url={window.location.href}
+                        url={eventUrl}
                         onShare={trackShare}
                       />
                     </div>
+                    {/* An affiliate ticket link says so next to the button
+                        (FTC; plan WP6). The sticky bar carries the same rel. */}
+                    {outbound?.sponsored && (
+                      <p className="text-xs text-muted-foreground">
+                        Affiliate link: we may earn a commission if you buy tickets, at no extra
+                        cost to you.{" "}
+                        <Link
+                          to="/affiliate-disclosure"
+                          className="inline-flex min-h-6 items-center underline underline-offset-2 hover:text-foreground"
+                        >
+                          How this works
+                        </Link>
+                      </p>
+                    )}
+
+                    {/* Other dates of the same event (events-pass2 WP4 item 13,
+                        bet 4). On a past event's page this is where the next
+                        one is (WP8 item 12). */}
+                    {otherDates.length > 0 && (
+                      <p className="mt-4 text-sm text-muted-foreground">
+                        {timing?.isOver || archived ? "Next dates" : "Other dates"}:{" "}
+                        {otherDates.map((d, i) => (
+                          <span key={d.id}>
+                            {i > 0 && ", "}
+                            <Link
+                              to={`/events/${createEventSlugWithCentralTime(d.title, d)}`}
+                              className="inline-flex min-h-11 items-center font-medium text-primary hover:underline"
+                            >
+                              {formatEventPart(d, "EEE MMM d")}
+                            </Link>
+                          </span>
+                        ))}
+                      </p>
+                    )}
+
+                    {/* Bet 4: restaurants open before a timed, upcoming evening
+                        show, with picks whose dinner time has passed dropped.
+                        A daytime event gets the plain nearby list below instead;
+                        "Dinner before the show" is the component's heading. */}
+                    {freshDinnerPicks.length > 0 && (
+                      <DinnerBeforeShow picks={freshDinnerPicks} startsAt={timing?.start ?? null} />
+                    )}
                   </div>
                 </article>
 
-                {/* About This Event - SEO Rich Content */}
-                <section className="bg-card rounded-2xl shadow-sm border p-6 md:p-8">
-                  <h2 className="text-xl font-bold mb-4">About This Event</h2>
-                  <div className="prose prose-slate max-w-none" itemProp="description">
+                {/* About This Event */}
+                <section className="bg-card rounded-2xl border p-6 md:p-8">
+                  <div className="mb-4 flex flex-wrap items-center gap-2">
+                    <h2 className="text-xl font-bold">About This Event</h2>
+                    {event.is_enhanced && event.enhanced_description && (
+                      <AIDisclosureBadge
+                        label="AI-assisted"
+                        tooltip="This description was rewritten or expanded with AI from the source listing. Check times and prices with the source."
+                      />
+                    )}
+                  </div>
+                  <div className="prose prose-slate max-w-none">
                     <p className="text-muted-foreground leading-relaxed text-base">
-                      {event.enhanced_description || event.original_description || `Join us for ${event.title}, a ${event.category.toLowerCase()} event happening in ${event.city || 'Des Moines'}, Iowa.`}
+                      {event.enhanced_description || event.original_description || aboutFallback}
                     </p>
                   </div>
 
-                  {/* AI Writeup Section */}
                   {event.ai_writeup && (
                     <div className="mt-6 pt-6 border-t">
                       <AIWriteup
@@ -389,74 +659,62 @@ export default function EventDetails() {
                   )}
                 </section>
 
-                {/* Things To Know - Optimized for Featured Snippets */}
-                <section className="bg-card rounded-2xl shadow-sm border p-6 md:p-8">
-                  <h2 className="text-xl font-bold mb-4 flex items-center gap-2">
-                    <Info className="h-5 w-5 text-primary" />
-                    Things To Know
-                  </h2>
-                  <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-                    <div className="space-y-3">
-                      <div>
-                        <h3 className="font-semibold text-sm text-foreground">When</h3>
-                        <p className="text-sm text-muted-foreground">{fullDate}</p>
-                      </div>
-                      <div>
-                        <h3 className="font-semibold text-sm text-foreground">Where</h3>
-                        <p className="text-sm text-muted-foreground">
-                          {event.venue ? `${event.venue}, ` : ''}{event.location}
-                          {event.city ? `, ${event.city}, Iowa` : ', Des Moines, Iowa'}
-                        </p>
-                      </div>
-                      <div>
-                        <h3 className="font-semibold text-sm text-foreground">Price</h3>
-                        <p className="text-sm text-muted-foreground">
-                          {isFree ? 'Free admission' : event.price || 'Contact venue for pricing'}
-                        </p>
-                      </div>
-                    </div>
-                    <div className="space-y-3">
-                      <div>
-                        <h3 className="font-semibold text-sm text-foreground">Category</h3>
-                        <p className="text-sm text-muted-foreground">{event.category}</p>
-                      </div>
-                      <div>
-                        <h3 className="font-semibold text-sm text-foreground">Area</h3>
-                        <p className="text-sm text-muted-foreground">{event.city || 'Des Moines'}, Iowa (Greater Des Moines Area)</p>
-                      </div>
-                      {event.source_url && !(event as { source_url_broken?: boolean }).source_url_broken && (
-                        <div>
-                          <h3 className="font-semibold text-sm text-foreground">More Info</h3>
-                          <a
-                            href={event.source_url}
-                            target="_blank"
-                            rel="noopener noreferrer"
-                            className="text-sm text-primary hover:underline inline-flex items-center gap-1"
-                          >
-                            Official Event Page
-                            <SpriteIcon name="external-link" className="h-3 w-3" />
-                          </a>
-                        </div>
-                      )}
-                    </div>
-                  </div>
-                </section>
+                {/* GEO fields: the FAQ is shown AND marked up, which is the
+                    condition EnhancedEventSEO's removed FAQPage never met
+                    (WEB-SEO-022). */}
+                {(event.geo_summary || (event.geo_key_facts?.length ?? 0) > 0) && (
+                  <section className="bg-card rounded-2xl border p-6 md:p-8">
+                    <h2 className="text-xl font-bold mb-4">Quick Facts</h2>
+                    {event.geo_summary && (
+                      <p className="text-muted-foreground leading-relaxed">{event.geo_summary}</p>
+                    )}
+                    {(event.geo_key_facts?.length ?? 0) > 0 && (
+                      <ul className="mt-4 list-disc pl-5 space-y-1 text-muted-foreground">
+                        {event.geo_key_facts.map((fact, i) => (
+                          <li key={i}>{fact}</li>
+                        ))}
+                      </ul>
+                    )}
+                  </section>
+                )}
+                {readGeoFaq(event.geo_faq).length > 0 && (
+                  <section className="bg-card rounded-2xl border overflow-hidden">
+                    <FAQSection
+                      title={`${event.title}: Questions and Answers`}
+                      faqs={readGeoFaq(event.geo_faq)}
+                      showSchema={true}
+                      className="border-0"
+                    />
+                  </section>
+                )}
 
-                {/* Community Features */}
-                <EventCheckIn eventId={event.id} eventTitle={event.title} />
-                <EventPhotoUpload eventId={event.id} />
-                <RatingSystem contentType="event" contentId={event.id} showReviews={true} />
+                {/* Community widgets, deferred until scrolled near. Check-in is
+                    only for events that have not ended. The photo uploader is
+                    gone from this page: uploads were stored and never shown
+                    here (WP8 item 11). */}
+                {isUpcoming && (
+                  <DeferredWidget minHeight={320} label="Event check-in">
+                    <EventCheckIn eventId={event.id} eventTitle={event.title} />
+                  </DeferredWidget>
+                )}
+                {/* Ratings only once someone could have been there (events-pass2
+                    WP4 item 15). */}
+                {(timing?.isHappeningNow || timing?.isOver || archived) && (
+                  <DeferredWidget minHeight={240} label="Ratings and reviews">
+                    <RatingSystem contentType="event" contentId={event.id} showReviews={true} />
+                  </DeferredWidget>
+                )}
               </div>
 
               {/* Sidebar */}
               <aside className="space-y-5">
-                {/* Map Card - Leaflet with OSM tiles (iframe embed is blocked by OSM's X-Frame-Options) */}
-                {event.latitude && event.longitude && (
-                  <Card className="overflow-hidden shadow-sm">
+                {/* Map: event coordinates, else the matched venue's (WP8 item 8). */}
+                {hasCoords && (
+                  <Card className="overflow-hidden shadow-none">
                     <div className="h-48 overflow-hidden">
                       <LazyLocationMap
-                        latitude={event.latitude}
-                        longitude={event.longitude}
+                        latitude={latitude}
+                        longitude={longitude}
                         venue={event.venue}
                         location={event.location}
                         className="h-48 w-full"
@@ -465,11 +723,7 @@ export default function EventDetails() {
                     <CardContent className="p-4">
                       <p className="text-sm font-medium mb-2">{event.venue || event.location}</p>
                       <Button asChild variant="outline" size="sm" className="w-full">
-                        <a
-                          href={`https://www.google.com/maps/dir/?api=1&destination=${event.latitude},${event.longitude}`}
-                          target="_blank"
-                          rel="noopener noreferrer"
-                        >
+                        <a href={directionsUrl} target="_blank" rel="noopener noreferrer">
                           <Navigation className="h-4 w-4 mr-2" />
                           Get Directions
                         </a>
@@ -478,11 +732,14 @@ export default function EventDetails() {
                   </Card>
                 )}
 
-                {/* Event Reminders */}
-                {isUpcoming && <EventReminderSettings eventId={event.id} />}
+                {isUpcoming && (
+                  <DeferredWidget minHeight={160} label="Event reminders">
+                    <EventReminderSettings eventId={event.id} eventTitle={event.title} />
+                  </DeferredWidget>
+                )}
 
                 {/* Explore More Links - Internal Linking for SEO */}
-                <Card className="shadow-sm">
+                <Card className="shadow-none">
                   <CardHeader className="pb-3">
                     <CardTitle className="text-base">Explore Des Moines Events</CardTitle>
                   </CardHeader>
@@ -517,16 +774,18 @@ export default function EventDetails() {
                       </span>
                       <ChevronRight className="h-4 w-4 text-muted-foreground" />
                     </Link>
-                    <Link
-                      to={`/events?category=${encodeURIComponent(event.category)}`}
-                      className="flex items-center justify-between p-2 rounded-lg hover:bg-muted/50 transition-colors text-sm"
-                    >
-                      <span className="flex items-center gap-2">
-                        <Tag className="h-4 w-4 text-muted-foreground" />
-                        More {event.category}
-                      </span>
-                      <ChevronRight className="h-4 w-4 text-muted-foreground" />
-                    </Link>
+                    {category && (
+                      <Link
+                        to={`/events?category=${encodeURIComponent(category)}`}
+                        className="flex items-center justify-between p-2 rounded-lg hover:bg-muted/50 transition-colors text-sm"
+                      >
+                        <span className="flex items-center gap-2">
+                          <Tag className="h-4 w-4 text-muted-foreground" />
+                          More {category}
+                        </span>
+                        <ChevronRight className="h-4 w-4 text-muted-foreground" />
+                      </Link>
+                    )}
                     <Link
                       to="/events"
                       className="flex items-center justify-between p-2 rounded-lg hover:bg-muted/50 transition-colors text-sm"
@@ -542,27 +801,37 @@ export default function EventDetails() {
               </aside>
             </div>
 
-            {/* Hotel Callout */}
-            <EventHotelCallout eventId={event.id} eventArea={event.city || undefined} />
+            {/* One hotel section, upcoming events only: linked hotels, else
+                NearbyHotels by distance (WP8 item 9). */}
+            {isUpcoming && (
+              <EventHotelCallout
+                eventId={event.id}
+                latitude={latitude}
+                longitude={longitude}
+                placeName={event.venue || "this event"}
+                nearSlug={venuePage?.slug ?? null}
+                showList={showHotelList}
+              />
+            )}
 
-            {/* Related Events Section — hidden when fewer than 3 matches */}
-            {relatedEvents.length >= 3 && (
+            {/* Same category, upcoming, its own bounded query (WP8 item 7). */}
+            {category && relatedEvents.length > 0 && (
               <section className="mt-12 pt-8 border-t">
-                <div className="flex items-center justify-between mb-6">
+                <div className="flex items-center justify-between gap-4 mb-6">
                   <div>
-                    <h2 className="text-2xl font-bold">More {event.category} Events</h2>
-                    <p className="text-sm text-muted-foreground mt-1">Similar events happening in Des Moines</p>
+                    <h2 className="text-2xl font-bold">More {category} Events</h2>
+                    <p className="text-sm text-muted-foreground mt-1">Coming up in the Des Moines area</p>
                   </div>
                   <Button
                     variant="outline"
                     size="sm"
-                    onClick={() => navigate(`/events?category=${encodeURIComponent(event.category)}`)}
+                    onClick={() => navigate(`/events?category=${encodeURIComponent(category)}`)}
                   >
                     View All
                     <ChevronRight className="h-4 w-4 ml-1" />
                   </Button>
                 </div>
-                <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-5" onClick={trackClick}>
+                <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-5" onClick={trackClick}>
                   {relatedEvents.map((relatedEvent) => (
                     <EventCard
                       key={relatedEvent.id}
@@ -576,39 +845,50 @@ export default function EventDetails() {
               </section>
             )}
 
-            {/* More Events in Des Moines - Additional Internal Links */}
-            {nearbyEvents.length > 0 && (
-              <section className="mt-12 pt-8 border-t pb-8">
-                <div className="flex items-center justify-between mb-6">
-                  <div>
-                    <h2 className="text-2xl font-bold">More Events in Des Moines</h2>
-                    <p className="text-sm text-muted-foreground mt-1">Discover other upcoming activities</p>
-                  </div>
-                  <Button variant="outline" size="sm" onClick={() => navigate('/events')}>
-                    Browse All
-                    <ChevronRight className="h-4 w-4 ml-1" />
-                  </Button>
-                </div>
-                <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-5">
-                  {nearbyEvents.map((nearbyEvent) => (
-                    <EventCard
-                      key={nearbyEvent.id}
-                      event={nearbyEvent}
-                      onViewDetails={() => {
-                        navigate(`/events/${createEventSlugWithCentralTime(nearbyEvent.title, nearbyEvent)}`);
-                      }}
-                    />
+            {/* Same Central day, within two miles, not over, starting no
+                earlier than three hours before this one (events-pass2 WP4
+                item 14). "Night" only for an evening start. */}
+            {sameNight.length > 0 && (
+              <section className="mt-12 pt-8 border-t" aria-labelledby="same-night-heading">
+                <h2 id="same-night-heading" className="text-2xl font-bold">
+                  {isEvening ? "Also that night nearby" : "Also that day nearby"}
+                </h2>
+                <p className="text-sm text-muted-foreground mt-1">
+                  Same day, within two miles of {event.venue || "this venue"}, straight-line distance
+                </p>
+                <ul className="mt-4 divide-y rounded-xl border">
+                  {sameNight.map(({ item, miles }) => (
+                    <li key={item.id}>
+                      <Link
+                        to={`/events/${createEventSlugWithCentralTime(item.title, item)}`}
+                        className="flex min-h-11 items-center justify-between gap-3 px-4 py-3 text-sm hover:bg-muted/50"
+                      >
+                        <span className="min-w-0">
+                          <span className="block truncate font-medium text-foreground">{item.title}</span>
+                          <span className="block truncate text-muted-foreground">
+                            {[eventTimeLabel(item), item.venue].filter(Boolean).join(" - ")}
+                          </span>
+                        </span>
+                        <span className="shrink-0 tabular-nums text-muted-foreground">{formatMiles(miles)}</span>
+                      </Link>
+                    </li>
                   ))}
-                </div>
+                </ul>
               </section>
             )}
 
-            {/* Cross-Content: Nearby Restaurants */}
-            <NearbyContent
-              variant="restaurants-near-event"
-              city={event.city || "Des Moines"}
-              excludeId={event.id}
-            />
+            {/* Distance-only restaurants: the fallback when "Dinner before the
+                show" has nothing to say (untimed, daytime, past, or nothing
+                open). */}
+            {freshDinnerPicks.length === 0 && (
+              <NearbyContent
+                variant="restaurants-near-event"
+                city={event.city || "Des Moines"}
+                excludeId={event.id}
+                latitude={latitude}
+                longitude={longitude}
+              />
+            )}
           </div>
 
           <LastUpdatedBadge updatedAt={event.updated_at} className="mt-6 justify-center" />
@@ -617,34 +897,44 @@ export default function EventDetails() {
         <Footer />
       </div>
 
+      {/* The sticky bar's link takes no onClick, so outbound clicks are
+          counted here as they bubble (consent-gated in useContentTracking). */}
+      <div
+        className="contents"
+        onClickCapture={(e) => {
+          if ((e.target as HTMLElement).closest("a[href^='http']")) trackClick();
+        }}
+      >
       <StickyMobileCTA
         variant="event"
         primaryAction={
-          ticketUrl
+          outbound
             ? {
-                label: "Get Tickets",
-                href: ticketUrl,
+                label: outbound.label,
+                href: outbound.href,
                 icon: "external",
                 isExternal: true,
+                rel: outbound.rel,
               }
             : isUpcoming
             ? {
                 label: "Add to Calendar",
-                onClick: () => downloadICS(event),
+                onClick: addToCalendar,
                 icon: "calendar",
               }
             : undefined
         }
         secondaryAction={
-          ticketUrl && isUpcoming
+          outbound && isUpcoming
             ? {
                 label: "Add to Calendar",
-                onClick: () => downloadICS(event),
+                onClick: addToCalendar,
                 icon: "calendar",
               }
             : undefined
         }
       />
+      </div>
     </>
   );
 }

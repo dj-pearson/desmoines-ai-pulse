@@ -14,7 +14,7 @@ export function MicroInteractionDemo() {
   return (
     <div className="container mx-auto p-8 space-y-12">
       <div className="text-center space-y-4">
-        <h1 className="text-4xl font-bold bg-gradient-to-r from-primary to-secondary bg-clip-text text-transparent animate-fade-in">
+        <h1 className="text-4xl font-bold text-foreground animate-fade-in">
           Micro-Interactions Demo
         </h1>
         <p className="text-muted-foreground text-lg animate-slide-up">

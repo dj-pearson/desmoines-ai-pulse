@@ -25,6 +25,7 @@ import { runAgent } from "../_shared/agentRun.ts";
 import { scoreOutput } from "../_shared/scoreOutput.ts";
 import { sendNurtureEmail } from "../_shared/sendNurtureEmail.ts";
 import { buildTrialNotice, planAmount } from "../_shared/trialNotice.ts";
+import { hasMarketingConsent } from "../_shared/marketingConsent.ts";
 
 const AGENT_KEY = "subscription-nurture";
 const TRIAL_WINDOW_DAYS = 3;
@@ -66,7 +67,7 @@ async function consented(supabase: Client, userId: string): Promise<{ email: str
   // broken profiles read looks exactly like nobody having consented.
   logErr(`consented(${userId})`, error, "user skipped, no mail sent");
   if (!data?.email) return null;
-  return { email: data.email, allowed: (data.lifecycle_signals as { messagingAllowed?: boolean } | null)?.messagingAllowed !== false };
+  return { email: data.email, allowed: hasMarketingConsent(data.lifecycle_signals) };
 }
 
 async function cappedRecently(supabase: Client, userId: string, kind: string, gapDays: number): Promise<boolean> {

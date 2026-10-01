@@ -18,11 +18,13 @@ import { handleCors, getCorsHeaders } from '../_shared/cors.ts';
 import { checkRateLimitPersistent } from '../_shared/rateLimit.ts';
 import { runJob } from '../_shared/jobRunner.ts';
 import { fetchWithTimeout } from '../_shared/fetchWithTimeout.ts';
-import { getAnthropicApiKey, extractClaudeText } from '../_shared/aiConfig.ts';
+import { getAnthropicApiKey, extractClaudeText, buildLightweightClaudeRequest } from '../_shared/aiConfig.ts';
+// decideTriage is the tested copy in logic.ts. This file used to declare its
+// own as well, and `deno run --no-check` ran the local one, so logic.test.ts
+// pinned a function the endpoint never called.
 import {
-  AUTO_APPROVE_THRESHOLD,
-  AUTO_REJECT_THRESHOLD,
   buildSafetyRequest,
+  buildTriagePatch,
   decideTriage,
   scoreCompleteness,
   type SafetyVerdict,
@@ -43,15 +45,28 @@ async function safetyCheck(s: Submission): Promise<SafetyVerdict> {
   if (!key) return { safe: false, determined: false, reasons: ['Safety check unavailable (no API key)'] };
   try {
     const { system, userContent } = buildSafetyRequest(s);
+    // WEB-BE-041. The model was 'claude-3-haiku-20240307', which is RETIRED -
+    // the call 404s, and because this check fails closed, every submission has
+    // been coming back undetermined and staying out of the auto-approve path.
+    // A safety gate that always says "I could not tell" is not a safety gate.
+    //
+    // buildLightweightClaudeRequest is the Haiku-tier equivalent of the
+    // buildClaudeRequest route AC2 asks for: the id comes from the ai_config
+    // row with a non-retired fallback, so the next model change is one row
+    // rather than three files. `system` is spread back on because that helper
+    // returns only model/max_tokens/temperature/messages.
+    const base = await buildLightweightClaudeRequest(
+      [{ role: 'user', content: userContent }],
+      {
+        supabaseUrl: Deno.env.get('SUPABASE_URL') ?? '',
+        supabaseKey: Deno.env.get('SUPABASE_SERVICE_ROLE_KEY') ?? '',
+        customMaxTokens: 300,
+      },
+    );
     const res = await fetchWithTimeout('https://api.anthropic.com/v1/messages', {
       method: 'POST',
       headers: { 'Content-Type': 'application/json', 'x-api-key': key, 'anthropic-version': '2023-06-01' },
-      body: JSON.stringify({
-        model: 'claude-3-haiku-20240307',
-        max_tokens: 300,
-        system,
-        messages: [{ role: 'user', content: userContent }],
-      }),
+      body: JSON.stringify({ ...base, system }),
     }, 60_000);
     if (!res.ok) return { safe: false, determined: false, reasons: [`Safety check upstream error (${res.status})`] };
     const data = await res.json();
@@ -76,23 +91,6 @@ async function safetyCheck(s: Submission): Promise<SafetyVerdict> {
   } catch (_e) {
     return { safe: false, determined: false, reasons: ['Safety check exception'] };
   }
-}
-
-/**
- * Pure triage decision. Auto-approve requires a DETERMINED-safe verdict; an
- * undetermined safety result can never auto-approve (fail closed → human queue).
- * A confirmed-unsafe verdict auto-rejects; low quality score auto-rejects.
- */
-export function decideTriage(
-  score: number,
-  dateValid: boolean,
-  safety: SafetyVerdict,
-): 'approved' | 'rejected' | 'pending' {
-  const confirmedUnsafe = safety.determined && !safety.safe;
-  if (confirmedUnsafe) return 'rejected';
-  if (score < AUTO_REJECT_THRESHOLD) return 'rejected';
-  if (score >= AUTO_APPROVE_THRESHOLD && dateValid && safety.determined && safety.safe) return 'approved';
-  return 'pending';
 }
 
 Deno.serve(async (req) => {
@@ -160,66 +158,63 @@ Deno.serve(async (req) => {
     // (AI error/refusal/parse-fail) is NOT a flag but also blocks auto-approve.
     const safetyFlag = safety.determined && !safety.safe;
 
-    const decision = decideTriage(score, dateValid, safety);
+    const proposed = decideTriage(score, dateValid, safety);
 
-    // Persist score + reasons on the submission regardless of outcome.
-    const patch: Record<string, unknown> = {
-      quality_score: score,
-      triage_reasons: allReasons,
-      triaged_at: new Date().toISOString(),
-    };
-
-    if (decision === 'approved') {
-      const { error: insErr } = await supabase.from('events').insert({
-        title: submission.title,
-        date: submission.date,
-        location: submission.location || submission.venue || 'Des Moines, IA',
-        category: submission.category || 'Community',
-        venue: submission.venue,
-        original_description: submission.description,
-        price: submission.price,
-        image_url: submission.image_url,
-        source_url: submission.website_url,
-        source: 'user_submission',
+    let publishError: string | null = null;
+    if (proposed === 'approved') {
+      // WEB-ADS-008: ONE publisher, shared with the human approve button. The
+      // mapping of submission to events row lives in publish_submission
+      // (20260920000001) and both paths call it.
+      const { error } = await supabase.rpc('publish_submission', {
+        p_submission_id: submission.id,
       });
-      if (insErr) throw new Error(`events insert: ${insErr.message}`);
-      patch.status = 'approved';
-      patch.auto_decided = true;
-    } else if (decision === 'rejected') {
-      patch.status = 'rejected';
-      patch.auto_decided = true;
-      patch.admin_notes = safetyFlag
-        ? 'Automatically declined: the submission did not pass our content guidelines.'
-        : 'Automatically declined: the submission was missing key details (date, venue, or a clear description). You are welcome to resubmit with more information.';
+      if (error) {
+        // Not thrown (business plan WP4 item 8): the score and reasons are
+        // still saved and the row waits for a human. See buildTriagePatch.
+        publishError = error.message;
+        console.error('[triage] publish_submission failed; leaving pending:', error.message);
+      }
     }
-    // pending: leave status, just store score + reasons for the admin queue.
 
-    await supabase.from('user_submitted_events').update(patch).eq('id', submission.id);
+    const { decision, patch } = buildTriagePatch({
+      decision: proposed,
+      score,
+      reasons: allReasons,
+      safetyFlag,
+      publishError,
+    });
+
+    // Checked: a failed write here means the admin queue has no score and the
+    // submitter is about to be told about a decision the row does not record.
+    const { error: patchError } = await supabase
+      .from('user_submitted_events')
+      .update(patch)
+      .eq('id', submission.id);
+    if (patchError) throw new Error(`saving triage result: ${patchError.message}`);
 
     ctx.processed(1);
-    ctx.meta({ decision, score, safetyFlag, submissionId: submission.id });
+    ctx.meta({ decision, score, safetyFlag, submissionId: submission.id, publishError });
 
-    // Notify the submitter on an auto-decision (best-effort).
-    if (decision !== 'pending' && submission.contact_email) {
+    // Notify the submitter on an auto-decision (best-effort). Only the type and
+    // the id: notify-event-submission reads the recipient, title and notes from
+    // the row it was just given, and falls back to the owner's account email
+    // when the submission has no contact_email.
+    if (decision !== 'pending') {
       try {
-        await supabase.functions.invoke('notify-event-submission', {
+        const { error: notifyError } = await supabase.functions.invoke('notify-event-submission', {
           body: {
             notificationType: decision === 'approved' ? 'event_approved' : 'event_rejected',
             eventId: submission.id,
-            eventTitle: submission.title,
-            eventDate: submission.date ? new Date(submission.date).toLocaleDateString() : undefined,
-            eventVenue: submission.venue || undefined,
-            eventCategory: submission.category || undefined,
-            submitterEmail: submission.contact_email,
-            adminNotes: typeof patch.admin_notes === 'string' ? patch.admin_notes : undefined,
           },
         });
+        if (notifyError) console.error('[triage] notify failed:', notifyError.message);
       } catch (e) {
         console.error('[triage] notify failed:', e);
       }
     }
 
-    return { decision, score, reasons: allReasons };
+    const savedReasons = Array.isArray(patch.triage_reasons) ? patch.triage_reasons : allReasons;
+    return { decision, score, reasons: savedReasons };
   });
 
   if (!result.ok) return json({ error: result.error }, 500, corsHeaders);

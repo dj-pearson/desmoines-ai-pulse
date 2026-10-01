@@ -21,6 +21,13 @@ final class SearchHistoryService {
         guard !trimmed.isEmpty else { return }
 
         recentSearches.removeAll { $0.caseInsensitiveCompare(trimmed) == .orderedSame }
+        // "jaz" then "jazz": the newer query refines the one in front, so it
+        // replaces it rather than sitting next to it (IOS-DD-SEARCH-04).
+        if let front = recentSearches.first,
+           front.count < trimmed.count,
+           trimmed.lowercased().hasPrefix(front.lowercased()) {
+            recentSearches.removeFirst()
+        }
         recentSearches.insert(trimmed, at: 0)
         if recentSearches.count > maxItems {
             recentSearches = Array(recentSearches.prefix(maxItems))

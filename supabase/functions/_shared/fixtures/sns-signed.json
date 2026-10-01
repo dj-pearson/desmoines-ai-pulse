@@ -1,0 +1,39 @@
+{
+  "_comment": "Signed with a throwaway self-signed key generated for this test (the private key was never committed). The string to sign was built by an independent Python implementation of the SNS spec.",
+  "certPem": "-----BEGIN CERTIFICATE-----\nMIIDNzCCAh+gAwIBAgIUfQXG7+XkGxf9OM2BgZGjDAzxXL0wDQYJKoZIhvcNAQEL\nBQAwKzEpMCcGA1UEAwwgc25zLnVzLWVhc3QtMi5hbWF6b25hd3MuY29tLXRlc3Qw\nHhcNMjYwOTI2MDQyMTMyWhcNMzYwOTIzMDQyMTMyWjArMSkwJwYDVQQDDCBzbnMu\ndXMtZWFzdC0yLmFtYXpvbmF3cy5jb20tdGVzdDCCASIwDQYJKoZIhvcNAQEBBQAD\nggEPADCCAQoCggEBAMVIt3L88mtwE3r3d5WUO/kyiU3lUhe8PC+cOzkoYcS1MMJS\nAuwkHk1O/tyW+ei2Nnh4/7ZMMdGqDLtqTEhiSzMEo+eSslwUQljTBA3sjpy1MUBJ\nVvLNfOimEr62XdZ42d873Q0RB1JCVSBX2dRikbMlZajRnP8y5GIGhn9HlE+CbTNO\njXXEX9L6OI2sZ4xpNG3wzxoMy3/hF9jtylTFac8sXXK0VmE/QaLkj7hzBt8oS92b\ny5RzV20VNpE+KYFH++mBtq0y/ZiWoZa828Rdh8e4fVBmRHCKT/puiInhGt0cXKwv\nex9GGn6Riu7qS8Ukk/EK9NDjswdInRlOTWX5//MCAwEAAaNTMFEwHQYDVR0OBBYE\nFCUb9uLsuiuYoMZ/CoS1ixbi219tMB8GA1UdIwQYMBaAFCUb9uLsuiuYoMZ/CoS1\nixbi219tMA8GA1UdEwEB/wQFMAMBAf8wDQYJKoZIhvcNAQELBQADggEBADYrf/7I\nL0+izLfh4DwZskHOFOvHbEg8r73fs0/zKyL/33iJzQqK08kRrupNUSWb14Fn6+nQ\nZ1RcFa7aBajIHc6Pm/oivpvvcICSDpo1cvD4XnYCdWDlw8gKK/tbBaxJuG6M/upd\nx7rkJQjkIMPfEwC7MqFO+ijTrxhh3ed41Y9455BHXnuV2VXRUUHSVM/4v+Ctc8EI\nJ/uRM5lQZrM0VOpjOhUe0Jrad8xUBeslsGzfA4O37nOtYmcgoJiYHJo7Dl2K/MdI\nTe7H0CpHrw2zkS3gckbXu9DflwOqDqNX15ZLGguTqLpwR5FCevJTsR8hZF/dDQSU\nBJpPxf89MMzBFiY=\n-----END CERTIFICATE-----\n",
+  "notificationV2": {
+    "Type": "Notification",
+    "MessageId": "22b80b92-fdea-4c2c-8f9d-bdfb0c7bf324",
+    "TopicArn": "arn:aws:sns:us-east-2:123456789012:dmi-ses-events",
+    "Message": "{\"eventType\": \"Bounce\", \"bounce\": {\"bounceType\": \"Permanent\", \"bounceSubType\": \"General\", \"bouncedRecipients\": [{\"emailAddress\": \"Gone@Example.com\", \"action\": \"failed\", \"status\": \"5.1.1\", \"diagnosticCode\": \"smtp; 550 5.1.1 user unknown\"}], \"timestamp\": \"2026-09-26T12:00:00.000Z\", \"feedbackId\": \"fb-1\"}, \"mail\": {\"messageId\": \"0100019a-abc\", \"destination\": [\"Gone@Example.com\"], \"timestamp\": \"2026-09-26T11:59:59.000Z\"}}",
+    "Timestamp": "2026-09-26T12:00:01.000Z",
+    "SignatureVersion": "2",
+    "SigningCertURL": "https://sns.us-east-2.amazonaws.com/SimpleNotificationService-test.pem",
+    "UnsubscribeURL": "https://sns.us-east-2.amazonaws.com/?Action=Unsubscribe&SubscriptionArn=x",
+    "Signature": "VECVx9HOuIynb3p0rErGDD5p5Q1dkL7mvWCFYzfyw1FgPbHLPh1CM/+thdYGN/O45Cr7WvxyouRZxqvAHFFxlXq7eew2Az4aN8h9TzndSuWuTm2dyeEYyF61wicG1R+1Vn2YQpnxhkaIsrV/174An2CAXwR2iaadGnak5iyH9V2aWLGyVOe6svaXI3+ipUpvePO+95JuUUDt5G+RGGqO9JHpKLMZcenP/zA/zOQdyX3OVvIklWYG85T3KIbCsOqlVFCO9tE08KO8hb+5HGlo+RWV27EPqhXgkO9F56gkuHrWRRFd5c7/AMi347zvwKi32r6nYpvZzhtFAMFClAbrww=="
+  },
+  "notificationV1": {
+    "Type": "Notification",
+    "MessageId": "22b80b92-fdea-4c2c-8f9d-bdfb0c7bf324",
+    "TopicArn": "arn:aws:sns:us-east-2:123456789012:dmi-ses-events",
+    "Message": "{\"eventType\": \"Bounce\", \"bounce\": {\"bounceType\": \"Permanent\", \"bounceSubType\": \"General\", \"bouncedRecipients\": [{\"emailAddress\": \"Gone@Example.com\", \"action\": \"failed\", \"status\": \"5.1.1\", \"diagnosticCode\": \"smtp; 550 5.1.1 user unknown\"}], \"timestamp\": \"2026-09-26T12:00:00.000Z\", \"feedbackId\": \"fb-1\"}, \"mail\": {\"messageId\": \"0100019a-abc\", \"destination\": [\"Gone@Example.com\"], \"timestamp\": \"2026-09-26T11:59:59.000Z\"}}",
+    "Timestamp": "2026-09-26T12:00:01.000Z",
+    "SignatureVersion": "1",
+    "SigningCertURL": "https://sns.us-east-2.amazonaws.com/SimpleNotificationService-test.pem",
+    "UnsubscribeURL": "https://sns.us-east-2.amazonaws.com/?Action=Unsubscribe&SubscriptionArn=x",
+    "Signature": "AOw0ZSz1piUkn9QG4d4LheQVF8Dw4cBqszh7h/MwedNKfZx8sRztq5W3iqY2bddRGNJc8ZjiIP9iWLjahV8xAYKn/ihuWLCxnfgOazcv1eTI7mpVZgwDyvwkjFxWpxe0dMHMqryxNAZiMeOuuYGl4VPx/hPrhsw62gVq8YxpFQ4Lqvv3Gtd4in0LvY20SVt4mAq+ake9Eo5zVdMzJLG/0fQFIFse97Io9CaxrsBNJRXs+DlEUrc6vFh95SsR3oB9V1JZdBLumW4TxtmeT3AApo2B86Vukt5rl9KG+cT3ro9I5Tm73LKj982foudbOvVuWPg5cSJCjRc6m1IXFSQ0CA==",
+    "Subject": "Amazon SES Email Event Notification"
+  },
+  "subscriptionConfirmation": {
+    "Type": "SubscriptionConfirmation",
+    "MessageId": "165545c9-2a5c-472c-8df2-7ff2be2b3b1b",
+    "Token": "2336412f37fb687f5d51e6e241d09c805a5a57b30d712f794cc5f6a988666d92768dd60a747ba6f3beb71854e285d6ad02428b09ceece29417f1f02d609c582afbacc99c583a916b9981dd2728f4ae6fdb82efd087cc3b7849e05798d2d2785c03b0879594eeac82c01f235d0e717736",
+    "TopicArn": "arn:aws:sns:us-east-2:123456789012:dmi-ses-events",
+    "Message": "You have chosen to subscribe to the topic arn:aws:sns:us-east-2:123456789012:dmi-ses-events.",
+    "SubscribeURL": "https://sns.us-east-2.amazonaws.com/?Action=ConfirmSubscription&TopicArn=arn:aws:sns:us-east-2:123456789012:dmi-ses-events&Token=2336412f",
+    "Timestamp": "2026-09-26T12:00:00.000Z",
+    "SignatureVersion": "1",
+    "SigningCertURL": "https://sns.us-east-2.amazonaws.com/SimpleNotificationService-test.pem",
+    "Signature": "ieQWMfxBm2zDunS1kNLJrnDBcDXx7kOQwi47NHle6L66/0XtiX9PRdn5f26CAJEQKT0IklJ+wSw7rdNPal0iBsyIu2yvCX4Qq5OiV565zKdgO8wla5zdZREvry6ILRAhs7pW2SMvlBp74v7oHOITtFg4QYYPT1FVIxY6BBsRdylFW79Dk8t1NpjKDiBwl/y8uv94c07nsgv0AznM9pB7Hd3Wf6w51Ge62ENxlIEsHsuEW7ytqyEWZMMW6T10/npVIeiCU0O/z/fIGMWlhHpxetHbIGZON7SrO0BnJkTbM/Ih0RDO0k9me6+m93ILDhWpJu22CbEMhQmxflce4HWCkg=="
+  }
+}

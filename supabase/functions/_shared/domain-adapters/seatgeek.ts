@@ -37,6 +37,18 @@ interface SeatGeekEvent {
   short_title?: string;
   datetime_local?: string;
   datetime_utc?: string;
+  /**
+   * WEB-BE-038. Neither of these was in this interface, so neither was read.
+   *
+   * time_tbd: the date is announced, the start time is not. datetime_local
+   * still carries a time -- SeatGeek's placeholder, 03:30:00 -- and it was
+   * being ingested as a showtime.
+   *
+   * date_tbd: not even the date is known. datetime_local is then meaningless
+   * in both halves, so the row is skipped rather than guessed at.
+   */
+  time_tbd?: boolean;
+  date_tbd?: boolean;
   type?: string;
   url?: string;
   venue?: SeatGeekVenue;
@@ -118,6 +130,12 @@ export const seatgeekAdapter: DomainAdapter = {
 function toAdapterEvent(evt: SeatGeekEvent): AdapterEvent | null {
   if (!evt.title || !evt.datetime_local) return null;
 
+  // WEB-BE-038. date_tbd means SeatGeek does not know WHEN, at all. Its
+  // datetime_local is a placeholder in both halves, so there is nothing to
+  // ingest -- an event with an invented date is worse than an event we do not
+  // list, because it drops off the site on the day it never happens.
+  if (evt.date_tbd === true) return null;
+
   const venue = evt.venue?.name ?? "Venue TBD";
   const city = evt.venue?.city ?? "Des Moines";
   const state = evt.venue?.state ?? "IA";
@@ -134,6 +152,10 @@ function toAdapterEvent(evt: SeatGeekEvent): AdapterEvent | null {
     title: evt.title,
     description: buildDescription(evt),
     date,
+    // The date part of `date` is real; the time part is SeatGeek's 03:30
+    // placeholder. Marked rather than rewritten so the row keeps a record of
+    // what was actually ingested.
+    time_tbd: evt.time_tbd === true,
     location: `${city}, ${state}`,
     venue,
     category: mapCategory(evt),

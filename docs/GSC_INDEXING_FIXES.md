@@ -1,6 +1,6 @@
 # GSC Indexing Fixes Applied
 
-Based on Google Search Console exports (Chart.csv, Critical issues.csv, Metadata.csv, Non-critical issues.csv), the following changes were made to improve page indexing.
+Based on Google Search Console exports (docs/gsc-exports/, moved there from the repo root under WEB-QUAL-009), the following changes were made to improve page indexing.
 
 ## Summary of GSC Issues
 
@@ -35,7 +35,7 @@ Based on Google Search Console exports (Chart.csv, Critical issues.csv, Metadata
 
 ### 4. **GSC Recommendations**
 
-- **Submit sitemap.xml in GSC**: In Google Search Console → Sitemaps, add `https://desmoinesinsider.com/sitemap.xml` as the primary sitemap index. The Metadata.csv showed only `sitemap-events.xml`; the full index includes all content types.
+- **Submit sitemap.xml in GSC**: In Google Search Console → Sitemaps, add `https://desmoinesinsider.com/sitemap.xml` as the primary sitemap index. The Metadata.csv (docs/gsc-exports/) showed only `sitemap-events.xml`; the full index includes all content types.
 
 ## Additional Recommendations (Manual)
 

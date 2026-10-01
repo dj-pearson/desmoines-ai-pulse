@@ -13,6 +13,7 @@ import { format } from "date-fns";
 import { toast } from "sonner";
 import { createLogger } from '@/lib/logger';
 import { SpriteIcon } from "@/components/ui/SpriteIcon";
+import { Spinner } from "@/components/ui/loading-skeleton";
 
 const log = createLogger('EventReviewSystem');
 
@@ -87,7 +88,7 @@ export default function EventReviewSystem() {
       <Card>
         <CardContent className="pt-6">
           <div className="text-center py-8">
-            <div className="animate-spin rounded-full h-8 w-8 border-b-2 border-primary mx-auto mb-4"></div>
+            <Spinner size="lg" className="mx-auto mb-4" />
             <p>Loading submitted events...</p>
           </div>
         </CardContent>
@@ -218,9 +219,9 @@ export default function EventReviewSystem() {
 
                             <p className="text-sm text-muted-foreground">
                               Submitted {format(new Date(event.submitted_at), "MMM d, yyyy 'at' h:mm a")}
-                              {(event as any).profiles && (
+                              {event.profiles && (
                                 <span className="ml-2">
-                                  by {(event as any).profiles.first_name} {(event as any).profiles.last_name}
+                                  by {event.profiles.first_name} {event.profiles.last_name}
                                 </span>
                               )}
                             </p>

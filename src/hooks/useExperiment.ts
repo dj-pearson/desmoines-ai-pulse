@@ -118,10 +118,17 @@ export function useExperiment(flagKey: string): {
     // Fire-and-forget: track assignment in user_analytics
     supabase
       .from('user_analytics')
+      // `page_path` AND `metadata` ARE NOT COLUMNS ON user_analytics, and
+      // PostgREST rejects the whole insert on either - so no experiment
+      // assignment has ever been recorded, event_type and session_id included
+      // (WEB-QUAL-015, WEB-QA-017). The column is `page_url`; the assignment
+      // detail goes into `filters_used`, which is the table's only jsonb.
+      // That is a placement of convenience, not a design: a real `metadata`
+      // column is the better home and wants a migration.
       .insert({
         event_type: 'experiment_assigned',
-        page_path: window.location.pathname,
-        metadata: { flag_key: flagKey, variant, identifier_type: user?.id ? 'user' : 'session' },
+        page_url: window.location.pathname,
+        filters_used: { flag_key: flagKey, variant, identifier_type: user?.id ? 'user' : 'session' },
         session_id: getSessionId(),
       })
       .then(() => {

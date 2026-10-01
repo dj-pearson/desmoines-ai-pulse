@@ -1,7 +1,7 @@
-import React, { useState, useEffect } from 'react';
+import { useState } from 'react';
+import { useQuery, useQueryClient } from '@tanstack/react-query';
 import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
-import { Badge } from "@/components/ui/badge";
 import { useCommunityFeatures } from "@/hooks/useCommunityFeatures";
 import { Check, Heart, X } from "lucide-react";
 import { useAuth } from "@/hooks/useAuth";
@@ -12,61 +12,52 @@ interface EventCheckInProps {
   eventTitle: string;
 }
 
+const EMPTY_COUNTS = { going: 0, interested: 0, maybe: 0, not_going: 0, total: 0 };
+
 export function EventCheckIn({ eventId, eventTitle }: EventCheckInProps) {
   const { user } = useAuth();
   const { updateEventCheckIn, getEventCheckIns, getUserEventCheckIn } = useCommunityFeatures();
-  const [userStatus, setUserStatus] = useState<string | null>(null);
-  const [checkInCounts, setCheckInCounts] = useState({
-    going: 0,
-    interested: 0,
-    maybe: 0,
-    not_going: 0,
-    total: 0
-  });
+  const queryClient = useQueryClient();
   const [loading, setLoading] = useState(false);
 
-  const loadCheckInData = async () => {
-    const [userCheckIn, counts] = await Promise.all([
-      getUserEventCheckIn(eventId),
-      getEventCheckIns(eventId)
-    ]);
-    
-    setUserStatus(userCheckIn);
-    setCheckInCounts(counts);
-  };
+  // useQuery instead of a mount effect (events plan WP8 item 9): the tallies
+  // are cached per event, a remount does not refetch, and the counts and the
+  // viewer's own status arrive as one entry keyed by who is asking.
+  const queryKey = ['event-check-in', eventId, user?.id ?? null] as const;
+  const { data } = useQuery({
+    queryKey,
+    queryFn: async () => {
+      const [status, counts] = await Promise.all([
+        getUserEventCheckIn(eventId),
+        getEventCheckIns(eventId),
+      ]);
+      return { status, counts };
+    },
+    enabled: Boolean(user),
+    staleTime: 60 * 1000,
+  });
+  const userStatus = data?.status ?? null;
+  const checkInCounts = data?.counts ?? EMPTY_COUNTS;
 
   const handleCheckIn = async (status: 'interested' | 'going' | 'maybe' | 'not_going') => {
     if (!user) return;
-    
+
     setLoading(true);
     const success = await updateEventCheckIn(eventId, status);
     if (success) {
-      setUserStatus(status);
-      await loadCheckInData(); // Refresh counts
+      await queryClient.invalidateQueries({ queryKey });
     }
     setLoading(false);
   };
 
-  useEffect(() => {
-    loadCheckInData();
-  }, [eventId]);
-
-  const getStatusIcon = (status: string) => {
-    switch (status) {
-      case 'going': return <Check className="w-4 h-4" />;
-      case 'interested': return <Heart className="w-4 h-4" />;
-      case 'maybe': return <SpriteIcon name="clock" className="w-4 h-4" />;
-      case 'not_going': return <X className="w-4 h-4" />;
-      default: return null;
-    }
-  };
-
+  // -700 fills: white text on the -500 shades this used failed 4.5:1
+  // (events-pass2 WP4 item 10).
   const getStatusColor = (status: string) => {
     switch (status) {
-      case 'going': return 'bg-green-500 hover:bg-green-600';
-      case 'interested': return 'bg-blue-500 hover:bg-blue-600';
-      case 'maybe': return 'bg-yellow-500 hover:bg-yellow-600';
-      case 'not_going': return 'bg-gray-500 hover:bg-gray-600';
+      case 'going': return 'bg-green-700 text-white hover:bg-green-800';
+      case 'interested': return 'bg-blue-700 text-white hover:bg-blue-800';
+      case 'maybe': return 'bg-yellow-700 text-white hover:bg-yellow-800';
+      case 'not_going': return 'bg-gray-700 text-white hover:bg-gray-800';
       default: return 'bg-primary hover:bg-primary/90';
     }
   };
@@ -76,7 +67,7 @@ export function EventCheckIn({ eventId, eventTitle }: EventCheckInProps) {
       <Card>
         <CardContent className="p-6 text-center">
           <SpriteIcon name="users" className="w-8 h-8 mx-auto mb-2 text-muted-foreground" />
-          <p className="text-muted-foreground">Sign in to check in to events</p>
+          <p className="text-muted-foreground">Sign in to say whether you're going to {eventTitle}</p>
         </CardContent>
       </Card>
     );
@@ -134,47 +125,40 @@ export function EventCheckIn({ eventId, eventTitle }: EventCheckInProps) {
           </div>
         </div>
 
-        {/* Community Stats */}
-        <div className="space-y-3">
-          <p className="text-sm font-medium">Community Interest:</p>
-          <div className="space-y-2">
-            <div className="flex items-center justify-between">
+        {/* Community Stats. A total of 0 is also what a failed read returns
+            (useCommunityFeatures getEventCheckIns), so "0 people" would be a
+            claim the page can't back. Say nothing about counts until someone
+            has answered (events-pass2 WP4 item 10). */}
+        {checkInCounts.total > 0 ? (
+          <div className="space-y-3">
+            <p className="text-sm font-medium">Community interest</p>
+            <dl className="space-y-2 text-sm">
               <div className="flex items-center gap-2">
-                <Badge variant="secondary" className="bg-green-100 text-green-800">
-                  <Check className="w-3 h-3 mr-1" />
+                <dt className="flex items-center gap-1 font-medium text-foreground">
+                  <Check className="w-3 h-3" aria-hidden="true" />
                   Going
-                </Badge>
-                <span className="text-sm text-muted-foreground">{checkInCounts.going} people</span>
+                </dt>
+                <dd className="text-muted-foreground tabular-nums">{checkInCounts.going}</dd>
               </div>
-            </div>
-            
-            <div className="flex items-center justify-between">
               <div className="flex items-center gap-2">
-                <Badge variant="secondary" className="bg-blue-100 text-blue-800">
-                  <Heart className="w-3 h-3 mr-1" />
+                <dt className="flex items-center gap-1 font-medium text-foreground">
+                  <Heart className="w-3 h-3" aria-hidden="true" />
                   Interested
-                </Badge>
-                <span className="text-sm text-muted-foreground">{checkInCounts.interested} people</span>
+                </dt>
+                <dd className="text-muted-foreground tabular-nums">{checkInCounts.interested}</dd>
               </div>
-            </div>
-            
-            <div className="flex items-center justify-between">
               <div className="flex items-center gap-2">
-                <Badge variant="secondary" className="bg-yellow-100 text-yellow-800">
-                  <SpriteIcon name="clock" className="w-3 h-3 mr-1" />
+                <dt className="flex items-center gap-1 font-medium text-foreground">
+                  <SpriteIcon name="clock" className="w-3 h-3" />
                   Maybe
-                </Badge>
-                <span className="text-sm text-muted-foreground">{checkInCounts.maybe} people</span>
+                </dt>
+                <dd className="text-muted-foreground tabular-nums">{checkInCounts.maybe}</dd>
               </div>
-            </div>
+            </dl>
           </div>
-          
-          <div className="pt-2 border-t">
-            <p className="text-sm text-muted-foreground">
-              Total responses: {checkInCounts.total}
-            </p>
-          </div>
-        </div>
+        ) : (
+          <p className="text-sm text-muted-foreground">Be the first to say you're going.</p>
+        )}
       </CardContent>
     </Card>
   );

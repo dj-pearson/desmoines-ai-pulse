@@ -223,12 +223,17 @@ export function ScraperSettings() {
           </Button>
         </div>
 
-        {/* Documentation Link */}
+        {/* Documentation Link.
+            WEB-ADS-014 link audit: this pointed at /docs/scraping/..., which is
+            not served. docs/ is repo content and is not copied into public/, so
+            the SPA fallback answered with the app shell and the admin got the
+            site instead of the document. The file is real; this is where it
+            lives. */}
         <div className="pt-4 border-t">
           <p className="text-sm text-muted-foreground">
             For detailed setup instructions, see{" "}
-            <a 
-              href="/docs/scraping/README-SCRAPER-SETUP.md"
+            <a
+              href="https://github.com/dj-pearson/desmoines-ai-pulse/blob/main/docs/scraping/README-SCRAPER-SETUP.md"
               className="text-primary hover:underline"
               target="_blank"
               rel="noopener noreferrer"

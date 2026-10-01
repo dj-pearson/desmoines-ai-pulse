@@ -33,19 +33,37 @@
          so a hardcoded one claimed the homepage as every page's share URL, and
          Helmet appends rather than replaces. Helmet supplies the real one. -->
 
+    <!-- WEB-SEO-044. This is the card social crawlers actually get: most do not
+         run JS, and the comment above records that Helmet APPENDS rather than
+         replaces, so the shell's og:image is the one that wins. It pointed at
+         DMI-Logo.png, an 800x800 SQUARE, under width/height that claim
+         1200x630 - numbers Facebook and Twitter lay the card out from. A 1.91:1
+         box reserved for a square image is worse than declaring nothing.
+         og-default.png is a real 1200x630 card; see
+         scripts/generate-og-default.mjs. -->
     <meta
       property="og:image"
-      content="https://desmoinesinsider.com/DMI-Logo.png"
+      content="https://desmoinesinsider.com/og-default.png"
     />
     <meta property="og:image:width" content="1200" />
     <meta property="og:image:height" content="630" />
+    <meta property="og:image:alt" content="Des Moines Insider - events, restaurants and what to do in Des Moines" />
     <meta property="og:locale" content="en_US" />
     <meta property="og:site_name" content="Des Moines Insider" />
     <meta property="og:region" content="IA" />
     <meta property="og:country-name" content="USA" />
 
     <!-- Performance optimizations for mobile -->
-    <meta name="theme-color" content="#2563eb" />
+    <!-- WEB-QUAL-007. theme-color paints the browser chrome above the page, so
+         it should match what is actually at the top: the header is
+         `bg-background`, which is #ffffff in light and #060a13 in dark
+         (measured on a rendered build). It was a single fixed #2563eb - a
+         Tailwind blue-600 that appears nowhere on this site - so a dark-mode
+         visitor got a blue bar sitting above a near-black page. Two metas with
+         a prefers-color-scheme media query is the modern form; browsers that
+         ignore the media attribute fall back to the first. -->
+    <meta name="theme-color" media="(prefers-color-scheme: light)" content="#ffffff" />
+    <meta name="theme-color" media="(prefers-color-scheme: dark)" content="#060a13" />
     <meta name="color-scheme" content="light dark" />
     <meta name="mobile-web-app-capable" content="yes" />
 
@@ -58,6 +76,26 @@
         --primary-foreground: 0 0% 100%;
         --border: 214.3 31.8% 91.4%;
         --radius: 0.75rem;
+      }
+      /* Dark tokens, same values as .dark in src/index.css, so a dark-mode
+         visitor doesn't get a white frame before the app CSS arrives. The
+         inline script below adds .light or .dark from the stored dmi-theme
+         choice; :not(.light) keeps an explicit light choice light. */
+      @media (prefers-color-scheme: dark) {
+        :root:not(.light) {
+          --background: 225 50% 5%;
+          --foreground: 225 20% 98%;
+          --primary: 225 87% 68%;
+          --primary-foreground: 225 87% 10%;
+          --border: 225 30% 15%;
+        }
+      }
+      :root.dark {
+        --background: 225 50% 5%;
+        --foreground: 225 20% 98%;
+        --primary: 225 87% 68%;
+        --primary-foreground: 225 87% 10%;
+        --border: 225 30% 15%;
       }
       * {
         border-color: hsl(var(--border));
@@ -122,7 +160,10 @@
           max-width: 1280px;
         }
       }
-      header {
+      /* The site header only (it carries .sticky). A bare `header` selector
+         also pinned in-page <header>s - the /outdoors intro and every pSEO
+         page's - over the content below them at z-index 50. */
+      header.sticky {
         position: sticky;
         top: 0;
         z-index: 50;
@@ -133,7 +174,6 @@
         font-size: 2.25rem;
         font-weight: 700;
         line-height: 1.2;
-        color: #fff;
       }
       @media (min-width: 768px) {
         h1 {
@@ -167,31 +207,11 @@
       .grid {
         display: grid;
       }
-      .gap-6 {
-        gap: 1.5rem;
-      }
-      .grid-cols-2 {
-        grid-template-columns: repeat(2, minmax(0, 1fr));
-      }
-      @media (min-width: 768px) {
-        .md\\:grid-cols-4 {
-          grid-template-columns: repeat(4, minmax(0, 1fr));
-        }
-      }
       .rounded-lg {
         border-radius: 0.5rem;
       }
       .p-4 {
         padding: 1rem;
-      }
-      .mb-6 {
-        margin-bottom: 1.5rem;
-      }
-      .mb-8 {
-        margin-bottom: 2rem;
-      }
-      .mt-12 {
-        margin-top: 3rem;
       }
       .py-16 {
         padding-top: 4rem;
@@ -234,11 +254,18 @@
       }
     </style>
 
+    <!-- Applies the stored dmi-theme (ThemeProvider's key) before first paint.
+         Pinned by SHA-256 in public/_headers script-src; regenerate the hash
+         if you edit it (node scripts/check-csp-hashes.mjs). -->
+    <script>
+      (function () { try { var t = localStorage.getItem("dmi-theme"); var d = t === "dark" || ((!t || t === "system") && window.matchMedia("(prefers-color-scheme: dark)").matches); document.documentElement.classList.add(d ? "dark" : "light"); } catch (e) {} })();
+    </script>
+
     <!-- Core Web Vitals optimization: DNS prefetch and preconnect for critical resources -->
     <!-- IMPORTANT: Use at most 4 preconnect hints (Lighthouse recommendation) -->
-    <!-- Fonts: Critical for FCP and LCP -->
-    <link rel="preconnect" href="https://fonts.googleapis.com" />
-    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
+    <!-- No Google Fonts: nothing in the CSS names Inter, and the request sent
+         every visitor's IP to Google before consent. The body font is the
+         system stack above. -->
 
     <!-- Database: Critical for interactivity (crossorigin needed for fetch/XHR requests) -->
     <!-- Project URL is injected at build time from VITE_SUPABASE_URL (no hardcoded project ref) -->
@@ -259,26 +286,8 @@
     <link rel="dns-prefetch" href="https://js.stripe.com" />
     <link rel="dns-prefetch" href="https://tile.openstreetmap.org" />
 
-    <!-- Critical resource preloading for LCP - WebP only (PNG used as img fallback, no preload needed) -->
-    <link
-      rel="preload"
-      as="image"
-      href="/DMI-Logo-Header.webp"
-      type="image/webp"
-      fetchpriority="high"
-    />
-    <!-- Font preloading with display=swap for better CLS -->
-    <link
-      rel="preload"
-      href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&display=swap"
-      as="style"
-      onload="this.onload=null;this.rel='stylesheet'"
-    />
-    <noscript
-      ><link
-        rel="stylesheet"
-        href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&display=swap"
-    /></noscript>
+    <!-- No logo preload: the header doesn't render DMI-Logo-Header.webp, so
+         the preload was a high-priority fetch nobody used. -->
 
     <!-- Favicons -->
     <link rel="icon" type="image/x-icon" href="/favicon.ico" />
@@ -298,6 +307,7 @@
       href="/android-chrome-512x512.png"
     />
     <link rel="manifest" href="/site.webmanifest" />
+    <link rel="alternate" type="application/rss+xml" title="Des Moines Insider" href="/rss.xml" />
 
     <!-- CRITICAL: Early error handler for Capacitor/mobile and extension-induced failures.
          Module-level errors in ES modules are silent in WKWebView.
@@ -416,7 +426,7 @@
     <meta
       data-rh="true"
       name="description"
-      content="Events, restaurants, and things to do in Des Moines, Iowa. Find what's happening today and this weekend across Des Moines, West Des Moines, Ankeny, Urbandale and the metro — updated daily."
+      content="Events, restaurants and things to do in Des Moines, Iowa. What's on today and this weekend across the metro, updated daily."
     />
     <meta name="author" content="Des Moines Insider" />
     <!--
@@ -437,9 +447,13 @@
       text-based audits as a phantom second canonical.)
     -->
 
+    <!-- WEB-SEO-026: this listed "SMS concierge Des Moines", "voice assistant
+         Des Moines events" and "ChatGPT Des Moines plugin" among the terms the
+         site wants to be found for. None of the three exists. Targeting a
+         query the site cannot answer earns a bounce, not a ranking. -->
     <meta
       name="keywords"
-      content="Des Moines AI guide, conversational city assistant, AI event recommendations Des Moines, intelligent local guide, SMS concierge Des Moines, voice assistant Des Moines events, ChatGPT Des Moines plugin, semantic search events, predictive analytics restaurants, context-aware recommendations, AI trip planner Des Moines, personalized Des Moines guide, multi-channel city guide, behavioral intelligence, proactive event alerts, Des Moines conversational AI"
+      content="Des Moines events, Des Moines restaurants, things to do Des Moines, Des Moines attractions, Des Moines concerts, family activities Des Moines, Des Moines event calendar, restaurant openings Des Moines, Des Moines trip planner, Iowa events"
     />
 
     <!-- Enhanced meta tags for AI optimization -->
@@ -455,59 +469,41 @@
     />
 
     <!-- Geographic targeting -->
+    <!-- geo.placename / geo.position / ICBM come from each page's Helmet tags
+         (SEOHead's downtown default, an event's own venue on its detail page).
+         A static copy here survived alongside them, so a Waukee event carried
+         both its own position and downtown's (events-pass2 WP4 item 9). -->
     <meta name="geo.region" content="US-IA" />
-    <meta name="geo.placename" content="Des Moines" />
-    <meta name="geo.position" content="41.5868;-93.6250" />
-    <meta name="ICBM" content="41.5868, -93.6250" />
 
     <!-- Twitter -->
     <meta name="twitter:card" content="summary_large_image" />
-    <meta name="twitter:site" content="@desmoinessider" />
-    <meta name="twitter:creator" content="@desmoinessider" />
+    <meta name="twitter:site" content="@desmoinesinsider" />
+    <meta name="twitter:creator" content="@desmoinesinsider" />
     <meta data-rh="true" name="twitter:title"
       content="Des Moines Insider: Events, Restaurants & Attractions"
     />
+    <!-- WEB-SEO-026: promised recommendations "via web, SMS, voice, or
+         ChatGPT". Only the web one exists. -->
     <meta data-rh="true" name="twitter:description"
-      content="Beyond directories. Get AI-powered recommendations via web, SMS, voice, or ChatGPT. Context-aware, learns from behavior, proactively assists. Des Moines redefined."
+      content="Events, restaurants and attractions in Des Moines, Iowa - what's on this week, where to eat, and what to do."
     />
     <meta
       name="twitter:image"
-      content="https://desmoinesinsider.com/DMI-Logo.png"
+      content="https://desmoinesinsider.com/og-default.png"
     />
 
-    <!-- JSON-LD Structured Data for AI-First Platform -->
-    <script type="application/ld+json">
-      {
-        "@context": "https://schema.org",
-        "@type": "SoftwareApplication",
-        "name": "Des Moines Insider",
-        "applicationCategory": "LifestyleApplication",
-        "operatingSystem": "Web, iOS, Android, Alexa, Google Assistant",
-        "description": "First truly conversational AI city guide for Des Moines, Iowa. Provides personalized, context-aware recommendations via web, SMS, voice assistants, and ChatGPT. Features semantic search, predictive analytics, and proactive assistance.",
-        "offers": {
-          "@type": "Offer",
-          "price": "0",
-          "priceCurrency": "USD"
-        },
-        "featureList": [
-          "Conversational AI search",
-          "Multi-channel access (Web, SMS, Voice, ChatGPT)",
-          "Context-aware recommendations",
-          "Behavioral learning",
-          "Predictive analytics",
-          "Automated trip planning",
-          "Real-time event updates",
-          "Proactive notifications"
-        ],
-        "screenshot": "https://desmoinesinsider.com/DMI-Logo.png",
-        "applicationSubCategory": "City Guide, Travel Planner, Event Discovery",
-        "provider": {
-          "@type": "Organization",
-          "name": "Des Moines Insider",
-          "url": "https://desmoinesinsider.com"
-        }
-      }
-    </script>
+    <!-- WEB-SEO-026: A SoftwareApplication BLOCK USED TO SHIP FROM HERE, ON
+         EVERY ROUTE, and it was a list of channels that do not exist. It
+         declared operatingSystem "Web, iOS, Android, Alexa, Google Assistant"
+         and a featureList including "Multi-channel access (Web, SMS, Voice,
+         ChatGPT)". There is no Alexa skill, no Google Assistant action, no SMS
+         number and no ChatGPT plugin; XPLAT-009 records that the assistant is
+         missing from the web app entirely.
+         It also had no data-rh attribute, so the prerenderer's dedupeJsonLd -
+         which only touches Helmet-managed blocks - could never replace or
+         remove it. Every page carried it verbatim.
+         The site's identity now comes from ONE Organization node emitted by
+         SEOHead, with a stable @id, and the WebSite node lives on / only. -->
 
   </head>
 
@@ -515,11 +511,11 @@
     <div id="root">
       <!-- Fallback content - replaced by React when app mounts successfully -->
       <!-- This content is visible to search engines and users without JavaScript -->
-      <div style="min-height:100vh;background:hsl(0 0% 100%);font-family:system-ui,sans-serif">
+      <div style="min-height:100vh;background:hsl(var(--background));color:hsl(var(--foreground));font-family:system-ui,sans-serif">
         <noscript>
-          <div style="max-width:1024px;margin:0 auto;padding:2rem 1rem">
+          <div style="max-width:1024px;margin:0 auto;padding:2rem 1rem;background:#fff;color:#111">
             <h1 style="font-size:2rem;font-weight:700;color:#1e3a5f;margin-bottom:1rem">Des Moines Insider</h1>
-            <p style="font-size:1.125rem;color:#444;margin-bottom:2rem">Your AI-powered guide to Des Moines events, restaurants, attractions, and local discoveries. Discover what's happening in Des Moines, Iowa.</p>
+            <p style="font-size:1.125rem;color:#444;margin-bottom:2rem">Des Moines events, restaurants and attractions, with what's on today and this weekend across the metro.</p>
             <nav style="margin-bottom:2rem">
               <h2 style="font-size:1.25rem;font-weight:600;margin-bottom:1rem;color:#333">Explore Des Moines</h2>
               <ul style="list-style:none;padding:0;display:flex;flex-wrap:wrap;gap:0.75rem">
@@ -533,13 +529,13 @@
                 <li><a href="/neighborhoods" style="color:#2563eb;text-decoration:underline">Neighborhoods</a></li>
                 <li><a href="/articles" style="color:#2563eb;text-decoration:underline">Articles</a></li>
                 <li><a href="/guides" style="color:#2563eb;text-decoration:underline">Guides</a></li>
-                <li><a href="/trip-planner" style="color:#2563eb;text-decoration:underline">AI Trip Planner</a></li>
+                <li><a href="/trip-planner" style="color:#2563eb;text-decoration:underline">Plan a trip</a></li>
                 <li><a href="/things-to-do" style="color:#2563eb;text-decoration:underline">Things to Do</a></li>
               </ul>
             </nav>
             <section style="margin-bottom:2rem">
               <h2 style="font-size:1.25rem;font-weight:600;margin-bottom:0.5rem;color:#333">About Des Moines Insider</h2>
-              <p style="color:#555;line-height:1.6">Des Moines Insider is your comprehensive guide to Des Moines, Iowa. We cover events, restaurants, attractions, and activities across the Greater Des Moines metro area including West Des Moines, Ankeny, Urbandale, Johnston, Clive, Waukee, and Altoona. Get personalized recommendations for things to do, places to eat, and local discoveries.</p>
+              <p style="color:#555;line-height:1.6">Des Moines Insider is your comprehensive guide to Des Moines, Iowa. We cover events, restaurants, attractions, and activities across the Greater Des Moines metro area including West Des Moines, Ankeny, Urbandale, Johnston, Clive, Waukee, and Altoona. Event listings are updated daily.</p>
             </section>
           </div>
         </noscript>

@@ -1,4 +1,5 @@
 import { Helmet } from "react-helmet-async";
+import { toJsonLd } from "@/lib/jsonLd";
 
 /**
  * An ItemList a crawler can check against the page it is on.
@@ -94,7 +95,7 @@ export default function ItemListSchema({
 
   return (
     <Helmet>
-      <script type="application/ld+json">{JSON.stringify(schema)}</script>
+      <script type="application/ld+json">{toJsonLd(schema)}</script>
     </Helmet>
   );
 }

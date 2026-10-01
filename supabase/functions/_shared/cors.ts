@@ -2,6 +2,8 @@
  * Environment-aware CORS configuration for edge functions
  */
 
+import { runtimeEnvironment } from './runtimeEnvironment.ts';
+
 /**
  * Get allowed origins based on environment
  */
@@ -11,7 +13,7 @@ export function getAllowedOrigins(): string[] {
   const siteUrl =
     Deno.env.get('SITE_URL') ||
     Deno.env.get('VITE_SITE_URL');
-  const env = Deno.env.get('ENVIRONMENT') || 'development';
+  const env = runtimeEnvironment();
 
   // Build base production list from the configured site URL
   const productionOrigins: string[] = [];
@@ -164,7 +166,7 @@ export function isOriginAllowed(origin: string): boolean {
   // (e.g. https://my-project.lovable.dev) — this rejects nested/forged hosts
   // like https://evil.attacker.lovable.dev and any http: origin. Opt out
   // entirely with ALLOW_LOVABLE_PREVIEWS=false.
-  const env = Deno.env.get('ENVIRONMENT') || 'development';
+  const env = runtimeEnvironment();
   const lovableOptOut = (Deno.env.get('ALLOW_LOVABLE_PREVIEWS') || '').toLowerCase() === 'false';
   if (env !== 'production' && !lovableOptOut && /^https:\/\/[a-z0-9-]+\.lovable\.dev$/.test(origin)) {
     return true;

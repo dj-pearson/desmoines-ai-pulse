@@ -14,6 +14,10 @@ import { Link } from 'react-router-dom';
 import { Calendar, MapPin, DollarSign } from 'lucide-react';
 import type { PseoDimensionRef } from '../../schemas';
 import { CATEGORY_FILTERS, temporalRange } from '../../listingFilters';
+import { formatEventPart } from "@/lib/timezone";
+import { applyEventVisibility } from "@/lib/eventQuery";
+import { isVisitableStatus } from "@/lib/restaurantHours";
+import { attractionListingHref, eventListingHref, restaurantListingHref } from '../../listingHrefs';
 
 interface PseoLiveListingsProps {
   dimensions: PseoDimensionRef[];
@@ -59,7 +63,7 @@ export function PseoLiveListings({ dimensions, pageTypeId }: PseoLiveListingsPro
       </h2>
       <div className="grid gap-4 md:grid-cols-2 lg:grid-cols-3">
         {items.map((item) => (
-          <ListingCard key={item.id} item={item} entityType={entityType} />
+          <ListingCard key={item.id} item={item} />
         ))}
       </div>
     </section>
@@ -80,18 +84,12 @@ interface ListingItem {
   rating?: number;
   category?: string;
   image_url?: string;
-  slug?: string;
+  href: string;
 }
 
-function ListingCard({ item, entityType }: { item: ListingItem; entityType: string }) {
-  const linkPath = entityType === 'events'
-    ? `/events/${item.slug ?? item.id}`
-    : entityType === 'restaurants'
-    ? `/restaurants/${item.slug ?? item.id}`
-    : `/attractions/${item.slug ?? item.id}`;
-
+function ListingCard({ item }: { item: ListingItem }) {
   return (
-    <Link to={linkPath}>
+    <Link to={item.href}>
       <Card className="h-full hover:shadow-lg transition-shadow cursor-pointer">
         {item.image_url && (
           <div className="h-36 overflow-hidden rounded-t-lg">
@@ -122,7 +120,7 @@ function ListingCard({ item, entityType }: { item: ListingItem; entityType: stri
             {item.date && (
               <span className="flex items-center gap-1">
                 <Calendar className="h-3 w-3" />
-                {new Date(item.date).toLocaleDateString()}
+                {formatEventPart(item, 'MMM d, yyyy')}
               </span>
             )}
             {item.price && (
@@ -187,11 +185,16 @@ async function fetchListings(
       // public.events has no `description` (enhanced_description /
       // original_description instead). Selecting it failed the whole query with
       // 42703, so every pSEO event landing page rendered an empty listing block.
-      .select('id, title, enhanced_description, original_description, location, date, price, category, image_url')
+      // event_start_utc is here for the link: the canonical slug carries the
+      // Central Time date, which prefers it over `date`.
+      .select('id, title, enhanced_description, original_description, location, date, event_start_utc, price, category, image_url')
       .gte('date', new Date().toISOString())
-      .neq('is_hidden', true) // Exclude soft-hidden stale events (WEB-AUTO-006)
       .order('date', { ascending: true })
       .limit(12);
+    // is_hidden (WEB-AUTO-006), archived_at (WEB-BE-034), and is_merged, which
+    // this query used to miss, so a merged duplicate could list beside the
+    // event it was merged into.
+    query = applyEventVisibility(query);
 
     if (location) {
       // venue is in the OR because that is where a neighbourhood name actually
@@ -226,15 +229,18 @@ async function fetchListings(
       price: e.price ?? undefined,
       category: e.category ?? undefined,
       image_url: e.image_url ?? undefined,
+      href: eventListingHref(e),
     }));
   }
 
   if (entityType === 'restaurants') {
     let query = supabase
       .from('restaurants')
-      .select('id, name, description, location, price_range, rating, cuisine, image_url, slug')
+      .select('id, name, description, location, price_range, rating, cuisine, image_url, slug, status')
+      .neq('is_merged', true) // WEB-AUTO-005, as useRestaurants does
       .order('rating', { ascending: false })
-      .limit(12);
+      // Over-fetch: closed and not-yet-open rows are dropped below.
+      .limit(24);
 
     if (location) {
       query = query.or(`city.ilike.%${location.name}%,location.ilike.%${location.name}%`);
@@ -249,7 +255,7 @@ async function fetchListings(
 
     const { data, error } = await query;
     if (error) throw error;
-    return (data ?? []).map((r) => ({
+    return (data ?? []).filter((r) => isVisitableStatus(r.status)).slice(0, 12).map((r) => ({
       id: r.id,
       name: r.name,
       description: r.description ?? undefined,
@@ -258,7 +264,7 @@ async function fetchListings(
       rating: r.rating ?? undefined,
       category: r.cuisine ?? undefined,
       image_url: r.image_url ?? undefined,
-      slug: r.slug ?? undefined,
+      href: restaurantListingHref(r),
     }));
   }
 
@@ -266,6 +272,7 @@ async function fetchListings(
   let query = supabase
     .from('attractions')
     .select('id, name, description, location, type, image_url')
+    .eq('is_active', true)
     .order('name')
     .limit(12);
 
@@ -282,5 +289,6 @@ async function fetchListings(
     location: a.location ?? undefined,
     category: a.type ?? undefined,
     image_url: a.image_url ?? undefined,
+    href: attractionListingHref(a),
   }));
 }

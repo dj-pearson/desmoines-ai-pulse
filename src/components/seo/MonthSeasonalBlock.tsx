@@ -2,8 +2,8 @@ import { Link } from "react-router-dom";
 import {
   SEASONAL_GUIDES,
   SEASONAL_THEMES,
-  monthLabelOf,
-  monthSlugOf,
+  monthName,
+  monthSlug,
   monthsAgo,
   monthSummary,
   seasonalPicks,
@@ -37,11 +37,11 @@ interface MonthSeasonalBlockProps {
  * hand about a specific venue, date or price.
  */
 export function MonthSeasonalBlock({ month, events }: MonthSeasonalBlockProps) {
-  const label = monthLabelOf(month);
-  const slug = monthSlugOf(month);
-  const theme = SEASONAL_THEMES[month.monthIndex];
+  const label = monthName(month);
+  const slug = monthSlug(month);
+  const theme = SEASONAL_THEMES[month.month];
   const guides = SEASONAL_GUIDES[slug] ?? [];
-  const picks = events ? seasonalPicks(events, month.monthIndex) : [];
+  const picks = events ? seasonalPicks(events, month.month) : [];
   const isPast = monthsAgo(month, new Date()) > 0;
 
   return (

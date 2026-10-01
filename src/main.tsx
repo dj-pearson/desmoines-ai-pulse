@@ -111,14 +111,62 @@ if (isCapacitor) {
   };
 }
 
+/**
+ * WEB-QA-028 -- THE OVERLAY IS NO LONGER GATED ON isCapacitor.
+ *
+ * The condition was `if (!isCapacitor && import.meta.env.PROD) return;`,
+ * commented "Always show on Capacitor". So a full-screen black panel with a
+ * raw stack trace was suppressed in the production WEB build and ACTIVE in
+ * every shipped iOS and Android build - the two surfaces where a user cannot
+ * open devtools, cannot dismiss it, and has no idea what they are looking at.
+ * It also appended rather than replaced, so WEB-QA-027 produced five stacked
+ * panels from one search.
+ *
+ * isCapacitor is the wrong axis. It cannot distinguish a TestFlight build,
+ * where a visible stack trace is genuinely useful, from an App Store build,
+ * where it is a bug report written in front of the customer. A build flag can:
+ * VITE_DEBUG_ERROR_OVERLAY=true turns it on for whatever build sets it, and
+ * every build that does not set it - including every store build - gets
+ * nothing. Development is unchanged and needs no flag.
+ *
+ * REVERSIBLE IN ONE VARIABLE, which is the point. If the answer to AC1 turns
+ * out to be "we do want it on internal tracks", that is a build-time env var
+ * on those lanes, not an edit here.
+ *
+ * ERRORS REACH SENTRY EITHER WAY, and that was already true rather than
+ * something this change adds. lib/sentry.ts installEarlyCapture() listens with
+ * addEventListener('error') and ('unhandledrejection'), which the
+ * `window.onerror = ...` assignment below does NOT replace - the two
+ * mechanisms are independent - and once the Sentry chunk lands its own
+ * handlers take over. The overlay was never the reporting path and turning it
+ * off removes none.
+ */
+const errorOverlayEnabled =
+  import.meta.env.DEV || import.meta.env.VITE_DEBUG_ERROR_OVERLAY === 'true';
+
+/** The most recent errors, newest first. Bounded so a loop cannot grow it. */
+const recentErrors: Array<{ message: string; source?: string }> = [];
+const MAX_OVERLAY_ERRORS = 5;
+
 function showErrorOverlay(message: string, source?: string) {
-  // Always show on Capacitor; on web, only in dev mode
-  if (!isCapacitor && import.meta.env.PROD) return;
+  if (!errorOverlayEnabled) return;
+
+  const escape = (value: unknown) => String(value).replace(/</g, '&lt;');
+
+  recentErrors.unshift({ message: String(message), source });
+  recentErrors.length = Math.min(recentErrors.length, MAX_OVERLAY_ERRORS);
 
   let overlay = document.getElementById('__error_overlay__');
   if (!overlay) {
     overlay = document.createElement('div');
     overlay.id = '__error_overlay__';
+    // WEB-QA-028 AC3: axe reports scrollable-region-focusable (serious) on a
+    // scrollable element no keyboard can reach. tabindex makes the panel
+    // focusable; role and label say what it is rather than leaving a screen
+    // reader to announce a wall of monospace.
+    overlay.setAttribute('role', 'alertdialog');
+    overlay.setAttribute('aria-label', 'Runtime error details');
+    overlay.setAttribute('tabindex', '0');
     overlay.style.cssText = `
       position:fixed;inset:0;z-index:99999;background:rgba(0,0,0,.92);
       color:#ff6b6b;font:14px/1.6 monospace;padding:24px 16px;
@@ -127,15 +175,27 @@ function showErrorOverlay(message: string, source?: string) {
     `;
     document.body.appendChild(overlay);
   }
-  overlay.innerHTML += `
+
+  // AC2: REPLACE, not append. The old `innerHTML +=` stacked a panel per
+  // error, so a failing render loop buried the first and most useful one under
+  // its own repeats.
+  overlay.innerHTML = recentErrors
+    .map(
+      (entry, index) => `
     <div style="margin-bottom:16px;border-bottom:1px solid #333;padding-bottom:12px">
-      <strong style="color:#ff4444;font-size:16px">Runtime Error</strong>
-      <pre style="white-space:pre-wrap;word-break:break-word;margin:8px 0 0;color:#ffa0a0">${
-        String(message).replace(/</g, '&lt;')
-      }</pre>
-      ${source ? `<span style="color:#888;font-size:12px">${String(source).replace(/</g, '&lt;')}</span>` : ''}
+      <strong style="color:#ff4444;font-size:16px">Runtime Error${
+        index === 0 && recentErrors.length > 1
+          ? ` <span style="color:#888;font-size:12px">(most recent of ${recentErrors.length})</span>`
+          : ''
+      }</strong>
+      <pre style="white-space:pre-wrap;word-break:break-word;margin:8px 0 0;color:#ffa0a0">${escape(
+        entry.message,
+      )}</pre>
+      ${entry.source ? `<span style="color:#888;font-size:12px">${escape(entry.source)}</span>` : ''}
     </div>
-  `;
+  `,
+    )
+    .join('');
 }
 
 // Catch synchronous errors (upgrades the early handler from index.html)
@@ -209,6 +269,35 @@ function initializeApp() {
   }
 
   try {
+    // CREATEROOT, NOT HYDRATEROOT, AND IT IS A MEASURED DECISION (WEB-PERF-038).
+    //
+    // On a prerendered route this throws the static tree away and rebuilds it.
+    // That is a real cost and it was worth trying to remove: measured on a
+    // prerendered /restaurants, 390x844, 4x CPU throttle, Slow 4G, median of
+    // three runs each --
+    //
+    //                 LCP      FCP      TBT     prerendered DOM discarded at
+    //   createRoot    1552ms   1552ms   626ms   2130ms
+    //   hydrateRoot   1552ms   1552ms   782ms   2205ms
+    //
+    // hydrateRoot was WORSE, and it still discarded the tree, because it
+    // reported EIGHT React #418 mismatches and fell back to client rendering
+    // after paying for the hydration attempt. The mismatches are not one stale
+    // date in one component; the stacks land at Suspense, nav, main, button and
+    // several div, which is two separate problems:
+    //
+    //   1. Every route in App.tsx is lazy(). The first client render of a
+    //      prerendered route is the <Suspense> FALLBACK, because the route
+    //      chunk has not resolved yet, while the captured HTML holds the whole
+    //      page. That mismatch is structural and fires on every prerendered
+    //      route.
+    //   2. There are mismatches in the shell too (the `at nav` stack is
+    //      Header), so fixing the lazy boundary alone would not be enough.
+    //
+    // So AC2's option (a) needs both surfaces made hydration-safe before it can
+    // pay, and option (b) is what ships: stay with createRoot and keep the
+    // prerendered DOM small, which is WEB-PERF-023. Re-run the comparison with
+    // scripts/measure-vitals.mjs before changing this line.
     const root = createRoot(rootElement);
 
     // Render immediately - this is the critical path

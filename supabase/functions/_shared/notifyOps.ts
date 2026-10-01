@@ -2,16 +2,18 @@
  * notifyOps — the OS reaching out (AOS-CORE-010).
  *
  * One place agents send operational notifications: escalations, failures, and
- * the daily digest. Routes by severity over the existing Resend email plumbing
- * and an optional ops webhook (Slack-compatible), frequency-caps/coalesces so a
+ * the daily digest. Routes by severity over _shared/email.ts (SES, or Resend
+ * until SES is configured) and an optional ops webhook (Slack-compatible), frequency-caps/coalesces so a
  * storm of tasks isn't a storm of emails, and is fully fail-safe — a delivery
  * failure is logged and NEVER blocks the originating agent.
  *
- * Env: RESEND_API_KEY + (ADMIN_ALERT_EMAIL | ALERT_EMAIL) for email;
+ * Env: ADMIN_ALERT_EMAIL (ALERT_EMAIL, ADMIN_NOTIFICATION_EMAIL as fallbacks)
+ *      plus the sendEmail provider settings for email;
  *      OPS_WEBHOOK_URL (or SLACK_WEBHOOK_URL) for the webhook.
  */
 
 import { fetchWithTimeout } from "./fetchWithTimeout.ts";
+import { adminAlertEmail, sendEmail } from "./email.ts";
 
 // deno-lint-ignore no-explicit-any
 type Client = any;
@@ -103,7 +105,7 @@ export async function notifyOps(supabase: Client, args: NotifyOpsArgs): Promise<
   // Email when routed to email, OR as a fallback when a webhook was wanted but
   // not configured/failed (so medium alerts still reach someone).
   const wantEmail = channels.includes("email") || (channels.includes("webhook") && !webhookOk);
-  if (wantEmail && (await sendEmail(args))) delivered.push("email");
+  if (wantEmail && (await sendOpsEmail(supabase, args))) delivered.push("email");
 
   // Record the send (drives future coalescing). Best-effort.
   try {
@@ -120,29 +122,24 @@ export async function notifyOps(supabase: Client, args: NotifyOpsArgs): Promise<
   return { sent: delivered.length > 0, coalesced: false, channels: delivered };
 }
 
-async function sendEmail(args: NotifyOpsArgs): Promise<boolean> {
-  try {
-    const to = Deno.env.get("ADMIN_ALERT_EMAIL") || Deno.env.get("ALERT_EMAIL");
-    const resendKey = Deno.env.get("RESEND_API_KEY");
-    if (!to || !resendKey) {
-      console.warn(`[notifyOps] email not sent (missing ADMIN_ALERT_EMAIL/RESEND_API_KEY): ${args.title}`);
-      return false;
-    }
-    const res = await fetchWithTimeout("https://api.resend.com/emails", {
-      method: "POST",
-      headers: { "Content-Type": "application/json", Authorization: `Bearer ${resendKey}` },
-      body: JSON.stringify({
-        from: "Des Moines Insider Automation <automation@desmoinesinsider.com>",
-        to: [to],
-        subject: `[${args.severity.toUpperCase()}] ${args.title}`,
-        text: `${args.body}\n\nSeverity: ${args.severity}\nSee Admin → Agents / Escalation inbox for details.`,
-      }),
-    });
-    return res.ok;
-  } catch (err) {
-    console.error("[notifyOps] email delivery failed:", err instanceof Error ? err.message : String(err));
+async function sendOpsEmail(supabase: Client, args: NotifyOpsArgs): Promise<boolean> {
+  const to = adminAlertEmail();
+  if (!to) {
+    console.warn(`[notifyOps] email not sent (no ADMIN_ALERT_EMAIL): ${args.title}`);
     return false;
   }
+  const res = await sendEmail(
+    {
+      to,
+      from: "Des Moines Insider Automation <automation@desmoinesinsider.com>",
+      subject: `[${args.severity.toUpperCase()}] ${args.title}`,
+      text: `${args.body}\n\nSeverity: ${args.severity}\nSee Admin > Agents / Escalation inbox for details.`,
+      category: "transactional",
+      template: "ops_alert",
+    },
+    { supabase },
+  );
+  return res.ok;
 }
 
 async function sendWebhook(args: NotifyOpsArgs): Promise<boolean> {

@@ -39,6 +39,21 @@ enum PremiumFeature: String, CaseIterable {
         }
     }
 
+    /// Whether iOS actually delivers this feature today. The raw values stay
+    /// for cross-platform parity (they mirror the web catalog), but nothing
+    /// may sell an un-offered feature: WEB-FEAT-016 found VIP listing eight
+    /// benefits and delivering none, and the iOS storefront repeated them
+    /// (IOS-DD-MONETIZATION-11). Advanced filters are free on iOS.
+    var isOffered: Bool {
+        switch self {
+        case .earlyAccess, .advancedFilters, .dailyDigest, .prioritySupport,
+             .vipEvents, .reservationAssistance, .smsAlerts, .concierge, .localPerks:
+            return false
+        case .unlimitedFavorites, .adFree, .tripPlanner, .writeReviews, .saveSearches, .createAlerts:
+            return true
+        }
+    }
+
     /// The tailored paywall to present when this feature is locked. Falls back
     /// to a generic context (built from the required tier + a short blurb) for
     /// features without a bespoke preset.
@@ -46,7 +61,6 @@ enum PremiumFeature: String, CaseIterable {
         switch self {
         case .unlimitedFavorites: return .unlimitedFavorites
         case .tripPlanner:        return .tripPlanner
-        case .advancedFilters:    return .advancedFilters
         case .adFree:             return .adFree
         case .saveSearches:       return .savedSearches
         case .createAlerts:       return .customAlerts
@@ -55,17 +69,14 @@ enum PremiumFeature: String, CaseIterable {
     }
 
     /// Short upsell blurb for features without a bespoke `PaywallContext`.
+    /// Un-offered features get a neutral line instead of a description of
+    /// something that does not exist (IOS-DD-MONETIZATION-11).
     var marketingBlurb: String {
+        guard isOffered else {
+            return "See everything \(requiredTier.displayName) includes."
+        }
         switch self {
         case .writeReviews:        return "Write reviews & ratings and share your take with the city."
-        case .earlyAccess:         return "Get early access to events before they're public."
-        case .dailyDigest:         return "A personalized daily digest of what's happening."
-        case .prioritySupport:     return "Priority support when you need a hand."
-        case .vipEvents:           return "Unlock VIP-exclusive events."
-        case .reservationAssistance: return "Get help landing hard-to-book reservations."
-        case .smsAlerts:           return "SMS alerts for the things you care about."
-        case .concierge:           return "Concierge support for your nights out."
-        case .localPerks:          return "Monthly local-business perks, just for VIPs."
         default:                   return "Unlock this premium feature."
         }
     }

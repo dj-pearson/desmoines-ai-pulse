@@ -17,30 +17,32 @@ paths = [
   # .env.example contains only placeholder values.
   '''\.env\.example''',
   # Docs reference key *prefixes* / placeholders, not live secrets.
+  #
+  # WEB-SEC-032: this blanket entry was doing more work than its comment claimed.
+  # Two markdown files carried a live key under it -- docs/restaurant-scraper-make-
+  # integration.md in three places and android/ANDROID_SETUP_GUIDE.md in one --
+  # so "not live secrets" was an assumption, not a fact. Both are redacted now.
+  # The entry stays because docs legitimately quote key PREFIXES when explaining
+  # a format, but it is the widest rule here and worth narrowing if a scan is
+  # ever clean without it.
   '''.*\.md''',
   '''\.gitleaks\.toml''',
 
-  # CRITICAL — committed service_role JWT in these historical (already-applied)
-  # migrations. The key MUST be rotated (docs/SECRETS_ROTATION.md). Allowlisted
-  # because the value is already in git history; rotation is the real fix.
-  '''supabase/migrations/20250820173146_.*\.sql''',
-  '''supabase/migrations/20250822015522_.*\.sql''',
-  '''supabase/migrations/20250823012338_.*\.sql''',
-  '''supabase/migrations/20250825174423_.*\.sql''',
-  '''supabase/migrations/20250830035320_.*\.sql''',
-  '''supabase/migrations/20250830035336_.*\.sql''',
-  '''supabase/migrations/20250830144003_.*\.sql''',
-  '''supabase/migrations/20250831045616_.*\.sql''',
-  '''supabase/migrations/20250903031613_.*\.sql''',
-  '''supabase/migrations/20250903140840_.*\.sql''',
-  '''supabase/migrations/20251004030356_.*\.sql''',
-
-  # Public anon keys (safe by design — shipped in the browser bundle) embedded in
-  # old debug/helper scripts. Still recommended to remove; not sensitive.
-  '''debug-browser\.js''',
-  '''debug-catchdesmoines\.js''',
-  '''invoke-populate-playgrounds\.cjs''',
-  '''scripts/event-datetime-sql-generator\.ts''',
+  # WEB-SEC-032: FIFTEEN ENTRIES REMOVED FROM HERE, and the removal is the point.
+  #
+  # Eleven migrations carried a service_role JWT and four scripts carried an anon
+  # key. All fifteen were allowlisted, so the scanner was configured not to look
+  # at exactly the files that had the problem -- and an allowlist that grows is a
+  # scanner that reports less every quarter.
+  #
+  # The literals are gone from the working tree: the migrations read
+  # public.app_secret('service_role_key'), and the scripts read
+  # VITE_SUPABASE_ANON_KEY and refuse to run without it. The key is removed from
+  # the DATABASE by supabase/migrations/20260902000015_purge_embedded_service_key.sql,
+  # which had been embedded in five live function bodies.
+  #
+  # THE VALUE IS STILL IN GIT HISTORY AND ALWAYS WILL BE. Rotation is the only
+  # fix for that, and it is the owner's, tracked in docs/SECRETS_ROTATION.md.
 ]
 
 # False positives from the default `generic-api-key` rule. These are not
@@ -61,4 +63,16 @@ regexes = [
   # fetches that file can already do. The edge function and the static file must
   # agree on the value, so it cannot live in a secret store.
   '''c2d7b3a0ed753ae68b306e25422227ff''',
+
+  # SEO-054, merging origin/hotfix/pseo-homepage-shell: four generic-api-key
+  # hits that arrived with that branch, none of them a credential.
+  # A localStorage key name with a "_v1" suffix (src/lib/userPreferencesStore.ts).
+  '''dmi_prefs_prompt_dismissed_v1''',
+  # A test token built from "0123456789abcdef" (email-unsubscribe/handler.test.ts).
+  '''0123456789abcdef''',
+  # A made-up password typed into a form by an E2E test (tests/account-settings.spec.ts).
+  '''Porch-Concert-2026''',
+  # The subscription Token in a recorded SNS fixture (_shared/fixtures/sns-signed.json);
+  # it only confirms a subscription to a topic, and the fixture is test input.
+  '''2336412f37fb687f5d51e6e241d09c805a5a57b30d712f''',
 ]

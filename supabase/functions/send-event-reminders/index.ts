@@ -4,11 +4,10 @@
 import { serve } from "https://deno.land/std@0.168.0/http/server.ts";
 import { createClient } from "https://esm.sh/@supabase/supabase-js@2";
 import { escapeHtml } from "../_shared/escapeHtml.ts";
-import { renderEmail } from "../_shared/emailLayout.ts";
-import { fetchWithTimeout } from "../_shared/fetchWithTimeout.ts";
+import { listUnsubscribeHeaders, renderEmail } from "../_shared/emailLayout.ts";
+import { sendEmail } from "../_shared/email.ts";
 import { requireAdminOrApiKey, timingSafeEqual } from "../_shared/apiKeyAuth.ts";
 
-const RESEND_API_KEY = Deno.env.get("RESEND_API_KEY");
 const SUPABASE_URL = Deno.env.get("SUPABASE_URL")!;
 const SUPABASE_SERVICE_ROLE_KEY = Deno.env.get("SUPABASE_SERVICE_ROLE_KEY")!;
 
@@ -225,48 +224,22 @@ Don't miss out! We'll see you there!
         preferencesPath: "/profile?tab=settings",
       },
     });
-    const htmlContent = rendered.html;
-    const textContent = rendered.text;
-
-    // Send email via Resend
-    if (!RESEND_API_KEY) {
-      throw new Error("RESEND_API_KEY not configured");
-    }
-
-    const response = await fetchWithTimeout("https://api.resend.com/emails", {
-      method: "POST",
-      headers: {
-        "Content-Type": "application/json",
-        Authorization: `Bearer ${RESEND_API_KEY}`,
-      },
-      body: JSON.stringify({
+    const sent = await sendEmail(
+      {
+        to: reminder.user_email,
         from: "Des Moines Insider <events@desmoinesinsider.com>",
-        to: [reminder.user_email],
         subject,
-        html: htmlContent,
-        text: textContent,
-        // RFC 8058 one-click unsubscribe headers so Gmail/Apple Mail surface
-        // a native Unsubscribe button above the message.
-        headers: rendered.listUnsubscribe
-          ? {
-              "List-Unsubscribe": rendered.listUnsubscribe,
-              "List-Unsubscribe-Post": rendered.listUnsubscribePost ?? "",
-            }
-          : undefined,
-        tags: [
-          { name: "type", value: "event_reminder" },
-          { name: "reminder_type", value: reminder.reminder_type },
-          { name: "event_id", value: reminder.event_id },
-        ],
-      }),
-    });
-
-    if (!response.ok) {
-      const errorData = await response.json();
-      throw new Error(`Resend API error: ${JSON.stringify(errorData)}`);
-    }
-
-    const emailResult = await response.json();
+        html: rendered.html,
+        text: rendered.text,
+        category: "marketing",
+        template: `event_reminder_${reminder.reminder_type}`,
+        headers: listUnsubscribeHeaders(rendered),
+        ref: { type: "event", id: String(reminder.event_id) },
+      },
+      { supabase },
+    );
+    if (!sent.ok) throw new Error(`Reminder not sent: ${sent.error}`);
+    const emailResult = { id: sent.messageId ?? null };
     console.log(`✓ Sent ${reminder.reminder_type} reminder for event ${reminder.event_id} to ${reminder.user_email}`);
 
     // Mark reminder as sent

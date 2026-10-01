@@ -48,19 +48,27 @@ async function fetchPseoPage(slug: string): Promise<PseoPageContent | null> {
 }
 
 /**
- * Hook to fetch all published pSEO page slugs (for sitemap generation).
+ * Published /things-to-do/* pSEO slugs. The /things-to-do hub is the only
+ * caller: it uses the set to upgrade a card's href from its fallback to the
+ * pSEO page, never to decide whether the card exists.
+ *
+ * Throws on error so TanStack Query retries and the hub sees `isError`. It
+ * used to return [] on failure, which read as "nothing is published" and hid
+ * cards for the whole session with no report.
  */
 export function usePseoPageSlugs() {
   return useQuery({
-    queryKey: ['pseo-page-slugs'],
-    queryFn: async () => {
-      const { data } = await supabase
+    queryKey: ['pseo-page-slugs', 'things-to-do'],
+    queryFn: async (): Promise<Array<{ slug: string }>> => {
+      const { data, error } = await supabase
         .from('pseo_pages')
-        .select('slug, updated_at')
+        .select('slug')
         .eq('is_published', true)
+        .like('slug', '/things-to-do/%')
         .order('slug');
 
-      return data ?? [];
+      if (error) throw error;
+      return (data ?? []) as Array<{ slug: string }>;
     },
     staleTime: 30 * 60 * 1000,
   });

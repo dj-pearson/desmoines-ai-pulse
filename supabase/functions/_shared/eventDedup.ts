@@ -14,41 +14,58 @@
  * one story earlier, at which point a SECOND copy of the sports prompt was
  * found already drifted in `ai-crawler`.
  *
- * NOTHING HERE CHANGED. The three tiers, their order, their thresholds and their
- * reason strings are the ones that were in `scrape-events/index.ts`, moved
- * verbatim. The reason strings in particular are load-bearing: they are written
- * into the scrape log and a reader greps for them.
+ * NOTHING CHANGED IN TIERS 1-3. Their order, their thresholds and their reason
+ * strings are the ones that were in `scrape-events/index.ts`, moved verbatim.
+ * The reason strings in particular are load-bearing: they are written into the
+ * scrape log and a reader greps for them. Tier 4 was added afterwards
+ * (WEB-BE-052) and is the only addition; it runs last, so it can only catch
+ * rows the three original tiers let through.
  *
- * ── THE THREE TIERS, IN ORDER ───────────────────────────────────────────────
+ * ── THE FOUR TIERS, IN ORDER ────────────────────────────────────────────────
  *
  *   1. EXACT FINGERPRINT. Both sides must actually have one; a missing
  *      fingerprint is not a match, it is unknown.
  *   2. SAME SOURCE URL + SAME DATE + 80% TITLE SIMILARITY. Catches a listing
  *      whose title was reworded between runs.
- *   3. SAME TITLE + SAME VENUE, WITHIN 24 HOURS. Catches a recurring show
- *      re-listed with a slightly different start time.
+ *   3. SAME TITLE + SAME VENUE + SAME CENTRAL CALENDAR DATE. Catches a
+ *      recurring show re-listed with a slightly different start time.
+ *   4. SAME NORMALIZED TITLE + SAME NORMALIZED VENUE + SAME CENTRAL CALENDAR
+ *      DATE, with at most one of the two titles carrying a subtitle. Catches
+ *      the same concert reported by SeatGeek, the venue and Catch Des Moines,
+ *      each of which words it differently. Tiers 2 and 3 cannot: tier 2 needs
+ *      one source_url on both sides, tier 3 needs the titles to be EQUAL.
  *
  * They are tried in that order and the FIRST match wins, so the reported reason
  * is the strongest one that applied rather than the last one checked.
  *
- * ── THE DATABASE IS STRICTER THAN THIS MODULE, AND IT WINS ──────────────────
+ * ── THE DATABASE AND THIS MODULE NOW AGREE (WEB-BE-036) ─────────────────────
  *
- * `public.events` carries a UNIQUE INDEX `events_title_venue_unique` on
- * (title, venue) with NO DATE IN IT: one row per title per venue, forever.
- * Tier 3 above is looser — it treats the same title and venue more than 24
- * hours apart as a different event, which is right for a weekly residency and
- * is not what this schema permits.
+ * They did not used to. `public.events` carried a UNIQUE INDEX
+ * `events_title_venue_unique` on (title, venue) with NO DATE IN IT — one row
+ * per title per venue, forever — which existed in production and in no
+ * migration. Measured 2026-08-29 on the first live hub ingest: of 88 extracted
+ * events this module passed 60, and Postgres refused 16 of those on the
+ * constraint. A batch insert is ONE statement, so the first collision lost
+ * every row beside it.
  *
- * Measured 2026-08-29 on the first live hub ingest: of 88 extracted events this
- * module passed 60, and Postgres refused 16 of those on the constraint. A batch
- * insert is ONE statement, so the first collision lost every row beside it.
+ * Migration 20260902000006 replaced it with `events_title_venue_date_unique`
+ * on (title, venue, event_local_date), where `event_local_date` is a stored
+ * generated column holding the Central-time calendar date of `date`. Tier 3
+ * below keys on exactly that, so the module and the index now accept and
+ * reject the same rows.
  *
- * `ingest-events` therefore inserts with ON CONFLICT DO NOTHING and reports the
- * two counts SEPARATELY — `duplicates` from here, `constraintDuplicates` from
- * the index. The disagreement is REPORTED, not resolved: loosening the
- * constraint changes what the live site shows, and tightening this module to
- * match would merge a real weekly series into one row. Which is correct is an
- * operator decision, and neither is made silently.
+ * WHAT CHANGED IN TIER 3, and why it is not a tidy-up: the old window was 24
+ * HOURS, so the Symphony's Saturday-evening and Sunday-matinee performances —
+ * 18 hours apart, and both required by eventSourceProfiles — collapsed into one
+ * row. A calendar-date key keeps both. The reason string moved with the
+ * behaviour, from `same_title_venue_within_24h` to
+ * `same_title_venue_same_day`, because a log line that describes a rule the
+ * code no longer applies is worse than one nobody greps for.
+ *
+ * `ingest-events` still inserts with ON CONFLICT DO NOTHING and still reports
+ * `duplicates` (caught here) separately from `constraintDuplicates` (caught by
+ * the index). The two counts should now agree; they are kept apart so that if
+ * they ever diverge again, the divergence is visible rather than summed away.
  *
  * ── THE SIMILARITY FUNCTION IS POSITIONAL, AND THAT IS A KNOWN WEAKNESS ─────
  *
@@ -60,6 +77,16 @@
  * measures the effect. Recorded here so the next reader knows it is a decision
  * and not an oversight.
  */
+
+import { centralWallClockFromUtc } from "./centralTime.ts";
+
+/**
+ * How many alphanumeric characters a title must keep after its subtitle is cut
+ * before that prefix is trusted to identify a show. Twelve is deliberate:
+ * "comedynight" is eleven, so "Comedy Night: Bob Smith" and "Comedy Night: Sue
+ * Jones" keep their subtitles and stay two events, which is correct.
+ */
+export const MIN_TITLE_KEY_LENGTH = 12;
 
 export interface DedupEvent {
   title: string;
@@ -88,8 +115,19 @@ export interface DuplicateVerdict {
  *  writers cannot disagree about it by a decimal point. */
 export const TITLE_SIMILARITY_THRESHOLD = 0.8;
 
-/** How close two same-title, same-venue events must be to be one event. */
-export const RECURRING_WINDOW_HOURS = 24;
+/**
+ * The Central-time calendar date of an instant, as YYYY-MM-DD.
+ *
+ * Every event in this system is a Des Moines event, so "the same day" means the
+ * same day in Des Moines. Deriving it through `centralWallClockFromUtc` rather
+ * than `toISOString()` matters for evening shows: 8pm CDT is already tomorrow
+ * in UTC, and a UTC-keyed comparison would split a single evening's listings
+ * across two days. This is the same value the `event_local_date` generated
+ * column holds, so this module and the unique index agree by construction.
+ */
+export function centralCalendarDate(instant: Date | string): string {
+  return centralWallClockFromUtc(instant).slice(0, 10);
+}
 
 /**
  * A stable identity for an event: normalized title, ISO date, normalized venue,
@@ -142,6 +180,68 @@ export function calculateTitleSimilarity(title1: string, title2: string): number
 }
 
 /**
+ * A title reduced to the part that identifies the SHOW (WEB-BE-052).
+ *
+ * The same concert arrives from three sources with three titles: SeatGeek
+ * lists "George Thorogood & The Destroyers", the venue lists
+ * "George Thorogood & The Destroyers: The Baddest Show on Earth", and Catch
+ * Des Moines lists it with a promoter prefix. Tier 3 below compares titles for
+ * EQUALITY, so all three stay separate rows.
+ *
+ * Returns { key, hadSubtitle }. The flag matters as much as the key - see
+ * isDuplicateEvent's tier 4 for why merging two differently-subtitled titles
+ * is the over-merge this must not do.
+ */
+export function normalizeEventTitle(title: string): { key: string; hadSubtitle: boolean } {
+  let work = (title || "").toLowerCase().trim();
+
+  // "Live Nation presents: X" / "AEG Presents X" - the promoter is not the show.
+  work = work.replace(/^.{1,30}?\spresents:?\s+/, "");
+
+  // The subtitle after the first colon or spaced dash. Cut only when what comes
+  // BEFORE it is long enough to identify something on its own: "DMSO: Remix" must
+  // not collapse to "dmso".
+  const cut = work.search(/\s*[:\u2013\u2014]\s|\s+-\s+/);
+  let hadSubtitle = false;
+  if (cut > 0) {
+    const head = work.slice(0, cut);
+    if (head.replace(/[^a-z0-9]/g, "").length >= MIN_TITLE_KEY_LENGTH) {
+      work = head;
+      hadSubtitle = true;
+    }
+  }
+
+  // Filler that one source adds and another does not. Whole words only, so
+  // "Live Nation" and "Tourist Trap" are untouched.
+  work = work.replace(/\b(live in concert|in concert|live|official|the tour|tour)\b/g, " ");
+
+  // "&" and "and" are the same word, and stripping punctuation alone does not
+  // make them agree: "George Thorogood & The Destroyers" reduces to
+  // "georgethorogoodthedestroyers" while the venue's "...and the Destroyers"
+  // reduces to "georgethorogoodandthedestroyers". Dropping the standalone word
+  // makes both sides the ampersand form. Word-bounded, so "Sandra" survives.
+  work = work.replace(/\band\b/g, " ");
+
+  return { key: work.replace(/[^a-z0-9]/g, ""), hadSubtitle };
+}
+
+/**
+ * A venue reduced for comparison. String-only on purpose: isDuplicateEvent is
+ * synchronous and the known-venue alias table (knownVenues.ts) needs a database
+ * round trip, so "Wells Fargo Arena" and "Wells Fargo Arena - Des Moines" match
+ * here while a genuine alias pair like "Hoyt Sherman" and "Hoyt Sherman Place"
+ * does not. Aliasing belongs in the weekly dedupe-content merge (AC3), which
+ * has a client.
+ */
+export function normalizeVenueName(venue: string): string {
+  return (venue || "")
+    .toLowerCase()
+    .replace(/^the\s+/, "")
+    .replace(/\s+-\s+.*$/, "")
+    .replace(/[^a-z0-9]/g, "");
+}
+
+/**
  * Is `newEvent` already in `existingEvents`?
  *
  * Returns the REASON as well as the verdict, because "this was a duplicate" and
@@ -185,24 +285,102 @@ export function isDuplicateEvent(
       }
     }
 
-    // 3. Same title, same venue, date within 24 hours (for recurring events).
+    // 3. Same title, same venue, same Central calendar date — the key the
+    //    database enforces (events_title_venue_date_unique) and the one
+    //    crawlers/catchdesmoines_crawler.py has always used.
     const titleMatch = newEvent.title.toLowerCase().trim() === existing.title.toLowerCase().trim();
     const venueMatch = newEvent.venue.toLowerCase().trim() === existing.venue.toLowerCase().trim();
 
     if (titleMatch && venueMatch) {
-      const existingDate = new Date(existing.date);
-      const timeDiff = Math.abs(newEvent.date.getTime() - existingDate.getTime());
-      const hoursDiff = timeDiff / (1000 * 60 * 60);
-
-      if (hoursDiff < RECURRING_WINDOW_HOURS) {
+      if (centralCalendarDate(newEvent.date) === centralCalendarDate(existing.date)) {
         return {
           isDuplicate: true,
-          reason: "same_title_venue_within_24h",
+          reason: "same_title_venue_same_day",
           existingEvent: existing,
         };
       }
     }
+
+    // 4. Same show, different source's wording (WEB-BE-052). Tier 3 requires
+    //    the titles to be EQUAL, so a subtitle or a promoter prefix one source
+    //    adds keeps the same concert as two rows.
+    //
+    //    AT MOST ONE SUBTITLE. This is the whole safety of the tier: a plain
+    //    title matching a subtitled one is the same show described twice
+    //    ("George Thorogood & The Destroyers" / "...: The Baddest Show on
+    //    Earth"), while TWO different subtitles under one prefix are usually
+    //    two events in a series ("Comedy Night: Bob" / "Comedy Night: Sue").
+    //    Merging those would delete a real event from the site, which is worse
+    //    than listing one twice.
+    const newTitle = normalizeEventTitle(newEvent.title);
+    const oldTitle = normalizeEventTitle(existing.title);
+
+    if (
+      newTitle.key.length >= MIN_TITLE_KEY_LENGTH &&
+      newTitle.key === oldTitle.key &&
+      !(newTitle.hadSubtitle && oldTitle.hadSubtitle) &&
+      normalizeVenueName(newEvent.venue) === normalizeVenueName(existing.venue) &&
+      centralCalendarDate(newEvent.date) === centralCalendarDate(existing.date)
+    ) {
+      return {
+        isDuplicate: true,
+        reason: "normalized_title_venue_same_day",
+        existingEvent: existing,
+      };
+    }
   }
 
   return { isDuplicate: false };
+}
+
+/**
+ * isDuplicateEvent over a set bucketed by Central calendar day, for writers
+ * that check hundreds of items against thousands of rows.
+ *
+ * Every tier either compares Central days directly (3, 4) or compares UTC days
+ * (1 via the fingerprint, 2 via toDateString), and a UTC day never straddles
+ * more than two Central days - so only the item's own day and its neighbours
+ * can hold a match, and the verdict is identical to a scan of the whole list.
+ *
+ * `add` exists for the rows a run inserts: the same event reaching one run
+ * twice (JSON-LD and the model both reading one page) must collapse against
+ * the first copy, which is not in the database yet.
+ */
+export interface DedupIndex<T extends ExistingEvent = ExistingEvent> {
+  find(newEvent: DedupEvent): DuplicateVerdict & { existingEvent?: T };
+  add(event: T): void;
+  readonly size: number;
+}
+
+export function createDedupIndex<T extends ExistingEvent>(existing: T[]): DedupIndex<T> {
+  const buckets = new Map<string, T[]>();
+  let size = 0;
+
+  const add = (event: T) => {
+    const day = centralCalendarDate(event.date);
+    const bucket = buckets.get(day);
+    if (bucket) bucket.push(event);
+    else buckets.set(day, [event]);
+    size++;
+  };
+
+  const neighbours = (instant: Date): string[] => {
+    const day = centralCalendarDate(instant);
+    const [y, m, d] = day.split("-").map(Number);
+    const shift = (n: number) => new Date(Date.UTC(y, m - 1, d + n)).toISOString().slice(0, 10);
+    return [shift(-1), day, shift(1)];
+  };
+
+  for (const e of existing) add(e);
+
+  return {
+    find(newEvent) {
+      const candidates = neighbours(newEvent.date).flatMap((d) => buckets.get(d) ?? []);
+      return isDuplicateEvent(newEvent, candidates) as DuplicateVerdict & { existingEvent?: T };
+    },
+    add,
+    get size() {
+      return size;
+    },
+  };
 }

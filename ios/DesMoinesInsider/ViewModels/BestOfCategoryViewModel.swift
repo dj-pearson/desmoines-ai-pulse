@@ -1,4 +1,5 @@
 import Foundation
+import Supabase
 
 /// ViewModel for a single Best-Of category (IOS-PARITY-005): leaderboard +
 /// nominee search + the current user's vote, with optimistic casting that
@@ -11,8 +12,17 @@ final class BestOfCategoryViewModel {
     private(set) var results: [VoteResult] = []
     private(set) var userVote: Vote?
     private(set) var isLoading = true
+    /// A failed leaderboard load. Separate from errorMessage, which is for
+    /// vote actions, so an outage shows a retry instead of an empty board
+    /// with "0 total votes" (IOS-DD-GUIDES-09).
+    private(set) var loadError: String?
+    /// A failed vote, shown in the booth.
     private(set) var errorMessage: String?
     private(set) var isVoting = false
+    /// The name of the pick just recorded this visit, for "Share my pick".
+    private(set) var justVotedFor: String?
+    /// Whether that pick was a write-in (it only reaches the board at 3 votes).
+    private(set) var justVotedWriteIn = false
 
     var searchQuery = "" {
         didSet {
@@ -40,11 +50,13 @@ final class BestOfCategoryViewModel {
 
     func load() async {
         isLoading = true
-        errorMessage = nil
+        loadError = nil
         do {
             results = try await service.fetchResults(categoryId: category.id)
         } catch {
-            errorMessage = error.localizedDescription
+            if !Self.isCancellation(error) {
+                loadError = error.localizedDescription
+            }
         }
         if let userId = auth.currentUser?.id.uuidString {
             userVote = try? await service.fetchUserVote(categoryId: category.id, userId: userId)
@@ -53,6 +65,10 @@ final class BestOfCategoryViewModel {
     }
 
     func refresh() async { await load() }
+
+    private static func isCancellation(_ error: Error) -> Bool {
+        error is CancellationError || (error as? URLError)?.code == .cancelled
+    }
 
     // MARK: - Search
 
@@ -84,6 +100,11 @@ final class BestOfCategoryViewModel {
     func castVote(entityType: String, entityId: String?, customEntry: String?, displayName: String, imageUrl: String?) async -> Bool {
         guard let userId = auth.currentUser?.id.uuidString else { return false }
         guard !isVoting else { return false }
+        // Re-tapping the current pick is not a change; don't send an upsert
+        // the server would refuse (IOS-DD-GUIDES-07).
+        if let current = userVote?.resultKey, current == (entityId ?? customEntry) {
+            return true
+        }
         isVoting = true
         errorMessage = nil
         defer { isVoting = false }
@@ -133,6 +154,8 @@ final class BestOfCategoryViewModel {
                 categoryId: category.id, userId: userId,
                 entityType: entityType, entityId: entityId, customEntry: customEntry
             )
+            justVotedFor = displayName
+            justVotedWriteIn = entityType == "custom"
             // Refresh the winners cache so badges reflect the new tally.
             await BestOfViewModel.refreshWinners()
             return true
@@ -140,8 +163,30 @@ final class BestOfCategoryViewModel {
             // Revert.
             results = prevResults
             userVote = prevVote
-            errorMessage = "Couldn't record your vote. Please try again."
+            let postgrest = error as? PostgrestError
+            errorMessage = Self.failureMessage(
+                for: postgrest?.message, code: postgrest?.code, hadEarlierVote: prevVote != nil
+            )
             return false
         }
+    }
+
+    /// What a failed vote tells the user. 42501 is RLS refusing a change
+    /// (the UPDATE policy in 20260930000003 is not applied); the three
+    /// messages come from votes_guard in 20261015000002
+    /// (IOS-DD-GUIDES-06/07).
+    nonisolated static func failureMessage(for message: String?, code: String?, hadEarlierVote: Bool) -> String {
+        if code == "42501" {
+            return hadEarlierVote
+                ? "We couldn't change your vote. Your earlier vote still counts."
+                : "We couldn't save your vote. Please try again later."
+        }
+        let text = message ?? ""
+        if text.contains("voting_closed") { return "Voting in this category has closed." }
+        if text.contains("invalid_write_in") {
+            return "That write-in can't be used. Try searching for the place instead."
+        }
+        if text.contains("unknown_entity") { return "That place is no longer listed." }
+        return "Couldn't record your vote. Please try again."
     }
 }

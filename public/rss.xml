@@ -1,176 +1,571 @@
 <?xml version="1.0" encoding="UTF-8"?>
-<rss version="2.0" xmlns:content="http://purl.org/rss/1.0/modules/content/" xmlns:atom="http://www.w3.org/2005/Atom">
+<rss version="2.0" xmlns:atom="http://www.w3.org/2005/Atom">
   <channel>
-    <title>Des Moines Insider - Local Events and Updates</title>
-    <link>https://desmoinesinsider.com</link>
-    <description>Stay updated with the latest events, restaurant openings, and local attractions in Des Moines, Iowa</description>
+    <title>Des Moines Insider</title>
+    <link>https://desmoinesinsider.com/</link>
+    <description>New articles and upcoming events in Des Moines, Iowa, from Des Moines Insider.</description>
     <language>en-us</language>
-    <lastBuildDate>2025-07-30T19:11:45.140Z</lastBuildDate>
+    <lastBuildDate>Thu, 01 Oct 2026 04:37:29 GMT</lastBuildDate>
     <atom:link href="https://desmoinesinsider.com/rss.xml" rel="self" type="application/rss+xml"/>
-    <image>
-      <url>https://desmoinesinsider.com/DMI-Logo2.png</url>
-      <title>Des Moines Insider</title>
-      <link>https://desmoinesinsider.com</link>
-    </image>
     <item>
-      <title>Wednesday Summer Fun At Skate South</title>
-      <link>https://desmoinesinsider.com/events/wednesday-summer-fun-at-skate-south-2025-07-29</link>
-      <description><![CDATA[Recurring weekly on Wednesday until August 13, 2025]]></description>
-      <category>Events</category>
-      <pubDate>2025-07-30T00:00:00.000Z</pubDate>
-      <guid>https://desmoinesinsider.com/events/wednesday-summer-fun-at-skate-south-2025-07-29</guid>
+      <title>Corn Mazes Near Des Moines (2026)</title>
+      <link>https://desmoinesinsider.com/articles/corn-mazes-near-des-moines</link>
+      <guid isPermaLink="true">https://desmoinesinsider.com/articles/corn-mazes-near-des-moines</guid>
+      <description>The biggest corn maze near Des Moines is Pumpkinville&apos;s 15-plus acres in Mitchellville; Howell&apos;s 8-acre maze in Cumming is the closest big one. Five corn mazes with 2026 dates, hours and prices from each farm&apos;s own site.</description>
+      <category>Attractions</category>
+      <pubDate>Thu, 01 Oct 2026 04:04:24 GMT</pubDate>
     </item>
     <item>
-      <title>Mini Kokedama Drop In</title>
-      <link>https://desmoinesinsider.com/events/mini-kokedama-drop-in-2025-07-29</link>
-      <description><![CDATA[Event details]]></description>
-      <category>Events</category>
-      <pubDate>2025-07-30T00:00:00.000Z</pubDate>
-      <guid>https://desmoinesinsider.com/events/mini-kokedama-drop-in-2025-07-29</guid>
+      <title>Haunted Houses Near Des Moines (2026)</title>
+      <link>https://desmoinesinsider.com/articles/haunted-houses-near-des-moines</link>
+      <guid isPermaLink="true">https://desmoinesinsider.com/articles/haunted-houses-near-des-moines</guid>
+      <description>Four haunted houses open within 20 minutes of downtown Des Moines in October 2026: The Slaughterhouse, Linn&apos;s Haunted House, Sleepy Hollow Haunted Scream Park and County Line Road Haunted Woods. Dates, hours and prices from each one&apos;s own site.</description>
+      <category>Attractions</category>
+      <pubDate>Thu, 01 Oct 2026 04:04:24 GMT</pubDate>
     </item>
     <item>
-      <title>WDM Locals Night</title>
-      <link>https://desmoinesinsider.com/events/wdm-locals-night-2025-07-29</link>
-      <description><![CDATA[Recurring weekly on Wednesday]]></description>
-      <category>Events</category>
-      <pubDate>2025-07-30T00:00:00.000Z</pubDate>
-      <guid>https://desmoinesinsider.com/events/wdm-locals-night-2025-07-29</guid>
+      <title>Building The Wall by Robert Schenkkan</title>
+      <link>https://desmoinesinsider.com/events/building-the-wall-by-robert-schenkkan-2026-10-02</link>
+      <guid isPermaLink="true">https://desmoinesinsider.com/events/building-the-wall-by-robert-schenkkan-2026-10-02</guid>
+      <description>Fri, Oct 2, 7:00 PM at Tallgrass Theatre Company. Theater performance of Building The Wall by Robert Schenkkan</description>
+      <category>Arts</category>
+      <pubDate>Wed, 30 Sep 2026 12:18:28 GMT</pubDate>
     </item>
     <item>
-      <title>Iowa Cubs vs Indiana</title>
-      <link>https://desmoinesinsider.com/events/iowa-cubs-vs-indiana-2025-07-29</link>
-      <description><![CDATA[Event details]]></description>
-      <category>Events</category>
-      <pubDate>2025-07-30T00:00:00.000Z</pubDate>
-      <guid>https://desmoinesinsider.com/events/iowa-cubs-vs-indiana-2025-07-29</guid>
+      <title>Alysha Brilla: Live at the Temple</title>
+      <link>https://desmoinesinsider.com/events/alysha-brilla-live-at-the-temple-2026-10-02</link>
+      <guid isPermaLink="true">https://desmoinesinsider.com/events/alysha-brilla-live-at-the-temple-2026-10-02</guid>
+      <description>Fri, Oct 2, 7:00 PM at Temple Theater. Live performance by Alysha Brilla at the Temple Theater</description>
+      <category>Music</category>
+      <pubDate>Wed, 30 Sep 2026 12:18:22 GMT</pubDate>
     </item>
     <item>
-      <title>Waukee Farmers Market</title>
-      <link>https://desmoinesinsider.com/events/waukee-farmers-market-2025-07-29</link>
-      <description><![CDATA[Recurring weekly on Wednesday until September 24, 2025]]></description>
-      <category>Events</category>
-      <pubDate>2025-07-30T00:00:00.000Z</pubDate>
-      <guid>https://desmoinesinsider.com/events/waukee-farmers-market-2025-07-29</guid>
+      <title>Candlelight: Tribute to Michael Jackson</title>
+      <link>https://desmoinesinsider.com/events/candlelight-tribute-to-michael-jackson-2026-10-02</link>
+      <guid isPermaLink="true">https://desmoinesinsider.com/events/candlelight-tribute-to-michael-jackson-2026-10-02</guid>
+      <description>Fri, Oct 2, 7:00 PM at Scottish Rite Consistory. Candlelight tribute concert to Michael Jackson</description>
+      <category>Music</category>
+      <pubDate>Wed, 30 Sep 2026 12:18:15 GMT</pubDate>
     </item>
     <item>
-      <title>Bondurant Farmers Market</title>
-      <link>https://desmoinesinsider.com/events/bondurant-farmers-market-2025-07-29</link>
-      <description><![CDATA[Recurring weekly on Wednesday until September 10, 2025]]></description>
-      <category>Events</category>
-      <pubDate>2025-07-30T00:00:00.000Z</pubDate>
-      <guid>https://desmoinesinsider.com/events/bondurant-farmers-market-2025-07-29</guid>
+      <title>WDM Library 30th Birthday Bash!</title>
+      <link>https://desmoinesinsider.com/events/wdm-library-30th-birthday-bash-2026-10-02</link>
+      <guid isPermaLink="true">https://desmoinesinsider.com/events/wdm-library-30th-birthday-bash-2026-10-02</guid>
+      <description>Fri, Oct 2, 7:00 PM at West Des Moines Public Library. 30th birthday celebration for West Des Moines Library</description>
+      <category>Community</category>
+      <pubDate>Wed, 30 Sep 2026 12:18:09 GMT</pubDate>
     </item>
     <item>
-      <title>Zoo Brew @ Blank Park Zoo</title>
-      <link>https://desmoinesinsider.com/events/zoo-brew-blank-park-zoo-2025-07-29</link>
-      <description><![CDATA[Event details]]></description>
-      <category>Events</category>
-      <pubDate>2025-07-30T00:00:00.000Z</pubDate>
-      <guid>https://desmoinesinsider.com/events/zoo-brew-blank-park-zoo-2025-07-29</guid>
+      <title>Live Music by Quinn Trilk</title>
+      <link>https://desmoinesinsider.com/events/live-music-by-quinn-trilk-2026-10-02</link>
+      <guid isPermaLink="true">https://desmoinesinsider.com/events/live-music-by-quinn-trilk-2026-10-02</guid>
+      <description>Fri, Oct 2, 7:00 PM at Iowa Distilling Company. Live music performance by Quinn Trilk</description>
+      <category>Music</category>
+      <pubDate>Wed, 30 Sep 2026 12:17:57 GMT</pubDate>
     </item>
     <item>
-      <title>Des Moines Biergarten</title>
-      <link>https://desmoinesinsider.com/events/des-moines-biergarten-2025-07-29</link>
-      <description><![CDATA[Recurring weekly on Wednesday, Thursday, Friday, Saturday until October 4, 2025]]></description>
-      <category>Events</category>
-      <pubDate>2025-07-30T00:00:00.000Z</pubDate>
-      <guid>https://desmoinesinsider.com/events/des-moines-biergarten-2025-07-29</guid>
+      <title>2026 Iowa Latino Gala</title>
+      <link>https://desmoinesinsider.com/events/2026-iowa-latino-gala-2026-10-02</link>
+      <guid isPermaLink="true">https://desmoinesinsider.com/events/2026-iowa-latino-gala-2026-10-02</guid>
+      <description>Fri, Oct 2, 7:00 PM at The Loft DSM. Iowa Latino Gala celebration</description>
+      <category>Community</category>
+      <pubDate>Wed, 30 Sep 2026 12:17:52 GMT</pubDate>
     </item>
     <item>
-      <title>Indianola Farmers Market</title>
-      <link>https://desmoinesinsider.com/events/indianola-farmers-market-2025-07-29</link>
-      <description><![CDATA[Recurring weekly on Wednesday until September 24, 2025]]></description>
-      <category>Events</category>
-      <pubDate>2025-07-30T00:00:00.000Z</pubDate>
-      <guid>https://desmoinesinsider.com/events/indianola-farmers-market-2025-07-29</guid>
+      <title>Yappy Hour at Surety Hotel</title>
+      <link>https://desmoinesinsider.com/events/yappy-hour-at-surety-hotel-2026-10-02</link>
+      <guid isPermaLink="true">https://desmoinesinsider.com/events/yappy-hour-at-surety-hotel-2026-10-02</guid>
+      <description>Fri, Oct 2, 7:00 PM at Surety Hotel, Autograph Collection. Yappy Hour event at Surety Hotel</description>
+      <category>Community</category>
+      <pubDate>Wed, 30 Sep 2026 12:17:46 GMT</pubDate>
     </item>
     <item>
-      <title>West Des Moines Community Band Concert</title>
-      <link>https://desmoinesinsider.com/events/west-des-moines-community-band-concert-2025-07-29</link>
-      <description><![CDATA[Enjoy free live music this summer with the West Des Moines Community Band! The Jamie Hurd Amphitheater offers a delightful evening of music under the stars with about 50+ volunteer musicians performing.]]></description>
-      <category>Events</category>
-      <pubDate>2025-07-30T00:00:00.000Z</pubDate>
-      <guid>https://desmoinesinsider.com/events/west-des-moines-community-band-concert-2025-07-29</guid>
+      <title>Farmstasia 2026</title>
+      <link>https://desmoinesinsider.com/events/farmstasia-2026-2026-10-02</link>
+      <guid isPermaLink="true">https://desmoinesinsider.com/events/farmstasia-2026-2026-10-02</guid>
+      <description>Fri, Oct 2, 7:00 PM at Living History Farms - Flynn Barn. Annual Farmstasia event at Living History Farms</description>
+      <category>Festival</category>
+      <pubDate>Wed, 30 Sep 2026 12:17:40 GMT</pubDate>
     </item>
     <item>
-      <title>Indianola Farmers Market @ Fairgrounds</title>
-      <link>https://desmoinesinsider.com/events/indianola-farmers-market-fairgrounds-2025-07-29</link>
-      <description><![CDATA[Recurring weekly on Wednesday until September 24, 2025]]></description>
-      <category>Events</category>
-      <pubDate>2025-07-30T00:00:00.000Z</pubDate>
-      <guid>https://desmoinesinsider.com/events/indianola-farmers-market-fairgrounds-2025-07-29</guid>
+      <title>First Friday at Mainframe Studios Featuring STEAM</title>
+      <link>https://desmoinesinsider.com/events/first-friday-at-mainframe-studios-featuring-steam-2026-10-02</link>
+      <guid isPermaLink="true">https://desmoinesinsider.com/events/first-friday-at-mainframe-studios-featuring-steam-2026-10-02</guid>
+      <description>Fri, Oct 2, 7:00 PM at Mainframe Studios. First Friday event at Mainframe Studios featuring STEAM</description>
+      <category>Arts</category>
+      <pubDate>Wed, 30 Sep 2026 12:17:34 GMT</pubDate>
     </item>
     <item>
-      <title>Open Mic Comedy at the Station</title>
-      <link>https://desmoinesinsider.com/events/open-mic-comedy-at-the-station-2025-07-29</link>
-      <description><![CDATA[Recurring weekly on Wednesday until October 29, 2025]]></description>
-      <category>Events</category>
-      <pubDate>2025-07-30T00:00:00.000Z</pubDate>
-      <guid>https://desmoinesinsider.com/events/open-mic-comedy-at-the-station-2025-07-29</guid>
+      <title>Wellness Happy Hour</title>
+      <link>https://desmoinesinsider.com/events/wellness-happy-hour-2026-10-02</link>
+      <guid isPermaLink="true">https://desmoinesinsider.com/events/wellness-happy-hour-2026-10-02</guid>
+      <description>Fri, Oct 2, 7:00 PM at Oxygen Yoga &amp; Fitness Urbandale. Recurring weekly on Friday until October 30, 2026</description>
+      <category>Health</category>
+      <pubDate>Wed, 30 Sep 2026 12:17:29 GMT</pubDate>
     </item>
     <item>
-      <title>Information Session: What Is Middlebrook?</title>
-      <link>https://desmoinesinsider.com/events/information-session-what-is-middlebrook-2025-07-29</link>
-      <description><![CDATA[Event details]]></description>
-      <category>Events</category>
-      <pubDate>2025-07-30T00:00:00.000Z</pubDate>
-      <guid>https://desmoinesinsider.com/events/information-session-what-is-middlebrook-2025-07-29</guid>
+      <title>Powerful Tools for Caregivers of Adults with Chronic Conditions</title>
+      <link>https://desmoinesinsider.com/events/powerful-tools-for-caregivers-of-adults-with-chronic-conditions-2026-10-02</link>
+      <guid isPermaLink="true">https://desmoinesinsider.com/events/powerful-tools-for-caregivers-of-adults-with-chronic-conditions-2026-10-02</guid>
+      <description>Fri, Oct 2, 7:00 PM at Virtual via Zoom. Recurring weekly on Friday until October 16, 2026</description>
+      <category>Health</category>
+      <pubDate>Wed, 30 Sep 2026 12:17:23 GMT</pubDate>
     </item>
     <item>
-      <title>2025 Rainbow Safari</title>
-      <link>https://desmoinesinsider.com/events/2025-rainbow-safari-2025-07-30</link>
-      <description><![CDATA[Join Capital City Pride for a FREE evening of wild family adventures at Blank Park Zoo as the annual Rainbow Safari returns on Thursday, July 31 from 5:30-9:00 PM. This LGBTQ+ community event offers family-friendly activities at the zoo.]]></description>
-      <category>Events</category>
-      <pubDate>2025-07-30T22:30:00.000Z</pubDate>
-      <guid>https://desmoinesinsider.com/events/2025-rainbow-safari-2025-07-30</guid>
+      <title>Youth Water Polo</title>
+      <link>https://desmoinesinsider.com/events/youth-water-polo-2026-10-01</link>
+      <guid isPermaLink="true">https://desmoinesinsider.com/events/youth-water-polo-2026-10-01</guid>
+      <description>Thu, Oct 1, 7:00 PM at Wellmark YMCA. Recurring weekly on Tuesday, Thursday until October 1, 2026</description>
+      <category>Sports</category>
+      <pubDate>Wed, 30 Sep 2026 12:17:17 GMT</pubDate>
     </item>
     <item>
-      <title>Valley Junction Farmers Market</title>
-      <link>https://desmoinesinsider.com/events/valley-junction-farmers-market-2025-07-30</link>
-      <description><![CDATA[Recurring weekly on Thursday until September 25, 2025]]></description>
-      <category>Events</category>
-      <pubDate>2025-07-31T00:00:00.000Z</pubDate>
-      <guid>https://desmoinesinsider.com/events/valley-junction-farmers-market-2025-07-30</guid>
+      <title>Trivia at Mickey&apos;s Irish Pub-Waukee</title>
+      <link>https://desmoinesinsider.com/events/trivia-at-mickey-s-irish-pub-waukee-2026-10-01</link>
+      <guid isPermaLink="true">https://desmoinesinsider.com/events/trivia-at-mickey-s-irish-pub-waukee-2026-10-01</guid>
+      <description>Thu, Oct 1, 7:00 PM at Mickey&apos;s Irish Pub-Waukee. Recurring weekly on Thursday until November 19, 2026</description>
+      <category>Entertainment</category>
+      <pubDate>Wed, 30 Sep 2026 12:17:10 GMT</pubDate>
     </item>
     <item>
-      <title>Trivia @ Middlebrook Mercantile</title>
-      <link>https://desmoinesinsider.com/events/trivia-middlebrook-mercantile-2025-07-30</link>
-      <description><![CDATA[Event details]]></description>
-      <category>Events</category>
-      <pubDate>2025-07-31T00:00:00.000Z</pubDate>
-      <guid>https://desmoinesinsider.com/events/trivia-middlebrook-mercantile-2025-07-30</guid>
+      <title>Trivia Night at The Royal Mile - Every Thursday!</title>
+      <link>https://desmoinesinsider.com/events/trivia-night-at-the-royal-mile-every-thursday-2026-10-01</link>
+      <guid isPermaLink="true">https://desmoinesinsider.com/events/trivia-night-at-the-royal-mile-every-thursday-2026-10-01</guid>
+      <description>Thu, Oct 1, 7:00 PM at Royal Mile. Weekly Thursday trivia at The Royal Mile</description>
+      <category>Entertainment</category>
+      <pubDate>Tue, 29 Sep 2026 12:18:10 GMT</pubDate>
     </item>
     <item>
-      <title>Splash Bash</title>
-      <link>https://desmoinesinsider.com/events/splash-bash-2025-07-30</link>
-      <description><![CDATA[Join the Boys & Girls Clubs of Central Iowa for a Family Splash Bash at Union Park on Thursday, July 31 from 4-6 pm! This summer splash event is organized by the Boys & Girls Clubs of Central Iowa and offers family-friendly water activities.]]></description>
-      <category>Events</category>
-      <pubDate>2025-07-31T00:00:00.000Z</pubDate>
-      <guid>https://desmoinesinsider.com/events/splash-bash-2025-07-30</guid>
+      <title>The Ridgemont Comedy Open Mic</title>
+      <link>https://desmoinesinsider.com/events/the-ridgemont-comedy-open-mic-2026-10-01</link>
+      <guid isPermaLink="true">https://desmoinesinsider.com/events/the-ridgemont-comedy-open-mic-2026-10-01</guid>
+      <description>Thu, Oct 1, 7:00 PM at The Ridgemont Windsor Heights. Weekly comedy open mic night</description>
+      <category>Comedy</category>
+      <pubDate>Tue, 29 Sep 2026 12:17:48 GMT</pubDate>
     </item>
     <item>
-      <title>2025 Summer Concert Series</title>
-      <link>https://desmoinesinsider.com/events/2025-summer-concert-series-2025-07-30</link>
-      <description><![CDATA[Recurring weekly on Thursday]]></description>
-      <category>Events</category>
-      <pubDate>2025-07-31T00:00:00.000Z</pubDate>
-      <guid>https://desmoinesinsider.com/events/2025-summer-concert-series-2025-07-30</guid>
+      <title>Trivia Thursdays at Mickey&apos;s Waukee</title>
+      <link>https://desmoinesinsider.com/events/trivia-thursdays-at-mickey-s-waukee-2026-10-01</link>
+      <guid isPermaLink="true">https://desmoinesinsider.com/events/trivia-thursdays-at-mickey-s-waukee-2026-10-01</guid>
+      <description>Thu, Oct 1, 7:00 PM at Mickey&apos;s Irish Pub Waukee. Thursday trivia at Mickey&apos;s Irish Pub Waukee</description>
+      <category>Entertainment</category>
+      <pubDate>Tue, 29 Sep 2026 12:17:40 GMT</pubDate>
     </item>
     <item>
-      <title>NASCAR's Iowa Fan Fest</title>
-      <link>https://desmoinesinsider.com/events/nascar-s-iowa-fan-fest-2025-07-30</link>
-      <description><![CDATA[Event details]]></description>
-      <category>Events</category>
-      <pubDate>2025-07-31T00:00:00.000Z</pubDate>
-      <guid>https://desmoinesinsider.com/events/nascar-s-iowa-fan-fest-2025-07-30</guid>
+      <title>2026 LGBTQ+ Adult Prom</title>
+      <link>https://desmoinesinsider.com/events/2026-lgbtq-adult-prom-2026-10-01</link>
+      <guid isPermaLink="true">https://desmoinesinsider.com/events/2026-lgbtq-adult-prom-2026-10-01</guid>
+      <description>Thu, Oct 1, 7:00 PM at Bash Events &amp; Catering. LGBTQ+ Adult Prom event</description>
+      <category>Community</category>
+      <pubDate>Tue, 29 Sep 2026 12:17:33 GMT</pubDate>
     </item>
     <item>
-      <title>Brightside/Altoona Farmers Market</title>
-      <link>https://desmoinesinsider.com/events/brightside-altoona-farmers-market-2025-07-30</link>
-      <description><![CDATA[Recurring weekly on Thursday until August 28, 2025]]></description>
-      <category>Events</category>
-      <pubDate>2025-07-31T00:00:00.000Z</pubDate>
-      <guid>https://desmoinesinsider.com/events/brightside-altoona-farmers-market-2025-07-30</guid>
+      <title>22nd Annual Works of Growth &amp; Recovery Art Exhibition</title>
+      <link>https://desmoinesinsider.com/events/22nd-annual-works-of-growth-recovery-art-exhibition-2026-10-01</link>
+      <guid isPermaLink="true">https://desmoinesinsider.com/events/22nd-annual-works-of-growth-recovery-art-exhibition-2026-10-01</guid>
+      <description>Thu, Oct 1, 7:00 PM at Olson-Larsen Galleries, 542 5th St, West Des Moines, IA 50265. Art exhibition at Olson-Larsen Galleries</description>
+      <category>Arts</category>
+      <pubDate>Tue, 29 Sep 2026 12:17:10 GMT</pubDate>
+    </item>
+    <item>
+      <title>Trivia at Mickey&apos;s Irish Pub-Waukee</title>
+      <link>https://desmoinesinsider.com/events/trivia-at-mickey-s-irish-pub-waukee-2026-10-01</link>
+      <guid isPermaLink="true">https://desmoinesinsider.com/events/trivia-at-mickey-s-irish-pub-waukee-2026-10-01</guid>
+      <description>Thu, Oct 1, 7:00 PM at Mickey&apos;s Irish Pub. Weekly trivia night at Mickey&apos;s Irish Pub in Waukee</description>
+      <category>Entertainment</category>
+      <pubDate>Mon, 28 Sep 2026 12:19:45 GMT</pubDate>
+    </item>
+    <item>
+      <title>Trivia</title>
+      <link>https://desmoinesinsider.com/events/trivia-2026-10-01</link>
+      <guid isPermaLink="true">https://desmoinesinsider.com/events/trivia-2026-10-01</guid>
+      <description>Thu, Oct 1, 7:00 PM at The Kee Bar &amp; Grill. Weekly trivia at The Kee Bar &amp; Grill</description>
+      <category>Entertainment</category>
+      <pubDate>Mon, 28 Sep 2026 12:19:39 GMT</pubDate>
+    </item>
+    <item>
+      <title>The Slaughterhouse Haunted House</title>
+      <link>https://desmoinesinsider.com/events/the-slaughterhouse-haunted-house-2026-10-01</link>
+      <guid isPermaLink="true">https://desmoinesinsider.com/events/the-slaughterhouse-haunted-house-2026-10-01</guid>
+      <description>Thu, Oct 1, 7:00 PM at The Slaughterhouse. Weekly haunted house event</description>
+      <category>Entertainment</category>
+      <pubDate>Mon, 28 Sep 2026 12:19:34 GMT</pubDate>
+    </item>
+    <item>
+      <title>Battle Of The Bands</title>
+      <link>https://desmoinesinsider.com/events/battle-of-the-bands-2026-10-01</link>
+      <guid isPermaLink="true">https://desmoinesinsider.com/events/battle-of-the-bands-2026-10-01</guid>
+      <description>Thu, Oct 1, 7:00 PM at Prairie Meadows. Weekly battle of the bands competition at Prairie Meadows</description>
+      <category>Music</category>
+      <pubDate>Mon, 28 Sep 2026 12:19:28 GMT</pubDate>
+    </item>
+    <item>
+      <title>Trivia @ The Merc</title>
+      <link>https://desmoinesinsider.com/events/trivia-the-merc-2026-10-01</link>
+      <guid isPermaLink="true">https://desmoinesinsider.com/events/trivia-the-merc-2026-10-01</guid>
+      <description>Thu, Oct 1, 7:00 PM at Middlebrook Mercantile. Trivia night at Middlebrook Mercantile</description>
+      <category>Entertainment</category>
+      <pubDate>Mon, 28 Sep 2026 12:19:23 GMT</pubDate>
+    </item>
+    <item>
+      <title>515 Brewing Pub Trivia</title>
+      <link>https://desmoinesinsider.com/events/515-brewing-pub-trivia-2026-10-01</link>
+      <guid isPermaLink="true">https://desmoinesinsider.com/events/515-brewing-pub-trivia-2026-10-01</guid>
+      <description>Thu, Oct 1, 7:00 PM at 515 Brewing Company. Weekly trivia night at 515 Brewing Company</description>
+      <category>Entertainment</category>
+      <pubDate>Mon, 28 Sep 2026 12:19:17 GMT</pubDate>
+    </item>
+    <item>
+      <title>Women &amp; Whiskey</title>
+      <link>https://desmoinesinsider.com/events/women-whiskey-2026-10-01</link>
+      <guid isPermaLink="true">https://desmoinesinsider.com/events/women-whiskey-2026-10-01</guid>
+      <description>Thu, Oct 1, 7:00 PM at River Center, The. Event at River Center</description>
+      <category>Food</category>
+      <pubDate>Mon, 28 Sep 2026 12:19:12 GMT</pubDate>
+    </item>
+    <item>
+      <title>Sips &amp; Stories</title>
+      <link>https://desmoinesinsider.com/events/sips-stories-2026-10-01</link>
+      <guid isPermaLink="true">https://desmoinesinsider.com/events/sips-stories-2026-10-01</guid>
+      <description>Thu, Oct 1, 7:00 PM at Rollins Mansion. Event at Rollins Mansion</description>
+      <category>Food</category>
+      <pubDate>Mon, 28 Sep 2026 12:19:06 GMT</pubDate>
+    </item>
+    <item>
+      <title>Meet &amp; Play</title>
+      <link>https://desmoinesinsider.com/events/meet-play-2026-10-01</link>
+      <guid isPermaLink="true">https://desmoinesinsider.com/events/meet-play-2026-10-01</guid>
+      <description>Thu, Oct 1, 7:00 PM at Rook Room Game Lounge and Cafe. Weekly recurring event at Rook Room Game Lounge and Cafe</description>
+      <category>Entertainment</category>
+      <pubDate>Mon, 28 Sep 2026 12:19:00 GMT</pubDate>
+    </item>
+    <item>
+      <title>22nd Annual Works of Growth &amp; Recovery Art Exhibition</title>
+      <link>https://desmoinesinsider.com/events/22nd-annual-works-of-growth-recovery-art-exhibition-2026-10-01</link>
+      <guid isPermaLink="true">https://desmoinesinsider.com/events/22nd-annual-works-of-growth-recovery-art-exhibition-2026-10-01</guid>
+      <description>Thu, Oct 1, 7:00 PM at Olson-Larsen Galleries. Annual art exhibition at Olson-Larsen Galleries</description>
+      <category>Arts</category>
+      <pubDate>Mon, 28 Sep 2026 12:18:55 GMT</pubDate>
+    </item>
+    <item>
+      <title>Clue</title>
+      <link>https://desmoinesinsider.com/events/clue-2026-10-01</link>
+      <guid isPermaLink="true">https://desmoinesinsider.com/events/clue-2026-10-01</guid>
+      <description>Thu, Oct 1, 7:00 PM at Ankeny Community Theatre. Theatrical production of Clue at Ankeny Community Theatre.</description>
+      <category>Arts</category>
+      <pubDate>Mon, 28 Sep 2026 12:18:49 GMT</pubDate>
+    </item>
+    <item>
+      <title>Ringling Bros. and Barnum &amp; Bailey Present Bigger Hair/Bigger Thrills</title>
+      <link>https://desmoinesinsider.com/events/ringling-bros-and-barnum-bailey-present-bigger-hair-bigger-thrills-2026-10-01</link>
+      <guid isPermaLink="true">https://desmoinesinsider.com/events/ringling-bros-and-barnum-bailey-present-bigger-hair-bigger-thrills-2026-10-01</guid>
+      <description>Thu, Oct 1, 7:00 PM at Iowa Events Center. Ringling Bros. and Barnum &amp; Bailey circus show at Iowa Events Center. Recurring daily until October 4, 2026.</description>
+      <category>Entertainment</category>
+      <pubDate>Mon, 28 Sep 2026 12:18:44 GMT</pubDate>
+    </item>
+    <item>
+      <title>Liver Life Walk, Your Way</title>
+      <link>https://desmoinesinsider.com/events/liver-life-walk-your-way-2026-10-01</link>
+      <guid isPermaLink="true">https://desmoinesinsider.com/events/liver-life-walk-your-way-2026-10-01</guid>
+      <description>Thu, Oct 1, 7:00 PM at Virtual. Virtual walk event benefiting liver health. Recurring monthly on the 1st until November 1, 2026.</description>
+      <category>Health</category>
+      <pubDate>Mon, 28 Sep 2026 12:18:38 GMT</pubDate>
+    </item>
+    <item>
+      <title>Come From Away</title>
+      <link>https://desmoinesinsider.com/events/come-from-away-2026-10-01</link>
+      <guid isPermaLink="true">https://desmoinesinsider.com/events/come-from-away-2026-10-01</guid>
+      <description>Thu, Oct 1, 7:00 PM at Des Moines Community Playhouse. Recurring weekly on Sunday, Wednesday, Thursday, Friday, Saturday until October 4, 2026</description>
+      <category>Arts</category>
+      <pubDate>Wed, 23 Sep 2026 18:20:29 GMT</pubDate>
+    </item>
+    <item>
+      <title>Come From Away</title>
+      <link>https://desmoinesinsider.com/events/come-from-away-2026-10-02</link>
+      <guid isPermaLink="true">https://desmoinesinsider.com/events/come-from-away-2026-10-02</guid>
+      <description>Fri, Oct 2, 7:00 PM at Des Moines Community Playhouse. Recurring weekly on Sunday, Wednesday, Thursday, Friday, Saturday until October 4, 2026</description>
+      <category>Arts</category>
+      <pubDate>Wed, 23 Sep 2026 18:20:29 GMT</pubDate>
+    </item>
+    <item>
+      <title>The Haunted Trolley Tour</title>
+      <link>https://desmoinesinsider.com/events/the-haunted-trolley-tour-2026-10-02</link>
+      <guid isPermaLink="true">https://desmoinesinsider.com/events/the-haunted-trolley-tour-2026-10-02</guid>
+      <description>Fri, Oct 2, 7:00 PM at Starts @ Whiskey River. Experience the Haunted Trolley Tour in Des Moines, Iowa on October 2nd. Spine-tingling ghost stories and paranormal history from Whiskey River. Book your spooky adventure today!</description>
+      <category>Community</category>
+      <pubDate>Fri, 28 Aug 2026 14:34:47 GMT</pubDate>
+    </item>
+    <item>
+      <title>Farmstasia 2026</title>
+      <link>https://desmoinesinsider.com/events/farmstasia-2026-2026-10-02</link>
+      <guid isPermaLink="true">https://desmoinesinsider.com/events/farmstasia-2026-2026-10-02</guid>
+      <description>Fri, Oct 2, 7:00 PM at Living History Farms. Farmstasia 2026 at Living History Farms in Urbandale near Des Moines. Family-friendly community event on October 2. Tickets and details inside.</description>
+      <category>Community</category>
+      <pubDate>Fri, 28 Aug 2026 14:34:03 GMT</pubDate>
+    </item>
+    <item>
+      <title>VIP Whiskey Tasting Event feat. Iowa Distilleries</title>
+      <link>https://desmoinesinsider.com/events/vip-whiskey-tasting-event-feat-iowa-distilleries-2026-10-02</link>
+      <guid isPermaLink="true">https://desmoinesinsider.com/events/vip-whiskey-tasting-event-feat-iowa-distilleries-2026-10-02</guid>
+      <description>Fri, Oct 2, 7:00 PM at Meridian Events &amp; Catering, The. Experience premium Iowa whiskey at VIP Tasting Event in West Des Moines. Sample craft distilleries, network with locals. October 2, 2026 at Meridian Events.</description>
+      <category>Community</category>
+      <pubDate>Fri, 28 Aug 2026 14:34:02 GMT</pubDate>
+    </item>
+    <item>
+      <title>Reefer Madness</title>
+      <link>https://desmoinesinsider.com/events/reefer-madness-2026-10-02</link>
+      <guid isPermaLink="true">https://desmoinesinsider.com/events/reefer-madness-2026-10-02</guid>
+      <description>Fri, Oct 2, 7:00 PM at Stoner Theater. Reefer Madness at Stoner Theater in Des Moines, IA on October 2, 2026. Community event featuring live entertainment. Get tickets and details now.</description>
+      <category>Community</category>
+      <pubDate>Fri, 28 Aug 2026 14:34:00 GMT</pubDate>
+    </item>
+    <item>
+      <title>Panda Fest 2026</title>
+      <link>https://desmoinesinsider.com/events/panda-fest-2026-2026-10-02</link>
+      <guid isPermaLink="true">https://desmoinesinsider.com/events/panda-fest-2026-2026-10-02</guid>
+      <description>Fri, Oct 2, 7:00 PM at Outlets of Des Moines. Panda Fest 2026 at Outlets of Des Moines in Altoona, IA on October 2. Community event with family fun, entertainment, and local attractions.</description>
+      <category>Community</category>
+      <pubDate>Fri, 28 Aug 2026 14:33:59 GMT</pubDate>
+    </item>
+    <item>
+      <title>Battle Of The Bands</title>
+      <link>https://desmoinesinsider.com/events/battle-of-the-bands-2026-10-01</link>
+      <guid isPermaLink="true">https://desmoinesinsider.com/events/battle-of-the-bands-2026-10-01</guid>
+      <description>Thu, Oct 1, 7:00 PM at Prairie Meadows Casino &amp; Hotel. Battle Of The Bands at Prairie Meadows Casino &amp; Hotel near Des Moines on October 1, 2026. Live music community event in Altoona, Iowa.</description>
+      <category>Community</category>
+      <pubDate>Fri, 28 Aug 2026 14:33:56 GMT</pubDate>
+    </item>
+    <item>
+      <title>Party for our Parks</title>
+      <link>https://desmoinesinsider.com/events/party-for-our-parks-2026-10-01</link>
+      <guid isPermaLink="true">https://desmoinesinsider.com/events/party-for-our-parks-2026-10-01</guid>
+      <description>Thu, Oct 1, 7:00 PM at Polk City Square. Join Party for our Parks on October 1st at Polk City Square. Community celebration supporting local parks in the Des Moines area. Family-friendly event.</description>
+      <category>Community</category>
+      <pubDate>Fri, 28 Aug 2026 14:33:55 GMT</pubDate>
+    </item>
+    <item>
+      <title>Luke Fox LIVE at Confluence Brewing</title>
+      <link>https://desmoinesinsider.com/events/luke-fox-live-at-confluence-brewing-2026-10-01</link>
+      <guid isPermaLink="true">https://desmoinesinsider.com/events/luke-fox-live-at-confluence-brewing-2026-10-01</guid>
+      <description>Thu, Oct 1, 7:00 PM at Confluence Brewing Company. Luke Fox LIVE at Confluence Brewing Company in Des Moines, IA on October 1st. Community event at 1235 Thomas Beck Rd. Live music and entertainment.</description>
+      <category>Community</category>
+      <pubDate>Fri, 28 Aug 2026 14:33:53 GMT</pubDate>
+    </item>
+    <item>
+      <title>Pumpkin Fest</title>
+      <link>https://desmoinesinsider.com/events/pumpkin-fest-2026-10-01</link>
+      <guid isPermaLink="true">https://desmoinesinsider.com/events/pumpkin-fest-2026-10-01</guid>
+      <description>Thu, Oct 1, 7:00 PM at Center Grove Orchard. Pumpkin Fest at Center Grove Orchard in Cambridge, IA near Des Moines. Family-friendly fall festival on October 1st. Community celebration with pumpkins and seasonal fun.</description>
+      <category>Community</category>
+      <pubDate>Fri, 28 Aug 2026 14:33:52 GMT</pubDate>
+    </item>
+    <item>
+      <title>Ringling Bros. and Barnum &amp; Bailey presents The Greatest Show On Earth - Des Moines</title>
+      <link>https://desmoinesinsider.com/events/ringling-bros-and-barnum-bailey-presents-the-greatest-show-on-earth-des-moines-2026-10-01</link>
+      <guid isPermaLink="true">https://desmoinesinsider.com/events/ringling-bros-and-barnum-bailey-presents-the-greatest-show-on-earth-des-moines-2026-10-01</guid>
+      <description>Thu, Oct 1, 7:00 PM at Wells Fargo Arena. Ringling Bros. Barnum &amp; Bailey Circus comes to Wells Fargo Arena in Des Moines, Iowa on October 1, 2026. Family entertainment with acrobats, animals &amp; more.</description>
+      <category>Family</category>
+      <pubDate>Fri, 14 Aug 2026 20:38:29 GMT</pubDate>
+    </item>
+    <item>
+      <title>Clint Black: Back On The Blacktop Tour</title>
+      <link>https://desmoinesinsider.com/events/clint-black-back-on-the-blacktop-tour-2026-10-02</link>
+      <guid isPermaLink="true">https://desmoinesinsider.com/events/clint-black-back-on-the-blacktop-tour-2026-10-02</guid>
+      <description>Fri, Oct 2, 7:00 PM at Vibrant Music Hall. Clint Black: Back On The Blacktop Tour at Vibrant Music Hall in Waukee near Des Moines, Iowa. October 2, 2026. Country music concert tickets.</description>
+      <category>Music</category>
+      <pubDate>Thu, 23 Jul 2026 00:04:02 GMT</pubDate>
+    </item>
+    <item>
+      <title>Kevin Bozeman</title>
+      <link>https://desmoinesinsider.com/events/kevin-bozeman-2026-10-02</link>
+      <guid isPermaLink="true">https://desmoinesinsider.com/events/kevin-bozeman-2026-10-02</guid>
+      <description>Fri, Oct 2, 7:00 PM at Funny Bone Comedy Club. Kevin Bozeman live comedy show at Funny Bone Comedy Club in West Des Moines, IA. October 2, 2026. Book tickets for this hilarious stand-up comedy event.</description>
+      <category>Comedy</category>
+      <pubDate>Mon, 29 Jun 2026 03:15:52 GMT</pubDate>
+    </item>
+    <item>
+      <title>Chris Munch</title>
+      <link>https://desmoinesinsider.com/events/chris-munch-2026-10-01</link>
+      <guid isPermaLink="true">https://desmoinesinsider.com/events/chris-munch-2026-10-01</guid>
+      <description>Thu, Oct 1, 7:00 PM at Funny Bone Comedy Club. Chris Munch live comedy performance at Funny Bone Comedy Club in West Des Moines, IA on October 1, 2026. Book tickets for this hilarious stand-up show.</description>
+      <category>Comedy</category>
+      <pubDate>Mon, 29 Jun 2026 03:15:52 GMT</pubDate>
+    </item>
+    <item>
+      <title>Jervis Campbell</title>
+      <link>https://desmoinesinsider.com/events/jervis-campbell-2026-10-01</link>
+      <guid isPermaLink="true">https://desmoinesinsider.com/events/jervis-campbell-2026-10-01</guid>
+      <description>Thu, Oct 1, 7:00 PM at Wooly&apos;s. Jervis Campbell live at Wooly&apos;s in Des Moines, IA on October 1, 2026. Music event at 504 E Locust St. Get tickets and event details.</description>
+      <category>Music</category>
+      <pubDate>Mon, 29 Jun 2026 03:15:52 GMT</pubDate>
+    </item>
+    <item>
+      <title>Final Act Ensemble: Halloween 2026 Show</title>
+      <link>https://desmoinesinsider.com/events/final-act-ensemble-halloween-2026-show-2026-10-01</link>
+      <guid isPermaLink="true">https://desmoinesinsider.com/events/final-act-ensemble-halloween-2026-show-2026-10-01</guid>
+      <description>Thu, Oct 1, 7:00 PM at Des Moines Community Playhouse. Final Act Ensemble Halloween 2026 Show at Des Moines Community Playhouse. October 1st. Arts event in Des Moines, IA. Tickets &amp; details.</description>
+      <category>Arts</category>
+      <pubDate>Thu, 14 May 2026 16:38:05 GMT</pubDate>
+    </item>
+    <item>
+      <title>Woman &amp; Whiskey A Curated Pairing Experience</title>
+      <link>https://desmoinesinsider.com/events/woman-whiskey-a-curated-pairing-experience-2026-10-01</link>
+      <guid isPermaLink="true">https://desmoinesinsider.com/events/woman-whiskey-a-curated-pairing-experience-2026-10-01</guid>
+      <description>Thu, Oct 1, 5:00 PM at The River Center. Woman &amp; Whiskey curated pairing experience at The River Center in Des Moines, IA. Premium whiskey tasting with gourmet food pairings October 1, 2026.</description>
+      <category>Food</category>
+      <pubDate>Mon, 11 May 2026 18:31:51 GMT</pubDate>
+    </item>
+    <item>
+      <title>Ringling Bros. and Barnum &amp; Bailey presents The Greatest Show On Earth - Des Moines</title>
+      <link>https://desmoinesinsider.com/events/ringling-bros-and-barnum-bailey-presents-the-greatest-show-on-earth-des-moines-2026-10-01</link>
+      <guid isPermaLink="true">https://desmoinesinsider.com/events/ringling-bros-and-barnum-bailey-presents-the-greatest-show-on-earth-des-moines-2026-10-01</guid>
+      <description>Thu, Oct 1, 7:00 PM at Casey&apos;s Center. Ringling Bros. and Barnum &amp; Bailey presents The Greatest Show On Earth</description>
+      <category>Family</category>
+      <pubDate>Mon, 11 May 2026 18:12:06 GMT</pubDate>
+    </item>
+    <item>
+      <title>Valley Junction&apos;s Artisan Trail: 15 Local Makers to Meet This Fall</title>
+      <link>https://desmoinesinsider.com/articles/valley-junctions-artisan-trail-15-local-makers-to-meet-this-fall</link>
+      <guid isPermaLink="true">https://desmoinesinsider.com/articles/valley-junctions-artisan-trail-15-local-makers-to-meet-this-fall</guid>
+      <description>Discover 15 exceptional artisans transforming Valley Junction into Des Moines&apos; premier destination for handcrafted goods. From pottery to metalwork, meet the local makers defining Iowa&apos;s creative renaissance this fall.</description>
+      <category>Local Business</category>
+      <pubDate>Tue, 14 Oct 2025 04:00:25 GMT</pubDate>
+    </item>
+    <item>
+      <title>Soup&apos;s On: 15 Must-Try Fall Comfort Dishes in Des Moines&apos; Local Restaurants</title>
+      <link>https://desmoinesinsider.com/articles/soups-on-15-must-try-fall-comfort-dishes-in-des-moines-local-restaurants</link>
+      <guid isPermaLink="true">https://desmoinesinsider.com/articles/soups-on-15-must-try-fall-comfort-dishes-in-des-moines-local-restaurants</guid>
+      <description>Discover 15 exceptional fall comfort soups at Des Moines restaurants, from classic French onion to authentic pho. Your guide to the best bowls in Iowa&apos;s capital city.</description>
+      <category>Food &amp; Drink</category>
+      <pubDate>Sun, 05 Oct 2025 16:03:55 GMT</pubDate>
+    </item>
+    <item>
+      <title>Pumpkin Patches and Apple Orchards Near Des Moines (2026)</title>
+      <link>https://desmoinesinsider.com/articles/best-pumpkin-patches-in-the-des-moines-area-your-complete-fall-guide</link>
+      <guid isPermaLink="true">https://desmoinesinsider.com/articles/best-pumpkin-patches-in-the-des-moines-area-your-complete-fall-guide</guid>
+      <description>The closest pumpkin patch to downtown is Iowa Orchard in Urbandale, about 15 minutes out, with no entry fee to pick pumpkins. For a full farm day, Howell&apos;s in Cumming and Center Grove Orchard in Cambridge have the most to do. Here are eight farms with their 2026 dates, hours and prices.</description>
+      <category>Attractions</category>
+      <pubDate>Sun, 05 Oct 2025 04:27:12 GMT</pubDate>
+    </item>
+    <item>
+      <title>Halloweekend in Des Moines: Your Ultimate Guide to Spooky Events &amp; Family Fun 2025</title>
+      <link>https://desmoinesinsider.com/articles/halloweekend-in-des-moines-your-ultimate-guide-to-spooky-events-family-fun-2023</link>
+      <guid isPermaLink="true">https://desmoinesinsider.com/articles/halloweekend-in-des-moines-your-ultimate-guide-to-spooky-events-family-fun-2023</guid>
+      <description>Discover the ultimate guide to Halloween in Des Moines! From terrifying haunted houses to family-friendly pumpkin patches, explore the best spooky events and autumn activities Central Iowa has to offer this October.</description>
+      <category>Lifestyle</category>
+      <pubDate>Sat, 04 Oct 2025 04:05:05 GMT</pubDate>
+    </item>
+    <item>
+      <title>Des Moines&apos; Cozy Coffee Crawl: 15 Local Cafes Perfect for Fall</title>
+      <link>https://desmoinesinsider.com/articles/des-moines-cozy-coffee-crawl-15-local-cafes-perfect-for-fall</link>
+      <guid isPermaLink="true">https://desmoinesinsider.com/articles/des-moines-cozy-coffee-crawl-15-local-cafes-perfect-for-fall</guid>
+      <description>Discover 15 exceptional local cafes perfect for fall coffee adventures in Des Moines. From cozy study spots to artisan roasters, explore the best seasonal drinks and welcoming atmospheres across the metro.</description>
+      <category>Food &amp; Drink</category>
+      <pubDate>Sat, 04 Oct 2025 03:49:01 GMT</pubDate>
+    </item>
+    <item>
+      <title>Des Moines&apos; Hidden History: 12 Fascinating Spots That Tell Our Story - Des Moines Guide</title>
+      <link>https://desmoinesinsider.com/articles/des-moines-hidden-history-12-fascinating-spots-that-tell-our-story-des-moines-guide</link>
+      <guid isPermaLink="true">https://desmoinesinsider.com/articles/des-moines-hidden-history-12-fascinating-spots-that-tell-our-story-des-moines-guide</guid>
+      <description>Discover everything you need to know about Des Moines&apos; Hidden History: 12 Fascinating Spots That Tell Our Story in Des Moines, Iowa. Your complete local guide.</description>
+      <category>History</category>
+      <pubDate>Sat, 04 Oct 2025 03:21:31 GMT</pubDate>
+    </item>
+    <item>
+      <title>Beaverdale&apos;s Best: A Local&apos;s Guide to Des Moines&apos; Most Charming Brick Streets - Des Moines Guide</title>
+      <link>https://desmoinesinsider.com/articles/beaverdales-best-a-locals-guide-to-des-moines-most-charming-brick-streets-des-moines-guide</link>
+      <guid isPermaLink="true">https://desmoinesinsider.com/articles/beaverdales-best-a-locals-guide-to-des-moines-most-charming-brick-streets-des-moines-guide</guid>
+      <description>Discover everything you need to know about Beaverdale&apos;s Best: A Local&apos;s Guide to Des Moines&apos; Most Charming Brick Streets in Des Moines, Iowa. Your complete local guide.</description>
+      <category>Tourism</category>
+      <pubDate>Sat, 04 Oct 2025 03:16:47 GMT</pubDate>
+    </item>
+    <item>
+      <title>The Budget Explorer&apos;s Guide to Des Moines: 25 Free &amp; Low-Cost Fall Activities - Des Moines Guide</title>
+      <link>https://desmoinesinsider.com/articles/the-budget-explorers-guide-to-des-moines-25-free-low-cost-fall-activities-des-moines-guide</link>
+      <guid isPermaLink="true">https://desmoinesinsider.com/articles/the-budget-explorers-guide-to-des-moines-25-free-low-cost-fall-activities-des-moines-guide</guid>
+      <description>Discover everything you need to know about The Budget Explorer&apos;s Guide to Des Moines: 25 Free &amp; Low-Cost Fall Activities in Des Moines, Iowa. Your complete local guide.</description>
+      <category>Lifestyle</category>
+      <pubDate>Sat, 04 Oct 2025 02:58:30 GMT</pubDate>
+    </item>
+    <item>
+      <title>Des Moines&apos; Indoor Farmers Markets 2023-24: Complete Winter Shopping Guide - Des Moines Guide</title>
+      <link>https://desmoinesinsider.com/articles/des-moines-indoor-farmers-markets-2023-24-complete-winter-shopping-guide-des-moines-guide</link>
+      <guid isPermaLink="true">https://desmoinesinsider.com/articles/des-moines-indoor-farmers-markets-2023-24-complete-winter-shopping-guide-des-moines-guide</guid>
+      <description>Discover everything you need to know about Des Moines&apos; Indoor Farmers Markets 2023-24: Complete Winter Shopping Guide in Des Moines, Iowa. Your complete local guide.</description>
+      <category>Shopping</category>
+      <pubDate>Wed, 03 Sep 2025 16:36:04 GMT</pubDate>
+    </item>
+    <item>
+      <title>Oktoberfest in Des Moines: Complete Guide to 2023 Beer Gardens &amp; German Events - Des Moines Guide</title>
+      <link>https://desmoinesinsider.com/articles/oktoberfest-in-des-moines-complete-guide-to-2023-beer-gardens-german-events-des-moines-guide</link>
+      <guid isPermaLink="true">https://desmoinesinsider.com/articles/oktoberfest-in-des-moines-complete-guide-to-2023-beer-gardens-german-events-des-moines-guide</guid>
+      <description>Discover everything you need to know about Oktoberfest in Des Moines: Complete Guide to 2023 Beer Gardens &amp; German Events in Des Moines, Iowa. Your complete local guide.</description>
+      <category>Food &amp; Drink</category>
+      <pubDate>Tue, 02 Sep 2025 20:15:37 GMT</pubDate>
+    </item>
+    <item>
+      <title>Drake Neighborhood Food Guide: 10 Hidden Gems Beyond Campus Life - Des Moines Guide</title>
+      <link>https://desmoinesinsider.com/articles/drake-neighborhood-food-guide-10-hidden-gems-beyond-campus-life-des-moines-guide</link>
+      <guid isPermaLink="true">https://desmoinesinsider.com/articles/drake-neighborhood-food-guide-10-hidden-gems-beyond-campus-life-des-moines-guide</guid>
+      <description>Discover everything you need to know about Drake Neighborhood Food Guide: 10 Hidden Gems Beyond Campus Life in Des Moines, Iowa. Your complete local guide.</description>
+      <category>Food &amp; Drink</category>
+      <pubDate>Tue, 02 Sep 2025 20:15:34 GMT</pubDate>
+    </item>
+    <item>
+      <title>The Ultimate Des Moines Patio Guide: 20 Must-Try Outdoor Dining Spots - Des Moines Guide</title>
+      <link>https://desmoinesinsider.com/articles/the-ultimate-des-moines-patio-guide-20-must-try-outdoor-dining-spots-des-moines-guide</link>
+      <guid isPermaLink="true">https://desmoinesinsider.com/articles/the-ultimate-des-moines-patio-guide-20-must-try-outdoor-dining-spots-des-moines-guide</guid>
+      <description>Discover everything you need to know about The Ultimate Des Moines Patio Guide: 20 Must-Try Outdoor Dining Spots in Des Moines, Iowa. Your complete local guide.</description>
+      <category>Food &amp; Drink</category>
+      <pubDate>Tue, 02 Sep 2025 20:10:07 GMT</pubDate>
+    </item>
+    <item>
+      <title>Des Moines&apos; Best Air-Conditioned Adventures: Indoor Activities for Scorching Days - Des Moines Guide</title>
+      <link>https://desmoinesinsider.com/articles/des-moines-best-air-conditioned-adventures-indoor-activities-for-scorching-days-des-moines-guide</link>
+      <guid isPermaLink="true">https://desmoinesinsider.com/articles/des-moines-best-air-conditioned-adventures-indoor-activities-for-scorching-days-des-moines-guide</guid>
+      <description>Discover everything you need to know about Des Moines&apos; Best Air-Conditioned Adventures: Indoor Activities for Scorching Days in Des Moines, Iowa. Your complete local guide.</description>
+      <category>Entertainment</category>
+      <pubDate>Tue, 02 Sep 2025 20:10:06 GMT</pubDate>
+    </item>
+    <item>
+      <title>Fall Colors &amp; Cider: The Ultimate Guide to Des Moines&apos; Apple Orchards &amp; Pumpkin Patches - Des Moines Guide</title>
+      <link>https://desmoinesinsider.com/articles/fall-colors-cider-the-ultimate-guide-to-des-moines-apple-orchards-pumpkin-patches-des-moines-guide</link>
+      <guid isPermaLink="true">https://desmoinesinsider.com/articles/fall-colors-cider-the-ultimate-guide-to-des-moines-apple-orchards-pumpkin-patches-des-moines-guide</guid>
+      <description>Discover everything you need to know about Fall Colors &amp; Cider: The Ultimate Guide to Des Moines&apos; Apple Orchards &amp; Pumpkin Patches in Des Moines, Iowa. Your complete local guide.</description>
+      <category>Tourism</category>
+      <pubDate>Tue, 02 Sep 2025 20:10:04 GMT</pubDate>
+    </item>
+    <item>
+      <title>Last Call for Farmers Market: Your September Shopping &amp; Cooking Guide - Des Moines Guide</title>
+      <link>https://desmoinesinsider.com/articles/last-call-for-farmers-market-your-september-shopping-cooking-guide-des-moines-guide</link>
+      <guid isPermaLink="true">https://desmoinesinsider.com/articles/last-call-for-farmers-market-your-september-shopping-cooking-guide-des-moines-guide</guid>
+      <description>Discover everything you need to know about Last Call for Farmers Market: Your September Shopping &amp; Cooking Guide in Des Moines, Iowa. Your complete local guide.</description>
+      <category>Lifestyle</category>
+      <pubDate>Tue, 02 Sep 2025 20:09:46 GMT</pubDate>
+    </item>
+    <item>
+      <title>Morning to Midnight: The Perfect Summer Saturday in Downtown Des Moines - Des Moines Guide</title>
+      <link>https://desmoinesinsider.com/articles/morning-to-midnight-the-perfect-summer-saturday-in-downtown-des-moines-des-moines-guide</link>
+      <guid isPermaLink="true">https://desmoinesinsider.com/articles/morning-to-midnight-the-perfect-summer-saturday-in-downtown-des-moines-des-moines-guide</guid>
+      <description>Discover everything you need to know about Morning to Midnight: The Perfect Summer Saturday in Downtown Des Moines in Des Moines, Iowa. Your complete local guide.</description>
+      <category>Entertainment</category>
+      <pubDate>Tue, 26 Aug 2025 02:25:36 GMT</pubDate>
+    </item>
+    <item>
+      <title>The Ultimate Highland Park Food Crawl: 8 Must-Try Ethnic Eateries - Des Moines Guide</title>
+      <link>https://desmoinesinsider.com/articles/the-ultimate-highland-park-food-crawl-8-must-try-ethnic-eateries-des-moines-guide</link>
+      <guid isPermaLink="true">https://desmoinesinsider.com/articles/the-ultimate-highland-park-food-crawl-8-must-try-ethnic-eateries-des-moines-guide</guid>
+      <description>Discover everything you need to know about The Ultimate Highland Park Food Crawl: 8 Must-Try Ethnic Eateries in Des Moines, Iowa. Your complete local guide.</description>
+      <category>Restaurants</category>
+      <pubDate>Tue, 26 Aug 2025 02:16:16 GMT</pubDate>
+    </item>
+    <item>
+      <title>7 Unexpected Date Night Ideas in Des Moines Under $50 - Des Moines Guide</title>
+      <link>https://desmoinesinsider.com/articles/7-unexpected-date-night-ideas-in-des-moines-under-50-des-moines-guide</link>
+      <guid isPermaLink="true">https://desmoinesinsider.com/articles/7-unexpected-date-night-ideas-in-des-moines-under-50-des-moines-guide</guid>
+      <description>Discover everything you need to know about 7 Unexpected Date Night Ideas in Des Moines Under $50 in Des Moines, Iowa. Your complete local guide.</description>
+      <category>Entertainment</category>
+      <pubDate>Tue, 26 Aug 2025 02:16:13 GMT</pubDate>
     </item>
   </channel>
 </rss>

@@ -80,7 +80,9 @@ export function SiteHealth({ dateRange, propertyId, connectedProviders }: SiteHe
       case "info":
         return <Info className="h-5 w-5 text-blue-500" />;
       default:
-        return <Activity className="h-5 w-5 text-gray-500" />;
+        // Unknown status, the neutral member of a semantic set - so the
+        // theme token rather than a raw gray, which does not follow dark mode.
+        return <Activity className="h-5 w-5 text-muted-foreground" />;
     }
   };
 
@@ -91,19 +93,6 @@ export function SiteHealth({ dateRange, propertyId, connectedProviders }: SiteHe
       info: "secondary",
     };
     return variants[severity] || "secondary";
-  };
-
-  const getSeverityBorderColor = (severity: string) => {
-    switch (severity) {
-      case "critical":
-        return "#ef4444";
-      case "warning":
-        return "#f59e0b";
-      case "info":
-        return "#0ea5e9";
-      default:
-        return "#6b7280";
-    }
   };
 
   if (loading) {
@@ -171,11 +160,7 @@ export function SiteHealth({ dateRange, propertyId, connectedProviders }: SiteHe
           {healthMetrics.length > 0 ? (
             <div className="space-y-4">
               {healthMetrics.map((metric, index) => (
-                <Card
-                  key={index}
-                  className="border-l-4"
-                  style={{ borderLeftColor: getSeverityBorderColor(metric.severity) }}
-                >
+                <Card key={index}>
                   <CardHeader className="pb-3">
                     <div className="flex items-start justify-between">
                       <div className="flex items-center gap-3">

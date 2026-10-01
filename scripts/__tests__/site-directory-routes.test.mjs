@@ -43,9 +43,32 @@ const servedBySegmentRoute = (href) =>
 
 console.log(`\nApp.tsx declares ${routes.size} literal routes; the directory links to ${DIRECTORY_HREFS.length}`);
 
+// Redirect sources in public/_redirects. An href that matches one of these
+// does reach a page, so it is not a soft 404 - but it costs every visitor a
+// 301 and it means the footer is advertising a URL the site has retired. That
+// is a different defect from a dead link, and it used to be reported as the
+// same one: /calendar (retired in WEB-FEAT-027, 301 -> /events) failed as "a
+// route that does not exist", which sent the reader looking for a missing
+// route rather than a stale link. WEB-CI-034.
+const redirectSources = new Set(
+  fs
+    .readFileSync('public/_redirects', 'utf8')
+    .split('\n')
+    .map((l) => l.trim())
+    .filter((l) => l && !l.startsWith('#'))
+    .map((l) => l.split(/\s+/)[0]),
+);
+
 console.log('\nevery directory href resolves');
-const unresolved = DIRECTORY_HREFS.filter((h) => !routes.has(h) && !servedBySegmentRoute(h));
+const missing = DIRECTORY_HREFS.filter((h) => !routes.has(h) && !servedBySegmentRoute(h));
+const redirected = missing.filter((h) => redirectSources.has(h));
+const unresolved = missing.filter((h) => !redirectSources.has(h));
 check('no href points at a route that does not exist', unresolved.length === 0, unresolved.join(', '));
+check(
+  'no href reaches its page only through a redirect',
+  redirected.length === 0,
+  redirected.map((h) => `${h} (301 in public/_redirects)`).join(', '),
+);
 
 console.log('\nhygiene');
 check('no duplicate hrefs across sections', new Set(DIRECTORY_HREFS).size === DIRECTORY_HREFS.length, [...DIRECTORY_HREFS.filter((h, i) => DIRECTORY_HREFS.indexOf(h) !== i)].join(', '));

@@ -23,3 +23,26 @@ export const createSlug = (name: string): string =>
     .toLowerCase()
     .replace(/[^a-z0-9]+/g, "-")
     .replace(/(^-|-$)/g, "");
+
+/**
+ * A slug turned back into a bounded `ilike` pattern for a title (WEB-PERF-031).
+ *
+ * `useEventBySlug`'s dateless branch had no date to narrow on, so it scanned
+ * the next 1,000 upcoming events and matched in JavaScript. Slugging is lossy -
+ * "Jazz in July: Night 2" and "jazz-in-july-night-2" cannot be inverted - but
+ * it is lossy in a direction that a LIKE pattern handles: every run of
+ * non-alphanumerics became a hyphen, so replacing each hyphen with `%` matches
+ * the original title and a bounded number of near-misses, which the caller then
+ * settles with createSlug.
+ *
+ * Returns null for a slug with nothing to match on, so the caller can skip the
+ * query rather than send `%%`.
+ *
+ * No LIKE escaping is needed on the way in: a slug is [a-z0-9-] by
+ * construction, and neither `%` nor `_` survives createSlug.
+ */
+export const slugToTitlePattern = (slug: string): string | null => {
+  const words = slug.split("-").filter(Boolean);
+  if (words.length === 0) return null;
+  return `%${words.join("%")}%`;
+};

@@ -1,6 +1,8 @@
 import { useQuery } from "@tanstack/react-query";
 import { supabase } from "@/integrations/supabase/client";
 import { createLogger } from '@/lib/logger';
+import { getOrCreateSessionId } from "@/lib/tracking";
+import { useAuthState } from "@/contexts/AuthContext";
 
 const log = createLogger('useActiveAds');
 
@@ -45,10 +47,10 @@ const AD_STALE_TIME = 5 * 60 * 1000;
  *      -> top_banner, featured_spot, below_fold, sponsored_listing
  *  and get_active_ads('sponsored_listing') returns HTTP 200.
  *
- *  `sidebar` is still deliberately absent: it is a front-end-only name that was
- *  never added to the enum, which is why isServable short-circuits it below
- *  rather than letting it reach the RPC (AC3 is the decision on whether it
- *  should exist at all). */
+ *  WEB-ADS-007 removed `sidebar`, which used to sit alongside these as a
+ *  front-end-only name that was never in the enum. There is no longer an
+ *  unservable placement, so the isServable() short-circuit that existed for it
+ *  is gone too. */
 const SERVABLE_PLACEMENTS = [
   'top_banner',
   'featured_spot',
@@ -57,22 +59,29 @@ const SERVABLE_PLACEMENTS = [
 ] as const;
 
 type ServablePlacement = typeof SERVABLE_PLACEMENTS[number];
-export type AdPlacement = ServablePlacement | 'sidebar';
 
-function isServable(placement: AdPlacement): placement is ServablePlacement {
-  return (SERVABLE_PLACEMENTS as readonly string[]).includes(placement);
-}
+/*
+ * WEB-ADS-007. This was `ServablePlacement | 'sidebar'`, with an isServable()
+ * guard below that skipped the RPC for sidebar and let the caller fall back to
+ * a house ad. `sidebar` was never in the placement_type enum, so no campaign
+ * could target it and the RPC rejected it outright - the short-circuit was the
+ * workaround for a placement that should not have been in the union. It is gone
+ * from PLACEMENT_SPECS now, so every value here is servable and the type says
+ * so.
+ */
+export type AdPlacement = ServablePlacement;
 
 export function useActiveAds(placementType: AdPlacement) {
-  // `sidebar` is a front-end-only placement — it exists in PLACEMENT_SPECS but was
-  // never added to the `placement_type` DB enum, so no campaign can ever target it
-  // and the RPC rejects it outright. Skip the call and let the caller fall back to a
-  // house ad instead of erroring on every render (WEB-QA-003).
-  const servable = isServable(placementType);
+  // WEB-SEC-031. The RPC below is passed p_user_id and applies PER-ACCOUNT
+  // frequency caps with it (WEB-ADS-002), so its answer is user-specific -- but
+  // the key was not, so after a logout the next person on the browser was
+  // served the previous account's capped selection until staleTime expired.
+  // useAuthState, not useAuth: ads render on every page, and the full context
+  // re-renders its consumers whenever an action reference changes (WEB-PERF-005).
+  const { user } = useAuthState();
 
   const { data, isLoading, refetch } = useQuery({
-    queryKey: ['active-ads', placementType],
-    enabled: servable,
+    queryKey: ['active-ads', placementType, user?.id ?? 'anonymous'],
     queryFn: async (): Promise<ActiveAd | null> => {
       // Send all three parameters, even though the last two are DEFAULT NULL.
       //
@@ -91,10 +100,29 @@ export function useActiveAds(placementType: AdPlacement) {
       // JSON-stringifies the args and an undefined key is DROPPED - which
       // sends the one-argument body again and reinstates the PGRST203
       // ambiguity described above. Both parameters accept NULL in SQL.
+      // WEB-ADS-002: these were both null, which switched OFF the frequency
+      // caps inside get_active_ads -- the ones that stop a visitor seeing the
+      // same campaign more than three times in five minutes, or an account
+      // seeing it more than ten times a day. Passing the real session and user
+      // is what turns them on. Still NULL rather than undefined when unknown,
+      // for the PGRST203 reason described above.
+      // WEB-CI-032: `error` was discarded, and this call decides whether the
+      // per-account frequency caps run. A failed getUser() looks exactly like
+      // a signed-out visitor, so the caps silently fall back to session-only -
+      // the WEB-ADS-002 failure mode, arrived at from the other direction.
+      // Treating it as anonymous is still the right behaviour (an ad must
+      // render), but it is now visible rather than assumed.
+      const { data: authData, error: authError } = await supabase.auth.getUser();
+      if (authError) {
+        log.warn('fetchActiveAd', 'getUser failed; serving as anonymous', {
+          placementType,
+          message: authError.message,
+        });
+      }
       const args = {
         p_placement_type: placementType as ServablePlacement,
-        p_session_id: null,
-        p_user_id: null,
+        p_session_id: getOrCreateSessionId(),
+        p_user_id: authData?.user?.id ?? null,
       } as unknown as Parameters<typeof supabase.rpc<'get_active_ads'>>[1];
       const { data, error } = await supabase.rpc('get_active_ads', args);
       if (error) {
@@ -127,5 +155,5 @@ export function useActiveAds(placementType: AdPlacement) {
     staleTime: AD_STALE_TIME,
   });
 
-  return { ad: data ?? null, isLoading: servable ? isLoading : false, refetch };
+  return { ad: data ?? null, isLoading, refetch };
 }

@@ -12,14 +12,33 @@ export interface Event {
   price?: string;
   image_url?: string;
   source_url?: string;
+  /**
+   * The affiliate redirect for the same page (scrape-ticketmaster-events).
+   * source_url stays the real page; eventOutboundLink prefers this for the
+   * button and marks it sponsored.
+   */
+  affiliate_url?: string | null;
   is_enhanced?: boolean;
   is_featured?: boolean;
   is_sponsored?: boolean;
   sponsored_until?: string | null;
-  created_at?: string;
-  updated_at?: string;
+  /*
+   * Nullable, not merely optional. The generated schema has events.created_at
+   * and events.updated_at as `string | null`, and EVENT_LIST_COLUMNS selects
+   * updated_at for ListFreshness - so a row read straight from the table was
+   * not assignable to this type, which is what broke EventsToday under
+   * strictNullChecks.
+   */
+  created_at?: string | null;
+  updated_at?: string | null;
   // New timezone fields
   event_start_utc?: string;
+  /**
+   * True when the source published a date but no start time (WEB-BE-038). The
+   * time component of `date` is then a placeholder -- SeatGeek's is 03:30:00 --
+   * and must not be displayed or emitted in JSON-LD.
+   */
+  time_tbd?: boolean | null;
   event_start_local?: string;
   event_timezone?: string;
   end_date?: string | null;
@@ -30,6 +49,11 @@ export interface Event {
   ai_writeup?: string | null;
   writeup_generated_at?: string | null;
   writeup_prompt_used?: string | null;
+  // GEO fields written by generate-seo-content. geo_faq is untyped JSON; read
+  // it through readGeoFaq (src/lib/restaurantMeta.ts).
+  geo_summary?: string | null;
+  geo_key_facts?: string[] | null;
+  geo_faq?: unknown;
 }
 
 export interface RestaurantOpening {

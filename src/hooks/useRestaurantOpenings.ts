@@ -2,15 +2,18 @@ import { useState, useEffect } from "react";
 import { supabase } from "@/integrations/supabase/client";
 import { Database } from "@/integrations/supabase/types";
 
+// `openingTimeframe` IS A READ-SIDE ALIAS AND BELONGS ONLY ON THE ROW. The
+// column is `opening_timeframe`; the camelCase name is produced by
+// useSupabase.ts:199 for RestaurantOpenings.tsx and AllInclusiveDashboard.tsx
+// to render. It was intersected onto Insert and Update too, so the write
+// helpers below advertised a field PostgREST would reject with PGRST204 -
+// nothing sent one, but nothing stopped it either. supabase-js 2.85+ rejects
+// excess properties on insert/update, which is what surfaced it.
 type RestaurantOpening = Database["public"]["Tables"]["restaurant_openings"]["Row"] & {
   openingTimeframe?: string;
 };
-type RestaurantOpeningInsert = Database["public"]["Tables"]["restaurant_openings"]["Insert"] & {
-  openingTimeframe?: string;
-};
-type RestaurantOpeningUpdate = Database["public"]["Tables"]["restaurant_openings"]["Update"] & {
-  openingTimeframe?: string;
-};
+type RestaurantOpeningInsert = Database["public"]["Tables"]["restaurant_openings"]["Insert"];
+type RestaurantOpeningUpdate = Database["public"]["Tables"]["restaurant_openings"]["Update"];
 
 interface RestaurantOpeningsState {
   restaurantOpenings: RestaurantOpening[];

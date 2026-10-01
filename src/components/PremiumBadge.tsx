@@ -15,31 +15,45 @@ interface PremiumBadgeProps {
   className?: string;
 }
 
+/**
+ * Tier surfaces are flat, not gradients, and every one carries white text at
+ * >= 4.5:1.
+ *
+ * What was here before was white text on `from-slate-400 to-slate-500`
+ * (3.0:1 at the light end), `from-amber-400 to-orange-500` (1.7:1 - the
+ * Insider label was effectively invisible) and `from-purple-500 to-pink-500`.
+ * The badge renders at text-[10px] in FeatureTag, so WCAG 1.4.3 wants 4.5:1,
+ * and none of the three cleared it.
+ *
+ * Measured against white: slate-600 7.58, amber-700 5.02, and the brand red
+ * --secondary 6.08 light / 5.23 dark. VIP now reads as the platform's own red
+ * rather than a purple-to-pink gradient that belongs to no part of this brand.
+ */
 const tierConfig: Record<
   SubscriptionTier,
   {
     icon: React.ElementType;
     label: string;
-    gradient: string;
+    surface: string;
     tooltip: string;
   }
 > = {
   free: {
     icon: Star,
     label: "Free",
-    gradient: "from-slate-400 to-slate-500",
+    surface: "bg-slate-600 text-white",
     tooltip: "Free plan",
   },
   insider: {
     icon: Sparkles,
     label: "Insider",
-    gradient: "from-amber-400 to-orange-500",
+    surface: "bg-amber-700 text-white",
     tooltip: "Insider member - Unlock premium features",
   },
   vip: {
     icon: Crown,
     label: "VIP",
-    gradient: "from-purple-500 to-pink-500",
+    surface: "bg-secondary text-secondary-foreground",
     tooltip: "VIP member - Full access to all features",
   },
 };
@@ -80,8 +94,8 @@ export function PremiumBadge({
           <Badge
             variant="outline"
             className={cn(
-              "bg-gradient-to-r text-white border-0 font-medium",
-              config.gradient,
+              "border-0 font-medium",
+              config.surface,
               sizeStyles.badge,
               className
             )}
@@ -106,8 +120,8 @@ export function PremiumInlineBadge({ tier }: { tier: SubscriptionTier }) {
   return (
     <span
       className={cn(
-        "inline-flex items-center gap-0.5 px-1.5 py-0.5 rounded text-xs font-medium bg-gradient-to-r text-white",
-        config.gradient
+        "inline-flex items-center gap-0.5 px-1.5 py-0.5 rounded text-xs font-medium",
+        config.surface
       )}
     >
       <Icon className="h-3 w-3" />
@@ -132,8 +146,8 @@ export function FeatureTag({ requiredTier, size = "sm" }: FeatureTagProps) {
         <TooltipTrigger asChild>
           <span
             className={cn(
-              "inline-flex items-center gap-1 rounded-full font-medium bg-gradient-to-r text-white",
-              config.gradient,
+              "inline-flex items-center gap-1 rounded-full font-medium",
+              config.surface,
               size === "sm" ? "text-[10px] px-1.5 py-0.5" : "text-xs px-2 py-1"
             )}
           >

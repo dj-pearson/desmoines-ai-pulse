@@ -11,6 +11,14 @@ import { createLogger } from '@/lib/logger';
 
 const log = createLogger('EventPhotoUpload');
 
+/**
+ * Raster formats only (events plan WP8 item 11). `image/*` let an SVG through,
+ * and an SVG served from a public bucket is a script-capable document. The
+ * bucket's own allowed_mime_types is deferred item D8; this is the client half.
+ */
+const EVENT_PHOTO_TYPES = ['image/jpeg', 'image/png', 'image/webp'] as const;
+const EXT_BY_TYPE: Record<string, string> = { 'image/jpeg': 'jpg', 'image/png': 'png', 'image/webp': 'webp' };
+
 interface EventPhotoUploadProps {
   eventId: string;
   onPhotoUploaded?: (photoUrl: string, caption?: string) => void;
@@ -33,10 +41,10 @@ export function EventPhotoUpload({ eventId, onPhotoUploaded, trigger }: EventPho
     if (!file) return;
 
     // Validate file type
-    if (!file.type.startsWith('image/')) {
+    if (!(EVENT_PHOTO_TYPES as readonly string[]).includes(file.type)) {
       toast({
         title: "Invalid file type",
-        description: "Please select an image file",
+        description: "Please choose a JPEG, PNG or WebP photo",
         variant: "destructive",
       });
       return;
@@ -66,10 +74,11 @@ export function EventPhotoUpload({ eventId, onPhotoUploaded, trigger }: EventPho
     
     try {
       // Upload to Supabase storage
-      const fileExt = selectedFile.name.split('.').pop();
+      // Extension from the checked MIME type, not the user's file name.
+      const fileExt = EXT_BY_TYPE[selectedFile.type] ?? 'jpg';
       const fileName = `${user.id}/${eventId}/${Date.now()}.${fileExt}`;
       
-      const { data: uploadData, error: uploadError } = await supabase.storage
+      const { error: uploadError } = await supabase.storage
         .from('event-photos')
         .upload(fileName, selectedFile);
 
@@ -169,7 +178,7 @@ export function EventPhotoUpload({ eventId, onPhotoUploaded, trigger }: EventPho
               <input
                 ref={fileInputRef}
                 type="file"
-                accept="image/*"
+                accept={EVENT_PHOTO_TYPES.join(',')}
                 onChange={handleFileSelect}
                 className="hidden"
               />

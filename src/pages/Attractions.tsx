@@ -1,4 +1,6 @@
-import React, { useState, useMemo, useEffect, lazy, Suspense, useRef } from "react";
+import { HubArticles } from "@/components/seo/HubArticles";
+import { RelatedLinks } from "@/components/seo/InternalLinks";
+import { useState, useMemo, useEffect, lazy, Suspense, useRef, startTransition } from "react";
 import Header from "@/components/Header";
 import Footer from "@/components/Footer";
 import { AdBanner } from "@/components/AdBanner";
@@ -6,21 +8,13 @@ import EnhancedLocalSEO from "@/components/EnhancedLocalSEO";
 import ItemListSchema from "@/components/schema/ItemListSchema";
 import { Breadcrumbs } from "@/components/ui/breadcrumbs";
 import { FAQSection } from "@/components/FAQSection";
-import { useAttractions } from "@/hooks/useAttractions";
+import { useAttractionTypeCounts, useAttractions } from "@/hooks/useAttractions";
 import { useUrlFilters } from "@/hooks/useUrlFilters";
 import { ActiveFilterChips } from "@/components/filters/ActiveFilterChips";
 import { getCanonicalUrl } from "@/lib/brandConfig";
 import { useToast } from "@/hooks/use-toast";
-import { useDocumentTitle } from "@/hooks/useDocumentTitle";
 import { BackToTop } from "@/components/BackToTop";
 import { useAnnounce } from "@/hooks/use-announce";
-import {
-  Card,
-  CardContent,
-  CardDescription,
-  CardHeader,
-  CardTitle,
-} from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
@@ -32,11 +26,11 @@ import {
   SelectValue,
 } from "@/components/ui/select";
 import { CardsGridSkeleton } from "@/components/ui/loading-skeleton";
-import { Star, Filter, List, Map, SlidersHorizontal, Landmark, ChevronRight, SearchX, X, ChevronDown, Shuffle } from "lucide-react";
+import { Filter, List, Map, SlidersHorizontal, Landmark, ChevronRight, SearchX, X, ChevronDown, Shuffle, LocateFixed } from "lucide-react";
 import { EmptyState } from "@/components/ui/empty-state";
 import { ErrorState } from "@/components/ui/error-state";
-import { SortDropdown, ATTRACTION_SORT_OPTIONS } from "@/components/SortDropdown";
-import { Link, useNavigate } from "react-router-dom";
+import { SortDropdown, type SortOption } from "@/components/SortDropdown";
+import { Link, useLocation, useNavigate } from "react-router-dom";
 import {
   Pagination,
   PaginationContent,
@@ -63,6 +57,12 @@ import {
   SheetTrigger,
 } from "@/components/ui/sheet";
 import { SpriteIcon } from "@/components/ui/SpriteIcon";
+import { ExploreSectionLinks } from "@/components/explore/ExploreSectionLinks";
+import { useNow } from "@/hooks/useNow";
+import { useGeolocation } from "@/hooks/useProximitySearch";
+import { sortByDistanceFrom, formatMilesAway } from "@/hooks/usePlaygrounds";
+import { attractionFactParts, attractionOpenStatus } from "@/lib/attractionHours";
+import { isPrerender } from "@/lib/isPrerender";
 
 // Lazy load map to prevent react-leaflet bundling issues
 const AttractionsMap = lazy(() => import("@/components/AttractionsMap"));
@@ -74,11 +74,59 @@ const createSlug = (name: string): string => {
     .replace(/^-+|-+$/g, "");
 };
 
+/** The 600px block the lazy map swaps into, so pressing Map shifts nothing. */
+function AttractionsMapSkeleton() {
+  return (
+    <div
+      className="h-[600px] w-full animate-pulse rounded-lg bg-muted"
+      role="status"
+      aria-label="Loading map"
+      data-testid="attractions-map-skeleton"
+    />
+  );
+}
+
+type AttractionRow = ReturnType<typeof useAttractions>["attractions"][number];
+
+/**
+ * Sort values the hub accepts. Name is the default (explore pass 2 WP3 item
+ * 2): "Highest rated" as a default ordered the page by attractions.rating, a
+ * column nothing on the page can source. It stays available on request.
+ */
+const SORT_VALUES = ["name_asc", "rating", "newest"] as const;
+type AttractionSort = (typeof SORT_VALUES)[number];
+const DEFAULT_SORT: AttractionSort = "name_asc";
+const ATTRACTION_SORTS: SortOption[] = [
+  { value: "name_asc", label: "Name (A-Z)" },
+  { value: "rating", label: "Highest rated" },
+  { value: "newest", label: "Recently added" },
+];
+
+function readSort(value: string): AttractionSort {
+  return (SORT_VALUES as readonly string[]).includes(value) ? (value as AttractionSort) : DEFAULT_SORT;
+}
+
+interface AttractionFactLineProps {
+  attraction: AttractionRow;
+  /** Null under prerender: no status goes into static HTML. */
+  now: Date | null;
+}
+
+/**
+ * One line of facts a visitor acts on (Explore plan WP3 items 3 and 7): Free,
+ * Indoor/Outdoor, Kids, and today's status when the hours say something. Each
+ * part renders only when its column is set; nothing renders when none are.
+ */
+function AttractionFactLine({ attraction, now }: AttractionFactLineProps) {
+  const facts = attractionFactParts(attraction, now);
+  if (facts.length === 0) return null;
+  return <p className="text-sm font-medium text-foreground/80">{facts.join(", ")}</p>;
+}
+
 export default function Attractions() {
   const navigate = useNavigate();
   const { toast } = useToast();
   const isMobile = useIsMobile();
-  useDocumentTitle("Attractions");
 
   const searchInputRef = useRef<HTMLInputElement>(null);
   const prefetchAttraction = usePrefetchAttraction();
@@ -88,12 +136,49 @@ export default function Attractions() {
   const { getStr, getNum, setParam, clearParams } = useUrlFilters();
   const selectedType = getStr("type", "all");
   const minRating = getStr("rating", "any-rating");
-  const featuredOnly = getStr("featured", "all");
-  const sortBy = getStr("sort", "rating");
+  // No Featured filter (explore pass 2 WP3 item 1). The is_featured flags were
+  // left set by 20260902000004 without anyone reviewing them, so "Featured"
+  // said nothing a visitor could rely on. An old ?featured= link reads as all;
+  // D8 brings the filter back once the flags are reviewed.
+  const sortBy = readSort(getStr("sort", DEFAULT_SORT));
   const setSelectedType = (v: string) => setParam("type", v, { def: "all", resetsPage: true });
   const setMinRating = (v: string) => setParam("rating", v, { def: "any-rating", resetsPage: true });
-  const setFeaturedOnly = (v: string) => setParam("featured", v, { def: "all", resetsPage: true });
-  const setSortBy = (v: string) => setParam("sort", v, { def: "rating", resetsPage: true });
+  const setSortBy = (v: string) => setParam("sort", v, { def: DEFAULT_SORT, resetsPage: true });
+  // Explore plan WP3 item 7. The hook already applies these server-side; the
+  // page never exposed them. "1" in the URL, absent otherwise.
+  const freeOnly = getStr("free", "") === "1";
+  const kidsOnly = getStr("kids", "") === "1";
+  const indoorOnly = getStr("indoor", "") === "1";
+  const toggleFlag = (key: "free" | "kids" | "indoor", on: boolean) =>
+    setParam(key, on ? "1" : "", { resetsPage: true });
+
+  // Open now (explore pass 2 WP3 items 3 and 5). The prerender has no clock a
+  // visitor shares, so under it there is no status anywhere on the page and
+  // ?open=now filters nothing. Otherwise the clock ticks each minute, so a tab
+  // left open drops a place when it closes.
+  const prerender = isPrerender();
+  const tick = useNow(60_000);
+  const now = prerender ? null : tick;
+  const openNowParam = getStr("open", "") === "now";
+  const openNowOnly = openNowParam && now !== null;
+  const setOpenNow = (on: boolean) => setParam("open", on ? "now" : "", { resetsPage: true });
+
+  // Near me is per visit: the position never goes in the URL.
+  const [nearMe, setNearMe] = useState(false);
+  const {
+    location: userLocation,
+    error: locationError,
+    isLoading: locating,
+    requestLocation,
+  } = useGeolocation();
+  const handleNearMe = () => {
+    if (nearMe) {
+      setNearMe(false);
+      return;
+    }
+    setNearMe(true);
+    if (!userLocation) requestLocation();
+  };
 
   const urlQ = getStr("q", "");
   const [searchQuery, setSearchQuery] = useState(() => urlQ);
@@ -114,7 +199,19 @@ export default function Attractions() {
 
   const [showFilters, setShowFilters] = useState(true); // Show filters by default
   const [showMobileFilters, setShowMobileFilters] = useState(false);
-  const [viewMode, setViewMode] = useState('list');
+  // ?view=map, so a shared or reloaded map view comes back as a map (item 9).
+  const viewMode = getStr("view", "list") === "map" ? "map" : "list";
+  const setViewMode = (v: "list" | "map") =>
+    startTransition(() => setParam("view", v, { def: "list" }));
+  const location = useLocation();
+  /** A real href for a pagination link, keeping every other param. */
+  const pageHref = (n: number) => {
+    const params = new URLSearchParams(location.search);
+    if (n <= 1) params.delete("page");
+    else params.set("page", String(n));
+    const qs = params.toString();
+    return qs ? `?${qs}` : location.pathname;
+  };
 
   const ITEMS_PER_PAGE = 30;
   const page = getNum("page", 1);
@@ -127,71 +224,69 @@ export default function Attractions() {
   const setPage = (v: number | ((prev: number) => number)) =>
     setParam("page", typeof v === "function" ? v(page) : v, { def: 1 });
 
-  // Get all attractions first
-  const { attractions: allAttractions, isLoading, error, refetch } = useAttractions({});
+  // WEB-PERF-028 AC4. The hook used to be called with no filters at all --
+  // every active attraction, every column in the list projection, on every
+  // visit -- with the search, type, rating, featured and sort controls all
+  // applied in the two useMemos below. The filters now go to Postgres, so a
+  // visitor who has picked a type downloads that type instead of the whole
+  // table and then discards most of it.
+  //
+  // `urlQ` rather than `searchQuery`: the input keeps its own immediate state
+  // and writes to the URL on a 300ms debounce (see above). Passing the raw
+  // input would fire a request per keystroke.
+  const { attractions: allAttractions, isLoading, error, refetch } = useAttractions({
+    // This page renders no total, so it does not pay for one (WEB-PERF-033).
+    countMode: "none",
+    search: urlQ || undefined,
+    type: selectedType !== "all" ? selectedType : undefined,
+    minRating: minRating !== "any-rating" ? parseFloat(minRating) : undefined,
+    freeOnly: freeOnly || undefined,
+    kidFriendlyOnly: kidsOnly || undefined,
+    indoorOnly: indoorOnly || undefined,
+    sortBy: sortBy === "rating" ? "rating" : sortBy === "newest" ? "newest" : "alphabetical",
+  });
   const { announce, announcement, regionProps } = useAnnounce();
 
-  // Get unique types for filter options
-  const attractionTypes = useMemo(() => {
-    const uniqueTypes = new Set(
-      allAttractions.map((attraction) => attraction.type).filter(Boolean)
-    );
-    return Array.from(uniqueTypes).sort();
-  }, [allAttractions]);
+  // The type list and the "Browse By Type" counts describe the WHOLE catalogue,
+  // not the current view, so they cannot be derived from a filtered list any
+  // more. One narrow single-column query answers both.
+  const { types: attractionTypes, counts: attractionTypeCounts } = useAttractionTypeCounts();
+  // The whole active catalogue, not the filtered view (item 11).
+  const catalogueTotal = useMemo(
+    () => Object.values(attractionTypeCounts).reduce((sum, n) => sum + n, 0),
+    [attractionTypeCounts]
+  );
 
-  // Apply filters
-  const filteredAttractions = useMemo(() => {
-    return allAttractions.filter((attraction) => {
-      // Search filter
-      if (searchQuery) {
-        const searchLower = searchQuery.toLowerCase();
-        const matchesSearch =
-          attraction.name.toLowerCase().includes(searchLower) ||
-          attraction.description?.toLowerCase().includes(searchLower) ||
-          attraction.location?.toLowerCase().includes(searchLower) ||
-          attraction.type?.toLowerCase().includes(searchLower);
-        if (!matchesSearch) return false;
-      }
-
-      // Type filter
-      if (selectedType !== "all" && attraction.type !== selectedType) {
-        return false;
-      }
-
-      // Rating filter
-      if (minRating !== "any-rating") {
-        const ratingThreshold = parseFloat(minRating);
-        if (!attraction.rating || attraction.rating < ratingThreshold) {
-          return false;
-        }
-      }
-
-      // Featured filter
-      if (featuredOnly === "featured" && !attraction.is_featured) {
-        return false;
-      }
-
-      return true;
-    });
-  }, [allAttractions, searchQuery, selectedType, minRating, featuredOnly]);
-
-  const sortedAttractions = useMemo(() => {
-    const sorted = [...filteredAttractions];
-    switch (sortBy) {
-      case "newest":
-        sorted.sort((a, b) => new Date(b.created_at || 0).getTime() - new Date(a.created_at || 0).getTime());
-        break;
-      case "name_asc":
-        sorted.sort((a, b) => a.name.localeCompare(b.name));
-        break;
-      case "rating":
-      default:
-        sorted.sort((a, b) => (b.rating || 0) - (a.rating || 0));
-        break;
+  // Open now is the one client-side filter: it depends on the minute, which
+  // Postgres doesn't know in Des Moines time. The count says how many rows
+  // have hours at all, since "7 open" out of 23 with hours is a different
+  // answer from 7 out of 60 with 37 unknown.
+  const openNow = useMemo(() => {
+    if (!now) return null;
+    let listed = 0;
+    const open: AttractionRow[] = [];
+    for (const a of allAttractions) {
+      const status = attractionOpenStatus(a.hours, a.hours_summary, now);
+      if (status.status === "unknown") continue;
+      listed++;
+      if (status.isOpen) open.push(a);
     }
-    // Boost up to 2 active sponsored listings to the top (WEB-FEAT-005).
-    return arrangeSponsored(sorted);
-  }, [filteredAttractions, sortBy]);
+    return { listed, open };
+  }, [allAttractions, now]);
+
+  // Postgres has applied every other filter and the sort.
+  const filteredAttractions = openNowOnly && openNow ? openNow.open : allAttractions;
+  // arrangeSponsored still runs client-side: boosting up to two active
+  // sponsored listings to the top (WEB-FEAT-005) is not something the ORDER BY
+  // expresses, and it must be applied AFTER the sort, exactly as before. Near
+  // me replaces both: in distance order a boosted row would be a wrong answer.
+  const nearMeActive = nearMe && userLocation !== null && !prerender;
+  const sortedAttractions = useMemo(() => {
+    if (nearMeActive && userLocation) {
+      return sortByDistanceFrom(filteredAttractions, userLocation);
+    }
+    return arrangeSponsored([...filteredAttractions]).map((a) => ({ ...a, distanceMiles: null as number | null }));
+  }, [filteredAttractions, nearMeActive, userLocation]);
 
   const handleSurpriseMe = () => {
     if (!filteredAttractions || filteredAttractions.length === 0) return;
@@ -216,20 +311,24 @@ export default function Attractions() {
   // Page reset on filter change is handled by setParam({ resetsPage: true }).
 
   // Announce result count to screen readers
+  const resultCount = filteredAttractions.length;
   useEffect(() => {
-    if (!isLoading && filteredAttractions) {
-      const count = filteredAttractions.length;
+    if (!isLoading) {
+      const count = resultCount;
       const context = searchQuery ? ` matching "${searchQuery}"` : '';
       announce(`Found ${count} attraction${count !== 1 ? 's' : ''}${context}`);
     }
-  }, [filteredAttractions?.length, isLoading, searchQuery, announce]);
+  }, [resultCount, isLoading, searchQuery, announce]);
 
   const getActiveFiltersCount = () => {
     let count = 0;
     if (searchQuery) count++;
     if (selectedType !== "all") count++;
     if (minRating !== "any-rating") count++;
-    if (featuredOnly !== "all") count++;
+    if (openNowOnly) count++;
+    if (freeOnly) count++;
+    if (kidsOnly) count++;
+    if (indoorOnly) count++;
     return count;
   };
 
@@ -237,7 +336,7 @@ export default function Attractions() {
 
   const handleClearFilters = () => {
     setSearchQuery("");
-    clearParams(["q", "type", "rating", "featured", "sort"]);
+    clearParams(["q", "type", "rating", "featured", "sort", "free", "kids", "indoor", "open"]);
     toast({
       title: "Filters Cleared",
       description: "All filters have been reset",
@@ -250,27 +349,15 @@ export default function Attractions() {
     ? `${selectedType} Attractions in Des Moines`
     : "Des Moines Attractions - Museums, Parks & Things to Do";
 
-  const pageDescription = `Discover ${filteredAttractions.length}+ attractions in Des Moines, Iowa. Explore museums, parks, entertainment venues, and cultural destinations. Find visitor information, hours, and directions for the best things to do in Des Moines.`;
+  const pageDescription = catalogueTotal > 0
+    ? `${catalogueTotal} attractions across the Des Moines metro: museums, parks, gardens and landmarks, with hours, admission and directions.`
+    : "Attractions across the Des Moines metro: museums, parks, gardens and landmarks, with hours, admission and directions.";
 
   const breadcrumbs = [
     { name: "Home", url: "/" },
     { name: "Attractions", url: "/attractions" },
   ];
 
-  const faqData = [
-    {
-      question: "What are the top attractions in Des Moines?",
-      answer: `Des Moines features ${filteredAttractions.length}+ attractions including Science Center of Iowa (interactive STEM exhibits), Blank Park Zoo (year-round animal exhibits), Pappajohn Sculpture Park (free outdoor art), Iowa State Capitol (free guided tours), and the Des Moines Art Center (free admission).`,
-    },
-    {
-      question: "Are there free attractions in Des Moines?",
-      answer: "Yes! Many Des Moines attractions offer free admission including Pappajohn Sculpture Park, Des Moines Art Center, Iowa State Capitol tours, State Historical Museum of Iowa, and various neighborhood parks.",
-    },
-    {
-      question: "What are the best family attractions in Des Moines?",
-      answer: "Top family-friendly attractions include Science Center of Iowa (hands-on exhibits), Blank Park Zoo, Adventureland Park (amusement rides), Living History Farms (interactive farm activities), and various splash pads and playgrounds.",
-    },
-  ];
 
   // The rendered set, capped, so every URL here is a link the crawler can
   // also see on the page. createSlug above is the same function the cards
@@ -312,16 +399,15 @@ export default function Attractions() {
 
       <Header />
 
-      {/* Hero Section with DMI Brand Colors */}
-      <section className="relative bg-gradient-to-br from-[#2D1B69] via-[#8B0000] to-[#DC143C] overflow-hidden min-h-[400px]">
-        <div className="absolute inset-0 bg-black/20"></div>
-        <div className="relative container mx-auto px-4 py-16 md:py-24 text-center">
-          <h1 className="text-4xl md:text-5xl lg:text-6xl font-bold text-white mb-4 tracking-tight">
-            Discover Des Moines Attractions
+      {/* Hero: one solid brand surface at about half the old height
+          (Explore plan WP3 item 11). */}
+      <section className="bg-[#2D1B69]">
+        <div className="container mx-auto px-4 py-10 md:py-12 text-center">
+          <h1 className="text-3xl md:text-5xl font-bold text-white mb-3 tracking-tight">
+            Des Moines Attractions
           </h1>
-          <p className="text-xl md:text-2xl text-white/90 mb-8 max-w-3xl mx-auto">
-            Explore museums, parks, entertainment venues, and cultural
-            attractions throughout the capital city
+          <p className="text-lg md:text-xl text-white/90 mb-6 max-w-3xl mx-auto">
+            Museums, parks, gardens and landmarks across the metro, with today's hours
           </p>
 
           {/* Search Bar */}
@@ -339,7 +425,7 @@ export default function Attractions() {
                       addRecentSearch('attractions', searchQuery);
                     }
                   }}
-                  className="text-base bg-white/95 backdrop-blur border-0 focus:ring-2 focus:ring-white h-12"
+                  className="text-base bg-background border-0 focus:ring-2 focus:ring-white h-12"
                   aria-label="Search attractions"
                   role="searchbox"
                 />
@@ -386,11 +472,11 @@ export default function Attractions() {
                         <div className="space-y-6">
                           {/* Type Filter */}
                           <div className="space-y-2">
-                            <label className="text-base font-medium">
+                            <label htmlFor="m-filter-type" className="text-base font-medium">
                               Attraction Type
                             </label>
                             <Select value={selectedType} onValueChange={setSelectedType}>
-                              <SelectTrigger className="input-mobile">
+                              <SelectTrigger id="m-filter-type" className="input-mobile">
                                 <SelectValue />
                               </SelectTrigger>
                               <SelectContent>
@@ -406,11 +492,11 @@ export default function Attractions() {
 
                           {/* Rating Filter */}
                           <div className="space-y-2">
-                            <label className="text-base font-medium">
+                            <label htmlFor="m-filter-rating" className="text-base font-medium">
                               Minimum Rating
                             </label>
                             <Select value={minRating} onValueChange={setMinRating}>
-                              <SelectTrigger className="input-mobile">
+                              <SelectTrigger id="m-filter-rating" className="input-mobile">
                                 <SelectValue />
                               </SelectTrigger>
                               <SelectContent>
@@ -419,22 +505,6 @@ export default function Attractions() {
                                 <SelectItem value="4.0">4.0+ Stars</SelectItem>
                                 <SelectItem value="3.5">3.5+ Stars</SelectItem>
                                 <SelectItem value="3.0">3.0+ Stars</SelectItem>
-                              </SelectContent>
-                            </Select>
-                          </div>
-
-                          {/* Featured Filter */}
-                          <div className="space-y-2">
-                            <label className="text-base font-medium">
-                              Featured
-                            </label>
-                            <Select value={featuredOnly} onValueChange={setFeaturedOnly}>
-                              <SelectTrigger className="input-mobile">
-                                <SelectValue />
-                              </SelectTrigger>
-                              <SelectContent>
-                                <SelectItem value="all">All Attractions</SelectItem>
-                                <SelectItem value="featured">Featured Only</SelectItem>
                               </SelectContent>
                             </Select>
                           </div>
@@ -465,6 +535,7 @@ export default function Attractions() {
                 <div className="flex items-center rounded-md bg-white/20 p-0.5">
                   <Button
                     onClick={() => setViewMode('list')}
+                    aria-pressed={viewMode === 'list'}
                     variant={viewMode === 'list' ? 'secondary' : 'ghost'}
                     size="icon"
                     className={viewMode === 'list' ? 'bg-white/30 text-white h-11' : 'text-white/70 hover:bg-white/30 hover:text-white h-11'}
@@ -475,6 +546,7 @@ export default function Attractions() {
                   </Button>
                   <Button
                     onClick={() => setViewMode('map')}
+                    aria-pressed={viewMode === 'map'}
                     variant={viewMode === 'map' ? 'secondary' : 'ghost'}
                     size="icon"
                     className={viewMode === 'map' ? 'bg-white/30 text-white h-11' : 'text-white/70 hover:bg-white/30 hover:text-white h-11'}
@@ -498,16 +570,17 @@ export default function Attractions() {
             { label: "Attractions" },
           ]}
         />
+        <ExploreSectionLinks current="/attractions" className="mb-6" />
         <div className="flex gap-8">
         <div className="flex-1 min-w-0">
 
         {/* Filters Section */}
         {showFilters && (
-          <div className="bg-white rounded-2xl shadow-lg p-6 mb-8 border">
-            <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-4">
+          <div className="bg-card text-card-foreground rounded-2xl p-6 mb-8 border">
+            <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
               {/* Type Filter */}
               <div className="space-y-2">
-                <label className="text-sm font-medium text-gray-700">
+                <label className="text-sm font-medium text-foreground">
                   Attraction Type
                 </label>
                 <Select value={selectedType} onValueChange={setSelectedType}>
@@ -527,7 +600,7 @@ export default function Attractions() {
 
               {/* Rating Filter */}
               <div className="space-y-2">
-                <label className="text-sm font-medium text-gray-700">
+                <label className="text-sm font-medium text-foreground">
                   Minimum Rating
                 </label>
                 <Select value={minRating} onValueChange={setMinRating}>
@@ -543,34 +616,75 @@ export default function Attractions() {
                   </SelectContent>
                 </Select>
               </div>
-
-              {/* Featured Filter */}
-              <div className="space-y-2">
-                <label className="text-sm font-medium text-gray-700">
-                  Featured
-                </label>
-                <Select value={featuredOnly} onValueChange={setFeaturedOnly}>
-                  <SelectTrigger aria-label="Featured">
-                    <SelectValue />
-                  </SelectTrigger>
-                  <SelectContent>
-                    <SelectItem value="all">All Attractions</SelectItem>
-                    <SelectItem value="featured">Featured Only</SelectItem>
-                  </SelectContent>
-                </Select>
-              </div>
             </div>
 
             <div className="flex justify-between mt-6">
               <Button variant="outline" onClick={handleClearFilters}>
                 Clear Filters
               </Button>
-              <div className="text-sm text-gray-500">
+              <div className="text-sm text-muted-foreground">
                 {formatCount(filteredAttractions?.length || 0, 'attraction')} found
               </div>
             </div>
           </div>
         )}
+
+        {/* Open now, Free / Kids / Indoors (item 7), Near me: one tap each.
+            All but Near me are URL-synced; a position never goes in a URL. */}
+        <div className="flex flex-wrap gap-2 mb-2" role="group" aria-label="Quick filters">
+          <Button
+            type="button"
+            variant={openNowOnly ? "default" : "outline"}
+            className="h-11 rounded-full px-5"
+            aria-pressed={openNowOnly}
+            onClick={() => setOpenNow(!openNowParam)}
+          >
+            Open now
+          </Button>
+          {([
+            { key: "free", label: "Free", on: freeOnly },
+            { key: "kids", label: "Kid-friendly", on: kidsOnly },
+            { key: "indoor", label: "Indoors", on: indoorOnly },
+          ] as const).map((chip) => (
+            <Button
+              key={chip.key}
+              type="button"
+              variant={chip.on ? "default" : "outline"}
+              className="h-11 rounded-full px-5"
+              aria-pressed={chip.on}
+              onClick={() => toggleFlag(chip.key, !chip.on)}
+            >
+              {chip.label}
+            </Button>
+          ))}
+          <Button
+            type="button"
+            variant={nearMeActive ? "default" : "outline"}
+            className="h-11 rounded-full px-5"
+            aria-pressed={nearMe}
+            onClick={handleNearMe}
+            disabled={locating}
+          >
+            <LocateFixed className="h-4 w-4 mr-2" aria-hidden="true" />
+            {locating ? "Locating..." : "Near me"}
+          </Button>
+        </div>
+        <div className="mb-6 min-h-5 text-sm text-muted-foreground">
+          {openNowOnly && openNow && !isLoading && (
+            <p data-open-now-count="">
+              Open now: {openNow.open.length} of {openNow.listed} with listed hours
+              {allAttractions.length > openNow.listed
+                ? `. ${allAttractions.length - openNow.listed} more have no hours with us.`
+                : ""}
+            </p>
+          )}
+          {nearMe && locationError && (
+            <p className="text-destructive" role="alert">
+              {locationError} The list is in its usual order.
+            </p>
+          )}
+          {nearMeActive && <p>Nearest first, straight-line distance. Places with no map location are last.</p>}
+        </div>
 
         {/* Screen reader announcement for result count changes */}
         <div {...regionProps}>{announcement}</div>
@@ -594,11 +708,21 @@ export default function Attractions() {
               ? `${selectedType} Attractions`
               : "Des Moines Attractions"}
           </h2>
-          <SortDropdown
-            options={ATTRACTION_SORT_OPTIONS}
-            value={sortBy}
-            onChange={setSortBy}
-          />
+          <div className="flex items-center gap-4">
+            {/* The site map with only attractions on, next to events and
+                restaurants when a visitor turns those on (item 10). */}
+            <Link
+              to="/map?layers=attraction"
+              className="inline-flex min-h-11 items-center text-sm font-medium text-foreground underline underline-offset-4 hover:text-primary"
+            >
+              Show on map
+            </Link>
+            <SortDropdown
+              options={ATTRACTION_SORTS}
+              value={sortBy}
+              onChange={setSortBy}
+            />
+          </div>
         </div>
 
         {/* Sticky filter bar: result count + removable chips (WEB-UX-003) */}
@@ -619,30 +743,42 @@ export default function Attractions() {
               ...(minRating !== "any-rating"
                 ? [{ key: "rating", label: `Rating: ${minRating}+`, onRemove: () => setMinRating("any-rating") }]
                 : []),
-              ...(featuredOnly !== "all"
-                ? [{ key: "featured", label: "Featured only", onRemove: () => setFeaturedOnly("all") }]
-                : []),
+              ...(openNowOnly ? [{ key: "open", label: "Open now", onRemove: () => setOpenNow(false) }] : []),
+              ...(freeOnly ? [{ key: "free", label: "Free", onRemove: () => toggleFlag("free", false) }] : []),
+              ...(kidsOnly ? [{ key: "kids", label: "Kid-friendly", onRemove: () => toggleFlag("kids", false) }] : []),
+              ...(indoorOnly ? [{ key: "indoor", label: "Indoors", onRemove: () => toggleFlag("indoor", false) }] : []),
             ]}
           />
         </div>
 
-        {viewMode === 'map' ? (
-          <AttractionsMap attractions={sortedAttractions} />
-        ) : isLoading ? (
+        {/* The map goes through the same loading and error states as the
+            list. Rendered first, a cold /attractions?view=map drew an empty
+            map while loading and on a failed query, with no explanation. */}
+        {isLoading ? (
+          viewMode === 'map' ? (
+            <AttractionsMapSkeleton />
+          ) : (
           <CardsGridSkeleton count={6} className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6" label={searchQuery ? `Searching for "${searchQuery}"...` : selectedType !== "all" ? `Loading ${selectedType} attractions...` : "Loading attractions..."} />
+          )
         ) : error ? (
           <ErrorState error={error} onRetry={() => refetch()} />
+        ) : viewMode === 'map' ? (
+          // Local boundary: the lazy map chunk used to suspend up to the
+          // route's fallback and blank the whole page on first toggle.
+          <Suspense fallback={<AttractionsMapSkeleton />}>
+            <AttractionsMap attractions={sortedAttractions} now={now} />
+          </Suspense>
         ) : sortedAttractions.length === 0 ? (
           <EmptyState
-            icon={searchQuery || selectedType !== "all" || minRating !== "any-rating" || featuredOnly !== "all" ? SearchX : Landmark}
+            icon={hasActiveFilters ? SearchX : Landmark}
             title={searchQuery ? `No results for "${searchQuery}"` : "No attractions found"}
             description={
-              searchQuery || selectedType !== "all" || minRating !== "any-rating" || featuredOnly !== "all"
+              hasActiveFilters
                 ? "Try adjusting your search criteria or filters to find more attractions."
                 : "No attractions available at the moment. Check back soon!"
             }
             actions={
-              searchQuery || selectedType !== "all" || minRating !== "any-rating" || featuredOnly !== "all"
+              hasActiveFilters
                 ? [
                     { label: "Clear Filters", onClick: handleClearFilters, variant: "outline" as const, icon: X },
                     { label: "Browse All Attractions", onClick: () => { handleClearFilters(); window.scrollTo({ top: 0, behavior: 'smooth' }); } },
@@ -661,21 +797,18 @@ export default function Attractions() {
             </p>
 
             <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
-              {paginatedAttractions.map((attraction) => (
-                <Link
-                  key={attraction.id}
-                  to={`/attractions/${createSlug(attraction.name)}`}
-                  className="block"
-                  aria-label={`${isSponsoredActive(attraction) ? "Sponsored: " : ""}${attraction.name}`}
-                  onMouseEnter={() => prefetchAttraction(createSlug(attraction.name))}
-                  onClick={() => {
-                    if (isSponsoredActive(attraction))
-                      logSponsoredClick("attraction", attraction.id);
-                  }}
-                >
-                  <Card
-                    className={`h-full hover:shadow-lg transition-all duration-200 hover:-translate-y-1 rounded-2xl overflow-hidden ${
-                      isSponsoredActive(attraction) ? "ring-2 ring-amber-400 shadow-lg" : ""
+              {paginatedAttractions.map((attraction, index) => {
+                const sponsored = isSponsoredActive(attraction);
+                const href = `/attractions/${createSlug(attraction.name)}`;
+                // An <article> with the title as a stretched link, and Save as
+                // a sibling above it (explore pass 2 WP3 item 7). The whole
+                // card was one <Link> with an aria-label, so a screen reader
+                // heard only the name and a button sat inside a link.
+                return (
+                  <article
+                    key={attraction.id}
+                    className={`relative flex h-full flex-col overflow-hidden rounded-2xl border bg-card text-card-foreground transition-shadow hover:shadow-lg focus-within:ring-2 focus-within:ring-ring ${
+                      sponsored ? "ring-2 ring-amber-400" : ""
                     }`}
                   >
                     <div className="relative">
@@ -683,29 +816,36 @@ export default function Attractions() {
                         <OptimizedImage
                           src={attraction.image_url}
                           alt={`${attraction.name} - ${attraction.type} in Des Moines`}
+                          // The first row of a three-column grid. Chrome does not start a lazy
+                          // image's fetch until layout has run, so the LCP candidate on a listing
+                          // page must not be lazy (WEB-SEO-032).
+                          // It used to decide whether the card appeared in the
+                          // prerendered HTML at all; WEB-PERF-041 removed that
+                          // gate, so now it only decides the fetch.
+                          priority={index < 3}
                           width={640}
                           height={360}
-                          className="transition-transform duration-200 hover:scale-105 object-cover"
+                          className="object-cover"
                           containerClassName="aspect-video overflow-hidden"
                           sizes="(max-width: 640px) 100vw, (max-width: 1024px) 50vw, 33vw"
                         />
                       ) : (
-                        <div className="aspect-video bg-gradient-to-br from-[#2D1B69] to-[#DC143C] flex items-center justify-center" role="img" aria-label={`No image available for ${attraction.name}`}>
-                          <Landmark className="h-12 w-12 text-white/40" />
+                        <div className="aspect-video bg-muted flex items-center justify-center" role="img" aria-label={`No image available for ${attraction.name}`}>
+                          <Landmark className="h-12 w-12 text-muted-foreground" aria-hidden="true" />
                         </div>
                       )}
                       {/* Sponsored listing treatment (WEB-FEAT-005) */}
-                      {isSponsoredActive(attraction) && (
+                      {sponsored && (
                         <div className="absolute top-3 left-3 z-20">
-                          <SponsoredBadge className="shadow-lg" />
+                          <SponsoredBadge />
                         </div>
                       )}
                       <SponsoredImpressionMarker
                         contentType="attraction"
                         contentId={attraction.id}
-                        active={isSponsoredActive(attraction)}
+                        active={sponsored}
                       />
-                      {/* Save (favorite) overlay — stopPropagation handled inside */}
+                      {/* Save sits above the stretched link, so it is its own control. */}
                       <div className="absolute top-3 right-3 z-20">
                         <FavoriteButton
                           contentType="attraction"
@@ -713,38 +853,40 @@ export default function Attractions() {
                           itemName={attraction.name}
                           size="icon"
                           variant="ghost"
-                          className="h-9 w-9 rounded-full bg-white/90 hover:bg-white shadow-md backdrop-blur"
+                          className="h-11 w-11 rounded-full bg-background/90 hover:bg-background"
                         />
                       </div>
                     </div>
-                    <CardContent className="p-5">
-                      <div className="flex items-center justify-between mb-2">
-                        <Badge
-                          variant="outline"
-                          className="bg-[#2D1B69]/10 text-[#2D1B69] text-xs"
-                        >
-                          <Landmark className="h-3 w-3 mr-1" />
+                    <div className="flex flex-1 flex-col p-5">
+                      {attraction.type && (
+                        <p className="mb-2 flex items-center gap-1 text-xs font-medium text-muted-foreground">
+                          <Landmark className="h-3 w-3" aria-hidden="true" />
                           {attraction.type}
-                        </Badge>
-                        {attraction.is_featured && (
-                          <Badge className="bg-[#DC143C] text-white text-xs">Featured</Badge>
-                        )}
-                      </div>
+                        </p>
+                      )}
                       <h3 className="font-semibold text-lg line-clamp-2 mb-2">
-                        {attraction.name}
+                        <Link
+                          to={href}
+                          className="after:absolute after:inset-0 after:z-10 after:content-[''] focus-visible:outline-none"
+                          onMouseEnter={() => prefetchAttraction(createSlug(attraction.name))}
+                          onFocus={() => prefetchAttraction(createSlug(attraction.name))}
+                          onClick={() => {
+                            if (sponsored) logSponsoredClick("attraction", attraction.id);
+                          }}
+                        >
+                          {attraction.name}
+                        </Link>
                       </h3>
                       <div className="space-y-2 text-sm text-muted-foreground">
-                        {attraction.rating && (
-                          <div className="flex items-center gap-2">
-                            <Star className="h-4 w-4 fill-yellow-400 text-yellow-400" />
-                            <span>{attraction.rating}/5</span>
-                          </div>
-                        )}
+                        <AttractionFactLine attraction={attraction} now={now} />
                         {attraction.location && (
                           <div className="flex items-center gap-2">
                             <SpriteIcon name="map-pin" className="h-4 w-4" />
                             <span className="line-clamp-1">{attraction.location}</span>
                           </div>
+                        )}
+                        {attraction.distanceMiles != null && (
+                          <p className="font-medium text-foreground/80">{formatMilesAway(attraction.distanceMiles)}</p>
                         )}
                       </div>
                       {attraction.description && (
@@ -752,10 +894,10 @@ export default function Attractions() {
                           {attraction.description}
                         </p>
                       )}
-                    </CardContent>
-                  </Card>
-                </Link>
-              ))}
+                    </div>
+                  </article>
+                );
+              })}
             </div>
 
             {/* Pagination controls */}
@@ -778,11 +920,12 @@ export default function Attractions() {
                       {page > 1 && (
                         <PaginationItem>
                           <PaginationPrevious
-                            onClick={() => {
+                            href={pageHref(page - 1)}
+                            onClick={(e) => {
+                              e.preventDefault();
                               setPage((p) => Math.max(1, p - 1));
                               window.scrollTo({ top: 0, behavior: 'smooth' });
                             }}
-                            className="cursor-pointer"
                           />
                         </PaginationItem>
                       )}
@@ -800,13 +943,14 @@ export default function Attractions() {
                         return (
                           <PaginationItem key={pageNum}>
                             <PaginationLink
+                              href={pageHref(pageNum)}
                               isActive={pageNum === page}
-                              onClick={() => {
+                              onClick={(e) => {
+                                e.preventDefault();
                                 setPage(pageNum);
                                 window.scrollTo({ top: 0, behavior: 'smooth' });
                               }}
-                              className="cursor-pointer"
-                            >
+                              >
                               {pageNum}
                             </PaginationLink>
                           </PaginationItem>
@@ -820,11 +964,12 @@ export default function Attractions() {
                       {page < totalPages && (
                         <PaginationItem>
                           <PaginationNext
-                            onClick={() => {
+                            href={pageHref(page + 1)}
+                            onClick={(e) => {
+                              e.preventDefault();
                               setPage((p) => Math.min(totalPages, p + 1));
                               window.scrollTo({ top: 0, behavior: 'smooth' });
                             }}
-                            className="cursor-pointer"
                           />
                         </PaginationItem>
                       )}
@@ -836,13 +981,6 @@ export default function Attractions() {
           </>
         )}
       </div>
-
-      {/* Sidebar Ad - Desktop Only */}
-      <aside className="hidden lg:block w-[160px] flex-shrink-0" aria-label="Sidebar advertisement">
-        <div className="sticky top-24">
-          <AdBanner placement="sidebar" />
-        </div>
-      </aside>
       </div>
       </div>
 
@@ -855,34 +993,32 @@ export default function Attractions() {
 
       {/* Browse Attractions By Type - Internal Linking for SEO */}
       {attractionTypes.length > 0 && (
-        <section className="py-12 bg-white border-t">
+        <section className="py-12 bg-background border-t">
           <div className="container mx-auto px-4">
-            <h2 className="text-2xl font-bold text-gray-900 mb-2">
+            <h2 className="text-2xl font-bold text-foreground mb-2">
               Browse Attractions By Type
             </h2>
-            <p className="text-gray-600 mb-6">
-              Explore Des Moines attractions by category to find exactly what you're looking for
+            <p className="text-muted-foreground mb-6">
+              Every type we list, with how many active attractions carry it
             </p>
             <div className="grid grid-cols-2 sm:grid-cols-3 md:grid-cols-4 lg:grid-cols-6 gap-3">
               {attractionTypes.map((type) => {
-                const count = allAttractions.filter((a) => a.type === type).length;
+                const count = attractionTypeCounts[type] ?? 0;
                 return (
-                  <button
+                  <Link
                     key={type}
-                    onClick={() => {
-                      setSelectedType(type);
-                      window.scrollTo({ top: 0, behavior: 'smooth' });
-                    }}
-                    className="flex items-center justify-between p-3 rounded-xl border hover:border-[#2D1B69] hover:bg-[#2D1B69]/5 transition-colors text-left group"
+                    to={`/attractions?type=${encodeURIComponent(type)}`}
+                    onClick={() => window.scrollTo({ top: 0, behavior: 'smooth' })}
+                    className="flex min-h-11 items-center justify-between p-3 rounded-xl border hover:border-primary hover:bg-muted transition-colors text-left group"
                   >
                     <div>
-                      <span className="text-sm font-medium text-gray-900 group-hover:text-[#2D1B69]">
+                      <span className="text-sm font-medium text-foreground group-hover:text-primary">
                         {type}
                       </span>
-                      <span className="block text-xs text-gray-500">{count} attractions</span>
+                      <span className="block text-xs text-muted-foreground">{formatCount(count, 'attraction')}</span>
                     </div>
-                    <ChevronRight className="h-4 w-4 text-gray-500 group-hover:text-[#2D1B69]" />
-                  </button>
+                    <ChevronRight className="h-4 w-4 text-muted-foreground group-hover:text-primary" aria-hidden="true" />
+                  </Link>
                 );
               })}
             </div>
@@ -898,35 +1034,51 @@ export default function Attractions() {
       </div>
 
       {/* SEO Content Section - Things to Do */}
-      <section className="py-12 bg-gray-50 border-t">
+      <section className="py-12 bg-muted/40 border-t">
         <div className="container mx-auto px-4 max-w-4xl">
-          <h2 className="text-2xl font-bold text-gray-900 mb-4">
+          <h2 className="text-2xl font-bold text-foreground mb-4">
             Things to Do in Des Moines, Iowa
           </h2>
-          <div className="prose prose-gray max-w-none text-gray-700 leading-relaxed space-y-4">
+          <div className="max-w-prose text-foreground/90 leading-relaxed space-y-4">
             <p>
-              Des Moines, the capital city of Iowa, offers a diverse array of attractions that cater to
-              every interest and age group. From world-class museums and interactive science centers to
-              sprawling parks and outdoor recreation, there's something for everyone in the Greater Des
-              Moines Area. Our comprehensive guide covers {allAttractions.length}+ attractions to help
-              you plan the perfect visit.
+              Des Moines has museums, parks, gardens, landmarks and family attractions across the
+              metro, from downtown to Ankeny and West Des Moines.
+              {catalogueTotal > 0 ? ` This guide lists ${catalogueTotal} of them, each with its own page.` : ""}
             </p>
             <p>
-              Whether you're a local looking for new weekend activities or a tourist planning a trip to
-              central Iowa, Des Moines delivers with attractions like the Pappajohn Sculpture Park (one
-              of the largest free outdoor sculpture parks in the country), the Des Moines Art Center
-              (offering free admission to internationally recognized collections), and the Science Center
-              of Iowa (featuring hands-on exhibits and an IMAX theater). Families will love Blank Park
-              Zoo, Adventureland Park, and the city's extensive network of playgrounds and splash pads.
+              Pappajohn Sculpture Park is a public park downtown, the Des Moines Art Center and the
+              Iowa State Capitol are close by, and the Science Center of Iowa and Blank Park Zoo are the
+              usual starts for families. The playgrounds guide covers play areas and splash pads.
             </p>
             <p>
-              Use the filters above to narrow down attractions by type, rating, or featured status. Switch
-              to map view to find attractions near you. Each attraction page includes visitor information,
-              directions, and tips to make the most of your visit to Des Moines.
+              Use Free, Kid-friendly and Indoors above to narrow the list, or switch to the map. Each
+              attraction page shows today's hours when we have them, admission, directions and what's on
+              nearby.
             </p>
           </div>
         </div>
       </section>
+
+      {/* SEO-011 / SEO-015: the attractions hub linked nowhere outside
+          itself. These are the pages that answer the next question. */}
+      <div className="max-w-4xl mx-auto px-4 sm:px-6 lg:px-8 py-8">
+        <RelatedLinks
+          title="Plan the rest of the day"
+          variant="grid"
+          links={[
+            { title: "Events this weekend", href: "/events/this-weekend" },
+            { title: "Kids and family events", href: "/events/kids" },
+            { title: "Playgrounds", href: "/playgrounds" },
+            { title: "Outdoors and trails", href: "/outdoors" },
+            { title: "Restaurants", href: "/restaurants" },
+            { title: "Things to do", href: "/things-to-do" },
+          ]}
+        />
+      </div>
+
+      <div className="max-w-4xl mx-auto px-4 sm:px-6 lg:px-8 pb-8">
+        <HubArticles hub="attractions" />
+      </div>
 
       {/* FAQ Section for SEO and Featured Snippets */}
       <section className="py-16 bg-muted/30">
@@ -934,38 +1086,33 @@ export default function Attractions() {
           <FAQSection
             title="Des Moines Attractions - Frequently Asked Questions"
             description="Common questions about attractions, museums, and things to see in Des Moines, Iowa."
+            // SEO-011. The answers this replaces asserted admission
+            // prices, accessibility, acreage, "over 100 species", "50+
+            // attractions" (the sitemap carries 22) and an IMAX theater -
+            // the fields the story names as the ones a visitor acts on, with
+            // no source in this repo, published as FAQPage schema. There is
+            // no price column (only is_free), so no answer promises prices
+            // (Explore plan WP3 item 3).
             faqs={[
               {
                 question: "What are the top attractions in Des Moines?",
-                answer: "Des Moines features 50+ attractions including Science Center of Iowa (interactive STEM exhibits and IMAX theater), Blank Park Zoo (year-round animal exhibits with over 100 species), Pappajohn Sculpture Park (free outdoor art gallery with 31 sculptures), Iowa State Capitol (free guided tours of the historic building), Living History Farms (interactive 500-acre farm experience), Des Moines Art Center (free admission to world-class art collections), Greater Des Moines Botanical Garden (indoor and outdoor gardens), and Adventureland Park (major amusement park with rides and water park). Our platform provides current hours, admission prices, and accessibility information for all attractions."
+                answer: "This guide lists the attractions we track across the Des Moines metro, including the Science Center of Iowa, Blank Park Zoo, the Iowa State Capitol, the Des Moines Art Center, the Greater Des Moines Botanical Garden and Pappajohn Sculpture Park. Each has its own page with its location, directions and, where we have them, its hours."
               },
               {
                 question: "Are there free attractions in Des Moines?",
-                answer: "Yes! Many Des Moines attractions offer free admission: Pappajohn Sculpture Park (downtown public art), Des Moines Art Center (free permanent collection), Iowa State Capitol tours (free guided tours), State Historical Museum of Iowa (free admission), Salisbury House & Gardens (free grounds access), Western Gateway Park (sculptures and trails), Gray's Lake Park (walking trails and beach), Principal Riverwalk (scenic downtown walking path), and various neighborhood parks. Several museums offer free admission days monthly. Check our Attractions page with the 'Free' filter for current free options."
+                answer: "Yes. Pappajohn Sculpture Park is a public park downtown, and several museums and landmarks are free to visit. Tap Free above the list to see the ones marked free admission; for prices at the others, check the attraction's official site."
               },
               {
                 question: "What are the best family attractions in Des Moines?",
-                answer: "Des Moines excels in family-friendly attractions: Science Center of Iowa (hands-on exhibits for all ages), Blank Park Zoo (educational animal experiences), Adventureland Park (amusement rides and water park for all ages), Living History Farms (interactive farm activities), Laser Quest (laser tag arena), Skyzone (trampoline park), various splash pads and playgrounds throughout the metro, Civic Center Broadway shows and family performances, and seasonal activities like pumpkin patches and Christmas displays. Our platform indicates age appropriateness and family amenities for each attraction."
-              },
-              {
-                question: "What museums are in Des Moines?",
-                answer: "Des Moines museums include Des Moines Art Center (modern and contemporary art with free admission), State Historical Museum of Iowa (Iowa history and culture), Science Center of Iowa (STEM exhibits and planetarium), Salisbury House & Gardens (historic mansion and art collection), World Food Prize Hall of Laureates (global food security), Hoyt Sherman Place (art gallery and historic theater), and various specialized museums. Most museums offer educational programs, special exhibitions, and guided tours. Check our Attractions page for current exhibits, hours, and special events at each museum."
-              },
-              {
-                question: "What outdoor attractions are available in Des Moines?",
-                answer: "Des Moines offers extensive outdoor attractions: Gray's Lake Park (177-acre park with trails and beach), Raccoon River Park (1,500 acres with trails and lodge), Pappajohn Sculpture Park (outdoor art), Greater Des Moines Botanical Garden (outdoor gardens), Water Works Park (1,500 acres along Raccoon River), Principal Riverwalk (downtown river trails), Maffitt Lake (fishing and wildlife), Big Creek State Park (nearby with 900-acre lake), and 100+ neighborhood parks and playgrounds. Seasonal activities include kayaking, paddleboarding, biking, hiking, and cross-country skiing."
+                answer: "The Science Center of Iowa and Blank Park Zoo are the obvious starts. For more, the Kids and Family events page lists upcoming family events and the playgrounds guide maps parks across the metro."
               },
               {
                 question: "Do Des Moines attractions require advance tickets?",
-                answer: "Ticket requirements vary by attraction. Popular attractions like Science Center of Iowa and Blank Park Zoo accept walk-ins but recommend online tickets during peak seasons (summer, weekends, holidays) to guarantee entry and skip lines. Adventureland Park offers online discounts for advance purchase. Special events and shows at Civic Center require advance tickets. Most museums and parks accept walk-ins year-round. Our attraction pages include ticketing information, online purchase links, and recommendations for advance booking based on season and day of week."
+                answer: "It depends on the attraction and the day. Each attraction page links to the official site, which is where ticketing and timed-entry rules are published."
               },
               {
-                question: "Are Des Moines attractions accessible for people with disabilities?",
-                answer: "Yes! Des Moines attractions prioritize accessibility. Major attractions like Science Center of Iowa, Blank Park Zoo, Des Moines Art Center, and Iowa State Capitol offer wheelchair accessibility, accessible parking, accessible restrooms, and accommodations for various disabilities. Many attractions provide sensory-friendly hours, assistive listening devices, and trained staff. Our platform indicates specific accessibility features for each attraction including wheelchair access, accessible parking, sensory accommodations, and service animal policies. Contact attractions directly for specific accommodation needs."
-              },
-              {
-                question: "What seasonal attractions are available in Des Moines?",
-                answer: "Des Moines offers seasonal attractions year-round: Spring (tulip displays at botanical gardens, Easter events), Summer (outdoor festivals, farmers markets, water parks, outdoor concerts), Fall (pumpkin patches, corn mazes, Oktoberfest, Iowa State Fair in August), Winter (holiday light displays, ice skating at Brenton Skating Plaza, indoor attractions). The Iowa State Fair in August is the state's largest event attracting 1+ million visitors. Check our Attractions page filtered by current season for relevant activities and special seasonal exhibitions."
+                question: "What is there to do outdoors in Des Moines?",
+                answer: "The outdoors guide covers trails and parks, the playgrounds guide covers play areas, and the attractions here include gardens and sculpture parks."
               }
             ]}
             showSchema={true}

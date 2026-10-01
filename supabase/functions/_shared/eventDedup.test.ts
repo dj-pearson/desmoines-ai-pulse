@@ -15,7 +15,6 @@ import {
   calculateTitleSimilarity,
   generateEventFingerprint,
   isDuplicateEvent,
-  RECURRING_WINDOW_HOURS,
   TITLE_SIMILARITY_THRESHOLD,
   type ExistingEvent,
 } from "./eventDedup.ts";
@@ -94,13 +93,13 @@ Deno.test("TIER 2 counter — same url and date, DIFFERENT show, is not a duplic
   assert(calculateTitleSimilarity("Beethoven Symphony No 9", "Mahler Symphony No 2") <= TITLE_SIMILARITY_THRESHOLD);
 });
 
-Deno.test("TIER 3 — same title and venue within 24 hours is one recurring event", () => {
+Deno.test("TIER 3 — same title and venue on the same Central day is one event", () => {
   const v = isDuplicateEvent(
     { title: "Open Mic Night", date: d("2026-09-10T01:00:00.000Z"), venue: "Woolys", source_url: "https://firstfleetconcerts.com/a" },
     [existing({ title: "open mic night", venue: "woolys", date: "2026-09-09T23:00:00.000Z", source_url: "https://firstfleetconcerts.com/b", fingerprint: undefined })],
   );
   assert(v.isDuplicate);
-  assertEquals(v.reason, "same_title_venue_within_24h");
+  assertEquals(v.reason, "same_title_venue_same_day");
 });
 
 Deno.test("TIER 3 counter — the SAME weekly event a week later is a real second event", () => {
@@ -112,13 +111,27 @@ Deno.test("TIER 3 counter — the SAME weekly event a week later is a real secon
   assertFalse(v.isDuplicate);
 });
 
-Deno.test("TIER 3 boundary — the window is 24 hours, checked on both sides", () => {
-  const at = (hours: number) => isDuplicateEvent(
-    { title: "Show", date: d(`2026-09-10T00:00:00.000Z`), venue: "Hall", source_url: "https://a.test/1" },
-    [existing({ title: "Show", venue: "Hall", date: new Date(Date.UTC(2026, 8, 10, hours)).toISOString(), source_url: "https://a.test/2", fingerprint: undefined })],
+Deno.test("TIER 3 boundary — the line is the Central calendar day, not a rolling window", () => {
+  // 2026-09-10T00:00Z is 7pm CDT on Sep 9. The comparison is against Sep 9 in
+  // Des Moines, NOT against a 24-hour window around a UTC instant.
+  const at = (utcHour: number) => isDuplicateEvent(
+    { title: "Show", date: d("2026-09-10T00:00:00.000Z"), venue: "Hall", source_url: "https://a.test/1" },
+    [existing({ title: "Show", venue: "Hall", date: new Date(Date.UTC(2026, 8, 10, utcHour)).toISOString(), source_url: "https://a.test/2", fingerprint: undefined })],
   ).isDuplicate;
-  assert(at(23), "23 hours apart is one event");
-  assertFalse(at(RECURRING_WINDOW_HOURS), "exactly 24 hours apart is NOT — the comparison is strictly less than");
+  assert(at(2), "2am UTC on Sep 10 is 9pm CDT on Sep 9 — the same evening, one event");
+  assertFalse(at(23), "11pm UTC on Sep 10 is 6pm CDT on Sep 10 — the next day, a second event");
+});
+
+Deno.test("TIER 3 counter — a Saturday evening and a Sunday matinee are two performances", () => {
+  // The case eventSourceProfiles names outright: the Symphony's concerts "must
+  // both be ingested". They are 18 hours apart, so the old 24-hour window
+  // collapsed them into one row and the site showed a matinee that did not
+  // exist as a separate listing (WEB-BE-036).
+  const v = isDuplicateEvent(
+    { title: "Beethoven Symphony No 9", date: d("2026-10-04T19:00:00.000Z"), venue: "Civic Center", source_url: "https://dmsymphony.org/a" },
+    [existing({ title: "Beethoven Symphony No 9", venue: "Civic Center", date: "2026-10-04T01:00:00.000Z", source_url: "https://dmsymphony.org/b", fingerprint: undefined })],
+  );
+  assertFalse(v.isDuplicate, "Sat 8pm CDT and Sun 2pm CDT are different Central days");
 });
 
 Deno.test("the first matching tier wins, so the reported reason is the strongest one", () => {

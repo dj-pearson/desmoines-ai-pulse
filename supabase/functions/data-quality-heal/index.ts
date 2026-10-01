@@ -22,10 +22,13 @@ const TABLES = ['events', 'restaurants', 'attractions'] as const;
 const BATCH = 25;
 const MAX_HEAL_ATTEMPTS = 3;
 
-// Column that carries the geocodable text differs per table.
+// Column that carries the geocodable text differs per table. Every name here
+// must exist in scripts/db-snapshot.json: restaurants has no `address`, and
+// asking for it made the select 42703 and threw the whole run away for every
+// table after it. restaurant-ingest-honesty.test.ts checks each entry.
 const ADDR_COLS: Record<string, string[]> = {
   events: ['location', 'venue'],
-  restaurants: ['address', 'location'],
+  restaurants: ['location'],
   attractions: ['address', 'location'],
 };
 
@@ -53,104 +56,117 @@ Deno.serve(async (req) => {
     const kpi: Record<string, { missingCoords: number; missingSeo: number; missingImage: number }> = {};
     const stageCounts = { geocoded: 0, geocodeFailed: 0, flagged: 0, seoBatches: 0, imageBatches: 0 };
 
+    // One table failing (a missing column, a timeout) is recorded here and the
+    // next table still runs. Only a run where every table failed is a failed
+    // run; anything less is reported with the errors attached.
+    const tableErrors: Record<string, string> = {};
+
     for (const table of TABLES) {
-      // ---- KPI snapshot (counts of rows missing each field class) ----
-      const [coordsMissing, seoMissing, imageMissing] = await Promise.all([
-        supabase.from(table).select('id', { count: 'exact', head: true }).is('latitude', null),
-        supabase.from(table).select('id', { count: 'exact', head: true }).is('seo_title', null),
-        supabase.from(table).select('id', { count: 'exact', head: true }).is('image_url', null),
-      ]);
-      // A COUNT THAT FAILED IS NOT A COUNT OF ZERO, and on a data-quality job
-      // that inversion is the whole point of the job. `?? 0` reported "0 rows
-      // missing coordinates / SEO / images" whether the data was complete or
-      // the count had errored, so the KPI a reader trusts most - the one saying
-      // there is nothing wrong - was the one a failed read produced.
-      const kpiError = coordsMissing.error ?? seoMissing.error ?? imageMissing.error;
-      if (kpiError) {
-        throw new Error(`could not count missing fields on ${table}: ${kpiError.message}`);
-      }
+      try {
+        // ---- KPI snapshot (counts of rows missing each field class) ----
+        const [coordsMissing, seoMissing, imageMissing] = await Promise.all([
+          supabase.from(table).select('id', { count: 'exact', head: true }).is('latitude', null),
+          supabase.from(table).select('id', { count: 'exact', head: true }).is('seo_title', null),
+          supabase.from(table).select('id', { count: 'exact', head: true }).is('image_url', null),
+        ]);
+        // A COUNT THAT FAILED IS NOT A COUNT OF ZERO, and on a data-quality job
+        // that inversion is the whole point of the job. `?? 0` reported "0 rows
+        // missing coordinates / SEO / images" whether the data was complete or
+        // the count had errored, so the KPI a reader trusts most - the one saying
+        // there is nothing wrong - was the one a failed read produced.
+        const kpiError = coordsMissing.error ?? seoMissing.error ?? imageMissing.error;
+        if (kpiError) {
+          throw new Error(`could not count missing fields on ${table}: ${kpiError.message}`);
+        }
 
-      kpi[table] = {
-        missingCoords: coordsMissing.count ?? 0,
-        missingSeo: seoMissing.count ?? 0,
-        missingImage: imageMissing.count ?? 0,
-      };
+        kpi[table] = {
+          missingCoords: coordsMissing.count ?? 0,
+          missingSeo: seoMissing.count ?? 0,
+          missingImage: imageMissing.count ?? 0,
+        };
 
-      // ---- Stage 1: geocode ----
-      const addrCols = ADDR_COLS[table];
-      const { data: rows, error: rowsError } = await supabase
-        .from(table)
-        .select(`id, latitude, longitude, heal_attempts, ${addrCols.join(', ')}`)
-        .is('latitude', null)
-        .eq('needs_manual_verification', false)
-        .limit(BATCH);
+        // ---- Stage 1: geocode ----
+        const addrCols = ADDR_COLS[table];
+        const { data: rows, error: rowsError } = await supabase
+          .from(table)
+          .select(`id, latitude, longitude, heal_attempts, ${addrCols.join(', ')}`)
+          .is('latitude', null)
+          .eq('needs_manual_verification', false)
+          .limit(BATCH);
 
-      // Same inversion on the work queue: `rows ?? []` made a failed read walk
-      // zero rows, and the stage then reported geocoded: 0 with the job marked
-      // successful - identical to "there was nothing left to heal".
-      if (rowsError) {
-        throw new Error(`could not read rows to geocode on ${table}: ${rowsError.message}`);
-      }
+        // Same inversion on the work queue: `rows ?? []` made a failed read walk
+        // zero rows, and the stage then reported geocoded: 0 with the job marked
+        // successful - identical to "there was nothing left to heal".
+        if (rowsError) {
+          throw new Error(`could not read rows to geocode on ${table}: ${rowsError.message}`);
+        }
 
-      for (const row of rows ?? []) {
-        const r = row as Record<string, unknown>;
-        const locationText = addrCols.map((c) => r[c]).find((v) => typeof v === 'string' && v.trim());
-        if (!locationText) continue;
+        for (const row of rows ?? []) {
+          const r = row as Record<string, unknown>;
+          const locationText = addrCols.map((c) => r[c]).find((v) => typeof v === 'string' && v.trim());
+          if (!locationText) continue;
 
+          try {
+            const res = await fetch(`${url}/functions/v1/geocode-location`, {
+              method: 'POST',
+              headers: { 'Content-Type': 'application/json', Authorization: `Bearer ${serviceKey}` },
+              body: JSON.stringify({ location: locationText }),
+            });
+            const geo = res.ok ? await res.json() : null;
+            if (geo?.latitude && geo?.longitude) {
+              await supabase.from(table).update({ latitude: geo.latitude, longitude: geo.longitude }).eq('id', r.id as string);
+              stageCounts.geocoded++;
+              ctx.processed(1);
+            } else {
+              throw new Error('no coordinates returned');
+            }
+          } catch (_e) {
+            const attempts = ((r.heal_attempts as number) ?? 0) + 1;
+            const patch: Record<string, unknown> = { heal_attempts: attempts };
+            if (attempts >= MAX_HEAL_ATTEMPTS) {
+              patch.needs_manual_verification = true;
+              stageCounts.flagged++;
+            }
+            await supabase.from(table).update(patch).eq('id', r.id as string);
+            stageCounts.geocodeFailed++;
+            ctx.failed(1);
+          }
+        }
+
+        // ---- Stage 2: SEO/GEO (delegate to generate-seo-content) ----
         try {
-          const res = await fetch(`${url}/functions/v1/geocode-location`, {
+          const res = await fetch(`${url}/functions/v1/generate-seo-content`, {
             method: 'POST',
             headers: { 'Content-Type': 'application/json', Authorization: `Bearer ${serviceKey}` },
-            body: JSON.stringify({ location: locationText }),
+            body: JSON.stringify({ contentType: SEO_TYPE[table], batchSize: 20 }),
           });
-          const geo = res.ok ? await res.json() : null;
-          if (geo?.latitude && geo?.longitude) {
-            await supabase.from(table).update({ latitude: geo.latitude, longitude: geo.longitude }).eq('id', r.id as string);
-            stageCounts.geocoded++;
-            ctx.processed(1);
-          } else {
-            throw new Error('no coordinates returned');
-          }
-        } catch (_e) {
-          const attempts = ((r.heal_attempts as number) ?? 0) + 1;
-          const patch: Record<string, unknown> = { heal_attempts: attempts };
-          if (attempts >= MAX_HEAL_ATTEMPTS) {
-            patch.needs_manual_verification = true;
-            stageCounts.flagged++;
-          }
-          await supabase.from(table).update(patch).eq('id', r.id as string);
-          stageCounts.geocodeFailed++;
-          ctx.failed(1);
+          if (res.ok) stageCounts.seoBatches++;
+        } catch (e) {
+          console.error(`[data-quality-heal] SEO stage failed for ${table}:`, e);
         }
-      }
 
-      // ---- Stage 2: SEO/GEO (delegate to generate-seo-content) ----
-      try {
-        const res = await fetch(`${url}/functions/v1/generate-seo-content`, {
-          method: 'POST',
-          headers: { 'Content-Type': 'application/json', Authorization: `Bearer ${serviceKey}` },
-          body: JSON.stringify({ contentType: SEO_TYPE[table], batchSize: 20 }),
-        });
-        if (res.ok) stageCounts.seoBatches++;
+        // ---- Stage 3: image backfill (delegate to backfill-images) ----
+        try {
+          const res = await fetch(`${url}/functions/v1/backfill-images`, {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json', Authorization: `Bearer ${serviceKey}` },
+            body: JSON.stringify({ contentType: table, limit: BATCH }),
+          });
+          if (res.ok) stageCounts.imageBatches++;
+        } catch (e) {
+          console.error(`[data-quality-heal] image stage failed for ${table}:`, e);
+        }
       } catch (e) {
-        console.error(`[data-quality-heal] SEO stage failed for ${table}:`, e);
-      }
-
-      // ---- Stage 3: image backfill (delegate to backfill-images) ----
-      try {
-        const res = await fetch(`${url}/functions/v1/backfill-images`, {
-          method: 'POST',
-          headers: { 'Content-Type': 'application/json', Authorization: `Bearer ${serviceKey}` },
-          body: JSON.stringify({ contentType: table, limit: BATCH }),
-        });
-        if (res.ok) stageCounts.imageBatches++;
-      } catch (e) {
-        console.error(`[data-quality-heal] image stage failed for ${table}:`, e);
+        tableErrors[table] = e instanceof Error ? e.message : String(e);
+        console.error(`[data-quality-heal] ${table} skipped:`, e);
       }
     }
 
-    ctx.meta({ kpi, stages: stageCounts });
-    return { kpi, stages: stageCounts };
+    ctx.meta({ kpi, stages: stageCounts, tableErrors });
+    if (Object.keys(tableErrors).length === TABLES.length) {
+      throw new Error(`every table failed: ${JSON.stringify(tableErrors)}`);
+    }
+    return { kpi, stages: stageCounts, tableErrors };
   });
 
   return new Response(

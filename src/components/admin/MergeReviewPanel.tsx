@@ -218,6 +218,8 @@ export default function MergeReviewPanel() {
                     className={
                       c.confidence >= 0.85
                         ? "bg-amber-500 hover:bg-amber-500"
+                        // The low half of an amber/slate confidence pair -
+                        // a two-member set, so slate stays (WEB-UX-034 AC2).
                         : "bg-slate-500 hover:bg-slate-500"
                     }
                   >

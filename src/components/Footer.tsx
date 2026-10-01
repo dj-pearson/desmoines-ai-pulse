@@ -1,102 +1,101 @@
 import { useState } from "react";
-import { Heart, Mail, Utensils, Map, Crown, Facebook, Twitter, Instagram, PlusCircle, DollarSign } from "lucide-react";
-import { Link } from "react-router-dom";
+import { Heart, Utensils, Map, Crown, Facebook, Twitter, Instagram, PlusCircle, DollarSign } from "lucide-react";
+import { Link, useLocation } from "react-router-dom";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
-import { useToast } from "@/hooks/use-toast";
-import { supabase } from "@/integrations/supabase/client";
+import { BRAND } from "@/lib/brandConfig";
 import { OptimizedLogo } from "@/components/OptimizedLogo";
-import { logConsent } from "@/lib/consentLog";
 import { reopenConsentBanner } from "@/components/CookieConsentBanner";
 import { SiteDirectory } from "@/components/seo/SiteDirectory";
 import { SpriteIcon } from "@/components/ui/SpriteIcon";
+import { useNewsletterSubscription } from "@/hooks/useNewsletterSubscription";
+import { useAuthFlags } from "@/contexts/AuthContext";
+import { isCapacitor } from "@/lib/capacitorUtils";
+import { MemberUpgradeGate } from "@/components/header/UserMenu";
+import { signUpHref } from "@/components/header/navigationConfig";
+import {
+  NEWSLETTER_PROMISE,
+  NEWSLETTER_SUBMIT_LABEL,
+  NEWSLETTER_SUBMITTING_LABEL,
+} from "@/content/newsletterCopy";
+
+/** Footer column titles: sentence case, no tracking. */
+const COLUMN_TITLE = "text-sm font-semibold mb-4 text-neutral-200";
 
 export default function Footer() {
   const [email, setEmail] = useState("");
-  const [isLoading, setIsLoading] = useState(false);
-  const { toast } = useToast();
+  const { subscribe, loading: isLoading } = useNewsletterSubscription();
+  const { isAuthenticated } = useAuthFlags();
+  const { pathname, search } = useLocation();
+  // Inside the iOS/Android app the App Store badge sends a person who already
+  // has the app to install it.
+  const inApp = isCapacitor();
 
+  // Double opt-in through the newsletter-subscribe edge function (WEB-FEAT-019,
+  // Home plan WP7). This used to insert into newsletter_subscribers from the
+  // browser, which skipped confirmation (the column default is 'active'), told
+  // anyone typing an address whether it was already subscribed (the 23505
+  // branch), and wrote consent_records before the person had confirmed
+  // anything. Consent is now recorded by the confirm RPC when the emailed link
+  // is clicked, and the hook shows the server's one answer for every outcome.
   const handleNewsletterSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
     if (!email) return;
-
-    setIsLoading(true);
-    try {
-      const { error } = await supabase
-        .from('newsletter_subscribers')
-        .insert({
-          email: email.toLowerCase().trim(),
-          source: 'footer',
-        });
-
-      if (error) {
-        if (error.code === '23505') {
-          toast({
-            title: "Already subscribed!",
-            description: "You're already on our list.",
-          });
-          setEmail("");
-          return;
-        }
-        throw error;
-      }
-
-      // Record affirmative marketing-email consent for CAN-SPAM / GDPR proof.
-      void logConsent({
-        type: "newsletter",
-        granted: true,
-        source: "newsletter_form",
-        email: email.toLowerCase().trim(),
-        metadata: { location: "footer" },
-      });
-
-      toast({
-        title: "Subscribed!",
-        description: "Welcome to the Des Moines Insider community. You can unsubscribe any time via the link in every email.",
-      });
-      setEmail("");
-    } catch (error) {
-      toast({
-        title: "Error",
-        description: "Please try again later.",
-        variant: "destructive",
-      });
-    } finally {
-      setIsLoading(false);
-    }
+    const ok = await subscribe({ email, source: "footer" });
+    if (ok) setEmail("");
   };
 
   return (
-    <footer className="bg-neutral-900 text-white">
-      {/* CTA Banner */}
-      <div className="bg-gradient-to-r from-primary to-primary/80 py-8">
+    <footer className="bg-neutral-900 text-white" aria-labelledby="site-footer-heading">
+      <h2 id="site-footer-heading" className="sr-only">
+        Site footer
+      </h2>
+      {/* CTA Banner: only for people who could act on it (guests and free
+          members), the same gate the header's Upgrade link uses. */}
+      <MemberUpgradeGate isAuthenticated={isAuthenticated}>
+      <div className="bg-primary py-8">
         <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8">
           <div className="flex flex-col md:flex-row items-center justify-between gap-4">
             <div className="text-center md:text-left">
               <h3 className="text-xl font-bold text-white mb-1">
-                Unlock Premium Features
+                Unlock premium features
               </h3>
               <p className="text-white/90 text-sm">
-                Get early event access, unlimited favorites & personalized recommendations
+                Unlimited favorites, saved-search alerts and no ads with Insider
               </p>
             </div>
-            <Link to="/pricing">
-              <Button size="lg" variant="secondary" className="font-semibold">
-                <Crown className="h-4 w-4 mr-2" />
+            {/* asChild: one interactive element, not a <button> inside an <a>. */}
+            <Button asChild size="lg" variant="secondary" className="font-semibold">
+              <Link to="/pricing">
+                <Crown className="h-4 w-4 mr-2" aria-hidden="true" />
                 View Plans
-                <SpriteIcon name="arrow-right" className="h-4 w-4 ml-2" />
-              </Button>
-            </Link>
+                <SpriteIcon name="arrow-right" className="h-4 w-4 ml-2" aria-hidden="true" />
+              </Link>
+            </Button>
           </div>
         </div>
       </div>
+      </MemberUpgradeGate>
 
       {/* Main Footer */}
       <div className="py-12">
         <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8">
-          <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-5 gap-8">
+          {/* TWO-UP LINK COLUMNS ON A PHONE (WEB-UX-037).
+              Measured at 375x800: this grid was 1376px with everything in one
+              column - brand 360, Explore 320, For You 156, Business 444. The
+              three link columns are short lists of one-line items, so stacking
+              them wasted the right half of the screen for 920px of the scroll.
+              grid-cols-2 pairs them; the brand cell keeps the full width
+              because its newsletter input needs it. */}
+          <div className="grid grid-cols-2 md:grid-cols-2 lg:grid-cols-5 gap-x-6 gap-y-8">
             {/* Brand */}
-            <div className="lg:col-span-2">
+            {/* md:col-span-1 is LOAD-BEARING. Without it the mobile
+                `col-span-2` carries into the md 2-column layout, the brand cell
+                takes a whole row of its own, and the tablet footer grows 336px
+                (2157 -> 2493 measured at 768). The full width is only wanted
+                where the grid is 2 columns wide and the newsletter input needs
+                them both. */}
+            <div className="col-span-2 md:col-span-1 lg:col-span-2">
               <OptimizedLogo
                 variant="logo2"
                 alt="Des Moines Insider"
@@ -106,15 +105,14 @@ export default function Footer() {
                 fetchPriority="low"
               />
               <p className="text-neutral-400 mb-4 text-sm">
-                Your AI-powered guide to discovering the best events, dining, and attractions
-                in Des Moines. {/* WEB-SEO-016: "Join 15,000+ locals" removed — nothing
+                Events, restaurants and things to do in Des Moines, updated
+                daily. {/* WEB-SEO-016: "Join 15,000+ locals" removed — nothing
                 measures it. */}
               </p>
 
               {/* Newsletter Benefit Line */}
               <p className="text-neutral-300 text-sm mb-2 flex items-center gap-1.5">
-                <SpriteIcon name="sparkles" className="h-3.5 w-3.5 text-amber-400 flex-shrink-0" aria-hidden="true" />
-                Weekly digest of trending events + AI-powered recommendations
+                {NEWSLETTER_PROMISE}
               </p>
 
               {/* Newsletter Mini Form */}
@@ -123,21 +121,24 @@ export default function Footer() {
                 <Input
                   id="footer-newsletter-email"
                   type="email"
-                  placeholder="Get your weekly Des Moines plan"
+                  autoComplete="email"
+                  inputMode="email"
+                  placeholder="you@example.com"
                   value={email}
                   onChange={(e) => setEmail(e.target.value)}
-                  className="bg-neutral-800 border-neutral-700 text-white placeholder:text-neutral-400 h-10"
+                  className="bg-neutral-800 border-neutral-700 text-white placeholder:text-neutral-400 h-11"
                   required
                   aria-describedby="newsletter-description"
                 />
                 <span id="newsletter-description" className="sr-only">Subscribe to receive weekly updates about Des Moines events</span>
-                <Button type="submit" disabled={isLoading} size="sm" className="h-10 px-5 whitespace-nowrap" aria-label="Subscribe to newsletter">
-                  Subscribe Free
+                <Button type="submit" disabled={isLoading} size="sm" className="h-11 px-5 whitespace-nowrap">
+                  {isLoading ? NEWSLETTER_SUBMITTING_LABEL : NEWSLETTER_SUBMIT_LABEL}
                 </Button>
               </form>
 
-              {/* Social Proof + CAN-SPAM disclosure. Submitting the form is an
-                  affirmative opt-in; we log it to consent_records. */}
+              {/* CAN-SPAM disclosure. Submitting starts a double opt-in; the
+                  consent_records row is written when the emailed link is
+                  confirmed, not here. */}
               <p className="text-neutral-400 text-xs mb-1 flex items-center gap-1">
                 <SpriteIcon name="users" className="h-3 w-3" aria-hidden="true" />
                 Free forever, unsubscribe anytime.
@@ -150,93 +151,113 @@ export default function Footer() {
                 . Every email includes a one-click unsubscribe link.
               </p>
 
-              {/* Social Links */}
-              <div className="flex gap-3" role="group" aria-label="Social media links">
-                <a href="https://facebook.com" target="_blank" rel="noopener noreferrer"
-                   aria-label="Follow us on Facebook (opens in new tab)"
-                   className="tap-area-44 w-9 h-9 rounded-full bg-neutral-800 hover:bg-neutral-700 flex items-center justify-center transition-colors focus:outline-none focus:ring-2 focus:ring-primary focus:ring-offset-2 focus:ring-offset-neutral-900">
-                  <Facebook className="h-4 w-4" aria-hidden="true" />
-                </a>
-                <a href="https://twitter.com" target="_blank" rel="noopener noreferrer"
-                   aria-label="Follow us on Twitter (opens in new tab)"
-                   className="tap-area-44 w-9 h-9 rounded-full bg-neutral-800 hover:bg-neutral-700 flex items-center justify-center transition-colors focus:outline-none focus:ring-2 focus:ring-primary focus:ring-offset-2 focus:ring-offset-neutral-900">
-                  <Twitter className="h-4 w-4" aria-hidden="true" />
-                </a>
-                <a href="https://instagram.com" target="_blank" rel="noopener noreferrer"
-                   aria-label="Follow us on Instagram (opens in new tab)"
-                   className="tap-area-44 w-9 h-9 rounded-full bg-neutral-800 hover:bg-neutral-700 flex items-center justify-center transition-colors focus:outline-none focus:ring-2 focus:ring-primary focus:ring-offset-2 focus:ring-offset-neutral-900">
-                  <Instagram className="h-4 w-4" aria-hidden="true" />
-                </a>
-              </div>
+              {/* Social Links.
 
-              {/* App Store Badge */}
+                  WEB-SEO-023: these linked to bare facebook.com, twitter.com
+                  and instagram.com -- the SITES, not profiles. A "Follow us on
+                  Facebook" button that opens Facebook's homepage is a dead
+                  control that looks alive, and it disagreed with the sameAs
+                  array the JSON-LD was emitting at the same time.
+
+                  Both now read BRAND.social, which is empty until the owner
+                  supplies real profile URLs. An absent row of icons is honest;
+                  three icons that go nowhere are not. */}
+              {BRAND.social.length > 0 && (
+                <div className="flex gap-3" role="group" aria-label="Social media links">
+                  {BRAND.social.map((href) => {
+                    const network = href.includes('facebook')
+                      ? { label: 'Facebook', Icon: Facebook }
+                      : href.includes('instagram')
+                        ? { label: 'Instagram', Icon: Instagram }
+                        : { label: 'X', Icon: Twitter };
+                    return (
+                      <a
+                        key={href}
+                        href={href}
+                        target="_blank"
+                        rel="noopener noreferrer"
+                        aria-label={`Follow us on ${network.label} (opens in new tab)`}
+                        className="tap-area-44 w-9 h-9 rounded-full bg-neutral-800 hover:bg-neutral-700 flex items-center justify-center transition-colors focus:outline-none focus:ring-2 focus:ring-primary focus:ring-offset-2 focus:ring-offset-neutral-900"
+                      >
+                        <network.Icon className="h-4 w-4" aria-hidden="true" />
+                      </a>
+                    );
+                  })}
+                </div>
+              )}
+
+              {/* App Store badge, web only. */}
+              {!inApp && (
               <a
                 href="https://apps.apple.com/us/app/des-moines-insider-events/id6759137729"
                 target="_blank"
                 rel="noopener noreferrer"
                 aria-label="Download Des Moines Insider on the App Store (opens in new tab)"
-                className="inline-block mt-4 focus:outline-none focus:ring-2 focus:ring-primary focus:ring-offset-2 focus:ring-offset-neutral-900 rounded-lg"
+                className="inline-flex min-h-11 items-center mt-4 focus:outline-none focus:ring-2 focus:ring-primary focus:ring-offset-2 focus:ring-offset-neutral-900 rounded-lg"
               >
                 <img
                   src="https://tools.applemediaservices.com/api/badges/download-on-the-app-store/black/en-us?size=250x83&releaseDate=1700000000"
                   alt="Download on the App Store"
+                  width={120}
+                  height={40}
                   className="h-10 w-auto"
                   loading="lazy"
                 />
               </a>
+              )}
             </div>
 
             {/* Explore */}
             <nav aria-label="Explore links">
-              <h4 className="text-sm font-semibold mb-4 uppercase tracking-wider text-neutral-300">Explore</h4>
-              <ul className="space-y-2">
+              <h3 className={COLUMN_TITLE}>Explore</h3>
+              <ul className="footer-link-list space-y-2">
                 <li>
-                  <Link to="/events" className="text-neutral-400 hover:text-white transition-colors text-sm flex items-center gap-2">
+                  <Link to="/events" className="footer-link flex items-center gap-2">
                     <SpriteIcon name="calendar" className="h-3.5 w-3.5" /> Events
                   </Link>
                 </li>
                 <li>
-                  <Link to="/events/today" className="text-neutral-400 hover:text-white transition-colors text-sm">
+                  <Link to="/events/today" className="footer-link">
                     Today's Events
                   </Link>
                 </li>
                 <li>
-                  <Link to="/events/this-weekend" className="text-neutral-400 hover:text-white transition-colors text-sm">
+                  <Link to="/events/this-weekend" className="footer-link">
                     This Weekend
                   </Link>
                 </li>
                 <li>
-                  <Link to="/trip-planner" className="text-neutral-400 hover:text-white transition-colors text-sm">
-                    AI Trip Planner
+                  <Link to="/trip-planner" className="footer-link">
+                    Plan a trip
                   </Link>
                 </li>
                 <li>
-                  <Link to="/restaurants" className="text-neutral-400 hover:text-white transition-colors text-sm flex items-center gap-2">
+                  <Link to="/restaurants" className="footer-link flex items-center gap-2">
                     <Utensils className="h-3.5 w-3.5" /> Restaurants
                   </Link>
                 </li>
                 <li>
-                  <Link to="/attractions" className="text-neutral-400 hover:text-white transition-colors text-sm flex items-center gap-2">
+                  <Link to="/attractions" className="footer-link flex items-center gap-2">
                     <SpriteIcon name="map-pin" className="h-3.5 w-3.5" /> Attractions
                   </Link>
                 </li>
                 <li>
-                  <Link to="/map" className="text-neutral-400 hover:text-white transition-colors text-sm flex items-center gap-2">
+                  <Link to="/map" className="footer-link flex items-center gap-2">
                     <Map className="h-3.5 w-3.5" /> Discover Map
                   </Link>
                 </li>
                 <li>
-                  <Link to="/deals" className="text-neutral-400 hover:text-white transition-colors text-sm flex items-center gap-2">
+                  <Link to="/deals" className="footer-link flex items-center gap-2">
                     <DollarSign className="h-3.5 w-3.5" /> Deals & Coupons
                   </Link>
                 </li>
                 <li>
-                  <Link to="/stay" className="text-neutral-400 hover:text-white transition-colors text-sm flex items-center gap-2">
+                  <Link to="/stay" className="footer-link flex items-center gap-2">
                     <SpriteIcon name="building-2" className="h-3.5 w-3.5" /> Hotels & Stay
                   </Link>
                 </li>
                 <li>
-                  <Link to="/submit-event" className="text-neutral-400 hover:text-white transition-colors text-sm flex items-center gap-2">
+                  <Link to="/submit-event" className="footer-link flex items-center gap-2">
                     <PlusCircle className="h-3.5 w-3.5" /> Submit an Event
                   </Link>
                 </li>
@@ -245,25 +266,27 @@ export default function Footer() {
 
             {/* For You */}
             <nav aria-label="Account links">
-              <h4 className="text-sm font-semibold mb-4 uppercase tracking-wider text-neutral-300">For You</h4>
-              <ul className="space-y-2">
+              <h3 className={COLUMN_TITLE}>For you</h3>
+              <ul className="footer-link-list space-y-2">
                 <li>
-                  <Link to="/pricing" className="text-neutral-400 hover:text-white transition-colors text-sm">
+                  <Link to="/pricing" className="footer-link">
                     Pricing
                   </Link>
                 </li>
+                {!isAuthenticated && (
+                  <li>
+                    <Link to={signUpHref(pathname, search)} className="footer-link">
+                      Sign Up Free
+                    </Link>
+                  </li>
+                )}
                 <li>
-                  <Link to="/auth" className="text-neutral-400 hover:text-white transition-colors text-sm">
-                    Sign Up Free
-                  </Link>
-                </li>
-                <li>
-                  <Link to="/gamification" className="text-neutral-400 hover:text-white transition-colors text-sm">
+                  <Link to="/gamification" className="footer-link">
                     Earn Rewards
                   </Link>
                 </li>
                 <li>
-                  <Link to="/articles" className="text-neutral-400 hover:text-white transition-colors text-sm">
+                  <Link to="/articles" className="footer-link">
                     Articles & Guides
                   </Link>
                 </li>
@@ -272,65 +295,65 @@ export default function Footer() {
 
             {/* Business & Legal */}
             <nav aria-label="Business links">
-              <h4 className="text-sm font-semibold mb-4 uppercase tracking-wider text-neutral-300">Business</h4>
-              <ul className="space-y-2">
+              <h3 className={COLUMN_TITLE}>Business</h3>
+              <ul className="footer-link-list space-y-2">
                 <li>
-                  <Link to="/advertise" className="text-neutral-400 hover:text-white transition-colors text-sm">
+                  <Link to="/advertise" className="footer-link">
                     Advertise With Us
                   </Link>
                 </li>
                 <li>
-                  <Link to="/business-partnership" className="text-neutral-400 hover:text-white transition-colors text-sm">
+                  <Link to="/business-partnership" className="footer-link">
                     Business Partnership
                   </Link>
                 </li>
                 <li>
-                  <Link to="/privacy-policy" className="text-neutral-400 hover:text-white transition-colors text-sm">
+                  <Link to="/privacy-policy" className="footer-link">
                     Privacy Policy
                   </Link>
                 </li>
                 <li>
-                  <Link to="/terms" className="text-neutral-400 hover:text-white transition-colors text-sm">
+                  <Link to="/terms" className="footer-link">
                     Terms of Service
                   </Link>
                 </li>
                 <li>
-                  <Link to="/accessibility" className="text-neutral-400 hover:text-white transition-colors text-sm">
+                  <Link to="/accessibility" className="footer-link">
                     Accessibility
                   </Link>
                 </li>
                 <li>
-                  <Link to="/cookie-policy" className="text-neutral-400 hover:text-white transition-colors text-sm">
+                  <Link to="/cookie-policy" className="footer-link">
                     Cookie Policy
                   </Link>
                 </li>
                 <li>
-                  <Link to="/acceptable-use" className="text-neutral-400 hover:text-white transition-colors text-sm">
+                  <Link to="/acceptable-use" className="footer-link">
                     Acceptable Use
                   </Link>
                 </li>
                 <li>
-                  <Link to="/dmca" className="text-neutral-400 hover:text-white transition-colors text-sm">
+                  <Link to="/dmca" className="footer-link">
                     DMCA / Copyright
                   </Link>
                 </li>
                 <li>
-                  <Link to="/dpa" className="text-neutral-400 hover:text-white transition-colors text-sm">
+                  <Link to="/dpa" className="footer-link">
                     Data Processing (DPA)
                   </Link>
                 </li>
                 <li>
-                  <Link to="/contact" className="text-neutral-400 hover:text-white transition-colors text-sm">
+                  <Link to="/contact" className="footer-link">
                     Contact Us
                   </Link>
                 </li>
                 <li>
-                  <Link to="/support" className="text-neutral-400 hover:text-white transition-colors text-sm">
+                  <Link to="/support" className="footer-link">
                     Help &amp; Support
                   </Link>
                 </li>
                 <li>
-                  <Link to="/affiliate-disclosure" className="text-neutral-400 hover:text-white transition-colors text-sm">
+                  <Link to="/affiliate-disclosure" className="footer-link">
                     Affiliate Disclosure
                   </Link>
                 </li>
@@ -342,7 +365,7 @@ export default function Footer() {
                   <button
                     type="button"
                     onClick={reopenConsentBanner}
-                    className="text-neutral-400 hover:text-white transition-colors text-sm text-left focus:outline-none focus:ring-2 focus:ring-primary rounded-sm"
+                    className="footer-link text-left focus:outline-none focus:ring-2 focus:ring-primary rounded-sm"
                   >
                     Your Privacy Choices
                   </button>
@@ -388,8 +411,9 @@ export default function Footer() {
               <p>
                 © {new Date().getFullYear()} Des Moines Insider. All rights reserved.
               </p>
-              {/* Physical postal address — required by CAN-SPAM §5(a)(5) for any
-                  marketing email we send out, and generally useful for legal notices. */}
+              {/* Contact line. This is not a CAN-SPAM postal address: a city
+                  and state don't meet 15 U.S.C. 7704(a)(5). The street address
+                  or PO box is an owner decision (home-pass2.md, Deferred). */}
               <address className="not-italic">
                 Des Moines Insider · Des Moines, Iowa, USA ·{" "}
                 <a

@@ -16,16 +16,20 @@
  * - campaign_rejected → advertiser
  * - campaign_refunded → advertiser
  * - creative_deadline_warning → advertiser
+ *
+ * The request names the campaign and the type. For a non-admin caller the
+ * recipient is the campaign's owner and the words are built from the type
+ * (./decision.ts planNotification); recipientEmail, recipientUserId, title,
+ * message, campaignName and metadata in the body are ignored.
  */
 
 import { serve } from "https://deno.land/std@0.190.0/http/server.ts";
 import { createClient } from "https://esm.sh/@supabase/supabase-js@2.45.0";
 import { handleCors, getCorsHeaders, isOriginAllowed } from "../_shared/cors.ts";
-import { escapeHtml } from "../_shared/escapeHtml.ts";
 import { checkRateLimit } from "../_shared/rateLimit.ts";
-import { renderEmail } from "../_shared/emailLayout.ts";
-import { fetchWithTimeout } from "../_shared/fetchWithTimeout.ts";
-import { isAdminUserId } from "../_shared/apiKeyAuth.ts";
+import { sendCampaignEmail } from "../_shared/campaignNotificationEmail.ts";
+import { isAdminUserId, listAdminUserIds } from "../_shared/apiKeyAuth.ts";
+import { decideNotification, planNotification } from "./decision.ts";
 
 serve(async (req) => {
   const corsResponse = handleCors(req);
@@ -56,77 +60,137 @@ serve(async (req) => {
       Deno.env.get("SUPABASE_SERVICE_ROLE_KEY") ?? ""
     );
 
-    // Require authentication (SEC-014)
+    // Authorization and routing live in ./decision.ts, which is importable in a
+    // test - this file is not, because of the esm.sh imports above.
+    // WEB-ADS-013 AC4.
     const authHeader = req.headers.get("Authorization");
-    if (!authHeader) {
-      return new Response(
-        JSON.stringify({ error: "Authorization required" }),
-        { status: 401, headers: { ...corsHeaders, "Content-Type": "application/json" } }
-      );
-    }
+    let userId: string | null = null;
+    let isAdmin = false;
 
-    const token = authHeader.replace("Bearer ", "");
-    const { data: { user }, error: authError } = await supabase.auth.getUser(token);
-    if (authError || !user) {
-      return new Response(
-        JSON.stringify({ error: "Invalid authentication" }),
-        { status: 401, headers: { ...corsHeaders, "Content-Type": "application/json" } }
-      );
-    }
-
-    // Check if user is admin or campaign owner.
-    // WEB-SEC-023: was profiles.role keyed by the row PK — a column that is not
-    // in the schema, so isAdmin was always false and admins were treated as
-    // ordinary users. isAdminUserId is the one shared definition.
-    const isAdmin = await isAdminUserId(
-      supabase,
-      user.id,
-      "send-campaign-notification",
-    );
-
-    const body = await req.json();
-    const {
-      recipientUserId,
-      recipientEmail,
-      notificationType,
-      campaignId,
-      campaignName,
-      title,
-      message,
-      metadata,
-    } = body;
-
-    if (!notificationType || !campaignId) {
-      return new Response(
-        JSON.stringify({ error: "notificationType and campaignId are required" }),
-        {
-          status: 400,
-          headers: { ...corsHeaders, "Content-Type": "application/json" },
-        }
-      );
-    }
-
-    // Verify user is admin or owns the campaign
-    if (!isAdmin) {
-      const { data: campaign } = await supabase
-        .from("campaigns")
-        .select("user_id")
-        .eq("id", campaignId)
-        .single();
-
-      if (!campaign || campaign.user_id !== user.id) {
-        return new Response(
-          JSON.stringify({ error: "Forbidden: not authorized for this campaign" }),
-          { status: 403, headers: { ...corsHeaders, "Content-Type": "application/json" } }
-        );
+    if (authHeader) {
+      const token = authHeader.replace("Bearer ", "");
+      const { data: { user }, error: authError } = await supabase.auth.getUser(token);
+      if (authError) {
+        // A token that does not resolve is a 401 either way, but the REASON
+        // matters when it is the auth service failing rather than the token
+        // being bad - discarded, those two look identical from the outside.
+        console.error("auth.getUser failed:", authError.message);
+      }
+      userId = user?.id ?? null;
+      if (userId) {
+        // WEB-SEC-023: was profiles.role keyed by the row PK - a column not in
+        // the schema, so isAdmin was always false and admins were treated as
+        // ordinary users. isAdminUserId is the one shared definition.
+        isAdmin = await isAdminUserId(supabase, userId, "send-campaign-notification");
       }
     }
 
-    // Resolve recipient email if not provided
-    let emailAddress = recipientEmail;
-    if (!emailAddress && recipientUserId) {
-      const { data: userData } = await supabase.auth.admin.getUserById(recipientUserId);
-      emailAddress = userData?.user?.email;
+    let body: Record<string, unknown>;
+    try {
+      const parsed = await req.json();
+      body = parsed && typeof parsed === "object" && !Array.isArray(parsed) ? parsed : {};
+    } catch {
+      body = {};
+    }
+    const notificationType = typeof body.notificationType === "string" ? body.notificationType : null;
+    const campaignId = typeof body.campaignId === "string" ? body.campaignId : null;
+    // WEB-ADS-013. Fan out to every admin, resolved HERE with the service
+    // role. The browser used to do this itself, selecting other users'
+    // profiles.user_role to find out who the admins are.
+    const shouldNotifyAdmins = body.notifyAdmins === true;
+
+    // The campaign row is read for every caller now, admin included: its
+    // owner is the default recipient and its name is the one in the email.
+    // The body's campaignName, title and message are not used (business plan
+    // WP4 item 2; see planNotification in ./decision.ts).
+    let campaign: { id: string; user_id: string; name: string | null } | null = null;
+    if (userId && campaignId) {
+      const { data, error: campaignError } = await supabase
+        .from("campaigns")
+        .select("id, user_id, name")
+        .eq("id", campaignId)
+        .maybeSingle();
+      if (campaignError) {
+        // A failed lookup must not read as "not your campaign": say it failed.
+        console.error("campaign lookup failed:", campaignError.message);
+        return new Response(
+          JSON.stringify({ error: "Could not read the campaign" }),
+          { status: 503, headers: { ...corsHeaders, "Content-Type": "application/json" } },
+        );
+      }
+      campaign = data ?? null;
+    }
+
+    const decision = decideNotification({
+      hasAuthHeader: !!authHeader,
+      userId,
+      isAdmin,
+      campaignOwnerId: campaign?.user_id ?? null,
+      notificationType,
+      campaignId,
+      notifyAdmins: shouldNotifyAdmins,
+    });
+
+    if (decision.kind === "unauthenticated" || decision.kind === "invalid_request" || decision.kind === "forbidden") {
+      return new Response(
+        JSON.stringify({ error: decision.error }),
+        { status: decision.status, headers: { ...corsHeaders, "Content-Type": "application/json" } },
+      );
+    }
+
+    // Only an admin reaches here without a campaign row (the owner check needs
+    // one). Nothing to name or address without it.
+    if (!campaign || !notificationType) {
+      return new Response(
+        JSON.stringify({ error: "No such campaign" }),
+        { status: 404, headers: { ...corsHeaders, "Content-Type": "application/json" } },
+      );
+    }
+
+    const plan = planNotification({ isAdmin, notificationType, campaign, body });
+
+    // Admin fan-out: one stored notification per admin, service-role written.
+    // No email here - the admin digest is not a transactional message to the
+    // advertiser, and the email path below addresses one recipient.
+    if (decision.kind === "notify_admins") {
+      const adminUserIds = await listAdminUserIds(supabase);
+      if (adminUserIds.length > 0) {
+        const { error: fanOutError } = await supabase
+          .from("campaign_notifications")
+          .insert(
+            adminUserIds.map((adminUserId: string) => ({
+              campaign_id: campaign.id,
+              recipient_user_id: adminUserId,
+              notification_type: notificationType,
+              title: plan.title,
+              message: plan.message,
+              is_read: false,
+              metadata: plan.metadata,
+            })),
+          );
+        if (fanOutError) {
+          console.error("Failed to store admin notifications:", fanOutError);
+          return new Response(
+            JSON.stringify({ error: "Failed to store admin notifications" }),
+            { status: 500, headers: { ...corsHeaders, "Content-Type": "application/json" } },
+          );
+        }
+      }
+      return new Response(
+        JSON.stringify({ success: true, adminsNotified: adminUserIds.length }),
+        { status: 200, headers: { ...corsHeaders, "Content-Type": "application/json" } },
+      );
+    }
+
+    // The address comes from auth, for the resolved recipient. Only an admin
+    // can name one directly (planNotification drops it for everyone else).
+    let emailAddress = plan.recipientEmail;
+    if (!emailAddress) {
+      const { data: userData, error: userError } = await supabase.auth.admin.getUserById(plan.recipientUserId);
+      if (userError) {
+        console.error("recipient lookup failed:", userError.message);
+      }
+      emailAddress = userData?.user?.email ?? null;
     }
 
     // Store in-app notification
@@ -134,14 +198,14 @@ serve(async (req) => {
       .from("campaign_notifications")
       .upsert(
         {
-          campaign_id: campaignId,
-          recipient_user_id: recipientUserId || null,
-          recipient_email: emailAddress || null,
+          campaign_id: campaign.id,
+          recipient_user_id: plan.recipientUserId,
+          recipient_email: emailAddress,
           notification_type: notificationType,
-          title: title || `Campaign Update: ${campaignName}`,
-          message: message || "You have a campaign update.",
+          title: plan.title,
+          message: plan.message,
           is_read: false,
-          metadata: metadata || {},
+          metadata: plan.metadata,
         },
         { ignoreDuplicates: false }
       );
@@ -150,85 +214,28 @@ serve(async (req) => {
       console.error("Failed to store notification:", notifError);
     }
 
-    // Attempt email delivery if we have a recipient email
+    // Attempt email delivery if we have a recipient email.
+    //
+    // The renderer and the provider call live in _shared/campaignNotificationEmail.ts
+    // (WEB-ADS-005) because stripe-webhook needs the same email and cannot reach
+    // this endpoint - it has no user token, and decision.ts requires one.
     let emailSent = false;
     if (emailAddress) {
-      const resendApiKey = Deno.env.get("RESEND_API_KEY");
-      const sendgridApiKey = Deno.env.get("SENDGRID_API_KEY");
-      const fromEmail = Deno.env.get("NOTIFICATION_FROM_EMAIL") || "noreply@desmoinesinsider.com";
-      const siteUrl = Deno.env.get("VITE_SITE_URL") || "https://desmoinesinsider.com";
-
-      const emailSubject = title || `Campaign Update: ${campaignName}`;
-      const bodyHtml = buildEmailBodyHtml({
-        title: emailSubject,
-        message: message || "",
-        campaignName,
-        campaignId,
-        notificationType,
-        siteUrl,
+      emailSent = await sendCampaignEmail({
+        to: emailAddress,
+        content: {
+          title: plan.title,
+          message: plan.message,
+          campaignName: plan.campaignName,
+          campaignId: campaign.id,
+          notificationType,
+          siteUrl: Deno.env.get("VITE_SITE_URL") || "https://desmoinesinsider.com",
+        },
+        fromEmail: Deno.env.get("NOTIFICATION_FROM_EMAIL") || "noreply@desmoinesinsider.com",
+        // Suppression list and email_log; the provider comes from the
+        // environment in _shared/email.ts.
+        supabase,
       });
-      const bodyText = buildEmailBodyText({
-        title: emailSubject,
-        message: message || "",
-        campaignName,
-      });
-
-      // Campaign notifications are transactional — they are responses to the
-      // recipient's own advertising-campaign activity. The transactional footer
-      // includes the postal address but no unsubscribe link (CAN-SPAM §5(a) does
-      // not require one for true transactional messages).
-      const rendered = renderEmail({
-        bodyHtml,
-        bodyText,
-        category: "transactional",
-        recipient: { email: emailAddress },
-      });
-      const emailHtml = rendered.html;
-      const emailText = rendered.text;
-
-      if (resendApiKey) {
-        try {
-          const res = await fetchWithTimeout("https://api.resend.com/emails", {
-            method: "POST",
-            headers: {
-              Authorization: `Bearer ${resendApiKey}`,
-              "Content-Type": "application/json",
-            },
-            body: JSON.stringify({
-              from: fromEmail,
-              to: [emailAddress],
-              subject: emailSubject,
-              html: emailHtml,
-              text: emailText,
-            }),
-          });
-          emailSent = res.ok;
-        } catch (err) {
-          console.error("Resend email failed:", err);
-        }
-      } else if (sendgridApiKey) {
-        try {
-          const res = await fetchWithTimeout("https://api.sendgrid.com/v3/mail/send", {
-            method: "POST",
-            headers: {
-              Authorization: `Bearer ${sendgridApiKey}`,
-              "Content-Type": "application/json",
-            },
-            body: JSON.stringify({
-              personalizations: [{ to: [{ email: emailAddress }] }],
-              from: { email: fromEmail },
-              subject: emailSubject,
-              content: [
-                { type: "text/plain", value: emailText },
-                { type: "text/html", value: emailHtml },
-              ],
-            }),
-          });
-          emailSent = res.ok || res.status === 202;
-        } catch (err) {
-          console.error("SendGrid email failed:", err);
-        }
-      }
     }
 
     return new Response(
@@ -245,7 +252,7 @@ serve(async (req) => {
   } catch (error) {
     console.error("Notification error:", error);
     return new Response(
-      JSON.stringify({ error: error.message || "Failed to send notification" }),
+      JSON.stringify({ error: error instanceof Error ? error.message : "Failed to send notification" }),
       {
         status: 500,
         headers: { ...corsHeaders, "Content-Type": "application/json" },
@@ -253,84 +260,3 @@ serve(async (req) => {
     );
   }
 });
-
-function buildEmailBodyHtml(params: {
-  title: string;
-  message: string;
-  campaignName: string;
-  campaignId: string;
-  notificationType: string;
-  siteUrl: string;
-}): string {
-  const { title, message, campaignName, campaignId, siteUrl, notificationType } = params;
-
-  const ctaUrl = getCampaignCtaUrl(notificationType, campaignId, siteUrl);
-  const ctaLabel = getCampaignCtaLabel(notificationType);
-
-  return `
-    <div style="background-color:#1a1a2e;padding:24px 32px;border-radius:8px 8px 0 0;">
-      <h1 style="margin:0;color:#ffffff;font-size:18px;font-weight:600;">Des Moines AI Pulse</h1>
-      <p style="margin:4px 0 0;color:#a0a0b0;font-size:13px;">Advertising Platform</p>
-    </div>
-    <div style="padding:32px;background-color:#ffffff;border:1px solid #e4e4e7;border-top:none;border-radius:0 0 8px 8px;">
-      <h2 style="margin:0 0 16px;color:#1a1a2e;font-size:20px;font-weight:600;">${escapeHtml(title)}</h2>
-      <p style="margin:0 0 24px;color:#4a4a5a;font-size:15px;line-height:1.6;">${escapeHtml(message)}</p>
-      ${ctaUrl ? `
-      <a href="${escapeHtml(ctaUrl)}" style="display:inline-block;background-color:#6366f1;color:#ffffff;text-decoration:none;padding:12px 24px;border-radius:6px;font-weight:500;font-size:14px;">
-        ${escapeHtml(ctaLabel)}
-      </a>
-      ` : ''}
-      <hr style="margin:32px 0;border:none;border-top:1px solid #e4e4e7;">
-      <p style="margin:0;color:#71717a;font-size:13px;">Campaign: <strong>${escapeHtml(campaignName)}</strong> &bull;
-        <a href="${siteUrl}/campaigns" style="color:#6366f1;text-decoration:none;">Manage campaigns</a>
-      </p>
-    </div>
-  `;
-}
-
-function buildEmailBodyText(params: {
-  title: string;
-  message: string;
-  campaignName: string;
-}): string {
-  return `${params.title}\n\n${params.message}\n\nCampaign: ${params.campaignName}`;
-}
-
-function getCampaignCtaUrl(type: string, campaignId: string, siteUrl: string): string {
-  switch (type) {
-    case 'creative_uploaded':
-    case 'campaign_created':
-      return `${siteUrl}/admin/campaigns/${campaignId}`;
-    case 'creative_rejected':
-    case 'creative_deadline_warning':
-      return `${siteUrl}/campaigns/${campaignId}/creatives`;
-    case 'campaign_activated':
-    case 'campaign_completed':
-    case 'campaign_expiring_soon':
-      return `${siteUrl}/campaigns/${campaignId}/analytics`;
-    case 'creative_approved':
-    case 'payment_received':
-      return `${siteUrl}/campaigns/${campaignId}`;
-    default:
-      return `${siteUrl}/campaigns/${campaignId}`;
-  }
-}
-
-function getCampaignCtaLabel(type: string): string {
-  switch (type) {
-    case 'creative_uploaded':
-      return 'Review Creatives';
-    case 'creative_rejected':
-      return 'Upload Revised Creative';
-    case 'campaign_activated':
-      return 'View Analytics';
-    case 'campaign_expiring_soon':
-      return 'Renew Campaign';
-    case 'campaign_completed':
-      return 'View Final Report';
-    case 'creative_deadline_warning':
-      return 'Upload Creatives Now';
-    default:
-      return 'View Campaign';
-  }
-}

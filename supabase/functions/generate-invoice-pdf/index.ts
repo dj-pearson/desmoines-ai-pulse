@@ -17,11 +17,16 @@ const corsHeaders = {
 };
 
 // Company details for invoice
+// WEB-SEO-023: the email and website were on the OLD brand domain, printed onto
+// every invoice under the current brand's name. An invoice is the document a
+// customer keeps and replies to, so a reply-to on a domain nobody reads is the
+// most expensive place for this to be wrong.
+// OWNER: confirm billing@ is monitored on the current domain.
 const COMPANY_INFO = {
   name: "Des Moines Insider LLC",
   address: "Des Moines, IA",
-  email: "billing@desmoinespulse.com",
-  website: "https://desmoinespulse.com",
+  email: "billing@desmoinesinsider.com",
+  website: "https://desmoinesinsider.com",
 };
 
 serve(async (req) => {

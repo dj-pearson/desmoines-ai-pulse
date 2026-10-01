@@ -53,4 +53,25 @@ final class VersionCheckTests: XCTestCase {
         let segments = version.split(separator: ".")
         XCTAssertTrue(segments.allSatisfy { Int($0) != nil }, "Version \(version) must be dotted-numeric")
     }
+
+    // MARK: - Store URL allowlist (IOS-DD-PLATFORM-09)
+
+    func testAcceptedStoreURLAllowsAppleAndTheSite() {
+        XCTAssertNotNil(VersionCheckService.acceptedStoreURL("https://apps.apple.com/app/id123"))
+        XCTAssertNotNil(VersionCheckService.acceptedStoreURL("https://desmoinesinsider.com/"))
+    }
+
+    func testAcceptedStoreURLRejectsOtherSchemesAndHosts() {
+        XCTAssertNil(VersionCheckService.acceptedStoreURL("itms-services://?action=download-manifest&url=x"))
+        XCTAssertNil(VersionCheckService.acceptedStoreURL("http://apps.apple.com/app/id123"))
+        XCTAssertNil(VersionCheckService.acceptedStoreURL("https://evil.example/app"))
+        XCTAssertNil(VersionCheckService.acceptedStoreURL("https://apps.apple.com.evil.example/app"))
+        XCTAssertNil(VersionCheckService.acceptedStoreURL(nil))
+        XCTAssertNil(VersionCheckService.acceptedStoreURL("https://apps.apple.com/app/des-moines-insider/id0000000000"))
+    }
+
+    @MainActor
+    func testDefaultStoreURLIsNeverNil() {
+        XCTAssertNotNil(VersionCheckService.shared.storeURL)
+    }
 }

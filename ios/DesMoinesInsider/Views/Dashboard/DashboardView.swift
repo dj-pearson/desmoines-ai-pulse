@@ -6,6 +6,7 @@ import SwiftUI
 /// subscription status, saved Trip Planner itineraries, favorites overview,
 /// saved searches/alerts (IOS-PARITY-008), recently viewed, and For-You
 /// recommendations. Guests get a sign-in prompt — never a dead end.
+@MainActor
 struct DashboardView: View {
     /// Profile pushes this into its own stack (false); standalone owns one (true).
     var ownsNavigationStack: Bool = true
@@ -22,6 +23,11 @@ struct DashboardView: View {
     /// Surfaces a failed recently-viewed lookup. Nothing else on this
     /// screen reports failure to the user (IOS-AUDIT-UX-057).
     @State private var toast: ToastMessage?
+    /// The soonest saved events that are not over (IOS-DD-SAVED-26).
+    @State private var comingUp: [Event] = []
+    /// The recent item being fetched, so a second tap is ignored and the card
+    /// shows progress.
+    @State private var openingRecentId: String?
 
     enum DetailTarget: Identifiable, Hashable {
         case event(Event)
@@ -63,6 +69,7 @@ struct DashboardView: View {
                             .padding(.horizontal)
                             .padding(.top, 8)
 
+                        comingUpSection
                         itinerariesSection
                         favoritesSection
                         alertsSection
@@ -95,10 +102,34 @@ struct DashboardView: View {
 
     // MARK: - Sections
 
+    @ViewBuilder
+    private var comingUpSection: some View {
+        if !comingUp.isEmpty {
+            SectionContainer(title: "Coming up", systemImage: "calendar.badge.clock") {
+                ScrollView(.horizontal, showsIndicators: false) {
+                    HStack(spacing: 12) {
+                        ForEach(comingUp) { event in
+                            Button { detailTarget = .event(event) } label: {
+                                ContentCard(event.cardData, variant: .compact, decorative: true)
+                            }
+                            .buttonStyle(.plain)
+                            .accessibilityLabel([event.title, event.urgency(at: Date())].compactMap { $0 }.joined(separator: ". "))
+                        }
+                    }
+                    .padding(.horizontal)
+                }
+            }
+        }
+    }
+
     private var itinerariesSection: some View {
         SectionContainer(title: "Your itineraries", systemImage: "map.fill") {
             if isLoading {
                 ProgressView().padding(.horizontal)
+            } else if tripService.availability == .paused {
+                // Storage is missing on the server; say so rather than invite
+                // a plan that can only fail (IOS-DD-TRIP-PLANNER-01).
+                EmptyHint(text: TripPlannerAvailability.pausedMessage, actionTitle: nil, action: nil)
             } else if trips.isEmpty {
                 EmptyHint(
                     text: "Plan an AI itinerary for your next Des Moines outing.",
@@ -127,10 +158,10 @@ struct DashboardView: View {
     private var favoritesSection: some View {
         SectionContainer(title: "Saved", systemImage: "heart.fill") {
             HStack(spacing: 10) {
-                favStat("Events", favorites.favoriteEventIds.count, "calendar")
-                favStat("Dining", favorites.favoriteRestaurantIds.count, "fork.knife")
-                favStat("Places", favorites.favoriteAttractionIds.count, "mountain.2.fill")
-                favStat("Guides", favorites.favoriteArticleIds.count, "doc.richtext")
+                favStat("Events", favorites.visibleIds(.event).count, "calendar", segment: .events)
+                favStat("Dining", favorites.visibleIds(.restaurant).count, "fork.knife", segment: .dining)
+                favStat("Places", favorites.visibleIds(.attraction).count, "mountain.2.fill", segment: .places)
+                favStat("Guides", favorites.visibleIds(.article).count, "doc.richtext", segment: .guides)
             }
             .padding(.horizontal)
             // IOS-AUDIT-UX-051 AC4: distinguish "still loading" from "nothing
@@ -158,7 +189,12 @@ struct DashboardView: View {
     @ViewBuilder
     private var recentlyViewedSection: some View {
         if !recents.recent.isEmpty {
-            SectionContainer(title: "Jump back in", systemImage: "clock.arrow.circlepath") {
+            SectionContainer(
+                title: "Jump back in",
+                systemImage: "clock.arrow.circlepath",
+                actionTitle: "Clear",
+                action: { recents.clear() }
+            ) {
                 ScrollView(.horizontal, showsIndicators: false) {
                     HStack(spacing: 12) {
                         ForEach(recents.recent) { item in
@@ -204,17 +240,26 @@ struct DashboardView: View {
 
     // MARK: - Pieces
 
-    private func favStat(_ label: String, _ count: Int, _ icon: String) -> some View {
-        VStack(spacing: 4) {
-            Image(systemName: icon).font(.title3).foregroundStyle(Color.accentColor)
-            Text("\(count)").font(.title3.bold())
-            Text(label).font(.caption).foregroundStyle(.secondary)
+    /// A tile that opens Saved on its segment (IOS-DD-SAVED-19).
+    private func favStat(_ label: String, _ count: Int, _ icon: String, segment: SavedSegment) -> some View {
+        Button {
+            SavedTabRouter.shared.segment = segment
+            DeepLinkHandler.shared.open(.tab(.favorites))
+        } label: {
+            VStack(spacing: 4) {
+                Image(systemName: icon).font(.title3).foregroundStyle(Color.accentColor)
+                Text("\(count)").font(.title3.bold()).foregroundStyle(.primary)
+                Text(label).font(.caption).foregroundStyle(.secondary)
+            }
+            .frame(maxWidth: .infinity)
+            .padding(.vertical, 12)
+            .background(Color(.secondarySystemGroupedBackground), in: RoundedRectangle(cornerRadius: 12))
         }
-        .frame(maxWidth: .infinity)
-        .padding(.vertical, 12)
-        .background(Color(.secondarySystemGroupedBackground), in: RoundedRectangle(cornerRadius: 12))
+        .buttonStyle(.plain)
         .accessibilityElement(children: .combine)
         .accessibilityLabel("\(count) saved \(label)")
+        .accessibilityAddTraits(.isButton)
+        .accessibilityHint("Opens Saved")
     }
 
     private func rowCard(title: String, subtitle: String, systemImage: String) -> some View {
@@ -247,6 +292,18 @@ struct DashboardView: View {
             }
             .frame(width: 150, height: 96)
             .clipShape(RoundedRectangle(cornerRadius: 10))
+            .overlay {
+                if item.id == openingRecentId {
+                    ZStack {
+                        RoundedRectangle(cornerRadius: 10).fill(.black.opacity(0.35))
+                        ProgressView().tint(.white)
+                    }
+                }
+            }
+
+            Text(item.typeLabel)
+                .font(.caption2.weight(.semibold))
+                .foregroundStyle(.secondary)
 
             Text(item.title)
                 .font(.caption.weight(.medium))
@@ -256,24 +313,48 @@ struct DashboardView: View {
         }
         .frame(width: 150, alignment: .leading)
         .accessibilityElement(children: .combine)
-        .accessibilityLabel(item.title)
+        .accessibilityLabel("\(item.typeLabel): \(item.title)")
     }
 
     // MARK: - Data
 
+    /// Both loads are awaited. `async let _` was never awaited, so the
+    /// favorites load was cancelled at scope exit, which emptied the favorite
+    /// sets app-wide (IOS-DD-SAVED-01).
     private func load() async {
-        async let _ = favorites.loadFavorites()
-        await loadTrips()
+        async let favs: () = favorites.loadFavorites()
+        async let tripsLoad: () = loadTrips()
+        _ = await (favs, tripsLoad)
+        await loadComingUp()
+    }
+
+    /// The three soonest saved events that are not over.
+    private func loadComingUp() async {
+        let ids = favorites.visibleIds(.event)
+        guard !ids.isEmpty else {
+            comingUp = []
+            return
+        }
+        guard let rows = try? await favorites.fetchFavoriteEvents(ids: ids.sorted()) else { return }
+        let now = Date()
+        comingUp = Array(
+            FavoritesViewModel.sortedEvents(rows.filter { !$0.isOver(at: now) }).prefix(3)
+        )
     }
 
     private func loadTrips() async {
         isLoading = true
-        trips = await tripService.fetchTrips()
+        // fetchTrips throws since IOS-DD-TRIP-PLANNER-04; the dashboard keeps
+        // its quiet empty state, and a missing table shows the paused hint.
+        trips = (try? await tripService.fetchTrips()) ?? []
         isLoading = false
     }
 
     private func openRecent(_ item: RecentlyViewedService.RecentItem) {
+        guard openingRecentId == nil else { return }
+        openingRecentId = item.id
         Task {
+            defer { openingRecentId = nil }
             do {
                 switch item.type {
                 case "event":
@@ -309,14 +390,25 @@ struct DashboardView: View {
 private struct SectionContainer<Content: View>: View {
     let title: String
     let systemImage: String
+    /// Optional header action, e.g. "Clear" on Jump back in (IOS-DD-SAVED-26).
+    var actionTitle: String? = nil
+    var action: (() -> Void)? = nil
     @ViewBuilder let content: Content
 
     var body: some View {
         VStack(alignment: .leading, spacing: 10) {
-            Label(title, systemImage: systemImage)
-                .font(.headline)
-                .padding(.horizontal)
-                .accessibilityAddTraits(.isHeader)
+            HStack {
+                Label(title, systemImage: systemImage)
+                    .font(.headline)
+                    .accessibilityAddTraits(.isHeader)
+                Spacer()
+                if let actionTitle, let action {
+                    Button(actionTitle, action: action)
+                        .font(.subheadline.weight(.medium))
+                        .minHitTarget()
+                }
+            }
+            .padding(.horizontal)
             content
         }
     }

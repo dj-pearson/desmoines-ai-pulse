@@ -47,11 +47,52 @@ final class LocalNotificationService {
 
     // MARK: - Schedule Reminder
 
-    /// Schedules a local notification 1 hour before the event.
-    func scheduleReminder(for event: Event) async {
+    /// What happened when a reminder was asked for (IOS-DD-EVENTS-14). Every
+    /// early return used to be silent, so a denied permission, a switched-off
+    /// setting or an event under an hour away all looked like success.
+    enum ReminderResult: Equatable {
+        case scheduled(Date)
+        case tooSoon
+        case alreadyStarted
+        case denied
+        case disabled
+        case noDate
+        case failed
+    }
+
+    /// When to fire, or nil when it is too late. Pure, so the timing is tested
+    /// without the notification center.
+    ///
+    /// A timed event: an hour before, or fifteen minutes before when the hour
+    /// has passed. A time-TBA event: 9:00 Des Moines time on its day, since
+    /// "an hour before" a time nobody published means nothing.
+    nonisolated static func reminderFireDate(eventStart: Date, hasSpecificTime: Bool, now: Date) -> Date? {
+        if hasSpecificTime {
+            let hourBefore = eventStart.addingTimeInterval(-3600)
+            if hourBefore > now { return hourBefore }
+            let quarterBefore = eventStart.addingTimeInterval(-15 * 60)
+            if quarterBefore > now { return quarterBefore }
+            return nil
+        }
+        let calendar = DesMoinesTime.calendar
+        let morning = calendar.date(bySettingHour: 9, minute: 0, second: 0, of: eventStart)
+        guard let morning, morning > now else { return nil }
+        return morning
+    }
+
+    /// Schedules a local notification ahead of the event.
+    @discardableResult
+    func scheduleReminder(for event: Event) async -> ReminderResult {
         // The master switch, honoured here so every call site gets it.
-        guard remindersEnabled else { return }
-        guard let eventDate = event.parsedDate else { return }
+        guard remindersEnabled else { return .disabled }
+        guard let eventDate = event.parsedDate else { return .noDate }
+
+        let now = Date()
+        guard let triggerDate = Self.reminderFireDate(
+            eventStart: eventDate, hasSpecificTime: event.hasSpecificTime, now: now
+        ) else {
+            return eventDate <= now ? .alreadyStarted : .tooSoon
+        }
 
         let center = UNUserNotificationCenter.current()
 
@@ -59,29 +100,31 @@ final class LocalNotificationService {
         let settings = await center.notificationSettings()
         if settings.authorizationStatus == .notDetermined {
             let granted = try? await center.requestAuthorization(options: [.alert, .badge, .sound])
-            guard granted == true else { return }
+            guard granted == true else { return .denied }
         } else if settings.authorizationStatus == .denied {
-            return
+            return .denied
         }
-
-        // Schedule 1 hour before
-        let triggerDate = eventDate.addingTimeInterval(-3600)
-        guard triggerDate > Date() else { return }
 
         let content = UNMutableNotificationContent()
         content.title = "Event Reminder"
-        content.body = "\(event.title) starts in 1 hour"
+        if !event.hasSpecificTime {
+            content.body = "\(event.title) is today"
+        } else if eventDate.timeIntervalSince(triggerDate) < 3600 {
+            content.body = "\(event.title) starts in 15 minutes"
+        } else {
+            content.body = "\(event.title) starts in 1 hour"
+        }
         if let venue = event.venue {
             content.body += " at \(venue)"
         }
         content.sound = .default
         content.userInfo = ["eventId": event.id]
 
-        let components = Calendar.current.dateComponents(
-            [.year, .month, .day, .hour, .minute],
-            from: triggerDate
-        )
-        let trigger = UNCalendarNotificationTrigger(dateMatching: components, repeats: false)
+        // Absolute, so the reminder fires at the right instant wherever the
+        // phone is. Calendar.current components would be read back in the
+        // zone the phone is in when it fires.
+        let interval = triggerDate.timeIntervalSince(now)
+        let trigger = UNTimeIntervalNotificationTrigger(timeInterval: max(interval, 1), repeats: false)
 
         let request = UNNotificationRequest(
             identifier: "event-reminder-\(event.id)",
@@ -92,8 +135,10 @@ final class LocalNotificationService {
         do {
             try await center.add(request)
             scheduledEventIds.insert(event.id)
+            return .scheduled(triggerDate)
         } catch {
             AppLogger.general.error("Failed to schedule notification: \(error.localizedDescription)")
+            return .failed
         }
     }
 
@@ -115,11 +160,15 @@ final class LocalNotificationService {
 
     // MARK: - Toggle
 
-    func toggleReminder(for event: Event) async {
+    /// Nil when an existing reminder was cancelled; otherwise what scheduling
+    /// did, for the caller to report.
+    @discardableResult
+    func toggleReminder(for event: Event) async -> ReminderResult? {
         if isReminderSet(for: event.id) {
             cancelReminder(for: event.id)
+            return nil
         } else {
-            await scheduleReminder(for: event)
+            return await scheduleReminder(for: event)
         }
     }
 

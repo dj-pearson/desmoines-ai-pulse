@@ -2,7 +2,7 @@ import { describe, it, expect } from "vitest";
 import { render, screen } from "@testing-library/react";
 import { MemoryRouter } from "react-router-dom";
 import {
-  isArchivedMonth,
+  isIndexableMonth,
   leadWindowMonths,
   monthSummary,
   parseMonthSlug,
@@ -24,7 +24,7 @@ describe("sitemap month rule", () => {
       ["october-2026", { count: 219, lastmod: "2026-09-29" }],
       ["november-2026", { count: 78, lastmod: "2026-09-28" }],
     ]);
-    const out = selectSitemapMonths(perMonth, NOW, { minEvents: 3, today: "2026-09-30" });
+    const out = selectSitemapMonths(perMonth, NOW, { today: "2026-09-30" });
     const slugs = out.map((m) => m.slug);
     expect(slugs).toContain("december-2026");
     expect(slugs).toContain("january-2027");
@@ -38,16 +38,21 @@ describe("sitemap month rule", () => {
       ["march-2027", { count: 2, lastmod: "2026-09-01" }],
       ["july-2027", { count: 1, lastmod: "2026-09-01" }],
     ]);
-    const slugs = selectSitemapMonths(perMonth, NOW, { minEvents: 3, today: "2026-09-30" }).map((m) => m.slug);
+    const slugs = selectSitemapMonths(perMonth, NOW, { today: "2026-09-30" }).map((m) => m.slug);
     expect(slugs).toContain("february-2027");
     expect(slugs).not.toContain("march-2027");
     expect(slugs).not.toContain("july-2027");
   });
 
-  it("never lists an archived month, even one with events", () => {
-    const perMonth = new Map<string, MonthTally>([["june-2026", { count: 40, lastmod: "2026-06-30" }]]);
-    const slugs = selectSitemapMonths(perMonth, NOW, { minEvents: 3, today: "2026-09-30" }).map((m) => m.slug);
-    expect(slugs).not.toContain("june-2026");
+  it("never lists a month outside the range, even one with events", () => {
+    // From September 2026 the range starts at August (events-pass2 WP3 item 6).
+    const perMonth = new Map<string, MonthTally>([
+      ["july-2026", { count: 40, lastmod: "2026-07-30" }],
+      ["august-2026", { count: 40, lastmod: "2026-08-30" }],
+    ]);
+    const slugs = selectSitemapMonths(perMonth, NOW, { today: "2026-09-30" }).map((m) => m.slug);
+    expect(slugs).not.toContain("july-2026");
+    expect(slugs).toContain("august-2026");
   });
 
   it("lead window starts at the current month and rolls over the year", () => {
@@ -55,21 +60,25 @@ describe("sitemap month rule", () => {
     // Early in a month the window is shorter: on 1 September, January is 122 days out.
     expect(leadWindowMonths(new Date(2026, 8, 1, 12))).not.toContain("january-2027");
   });
+
+  it("lists exactly the months the page calls indexable", () => {
+    const perMonth = new Map<string, MonthTally>([
+      ["july-2026", { count: 40, lastmod: "2026-07-30" }],
+      ["january-2027", { count: 1, lastmod: "2026-09-01" }],
+      ["march-2027", { count: 2, lastmod: "2026-09-01" }],
+      ["april-2027", { count: 5, lastmod: "2026-09-01" }],
+    ]);
+    const listed = new Set(selectSitemapMonths(perMonth, NOW, { today: "2026-09-30" }).map((m) => m.slug));
+    for (const [slug, tally] of perMonth) {
+      expect(listed.has(slug)).toBe(isIndexableMonth(parseMonthSlug(slug)!, tally.count, NOW));
+    }
+  });
 });
 
-describe("archive policy", () => {
-  it("noindexes months more than two calendar months back", () => {
-    expect(isArchivedMonth(parseMonthSlug("july-2026")!, NOW)).toBe(false);
-    expect(isArchivedMonth(parseMonthSlug("june-2026")!, NOW)).toBe(true);
-    expect(isArchivedMonth(parseMonthSlug("october-2026")!, NOW)).toBe(false);
-    // Across a year boundary: from February 2027, November 2026 is 3 back.
-    expect(isArchivedMonth(parseMonthSlug("november-2026")!, new Date(2027, 1, 10))).toBe(true);
-    expect(isArchivedMonth(parseMonthSlug("december-2026")!, new Date(2027, 1, 10))).toBe(false);
-  });
-
+describe("month arithmetic", () => {
   it("shifts months across years in both directions", () => {
-    expect(shiftMonth({ year: 2026, monthIndex: 11 }, 1)).toEqual({ year: 2027, monthIndex: 0 });
-    expect(shiftMonth({ year: 2027, monthIndex: 0 }, -1)).toEqual({ year: 2026, monthIndex: 11 });
+    expect(shiftMonth({ year: 2026, month: 12 }, 1)).toEqual({ year: 2027, month: 1 });
+    expect(shiftMonth({ year: 2027, month: 1 }, -1)).toEqual({ year: 2026, month: 12 });
   });
 });
 
@@ -98,8 +107,8 @@ describe("seasonal copy is derived, not invented", () => {
       { title: "Iowa Wild vs Charlotte", category: "Sports" },
       { title: "Trick or Trees", category: "Community" },
     ];
-    expect(seasonalPicks(events, 9).map((e) => e.title)).toEqual(["Spooky Science", "Trick or Trees"]);
-    expect(seasonalPicks(events, 0)).toEqual([]);
+    expect(seasonalPicks(events, 10).map((e) => e.title)).toEqual(["Spooky Science", "Trick or Trees"]);
+    expect(seasonalPicks(events, 1)).toEqual([]);
   });
 });
 

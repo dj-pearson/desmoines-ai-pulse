@@ -3,6 +3,7 @@ import { supabase } from '@/integrations/supabase/client';
 import { useToast } from '@/hooks/use-toast';
 import { useAuth } from '@/contexts/AuthContext';
 import type { CrmTask, CrmTaskInput, CrmTaskPriority, CrmTaskStatus } from '@/types/crm';
+import { fromUnknownTable } from "@/integrations/supabase/unknownTable";
 
 const CRM_TASKS_KEY = 'crm-tasks';
 
@@ -22,8 +23,7 @@ export function useCrmTasks(filters?: CrmTaskFilters) {
   return useQuery({
     queryKey: [CRM_TASKS_KEY, filters],
     queryFn: async () => {
-      let query = supabase
-        .from('crm_tasks')
+      let query = fromUnknownTable('crm_tasks')
         .select(`
           *,
           contact:crm_contacts(id, email, first_name, last_name),
@@ -94,8 +94,7 @@ export function useCrmMyTasks() {
     queryFn: async () => {
       if (!user?.id) return [];
 
-      const { data, error } = await supabase
-        .from('crm_tasks')
+      const { data, error } = await fromUnknownTable('crm_tasks')
         .select(`
           *,
           contact:crm_contacts(id, email, first_name, last_name),
@@ -118,8 +117,7 @@ export function useCrmOverdueTasks() {
     queryFn: async () => {
       const now = new Date().toISOString();
 
-      const { data, error } = await supabase
-        .from('crm_tasks')
+      const { data, error } = await fromUnknownTable('crm_tasks')
         .select(`
           *,
           contact:crm_contacts(id, email, first_name, last_name),
@@ -143,8 +141,7 @@ export function useCrmUpcomingTasks(days = 7) {
       const future = new Date();
       future.setDate(future.getDate() + days);
 
-      const { data, error } = await supabase
-        .from('crm_tasks')
+      const { data, error } = await fromUnknownTable('crm_tasks')
         .select(`
           *,
           contact:crm_contacts(id, email, first_name, last_name),
@@ -167,8 +164,7 @@ export function useCrmContactTasks(contactId: string | undefined) {
     queryFn: async () => {
       if (!contactId) return [];
 
-      const { data, error } = await supabase
-        .from('crm_tasks')
+      const { data, error } = await fromUnknownTable('crm_tasks')
         .select('*')
         .eq('contact_id', contactId)
         .order('due_date', { ascending: true, nullsFirst: false });
@@ -186,8 +182,7 @@ export function useCrmDealTasks(dealId: string | undefined) {
     queryFn: async () => {
       if (!dealId) return [];
 
-      const { data, error } = await supabase
-        .from('crm_tasks')
+      const { data, error } = await fromUnknownTable('crm_tasks')
         .select('*')
         .eq('deal_id', dealId)
         .order('due_date', { ascending: true, nullsFirst: false });
@@ -206,8 +201,7 @@ export function useCrmTaskMutations() {
 
   const createTask = useMutation({
     mutationFn: async (input: CrmTaskInput) => {
-      const { data, error } = await supabase
-        .from('crm_tasks')
+      const { data, error } = await fromUnknownTable('crm_tasks')
         .insert({
           ...input,
           created_by: user?.id,
@@ -248,8 +242,7 @@ export function useCrmTaskMutations() {
 
   const updateTask = useMutation({
     mutationFn: async ({ id, ...input }: Partial<CrmTaskInput> & { id: string }) => {
-      const { data, error } = await supabase
-        .from('crm_tasks')
+      const { data, error } = await fromUnknownTable('crm_tasks')
         .update(input)
         .eq('id', id)
         .select()
@@ -276,8 +269,7 @@ export function useCrmTaskMutations() {
 
   const completeTask = useMutation({
     mutationFn: async (id: string) => {
-      const { data, error } = await supabase
-        .from('crm_tasks')
+      const { data, error } = await fromUnknownTable('crm_tasks')
         .update({
           status: 'completed',
           completed_at: new Date().toISOString(),
@@ -308,8 +300,7 @@ export function useCrmTaskMutations() {
 
   const deleteTask = useMutation({
     mutationFn: async (id: string) => {
-      const { error } = await supabase
-        .from('crm_tasks')
+      const { error } = await fromUnknownTable('crm_tasks')
         .delete()
         .eq('id', id);
 
@@ -348,8 +339,7 @@ export function useCrmTaskStats() {
     queryFn: async () => {
       const now = new Date().toISOString();
 
-      const { data: tasks, error } = await supabase
-        .from('crm_tasks')
+      const { data: tasks, error } = await fromUnknownTable('crm_tasks')
         .select('status, priority, due_date, assigned_to');
 
       if (error) throw error;

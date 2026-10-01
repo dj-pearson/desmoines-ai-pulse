@@ -32,13 +32,86 @@ final class MetricKitSubscriber: NSObject, MXMetricManagerSubscriber {
         }
     }
 
+    /// Most crash reports a phone sends per payload. A crash loop should not
+    /// turn into a flood of log-error calls.
+    nonisolated static let maxCrashReportsPerPayload = 5
+
+    /// Forwards MetricKit crash diagnostics to log-error (IOS-DD-PLATFORM-17).
+    /// A Swift trap (SIGTRAP) leaves the in-process handler nothing but a
+    /// signal number, so MetricKit's call-stack tree is the only record of
+    /// where it happened.
     nonisolated func didReceive(_ payloads: [MXDiagnosticPayload]) {
         for payload in payloads {
             let json = payload.jsonRepresentation()
             Task { @MainActor in
                 AppLogger.general.warning("MetricKit diagnostic received (\(json.count) bytes)")
             }
+            for crash in (payload.crashDiagnostics ?? []).prefix(Self.maxCrashReportsPerPayload) {
+                let summary = Self.summary(
+                    exceptionType: crash.exceptionType?.intValue,
+                    signal: crash.signal?.intValue,
+                    terminationReason: crash.terminationReason,
+                    callStackJSON: crash.callStackTree.jsonRepresentation()
+                )
+                let build = crash.metaData.applicationBuildVersion
+                Task.detached(priority: .utility) {
+                    _ = await ErrorSink.send(
+                        message: summary,
+                        component: "ios-crash",
+                        action: "metrickit",
+                        route: "app/\(build)",
+                        severity: "critical"
+                    )
+                }
+            }
         }
+    }
+
+    /// One line for a MetricKit crash: exception type, signal, the start of
+    /// the termination reason, and the first frame in the app binary as
+    /// DesMoinesInsider+0x<offset> (symbolicate with the dSYM). Pure, so the
+    /// JSON walk is testable with a fixture.
+    nonisolated static func summary(
+        exceptionType: Int?,
+        signal: Int?,
+        terminationReason: String?,
+        callStackJSON: Data
+    ) -> String {
+        var parts: [String] = []
+        parts.append("exc=\(exceptionType.map(String.init) ?? "?")")
+        parts.append("sig=\(signal.map(String.init) ?? "?")")
+        if let reason = terminationReason, !reason.isEmpty {
+            parts.append(String(reason.prefix(200)))
+        }
+        if let frame = firstAppFrame(in: callStackJSON) {
+            parts.append(frame)
+        }
+        return parts.joined(separator: " ")
+    }
+
+    /// Walks callStacks[].callStackRootFrames[] and their subFrames, depth
+    /// first, for the first frame whose binaryName is the app.
+    nonisolated private static func firstAppFrame(in json: Data) -> String? {
+        guard let root = try? JSONSerialization.jsonObject(with: json) as? [String: Any],
+              let stacks = root["callStacks"] as? [[String: Any]] else { return nil }
+        func search(_ frames: [[String: Any]]) -> String? {
+            for frame in frames {
+                if frame["binaryName"] as? String == "DesMoinesInsider",
+                   let offset = (frame["offsetIntoBinaryTextSegment"] as? NSNumber)?.intValue {
+                    return "DesMoinesInsider+0x" + String(offset, radix: 16)
+                }
+                if let sub = frame["subFrames"] as? [[String: Any]], let found = search(sub) {
+                    return found
+                }
+            }
+            return nil
+        }
+        for stack in stacks {
+            if let frames = stack["callStackRootFrames"] as? [[String: Any]], let found = search(frames) {
+                return found
+            }
+        }
+        return nil
     }
 
     // MARK: - Summary Logging

@@ -1,4 +1,5 @@
 import { test, expect, Page } from '@playwright/test';
+import { installFixtureBackend } from './support/fixtureBackend';
 
 /**
  * Search and Filter Functionality Testing Suite
@@ -19,7 +20,14 @@ const pagesWithSearch = [
   { path: '/restaurants', name: 'restaurants', hasFilters: true },
   { path: '/attractions', name: 'attractions', hasFilters: true },
   { path: '/articles', name: 'articles', hasFilters: true },
-  { path: '/search', name: 'advanced-search', hasFilters: true },
+  // /search is the PLAIN-LANGUAGE search page ("Describe what you're looking
+  // for..."), not the advanced one, and it has no filter controls by design -
+  // measured on the build: 2 inputs, 0 comboboxes, 0 aria-pressed, 0 tabs. The
+  // advanced-filter UI is at /search/advanced and sits behind a PremiumGate, so
+  // an anonymous run sees the upsell rather than the filters. This entry
+  // asserted filters on a page that has none and was named for a route that
+  // does not exist (/advanced-search 404s).
+  { path: '/search', name: 'search', hasFilters: false },
 ];
 
 async function findSearchInputs(page: Page): Promise<any[]> {
@@ -71,6 +79,16 @@ async function findFilters(page: Page): Promise<any[]> {
       }))
   );
 }
+
+/**
+ * Every describe in this file runs against fixtures (WEB-CI-028 AC2). The smoke
+ * lane builds with placeholder VITE_SUPABASE_*, so without this a "search
+ * returns results" assertion is asserting against a page that can never have
+ * any - which is why this spec sat in no lane for four passes.
+ */
+test.beforeEach(async ({ page }) => {
+  await installFixtureBackend(page);
+});
 
 test.describe('Search Bar Discovery', () => {
   for (const page of pagesWithSearch) {
@@ -300,6 +318,30 @@ test.describe('Search Results', () => {
 
 test.describe('Filter Functionality', () => {
   test('events page filters should work correctly', async ({ page }) => {
+    // /events searches SERVER-side (textSearch on search_vector), and the
+    // fixture backend returns the same rows whatever the query says. This
+    // passed on the old page only because its Featured block (two fixture
+    // rows) hid itself while any filter was active; the events plan removed
+    // that block. So the backend's answer for this one term is stated here:
+    // a search_vector query naming it matches nothing. What the test then
+    // checks is that typing reaches the query and the list renders the answer.
+    const searchedFor: string[] = [];
+    await page.route('**/rest/v1/events?**', (route) => {
+      const url = decodeURIComponent(route.request().url());
+      if (!/search_vector=[^&]*zzzznonexistentquery/i.test(url)) return route.fallback();
+      searchedFor.push(url);
+      return route.fulfill({
+        status: 200,
+        contentType: 'application/json',
+        headers: {
+          'access-control-allow-origin': '*',
+          'access-control-expose-headers': 'content-range',
+          'content-range': '*/0',
+        },
+        body: route.request().method() === 'HEAD' ? '' : '[]',
+      });
+    });
+
     await page.goto('/events', { waitUntil: 'networkidle' });
 
     // This test was broken three separate ways and could not fail on the
@@ -318,7 +360,11 @@ test.describe('Filter Functionality', () => {
     // responded — either the result set changed or the filter state was
     // reflected in the URL. Accepting either keeps this robust when a chosen
     // facet happens to match everything.
-    const cards = () => page.locator('a[href^="/events/"]');
+    // Card TITLE links only. The events directory (landing and suburb links,
+    // all a[href^="/events/"]) mounts lazily once the list is short enough to
+    // bring it on screen, so counting every events link counted the empty
+    // state's directory as results (events-pass2 WP1 item 16).
+    const cards = () => page.locator('h3 > a[href^="/events/"], h4 > a[href^="/events/"]');
 
     // Driven through the SEARCH INPUT rather than a Radix dropdown.
     //
@@ -350,6 +396,7 @@ test.describe('Filter Functionality', () => {
 
     const afterCount = await cards().count();
 
+    expect(searchedFor.length, 'the search term never reached the events query').toBeGreaterThan(0);
     expect(
       afterCount,
       `Filtering by a non-matching term should reduce the rendered results. ` +
@@ -539,9 +586,13 @@ test.describe('Mobile Search Experience', () => {
     await searchInput.fill('food');
     await page.waitForTimeout(800);
 
-    // Results should be visible
-    const resultsVisible = await page.locator('[data-testid*="result"], article, .card').first().isVisible();
-    expect(resultsVisible, 'Search results should be visible on mobile').toBe(true);
+    // THE SELECTOR THIS USED MATCHES NOTHING IN THIS APP, and the same file
+    // already says so: the Filter Functionality test 200 lines up records
+    // '[data-testid*="result"], article, .card' measuring 0 while the page
+    // showed 40 event cards. That fix never reached this test, so it asserted
+    // "search results are visible on mobile" against a locator that could
+    // never resolve. Event cards are a[href^="/events/"] inside the grid.
+    await expect(page.locator('a[href^="/events/"]').first()).toBeVisible();
   });
 
   test('filters should be mobile-friendly', async ({ page }) => {

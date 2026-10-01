@@ -10,6 +10,7 @@ import { useAuth } from "@/hooks/useAuth";
 import { toast } from "sonner";
 import { createLogger } from '@/lib/logger';
 import { SpriteIcon } from "@/components/ui/SpriteIcon";
+import { formatEventPart } from "@/lib/timezone";
 
 const log = createLogger('GroupEventPlanner');
 
@@ -173,7 +174,7 @@ export function GroupEventPlanner({ group, onClose }: GroupEventPlannerProps) {
                             </h5>
                             <div className="flex items-center gap-2 text-xs text-muted-foreground mt-1">
                               <SpriteIcon name="calendar" className="w-3 h-3" />
-                              {new Date(event.date).toLocaleDateString()}
+                              {formatEventPart(event, 'MMM d, yyyy')}
                               {event.venue && (
                                 <>
                                   <SpriteIcon name="map-pin" className="w-3 h-3" />
@@ -210,7 +211,7 @@ export function GroupEventPlanner({ group, onClose }: GroupEventPlannerProps) {
                               <h5 className="font-medium text-sm">{event.title}</h5>
                               <div className="flex items-center gap-2 text-xs text-muted-foreground">
                                 <SpriteIcon name="calendar" className="w-3 h-3" />
-                                {new Date(event.date).toLocaleDateString()}
+                                {formatEventPart(event, 'MMM d, yyyy')}
                                 {event.venue && (
                                   <>
                                     <SpriteIcon name="map-pin" className="w-3 h-3" />

@@ -22,13 +22,20 @@ import logging
 import os
 import re
 import sys
-from datetime import datetime, timedelta
+import time
+from datetime import datetime
 from typing import Optional
 from dateutil import parser as date_parser
 from zoneinfo import ZoneInfo
 from urllib.robotparser import RobotFileParser
 from urllib.parse import urlsplit
 from urllib.request import urlopen
+
+# Sibling modules, stdlib only (test_venue_match.py / test_event_detail.py run
+# them before the dependency install).
+sys.path.insert(0, os.path.dirname(os.path.abspath(__file__)))
+from event_detail import detail_fields, parse_end_date  # noqa: E402
+from venue_match import ingest_coordinates, match_known_venue  # noqa: E402
 
 # Configure logging
 logging.basicConfig(
@@ -64,6 +71,105 @@ except ImportError:
 # Configuration
 CATCHDESMOINES_BASE_URL = "https://www.catchdesmoines.com"
 EVENTS_LIST_URL = f"{CATCHDESMOINES_BASE_URL}/events/"
+
+# WEB-BE-049. The canonical event category vocabulary, read from the SAME file
+# the edge functions and the browser bundle read. A fourth hand-maintained copy
+# is how the vocabularies diverged in the first place: this crawler's prompt
+# asked for one list, the shared prompt asked for a different one, and that
+# prompt's own example used a word in neither.
+_CATEGORY_JSON = os.path.join("supabase", "functions", "_shared", "eventCategories.json")
+
+
+def _category_data_path() -> str:
+    """The workflow runs this with cwd=crawlers, the offline tests exec the
+    module source with no __file__, and a developer may run it from the repo
+    root. Try all three rather than assume one."""
+    candidates = []
+    here = globals().get("__file__")
+    if here:
+        candidates.append(os.path.join(os.path.dirname(os.path.abspath(here)), "..", _CATEGORY_JSON))
+    candidates.append(os.path.join("..", _CATEGORY_JSON))
+    candidates.append(_CATEGORY_JSON)
+    for c in candidates:
+        if os.path.exists(c):
+            return c
+    return candidates[0]
+
+
+def _load_category_vocabulary() -> tuple:
+    """(categories, fallback, keyword_groups). Falls back to a bare vocabulary
+    if the file is unreadable - a crawl that cannot read a JSON file should not
+    stop, but it must not silently invent categories either."""
+    path = _category_data_path()
+    try:
+        with open(path, encoding="utf-8") as fh:
+            data = json.load(fh)
+        return (
+            list(data["categories"]),
+            data["fallback"],
+            [(g["category"], list(g["match"])) for g in data["keywords"]],
+        )
+    except Exception as e:  # noqa: BLE001
+        logger.warning(f"Could not read the category vocabulary at {path}: {e}")
+        return (["Other"], "Other", [])
+
+
+EVENT_CATEGORIES, FALLBACK_CATEGORY, _CATEGORY_KEYWORDS = _load_category_vocabulary()
+CATEGORY_VOCABULARY = "/".join(EVENT_CATEGORIES)
+
+
+def sanitize_like(value: str, max_length: int = 500) -> str:
+    """Escape LIKE/ILIKE wildcards in a value used as a PATTERN (WEB-BE-048).
+
+    Port of sanitizeLikeInput in supabase/functions/_shared/validation.ts, and
+    it must stay in step with it: the same titles pass through both paths.
+
+    WHY IT MATTERS HERE. _check_duplicate passes a scraped title and venue to
+    .ilike(), where they are patterns rather than values. One stored title
+    already carries a literal percent ("Monday Pop Up Hours and 10% Bourbon"),
+    and in an ilike that percent matches anything - so the check can report a
+    duplicate that is not one. It GATES THE INSERT, so a false match silently
+    drops a real event.
+
+    APOSTROPHES ARE KEPT, for the reason the TypeScript version records:
+    stripping them turned "Chef George's" into "Chef Georges" and MISSED the
+    real duplicate. Many venue names here carry one.
+    """
+    if not isinstance(value, str):
+        return ""
+    return (
+        value[:max_length]
+        .replace("\\", "\\\\")  # backslash first, or the escapes below get escaped
+        .replace("%", "\\%")
+        .replace("_", "\\_")
+        .replace(";", "")
+        .strip()
+    )
+
+
+def normalize_category(raw) -> str:
+    """Port of supabase/functions/_shared/eventCategories.ts normalizeCategory.
+    Total: every input produces a canonical value."""
+    if not isinstance(raw, str):
+        return FALLBACK_CATEGORY
+    trimmed = raw.strip()
+    if not trimmed:
+        return FALLBACK_CATEGORY
+    lower = trimmed.lower()
+    for canonical in EVENT_CATEGORIES:
+        if canonical.lower() == lower:
+            return canonical
+    # Word-prefix, not substring: a plain `in` filed "Block Party" under Arts
+    # because it contains "art". A keyword that is not plain letters ("trade
+    # show", "stand-up") is matched whole, because the split would tear it in
+    # half and it could never fire.
+    words = [w for w in re.split(r"[^a-z]+", lower) if w]
+    for category, matches in _CATEGORY_KEYWORDS:
+        for kw in matches:
+            hit = kw in lower if re.search(r"[^a-z]", kw) else any(w.startswith(kw) for w in words)
+            if hit:
+                return category
+    return FALLBACK_CATEGORY
 CENTRAL_TZ = ZoneInfo("America/Chicago")
 
 # Claude 4.5 Sonnet model
@@ -118,6 +224,18 @@ MAX_EXTRACTION_CHARS = 60000
 # same way whether it was blocked or broken.
 ROBOTS_TIMEOUT_SECONDS = 5
 ROBOTS_USER_AGENT = "*"  # the crawler presents a browser UA, so it matches the wildcard group
+# WEB-BE-051. Five pages of twelve was about 60 events, a few days of the
+# calendar, so a show months out appeared only once it was close, and the
+# month pages (WEB-SEO-041) had nothing to list. Twenty pages is about 240.
+DEFAULT_MAX_PAGES = 20
+# The job has a hard timeout and a render plus a model call per page, plus a
+# detail fetch per new event. Work that does not fit is deferred to the next
+# daily run rather than lost: every run walks from page 0, and duplicates are
+# skipped before any detail fetch, so tomorrow resumes where today stopped.
+DEFAULT_TIME_BUDGET_MINUTES = 30
+# Share of the budget the listing walk may spend before processing starts.
+LIST_BUDGET_SHARE = 0.5
+
 DEFAULT_LIST_DELAY_SECONDS = 2.0
 DEFAULT_DETAIL_DELAY_SECONDS = 1.0
 
@@ -228,12 +346,38 @@ def clean_html_for_extraction(html: str) -> str:
     return cleaned
 
 
+def page_adds_new_events(events: list, seen_detail_urls: set) -> bool:
+    """Record this page's detail links; True when at least one is new.
+
+    An event with no detail_url cannot be compared, so it counts as new: a
+    page of those is not proof the listing ended.
+    """
+    added = False
+    for event in events:
+        url = (event.get("detail_url") or "").strip().rstrip("/").lower()
+        if not url:
+            added = True
+            continue
+        if url not in seen_detail_urls:
+            seen_detail_urls.add(url)
+            added = True
+    return added
+
+
 class CatchDesMoinesCrawler:
     """Crawler for catchdesmoines.com events."""
 
-    def __init__(self, dry_run: bool = False, max_pages: int = 5):
+    def __init__(
+        self,
+        dry_run: bool = False,
+        max_pages: int = DEFAULT_MAX_PAGES,
+        time_budget_minutes: float = DEFAULT_TIME_BUDGET_MINUTES,
+    ):
         self.dry_run = dry_run
         self.max_pages = max_pages
+        self.time_budget_seconds = time_budget_minutes * 60
+        # Events extracted but left for the next run because the budget ran out.
+        self.events_deferred: int = 0
         self.supabase: Optional[Client] = None
         self.anthropic_client: Optional[anthropic.Anthropic] = None
         self.events_found: list = []
@@ -248,6 +392,16 @@ class CatchDesMoinesCrawler:
         # Extraction failures are counted, not swallowed. A run that extracts
         # nothing because the API call blew up must not exit 0 looking healthy.
         self.extraction_errors: int = 0
+        # Items skipped because their duplicate check could not be completed
+        # (WEB-BE-048). Kept apart from duplicates_skipped: "the event was
+        # already there" and "we could not find out" are different facts.
+        self.duplicate_check_errors: int = 0
+        # Set at the top of run(); the heartbeat row needs a start as well as a
+        # finish or "how long did this take" is unanswerable after the fact.
+        self.started_at: Optional[str] = None
+        # known_venues rows (46 today), loaded once per run in _init_clients.
+        # Empty means no venue coordinates this run, never a crash.
+        self.known_venues: list = []
 
     def _init_clients(self):
         """Initialize Supabase and Anthropic clients."""
@@ -265,6 +419,42 @@ class CatchDesMoinesCrawler:
         self.supabase = create_client(supabase_url, supabase_key)
         self.anthropic_client = anthropic.Anthropic(api_key=anthropic_key)
         logger.info("Initialized Supabase and Anthropic clients")
+        self._load_known_venues()
+
+    def _load_known_venues(self) -> None:
+        """Load known_venues once. A failed read is logged and leaves the list
+        empty: the rows still insert, just without venue coordinates, which is
+        what happened on every run before this existed."""
+        try:
+            result = self.supabase.table("known_venues").select(
+                "id, name, aliases, latitude, longitude"
+            ).eq("is_active", True).execute()
+            self.known_venues = result.data or []
+            logger.info(f"Loaded {len(self.known_venues)} known venue(s)")
+        except Exception as e:
+            logger.warning(f"Could not load known_venues; no venue coordinates this run: {e}")
+            self.known_venues = []
+
+    def _detail_record_fields(self, event: dict, parsed_dt: datetime) -> dict:
+        """image_url, end_date and coordinates for the row (WEB-BE-050).
+
+        CLAUDE.md requires every ingestion path to match a known venue and
+        take its coordinates at ingest. The edge scrapers did; this crawler,
+        the one that runs daily, wrote none of these, so its rows had no map
+        pin, no image (Event JSON-LD fell back to og-default.png) and no end.
+        """
+        detail = event.get("_detail") or {}
+        out = {}
+        if detail.get("image_url"):
+            out["image_url"] = detail["image_url"]
+        end_date = parse_end_date(detail.get("end_date_raw"), parsed_dt)
+        if end_date:
+            out["end_date"] = end_date
+        venue = match_known_venue(self._record_venue(event), self.known_venues)
+        if venue is None and detail.get("place_name"):
+            venue = match_known_venue(detail["place_name"], self.known_venues)
+        out.update(ingest_coordinates(venue, detail.get("source_coordinates")))
+        return out
 
     async def crawl_events_list(self, page: int = 0) -> str:
         """Crawl the events listing page."""
@@ -437,7 +627,7 @@ For EACH event, extract:
 - date: YYYY-MM-DD HH:MM:SS (Central Time)
 - location: City/venue (default: "Des Moines, IA")
 - venue: Specific venue name
-- category: Music/Sports/Arts/Community/Entertainment/Festival/Food
+- category: EXACTLY ONE OF {CATEGORY_VOCABULARY} - not a word of your own
 - price: Price or "See website"
 - detail_url: The event detail page path (e.g., /event/event-name/12345/)
 
@@ -449,7 +639,7 @@ FORMAT AS JSON ARRAY ONLY:
     "date": "2025-MM-DD HH:MM:SS",
     "location": "Des Moines, IA",
     "venue": "Venue Name",
-    "category": "Category",
+    "category": "Music",
     "price": "Price",
     "detail_url": "/event/event-name/12345/"
   }}
@@ -503,7 +693,14 @@ Return ONLY the JSON array. No other text."""
                 dt = datetime.strptime(date_str, "%Y-%m-%d %H:%M:%S")
             elif re.match(r'^\d{4}-\d{2}-\d{2}$', date_str):
                 dt = datetime.strptime(date_str, "%Y-%m-%d")
-                dt = dt.replace(hour=19, minute=0, second=0)  # Default 7 PM
+                # WEB-BE-037. This stamped 19:00:00, which is indistinguishable
+                # from a real 7pm show and disagreed with the three other
+                # ingestion paths. NO_TIME_MARKER (19:31:58) is the project-wide
+                # sentinel for "the source published a day but no time"; it is
+                # deliberately an odd value so a reader can tell the two apart.
+                # Keep in step with NO_TIME_MARKER in
+                # supabase/functions/_shared/eventDateTime.ts.
+                dt = dt.replace(hour=19, minute=31, second=58)
             else:
                 dt = date_parser.parse(date_str)
 
@@ -535,13 +732,16 @@ Return ONLY the JSON array. No other text."""
         return (event.get("venue") or event.get("location") or "TBD")[:100]
 
     def _dedupe_key(self, event: dict, parsed_dt: Optional[datetime]) -> Optional[tuple]:
-        """title + calendar date + venue, the key where a match is genuinely one
-        event stored twice. Title alone collapses a weekly trivia night."""
+        """title + CENTRAL calendar date + venue, the key where a match is
+        genuinely one event stored twice. Title alone collapses a weekly trivia
+        night. Central, not UTC: parsed_dt is UTC, and an evening show is
+        already tomorrow there, while events_title_venue_date_unique and
+        _shared/eventDedup.ts both key on the Des Moines date."""
         if not parsed_dt:
             return None
         return (
             self._record_title(event).strip().lower(),
-            parsed_dt.date().isoformat(),
+            parsed_dt.astimezone(CENTRAL_TZ).date().isoformat(),
             self._record_venue(event).strip().lower(),
         )
 
@@ -564,25 +764,33 @@ Return ONLY the JSON array. No other text."""
             return False
 
         try:
-            # Same calendar day in UTC, matching how `date` is stored.
-            day_start = parsed_dt.replace(hour=0, minute=0, second=0, microsecond=0)
-            day_end = day_start + timedelta(days=1)
-
+            # Same Central calendar day, read from the column the unique index
+            # is built on (event_local_date, generated from `date`). This was a
+            # UTC-day range on `date`, which split one evening across two days.
             result = self.supabase.table("events").select("id").ilike(
-                "title", self._record_title(event).strip()
+                "title", sanitize_like(self._record_title(event))
             ).ilike(
-                "venue", self._record_venue(event).strip()
-            ).gte(
-                "date", day_start.isoformat()
-            ).lt(
-                "date", day_end.isoformat()
+                "venue", sanitize_like(self._record_venue(event))
+            ).eq(
+                "event_local_date", key[1]
             ).execute()
 
             return len(result.data) > 0
 
         except Exception as e:
-            logger.warning(f"Error checking duplicate: {e}")
-            return False
+            # WEB-BE-048. TREAT AS A DUPLICATE, i.e. skip. Returning False here
+            # meant "not a duplicate", so one PostgREST hiccup re-inserted every
+            # event in the batch - and this check is the only thing between a
+            # re-crawl and a duplicate row. A skip costs one cycle of latency
+            # and the next scheduled run re-crawls the event; a wrong insert has
+            # to be found and cleaned up by hand. Counted as an extraction error
+            # so the run does not report success while flying blind.
+            logger.warning(
+                f"Error checking duplicate for {self._record_title(event)}; "
+                f"skipping rather than risking a duplicate insert: {e}"
+            )
+            self.duplicate_check_errors += 1
+            return True
 
     async def _insert_event(self, event: dict) -> bool:
         """Insert event into Supabase."""
@@ -623,7 +831,9 @@ Return ONLY the JSON array. No other text."""
                 "event_start_utc": parsed_dt.isoformat(),
                 "location": event.get("location", "Des Moines, IA")[:100],
                 "venue": self._record_venue(event),
-                "category": event.get("category", "General")[:50],
+                # WEB-BE-049: normalized here as well as prompted for, because a
+                # prompt is a request and this is the write.
+                "category": normalize_category(event.get("category")),
                 "price": event.get("price", "See website")[:50],
                 "source_url": event.get("source_url", ""),
                 "is_featured": False,
@@ -631,6 +841,7 @@ Return ONLY the JSON array. No other text."""
                 "created_at": now,
                 "updated_at": now,
             }
+            event_record.update(self._detail_record_fields(event, parsed_dt))
 
             result = self.supabase.table("events").insert(event_record).execute()
 
@@ -648,8 +859,78 @@ Return ONLY the JSON array. No other text."""
             logger.error(f"Error inserting event '{event.get('title')}': {e}")
             return False
 
+    def post_heartbeat(self, result: Optional[dict]) -> None:
+        """Record this run in automation_job_runs (WEB-BE-043).
+
+        WHY A PYTHON WRITE AND NOT AN EDGE FUNCTION. This crawler is a GitHub
+        Actions job. Nothing inside Supabase schedules it, so nothing inside
+        Supabase can tell the difference between "ran and found nothing" and
+        "has not run since February" - which is exactly what happened: the
+        workflow failed on a missing secret every day for six months and the
+        only place that was visible was the Actions tab (WEB-SEO-017). The
+        watchdog reads automation_job_runs, so the crawler has to post there
+        itself.
+
+        BEST EFFORT, ALWAYS. A ledger write that fails must never fail the
+        crawl or change its exit code - the events are already in the table.
+        """
+        if self.dry_run or not self.supabase:
+            return
+
+        found = result["total_found"] if result else 0
+        inserted = result["inserted"] if result else 0
+        duplicates = result["duplicates"] if result else 0
+        errors = (
+            result["extraction_errors"] + result.get("duplicate_check_errors", 0)
+            if result
+            else 1
+        )
+
+        # `result is None` means run() aborted on the first page, which is a
+        # failure however few errors were counted.
+        if result is None:
+            status = "failed"
+            error = "crawl aborted: the first listing page returned no HTML"
+        elif errors:
+            status = "failed"
+            error = f"{errors} extraction error(s)"
+        else:
+            status = "success"
+            error = None
+
+        row = {
+            "job_name": "github-event-crawler",
+            "started_at": self.started_at,
+            "finished_at": datetime.now(tz=ZoneInfo("UTC")).isoformat(),
+            "status": status,
+            "items_processed": inserted,
+            "items_failed": errors,
+            "error": error,
+            "metadata": {
+                "runner": "github-actions",
+                "maxPages": self.max_pages,
+                "deferred": self.events_deferred,
+                # The shape supabase/functions/_shared/ingestionHealth.ts reads.
+                "sources": {
+                    "catchdesmoines.com": {
+                        "fetched": found,
+                        "inserted": inserted,
+                        "duplicates": duplicates,
+                        "errors": errors,
+                    }
+                },
+            },
+        }
+
+        try:
+            self.supabase.table("automation_job_runs").insert(row).execute()
+            logger.info("Posted heartbeat row to automation_job_runs")
+        except Exception as e:  # noqa: BLE001 - never let the ledger fail the crawl
+            logger.warning(f"Could not post heartbeat row: {e}")
+
     async def run(self):
         """Run the crawler."""
+        self.started_at = datetime.now(tz=ZoneInfo("UTC")).isoformat()
         logger.info("=" * 60)
         logger.info("CatchDesMoines Event Crawler")
         logger.info(f"Dry Run: {self.dry_run}")
@@ -660,9 +941,17 @@ Return ONLY the JSON array. No other text."""
         self._init_clients()
 
         all_events = []
+        seen_detail_urls: set = set()
+        run_start = time.monotonic()
+        list_deadline = run_start + self.time_budget_seconds * LIST_BUDGET_SHARE
+        run_deadline = run_start + self.time_budget_seconds
 
         # Crawl event listing pages
         for page in range(self.max_pages):
+            if page > 0 and time.monotonic() > list_deadline:
+                logger.info(f"Listing budget spent after {page} page(s); processing what was found")
+                break
+
             html = await self.crawl_events_list(page)
 
             if not html:
@@ -685,6 +974,13 @@ Return ONLY the JSON array. No other text."""
                     logger.info(f"No more events found on page {page + 1}")
                 break
 
+            # Past the end of the calendar the listing repeats or empties. A
+            # page that adds no detail link this run has not already seen is
+            # the end, whatever max_pages says.
+            if page > 0 and not page_adds_new_events(events, seen_detail_urls):
+                logger.info(f"Page {page + 1} added no new events; end of the listing")
+                break
+
             all_events.extend(events)
             logger.info(f"Total events found so far: {len(all_events)}")
 
@@ -696,6 +992,13 @@ Return ONLY the JSON array. No other text."""
 
         # Process each event
         for i, event in enumerate(all_events):
+            if time.monotonic() > run_deadline:
+                self.events_deferred = len(all_events) - i
+                logger.warning(
+                    f"Time budget spent; deferring {self.events_deferred} event(s) to the next run"
+                )
+                break
+
             logger.info(f"Processing event {i + 1}/{len(all_events)}: {event.get('title')}")
 
             # Check for duplicates
@@ -713,6 +1016,8 @@ Return ONLY the JSON array. No other text."""
             if detail_url:
                 detail_result = await self.crawl_event_detail(detail_url)
                 event["source_url"] = detail_result.get("source_url", detail_url)
+                if detail_result.get("html"):
+                    event["_detail"] = detail_fields(detail_result["html"])
 
                 # Delay between detail requests. Was a hardcoded 1s, which is
                 # below the Crawl-delay: 2 catchdesmoines.com publishes.
@@ -733,7 +1038,9 @@ Return ONLY the JSON array. No other text."""
         logger.info(f"Total events extracted: {len(all_events)}")
         logger.info(f"Events inserted: {self.events_inserted}")
         logger.info(f"Duplicates skipped: {self.duplicates_skipped}")
+        logger.info(f"Duplicate-check errors (skipped): {self.duplicate_check_errors}")
         logger.info(f"Extraction errors: {self.extraction_errors}")
+        logger.info(f"Deferred to next run: {self.events_deferred}")
         logger.info("=" * 60)
 
         return {
@@ -741,6 +1048,10 @@ Return ONLY the JSON array. No other text."""
             "inserted": self.events_inserted,
             "duplicates": self.duplicates_skipped,
             "extraction_errors": self.extraction_errors,
+            # Reported apart from duplicates so an operator can tell "already
+            # there" from "could not find out" (WEB-BE-048).
+            "duplicate_check_errors": self.duplicate_check_errors,
+            "deferred": self.events_deferred,
         }
 
 
@@ -750,7 +1061,13 @@ async def main():
 
     parser = argparse.ArgumentParser(description="CatchDesMoines Event Crawler")
     parser.add_argument("--dry-run", action="store_true", help="Don't insert into database")
-    parser.add_argument("--max-pages", type=int, default=5, help="Maximum pages to crawl")
+    parser.add_argument("--max-pages", type=int, default=DEFAULT_MAX_PAGES, help="Maximum pages to crawl")
+    parser.add_argument(
+        "--time-budget-minutes",
+        type=float,
+        default=DEFAULT_TIME_BUDGET_MINUTES,
+        help="Stop starting new work after this long; the rest waits for the next run",
+    )
     args = parser.parse_args()
 
     # Load environment variables from .env file if present
@@ -760,8 +1077,23 @@ async def main():
     except ImportError:
         pass
 
-    crawler = CatchDesMoinesCrawler(dry_run=args.dry_run, max_pages=args.max_pages)
-    result = await crawler.run()
+    crawler = CatchDesMoinesCrawler(
+        dry_run=args.dry_run,
+        max_pages=args.max_pages,
+        time_budget_minutes=args.time_budget_minutes,
+    )
+    try:
+        result = await crawler.run()
+    except Exception:
+        # A crash mid-crawl is the case the ledger most needs to record, and it
+        # is the one an early return would miss. Re-raised immediately after, so
+        # the exit code is unchanged.
+        crawler.post_heartbeat(None)
+        raise
+
+    # Posted before the GITHUB_OUTPUT write and outside any success check, so a
+    # failed crawl leaves a failed row rather than no row at all.
+    crawler.post_heartbeat(result)
 
     # Output for GitHub Actions
     if os.environ.get("GITHUB_OUTPUT"):

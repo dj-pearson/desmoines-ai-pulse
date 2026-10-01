@@ -131,6 +131,8 @@ export function usePersonalizedRecommendations() {
         .select('*')
         .gte('date', new Date().toISOString().split('T')[0])
         .neq('is_hidden', true) // Exclude soft-hidden stale events (WEB-AUTO-006)
+        // WEB-BE-034: archived_at is the other unpublish switch.
+        .is('archived_at', null)
         .order('date', { ascending: true })
         .limit(10);
 
@@ -342,6 +344,8 @@ export function usePersonalizedRecommendations() {
         .select('*')
         .eq('is_featured', true)
         .neq('is_hidden', true) // Exclude soft-hidden stale events (WEB-AUTO-006)
+        // WEB-BE-034: archived_at is the other unpublish switch.
+        .is('archived_at', null)
         .limit(4);
       // A strategy that FAILED contributes nothing, exactly like a strategy
       // with no matches - and the user just sees fewer recommendations. One

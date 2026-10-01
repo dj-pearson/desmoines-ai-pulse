@@ -314,18 +314,40 @@ export function stripPrerenderSignal(html) {
  * offline against captured HTML, which is how the two regressions in
  * dedupeJsonLd were found.
  *
+ * SEO-029: `shellTitle` may also be a list. The vite shell's title is not the
+ * title production serves at an unrendered URL: Cloudflare's SPA fallback is
+ * dist/index.html, which the hub pass has overwritten with the PRERENDERED
+ * homepage ("Des Moines Insider | Events, Restaurants & Things to Do"). A gate
+ * that only knew the vite title could not see the symptom it exists to stop,
+ * so prerender.mjs passes both.
+ *
  * @param {string} html      the captured document
  * @param {string} route     the pathname it was captured for
- * @param {string|null} shellTitle  the <title> vite shipped in the build shell
+ * @param {string|null|Array<string|null>} shellTitle  title(s) that mean the
+ *   page never rendered as itself: the vite shell's, and the homepage's
  * @returns {string[]} failure reasons, empty if the page is publishable
  */
 export function strictGateFailures(html, route, shellTitle) {
   const failures = [];
 
+  // Compare decoded text, so "&amp;" in one capture and "&" in another (Helmet
+  // and vite do not escape identically) cannot hide a match.
+  const decode = (t) =>
+    t
+      .replace(/&#x27;|&#39;|&apos;/g, "'")
+      .replace(/&quot;/g, '"')
+      // &amp; last, so "&amp;quot;" decodes to "&quot;" and not to '"'.
+      .replace(/&amp;/g, '&')
+      .replace(/\s+/g, ' ')
+      .trim();
+  const forbidden = (Array.isArray(shellTitle) ? shellTitle : [shellTitle])
+    .filter((t) => typeof t === 'string' && t.trim() !== '')
+    .map(decode);
+
   const renderedTitle = /<title[^>]*>(.*?)<\/title>/is.exec(html)?.[1]?.trim() ?? null;
   if (!renderedTitle) {
     failures.push('no <title> at all');
-  } else if (shellTitle && renderedTitle === shellTitle) {
+  } else if (forbidden.includes(decode(renderedTitle))) {
     // The exact production symptom: ~1,070 entity URLs serving the homepage
     // title. A page still carrying the build shell's title never rendered
     // itself, whatever else is on it.

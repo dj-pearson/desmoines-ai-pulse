@@ -3,11 +3,18 @@ import AuthenticationServices
 
 /// Authentication view with sign in, sign up tabs, and Apple Sign-In.
 struct AuthView: View {
+    /// True when presented in a sheet (MainTabView), which has no back button,
+    /// so the view adds its own Cancel (IOS-DD-ACCOUNT-15).
+    var isModal = false
+
     @State private var viewModel = AuthViewModel()
     @State private var isSignUpMode = false
     @State private var showPassword = false
     @State private var showConfirmPassword = false
+    @FocusState private var emailFocused: Bool
     @Environment(\.dismiss) private var dismiss
+    @Environment(\.colorScheme) private var colorScheme
+    @Environment(\.openURL) private var openURL
 
     var body: some View {
         ScrollView {
@@ -34,6 +41,11 @@ struct AuthView: View {
                 .padding(.horizontal)
                 .accessibilityLabel("Choose sign in or sign up")
 
+                if let pending = viewModel.pendingVerificationEmail {
+                    checkInboxPanel(email: pending)
+                        .padding(.horizontal)
+                }
+
                 // Form
                 VStack(spacing: 14) {
                     if isSignUpMode {
@@ -56,12 +68,17 @@ struct AuthView: View {
                             .keyboardType(.emailAddress)
                             .autocapitalization(.none)
                             .textFieldStyle(.glassInput)
+                            .focused($emailFocused)
 
                         if !viewModel.email.isEmpty && !viewModel.isEmailValid {
                             Text("Please enter a valid email address")
                                 .font(.caption)
                                 .foregroundStyle(.red)
                                 .accessibilityLabel("Email validation error: invalid email format")
+                        } else if let hint = viewModel.emailFieldHint {
+                            Text(hint)
+                                .font(.caption)
+                                .foregroundStyle(.secondary)
                         }
                     }
 
@@ -99,7 +116,11 @@ struct AuthView: View {
                             }
                         }
 
-                        interestsSection
+                        // Interests are asked in onboarding now; the form only
+                        // asks for the marketing opt-in (IOS-DD-ACCOUNT-01).
+                        Toggle("Email me weekly Des Moines picks", isOn: $viewModel.emailOptIn)
+                            .font(.subheadline)
+                            .tint(Color.accentColor)
                     }
 
                     // Lockout warning
@@ -132,7 +153,12 @@ struct AuthView: View {
                 // Forgot password
                 if !isSignUpMode {
                     Button {
-                        Task { await viewModel.resetPassword() }
+                        Task {
+                            await viewModel.resetPassword()
+                            if viewModel.emailFieldHint != nil {
+                                emailFocused = true
+                            }
+                        }
                     } label: {
                         Text("Forgot Password?")
                             .font(.subheadline)
@@ -165,7 +191,10 @@ struct AuthView: View {
                         }
                     }
                 }
-                .signInWithAppleButtonStyle(.black)
+                // Black on a dark background disappeared (IOS-DD-ACCOUNT-15).
+                // The button does not restyle in place, so `.id` rebuilds it.
+                .signInWithAppleButtonStyle(colorScheme == .dark ? .white : .black)
+                .id(colorScheme)
                 .frame(height: 50)
                 .clipShape(RoundedRectangle(cornerRadius: 12))
                 .padding(.horizontal)
@@ -176,15 +205,26 @@ struct AuthView: View {
         // lower fields + Create Account button sit below it (IOS-AUDIT-UX-045).
         .scrollDismissesKeyboard(.interactively)
         .navigationBarTitleDisplayMode(.inline)
-        .alert("Sign In Error", isPresented: $viewModel.showError) {
+        .toolbar {
+            if isModal {
+                ToolbarItem(placement: .cancellationAction) {
+                    Button("Cancel") { dismiss() }
+                }
+            }
+        }
+        .alert(isSignUpMode ? "Couldn't Create Account" : "Couldn't Sign In", isPresented: $viewModel.showError) {
             Button("OK", role: .cancel) {}
         } message: {
             Text(viewModel.errorMessage ?? "Something went wrong.")
         }
         .alert("Check Your Email", isPresented: $viewModel.showVerificationAlert) {
-            Button("OK", role: .cancel) { dismiss() }
+            // With an address pending, stay: the inline panel carries Resend
+            // and Open Mail. Dismissing used to drop the address entirely.
+            Button("OK", role: .cancel) {
+                if viewModel.pendingVerificationEmail == nil { dismiss() }
+            }
         } message: {
-            Text("We've sent a verification link to your email. Please verify your account to continue.")
+            Text("If that address can be used for a new account, a confirmation link is on its way. Open it on this iPhone to finish signing up.")
         }
         .alert("Email Sent", isPresented: $viewModel.showInfo) {
             Button("OK", role: .cancel) {}
@@ -255,46 +295,55 @@ struct AuthView: View {
         }
     }
 
-    // MARK: - Interests Section
+    // MARK: - Check your inbox (IOS-DD-ACCOUNT-06)
 
-    private var interestsSection: some View {
-        VStack(alignment: .leading, spacing: 8) {
-            Text("What interests you?")
-                .font(.subheadline.weight(.medium))
+    private func checkInboxPanel(email: String) -> some View {
+        VStack(alignment: .leading, spacing: 10) {
+            Label("Check your inbox", systemImage: "envelope.badge")
+                .font(.headline)
+            Text("Confirm \(email) with the link we sent, then sign in.")
+                .font(.subheadline)
                 .foregroundStyle(.secondary)
+                .fixedSize(horizontal: false, vertical: true)
 
-            LazyVGrid(columns: [GridItem(.adaptive(minimum: 80), spacing: 8)], spacing: 8) {
-                ForEach(AuthViewModel.availableInterests, id: \.self) { interest in
-                    Button {
-                        if viewModel.selectedInterests.contains(interest) {
-                            viewModel.selectedInterests.remove(interest)
-                        } else {
-                            viewModel.selectedInterests.insert(interest)
-                        }
-                    } label: {
-                        Text(interest)
-                            .font(.caption.weight(.medium))
-                            .padding(.horizontal, 10)
-                            .padding(.vertical, 6)
-                            .frame(maxWidth: .infinity)
-                            .background(
-                                viewModel.selectedInterests.contains(interest)
-                                    ? Color.accentColor.opacity(0.15)
-                                    : Color(.systemGray6)
-                            )
-                            .foregroundStyle(
-                                viewModel.selectedInterests.contains(interest)
-                                    ? Color.accentColor
-                                    : Color.primary
-                            )
-                            .clipShape(Capsule())
-                    }
-                    .buttonStyle(.plain)
-                    .accessibilityAddTraits(viewModel.selectedInterests.contains(interest) ? .isSelected : [])
-                    .accessibilityLabel(interest)
-                }
+            ViewThatFits(in: .horizontal) {
+                HStack(spacing: 12) { checkInboxButtons }
+                VStack(alignment: .leading, spacing: 8) { checkInboxButtons }
             }
         }
+        .padding(14)
+        .frame(maxWidth: .infinity, alignment: .leading)
+        .background(Color(.secondarySystemBackground), in: RoundedRectangle(cornerRadius: 12))
+        .accessibilityElement(children: .contain)
+    }
+
+    @ViewBuilder
+    private var checkInboxButtons: some View {
+        Button {
+            Task { await viewModel.resendVerification() }
+        } label: {
+            Text(viewModel.resendCooldownRemaining > 0
+                 ? "Resend in \(viewModel.resendCooldownRemaining)s"
+                 : "Resend link")
+                .font(.subheadline.weight(.semibold))
+        }
+        .disabled(viewModel.resendCooldownRemaining > 0 || viewModel.isResending)
+        .minHitTarget()
+
+        Button {
+            if let url = URL(string: "message://") { openURL(url) }
+        } label: {
+            Text("Open Mail").font(.subheadline.weight(.semibold))
+        }
+        .minHitTarget()
+
+        Button {
+            viewModel.clearPendingVerification()
+            emailFocused = true
+        } label: {
+            Text("Use a different email").font(.subheadline)
+        }
+        .minHitTarget()
     }
 }
 
@@ -315,7 +364,7 @@ extension TextFieldStyle where Self == RoundedInputStyle {
 
 // MARK: - Password Strength Bar
 
-private struct PasswordStrengthBar: View {
+struct PasswordStrengthBar: View {
     let strength: AuthViewModel.PasswordStrength
 
     private var progress: Double {
