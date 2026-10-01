@@ -228,7 +228,7 @@
         "Cuisine section linking to best pizza / burger / breakfast pages once SEO-041 publishes them.",
         "ItemList schema for the ranked list. Close SEO-010 and SEO-026 with notes pointing here."
       ],
-      "notes": "",
+      "notes": "CODE COMPLETE 2026-10-01, merged to claude/seo-q4-loop (f93a3104); passes FALSE until live and the head terms are re-measured. No review count is stored, so the rule ranks on Google star rating alone and says so: 'Ranked by Google star rating, highest first and ties in alphabetical order, among open restaurants inside the Des Moines metro, counting each Google listing once and leaving out bakeries, coffee shops and dessert shops', plus a warning that few-review places can rank beside many-review ones. Today: ten 5.0, seven 4.9, three 4.8, matching a direct production query. Before -> after: first paragraph hidden on phones -> visible; 1,744 words / 189 unique internal links -> 2,261 / 213; cuisine x area links 0 -> 9 (read from pseo_pages at render); ItemList was the first 20 of the daily shuffle (incl. San Antonio, Crested Butte, Ames restaurants) -> the ranked 20; no aggregateRating. Ranked list sits right after the hero, before filters. Guide/FAQ kept. Files: src/lib/restaurantRanking.ts (15 tests), useTopRatedRestaurants.ts, useRestaurantHubAreaPages.ts, RestaurantsTopRated.tsx, pseo/restaurantAreaPages.ts, seo/RestaurantsHubDirectory.tsx, Restaurants.tsx, restaurantsHubCopy.ts. Verified: build; all 9 linked pSEO pages prerender, indexable, sitemapped; type-check, lint, check-seo-routes, check-seo-meta-length, check-lcp-priority, check-restaurant-seo, check-pseo-coverage; vitest 2,325/2,332; hub Playwright 20/21; 390px and 1280px light/dark. SEO-010 and SEO-026 closed in their files. OPEN: store Google review count (userRatingCount) then add a minimum; cuisine mislabels in the top 20 (SEO-061); no metro-wide best pizza/burger/breakfast pages and no burger category; /restaurants/<area> pSEO rows 404 live -> SEO-065; restaurants-hub-pass2 tonight-strip test mocks the retired opening column.",
       "supersedes": [
         "SEO-010",
         "SEO-026"
@@ -659,6 +659,23 @@
         "check-pseo-coverage, check-pseo-collisions, check-sitemap-redirects pass."
       ],
       "notes": "DONE IN PRODUCTION 2026-10-01; merged to claude/seo-q4-loop (aec98726) and the 301s to hotfix/pseo-homepage-shell (d421b171, merge 730dc9bd). passes FALSE until live. None of the 80 passed: every one listed 100% of its parent (the listing query never reads the audience dimension; restaurants have no dates). 26 restaurant x time pages with impressions -> noindex,follow + canonical /restaurants (a stand-in; no single-cuisine page exists); 54 (all 40 audience x time with 0 impressions + 14 restaurant x time) unpublished + 301 to /things-to-do/<time>, /events/today, /events/this-weekend or /restaurants (spring -> /things-to-do because /things-to-do/spring is in no sitemap). Rule src/pseo/duplicateRule.ts: indexable only with >=5 items and <70% overlap with the parent; else noindex+canonical if it has impressions, 301 if not; enforced by check-pseo-coverage offline and live. PseoPage honours a stored site-path canonical. Table docs/seo/pseo-time-duplicates-2026-10-01.csv. Rewrote /asian/west-des-moines (13) and /brunch/west-des-moines (7) from current listings; check-pseo-coverage passes. Backups + SQL in backups/seo-064/ (untracked). Verified: check-pseo-coverage, -collisions, -time-copy, check-sitemap-redirects, check-seo-route-parity, lint, type-check, 65 vitest (loop); check-sitemap-redirects, route parity, collisions (hotfix). NOTE: a CI build of #444 failed mid-run because this story unpublished /things-to-do/budget/this-weekend while the build was prerendering; the next build regenerates the sitemap from the DB. OPEN: hotfix code ignores pseo robots, so the 26 noindex pages stay indexable in production until the loop branch ships; same duplication pattern untouched on 8 /restaurants/<time> pages, 27 audience pages without a time dimension, and /things-to-do/<time> vs /events/<time>; 'Wasabi Waukee' counted under West Des Moines."
+    },
+    {
+      "id": "SEO-065",
+      "title": "/restaurants/<area> pages are published but 404 because the detail route catches them",
+      "priority": 1,
+      "phase": 1,
+      "branch": "claude/seo-q4-loop",
+      "passes": false,
+      "description": "Found by SEO-038: /restaurants/ankeny, /restaurants/west-des-moines, /restaurants/downtown, /restaurants/east-village and /restaurants/valley-junction are published pSEO rows that return 404 live because /restaurants/:slug (restaurant detail) matches first and finds no restaurant. These are the highest-volume targets in keyword-opportunities.csv ('restaurants in west des moines iowa' 50,000/mo; Ankeny, East Village and Downtown 5,000 each), all marked out of Catch Des Moines's scope.",
+      "acceptanceCriteria": [
+        "Reproduce: curl the five URLs as Googlebot and record status/title; find the route order in src/App.tsx and how RestaurantDetails handles an unknown slug.",
+        "Make /restaurants/<area> render the area page when the slug is a taxonomy location with a published row and no restaurant has that slug (check for collisions with real restaurant slugs; scripts/check-pseo-route-collisions). Prerender them and add to sitemap-pseo.xml.",
+        "Copy on these pages templated from rows (SEO-041 writer), using restaurants.neighborhood for downtown/east-village/valley-junction and city for suburbs; apply the coverage rule (5+ indexable).",
+        "Link them from the /restaurants hub directory (SEO-038) and from restaurant detail pages' suburb link (SEO-034) where they exist.",
+        "Verify prerendered HTML has each page's own title; check-pseo-route-collisions, check-seo-route-parity, check-sitemap-registration pass."
+      ],
+      "notes": ""
     }
   ]
 }
