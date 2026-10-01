@@ -46,7 +46,28 @@ export const CATEGORY_FILTERS: Record<string, { entity: 'events' | 'restaurants'
   brunch: { entity: 'restaurants', column: 'cuisine', pattern: 'brunch|breakfast|caf|coffee|bakery|diner' },
   coffee: { entity: 'restaurants', column: 'cuisine', pattern: 'coffee|caf|espresso' },
   steakhouse: { entity: 'restaurants', column: 'cuisine', pattern: 'steak' },
+  // SEO-041. 'pizz' covers Pizza, Pizzeria and "Italian/Pizza". It is a subset
+  // of italian's pattern on purpose: an area's pizza page and its italian page
+  // can overlap, and src/pseo/coverageRule.ts refuses to index two pages whose
+  // listings are identical.
+  pizza: { entity: 'restaurants', column: 'cuisine', pattern: 'pizz' },
 };
+
+/**
+ * Which table a page lists, from its dimensions. The one copy: the live
+ * listing component, the shippable-set gate and the coverage rule all call it.
+ * Category membership comes from CATEGORY_FILTERS rather than a second
+ * hand-kept list, which is how /pizza/* would otherwise have been resolved to
+ * events and listed nothing.
+ */
+export function resolveEntityType(contentSlug?: string, categorySlug?: string): 'events' | 'restaurants' | 'attractions' {
+  if (contentSlug === 'restaurants') return 'restaurants';
+  if (contentSlug === 'attractions') return 'attractions';
+  if (contentSlug === 'events' || contentSlug === 'things-to-do' || contentSlug === 'nightlife') return 'events';
+  const cat = categorySlug ? CATEGORY_FILTERS[categorySlug] : undefined;
+  if (cat) return cat.entity;
+  return 'events';
+}
 
 function ymd(d: Date): string {
   const m = `${d.getMonth() + 1}`.padStart(2, '0');

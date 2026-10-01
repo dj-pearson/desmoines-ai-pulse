@@ -13,7 +13,7 @@ import { Skeleton } from '@/components/ui/skeleton';
 import { Link } from 'react-router-dom';
 import { Calendar, MapPin, DollarSign } from 'lucide-react';
 import type { PseoDimensionRef } from '../../schemas';
-import { CATEGORY_FILTERS, temporalRange } from '../../listingFilters';
+import { CATEGORY_FILTERS, resolveEntityType, temporalRange } from '../../listingFilters';
 import { formatEventPart } from "@/lib/timezone";
 import { applyEventVisibility } from "@/lib/eventQuery";
 import { isVisitableStatus } from "@/lib/restaurantHours";
@@ -144,21 +144,6 @@ function ListingCard({ item }: { item: ListingItem }) {
 // ---------------------------------------------------------------------------
 // Data Fetching
 // ---------------------------------------------------------------------------
-
-function resolveEntityType(contentSlug?: string, categorySlug?: string): string {
-  if (contentSlug === 'restaurants') return 'restaurants';
-  if (contentSlug === 'attractions') return 'attractions';
-  if (contentSlug === 'events' || contentSlug === 'things-to-do' || contentSlug === 'nightlife') return 'events';
-
-  // Infer from category
-  const restaurantCategories = ['italian', 'mexican', 'asian', 'bbq', 'brunch', 'coffee', 'steakhouse'];
-  if (categorySlug && restaurantCategories.includes(categorySlug)) return 'restaurants';
-
-  const eventCategories = ['live-music', 'festivals', 'arts-culture', 'sports', 'farmers-markets'];
-  if (categorySlug && eventCategories.includes(categorySlug)) return 'events';
-
-  return 'events'; // Default
-}
 
 async function fetchListings(
   entityType: string,

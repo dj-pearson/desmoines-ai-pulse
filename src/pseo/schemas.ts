@@ -53,6 +53,12 @@ export interface PseoSeoMeta {
   canonicalUrl: string;
   ogImage?: string;
   ogType: string;
+  /**
+   * SEO-041. Set to "noindex, follow" on a cuisine x area page with 3 or 4
+   * places behind it (src/pseo/coverageRule.ts). Absent means indexable. The
+   * sitemap generator leaves any page carrying it out of sitemap-pseo.xml.
+   */
+  robots?: 'noindex, follow';
 }
 
 export interface PseoSection {

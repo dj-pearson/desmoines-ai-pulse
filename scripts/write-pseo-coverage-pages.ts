@@ -1,0 +1,273 @@
+#!/usr/bin/env tsx
+/**
+ * SEO-041 - bring the cuisine x suburb pSEO pages in line with the coverage
+ * rule (src/pseo/coverageRule.ts), as SQL for review. It never writes to the
+ * database itself.
+ *
+ *   npx tsx scripts/write-pseo-coverage-pages.ts [--only mexican,pizza] > coverage.sql
+ *   (back up the rows it names, then apply with psql)
+ *
+ * What it emits, per combination the rule governs:
+ *
+ *   indexable, no row          INSERT a page written from the restaurant rows
+ *   noindex, published         set seo.robots = "noindex, follow"
+ *   indexable, noindexed       remove seo.robots
+ *   under the floor, published UPDATE is_published = false (add the 301 to
+ *                              public/_redirects by hand; the script cannot
+ *                              choose the target)
+ *   data-built copy now stale  rewrite its sections from the current listing
+ *
+ * WHY NOT THE GENERATION PIPELINE. generate-pseo-page sends the dimensions to
+ * Claude with no restaurant data in the prompt and asks for "6-8 restaurant
+ * recommendations with specific dish suggestions, price context"; the
+ * published /mexican/ankeny it produced recommends a taqueria that is not in
+ * the restaurants table and quotes prices nobody checked. Copy here is built
+ * only from columns on the listed rows (name, price_range) and from what the
+ * page itself does, so every sentence is checkable against the database.
+ * The noindex band (3-4 places) is not generated here: the rule allows those
+ * pages, it does not ask for them.
+ *
+ * --only limits INSERTS to the named categories (SEO-041 published only the
+ * cuisines with measured demand). Updates to existing rows are never limited:
+ * the rule applies to every published page in scope.
+ *
+ * Reads production with the anon key from .env (VITE_SUPABASE_URL,
+ * VITE_SUPABASE_ANON_KEY).
+ */
+import { readFileSync } from 'node:fs';
+import path from 'node:path';
+import { fileURLToPath } from 'node:url';
+import process from 'node:process';
+import { categoryDimension, locationDimension } from '../src/pseo/taxonomy';
+import { matchingPlaces, type CoverageRestaurantRow } from '../src/pseo/coverageRule';
+import { evaluateCoverage, DATA_TEMPLATE_GENERATOR, type PublishedPseoRow, type CoverageRow } from './lib/pseoCoverage';
+
+const ROOT = path.resolve(path.dirname(fileURLToPath(import.meta.url)), '..');
+
+interface Restaurant extends CoverageRestaurantRow {
+  price_range: string | null;
+  rating: number | null;
+}
+
+/** How each category reads in a heading, and what its cuisine filter actually matches. */
+const NOUN: Record<string, { plural: string; inline: string; singular: string; matches: string }> = {
+  mexican: { plural: 'Mexican Restaurants', inline: 'Mexican restaurants', singular: 'Mexican restaurant', matches: 'Mexican, Tex-Mex or Latin' },
+  pizza: { plural: 'Pizza Places', inline: 'pizza places', singular: 'pizza place', matches: 'pizza' },
+  asian: {
+    plural: 'Asian Restaurants',
+    inline: 'Asian restaurants',
+    singular: 'Asian restaurant',
+    matches: 'Asian, Chinese, Thai, Japanese, sushi, Vietnamese, Korean or ramen',
+  },
+  italian: { plural: 'Italian and Pizza Restaurants', inline: 'Italian and pizza restaurants', singular: 'Italian or pizza restaurant', matches: 'Italian or pizza' },
+  bbq: { plural: 'BBQ Restaurants', inline: 'BBQ restaurants', singular: 'BBQ restaurant', matches: 'BBQ, barbecue or smokehouse' },
+  brunch: {
+    plural: 'Brunch, Breakfast and Cafe Spots',
+    inline: 'brunch, breakfast and cafe spots',
+    singular: 'brunch or breakfast spot',
+    matches: 'brunch, breakfast, cafe, coffee, bakery or diner',
+  },
+  coffee: { plural: 'Coffee Shops and Cafes', inline: 'coffee shops and cafes', singular: 'coffee shop', matches: 'coffee, cafe or espresso' },
+  steakhouse: { plural: 'Steakhouses', inline: 'steakhouses', singular: 'steakhouse', matches: 'steak' },
+};
+
+function env(): Record<string, string | undefined> {
+  const out: Record<string, string | undefined> = { ...process.env };
+  try {
+    for (const line of readFileSync(path.join(ROOT, '.env'), 'utf8').split(/\r?\n/)) {
+      const m = /^([A-Z0-9_]+)=(.*)$/.exec(line.trim());
+      if (m && out[m[1]] === undefined) out[m[1]] = m[2].replace(/^['"]|['"]$/g, '');
+    }
+  } catch {
+    // environment only
+  }
+  return out;
+}
+
+async function fetchAll<T>(base: string, key: string, table: string, select: string): Promise<T[]> {
+  const headers = { apikey: key, Authorization: `Bearer ${key}` };
+  const rows: T[] = [];
+  for (let offset = 0; ; offset += 1000) {
+    const res = await fetch(`${base.replace(/\/+$/, '')}/rest/v1/${table}?select=${select}&order=id&limit=1000&offset=${offset}`, { headers });
+    if (!res.ok) throw new Error(`${table}: HTTP ${res.status}`);
+    const page = (await res.json()) as T[];
+    rows.push(...page);
+    if (page.length < 1000) break;
+  }
+  return rows;
+}
+
+function joinNames(names: string[]): string {
+  if (names.length <= 1) return names.join('');
+  return `${names.slice(0, -1).join(', ')} and ${names[names.length - 1]}`;
+}
+
+/** Same order the live listing uses: rating descending, nulls first as Postgres sorts them. */
+function byRating(a: Restaurant, b: Restaurant): number {
+  if (a.rating === null && b.rating === null) return a.name.localeCompare(b.name);
+  if (a.rating === null) return -1;
+  if (b.rating === null) return 1;
+  return b.rating - a.rating || a.name.localeCompare(b.name);
+}
+
+export function buildPage(row: CoverageRow, places: Restaurant[], today: string) {
+  const cat = categoryDimension.values.find((v) => v.slug === row.category);
+  const loc = locationDimension.values.find((v) => v.slug === row.location);
+  if (!cat || !loc) throw new Error(`${row.slug}: not in taxonomy`);
+  const noun = NOUN[row.category] ?? {
+    plural: `${cat.name} Restaurants`,
+    inline: `${cat.name} restaurants`,
+    singular: `${cat.name} restaurant`,
+    matches: cat.name,
+  };
+  const ordered = [...places].sort(byRating);
+  const names = ordered.map((p) => p.name);
+  const withPrice = ordered.map((p) => (p.price_range ? `${p.name} (${p.price_range})` : p.name));
+  const lower = noun.inline;
+
+  const title = `${noun.plural} in ${loc.name}, Iowa`;
+  const h1 = `${noun.plural} in ${loc.name}`;
+  const lead = joinNames(names.slice(0, 2));
+  // Names the top two when they fit, because a description that names real
+  // places is the one thing a template can say that is specific to the page.
+  let description = `${places.length} ${lower} in ${loc.name}, Iowa, including ${lead}, listed from the Des Moines Insider restaurant directory.`;
+  if (description.length > 160) {
+    description = `${places.length} ${lower} in ${loc.name}, Iowa, listed from the Des Moines Insider restaurant directory with a link to each one.`;
+  }
+
+  const faqs = [
+    {
+      question: `Which ${lower} in ${loc.name} does Des Moines Insider list?`,
+      answer: `As of ${today}, ${places.length}: ${joinNames(withPrice)}. Price ranges are shown where the directory has one.`,
+    },
+    {
+      question: `Why is a ${noun.singular} in ${loc.name} missing from this list?`,
+      answer:
+        `This page lists restaurants in the Des Moines Insider directory whose city or address is ${loc.name} and whose cuisine ` +
+        `is recorded as ${noun.matches}. Restaurants marked closed, or announced but not yet open, are left out. ` +
+        'A place that is not listed is not in the directory yet.',
+    },
+  ];
+
+  const sections = [
+    {
+      id: 'hero_intro',
+      type: 'hero_intro',
+      content:
+        `The Des Moines Insider restaurant directory lists ${places.length} ${lower} in ${loc.name} right now. ` +
+        'The list below is read from it live, ordered by rating, and each name opens that restaurant\'s own page ' +
+        'with the address, hours, price range and links the directory holds for it. Closed restaurants and ones ' +
+        'that are announced but not yet open are left out.',
+    },
+    { id: 'live_listings', type: 'live_listings', heading: `${noun.plural} in ${loc.name}` },
+    { id: 'faq', type: 'faq', heading: `About this list`, faqs },
+  ];
+
+  return {
+    id: `category-location__${[row.category, row.location].sort().join('_')}`,
+    slug: row.slug,
+    page_type_id: 'category-location',
+    dimensions: [
+      { name: cat.name, slug: cat.slug, tier: cat.tier, dimension: 'category' },
+      { name: loc.name, slug: loc.slug, tier: loc.tier, dimension: 'location' },
+    ],
+    seo: {
+      title,
+      h1,
+      description,
+      keywords: [
+        `${cat.name.toLowerCase()} ${loc.name.toLowerCase()}`,
+        `${cat.name.toLowerCase()} restaurants ${loc.name.toLowerCase()}`,
+        `${loc.name.toLowerCase()} ${cat.name.toLowerCase()}`,
+        `${cat.name.toLowerCase()} ${loc.name.toLowerCase()} iowa`,
+      ],
+      canonicalUrl: row.slug,
+      ogType: 'website',
+      ...(row.verdict === 'noindex' ? { robots: 'noindex, follow' } : {}),
+    },
+    sections,
+    related_pages: [],
+    structured_data: {
+      '@type': 'WebPage',
+      breadcrumb: [
+        { name: 'Home', url: '/' },
+        { name: 'Restaurants', url: '/restaurants' },
+        { name: h1, url: row.slug },
+      ],
+      faqItems: faqs,
+    },
+    generation_meta: {
+      generatedAt: new Date().toISOString(),
+      generatedBy: DATA_TEMPLATE_GENERATOR,
+      promptVersion: 'none',
+      modelUsed: 'none',
+      wordCount: JSON.stringify(sections).split(/\s+/).length,
+      refreshSchedule: 'monthly',
+      placeFingerprint: row.fingerprint,
+      placeCount: places.length,
+      sourceTable: 'restaurants',
+    },
+    is_published: true,
+    quality_score: 0.8,
+  };
+}
+
+const lit = (v: unknown) => `'${JSON.stringify(v).replace(/'/g, "''")}'::jsonb`;
+const str = (v: string) => `'${v.replace(/'/g, "''")}'`;
+
+async function main() {
+  const E = env();
+  const base = E.VITE_SUPABASE_URL;
+  const key = E.VITE_SUPABASE_ANON_KEY;
+  if (!base || !key) throw new Error('VITE_SUPABASE_URL and VITE_SUPABASE_ANON_KEY are required.');
+
+  const [pages, restaurants] = await Promise.all([
+    fetchAll<PublishedPseoRow>(base, key, 'pseo_pages', 'id,slug,page_type_id,dimensions,seo,is_published,generation_meta,sections'),
+    fetchAll<Restaurant>(base, key, 'restaurants', 'id,name,city,location,cuisine,status,is_merged,price_range,rating'),
+  ]);
+  const report = evaluateCoverage(pages, restaurants);
+  const today = new Date().toISOString().slice(0, 10);
+  const out: string[] = ['-- SEO-041 coverage rule. Generated by scripts/write-pseo-coverage-pages.ts', 'begin;'];
+
+  const onlyIdx = process.argv.indexOf('--only');
+  const only = onlyIdx > 0 ? new Set((process.argv[onlyIdx + 1] ?? '').split(',').filter(Boolean)) : null;
+
+  for (const row of report.rows) {
+    const places = matchingPlaces(restaurants, row.locationName, row.category);
+    const stale = row.published && row.templateFingerprint !== null && row.templateFingerprint !== row.fingerprint;
+
+    if (row.verdict === 'indexable' && row.published === null) {
+      if (only && !only.has(row.category)) {
+        out.push(`-- skipped ${row.slug} (${row.places} places, indexable): not in --only`);
+        continue;
+      }
+      const p = buildPage(row, places, today);
+      out.push(
+        `insert into pseo_pages (id, slug, page_type_id, dimensions, seo, sections, related_pages, structured_data, generation_meta, is_published, quality_score, published_at) values (` +
+          `${str(p.id)}, ${str(p.slug)}, ${str(p.page_type_id)}, ${lit(p.dimensions)}, ${lit(p.seo)}, ${lit(p.sections)}, ` +
+          `${lit(p.related_pages)}, ${lit(p.structured_data)}, ${lit(p.generation_meta)}, true, ${p.quality_score}, now()) on conflict (id) do nothing;`,
+      );
+    } else if (stale && row.verdict !== 'not-generated') {
+      const p = buildPage(row, places, today);
+      out.push(
+        `update pseo_pages set seo = ${lit(p.seo)}, sections = ${lit(p.sections)}, structured_data = ${lit(p.structured_data)}, ` +
+          `generation_meta = ${lit(p.generation_meta)}, updated_at = now() where slug = ${str(row.slug)};`,
+      );
+    } else if (row.published && row.verdict === 'noindex' && !row.noindexed) {
+      out.push(`update pseo_pages set seo = seo || '{"robots":"noindex, follow"}'::jsonb, updated_at = now() where slug = ${str(row.slug)}; -- ${row.places} place(s)`);
+    } else if (row.published && row.verdict === 'indexable' && row.noindexed) {
+      out.push(`update pseo_pages set seo = seo - 'robots', updated_at = now() where slug = ${str(row.slug)}; -- ${row.places} places`);
+    } else if (row.published && row.verdict === 'not-generated') {
+      out.push(`update pseo_pages set is_published = false, updated_at = now() where slug = ${str(row.slug)}; -- ${row.places} place(s); add a 301`);
+    }
+  }
+  out.push('commit;');
+  process.stdout.write(`${out.join('\n')}\n`);
+}
+
+if (process.argv[1] && fileURLToPath(import.meta.url) === path.resolve(process.argv[1])) {
+  main().catch((err) => {
+    console.error(`[write-pseo-coverage-pages] ${(err as Error).message}`);
+    process.exit(1);
+  });
+}

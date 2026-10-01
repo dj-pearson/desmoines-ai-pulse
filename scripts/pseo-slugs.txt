@@ -36,7 +36,6 @@
 /attractions/valley-junction
 /attractions/west-des-moines
 /attractions/winter
-/bbq/ankeny
 /bbq/august
 /bbq/december
 /bbq/downtown
@@ -47,7 +46,6 @@
 /bbq/this-weekend
 /bbq/today
 /bbq/valley-junction
-/bbq/west-des-moines
 /bbq/winter
 /brunch/ankeny
 /brunch/august
@@ -142,8 +140,10 @@
 /mexican/this-weekend
 /mexican/today
 /mexican/valley-junction
+/mexican/waukee
 /mexican/west-des-moines
 /mexican/winter
+/pizza/west-des-moines
 /restaurants/ankeny
 /restaurants/asian
 /restaurants/august
