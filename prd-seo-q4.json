@@ -115,7 +115,7 @@
         "Article schema with datePublished, dateModified and author; visible 'Updated' date; links to /events/october-2026 and the relevant events and back from the month page.",
         "Request indexing: add to the articles sitemap and ping IndexNow if SEO-047 has landed."
       ],
-      "notes": "",
+      "notes": "CONTENT LIVE IN PRODUCTION DB 2026-10-01; code merged to claude/seo-q4-loop (a2776b56). passes stays FALSE: prerendered HTML needs a rebuild/deploy, full tsc type-check did not finish (ESLint clean on changed files), IndexNow not pinged. Articles: /articles/haunted-houses-near-des-moines (4 venues, inserted), /articles/best-pumpkin-patches-in-the-des-moines-area-your-complete-fall-guide (8 venues, last year's row refreshed in place, published_at kept), /articles/corn-mazes-near-des-moines (5 venues, inserted). Backup of the updated row in scripts/content-backups/seo-032/; full SQL in scripts/seo-032-halloween-articles.sql. Inserts ran with the article social-post webhook trigger disabled (owner may want social posts; slug/word-count/sitemap-queue fields were set by hand). Unverifiable facts are written as 'check the site' (Slaughterhouse beyond opening night/$25, County Line Road price, Wilson's and Berry Patch 2026 dates, Pumpkinville price conflict). Adventureland Phantom Fall Fest omitted (403). ArticleDetails.tsx shows a visible Updated date; MonthlyEventsPage.tsx links October to the three guides; sitemap-articles.xml regenerated (20 URLs). Follow-ups filed as SEO-053 (fabricated 2025 Halloweekend article, Fall Colors overlap) and SEO-055 (event slug off-by-one from midnight-UTC dates).",
       "supersedes": [
         "SEO-019 (fall half)"
       ]
@@ -457,6 +457,54 @@
         "SEO-020"
       ],
       "needsOwner": "PSI_API_KEY"
+    },
+    {
+      "id": "SEO-053",
+      "title": "Retire or correct the 2025 Halloweekend article that carries invented venues",
+      "priority": 1,
+      "phase": 1,
+      "branch": "claude/seo-q4-loop",
+      "passes": false,
+      "description": "Found by SEO-032: the article halloweekend-in-des-moines-...-2023 (still published) claims a Salisbury House haunted basement, the Slaughterhouse in Ankeny, and 'Nightmare on Hickman' at Sleepy Hollow, none verified. Published false venue facts are a trust and helpful-content risk and compete with the new Halloween guides. 'Fall Colors & Cider' overlaps the pumpkin guide.",
+      "acceptanceCriteria": [
+        "Find every article in production with claims that cannot be verified against a source fetched this session; start with the Halloweekend one.",
+        "Either correct it with verified facts or unpublish it and 301 its URL to the closest new guide (follow the redirect-retention rule). Back up rows first.",
+        "Decide Fall Colors & Cider vs the pumpkin guide: merge or differentiate; record the GSC numbers behind the choice.",
+        "List any other articles with the same problem in notes."
+      ],
+      "notes": ""
+    },
+    {
+      "id": "SEO-054",
+      "title": "Populate restaurant hours so pages and titles can truthfully say Hours",
+      "priority": 1,
+      "phase": 1,
+      "branch": "claude/seo-q4-loop",
+      "passes": false,
+      "description": "Found by SEO-030: hours_json is null on all 478 restaurants, so no title says Hours and no page can answer 'X hours' or open-now queries ('dutch bros hours' 333 impr, 'food open now' 353). 440 rows have a Google place id. restaurants.opening is a date column the code reads as hours text.",
+      "acceptanceCriteria": [
+        "Find the existing hours ingestion path (Google Places or other) and why it never filled hours_json; fill it for rows with a place id, within API cost limits the code already uses. Back up first.",
+        "Fix the opening-column misuse so a date never renders as hours.",
+        "Re-run scripts/backfill-restaurant-seo.ts so titles gain Hours where now true; run npm run check-restaurant-seo.",
+        "Record coverage (rows with hours) before and after."
+      ],
+      "notes": "",
+      "needsOwner": "Google Places API key/billing if not already configured"
+    },
+    {
+      "id": "SEO-055",
+      "title": "Event slugs land a day early because dates are stored at midnight UTC",
+      "priority": 3,
+      "phase": 1,
+      "branch": "claude/seo-q4-loop",
+      "passes": false,
+      "description": "Found by SEO-032: the Slaughterhouse opens Oct 2 but its event slug ends -2026-10-01. Wrong dates in URLs are visible in search results.",
+      "acceptanceCriteria": [
+        "Reproduce with a few rows; find where the slug date is derived.",
+        "Derive the slug date in America/Chicago. Existing slugs are public URLs: do not rename them without a 301 kept for 1+ release; new rows get the correct date.",
+        "Add a test."
+      ],
+      "notes": ""
     }
   ]
 }
