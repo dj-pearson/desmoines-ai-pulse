@@ -152,7 +152,7 @@
         "Image alt text names the restaurant and dish/space.",
         "Measure with a script over the top 50 restaurants by impressions: fields present in prerendered HTML. Record coverage before and after."
       ],
-      "notes": ""
+      "notes": "CODE COMPLETE 2026-10-01, merged to claude/seo-q4-loop (f0c5f28b); passes FALSE until live, and hours stay 1/50 until the SEO-054 backfill runs. Top-50 coverage between H1 and first H2 (before -> after): hours 0/1 -> 1/1, phone 0/38 -> 38/38, price/address/menu unchanged (47/47, 45/45, 9/9), visible 'Listing last updated' 0/50 -> 50/50, suburb link 0/26 -> 26/26, cuisine x area link 0 -> 6; schema hasMenu 5/9 -> 9/9, sameAs 36/37 -> 37/37, acceptsReservations 0/1 -> 1/1, aggregateRating 0 -> 0. Files: src/lib/restaurantAtAGlance.ts (:108 schedule-phrased hours sentence, never infers closed days; :130 date; :158 suburb link), src/components/RestaurantAtAGlance.tsx placed at RestaurantDetails.tsx:747 (price/address moved here from hero chips), src/pseo/restaurantAreaPages.ts:31 + useRestaurantAreaPages.ts (links only published, indexable pSEO pages whose listing includes the restaurant), restaurantMeta.ts:412,:446 schema shared with the edge shell (_middleware.ts:634,:658), scripts/measure-restaurant-answer.mjs. Schema decisions: no AggregateRating (only rating is Google's; first-party table has 0 restaurant ratings); sameAs = own site + Google Maps (no social columns); hasMenu = our menu section or their menu page; acceptsReservations omitted when unknown; label is 'Listing last updated' not 'Last verified' because updated_at changes on any write. Verified: type-check, lint, functions type-check, 104 targeted tests, edge-shell suite, check-lcp-priority, check-seo-meta-length; 390px and 1280px layouts. OPEN: production status wrong on top pages -> SEO-062; neighbourhood pages list only 12 most popular so not every restaurant gets a backlink; edge shell lacks cuisine x area links (extra DB read); photo alt can't name dishes (unknown photo content)."
     },
     {
       "id": "SEO-035",
@@ -606,6 +606,23 @@
         "Re-run scripts/write-pseo-coverage-pages.ts; re-publish combos that now pass and remove their 301s per redirect rules (only if the redirect target was temporary).",
         "Replace LLM copy on /restaurants/<area> pages with copy templated from rows.",
         "NEEDS WEB SEARCH QUOTA: verify before starting."
+      ],
+      "notes": ""
+    },
+    {
+      "id": "SEO-062",
+      "title": "Top restaurant pages say 'opening soon' or 'announced' for places that are open",
+      "priority": 1,
+      "phase": 0,
+      "branch": "hotfix/pseo-homepage-shell",
+      "passes": false,
+      "description": "Found by SEO-034: 22 restaurants have status opening_soon or announced, and they include most of the highest-traffic pages on the site: atlas-caf (101 clicks, Google OPERATIONAL), marvs-mainstreet-dive (86 clicks, opening_date 2026-03-31), yard-house (69), canopy (65, Google OPERATIONAL), jungle-tea (45, opening_date 2026-05-15), san-miguel-eatery (35), the-contrary? (check), dutch-bros-coffee (20), bonchon (opening_date 2026-04-29), kura-revolving-sushi-bar, wayback-burgers, bubbies-pleasant-hill, taste-of-new-york-pleasant-hill. Pages tell searchers the place hasn't opened, which kills CTR and is false. daves-hot-chicken-2 is a Davenport address in a Des Moines guide. This is data, so it is live the moment it is fixed - no deploy needed.",
+      "acceptanceCriteria": [
+        "For each of the 22 rows, establish current status from evidence fetched this session: Google business_status where already stored, the restaurant's own site/location page, or its official listing. Record evidence per row in the SQL header.",
+        "Back up all 22 rows, then set status to 'open' (or 'newly_opened' if the codebase uses it for recent openings; check how it is rendered) where evidence shows operating; leave opening_soon only with a future date and evidence; set closed with evidence.",
+        "daves-hot-chicken-2 (Davenport): mark it out of scope per existing conventions (status, region, or hide) and make sure it leaves Des Moines lists and the sitemap; 301 only if a Des Moines location row exists.",
+        "Add a nightly or build-time check that flags opening_soon/announced rows whose opening_date has passed or whose business_status is OPERATIONAL, so this cannot silently recur.",
+        "Verify on the live site: curl atlas-caf, bonchon, canopy, marvs-mainstreet-dive as Googlebot and confirm no 'opening soon' text (client render may need the prerender rebuild; note it)."
       ],
       "notes": ""
     }
