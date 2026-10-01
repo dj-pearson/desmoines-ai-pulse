@@ -55,3 +55,11 @@
 /restaurants/el-fogn                       /restaurants/el-fogon  301
 /restaurants/ritual-caf                    /restaurants/ritual-cafe  301
 /restaurants/trellis-caf                   /restaurants/trellis-cafe  301
+
+# SEO-053: two 2025 articles carried invented venue facts (a Salisbury House
+# "haunted basement", the Slaughterhouse placed in Ankeny, a Pierce's Pumpkin
+# Patch in Grimes). Both rows are archived, not deleted (backups in
+# scripts/content-backups/seo-053/), and each URL goes to the verified SEO-032
+# guide that replaced it. Keep these for at least one release cycle.
+/articles/halloweekend-in-des-moines-your-ultimate-guide-to-spooky-events-family-fun-2023  /articles/haunted-houses-near-des-moines  301
+/articles/fall-colors-cider-the-ultimate-guide-to-des-moines-apple-orchards-pumpkin-patches-des-moines-guide  /articles/best-pumpkin-patches-in-the-des-moines-area-your-complete-fall-guide  301
