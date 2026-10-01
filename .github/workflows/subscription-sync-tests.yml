@@ -367,6 +367,9 @@ jobs:
       - run: deno test --allow-read supabase/functions/_tests/event-unique-key.test.ts
       # eventDedup has had its own suite since DMI-010 and no lane ever ran it.
       - run: deno test supabase/functions/_shared/eventDedup.test.ts
+      # SEO-031. "Schedule" and a bare "Iowa Cubs" reached the public calendar
+      # as events; firecrawl-scraper now refuses both shapes.
+      - run: deno test supabase/functions/_shared/scheduleTitleGuard.test.ts
       # The day-bucketed index both event writers dedup through, and the paged
       # read that feeds it (a single select stops at max-rows silently).
       - run: deno test supabase/functions/_shared/existingEvents.test.ts
