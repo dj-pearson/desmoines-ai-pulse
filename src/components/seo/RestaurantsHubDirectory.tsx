@@ -1,5 +1,5 @@
 import { Link } from "react-router-dom";
-import { NEIGHBORHOODS } from "@/lib/neighborhoods";
+import { NEIGHBORHOODS, neighborhoodHref } from "@/lib/neighborhoods";
 import { DIRECTORY_PILL } from "@/components/seo/MonthLinks";
 import { drinkCuisines } from "@/lib/restaurantsHubCopy";
 
@@ -30,7 +30,7 @@ const WHEN_AND_WHAT: DirectoryLink[] = [
 const BREWERIES: DirectoryLink = { href: "/breweries", label: "Breweries" };
 
 const WHERE: DirectoryLink[] = NEIGHBORHOODS.map((n) => ({
-  href: `/neighborhoods/${n.slug}`,
+  href: neighborhoodHref(n),
   label: n.name,
 }));
 

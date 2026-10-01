@@ -22,7 +22,7 @@ export function formatRestaurantCount(total: number | null | undefined): string 
 }
 
 const NEIGHBORHOOD_LINKS = [
-  { label: "East Village", to: "/neighborhoods/east-village" },
+  { label: "East Village", to: "/things-to-do/east-village" },
   { label: "West Des Moines", to: "/neighborhoods/west-des-moines" },
   { label: "Ankeny", to: "/neighborhoods/ankeny" },
 ];

@@ -19,7 +19,7 @@ import {
   resolveHubLink,
 } from "@/lib/hubLinks";
 import { SEASON_FALLBACK_HREF } from "@/lib/hubSeason";
-import { NEIGHBORHOODS } from "@/lib/neighborhoods";
+import { NEIGHBORHOODS, neighborhoodHref } from "@/lib/neighborhoods";
 import { LANDING_LIGHT_COLUMNS } from "@/hooks/useEventLanding";
 import { navigationGroups } from "@/components/header/navigationConfig";
 
@@ -177,7 +177,8 @@ describe("areas (WP1 item 7)", () => {
     for (const area of HUB_AREAS) {
       const n = NEIGHBORHOODS.find((x) => x.slug === area.key)!;
       const link = resolveFixedItem(area, new Set());
-      expect(link.href).toBe(`/neighborhoods/${n.slug}`);
+      // SEO-040: the East Village guide lives at /things-to-do/east-village.
+      expect(link.href).toBe(neighborhoodHref(n));
       expect(link.description).toBe(n.description);
     }
   });

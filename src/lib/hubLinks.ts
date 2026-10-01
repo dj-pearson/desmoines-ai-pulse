@@ -8,7 +8,7 @@
  * its pSEO page when that page is published, at the real page that answers the
  * same intent when it is not, and is left out when neither exists.
  */
-import { NEIGHBORHOODS } from '@/lib/neighborhoods';
+import { NEIGHBORHOODS, neighborhoodHref } from '@/lib/neighborhoods';
 import { LANDING_LIGHT_COLUMNS, type EventLandingOptions } from '@/hooks/useEventLanding';
 import { RESTAURANT_PRESETS } from '@/lib/restaurantPresets';
 
@@ -135,7 +135,7 @@ export const HUB_AREAS: readonly FixedHubItem[] = NEIGHBORHOODS.map((n) => ({
   pseoSlug: n.slug,
   name: n.name,
   description: n.description,
-  fallback: { href: `/neighborhoods/${n.slug}` },
+  fallback: { href: neighborhoodHref(n) },
 }));
 
 export const HUB_ALL_AREAS_HREF = '/neighborhoods';

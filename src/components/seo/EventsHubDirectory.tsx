@@ -1,6 +1,6 @@
 import { Link } from "react-router-dom";
 import { useVenueLinks } from "@/hooks/useVenues";
-import { NEIGHBORHOODS } from "@/lib/neighborhoods";
+import { NEIGHBORHOODS, neighborhoodHref } from "@/lib/neighborhoods";
 import { SUBURB_EVENT_PAGES, hasNeighborhoodGuide, hasSuburbPage } from "@/lib/suburbs";
 import { DIRECTORY_PILL, MonthLinks } from "@/components/seo/MonthLinks";
 
@@ -86,7 +86,8 @@ const pairLink =
  * exists, then the guides that have no events page (East Village).
  */
 function PlacesSection() {
-  const guidesWithoutEvents = NEIGHBORHOODS.filter((n) => n.prerender && !hasSuburbPage(n.slug));
+  // guidePath (SEO-040): the East Village guide moved to /things-to-do/east-village.
+  const guidesWithoutEvents = NEIGHBORHOODS.filter((n) => (n.prerender || n.guidePath) && !hasSuburbPage(n.slug));
 
   return (
     <section>
@@ -119,7 +120,7 @@ function PlacesSection() {
         )}
         {guidesWithoutEvents.map((n) => (
           <li key={n.slug}>
-            <Link to={`/neighborhoods/${n.slug}`} className={DIRECTORY_PILL}>
+            <Link to={neighborhoodHref(n)} className={DIRECTORY_PILL}>
               {n.name} guide
             </Link>
           </li>

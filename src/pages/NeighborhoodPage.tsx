@@ -1,4 +1,4 @@
-import { useParams, Link } from "react-router-dom";
+import { useParams, Link, Navigate } from "react-router-dom";
 import { Helmet } from "react-helmet-async";
 import Header from "@/components/Header";
 import Footer from "@/components/Footer";
@@ -34,7 +34,16 @@ export default function NeighborhoodPage() {
   const neighborhood = findNeighborhood(slug);
 
 
-  const { data, isLoading, error, refetch } = useNeighborhoodContent(neighborhood);
+  // SEO-040: an area whose guide moved. public/_redirects answers the URL with
+  // a 301 before the app loads; this covers in-app navigation and the
+  // trailing-slash form. Passing undefined keeps the query idle.
+  const { data, isLoading, error, refetch } = useNeighborhoodContent(
+    neighborhood?.guidePath ? undefined : neighborhood
+  );
+
+  if (neighborhood?.guidePath) {
+    return <Navigate to={neighborhood.guidePath} replace />;
+  }
 
   // A slug that is not in the inventory. Answered rather than 404'd, because
   // these URLs were sitemapped for months and a crawler that still holds one

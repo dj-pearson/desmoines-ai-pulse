@@ -106,8 +106,9 @@ export const PRERENDER_ROUTES = [
   // and three tabs reading Events (0) / Dining (0) / Attractions (0) - and they
   // were linked from nowhere on the site. Keep this list equal to NEIGHBORHOODS
   // in src/lib/neighborhoods.ts; check-neighborhood-inventory.mjs enforces it.
+  // SEO-040: /neighborhoods/east-village 301s to /things-to-do/east-village,
+  // which sitemap-pseo.xml carries and the pSEO pass prerenders.
   '/neighborhoods',
-  '/neighborhoods/east-village',
   '/neighborhoods/west-des-moines',
   '/neighborhoods/ankeny',
   '/neighborhoods/urbandale',
