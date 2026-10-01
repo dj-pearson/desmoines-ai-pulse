@@ -182,6 +182,12 @@ serve(async (req) => {
       const { data: restaurants, error } = await supabase
         .from("restaurants")
         .select("id, name, slug, updated_at, created_at, is_featured")
+        // Same rows as scripts/generate-dynamic-sitemaps.ts (SEO-059): no
+        // merged duplicates and no place that has closed for good, whose
+        // page is noindex. status is nullable, hence the ORs.
+        .neq("is_merged", true)
+        .or("status.is.null,status.neq.closed")
+        .or("business_status.is.null,business_status.neq.CLOSED_PERMANENTLY")
         .order("created_at", { ascending: false })
         .limit(1000);
 

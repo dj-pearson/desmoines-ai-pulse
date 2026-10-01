@@ -1,6 +1,7 @@
 import { Link } from "react-router-dom";
 import { useQuery } from "@tanstack/react-query";
 import { supabase } from "@/integrations/supabase/client";
+import { NOT_CLOSED_RESTAURANT_FILTER } from "@/lib/restaurantHours";
 import { Card, CardContent } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
 import { createEventSlugWithCentralTime, formatEventPart } from "@/lib/timezone";
@@ -51,6 +52,9 @@ export function InternalLinking({
         .select("id, name, cuisine, location")
         .eq("cuisine", cuisine)
         .neq("id", currentId || "")
+        // Never link to a duplicate or a place that has closed (SEO-059).
+        .neq("is_merged", true)
+        .or(NOT_CLOSED_RESTAURANT_FILTER)
         .limit(3);
 
       if (error) throw error;
@@ -77,6 +81,8 @@ export function InternalLinking({
           .from("restaurants")
           .select("id, name, cuisine, location")
           .eq("is_featured", true)
+          .neq("is_merged", true)
+          .or(NOT_CLOSED_RESTAURANT_FILTER)
           .limit(2),
       ]);
 

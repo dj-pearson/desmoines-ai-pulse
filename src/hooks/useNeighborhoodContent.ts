@@ -2,6 +2,7 @@ import { useQuery } from '@tanstack/react-query';
 import { supabase } from '@/integrations/supabase/client';
 import { STALE_TIME, GC_TIME } from '@/lib/queryConfig';
 import { EVENT_LIST_COLUMNS, RESTAURANT_LIST_COLUMNS, ATTRACTION_LIST_COLUMNS } from '@/lib/listColumns';
+import { NOT_CLOSED_RESTAURANT_FILTER } from '@/lib/restaurantHours';
 import { sanitizePostgrestPattern } from '@/lib/postgrestPattern';
 import { createLogger } from '@/lib/logger';
 import type { Neighborhood } from '@/lib/neighborhoods';
@@ -97,6 +98,9 @@ export function useNeighborhoodContent(neighborhood: Neighborhood | undefined) {
           .from('restaurants')
           .select(RESTAURANT_LIST_COLUMNS)
           .or(ilikeAny(['city', 'location'], terms))
+          // Merged duplicates and places that closed for good stay out (SEO-059).
+          .neq('is_merged', true)
+          .or(NOT_CLOSED_RESTAURANT_FILTER)
           .order('popularity_score', { ascending: false, nullsFirst: false })
           .limit(PER_TAB),
         supabase

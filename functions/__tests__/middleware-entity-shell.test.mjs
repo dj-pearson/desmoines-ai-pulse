@@ -315,6 +315,15 @@ ck('with no hours in the body', !closedOut.includes('Hours:'));
 ck('and no openingHoursSpecification', injectedNode(closedOut) && !('openingHoursSpecification' in injectedNode(closedOut)));
 ck('and robots noindex, follow', closedOut.includes('name="robots" content="noindex, follow"'), closedOut.match(/name="robots"[^>]*/)?.[0]);
 
+// SEO-059: Google's CLOSED_PERMANENTLY on a row we still call open (Bistro
+// Nomad before the data pass) is the same closure.
+const googleClosedOut = await rewrite(SHELL, { pageUrl: PAGE, sbBase: SB, type: 'restaurant', entity: { id: 'g1', title: 'x', row: { ...openRow, status: 'open', business_status: 'CLOSED_PERMANENTLY' } } });
+ck('business_status CLOSED_PERMANENTLY says "Permanently closed"', googleClosedOut.includes('Permanently closed'));
+ck('with no hours and no openingHoursSpecification', !googleClosedOut.includes('Hours:') && !('openingHoursSpecification' in (injectedNode(googleClosedOut) ?? {})));
+ck('and robots noindex, follow', googleClosedOut.includes('name="robots" content="noindex, follow"'), googleClosedOut.match(/name="robots"[^>]*/)?.[0]);
+const googleTempOut = await rewrite(SHELL, { pageUrl: PAGE, sbBase: SB, type: 'restaurant', entity: { id: 'g2', title: 'x', row: { ...openRow, status: 'open', business_status: 'CLOSED_TEMPORARILY' } } });
+ck('CLOSED_TEMPORARILY: no hours, but still indexable and not called closed for good', !googleTempOut.includes('Hours:') && googleTempOut.includes('name="robots" content="index, follow"') && !googleTempOut.includes('Permanently closed'));
+
 for (const status of ['opening_soon', 'announced']) {
   const soon = await rewrite(SHELL, { pageUrl: PAGE, sbBase: SB, type: 'restaurant', entity: { id: 's1', title: 'x', row: { ...openRow, status } } });
   ck(`${status}: no hours anywhere`, !soon.includes('Hours:') && !('openingHoursSpecification' in (injectedNode(soon) ?? {})));

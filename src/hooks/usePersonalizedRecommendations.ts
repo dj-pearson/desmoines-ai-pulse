@@ -1,5 +1,6 @@
 import { useState, useEffect, useCallback } from 'react';
 import { supabase } from '@/integrations/supabase/client';
+import { NOT_CLOSED_RESTAURANT_FILTER } from '@/lib/restaurantHours';
 import { createLogger } from '@/lib/logger';
 import { useAuth } from './useAuth';
 
@@ -210,6 +211,9 @@ export function usePersonalizedRecommendations() {
       const query = supabase
         .from('restaurants')
         .select('*')
+        // Never recommend a duplicate or a place that has closed (SEO-059).
+        .neq('is_merged', true)
+        .or(NOT_CLOSED_RESTAURANT_FILTER)
         .order('popularity_score', { ascending: false })
         .limit(15);
 
