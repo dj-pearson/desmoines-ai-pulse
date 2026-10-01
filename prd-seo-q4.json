@@ -521,7 +521,7 @@
         "Make time-relative pages render their list from live data with only evergreen intro copy, or regenerate the copy and schedule regeneration; back up rows first.",
         "Add a check script that flags past-month or past-holiday words in time-relative pSEO bodies."
       ],
-      "notes": ""
+      "notes": "DONE IN PRODUCTION 2026-10-01; merged to claude/seo-q4-loop (e049d1af) and the 301s to hotfix/pseo-homepage-shell (d1802754). passes FALSE until live and generate-pseo-page is redeployed. Found 128 published time-relative pSEO rows; 118 named a month/season/holiday/year outside their window (1,190 words; worst /festivals/today 53 incl. St. Patrick's Day 23, /things-to-do/families/this-weekend 45, /events/this-weekend 40); none had a live listing. 126 rewritten with evergreen intro + FAQ from src/pseo/timeRelative.ts (describes how the list is chosen; names no event, venue, date or price) plus the live list; PseoPage renders through the same builder so regenerated rows can't reintroduce stale copy; generate-pseo-page skips time-relative pages; listing date filter now includes the whole last day. Consolidated: /things-to-do/this-weekend (7 impr) -> 301 /events/this-weekend, /things-to-do/today (1) -> 301 /events/today; both rows unpublished and out of sitemap-pseo.xml. Backup + SQL in backups/seo-056/ (main checkout, untracked). check-pseo-time-copy added to validate (126 rows, 0 stale words); check-pseo-collisions, check-sitemap-redirects, check-seo-route-parity, lint, type-check, 45 pSEO tests pass. OPEN -> SEO-064: 40 audience x time pages duplicate their non-audience page's listings and 40 restaurant x time pages list the same restaurants year-round; check-pseo-coverage now flags /asian/west-des-moines and /brunch/west-des-moines after restaurant list changes."
     },
     {
       "id": "SEO-057",
@@ -640,6 +640,23 @@
         "Fix bar-martinez, littleleaf-luncheonette, moes-southwest-grill and taste-of-new-york-pleasant-hill identity data (address, phone, website, name/slug city) from their own sites; slug renames need 301s on both branches per the redirect rule.",
         "Move 'empire' (Kids Empire) out of restaurants (hide + add to playgrounds if that table fits, or just hide) and 301 per the rule.",
         "Re-run scripts/check-stale-openings.ts and check-restaurant-seo; both clean."
+      ],
+      "notes": ""
+    },
+    {
+      "id": "SEO-064",
+      "title": "80 time-relative pSEO pages duplicate another page's listing",
+      "priority": 2,
+      "phase": 1,
+      "branch": "claude/seo-q4-loop",
+      "passes": false,
+      "description": "Found by SEO-056: 40 audience x time pages (e.g. /things-to-do/families/this-weekend) list the same events as their non-audience page, and 40 restaurant x time pages list the same restaurants all year. Near-duplicate pages at scale are the doorway pattern Google demotes; check-pseo-coverage also now flags /asian/west-des-moines and /brunch/west-des-moines after restaurant list changes from SEO-059/060/062.",
+      "acceptanceCriteria": [
+        "For each of the 80, measure listing overlap with its parent page and GSC impressions; record the table.",
+        "Audience x time pages: keep indexable only where an audience filter actually changes the list (e.g. kid-tagged events) by a stated threshold; otherwise noindex,follow with canonical to the parent, or 301 if 0 impressions. 301s go on both branches per the redirect rule.",
+        "Restaurant x time pages: noindex or 301 unless the time window changes the list (e.g. open-late hours data, seasonal patios).",
+        "Resolve the two check-pseo-coverage flags.",
+        "check-pseo-coverage, check-pseo-collisions, check-sitemap-redirects pass."
       ],
       "notes": ""
     }
