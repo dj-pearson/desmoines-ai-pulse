@@ -22,12 +22,14 @@ import {
   groupTodayEvents,
   countFree,
   countStartingAfter5pm,
-  formatCentralDate,
   hourLabel,
   type LandingEvent,
 } from "@/hooks/useEventLanding";
 import NoIndexMeta from "@/components/schema/NoIndexMeta";
 import { EventsLandingLinks } from "@/components/events/EventsLandingLinks";
+import { EventLinkList, HubTopPicks } from "@/components/events/HubEventLinks";
+import { useLatestWeekendArticle } from "@/hooks/useLatestWeekendArticle";
+import { hubTopPicks, todayHeadline } from "@/lib/eventHubSummary";
 import { EVENING_START_HOUR } from "@/lib/tonightPairings";
 import { WeatherNotice } from "@/components/WeatherNotice";
 import { ErrorState } from "@/components/ui/error-state";
@@ -114,13 +116,31 @@ export default function EventsToday() {
   }, [grouped]);
 
   const visibleEvents = useMemo(() => groups.flatMap((group) => group.events), [groups]);
-  const hiddenCount = listed.length - visibleEvents.length;
+  // SEO-036: past the card cap, the rest of the day is listed as plain links,
+  // in page order, so every counted event is in the HTML.
+  const moreEvents = useMemo(() => {
+    const shown = new Set(visibleEvents.map((event) => event.id));
+    return listed.filter((event) => !shown.has(event.id));
+  }, [listed, visibleEvents]);
 
-  // The day the rows were fetched for, under the h1, as the weekend page does.
-  // Absolute, so it is still true in prerendered HTML read later that day.
-  const dayLabel =
+  const { data: weekendArticle } = useLatestWeekendArticle();
+  const picks = useMemo(
+    () => (todayWindow ? hubTopPicks(listed, todayWindow.startDay) : []),
+    [listed, todayWindow]
+  );
+
+  /**
+   * SEO-036: the h1 and first sentence name the day and its counts, from the
+   * rows fetched for it. The date is absolute, so prerendered HTML read the
+   * next morning is stale but not false; the client refetches on load.
+   */
+  const headline =
     todayWindow && !isLoading && !loadError
-      ? formatCentralDate(todayWindow.startDay, "EEEE, MMMM d, yyyy")
+      ? todayHeadline(todayWindow.startDay, {
+          total: listed.length,
+          free: countFree(listed),
+          cap: events.length >= FETCH_LIMIT ? listed.length : undefined,
+        })
       : null;
 
   /**
@@ -203,9 +223,9 @@ export default function EventsToday() {
         <div className="mb-8">
           <div className="flex items-center gap-2 mb-4">
             <SpriteIcon name="calendar" className="h-6 w-6 text-primary" />
-            <h1 className="text-3xl font-bold">Events Today in Des Moines</h1>
+            <h1 className="text-3xl font-bold">{headline?.heading ?? "Events Today in Des Moines"}</h1>
           </div>
-          {dayLabel && <p className="text-lg text-muted-foreground mb-2">{dayLabel}</p>}
+          {headline && <p className="text-lg mb-2">{headline.summary}</p>}
 
           {/* SEO-009: a visible, absolute freshness date from the rows, not
               from the clock that ran the build. */}
@@ -271,6 +291,13 @@ export default function EventsToday() {
           </SkeletonGroup>
         ) : visibleEvents.length > 0 ? (
           <>
+            <HubTopPicks
+              picks={picks}
+              heading="Top picks for the day"
+              headingId="today-picks"
+              article={weekendArticle}
+            />
+
             {groups.map((group) => (
               <section key={group.id} aria-labelledby={`today-${group.id}`} className="mb-8">
                 <h2 id={`today-${group.id}`} className="text-2xl font-bold mb-4">
@@ -297,15 +324,19 @@ export default function EventsToday() {
               </section>
             ))}
 
-            {hiddenCount > 0 && (
-              <div className="mb-8 text-center">
-                <p className="text-muted-foreground mb-3">
-                  Showing {visibleEvents.length} of {formatCount(listed.length, "event")} today.
-                </p>
-                <Button asChild variant="outline">
-                  <Link to="/events?preset=today">See all of today on the events page</Link>
+            {moreEvents.length > 0 && (
+              <section aria-labelledby="today-more" className="mb-8">
+                <h2 id="today-more" className="text-2xl font-bold mb-4">
+                  More events{" "}
+                  <span className="text-base font-normal text-muted-foreground">
+                    ({formatCount(moreEvents.length, "event")})
+                  </span>
+                </h2>
+                <EventLinkList events={moreEvents} />
+                <Button asChild variant="outline" className="mt-4 min-h-11">
+                  <Link to="/events?preset=today">See the day on the events page, with filters and a map</Link>
                 </Button>
-              </div>
+              </section>
             )}
           </>
         ) : (

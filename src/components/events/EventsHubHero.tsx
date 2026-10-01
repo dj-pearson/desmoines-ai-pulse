@@ -72,6 +72,8 @@ export interface EventsHubHeroProps {
   isNearMe: boolean;
   isLocating: boolean;
   onToggleNearMe: () => void;
+  /** "318 upcoming events from ... to ..., 12 free." Nothing renders while null. */
+  summary?: string | null;
 }
 
 export function EventsHubHero({
@@ -86,6 +88,7 @@ export function EventsHubHero({
   isNearMe,
   isLocating,
   onToggleNearMe,
+  summary,
 }: EventsHubHeroProps) {
   return (
     <section className="border-b bg-muted/40">
@@ -94,6 +97,9 @@ export function EventsHubHero({
           <h1 className="text-3xl font-extrabold tracking-tight text-foreground sm:text-4xl md:text-5xl">
             Des Moines Events
           </h1>
+          {/* SEO-036: the first sentence is the calendar's range and counts.
+              Shown at every width; the tagline below stays desktop-only. */}
+          {summary && <p className="mt-2 text-base font-medium text-foreground md:text-lg">{summary}</p>}
           <p className="mt-2 hidden text-base text-muted-foreground sm:block md:text-lg">
             Concerts, festivals, food and things to do in Des Moines, Iowa, in Central Time.
           </p>

@@ -202,6 +202,35 @@ check(
   strictGateFailures(homeAtPseo, '/things-to-do/east-village', VITE_TITLE).length === 0,
 );
 
+console.log('\nstrictGateFailures - a declared canonical elsewhere (SEO-036)');
+
+check(
+  'a page canonicalised to its declared target passes',
+  strictGateFailures(
+    good('/events/today', 'Events Near Me in Des Moines | Des Moines Insider'),
+    '/events/near-me',
+    SHELL_TITLE,
+    '/events/today',
+  ).length === 0,
+);
+check(
+  'the same page fails without the declaration',
+  strictGateFailures(
+    good('/events/today', 'Events Near Me in Des Moines | Des Moines Insider'),
+    '/events/near-me',
+    SHELL_TITLE,
+  ).some((f) => f.includes('/events/today')),
+);
+check(
+  'a declared target fails when the page points somewhere else',
+  strictGateFailures(
+    good('/', 'Events Near Me in Des Moines | Des Moines Insider'),
+    '/events/near-me',
+    SHELL_TITLE,
+    '/events/today',
+  ).length > 0,
+);
+
 console.log(
   `\n${failures === 0 ? 'PASS' : 'FAIL'}: strict-gate — ${failures} failing check(s)\n`,
 );

@@ -37,7 +37,8 @@ export const PRERENDER_ROUTES = [
   '/events/date-night',
   // events-pass2 WP5 item 10. The default origin is Downtown and nothing asks
   // for location until a tap, so the capture holds the next 7 days' cards
-  // "within 25 miles of Downtown" and their ItemList.
+  // "within 25 miles of Downtown" and their ItemList. SEO-036: canonical to
+  // /events/today and out of the sitemap; see PRERENDERED_NOT_SITEMAPPED.
   '/events/near-me',
   '/events/west-des-moines',
   '/events/ankeny',
@@ -151,6 +152,27 @@ export const SITEMAP_ONLY_ROUTES = [
   '/privacy-policy',
   '/terms',
 ];
+
+/**
+ * Routes prerendered but deliberately NOT in the sitemap, because their
+ * canonical points at another page. They still need static HTML: without it
+ * functions/_middleware.ts serves the SPA shell with a self-canonical, which
+ * is the opposite of what the page declares.
+ *
+ *   /events/near-me - canonical /events/today (SEO-036). It ranked 72 against
+ *                     /events/today's 47-53 for the same "what's on now"
+ *                     intent; the canonical consolidates the two.
+ *
+ * Every route here must also be in PRERENDER_ROUTES and must not be in the
+ * sitemap; check-seo-route-parity.mjs enforces both. check-prerender-head.mjs
+ * and audit-prerendered-seo.mjs read the target, so the built canonical has to
+ * be exactly this one.
+ */
+export const CANONICAL_ELSEWHERE = {
+  '/events/near-me': '/events/today',
+};
+
+export const PRERENDERED_NOT_SITEMAPPED = Object.keys(CANONICAL_ELSEWHERE);
 
 /**
  * Routes intentionally excluded from BOTH lists, recorded so the reasoning is

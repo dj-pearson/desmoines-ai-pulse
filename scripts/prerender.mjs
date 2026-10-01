@@ -64,7 +64,7 @@ import {
   stripPrerenderSignal,
   strictGateFailures,
 } from './lazy-preload-patterns.mjs';
-import { PRERENDER_ROUTES } from './prerender-routes.mjs';
+import { CANONICAL_ELSEWHERE, PRERENDER_ROUTES } from './prerender-routes.mjs';
 import { prerenderOutputPath } from './prerender-output.mjs';
 import { orderEntityRoutes, pinFirst, MONTH_PAGE_ROUTE } from './prerender-order.mjs';
 import process from 'node:process';
@@ -951,7 +951,12 @@ const duplicateJsonLdRoutes = [];
       // the shell — the shell's title IS the homepage's — and because hub
       // coverage is already verified on disk after the pass.
       if (strict) {
-        const failures = strictGateFailures(html, route, forbiddenTitles);
+        const failures = strictGateFailures(
+          html,
+          route,
+          forbiddenTitles,
+          CANONICAL_ELSEWHERE[route] ?? route,
+        );
         if (failures.length > 0) {
           strictRejections.push(`${route}: ${failures.join('; ')}`);
           throw new Error(

@@ -49,8 +49,12 @@ export const RESTAURANT_LIST_COLUMNS =
 // time_tbd (20260902000016) is here as of SEO-055: probed present on production
 // 2026-10-01 (`select time_tbd from events` returns rows, and SEO-055 wrote it on
 // 148 of them). Cards need it to show "All day" instead of a crawler-default 7 pm.
+//
+// popularity_score is here as of SEO-036: probed present on production
+// 2026-10-01. The hubs' top picks break ties on it, the weekly article's rule
+// (src/lib/eventHubSummary.ts hubTopPicks).
 export const EVENT_LIST_COLUMNS =
-  "category, city, created_at, date, end_date, enhanced_description, event_start_local, event_start_utc, event_timezone, id, image_url, is_enhanced, is_featured, is_sponsored, sponsored_until, latitude, location, longitude, original_description, price, source_url, time_tbd, title, updated_at, venue, writeup_generated_at";
+  "category, city, created_at, date, end_date, enhanced_description, event_start_local, event_start_utc, event_timezone, id, image_url, is_enhanced, is_featured, is_sponsored, sponsored_until, latitude, location, longitude, original_description, popularity_score, price, source_url, time_tbd, title, updated_at, venue, writeup_generated_at";
 
 // is_sponsored and sponsored_until are here because Attractions.tsx calls
 // arrangeSponsored() on this list (WEB-FEAT-005) and the cards call

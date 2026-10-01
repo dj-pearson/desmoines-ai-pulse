@@ -11,8 +11,10 @@ import { installFixtureBackend } from './support/fixtureBackend';
  * 2. A festival that opened Thursday and runs to Sunday is listed under
  *    today (Saturday), not dropped and not tucked under Friday.
  * 3. Location chips are cities, not venue strings.
- * 4. "Our weekend picks" lists featured / written-up events and links to
- *    /trip-planner with the rest of the weekend as the window.
+ * 4. "Top picks this weekend" follows the weekly article's rule (SEO-036:
+ *    featured, then major venue, one per venue, nothing already over) and
+ *    links to /trip-planner with the rest of the weekend as the window.
+ * 5. The h1 and first sentence carry the weekend's dates and counts (SEO-036).
  *
  * The events handler returns every row for every events request, including
  * the is_indoor lookup: grouping is what's under test, not the bounds.
@@ -116,17 +118,32 @@ test.describe('/events/this-weekend on a Saturday', () => {
     await expect(location.getByRole('button', { name: 'Wells Fargo Arena' })).toHaveCount(0);
   });
 
-  test('picks list featured then written-up events and link to the trip planner', async ({ page }) => {
+  test('picks follow the weekly article rule and link to the trip planner', async ({ page }) => {
     await installWeekend(page);
     await page.goto('/events/this-weekend');
 
     const picks = page.locator('section[aria-labelledby="weekend-picks"]');
-    await expect(picks.getByRole('heading', { name: 'Our weekend picks' })).toBeVisible();
+    await expect(picks.getByRole('heading', { name: 'Top picks this weekend' })).toBeVisible();
     const links = picks.getByRole('listitem').getByRole('link');
-    await expect(links).toHaveText(['Weekend Fixture Festival', 'Weekend Fixture Sunday Brunch']);
+    // The brunch is at Wells Fargo Arena like the featured festival, and the
+    // rule takes one pick per venue; the Friday show is already over.
+    await expect(links).toHaveText(['Weekend Fixture Festival', 'Weekend Fixture Saturday Show']);
     await expect(picks.getByRole('link', { name: 'Plan this weekend' })).toHaveAttribute(
       'href',
       '/trip-planner?from=2026-09-26&to=2026-09-27',
     );
+  });
+
+  test('the h1 and first sentence state the dates and the counts', async ({ page }) => {
+    await installWeekend(page);
+    await page.goto('/events/this-weekend');
+
+    await expect(page.getByRole('heading', { level: 1 })).toHaveText(
+      'This weekend in Des Moines: September 25-27, 2026',
+    );
+    // Every fixture row is priced Free, and the handler returns all four.
+    await expect(
+      page.getByText('4 events on our calendar from Friday through Sunday, 4 free.'),
+    ).toBeVisible();
   });
 });
