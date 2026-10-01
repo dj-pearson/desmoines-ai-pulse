@@ -8,6 +8,7 @@
  * scripts/generate-rss.ts now rebuilds it on every build from published
  * articles and upcoming events.
  */
+import { markdownToPlainText } from '../../src/lib/aiText';
 import { createEventSlug } from './sitemapSlugs';
 
 export interface RssArticle {
@@ -74,9 +75,13 @@ function parse(s: string | null | undefined): Date | null {
   return Number.isFinite(d.getTime()) ? d : null;
 }
 
-/** Plain text from a field that may carry the enhancer's markdown. */
+/**
+ * Plain text from a field that may carry the enhancer's markdown or a model
+ * label (SEO-057). The shared helper keeps snake_case and URLs that the old
+ * character strip mangled.
+ */
 function plain(s: string): string {
-  return s.replace(/[*_#`>]+/g, '').replace(/\s+/g, ' ').trim();
+  return markdownToPlainText(s);
 }
 
 function clip(s: string, max = 300): string {

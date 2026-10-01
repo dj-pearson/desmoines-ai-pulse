@@ -1,6 +1,7 @@
 import "https://deno.land/x/xhr@0.1.0/mod.ts";
 import { requireAdminOrApiKey } from "../_shared/apiKeyAuth.ts";
 import { fetchWithTimeout } from "../_shared/fetchWithTimeout.ts";
+import { stripAiLabels } from "../_shared/aiText.ts";
 import { serve } from "https://deno.land/std@0.168.0/http/server.ts";
 import { createClient } from 'https://esm.sh/@supabase/supabase-js@2';
 import { getAIConfig, buildClaudeRequest, getClaudeHeaders, getAnthropicApiKey, extractClaudeText } from "../_shared/aiConfig.ts";
@@ -70,6 +71,14 @@ serve(async (req) => {
     
     // Remove status field if it exists before updating database
     delete enhancedData.status;
+
+    // SEO-057: a description that comes back as "**Description:** ..." or with
+    // a trailing "**Location:**" line keeps its text and loses the label.
+    for (const field of ['enhanced_description', 'description']) {
+      if (typeof enhancedData[field] === 'string') {
+        enhancedData[field] = stripAiLabels(enhancedData[field]);
+      }
+    }
     
     // Update the database with enhanced information
     const tableName = getTableName(contentType);
@@ -186,7 +195,7 @@ Return in this JSON format (only include fields you can verify):
     if (field === 'location') return `"location": "Complete address if different from current"`;
     if (field === 'phone') return `"phone": "Phone number in (xxx) xxx-xxxx format"`;
     if (field === 'website') return `"website": "Official website URL"`;
-    if (field === fieldConfig.descriptionField) return `"${field}": "Brief, factual description (2-3 sentences max)"`;
+    if (field === fieldConfig.descriptionField) return `"${field}": "Brief, factual description (2-3 sentences max), plain text with no markdown and no label such as 'Description:'"`;
     if (field === 'cuisine') return `"cuisine": "Type of cuisine"`;
     if (field === 'price_range') return `"price_range": "$", "$$", "$$$", or "$$$$"`;
     if (field === 'venue') return `"venue": "Event venue name"`;

@@ -56,9 +56,11 @@ import { eventOutboundLink } from "@/lib/eventSchema";
 import { eventPriceLabel, isFreePrice } from "@/lib/eventPrice";
 import { findEventArea, isInBBox } from "@/lib/eventAreas";
 import { handleError } from "@/lib/errorHandler";
+import { markdownToPlainText } from "@/lib/aiText";
 import { EVENING_START_HOUR, type TonightEvent } from "@/lib/tonightPairings";
 import { EventProvenance } from "@/components/events/EventProvenance";
 import { AIDisclosureBadge } from "@/components/AIDisclosureBadge";
+import { PlainTextBlocks } from "@/components/PlainTextBlocks";
 
 // Below-the-fold widgets that each fire their own requests on mount. React.lazy
 // defers the chunk; LazySection defers the mount until the reader scrolls near
@@ -581,7 +583,10 @@ export default function EventDetails() {
                       <FavoriteButton eventId={event.id} size="sm" variant="outline" />
                       <ShareDialog
                         title={event.title}
-                        description={event.enhanced_description || event.original_description || `Check out ${event.title} in Des Moines`}
+                        description={
+                          markdownToPlainText(event.enhanced_description || event.original_description) ||
+                          `Check out ${event.title} in Des Moines`
+                        }
                         url={eventUrl}
                         onShare={trackShare}
                       />
@@ -643,9 +648,12 @@ export default function EventDetails() {
                     )}
                   </div>
                   <div className="prose prose-slate max-w-none">
-                    <p className="text-muted-foreground leading-relaxed text-base">
-                      {event.enhanced_description || event.original_description || aboutFallback}
-                    </p>
+                    {/* Paragraphs, without the markdown and model labels some
+                        stored descriptions carry (SEO-057). */}
+                    <PlainTextBlocks
+                      text={event.enhanced_description || event.original_description || aboutFallback}
+                      paragraphClassName="text-muted-foreground leading-relaxed text-base"
+                    />
                   </div>
 
                   {event.ai_writeup && (

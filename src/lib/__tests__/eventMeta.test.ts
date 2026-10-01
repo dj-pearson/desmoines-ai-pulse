@@ -66,6 +66,18 @@ describe("the showtime is Central in a UTC runtime", () => {
   });
 });
 
+describe("SEO-057: a model label or markdown never reaches the meta description", () => {
+  it("drops '**Enhanced Event Description:**' and the asterisks, keeps the text", () => {
+    const labelled = ev({
+      enhanced_description:
+        "**Enhanced Event Description:**\n\n**Iowa Cubs Baseball at Principal Park**\n\nExperience the thrill of America's pastime.\n\n**Location:**",
+    });
+    const meta = eventMetaDescription(labelled);
+    expect(meta).not.toMatch(/Enhanced Event Description|\*\*|Location:/);
+    expect(meta).toContain("Tickets $15. Iowa Cubs Baseball at Principal Park");
+  });
+});
+
 describe("eventPageTitle", () => {
   it("leads with the name and date and keeps venue and city when they fit", () => {
     const t = eventPageTitle(ev({ title: "Trivia Night", venue: "Mickey's Irish Pub", city: "Waukee" }));

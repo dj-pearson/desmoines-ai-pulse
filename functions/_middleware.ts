@@ -16,6 +16,7 @@ import {
   resolveOpeningHoursSpecification,
 } from "../src/lib/restaurantHours";
 import { safeHttpUrl } from "../src/lib/safeUrl";
+import { markdownToPlainText } from "../src/lib/aiText";
 
 /**
  * Cloudflare Pages Functions middleware.
@@ -736,7 +737,10 @@ export function eventShellBody(row: Record<string, any>, now: Date = new Date())
       })
     : "";
   const where = [row.venue, row.location].filter(Boolean).join(", ");
-  const about = row.enhanced_description || row.original_description || row.geo_summary || row.seo_description;
+  // Plain text, without the model labels and markdown some rows carry (SEO-057).
+  const about = markdownToPlainText(
+    row.enhanced_description || row.original_description || row.geo_summary || row.seo_description,
+  );
   const locality = parseIowaAddress(row.location)?.addressLocality || row.city || "";
   const suburbSlug = slugify(locality);
   const past = when ? Date.parse(when) < now.getTime() - 24 * 60 * 60 * 1000 : false;

@@ -21,6 +21,7 @@ import { createClient } from "https://esm.sh/@supabase/supabase-js@2.39.3";
 // silently `undefined`, which is why this file hand-rolled a DST guess instead.
 import { format as dateFnsFormat } from "https://esm.sh/date-fns@2.30.0";
 import { resolveListingUrls } from "../_shared/eventSourceProfiles.ts";
+import { stripAiLabels } from "../_shared/aiText.ts";
 import {
   DEFAULT_CONTENT_BUDGET,
   prepareContentForExtraction,
@@ -1459,8 +1460,9 @@ async function insertData(
               return {
                 ...baseItem,
                 title: item.title?.substring(0, 200) || "Untitled Event",
-                original_description: item.description?.substring(0, 500) || "",
-                enhanced_description: item.description?.substring(0, 500) || "",
+                // SEO-057: the model's own labels and footers, not its text.
+                original_description: stripAiLabels(item.description).substring(0, 500),
+                enhanced_description: stripAiLabels(item.description).substring(0, 500),
                 date: parsedEventDateTime.event_start_utc.toISOString(),
                 event_start_local: parsedEventDateTime.event_start_local,
                 event_timezone: parsedEventDateTime.event_timezone,

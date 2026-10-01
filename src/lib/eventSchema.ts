@@ -44,6 +44,7 @@
 import { Event } from '@/lib/types';
 import { centralDateOf, createEventSlugWithCentralTime, hasSpecificTime } from '@/lib/timezone';
 import { BRAND } from '@/lib/brandConfig';
+import { markdownToPlainText } from '@/lib/aiText';
 import { isHttpUrl } from '@/lib/dashboardItems';
 import { buildEventOffers, isEventAccessibleForFree, parseEventPrice } from '@/lib/eventOffers';
 import { DEFAULT_EVENT_HOURS } from '@/lib/eventTiming';
@@ -296,9 +297,10 @@ export function buildEventJsonLd(
 ) {
   const url = eventPageUrl(event);
   const endDate = eventEndIso(event);
+  // schema.org description is plain text; a stored model label or markdown
+  // would be read verbatim by search engines and assistants (SEO-057).
   const fullDescription =
-    event.enhanced_description ||
-    event.original_description ||
+    markdownToPlainText(event.enhanced_description || event.original_description) ||
     `${event.title} in ${event.city?.trim() || BRAND.city}, ${BRAND.state}`;
   const offers = buildEventOffers(event.price);
   const accessibleForFree = isEventAccessibleForFree(event.price);
