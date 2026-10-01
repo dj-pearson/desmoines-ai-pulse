@@ -472,7 +472,7 @@
         "Decide Fall Colors & Cider vs the pumpkin guide: merge or differentiate; record the GSC numbers behind the choice.",
         "List any other articles with the same problem in notes."
       ],
-      "notes": ""
+      "notes": "DONE IN PRODUCTION 2026-10-01, code merged to claude/seo-q4-loop (56054113); passes stays FALSE until the two 301s are confirmed live after deploy. Archived (not deleted) bd35e640 halloweekend-in-des-moines-...-2023 -> 301 /articles/haunted-houses-near-des-moines (false: Slaughterhouse is 500 Locust St downtown not Ankeny; Salisbury House lists only a Ghoulish Gala; no source for Nightmare on Hickman; also wrong towns for Wilson's, Bloomsbury, an unfindable Faulkner's Pumpkin Ranch; 37 impr/16 mo) and a6670630 fall-colors-cider -> 301 pumpkin guide (body was raw JSON; Pierce's and Center Grove in wrong towns; 24 impr pos 51 vs pumpkin 2,609 pos 19). Webhook fires only on transition TO published, so no social posts. Backups scripts/content-backups/seo-053/, SQL scripts/seo-053-retire-fabricated-articles.sql (its header lists per-article failures for all 15 others). _redirects +2, sitemap-articles 20->18. check-sitemap-redirects OK, check-seo-route-parity consistent, validate 0 lint errors. OPEN: scripts/prerender-priority.json still lists both old URLs (regenerate with npm run generate-prerender-priority); the other 15 published 2025 articles all fail spot-checks -> SEO-058."
     },
     {
       "id": "SEO-054",
@@ -534,6 +534,23 @@
         "Strip labels and markdown when building meta descriptions and plain-text snippets (shared helper, tested); render markdown properly or as plain text on the page.",
         "Clean the stored rows in production with a backup, and fix the enhancement prompt/code so new rows don't carry the label.",
         "Verify on 5 prerendered event pages."
+      ],
+      "notes": ""
+    },
+    {
+      "id": "SEO-058",
+      "title": "Fifteen published articles carry raw JSON bodies, placeholders, closed businesses and wrong towns",
+      "priority": 1,
+      "phase": 1,
+      "branch": "claude/seo-q4-loop",
+      "passes": false,
+      "description": "Found by SEO-053: every other published 2025 article failed spot-checks. 13 render the generator's raw JSON/HTML as the body, 4 end in '[Content continues...]', and they name closed businesses (Django, Peace Tree, Star Bar, the Science Center IMAX) and wrong towns. Some still earn search traffic: patio guide 1,043 impr/3 mo, soups 449, coffee crawl 113, Highland Park 74, Drake 41. Pages like this are the clearest helpful-content risk on the site and they sit in the section that preferred sources and Top Stories depend on.",
+      "acceptanceCriteria": [
+        "Use the per-article failure list in the header of scripts/seo-053-retire-fabricated-articles.sql (on claude/seo-q4-loop) as the starting audit.",
+        "Articles with GSC impressions (patio, soups, coffee crawl, Highland Park, Drake): rewrite in place on the same URL with every venue verified against a source fetched this session; drop closed or unverifiable places; render clean prose, not JSON; keep published_at, bump updated_at. Back up rows first.",
+        "Articles with no impressions and failed facts: archive and 301 to the closest live guide or hub (redirect retention rule), or rewrite if a clear current topic.",
+        "Fix the generator so a JSON or placeholder body can never be published (a check on publish or a CI check over the articles table).",
+        "Regenerate scripts/prerender-priority.json and sitemap-articles.xml. Record per-article outcome in notes."
       ],
       "notes": ""
     }
