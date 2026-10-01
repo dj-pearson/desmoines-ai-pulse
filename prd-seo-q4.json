@@ -38,7 +38,7 @@
         "Every published pSEO URL is in sitemap-pseo.xml (14 today; GSC shows 78+ such URLs with impressions).",
         "Verify after deploy: the same curl list returns each page's own title. If the hotfix is not yet deployed, say so and leave passes false."
       ],
-      "notes": "",
+      "notes": "CODE COMPLETE 2026-10-01, merged to hotfix/pseo-homepage-shell (f0827762); passes stays FALSE until the live Googlebot curl is re-run after deploy. Cause: 74 of 86 pSEO paths with GSC impressions returned the homepage title. All 86 HAD published pseo_pages rows; they were absent from sitemap-pseo.xml (14 URLs), so the prerender never rendered them and Cloudflare served the prerendered homepage as fallback. The old strict gate only knew the vite shell title, not the homepage title. Fix: scripts/generate-pseo-demand-routes.mjs -> scripts/pseo-demand-routes.json (85 demand paths); sitemap-pseo = shippable set + demand paths (90 URLs, generate-dynamic-sitemaps.ts:748,865); unbudgeted pSEO prerender pass with one retry that fails the build on any miss (prerender.mjs:391,1062,1085); strict gate rejects the homepage title too (lazy-preload-patterns.mjs:342,634, strict-gate.test.mjs). Verified locally: full build exit 0, hubs 55/55, pSEO 90/90, entities 1187/1187 in ~841s; negative control (homepage title forced onto /things-to-do/fall) fails the build 'pSEO prerender incomplete: 1/90'. ALSO FIXES MAIN'S BUILD: src/pages/EventsToday.tsx restored from 9c6142f1 (the useEventLanding version); merge a75cbea3 had left it unparseable. Develop is BEHIND main for this file: when the hotfix merges back to develop, keep main's version. DB: 7 pseo_pages rows had stale March 2026 dates removed from title/h1/description (backup backups/seo-029/pseo_pages-stale-dates-2026-09-30.json in the main checkout, untracked). RISKS/OPEN: (1) local build is ~14 min; Cloudflare Pages has a 20-minute build limit, so watch the first deploy; (2) npm run validate reports check-supabase-await, check-identity-reads, check-csp-hashes failing on files unchanged from main, not yet confirmed as pre-existing on clean main; (3) 154 other published pSEO pages stay out of the sitemap by design (doorway filter); (4) body copy of /festivals/today and /things-to-do/this-weekend is March-specific generated text -> SEO-056.",
       "supersedes": [
         "SEO-012 (things-to-do sub-pages half)",
         "SEO-025 (render half)",
@@ -503,6 +503,21 @@
         "Reproduce with a few rows; find where the slug date is derived.",
         "Derive the slug date in America/Chicago. Existing slugs are public URLs: do not rename them without a 301 kept for 1+ release; new rows get the correct date.",
         "Add a test."
+      ],
+      "notes": ""
+    },
+    {
+      "id": "SEO-056",
+      "title": "Time-relative pSEO pages carry March-specific generated body copy",
+      "priority": 2,
+      "phase": 1,
+      "branch": "claude/seo-q4-loop",
+      "passes": false,
+      "description": "Found by SEO-029: /festivals/today has 18 St. Patrick's Day mentions and /things-to-do/this-weekend has March-specific text, generated in spring and now baked into prerendered HTML. A 'today' or 'this weekend' page whose body talks about March is a quality signal against the site.",
+      "acceptanceCriteria": [
+        "List every published pseo_pages row whose slug is time-relative (today, this-weekend, tonight, month or season names) and grep its body for month/holiday words that no longer apply.",
+        "Make time-relative pages render their list from live data with only evergreen intro copy, or regenerate the copy and schedule regeneration; back up rows first.",
+        "Add a check script that flags past-month or past-holiday words in time-relative pSEO bodies."
       ],
       "notes": ""
     }
