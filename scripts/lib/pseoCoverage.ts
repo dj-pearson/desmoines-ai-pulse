@@ -29,7 +29,7 @@ export interface PublishedPseoRow {
   slug: string;
   page_type_id: string;
   dimensions: Array<{ dimension: string; slug: string; name: string; tier?: number }>;
-  seo: { robots?: string; title?: string } | null;
+  seo: { robots?: string; title?: string; canonicalUrl?: string } | null;
   is_published: boolean;
   generation_meta: { generatedBy?: string; placeFingerprint?: string } | null;
   sections: Array<{ type: string; faqs?: Array<{ question: string; answer: string }> }> | null;
@@ -67,6 +67,14 @@ export const DATA_TEMPLATE_GENERATOR = 'seo-041-data-template';
  */
 export const PSEO_NOINDEX_ROUTES_FILE = 'scripts/.generated/pseo-noindex-routes.json';
 
+/**
+ * SEO-064: published pSEO pages whose seo.canonicalUrl names another page
+ * (route -> target), for scripts/check-prerender-head.mjs, which otherwise
+ * requires every prerendered page to canonical itself. Written beside
+ * PSEO_NOINDEX_ROUTES_FILE by generate-dynamic-sitemaps.ts; gitignored.
+ */
+export const PSEO_CANONICAL_ELSEWHERE_FILE = 'scripts/.generated/pseo-canonical-elsewhere.json';
+
 export interface CoverageReport {
   rows: CoverageRow[];
   /** Published, in-scope pages whose stored state disagrees with the rule. */
@@ -84,8 +92,14 @@ export interface CoverageReport {
    * submitting that.
    */
   submittable: string[];
-  /** Published, in-scope slugs carrying noindex: prerendered, never submitted. */
+  /**
+   * Published slugs carrying noindex: prerendered, never submitted. In-scope
+   * pages, plus (SEO-064) any other page that carries it, such as the
+   * duplicates src/pseo/duplicateRule.ts holds at noindex.
+   */
   noindexPublished: string[];
+  /** SEO-064: published pages whose canonical names another page, route -> target. */
+  canonicalElsewhere: Record<string, string>;
 }
 
 async function fetchAll<T>(base: string, key: string, table: string, select: string): Promise<T[]> {
@@ -183,10 +197,19 @@ export function evaluateCoverage(pages: readonly PublishedPseoRow[], restaurants
   // A page outside the governed family that carries noindex for its own
   // reasons stays out of the sitemap too. Nothing writes that today; this
   // keeps a hand-set flag from being contradicted by the sitemap.
+  // SEO-064 puts the duplicates src/pseo/duplicateRule.ts holds at noindex
+  // here too, and they are prerendered like the in-scope noindex pages so a
+  // JS-less crawler reads the noindex and the canonical, not the shell.
+  const canonicalElsewhere: Record<string, string> = {};
   for (const p of pages) {
     if (!p.is_published) continue;
+    const canonical = p.seo?.canonicalUrl;
+    if (canonical && canonical.startsWith('/') && canonical !== p.slug) canonicalElsewhere[p.slug] = canonical;
     if (isCoverageScoped(p.page_type_id, p.dimensions)) continue;
-    if (p.seo?.robots === 'noindex, follow') keepOutOfSitemap.add(p.slug);
+    if (p.seo?.robots === 'noindex, follow') {
+      keepOutOfSitemap.add(p.slug);
+      noindexPublished.push(p.slug);
+    }
   }
 
   return {
@@ -196,6 +219,7 @@ export function evaluateCoverage(pages: readonly PublishedPseoRow[], restaurants
     indexable: indexable.sort(),
     submittable: submittable.sort(),
     noindexPublished: noindexPublished.sort(),
+    canonicalElsewhere,
   };
 }
 

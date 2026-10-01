@@ -21,6 +21,15 @@
  * or whose data-built copy names a listing that has since changed. Without
  * credentials it says so and the online half is skipped, loudly.
  *
+ * SEO-064 DUPLICATE RULE (src/pseo/duplicateRule.ts), for audience x time
+ * and restaurant cuisine x time pages, which add a dimension the listing
+ * never reads:
+ *   offline  no such page, for any taxonomy combination, is in
+ *            sitemap-pseo.xml, and any 301 for one points at its parent page;
+ *   online   each published one is measured against its parent's listing;
+ *            unless it lists 5+ items with under 70% shared, it must carry
+ *            robots noindex and canonical the parent page.
+ *
  * Usage: npx tsx scripts/check-pseo-coverage.ts [--table]
  */
 import { readFileSync } from 'node:fs';
@@ -36,6 +45,15 @@ import {
 import { CATEGORY_FILTERS } from '../src/pseo/listingFilters';
 import { NEIGHBORHOOD_SLUGS } from '../src/lib/neighborhoodBoundaries';
 import { computePseoCoverage } from './lib/pseoCoverage';
+import { audienceDimension, temporalDimension } from '../src/pseo/taxonomy';
+import { duplicateFamily, parentPage } from '../src/pseo/duplicateRule';
+import {
+  duplicateStateProblems,
+  measureDuplicates,
+  readRedirects,
+  readSitemapPaths,
+  type DuplicatePageRow,
+} from './lib/pseoDuplicates';
 
 const ROOT = path.resolve(path.dirname(fileURLToPath(import.meta.url)), '..');
 const problems: string[] = [];
@@ -82,6 +100,43 @@ if (!srcStatusBlock || statuses(edgeStatusBlock) !== statuses(srcStatusBlock)) {
   problems.push(`NOT_VISITABLE_STATUSES differ: edge [${statuses(edgeStatusBlock)}] vs src/lib/restaurantHours.ts [${statuses(srcStatusBlock)}]`);
 }
 
+// --- offline: SEO-064 duplicates are out of the sitemap, 301s hit the parent -
+const redirects = readRedirects(ROOT);
+const pseoSitemap = readSitemapPaths(ROOT, 'sitemap-pseo.xml');
+const allSitemapped = readSitemapPaths(ROOT);
+{
+  const combos: Array<{ slug: string; pageType: string; dims: DuplicatePageRow['dimensions'] }> = [];
+  for (const t of temporalDimension.values) {
+    const td = { dimension: 'temporal', slug: t.slug, name: t.name };
+    for (const a of audienceDimension.values) {
+      combos.push({
+        slug: `/things-to-do/${a.slug}/${t.slug}`,
+        pageType: 'audience-temporal',
+        dims: [{ dimension: 'audience', slug: a.slug, name: a.name }, td],
+      });
+    }
+    for (const c of COVERAGE_CATEGORIES) {
+      combos.push({ slug: `/${c}/${t.slug}`, pageType: 'category-temporal', dims: [{ dimension: 'category', slug: c, name: c }, td] });
+    }
+  }
+  let governed = 0;
+  for (const c of combos) {
+    const family = duplicateFamily(c.pageType, c.dims);
+    if (!family) {
+      problems.push(`duplicate rule: ${c.slug} should be governed and duplicateFamily() says it is not`);
+      continue;
+    }
+    governed++;
+    // The extra dimension is one the listing never reads, so the page is its
+    // parent's list under another URL on every day: never submitted.
+    if (pseoSitemap.has(c.slug)) problems.push(`${c.slug}: duplicates its parent's listing (SEO-064) and is in sitemap-pseo.xml`);
+    const to = redirects.get(c.slug);
+    const want = parentPage(family, c.dims, redirects, allSitemapped);
+    if (to !== undefined && to !== want) problems.push(`${c.slug}: 301s to ${to}; the duplicate rule's parent page is ${want}`);
+  }
+  if (governed === 0) problems.push('duplicate rule: no taxonomy combination was governed; the offline check saw nothing');
+}
+
 // --- online -----------------------------------------------------------------
 function env(): Record<string, string | undefined> {
   const out: Record<string, string | undefined> = { ...process.env };
@@ -115,6 +170,19 @@ if (!base || !key) {
 const report = await computePseoCoverage({ base, key });
 problems.push(...report.violations);
 
+// --- online: SEO-064 duplicates ----------------------------------------------
+const dupRes = await fetch(
+  `${base.replace(/\/+$/, '')}/rest/v1/pseo_pages?select=slug,page_type_id,dimensions,seo,is_published&is_published=eq.true&order=slug&limit=1000`,
+  { headers: { apikey: key, Authorization: `Bearer ${key}` } },
+);
+if (!dupRes.ok) throw new Error(`pseo_pages: HTTP ${dupRes.status}`);
+const dupPages = (await dupRes.json()) as DuplicatePageRow[];
+const dupBySlug = new Map(dupPages.map((p) => [p.slug, p]));
+const duplicates = await measureDuplicates({ base, key }, dupPages, redirects, allSitemapped);
+for (const m of duplicates) {
+  problems.push(...duplicateStateProblems(m, dupBySlug.get(m.slug) as DuplicatePageRow, redirects, pseoSitemap));
+}
+
 if (process.argv.includes('--table')) {
   console.log('slug | places | verdict | published | noindex | names');
   for (const r of report.rows.filter((x) => x.places > 0 || x.published)) {
@@ -136,6 +204,7 @@ for (const r of report.rows) counts[r.verdict]++;
 console.log(
   `[pseo-coverage] OK ${report.rows.length} cuisine x suburb combinations: ${counts.indexable} indexable, ` +
     `${counts.noindex} noindex, ${counts['not-generated']} under the floor. Published: ${report.indexable.length} indexable, ` +
-    `${report.noindexPublished.length} noindex.` +
+    `${report.noindexPublished.length} noindex. Duplicate rule (SEO-064): ${duplicates.length} published page(s) measured, ` +
+    `${duplicates.filter((d) => d.passes).length} list enough of their own to be indexable.` +
     (missing.length ? ` Indexable but not published yet: ${missing.join(', ')}.` : ''),
 );

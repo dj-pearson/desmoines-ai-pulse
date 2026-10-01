@@ -33,7 +33,24 @@
  */
 import { readFileSync, existsSync } from 'node:fs';
 import { walkPrerenderedPages } from './prerender-output.mjs';
-import { CANONICAL_ELSEWHERE } from './prerender-routes.mjs';
+import { CANONICAL_ELSEWHERE as STATIC_CANONICAL_ELSEWHERE } from './prerender-routes.mjs';
+
+/**
+ * SEO-064: published pSEO duplicates canonical their parent page. The list is
+ * per-build data written by generate-dynamic-sitemaps.ts (it comes from the
+ * pseo_pages rows), so it is read here rather than kept in prerender-routes.mjs.
+ */
+const PSEO_CANONICAL_FILE = 'scripts/.generated/pseo-canonical-elsewhere.json';
+let pseoCanonicalElsewhere = {};
+if (existsSync(PSEO_CANONICAL_FILE)) {
+  try {
+    const routes = JSON.parse(readFileSync(PSEO_CANONICAL_FILE, 'utf8'))?.routes;
+    if (routes && typeof routes === 'object') pseoCanonicalElsewhere = routes;
+  } catch (err) {
+    console.warn(`[prerender-head] could not read ${PSEO_CANONICAL_FILE}: ${err.message}`);
+  }
+}
+const CANONICAL_ELSEWHERE = { ...pseoCanonicalElsewhere, ...STATIC_CANONICAL_ELSEWHERE };
 
 const DIST = 'dist';
 
