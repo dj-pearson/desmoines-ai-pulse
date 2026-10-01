@@ -317,7 +317,7 @@
         "Past dated instances 301 or link to their series page; follow the redirect-retention rule.",
         "Event schema on the instance, EventSeries on the series page. In sitemap and prerendered."
       ],
-      "notes": ""
+      "notes": "CODE COMPLETE 2026-10-01, merged to claude/seo-q4-loop (60cd243e); passes FALSE until live. 20 /events/series/<slug> pages: Panda Fest, Cloris Awards, Farmstasia, Jazz in July (4 instances), CITYVIEW Martini Fest, Rainbow Safari, FemCity Beyond Business Conference, Hinterland (4), Living History Farms Race, LHF Family Halloween, Head of the Des Moines Regatta, Forever in Love Bridal Show, Center Grove Pumpkin Fest, Beaverdale Fall Festival (2), National Balloon Classic, Eerie Evenings, Holiday Boutique, Original Oktoberfest, Taste of the Junction, Des Moines Concours (2). Production rows only span Apr 2026-Jul 2027, so 'annual' came from the title ('11th Annual', year) or description; Prairie Trail Labor Day Fest excluded (2026 was its first year), State Fair excluded (/iowa-state-fair covers it). 7 have a current edition; 13 say '2027 date not announced yet'. Storage: code mapping src/lib/eventSeries.ts (editorial pick; membership derived from normalised titles at load, so next year's rows join without edits). New: eventSeriesView.ts, useEventSeriesPage.ts, EventSeriesPage.tsx, seo/AnnualEventLinks.tsx, public/sitemap-event-series.xml (registered in robots.txt and sitemap.xml). Instances (and the not-found page hidden past events show) link to their series; month pages and the events hub directory link the series. EventSeries JSON-LD with subEvents. Verified: check-seo-route-parity, check-sitemap-registration, check-seo-meta-length, check-event-unpublish, type-check, lint, strict type-check on new files, edge-shell test, 39 unit tests; prerendered HTML has own title, canonical and JSON-LD. OPEN: decide whether to 301 past instances to their series; regenerate-sitemaps needs deploy; some organiser links are year-specific; LOCAL PRERENDER EXITS 1 on 26 restaurant x time pSEO routes (e.g. /bbq/today) that SEO-064 made noindex+canonical -> SEO-066 (build blocker on this branch)."
     },
     {
       "id": "SEO-044",
@@ -674,6 +674,22 @@
         "Copy on these pages templated from rows (SEO-041 writer), using restaurants.neighborhood for downtown/east-village/valley-junction and city for suburbs; apply the coverage rule (5+ indexable).",
         "Link them from the /restaurants hub directory (SEO-038) and from restaurant detail pages' suburb link (SEO-034) where they exist.",
         "Verify prerendered HTML has each page's own title; check-pseo-route-collisions, check-seo-route-parity, check-sitemap-registration pass."
+      ],
+      "notes": ""
+    },
+    {
+      "id": "SEO-066",
+      "title": "Loop-branch build fails: 26 noindex+canonical pSEO pages are rejected by the strict prerender gate",
+      "priority": 1,
+      "phase": 1,
+      "branch": "claude/seo-q4-loop",
+      "passes": false,
+      "description": "Found by SEO-043: a full prerender on claude/seo-q4-loop exits 1 on 26 restaurant x time pSEO routes (e.g. /bbq/today) that SEO-064 set to noindex,follow with a canonical to /restaurants. They are listed in both the noindex list and CANONICAL_ELSEWHERE, and the strict gate (canonical must resolve to the route itself) rejects them. If CI behaves the same, PR #443 can never build and nothing on this branch can ship.",
+      "acceptanceCriteria": [
+        "Reproduce with a full build (or the pSEO pass alone) on claude/seo-q4-loop and capture the exact failure for 2 routes.",
+        "Fix the gate/route lists so a page that deliberately canonicalises elsewhere is accepted when its canonical matches its declared target (and still fails if it accidentally points at the homepage or anything undeclared). Add a negative control test.",
+        "Decide whether these noindex pages should be prerendered at all or excluded from the pSEO pass; justify.",
+        "Full build exits 0 on the branch; check PR #443's CI build step result."
       ],
       "notes": ""
     }
