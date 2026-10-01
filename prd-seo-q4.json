@@ -624,6 +624,23 @@
         "Add a nightly or build-time check that flags opening_soon/announced rows whose opening_date has passed or whose business_status is OPERATIONAL, so this cannot silently recur.",
         "Verify on the live site: curl atlas-caf, bonchon, canopy, marvs-mainstreet-dive as Googlebot and confirm no 'opening soon' text (client render may need the prerender rebuild; note it)."
       ],
+      "notes": "DATA FIXED IN PRODUCTION 2026-10-01; code merged to hotfix/pseo-homepage-shell (b2561353). passes FALSE: prerendered pages still say 'hasn't opened yet' until #444 deploys and rebuilds, and 5 rows remain unknown. 15 of 22 set to open with evidence (backup + per-row evidence in scripts/content-backups/seo-062/): atlas-caf and canopy (stored Google OPERATIONAL; oakparkdsm.com same address), bonchon (bonchon.com location page), bubbies-pleasant-hill, wayback-burgers, highland-underground, judges-dsm, les-chinese-bar-b-que, chikin-likin (own sites with hours), bar-martinez and littleleaf-luncheonette (own sites; row address/phone/website belong to other businesses), moes-southwest-grill (official Urbandale listing; row location only 'Des Moines metro'), taste-of-new-york-pleasant-hill (Waukee store open; name says Pleasant Hill), empire (Kids Empire is open but is an indoor playground, not a restaurant). daves-hot-chicken-2 (Davenport) -> is_merged with no target + blacklisted out_of_scope: out of every list and the sitemap, edge shell serves noindex. Unchanged: kura-revolving-sushi-bar (Kura lists 0 Iowa stores), san-miguel-eatery (site 'under construction'). UNKNOWN: dutch-bros-coffee (1534 E Grand not among Dutch Bros' 3 Iowa stores), jungle-tea and marvs-mainstreet-dive (no website, dates passed), the-ingersoll, yard-house (fetch blocked; listed April 2027). Guard: staleUpcomingReason() in src/lib/restaurantOpenings.ts (25 tests), scripts/check-stale-openings.ts, nightly .github/workflows/stale-openings-check.yml (network needed, so not in validate); today it exits 1 on dutch-bros, jungle-tea, marvs. OPEN -> SEO-063."
+    },
+    {
+      "id": "SEO-063",
+      "title": "Restaurant rows carry stale 'opening soon' copy, wrong addresses and a playground",
+      "priority": 1,
+      "phase": 1,
+      "branch": "claude/seo-q4-loop",
+      "passes": false,
+      "description": "Found by SEO-062. Three top-traffic pages have unknown status with passed opening dates: marvs-mainstreet-dive (86 clicks), jungle-tea (45), dutch-bros-coffee (20). Stored GEO copy (geo_faq, geo_summary, description) still says 'opening soon' for atlas-caf, bonchon, moes and probably others. bar-martinez and littleleaf-luncheonette carry another business's address/phone/website; moes-southwest-grill has no street address; taste-of-new-york-pleasant-hill is a Waukee store; 'empire' (Kids Empire) is an indoor playground listed as a restaurant; yard-house is listed for April 2027 while it ranks for 'yard house west des moines'.",
+      "acceptanceCriteria": [
+        "Resolve status for marvs-mainstreet-dive, jungle-tea, dutch-bros-coffee, the-ingersoll, yard-house with evidence fetched this session (official social pages, the business's Google listing, local news); leave unknown only if nothing can be fetched, and say so. NEEDS WEB SEARCH QUOTA or reachable official pages.",
+        "Scan every restaurant row's description, geo_summary, geo_faq and seo_description for 'opening soon', 'coming soon', 'will open', 'opens in' where status is open; rewrite those sentences from facts in the row (templated, no invention). Back up first.",
+        "Fix bar-martinez, littleleaf-luncheonette, moes-southwest-grill and taste-of-new-york-pleasant-hill identity data (address, phone, website, name/slug city) from their own sites; slug renames need 301s on both branches per the redirect rule.",
+        "Move 'empire' (Kids Empire) out of restaurants (hide + add to playgrounds if that table fits, or just hide) and 301 per the rule.",
+        "Re-run scripts/check-stale-openings.ts and check-restaurant-seo; both clean."
+      ],
       "notes": ""
     }
   ]
