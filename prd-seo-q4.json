@@ -1,0 +1,462 @@
+{
+  "project": "Des Moines Insider - Q4 2026 page-by-page SEO and AI search",
+  "branchName": "claude/seo-q4-loop",
+  "description": "Derived from docs/seo/SEO_GEO_PAGE_PLAN_2026-Q4.md and the GSC export in Keyword/desmoinesinsider.com-Performance-on-Search-2026-09-30. This file is the single SEO queue: every open story in prd-seo.json, prd-seo-organic.json and the WEB-SEO-* stories in prd.json is folded into a story here (see each story's 'supersedes'); when a story here passes, close the superseded ones in their own file with a pointer. BRANCHES: phase 0 stories ship on hotfix/pseo-homepage-shell off main (PR to main AND develop); everything else on claude/seo-q4-loop off develop (PR to develop). PRODUCTION DATA: the owner authorised direct production writes on 2026-09-30 (articles, pseo_pages, restaurant seo_title backfill). Back up before any bulk UPDATE. FACTS: no fabricated hours, prices, dates or opinions; verified source or omit. All CLAUDE.md rules bind: backward compatibility, additive migrations, safeStorage, errorHandler, import.meta.env.DEV logs, conventional commits, no --no-verify. Pick the highest-priority passes:false story whose dependencies are met; stories marked needsOwner do everything possible and record the owner step.",
+  "baselines": {
+    "measuredOn": "2026-09-30",
+    "window": "3 months (2026-06-29 to 2026-09-28), web",
+    "clicks": 1040,
+    "impressions": 108773,
+    "ctrPercent": 0.96,
+    "avgPosition": 13.26,
+    "clicksByMonth": {
+      "2026-07": 292,
+      "2026-08": 349,
+      "2026-09": 385
+    },
+    "restaurantDetailClicks": 714,
+    "pseoPagesServingHomepageTitle": "10 of 10 checked",
+    "restaurantsHubPosition": 27.5,
+    "eventsThisWeekendPosition": 63,
+    "octoberMonthPageCtrPercent": 30.38
+  },
+  "userStories": [
+    {
+      "id": "SEO-029",
+      "title": "pSEO and things-to-do pages serve the homepage title, description and H1 to crawlers",
+      "priority": 1,
+      "phase": 0,
+      "branch": "hotfix/pseo-homepage-shell",
+      "passes": false,
+      "description": "Live check 2026-09-30 as Googlebot: /things-to-do/east-village, /things-to-do/ankeny, /things-to-do/festivals, /things-to-do/families, /things-to-do/date-night, /things-to-do/fall, /asian/east-village, /brunch/valley-junction, /mexican/downtown and /festivals/valley-junction all return 'Des Moines Insider | Events, Restaurants & Things to Do' and H1 'What's Happening in Des Moines'. /things-to-do/* alone has 3,948 impressions in the last 3 months; 'east village des moines' (458 impr, pos 12.1) lands on a page titled as the homepage. A local build renders /things-to-do/fall with its own title, so the cause is either missing published pseo_pages rows (SEO-012 found festivals, east-village and ankeny had none) or the entity-pass budget dropping pSEO.",
+      "acceptanceCriteria": [
+        "Reproduce first: curl every pSEO/things-to-do URL in Keyword/desmoinesinsider.com-Performance-on-Search-2026-09-30/Pages.csv as Googlebot and list which return the homepage title. Record the count in notes.",
+        "For each, determine the cause: no published pseo_pages row, or row exists but the prerender did not capture it. Check pseo_pages in production via SUPABASE_DB_URL.",
+        "Missing rows: publish them through the existing pipeline (src/pseo/pipeline.ts) or by inserting rows built from real restaurant/event/attraction data. Production writes are authorised by the owner (2026-09-30). No fabricated facts. Hours, prices, dates, addresses and 'what to order' claims come from the database row, the business's own site, or a cited public source fetched this session. If a fact cannot be verified, leave it out rather than guess; say so in notes.",
+        "Render misses: move every pSEO URL with GSC impressions into the always-run hub pass (scripts/prerender-routes.mjs) or an unbudgeted pSEO pass.",
+        "Build fails if any pSEO page's prerendered <title> equals the homepage shell title (extend strictGateFailures or the hub-pass assertion). Run the negative control: break one page and confirm the build fails.",
+        "Every published pSEO URL is in sitemap-pseo.xml (14 today; GSC shows 78+ such URLs with impressions).",
+        "Verify after deploy: the same curl list returns each page's own title. If the hotfix is not yet deployed, say so and leave passes false."
+      ],
+      "notes": "",
+      "supersedes": [
+        "SEO-012 (things-to-do sub-pages half)",
+        "SEO-025 (render half)",
+        "WEB-SEO-013"
+      ]
+    },
+    {
+      "id": "SEO-030",
+      "title": "Restaurant seo_title values in the database override the Menu, Hours & Reviews template",
+      "priority": 1,
+      "phase": 0,
+      "branch": "hotfix/pseo-homepage-shell",
+      "passes": false,
+      "description": "RestaurantDetails.tsx:224-233 builds '${name} - ${cuisine} in ${city}, Iowa | Menu, Hours & Reviews', but restaurants.seo_title wins and is weaker. Live: 'The Contrary - Reviews', 'Dutch Bros Coffee Des Moines - Reviews', 'Marv's Mainstreet Dive Norwalk - Reviews'. The queries are 'the contrary menu' (811 impr), 'dutch bros hours' (333), 'bonchon des moines menu' (840). 18 restaurant pages sit at position 12 or better with 500+ impressions and CTR under 1% (jungle-tea, bonchon, dutch-bros-coffee, the-contrary, triple-bs, tous-les-jours, taste-of-new-york-pizza-bar, el-rincn-catracho-2, bandit-burrito, 100th-st-corner-cafe, bix-co, sushi-a-go-go, el-molcajete, pallys-pub-pizza, cajun-belle, texas-roadhouse, wayback-burgers, gus-and-lisas).",
+      "acceptanceCriteria": [
+        "Back up current seo_title/seo_description for every restaurant to a file in the repo (scripts/backups/ or similar) before writing, so the change is reversible.",
+        "Backfill restaurants.seo_title in production to '{Name} {City}: Menu, Hours & Reviews', trimmed to fit ~60 characters with ' | Des Moines Insider' appended by SEOHead. Say 'Menu' only when the row has a menu URL; otherwise 'Hours, Photos & Reviews'.",
+        "Do the same review for seo_description: it should name the city, cuisine and one concrete fact from the row, under 155 characters.",
+        "Change the code so a future seo_title that drops the city or the intent words falls back to the template (or add a check script that flags them).",
+        "Verify on live HTML for the 18 pages listed after the prerender rebuild. Record before/after titles in notes."
+      ],
+      "notes": ""
+    },
+    {
+      "id": "SEO-031",
+      "title": "Five small SEO defects found in the 2026-09-30 audit",
+      "priority": 2,
+      "phase": 0,
+      "branch": "hotfix/pseo-homepage-shell",
+      "passes": false,
+      "description": "Each is under an hour and each is live.",
+      "acceptanceCriteria": [
+        "Restaurant JSON-LD @id uses https://desmoinespulse.com (RestaurantDetails.tsx:265). Use the canonical domain from BRAND.",
+        "/events/schedule-2026-09-26 renders as 'Schedule - Sat, Sep 26 | Principal Park' and ranks position 2 (479 impr). Fix the crawler/title so team-schedule rows carry team and opponent; fix the existing row(s) in production.",
+        "public/rss.xml was last built 2025-07-30 and is not linked from <head>. Generate it at build time from articles + upcoming events with RFC-822 dates and add <link rel=alternate>, or delete it.",
+        "robots.txt still has 'Allow: /weekend' for a route that 301s. Remove it.",
+        "Restaurants hub meta description says '200+ restaurants'; the sitemap has 477. Derive the number from data."
+      ],
+      "notes": ""
+    },
+    {
+      "id": "SEO-051",
+      "title": "Verify the code-complete SEO stories in production and close them",
+      "priority": 2,
+      "phase": 0,
+      "branch": "hotfix/pseo-homepage-shell",
+      "passes": false,
+      "description": "SEO-001 and SEO-002 (prd-seo.json) are marked code complete with production verification pending since 2026-08-29. WEB-SEO-006 and WEB-SEO-008 (prd.json) record fixes on loop branches. None has been checked against production since. This is a verification story: close what is true, reopen what is not.",
+      "acceptanceCriteria": [
+        "SEO-001: curl a sample of 30 entity URLs (10 restaurants, 10 events, 10 others, chosen by GSC impressions) as GPTBot; each must return its own title, canonical and JSON-LD. Record the pass rate.",
+        "SEO-002: run the Rich Results test (or validate JSON-LD locally against Google's Event requirements) on /events, /events/today, /events/this-weekend and 5 event detail pages.",
+        "WEB-SEO-006 / WEB-SEO-008: check the latest build log or a fresh build for prerender coverage and duplicate BreadcrumbList blocks.",
+        "Set passes=true in the original files only for what verified. For anything that did not, add a note with the measurement and fold the remaining work into a story here."
+      ],
+      "notes": "",
+      "supersedes": [
+        "SEO-001",
+        "SEO-002",
+        "WEB-SEO-006",
+        "WEB-SEO-008"
+      ]
+    },
+    {
+      "id": "SEO-032",
+      "title": "Halloween season content: haunted houses, pumpkin patches, corn mazes near Des Moines 2026",
+      "priority": 1,
+      "phase": 1,
+      "branch": "claude/seo-q4-loop",
+      "passes": false,
+      "description": "'haunted houses des moines' is 5,000/mo and +900% over three months in keyword-opportunities.csv. 'pumpkin patch' already gives us 73 impressions at position 10 with no page built for it; last year's pumpkin patch guide had 2,609 impressions (SEO-019). Demand peaks in the first three weeks of October, so this ships first.",
+      "acceptanceCriteria": [
+        "Publish to production (articles table, is_published) three articles: haunted houses near Des Moines 2026, pumpkin patches and apple orchards near Des Moines 2026, corn mazes near Des Moines 2026. Refresh last year's pumpkin patch URL instead of duplicating it if it exists.",
+        "Each entry: name, town, distance from downtown, 2026 dates and hours, price, a link to the official site, one sentence on what it is. Every date and price is from the venue's own 2026 page, fetched this session, and the article lists sources. No fabricated facts. Hours, prices, dates, addresses and 'what to order' claims come from the database row, the business's own site, or a cited public source fetched this session. If a fact cannot be verified, leave it out rather than guess; say so in notes.",
+        "Article schema with datePublished, dateModified and author; visible 'Updated' date; links to /events/october-2026 and the relevant events and back from the month page.",
+        "Request indexing: add to the articles sitemap and ping IndexNow if SEO-047 has landed."
+      ],
+      "notes": "",
+      "supersedes": [
+        "SEO-019 (fall half)"
+      ]
+    },
+    {
+      "id": "SEO-033",
+      "title": "Month event pages ship 6-8 weeks ahead with a seasonal block",
+      "priority": 1,
+      "phase": 1,
+      "branch": "claude/seo-q4-loop",
+      "passes": false,
+      "description": "/events/october-2026 converts at 30.4% CTR at position 3.1 (24 clicks from 79 impr); /events/november-2026 at 7.8%. These are the best-converting pages on the site, and they only earn once indexed, so they need to exist before demand.",
+      "acceptanceCriteria": [
+        "December 2026 and January 2027 month pages exist, prerender, and are in sitemap-events.xml now, even if the event count is below the current minimum (lower or bypass the minimum for months within 10 weeks).",
+        "Each month page has a short seasonal intro block above the list (October: Halloween, haunted houses, pumpkin patches, trick-or-treat; November: Thanksgiving, holiday lights; December: lights, markets, New Year's Eve), linking to the matching articles. Text is data-driven or factual, never invented.",
+        "H2s use the phrasing people search: 'Things to do in Des Moines in October 2026', 'October events in Des Moines'.",
+        "Previous/next month links. Months more than 2 months in the past are noindexed or 301 to the current month; pick one and justify it in notes."
+      ],
+      "notes": ""
+    },
+    {
+      "id": "SEO-034",
+      "title": "Restaurant detail pages answer the query above the fold and carry complete Restaurant schema",
+      "priority": 1,
+      "phase": 1,
+      "branch": "claude/seo-q4-loop",
+      "passes": false,
+      "description": "Restaurant pages are 714 of 1,040 clicks. 239 of 329 pages with impressions got zero clicks (13,522 impressions). Catch Des Moines's listings have no openingHours, priceRange, servesCuisine or hasMenu in JSON-LD and load hours by JavaScript; this is the gap.",
+      "acceptanceCriteria": [
+        "Above the fold, in server-rendered text: today's hours and an open/closed line (phrased by schedule so it survives prerender, e.g. 'Open until 9 pm on Fridays'), price range, menu link when present, address with neighborhood/suburb, phone.",
+        "Restaurant JSON-LD includes servesCuisine, priceRange, hasMenu, openingHoursSpecification, acceptsReservations, geo, sameAs (official site, maps URL, social) when the row has them. Drop AggregateRating unless the ratings are first-party.",
+        "Visible 'Last verified' date from updated_at, and dateModified in WebPage schema.",
+        "Each page links to its neighborhood/suburb page and matching cuisine x area pSEO page when one is published, and those pages link back.",
+        "Image alt text names the restaurant and dish/space.",
+        "Measure with a script over the top 50 restaurants by impressions: fields present in prerendered HTML. Record coverage before and after."
+      ],
+      "notes": ""
+    },
+    {
+      "id": "SEO-035",
+      "title": "A weekly 'This weekend in Des Moines' article, generated from the events table, plus a daily prerender rebuild",
+      "priority": 1,
+      "phase": 1,
+      "branch": "claude/seo-q4-loop",
+      "passes": false,
+      "description": "/events/this-weekend ranks 63; 'things to do in des moines this weekend' is ours at pos 24 and desmoinesparent.com ranks top 5 with a weekly list. A dated weekly URL is also the news-style content Top Stories and preferred sources reward. The daily crawler's output never reaches prerendered HTML because CLOUDFLARE_DEPLOY_HOOK_URL is unset (WEB-SEO-011).",
+      "acceptanceCriteria": [
+        "A scheduled job (GitHub Action or edge function cron) publishes every Thursday an article 'This weekend in Des Moines: {dates}' built only from events rows: top picks by a stated rule (e.g. featured, ticketed venues, family), the free list, and a link to /events/this-weekend. No invented descriptions.",
+        "Publish this week's (Oct 2-4, 2026) now in production.",
+        "Daily rebuild: wire a Cloudflare Pages deploy hook so the prerender reruns at least daily. If the secret must be created in Cloudflare, create it via API if credentials exist; otherwise record the exact step for the owner.",
+        "The weekend article links to the hub and the hub links to the latest article."
+      ],
+      "notes": "",
+      "supersedes": [
+        "WEB-SEO-011",
+        "WEB-SEO-017"
+      ],
+      "needsOwner": "Cloudflare deploy hook secret if no API token is available"
+    },
+    {
+      "id": "SEO-036",
+      "title": "Event hubs lead with the date and the count, and /events/near-me stops splitting signals",
+      "priority": 2,
+      "phase": 1,
+      "branch": "claude/seo-q4-loop",
+      "passes": false,
+      "description": "/events pos 31-37, /events/today pos 47-53, /events/this-weekend pos 59-63, /events/near-me pos 72 (494 impr, not prerendered, not in a sitemap). SEO-009 added ListFreshness; the rest of that story is still open.",
+      "acceptanceCriteria": [
+        "Confirm prerendered HTML for /events, /events/today and /events/this-weekend contains the full event list (names, dates, venues, links). Record counts.",
+        "H1 and first sentence state the date range and counts: 'This weekend in Des Moines: Oct 2-4, 2026. 47 events, 12 free.' Computed from data at render.",
+        "A short 'top picks' block above the full list, chosen by a stated rule, linking to the weekly article (SEO-035).",
+        "/events/near-me canonicals to /events/today (or this-weekend; justify), stays out of the sitemap.",
+        "Close SEO-009 in prd-seo.json with a note pointing here."
+      ],
+      "notes": "",
+      "supersedes": [
+        "SEO-009"
+      ]
+    },
+    {
+      "id": "SEO-037",
+      "title": "Google preferred source button, NewsArticle schema, and a real author page",
+      "priority": 2,
+      "phase": 1,
+      "branch": "claude/seo-q4-loop",
+      "passes": false,
+      "description": "Google preferred sources (developers.google.com/search/docs/appearance/preferred-sources) boosts a chosen site in Top Stories and AI Mode/AI Overviews for users who pick it. Button: <script async src='https://news.google.com/swg/js/v1/publisher.js'></script><div google-add-preferred-source-btn></div>, or link https://www.google.com/preferences/source?q=desmoinesinsider.com. It pays off only with dated, bylined, timely content, which is why SEO-035 runs alongside it.",
+      "acceptanceCriteria": [
+        "PreferredSourceButton component: lazy-loads publisher.js only when scrolled into view (no LCP cost), data-theme follows the site theme, falls back to the plain link if the script fails. Named export, typed props.",
+        "Placed at the end of every article, on /events/this-weekend, on the homepage below the fold, and in the footer. Not on restaurant/event detail pages.",
+        "Articles emit BlogPosting (evergreen) or NewsArticle (timely: weekend posts, openings) with datePublished, dateModified, author (Person with url), publisher (Organization with logo).",
+        "An author page (/about/<slug> or /authors/<slug>) and an About section stating who runs the site and how listings are chosen. Real names and facts only; ask the owner for the byline if none exists in the DB. ",
+        "Playwright test that the button renders on an article and is absent from a restaurant page.",
+        "Note for the owner in progress: check google.com/preferences/source for desmoinesinsider.com and enable 'Search generative AI features' in Search Console."
+      ],
+      "notes": "",
+      "needsOwner": "Author name/bio for the byline; Search Console setting"
+    },
+    {
+      "id": "SEO-038",
+      "title": "Restaurants hub targets the head term with a data-backed ranked list and suburb/neighborhood sections",
+      "priority": 2,
+      "phase": 2,
+      "branch": "claude/seo-q4-loop",
+      "passes": false,
+      "description": "/restaurants pos 27.5; 'restaurants in des moines' pos 39.6 (535 impr), 'best restaurants in des moines' pos 38. Head term is 50,000/mo at competition index 11. SEO-010 and SEO-026 stalled on editorial picks needing someone who has eaten there; this story uses a stated, checkable rule instead.",
+      "acceptanceCriteria": [
+        "A ranked list of 20 at the top of the HTML chosen by a published rule (e.g. rating x review count from first-party/stored data, open now, local-owned), with the rule stated on the page and one factual line per entry from the row. No invented opinions.",
+        "Sections linking to /restaurants/west-des-moines, /restaurants/ankeny, /restaurants/east-village, /restaurants/downtown (or their pSEO equivalents). Each must exist, prerender with its own title, and be in a sitemap; publish missing ones (see SEO-041).",
+        "Cuisine section linking to best pizza / burger / breakfast pages once SEO-041 publishes them.",
+        "ItemList schema for the ranked list. Close SEO-010 and SEO-026 with notes pointing here."
+      ],
+      "notes": "",
+      "supersedes": [
+        "SEO-010",
+        "SEO-026"
+      ]
+    },
+    {
+      "id": "SEO-039",
+      "title": "A standing 'New restaurants in Des Moines' hub",
+      "priority": 2,
+      "phase": 2,
+      "branch": "claude/seo-q4-loop",
+      "passes": false,
+      "description": "'new restaurants des moines 2026' is our best generic query: 203 impr, 15 clicks, pos 8.8, served by a detail page. Openings are timely and citable by local media.",
+      "acceptanceCriteria": [
+        "/restaurants/new lists restaurants by opened/created date from the DB (and the restaurant-opening scraper's data), newest first, with month headers.",
+        "Title targets 'New Restaurants in Des Moines (2026)'; first sentence states how many opened and the date range.",
+        "Monthly article 'New restaurants in Des Moines: October 2026' generated from the same data and published in production.",
+        "In sitemap, prerendered, linked from /restaurants and the homepage."
+      ],
+      "notes": ""
+    },
+    {
+      "id": "SEO-040",
+      "title": "One URL per intent: East Village and date night are split across competing pages",
+      "priority": 2,
+      "phase": 2,
+      "branch": "claude/seo-q4-loop",
+      "passes": false,
+      "description": "/things-to-do/east-village (1,208 impr, pos 11.8) vs /neighborhoods/east-village (124, pos 17.0). /events/date-night (390+105 impr) vs /things-to-do/date-night (215). Two pages for one query split the signals.",
+      "acceptanceCriteria": [
+        "For each pair pick the winner from GSC (record the numbers), turn the loser into a section linking to it or 301 it. A 301 must follow the Backward Compatibility rule (keep for 1+ release) and update _redirects, sitemaps and internal links.",
+        "Audit the rest of the GSC page list for the same pattern (neighborhood vs things-to-do vs pSEO) and list any other pairs found.",
+        "The winning East Village page has: two-sentence intro, parking, 8-10 restaurants linked, bars, what's on this week, map. Facts from data only."
+      ],
+      "notes": ""
+    },
+    {
+      "id": "SEO-041",
+      "title": "Publish the suburb and cuisine x area pSEO pages with real coverage, noindex the thin ones",
+      "priority": 2,
+      "phase": 2,
+      "branch": "claude/seo-q4-loop",
+      "passes": false,
+      "description": "Suburbs are the largest volume block in keyword-opportunities.csv and out of Catch Des Moines's scope. SEO-025 ranked locations by demand (src/pseo/measuredDemand.ts) but could not publish without credentials; production writes are now authorised. SEO-017 warned that filtered pages over the same restaurants are duplicates.",
+      "acceptanceCriteria": [
+        "Publish pseo_pages for the top locations by measured demand (Ankeny, West Des Moines, Johnston, Urbandale, Waukee, Altoona, Clive and the cuisines with demand: pizza, burger, breakfast, brunch, mexican, asian, bbq).",
+        "Rule: a page needs at least 5 published places to be indexed and 3 to exist at all. Enforce it in code and a check script; under 5 gets noindex and leaves the sitemap.",
+        "Each published page prerenders with its own title (SEO-029 gate) and is in sitemap-pseo.xml.",
+        "Record per-page place counts. Close SEO-025 and SEO-017 with notes."
+      ],
+      "notes": "",
+      "supersedes": [
+        "SEO-025",
+        "SEO-017",
+        "SEO-012 (hub half)"
+      ]
+    },
+    {
+      "id": "SEO-042",
+      "title": "Playgrounds hub converts nothing; detail titles miss what parents search",
+      "priority": 3,
+      "phase": 2,
+      "branch": "claude/seo-q4-loop",
+      "passes": false,
+      "description": "/playgrounds + /playgrounds/ : 1,655 impressions, 0 clicks, pos 16-29. Detail pages rank well (riverview park 472 impr, big creek state park playground pos 4.3). 'splash pads des moines' and 'indoor playground des moines' are 500/mo each.",
+      "acceptanceCriteria": [
+        "Hub leads with 'Best playgrounds by age' and a splash pad section (with season dates from the city/park source) and an indoor playground section, from data.",
+        "Detail titles '{Park} Playground, {City}: Equipment, Shade, Restrooms' when those fields exist.",
+        "Two-way links between playgrounds, /events/kids and family-friendly restaurants. Close SEO-014."
+      ],
+      "notes": "",
+      "supersedes": [
+        "SEO-014"
+      ]
+    },
+    {
+      "id": "SEO-043",
+      "title": "Series pages for annual events so authority survives each year",
+      "priority": 3,
+      "phase": 2,
+      "branch": "claude/seo-q4-loop",
+      "passes": false,
+      "description": "Annual events are searched by name and year ('cloris awards 2026' pos 4.4, 'forever in love bridal show' 21% CTR, 'rainbow safari blank park zoo' 15.8%). Dated event URLs die after the event.",
+      "acceptanceCriteria": [
+        "/events/series/:slug for the 20 biggest annual events, listing the current dated instance, past years, venue and official link.",
+        "Past dated instances 301 or link to their series page; follow the redirect-retention rule.",
+        "Event schema on the instance, EventSeries on the series page. In sitemap and prerendered."
+      ],
+      "notes": ""
+    },
+    {
+      "id": "SEO-044",
+      "title": "Contextual internal links between restaurants, events, neighborhoods, playgrounds and articles",
+      "priority": 3,
+      "phase": 2,
+      "branch": "claude/seo-q4-loop",
+      "passes": false,
+      "description": "SEO-015 added a 45-link footer directory; the lateral links (event to nearby restaurants, restaurant to its neighborhood, article to its hub and back) are still missing.",
+      "acceptanceCriteria": [
+        "Event detail: 3-5 restaurants near the venue (by lat/lng). Restaurant detail: neighborhood page, 3 nearby restaurants, upcoming events at nearby venues. Article: its hub; hub: its articles.",
+        "Measure unique internal links on 10 sample pages before and after. Close SEO-015."
+      ],
+      "notes": "",
+      "supersedes": [
+        "SEO-015"
+      ]
+    },
+    {
+      "id": "SEO-045",
+      "title": "Venue pages, then hotels near each venue",
+      "priority": 3,
+      "phase": 2,
+      "branch": "claude/seo-q4-loop",
+      "passes": false,
+      "description": "Concert queries name venues ('gary clark jr val air ballroom' 145 impr). SEO-018 said a venue table or reliable venue normalisation is the prerequisite; SEO-013 (stay) depends on it. /stay is pos 50.",
+      "acceptanceCriteria": [
+        "A venues table (additive migration) or a normalisation over events.venue, populated for the top 30 venues with lat/lng from geocoding.",
+        "/music/venues/:slug (route exists) lists upcoming events at the venue; no generated parking/capacity facts.",
+        "'Hotels near {venue}' pages for Wells Fargo Arena, Iowa State Fairgrounds, Principal Park, Jordan Creek, computed by distance from the hotels table. Add /stay/:slug to a sitemap.",
+        "Close SEO-018 and SEO-013."
+      ],
+      "notes": "",
+      "supersedes": [
+        "SEO-018",
+        "SEO-013"
+      ]
+    },
+    {
+      "id": "SEO-046",
+      "title": "Attractions carry hours, admission and time-to-spend from verified sources",
+      "priority": 4,
+      "phase": 2,
+      "branch": "claude/seo-q4-loop",
+      "passes": false,
+      "description": "22 attractions, 1 click in the last 3 months, pos 30+. Catch Des Moines's core product, so this is low priority. SEO-011 stalled on unverified facts.",
+      "acceptanceCriteria": [
+        "For each of the 22, fill hours, admission and parking from the attraction's own site fetched this session, with the source URL stored. No fabricated facts. Hours, prices, dates, addresses and 'what to order' claims come from the database row, the business's own site, or a cited public source fetched this session. If a fact cannot be verified, leave it out rather than guess; say so in notes.",
+        "TouristAttraction schema carries openingHoursSpecification where verified. Close SEO-011."
+      ],
+      "notes": "",
+      "supersedes": [
+        "SEO-011"
+      ]
+    },
+    {
+      "id": "SEO-047",
+      "title": "Get indexed where AI search looks: Bing, IndexNow, Brave; generate llms.txt from data",
+      "priority": 2,
+      "phase": 2,
+      "branch": "claude/seo-q4-loop",
+      "passes": false,
+      "description": "ChatGPT search uses OAI-SearchBot plus Bing; Claude's results overlap heavily with Brave. Google says it ignores llms.txt, so it stays cheap and generated, not hand-kept.",
+      "acceptanceCriteria": [
+        "IndexNow: key file in public/, and a build or crawler step that pings IndexNow with changed event/restaurant/article URLs.",
+        "Bing Webmaster Tools: if no account access, write the exact steps for the owner (verify, submit the 9 sitemaps). Check Brave Search for site:desmoinesinsider.com and record result counts.",
+        "llms.txt generated at build from real counts and top hubs; remove the hand-maintained drift comment."
+      ],
+      "notes": "",
+      "needsOwner": "Bing Webmaster Tools verification"
+    },
+    {
+      "id": "SEO-048",
+      "title": "November-December seasonal content",
+      "priority": 2,
+      "phase": 2,
+      "branch": "claude/seo-q4-loop",
+      "passes": false,
+      "description": "Next seasonal wave from keyword-opportunities.csv: ice skating (5,000/mo), holiday lights, Thanksgiving dining out, Small Business Saturday, trick-or-treat times by suburb.",
+      "acceptanceCriteria": [
+        "Publish by the dates in docs/seo/SEO_GEO_PAGE_PLAN_2026-Q4.md: trick-or-treat times by suburb (by Oct 8), Thanksgiving dinner out (Oct 29), holiday lights (Nov 5), ice skating (Nov 12), Small Business Saturday in Valley Junction and East Village (Nov 19).",
+        "Refresh last year's soups article rather than duplicating it.",
+        "No fabricated facts. Hours, prices, dates, addresses and 'what to order' claims come from the database row, the business's own site, or a cited public source fetched this session. If a fact cannot be verified, leave it out rather than guess; say so in notes.",
+        "Each linked from the matching month page and back. Close SEO-019."
+      ],
+      "notes": "",
+      "supersedes": [
+        "SEO-019"
+      ]
+    },
+    {
+      "id": "SEO-049",
+      "title": "AI citation baseline: 20 prompts across assistants",
+      "priority": 3,
+      "phase": 2,
+      "branch": "claude/seo-q4-loop",
+      "passes": false,
+      "description": "We have no measurement of AI citations. Without a baseline nothing in this PRD can claim an AI search effect.",
+      "acceptanceCriteria": [
+        "Write docs/seo/ai-citation-prompts.md with 20 prompts covering restaurants by name, 'best X in neighborhood', this weekend, open now, playgrounds.",
+        "Run what can be run from here (web search tools, Perplexity/Google AI Mode via browser if available) and log whether desmoinesinsider.com or Catch Des Moines is cited. Record what could not be run."
+      ],
+      "notes": ""
+    },
+    {
+      "id": "SEO-050",
+      "title": "Search Console sync, so the next plan does not depend on a manual export",
+      "priority": 3,
+      "phase": 2,
+      "branch": "claude/seo-q4-loop",
+      "passes": false,
+      "description": "WEB-SEO-014: gsc-oauth, gsc-fetch-properties and gsc-sync-data are not deployed; the refresh token was expected to lapse around 2026-09-30.",
+      "acceptanceCriteria": [
+        "Deploy the three functions if SUPABASE_ACCESS_TOKEN allows, following the edge-function backward-compat rules.",
+        "If OAuth needs the owner's browser, record the exact step. Close or update WEB-SEO-014."
+      ],
+      "notes": "",
+      "supersedes": [
+        "WEB-SEO-014",
+        "WEB-BE-031"
+      ],
+      "needsOwner": "Google OAuth consent"
+    },
+    {
+      "id": "SEO-052",
+      "title": "Desktop ranks twelve positions worse than mobile: finish the diagnosis",
+      "priority": 4,
+      "phase": 2,
+      "branch": "claude/seo-q4-loop",
+      "passes": false,
+      "description": "Carried from SEO-020. Mobile 9.28 vs desktop 22.76 in the 3-month export. Blocked on a PageSpeed Insights API key.",
+      "acceptanceCriteria": [
+        "Run PSI/CrUX per device for the top 10 URLs if a key is available; otherwise record the block and leave passes false."
+      ],
+      "notes": "",
+      "supersedes": [
+        "SEO-020"
+      ],
+      "needsOwner": "PSI_API_KEY"
+    }
+  ]
+}
