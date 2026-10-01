@@ -1,0 +1,38 @@
+# Stale restaurant openings (SEO-062)
+# Fails when a restaurant is still marked opening_soon/announced although its
+# opening_date has passed or Google's business_status is OPERATIONAL. Nothing
+# clears that status, and on 2026-10-01 it was telling searchers that 15 open
+# places, including the top restaurant pages, had not opened. Read-only; a
+# person fixes the rows (see scripts/check-stale-openings.ts).
+
+name: Stale Openings Check
+
+on:
+  schedule:
+    - cron: '30 11 * * *' # daily at 11:30 UTC (06:30 Central)
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  check:
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Set up Node 20
+        uses: actions/setup-node@v4
+        with:
+          node-version-file: .nvmrc
+          cache: 'npm'
+
+      - name: Install deps
+        run: npm ci
+
+      - name: Flag stale upcoming restaurants
+        env:
+          VITE_SUPABASE_URL: ${{ secrets.VITE_SUPABASE_URL }}
+          VITE_SUPABASE_ANON_KEY: ${{ secrets.VITE_SUPABASE_ANON_KEY }}
+        run: npx tsx scripts/check-stale-openings.ts
