@@ -76,11 +76,14 @@ describe("weekendWindow", () => {
 });
 
 describe("dates, slugs and titles", () => {
-  it("files a midnight-UTC row under the previous Central day, like the rest of the site", () => {
+  it("files a 00:00 UTC row under its Central day, where it is 7 pm (SEO-055)", () => {
     const e = row({ title: "Trivia", date: "2026-10-03T00:00:00+00:00", event_start_utc: "2026-10-03T00:00:00+00:00" });
     expect(eventLocalDate(e)).toBe("2026-10-02");
-    // ...and does not print 7 pm for it, because that is not a real time (SEO-055).
-    expect(hasRealStartTime(e)).toBe(false);
+    // 7 pm CDT is a real start time for most shows (SeatGeek's own URLs say so);
+    // only time_tbd or the 19:31:58 marker means "no time".
+    expect(hasRealStartTime(e)).toBe(true);
+    expect(hasRealStartTime({ ...e, time_tbd: true })).toBe(false);
+    expect(hasRealStartTime(row({ event_start_utc: "2026-10-03T00:31:58+00:00" }))).toBe(false);
   });
 
   it("builds the same event slug as the detail page resolves", () => {
@@ -133,6 +136,32 @@ describe("visibility", () => {
     const got = selectWeekendEvents([thursdayEvening, fri, sunNight, monday, hidden], w).map((e) => e.title);
     expect(got.sort()).toEqual(["Fri", "Sun"]);
   });
+
+  it("keeps a run that started before Friday and is still on (SEO-055: Ringling Bros., Pumpkin Fest)", () => {
+    const w = weekendWindow(new Date("2026-10-01T17:00:00Z"));
+    const ringling = row({
+      title: "Ringling",
+      event_start_utc: "2026-10-02T00:00:00+00:00", // Thu Oct 1, 7 pm CDT
+      end_date: "2026-10-04T22:00:00+00:00", // Sun Oct 4, 5 pm CDT
+    });
+    const pumpkinFest = row({
+      title: "Pumpkin Fest",
+      event_start_utc: "2026-10-01T14:00:00+00:00",
+      end_date: "2026-11-06T23:00:00+00:00",
+    });
+    const endedThursday = row({
+      title: "Ended",
+      event_start_utc: "2026-09-25T14:00:00+00:00",
+      end_date: "2026-10-01T23:00:00+00:00", // Oct 1 Central
+    });
+    const startsMonday = row({
+      title: "Later",
+      event_start_utc: "2026-10-05T14:00:00+00:00",
+      end_date: "2026-10-09T23:00:00+00:00",
+    });
+    const got = selectWeekendEvents([ringling, pumpkinFest, endedThursday, startsMonday], w).map((e) => e.title);
+    expect(got.sort()).toEqual(["Pumpkin Fest", "Ringling"]);
+  });
 });
 
 describe("selection rule", () => {
@@ -160,7 +189,12 @@ describe("selection rule", () => {
   });
 
   it("keeps one listing per show and prefers the one with a start time", () => {
-    const dateOnly = row({ title: "Reefer Madness", venue: "Stoner Theater", event_start_utc: "2026-10-03T00:00:00+00:00" });
+    const dateOnly = row({
+      title: "Reefer Madness",
+      venue: "Stoner Theater",
+      event_start_utc: "2026-10-03T00:00:00+00:00",
+      time_tbd: true,
+    });
     const timed = row({
       title: "Reefer Madness - Des Moines",
       venue: "Stoner Theater at Des Moines Performing Arts",
@@ -187,6 +221,14 @@ describe("buildWeekendArticle", () => {
     row({ title: "Free Park Day", venue: "Gray's Lake", price: "Free", event_start_utc: "2026-10-03T15:00:00+00:00" }),
     row({ title: "Trivia Thursday", venue: "A Pub" }),
     row({ title: "Secret Hidden Thing", venue: "Hoyt Sherman Place", is_hidden: true }),
+    row({
+      title: "Pumpkin Fest",
+      venue: "Center Grove Orchard",
+      event_start_utc: "2026-10-02T00:00:00+00:00",
+      end_date: "2026-11-06T23:00:00+00:00",
+      time_tbd: true,
+    }),
+    row({ title: "Gate Night", venue: "A Barn", event_start_utc: "2026-10-03T00:31:58+00:00" }),
   ];
   const a = buildWeekendArticle(rows, w, "2026-10-01");
 
@@ -209,9 +251,21 @@ describe("buildWeekendArticle", () => {
   });
 
   it("counts the regular separately instead of listing it", () => {
-    expect(a.counts).toMatchObject({ total: 3, listed: 2, regulars: 1, free: 1 });
+    expect(a.counts).toMatchObject({ total: 5, listed: 4, regulars: 1, free: 1, runs: 1 });
     expect(a.content).not.toContain("[Trivia Thursday]");
     expect(a.content).toContain("Plus 1 weekly regular");
+  });
+
+  it("lists a run once, with its dates and no time, under its own heading", () => {
+    expect(a.content).toContain("## Running this weekend");
+    expect(a.content).toContain(
+      "- [Pumpkin Fest](/events/pumpkin-fest-2026-10-01) - October 1 - November 6 - Center Grove Orchard",
+    );
+    expect(a.counts.byDay["2026-10-02"]).toBe(2); // Big Concert + Gate Night, not the run
+  });
+
+  it("prints the date only for a row stamped with the no-time marker", () => {
+    expect(a.content).toMatch(/- \[Gate Night\]\(\/events\/gate-night-2026-10-02\) - A Barn( \(top pick\))?\n/);
   });
 
   it("states the pick rule in the article", () => {

@@ -22,21 +22,27 @@
  * article uses the same rule so every link it prints resolves, and so the
  * article and the hub agree on what "this weekend" contains.
  *
- * 78% of upcoming rows are stored at exactly 00:00 UTC (SEO-055), which is
- * 7 pm the previous day in Central time. For most of them the Central date is
- * right - "$5.55 Movie Ticket Wednesdays!" sits at Thursday 00:00 UTC, i.e.
- * Wednesday evening Central - but the 7 pm is not a real start time, so a
- * midnight-UTC row prints no time at all (hasRealStartTime).
+ * WHETHER IT HAS A TIME, AND WHICH DAYS IT RUNS: src/lib/eventTime.ts, shared
+ * with the hubs (SEO-055). time_tbd or the 19:31:58 marker means no time is
+ * printed. A row whose end_date is on a later Central day runs over several
+ * days; one that overlaps the weekend is listed under "Running this weekend"
+ * with its end date, rather than dropped because it started on a Thursday
+ * (which is how Ringling Bros. and Pumpkin Fest fell out of the first article).
  */
 import { formatInTimeZone, fromZonedTime } from "date-fns-tz";
+import {
+  EVENT_TIMEZONE,
+  eventCentralDate,
+  eventCentralEndDate,
+  eventOverlapsDays,
+  eventStartInstant,
+  hasStatedStartTime,
+} from "./eventTime";
 
-export const WEEKEND_TIMEZONE = "America/Chicago";
+export const WEEKEND_TIMEZONE = EVENT_TIMEZONE;
 
 /** Every weekend article's slug starts with this; the hub finds the latest by it. */
 export const WEEKEND_ARTICLE_SLUG_PREFIX = "this-weekend-in-des-moines-";
-
-/** Marker the crawler writes when it found no time (src/lib/timezone.ts). */
-const NO_TIME_MARKER = "19:31:58";
 
 export interface WeekendEventRow {
   id: string;
@@ -45,6 +51,7 @@ export interface WeekendEventRow {
   event_start_utc?: string | null;
   event_start_local?: string | null;
   time_tbd?: boolean | null;
+  end_date?: string | null;
   venue?: string | null;
   location?: string | null;
   city?: string | null;
@@ -101,18 +108,10 @@ export function weekendWindow(now: Date): WeekendWindow {
   };
 }
 
-function startInstant(e: WeekendEventRow): string | null {
-  return e.event_start_utc || e.date || null;
-}
+const startInstant = eventStartInstant;
 
 /** The Central-time calendar date the site files this event under. */
-export function eventLocalDate(e: WeekendEventRow): string | null {
-  const s = startInstant(e);
-  if (!s) return null;
-  const d = new Date(s);
-  if (Number.isNaN(d.getTime())) return null;
-  return formatInTimeZone(d, WEEKEND_TIMEZONE, "yyyy-MM-dd");
-}
+export const eventLocalDate: (e: WeekendEventRow) => string | null = eventCentralDate;
 
 /**
  * Same visibility predicates as useEvents / useEventBySlug / the sitemap
@@ -134,21 +133,8 @@ export function eventSlug(e: WeekendEventRow): string {
   return local ? `${titleSlug}-${local}` : titleSlug;
 }
 
-/**
- * True only when the row carries a start time we would stand behind. Midnight
- * UTC is the crawler's date-only default (SEO-055) and 19:31:58 its "no time"
- * marker; printing either as "7 pm" would be inventing a time.
- */
-export function hasRealStartTime(e: WeekendEventRow): boolean {
-  if (e.time_tbd) return false;
-  const s = startInstant(e);
-  if (!s) return false;
-  const d = new Date(s);
-  if (Number.isNaN(d.getTime())) return false;
-  if (d.getUTCHours() === 0 && d.getUTCMinutes() === 0 && d.getUTCSeconds() === 0) return false;
-  if (formatInTimeZone(d, WEEKEND_TIMEZONE, "HH:mm:ss") === NO_TIME_MARKER) return false;
-  return true;
-}
+/** True only when the row carries a start time we would stand behind (eventTime.ts). */
+export const hasRealStartTime: (e: WeekendEventRow) => boolean = hasStatedStartTime;
 
 const VIRTUAL_RE = /\b(virtual|zoom|online|livestream)\b/i;
 
@@ -292,10 +278,18 @@ export function pickTopEvents(events: WeekendEventRow[], opts: PickOptions = {})
   return picks;
 }
 
-/** Rows inside the window that the public site would show, one per event. */
+/**
+ * Rows the public site would show that are on at any point Friday-Sunday, one
+ * per event: single-day events dated in the window, and multi-day runs
+ * (end_date on a later Central day) that overlap it.
+ */
 export function selectWeekendEvents(rows: WeekendEventRow[], w: WeekendWindow): WeekendEventRow[] {
-  const days = new Set([w.friday, w.saturday, w.sunday]);
-  return dedupeEvents(rows.filter((e) => isPublicEvent(e) && days.has(eventLocalDate(e) ?? "")));
+  return dedupeEvents(rows.filter((e) => isPublicEvent(e) && eventOverlapsDays(e, w.friday, w.sunday)));
+}
+
+/** A multi-day run that is on this weekend, listed once rather than under one day. */
+export function isWeekendRun(e: WeekendEventRow): boolean {
+  return eventCentralEndDate(e) !== null;
 }
 
 // ---------------------------------------------------------------- formatting
@@ -353,7 +347,16 @@ function priceOf(e: WeekendEventRow): string | null {
   return p;
 }
 
+function shortDay(isoDate: string): string {
+  return formatInTimeZone(fromZonedTime(`${isoDate}T12:00:00`, WEEKEND_TIMEZONE), WEEKEND_TIMEZONE, "MMMM d");
+}
+
 function whenOf(e: WeekendEventRow, withDay: boolean): string {
+  const end = eventCentralEndDate(e);
+  if (end) {
+    // A run: its dates, never a time - one start time does not describe a run.
+    return `${shortDay(eventLocalDate(e) ?? "")} - ${shortDay(end)}`;
+  }
   const s = startInstant(e);
   const day = withDay ? dayHeading(eventLocalDate(e) ?? "") : "";
   if (!s || !hasRealStartTime(e)) return day;
@@ -388,7 +391,15 @@ export interface WeekendArticle {
   seo_description: string;
   seo_keywords: string[];
   word_count: number;
-  counts: { total: number; listed: number; regulars: number; picks: number; free: number; byDay: Record<string, number> };
+  counts: {
+    total: number;
+    listed: number;
+    regulars: number;
+    picks: number;
+    free: number;
+    runs: number;
+    byDay: Record<string, number>;
+  };
 }
 
 /** Same arithmetic as the sync_article_word_count trigger, which replica mode skips. */
@@ -413,8 +424,9 @@ export function buildWeekendArticle(rows: WeekendEventRow[], w: WeekendWindow, p
   const range = formatWeekendRange(w);
   const [fri, sat, sun] = [w.friday, w.saturday, w.sunday];
 
+  const runs = listed.filter(isWeekendRun).sort(compareByStart);
   const byDay: Record<string, WeekendEventRow[]> = { [fri]: [], [sat]: [], [sun]: [] };
-  for (const e of listed) byDay[eventLocalDate(e) as string]?.push(e);
+  for (const e of listed) if (!isWeekendRun(e)) byDay[eventLocalDate(e) as string]?.push(e);
   for (const d of Object.keys(byDay)) byDay[d].sort(compareByStart);
 
   const title = `This Weekend in Des Moines: ${range}`;
@@ -446,6 +458,12 @@ export function buildWeekendArticle(rows: WeekendEventRow[], w: WeekendWindow, p
     );
   } else {
     for (const e of free) out.push(`- ${eventLine(e, true)}`);
+    out.push("");
+  }
+
+  if (runs.length > 0) {
+    out.push("## Running this weekend", "");
+    for (const e of runs) out.push(`- ${eventLine(e, false)}${pickIds.has(e.id) ? " (top pick)" : ""}`);
     out.push("");
   }
 
@@ -511,6 +529,7 @@ export function buildWeekendArticle(rows: WeekendEventRow[], w: WeekendWindow, p
       regulars: regulars.length,
       picks: picks.length,
       free: free.length,
+      runs: runs.length,
       byDay: { [fri]: byDay[fri].length, [sat]: byDay[sat].length, [sun]: byDay[sun].length },
     },
   };

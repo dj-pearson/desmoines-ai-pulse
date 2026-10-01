@@ -46,11 +46,11 @@ export const RESTAURANT_LIST_COLUMNS =
 // end_date (20260316000002_add_event_end_date.sql) is here so multi-day events
 // can count as "happening now" (docs/page-plans/events.md WP0 item 3).
 //
-// time_tbd is deliberately NOT here yet. It arrives in 20260902000016, after the
-// 2026-08-24 production snapshot; add it only once `npm run check-schema:probe`
-// reports it present, or every events surface goes blank with 42703.
+// time_tbd (20260902000016) is here as of SEO-055: probed present on production
+// 2026-10-01 (`select time_tbd from events` returns rows, and SEO-055 wrote it on
+// 148 of them). Cards need it to show "All day" instead of a crawler-default 7 pm.
 export const EVENT_LIST_COLUMNS =
-  "category, city, created_at, date, end_date, enhanced_description, event_start_local, event_start_utc, event_timezone, id, image_url, is_enhanced, is_featured, is_sponsored, sponsored_until, latitude, location, longitude, original_description, price, source_url, title, updated_at, venue, writeup_generated_at";
+  "category, city, created_at, date, end_date, enhanced_description, event_start_local, event_start_utc, event_timezone, id, image_url, is_enhanced, is_featured, is_sponsored, sponsored_until, latitude, location, longitude, original_description, price, source_url, time_tbd, title, updated_at, venue, writeup_generated_at";
 
 // is_sponsored and sponsored_until are here because Attractions.tsx calls
 // arrangeSponsored() on this list (WEB-FEAT-005) and the cards call
