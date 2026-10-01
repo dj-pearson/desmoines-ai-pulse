@@ -942,6 +942,26 @@ function rewriterFor(rules: EntityShellRewrite[]): HTMLRewriter {
   return rewriter;
 }
 
+function entityShell(
+  shell: Response,
+  opts: { pageUrl: string; sbBase: string; type: string; entity: Resolved },
+): Response {
+  const rewriter = rewriterFor(entityShellRewrites(opts));
+
+  const headers: Record<string, string> = {
+    "Content-Type": "text/html; charset=utf-8",
+    "Cache-Control": "public, max-age=600",
+  };
+  // The header, not only the meta tag: the prerendered homepage carries a
+  // robots meta, but a shell built without one would otherwise say nothing.
+  if (opts.type === "event" && isLongPastEvent(opts.entity.startDate)) headers["X-Robots-Tag"] = "noindex";
+  const restaurantRobots = opts.type === "restaurant" ? restaurantShellRobots(opts.entity.row) : null;
+  if (restaurantRobots) headers["X-Robots-Tag"] = restaurantRobots;
+
+  return new Response(rewriter.transform(shell).body, { status: 200, headers });
+}
+
+
 /** The stored seo of a published /restaurants/<area> pSEO row (SEO-065). */
 export interface RestaurantAreaSeo {
   title?: string;
@@ -977,12 +997,24 @@ async function publishedRestaurantAreaPage(
  * route's lookup found no restaurant called "ankeny". It now carries the pSEO
  * page's own title, description, canonical and robots, and a body naming the
  * page, in place of the homepage's. The client renders the full page.
+ *
+ * The homepage's ld+json blocks are claims about the wrong page, so they go,
+ * and the page's own CollectionPage node replaces them: the same "never strip
+ * without replacing" rule the entity shell follows.
  */
 export function restaurantAreaShellRewrites(pageUrl: string, seo: RestaurantAreaSeo): EntityShellRewrite[] {
   const title = seo.title ? `${seo.title} | Des Moines Insider` : "";
   const heading = seo.h1 || seo.title || "";
+  const node: Record<string, unknown> = {
+    "@context": "https://schema.org",
+    "@type": "CollectionPage",
+    url: pageUrl,
+    ...(heading ? { name: heading } : {}),
+    ...(seo.description ? { description: seo.description } : {}),
+  };
   const rules: EntityShellRewrite[] = [
     { selector: 'script[type="application/ld+json"]', remove: true },
+    { selector: "head", appendHtml: jsonLdScript(node) },
     { selector: 'link[rel="canonical"]', setAttribute: "href", to: pageUrl },
     { selector: 'meta[property="og:url"]', setAttribute: "content", to: pageUrl },
     { selector: 'meta[property="og:type"]', setAttribute: "content", to: "website" },
@@ -1014,25 +1046,6 @@ export function restaurantAreaShellRewrites(pageUrl: string, seo: RestaurantArea
     rules.push({ selector: 'meta[name="robots"]', setAttribute: "content", to: "noindex, follow" });
   }
   return rules;
-}
-
-function entityShell(
-  shell: Response,
-  opts: { pageUrl: string; sbBase: string; type: string; entity: Resolved },
-): Response {
-  const rewriter = rewriterFor(entityShellRewrites(opts));
-
-  const headers: Record<string, string> = {
-    "Content-Type": "text/html; charset=utf-8",
-    "Cache-Control": "public, max-age=600",
-  };
-  // The header, not only the meta tag: the prerendered homepage carries a
-  // robots meta, but a shell built without one would otherwise say nothing.
-  if (opts.type === "event" && isLongPastEvent(opts.entity.startDate)) headers["X-Robots-Tag"] = "noindex";
-  const restaurantRobots = opts.type === "restaurant" ? restaurantShellRobots(opts.entity.row) : null;
-  if (restaurantRobots) headers["X-Robots-Tag"] = restaurantRobots;
-
-  return new Response(rewriter.transform(shell).body, { status: 200, headers });
 }
 
 /**

@@ -6,6 +6,7 @@ import SEOHead from "@/components/SEOHead";
 import { Breadcrumbs } from "@/components/ui/breadcrumbs";
 import { BRAND } from "@/lib/brandConfig";
 import { ABOUT_PATH, organizationNode } from "@/lib/articleSchema";
+import { toJsonLd } from "@/lib/jsonLd";
 
 /**
  * /about (SEO-037): who runs the site and how listings get on it.
@@ -63,7 +64,7 @@ export default function About() {
         keywords={["about Des Moines Insider", "Des Moines events guide", "how listings are chosen"]}
       />
       <Helmet>
-        <script type="application/ld+json">{JSON.stringify(aboutSchema)}</script>
+        <script type="application/ld+json">{toJsonLd(aboutSchema)}</script>
       </Helmet>
 
       <div className="min-h-screen bg-background">

@@ -27,7 +27,9 @@ async function rewrite(html, rules) {
     out += decoder.decode(chunk, { stream: true });
   });
   for (const rule of rules) {
-    if ('setInnerHtml' in rule) {
+    if ('appendHtml' in rule) {
+      rewriter.on(rule.selector, { element: (el) => el.append(rule.appendHtml, { html: true }) });
+    } else if ('setInnerHtml' in rule) {
       rewriter.on(rule.selector, { element: (el) => el.setInnerContent(rule.setInnerHtml, { html: true }) });
     } else if ('remove' in rule) {
       rewriter.on(rule.selector, { element: (el) => el.remove() });
@@ -77,6 +79,11 @@ ck('title is the page title, branded once', out.includes('<title>Restaurants in 
 ck('canonical is the requested URL', out.includes(`<link rel="canonical" href="${pageUrl}">`));
 ck('og:url is the requested URL', out.includes(`<meta property="og:url" content="${pageUrl}">`));
 ck("the homepage's JSON-LD is gone", !out.includes('Organization'));
+const blocks = [...out.matchAll(/<script type="application\/ld\+json">([\s\S]*?)<\/script>/g)].map((m) => m[1]);
+ck('exactly one ld+json block remains, the page\'s own', blocks.length === 1, blocks.length);
+const node = blocks.length === 1 ? JSON.parse(blocks[0]) : {};
+ck('it is a CollectionPage at the requested URL', node['@type'] === 'CollectionPage' && node.url === pageUrl, node);
+ck('it names the page', node.name === 'Restaurants in West Des Moines');
 ck("the homepage's H1 is replaced by the page's", !out.includes("What's Happening") && out.includes('<h1>Restaurants in West Des Moines</h1>'));
 ck('robots stays as the shell had it for an indexable page', out.includes('<meta name="robots" content="index, follow">'));
 ck(
