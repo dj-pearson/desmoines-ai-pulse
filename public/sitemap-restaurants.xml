@@ -637,12 +637,6 @@
     <priority>0.6</priority>
   </url>
   <url>
-    <loc>https://desmoinesinsider.com/restaurants/daves-hot-chicken-2</loc>
-    <lastmod>2026-10-01</lastmod>
-    <changefreq>monthly</changefreq>
-    <priority>0.6</priority>
-  </url>
-  <url>
     <loc>https://desmoinesinsider.com/restaurants/del-rios-cafe-catering</loc>
     <lastmod>2026-10-01</lastmod>
     <changefreq>monthly</changefreq>
@@ -818,12 +812,6 @@
   </url>
   <url>
     <loc>https://desmoinesinsider.com/restaurants/el-toreado-restaurant-bar-grill-ep-true</loc>
-    <lastmod>2026-10-01</lastmod>
-    <changefreq>monthly</changefreq>
-    <priority>0.6</priority>
-  </url>
-  <url>
-    <loc>https://desmoinesinsider.com/restaurants/empire</loc>
     <lastmod>2026-10-01</lastmod>
     <changefreq>monthly</changefreq>
     <priority>0.6</priority>
@@ -2197,7 +2185,7 @@
     <priority>0.6</priority>
   </url>
   <url>
-    <loc>https://desmoinesinsider.com/restaurants/taste-of-new-york-pleasant-hill</loc>
+    <loc>https://desmoinesinsider.com/restaurants/taste-of-new-york-waukee</loc>
     <lastmod>2026-10-01</lastmod>
     <changefreq>monthly</changefreq>
     <priority>0.6</priority>
