@@ -420,6 +420,26 @@ function collectPseoRoutes() {
       routes.add(pathname);
     }
   }
+  // SEO-041: published pSEO pages the coverage rule holds at noindex. They are
+  // not submitted, but they are public URLs, and an unrendered pSEO URL is
+  // served Cloudflare's SPA fallback: the prerendered homepage, indexable, with
+  // its title (SEO-029). Rendering them here means a crawler reads the page's
+  // own title and its noindex. Written by scripts/generate-dynamic-sitemaps.ts
+  // (PSEO_NOINDEX_ROUTES_FILE in scripts/lib/pseoCoverage.ts); absent means the
+  // sitemap step could not measure the rule, which it already warned about.
+  const noindexFile = path.join(process.cwd(), 'scripts', '.generated', 'pseo-noindex-routes.json');
+  if (fs.existsSync(noindexFile)) {
+    try {
+      const parsed = JSON.parse(fs.readFileSync(noindexFile, 'utf8'));
+      for (const r of Array.isArray(parsed?.routes) ? parsed.routes : []) {
+        if (typeof r === 'string' && /^(\/[a-z0-9-]+){1,2}$/.test(r) && !ROUTES.includes(r)) routes.add(r);
+      }
+    } catch (err) {
+      warn(`could not read ${noindexFile} (${err.message}); noindex pSEO pages will not be prerendered`);
+    }
+  } else {
+    warn(`${noindexFile} not found; noindex pSEO pages will not be prerendered this build`);
+  }
   return [...routes];
 }
 
@@ -1086,7 +1106,7 @@ const duplicateJsonLdRoutes = [];
       await shutdown();
       const reasons = strictRejections.length ? ` Strict gate: ${strictRejections.join(' | ')}.` : '';
       throw new PrerenderFailure(
-        `pSEO prerender incomplete: ${pending.length}/${pseoRoutes.length} sitemap-pseo.xml URL(s) did not ` +
+        `pSEO prerender incomplete: ${pending.length}/${pseoRoutes.length} pSEO URL(s) (sitemap-pseo.xml plus noindex pages) did not ` +
           `render as themselves after a retry: ${pending.join(', ')}.${reasons} In production these would ` +
           'serve the homepage title and H1 (SEO-029). Per-route reasons are in the [prerender] warnings above.',
       );

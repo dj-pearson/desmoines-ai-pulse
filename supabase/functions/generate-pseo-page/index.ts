@@ -20,6 +20,7 @@ import { createClient } from 'https://esm.sh/@supabase/supabase-js@2';
 import { getAIConfig, getClaudeHeaders, getAnthropicApiKey } from "../_shared/aiConfig.ts";
 import { checkRateLimit } from "../_shared/rateLimit.ts";
 import { requireAdminOrApiKey } from "../_shared/apiKeyAuth.ts";
+import { countPlaces, coverageScope, coverageVerdict } from "../_shared/pseoCoverage.ts";
 
 const corsHeaders = {
   'Access-Control-Allow-Origin': '*',
@@ -118,6 +119,35 @@ serve(async (req) => {
       }
     }
 
+    // SEO-041 coverage rule, before any Claude call is paid for. A cuisine x
+    // suburb page needs 3 places to exist and 5 to be indexed, counted the way
+    // the page's own live listing counts them. Under 3 is a skip, reported as
+    // skipped (the existing-page branch above already uses that shape); 3-4 is
+    // generated with robots noindex. Pages outside the rule are untouched.
+    let robots: 'noindex, follow' | undefined;
+    const scope = coverageScope(pageTypeId, dimensions);
+    if (scope) {
+      const { data: places, error: placesError } = await supabase
+        .from('restaurants')
+        .select('city, location, cuisine, status, is_merged');
+      if (placesError) {
+        return jsonResponse({ success: false, error: `Could not count places for the coverage rule: ${placesError.message}` }, 500);
+      }
+      const count = countPlaces(places ?? [], scope.location.name, scope.category.slug);
+      const verdict = coverageVerdict(count);
+      if (verdict === 'not-generated') {
+        return jsonResponse({
+          success: true,
+          skipped: true,
+          message: `Coverage rule: ${count} place(s) for ${slug}; a page needs at least 3 to exist.`,
+          pageId,
+          slug,
+          placeCount: count,
+        });
+      }
+      if (verdict === 'noindex') robots = 'noindex, follow';
+    }
+
     // Build prompt
     const currentDate = new Date().toISOString().split('T')[0];
     const currentSeason = getCurrentSeason();
@@ -181,6 +211,7 @@ serve(async (req) => {
         keywords,
         canonicalUrl: slug,
         ogType: 'website',
+        ...(robots ? { robots } : {}),
       },
       sections: parsedContent.sections ?? [],
       related_pages: [],

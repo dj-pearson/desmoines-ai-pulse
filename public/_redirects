@@ -4,6 +4,15 @@
 # /things-to-do/tourists page duplicated that concept — 301 to the canonical.
 /things-to-do/tourists  /visitors-guide  301
 
+# SEO-041: these two pSEO pages promised BBQ in Ankeny and West Des Moines and
+# listed none; the restaurants table has no BBQ place in either city. Under the
+# coverage rule (src/pseo/coverageRule.ts) a page with fewer than 3 places is
+# not published, so both were unpublished on 2026-10-01 and point at the area
+# guide. /bbq/ankeny had 67 Search Console impressions, /bbq/west-des-moines 18.
+# Keep for at least one release cycle (CLAUDE.md, Backward Compatibility).
+/bbq/ankeny  /guide/ankeny  301
+/bbq/west-des-moines  /guide/west-des-moines  301
+
 # WEB-SEO-007: /weekend and /events/this-weekend targeted the same query.
 # /events/this-weekend is the canonical one — it declares its own canonical URL,
 # emits EventListJsonLd and carries FAQ content, none of which /weekend did.

@@ -10,9 +10,10 @@
  */
 
 import { createClient } from '@supabase/supabase-js';
-import { readFileSync, existsSync, writeFileSync } from 'fs';
+import { readFileSync, existsSync, writeFileSync, mkdirSync, rmSync } from 'fs';
 import { join } from 'path';
 import { computePseoShippable } from './lib/pseoShippable';
+import { computePseoCoverage, PSEO_NOINDEX_ROUTES_FILE } from './lib/pseoCoverage';
 import { childLastmod } from './lib/sitemapLastmod';
 import { isInMetro } from '../src/lib/geo';
 // The month floor, the range and the Central-month rule are the month page's
@@ -772,6 +773,21 @@ function readPseoDemandRoutes(): string[] {
   }
 }
 
+/** SEO-041: the noindex pSEO pages the prerender renders but the sitemap omits. */
+function writePseoNoindexRoutes(routes: string[]): void {
+  const file = join(process.cwd(), PSEO_NOINDEX_ROUTES_FILE);
+  try {
+    mkdirSync(join(file, '..'), { recursive: true });
+    writeFileSync(file, `${JSON.stringify({ generatedAt: new Date().toISOString(), routes: [...routes].sort() }, null, 2)}
+`);
+  } catch (error) {
+    // Not fatal: without it these pages fall back to the shell for non-JS
+    // crawlers, which is where they were before. Say so rather than hide it.
+    rmSync(file, { force: true });
+    console.warn(`⚠️ could not write ${PSEO_NOINDEX_ROUTES_FILE}: ${(error as Error).message}`);
+  }
+}
+
 /**
  * pSEO pages (WEB-SEO-013).
  *
@@ -788,6 +804,9 @@ async function generatePseoSitemap(): Promise<number | null> {
   console.log('🧩 Generating pSEO sitemap...');
 
   const target = join(process.cwd(), 'public', 'sitemap-pseo.xml');
+  // SEO-041: last run's noindex list must not outlive a run that could not
+  // measure this one. Rewritten below only when the coverage rule was measured.
+  rmSync(join(process.cwd(), PSEO_NOINDEX_ROUTES_FILE), { force: true });
 
   // IT SOURCES THE SHIPPABLE SET, NOT is_published.
   //
@@ -882,12 +901,59 @@ async function generatePseoSitemap(): Promise<number | null> {
         `are not submitted and will 404: ${demandUnpublished.slice(0, 10).join(', ')}`
     );
   }
+  // SEO-041: the coverage rule for cuisine x suburb pages. It ADDS the
+  // indexable ones (5+ places, distinct listing, copy written from the rows)
+  // whether or not Search Console has seen them yet, and it REMOVES the noindex and under-floor ones even
+  // when they carry impressions: a page telling crawlers noindex must not be
+  // submitted, and submitting it is the contradiction Search Console reports as
+  // "Submitted URL marked noindex". The rule is narrow on purpose (suburbs x
+  // restaurant cuisines, counted live), which is what keeps this addition from
+  // reopening the doorway question the shippable filter answered: every page it
+  // admits lists at least five real places that no other admitted page lists
+  // in the same combination. See src/pseo/coverageRule.ts.
+  //
+  // A coverage failure keeps the last good file, for the same reason a failed
+  // listing query does above: falling back to the old selection would submit
+  // the noindex pages.
+  let coverage: Awaited<ReturnType<typeof computePseoCoverage>>;
+  try {
+    coverage = await computePseoCoverage({ base: SUPABASE_URL as string, key: SUPABASE_KEY as string });
+  } catch (error) {
+    console.warn(
+      `⚠️ pSEO coverage rule could not be measured (${(error as Error).message}). Keeping the existing ` +
+        'sitemap-pseo.xml rather than submitting pages the rule may hold out.'
+    );
+    return null;
+  }
+  // Only data-built pages are added on the rule's say-so; see `submittable`.
+  const coverageAdded = coverage.submittable.filter(
+    (slug) => bySlug.has(slug) && !shippable.canonical.includes(slug) && !demandAdded.includes(slug)
+  );
+  const selected = [...new Set([...shippable.canonical, ...demandAdded, ...coverageAdded])];
+  const heldOut = selected.filter((slug) => coverage.keepOutOfSitemap.has(slug));
+  if (coverage.violations.length > 0) {
+    console.warn(
+      `⚠️ ${coverage.violations.length} published pSEO page(s) break the SEO-041 coverage rule; ` +
+        'run `npm run check-pseo-coverage`. They are held out of the sitemap meanwhile.'
+    );
+  }
+  if (heldOut.length > 0) {
+    console.log(`🧩 pSEO coverage rule held out ${heldOut.length} page(s): ${heldOut.join(', ')}`);
+  }
+
+  // The noindex pages are still prerendered, so a crawler that does not run
+  // JavaScript reads their own title and the noindex, not the homepage shell
+  // Cloudflare would otherwise serve (SEO-029). scripts/prerender.mjs reads
+  // this file; it is written fresh on every run and is not committed.
+  writePseoNoindexRoutes(coverage.noindexPublished);
+
   console.log(
     `🧩 pSEO sitemap: ${shippable.canonical.length} shippable + ${demandAdded.length} published with measured impressions ` +
-      `(scripts/pseo-demand-routes.json)`
+      `(scripts/pseo-demand-routes.json) + ${coverageAdded.length} indexable under the coverage rule, ` +
+      `less ${heldOut.length} held out`
   );
 
-  const urls = [...shippable.canonical, ...demandAdded].map((slug: string) => {
+  const urls = selected.filter((slug) => !coverage.keepOutOfSitemap.has(slug)).map((slug: string) => {
     const page = bySlug.get(slug) as { updated_at?: string; published_at?: string } | undefined;
     return {
       loc: `${baseUrl}${slug.startsWith('/') ? slug : `/${slug}`}`,

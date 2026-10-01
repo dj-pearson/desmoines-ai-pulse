@@ -37,7 +37,7 @@
  */
 import path from 'node:path';
 import { fileURLToPath } from 'node:url';
-import { CATEGORY_FILTERS, temporalRange } from '../../src/pseo/listingFilters';
+import { CATEGORY_FILTERS, resolveEntityType, temporalRange } from '../../src/pseo/listingFilters';
 import { classifySlugs } from './pseoRouteClaims.mjs';
 
 const REPO_ROOT = path.resolve(path.dirname(fileURLToPath(import.meta.url)), '..', '..');
@@ -48,19 +48,12 @@ const REPO_ROOT = path.resolve(path.dirname(fileURLToPath(import.meta.url)), '..
  */
 export const FLOOR = { events: 8, restaurants: 6, attractions: 6 };
 
-// --------------------------------------------------------------------------
-// Transcribed from PseoLiveListings.resolveEntityType.
-const RESTAURANT_CATEGORIES = ['italian', 'mexican', 'asian', 'bbq', 'brunch', 'coffee', 'steakhouse'];
-const EVENT_CATEGORIES = ['live-music', 'festivals', 'arts-culture', 'sports', 'farmers-markets'];
-
-export function resolveEntityType(contentSlug, categorySlug) {
-  if (contentSlug === 'restaurants') return 'restaurants';
-  if (contentSlug === 'attractions') return 'attractions';
-  if (contentSlug === 'events' || contentSlug === 'things-to-do' || contentSlug === 'nightlife') return 'events';
-  if (categorySlug && RESTAURANT_CATEGORIES.includes(categorySlug)) return 'restaurants';
-  if (categorySlug && EVENT_CATEGORIES.includes(categorySlug)) return 'events';
-  return 'events';
-}
+// resolveEntityType lives in src/pseo/listingFilters.ts with the patterns, and
+// is re-exported here for the callers that imported it from this module.
+// It used to be a transcription of the component's copy, with its own list of
+// restaurant categories; SEO-041 added /pizza and two hand-kept lists would
+// have had to learn it separately.
+export { resolveEntityType };
 
 /**
  * The PostgREST query the component builds, as URL parameters. Mirrors

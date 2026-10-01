@@ -42,6 +42,7 @@ export function PseoPage({ page }: PseoPageProps) {
         url={seo.canonicalUrl}
         keywords={seo.keywords}
         canonicalUrl={getCanonicalUrl(page.slug)}
+        robots={seo.robots === 'noindex, follow' ? 'noindex, follow' : undefined}
         breadcrumbs={structuredData.breadcrumb}
         structuredData={schemaData}
       />
