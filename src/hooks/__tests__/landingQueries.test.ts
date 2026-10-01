@@ -108,10 +108,15 @@ describe("month pages (events-pass2 WP3 item 6)", () => {
     expect(isMonthInRange({ year: 2027, month: 10 }, now)).toBe(false);
   });
 
-  it("is indexable only in range with at least three events", () => {
+  it("is indexable in range with at least three events, or inside the SEO-033 lead window", () => {
     expect(MIN_EVENTS_PER_MONTH).toBe(3);
     expect(isIndexableMonth({ year: 2026, month: 9 }, 3, now)).toBe(true);
-    expect(isIndexableMonth({ year: 2026, month: 9 }, 2, now)).toBe(false);
+    // Under the floor but in the lead window: published ahead of its events.
+    expect(isIndexableMonth({ year: 2026, month: 9 }, 2, now)).toBe(true);
+    // Under the floor, out of the window (1 Feb 2027 is > 98 days out).
+    expect(isIndexableMonth({ year: 2027, month: 2 }, 2, now)).toBe(false);
+    // Last month is in range but behind the window: the floor applies.
+    expect(isIndexableMonth({ year: 2026, month: 8 }, 2, now)).toBe(false);
     expect(isIndexableMonth({ year: 1998, month: 3 }, 50, now)).toBe(false);
   });
 

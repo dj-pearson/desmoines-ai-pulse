@@ -23,7 +23,12 @@
 import { addDays, parseISO } from "date-fns";
 import { formatInTimeZone, fromZonedTime } from "date-fns-tz";
 import { haversineDistance } from "@/lib/geo";
-import { getRestaurantOpenStatus, type RestaurantOpenResult } from "@/lib/restaurantHours";
+import {
+  hoursTextOf,
+  resolveOpenStatus,
+  type RestaurantOpenResult,
+  type StoredOpeningHours,
+} from "@/lib/restaurantHours";
 import { reorderForWeather, type WeatherSnapshot } from "@/hooks/useWeather";
 
 const CENTRAL = "America/Chicago";
@@ -107,8 +112,10 @@ export interface TonightRestaurant {
   price_range?: string | null;
   latitude?: number | null;
   longitude?: number | null;
-  /** Free-text hours. Typed loosely because a bad row can carry a non-string. */
+  /** The `opening` column: a date in production, so read only through hoursTextOf. Typed loosely because a bad row can carry a non-string. */
   opening?: unknown;
+  /** Google's structured hours (WEB-BE-045), preferred over `opening`. */
+  hours_json?: StoredOpeningHours | null;
   opening_date?: string | null;
   status?: string | null;
 }
@@ -439,8 +446,8 @@ export function isOpenForDinner(
     const opens = Date.parse(restaurant.opening_date);
     if (Number.isFinite(opens) && opens > now.getTime()) return null;
   }
-  if (typeof restaurant.opening !== "string") return null;
-  const result = getRestaurantOpenStatus(restaurant.opening, at);
+  // SEO-054: hours_json first; `opening` counts only when it is hours text.
+  const result = resolveOpenStatus(restaurant.hours_json, hoursTextOf(restaurant.opening), at);
   return result.status === "open" ? result : null;
 }
 

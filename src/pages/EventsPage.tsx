@@ -26,6 +26,7 @@ import { EventsStickyBar } from "@/components/events/EventsStickyBar";
 import { TonightStrip } from "@/components/events/TonightStrip";
 import { DayGroupedList } from "@/components/events/DayGroupedList";
 import { EventsHubHero } from "@/components/events/EventsHubHero";
+import { hubSummary } from "@/lib/eventHubSummary";
 import { buildHubFaqs } from "@/components/events/eventsHubFaqs";
 import { EmptyState } from "@/components/ui/empty-state";
 import { Button } from "@/components/ui/button";
@@ -53,6 +54,7 @@ import {
   EVENTS_PER_PAGE,
   countHub,
   countLabel,
+  fetchHubCalendarSummary,
   fetchHubPage,
   fetchNearMe,
   fetchSponsoredLead,
@@ -426,6 +428,25 @@ export default function EventsPage() {
     () => (tonightEnabled ? selectTonight(tonightQuery.data ?? [], now) : []),
     [tonightEnabled, tonightQuery.data, now]
   );
+  /**
+   * SEO-036: the hero's first sentence, the whole calendar's range and counts
+   * whatever the filters are, keyed by the Central day so it rolls over at
+   * midnight. Dates are absolute (eventHubSummary.ts says why).
+   */
+  const calendarQuery = useQuery({
+    queryKey: queryKeys.events.list({ hub: "calendar-summary", day: today }),
+    queryFn: () => fetchHubCalendarSummary(new Date()),
+    staleTime: 5 * 60 * 1000,
+  });
+  const calendar = calendarQuery.data;
+  const calendarSummary =
+    calendar && calendar.total !== null
+      ? hubSummary(today, calendar.lastDay, { total: calendar.total, free: calendar.free })
+      : null;
+  // No top-picks block here (SEO-036 puts it on /events/today and
+  // /events/this-weekend): on a phone it pushed the first card to 817px,
+  // past the first screen this hub was rebuilt to keep (WP1 item 8).
+
   // Strip rows are already on screen; the list leaves them out (item 14).
   const stripIds = useMemo(() => new Set(stripItems.map((i) => i.event.id)), [stripItems]);
   // One LCP priority (item 11): the strip's first two cards when it shows,
@@ -684,6 +705,7 @@ export default function EventsPage() {
           isNearMe={nearParam}
           isLocating={isLoadingLocation}
           onToggleNearMe={handleNearMe}
+          summary={calendarSummary}
         />
 
         <EventFiltersSheet

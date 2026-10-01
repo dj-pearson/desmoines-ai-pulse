@@ -315,16 +315,72 @@ ck('with no hours in the body', !closedOut.includes('Hours:'));
 ck('and no openingHoursSpecification', injectedNode(closedOut) && !('openingHoursSpecification' in injectedNode(closedOut)));
 ck('and robots noindex, follow', closedOut.includes('name="robots" content="noindex, follow"'), closedOut.match(/name="robots"[^>]*/)?.[0]);
 
+// SEO-059: Google's CLOSED_PERMANENTLY on a row we still call open (Bistro
+// Nomad before the data pass) is the same closure.
+const googleClosedOut = await rewrite(SHELL, { pageUrl: PAGE, sbBase: SB, type: 'restaurant', entity: { id: 'g1', title: 'x', row: { ...openRow, status: 'open', business_status: 'CLOSED_PERMANENTLY' } } });
+ck('business_status CLOSED_PERMANENTLY says "Permanently closed"', googleClosedOut.includes('Permanently closed'));
+ck('with no hours and no openingHoursSpecification', !googleClosedOut.includes('Hours:') && !('openingHoursSpecification' in (injectedNode(googleClosedOut) ?? {})));
+ck('and robots noindex, follow', googleClosedOut.includes('name="robots" content="noindex, follow"'), googleClosedOut.match(/name="robots"[^>]*/)?.[0]);
+const googleTempOut = await rewrite(SHELL, { pageUrl: PAGE, sbBase: SB, type: 'restaurant', entity: { id: 'g2', title: 'x', row: { ...openRow, status: 'open', business_status: 'CLOSED_TEMPORARILY' } } });
+ck('CLOSED_TEMPORARILY: no hours, but still indexable and not called closed for good', !googleTempOut.includes('Hours:') && googleTempOut.includes('name="robots" content="index, follow"') && !googleTempOut.includes('Permanently closed'));
+
 for (const status of ['opening_soon', 'announced']) {
   const soon = await rewrite(SHELL, { pageUrl: PAGE, sbBase: SB, type: 'restaurant', entity: { id: 's1', title: 'x', row: { ...openRow, status } } });
   ck(`${status}: no hours anywhere`, !soon.includes('Hours:') && !('openingHoursSpecification' in (injectedNode(soon) ?? {})));
   ck(`${status}: still indexable and not called closed`, soon.includes('name="robots" content="index, follow"') && !soon.includes('Permanently closed'));
 }
 
+console.log('\nthe answer next to the name (SEO-034)');
+// 2026-10-02 is a Friday; 17:00Z is noon in Des Moines.
+const FRIDAY = new Date('2026-10-02T17:00:00Z');
+const answerRow = {
+  ...bonchonRow,
+  status: 'open',
+  description: 'Korean fried chicken.',
+  hours_json: {
+    periods: [1, 2, 3, 4, 5].map((day) => ({ open: { day, hour: 11, minute: 0 }, close: { day, hour: 21, minute: 0 } })),
+    weekdayDescriptions: ['Friday: 11:00 AM - 9:00 PM'],
+  },
+  updated_at: '2026-10-01T15:00:00Z',
+  google_maps_uri: 'https://maps.google.com/?cid=42',
+  reservable: false,
+  rating: 4.7,
+};
+const answer = await rewrite(SHELL, {
+  pageUrl: 'https://desmoinesinsider.com/restaurants/bonchon',
+  sbBase: SB,
+  type: 'restaurant',
+  entity: { id: 'a1', title: 'x', row: answerRow },
+  now: FRIDAY,
+});
+const an = injectedNode(answer);
+ck("the day's hours are phrased by schedule", answer.includes('<li>Open 11 AM to 9 PM on Fridays</li>'), answer.match(/<ul>.*?<\/ul>/)?.[0]);
+ck('and come before the address', answer.indexOf('on Fridays') < answer.indexOf('Address:'));
+ck('the listing says when it last changed', answer.includes('Listing last updated October 1, 2026'));
+ck('the suburb page is linked', answer.includes('href="/neighborhoods/west-des-moines"'));
+ck('sameAs carries the site and the Google listing', JSON.stringify(an?.sameAs) === JSON.stringify([bonchonRow.website, 'https://maps.google.com/?cid=42']), JSON.stringify(an?.sameAs));
+ck('acceptsReservations says what the row says', an?.acceptsReservations === false);
+ck('dateModified rides on mainEntityOfPage', an?.mainEntityOfPage?.['@type'] === 'WebPage' && an.mainEntityOfPage.dateModified === '2026-10-01T15:00:00Z', JSON.stringify(an?.mainEntityOfPage));
+ck('no aggregateRating, even with a Google rating on the row', an && !('aggregateRating' in an));
+ck('still one ld+json block', [...answer.matchAll(/application\/ld\+json/g)].length === 1);
+const noReservable = injectedNode(await rewrite(SHELL, { pageUrl: PAGE, sbBase: SB, type: 'restaurant', entity: { id: 'a2', title: 'x', row: { ...answerRow, reservable: null } } }));
+ck('unknown reservations are left out, not published as false', noReservable && !('acceptsReservations' in noReservable));
+const closedAnswer = await rewrite(SHELL, { pageUrl: PAGE, sbBase: SB, type: 'restaurant', entity: { id: 'a3', title: 'x', row: { ...answerRow, status: 'closed' } } });
+ck('a closed place gets no hours sentence and no phone', !closedAnswer.includes('on Fridays') && !closedAnswer.includes('Phone:'));
+
 console.log('\nabsences the shell really has');
 // A title-less entity must not blank the shell's own title.
 const untitled = await rewrite(SHELL, { pageUrl: PAGE, sbBase: SB, type: 'restaurant', entity: { id: 'r2', title: '' } });
 ck("an empty title leaves the shell's title alone", untitled.includes('<title>Des Moines Insider'), /<title>[^<]*/.exec(untitled)?.[0]);
+
+console.log('\nannual event series (SEO-043)');
+{
+  const { eventShellBody } = await import('../_middleware.ts');
+  const annual = eventShellBody({ title: '11th Annual Cloris Awards', date: '2026-08-30T23:00:00Z', venue: 'Sheslow Auditorium' });
+  ck('an annual event links its series page', annual.includes('href="/events/series/cloris-awards"'), annual.slice(0, 400));
+  const oneOff = eventShellBody({ title: 'Gary Clark Jr.', date: '2026-09-30T23:00:00Z', venue: 'Hoyt Sherman Place' });
+  ck('a one-off event links no series', !oneOff.includes('/events/series/'));
+}
 
 console.log(`\n${bad} failure(s)`);
 process.exit(bad ? 1 : 0);

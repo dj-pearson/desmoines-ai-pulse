@@ -70,12 +70,36 @@ export interface PageRecord {
   position: unknown;
 }
 
+/**
+ * The linked credential, minus the tokens. Only the columns that say whether
+ * the grant still works are read into the browser.
+ */
+export interface GscCredentialStatus {
+  is_active: boolean | null;
+  last_refreshed_at: string | null;
+  last_used_at: string | null;
+}
+
 export interface GscPropertyRecord {
   property_url: string;
   last_sync_at: string | null;
   next_sync_at: string | null;
   sync_enabled: boolean | null;
+  /** active / paused / error, written by gsc-sync-data. */
+  status?: string | null;
+  error_message?: string | null;
+  /** null when the property has no linked credential. undefined when not read. */
+  gsc_oauth_credentials?: GscCredentialStatus | null;
 }
+
+/**
+ * - connected: a working credential is linked.
+ * - not_connected: no credential, or it was deactivated (revoked grant,
+ *   disconnect). Only the OAuth consent flow fixes this.
+ * - error: connected, but the last sync failed for another reason; the next
+ *   scheduled run may clear it.
+ */
+export type GscConnection = "connected" | "not_connected" | "error";
 
 /**
  * Reads every row of a table in PAGE_SIZE chunks. A plain select() stops at the
@@ -133,6 +157,9 @@ export interface GscFreshness {
   refreshTokenDaysRemaining: number | null;
   syncEnabled: boolean;
   nextSyncAt: string | null;
+  connection: GscConnection;
+  /** gsc_properties.error_message from the last run, when there is one. */
+  errorMessage: string | null;
 }
 
 export interface GscPerformance {
@@ -193,6 +220,31 @@ function minDate(a: string | null, b: string | null): string | null {
   return a < b ? a : b;
 }
 
+/** Latest of several ISO timestamps, comparing as instants rather than strings. */
+function latestInstant(...values: Array<string | null | undefined>): string | null {
+  let best: string | null = null;
+  let bestMs = -Infinity;
+  for (const value of values) {
+    if (!value) continue;
+    const ms = Date.parse(value);
+    if (!Number.isNaN(ms) && ms > bestMs) {
+      best = value;
+      bestMs = ms;
+    }
+  }
+  return best;
+}
+
+export function connectionOf(property: GscPropertyRecord): GscConnection {
+  // undefined means the caller did not read the credential (older shape);
+  // treat that as unknown-but-connected rather than inventing a disconnect.
+  const credential = property.gsc_oauth_credentials;
+  if (credential === null) return "not_connected";
+  if (credential && credential.is_active === false) return "not_connected";
+  if (property.status === "error") return "error";
+  return "connected";
+}
+
 /**
  * Pure aggregation, separated from the fetch so it can be tested without a
  * database. `now` is a parameter for the same reason - the freshness figures are
@@ -225,9 +277,15 @@ export function aggregateGscPerformance(
   const totalImpressions = queries.reduce((sum, q) => sum + q.impressions, 0);
   const totalClicks = queries.reduce((sum, q) => sum + q.clicks, 0);
 
-  // The refresh token's clock runs from when it was last USED, which is the
-  // property's last sync, not from when the credential row was created.
-  const idleDays = daysBetween(property.last_sync_at, now);
+  // The refresh token's clock runs from when it was last USED, not from when
+  // the credential row was created. A sync uses it, and so does a refresh;
+  // take whichever is latest.
+  const credential = property.gsc_oauth_credentials ?? null;
+  const idleDays = daysBetween(
+    latestInstant(property.last_sync_at, credential?.last_refreshed_at, credential?.last_used_at),
+    now,
+  );
+  const connection = connectionOf(property);
 
   return {
     freshness: {
@@ -240,6 +298,8 @@ export function aggregateGscPerformance(
         idleDays === null ? null : REFRESH_TOKEN_IDLE_LIMIT_DAYS - idleDays,
       syncEnabled: property.sync_enabled ?? false,
       nextSyncAt: property.next_sync_at,
+      connection,
+      errorMessage: property.error_message ?? null,
     },
     totals: {
       queries: queries.length,
@@ -264,7 +324,11 @@ export function aggregateGscPerformance(
 async function fetchGscPerformance(): Promise<GscPerformance | null> {
   const { data: property, error: propertyError } = await supabase
     .from("gsc_properties")
-    .select("id, property_url, last_sync_at, next_sync_at, sync_enabled")
+    // Many-to-one embed through oauth_credential_id: an object, or null when
+    // no credential is linked. Token columns are deliberately not selected.
+    .select(
+      "id, property_url, last_sync_at, next_sync_at, sync_enabled, status, error_message, gsc_oauth_credentials(is_active, last_refreshed_at, last_used_at)",
+    )
     .order("last_sync_at", { ascending: false, nullsFirst: false })
     .limit(1)
     .maybeSingle();
@@ -285,12 +349,24 @@ async function fetchGscPerformance(): Promise<GscPerformance | null> {
     ),
   ]);
 
-  return aggregateGscPerformance(property, keywordRows, pageRows);
+  // PostgREST returns a many-to-one embed as an object; guard the array shape
+  // anyway so a relationship change cannot silently read as "not connected".
+  const embedded = property.gsc_oauth_credentials as unknown;
+  const credential = (Array.isArray(embedded) ? embedded[0] ?? null : embedded ?? null) as
+    | GscCredentialStatus
+    | null;
+
+  return aggregateGscPerformance(
+    { ...property, gsc_oauth_credentials: credential },
+    keywordRows,
+    pageRows,
+  );
 }
 
 /**
  * Google Search Console performance for the connected property, or null when no
- * property has been connected yet. Admin-only: the gsc_* tables carry
+ * property exists at all. A property whose credential is gone or revoked still
+ * returns data, with freshness.connection = "not_connected". Admin-only: the gsc_* tables carry
  * admin-scoped RLS, so this returns nothing useful outside the admin surface.
  */
 export function useGscPerformance() {

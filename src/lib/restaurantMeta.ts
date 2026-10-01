@@ -21,6 +21,7 @@
  */
 
 import { titleNamesCity } from "./seoTitleLocation";
+import { hoursTextOf } from "./hoursText";
 
 export interface RestaurantMetaInput {
   name: string;
@@ -145,7 +146,8 @@ function facetsOf(r: RestaurantMetaInput): Facets {
   const hoursJson = r.hours_json != null && typeof r.hours_json === "object";
   return {
     menu: r.hasMenu ?? usableLink(r.menu_url),
-    hours: r.hasHours ?? (hasText(r.opening) || hoursJson),
+    // SEO-054: `opening` is a date column in production, and a date is not hours.
+    hours: r.hasHours ?? (hoursTextOf(r.opening) !== null || hoursJson),
     phone: r.hasPhone ?? hasText(r.phone),
     photos: r.hasPhotos ?? usableLink(r.image_url),
   };
@@ -396,6 +398,24 @@ export interface RestaurantSchemaContext {
   openingHoursSpecification: unknown[] | null;
   /** False for closed, temporarily closed and not-open-yet rows: no hours for those. */
   openForBusiness: boolean;
+  /** The Google Maps listing (restaurants.google_maps_uri), already through safeWebUrl. Joins sameAs. */
+  mapsUrl?: string | null;
+  /**
+   * From restaurants.reservable / reservation_url: true or false when the row
+   * says, the curated booking URL when there is one, undefined when unknown.
+   * Unknown is left out, never published as false.
+   */
+  acceptsReservations?: boolean | string;
+}
+
+/** acceptsReservations for the Restaurant node: the booking URL, the row's yes/no, or undefined. */
+export function acceptsReservationsOf(row: {
+  reservable?: boolean | null;
+  reservation_url?: string | null;
+}, safeUrl: (raw: unknown) => string | null): boolean | string | undefined {
+  const booking = safeUrl(row.reservation_url);
+  if (booking) return booking;
+  return typeof row.reservable === "boolean" ? row.reservable : undefined;
 }
 
 export interface RestaurantSchemaRow {
@@ -414,13 +434,20 @@ export interface RestaurantSchemaRow {
  * tested. Every property is a fact from the row, or left out:
  *  - priceRange only as a "$" to "$$$$" tier;
  *  - openingHoursSpecification only for a place open for business;
- *  - hasMenu only when no captured menu is on the page (MenuSchema owns it then);
+ *  - hasMenu points at the captured Menu node when there is one, else their menu page;
+ *  - sameAs is their site and the Google listing, when the row has them;
+ *  - acceptsReservations only when the row says yes or no;
+ *  - no aggregateRating: the only rating on the row is Google's, which is not
+ *    first-party, and content_rating_aggregates held 0 restaurant ratings on
+ *    2026-10-01 (SEO-034);
  *  - geo only from real coordinates (WEB-SEO-024: no downtown fallback pin);
  *  - no review count, no paymentAccepted: no column backs either.
  */
 export function buildRestaurantSchema(row: RestaurantSchemaRow, ctx: RestaurantSchemaContext) {
   const addr = parseIowaAddress(row.location);
   const tier = priceTier(row.price_range);
+  // Their own site, then the Google listing. No social columns exist on the row.
+  const sameAs = [ctx.website, ctx.mapsUrl].filter((u): u is string => !!u);
   return {
     "@context": "https://schema.org",
     "@type": "Restaurant",
@@ -438,8 +465,11 @@ export function buildRestaurantSchema(row: RestaurantSchemaRow, ctx: RestaurantS
     },
     ...(row.phone ? { telephone: row.phone } : {}),
     url: ctx.url,
-    ...(ctx.website ? { sameAs: [ctx.website] } : {}),
-    ...(ctx.menuUrl && !ctx.hasCapturedMenu ? { hasMenu: ctx.menuUrl } : {}),
+    ...(sameAs.length > 0 ? { sameAs } : {}),
+    // A captured menu is a Menu node on this page (MenuSchema, @id "<url>#menu");
+    // point at it. Otherwise their own menu page.
+    ...(ctx.hasCapturedMenu ? { hasMenu: `${ctx.url}#menu` } : ctx.menuUrl ? { hasMenu: ctx.menuUrl } : {}),
+    ...(ctx.acceptsReservations !== undefined ? { acceptsReservations: ctx.acceptsReservations } : {}),
     ...(tier ? { priceRange: tier } : {}),
     ...(row.image_url ? { image: [row.image_url] } : {}),
     ...(row.latitude != null && row.longitude != null

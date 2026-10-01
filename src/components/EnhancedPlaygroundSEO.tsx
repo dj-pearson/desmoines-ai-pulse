@@ -1,7 +1,7 @@
 import { Helmet } from "react-helmet-async";
 import { BRAND } from "@/lib/brandConfig";
 import { toJsonLd } from "@/lib/jsonLd";
-import { suburbFromLocation } from "@/hooks/usePlaygrounds";
+import { playgroundAgeText, playgroundTitle, suburbFromLocation } from "@/lib/playgroundMeta";
 
 interface PlaygroundData {
   name: string;
@@ -14,6 +14,8 @@ interface PlaygroundData {
   latitude?: number | null;
   longitude?: number | null;
   is_featured?: boolean | null;
+  has_shade?: boolean | null;
+  has_restrooms?: boolean | null;
 }
 
 interface EnhancedPlaygroundSEOProps {
@@ -39,18 +41,16 @@ export default function EnhancedPlaygroundSEO({
   const hasCoords = playground.latitude != null && playground.longitude != null;
   const where = locality ? `${locality}, ${BRAND.state}` : `the ${BRAND.city} metro`;
 
-  const getOptimizedTitle = () => {
-    const parts = [playground.name];
-    if (playground.age_range) parts.push(`Ages ${playground.age_range}`);
-    parts.push(`Playground in ${where}`);
-    return parts.join(" - ");
-  };
+  // SEO-042. "{Park} Playground, {City}: Equipment, Shade, Restrooms", each
+  // word only when the row backs it. The old "{Name} - Ages All ages -
+  // Playground in Des Moines, Iowa" said "Ages" twice on 24 of 27 rows and
+  // none of the words parents search with.
+  const getOptimizedTitle = () => playgroundTitle(playground);
 
   const getGEODescription = () => {
     const desc = playground.description || "";
-    const ageText = playground.age_range
-      ? ` Listed for ages ${playground.age_range}.`
-      : "";
+    const age = playgroundAgeText(playground.age_range);
+    const ageText = age ? ` ${age}` : "";
     const amenitiesText =
       playground.amenities && playground.amenities.length > 0
         ? ` Amenities include ${playground.amenities.slice(0, 4).join(", ")}.`

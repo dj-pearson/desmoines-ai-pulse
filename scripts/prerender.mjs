@@ -65,8 +65,9 @@ import {
   strictGateFailures,
 } from './lazy-preload-patterns.mjs';
 import { PRERENDER_ROUTES } from './prerender-routes.mjs';
+import { expectedCanonicalFor, readPseoCanonicalElsewhere } from './pseo-canonical-elsewhere.mjs';
 import { prerenderOutputPath } from './prerender-output.mjs';
-import { orderEntityRoutes } from './prerender-order.mjs';
+import { orderEntityRoutes, pinFirst, MONTH_PAGE_ROUTE } from './prerender-order.mjs';
 import process from 'node:process';
 
 const DIST = path.resolve('dist');
@@ -358,7 +359,11 @@ function collectEntityRoutes() {
 
   const present = ENTITY_SITEMAPS.filter((f) => (buckets.get(f) || []).length > 0);
   const bySitemap = present.map((f) => [f.replace(/^sitemap-|\.xml$/g, ''), buckets.get(f)]);
-  const ordered = orderEntityRoutes(bySitemap, IMPRESSION_PRIORITY, FAIRNESS_EVERY);
+  // SEO-033: month index pages first, then the measured order. See pinFirst.
+  const ordered = pinFirst(
+    orderEntityRoutes(bySitemap, IMPRESSION_PRIORITY, FAIRNESS_EVERY),
+    (route) => MONTH_PAGE_ROUTE.test(route),
+  );
 
   // Print the shape of the order the budget will be spent in. When a pass comes
   // back short, this line is what says which categories were ever going to be
@@ -388,7 +393,10 @@ function collectEntityRoutes() {
  * before the entity pass. A URL in one of these that does not render as itself
  * fails the build. scripts/check-sitemap-registration.mjs reads this list.
  */
-const UNBUDGETED_SITEMAPS = ['sitemap-pseo.xml'];
+// SEO-043: the annual event series pages, 20 URLs. They exist to keep a URL's
+// search history across years, which a page served as the homepage shell to a
+// JS-less crawler does not do, so they get the same fatal, unbudgeted render.
+const UNBUDGETED_SITEMAPS = ['sitemap-pseo.xml', 'sitemap-event-series.xml'];
 
 /**
  * SEO-029: the URLs for the unbudgeted pass, read from the sitemaps in dist/
@@ -415,6 +423,33 @@ function collectPseoRoutes() {
       if (ROUTES.includes(pathname)) continue;
       routes.add(pathname);
     }
+  }
+  // SEO-041: published pSEO pages the coverage rule holds at noindex. They are
+  // not submitted, but they are public URLs, and an unrendered pSEO URL is
+  // served Cloudflare's SPA fallback: the prerendered homepage, indexable, with
+  // its title (SEO-029). Rendering them here means a crawler reads the page's
+  // own title and its noindex. Written by scripts/generate-dynamic-sitemaps.ts
+  // (PSEO_NOINDEX_ROUTES_FILE in scripts/lib/pseoCoverage.ts); absent means the
+  // sitemap step could not measure the rule, which it already warned about.
+  //
+  // SEO-066 kept SEO-064's noindex duplicates (/bbq/today -> canonical
+  // /restaurants) in this pass rather than excluding them. Excluded, they get
+  // the same fallback: an indexable homepage with a self-canonical from
+  // functions/_middleware.ts, which is the duplicate SEO-064 set out to remove.
+  // The gate checks them against their declared target instead
+  // (scripts/pseo-canonical-elsewhere.mjs).
+  const noindexFile = path.join(process.cwd(), 'scripts', '.generated', 'pseo-noindex-routes.json');
+  if (fs.existsSync(noindexFile)) {
+    try {
+      const parsed = JSON.parse(fs.readFileSync(noindexFile, 'utf8'));
+      for (const r of Array.isArray(parsed?.routes) ? parsed.routes : []) {
+        if (typeof r === 'string' && /^(\/[a-z0-9-]+){1,2}$/.test(r) && !ROUTES.includes(r)) routes.add(r);
+      }
+    } catch (err) {
+      warn(`could not read ${noindexFile} (${err.message}); noindex pSEO pages will not be prerendered`);
+    }
+  } else {
+    warn(`${noindexFile} not found; noindex pSEO pages will not be prerendered this build`);
   }
   return [...routes];
 }
@@ -632,6 +667,11 @@ const duplicateJsonLdRoutes = [];
   // which the hub pass overwrites with the prerendered homepage. The homepage
   // title is appended once the hub pass has written it.
   const forbiddenTitles = [shellTitle];
+
+  // SEO-066: pSEO duplicates SEO-064 holds at noindex canonical their parent
+  // (/bbq/today -> /restaurants). Without this map the gate demanded a
+  // self-canonical from them and the pSEO pass failed the build on all 26.
+  const pseoCanonicalElsewhere = readPseoCanonicalElsewhere(warn);
 
   // SEO-001: routes the strict gate refused, with the reason. Reported at the
   // end rather than only thrown, because a rejection is the interesting output
@@ -927,7 +967,12 @@ const duplicateJsonLdRoutes = [];
       // the shell — the shell's title IS the homepage's — and because hub
       // coverage is already verified on disk after the pass.
       if (strict) {
-        const failures = strictGateFailures(html, route, forbiddenTitles);
+        const failures = strictGateFailures(
+          html,
+          route,
+          forbiddenTitles,
+          expectedCanonicalFor(route, pseoCanonicalElsewhere),
+        );
         if (failures.length > 0) {
           strictRejections.push(`${route}: ${failures.join('; ')}`);
           throw new Error(
@@ -1082,7 +1127,7 @@ const duplicateJsonLdRoutes = [];
       await shutdown();
       const reasons = strictRejections.length ? ` Strict gate: ${strictRejections.join(' | ')}.` : '';
       throw new PrerenderFailure(
-        `pSEO prerender incomplete: ${pending.length}/${pseoRoutes.length} sitemap-pseo.xml URL(s) did not ` +
+        `pSEO prerender incomplete: ${pending.length}/${pseoRoutes.length} pSEO URL(s) (sitemap-pseo.xml plus noindex pages) did not ` +
           `render as themselves after a retry: ${pending.join(', ')}.${reasons} In production these would ` +
           'serve the homepage title and H1 (SEO-029). Per-route reasons are in the [prerender] warnings above.',
       );

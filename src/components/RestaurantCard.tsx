@@ -91,8 +91,12 @@ export interface RestaurantCardProps {
     opening?: string | null;
     opening_date?: string | null;
     opening_timeframe?: string | null;
-    /** Structured hours, used when the row carries them. No list query selects this yet. */
-    hours_json?: StoredOpeningHours | null;
+    /**
+     * Structured hours, used when the row carries them. `unknown` because the
+     * generated row types it as Json (SEO-054); resolveOpenStatus validates
+     * every field it reads.
+     */
+    hours_json?: unknown;
     is_sponsored?: boolean | null;
     sponsored_until?: string | null;
     image_url?: string | null;
@@ -177,7 +181,7 @@ function RestaurantCardComponent({
   const lifecycleLabel = restaurant.status ? LIFECYCLE_LABEL[restaurant.status] : undefined;
   const openStatus = useMemo(
     () =>
-      lifecycleLabel || prerendering ? null : resolveOpenStatus(restaurant.hours_json, restaurant.opening, now),
+      lifecycleLabel || prerendering ? null : resolveOpenStatus(restaurant.hours_json as StoredOpeningHours | null, restaurant.opening, now),
     [lifecycleLabel, prerendering, restaurant.hours_json, restaurant.opening, now],
   );
 

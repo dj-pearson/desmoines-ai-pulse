@@ -1326,8 +1326,11 @@ export type Database = {
         Row: {
           accessibility_notes: string | null
           address: string | null
+          admission_summary: string | null
           created_at: string | null
           description: string | null
+          fact_sources: Json | null
+          facts_verified_at: string | null
           geo_faq: Json | null
           geo_key_facts: string[] | null
           geo_summary: string | null
@@ -1348,6 +1351,7 @@ export type Database = {
           longitude: number | null
           name: string
           needs_manual_verification: boolean
+          parking_summary: string | null
           rating: number | null
           seo_description: string | null
           seo_h1: string | null
@@ -1361,8 +1365,11 @@ export type Database = {
         Insert: {
           accessibility_notes?: string | null
           address?: string | null
+          admission_summary?: string | null
           created_at?: string | null
           description?: string | null
+          fact_sources?: Json | null
+          facts_verified_at?: string | null
           geo_faq?: Json | null
           geo_key_facts?: string[] | null
           geo_summary?: string | null
@@ -1383,6 +1390,7 @@ export type Database = {
           longitude?: number | null
           name: string
           needs_manual_verification?: boolean
+          parking_summary?: string | null
           rating?: number | null
           seo_description?: string | null
           seo_h1?: string | null
@@ -1396,8 +1404,11 @@ export type Database = {
         Update: {
           accessibility_notes?: string | null
           address?: string | null
+          admission_summary?: string | null
           created_at?: string | null
           description?: string | null
+          fact_sources?: Json | null
+          facts_verified_at?: string | null
           geo_faq?: Json | null
           geo_key_facts?: string[] | null
           geo_summary?: string | null
@@ -1418,6 +1429,7 @@ export type Database = {
           longitude?: number | null
           name?: string
           needs_manual_verification?: boolean
+          parking_summary?: string | null
           rating?: number | null
           seo_description?: string | null
           seo_h1?: string | null
@@ -4723,6 +4735,7 @@ export type Database = {
           source_url_broken: boolean
           source_url_checked_at: string | null
           sponsored_until: string | null
+          time_tbd: boolean
           title: string
           trending_score: number
           updated_at: string | null
@@ -4784,6 +4797,7 @@ export type Database = {
           source_url_broken?: boolean
           source_url_checked_at?: string | null
           sponsored_until?: string | null
+          time_tbd?: boolean
           title: string
           trending_score?: number
           updated_at?: string | null
@@ -4845,6 +4859,7 @@ export type Database = {
           source_url_broken?: boolean
           source_url_checked_at?: string | null
           sponsored_until?: string | null
+          time_tbd?: boolean
           title?: string
           trending_score?: number
           updated_at?: string | null
@@ -7869,6 +7884,8 @@ export type Database = {
           geo_summary: string | null
           geom: unknown
           google_place_id: string | null
+          business_status: string | null
+          hours_json: Json | null
           heal_attempts: number
           id: string
           image_checked_at: string | null
@@ -7883,6 +7900,7 @@ export type Database = {
           menu_url: string | null
           merged_at: string | null
           merged_into: string | null
+          neighborhood: string | null
           name: string
           needs_manual_verification: boolean
           opening: string | null
@@ -7920,6 +7938,8 @@ export type Database = {
           geo_summary?: string | null
           geom?: unknown
           google_place_id?: string | null
+          business_status?: string | null
+          hours_json?: Json | null
           heal_attempts?: number
           id?: string
           image_checked_at?: string | null
@@ -7934,6 +7954,7 @@ export type Database = {
           menu_url?: string | null
           merged_at?: string | null
           merged_into?: string | null
+          neighborhood?: string | null
           name: string
           needs_manual_verification?: boolean
           opening?: string | null
@@ -7971,6 +7992,8 @@ export type Database = {
           geo_summary?: string | null
           geom?: unknown
           google_place_id?: string | null
+          business_status?: string | null
+          hours_json?: Json | null
           heal_attempts?: number
           id?: string
           image_checked_at?: string | null
@@ -7985,6 +8008,7 @@ export type Database = {
           menu_url?: string | null
           merged_at?: string | null
           merged_into?: string | null
+          neighborhood?: string | null
           name?: string
           needs_manual_verification?: boolean
           opening?: string | null

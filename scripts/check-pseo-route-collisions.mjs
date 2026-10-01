@@ -78,7 +78,7 @@ try {
   process.exit(1);
 }
 
-const { exact: exactHits, shadowed, redirected, redirectSources, routeCount, pseoRouteCount } = claims;
+const { exact: exactHits, shadowed, redirected, fallback, redirectSources, routeCount, pseoRouteCount } = claims;
 const exact = exactHits.map((e) => `${e.slug}  <-  ${e.route}`);
 
 console.log(
@@ -87,6 +87,16 @@ console.log(
 );
 if (redirected.length > 0) {
   console.log(`[pseo-collisions] ${redirected.length} already handled by public/_redirects.`);
+}
+
+if (fallback.length > 0) {
+  // SEO-065. The fallback only holds while no restaurant has the slug; that is
+  // a database fact this offline check cannot see. Checked in production on
+  // 2026-10-01: no restaurants.slug equals any RESTAURANT_AREA_SLUGS entry.
+  console.log(
+    `[pseo-collisions] ${fallback.length} /restaurants/<area> page(s) served by RestaurantDetails' pSEO ` +
+      `fallback (src/pseo/restaurantAreaSlugs.ts): ${fallback.map((f) => f.slug).join(', ')}.`
+  );
 }
 
 if (shadowed.length > 0) {

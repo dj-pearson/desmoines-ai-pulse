@@ -35,7 +35,15 @@ import { NearbyContent } from "@/components/NearbyContent";
 import { SpriteIcon } from "@/components/ui/SpriteIcon";
 import { createSlug } from "@/lib/slug";
 import { fetchBySlug } from "@/lib/resolveBySlug";
-import { attractionOpenStatus, weeklyHoursRows } from "@/lib/attractionHours";
+import { activeHoursSeason, attractionOpenStatus, weeklyHoursRows } from "@/lib/attractionHours";
+import {
+  attractionHoursSentence,
+  calendarDateLabel,
+  factSourceSites,
+  parseFactSources,
+  seasonLabel,
+} from "@/lib/attractionAtAGlance";
+import { AttractionAtAGlance } from "@/components/AttractionAtAGlance";
 import { isPrerender } from "@/lib/isPrerender";
 import { useNow } from "@/hooks/useNow";
 import { handleError } from "@/lib/errorHandler";
@@ -311,15 +319,44 @@ export default function AttractionDetails() {
   const visitTime = getEstimatedDuration(attraction.type);
   const typeLabel = attraction.type?.toLowerCase() || "attraction";
 
-  // Rows for "Plan your visit". Each renders only with data behind it.
+  // SEO-046: the facts under the h1, read from the attraction's own site and
+  // recorded with the pages and the date. The hours line is phrased by
+  // schedule ("Open 10 AM to 4 PM on Thursdays"), so the prerender may name
+  // the build day: it stays true whenever it is read, like SEO-034's
+  // restaurant block. After mount it names the visitor's day.
+  const factsClock = now ?? new Date();
+  const hoursSentence = attractionHoursSentence(attraction.hours, factsClock);
+  const hoursSeason = seasonLabel(activeHoursSeason(attraction.hours, factsClock));
+  const factSites = factSourceSites(parseFactSources(attraction.fact_sources));
+  const factsChecked = calendarDateLabel(attraction.facts_verified_at);
+  const sourceNote =
+    factSites.length > 0 && factsChecked
+      ? ` Source: ${factSites.map((s) => s.host).join(" and ")}, checked ${factsChecked}.`
+      : "";
+  // The FAQ's hours answer: the week as the table shows it (with its season),
+  // then the site's own note. Days the row leaves out are left out here too.
+  const weekText = weeklyHours
+    .filter((r) => r.text)
+    .map((r) => `${r.label} ${r.text}`)
+    .join(", ");
+  const hoursAnswer = [
+    weekText ? `${hoursSeason ? `${hoursSeason}: ` : ""}${weekText}.` : null,
+    attraction.hours_summary,
+  ]
+    .filter(Boolean)
+    .join(" ");
+
+  // Rows for "Plan your visit". Each renders only with data behind it. The
+  // site's own wording first; the is_free flag only when there is none.
   const admission =
-    attraction.is_free === true
+    attraction.admission_summary ||
+    (attraction.is_free === true
       ? "Free"
       : attraction.is_free === false
         ? attraction.website
           ? "Paid admission. Prices are on the official site."
           : "Paid admission"
-        : null;
+        : null);
   const setting =
     attraction.is_indoor === true ? "Indoor" : attraction.is_indoor === false ? "Outdoor" : null;
   const kidFriendly =
@@ -353,10 +390,36 @@ export default function AttractionDetails() {
           {
             question: `Is ${attraction.name} free?`,
             answer: attraction.is_free
-              ? `Yes, admission to ${attraction.name} is free.`
-              : attraction.website
-                ? `No, ${attraction.name} charges admission. Check its official site for current prices.`
-                : `No, ${attraction.name} charges admission.`,
+              ? `Yes, admission to ${attraction.name} is free.${sourceNote}`
+              : attraction.admission_summary
+                ? `No. ${attraction.admission_summary}${sourceNote}`
+                : attraction.website
+                  ? `No, ${attraction.name} charges admission. Check its official site for current prices.`
+                  : `No, ${attraction.name} charges admission.`,
+          },
+        ]
+      : attraction.admission_summary
+        ? [
+            {
+              question: `How much does ${attraction.name} cost?`,
+              answer: `${attraction.admission_summary}${sourceNote}`,
+            },
+          ]
+        : []),
+    // SEO-046. Only from the verified columns; the source rides along.
+    ...(hoursAnswer
+      ? [
+          {
+            question: `What are ${attraction.name}'s hours?`,
+            answer: `${hoursAnswer}${sourceNote}`,
+          },
+        ]
+      : []),
+    ...(attraction.parking_summary
+      ? [
+          {
+            question: `Where do you park for ${attraction.name}?`,
+            answer: `${attraction.parking_summary}${sourceNote}`,
           },
         ]
       : []),
@@ -514,6 +577,17 @@ export default function AttractionDetails() {
               </div>
             </div>
 
+            {/* SEO-046: hours, admission and parking from the attraction's own
+                site, directly under the h1, with the source and the date. */}
+            <AttractionAtAGlance
+              hours={hoursSentence ?? attraction.hours_summary}
+              hasWeeklyTable={Boolean(hoursSentence) && weeklyHours.length > 0}
+              admission={attraction.admission_summary}
+              parking={attraction.parking_summary}
+              sources={factSites}
+              checked={factsChecked}
+            />
+
             {/* Today's status, computed from the row (or the hours text) at
                 this minute. Not rendered under prerender. The fallback is
                 plain text: the Website row below is the page's one link to
@@ -555,11 +629,16 @@ export default function AttractionDetails() {
                           ))}
                         </tbody>
                       </table>
+                      {hoursSeason && <p className="mt-2 text-sm text-muted-foreground">These hours run {hoursSeason}.</p>}
+                      {attraction.hours_summary && (
+                        <p className="mt-2 max-w-prose text-sm text-muted-foreground">{attraction.hours_summary}</p>
+                      )}
                     </VisitRow>
                   ) : attraction.hours_summary ? (
                     <VisitRow term="Hours">{attraction.hours_summary}</VisitRow>
                   ) : null}
                   {admission && <VisitRow term="Admission">{admission}</VisitRow>}
+                  {attraction.parking_summary && <VisitRow term="Parking">{attraction.parking_summary}</VisitRow>}
                   {setting && <VisitRow term="Indoor / outdoor">{setting}</VisitRow>}
                   {kidFriendly && <VisitRow term="Kid-friendly">{kidFriendly}</VisitRow>}
                   {attraction.accessibility_notes && (

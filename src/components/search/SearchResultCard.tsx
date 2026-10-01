@@ -4,6 +4,7 @@ import { OptimizedImage } from "@/components/OptimizedImage";
 import type { EventPairing } from "@/hooks/useSearchPairings";
 import type { SearchRow } from "@/hooks/useSearchResults";
 import { hotelRateLabel } from "@/lib/hotelBooking";
+import { markdownToPlainText } from "@/lib/aiText";
 import { searchResultHref, type SearchResultType } from "@/lib/searchResultHref";
 import { formatEventDateShort } from "@/lib/timezone";
 import { formatCentralTime, formatMiles } from "@/lib/tonightPairings";
@@ -40,7 +41,7 @@ function rowTitle(item: SearchRow): string {
 
 function rowDescription(item: SearchRow, type: SearchResultType): string {
   if (type === "hotels") return item.short_description || item.description || "";
-  return item.enhanced_description || item.original_description || item.description || "";
+  return markdownToPlainText(item.enhanced_description || item.original_description || item.description);
 }
 
 /** The facts line under the title, per type. Only columns the row carries; nothing derived. */

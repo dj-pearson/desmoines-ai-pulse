@@ -130,14 +130,16 @@ interface NearPlace {
  * Places people come for that are not all in `venues`. Wells Fargo Arena is
  * seeded there (20260228000002) and is repeated here so the option exists
  * even while the venues read is loading or has failed; a venues row with the
- * same slug replaces it. The Fairgrounds is not a music venue, so it has no
- * row. Coordinates are the published location of each site.
+ * same slug replaces it. The Fairgrounds has had a venues row since SEO-045
+ * and is kept here for the same reason.
  */
 const FIXED_NEAR_PLACES: NearPlace[] = [
   // The slug keeps the old name so shared links work; the page says the
   // building's current name (pass-2 WP2 item 9).
-  { slug: "wells-fargo-arena", name: currentVenueName("Wells Fargo Arena"), latitude: 41.5908, longitude: -93.6208 },
-  { slug: "iowa-state-fairgrounds", name: "Iowa State Fairgrounds", latitude: 41.5964, longitude: -93.5531 },
+  // SEO-045: the geocoded pairs 20261018000045 writes to the venues rows, so
+  // the fallback and the loaded row measure from the same point.
+  { slug: "wells-fargo-arena", name: currentVenueName("Wells Fargo Arena"), latitude: 41.5925082, longitude: -93.6210723 },
+  { slug: "iowa-state-fairgrounds", name: "Iowa State Fairgrounds", latitude: 41.5954105, longitude: -93.5464497 },
 ];
 
 interface HotelFilterValues {

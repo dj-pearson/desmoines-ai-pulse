@@ -10,6 +10,7 @@ import { createClient } from "https://esm.sh/@supabase/supabase-js@2.39.3";
 import { handleCors, getCorsHeaders, isOriginAllowed } from "../_shared/cors.ts";
 import { checkRateLimit } from "../_shared/rateLimit.ts";
 import { fetchWithTimeout } from "../_shared/fetchWithTimeout.ts";
+import { requireAdminOrApiKey, type AdminCaller } from "../_shared/apiKeyAuth.ts";
 
 serve(async (req) => {
   const corsResponse = handleCors(req);
@@ -26,6 +27,16 @@ serve(async (req) => {
   if (!rateLimit.success && rateLimit.response) {
     return rateLimit.response;
   }
+
+  // SEO-050: admin-only, like gsc-sync-data and gsc-fetch-properties. This
+  // runs as service_role and writes OAuth credentials, and it had no caller
+  // check, so any holder of the public anon key could call action=refresh
+  // against any credential id. Both callers (OAuthProviderSetup for
+  // authorize, AdminGscCallback for callback) already send the admin's
+  // session JWT, and no mobile binary calls this function.
+  const caller: AdminCaller = { user: null };
+  const authFailure = await requireAdminOrApiKey(req, corsHeaders, caller);
+  if (authFailure) return authFailure;
 
   try {
     const supabaseUrl = Deno.env.get("SUPABASE_URL")!;
@@ -129,116 +140,89 @@ serve(async (req) => {
         Date.now() + (tokenData.expires_in || 3600) * 1000
       );
 
-      // Get user from authorization header (best-effort — userId can be null)
-      const authHeader = req.headers.get("Authorization");
-      let userId: string | null = null;
-      if (authHeader) {
-        try {
-          const token = authHeader.replace("Bearer ", "");
-          const { data: authData, error: authErr } = await supabase.auth.getUser(token);
-          if (authErr) {
-            console.warn("Could not resolve user from auth token:", authErr.message);
-          } else {
-            userId = authData.user?.id ?? null;
-          }
-        } catch (authEx) {
-          console.warn("Auth getUser threw:", authEx);
-        }
-      }
+      // requireAdminOrApiKey above resolved the caller. A machine caller
+      // (API key / service role) has no user, and its credential is saved
+      // without one, as before.
+      const userId: string | null = caller.user?.id ?? null;
 
-      console.log(`Saving credentials for user_id: ${userId ?? "anonymous"}`);
+      console.log(`Saving credentials for user_id: ${userId ?? "machine caller"}`);
       console.log(`Token fields received: access_token=${!!tokenData.access_token}, refresh_token=${!!tokenData.refresh_token}, expires_in=${tokenData.expires_in}`);
 
-      // Deactivate all previous credentials for this user and cascade-delete their properties
-      if (userId) {
-        const oldCredsRes = await fetch(
-          `${supabaseUrl}/rest/v1/gsc_oauth_credentials?user_id=eq.${userId}&select=id`,
-          {
-            headers: {
-              Authorization: `Bearer ${supabaseServiceKey}`,
-              apikey: supabaseServiceKey,
-            },
-          }
-        );
-        const oldCreds: { id: string }[] = oldCredsRes.ok ? await oldCredsRes.json() : [];
-        const oldCredIds = oldCreds.map((c) => c.id);
+      // SEO-050: SAVE FIRST, THEN RETIRE THE OLD ONES. This used to deactivate
+      // the user's old credentials and DELETE every gsc_properties row linked
+      // to them before inserting the new credential. gsc_keyword_performance
+      // and gsc_page_performance reference gsc_properties ON DELETE CASCADE,
+      // so a reconnect by the admin who owns the linked credential (all five
+      // rows belong to one user, measured 2026-10-01) would have deleted
+      // 24,015 keyword rows and 18,598 page rows - a year of history that
+      // Search Console no longer retains in full. And a failed insert after
+      // the delete left the user with nothing connected at all.
+      //
+      // Now: insert, re-point that user's properties at the new credential,
+      // then deactivate the old credentials. gsc-fetch-properties re-links by
+      // property_url as well, so the property row and its history survive.
+      const { data: credential, error: insertError } = await supabase
+        .from("gsc_oauth_credentials")
+        .insert({
+          access_token: tokenData.access_token,
+          refresh_token: tokenData.refresh_token ?? null,
+          token_type: tokenData.token_type ?? "Bearer",
+          expires_at: expiresAt.toISOString(),
+          scope: tokenData.scope ?? null,
+          user_id: userId,
+          is_active: true,
+        })
+        // id only: the representation used to be logged in full, which put
+        // the access and refresh tokens into the function logs.
+        .select("id")
+        .single();
 
-        if (oldCredIds.length > 0) {
-          // Delete gsc_properties linked to old credentials
-          await fetch(
-            `${supabaseUrl}/rest/v1/gsc_properties?oauth_credential_id=in.(${oldCredIds.join(",")})`,
-            {
-              method: "DELETE",
-              headers: {
-                Authorization: `Bearer ${supabaseServiceKey}`,
-                apikey: supabaseServiceKey,
-              },
-            }
-          );
-
-          // Deactivate old credentials
-          await fetch(
-            `${supabaseUrl}/rest/v1/gsc_oauth_credentials?user_id=eq.${userId}`,
-            {
-              method: "PATCH",
-              headers: {
-                "Content-Type": "application/json",
-                Authorization: `Bearer ${supabaseServiceKey}`,
-                apikey: supabaseServiceKey,
-              },
-              body: JSON.stringify({ is_active: false }),
-            }
-          );
-          console.log(`Deactivated ${oldCredIds.length} old credential(s) and their properties for user ${userId}`);
-        }
-      }
-
-      // Save credentials via raw REST fetch to get exact PostgREST response
-      const insertPayload = {
-        access_token: tokenData.access_token,
-        refresh_token: tokenData.refresh_token ?? null,
-        token_type: tokenData.token_type ?? "Bearer",
-        expires_at: expiresAt.toISOString(),
-        scope: tokenData.scope ?? null,
-        user_id: userId,
-        is_active: true,
-      };
-
-      const insertResponse = await fetch(
-        `${supabaseUrl}/rest/v1/gsc_oauth_credentials`,
-        {
-          method: "POST",
-          headers: {
-            "Content-Type": "application/json",
-            Authorization: `Bearer ${supabaseServiceKey}`,
-            apikey: supabaseServiceKey,
-            Prefer: "return=representation",
-          },
-          body: JSON.stringify(insertPayload),
-        }
-      );
-
-      const insertBodyText = await insertResponse.text();
-      console.log(`Insert HTTP status: ${insertResponse.status}`);
-      console.log(`Insert response body: ${insertBodyText}`);
-
-      if (!insertResponse.ok) {
+      if (insertError || !credential?.id) {
         throw new Error(
-          `Failed to save credentials (HTTP ${insertResponse.status}): ${insertBodyText}`
+          `Failed to save credentials: ${insertError?.message ?? "no row returned"}`
         );
       }
 
-      let credential: { id: string } | null = null;
-      try {
-        const parsed = JSON.parse(insertBodyText);
-        credential = Array.isArray(parsed) ? parsed[0] : parsed;
-      } catch {
-        console.warn("Could not parse insert response as JSON:", insertBodyText);
-      }
+      if (userId) {
+        const { data: oldCreds, error: oldCredsError } = await supabase
+          .from("gsc_oauth_credentials")
+          .select("id")
+          .eq("user_id", userId)
+          .neq("id", credential.id);
 
-      if (!credential?.id) {
-        console.error("Insert succeeded but returned no row");
-        throw new Error("Credential was not saved — no row returned. Check RLS policies.");
+        if (oldCredsError) {
+          // The new credential is saved and active; leaving old ones active
+          // is untidy, not broken, because sync resolves the credential
+          // through gsc_properties.oauth_credential_id.
+          console.error("Could not list previous credentials; leaving them active:", oldCredsError.message);
+        } else {
+          const oldCredIds = (oldCreds ?? []).map((c: { id: string }) => c.id);
+          if (oldCredIds.length > 0) {
+            const { error: relinkError } = await supabase
+              .from("gsc_properties")
+              .update({
+                oauth_credential_id: credential.id,
+                status: "active",
+                error_message: null,
+                updated_at: new Date().toISOString(),
+              })
+              .in("oauth_credential_id", oldCredIds);
+            if (relinkError) {
+              // Do not deactivate what the properties still point at.
+              console.error("Could not re-link properties to the new credential; old credentials left active:", relinkError.message);
+            } else {
+              const { error: deactivateError } = await supabase
+                .from("gsc_oauth_credentials")
+                .update({ is_active: false })
+                .in("id", oldCredIds);
+              if (deactivateError) {
+                console.error("Could not deactivate previous credentials:", deactivateError.message);
+              } else {
+                console.log(`Re-linked properties and deactivated ${oldCredIds.length} previous credential(s) for user ${userId}`);
+              }
+            }
+          }
+        }
       }
 
       console.log("OAuth credentials saved successfully, id:", credential.id);

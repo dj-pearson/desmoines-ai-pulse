@@ -20,6 +20,7 @@ import { createClient } from 'https://esm.sh/@supabase/supabase-js@2';
 import { getAIConfig, getClaudeHeaders, getAnthropicApiKey } from "../_shared/aiConfig.ts";
 import { checkRateLimit } from "../_shared/rateLimit.ts";
 import { requireAdminOrApiKey } from "../_shared/apiKeyAuth.ts";
+import { countPlaces, coverageScope, coverageVerdict } from "../_shared/pseoCoverage.ts";
 
 const corsHeaders = {
   'Access-Control-Allow-Origin': '*',
@@ -118,6 +119,51 @@ serve(async (req) => {
       }
     }
 
+    // SEO-056. A page named for a moving window (today, this weekend, a month,
+    // a season) is not generated: its copy is the evergreen template in
+    // src/pseo/timeRelative.ts (scripts/write-pseo-time-relative-pages.ts),
+    // because generated copy describes the one instance of the window it was
+    // written in - /festivals/today said "March 17th" into October. Reported
+    // as skipped, the shape the existing-page branch already uses.
+    if (dimensions.some((d) => d.dimension === 'temporal' || d.dimension === 'occasion')) {
+      return jsonResponse({
+        success: true,
+        skipped: true,
+        message: 'Time-relative pages are written from a template (SEO-056), not generated.',
+        pageId,
+        slug,
+      });
+    }
+
+    // SEO-041 coverage rule, before any Claude call is paid for. A cuisine x
+    // suburb page needs 3 places to exist and 5 to be indexed, counted the way
+    // the page's own live listing counts them. Under 3 is a skip, reported as
+    // skipped (the existing-page branch above already uses that shape); 3-4 is
+    // generated with robots noindex. Pages outside the rule are untouched.
+    let robots: 'noindex, follow' | undefined;
+    const scope = coverageScope(pageTypeId, dimensions);
+    if (scope) {
+      const { data: places, error: placesError } = await supabase
+        .from('restaurants')
+        .select('city, location, cuisine, status, is_merged, neighborhood');
+      if (placesError) {
+        return jsonResponse({ success: false, error: `Could not count places for the coverage rule: ${placesError.message}` }, 500);
+      }
+      const count = countPlaces(places ?? [], scope.location, scope.category.slug);
+      const verdict = coverageVerdict(count);
+      if (verdict === 'not-generated') {
+        return jsonResponse({
+          success: true,
+          skipped: true,
+          message: `Coverage rule: ${count} place(s) for ${slug}; a page needs at least 3 to exist.`,
+          pageId,
+          slug,
+          placeCount: count,
+        });
+      }
+      if (verdict === 'noindex') robots = 'noindex, follow';
+    }
+
     // Build prompt
     const currentDate = new Date().toISOString().split('T')[0];
     const currentSeason = getCurrentSeason();
@@ -181,6 +227,7 @@ serve(async (req) => {
         keywords,
         canonicalUrl: slug,
         ogType: 'website',
+        ...(robots ? { robots } : {}),
       },
       sections: parsedContent.sections ?? [],
       related_pages: [],

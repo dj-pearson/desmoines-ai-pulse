@@ -138,10 +138,25 @@ Deno.test('every display surface honours the flag through one function', async (
   // codeOnly first: the comment explaining the fix NAMES NO_TIME_MARKER above
   // the flag check, so an ordering assertion over raw source fails on correct
   // code.
-  const code = fn.replace(/\/\*[\s\S]*?\*\//g, '').split('\n').map((l) => l.replace(/\/\/.*$/, '')).join('\n');
+  const codeOnly = (s: string) =>
+    s.replace(/\/\*[\s\S]*?\*\//g, '').split('\n').map((l) => l.replace(/\/\/.*$/, '')).join('\n');
+  const code = codeOnly(fn);
   const flag = code.indexOf('time_tbd');
+  // SEO-055 moved the sentinel comparison into src/lib/eventTime.ts, which
+  // hasSpecificTime now delegates to. Either shape is fine as long as the flag
+  // is read first: inline, or before the delegation AND inside the delegate.
   const marker = code.indexOf('NO_TIME_MARKER');
-  assert(flag > 0 && marker > 0 && flag < marker, 'the explicit flag wins over the sentinel');
+  const delegate = code.indexOf('hasStatedStartTime(');
+  if (marker > 0) {
+    assert(flag > 0 && flag < marker, 'the explicit flag wins over the sentinel');
+  } else {
+    assert(flag > 0 && delegate > 0 && flag < delegate, 'the explicit flag wins over the sentinel');
+    const et = codeOnly(await read('src/lib/eventTime.ts'));
+    const stated = et.slice(et.indexOf('export function hasStatedStartTime'));
+    const etFlag = stated.indexOf('time_tbd');
+    const etMarker = stated.indexOf('NO_TIME_MARKER');
+    assert(etFlag > 0 && etMarker > 0 && etFlag < etMarker, 'eventTime.ts reads time_tbd before the sentinel');
+  }
 
   // The display surfaces now label times through eventTiming.ts, and the
   // JSON-LD through eventSchema.ts; those two are where the check is called.

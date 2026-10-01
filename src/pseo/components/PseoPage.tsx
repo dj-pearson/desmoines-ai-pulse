@@ -20,7 +20,12 @@ import { PseoNeighborhoodProfile } from './sections/PseoNeighborhoodProfile';
 import { PseoAudienceCallout } from './sections/PseoAudienceCallout';
 import { PseoRelatedPages } from './sections/PseoRelatedPages';
 import { PseoLiveListings } from './sections/PseoLiveListings';
+import { PseoAreaGuide } from './sections/PseoAreaGuide';
 import { PseoBreadcrumbs } from './PseoBreadcrumbs';
+import { HubArticles } from '@/components/seo/HubArticles';
+import { areaHubForPageDimensions } from '@/lib/areaHubs';
+import { AREA_GUIDE_SLUGS, areaGuideDescription, areaGuideIntro, boundaryForLocation } from '../areaGuide';
+import { buildTimeRelativePage } from '../timeRelative';
 
 const PseoMapEmbed = lazy(() => import('./sections/PseoMapEmbed'));
 
@@ -28,11 +33,13 @@ interface PseoPageProps {
   page: PseoPageContent;
 }
 
-export function PseoPage({ page }: PseoPageProps) {
+export function PseoPage({ page: storedPage }: PseoPageProps) {
+  const page = asTimeRelative(asAreaGuide(storedPage));
   const { seo, sections, relatedPages, structuredData } = page;
 
   // Build structured data for Schema.org
   const schemaData = buildSchemaOrgData(page);
+  const { key: areaKey, name: areaName } = areaHubForPageDimensions(page.dimensions) ?? {};
 
   return (
     <>
@@ -41,7 +48,8 @@ export function PseoPage({ page }: PseoPageProps) {
         description={seo.description}
         url={seo.canonicalUrl}
         keywords={seo.keywords}
-        canonicalUrl={getCanonicalUrl(page.slug)}
+        canonicalUrl={getCanonicalUrl(canonicalPath(page))}
+        robots={seo.robots === 'noindex, follow' ? 'noindex, follow' : undefined}
         breadcrumbs={structuredData.breadcrumb}
         structuredData={schemaData}
       />
@@ -67,6 +75,10 @@ export function PseoPage({ page }: PseoPageProps) {
             <SectionRenderer key={section.id} section={section} page={page} />
           ))}
 
+          {/* SEO-044: an area page lists the articles that name its area,
+              which link back to it. Renders nothing when none match. */}
+          {areaKey && <HubArticles area={areaKey} title={`${areaName} guides`} />}
+
           {/* Related Pages (always last) */}
           {relatedPages.length > 0 && (
             <PseoRelatedPages pages={relatedPages} />
@@ -77,6 +89,60 @@ export function PseoPage({ page }: PseoPageProps) {
       <Footer />
     </>
   );
+}
+
+/**
+ * SEO-064. The page's own slug, unless the row names another site path as its
+ * canonical: the duplicates src/pseo/duplicateRule.ts holds at noindex point
+ * at their parent page. Only a root-relative path is honoured, so a stray
+ * absolute or malformed value falls back to the self-canonical.
+ */
+function canonicalPath(page: PseoPageContent): string {
+  const stored = page.seo.canonicalUrl;
+  return stored && /^\/[a-z0-9/-]*$/.test(stored) ? stored : page.slug;
+}
+
+/**
+ * SEO-040. A page in AREA_GUIDE_SLUGS renders a two-sentence intro and the
+ * data-built area guide in place of its stored LLM sections, and describes
+ * itself accordingly. Any other page, or one whose location has no polygon,
+ * is returned unchanged.
+ */
+function asAreaGuide(page: PseoPageContent): PseoPageContent {
+  if (!AREA_GUIDE_SLUGS.has(page.slug)) return page;
+  const location = page.dimensions.find((d) => d.dimension === 'location');
+  const boundary = boundaryForLocation(location?.slug);
+  if (!boundary) return page;
+  return {
+    ...page,
+    seo: { ...page.seo, description: areaGuideDescription(boundary) },
+    sections: [
+      { id: 'hero_intro', type: 'hero_intro', content: areaGuideIntro(boundary) },
+      { id: 'area_guide', type: 'area_guide' },
+    ],
+  };
+}
+
+/**
+ * SEO-056. A page with a temporal dimension (today, this weekend, a month, a
+ * season) renders the evergreen copy from src/pseo/timeRelative.ts and the
+ * live listing, whatever its stored sections say. The rows were rewritten with
+ * the same builder; doing it here as well means a regenerated row cannot put
+ * "March 17th in Des Moines" back into the prerendered HTML.
+ */
+function asTimeRelative(page: PseoPageContent): PseoPageContent {
+  const built = buildTimeRelativePage(page.dimensions);
+  if (!built) return page;
+  return {
+    ...page,
+    seo: { ...page.seo, ...built.seo },
+    sections: built.sections,
+    structuredData: {
+      ...page.structuredData,
+      breadcrumb: [...built.breadcrumb, { name: built.seo.h1, url: page.slug }],
+      faqItems: built.faqs,
+    },
+  };
 }
 
 // ---------------------------------------------------------------------------
@@ -107,6 +173,9 @@ function SectionRenderer({
         <PseoLiveListings
           dimensions={page.dimensions}
           pageTypeId={page.pageTypeId}
+          heading={section.heading}
+          emptyHref={section.emptyHref}
+          emptyLabel={section.emptyLabel}
         />
       );
 
@@ -141,6 +210,9 @@ function SectionRenderer({
           <PseoMapEmbed dimensions={page.dimensions} />
         </Suspense>
       );
+
+    case 'area_guide':
+      return <PseoAreaGuide dimensions={page.dimensions} />;
 
     case 'related_pages':
       return null; // Handled separately above

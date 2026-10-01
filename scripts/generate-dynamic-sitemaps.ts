@@ -10,17 +10,29 @@
  */
 
 import { createClient } from '@supabase/supabase-js';
-import { readFileSync, existsSync, writeFileSync } from 'fs';
+import { readFileSync, existsSync, writeFileSync, mkdirSync, rmSync } from 'fs';
 import { join } from 'path';
 import { computePseoShippable } from './lib/pseoShippable';
+import { computePseoCoverage, PSEO_CANONICAL_ELSEWHERE_FILE, PSEO_NOINDEX_ROUTES_FILE } from './lib/pseoCoverage';
 import { childLastmod } from './lib/sitemapLastmod';
 import { isInMetro } from '../src/lib/geo';
+// SEO-045. No `@/` imports in hotelsNear.ts, so the page and this file share one rule.
+import { hotelsNear, hotelsNearPath, isHotelsNearIndexable } from '../src/lib/hotelsNear';
 // The month floor, the range and the Central-month rule are the month page's
 // own (src/lib/monthPages.ts has no `@/` imports so it loads under tsx here).
-import { centralMonthOf, isIndexableMonth, monthSlug, MIN_EVENTS_PER_MONTH, type MonthRef } from '../src/lib/monthPages';
+import {
+  centralMonthOf,
+  LEAD_WINDOW_DAYS,
+  monthSlug,
+  MIN_EVENTS_PER_MONTH,
+  selectSitemapMonths,
+  type MonthTally,
+} from '../src/lib/monthPages';
 // Slug shapes live in one place so the freshness check cannot build a URL the
 // generator would not have written. See scripts/lib/sitemapSlugs.ts.
 import { createSlug, createEventSlug } from './lib/sitemapSlugs';
+// SEO-043. No `@/` imports in eventSeries.ts, for the same reason as monthPages.
+import { EVENT_SERIES, allSeriesTitlePatterns, seriesForEvent, seriesPath } from '../src/lib/eventSeries';
 
 // Load .env for local development (Cloudflare Pages / Infisical set env vars at build time)
 function loadEnvFile(filePath: string): void {
@@ -286,17 +298,21 @@ async function generateEventsSitemap(): Promise<number | null> {
   // MIN_EVENTS_PER_MONTH is a floor on top of that. One event in a month is not
   // a listing page, it is a detail page with a heading, and it would compete
   // with the event's own URL. It is imported from src/lib/monthPages.ts, the
-  // same constant MonthlyEventsPage uses to decide noindex, and the month must
+  // same rule MonthlyEventsPage uses to decide noindex, and the month must
   // also be in the page's range (last month to twelve ahead): a sitemap entry
   // for a page that renders noindex is a contradiction Search Console reports.
+  //
+  // SEO-033 RELAXES THE FLOOR FOR THE NEXT FEW MONTHS, and only for them.
+  // Months whose first day is within LEAD_WINDOW_DAYS are published at any
+  // count, because the page carries a seasonal intro and month links and is
+  // not a bare heading over an empty grid. selectSitemapMonths lists exactly
+  // the months isIndexableMonth calls indexable.
   //
   // Months are CENTRAL months. getUTCMonth put an 8 PM CDT Sep 30 event
   // (01:00Z Oct 1) in October, so a month's count could differ from what its
   // own page lists. centralMonthOf is pinned at exactly that instant by
   // src/hooks/__tests__/landingQueries.test.ts.
-  const monthNow = new Date();
-
-  const perMonth = new Map<string, { ref: MonthRef; count: number; lastmod: string }>();
+  const perMonth = new Map<string, MonthTally>();
   for (const event of eventList) {
     // Prefer the UTC start, matching what the page itself queries on.
     const raw = event.event_start_utc || event.date;
@@ -307,7 +323,7 @@ async function generateEventsSitemap(): Promise<number | null> {
     const slug = monthSlug(ref);
     const lastmod = event.updated_at ? event.updated_at.split('T')[0] : currentDate;
     const seen = perMonth.get(slug);
-    if (!seen) perMonth.set(slug, { ref, count: 1, lastmod });
+    if (!seen) perMonth.set(slug, { count: 1, lastmod });
     else {
       seen.count += 1;
       // Newest touched event in the month is the month page's real lastmod.
@@ -315,20 +331,20 @@ async function generateEventsSitemap(): Promise<number | null> {
     }
   }
 
-  const monthUrls = [...perMonth.entries()]
-    .filter(([, v]) => isIndexableMonth(v.ref, v.count, monthNow))
-    .sort(([a], [b]) => (a < b ? -1 : 1))
-    .map(([slug, v]) => ({
-      loc: `${baseUrl}/events/${slug}`,
-      lastmod: v.lastmod,
-      changefreq: 'daily',
-      priority: '0.8',
-    }));
+  const selectedMonths = selectSitemapMonths(perMonth, new Date(), { today: currentDate });
+  const monthUrls = selectedMonths.map(({ slug, lastmod }) => ({
+    loc: `${baseUrl}/events/${slug}`,
+    lastmod,
+    changefreq: 'daily',
+    priority: '0.8',
+  }));
 
-  const skipped = perMonth.size - monthUrls.length;
+  const forced = selectedMonths.filter((m) => m.forced).map((m) => m.slug);
+  const skipped = [...perMonth.keys()].filter((slug) => !selectedMonths.some((m) => m.slug === slug));
   console.log(
-    `   ${monthUrls.length} month page(s) with >= ${MIN_EVENTS_PER_MONTH} events` +
-      (skipped > 0 ? `; ${skipped} month(s) skipped as too thin or out of range` : ''),
+    `   ${monthUrls.length} month page(s): >= ${MIN_EVENTS_PER_MONTH} events, or within ${LEAD_WINDOW_DAYS}d` +
+      (forced.length > 0 ? `; under the floor but published ahead: ${forced.join(', ')}` : '') +
+      (skipped.length > 0 ? `; ${skipped.length} month(s) skipped as too thin or out of range` : ''),
   );
   urls.push(...monthUrls);
 
@@ -363,6 +379,10 @@ async function generateRestaurantsSitemap(): Promise<number | null> {
     // the NULL rows, so "not closed" is an OR that keeps them
     // (useBreweryTrail.ts uses the same filter).
     .or('status.is.null,status.neq.closed')
+    // SEO-059: the page is also noindex when Google's business_status says
+    // CLOSED_PERMANENTLY, so that row leaves the sitemap too. A second `or`
+    // param is ANDed with the first by PostgREST.
+    .or('business_status.is.null,business_status.neq.CLOSED_PERMANENTLY')
     .order('name')
     .order('id')
     .limit(5000);
@@ -497,7 +517,7 @@ async function generateHotelsSitemap(): Promise<number | null> {
 
   const { data: hotels, error } = await supabase
     .from('hotels')
-    .select('id, slug, updated_at')
+    .select('id, slug, updated_at, latitude, longitude')
     // Only rows the detail page will actually render. useHotel filters on
     // is_active too, so an inactive hotel resolves to nothing.
     .eq('is_active', true)
@@ -518,6 +538,37 @@ async function generateHotelsSitemap(): Promise<number | null> {
       changefreq: 'weekly',
       priority: '0.6',
     }));
+
+  // SEO-045: /stay/near/:slug, one per venue with enough hotels in range.
+  // The rule is the page's own (hotelsNear + isHotelsNearIndexable), so a URL
+  // is submitted exactly when the page would not noindex itself. In this
+  // sitemap rather than a new one: it is the stay module, and the prerenderer
+  // already renders every URL here.
+  const { data: venues, error: venuesError } = await supabase
+    .from('venues')
+    .select('slug, latitude, longitude, updated_at')
+    .not('slug', 'is', null)
+    .not('latitude', 'is', null)
+    .order('slug');
+  if (venuesError) {
+    // The hotel pages above are still right; the near pages are left out
+    // rather than guessed at, and the log says so.
+    console.error('❌ Error fetching venues for hotels-near pages:', venuesError);
+  } else {
+    let nearPages = 0;
+    for (const venue of venues ?? []) {
+      const near = hotelsNear(venue, hotels ?? []);
+      if (!venue.slug || !isHotelsNearIndexable(near.length)) continue;
+      urls.push({
+        loc: `${baseUrl}${hotelsNearPath(venue.slug)}`,
+        lastmod: venue.updated_at ? venue.updated_at.split('T')[0] : currentDate,
+        changefreq: 'monthly',
+        priority: '0.6',
+      });
+      nearPages += 1;
+    }
+    console.log(`   ${nearPages} hotels-near-venue page(s) of ${(venues ?? []).length} located venues`);
+  }
 
   // The hub only as the empty-set fallback, as for venues/trails/teams below:
   // /stay is already in sitemap-static.xml, and a URL in two sitemaps fails
@@ -761,6 +812,38 @@ function readPseoDemandRoutes(): string[] {
   }
 }
 
+/** SEO-041: the noindex pSEO pages the prerender renders but the sitemap omits. */
+function writePseoNoindexRoutes(routes: string[]): void {
+  const file = join(process.cwd(), PSEO_NOINDEX_ROUTES_FILE);
+  try {
+    mkdirSync(join(file, '..'), { recursive: true });
+    writeFileSync(file, `${JSON.stringify({ generatedAt: new Date().toISOString(), routes: [...routes].sort() }, null, 2)}
+`);
+  } catch (error) {
+    // Not fatal: without it these pages fall back to the shell for non-JS
+    // crawlers, which is where they were before. Say so rather than hide it.
+    rmSync(file, { force: true });
+    console.warn(`⚠️ could not write ${PSEO_NOINDEX_ROUTES_FILE}: ${(error as Error).message}`);
+  }
+}
+
+/**
+ * SEO-064: published pSEO pages that canonical another page (the duplicates
+ * src/pseo/duplicateRule.ts holds at noindex), for check-prerender-head.mjs.
+ */
+function writePseoCanonicalElsewhere(routes: Record<string, string>): void {
+  const file = join(process.cwd(), PSEO_CANONICAL_ELSEWHERE_FILE);
+  try {
+    mkdirSync(join(file, '..'), { recursive: true });
+    const sorted = Object.fromEntries(Object.entries(routes).sort(([a], [b]) => a.localeCompare(b)));
+    writeFileSync(file, `${JSON.stringify({ generatedAt: new Date().toISOString(), routes: sorted }, null, 2)}
+`);
+  } catch (error) {
+    rmSync(file, { force: true });
+    console.warn(`could not write ${PSEO_CANONICAL_ELSEWHERE_FILE}: ${(error as Error).message}`);
+  }
+}
+
 /**
  * pSEO pages (WEB-SEO-013).
  *
@@ -777,6 +860,10 @@ async function generatePseoSitemap(): Promise<number | null> {
   console.log('🧩 Generating pSEO sitemap...');
 
   const target = join(process.cwd(), 'public', 'sitemap-pseo.xml');
+  // SEO-041: last run's noindex list must not outlive a run that could not
+  // measure this one. Rewritten below only when the coverage rule was measured.
+  rmSync(join(process.cwd(), PSEO_NOINDEX_ROUTES_FILE), { force: true });
+  rmSync(join(process.cwd(), PSEO_CANONICAL_ELSEWHERE_FILE), { force: true });
 
   // IT SOURCES THE SHIPPABLE SET, NOT is_published.
   //
@@ -871,12 +958,60 @@ async function generatePseoSitemap(): Promise<number | null> {
         `are not submitted and will 404: ${demandUnpublished.slice(0, 10).join(', ')}`
     );
   }
+  // SEO-041: the coverage rule for cuisine x suburb pages. It ADDS the
+  // indexable ones (5+ places, distinct listing, copy written from the rows)
+  // whether or not Search Console has seen them yet, and it REMOVES the noindex and under-floor ones even
+  // when they carry impressions: a page telling crawlers noindex must not be
+  // submitted, and submitting it is the contradiction Search Console reports as
+  // "Submitted URL marked noindex". The rule is narrow on purpose (suburbs x
+  // restaurant cuisines, counted live), which is what keeps this addition from
+  // reopening the doorway question the shippable filter answered: every page it
+  // admits lists at least five real places that no other admitted page lists
+  // in the same combination. See src/pseo/coverageRule.ts.
+  //
+  // A coverage failure keeps the last good file, for the same reason a failed
+  // listing query does above: falling back to the old selection would submit
+  // the noindex pages.
+  let coverage: Awaited<ReturnType<typeof computePseoCoverage>>;
+  try {
+    coverage = await computePseoCoverage({ base: SUPABASE_URL as string, key: SUPABASE_KEY as string });
+  } catch (error) {
+    console.warn(
+      `⚠️ pSEO coverage rule could not be measured (${(error as Error).message}). Keeping the existing ` +
+        'sitemap-pseo.xml rather than submitting pages the rule may hold out.'
+    );
+    return null;
+  }
+  // Only data-built pages are added on the rule's say-so; see `submittable`.
+  const coverageAdded = coverage.submittable.filter(
+    (slug) => bySlug.has(slug) && !shippable.canonical.includes(slug) && !demandAdded.includes(slug)
+  );
+  const selected = [...new Set([...shippable.canonical, ...demandAdded, ...coverageAdded])];
+  const heldOut = selected.filter((slug) => coverage.keepOutOfSitemap.has(slug));
+  if (coverage.violations.length > 0) {
+    console.warn(
+      `⚠️ ${coverage.violations.length} published pSEO page(s) break the SEO-041 coverage rule; ` +
+        'run `npm run check-pseo-coverage`. They are held out of the sitemap meanwhile.'
+    );
+  }
+  if (heldOut.length > 0) {
+    console.log(`🧩 pSEO coverage rule held out ${heldOut.length} page(s): ${heldOut.join(', ')}`);
+  }
+
+  // The noindex pages are still prerendered, so a crawler that does not run
+  // JavaScript reads their own title and the noindex, not the homepage shell
+  // Cloudflare would otherwise serve (SEO-029). scripts/prerender.mjs reads
+  // this file; it is written fresh on every run and is not committed.
+  writePseoNoindexRoutes(coverage.noindexPublished);
+  writePseoCanonicalElsewhere(coverage.canonicalElsewhere);
+
   console.log(
     `🧩 pSEO sitemap: ${shippable.canonical.length} shippable + ${demandAdded.length} published with measured impressions ` +
-      `(scripts/pseo-demand-routes.json)`
+      `(scripts/pseo-demand-routes.json) + ${coverageAdded.length} indexable under the coverage rule, ` +
+      `less ${heldOut.length} held out`
   );
 
-  const urls = [...shippable.canonical, ...demandAdded].map((slug: string) => {
+  const urls = selected.filter((slug) => !coverage.keepOutOfSitemap.has(slug)).map((slug: string) => {
     const page = bySlug.get(slug) as { updated_at?: string; published_at?: string } | undefined;
     return {
       loc: `${baseUrl}${slug.startsWith('/') ? slug : `/${slug}`}`,
@@ -945,6 +1080,71 @@ async function generateVotingCategoriesSitemap(): Promise<number | null> {
 
   const written = writeSitemap('sitemap-best-of.xml', urls, 'voting categories');
   console.log(`\u2705 Best-Of categories sitemap generated: ${written} URLs`);
+  return written;
+}
+
+/**
+ * SEO-043: /events/series/<slug>, one per annual event in EVENT_SERIES.
+ *
+ * A series is submitted only when at least one row belongs to it, because the
+ * page noindexes itself with nothing on file. Hidden and archived rows count:
+ * a past edition is what the page lists. Merged duplicates do not, and nor
+ * does a row a moderator hid (hidden on or before its own date; the stale
+ * sweep only hides rows already past - see src/lib/eventSeriesView.ts).
+ * lastmod is the newest member row's updated_at.
+ *
+ * Every URL here is prerendered in prerender.mjs's unbudgeted pass, so a
+ * series page that does not render as itself fails the build.
+ */
+async function generateEventSeriesSitemap(): Promise<number | null> {
+  console.log('Generating event series sitemap...');
+
+  const { data: rows, error } = await supabase
+    .from('events')
+    .select('title, venue, location, date, updated_at, is_hidden, hidden_at, archived_at')
+    .neq('is_merged', true)
+    .or(allSeriesTitlePatterns().join(','))
+    .order('id')
+    .limit(2000);
+
+  if (error) {
+    console.error('Error fetching event series rows:', error);
+    return null;
+  }
+
+  const lastmodBySlug = new Map<string, string>();
+  for (const row of rows ?? []) {
+    const def = seriesForEvent(row);
+    if (!def) continue;
+    // Within a day of the start counts as the event's own day; the sweep's
+    // cutoff is days later, so this cannot mistake it for a moderator.
+    if (row.is_hidden && (!row.hidden_at || Date.parse(row.hidden_at) < Date.parse(row.date) + 86_400_000)) continue;
+    const stamp = row.updated_at ? row.updated_at.split('T')[0] : currentDate;
+    const held = lastmodBySlug.get(def.slug);
+    if (!held || stamp > held) lastmodBySlug.set(def.slug, stamp);
+  }
+
+  const urls = EVENT_SERIES.filter((def) => lastmodBySlug.has(def.slug)).map((def) => ({
+    loc: `${baseUrl}${seriesPath(def)}`,
+    lastmod: lastmodBySlug.get(def.slug),
+    changefreq: 'weekly',
+    priority: '0.7',
+  }));
+
+  const missing = EVENT_SERIES.filter((def) => !lastmodBySlug.has(def.slug)).map((def) => def.slug);
+  if (missing.length) {
+    console.warn(`Event series with no rows, left out of the sitemap: ${missing.join(', ')}`);
+  }
+
+  // /events is already in sitemap-static.xml, so it cannot stand in here (a URL
+  // in two sitemaps fails check-sitemap-duplicates). Keep the committed file.
+  if (urls.length === 0) {
+    console.error('No event series has a row; keeping the existing sitemap-event-series.xml.');
+    return null;
+  }
+
+  const written = writeSitemap('sitemap-event-series.xml', urls, 'event series');
+  console.log(`Event series sitemap generated: ${written} URLs`);
   return written;
 }
 
@@ -1024,6 +1224,7 @@ async function main(): Promise<void> {
       generateItinerariesSitemap(),
       generateVotingCategoriesSitemap(),
       generateGuidesSitemap(),
+      generateEventSeriesSitemap(),
       generatePseoSitemap()
     ]);
 
@@ -1059,6 +1260,7 @@ async function main(): Promise<void> {
       'sitemap-best-of.xml',
       'sitemap-itineraries.xml',
       'sitemap-guides.xml',
+      'sitemap-event-series.xml',
       'sitemap-pseo.xml',
     ];
 

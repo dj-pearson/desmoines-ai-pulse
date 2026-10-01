@@ -34,6 +34,18 @@
 import { readFileSync, existsSync } from 'node:fs';
 import { join } from 'node:path';
 import { walkPrerenderedPages } from './prerender-output.mjs';
+import { CANONICAL_ELSEWHERE as STATIC_CANONICAL_ELSEWHERE } from './prerender-routes.mjs';
+import { readPseoCanonicalElsewhere } from './pseo-canonical-elsewhere.mjs';
+
+/**
+ * SEO-064: published pSEO duplicates canonical their parent page. The list is
+ * per-build data written by generate-dynamic-sitemaps.ts (it comes from the
+ * pseo_pages rows), so it is read here rather than kept in prerender-routes.mjs.
+ * SEO-066: read through the same module as prerender.mjs's strict gate, so the
+ * two cannot accept different targets.
+ */
+const pseoCanonicalElsewhere = readPseoCanonicalElsewhere((m) => console.warn(`[prerender-head] ${m}`));
+const CANONICAL_ELSEWHERE = { ...pseoCanonicalElsewhere, ...STATIC_CANONICAL_ELSEWHERE };
 
 const DIST = 'dist';
 
@@ -125,7 +137,10 @@ for (const p of pages) {
       canonicalPath = null;
     }
     const normalise = (s) => (s === null ? null : s.replace(/\/+$/, '') || '/');
-    if (normalise(canonicalPath) !== normalise(p.route)) {
+    // SEO-036: a route declared in CANONICAL_ELSEWHERE must point at its
+    // declared target, and only there.
+    const expected = CANONICAL_ELSEWHERE[p.route] ?? p.route;
+    if (normalise(canonicalPath) !== normalise(expected)) {
       problems.push(`${p.route}: canonical points at ${p.canonical}`);
     }
   }

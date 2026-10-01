@@ -53,6 +53,12 @@ export interface PseoSeoMeta {
   canonicalUrl: string;
   ogImage?: string;
   ogType: string;
+  /**
+   * SEO-041. Set to "noindex, follow" on a cuisine x area page with 3 or 4
+   * places behind it (src/pseo/coverageRule.ts). Absent means indexable. The
+   * sitemap generator leaves any page carrying it out of sitemap-pseo.xml.
+   */
+  robots?: 'noindex, follow';
 }
 
 export interface PseoSection {
@@ -63,6 +69,9 @@ export interface PseoSection {
   items?: PseoCuratedItem[];
   faqs?: PseoFaqItem[];
   tips?: string[];
+  /** SEO-056, live_listings only: where an empty listing sends the visitor. */
+  emptyHref?: string;
+  emptyLabel?: string;
 }
 
 export type PseoSectionType =
@@ -75,7 +84,9 @@ export type PseoSectionType =
   | 'related_pages'
   | 'neighborhood_profile'
   | 'audience_callout'
-  | 'map_embed';
+  | 'map_embed'
+  /** SEO-040: restaurants, bars, events, parking and a map from rows (PseoAreaGuide). */
+  | 'area_guide';
 
 export interface PseoCuratedItem {
   name: string;

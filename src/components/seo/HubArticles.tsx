@@ -3,23 +3,31 @@ import { useQuery } from "@tanstack/react-query";
 import { supabase } from "@/integrations/supabase/client";
 import { STALE_TIME } from "@/lib/queryConfig";
 import { articleMatchesHub, type HubKey } from "@/lib/articleHubs";
+import { articleMatchesArea } from "@/lib/areaHubs";
 
 const HUB_RAIL_ROWS = 40;
 
-interface HubArticlesProps {
-  hub: HubKey;
+type HubArticlesProps = (
+  | { hub: HubKey; area?: never }
+  /** An area key from src/lib/areaHubs.ts ("east-village", "downtown"). */
+  | { area: string; hub?: never }
+) & {
   title?: string;
   limit?: number;
   className?: string;
-}
+};
 
 /**
  * The hub half of "every article links into its hub and the hub links back"
  * (SEO-015, SEO-019). Published articles whose title, category or tags match
  * this hub, newest first. Renders nothing when none match, so a hub never
  * ships an empty "guides" block.
+ *
+ * With `area` in place of `hub`, the articles that name that neighbourhood or
+ * suburb (SEO-044): the area page's half of the same rule. Same query key, so
+ * a page carrying both kinds still makes one request.
  */
-export function HubArticles({ hub, title = "Guides from Des Moines Insider", limit = 4, className = "" }: HubArticlesProps) {
+export function HubArticles({ hub, area, title = "Guides from Des Moines Insider", limit = 4, className = "" }: HubArticlesProps) {
   // 40 newest published articles, matched client-side by articleMatchesHub.
   // It was 100 rows to show at most four links below the fold; 40 still covers
   // several months of publishing for every hub (events plan WP7 item 4). The
@@ -39,7 +47,9 @@ export function HubArticles({ hub, title = "Guides from Des Moines Insider", lim
     },
   });
 
-  const matches = (data ?? []).filter((a) => a.slug && articleMatchesHub(a, hub)).slice(0, limit);
+  const matches = (data ?? [])
+    .filter((a) => a.slug && (hub ? articleMatchesHub(a, hub) : articleMatchesArea(a, area)))
+    .slice(0, limit);
   if (matches.length === 0) return null;
 
   return (

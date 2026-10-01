@@ -15,7 +15,7 @@
 import fs from 'node:fs';
 import path from 'node:path';
 import process from 'node:process';
-import { PRERENDER_ROUTES } from './prerender-routes.mjs';
+import { CANONICAL_ELSEWHERE, PRERENDER_ROUTES } from './prerender-routes.mjs';
 import { prerenderOutputPath } from './prerender-output.mjs';
 
 const DIST = path.resolve('dist');
@@ -68,7 +68,8 @@ function auditRoute(route) {
     descCount: descriptions.length,
     canonical: canonicalRaw,
     canonicalPath,
-    canonicalOk: canonicalPath !== null && normPath(canonicalPath) === normPath(route),
+    canonicalOk:
+      canonicalPath !== null && normPath(canonicalPath) === normPath(CANONICAL_ELSEWHERE[route] ?? route),
     robots: rx.robots.exec(html)?.[1] ?? null,
     ogTitle: decode(rx.ogTitle.exec(html)?.[1] ?? ''),
     h1Count: h1s.length,
@@ -95,7 +96,11 @@ const dupTitles = groupBy(present, 'title');
 // Compare the LAST description: Helmet appends, so the page's own value is last
 // while index.html's static fallback is first.
 const dupOwnDesc = groupBy(present, (r) => r.descriptions[r.descriptions.length - 1] ?? null);
-const dupCanonical = groupBy(present, 'canonicalPath');
+// A route declared in CANONICAL_ELSEWHERE shares its target's canonical on purpose.
+const dupCanonical = groupBy(
+  present.filter((r) => !CANONICAL_ELSEWHERE[r.route]),
+  'canonicalPath',
+);
 
 if (JSON_OUT) {
   console.log(JSON.stringify({ results, dupTitles, dupOwnDesc, dupCanonical }, null, 2));

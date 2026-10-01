@@ -23,7 +23,9 @@ import { BackToTop } from "@/components/BackToTop";
 import { BreadcrumbListSchema } from "@/components/schema/BreadcrumbListSchema";
 import SpeakableSchema from "@/components/schema/SpeakableSchema";
 import { getCanonicalUrl } from "@/lib/brandConfig";
+import { RestaurantAtAGlance } from "@/components/RestaurantAtAGlance";
 import {
+  acceptsReservationsOf,
   buildRestaurantSchema,
   currentDescription,
   priceTier,
@@ -32,12 +34,13 @@ import {
   restaurantPageTitle,
 } from "@/lib/restaurantMeta";
 import { buildRestaurantFaqs, type RestaurantLifecycle } from "@/lib/restaurantFaqs";
-import { Phone, Star, DollarSign, ArrowLeft, Navigation, MessageCircle, Utensils, Globe, Info, Map, CalendarCheck, RefreshCw } from "lucide-react";
-import { useState, useMemo, useEffect } from "react";
+import { Phone, Star, ArrowLeft, Navigation, MessageCircle, Utensils, Globe, Info, Map, CalendarCheck, RefreshCw } from "lucide-react";
+import { useState, useMemo, useEffect, lazy, Suspense } from "react";
 import { useContentTracking } from "@/hooks/useContentTracking";
 import { useRecordRecentView } from "@/hooks/useRecentlyViewedFeed";
 import {
   formatOpenStatusLine,
+  hoursTextOf,
   resolveOpenStatus,
   resolveOpeningHoursSpecification,
   type RestaurantOpenResult,
@@ -45,6 +48,8 @@ import {
 } from "@/lib/restaurantHours";
 import { useMinuteClock } from "@/hooks/useMinuteClock";
 import { useRestaurantMenu } from "@/hooks/useRestaurantMenu";
+import { useRestaurantAreaPages } from "@/hooks/useRestaurantAreaPages";
+import { lastUpdatedLabel, neighborhoodLink, scheduleHoursSentence } from "@/lib/restaurantAtAGlance";
 import { tonightHeading, useTonightNearRestaurant } from "@/hooks/useTonightNearRestaurant";
 import { handleError } from "@/lib/errorHandler";
 import { LazyLocationMap } from "@/components/LazyLocationMap";
@@ -61,6 +66,10 @@ import { ClaimListingCta } from "@/components/business/ClaimListingCta";
 import { CollapsibleSection } from "@/components/CollapsibleSection";
 import { SpriteIcon } from "@/components/ui/SpriteIcon";
 import { DETAIL_STALE_TIME, detailQueryKey } from "@/lib/detailQueryKeys";
+import { isRestaurantAreaSlug } from "@/pseo/restaurantAreaSlugs";
+
+// SEO-065: the pSEO renderer, loaded only for an area slug no restaurant owns.
+const RestaurantAreaPseoPage = lazy(() => import("@/pseo/pages/RestaurantAreaPseoPage"));
 
 const UUID_RE = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
 
@@ -264,7 +273,22 @@ export default function RestaurantDetails() {
   const hasCapturedMenu = !!menuData?.menu && menuData.sections.length > 0;
 
   // The minute clock, so an event that has started leaves the list (WP3.7).
-  const tonight = useTonightNearRestaurant(restaurant?.latitude, restaurant?.longitude, now);
+  // Not asked for a place you can't eat at tonight: the rail never shows there
+  // (showTonight below), and an unasked query settles at once, so the any-date
+  // "Events Happening Nearby" rail takes its place (SEO-044). It used to wait
+  // for tonight's list to be EMPTY, so a not-open-yet place with something on
+  // tonight showed neither list.
+  const tonightApplies =
+    !!restaurant &&
+    !lifecycleOf(restaurant.status, (restaurant as { business_status?: string | null }).business_status);
+  const tonight = useTonightNearRestaurant(
+    tonightApplies ? restaurant.latitude : null,
+    tonightApplies ? restaurant.longitude : null,
+    now,
+  );
+
+  // Published, indexable cuisine x area pages that list this place (SEO-034).
+  const { data: areaPages } = useRestaurantAreaPages(restaurant);
 
   if (isLoading || (mergedInto && (survivorLoading || redirectTo))) {
     return (
@@ -293,7 +317,7 @@ export default function RestaurantDetails() {
             </div>
           </div>
         </div>
-        <Footer />
+        <Footer preferredSource={false} />
       </>
     );
   }
@@ -333,13 +357,13 @@ export default function RestaurantDetails() {
             </div>
           </div>
         </div>
-        <Footer />
+        <Footer preferredSource={false} />
       </>
     );
   }
 
   if (!restaurant) {
-    return (
+    const notFound = (
       <>
         <Helmet>
           <meta name="robots" content="noindex, follow" />
@@ -364,9 +388,20 @@ export default function RestaurantDetails() {
             </CardContent>
           </Card>
         </div>
-        <Footer />
+        <Footer preferredSource={false} />
       </>
     );
+    // SEO-065: no restaurant has this slug, and it is a taxonomy location, so
+    // it may be the published area page (/restaurants/ankeny). React Router
+    // sends it here before the generic pSEO route can see it.
+    if (slug && isRestaurantAreaSlug(slug)) {
+      return (
+        <Suspense fallback={null}>
+          <RestaurantAreaPseoPage slug={slug} notFound={notFound} />
+        </Suspense>
+      );
+    }
+    return notFound;
   }
 
   // WP8 items 1 and 2. Every scraped URL goes through safeWebUrl before it
@@ -386,14 +421,19 @@ export default function RestaurantDetails() {
   // Pre-opening copy on a place that has opened is left out everywhere (WP3.4).
   const aboutText = currentDescription(restaurant);
   const hoursSpec = resolveOpeningHoursSpecification(hoursJson, restaurant.opening);
+  // Columns select("*") returns that types.ts does not list yet (Places
+  // enrichment and SEO-060). Each is optional and read defensively.
+  const placeExtras = restaurant as {
+    google_maps_uri?: string | null;
+    reservable?: boolean | null;
+    reservation_url?: string | null;
+    neighborhood?: string | null;
+  };
 
   const showImage = restaurant.image_url && !imageError;
   // The address's city, not the `city` column: the column says "Des Moines" for
   // rows whose address is in West Des Moines (Bonchon, Dave's Hot Chicken).
   const cityName = restaurantLocality(restaurant) || "Des Moines";
-  // `location` is already the full address; appending the city used to print
-  // "..., West Des Moines, IA 50266, USA, Des Moines".
-  const neighborhoodText = restaurant.location || cityName;
 
   // One builder for this page and the edge shell (functions/_middleware.ts), so
   // a crawler that misses the prerender sees the same title. seo_title and
@@ -406,7 +446,8 @@ export default function RestaurantDetails() {
   const metaInput = {
     ...restaurant,
     hasMenu: hasCapturedMenu || !!safeMenuUrl,
-    hasHours: lifecycle !== "closed" && (!!hoursSpec || !!restaurant.opening?.trim()),
+    // SEO-054: `opening` is a date column; only hours text counts.
+    hasHours: lifecycle !== "closed" && (!!hoursSpec || hoursTextOf(restaurant.opening) !== null),
     hasPhone: !isShut && !!phoneHref,
     hasPhotos: !!restaurant.image_url,
   };
@@ -451,6 +492,8 @@ export default function RestaurantDetails() {
     openingHoursSpecification: hoursSpec,
     // A closed or not-yet-open place publishes no hours.
     openForBusiness: !lifecycle,
+    mapsUrl: safeWebUrl(placeExtras.google_maps_uri),
+    acceptsReservations: acceptsReservationsOf(placeExtras, safeWebUrl),
   });
 
   // WEB-SEO-027: the BreadcrumbList this used to build lived here AND in the
@@ -506,6 +549,12 @@ export default function RestaurantDetails() {
   const menuCapturedAt = hasCapturedMenu ? centralDate(menuData?.menu?.captured_at) : null;
   const menuFromTheirSite =
     !!menuData?.menu && (menuData.menu.source_type === "scraped" || !!safeWebUrl(menuData.menu.source_url));
+
+  // SEO-034: the answers under the name. Hours by schedule, so the prerendered
+  // sentence stays true; none for a place you can't walk into.
+  const hoursSentence = lifecycle ? null : scheduleHoursSentence(hoursJson, restaurant.opening, now);
+  const hoodLink = neighborhoodLink(placeExtras, cityName);
+  const areaLinks = [...(hoodLink ? [hoodLink] : []), ...(areaPages ?? [])];
 
   const chipClass =
     "inline-flex min-h-11 items-center text-xs px-3 bg-gray-100 text-gray-800 dark:bg-muted dark:text-foreground hover:bg-[#2D1B69]/10 hover:text-[#2D1B69] rounded-full transition-colors whitespace-nowrap font-medium";
@@ -668,18 +717,9 @@ export default function RestaurantDetails() {
                         <span className="text-sm">Google rating</span>
                       </div>
                     ) : null}
-                    {tier && (
-                      <div className="flex items-center gap-1.5 bg-black/30 backdrop-blur-sm rounded-full px-3 py-1">
-                        <DollarSign className="h-4 w-4" aria-hidden="true" />
-                        <span className="font-semibold">{tier}</span>
-                      </div>
-                    )}
-                    {restaurant.location && (
-                      <div className="flex items-center gap-1.5 bg-black/30 backdrop-blur-sm rounded-full px-3 py-1">
-                        <SpriteIcon name="map-pin" className="h-4 w-4" />
-                        <span className="text-sm">{neighborhoodText}</span>
-                      </div>
-                    )}
+                    {/* Price and address moved to the at-a-glance list
+                        below, where they are text a crawler reads next to
+                        the hours (SEO-034). */}
                   </div>
                 </div>
               </div>
@@ -728,6 +768,20 @@ export default function RestaurantDetails() {
                 </div>
               </div>
             )}
+
+            {/* SEO-034: hours, address, phone, price and menu, in that order,
+                before the buttons and long copy. */}
+            <RestaurantAtAGlance
+              hoursSentence={hoursSentence}
+              priceTier={tier}
+              address={restaurant.location}
+              locality={restaurantLocality(restaurant)}
+              phone={!isShut ? restaurant.phone : null}
+              phoneHref={!isShut ? phoneHref : null}
+              menu={menuAction}
+              areaLinks={areaLinks}
+              lastUpdated={lastUpdatedLabel(restaurant.updated_at)}
+            />
 
             {/* Quick Actions Bar */}
             <div className="flex flex-wrap gap-3 p-4 md:p-6 bg-gray-50 border-b">
@@ -1112,10 +1166,11 @@ export default function RestaurantDetails() {
             />
           </div>
 
-          {/* Any-date events nearby, only when nothing is on tonight. It asks
-              once tonight's answer is in, so the page never makes both event
+          {/* Any-date events nearby, whenever the tonight rail is not showing
+              (nothing on tonight, or a place that isn't open). It asks once
+              tonight's answer is in, so the page never makes both event
               requests for the same spot. */}
-          {tonight.events.length === 0 && tonight.isSettled ? (
+          {!showTonight && tonight.isSettled ? (
             <NearbyContent
               variant="events-near-restaurant"
               city={restaurant.city || "Des Moines"}
@@ -1143,7 +1198,7 @@ export default function RestaurantDetails() {
           hoursCheckedOn={lifecycle !== "closed" ? hoursCheckedAt(hoursJson) : null}
         />
       </div>
-      <Footer />
+      <Footer preferredSource={false} />
       <BackToTop />
 
       {/* No sticky actions for a closed place: every one of them (reserve,

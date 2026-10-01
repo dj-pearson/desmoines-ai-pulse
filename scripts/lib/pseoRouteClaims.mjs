@@ -20,8 +20,28 @@
  * fallback, and it is what makes an unclaimed pSEO slug resolve at all.
  */
 import { existsSync, readFileSync } from 'node:fs';
+import { dirname, resolve } from 'node:path';
+import { fileURLToPath } from 'node:url';
 
 const PSEO_ELEMENT = /Pseo/;
+
+/**
+ * SEO-065. /restaurants/<area> is answered by RestaurantDetails, which falls
+ * back to the pSEO page when no restaurant has the slug and the slug is in
+ * src/pseo/restaurantAreaSlugs.ts. So that route does render the pSEO page
+ * for those slugs, and they are not claimed. Read as text because this file is
+ * plain JS; the list is a literal there for exactly this reader.
+ */
+const AREA_SLUGS_FILE = resolve(dirname(fileURLToPath(import.meta.url)), '..', '..', 'src', 'pseo', 'restaurantAreaSlugs.ts');
+const AREA_FALLBACK_ROUTE = '/restaurants/:slug';
+
+export function readRestaurantAreaSlugs(path = AREA_SLUGS_FILE) {
+  if (!existsSync(path)) throw new Error(`${path} not found - cannot tell which /restaurants/<area> slugs fall back to pSEO.`);
+  const block = /RESTAURANT_AREA_SLUGS[^=]*=\s*\[([\s\S]*?)\]/.exec(readFileSync(path, 'utf8'))?.[1] ?? '';
+  const slugs = [...block.matchAll(/'([a-z0-9-]+)'/g)].map((m) => m[1]);
+  if (slugs.length === 0) throw new Error(`No RESTAURANT_AREA_SLUGS read from ${path}. The check is blind.`);
+  return slugs;
+}
 
 /**
  * Parses <Route path=... element={<X> pairs out of src/App.tsx.
@@ -81,14 +101,22 @@ export function routeMatcher(path) {
  *   exact       a non-parameterised route answers this URL
  *   shadowed    a parameterised route (an entity detail page) answers it
  *   redirected  public/_redirects already sends it somewhere
+ *   fallback    /restaurants/<area>: the detail route renders the pSEO page
+ *               when no restaurant has that slug (SEO-065)
  *
  * `claimed` is the union of exact and shadowed: the URLs where the pSEO page is
  * not what a visitor gets. Redirected slugs are NOT claimed - the redirect is
  * the resolution, and re-reporting it is what turns a check into noise.
  */
-export function classifySlugs(slugs, { appPath, redirectsPath }) {
+export function classifySlugs(slugs, { appPath, redirectsPath, areaSlugsPath = AREA_SLUGS_FILE }) {
   const allRoutes = readRoutes(appPath);
   const redirectSources = readRedirectSources(redirectsPath);
+  const areaSlugs = new Set(readRestaurantAreaSlugs(areaSlugsPath));
+  const areaFallback = (slug, route) => {
+    if (route !== AREA_FALLBACK_ROUTE) return false;
+    const segs = slug.split('/').filter(Boolean);
+    return segs.length === 2 && areaSlugs.has(segs[1]);
+  };
 
   const matchers = allRoutes
     .filter((r) => !PSEO_ELEMENT.test(r.element))
@@ -99,6 +127,8 @@ export function classifySlugs(slugs, { appPath, redirectsPath }) {
   const exact = [];
   const shadowed = [];
   const redirected = [];
+  // SEO-065: answered by the detail route's pSEO fallback, so not claimed.
+  const fallback = [];
 
   for (const slug of slugs) {
     if (redirectSources.includes(slug)) {
@@ -115,6 +145,10 @@ export function classifySlugs(slugs, { appPath, redirectsPath }) {
       continue;
     }
     const param = matchers.find((m) => m.hasParam && m.re.test(slug));
+    if (param && areaFallback(slug, param.path)) {
+      fallback.push({ slug, route: param.path });
+      continue;
+    }
     if (param) shadowed.push({ slug, route: param.path });
   }
 
@@ -126,6 +160,7 @@ export function classifySlugs(slugs, { appPath, redirectsPath }) {
     exact,
     shadowed,
     redirected,
+    fallback,
     claimed: new Set([...exact.map((e) => e.slug), ...shadowed.map((s) => s.slug)]),
   };
 }

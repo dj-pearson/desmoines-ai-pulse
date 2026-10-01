@@ -1,0 +1,128 @@
+# Daily Prerender Rebuild (SEO-035, supersedes WEB-SEO-011's deploy step)
+#
+# The production build is the only thing that regenerates public/sitemap-*.xml
+# and re-runs the prerenderer, and it only ran on push to main. So the daily
+# crawler's new events, and /events/today, /events/this-weekend and every other
+# prerendered list, stayed frozen at the last merge for crawlers that do not run
+# JavaScript. This workflow POSTs a Cloudflare Pages deploy hook once a day,
+# which rebuilds main against current data.
+#
+# 13:00 UTC is 8 am CDT / 7 am CST: after the 12:00 UTC crawler (usually done
+# by 12:20), and after the Thursday weekend article (11:00 UTC), so Thursday's
+# rebuild prerenders it. This is the single place the hook is called; the
+# crawler's publish-freshness job no longer calls it, so there is one build a
+# day rather than two.
+#
+# NEEDS ONE SECRET: CLOUDFLARE_DEPLOY_HOOK_URL (repository secret). Without it
+# the run goes yellow with a warning, not red, so a missing secret is visible
+# in the Actions list without paging anyone.
+#
+# INDEXNOW (SEO-047). After the hook fires, the second job waits for the new
+# sitemaps to go live, diffs every URL's lastmod against the last run's
+# snapshot (kept in the Actions cache) and submits what changed to IndexNow,
+# which Bing reads. Nothing changed means nothing is sent, and the log says so.
+# A rejected submission fails that job and leaves the snapshot alone, so the
+# next day's run sends the same URLs again. On a cache miss it falls back to
+# URLs whose lastmod is within the last day.
+
+name: Daily Prerender Rebuild
+
+on:
+  schedule:
+    - cron: '0 13 * * *'
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+concurrency:
+  group: prerender-rebuild
+  cancel-in-progress: false
+
+jobs:
+  rebuild:
+    name: Trigger Cloudflare Pages rebuild
+    runs-on: ubuntu-latest
+    outputs:
+      triggered: ${{ steps.deploy.outputs.triggered }}
+    timeout-minutes: 5
+    steps:
+      - name: POST the deploy hook
+        id: deploy
+        env:
+          DEPLOY_HOOK: ${{ secrets.CLOUDFLARE_DEPLOY_HOOK_URL }}
+        run: |
+          if [ -z "${DEPLOY_HOOK}" ]; then
+            echo "::warning::CLOUDFLARE_DEPLOY_HOOK_URL is not set. Create a deploy hook for branch main in the Cloudflare Pages project (Settings > Builds & deployments > Deploy hooks) and add its URL as a repository secret with that name (SEO-035)."
+            echo "triggered=false" >> "$GITHUB_OUTPUT"
+            exit 0
+          fi
+          code=$(curl -sS -o /tmp/deploy.json -w '%{http_code}' -X POST "${DEPLOY_HOOK}" --max-time 60) || true
+          echo "deploy hook HTTP ${code}"
+          # The response carries a deployment id, not the hook URL; safe to show.
+          head -c 300 /tmp/deploy.json 2>/dev/null || true
+          echo
+          if [ "${code}" != "200" ] && [ "${code}" != "201" ]; then
+            echo "::error::Deploy hook returned ${code}; today's prerender will not run."
+            exit 1
+          fi
+          echo "triggered=true" >> "$GITHUB_OUTPUT"
+
+      - name: Summary
+        if: always()
+        run: |
+          echo "## Daily prerender rebuild" >> "$GITHUB_STEP_SUMMARY"
+          echo "" >> "$GITHUB_STEP_SUMMARY"
+          echo "- **Rebuild triggered**: ${{ steps.deploy.outputs.triggered || 'false' }}" >> "$GITHUB_STEP_SUMMARY"
+          echo "- The build regenerates sitemap-*.xml and re-runs the prerenderer against current events." >> "$GITHUB_STEP_SUMMARY"
+
+  indexnow:
+    name: Submit changed URLs to IndexNow
+    needs: rebuild
+    # Runs even when the hook did not fire (secret unset, hook error): pushes
+    # to main also deploy new sitemaps, and the diff finds those just the same.
+    # It only waits for a fresh build when one was actually triggered.
+    if: ${{ !cancelled() }}
+    runs-on: ubuntu-latest
+    timeout-minutes: 40
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v4
+
+      - name: Set up Node 20
+        uses: actions/setup-node@v4
+        with:
+          node-version: '20'
+          cache: 'npm'
+
+      - name: Install dependencies
+        run: npm ci
+
+      # Each run saves under its own key; restore-keys picks the newest.
+      - name: Restore the last sitemap snapshot
+        uses: actions/cache/restore@v4
+        with:
+          path: .indexnow/state.json
+          key: indexnow-sitemap-state-${{ github.run_id }}
+          restore-keys: indexnow-sitemap-state-
+
+      - name: Diff the live sitemaps and submit
+        env:
+          TRIGGERED: ${{ needs.rebuild.outputs.triggered }}
+        run: |
+          WAIT=0
+          if [ "${TRIGGERED}" = "true" ]; then WAIT=25; fi
+          npx tsx scripts/indexnow-ping.ts --from-sitemaps --state .indexnow/state.json --wait-minutes "${WAIT}" --since-days 1 | tee /tmp/indexnow.log
+
+      - name: Save the snapshot
+        if: success()
+        uses: actions/cache/save@v4
+        with:
+          path: .indexnow/state.json
+          key: indexnow-sitemap-state-${{ github.run_id }}
+
+      - name: Summary
+        if: always()
+        run: |
+          echo "## IndexNow" >> "$GITHUB_STEP_SUMMARY"
+          grep '^indexnow:\|IndexNow HTTP' /tmp/indexnow.log >> "$GITHUB_STEP_SUMMARY" 2>/dev/null || echo "No log." >> "$GITHUB_STEP_SUMMARY"

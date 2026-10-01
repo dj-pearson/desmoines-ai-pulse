@@ -118,10 +118,13 @@ export const DIRECTORY_SECTIONS: DirectorySection[] = [
     title: "Neighborhoods",
     links: [
       { title: "All neighborhoods", href: "/neighborhoods" },
-      { title: "Downtown", href: "/neighborhoods/downtown" },
-      { title: "East Village", href: "/neighborhoods/east-village" },
-      { title: "Beaverdale", href: "/neighborhoods/beaverdale" },
-      { title: "Highland Park", href: "/neighborhoods/highland-park" },
+      // SEO-040: Downtown, Beaverdale and Highland Park pointed at
+      // /neighborhoods/<slug> URLs with no guide behind them, which answer with
+      // a noindex "we don't have a guide" page. The area pages that exist:
+      { title: "Downtown", href: "/things-to-do/downtown" },
+      { title: "East Village", href: "/things-to-do/east-village" },
+      { title: "West Des Moines", href: "/neighborhoods/west-des-moines" },
+      { title: "Ankeny", href: "/neighborhoods/ankeny" },
     ],
   },
   {

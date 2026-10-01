@@ -15,6 +15,7 @@ import { SpriteIcon } from "@/components/ui/SpriteIcon";
 import { isCapacitor, openExternalUrl, shareWithOutcome } from "@/lib/capacitorUtils";
 import { useRecordRecentView } from "@/hooks/useRecentlyViewedFeed";
 import { getDirectionsUrl } from "@/lib/directions";
+import { markdownToPlainText } from "@/lib/aiText";
 import { handleError } from "@/lib/errorHandler";
 import { isFreePrice } from "@/lib/eventPrice";
 import {
@@ -162,7 +163,7 @@ export function EventQuickView({ event, open, onOpenChange }: EventQuickViewProp
         })
       : null;
   const detailsHref = `/events/${createEventSlugWithCentralTime(event.title, event)}`;
-  const description = event.enhanced_description || event.original_description;
+  const description = markdownToPlainText(event.enhanced_description || event.original_description);
   const srSummary = [
     when,
     event.venue || event.location,

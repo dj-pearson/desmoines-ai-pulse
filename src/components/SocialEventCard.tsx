@@ -8,6 +8,7 @@ import ShareDialog from '@/components/ShareDialog';
 import { useEventSocial } from '@/hooks/useEventSocial';
 import { BatchEventSocialData } from '@/hooks/useBatchEventSocial';
 import { Event } from '@/lib/types';
+import { markdownToPlainText } from '@/lib/aiText';
 import { SpriteIcon } from '@/components/ui/SpriteIcon';
 import { createEventSlugWithCentralTime, formatInCentralTime } from '@/lib/timezone';
 import {
@@ -362,7 +363,7 @@ function SocialEventCardComponent({
           {/* Description Preview */}
           {(event.enhanced_description || event.original_description) && (
             <p className="text-sm text-muted-foreground line-clamp-2 leading-relaxed">
-              {event.enhanced_description || event.original_description}
+              {markdownToPlainText(event.enhanced_description || event.original_description)}
             </p>
           )}
 
@@ -392,8 +393,7 @@ function SocialEventCardComponent({
             <ShareDialog
               title={event.title}
               description={
-                event.enhanced_description ||
-                event.original_description ||
+                markdownToPlainText(event.enhanced_description || event.original_description) ||
                 `Check out ${event.title} in Des Moines`
               }
               url={`${window.location.origin}${eventUrl}`}

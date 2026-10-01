@@ -13,6 +13,10 @@ import { RestaurantInlineFilters } from "@/components/RestaurantInlineFilters";
 import { RestaurantsTonightStrip } from "@/components/RestaurantsTonightStrip";
 import { RestaurantsHubDirectory } from "@/components/seo/RestaurantsHubDirectory";
 import { RestaurantsHubFaq, RestaurantsHubGuide } from "@/components/RestaurantsHubGuide";
+import { RestaurantsTopRated } from "@/components/RestaurantsTopRated";
+import { useTopRatedRestaurants } from "@/hooks/useTopRatedRestaurants";
+import { useRestaurantHubAreaPages } from "@/hooks/useRestaurantHubAreaPages";
+import { TOP_RATED_RULE } from "@/lib/restaurantRanking";
 import {
   useRestaurants,
   useInfiniteRestaurants,
@@ -105,9 +109,6 @@ const CARDS_BEFORE_TONIGHT = 3;
  * (eat-drink plan WP1 item 6).
  */
 const RESULTS_BEFORE_INTERSTITIAL = 9;
-
-/** How many restaurants go into the ItemList. Both fields must use it. */
-const RESTAURANT_SCHEMA_LIMIT = 20;
 
 
 const FILTER_KEYS = ["q", "cuisine", "price", "rmin", "rmax", "location", "sort", "featured", "open", "tags"];
@@ -332,6 +333,7 @@ export default function Restaurants() {
   );
   const filterOptions = useRestaurantFilterOptions();
   const { cuisineCounts } = useCuisineCounts();
+  const { data: areaPages = [] } = useRestaurantHubAreaPages();
   const { announce, announcement, regionProps } = useAnnounce();
 
   const handleSurpriseMe = useCallback(() => {
@@ -493,19 +495,31 @@ export default function Restaurants() {
     "late night food Des Moines",
   ];
 
+  // THE RANKED LIST LEADS THE UNFILTERED HUB (SEO-038), page 1 only: a
+  // filtered or paged view is a search, and a ranking over the whole metro
+  // above it would be answering a different question.
+  const showTopRated = !hasActiveFilters && page === 1;
+  const topRated = useTopRatedRestaurants({ enabled: showTopRated });
+  const topRatedRows = topRated.data ?? [];
+
   // ONLY THE CANONICAL LIST GETS AN ItemList (item 12): page 1 with no
   // filters, which is the one URL a crawler should treat as this collection.
   // A filtered or paged view is a different list under the same canonical.
-  const emitItemList = !hasActiveFilters && page === 1 && restaurants.length > 0;
-  const schemaRows = restaurants.slice(0, RESTAURANT_SCHEMA_LIMIT);
+  //
+  // IT LISTS THE RANKED 20 (SEO-038), not the first 20 of the rotation. The
+  // rotation is shuffled by a daily seed, so the ItemList used to name a
+  // different arbitrary 20 each day, and on 2026-10-01 it included a San
+  // Antonio and a Crested Butte restaurant.
+  const emitItemList = showTopRated && topRatedRows.length > 0;
+  const schemaRows = topRatedRows;
 
   const restaurantsSchema = emitItemList
     ? {
         "@context": "https://schema.org",
         "@type": "ItemList",
-        name: "Restaurants in Des Moines, Iowa",
-        description:
-          "Restaurants in Des Moines, Iowa, with menus, hours, prices and photos.",
+        name: "Best-rated restaurants in Des Moines, Iowa",
+        description: TOP_RATED_RULE,
+        itemListOrder: "https://schema.org/ItemListOrderAscending",
         // numberOfItems COUNTS THE ITEMS ACTUALLY LISTED, not the collection the
         // page was drawn from. This read `totalCount || restaurants.length` while
         // itemListElement was sliced to 20, so the prerendered page declared an
@@ -531,7 +545,6 @@ export default function Restaurants() {
               "@id": pageUrl,
               url: pageUrl,
               name: restaurant.name,
-              description: restaurant.description,
               servesCuisine: restaurant.cuisine,
               priceRange: restaurant.price_range,
               address: {
@@ -544,6 +557,10 @@ export default function Restaurants() {
               },
               ...(restaurant.image_url && { image: restaurant.image_url }),
               // WEB-SEO-025: no aggregateRating is emitted here.
+              //
+              // SEO-038 ranks these rows BY a rating, and it is still not
+              // emitted: the rating is Google's, a third party's, and review
+              // snippets are for first-party ratings.
               //
               // This block asserted a review count of Math.round(popularity_score * 2)
               // for the first 20 restaurants on the site's highest-impression page.
@@ -698,9 +715,11 @@ export default function Restaurants() {
                   Des Moines
                 </span>
               </h1>
-              <p className="hidden sm:block text-lg md:text-xl text-white/80 max-w-2xl mx-auto">
-                Search by cuisine, price or dietary need, see what opened this month, and find
-                dinner near tonight's show.
+              {/* SEO-038. Visible at every width: on a phone it was
+                  display:none, and it now says what sits directly below. */}
+              <p className="mt-2 sm:mt-0 text-sm sm:text-lg md:text-xl text-white/85 max-w-2xl mx-auto">
+                Start with the 20 best-rated on Google, or search every listing by cuisine, price
+                or dietary need and see what opened this month.
               </p>
             </div>
 
@@ -844,6 +863,11 @@ export default function Restaurants() {
             ]}
             className="hidden sm:flex mb-4"
           />
+          {showTopRated && (
+            <div className="mb-4 sm:mb-6">
+              <RestaurantsTopRated restaurants={topRatedRows} isLoading={topRated.isLoading} />
+            </div>
+          )}
           <div className="space-y-2 sm:space-y-6">
             {/* Smart Preset Filters - one-tap scenarios */}
             <RestaurantSmartPresets onApplyPreset={setFilters} filters={filters} />
@@ -1154,6 +1178,7 @@ export default function Restaurants() {
                 and cuisines, as crawlable links (item 8). */}
             <RestaurantsHubDirectory
               cuisineCounts={cuisineCounts}
+              areaPages={areaPages}
               onCuisineClick={scrollToResults}
               className="py-8"
             />

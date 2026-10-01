@@ -32,6 +32,7 @@
  * sentence an assistant lifts when asked what is on in Des Moines this
  * weekend, so a wrong word in it is repeated to people as fact.
  */
+import { markdownToPlainText } from "@/lib/aiText";
 import { BRAND } from "@/lib/brandConfig";
 import { parseEventPrice } from "@/lib/eventOffers";
 import { eventEnd, eventTiming } from "@/lib/eventTiming";
@@ -166,7 +167,9 @@ export function eventMetaDescription(event: EventLike): string {
   const price = priceFragment(event);
   const priceText = price ? (price.free ? " Free admission." : ` Tickets ${price.text}.`) : "";
 
-  const about = (event.enhanced_description || event.original_description || "").trim();
+  // Plain text: a model label or markdown here is the first thing a searcher
+  // reads in the snippet (SEO-057).
+  const about = markdownToPlainText(event.enhanced_description || event.original_description);
   const head = `${lead}${priceText}`;
   if (!about) return clip(head, EVENT_DESCRIPTION_BUDGET);
 

@@ -18,6 +18,7 @@
  * would still pass if the gate rejected everything.
  */
 import { strictGateFailures } from '../lazy-preload-patterns.mjs';
+import { expectedCanonicalFor, validatePseoCanonicalElsewhere } from '../pseo-canonical-elsewhere.mjs';
 
 let failures = 0;
 const check = (name, cond, detail = '') => {
@@ -200,6 +201,105 @@ check(
 check(
   'with only the vite title known, the homepage title is NOT caught (why the list exists)',
   strictGateFailures(homeAtPseo, '/things-to-do/east-village', VITE_TITLE).length === 0,
+);
+
+console.log('\nstrictGateFailures - a declared canonical elsewhere (SEO-036)');
+
+check(
+  'a page canonicalised to its declared target passes',
+  strictGateFailures(
+    good('/events/today', 'Events Near Me in Des Moines | Des Moines Insider'),
+    '/events/near-me',
+    SHELL_TITLE,
+    '/events/today',
+  ).length === 0,
+);
+check(
+  'the same page fails without the declaration',
+  strictGateFailures(
+    good('/events/today', 'Events Near Me in Des Moines | Des Moines Insider'),
+    '/events/near-me',
+    SHELL_TITLE,
+  ).some((f) => f.includes('/events/today')),
+);
+check(
+  'a declared target fails when the page points somewhere else',
+  strictGateFailures(
+    good('/', 'Events Near Me in Des Moines | Des Moines Insider'),
+    '/events/near-me',
+    SHELL_TITLE,
+    '/events/today',
+  ).length > 0,
+);
+
+console.log('\nstrictGateFailures - generated pSEO canonical elsewhere (SEO-066)');
+
+// The shape of scripts/.generated/pseo-canonical-elsewhere.json as SEO-064's
+// rows produce it, plus three declarations the gate must refuse to honour.
+const generated = validatePseoCanonicalElsewhere({
+  '/bbq/today': '/restaurants',
+  '/asian/fall': '/restaurants',
+  '/pizza/tonight': '/',
+  '/mexican/winter': '/mexican/winter',
+  '/brunch/spring': 'https://elsewhere.example/restaurants',
+});
+const bbqToday = good('/restaurants', 'BBQ in Des Moines Today | Des Moines Insider');
+
+check(
+  'a pSEO page canonicalised to its generated target passes (the 26 that failed the build)',
+  strictGateFailures(bbqToday, '/bbq/today', SHELL_TITLE, expectedCanonicalFor('/bbq/today', generated.accepted))
+    .length === 0,
+);
+check(
+  'negative control: the same page fails when the map is not consulted (the SEO-066 bug)',
+  strictGateFailures(bbqToday, '/bbq/today', SHELL_TITLE).some((f) => f.includes('/restaurants')),
+);
+check(
+  'negative control: a declared pSEO page that canonicals the homepage fails',
+  strictGateFailures(
+    good('/', 'BBQ in Des Moines Today | Des Moines Insider'),
+    '/bbq/today',
+    SHELL_TITLE,
+    expectedCanonicalFor('/bbq/today', generated.accepted),
+  ).some((f) => f.includes('canonical points at /,')),
+);
+check(
+  'negative control: a declared pSEO page that canonicals an undeclared target fails',
+  strictGateFailures(
+    good('/restaurants/cuisine/bbq', 'BBQ in Des Moines Today | Des Moines Insider'),
+    '/bbq/today',
+    SHELL_TITLE,
+    expectedCanonicalFor('/bbq/today', generated.accepted),
+  ).some((f) => f.includes('/restaurants/cuisine/bbq')),
+);
+check(
+  'negative control: an undeclared pSEO page canonicalising elsewhere still fails',
+  strictGateFailures(
+    good('/restaurants', 'Pizza in Des Moines Today | Des Moines Insider'),
+    '/pizza/today',
+    SHELL_TITLE,
+    expectedCanonicalFor('/pizza/today', generated.accepted),
+  ).length > 0,
+);
+check(
+  'a stored homepage target is dropped, so that page must self-canonical',
+  !('/pizza/tonight' in generated.accepted) &&
+    expectedCanonicalFor('/pizza/tonight', generated.accepted) === '/pizza/tonight',
+);
+check(
+  'self-targets and off-site targets are dropped too',
+  !('/mexican/winter' in generated.accepted) &&
+    !('/brunch/spring' in generated.accepted) &&
+    generated.rejected.length === 3,
+);
+check(
+  'the hand-kept list wins over the generated one',
+  expectedCanonicalFor('/events/near-me', { '/events/near-me': '/events' }) === '/events/today',
+);
+check(
+  'a malformed file body yields no declarations',
+  Object.keys(validatePseoCanonicalElsewhere(['/bbq/today']).accepted).length === 0 &&
+    Object.keys(validatePseoCanonicalElsewhere(null).accepted).length === 0,
 );
 
 console.log(

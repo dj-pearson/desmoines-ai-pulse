@@ -11,21 +11,36 @@ import { createClient } from "https://esm.sh/@supabase/supabase-js@2.39.3";
 import { errorResponse } from "../_shared/errorResponse.ts";
 import { fetchWithTimeout } from "../_shared/fetchWithTimeout.ts";
 import { requireAdminOrApiKey } from "../_shared/apiKeyAuth.ts";
+import { handleCors, getCorsHeaders, isOriginAllowed } from "../_shared/cors.ts";
+import { checkRateLimitPersistent, addRateLimitHeaders } from "../_shared/rateLimit.ts";
+import { validateInput } from "../_shared/validation.ts";
 
-const corsHeaders = {
-  "Access-Control-Allow-Origin": "*",
-  "Access-Control-Allow-Headers":
-    "authorization, x-client-info, apikey, content-type",
-};
+const UUID_PATTERN = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
 
-interface SyncRequest {
-  propertyId: string;
-  dateRange?: number; // Days to sync (default: 28)
-}
+// Search Console retains 16 months (~486 days). The widest backfill pass ever
+// sent was 480, so 540 rejects nothing a real caller has used.
+const MAX_DATE_RANGE_DAYS = 540;
 
 serve(async (req) => {
-  if (req.method === "OPTIONS") {
-    return new Response(null, { headers: corsHeaders });
+  // SEO-050: shared, environment-aware CORS instead of a hardcoded "*". The
+  // only browser caller is the admin dashboard on the site origin; pg_cron
+  // sends no Origin header and is unaffected.
+  const corsResponse = handleCors(req);
+  if (corsResponse) return corsResponse;
+  const origin = req.headers.get("origin") || "";
+  const corsHeaders = getCorsHeaders(isOriginAllowed(origin) ? origin : undefined);
+
+  // Each call makes two Search Console API requests and up to ~50 upsert
+  // batches. 20 per 15 minutes is far above what an admin clicking "sync"
+  // does; the daily cron presents the service-role key and is exempt.
+  const rateLimit = await checkRateLimitPersistent(req, {
+    max: 20,
+    endpoint: "gsc-sync-data",
+    exemptInternal: true,
+    message: "Too many sync requests. Please try again later.",
+  });
+  if (!rateLimit.success && rateLimit.response) {
+    return addRateLimitHeaders(rateLimit.response, rateLimit);
   }
 
   // Runs as service_role and had no caller check. verify_jwt is not a gate:
@@ -33,9 +48,10 @@ serve(async (req) => {
   // the publishable anon key is, in every client bundle.
   //
   // Every caller is admin-gated already: SearchTrafficDashboard, mounted at
-  // /admin/analytics-dashboard behind <ProtectedRoute requireAdmin>. No cron job posts here.
-  // So the route assumed admin and the server did not enforce it; the admin
-  // JWT that functions.invoke sends is what requireAdminOrApiKey checks.
+  // /admin/analytics-dashboard behind <ProtectedRoute requireAdmin>, and the
+  // gsc-sync-daily pg_cron job (20260831000001), which sends the service-role
+  // key. The admin JWT that functions.invoke sends, or that key, is what
+  // requireAdminOrApiKey checks.
   const authFailure = await requireAdminOrApiKey(req, corsHeaders);
   if (authFailure) return authFailure;
 
@@ -46,19 +62,35 @@ serve(async (req) => {
     const supabaseServiceKey = Deno.env.get("SUPABASE_SERVICE_ROLE_KEY")!;
     const supabase = createClient(supabaseUrl, supabaseServiceKey);
 
-    const body: SyncRequest = await req.json();
-    propertyId = body.propertyId;
-    const dateRange = body.dateRange ?? 28;
-
-    if (!propertyId) {
+    // A body that is not JSON used to throw out of req.json() into the 500
+    // handler. It is a caller error, so it is a 400 now.
+    let body: Record<string, unknown>;
+    try {
+      body = await req.json();
+    } catch {
       return new Response(
-        JSON.stringify({ error: "propertyId is required" }),
-        {
-          status: 400,
-          headers: { ...corsHeaders, "Content-Type": "application/json" },
-        }
+        JSON.stringify({ error: "Request body must be JSON with propertyId" }),
+        { status: 400, headers: { ...corsHeaders, "Content-Type": "application/json" } }
       );
     }
+
+    const validation = validateInput(body ?? {}, {
+      propertyId: { type: "string", required: true, pattern: UUID_PATTERN },
+      dateRange: { type: "number", min: 1, max: MAX_DATE_RANGE_DAYS, default: 28 },
+    });
+    if (!validation.success) {
+      // Same status and same `error` key the old "propertyId is required"
+      // branch returned; `details` is new and additive.
+      return new Response(
+        JSON.stringify({
+          error: Object.values(validation.errors ?? {})[0] ?? "Invalid request",
+          details: validation.errors,
+        }),
+        { status: 400, headers: { ...corsHeaders, "Content-Type": "application/json" } }
+      );
+    }
+    propertyId = validation.data!.propertyId as string;
+    const dateRange = Math.round(validation.data!.dateRange as number);
 
     console.log(`Syncing GSC data for property: ${propertyId}`);
     const startTime = Date.now();
@@ -80,8 +112,22 @@ serve(async (req) => {
       );
     }
 
+    // SEO-050: a sync that cannot authenticate used to return 401 and leave
+    // the property reading status 'active', so the admin panel had no way to
+    // say "not connected". status is CHECKed to active/paused/error, so this
+    // uses 'error' with a message that says reconnecting is the fix.
+    const markDisconnected = async (reason: string) => {
+      const now = new Date().toISOString();
+      const { error: markError } = await supabase
+        .from("gsc_properties")
+        .update({ status: "error", error_message: reason, is_syncing: false, updated_at: now })
+        .eq("id", propertyId);
+      if (markError) console.error("Could not record disconnected state:", markError.message);
+    };
+
     const credential = property.gsc_oauth_credentials;
     if (!credential || !credential.is_active) {
+      await markDisconnected("No active Search Console credential is linked to this property. Reconnect through OAuth.");
       return new Response(
         JSON.stringify({ error: "No active credential for this property" }),
         {
@@ -96,6 +142,7 @@ serve(async (req) => {
       console.log("Access token expired — attempting refresh...");
 
       if (!credential.refresh_token) {
+        await markDisconnected("Access token expired and the credential has no refresh token. Reconnect through OAuth.");
         return new Response(
           JSON.stringify({
             error: "Access token expired and no refresh token available. Please reconnect.",
@@ -122,6 +169,36 @@ serve(async (req) => {
       if (!refreshResponse.ok) {
         const refreshError = await refreshResponse.text();
         console.error("Token refresh failed:", refreshError);
+        // invalid_grant is Google saying the refresh token is revoked or
+        // lapsed: only a person at the consent screen can fix that. Anything
+        // else (5xx, timeout) may clear on tomorrow's run.
+        const revoked = refreshError.includes("invalid_grant");
+        // A revoked grant also deactivates the credential, matching what
+        // gsc-oauth?action=refresh does. is_active=false is what the admin
+        // panel reads as "not connected".
+        const { error: credErr } = await supabase
+          .from("gsc_oauth_credentials")
+          .update({
+            ...(revoked ? { is_active: false } : {}),
+            error_count: (credential.error_count || 0) + 1,
+            last_error: `Token refresh failed (HTTP ${refreshResponse.status})${revoked ? ": invalid_grant" : ""}`,
+            last_error_at: new Date().toISOString(),
+          })
+          .eq("id", credential.id);
+        if (credErr) console.error("Could not record refresh failure on credential:", credErr.message);
+        if (revoked) {
+          await markDisconnected("Google rejected the refresh token (invalid_grant). Reconnect through OAuth.");
+        } else {
+          const { error: propErr } = await supabase
+            .from("gsc_properties")
+            .update({
+              status: "error",
+              error_message: `Token refresh failed (HTTP ${refreshResponse.status}); will retry on the next run.`,
+              is_syncing: false,
+            })
+            .eq("id", propertyId);
+          if (propErr) console.error("Could not record refresh failure on property:", propErr.message);
+        }
         return new Response(
           JSON.stringify({
             error: "Token refresh failed — please reconnect Google Search Console.",
@@ -135,8 +212,10 @@ serve(async (req) => {
       const refreshData = await refreshResponse.json();
       const newExpiresAt = new Date(Date.now() + (refreshData.expires_in || 3600) * 1000);
 
-      // Persist refreshed token
-      await supabase
+      // Persist refreshed token. A failed write is survivable for this run
+      // (the token is in memory) but means every run refreshes again, so it
+      // is logged rather than ignored.
+      const { error: persistError } = await supabase
         .from("gsc_oauth_credentials")
         .update({
           access_token: refreshData.access_token,
@@ -144,6 +223,7 @@ serve(async (req) => {
           last_refreshed_at: new Date().toISOString(),
         })
         .eq("id", credential.id);
+      if (persistError) console.error("Could not persist refreshed token:", persistError.message);
 
       credential.access_token = refreshData.access_token;
       console.log("Token refreshed successfully, new expiry:", newExpiresAt.toISOString());
@@ -214,6 +294,7 @@ serve(async (req) => {
     console.log(`Processing ${keywordRows.length} keyword records...`);
 
     let keywordsSynced = 0;
+    let batchErrors = 0;
     const BATCH_SIZE = 500;
 
     // Build records array
@@ -242,6 +323,7 @@ serve(async (req) => {
       if (!upsertError) {
         keywordsSynced += batch.length;
       } else {
+        batchErrors++;
         console.error(`Keyword batch ${i / BATCH_SIZE + 1} error:`, upsertError.message);
       }
     }
@@ -361,6 +443,7 @@ serve(async (req) => {
       if (!upsertError) {
         pagesSynced += batch.length;
       } else {
+        batchErrors++;
         console.error(`Page batch ${i / BATCH_SIZE + 1} error:`, upsertError.message);
       }
     }
@@ -369,16 +452,33 @@ serve(async (req) => {
     // Update property with sync status
     // ========================================================================
     const executionTime = Date.now() - startTime;
+    const finishedAt = new Date().toISOString();
 
-    await supabase
+    // error_message used to survive a successful run forever, so a property
+    // that failed once in March still carried the March error. A clean run
+    // clears it; a run with failed batches says how many.
+    const { error: finalUpdateError } = await supabase
       .from("gsc_properties")
       .update({
         is_syncing: false,
-        last_sync_at: new Date().toISOString(),
+        last_sync_at: finishedAt,
         status: "active",
-        updated_at: new Date().toISOString(),
+        error_message: batchErrors > 0
+          ? `${batchErrors} upsert batch(es) failed on the last run; see gsc-sync-data logs.`
+          : null,
+        updated_at: finishedAt,
       })
       .eq("id", propertyId);
+    if (finalUpdateError) console.error("Could not record sync completion:", finalUpdateError.message);
+
+    // The refresh-token idle clock runs from last use. Nothing wrote
+    // last_used_at on this path, so the column still read 2026-03-31 while
+    // the daily job was using the grant every morning.
+    const { error: usedError } = await supabase
+      .from("gsc_oauth_credentials")
+      .update({ last_used_at: finishedAt })
+      .eq("id", credential.id);
+    if (usedError) console.error("Could not record credential use:", usedError.message);
 
     console.log(
       `Sync completed: ${keywordsSynced} keywords, ${pagesSynced} pages in ${executionTime}ms`
@@ -390,6 +490,7 @@ serve(async (req) => {
         summary: {
           keywordsSynced,
           pagesSynced,
+          batchErrors,
           dateRange: {
             start: startDateStr,
             end: endDateStr,
