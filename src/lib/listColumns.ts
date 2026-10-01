@@ -62,8 +62,12 @@ export const EVENT_LIST_COLUMNS =
 // this projection, so every row arrived with them undefined and the sponsored
 // boost had never once fired on that page. Restaurants and events already
 // carry them; this brings attractions in line.
+//
+// admission_summary, parking_summary, fact_sources and facts_verified_at are
+// SEO-046: the detail page states them under the h1, and the /attractions
+// free-admission list reads the sources to show only verified "free".
 export const ATTRACTION_LIST_COLUMNS =
-  "created_at, description, id, image_url, is_featured, is_sponsored, sponsored_until, latitude, location, longitude, name, rating, type, updated_at, website, address, hours_summary, hours, is_indoor, is_kid_friendly, is_free, is_active, accessibility_notes";
+  "created_at, description, id, image_url, is_featured, is_sponsored, sponsored_until, latitude, location, longitude, name, rating, type, updated_at, website, address, hours_summary, hours, is_indoor, is_kid_friendly, is_free, is_active, accessibility_notes, admission_summary, parking_summary, fact_sources, facts_verified_at";
 
 // Hotels: 43 columns, of which the list UI reads none of the SEO/GEO text or
 // the gallery array. Verified by grepping every useHotels caller

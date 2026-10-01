@@ -1326,8 +1326,11 @@ export type Database = {
         Row: {
           accessibility_notes: string | null
           address: string | null
+          admission_summary: string | null
           created_at: string | null
           description: string | null
+          fact_sources: Json | null
+          facts_verified_at: string | null
           geo_faq: Json | null
           geo_key_facts: string[] | null
           geo_summary: string | null
@@ -1348,6 +1351,7 @@ export type Database = {
           longitude: number | null
           name: string
           needs_manual_verification: boolean
+          parking_summary: string | null
           rating: number | null
           seo_description: string | null
           seo_h1: string | null
@@ -1361,8 +1365,11 @@ export type Database = {
         Insert: {
           accessibility_notes?: string | null
           address?: string | null
+          admission_summary?: string | null
           created_at?: string | null
           description?: string | null
+          fact_sources?: Json | null
+          facts_verified_at?: string | null
           geo_faq?: Json | null
           geo_key_facts?: string[] | null
           geo_summary?: string | null
@@ -1383,6 +1390,7 @@ export type Database = {
           longitude?: number | null
           name: string
           needs_manual_verification?: boolean
+          parking_summary?: string | null
           rating?: number | null
           seo_description?: string | null
           seo_h1?: string | null
@@ -1396,8 +1404,11 @@ export type Database = {
         Update: {
           accessibility_notes?: string | null
           address?: string | null
+          admission_summary?: string | null
           created_at?: string | null
           description?: string | null
+          fact_sources?: Json | null
+          facts_verified_at?: string | null
           geo_faq?: Json | null
           geo_key_facts?: string[] | null
           geo_summary?: string | null
@@ -1418,6 +1429,7 @@ export type Database = {
           longitude?: number | null
           name?: string
           needs_manual_verification?: boolean
+          parking_summary?: string | null
           rating?: number | null
           seo_description?: string | null
           seo_h1?: string | null

@@ -19,6 +19,14 @@
  *     opening could be on the day nobody entered.
  * A day is closed only when it says so: `null`, `false`, `"closed"`, or an
  * object with `closed: true`.
+ *
+ * SEASONS (SEO-046). Most attractions publish hours by season: the zoo's
+ * "10 to 4 from Labor Day to Memorial Day", the Botanical Garden's four
+ * date ranges. So the column may also hold the week object with
+ * `valid_from` / `valid_through` (YYYY-MM-DD, Central time, inclusive), or an
+ * array of those. A season only answers for the dates it names: outside every
+ * season the hours are unknown, never last season's hours carried forward,
+ * and the schema says when each set of hours applies.
  */
 import {
   desMoinesNow,
@@ -40,7 +48,7 @@ const WEEK: ReadonlyArray<{ key: string; label: string; day: number }> = [
   { key: "sun", label: "Sunday", day: 0 },
 ];
 
-type DayHours =
+export type DayHours =
   | { kind: "open"; openMinute: number; closeMinute: number }
   | { kind: "closed" }
   | { kind: "missing" };
@@ -81,14 +89,73 @@ function isRecord(value: unknown): value is Record<string, unknown> {
   return typeof value === "object" && value !== null && !Array.isArray(value);
 }
 
+const VALIDITY_KEYS = new Set(["valid_from", "valid_through"]);
+
 /** The stored object keyed by three-letter day, whatever case or length the admin used. */
 function normaliseKeys(hours: unknown): Record<string, unknown> | null {
   if (!isRecord(hours)) return null;
   const out: Record<string, unknown> = {};
   for (const [key, value] of Object.entries(hours)) {
+    if (VALIDITY_KEYS.has(key)) continue;
     out[key.trim().toLowerCase().slice(0, 3)] = value;
   }
   return out;
+}
+
+/** One set of weekly hours and the dates it covers (null = open-ended). */
+export interface HoursSeason {
+  validFrom: string | null;
+  validThrough: string | null;
+  week: Record<string, unknown>;
+}
+
+const ISO_DATE = /^\d{4}-\d{2}-\d{2}$/;
+
+/**
+ * Every season the column holds, in stored order. A plain week object is one
+ * open-ended season. A season whose valid_from or valid_through is present
+ * but not a YYYY-MM-DD date is dropped: its dates can't be read, so it can't
+ * be said to apply on any day.
+ */
+export function hoursSeasons(hours: unknown): HoursSeason[] {
+  const list = Array.isArray(hours) ? hours : [hours];
+  const out: HoursSeason[] = [];
+  for (const item of list) {
+    if (!isRecord(item)) continue;
+    const from = item.valid_from;
+    const through = item.valid_through;
+    if (from != null && !(typeof from === "string" && ISO_DATE.test(from))) continue;
+    if (through != null && !(typeof through === "string" && ISO_DATE.test(through))) continue;
+    out.push({ validFrom: (from as string | undefined) ?? null, validThrough: (through as string | undefined) ?? null, week: item });
+  }
+  return out;
+}
+
+/** "2026-10-01" for `now` in Des Moines. */
+export function centralDateKey(now: Date): string {
+  return now.toLocaleDateString("en-CA", { timeZone: "America/Chicago" });
+}
+
+/** The season that covers `now`'s date in Des Moines, or null. The first match wins. */
+export function activeHoursSeason(hours: unknown, now: Date = new Date()): HoursSeason | null {
+  const today = centralDateKey(now);
+  return (
+    hoursSeasons(hours).find(
+      (s) => (!s.validFrom || s.validFrom <= today) && (!s.validThrough || today <= s.validThrough),
+    ) ?? null
+  );
+}
+
+/** The week that applies on `now`'s date, or null when no season covers it. */
+function activeWeek(hours: unknown, now: Date): Record<string, unknown> | null {
+  return activeHoursSeason(hours, now)?.week ?? null;
+}
+
+/** Whole days from `now`'s Central date to a YYYY-MM-DD date. */
+function daysUntil(dateKey: string, now: Date): number {
+  const a = Date.parse(`${centralDateKey(now)}T00:00:00Z`);
+  const b = Date.parse(`${dateKey}T00:00:00Z`);
+  return Math.round((b - a) / 86_400_000);
 }
 
 function readDay(raw: Record<string, unknown> | null, key: string): DayHours {
@@ -108,9 +175,19 @@ function readDay(raw: Record<string, unknown> | null, key: string): DayHours {
   return { kind: "open", openMinute, closeMinute };
 }
 
-/** The stored hours as the `periods` shape resolveOpenStatus reads. */
-export function attractionHoursToPeriods(hours: unknown): StoredOpeningHours["periods"] {
-  const raw = normaliseKeys(hours);
+/**
+ * One weekday (0 = Sunday) from the season covering `now`: open with minutes,
+ * closed, or missing (no season covers the date, or the season leaves the day
+ * out).
+ */
+export function attractionDayHours(hours: unknown, day: number, now: Date = new Date()): DayHours {
+  const key = WEEK.find((w) => w.day === day)?.key;
+  return key ? readDay(normaliseKeys(activeWeek(hours, now)), key) : { kind: "missing" };
+}
+
+/** The hours that apply on `now`'s date as the `periods` shape resolveOpenStatus reads. */
+export function attractionHoursToPeriods(hours: unknown, now: Date = new Date()): StoredOpeningHours["periods"] {
+  const raw = normaliseKeys(activeWeek(hours, now));
   const periods: NonNullable<StoredOpeningHours["periods"]> = [];
   for (const { key, day } of WEEK) {
     const d = readDay(raw, key);
@@ -145,7 +222,8 @@ export function attractionOpenStatus(
   hoursSummary: string | null | undefined,
   now: Date = new Date(),
 ): RestaurantOpenResult {
-  const raw = normaliseKeys(hours);
+  const season = activeHoursSeason(hours, now);
+  const raw = normaliseKeys(season?.week ?? null);
   const days = WEEK.map((w) => readDay(raw, w.key));
   const today = readDay(raw, todayKey(now));
 
@@ -153,7 +231,7 @@ export function attractionOpenStatus(
     return resolveOpenStatus(null, hoursSummary, now);
   }
 
-  const periods = attractionHoursToPeriods(hours) ?? [];
+  const periods = attractionHoursToPeriods(hours, now) ?? [];
   if (periods.length === 0) {
     // Today is entered as closed and no day has hours. That is still a real
     // answer for today, with no next opening to name.
@@ -168,7 +246,10 @@ export function attractionOpenStatus(
   }
 
   const result = resolveOpenStatus({ periods }, hoursSummary, now);
-  const complete = days.every((d) => d.kind !== "missing");
+  // A season ending within the week can't name the next opening either: it
+  // could fall after the season, on hours nobody has published.
+  const endsThisWeek = season?.validThrough != null && daysUntil(season.validThrough, now) < 7;
+  const complete = days.every((d) => d.kind !== "missing") && !endsThisWeek;
   if (!complete && result.status === "closed") {
     return { ...result, nextOpensAt: null, nextOpensInMinutes: null };
   }
@@ -186,7 +267,7 @@ function formatRange(openMinute: number, closeMinute: number): string {
  * seven blanks.
  */
 export function weeklyHoursRows(hours: unknown, now: Date = new Date()): WeeklyHoursRow[] {
-  const raw = normaliseKeys(hours);
+  const raw = normaliseKeys(activeWeek(hours, now));
   const today = todayKey(now);
   const rows = WEEK.map(({ key, label }) => {
     const d = readDay(raw, key);
@@ -203,6 +284,10 @@ export interface OpeningHoursSpecification {
   dayOfWeek: string;
   opens: string;
   closes: string;
+  /** The season's first day, when the row gives one (SEO-046). */
+  validFrom?: string;
+  /** The season's last day, when the row gives one. */
+  validThrough?: string;
 }
 
 const SCHEMA_DAY: Record<string, string> = {
@@ -228,19 +313,30 @@ function schemaClock(minute: number): string {
  * schema.org way to say closed). A day nobody entered is left out, because
  * publishing it as closed would be a claim the row doesn't make. Empty when
  * no day is stated, so the caller omits the property.
+ *
+ * Seasonal hours (SEO-046) carry validFrom / validThrough, so a crawler reads
+ * "10 to 4, September 7 to May 31" rather than "10 to 4". A season that ended
+ * before `now`'s date is left out; one that hasn't started yet stays in, with
+ * its dates.
  */
-export function attractionOpeningHoursSpec(hours: unknown): OpeningHoursSpecification[] {
-  const raw = normaliseKeys(hours);
+export function attractionOpeningHoursSpec(hours: unknown, now: Date = new Date()): OpeningHoursSpecification[] {
+  const today = centralDateKey(now);
   const out: OpeningHoursSpecification[] = [];
-  for (const { key } of WEEK) {
-    const d = readDay(raw, key);
-    if (d.kind === "missing") continue;
-    out.push({
-      "@type": "OpeningHoursSpecification",
-      dayOfWeek: SCHEMA_DAY[key],
-      opens: d.kind === "open" ? schemaClock(d.openMinute) : "00:00",
-      closes: d.kind === "open" ? schemaClock(d.closeMinute) : "00:00",
-    });
+  for (const season of hoursSeasons(hours)) {
+    if (season.validThrough && season.validThrough < today) continue;
+    const raw = normaliseKeys(season.week);
+    for (const { key } of WEEK) {
+      const d = readDay(raw, key);
+      if (d.kind === "missing") continue;
+      out.push({
+        "@type": "OpeningHoursSpecification",
+        dayOfWeek: SCHEMA_DAY[key],
+        opens: d.kind === "open" ? schemaClock(d.openMinute) : "00:00",
+        closes: d.kind === "open" ? schemaClock(d.closeMinute) : "00:00",
+        ...(season.validFrom ? { validFrom: season.validFrom } : {}),
+        ...(season.validThrough ? { validThrough: season.validThrough } : {}),
+      });
+    }
   }
   return out;
 }
