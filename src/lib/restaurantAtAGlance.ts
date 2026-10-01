@@ -29,7 +29,7 @@ import {
   getOpeningHoursSpecificationFromJson,
   type StoredOpeningHours,
 } from './restaurantHours';
-import { findNeighborhood } from './neighborhoods';
+import { findAreaHub } from './areaHubs';
 
 const DAY_NAMES = ['Sunday', 'Monday', 'Tuesday', 'Wednesday', 'Thursday', 'Friday', 'Saturday'] as const;
 const MINUTES_PER_DAY = 24 * 60;
@@ -139,27 +139,20 @@ export interface AreaLink {
   label: string;
 }
 
-function slugOf(s: string): string {
-  return s
-    .toLowerCase()
-    .normalize('NFKD')
-    .replace(/[^a-z0-9\s-]/g, '')
-    .trim()
-    .replace(/\s+/g, '-');
-}
-
 /**
  * The neighbourhood or suburb page this restaurant belongs to, or null.
  *
- * The `neighborhood` column first (SEO-060 is filling it from coordinates),
- * then the address's city. Only slugs in the neighbourhood inventory count,
- * so a Davenport or Norwalk address links nowhere rather than to a 404.
+ * The `neighborhood` column first (SEO-060 fills it from coordinates), then
+ * the address's city. Only areas with a page count (src/lib/areaHubs.ts), so
+ * a Davenport or Norwalk address links nowhere rather than to a 404. The href
+ * is the area's own page: East Village and Downtown live under /things-to-do
+ * (SEO-040), and a Valley Junction row links to West Des Moines (SEO-044; it
+ * linked /neighborhoods/east-village, which 301s).
  */
 export function neighborhoodLink(row: { neighborhood?: string | null }, locality: string | null): AreaLink | null {
   for (const candidate of [row.neighborhood, locality]) {
-    if (!candidate) continue;
-    const hood = findNeighborhood(slugOf(candidate));
-    if (hood) return { href: `/neighborhoods/${hood.slug}`, label: `${hood.name} restaurants and things to do` };
+    const hub = findAreaHub(candidate);
+    if (hub) return { href: hub.href, label: `${hub.name} restaurants and things to do` };
   }
   return null;
 }

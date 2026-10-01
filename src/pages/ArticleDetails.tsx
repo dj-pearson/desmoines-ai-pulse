@@ -39,6 +39,7 @@ import {
   readTimeLabel,
   wasMeaningfullyUpdated,
 } from "@/lib/articleHubs";
+import { areaHubsForArticle } from "@/lib/areaHubs";
 import { ogImageUrl } from '@/lib/ogImage';
 import { BRAND, getCanonicalUrl } from '@/lib/brandConfig';
 import { handleError } from '@/lib/errorHandler';
@@ -448,9 +449,16 @@ const ArticleDetails: React.FC = () => {
                       reading "Table of contents will be generated based on
                       article headings" and "Related articles will be shown
                       here", on every article and in every crawl. This is the
-                      article half of "every article links into its hub". */}
+                      article half of "every article links into its hub".
+                      SEO-044: the area page first when the article names one
+                      (an East Village crawl links /things-to-do/east-village),
+                      and that page lists the article back (HubArticles). */}
                   <Card className="p-6">
-                    <RelatedLinks title="Keep exploring" variant="list" links={hubsForArticle(article)} />
+                    <RelatedLinks
+                      title="Keep exploring"
+                      variant="list"
+                      links={[...areaHubsForArticle(article), ...hubsForArticle(article)]}
+                    />
                   </Card>
 
                   <RelatedArticles article={article} />

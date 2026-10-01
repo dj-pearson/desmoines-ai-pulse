@@ -22,6 +22,8 @@ import { PseoRelatedPages } from './sections/PseoRelatedPages';
 import { PseoLiveListings } from './sections/PseoLiveListings';
 import { PseoAreaGuide } from './sections/PseoAreaGuide';
 import { PseoBreadcrumbs } from './PseoBreadcrumbs';
+import { HubArticles } from '@/components/seo/HubArticles';
+import { areaHubForPageDimensions } from '@/lib/areaHubs';
 import { AREA_GUIDE_SLUGS, areaGuideDescription, areaGuideIntro, boundaryForLocation } from '../areaGuide';
 import { buildTimeRelativePage } from '../timeRelative';
 
@@ -37,6 +39,7 @@ export function PseoPage({ page: storedPage }: PseoPageProps) {
 
   // Build structured data for Schema.org
   const schemaData = buildSchemaOrgData(page);
+  const { key: areaKey, name: areaName } = areaHubForPageDimensions(page.dimensions) ?? {};
 
   return (
     <>
@@ -71,6 +74,10 @@ export function PseoPage({ page: storedPage }: PseoPageProps) {
           {sections.map((section) => (
             <SectionRenderer key={section.id} section={section} page={page} />
           ))}
+
+          {/* SEO-044: an area page lists the articles that name its area,
+              which link back to it. Renders nothing when none match. */}
+          {areaKey && <HubArticles area={areaKey} title={`${areaName} guides`} />}
 
           {/* Related Pages (always last) */}
           {relatedPages.length > 0 && (

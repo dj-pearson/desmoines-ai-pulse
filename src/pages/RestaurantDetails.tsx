@@ -273,7 +273,19 @@ export default function RestaurantDetails() {
   const hasCapturedMenu = !!menuData?.menu && menuData.sections.length > 0;
 
   // The minute clock, so an event that has started leaves the list (WP3.7).
-  const tonight = useTonightNearRestaurant(restaurant?.latitude, restaurant?.longitude, now);
+  // Not asked for a place you can't eat at tonight: the rail never shows there
+  // (showTonight below), and an unasked query settles at once, so the any-date
+  // "Events Happening Nearby" rail takes its place (SEO-044). It used to wait
+  // for tonight's list to be EMPTY, so a not-open-yet place with something on
+  // tonight showed neither list.
+  const tonightApplies =
+    !!restaurant &&
+    !lifecycleOf(restaurant.status, (restaurant as { business_status?: string | null }).business_status);
+  const tonight = useTonightNearRestaurant(
+    tonightApplies ? restaurant.latitude : null,
+    tonightApplies ? restaurant.longitude : null,
+    now,
+  );
 
   // Published, indexable cuisine x area pages that list this place (SEO-034).
   const { data: areaPages } = useRestaurantAreaPages(restaurant);
@@ -1154,10 +1166,11 @@ export default function RestaurantDetails() {
             />
           </div>
 
-          {/* Any-date events nearby, only when nothing is on tonight. It asks
-              once tonight's answer is in, so the page never makes both event
+          {/* Any-date events nearby, whenever the tonight rail is not showing
+              (nothing on tonight, or a place that isn't open). It asks once
+              tonight's answer is in, so the page never makes both event
               requests for the same spot. */}
-          {tonight.events.length === 0 && tonight.isSettled ? (
+          {!showTonight && tonight.isSettled ? (
             <NearbyContent
               variant="events-near-restaurant"
               city={restaurant.city || "Des Moines"}
