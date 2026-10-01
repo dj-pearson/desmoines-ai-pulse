@@ -334,9 +334,10 @@ export function strictGateFailures(html, route, shellTitle) {
   // and vite do not escape identically) cannot hide a match.
   const decode = (t) =>
     t
-      .replace(/&amp;/g, '&')
       .replace(/&#x27;|&#39;|&apos;/g, "'")
       .replace(/&quot;/g, '"')
+      // &amp; last, so "&amp;quot;" decodes to "&quot;" and not to '"'.
+      .replace(/&amp;/g, '&')
       .replace(/\s+/g, ' ')
       .trim();
   const forbidden = (Array.isArray(shellTitle) ? shellTitle : [shellTitle])

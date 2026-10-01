@@ -21,7 +21,7 @@
  * existing backup for the day is never overwritten: the first one is the one
  * that holds the values from before the change. Restore with --restore <file>.
  */
-import { writeFileSync, existsSync, mkdirSync, readFileSync } from "node:fs";
+import { writeFileSync, mkdirSync, readFileSync } from "node:fs";
 import { dirname, resolve } from "node:path";
 import {
   restaurantTemplateTitle,
@@ -67,13 +67,17 @@ function writeChanges(changes: Change[]): number {
 function backup(rows: RestaurantSeoRow[]): string {
   const day = new Date().toISOString().slice(0, 10);
   const file = resolve(process.cwd(), `scripts/backups/restaurants-seo-${day}.json`);
-  if (existsSync(file)) {
+  mkdirSync(dirname(file), { recursive: true });
+  const data = rows.map((r) => ({ id: r.id, slug: r.slug, seo_title: r.seo_title, seo_description: r.seo_description }));
+  // "wx" creates the file or fails if it exists, in one call, so an existing
+  // backup (the pre-change state) can never be overwritten by a later run.
+  try {
+    writeFileSync(file, `${JSON.stringify({ exportedAt: new Date().toISOString(), table: "restaurants", rows: data }, null, 2)}\n`, { flag: "wx" });
+  } catch (error) {
+    if ((error as NodeJS.ErrnoException).code !== "EEXIST") throw error;
     console.log(`backup exists, kept as is: ${file}`);
     return file;
   }
-  mkdirSync(dirname(file), { recursive: true });
-  const data = rows.map((r) => ({ id: r.id, slug: r.slug, seo_title: r.seo_title, seo_description: r.seo_description }));
-  writeFileSync(file, `${JSON.stringify({ exportedAt: new Date().toISOString(), table: "restaurants", rows: data }, null, 2)}\n`);
   console.log(`backed up ${data.length} rows to ${file}`);
   return file;
 }
