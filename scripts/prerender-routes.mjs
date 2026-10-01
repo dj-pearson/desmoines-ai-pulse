@@ -123,6 +123,8 @@ export const PRERENDER_ROUTES = [
   '/itineraries',
 
   '/contact',
+  // SEO-037: the page article bylines and the Organization author point at.
+  '/about',
 ];
 
 /**

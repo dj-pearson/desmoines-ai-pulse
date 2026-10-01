@@ -24,6 +24,8 @@ import NoIndexMeta from '@/components/schema/NoIndexMeta';
 import { NewsletterSignup } from '@/components/NewsletterSignup';
 import { RelatedArticles } from '@/components/articles/RelatedArticles';
 import { SpriteIcon } from "@/components/ui/SpriteIcon";
+import { PreferredSourceButton } from '@/components/seo/PreferredSourceButton';
+import { buildArticleJsonLd, ABOUT_PATH } from '@/lib/articleSchema';
 import { VIEW_COUNTS_LIVE, useArticleBySlug } from '@/hooks/useArticles';
 import {
   ARTICLE_HUBS,
@@ -167,41 +169,11 @@ const ArticleDetails: React.FC = () => {
     : { href: '/things-to-do', title: 'Things to do in Des Moines' };
   const ogImage = ogImageUrl("article", article.id);
 
-  // Article Schema for SEO
+  // BlogPosting or NewsArticle by slug rule; see src/lib/articleSchema.ts.
+  // Image keeps the og:image fallback so the two never disagree.
   const articleSchema = {
-    "@context": "https://schema.org",
-    "@type": "Article",
-    "headline": article.title,
-    "description": article.excerpt || article.seo_description || '',
-    // Same fallback as og:image below, so the two never disagree.
-    "image": article.featured_image_url || ogImage,
-    "datePublished": publishedAt,
-    "dateModified": article.updated_at || article.published_at || article.created_at,
-    "author": {
-      "@type": "Organization",
-      "name": BRAND.name,
-      "url": BRAND.baseUrl
-    },
-    "publisher": {
-      "@type": "Organization",
-      "name": BRAND.name,
-      "logo": {
-        "@type": "ImageObject",
-        "url": `${BRAND.baseUrl}${BRAND.logo}`
-      }
-    },
-    "mainEntityOfPage": {
-      "@type": "WebPage",
-      "@id": `${BRAND.baseUrl}/articles/${article.slug}`
-    },
-    "articleSection": article.category || "Local News",
-    "keywords": Array.isArray(article.tags) ? article.tags.join(', ') : article.tags || '',
-    "wordCount": article.content ? article.content.split(/\s+/).length : 0,
-    "inLanguage": "en-US",
-    "about": {
-      "@type": "Place",
-      "name": "Des Moines, Iowa"
-    }
+    ...buildArticleJsonLd(article),
+    image: article.featured_image_url || ogImage,
   };
 
   return (
@@ -302,6 +274,12 @@ const ArticleDetails: React.FC = () => {
                     />
                   )}
                   <div className="flex flex-wrap items-center gap-x-4 gap-y-1 text-sm text-muted-foreground">
+                    <span>
+                      By{' '}
+                      <Link to={ABOUT_PATH} rel="author" className="font-medium text-foreground hover:underline">
+                        {BRAND.name}
+                      </Link>
+                    </span>
                     <span className="flex items-center gap-1">
                       <SpriteIcon name="calendar" className="h-4 w-4" />
                       <span>
@@ -455,6 +433,12 @@ const ArticleDetails: React.FC = () => {
                     }
                   />
                 </div>
+
+                {/* SEO-037: Google preferred source, at the end of every article. */}
+                <PreferredSourceButton
+                  className="mt-8"
+                  description={`Pick ${BRAND.name} as a preferred source and Google will show more of our Des Moines stories in Top Stories.`}
+                />
               </article>
 
               {/* Sidebar */}
@@ -487,7 +471,7 @@ const ArticleDetails: React.FC = () => {
         </div>
       </div>
 
-      <Footer />
+      <Footer preferredSource={false} />
     </>
   );
 };

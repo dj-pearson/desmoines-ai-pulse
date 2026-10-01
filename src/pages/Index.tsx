@@ -10,6 +10,7 @@ import { LazySection } from "@/components/LazySection";
 import { RecentlyViewedRail } from "@/components/RecentlyViewedRail";
 import SEOHead from "@/components/SEOHead";
 import SpeakableSchema from "@/components/schema/SpeakableSchema";
+import { PreferredSourceButton } from "@/components/seo/PreferredSourceButton";
 import { SocialProof } from "@/components/SocialProof";
 import { TonightRail } from "@/components/TonightRail";
 import { DashboardGridSkeleton } from "@/components/ui/loading-skeleton";
@@ -309,11 +310,22 @@ export default function Index() {
           </div>
         </section>
 
+        {/* SEO-037: Google preferred source, below the fold. The footer's copy
+            is switched off on this page so the button appears once. */}
+        <section className="py-10 bg-background" aria-labelledby="preferred-source-heading">
+          <div className="max-w-4xl mx-auto px-4 sm:px-6 lg:px-8">
+            <h2 id="preferred-source-heading" className="text-xl font-semibold mb-2">
+              See more of us on Google
+            </h2>
+            <PreferredSourceButton description="Add Des Moines Insider as a preferred source and Google will show more of our weekend picks and local stories in Top Stories." />
+          </div>
+        </section>
+
         {/* The footer holds the page's one newsletter signup (WP7). Not in a
             LazySection: it makes no queries until submit, and its links are
             the site's crawl paths. */}
         <Suspense fallback={<SectionPlaceholder height={400} />}>
-          <Footer />
+          <Footer preferredSource={false} />
         </Suspense>
       </div>
 

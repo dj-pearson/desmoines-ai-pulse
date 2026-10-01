@@ -203,6 +203,8 @@ import { CookieConsentBanner } from "@/components/CookieConsentBanner";
 
 // Contact page
 const Contact = lazyWithRetry(() => import("./pages/Contact"));
+// About page (SEO-037): article bylines and the Organization author point here
+const About = lazyWithRetry(() => import("./pages/About"));
 const Support = lazyWithRetry(() => import("./pages/Support"));
 const Csat = lazyWithRetry(() => import("./pages/Csat"));
 
@@ -616,6 +618,7 @@ const App = () => (
             <Route path="/newsletter/confirm" element={<NewsletterConfirm />} />
             {/* Contact page */}
             <Route path="/contact" element={<Contact />} />
+            <Route path="/about" element={<About />} />
             <Route path="/support" element={<Support />} />
             <Route path="/csat" element={<Csat />} />
             {/* Community voting */}

@@ -14,6 +14,7 @@ import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import { Breadcrumbs } from "@/components/ui/breadcrumbs";
 import { SpriteIcon } from "@/components/ui/SpriteIcon";
+import { PreferredSourceButton } from "@/components/seo/PreferredSourceButton";
 import { ErrorState } from "@/components/ui/error-state";
 import { SkeletonGroup } from "@/components/ui/skeleton";
 import { useBatchEventSocial } from "@/hooks/useBatchEventSocial";
@@ -715,9 +716,16 @@ export default function EventsThisWeekend() {
         {/* SEO-003: FAQSection renders the questions and emits the single
             FAQPage block, so schema only ships with a visible FAQ. */}
         <FAQSection faqs={faqData} />
+
+        {/* SEO-037: Google preferred source, last on the page. Outside the
+            events/no-events branch so it shows either way. */}
+        <PreferredSourceButton
+          className="mt-8"
+          description="Add Des Moines Insider as a preferred source and Google will show more of our weekend picks in Top Stories."
+        />
       </div>
 
-      <Footer />
+      <Footer preferredSource={false} />
     </div>
   );
 }

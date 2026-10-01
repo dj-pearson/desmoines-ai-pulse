@@ -294,7 +294,7 @@ export default function RestaurantDetails() {
             </div>
           </div>
         </div>
-        <Footer />
+        <Footer preferredSource={false} />
       </>
     );
   }
@@ -334,7 +334,7 @@ export default function RestaurantDetails() {
             </div>
           </div>
         </div>
-        <Footer />
+        <Footer preferredSource={false} />
       </>
     );
   }
@@ -365,7 +365,7 @@ export default function RestaurantDetails() {
             </CardContent>
           </Card>
         </div>
-        <Footer />
+        <Footer preferredSource={false} />
       </>
     );
   }
@@ -1145,7 +1145,7 @@ export default function RestaurantDetails() {
           hoursCheckedOn={lifecycle !== "closed" ? hoursCheckedAt(hoursJson) : null}
         />
       </div>
-      <Footer />
+      <Footer preferredSource={false} />
       <BackToTop />
 
       {/* No sticky actions for a closed place: every one of them (reserve,

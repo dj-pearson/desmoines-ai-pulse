@@ -169,7 +169,7 @@ function EventLoadingState({ slug }: { slug: string | undefined }) {
           </div>
         </div>
       </div>
-      <Footer />
+      <Footer preferredSource={false} />
     </div>
   );
 }
@@ -282,7 +282,7 @@ export default function EventDetails() {
             </div>
           </div>
         </div>
-        <Footer />
+        <Footer preferredSource={false} />
       </div>
     );
   }
@@ -324,7 +324,7 @@ export default function EventDetails() {
               </div>
             </div>
           </div>
-          <Footer />
+          <Footer preferredSource={false} />
         </div>
       </>
     );
@@ -894,7 +894,7 @@ export default function EventDetails() {
           <LastUpdatedBadge updatedAt={event.updated_at} className="mt-6 justify-center" />
         </div>
 
-        <Footer />
+        <Footer preferredSource={false} />
       </div>
 
       {/* The sticky bar's link takes no onClick, so outbound clicks are

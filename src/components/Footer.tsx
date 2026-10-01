@@ -8,6 +8,7 @@ import { OptimizedLogo } from "@/components/OptimizedLogo";
 import { reopenConsentBanner } from "@/components/CookieConsentBanner";
 import { SiteDirectory } from "@/components/seo/SiteDirectory";
 import { SpriteIcon } from "@/components/ui/SpriteIcon";
+import { PreferredSourceButton } from "@/components/seo/PreferredSourceButton";
 import { useNewsletterSubscription } from "@/hooks/useNewsletterSubscription";
 import { useAuthFlags } from "@/contexts/AuthContext";
 import { isCapacitor } from "@/lib/capacitorUtils";
@@ -22,7 +23,16 @@ import {
 /** Footer column titles: sentence case, no tracking. */
 const COLUMN_TITLE = "text-sm font-semibold mb-4 text-neutral-200";
 
-export default function Footer() {
+interface FooterProps {
+  /**
+   * Show the Google preferred-source button (SEO-037). Off on restaurant and
+   * event detail pages, and on pages that already place one in their body
+   * (article, homepage, this weekend), so no page shows it twice.
+   */
+  preferredSource?: boolean;
+}
+
+export default function Footer({ preferredSource = true }: FooterProps = {}) {
   const [email, setEmail] = useState("");
   const { subscribe, loading: isLoading } = useNewsletterSubscription();
   const { isAuthenticated } = useAuthFlags();
@@ -343,6 +353,11 @@ export default function Footer() {
                   </Link>
                 </li>
                 <li>
+                  <Link to="/about" className="footer-link">
+                    About Us
+                  </Link>
+                </li>
+                <li>
                   <Link to="/contact" className="footer-link">
                     Contact Us
                   </Link>
@@ -398,6 +413,17 @@ export default function Footer() {
           <SiteDirectory />
         </div>
       </div>
+
+      {preferredSource && (
+        <div className="border-t border-neutral-800 py-6">
+          <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8">
+            <PreferredSourceButton
+              surface="dark"
+              description="Using Google? Add us as a preferred source to see more Des Moines Insider stories in Top Stories."
+            />
+          </div>
+        </div>
+      )}
 
       <div className="border-t border-neutral-800 py-6">
         <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8">
