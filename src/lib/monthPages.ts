@@ -243,6 +243,11 @@ export interface SeasonalGuideLink {
  * whose title is about the 2023-24 season and is not linked from a 2026 page.
  * November, December and January therefore carry no guide links until those
  * articles are written; the calendar picks in the block are their seasonal links.
+ *
+ * SEO-048 (2026-10-01): trick-or-treat times published and linked from October.
+ * Holiday lights, ice skating, Thanksgiving dinner out and Small Business
+ * Saturday exist only as draft rows (fewer than five verified entries); add
+ * them to "november-2026" / "december-2026" here when each one is published.
  */
 export const SEASONAL_GUIDES: Record<string, SeasonalGuideLink[]> = {
   "october-2026": [
@@ -252,6 +257,10 @@ export const SEASONAL_GUIDES: Record<string, SeasonalGuideLink[]> = {
       label: "Pumpkin patches and apple orchards",
     },
     { href: "/articles/corn-mazes-near-des-moines", label: "Corn mazes near Des Moines" },
+    {
+      href: "/articles/trick-or-treat-times-des-moines-suburbs-october-2026",
+      label: "Trick-or-treat times by suburb",
+    },
   ],
 };
 
