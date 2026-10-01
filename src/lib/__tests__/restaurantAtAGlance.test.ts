@@ -97,7 +97,17 @@ describe('neighborhoodLink', () => {
   });
 
   it('prefers the neighborhood column when it names a page', () => {
-    expect(neighborhoodLink({ neighborhood: 'East Village' }, 'Des Moines')?.href).toBe('/neighborhoods/east-village');
+    expect(neighborhoodLink({ neighborhood: 'East Village' }, 'Des Moines')?.href).toBe('/things-to-do/east-village');
+  });
+
+  it('links the area page itself, never a URL that 301s (SEO-044)', () => {
+    expect(neighborhoodLink({ neighborhood: 'east-village' }, 'Des Moines')?.href).toBe('/things-to-do/east-village');
+    expect(neighborhoodLink({ neighborhood: 'downtown' }, 'Des Moines')).toEqual({
+      href: '/things-to-do/downtown',
+      label: 'Downtown Des Moines restaurants and things to do',
+    });
+    expect(neighborhoodLink({ neighborhood: 'valley-junction' }, null)?.href).toBe('/neighborhoods/west-des-moines');
+    expect(neighborhoodLink({ neighborhood: 'sherman-hill' }, 'Des Moines')).toBeNull();
   });
 
   it('links nowhere for a place with no page', () => {

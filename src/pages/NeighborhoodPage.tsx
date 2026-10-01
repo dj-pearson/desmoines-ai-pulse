@@ -11,6 +11,7 @@ import { findNeighborhood, NEIGHBORHOOD_MIN_ITEMS } from "@/lib/neighborhoods";
 import { useNeighborhoodContent } from "@/hooks/useNeighborhoodContent";
 import { ErrorState } from "@/components/ui/error-state";
 import { PlaceCrossLinks } from "@/components/PlaceCrossLinks";
+import { HubArticles } from "@/components/seo/HubArticles";
 import { Skeleton, SkeletonGroup } from "@/components/ui/skeleton";
 
 /**
@@ -149,6 +150,13 @@ export default function NeighborhoodPage() {
             do not depend on the fetch, and a crawler that times out waiting for
             content should still leave with somewhere to go. */}
         <PlaceCrossLinks slug={neighborhood.slug} from="neighborhood" />
+
+        {/* SEO-044: articles that name this area link here; this lists them back. */}
+        <HubArticles
+          area={neighborhood.slug}
+          title={`${neighborhood.name} guides`}
+          className="mt-12 border-t pt-8"
+        />
       </div>
 
       <Footer />
