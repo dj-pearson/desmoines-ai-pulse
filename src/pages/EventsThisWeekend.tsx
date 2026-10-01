@@ -29,6 +29,7 @@ import { Breadcrumbs } from "@/components/ui/breadcrumbs";
 import { EVENT_LIST_COLUMNS } from "@/lib/listColumns";
 import { formatCount } from "@/lib/pluralize";
 import { SpriteIcon } from "@/components/ui/SpriteIcon";
+import { PreferredSourceButton } from "@/components/seo/PreferredSourceButton";
 
 /**
  * WEB-PERF-023. The grid rendered every event in the weekend window and this
@@ -501,9 +502,15 @@ export default function EventsThisWeekend() {
             </CardContent>
           </Card>
         )}
+        {/* SEO-037: Google preferred source. Outside the events/no-events
+            branch so it shows either way. */}
+        <PreferredSourceButton
+          className="mt-8"
+          description="Add Des Moines Insider as a preferred source and Google will show more of our weekend picks in Top Stories."
+        />
       </div>
 
-      <Footer />
+      <Footer preferredSource={false} />
     </div>
   );
 }

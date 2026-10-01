@@ -22,6 +22,8 @@ import { BRAND } from '@/lib/brandConfig';
 import SpeakableSchema from '@/components/schema/SpeakableSchema';
 import FAQSchema from '@/components/schema/FAQSchema';
 import { SpriteIcon } from "@/components/ui/SpriteIcon";
+import { PreferredSourceButton } from '@/components/seo/PreferredSourceButton';
+import { buildArticleJsonLd, ABOUT_PATH } from '@/lib/articleSchema';
 
 const ArticleDetails: React.FC = () => {
   const { slug } = useParams();
@@ -113,41 +115,8 @@ const ArticleDetails: React.FC = () => {
 
   const updatedAt = updatedAfterPublish(article);
 
-  // Article Schema for SEO
-  const articleSchema = {
-    "@context": "https://schema.org",
-    "@type": "Article",
-    "headline": article.title,
-    "description": article.excerpt || article.seo_description || '',
-    "image": article.featured_image_url || `${BRAND.baseUrl}${BRAND.logo}`,
-    "datePublished": article.published_at || article.created_at,
-    "dateModified": article.updated_at || article.published_at || article.created_at,
-    "author": {
-      "@type": "Organization",
-      "name": BRAND.name,
-      "url": BRAND.baseUrl
-    },
-    "publisher": {
-      "@type": "Organization",
-      "name": BRAND.name,
-      "logo": {
-        "@type": "ImageObject",
-        "url": `${BRAND.baseUrl}${BRAND.logo}`
-      }
-    },
-    "mainEntityOfPage": {
-      "@type": "WebPage",
-      "@id": `${BRAND.baseUrl}/articles/${article.slug}`
-    },
-    "articleSection": article.category || "Local News",
-    "keywords": Array.isArray(article.tags) ? article.tags.join(', ') : article.tags || '',
-    "wordCount": article.content ? article.content.split(/\s+/).length : 0,
-    "inLanguage": "en-US",
-    "about": {
-      "@type": "Place",
-      "name": "Des Moines, Iowa"
-    }
-  };
+  // BlogPosting or NewsArticle by slug rule; see src/lib/articleSchema.ts.
+  const articleSchema = buildArticleJsonLd(article);
 
   return (
     <>
@@ -236,7 +205,13 @@ const ArticleDetails: React.FC = () => {
                       tooltip="This article was drafted with AI assistance and edited by our team before publishing. Details and quotes may still contain errors — please verify anything important."
                     />
                   )}
-                  <div className="flex items-center gap-4 text-sm text-muted-foreground">
+                  <div className="flex flex-wrap items-center gap-4 text-sm text-muted-foreground">
+                    <span>
+                      By{' '}
+                      <Link to={ABOUT_PATH} rel="author" className="font-medium text-foreground hover:underline">
+                        {BRAND.name}
+                      </Link>
+                    </span>
                     <span className="flex items-center gap-1">
                       <SpriteIcon name="calendar" className="h-4 w-4" />
                       {formatDate(article.published_at || article.created_at)}
@@ -385,6 +360,12 @@ const ArticleDetails: React.FC = () => {
                     </div>
                   </div>
                 </div>
+
+                {/* SEO-037: Google preferred source, at the end of every article. */}
+                <PreferredSourceButton
+                  className="mt-8"
+                  description={`Pick ${BRAND.name} as a preferred source and Google will show more of our Des Moines stories in Top Stories.`}
+                />
               </article>
 
               {/* Sidebar */}
@@ -428,7 +409,7 @@ const ArticleDetails: React.FC = () => {
         </div>
       </div>
 
-      <Footer />
+      <Footer preferredSource={false} />
 
       {/* Share Dialog */}
       <ShareDialog 

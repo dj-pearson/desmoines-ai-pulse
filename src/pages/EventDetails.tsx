@@ -118,7 +118,7 @@ export default function EventDetails() {
             </div>
           </div>
         </div>
-        <Footer />
+        <Footer preferredSource={false} />
       </div>
     );
   }
@@ -156,7 +156,7 @@ export default function EventDetails() {
               </div>
             </div>
           </div>
-          <Footer />
+          <Footer preferredSource={false} />
         </div>
       </>
     );
@@ -614,7 +614,7 @@ export default function EventDetails() {
           <LastUpdatedBadge updatedAt={event.updated_at} className="mt-6 justify-center" />
         </div>
 
-        <Footer />
+        <Footer preferredSource={false} />
       </div>
 
       <StickyMobileCTA

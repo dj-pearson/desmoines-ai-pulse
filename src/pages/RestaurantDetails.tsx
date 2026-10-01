@@ -160,7 +160,7 @@ export default function RestaurantDetails() {
             </div>
           </div>
         </div>
-        <Footer />
+        <Footer preferredSource={false} />
       </>
     );
   }
@@ -191,7 +191,7 @@ export default function RestaurantDetails() {
             </CardContent>
           </Card>
         </div>
-        <Footer />
+        <Footer preferredSource={false} />
       </>
     );
   }
@@ -916,7 +916,7 @@ export default function RestaurantDetails() {
 
         <LastUpdatedBadge updatedAt={restaurant.updated_at} className="mt-6 justify-center" />
       </div>
-      <Footer />
+      <Footer preferredSource={false} />
       <BackToTop />
 
       <StickyMobileCTA

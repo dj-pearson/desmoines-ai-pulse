@@ -256,3 +256,43 @@ test.describe('Button Click Feedback', () => {
     }
   });
 });
+
+/**
+ * SEO-037: the Google preferred-source button belongs on articles (and the
+ * hubs and footer) but not on restaurant or event detail pages.
+ *
+ * Playwright sets navigator.webdriver, which PreferredSourceButton treats the
+ * same as the prerenderer: it never loads publisher.js and renders Google's
+ * plain deeplink instead. So in this suite the fallback link is what appears;
+ * the assertion accepts either form so it still holds in a real browser.
+ *
+ * Slugs are live rows as of 2026-10-01 (corn-mazes-near-des-moines is a
+ * published article, jesses-embers the oldest restaurant).
+ */
+test.describe('Google preferred source button (SEO-037)', () => {
+  const PREFERRED = '[data-preferred-source]';
+  const BUTTON_OR_LINK =
+    '[google-add-preferred-source-btn], a[href="https://www.google.com/preferences/source?q=desmoinesinsider.com"]';
+
+  test('renders at the end of an article', async ({ page }) => {
+    await page.goto('/articles/corn-mazes-near-des-moines');
+    await expect(page.locator('h1')).toBeVisible({ timeout: 20000 });
+
+    const block = page.locator(`article ${PREFERRED}`);
+    await expect(block).toHaveCount(1);
+    await block.scrollIntoViewIfNeeded();
+    await expect(block.locator(BUTTON_OR_LINK).first()).toBeVisible();
+
+    // One per page: the footer copy is switched off where the body has one.
+    await expect(page.locator(PREFERRED)).toHaveCount(1);
+  });
+
+  test('is absent from a restaurant page', async ({ page }) => {
+    await page.goto('/restaurants/jesses-embers');
+    await expect(page.locator('h1')).toBeVisible({ timeout: 20000 });
+    await expect(page.locator('footer')).toBeVisible();
+
+    await expect(page.locator(PREFERRED)).toHaveCount(0);
+    await expect(page.locator(BUTTON_OR_LINK)).toHaveCount(0);
+  });
+});

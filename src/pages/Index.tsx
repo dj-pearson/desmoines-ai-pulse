@@ -34,6 +34,7 @@ import { BreadcrumbListSchema } from "@/components/schema/BreadcrumbListSchema";
 import SpeakableSchema from "@/components/schema/SpeakableSchema";
 import { AdBanner } from "@/components/AdBanner";
 import { SpriteIcon } from "@/components/ui/SpriteIcon";
+import { PreferredSourceButton } from "@/components/seo/PreferredSourceButton";
 
 // Lazy load below-the-fold and heavy components to improve initial load
 const Footer = lazy(() => import("@/components/Footer"));
@@ -788,6 +789,17 @@ export default function Index() {
           </div>
         </section>
 
+        {/* SEO-037: Google preferred source, below the fold. The footer's copy
+            is switched off on this page so the button appears once. */}
+        <section className="py-10 bg-background" aria-labelledby="preferred-source-heading">
+          <div className="max-w-4xl mx-auto px-4 sm:px-6 lg:px-8">
+            <h2 id="preferred-source-heading" className="text-xl font-semibold mb-2">
+              See more of us on Google
+            </h2>
+            <PreferredSourceButton description="Add Des Moines Insider as a preferred source and Google will show more of our weekend picks and local stories in Top Stories." />
+          </div>
+        </section>
+
         {/* Below-Fold Ad Placement */}
         <div className="py-6 bg-muted/20">
           <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8">
@@ -799,7 +811,7 @@ export default function Index() {
           <Newsletter />
         </Suspense>
         <Suspense fallback={<SectionLoader />}>
-          <Footer />
+          <Footer preferredSource={false} />
         </Suspense>
       </div>
 
