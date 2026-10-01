@@ -63,3 +63,16 @@
 # guide that replaced it. Keep these for at least one release cycle.
 /articles/halloweekend-in-des-moines-your-ultimate-guide-to-spooky-events-family-fun-2023  /articles/haunted-houses-near-des-moines  301
 /articles/fall-colors-cider-the-ultimate-guide-to-des-moines-apple-orchards-pumpkin-patches-des-moines-guide  /articles/best-pumpkin-patches-in-the-des-moines-area-your-complete-fall-guide  301
+
+# SEO-058: seven more 2025 articles were raw generator JSON naming closed
+# businesses and wrong towns, and none had a search impression in the three
+# months to 2026-09-30. Archived, not deleted (backups in
+# scripts/content-backups/seo-058/); each URL goes to the closest live hub.
+# Keep these for at least one release cycle.
+/articles/beaverdales-best-a-locals-guide-to-des-moines-most-charming-brick-streets-des-moines-guide  /neighborhoods/beaverdale  301
+/articles/7-unexpected-date-night-ideas-in-des-moines-under-50-des-moines-guide  /events/date-night  301
+/articles/des-moines-indoor-farmers-markets-2023-24-complete-winter-shopping-guide-des-moines-guide  /things-to-do/winter  301
+/articles/des-moines-best-air-conditioned-adventures-indoor-activities-for-scorching-days-des-moines-guide  /things-to-do  301
+/articles/oktoberfest-in-des-moines-complete-guide-to-2023-beer-gardens-german-events-des-moines-guide  /guides/fall-festivals  301
+/articles/last-call-for-farmers-market-your-september-shopping-cooking-guide-des-moines-guide  /neighborhoods/downtown  301
+/articles/morning-to-midnight-the-perfect-summer-saturday-in-downtown-des-moines-des-moines-guide  /neighborhoods/downtown  301
