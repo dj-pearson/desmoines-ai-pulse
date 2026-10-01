@@ -23,6 +23,7 @@ import { PseoLiveListings } from './sections/PseoLiveListings';
 import { PseoAreaGuide } from './sections/PseoAreaGuide';
 import { PseoBreadcrumbs } from './PseoBreadcrumbs';
 import { AREA_GUIDE_SLUGS, areaGuideDescription, areaGuideIntro, boundaryForLocation } from '../areaGuide';
+import { buildTimeRelativePage } from '../timeRelative';
 
 const PseoMapEmbed = lazy(() => import('./sections/PseoMapEmbed'));
 
@@ -31,7 +32,7 @@ interface PseoPageProps {
 }
 
 export function PseoPage({ page: storedPage }: PseoPageProps) {
-  const page = asAreaGuide(storedPage);
+  const page = asTimeRelative(asAreaGuide(storedPage));
   const { seo, sections, relatedPages, structuredData } = page;
 
   // Build structured data for Schema.org
@@ -104,6 +105,28 @@ function asAreaGuide(page: PseoPageContent): PseoPageContent {
   };
 }
 
+/**
+ * SEO-056. A page with a temporal dimension (today, this weekend, a month, a
+ * season) renders the evergreen copy from src/pseo/timeRelative.ts and the
+ * live listing, whatever its stored sections say. The rows were rewritten with
+ * the same builder; doing it here as well means a regenerated row cannot put
+ * "March 17th in Des Moines" back into the prerendered HTML.
+ */
+function asTimeRelative(page: PseoPageContent): PseoPageContent {
+  const built = buildTimeRelativePage(page.dimensions);
+  if (!built) return page;
+  return {
+    ...page,
+    seo: { ...page.seo, ...built.seo },
+    sections: built.sections,
+    structuredData: {
+      ...page.structuredData,
+      breadcrumb: [...built.breadcrumb, { name: built.seo.h1, url: page.slug }],
+      faqItems: built.faqs,
+    },
+  };
+}
+
 // ---------------------------------------------------------------------------
 // Section Renderer
 // ---------------------------------------------------------------------------
@@ -132,6 +155,9 @@ function SectionRenderer({
         <PseoLiveListings
           dimensions={page.dimensions}
           pageTypeId={page.pageTypeId}
+          heading={section.heading}
+          emptyHref={section.emptyHref}
+          emptyLabel={section.emptyLabel}
         />
       );
 

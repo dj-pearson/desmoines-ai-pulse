@@ -56,6 +56,17 @@
 /things-to-do/date-night  /events/date-night  301
 /neighborhoods/downtown  /things-to-do/downtown  301
 
+# SEO-056: the pSEO "things to do this weekend / today" pages duplicated the
+# events hubs SEO-040 flagged, and carried copy generated in March 2026 (St.
+# Patrick's Day, "spring") that the prerender served in October. The hubs
+# win: /things-to-do/this-weekend had 7 impressions and /things-to-do/today 1
+# in the 2026-09-30 Search Console export. Both pSEO rows were unpublished on
+# 2026-10-01 (src/pseo/timeRelative.ts HUB_DUPLICATES; check-pseo-time-copy
+# fails if a line here goes missing). Keep for at least one release cycle
+# (CLAUDE.md, Backward Compatibility).
+/things-to-do/this-weekend  /events/this-weekend  301
+/things-to-do/today  /events/today  301
+
 # WEB-SEO-007: /weekend and /events/this-weekend targeted the same query.
 # /events/this-weekend is the canonical one — it declares its own canonical URL,
 # emits EventListJsonLd and carries FAQ content, none of which /weekend did.
