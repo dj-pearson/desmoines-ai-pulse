@@ -119,3 +119,10 @@
 /articles/last-call-for-farmers-market-your-september-shopping-cooking-guide-des-moines-guide  /things-to-do/downtown  301
 /articles/morning-to-midnight-the-perfect-summer-saturday-in-downtown-des-moines-des-moines-guide  /things-to-do/downtown  301
 /events/the-slaughterhouse-haunted-house-2026-10-01  /events/the-slaughterhouse-haunted-house-2026-10-02  301
+
+# SEO-056 (shipped early with the hotfix, 2026-10-01): the pSEO "things to do
+# this weekend / today" pages duplicated the events hubs and carried copy
+# generated in March 2026. Both rows were unpublished in production; same
+# rules as on claude/seo-q4-loop. Keep for at least one release cycle.
+/things-to-do/this-weekend  /events/this-weekend  301
+/things-to-do/today  /events/today  301
