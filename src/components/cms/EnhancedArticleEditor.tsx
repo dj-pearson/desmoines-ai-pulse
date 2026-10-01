@@ -20,6 +20,8 @@ import { FileText, Save, Eye, Trash2, ArrowLeft, Plus, X, Globe, Search, Tag, Us
 import { toast } from 'sonner';
 import { cn } from '@/lib/utils';
 import { createLogger } from '@/lib/logger';
+import { LoadingSpinner } from "@/components/ui/loading-skeleton";
+import { fromUnknownTable } from "@/integrations/supabase/unknownTable";
 
 const log = createLogger('EnhancedArticleEditor');
 
@@ -106,9 +108,9 @@ export default function EnhancedArticleEditor() {
   useEffect(() => {
     const loadData = async () => {
       const [authorsRes, categoriesRes, tagsRes] = await Promise.all([
-        supabase.from('author_profiles').select('id, display_name, avatar_url').eq('is_active', true),
-        supabase.from('article_categories').select('id, name, slug, color').eq('is_active', true).order('sort_order'),
-        supabase.from('article_tags').select('id, name, slug, color').order('usage_count', { ascending: false }),
+        fromUnknownTable('author_profiles').select('id, display_name, avatar_url').eq('is_active', true),
+        fromUnknownTable('article_categories').select('id, name, slug, color').eq('is_active', true).order('sort_order'),
+        fromUnknownTable('article_tags').select('id, name, slug, color').order('usage_count', { ascending: false }),
       ]);
 
       if (authorsRes.data) setAuthors(authorsRes.data);
@@ -266,19 +268,32 @@ export default function EnhancedArticleEditor() {
         await handleSave(false);
       }
 
-      // Update article review status
-      await supabase
-        .from('articles')
-        .update({ review_status: 'pending_review' })
-        .eq('id', articleId);
+      // The `articles.review_status` update that used to be here wrote a column
+      // that does not exist, so it came back PGRST204 and changed nothing. The
+      // content_queue row inserted below is what actually records that this
+      // article is awaiting review, and it always was.
 
-      // Add to content queue
+      // WRITTEN AGAINST THE REAL content_queue, which is content_type +
+      // content_id + content_data, NOT article_id + priority. Two migrations
+      // claim this table name: 20251108000001 created the shape that is
+      // deployed, and 20251203000001_cms_features.sql declares a different one
+      // with article_id - under `CREATE TABLE IF NOT EXISTS`, so it was a
+      // no-op the moment it ran and would still be a no-op if the migration
+      // drift behind it were fixed. This insert named that unreachable shape,
+      // so submitting an article for review has never created a queue row
+      // (WEB-QA-034). content_data is NOT NULL and is what the reviewer sees.
       const { data: { user } } = await supabase.auth.getUser();
       const { error } = await supabase.from('content_queue').insert({
-        article_id: articleId,
+        content_type: 'article',
+        content_id: articleId,
+        content_data: {
+          title: articleData.title,
+          excerpt: articleData.excerpt,
+          category: articleData.category,
+          priority: articleData.priority,
+        },
         submitted_by: user?.id,
         status: 'pending',
-        priority: articleData.priority,
       });
 
       if (error) throw error;
@@ -309,7 +324,7 @@ export default function EnhancedArticleEditor() {
   if (loading) {
     return (
       <div className="flex items-center justify-center min-h-screen">
-        <div className="animate-spin rounded-full h-8 w-8 border-b-2 border-primary"></div>
+        <LoadingSpinner size="lg" label="Loading article" />
       </div>
     );
   }

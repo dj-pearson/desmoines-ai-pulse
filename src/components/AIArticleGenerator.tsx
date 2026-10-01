@@ -308,9 +308,9 @@ const AIArticleGenerator: React.FC = () => {
                           <div className="text-2xl font-bold text-green-600">{suggestions.content_gaps_identified.length}</div>
                           <div className="text-sm text-green-700 dark:text-green-300">Content Gaps</div>
                         </div>
-                        <div className="bg-purple-50 dark:bg-purple-950 p-4 rounded-lg">
-                          <div className="text-2xl font-bold text-purple-600">{suggestions.seasonal_opportunities.length}</div>
-                          <div className="text-sm text-purple-700 dark:text-purple-300">Seasonal Ideas</div>
+                        <div className="bg-teal-50 dark:bg-teal-950 p-4 rounded-lg">
+                          <div className="text-2xl font-bold text-teal-600">{suggestions.seasonal_opportunities.length}</div>
+                          <div className="text-sm text-teal-700 dark:text-teal-300">Seasonal Ideas</div>
                         </div>
                         <div className="bg-orange-50 dark:bg-orange-950 p-4 rounded-lg">
                           <div className="text-2xl font-bold text-orange-600">{suggestions.trending_local_topics.length}</div>
@@ -438,7 +438,7 @@ const AIArticleGenerator: React.FC = () => {
                     <div className="text-sm text-muted-foreground">SEO Strength</div>
                   </div>
                   <div className="bg-white dark:bg-gray-900 p-4 rounded-lg">
-                    <div className="text-2xl font-bold text-purple-600">{generationResult.metadata.seo_score.local_relevance}</div>
+                    <div className="text-2xl font-bold text-teal-600">{generationResult.metadata.seo_score.local_relevance}</div>
                     <div className="text-sm text-muted-foreground">Local Relevance</div>
                   </div>
                 </div>

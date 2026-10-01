@@ -60,13 +60,15 @@ struct AffiliateAdBanner: View {
             .simultaneousGesture(TapGesture().onEnded {
                 tracking.logAffiliateClick(partner: partner.name, placement: placementKey)
             })
-            .accessibilityLabel("\(partner.name) hotel advertisement. Tap to learn more.")
+            // Says it is an ad and that it leaves the app (IOS-DD-GUIDES-24).
+            .accessibilityLabel("Advertisement: \(partner.name) hotels")
+            .accessibilityHint("Opens in Safari")
             .accessibilityAddTraits(.isLink)
 
-            // FTC-compliant "Ad" label
+            // FTC-compliant "Ad" label. A text style, so it scales with
+            // Dynamic Type instead of staying at a fixed 10pt (IOS-DD-GUIDES-24).
             Text("Ad")
-                .font(.system(size: 10, weight: .medium))
-                .tracking(0.5)
+                .font(.caption2.weight(.semibold))
                 .textCase(.uppercase)
                 .foregroundStyle(.white.opacity(0.9))
                 .padding(.horizontal, 6)

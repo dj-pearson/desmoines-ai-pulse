@@ -40,8 +40,10 @@ private struct FilterPillLabel: View {
                     .frame(minWidth: 16, minHeight: 16)
                     .padding(.horizontal, 3)
                     .background(Color.white.opacity(0.25), in: Capsule())
+                    .accessibilityHidden(true)
             }
             Image(systemName: "chevron.down").font(.system(size: 9, weight: .bold))
+                .accessibilityHidden(true)
         }
         .padding(.horizontal, 12)
         .padding(.vertical, 8)
@@ -69,10 +71,14 @@ private struct CategoryPill: View {
             )
         }
         .buttonStyle(.plain)
+        .filterPillAccessibility(
+            title: "Category",
+            value: viewModel.selectedCategory?.displayName ?? "Any",
+            isActive: viewModel.selectedCategory != nil
+        )
         .popover(isPresented: $showPopover, attachmentAnchor: .point(.bottom), arrowEdge: .top) {
             PopoverList(title: "Category", hasSelection: viewModel.selectedCategory != nil) {
                 viewModel.selectedCategory = nil
-                viewModel.activePreset = nil
             } content: {
                 LazyVGrid(columns: [GridItem(.adaptive(minimum: 120), spacing: 6)], alignment: .leading, spacing: 6) {
                     ForEach(EventCategory.allCases) { cat in
@@ -80,7 +86,6 @@ private struct CategoryPill: View {
                         Button {
                             UIImpactFeedbackGenerator(style: .light).impactOccurred()
                             viewModel.selectedCategory = selected ? nil : cat
-                            viewModel.activePreset = nil
                         } label: {
                             HStack(spacing: 6) {
                                 Image(systemName: cat.icon).font(.caption2)
@@ -126,10 +131,14 @@ private struct WhenPill: View {
             )
         }
         .buttonStyle(.plain)
+        .filterPillAccessibility(
+            title: "When",
+            value: viewModel.selectedDatePreset?.rawValue ?? "Any time",
+            isActive: viewModel.selectedDatePreset != nil
+        )
         .popover(isPresented: $showPopover, attachmentAnchor: .point(.bottom), arrowEdge: .top) {
             PopoverList(title: "When", hasSelection: viewModel.selectedDatePreset != nil) {
                 viewModel.selectedDatePreset = nil
-                viewModel.activePreset = nil
             } content: {
                 VStack(spacing: 6) {
                     ForEach(DateFilterPreset.allCases) { preset in
@@ -137,7 +146,6 @@ private struct WhenPill: View {
                         Button {
                             UIImpactFeedbackGenerator(style: .light).impactOccurred()
                             viewModel.selectedDatePreset = selected ? nil : preset
-                            viewModel.activePreset = nil
                         } label: {
                             HStack {
                                 Text(preset.rawValue)
@@ -181,6 +189,11 @@ private struct PricePill: View {
             )
         }
         .buttonStyle(.plain)
+        .filterPillAccessibility(
+            title: "Price",
+            value: viewModel.showFreeOnly ? "Free only" : "Any price",
+            isActive: viewModel.showFreeOnly
+        )
         .popover(isPresented: $showPopover, attachmentAnchor: .point(.bottom), arrowEdge: .top) {
             PopoverList(title: "Price", hasSelection: viewModel.showFreeOnly) {
                 viewModel.showFreeOnly = false
@@ -188,11 +201,9 @@ private struct PricePill: View {
                 VStack(spacing: 8) {
                     priceRow(title: "Any price", selected: !viewModel.showFreeOnly) {
                         viewModel.showFreeOnly = false
-                        viewModel.activePreset = nil
                     }
                     priceRow(title: "Free only", selected: viewModel.showFreeOnly) {
                         viewModel.showFreeOnly = true
-                        viewModel.activePreset = nil
                     }
                 }
             }
@@ -241,6 +252,11 @@ private struct AreaPill: View {
             )
         }
         .buttonStyle(.plain)
+        .filterPillAccessibility(
+            title: "Area",
+            value: viewModel.selectedCities.isEmpty ? "Any" : viewModel.selectedCities.sorted().joined(separator: ", "),
+            isActive: !viewModel.selectedCities.isEmpty
+        )
         .popover(isPresented: $showPopover, attachmentAnchor: .point(.bottom), arrowEdge: .top) {
             PopoverList(title: "Neighborhood", hasSelection: !viewModel.selectedCities.isEmpty) {
                 viewModel.selectedCities = []
@@ -255,7 +271,6 @@ private struct AreaPill: View {
                             } else {
                                 viewModel.selectedCities.insert(area.rawValue)
                             }
-                            viewModel.activePreset = nil
                         } label: {
                             HStack(spacing: 4) {
                                 if selected {
@@ -299,6 +314,11 @@ private struct MorePill: View {
             )
         }
         .buttonStyle(.plain)
+        .filterPillAccessibility(
+            title: "More",
+            value: viewModel.showFeaturedOnly ? "Featured only" : "None",
+            isActive: viewModel.showFeaturedOnly
+        )
         .popover(isPresented: $showPopover, attachmentAnchor: .point(.bottom), arrowEdge: .top) {
             PopoverList(title: "More Options", hasSelection: viewModel.showFeaturedOnly) {
                 viewModel.showFeaturedOnly = false
@@ -346,6 +366,20 @@ private struct PopoverList<Content: View>: View {
         .padding(14)
         .frame(width: 300)
         .frame(maxHeight: 420)
+    }
+}
+
+// MARK: - Pill accessibility (IOS-DD-EVENTS-25)
+
+private extension View {
+    /// The active state was conveyed by fill colour alone. VoiceOver now hears
+    /// the filter's name, its current value and whether it is on.
+    func filterPillAccessibility(title: String, value: String, isActive: Bool) -> some View {
+        self
+            .accessibilityLabel(title)
+            .accessibilityValue(value)
+            .accessibilityAddTraits(isActive ? .isSelected : [])
+            .accessibilityHint("Opens \(title.lowercased()) options")
     }
 }
 

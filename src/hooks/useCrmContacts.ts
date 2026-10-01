@@ -7,6 +7,7 @@ import type {
   CrmContactFilters,
   CrmContactSummary,
 } from '@/types/crm';
+import { fromUnknownTable } from "@/integrations/supabase/unknownTable";
 
 const CRM_CONTACTS_KEY = 'crm-contacts';
 
@@ -16,8 +17,7 @@ export function useCrmContacts(filters?: CrmContactFilters) {
   return useQuery({
     queryKey: [CRM_CONTACTS_KEY, filters],
     queryFn: async () => {
-      let query = supabase
-        .from('crm_contacts')
+      let query = fromUnknownTable('crm_contacts')
         .select('*');
 
       // Apply filters
@@ -93,8 +93,7 @@ export function useCrmContact(contactId: string | undefined) {
     queryFn: async () => {
       if (!contactId) return null;
 
-      const { data, error } = await supabase
-        .from('crm_contacts')
+      const { data, error } = await fromUnknownTable('crm_contacts')
         .select('*')
         .eq('id', contactId)
         .single();
@@ -113,8 +112,7 @@ export function useCrmContactSummary(contactId: string | undefined) {
       if (!contactId) return null;
 
       // Fetch contact with related data
-      const { data: contact, error: contactError } = await supabase
-        .from('crm_contacts')
+      const { data: contact, error: contactError } = await fromUnknownTable('crm_contacts')
         .select('*')
         .eq('id', contactId)
         .single();
@@ -132,15 +130,13 @@ export function useCrmContactSummary(contactId: string | undefined) {
       // They throw now, so a dead CRM looks dead. That is the point: WEB-QA-018's
       // build-or-delete decision is easier to make about a screen that visibly
       // does not work than about one that convincingly shows zeroes.
-      const { data: deals, error: dealsError } = await supabase
-        .from('crm_deals')
+      const { data: deals, error: dealsError } = await fromUnknownTable('crm_deals')
         .select('status, value')
         .eq('contact_id', contactId);
       if (dealsError) throw dealsError;
 
       // Fetch communications count
-      const { count: communicationsCount, error: communicationsError } = await supabase
-        .from('crm_communications')
+      const { count: communicationsCount, error: communicationsError } = await fromUnknownTable('crm_communications')
         .select('*', { count: 'exact', head: true })
         .eq('contact_id', contactId);
       if (communicationsError) throw communicationsError;
@@ -153,8 +149,7 @@ export function useCrmContactSummary(contactId: string | undefined) {
       if (activitiesError) throw activitiesError;
 
       // Fetch segment names
-      const { data: segments, error: segmentsError } = await supabase
-        .from('crm_contact_segments')
+      const { data: segments, error: segmentsError } = await fromUnknownTable('crm_contact_segments')
         .select('segment:crm_segments(name)')
         .eq('contact_id', contactId);
       if (segmentsError) throw segmentsError;
@@ -182,8 +177,7 @@ export function useCrmContactMutations() {
 
   const createContact = useMutation({
     mutationFn: async (input: CrmContactInput) => {
-      const { data, error } = await supabase
-        .from('crm_contacts')
+      const { data, error } = await fromUnknownTable('crm_contacts')
         .insert(input)
         .select()
         .single();
@@ -209,8 +203,7 @@ export function useCrmContactMutations() {
 
   const updateContact = useMutation({
     mutationFn: async ({ id, ...input }: CrmContactInput & { id: string }) => {
-      const { data, error } = await supabase
-        .from('crm_contacts')
+      const { data, error } = await fromUnknownTable('crm_contacts')
         .update(input)
         .eq('id', id)
         .select()
@@ -238,8 +231,7 @@ export function useCrmContactMutations() {
 
   const deleteContact = useMutation({
     mutationFn: async (id: string) => {
-      const { error } = await supabase
-        .from('crm_contacts')
+      const { error } = await fromUnknownTable('crm_contacts')
         .delete()
         .eq('id', id);
 
@@ -302,8 +294,7 @@ export function useCrmContactStats() {
     queryKey: [CRM_CONTACTS_KEY, 'stats'],
     queryFn: async () => {
       // Get total counts by status
-      const { data: statusCounts, error: statusError } = await supabase
-        .from('crm_contacts')
+      const { data: statusCounts, error: statusError } = await fromUnknownTable('crm_contacts')
         .select('status')
         .then(result => {
           if (result.error) throw result.error;
@@ -317,8 +308,7 @@ export function useCrmContactStats() {
       if (statusError) throw statusError;
 
       // Get counts by source
-      const { data: sourceCounts, error: sourceError } = await supabase
-        .from('crm_contacts')
+      const { data: sourceCounts, error: sourceError } = await fromUnknownTable('crm_contacts')
         .select('source')
         .then(result => {
           if (result.error) throw result.error;
@@ -336,8 +326,7 @@ export function useCrmContactStats() {
       startOfMonth.setDate(1);
       startOfMonth.setHours(0, 0, 0, 0);
 
-      const { count: newThisMonth, error: newThisMonthError } = await supabase
-        .from('crm_contacts')
+      const { count: newThisMonth, error: newThisMonthError } = await fromUnknownTable('crm_contacts')
         .select('*', { count: 'exact', head: true })
         .gte('created_at', startOfMonth.toISOString());
       if (newThisMonthError) throw newThisMonthError;
@@ -347,8 +336,7 @@ export function useCrmContactStats() {
       // !result.data?.length) return { data: 0 }` publishes "average lead score
       // 0" for a query that never ran, and 0 is a plausible-looking average. No
       // rows still averages to 0, which is fine; a failed read does not.
-      const { data: avgScore, error: avgScoreError } = await supabase
-        .from('crm_contacts')
+      const { data: avgScore, error: avgScoreError } = await fromUnknownTable('crm_contacts')
         .select('lead_score')
         .then(result => {
           if (result.error) return { data: 0, error: result.error };

@@ -208,13 +208,33 @@ function entityBudgetSeconds() {
 const ENTITY_SITEMAPS = [
   'sitemap-restaurants.xml',
   'sitemap-events.xml',
-  // WEB-SEO-013: generated pSEO pages are pure SPA routes with no static
-  // fallback, so they need prerendering more than most, but they sit behind the
-  // two entity sets that actually draw impressions.
-  'sitemap-pseo.xml',
+  // sitemap-pseo.xml is NOT here: it is in UNBUDGETED_SITEMAPS below (SEO-029).
+  // As an entity family it lost the budget race, and on 2026-09-30 74 of 87
+  // pSEO URLs with Search Console impressions served the homepage to Googlebot.
   'sitemap-attractions.xml',
   'sitemap-playgrounds.xml',
   'sitemap-articles.xml',
+  // WEB-SEO-034. LAST ON PURPOSE. This list is a strict priority order and the
+  // budget shortfall falls entirely on the tail, so adding hotels ahead of an
+  // existing family would take that family's whole allocation rather than
+  // sharing the cost. /stay is roughly 70 rows and had no sitemap at all until
+  // now, so being in one is the change that matters; being prerendered is the
+  // improvement after it.
+  'sitemap-hotels.xml',
+  // WEB-SEO-035, and AFTER hotels for the reason the hotels comment gives: the
+  // list is a strict priority order and the budget shortfall falls on the tail,
+  // so a new family inserted higher takes an existing family's allocation
+  // rather than sharing the cost. These four are small (venues, trails, teams
+  // and published itineraries are tens of rows, not hundreds) and had no
+  // sitemap at all until now, so being submitted is the change that matters.
+  'sitemap-venues.xml',
+  'sitemap-trails.xml',
+  'sitemap-teams.xml',
+  'sitemap-itineraries.xml',
+  // WEB-SEO-035 AC3, added once BestOfCategory.tsx got a canonical and an
+  // ItemList. Behind the other four for the same tail-priority reason, and it
+  // is the smallest family of the lot - one URL per active voting category.
+  'sitemap-best-of.xml',
   'sitemap-guides.xml',
 ];
 
@@ -365,6 +385,52 @@ function collectEntityRoutes() {
       `categories: ${[...headCategories].map(([k, v]) => `${k} ${v}`).join(', ')}`,
   );
   return ordered;
+}
+
+/**
+ * Sitemaps rendered in their own pass with no deadline, after the hubs and
+ * before the entity pass. A URL in one of these that does not render as itself
+ * fails the build. scripts/check-sitemap-registration.mjs reads this list.
+ */
+const UNBUDGETED_SITEMAPS = ['sitemap-pseo.xml'];
+
+/**
+ * SEO-029: the URLs for the unbudgeted pass, read from the sitemaps in dist/
+ * for the reason collectEntityRoutes gives (prerendered stays a subset of
+ * sitemapped). A missing file is fatal rather than a skip: the generator
+ * always writes one, so absence means this is not the build we think it is.
+ */
+function collectPseoRoutes() {
+  const routes = new Set();
+  for (const file of UNBUDGETED_SITEMAPS) {
+    const full = path.join(DIST, file);
+    if (!fs.existsSync(full)) {
+      throw new PrerenderFailure(
+        `${full} not found. Its pages would fall back to the homepage shell in production (SEO-029).`,
+      );
+    }
+    for (const m of fs.readFileSync(full, 'utf8').matchAll(/<loc>\s*([^<\s]+)\s*<\/loc>/g)) {
+      let pathname;
+      try {
+        pathname = new URL(m[1]).pathname.replace(/\/+$/, '') || '/';
+      } catch {
+        continue;
+      }
+      if (ROUTES.includes(pathname)) continue;
+      routes.add(pathname);
+    }
+  }
+  return [...routes];
+}
+
+/** The prerendered homepage's <title>, once the hub pass has written it. */
+function homepageTitle() {
+  try {
+    const html = fs.readFileSync(prerenderOutputPath(DIST, '/'), 'utf8');
+    return /<title[^>]*>(.*?)<\/title>/is.exec(html)?.[1]?.trim() || null;
+  } catch {
+    return null;
+  }
 }
 
 const MIME = {
@@ -564,6 +630,13 @@ const duplicateJsonLdRoutes = [];
   // never rendered itself — see the strict gate in renderRoute().
   const shellTitle = /<title>(.*?)<\/title>/is.exec(buildHtml)?.[1]?.trim() ?? null;
 
+  // SEO-029: titles that mean "this page never rendered as itself". The vite
+  // shell's is the one Chromium sees here, but it is NOT the one production
+  // serves at an unrendered URL: Cloudflare's SPA fallback is dist/index.html,
+  // which the hub pass overwrites with the prerendered homepage. The homepage
+  // title is appended once the hub pass has written it.
+  const forbiddenTitles = [shellTitle];
+
   // SEO-001: routes the strict gate refused, with the reason. Reported at the
   // end rather than only thrown, because a rejection is the interesting output
   // here: it means a page is in the sitemap and is NOT publishable, which is a
@@ -580,6 +653,15 @@ const duplicateJsonLdRoutes = [];
   async function renderRoute(route, strict = false, browser = browsers[0]) {
     const page = await browser.newPage();
     try {
+      // Tell the app it is being prerendered (src/lib/isPrerender.ts), before
+      // any of its scripts run. LazySection then mounts every section at once:
+      // this page never scrolls, so without the flag Home's snapshot,
+      // neighbourhood links and dashboard shipped as empty placeholders
+      // (home-pass2 WP1 item 1). Not navigator.webdriver, which Playwright also
+      // sets and which would defeat the request-budget spec.
+      await page.evaluateOnNewDocument(() => {
+        window.__DMI_PRERENDER__ = true;
+      });
       await page.goto(`http://127.0.0.1:${PORT}${route}`, {
         waitUntil: 'domcontentloaded',
         timeout: 30000,
@@ -849,7 +931,7 @@ const duplicateJsonLdRoutes = [];
       // the shell — the shell's title IS the homepage's — and because hub
       // coverage is already verified on disk after the pass.
       if (strict) {
-        const failures = strictGateFailures(html, route, shellTitle);
+        const failures = strictGateFailures(html, route, forbiddenTitles);
         if (failures.length > 0) {
           strictRejections.push(`${route}: ${failures.join('; ')}`);
           throw new Error(
@@ -955,6 +1037,65 @@ const duplicateJsonLdRoutes = [];
   // cannot reach this line — it threw above — so nothing is being discarded.
   strictRejections.length = 0;
   console.log(`[prerender] hub coverage verified on disk: ${ROUTES.length}/${ROUTES.length}`);
+
+  // From here on, a page carrying the homepage's title is the production
+  // symptom, so the strict gate refuses it too. See forbiddenTitles.
+  const homeTitle = homepageTitle();
+  if (homeTitle) {
+    forbiddenTitles.push(homeTitle);
+  } else {
+    warn('could not read the prerendered homepage <title> from dist/index.html; the gate knows only the vite shell title');
+  }
+
+  // SEO-029: pSEO pages, unbudgeted and fatal.
+  //
+  // Every URL in sitemap-pseo.xml is either in the WEB-SEO-013 shippable set or
+  // a published page Search Console has already shown to searchers
+  // (scripts/pseo-demand-routes.json). When these were an entity family they
+  // sat behind restaurants and events in a pass that runs out of time, and
+  // anything it did not reach got Cloudflare's SPA fallback: the prerendered
+  // homepage, with a self-canonical from functions/_middleware.ts. Measured
+  // 2026-09-30 as Googlebot, 74 of 87 pSEO URLs with impressions returned the
+  // homepage title and H1, including /things-to-do/east-village (1,208
+  // impressions, position 11.8).
+  //
+  // There are under 100 of them, so they get the hub treatment: no deadline,
+  // and a page that does not render as itself fails the build instead of
+  // shipping the homepage again. One retry, because a single slow Supabase read
+  // should not cost a deploy, and two in a row is not slow.
+  const pseoRoutes = collectPseoRoutes();
+  if (pseoRoutes.length > 0) {
+    const pseoStarted = Date.now();
+    const okBefore = ok;
+    const failedBefore = failed;
+    let pending = [...pseoRoutes];
+    for (let attempt = 1; attempt <= 2 && pending.length > 0; attempt++) {
+      strictRejections.length = 0;
+      // A file left by an earlier attempt or an earlier run must not count as
+      // this run's success.
+      for (const r of pending) fs.rmSync(prerenderOutputPath(DIST, r), { force: true });
+      await renderPool(pending, CONCURRENCY, null, true);
+      pending = pending.filter((r) => !fs.existsSync(prerenderOutputPath(DIST, r)));
+      if (pending.length > 0 && attempt === 1) {
+        warn(`pSEO: ${pending.length} route(s) did not render as themselves; retrying once: ${pending.join(', ')}`);
+      }
+    }
+    const pseoSeconds = Math.round((Date.now() - pseoStarted) / 1000);
+    console.log(`[prerender] pSEO: ${pseoRoutes.length - pending.length}/${pseoRoutes.length} written in ${pseoSeconds}s`);
+    if (pending.length > 0) {
+      await shutdown();
+      const reasons = strictRejections.length ? ` Strict gate: ${strictRejections.join(' | ')}.` : '';
+      throw new PrerenderFailure(
+        `pSEO prerender incomplete: ${pending.length}/${pseoRoutes.length} sitemap-pseo.xml URL(s) did not ` +
+          `render as themselves after a retry: ${pending.join(', ')}.${reasons} In production these would ` +
+          'serve the homepage title and H1 (SEO-029). Per-route reasons are in the [prerender] warnings above.',
+      );
+    }
+    // A retried route was counted as failed on its first attempt; it succeeded.
+    ok = okBefore + pseoRoutes.length;
+    failed = failedBefore;
+    strictRejections.length = 0;
+  }
 
   // WEB-SEO-006: entity detail pages.
   let entityUnrendered = [];

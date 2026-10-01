@@ -10,33 +10,62 @@ import os
 final class ConsentService {
     static let shared = ConsentService()
 
+    // UserDefaults stays the source of truth (tests and older code read and
+    // write the keys directly), but computed properties are invisible to
+    // @Observable, so a Settings toggle bound to one did not redraw when
+    // tapped. Each property now registers its read with `access(keyPath:)`
+    // and wraps its write in `withMutation(keyPath:)`, the two hooks the
+    // macro synthesizes (IOS-DD-ACCOUNT-11).
+
     /// Whether the user has completed the consent flow (shown only once).
     var hasCompletedConsent: Bool {
-        get { UserDefaults.standard.bool(forKey: Keys.hasCompleted) }
-        set { UserDefaults.standard.set(newValue, forKey: Keys.hasCompleted) }
+        get {
+            access(keyPath: \.hasCompletedConsent)
+            return UserDefaults.standard.bool(forKey: Keys.hasCompleted)
+        }
+        set {
+            withMutation(keyPath: \.hasCompletedConsent) {
+                UserDefaults.standard.set(newValue, forKey: Keys.hasCompleted)
+            }
+        }
     }
 
     /// Individual consent toggles
     var locationConsent: Bool {
-        get { UserDefaults.standard.bool(forKey: Keys.location) }
+        get {
+            access(keyPath: \.locationConsent)
+            return UserDefaults.standard.bool(forKey: Keys.location)
+        }
         set {
-            UserDefaults.standard.set(newValue, forKey: Keys.location)
+            withMutation(keyPath: \.locationConsent) {
+                UserDefaults.standard.set(newValue, forKey: Keys.location)
+            }
             AppLogger.general.info("Consent changed: location=\(newValue)")
         }
     }
 
     var emailConsent: Bool {
-        get { UserDefaults.standard.bool(forKey: Keys.email) }
+        get {
+            access(keyPath: \.emailConsent)
+            return UserDefaults.standard.bool(forKey: Keys.email)
+        }
         set {
-            UserDefaults.standard.set(newValue, forKey: Keys.email)
+            withMutation(keyPath: \.emailConsent) {
+                UserDefaults.standard.set(newValue, forKey: Keys.email)
+            }
             AppLogger.general.info("Consent changed: email=\(newValue)")
         }
     }
 
     var analyticsConsent: Bool {
-        get { UserDefaults.standard.bool(forKey: Keys.analytics) }
+        get {
+            access(keyPath: \.analyticsConsent)
+            return UserDefaults.standard.bool(forKey: Keys.analytics)
+        }
         set {
-            UserDefaults.standard.set(newValue, forKey: Keys.analytics)
+            withMutation(keyPath: \.analyticsConsent) {
+                UserDefaults.standard.set(newValue, forKey: Keys.analytics)
+            }
             AppLogger.general.info("Consent changed: analytics=\(newValue)")
         }
     }

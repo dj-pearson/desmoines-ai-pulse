@@ -1,5 +1,14 @@
 import { describe, it, expect } from 'vitest';
-import { buildEventJsonLd, buildEventItemList, eventEndIso } from '@/lib/eventSchema';
+import {
+  affiliateTarget,
+  buildEventJsonLd,
+  buildEventItemList,
+  eventEndIso,
+  eventOutboundLink,
+  eventStartIso,
+  eventTicketUrl,
+  LIST_DESCRIPTION_MAX,
+} from '@/lib/eventSchema';
 import type { Event } from '@/lib/types';
 
 /**
@@ -129,5 +138,180 @@ describe('buildEventItemList', () => {
     expect(list.itemListElement.every((e) => 'endDate' in e.item)).toBe(true);
     // Not vacuous: the list is genuinely non-empty.
     expect(list.itemListElement.length).toBeGreaterThan(0);
+  });
+});
+
+describe('an event with no announced start time (WEB-BE-038)', () => {
+  // SeatGeek marks an unannounced showtime with time_tbd and fills
+  // datetime_local with 03:30:00, which is 08:30Z in September. Ingested as a
+  // fact, that renders in a rich result as "3:30 AM".
+  const TBD_START = '2026-09-04T08:30:00.000Z';
+
+  it('publishes a date-only startDate', () => {
+    expect(eventStartIso(ev({ date: TBD_START, time_tbd: true }))).toBe('2026-09-04');
+  });
+
+  it('leaves a normal event timestamp alone', () => {
+    const start = '2026-09-04T00:00:00.000Z';
+    expect(eventStartIso(ev({ date: start }))).toBe(start);
+    expect(eventStartIso(ev({ date: start, time_tbd: false }))).toBe(start);
+  });
+
+  it('omits endDate rather than estimating one', () => {
+    expect(eventEndIso(ev({ date: TBD_START, time_tbd: true }))).toBeNull();
+  });
+
+  it('keeps a real end_date, as a Central date to match the date-only start', () => {
+    const e = ev({ date: TBD_START, time_tbd: true });
+    e.end_date = '2026-09-06T23:00:00.000Z';
+    expect(eventEndIso(e)).toBe('2026-09-06');
+  });
+
+  it('the built node carries the date-only start and no endDate', () => {
+    const node = buildEventJsonLd(ev({ date: TBD_START, time_tbd: true }));
+    expect(node.startDate).toBe('2026-09-04');
+    expect('endDate' in node).toBe(false);
+  });
+});
+
+describe('JSON-LD time matches the page (events-pass2 WP4 item 2)', () => {
+  it('a 19:31:58 sentinel row publishes its Central date and no endDate', () => {
+    // 19:31:58 CDT on Fri Sep 4 is 00:31:58Z on Sep 5. Slicing the UTC string
+    // used to publish the 5th.
+    const node = buildEventJsonLd(
+      ev({ date: '2026-09-05T00:31:58+00:00', event_start_local: '2026-09-04T19:31:58' }),
+    );
+    expect(node.startDate).toMatch(/^\d{4}-\d{2}-\d{2}$/);
+    expect(node.startDate).toBe('2026-09-04');
+    expect('endDate' in node).toBe(false);
+  });
+
+  it('a SeatGeek 03:30 row publishes a date-only startDate and no endDate, with no time_tbd column', () => {
+    const node = buildEventJsonLd(
+      ev({
+        date: '2026-09-04T08:30:00+00:00',
+        event_start_utc: '2026-09-04T08:30:00+00:00',
+        event_start_local: '2026-09-04T03:30:00',
+        source_url: 'https://seatgeek.com/some-show-tickets/concert/123',
+      }),
+    );
+    expect(node.startDate).toBe('2026-09-04');
+    expect('endDate' in node).toBe(false);
+  });
+
+  it('a timed evening event keeps its instant and a three-hour estimate', () => {
+    const node = buildEventJsonLd(ev({ date: '2026-09-05T00:00:00.000Z' }));
+    expect(node.startDate).toBe('2026-09-05T00:00:00.000Z');
+    expect(node.endDate).toBe('2026-09-05T03:00:00.000Z');
+  });
+
+  it('ignores an end_date before the start', () => {
+    expect(eventEndIso(ev({ date: '2026-09-05T00:00:00.000Z', end_date: '2026-09-01T00:00:00.000Z' }))).toBe(
+      '2026-09-05T03:00:00.000Z',
+    );
+  });
+});
+
+describe('descriptions in lists (events-pass2 WP4 item 18)', () => {
+  const long = `${'Live music on the lawn with food trucks and a cash bar. '.repeat(20)}`.trim();
+
+  it('trims list items to LIST_DESCRIPTION_MAX at a word boundary', () => {
+    const list = buildEventItemList([ev({ enhanced_description: long })], { name: 'n', description: 'd', url: 'u' });
+    const text = list.itemListElement[0].item.description;
+    expect(text.length).toBeLessThanOrEqual(LIST_DESCRIPTION_MAX);
+    expect(text.endsWith('...')).toBe(true);
+    expect(long.startsWith(text.slice(0, -3))).toBe(true);
+    expect(text.slice(0, -3).endsWith(' ')).toBe(false);
+  });
+
+  it('the detail node keeps the full text', () => {
+    expect(buildEventJsonLd(ev({ enhanced_description: long })).description).toBe(long);
+  });
+});
+
+describe('eventOutboundLink (events-pass2 WP4 item 5)', () => {
+  it('names the host for a Varies price on a listing site', () => {
+    expect(
+      eventOutboundLink({ price: 'Varies', source_url: 'https://www.catchdesmoines.com/event/x/123/' }),
+    ).toEqual({
+      href: 'https://www.catchdesmoines.com/event/x/123/',
+      label: 'Event listing on catchdesmoines.com',
+      sellsTickets: false,
+      sponsored: false,
+      rel: 'noopener noreferrer',
+    });
+  });
+
+  it('says Get tickets for a paid price on a ticketing host', () => {
+    expect(eventOutboundLink({ price: '$25', source_url: 'https://www.ticketmaster.com/e/1' })?.label).toBe(
+      'Get tickets',
+    );
+    expect(
+      eventOutboundLink({ price: '$20-$45', source_url: 'https://concerts.livenation.axs.com/x' })?.sellsTickets,
+    ).toBe(true);
+  });
+
+  it('does not say Get tickets for a free or unreadable price, even on a ticketer', () => {
+    expect(eventOutboundLink({ price: 'Free', source_url: 'https://www.eventbrite.com/e/1' })?.label).toBe(
+      'Event listing on eventbrite.com',
+    );
+    expect(eventOutboundLink({ price: 'TBD', source_url: 'https://seatgeek.com/x' })?.sellsTickets).toBe(false);
+  });
+
+  it('does not treat a look-alike host as a ticketer', () => {
+    expect(eventOutboundLink({ price: '$25', source_url: 'https://notticketmaster.com/x' })?.sellsTickets).toBe(false);
+  });
+
+  it('returns nothing for a javascript: link or a broken one', () => {
+    expect(eventOutboundLink({ price: '$25', source_url: 'javascript:alert(1)' })).toBeNull();
+    expect(
+      eventOutboundLink({ price: '$25', source_url: 'https://www.ticketmaster.com/e/1', source_url_broken: true }),
+    ).toBeNull();
+  });
+});
+
+describe('Ticketmaster affiliate links (WP6)', () => {
+  const target = 'https://www.ticketmaster.com/some-show-waukee-iowa-10-12-2026/event/0600632DE1A4';
+  const redirect = `https://ticketmaster.evyy.net/c/6430290/264167/4272?u=${encodeURIComponent(target)}`;
+
+  it('decodes the redirect target', () => {
+    expect(affiliateTarget(redirect)).toBe(target);
+    expect(affiliateTarget(target)).toBeNull();
+    expect(affiliateTarget('https://ticketmaster.evyy.net/c/1/2/3?u=javascript%3Aalert(1)')).toBeNull();
+  });
+
+  it('reads Get tickets, marked sponsored, for affiliate_url', () => {
+    const link = eventOutboundLink({ price: '$35', source_url: target, affiliate_url: redirect });
+    expect(link).toEqual({
+      href: redirect,
+      label: 'Get tickets',
+      sellsTickets: true,
+      sponsored: true,
+      rel: 'sponsored noopener noreferrer',
+    });
+  });
+
+  it('prefers affiliate_url over a non-affiliate source_url', () => {
+    const link = eventOutboundLink({
+      price: 'Varies',
+      source_url: 'https://www.vibrantmusichall.com/shows',
+      affiliate_url: redirect,
+    });
+    expect(link?.href).toBe(redirect);
+    expect(link?.label).toBe('Event listing on ticketmaster.com');
+    expect(link?.sponsored).toBe(true);
+  });
+
+  it('treats an old row whose source_url is the redirect as an affiliate link', () => {
+    const link = eventOutboundLink({ price: '$35', source_url: redirect });
+    expect(link?.label).toBe('Get tickets');
+    expect(link?.sponsored).toBe(true);
+    expect(eventTicketUrl({ source_url: redirect })).toBe(target);
+  });
+
+  it('shows nothing when the checker flagged the link broken', () => {
+    expect(
+      eventOutboundLink({ price: '$35', source_url: target, affiliate_url: redirect, source_url_broken: true }),
+    ).toBeNull();
   });
 });

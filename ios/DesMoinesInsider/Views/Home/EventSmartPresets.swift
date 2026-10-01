@@ -38,7 +38,7 @@ enum EventPreset: String, CaseIterable, Identifiable {
         case .familyFun:    return "All ages welcome"
         case .artCulture:   return "Museums & galleries"
         case .outdoors:     return "Parks & nature"
-        case .tonight:      return "Happening today"
+        case .tonight:      return "Out tonight"
         case .thisWeek:     return "Coming up soon"
         case .featured:     return "Editor's picks"
         }
@@ -88,7 +88,8 @@ enum EventPreset: String, CaseIterable, Identifiable {
     var datePreset: DateFilterPreset? {
         switch self {
         case .freeWeekend: return .thisWeekend
-        case .tonight:     return .today
+        // Tonight, not midnight-to-midnight (IOS-DD-EVENTS-18).
+        case .tonight:     return .tonight
         case .thisWeek:    return .thisWeek
         default:           return nil
         }

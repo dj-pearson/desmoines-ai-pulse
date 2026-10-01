@@ -19,6 +19,7 @@
  */
 import { readFileSync, readdirSync } from 'node:fs';
 import { join } from 'node:path';
+import { execFileSync } from 'node:child_process';
 
 const MIGRATIONS_DIR = 'supabase/migrations';
 const BASELINE_PATH = '.github/migration-safety-baseline.json';
@@ -57,8 +58,35 @@ try {
   process.exit(0);
 }
 
-const toScan = files.filter((f) => !grandfathered.has(f));
-console.log(`[migration-safety] ${toScan.length} new migration(s) to scan (${grandfathered.size} grandfathered)`);
+/**
+ * SCAN WHAT THIS CHANGE ADDS, not everything since the baseline. The check ran
+ * over every migration missing from the grandfathered list, so the moment one
+ * merged with the migration-override label - the documented way to accept a
+ * reviewed destructive change - every later PR failed on it, including PRs
+ * that touched no SQL. Six such migrations were failing every PR on
+ * 2026-09-30. With the base branch visible to git, only the files this change
+ * adds are scanned; the override label then means what it says. Without it
+ * (a local run, a shallow clone) the old, stricter scope applies.
+ */
+function baseMigrations() {
+  const base = process.env.GITHUB_BASE_REF ? `origin/${process.env.GITHUB_BASE_REF}` : 'origin/main';
+  try {
+    const out = execFileSync('git', ['ls-tree', '--name-only', `${base}:${MIGRATIONS_DIR}`], {
+      encoding: 'utf8',
+      stdio: ['ignore', 'pipe', 'ignore'],
+    });
+    return { base, files: new Set(out.split('\n').filter((f) => f.endsWith('.sql'))) };
+  } catch {
+    return null;
+  }
+}
+const onBase = baseMigrations();
+const toScan = files.filter((f) => !grandfathered.has(f) && !(onBase && onBase.files.has(f)));
+console.log(
+  onBase
+    ? `[migration-safety] ${toScan.length} migration(s) added against ${onBase.base} to scan`
+    : `[migration-safety] ${toScan.length} new migration(s) to scan (${grandfathered.size} grandfathered; base branch not visible, scanning all)`,
+);
 
 const findings = [];
 for (const f of toScan) {

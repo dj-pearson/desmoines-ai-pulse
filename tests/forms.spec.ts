@@ -377,7 +377,11 @@ test.describe('Form UX Features', () => {
   test('password fields should have visibility toggle', async ({ page }) => {
     await page.goto('/auth');
 
-    const passwordInput = page.locator('input[type="password"]').first();
+    // Located by id, NOT by input[type="password"] (WEB-AUTH-008). A working
+    // toggle changes the type to "text", so a type-based locator stops
+    // matching the moment the feature under test does its job, and the
+    // getAttribute below would time out on the page where the toggle works.
+    const passwordInput = page.locator('#password');
 
     if (await passwordInput.count() > 0) {
       // Look for a password VISIBILITY toggle specifically.
@@ -390,8 +394,8 @@ test.describe('Form UX Features', () => {
       // else-branch to skip gracefully when no toggle exists; the loose
       // selector was what defeated it.
       //
-      // /auth currently has NO visibility toggle, so this should take the skip
-      // path rather than fail.
+      // /auth HAS a toggle now (src/components/ui/PasswordInput.tsx), so this
+      // takes the assertion path rather than the skip path.
       const toggleButton = page
         .locator(
           'button[aria-label*="show password" i], button[aria-label*="hide password" i], ' +

@@ -8,7 +8,10 @@ import { Badge } from '@/components/ui/badge';
 import { Skeleton } from '@/components/ui/skeleton';
 import { Heart, Users, Palette, Dumbbell, Utensils, Compass } from "lucide-react";
 import { getCanonicalUrl } from '@/lib/brandConfig';
+import { toJsonLd } from '@/lib/jsonLd';
+import { collectionPageJsonLd } from '@/lib/collectionPageJsonLd';
 import { SpriteIcon } from "@/components/ui/SpriteIcon";
+import { OptimizedImage } from "@/components/OptimizedImage";
 
 const THEME_ICONS: Record<string, typeof Heart> = {
   romance: Heart,
@@ -38,7 +41,7 @@ export default function Itineraries() {
   return (
     <>
       <Helmet>
-        <title>Curated Itineraries — Des Moines Trip Plans | Des Moines Insider</title>
+        <title>Des Moines Trip Plans & Itineraries | Des Moines Insider</title>
         <meta name="description" content="Browse curated Des Moines itineraries for weekends, date days, family fun, food tours, and art walks. Printable checklists included." />
         {/* WEB-SEO-002: sitemapped and prerendered, but had no canonical. */}
         <link rel="canonical" href={getCanonicalUrl('/itineraries')} />
@@ -51,6 +54,16 @@ export default function Itineraries() {
         <meta property="og:url" content={getCanonicalUrl('/itineraries')} />
         <meta name="twitter:title" content="Curated Itineraries — Des Moines Trip Plans | Des Moines Insider" />
         <meta name="twitter:description" content="Browse curated Des Moines itineraries for weekends, date days, family fun, food tours, and art walks. Printable checklists included." />
+        <script type="application/ld+json">
+          {toJsonLd(
+            collectionPageJsonLd({
+              name: 'Des Moines Trip Plans & Itineraries',
+              description:
+                'Browse curated Des Moines itineraries for weekends, date days, family fun, food tours, and art walks. Printable checklists included.',
+              path: '/itineraries',
+            }),
+          )}
+        </script>
       </Helmet>
       <div className="min-h-screen bg-background">
         <Header />
@@ -77,7 +90,7 @@ export default function Itineraries() {
               ))}
             </div>
           ) : (
-            sortedThemes.map((theme) => {
+            sortedThemes.map((theme, themeIndex) => {
               const items = groupedByTheme![theme];
               const Icon = THEME_ICONS[theme] || Compass;
               return (
@@ -87,16 +100,23 @@ export default function Itineraries() {
                     <h2 className="text-2xl font-bold">{getThemeLabel(theme)}</h2>
                   </div>
                   <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-6">
-                    {items.map((it) => (
+                    {items.map((it, index) => (
                       <Link key={it.id} to={`/itineraries/${it.slug}`}>
                         <Card className="hover:border-primary transition-colors h-full">
                           {it.cover_image && (
                             <div className="h-40 overflow-hidden rounded-t-lg">
-                              <img
+                              <OptimizedImage
                                 src={it.cover_image}
                                 alt={it.title}
-                                className="w-full h-full object-cover"
-                                loading="lazy"
+                                className="object-cover"
+                                containerClassName="w-full h-full"
+                                // Only the first theme's first row is above the
+                                // fold; every later section is scrolled to.
+                                // The first row of a three-column grid. Chrome does not start a lazy
+                                // image's fetch until layout has run, so the LCP candidate on a listing
+                                // page must not be lazy (WEB-SEO-032).
+                                priority={themeIndex === 0 && index < 3}
+                                sizes="(max-width: 640px) 100vw, (max-width: 1024px) 50vw, 33vw"
                               />
                             </div>
                           )}

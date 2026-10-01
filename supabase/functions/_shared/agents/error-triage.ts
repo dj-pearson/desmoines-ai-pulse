@@ -9,6 +9,7 @@
  * Consolidated into `agent-runner` (was `agent-error-triage/index.ts`).
  */
 import { createAgentTask } from "../agentTasks.ts";
+import { MAX_NEW_TASKS_PER_RUN, pickClustersToCreate } from "../errorPolicy.ts";
 import type { AgentRun } from "./types.ts";
 
 const AGENT_KEY = "error-triage";
@@ -70,23 +71,16 @@ export const run: AgentRun = async (ctx, { supabase }) => {
   const activeSigs = new Set(clusters.keys());
   let upserted = 0;
 
-  for (const c of clusters.values()) {
-    const highFreqUserFacing = c.userFacing && c.frequency >= TIER2_MIN_FREQUENCY;
-    const tier: 1 | 2 = highFreqUserFacing ? 2 : 1;
-    const dedupeKey = `error:${c.signature}`;
-    const payload = {
-      signature: c.signature,
-      frequency: c.frequency,
-      firstSeen: c.firstSeen,
-      lastSeen: c.lastSeen,
-      routes: Array.from(c.routes).slice(0, 20),
-      affectedUsers: c.users.size,
-      sample: c.sample, // already PII-scrubbed at ingest
-      component: c.component,
-      action: c.action,
-    };
+  // Most frequent first, so the per-run cap keeps the loudest signatures
+  // (IOS-DD-PLATFORM-18).
+  const ordered = Array.from(clusters.values()).sort((a, b) => b.frequency - a.frequency);
+  const dedupeKeyOf = (c: Cluster) => `error:${c.signature}`;
 
-    // Upsert: refresh an existing open task's payload, else create.
+  // Pass 1: which clusters already have an open task.
+  const existingIds = new Map<string, string>();
+  const readable: Cluster[] = [];
+  for (const c of ordered) {
+    const dedupeKey = dedupeKeyOf(c);
     const { data: existing, error: existingError } = await supabase
       .from("agent_tasks")
       .select("id")
@@ -103,20 +97,58 @@ export const run: AgentRun = async (ctx, { supabase }) => {
       console.warn(`[error-triage] dedupe read failed for ${dedupeKey}; skipping: ${existingError.message}`);
       continue;
     }
-    if (existing?.id) {
-      await supabase.from("agent_tasks").update({ payload }).eq("id", existing.id);
-    } else {
+    if (existing?.id) existingIds.set(dedupeKey, existing.id);
+    readable.push(c);
+  }
+
+  // At most MAX_NEW_TASKS_PER_RUN new tasks per run; updates are not capped.
+  const toCreate = new Set(
+    pickClustersToCreate(
+      readable.map((c) => ({ key: dedupeKeyOf(c), frequency: c.frequency })),
+      new Set(existingIds.keys()),
+      MAX_NEW_TASKS_PER_RUN,
+    ),
+  );
+
+  // Pass 2: refresh existing tasks, create the capped set of new ones.
+  let skippedByCap = 0;
+  for (const c of readable) {
+    const highFreqUserFacing = c.userFacing && c.frequency >= TIER2_MIN_FREQUENCY;
+    const tier: 1 | 2 = highFreqUserFacing ? 2 : 1;
+    const dedupeKey = dedupeKeyOf(c);
+    const payload = {
+      signature: c.signature,
+      frequency: c.frequency,
+      firstSeen: c.firstSeen,
+      lastSeen: c.lastSeen,
+      routes: Array.from(c.routes).slice(0, 20),
+      affectedUsers: c.users.size,
+      sample: c.sample, // already PII-scrubbed at ingest
+      component: c.component,
+      action: c.action,
+    };
+
+    const existingId = existingIds.get(dedupeKey);
+    if (existingId) {
+      await supabase.from("agent_tasks").update({ payload }).eq("id", existingId);
+    } else if (toCreate.has(dedupeKey)) {
       await createAgentTask(supabase, {
         agentKey: AGENT_KEY,
         category: "dev",
-        title: `[${c.frequency}x] ${c.component ?? "app"}: ${c.sample.slice(0, 80)}`,
+        title: `[${c.frequency}x] ${(c.component ?? "app").slice(0, 40)}: ${c.sample.slice(0, 80)}`,
         confidence: 0,
         forceTier: tier,
         dedupeKey,
         payload,
       });
+    } else {
+      skippedByCap++;
+      continue;
     }
     upserted++;
+  }
+  if (skippedByCap > 0) {
+    console.warn(`[error-triage] ${skippedByCap} new signature(s) over the ${MAX_NEW_TASKS_PER_RUN}-task cap; next run`);
   }
 
   // Auto-close: open error tasks whose signature had no events in the window.
@@ -143,7 +175,7 @@ export const run: AgentRun = async (ctx, { supabase }) => {
   }
 
   ctx.processed(events?.length ?? 0);
-  ctx.summary(`${clusters.size} cluster(s), ${upserted} task(s) upserted, ${closed} auto-closed`);
-  ctx.meta({ clusters: clusters.size, upserted, closed });
+  ctx.summary(`${clusters.size} cluster(s), ${upserted} task(s) upserted, ${skippedByCap} over cap, ${closed} auto-closed`);
+  ctx.meta({ clusters: clusters.size, upserted, skippedByCap, closed });
   return { clusters: clusters.size, upserted, closed };
 };

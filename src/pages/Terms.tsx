@@ -4,6 +4,26 @@ import Footer from "@/components/Footer";
 import SEOHead from "@/components/SEOHead";
 import { BackToTop } from "@/components/BackToTop";
 import { Breadcrumbs } from "@/components/ui/breadcrumbs";
+import { useSubscription } from "@/hooks/useSubscription";
+import { benefitsFor, displayPrice, type PlanName } from "@/lib/planBenefits";
+
+/**
+ * One plan's line in "Subscription Features", from planBenefits.ts like every
+ * other surface that lists benefits. This list used to be typed out here and
+ * promised VIP the trip planner plus priority_support and early_access, none
+ * of which VIP gets over Insider. The truthfulness test now reads this file.
+ */
+function PlanTermsLine({ plan, label }: { plan: Exclude<PlanName, "free">; label: string }) {
+  const { plans, getPlanByName } = useSubscription();
+  const price = displayPrice(plans, plan, "monthly");
+  const benefits = benefitsFor(plan, getPlanByName(plan)?.limits);
+  return (
+    <li>
+      <strong>{label}</strong>
+      {price !== null && ` ($${price.toFixed(2)}/month)`}: {benefits.map((b) => b.text).join("; ")}.
+    </li>
+  );
+}
 
 export default function Terms() {
   const lastUpdated = "March 10, 2026";
@@ -237,8 +257,8 @@ export default function Terms() {
 
             <h3 className="text-xl font-medium mt-6 mb-3">Subscription Features</h3>
             <ul className="list-disc pl-6 space-y-2">
-              <li><strong>Insider</strong> ($4.99/month): Unlimited favorites, advanced search filters, event reminders, and ad-free experience.</li>
-              <li><strong>VIP</strong> ($12.99/month): All Insider features plus AI Trip Planner, priority support, and early access to new features.</li>
+              <PlanTermsLine plan="insider" label="Insider" />
+              <PlanTermsLine plan="vip" label="VIP" />
             </ul>
             <p className="mt-2">
               Pricing is in US dollars and may vary by region. Applicable taxes may apply based on your location.

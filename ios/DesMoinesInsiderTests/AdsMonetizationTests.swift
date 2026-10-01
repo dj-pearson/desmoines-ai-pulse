@@ -37,7 +37,7 @@ final class AdsMonetizationTests: XCTestCase {
           "itemType": "restaurant",
           "itemId": "abc-123",
           "title": "Tacos El Sol",
-          "reason": "A sponsored mexican spot locals are loving",
+          "reason": "Sponsored · Mexican",
           "imageUrl": null,
           "campaignId": "camp-9"
         }
@@ -75,5 +75,93 @@ final class AdsMonetizationTests: XCTestCase {
         let comps = URLComponents(url: url, resolvingAgainstBaseURL: false)
         XCTAssertEqual(comps?.path, "/advertise")
         XCTAssertTrue((comps?.queryItems ?? []).isEmpty)
+    }
+    // MARK: IOS-DD-MONETIZATION-07 — track-ad-event contract
+
+    /// Keys the edge function destructures (supabase/functions/track-ad-event).
+    /// page_url and referrer_url are web-only.
+    private static let trackAdEventKeys: Set<String> = [
+        "kind", "campaign_id", "creative_id", "placement_type", "session_id",
+        "client_event_id", "page_url", "referrer_url", "impression_id",
+    ]
+
+    func testTrackPayloadKeysMatchEdgeFunction() throws {
+        let payload = AdTrackingService.TrackPayload(
+            kind: "impression",
+            campaign_id: UUID().uuidString,
+            creative_id: UUID().uuidString,
+            placement_type: "below_fold",
+            session_id: "session_1",
+            client_event_id: UUID().uuidString,
+            impression_id: UUID().uuidString
+        )
+        let data = try JSONEncoder().encode(payload)
+        let object = try XCTUnwrap(JSONSerialization.jsonObject(with: data) as? [String: Any])
+        let keys = Set(object.keys)
+        XCTAssertEqual(keys, [
+            "kind", "campaign_id", "creative_id", "placement_type", "session_id",
+            "client_event_id", "impression_id",
+        ])
+        XCTAssertTrue(keys.isSubset(of: Self.trackAdEventKeys),
+                      "Every key must be one track-ad-event reads: \(keys.subtracting(Self.trackAdEventKeys))")
+    }
+
+    func testRowEnqueuedDuringFlushSurvives() {
+        // "late" was appended while the flush awaited; only sent/dropped keys go.
+        let remaining = AdTrackingService.remainingAfterFlush(["a", "b", "late"], done: ["a", "b"])
+        XCTAssertEqual(remaining, ["late"])
+        XCTAssertEqual(AdTrackingService.remainingAfterFlush(["a", "b"], done: ["a"]), ["b"],
+                       "A row that failed stays queued")
+    }
+
+    // MARK: IOS-DD-MONETIZATION-08 — interstitial trigger
+
+    func testInterstitialNeverAskedForProgrammaticOrPaid() {
+        XCTAssertTrue(MainTabView.shouldAskForInterstitial(isFree: true, programmatic: false))
+        XCTAssertFalse(MainTabView.shouldAskForInterstitial(isFree: true, programmatic: true),
+                       "A deep link or Siri intent switching tabs is not the user browsing")
+        XCTAssertFalse(MainTabView.shouldAskForInterstitial(isFree: false, programmatic: false),
+                       "Paid tiers are ad-free")
+    }
+
+    // MARK: IOS-DD-MONETIZATION-09 — one unit per slot
+
+    func testUnsoldSlotRotation() {
+        XCTAssertEqual(AdBannerView.fallbackUnit(ordinal: 0, hasAffiliate: true), .affiliate)
+        XCTAssertEqual(AdBannerView.fallbackUnit(ordinal: 1, hasAffiliate: true), .affiliate)
+        XCTAssertEqual(AdBannerView.fallbackUnit(ordinal: 2, hasAffiliate: true), .house)
+        XCTAssertEqual(AdBannerView.fallbackUnit(ordinal: 0, hasAffiliate: false), .house)
+    }
+
+    // MARK: IOS-DD-MONETIZATION-10 — house ads sell only what exists
+
+    func testHouseAdCopySellsNothingUnoffered() {
+        let banned = ["advanced filter", "insider tip", "across all your devices", "journalism"]
+        for copy in HouseAdCopy.all {
+            let text = (copy.subhead + " " + copy.cta).lowercased()
+            for phrase in banned {
+                XCTAssertFalse(text.contains(phrase), "\(copy.id) sells '\(phrase)'")
+            }
+        }
+    }
+
+    func testHouseAdsOpenTheirOwnPaywall() {
+        let contexts = Dictionary(uniqueKeysWithValues: HouseAdCopy.all.map { ($0.id, $0.context.id) })
+        XCTAssertEqual(contexts["ad_free"], PaywallContext.adFree.id)
+        XCTAssertEqual(contexts["trip_planner"], PaywallContext.tripPlanner.id)
+        XCTAssertEqual(contexts["unlimited_saves"], PaywallContext.unlimitedFavorites.id)
+    }
+
+    // MARK: IOS-DD-MONETIZATION-19 — sponsored picks open natively
+
+    func testSponsoredPickOpensNativeDetail() {
+        func pick(_ type: String) -> SponsoredPickService.SponsoredPick {
+            SponsoredPickService.SponsoredPick(
+                itemType: type, itemId: "id-1", title: "T", reason: "Sponsored", imageUrl: nil, campaignId: "c"
+            )
+        }
+        XCTAssertEqual(SponsoredPickCard.presentation(for: pick("event"))?.id, "event-id-1")
+        XCTAssertEqual(SponsoredPickCard.presentation(for: pick("restaurant"))?.id, "restaurant-id-1")
+        XCTAssertNil(SponsoredPickCard.presentation(for: pick("hotel")))
     }
 }

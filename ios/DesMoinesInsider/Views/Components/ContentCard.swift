@@ -36,6 +36,10 @@ struct CardPill: Identifiable, Hashable {
     let text: String
     let tint: Color
     var filled: Bool = true
+    /// When set, only the icon takes this colour and the text is `.primary`.
+    /// System yellow or green text on white is far below 4.5:1
+    /// (IOS-DD-RESTAURANTS-12).
+    var iconTint: Color? = nil
 
     static func == (lhs: CardPill, rhs: CardPill) -> Bool { lhs.id == rhs.id }
     func hash(into hasher: inout Hasher) { hasher.combine(id) }
@@ -45,6 +49,14 @@ struct CardPill: Identifiable, Hashable {
 /// route to the right FavoritesService method.
 enum FavoritableKind {
     case event, restaurant, attraction
+
+    var favoriteKind: FavoriteKind {
+        switch self {
+        case .event: return .event
+        case .restaurant: return .restaurant
+        case .attraction: return .attraction
+        }
+    }
 }
 
 /// The favorite affordance. `.managed` self-toggles through FavoritesService
@@ -107,17 +119,21 @@ struct ContentCard: View {
     var decorative: Bool = false
 
     @Binding var toast: ToastMessage?
+    /// Whether the host passed a toast binding. Without one, favorite
+    /// feedback goes to AppToastCenter (IOS-DD-SAVED-15).
+    private let hasToastBinding: Bool
 
     init(
         _ data: ContentCardData,
         variant: Variant = .standard,
         decorative: Bool = false,
-        toast: Binding<ToastMessage?> = .constant(nil)
+        toast: Binding<ToastMessage?>? = nil
     ) {
         self.data = data
         self.variant = variant
         self.decorative = decorative
-        self._toast = toast
+        self._toast = toast ?? .constant(nil)
+        self.hasToastBinding = toast != nil
     }
 
     var body: some View {
@@ -198,7 +214,7 @@ struct ContentCard: View {
     @ViewBuilder
     private func favoriteButton(style: CardFavoriteButton.Style) -> some View {
         if !decorative, let favorite = data.favorite {
-            CardFavoriteButton(favorite: favorite, style: style, toast: $toast)
+            CardFavoriteButton(favorite: favorite, style: style, toast: $toast, hasToastBinding: hasToastBinding)
         }
     }
 
@@ -211,16 +227,26 @@ struct ContentCard: View {
             HStack(spacing: 6) {
                 ForEach(shown) { PillView(pill: $0) }
                 Spacer(minLength: 0)
+                // White bold text on a filled capsule, as EventDetailHeader
+                // does: orange caption text on white was about 2.2:1
+                // (IOS-DD-EVENTS-25).
                 if let urgency = data.urgency {
                     Label(urgency, systemImage: "clock.badge.exclamationmark")
                         .font(.caption.bold())
-                        .foregroundStyle(.orange)
+                        .foregroundStyle(.white)
                         .lineLimit(1)
+                        .padding(.horizontal, 7)
+                        .padding(.vertical, 2)
+                        .background(PremiumTokens.urgencyFill, in: Capsule())
                 }
                 if data.isFeatured {
                     Label("Featured", systemImage: "star.fill")
-                        .font(.caption2.weight(.semibold))
-                        .foregroundStyle(.orange)
+                        .font(.caption2.bold())
+                        .foregroundStyle(.white)
+                        .lineLimit(1)
+                        .padding(.horizontal, 7)
+                        .padding(.vertical, 2)
+                        .background(PremiumTokens.urgencyFill, in: Capsule())
                 }
             }
         }
@@ -245,6 +271,23 @@ struct ContentCard: View {
                     .glassCard(cornerRadius: 14, material: .regularMaterial, elevation: PremiumTokens.elevation4)
                 favoriteButton(style: .overlay).padding(10)
             }
+            // "Happening now" / "Today" on the rail cards too, so the Tonight
+            // rail says which shows are already on (IOS-DD-EVENTS-18). Bottom
+            // leading: the top-leading corner already holds the category,
+            // sponsored and award badges.
+            .overlay(alignment: .bottomLeading) {
+                if let urgency = data.urgency {
+                    Text(urgency)
+                        .font(.caption2.bold())
+                        .foregroundStyle(.white)
+                        .lineLimit(1)
+                        .padding(.horizontal, 8)
+                        .padding(.vertical, 3)
+                        .background(PremiumTokens.urgencyFill, in: Capsule())
+                        .padding(10)
+                        .accessibilityHidden(true)
+                }
+            }
 
             Text(data.title)
                 .appText(.bodyEmphasized)
@@ -267,6 +310,21 @@ struct ContentCard: View {
             ZStack(alignment: .topTrailing) {
                 image(width: 180, height: 110, corner: 12, scrim: false)
                 favoriteButton(style: .overlay).padding(8)
+            }
+            // Only events carry urgency; the Dashboard "Coming up" strip
+            // uses this variant for them (IOS-DD-SAVED-26).
+            .overlay(alignment: .bottomLeading) {
+                if let urgency = data.urgency {
+                    Text(urgency)
+                        .font(.caption2.bold())
+                        .foregroundStyle(.white)
+                        .lineLimit(1)
+                        .padding(.horizontal, 8)
+                        .padding(.vertical, 3)
+                        .background(PremiumTokens.urgencyFill, in: Capsule())
+                        .padding(8)
+                        .accessibilityHidden(true)
+                }
             }
 
             Text(data.title)
@@ -381,7 +439,13 @@ private struct PillView: View {
 
     var body: some View {
         Group {
-            if let icon = pill.icon {
+            if let icon = pill.icon, let iconTint = pill.iconTint {
+                Label {
+                    Text(pill.text).foregroundStyle(.primary)
+                } icon: {
+                    Image(systemName: icon).foregroundStyle(iconTint)
+                }
+            } else if let icon = pill.icon {
                 Label(pill.text, systemImage: icon)
             } else {
                 Text(pill.text)
@@ -446,15 +510,26 @@ struct AwardBadge: View {
 
 // MARK: - Shared favorite button
 
+@MainActor
 struct CardFavoriteButton: View {
     enum Style { case overlay, inline }
 
     let favorite: CardFavorite
     var style: Style = .inline
     @Binding var toast: ToastMessage?
+    /// False when the card was built with the default `.constant(nil)`.
+    var hasToastBinding = true
 
     @State private var favorites = FavoritesService.shared
+    @State private var auth = AuthService.shared
     @State private var burst = false
+
+    /// A save for this card is on the network; the heart dims and further
+    /// taps are ignored (IOS-DD-SAVED-05).
+    private var isInFlight: Bool {
+        guard case .managed(let kind, let id, _) = favorite else { return false }
+        return favorites.isInFlight(kind: kind.favoriteKind, id: id)
+    }
 
     private var isFavorited: Bool {
         switch favorite {
@@ -489,6 +564,7 @@ struct CardFavoriteButton: View {
                             Circle().fill(.ultraThinMaterial)
                         }
                     }
+                    .opacity(isInFlight ? 0.5 : 1)
             }
         }
         .buttonStyle(.plain)
@@ -507,31 +583,55 @@ struct CardFavoriteButton: View {
     }
 
     private func tapped() {
-        if !isFavorited { burst.toggle() }
-
         switch favorite {
         case .external(_, _, let onToggle):
+            if !isFavorited { burst.toggle() }
             onToggle()
         case .managed(let kind, let id, _):
+            // Guests get sign-in, not a celebration and then an error
+            // (IOS-DD-SAVED-15).
+            guard auth.isAuthenticated else {
+                NotificationCenter.default.post(name: .favoritesSignInRequired, object: nil)
+                return
+            }
+            guard !favorites.isInFlight(kind: kind.favoriteKind, id: id) else { return }
             let wasFavorited = isFavorited
             Task {
                 do {
+                    let nowSaved: Bool
                     switch kind {
-                    case .event:      _ = try await favorites.toggleFavorite(eventId: id)
-                    case .restaurant: _ = try await favorites.toggleRestaurantFavorite(restaurantId: id)
-                    case .attraction: _ = try await favorites.toggleFavoriteAttraction(attractionId: id)
+                    case .event:      nowSaved = try await favorites.toggleFavorite(eventId: id)
+                    case .restaurant: nowSaved = try await favorites.toggleRestaurantFavorite(restaurantId: id)
+                    case .attraction: nowSaved = try await favorites.toggleFavoriteAttraction(attractionId: id)
                     }
-                    toast = wasFavorited
-                        ? .info("Removed from saved", icon: "heart")
-                        : .success("Saved!", icon: "heart.fill")
+                    // The burst plays once the save has landed, not before.
+                    // It carries its own haptic; a second one here doubled it.
+                    if nowSaved && !wasFavorited {
+                        burst.toggle()
+                    }
+                    show(nowSaved
+                        ? .success("Saved!", icon: "heart.fill")
+                        : .info("Removed from saved", icon: "heart"))
                 } catch {
+                    UINotificationFeedbackGenerator().notificationOccurred(.error)
                     // The favorites cap shows the upsell paywall app-wide
                     // (IOS-SUB-011); skip the redundant error toast for it.
                     if !FavoritesService.isLimitReached(error) {
-                        toast = .error(error.localizedDescription, icon: "exclamationmark.triangle")
+                        show(.error(error.localizedDescription, icon: "exclamationmark.triangle"))
                     }
                 }
             }
+        }
+    }
+
+    /// Cards built without a toast binding (Search, saved-search results,
+    /// Attractions) used to drop every message; those go to the app-wide
+    /// toast instead (IOS-DD-SAVED-15).
+    private func show(_ message: ToastMessage) {
+        if hasToastBinding {
+            toast = message
+        } else {
+            AppToastCenter.shared.show(message)
         }
     }
 }
@@ -548,13 +648,13 @@ private struct CardDateBadge: View {
 
     var body: some View {
         VStack(spacing: 1) {
-            Text(date.formatted(.dateTime.weekday(.short)).uppercased())
+            Text(date.formatted(DesMoinesTime.style(.dateTime.weekday(.short))).uppercased())
                 .font(.system(size: labelSize, weight: .bold))
                 .foregroundStyle(Color.accentColor)
-            Text(date.formatted(.dateTime.day()))
+            Text(date.formatted(DesMoinesTime.style(.dateTime.day())))
                 .font(.system(size: daySize, weight: .bold))
                 .foregroundStyle(.primary)
-            Text(date.formatted(.dateTime.month(.abbreviated)).uppercased())
+            Text(date.formatted(DesMoinesTime.style(.dateTime.month(.abbreviated))).uppercased())
                 .font(.system(size: labelSize, weight: .medium))
                 .foregroundStyle(.secondary)
         }
@@ -649,20 +749,32 @@ extension Event {
         )
         data.isSponsored = isActivelySponsored
         if let date = parsedDate {
-            data.metaPrimary = CardMetaLine(
-                icon: "clock",
-                text: date.formatted(.dateTime.weekday(.abbreviated).month(.abbreviated).day().hour().minute())
-            )
+            data.metaPrimary = CardMetaLine(icon: "clock", text: cardDateText(date))
         }
         data.metaSecondary = CardMetaLine(icon: "mappin", text: displayLocation)
         return data
+    }
+
+    /// The card's date line in Des Moines time, with " - Time TBA" instead of
+    /// a placeholder time (IOS-DD-EVENTS-05). Internal so the Saved rows and
+    /// the shared plan text use it too (IOS-DD-SAVED-11).
+    func cardDateText(_ date: Date) -> String {
+        let day = DesMoinesTime.style(.dateTime.weekday(.abbreviated).month(.abbreviated).day())
+        guard hasSpecificTime else { return date.formatted(day) + " - Time TBA" }
+        return date.formatted(DesMoinesTime.style(.dateTime.weekday(.abbreviated).month(.abbreviated).day().hour().minute()))
+            + DesMoinesTime.zoneSuffix(at: date)
     }
 
     /// Full label for the standalone (standard) card.
     private var eventCardAccessibilityLabel: String {
         var parts: [String] = [title]
         if let date = parsedDate {
-            parts.append(date.formatted(.dateTime.weekday(.wide).month(.wide).day().hour().minute()))
+            if hasSpecificTime {
+                parts.append(date.formatted(DesMoinesTime.style(.dateTime.weekday(.wide).month(.wide).day().hour().minute()))
+                    + (DesMoinesTime.deviceDiffersFromCentral(at: date) ? " Central time" : ""))
+            } else {
+                parts.append(date.formatted(DesMoinesTime.style(.dateTime.weekday(.wide).month(.wide).day())) + ", time to be announced")
+            }
         }
         parts.append(displayLocation)
         if isFree { parts.append("Free event") }
@@ -677,18 +789,13 @@ extension Restaurant {
     var cardData: ContentCardData {
         var pills: [CardPill] = []
         if let price = priceRange, !price.isEmpty {
-            pills.append(CardPill(icon: nil, text: price, tint: .green, filled: false))
+            pills.append(CardPill(icon: nil, text: price, tint: .secondary, filled: false))
         }
         if let rating {
-            pills.append(CardPill(icon: "star.fill", text: String(format: "%.1f", rating), tint: .yellow, filled: false))
+            pills.append(CardPill(icon: "star.fill", text: String(format: "%.1f", rating), tint: .primary, filled: false, iconTint: .yellow))
         }
-        if let isOpen = isOpenNow() {
-            pills.append(CardPill(
-                icon: isOpen ? "clock.badge.checkmark" : "clock.badge.xmark",
-                text: isOpen ? "Open" : "Closed",
-                tint: isOpen ? .green : .red,
-                filled: false
-            ))
+        if let pill = statusPill {
+            pills.append(pill)
         }
 
         var data = ContentCardData(
@@ -699,7 +806,7 @@ extension Restaurant {
             placeholderTint: .orange,
             pills: pills,
             favorite: .managed(kind: .restaurant, id: id, title: name),
-            accessibilityLabel: "\(name), \(cuisine ?? "restaurant"), \(ratingText)"
+            accessibilityLabel: cardAccessibilityLabel
         )
         data.isSponsored = isActivelySponsored
         data.awardBadge = BestOfWinners.shared.winnerLabel(forEntityId: id)
@@ -711,13 +818,52 @@ extension Restaurant {
         }
         return data
     }
+
+    /// Lifecycle first (New / opening date / Closed), else the hours line
+    /// (IOS-DD-RESTAURANTS-01 / 06). Nothing when the hours are unknown: a
+    /// wrong "Open" costs more trust than a missing one. Internal so the Saved
+    /// row shows the same status (IOS-DD-SAVED-27).
+    var statusPill: CardPill? {
+        switch lifecycle {
+        case .newlyOpened:
+            return CardPill(icon: "sparkles", text: "New", tint: .primary, filled: false, iconTint: .orange)
+        case .openingSoon:
+            return CardPill(icon: "calendar", text: openingLabel ?? "Opening soon", tint: .primary, filled: false, iconTint: .orange)
+        case .closedPermanently:
+            return CardPill(icon: "xmark.octagon", text: "Closed", tint: .primary, filled: false, iconTint: .red)
+        case .open, .closedTemporarily:
+            break
+        }
+        let status = openStatus()
+        guard let line = status.line else { return nil }
+        let icon: String
+        let tint: Color
+        switch status {
+        case .open:
+            icon = "clock.badge.checkmark"; tint = .green
+        case .closingSoon:
+            icon = "clock.badge.exclamationmark"; tint = .orange
+        case .closed:
+            icon = "clock.badge.xmark"; tint = .red
+        case .unknown:
+            return nil
+        }
+        return CardPill(icon: icon, text: line, tint: .primary, filled: false, iconTint: tint)
+    }
 }
 
 extension Attraction {
     var cardData: ContentCardData {
         var pills: [CardPill] = []
+        // Free only when the row says so; null is unknown (IOS-DD-BROWSE-09).
+        if isFree == true {
+            pills.append(CardPill(icon: "gift", text: "Free", tint: .primary, filled: false, iconTint: .green))
+        }
         if let rating {
             pills.append(CardPill(icon: "star.fill", text: String(format: "%.1f", rating), tint: .yellow, filled: false))
+        }
+        if let pill = openStatusPill {
+            pills.append(pill)
         }
 
         var data = ContentCardData(
@@ -732,11 +878,38 @@ extension Attraction {
             accessibilityLabel: compactCardAccessibilityLabel
         )
         data.awardBadge = BestOfWinners.shared.winnerLabel(forEntityId: id)
-        data.metaPrimary = CardMetaLine(icon: attractionType.icon, text: attractionType.displayName)
+        // The paid placement is labelled like Event and Restaurant (IOS-DD-BROWSE-09).
+        data.isSponsored = isActivelySponsored
+        data.metaPrimary = CardMetaLine(icon: attractionType.icon, text: typeLabel)
         if let location, !location.isEmpty {
             data.metaSecondary = CardMetaLine(icon: "mappin", text: location)
         }
         return data
+    }
+
+    /// The stored type when it is not one of the nine known ones ("Park/Art"),
+    /// instead of "Other".
+    var typeLabel: String {
+        let raw = type.trimmingCharacters(in: .whitespacesAndNewlines)
+        if attractionType == .other, !raw.isEmpty { return raw }
+        return attractionType.displayName
+    }
+
+    /// Today's hours as a pill, styled like the restaurant one; nothing when
+    /// unknown (IOS-DD-BROWSE-10).
+    var openStatusPill: CardPill? {
+        let status = openStatus()
+        guard let line = status.line else { return nil }
+        switch status {
+        case .open:
+            return CardPill(icon: "clock.badge.checkmark", text: line, tint: .primary, filled: false, iconTint: .green)
+        case .closingSoon:
+            return CardPill(icon: "clock.badge.exclamationmark", text: line, tint: .primary, filled: false, iconTint: .orange)
+        case .closed:
+            return CardPill(icon: "clock.badge.xmark", text: line, tint: .primary, filled: false, iconTint: .red)
+        case .unknown:
+            return nil
+        }
     }
 }
 

@@ -1,185 +1,317 @@
-import { useParams, useNavigate, Link } from "react-router-dom";
-import { useQuery } from "@tanstack/react-query";
-import { supabase } from "@/integrations/supabase/client";
+import { useMemo, useState } from "react";
+import { useParams, Link } from "react-router-dom";
+import { ChevronLeft, ChevronRight } from "lucide-react";
 import Header from "@/components/Header";
 import Footer from "@/components/Footer";
-import EventCard from "@/components/EventCard";
+import { SocialEventCard } from "@/components/SocialEventCard";
 import EnhancedLocalSEO from "@/components/EnhancedLocalSEO";
 import { EventListJsonLd } from "@/components/schema/EventListJsonLd";
-import { FAQSection } from "@/components/FAQSection";
-import { useDocumentTitle } from "@/hooks/useDocumentTitle";
-import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
-import { Badge } from "@/components/ui/badge";
-import { Button } from "@/components/ui/button";
-import { ChevronLeft, ChevronRight } from "lucide-react";
-import { format, startOfMonth, addMonths, isValid } from "date-fns";
-import { fromZonedTime } from "date-fns-tz";
-import { useState, useMemo } from "react";
-import { BRAND } from "@/lib/brandConfig";
-import { Breadcrumbs } from "@/components/ui/breadcrumbs";
-import { EVENT_LIST_COLUMNS } from "@/lib/listColumns";
-import { formatCount } from "@/lib/pluralize";
-import { SpriteIcon } from "@/components/ui/SpriteIcon";
-import { MonthSeasonalBlock } from "@/components/seo/MonthSeasonalBlock";
 import NoIndexMeta from "@/components/schema/NoIndexMeta";
-import { isArchivedMonth, monthLabelOf, monthSlugOf, shiftMonth } from "@/lib/monthPages";
+import { FAQSection } from "@/components/FAQSection";
+import { ListFreshness } from "@/components/ListFreshness";
+import { EventsLandingLinks } from "@/components/events/EventsLandingLinks";
+import { MonthCalendarGrid } from "@/components/events/MonthCalendarGrid";
+import { MonthSeasonalBlock } from "@/components/seo/MonthSeasonalBlock";
+import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
+import { Button } from "@/components/ui/button";
+import { Breadcrumbs } from "@/components/ui/breadcrumbs";
+import { SpriteIcon } from "@/components/ui/SpriteIcon";
+import { ErrorState } from "@/components/ui/error-state";
+import { SkeletonGroup } from "@/components/ui/skeleton";
+import { useUrlFilters } from "@/hooks/useUrlFilters";
+import { useBatchEventSocial } from "@/hooks/useBatchEventSocial";
+import {
+  useEventLanding,
+  useLandingCards,
+  groupByWeek,
+  splitAtToday,
+  countByCentralDay,
+  countFree,
+  countLabel,
+  countStartingAfter5pm,
+  LANDING_LIGHT_COLUMNS,
+  type LandingEvent,
+} from "@/hooks/useEventLanding";
+import { BRAND } from "@/lib/brandConfig";
+import { centralDateOf } from "@/lib/timezone";
+import {
+  centralMonthOf,
+  isCurrentMonth,
+  isIndexableMonth,
+  isMonthInRange,
+  isYearInRange,
+  monthName,
+  monthSlug,
+  parseMonthSlug,
+  shiftMonth,
+  type MonthRef,
+} from "@/lib/monthPages";
+import { formatCount } from "@/lib/pluralize";
+import { EVENTS_UPDATE_ANSWER } from "@/content/eventsCopy";
 
 /**
  * WEB-PERF-023. The grid rendered every event in the month, which measured
- * 14,857 DOM elements on /events/august-2026 (268 events) - the worst route on
- * the site against a 1,189 median and a ~1,500 Lighthouse flag. The cost is
- * about 53 elements per EventCard on top of ~460 of page chrome, derived from
- * the four month pages: 268 events -> 14,857, 153 -> 8,438, 122 -> 6,806,
- * 75 -> 4,489.
- *
- * 36 is twelve full rows of the lg:grid-cols-3 grid and puts August at roughly
- * 2,400, in line with /restaurants (2,875) and / (2,314) rather than ten times
- * worse than either. Matches VISIBLE_RESTAURANTS in DietaryRestaurants.tsx.
- *
- * THE TRADE-OFF IS REAL AND IS NOT MINE TO SETTLE ALONE: these are SEO landing
- * pages that SEO-016 has only just started linking to, and a month page now
- * lists 36 of 268 events. Every event remains reachable through /events, the
- * month navigation and its own detail page, and 14,857 elements is itself a
- * Core Web Vitals problem - but if the whole month must render, the fix is a
- * cheaper card, not a bigger cap.
+ * 14,857 DOM elements on /events/august-2026 (268 events), the worst route on
+ * the site. 36 is twelve full rows of the lg:grid-cols-3 grid. The calendar
+ * grid above the cards covers every day of the month and links each one to
+ * the hub, so the cap hides nothing that isn't a click away.
  */
 const VISIBLE_EVENTS = 36;
 
-/** Event dates on this site are Des Moines dates. */
-const EVENT_TZ = "America/Chicago";
+/** Row cap for the month window. Counts at the cap read "1000+". */
+const FETCH_LIMIT = 1000;
+
+const EMPTY: LandingEvent[] = [];
+const ALL = "all";
+
+/** The not-found state for a month outside the range's years (WP3 item 6). */
+function MonthNotFound({ label }: { label: string | null }) {
+  const current = centralMonthOf(new Date());
+  return (
+    <div className="min-h-screen bg-background">
+      <NoIndexMeta />
+      <Header />
+      <div className="container mx-auto px-4 py-16 max-w-2xl text-center">
+        <SpriteIcon name="calendar" className="h-12 w-12 text-muted-foreground mx-auto mb-4" />
+        <h1 className="text-3xl font-bold mb-3">
+          {label ? `No calendar for ${label}` : "No calendar for that month"}
+        </h1>
+        <p className="text-muted-foreground mb-6">
+          Month pages cover last month through twelve months ahead.
+        </p>
+        <div className="flex flex-wrap justify-center gap-3">
+          <Button asChild className="min-h-11">
+            <Link to={`/events/${monthSlug(current)}`}>{monthName(current)} events</Link>
+          </Button>
+          <Button asChild variant="outline" className="min-h-11">
+            <Link to="/events">All upcoming events</Link>
+          </Button>
+        </div>
+      </div>
+      <Footer />
+    </div>
+  );
+}
 
 export default function MonthlyEventsPage() {
   const { slug } = useParams<{ slug: string }>();
-  const monthYear = slug;
-  const navigate = useNavigate();
-  const [selectedCategory, setSelectedCategory] = useState<string>("all");
+  const parsed = parseMonthSlug(slug);
+  const now = new Date();
+  const renderable = parsed !== null && isYearInRange(parsed.year, now);
+  // A fallback month keeps the hook order stable; the query is disabled when
+  // the slug is not renderable, and the page renders the not-found state.
+  const target: MonthRef = parsed ?? { year: 2000, month: 1 };
 
-  // Parse month-year from URL (e.g., "march-2024")
-  const parseMonthYear = (monthYearStr: string) => {
-    const [monthName, yearStr] = monthYearStr.split("-");
-    const year = parseInt(yearStr);
-    const monthIndex = new Date(`${monthName} 1, ${year}`).getMonth();
-    return new Date(year, monthIndex, 1);
-  };
+  const { getStr, setParam } = useUrlFilters();
+  const selectedCategory = getStr("category", ALL);
 
-  const targetDate = monthYear ? parseMonthYear(monthYear) : new Date();
-  const isValidDate = isValid(targetDate);
-  
-  const monthStart = startOfMonth(targetDate);
-  
-  // Fetch the full month once; category filtering + category list are derived
-  // in memory to avoid a second full-range query (WEB-PERF-011).
-  const { data: allEvents, isLoading } = useQuery({
-    queryKey: ["monthly-events", monthYear],
-    queryFn: async () => {
-      const { data, error } = await supabase
-        .from("events")
-        .select(EVENT_LIST_COLUMNS)
-        // SEO-033: bound the month in Central time. `date` is timestamptz, and
-        // the old .lte("date", "yyyy-MM-31") meant "<= 00:00 UTC on the 31st",
-        // which dropped every event on the last evening of the month and pulled
-        // in the previous month's last evening instead. Measured 2026-09-30:
-        // October showed 216 rows against 199 Central-time October events, and
-        // the five it lost were all on Halloween, two of them Halloween events.
-        .gte("date", fromZonedTime(monthStart, EVENT_TZ).toISOString())
-        .lt("date", fromZonedTime(addMonths(monthStart, 1), EVENT_TZ).toISOString())
-        .order("date", { ascending: true })
-        // `time` is not a column on public.events; ordering by it made PostgREST
-        // reject the query with 42703 and the month grid rendered empty.
-        // event_start_local is the intended intra-day ordering key.
-        .order("event_start_local", { ascending: true, nullsFirst: false });
-
-      if (error) throw error;
-      return data || [];
-    },
-    enabled: isValidDate, // Only run query if date is valid
+  /**
+   * The window is centralWindow(month). Light rows for the whole month (WP3
+   * item 7): the grid, the week totals and the stats read only these. Full
+   * card rows are fetched for the 36 rendered, by id, below.
+   */
+  const {
+    data: allEvents = EMPTY,
+    isLoading,
+    isError,
+    error,
+    refetch,
+    window: monthWindow,
+  } = useEventLanding({
+    key: { landing: "month" },
+    window: { kind: "month", year: target.year, month: target.month },
+    limit: FETCH_LIMIT,
+    enabled: renderable,
+    columns: LANDING_LIGHT_COLUMNS,
   });
 
-  // Category filter applied in memory (preserves the previous grid behavior).
-  const events = useMemo(() => {
-    if (!allEvents) return allEvents;
-    if (selectedCategory === "all") return allEvents;
-    return allEvents.filter((event) => event.category === selectedCategory);
-  }, [allEvents, selectedCategory]);
-
-  // Distinct category list derived from the already-fetched rows.
-  const categories = useMemo(
+  const events = useMemo(
     () =>
-      [...new Set((allEvents || []).map((event) => event.category))]
-        .filter(Boolean)
-        .sort(),
+      selectedCategory === ALL
+        ? allEvents
+        : allEvents.filter((event) => event.category === selectedCategory),
+    [allEvents, selectedCategory]
+  );
+
+  const categories = useMemo(
+    () => [...new Set(allEvents.map((event) => event.category).filter(Boolean))].sort(),
     [allEvents]
   );
 
-  useDocumentTitle(isValidDate ? `${format(targetDate, "MMMM yyyy")} Events` : "Monthly Events");
+  const today = centralDateOf(now);
+  const current = renderable && isCurrentMonth(target, now);
 
-  // Check validity AFTER hooks
-  if (!isValidDate) {
-    return <div>Invalid date format</div>;
+  /**
+   * The current month starts today (WP3 item 5): days already over fold into
+   * "Earlier this month", and the 36-card cap fills from today forward.
+   * Other months list from the 1st.
+   */
+  const { earlier, upcoming } = useMemo(
+    () => (current ? splitAtToday(events, today) : { earlier: EMPTY, upcoming: events }),
+    [current, events, today]
+  );
+
+  const visibleRows = useMemo(() => upcoming.slice(0, VISIBLE_EVENTS), [upcoming]);
+
+  /** Earlier weeks the reader opened; closed, they render no cards. */
+  const [earlierOpen, setEarlierOpen] = useState(false);
+  const earlierRows = useMemo(
+    () => (earlierOpen ? earlier.slice(0, VISIBLE_EVENTS) : EMPTY),
+    [earlierOpen, earlier]
+  );
+
+  const renderedRows = useMemo(() => [...visibleRows, ...earlierRows], [visibleRows, earlierRows]);
+  const { cards, isPending: cardsPending } = useLandingCards(renderedRows, renderable);
+  const cardById = useMemo(() => new Map(cards.map((row) => [row.id, row])), [cards]);
+  const card = (event: LandingEvent): LandingEvent => cardById.get(event.id) ?? event;
+  const visibleCards = useMemo(
+    () => visibleRows.map((event) => cardById.get(event.id) ?? event),
+    [visibleRows, cardById]
+  );
+
+  /** Week headings over the capped list; each heading counts its whole week. */
+  const weeks = useMemo(() => {
+    if (!monthWindow) return [];
+    const carryTo = current ? today : undefined;
+    const totals = new Map(
+      groupByWeek(upcoming, monthWindow.startDay, monthWindow.endDay, carryTo).map((w) => [
+        w.id,
+        w.events.length,
+      ])
+    );
+    return groupByWeek(visibleRows, monthWindow.startDay, monthWindow.endDay, carryTo).map(
+      (week) => ({ ...week, total: totals.get(week.id) ?? week.events.length })
+    );
+  }, [upcoming, visibleRows, monthWindow, current, today]);
+
+  const earlierWeeks = useMemo(
+    () => (monthWindow ? groupByWeek(earlierRows, monthWindow.startDay, monthWindow.endDay) : []),
+    [earlierRows, monthWindow]
+  );
+
+  const dayCounts = useMemo(() => countByCentralDay(events), [events]);
+
+  // WEB-PERF-030: one batch query per table for the cards actually rendered.
+  const socialIds = useMemo(() => renderedRows.map((e) => e.id), [renderedRows]);
+  const { data: batchSocialData, isPending: batchSocialPending } = useBatchEventSocial(socialIds);
+
+  if (!parsed || !renderable) {
+    return <MonthNotFound label={parsed ? monthName(parsed) : null} />;
   }
 
-  // Prev/next are real links (SEO-033): they were buttons calling navigate(),
-  // which a crawler cannot follow, so no month page linked to its neighbours.
-  const monthRef = { year: targetDate.getFullYear(), monthIndex: targetDate.getMonth() };
-  const prevRef = shiftMonth(monthRef, -1);
-  const nextRef = shiftMonth(monthRef, 1);
-  const prevHref = `/events/${monthSlugOf(prevRef)}`;
-  const nextHref = `/events/${monthSlugOf(nextRef)}`;
-  const archived = isArchivedMonth(monthRef);
-  const shortMonth = format(targetDate, "MMMM");
+  const canonicalSlug = monthSlug(parsed);
+  const prev = shiftMonth(parsed, -1);
+  const next = shiftMonth(parsed, 1);
+  const monthDisplayName = monthName(parsed);
+  const canonicalUrl = `${BRAND.baseUrl}/events/${canonicalSlug}`;
 
-  const monthDisplayName = format(targetDate, "MMMM yyyy");
-  const pageTitle = `${monthDisplayName} Events in Des Moines - Complete Calendar`;
-  const pageDescription = `Complete list of events happening in ${monthDisplayName} in Des Moines and suburbs. Concerts, festivals, community events, and entertainment activities with dates, times, and details.`;
-  
+  const loaded = !isLoading && !isError;
+  const inRange = isMonthInRange(parsed, now);
+  // Indexable: in range with at least MIN_EVENTS_PER_MONTH events, the
+  // sitemap's floor. Decided on the unfiltered month once it has loaded, so
+  // the loading render doesn't flip the robots tag.
+  const indexable = loaded && isIndexableMonth(parsed, allEvents.length, now);
+  const noindex = (isError && allEvents.length === 0) || (loaded && !indexable);
+
+  const pageTitle = `${monthDisplayName} Events in Des Moines, Central Time | ${BRAND.name}`;
+  const pageDescription = `Events in ${monthDisplayName} in Des Moines and the suburbs, by day and by week, with dates, times and venues in Central time.`;
+
   const breadcrumbs = [
     { name: "Events", url: "/events" },
-    { name: monthDisplayName, url: `/events/${monthYear}` },
+    { name: monthDisplayName, url: `/events/${canonicalSlug}` },
   ];
 
+  // No live count in these answers: FAQSection emits FAQPage JSON, and a
+  // count makes the loading and loaded renders disagree (WEB-SEO-008).
   const faqData = [
     {
       question: `What events are happening in ${monthDisplayName} in Des Moines?`,
-      answer: `We have ${formatCount(events?.length || 0, 'event')} scheduled for ${monthDisplayName} in Des Moines and surrounding areas. Browse our complete calendar with dates, times, locations, and ticket information.`,
+      answer: `This page lists the events on our calendar for ${monthDisplayName}, Central time, in Des Moines and surrounding areas: a calendar with the count for each day, then the events week by week, with dates, times and venues.`,
     },
     {
       question: "How often is the monthly calendar updated?",
-      answer: "Our monthly event calendar is updated daily as new events are added and details change. We recommend checking back regularly for the most current information.",
+      answer: EVENTS_UPDATE_ANSWER,
     },
     {
       question: "Do you include events in Des Moines suburbs?",
-      answer: "Yes! Our monthly calendar includes events throughout the greater Des Moines metro area including West Des Moines, Ankeny, Urbandale, Johnston, and other nearby communities.",
+      answer: "Yes. The calendar includes events across the Des Moines metro, including West Des Moines, Ankeny, Urbandale, Johnston and other nearby communities.",
     },
     {
       question: "Can I filter events by category or type?",
-      answer: "Absolutely! Use our category filters to narrow down events by type such as music, family, sports, arts, or community events to find exactly what interests you.",
+      answer: "Yes. The category buttons on this page narrow the month to one category, and each day in the calendar opens that day on the events page.",
     },
   ];
 
+  // Overflow opens the rest of the month on the hub (WP3 item 10): from today
+  // (or the 1st, for a month that hasn't started or is over) to the last day.
+  const overflowFrom =
+    monthWindow && today > monthWindow.startDay && today <= monthWindow.endDay
+      ? today
+      : monthWindow?.startDay ?? "";
+  const overflowParams = new URLSearchParams({
+    from: overflowFrom,
+    to: monthWindow?.endDay ?? "",
+  });
+  if (selectedCategory !== ALL) overflowParams.set("category", selectedCategory);
+  const overflowHref = `/events?${overflowParams.toString()}`;
+
+  // Neighbours outside the range get no link at all, so a crawler can't walk
+  // from one empty month to the next. rel=prev/next only on an indexable page.
+  const prevInRange = isMonthInRange(prev, now);
+  const nextInRange = isMonthInRange(next, now);
+  const thisMonth = centralMonthOf(now);
+
+  let cardIndex = 0;
+
+  const monthNav = (
+    <nav aria-label="Other months" className="flex flex-wrap justify-between items-center gap-3">
+      {prevInRange ? (
+        <Button asChild variant="outline" className="min-h-11">
+          <Link to={`/events/${monthSlug(prev)}`} rel={indexable ? "prev" : undefined}>
+            <ChevronLeft className="h-4 w-4" aria-hidden="true" />
+            {monthName(prev)}
+          </Link>
+        </Button>
+      ) : (
+        <span />
+      )}
+      {!inRange && (
+        <Button asChild variant="outline" className="min-h-11">
+          <Link to={`/events/${monthSlug(thisMonth)}`}>{monthName(thisMonth)}</Link>
+        </Button>
+      )}
+      {nextInRange ? (
+        <Button asChild variant="outline" className="min-h-11">
+          <Link to={`/events/${monthSlug(next)}`} rel={indexable ? "next" : undefined}>
+            {monthName(next)}
+            <ChevronRight className="h-4 w-4" aria-hidden="true" />
+          </Link>
+        </Button>
+      ) : (
+        <span />
+      )}
+    </nav>
+  );
+
+
   return (
     <div className="min-h-screen bg-background">
+      {noindex && <NoIndexMeta />}
       <EnhancedLocalSEO
         pageTitle={pageTitle}
         pageDescription={pageDescription}
-        canonicalUrl={`${BRAND.baseUrl}/events/${monthYear}`}
+        canonicalUrl={canonicalUrl}
         pageType="website"
         breadcrumbs={breadcrumbs}
         isTimeSensitive={true}
       />
-      {/* SEO-033: months more than ARCHIVE_AFTER_MONTHS back stay reachable but
-          leave the index. See isArchivedMonth for why this is not a 301. */}
-      {archived && <NoIndexMeta />}
-      {/* The schema must describe what the page SHOWS. The grid is capped at
-          VISIBLE_EVENTS, and EventListJsonLd defaults maxItems to 50, so
-          passing the full month here would advertise events a reader cannot
-          see - the same defect already fixed on /restaurants, which declared
-          numberOfItems 478 against a 20-item list. */}
+      {/* The schema describes what the page shows: the capped list. */}
       <EventListJsonLd
-        events={(events || []).slice(0, VISIBLE_EVENTS)}
+        events={visibleCards}
         maxItems={VISIBLE_EVENTS}
-        listName={pageTitle}
+        listName={`${monthDisplayName} Events in Des Moines`}
         listDescription={pageDescription}
-        listUrl={`${BRAND.baseUrl}/events/${monthYear}`}
+        listUrl={canonicalUrl}
       />
 
       <Header />
@@ -193,121 +325,89 @@ export default function MonthlyEventsPage() {
             { label: monthDisplayName },
           ]}
         />
-        {/* Header with Navigation */}
-        <div className="flex items-center justify-between mb-8">
-          <div className="flex items-center gap-4">
-            <Button asChild variant="outline" size="sm">
-              <Link to={prevHref} rel="prev">
-                <ChevronLeft className="h-4 w-4" />
-                Previous Month
-              </Link>
-            </Button>
-            
-            <div className="text-center">
-              <div className="flex items-center gap-2 mb-2">
-                <SpriteIcon name="calendar" className="h-6 w-6 text-primary" />
-                <h1 className="text-3xl font-bold">{monthDisplayName} Events</h1>
-              </div>
-              <div className="flex items-center gap-4 text-muted-foreground">
-                <div className="flex items-center gap-1">
-                  <SpriteIcon name="map-pin" className="h-4 w-4" />
-                  <span>Des Moines Metro Area</span>
-                </div>
-                <div className="flex items-center gap-1">
-                  <SpriteIcon name="clock" className="h-4 w-4" />
-                  <span>{events?.length || 0} Events This Month</span>
-                </div>
-              </div>
-            </div>
-            
-            <Button asChild variant="outline" size="sm">
-              <Link to={nextHref} rel="next">
-                Next Month
-                <ChevronRight className="h-4 w-4" />
-              </Link>
-            </Button>
+
+        <div className="mb-8">
+          <div className="flex items-center gap-2 mb-2">
+            <SpriteIcon name="calendar" className="h-6 w-6 text-primary" />
+            <h1 className="text-3xl font-bold">{monthDisplayName} Events in Des Moines</h1>
           </div>
+          <div className="flex flex-wrap items-center gap-4 text-muted-foreground mb-4">
+            <div className="flex items-center gap-1">
+              <SpriteIcon name="map-pin" className="h-4 w-4" />
+              <span>Des Moines Metro Area</span>
+            </div>
+            {loaded && (
+              <div className="flex items-center gap-1">
+                <SpriteIcon name="clock" className="h-4 w-4" />
+                <span>
+                  {countLabel(events.length, FETCH_LIMIT)}{" "}
+                  {events.length === 1 ? "event" : "events"} this month, Central time
+                </span>
+              </div>
+            )}
+          </div>
+          <ListFreshness rows={allEvents} className="mb-4" />
+          {monthNav}
         </div>
 
-        <p className="text-lg text-muted-foreground mb-8 text-center max-w-3xl mx-auto">
-          Complete calendar of events happening in {monthDisplayName} throughout Des Moines and suburbs. 
-          Find concerts, festivals, community gatherings, and entertainment activities with all the details you need.
-        </p>
+        {/* SEO-033: the intro a month published ahead of its events still has. */}
+        <MonthSeasonalBlock month={parsed} events={loaded ? allEvents : undefined} />
 
-        <MonthSeasonalBlock month={monthRef} events={allEvents} />
-
-        {/* Quick Stats */}
         <Card className="mb-8">
           <CardContent className="pt-6">
-            <div className="grid grid-cols-1 md:grid-cols-4 gap-4 text-center">
+            <div className="grid grid-cols-2 md:grid-cols-4 gap-4 text-center">
               <div>
                 <div className="text-2xl font-bold text-primary">
-                  {events?.length || 0}
+                  {countLabel(events.length, FETCH_LIMIT)}
                 </div>
-                <div className="text-sm text-muted-foreground">
-                  Total Events
-                </div>
+                <div className="text-sm text-muted-foreground">Total Events</div>
               </div>
               <div>
-                <div className="text-2xl font-bold text-primary">
-                  {events?.filter(e => e.price === "Free" || e.price === "0").length || 0}
-                </div>
+                <div className="text-2xl font-bold text-primary">{countFree(events)}</div>
                 <div className="text-sm text-muted-foreground">Free Events</div>
               </div>
               <div>
-                <div className="text-2xl font-bold text-primary">
-                  {categories?.length || 0}
-                </div>
-                <div className="text-sm text-muted-foreground">
-                  Event Categories
-                </div>
+                <div className="text-2xl font-bold text-primary">{categories.length}</div>
+                <div className="text-sm text-muted-foreground">Event Categories</div>
               </div>
               <div>
-                <div className="text-2xl font-bold text-primary">
-                  {new Set(events?.map(e => e.location?.split(",")[0])).size || 0}
-                </div>
-                <div className="text-sm text-muted-foreground">Locations</div>
+                <div className="text-2xl font-bold text-primary">{countStartingAfter5pm(events)}</div>
+                <div className="text-sm text-muted-foreground">Starting after 5 PM</div>
               </div>
             </div>
           </CardContent>
         </Card>
 
-        {/* Category Filters */}
-        {categories && categories.length > 0 && (
+        {categories.length > 0 && (
           <Card className="mb-8">
             <CardHeader>
-              <CardTitle>Filter by Category</CardTitle>
+              <CardTitle id="month-category-label">Filter by Category</CardTitle>
             </CardHeader>
             <CardContent>
-              <div className="flex flex-wrap gap-2">
-                <Badge
-                  variant={selectedCategory === "all" ? "default" : "outline"}
-                  className="cursor-pointer"
-                  onClick={() => setSelectedCategory("all")}
-                >
-                  All Events
-                </Badge>
-                {categories.map((category) => (
-                  <Badge
+              <div role="group" aria-labelledby="month-category-label" className="flex flex-wrap gap-2">
+                {[ALL, ...categories].map((category) => (
+                  <Button
                     key={category}
+                    type="button"
+                    size="sm"
+                    className="min-h-11"
                     variant={selectedCategory === category ? "default" : "outline"}
-                    className="cursor-pointer"
-                    onClick={() => setSelectedCategory(category)}
+                    aria-pressed={selectedCategory === category}
+                    onClick={() => setParam("category", category, { def: ALL })}
                   >
-                    {category}
-                  </Badge>
+                    {category === ALL ? "All Events" : category}
+                  </Button>
                 ))}
               </div>
             </CardContent>
           </Card>
         )}
 
-        {/* Events Grid. The H2 is the phrasing people search (SEO-033). */}
-        <h2 className="text-2xl font-semibold mb-4">
-          {shortMonth} events in Des Moines
-        </h2>
-        {isLoading ? (
-          <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
+        {isLoading || (cardsPending && !isError) ? (
+          <SkeletonGroup
+            label={`Loading ${monthDisplayName} events...`}
+            className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6"
+          >
             {[...Array(6)].map((_, i) => (
               <Card key={i} className="animate-pulse">
                 <CardContent className="p-6">
@@ -317,97 +417,142 @@ export default function MonthlyEventsPage() {
                 </CardContent>
               </Card>
             ))}
-          </div>
-        ) : events && events.length > 0 ? (
+          </SkeletonGroup>
+        ) : events.length > 0 && monthWindow ? (
           <>
-            {/* WEB-PERF-023: this rendered every event in the month, and
-                /events/august-2026 measured 14,857 DOM elements inside #root —
-                the worst route on the site, ten times the ~1,500 Lighthouse
-                flag and twelve times the 1,189 median across all 1,171
-                prerendered routes. The four month pages were the four worst.
-                Only the grid is capped; the heading and the month-navigation
-                count below still read events.length, so no displayed number
-                changes. */}
-            <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6 mb-12">
-              {events.slice(0, VISIBLE_EVENTS).map((event) => (
-                <EventCard key={event.id} event={event} onViewDetails={() => {}} />
-              ))}
-            </div>
+            <h2 className="text-2xl font-bold mb-4">{monthDisplayName} by day</h2>
+            <MonthCalendarGrid
+              startDay={monthWindow.startDay}
+              endDay={monthWindow.endDay}
+              today={today}
+              counts={dayCounts}
+              linkParams={selectedCategory !== ALL ? { category: selectedCategory } : undefined}
+              label={`${monthDisplayName}, events per day`}
+              className="mb-10"
+            />
 
-            {events.length > VISIBLE_EVENTS && (
+            {weeks.map((week) => (
+              <section key={week.id} aria-labelledby={week.id} className="mb-10">
+                <h2 id={week.id} className="text-2xl font-bold mb-4">
+                  {week.label}{" "}
+                  <span className="text-base font-normal text-muted-foreground">
+                    ({formatCount(week.total, "event")})
+                  </span>
+                </h2>
+                <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
+                  {week.events.map((event) => {
+                    const index = cardIndex++;
+                    // The first row is the LCP candidate and must not be lazy (WEB-SEO-032).
+                    return (
+                      <SocialEventCard
+                        key={event.id}
+                        event={card(event)}
+                        socialData={batchSocialData?.[event.id]}
+                        socialDataPending={batchSocialPending}
+                        onViewDetails={() => {}}
+                        priority={index < 3}
+                      />
+                    );
+                  })}
+                </div>
+              </section>
+            ))}
+
+            {upcoming.length === 0 && (
+              <p className="mb-8 text-muted-foreground">
+                Nothing else is listed for the rest of {monthDisplayName}.
+              </p>
+            )}
+
+            {upcoming.length > VISIBLE_EVENTS && (
               <div className="mb-12 text-center">
                 <p className="text-muted-foreground mb-3">
-                  Showing {VISIBLE_EVENTS} of {formatCount(events.length, 'event')} in{" "}
-                  {monthDisplayName}.
+                  Showing the {VISIBLE_EVENTS} soonest of{" "}
+                  {formatCount(upcoming.length, "event")}
+                  {current ? " from today" : ""} in {monthDisplayName}.
                 </p>
-                <Button asChild variant="outline">
-                  <Link to="/events">Browse all events</Link>
+                <Button asChild variant="outline" className="min-h-11">
+                  <Link to={overflowHref}>See the rest of {monthDisplayName} on the events page</Link>
                 </Button>
               </div>
             )}
 
+            {earlier.length > 0 && (
+              <section aria-labelledby="month-earlier" className="mb-10">
+                <h2 id="month-earlier" className="text-2xl font-bold mb-2">
+                  Earlier this month
+                </h2>
+                <details
+                  data-month-earlier
+                  onToggle={(e) => setEarlierOpen(e.currentTarget.open)}
+                >
+                  <summary className="flex min-h-11 cursor-pointer items-center text-muted-foreground">
+                    Already over. Show {formatCount(earlier.length, "event")}
+                  </summary>
+                  {earlierOpen &&
+                    earlierWeeks.map((week) => (
+                      <div key={week.id} className="mt-6">
+                        <h3 className="text-lg font-semibold mb-3">{week.label}</h3>
+                        <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
+                          {week.events.map((event) => (
+                            <SocialEventCard
+                              key={event.id}
+                              event={card(event)}
+                              socialData={batchSocialData?.[event.id]}
+                              socialDataPending={batchSocialPending}
+                              onViewDetails={() => {}}
+                            />
+                          ))}
+                        </div>
+                      </div>
+                    ))}
+                  {earlierOpen && earlier.length > VISIBLE_EVENTS && (
+                    <p className="mt-4 text-muted-foreground">
+                      Showing the first {VISIBLE_EVENTS} of {formatCount(earlier.length, "event")}.
+                    </p>
+                  )}
+                </details>
+              </section>
+            )}
+
+            <Card className="mb-8">
+              <CardContent className="pt-6">{monthNav}</CardContent>
+            </Card>
           </>
+        ) : isError ? (
+          // WEB-QA-031: a failed fetch must not claim the month is empty.
+          <ErrorState error={error} onRetry={() => void refetch()} />
         ) : (
           <Card className="text-center py-12">
             <CardContent>
               <SpriteIcon name="calendar" className="h-12 w-12 text-muted-foreground mx-auto mb-4" />
-              <h2 className="text-xl font-semibold mb-2">
-                No Events Found for {monthDisplayName}
-              </h2>
+              <h2 className="text-xl font-semibold mb-2">No Events Found for {monthDisplayName}</h2>
               <p className="text-muted-foreground mb-4">
-                {selectedCategory !== "all"
+                {selectedCategory !== ALL
                   ? `No ${selectedCategory.toLowerCase()} events found for this month. Try viewing all categories.`
                   : "No events are currently scheduled for this month. Check back later or browse other months."}
               </p>
               <div className="flex justify-center gap-4">
-                {selectedCategory !== "all" && (
+                {selectedCategory !== ALL && (
                   <Button
                     variant="outline"
-                    onClick={() => setSelectedCategory("all")}
+                    className="min-h-11"
+                    onClick={() => setParam("category", ALL, { def: ALL })}
                   >
                     Show All Categories
                   </Button>
                 )}
-                <Button onClick={() => navigate("/events")}>
-                  Browse All Events
+                <Button asChild className="min-h-11">
+                  <Link to="/events">Browse All Events</Link>
                 </Button>
               </div>
             </CardContent>
           </Card>
         )}
 
-        {/* Monthly Navigation. Outside the results branch so an empty month,
-            which is exactly what a page published ahead of its events looks
-            like, still links to its neighbours. */}
-        <nav aria-label="Adjacent months" className="mb-8">
-          <Card>
-            <CardContent className="pt-6">
-              <div className="flex justify-between items-center gap-2">
-                <Button asChild variant="outline">
-                  <Link to={prevHref} rel="prev" className="flex items-center gap-2">
-                    <ChevronLeft className="h-4 w-4" />
-                    {monthLabelOf(prevRef)}
-                  </Link>
-                </Button>
+        <EventsLandingLinks current={`/events/${canonicalSlug}`} className="mb-8" />
 
-                <div className="text-center">
-                  <div className="text-lg font-semibold">{monthDisplayName}</div>
-                  <div className="text-sm text-muted-foreground">{formatCount(events?.length || 0, 'event')}</div>
-                </div>
-
-                <Button asChild variant="outline">
-                  <Link to={nextHref} rel="next" className="flex items-center gap-2">
-                    {monthLabelOf(nextRef)}
-                    <ChevronRight className="h-4 w-4" />
-                  </Link>
-                </Button>
-              </div>
-            </CardContent>
-          </Card>
-        </nav>
-
-        {/* FAQ Section */}
-        <FAQSection 
+        <FAQSection
           faqs={faqData}
           title="Monthly Events Questions"
           description={`Common questions about ${monthDisplayName} events in Des Moines`}

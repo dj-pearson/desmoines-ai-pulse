@@ -4899,3 +4899,758 @@ SESSION TALLY (2026-06-25): closed WEB-FEAT-008, WEB-FEAT-010, and all 4 newly
 filed audit stories (WEB-SEC-009, WEB-SEC-010, WEB-PERF-008, WEB-UX-024). Every
 WEB-* story now passes (186 total true / 11 false). Remaining 11 are all
 IOS-AUDIT-* (no Xcode here; most blocked on external inputs).
+
+================================================================================
+## 2026-09-09 — WEB-FEAT-033 (/community showed blank friends): DONE
+================================================================================
+Found by running the app-project type ratchet, which is in NO workflow. It takes
+21 minutes, which is exactly why nobody runs it, and in that one run it turned up
+two live regressions sitting on main.
+
+FIXED
+- useSocialFeatures.ts: Social.tsx reads friend.friend_profile?.first_name /
+  .last_name / .email in seven places, across both the accepted-friends list and
+  the pending-request list, and the hook never set that field. Every optional
+  chain resolved to undefined, so a real connection rendered as an empty card
+  with the fallback initial "U". attachProfiles() now hydrates the OTHER party
+  (user_friends rows are written once by whoever asked, so self can be either
+  column) in one batched profiles request keyed by user_id. A profiles failure
+  is not treated as an error: RLS hiding other users' rows is a legitimate
+  policy, and the list degrades to today's behaviour instead of emptying.
+  FriendProfile is exported alongside Friend.
+- useEventIndoorFlags.ts: the `is_indoor` row assertion was a TS2352 because
+  types.ts is generated from the DEPLOYED schema and migration 20260908000001
+  is not applied, so PostgREST types the select as SelectQueryError. Cast
+  through unknown with the reason written down. No behaviour change - the
+  runtime contract is the graceful degradation the file header describes.
+
+FILED
+- WEB-CI-031: the 21-minute app type check. Measured here: 21m12s real, 20m14s
+  user, ~5.2GB peak RSS over 882 files. That cost, not the 374-error baseline,
+  is what has kept WEB-CI-030 unlanded. Story asks for --generateTrace before
+  optimising (prime suspect: the 476KB generated Database type instantiating
+  deep PostgREST generics in every hook), and for a nightly run as the
+  zero-cost interim so regressions are caught within a day instead of never.
+
+VERIFIED: app ratchet 374 -> 365 errors across 67 files, no regressions;
+baseline re-cut to match. eslint clean on the changed files.
+
+FILES
+  M src/hooks/useSocialFeatures.ts
+  M src/hooks/useEventIndoorFlags.ts
+  M app-type-baseline.json
+  M prd.json  (WEB-FEAT-033 passes=true, WEB-CI-031 filed)
+
+================================================================================
+## 2026-09-09 — WEB-SEO-029 (one WebSite node, working SearchAction): DONE
+================================================================================
+The sitelinks search box, if Google ever granted it, sent people to
+/events?search={term} - a parameter EventsPage has never read. It reads `q`.
+So the one search entry point Google can offer for this domain landed the
+visitor on an unfiltered event list.
+
+FIXED
+- Index.tsx: SearchAction now targets /search?q={search_term_string}, the page
+  actually built for a free-text query (SearchResults.tsx:163 reads ?q=).
+- SEOHead.tsx: dropped the WebSite node. It was emitted on all 30 pages that
+  mount SEOHead, each one a site-level claim competing with Index's, and each
+  carrying the same dead target.
+- EnhancedLocalSEO.tsx: same node removed from the event landing pages
+  (/events/free, /events/date-night, /events/kids, /events/location/*).
+- EventsPage.tsx: reads 'search' as an alias for 'q'. The dead parameter has
+  been in structured data long enough to be indexed, and CLAUDE.md's rule on
+  public URL shapes says you do not simply stop honouring one. 'q' wins.
+
+GUARDED
+- checkWebsiteNodes() in scripts/check-duplicate-schema.mjs, in npm run
+  validate: one allowed owner, no /events?search= target anywhere, and the two
+  unmounted emitters (WebSiteSchema.tsx, SEOOptimizedHead.tsx) fail the moment
+  anything imports them. Counts TOP-LEVEL nodes only - the first version
+  flagged SpeakableSchema and PseoPage, whose isPartOf: { '@type': 'WebSite' }
+  is a valid reference to the site, not a competing node.
+
+VERIFIED: mutation-tested both branches of the guard (restoring the old target
+fails it; adding a WebSite node back to SEOHead fails it). 536 unit tests pass.
+lint, check-imports, check-schema, check-seo-routes, check-sitemap-redirects,
+check-icon-sprite, check-brand-leak, check-schema-placeholders,
+check-annual-dates all green.
+
+NOT VERIFIED: the Rich Results test on /, which needs the deployed page.
+
+FILED
+- WEB-CI-032: `npm run validate` is RED on this branch's base, independently of
+  anything here - check-error-handling reports 146 vs a baseline of 144, six
+  files regressed, including AuthContext 2 -> 3. Confirmed in a clean stash. It
+  survives because pr-checks.yml runs checks a la carte and never runs validate.
+
+FILES
+  M src/pages/Index.tsx
+  M src/components/SEOHead.tsx
+  M src/components/EnhancedLocalSEO.tsx
+  M src/pages/EventsPage.tsx
+  M scripts/check-duplicate-schema.mjs
+  M prd.json  (WEB-SEO-029 passes=true, WEB-CI-032 filed)
+
+================================================================================
+## 2026-09-09 — WEB-CI-032 (six discarded Supabase errors, and the CI gap): DONE
+================================================================================
+`npm run validate` was RED on the base and no workflow ran it. Six files had
+gained discarded Supabase errors. Three of them were money or access.
+
+FIXED — the three that could not be logged and left alone
+- create-subscription-checkout: BOTH double-charge guards discarded `error`.
+  supabase-js resolves with { error } rather than throwing, so a failed read
+  arrives as data: null - which reads as "this user has no subscription" and
+  lets the sale through. The people most exposed are the ones who already pay,
+  which is the same evaporating-guard failure WEB-FEAT-013 fixed from the other
+  direction. Both now return 503 subscription_lookup_failed. Declining a
+  checkout is recoverable; charging twice is not.
+- delete-user-account: the subscription lookup feeding the Stripe teardown
+  discarded its error and fell through on `?? []`. A failed read looked exactly
+  like a user with no subscription, so nothing was cancelled, no error was
+  reported, and the purge then erased the ONLY mapping to the Stripe customer
+  while the charge kept recurring - the outcome that block exists to prevent.
+  Now refuses, same as a billing failure does.
+- AuthContext.checkIsAdmin: both role reads discarded `error`, then cached
+  isAdmin:false for CACHE_TTL. One dropped request cost a real admin /admin/*
+  for five minutes, silently (esbuild.drop strips console.* in production). A
+  failure is not an answer, so it is no longer cached.
+
+FIXED — the three where the fallback was right and the silence was not
+- useActiveAds / track-ad-event: a failed getUser() is not anonymous traffic,
+  but was recorded as if it were, dropping the per-account frequency cap and
+  the attribution. Anonymous stays the fallback; it is now logged.
+- useProfile: a failed read-back returned null, so the app concluded the user
+  has no profile. Now throws, so TanStack retries.
+
+CI
+- pr-checks.yml ran nine of validate's fourteen checks. Added the four green
+  ones: check-error-handling, check-brand-leak, check-schema-placeholders,
+  check-annual-dates. NOT folded into a single `npm run validate` step, because
+  validate's first entry is the no-op type-check (WEB-CI-030) and that would
+  hide it.
+
+VERIFIED: check-error-handling 146/101 -> 137/95, baseline re-cut at the lower
+number. Full `npm run validate` green. 536 unit tests pass. YAML parses.
+
+FILED
+- WEB-CI-033: check-edge-types is ALREADY a step in pr-checks.yml and exits 1
+  on the base - 10 errors across six _tests/ files, nine of them null-narrowing
+  in a test helper. Every PR inherits a red check it did not cause.
+
+FILES
+  M src/contexts/AuthContext.tsx
+  M src/hooks/useActiveAds.ts
+  M src/hooks/useProfile.ts
+  M supabase/functions/create-subscription-checkout/index.ts
+  M supabase/functions/delete-user-account/index.ts
+  M supabase/functions/track-ad-event/index.ts
+  M error-handling-baseline.json
+  M .github/workflows/pr-checks.yml
+  M prd.json  (WEB-CI-032 passes=true, WEB-CI-033 filed)
+
+================================================================================
+## 2026-09-09 — WEB-CI-033 (the PR gate was red before any PR): DONE
+================================================================================
+`npm run check-edge-types` is a step in pr-checks.yml and exited 1 on the
+default branch, so every PR inherited a red check it did not cause - the trap
+scripts/strict-ratchet.mjs already documents twice.
+
+FIXED
+- Nine of the ten errors were ONE defect. remote.d.ts declared
+  `export const assert: any`, and an any-typed value cannot be an assertion
+  function, so every `assert(m, '...')` followed by `m[0]` lost its narrowing
+  and reported TS18047 on the next line - across six _tests/ files. Declared as
+  `(expr: unknown, msg?: string) => asserts expr`, which is what std/assert
+  actually is. The shim got less wrong, not more permissive; every other name
+  in it stays `any` for the reason its header gives.
+- The tenth: deno.d.ts declared the Deno value-side globals but not the
+  DirEntry TYPE, which no-embedded-credentials.test.ts annotates its
+  accumulator with. Added, and readDir now returns Deno.DirEntry so the shape
+  and the name cannot drift apart.
+
+VERIFIED: check-edge-types 168/37 -> 148/29, exit 0, baseline re-cut.
+type-check:edge clean. npm run validate exit 0. No test SOURCE changed, so
+nothing about what these suites assert has moved.
+
+FILED
+- WEB-CI-034: the other red step. `npm run test:offline` is 18/19 and exits 1
+  on the base - site-directory-routes.test.mjs dies with
+  ERR_UNKNOWN_FILE_EXTENSION '.tsx'. run-offline-suites.mjs spawns plain node
+  with process.execArgv, directly under a comment saying it uses tsx. One
+  suite in nineteen has never run while the step printed a tidy 18/19.
+
+FILES
+  M supabase/functions/_typecheck/remote.d.ts
+  M supabase/functions/_typecheck/deno.d.ts
+  M .github/edge-type-baseline.json
+  M prd.json  (WEB-CI-033 passes=true, WEB-CI-034 filed)
+
+================================================================================
+## 2026-09-09 — WEB-CI-034 (the footer linked every page at a dead /calendar): DONE
+================================================================================
+THE FILED DIAGNOSIS WAS WRONG, and it is worth saying so. The story blamed
+scripts/run-offline-suites.mjs for spawning plain node. It does not: it spawns
+process.execPath with process.execArgv, and under tsx that argv carries
+--require preflight.cjs and --import loader.mjs, so the child loads .tsx fine.
+The ERR_UNKNOWN_FILE_EXTENSION came from running the suite directly under node
+while diagnosing. Under the runner the suite RUNS and fails a real check.
+
+THE ACTUAL DEFECT
+SiteDirectory renders in the footer of EVERY page and carried an "Event
+calendar" link to /calendar. WEB-FEAT-027 removed that route - its hook was
+mock data, so the page could never show anything - and kept a 301 to /events
+in public/_redirects for links already indexed. So the footer of ~1,100 pages
+pushed every visitor through a redirect, landing on a page the same section
+already links directly, under a title promising a calendar that no longer
+exists. Link removed.
+
+THE CHECK NOW DISTINGUISHES TWO THINGS
+An href that resolves NOWHERE is a soft 404 on every page. An href that
+resolves only through a 301 is a wasted hop and a stale promise. /calendar was
+reported as the first, which sends the reader looking for a missing route
+rather than a stale link. Split into two checks, both mutation-tested.
+
+VERIFIED: test:offline 19/19 (was 18/19 and exit 1 on the base). validate exit
+0, check-edge-types exit 0, 536 unit tests pass.
+
+FILES
+  M src/components/seo/SiteDirectory.tsx
+  M scripts/__tests__/site-directory-routes.test.mjs
+  M prd.json  (WEB-CI-034 passes=true, title and diagnosis corrected)
+
+================================================================================
+## 2026-09-09 — WEB-PERF-033 (a COUNT(*) per request for nobody): DONE
+================================================================================
+/attractions and /playgrounds render no total and do not even destructure
+totalCount, and both hooks asked PostgREST for count: "exact" - a second full
+COUNT(*) over the filtered set on every request, including every keystroke in
+the search box.
+
+FIXED
+- src/lib/listCount.ts: countOption(mode) turns a CountMode into the select
+  options object. Default "estimated", the mode useRestaurants already settled
+  on (its own note records why "planned" is wrong: NULL whenever the planner
+  has no statistic, which rendered a blank number before the word "found").
+- useAttractions, usePlaygrounds, useHotels take countMode.
+- /attractions and /playgrounds pass "none", which OMITS the option rather than
+  setting it to a falsy value. PostgREST decides from the key's presence, so
+  `{ count: undefined }` would look right and still count. That is the
+  assertion the unit test exists for.
+- AttractionManager, PlaygroundManager, HotelManager and AdminContent pass
+  "exact": they paginate on the number or show it as a figure of record.
+
+NOT DONE, DELIBERATELY, against the story's own acceptance criteria
+- useEvents and EventsPage:285 keep count: "exact". EventsPage paginates on
+  totalCount, events is the largest of these tables, and "estimated" becomes a
+  planner estimate above PostgREST's threshold - a wrong page count on the
+  busiest page on the site. Dropping a number nobody renders is not the same
+  trade as trading away correct pagination. Doing it properly needs a real row
+  count, which this container cannot get.
+
+VERIFIED: 4 new unit tests (540 total pass), validate exit 0, test:offline
+19/19, and the touched files type-check clean under tsconfig.app.json as a
+file slice - the full app project is the 21-minute run in WEB-CI-031.
+
+FILES
+  A src/lib/listCount.ts
+  A src/lib/__tests__/listCount.test.ts
+  M src/hooks/useAttractions.ts, usePlaygrounds.ts, useHotels.ts
+  M src/pages/Attractions.tsx, Playgrounds.tsx, AdminContent.tsx
+  M src/components/admin/AttractionManager.tsx, PlaygroundManager.tsx, HotelManager.tsx
+  M prd.json  (WEB-PERF-033 passes=true)
+
+================================================================================
+## 2026-09-09 — WEB-FEAT-018 (a typo was an unlock; a subscriber saw the wall): DONE
+================================================================================
+Two defects in the paywall, opposite directions.
+
+1. UNKNOWN FEATURE NAME GRANTED ACCESS
+hasFeature was a switch whose `default` returned true, commented "Free
+features". So `feature="trip_plannner"` was not a broken gate, it was an OPEN
+one - the component works, the tests pass, the paywall is simply absent, and
+nothing reports it. supabase/functions/_shared/entitlements.ts had the same
+default (`PREMIUM_FEATURES[feature] ?? 'free'`), so the server agreed with the
+typo. Both now deny an unknown name and say so in development.
+- src/lib/premiumFeatures.ts is the vocabulary: a map, a PremiumFeature union,
+  requiredTierFor() returning null for "not a premium feature", and
+  tierHasFeature(). The 15 entries are exactly the old switch's cases; no
+  feature changed tier.
+- A unit test parses the edge function's map and compares it entry-for-entry
+  with the client's. The two drifting is how a feature ends up sold on the web
+  and refused by the API. Mutation-tested by moving trip_planner to vip on the
+  server side alone.
+
+2. THE PAYWALL FLASHED AT PEOPLE WHO HAD PAID
+useSubscription reports tier "free" until the user-subscriptions query lands,
+and the gates never read the loading flag. A VIP opening /trip-planner got
+"Upgrade to Unlock" first and the feature they pay for second, every load.
+PremiumGate now renders a skeleton, PremiumSection renders nothing, and
+PremiumButton is disabled with no upgrade tag, until the answer is known.
+subscriptionLoading and NOT isLoading: isLoading also covers the
+subscription_plans query, which runs for signed-out visitors and would put a
+skeleton in front of the paywall they are meant to see. A disabled query is not
+loading, so anonymous visitors reach the gate exactly as before.
+
+NOT DONE, DELIBERATELY
+- No safeStorage tier cache for first paint (the story asks for one). The
+  skeleton removes the wrong answer, which was the harm. A cached tier is a
+  second source of truth for an entitlement, and getting its invalidation wrong
+  on downgrade or expiry shows paid content to someone who no longer pays.
+- No Playwright smoke: WEB-CI-028 records that four specs already run nowhere.
+- AdBanner is listed in the story as affected and is NOT: it already returns
+  null while subscriptionLoading. Left alone.
+
+VERIFIED: 10 new tests (550 total pass), both mutation-tested. validate exit 0,
+check-edge-types exit 0, test:offline 19/19, touched files type-check clean as
+a file slice.
+
+FILES
+  A src/lib/premiumFeatures.ts
+  A src/lib/__tests__/premiumFeatures.test.ts
+  A src/components/__tests__/premiumGateLoading.test.tsx
+  M src/hooks/useSubscription.ts
+  M src/components/PremiumGate.tsx
+  M supabase/functions/_shared/entitlements.ts
+  M prd.json  (WEB-FEAT-018 passes=true)
+
+================================================================================
+## 2026-09-09 — WEB-AUTH-008 (auth errors you can act on): PARTIALLY DONE
+================================================================================
+The two error-copy criteria are closed. The two a11y ones are not, and the
+story stays OPEN for them - see the note in prd.json.
+
+FIXED
+- src/lib/authErrorMessages.ts: a Supabase auth failure -> copy + an action.
+  Matches on `code` first (the stable identifier) and message text only as a
+  fallback, because supabase-js only added codes in 2.4x and older responses
+  carry the message alone. An unrecognised failure gets neutral copy, not the
+  raw string: "AuthApiError: invalid claim: missing sub claim" was reaching a
+  reader who wanted to look at restaurants.
+- AuthContext.login returns errorCode alongside error. Matching Supabase's
+  wording at the call site would be a second place for that wording to break.
+  `error` is unchanged for existing callers.
+- Auth.tsx renders the mapped copy, and on email_not_confirmed shows an INLINE
+  "Resend confirmation email". That resend already existed - on the post-signup
+  screen the user had already navigated away from. Inline rather than in the
+  toast so it outlives the toast.
+
+DELIBERATE NON-CHANGE
+"Invalid login credentials" stays non-committal. Splitting it into "no such
+account" and "wrong password" would be friendlier and would turn the form into
+an account-existence oracle. A test asserts the copy does neither.
+
+STILL OPEN (next pass on this story)
+Password show/hide toggle + un-skip tests/forms.spec.ts:377-418; interest tiles
+as <label> wrapping the Checkbox with onCheckedChange; typing
+handleInputChange; the required Select in the zod schema. That is a11y work
+verified by npm run test:a11y, a different pass from error copy.
+
+VERIFIED: 8 new unit tests (558 total pass), validate exit 0, test:offline
+19/19, check-edge-types exit 0, touched files type-check clean as a file slice.
+
+FILES
+  A src/lib/authErrorMessages.ts
+  A src/lib/__tests__/authErrorMessages.test.ts
+  M src/contexts/AuthContext.tsx
+  M src/pages/Auth.tsx
+  M prd.json  (WEB-AUTH-008 still open, scoped down)
+
+================================================================================
+## 2026-09-09 — WEB-AUTH-008 second pass (the a11y half): CLOSED
+================================================================================
+PASSWORD TOGGLE
+src/components/ui/PasswordInput.tsx, used by the login and signup fields.
+type="button" deliberately: a button with no type inside a form SUBMITS it, so
+revealing your password would fire a sign-in attempt. aria-pressed tracks the
+state. tabIndex -1 keeps Tab going from the password field to Sign In, which is
+what a keyboard user filling a form wants - WCAG 2.4.3 is about tab ORDER, not
+about putting every control in it.
+tests/forms.spec.ts now locates the field by #id rather than
+input[type="password"]. A working toggle changes the type, so the old locator
+stopped matching exactly when the feature worked, and the assertion it was
+guarding would have timed out on the first page that passed.
+
+INTEREST TILES — THE FILED DIAGNOSIS WAS WRONG
+The story says the tiles were not keyboard operable. They were: Space on the
+focused Radix checkbox fires a click, which bubbled to the wrapping div's
+onClick, so the tile toggled. The first version of my test asserted the story's
+claim and FAILED, which is how this was caught. The real defect is one level
+up: the tile text was a sibling <span> associated with nothing, so the checkbox
+had NO ACCESSIBLE NAME - eight tiles that all announce as "checkbox, not
+checked", with no way to tell food from nightlife. A <label> wrapping the
+control names it and keeps the whole tile clickable with no onClick at all. The
+dead onChange (Radix exposes onCheckedChange and ignores onChange) is gone too.
+
+TYPES
+handleInputChange is keyed to a declared SignUpFormData instead of
+(field: string, value: any), so a misspelt field name is a compile error rather
+than a new key on the state object that nothing reads.
+
+THE SELECT CRITERION NEEDED NO CHANGE
+businessType IS validated (Auth.tsx:500) and so is location. The `required`
+attribute on a Radix Select is not browser-enforced, which is precisely why
+those JS checks exist. Recorded rather than silently skipped.
+
+VERIFIED IN A REAL BROWSER, not only jsdom: vite on 127.0.0.1:8080 and
+Playwright's chromium launched with executablePath (the container ships build
+1194, this Playwright wants 1200). Toggle flips type password -> text,
+aria-pressed false -> true; getByRole('checkbox', { name: /food & dining/i })
+resolves on the signup tab. NOTE for the Playwright suite: the cookie-consent
+dialog is fixed to the bottom and INTERCEPTS POINTER EVENTS - the click only
+worked after dismissing it.
+
+VERIFIED: 7 new vitest tests (565 total pass), validate exit 0, test:offline
+19/19, touched files type-check clean as a file slice.
+
+FILES
+  A src/components/ui/PasswordInput.tsx
+  A src/components/__tests__/passwordInput.test.tsx
+  A src/components/__tests__/interestTiles.test.tsx
+  M src/pages/Auth.tsx
+  M tests/forms.spec.ts
+  M prd.json  (WEB-AUTH-008 passes=true)
+
+================================================================================
+## 2026-09-09 — WEB-QA-027 (a failed search painted over the mobile apps): DONE
+================================================================================
+Found by RUNNING the app, not by reading it: an axe sweep over seven public
+routes in a real browser (vite on 127.0.0.1:8080 with an unreachable Supabase,
+Playwright's chromium launched by executablePath). Six routes came back with
+ZERO violations under wcag2a/2aa/21a/21aa - worth recording on its own, the
+a11y work in this repo is holding. /search had one, and the violating node was
+#__error_overlay__: the page had CRASHED.
+
+THE DEFECT
+useNLPSearch.search() returned searchMutation.mutateAsync(...), which rejects
+on failure, and all three callers - the URL-query effect in SearchResults:181
+and both entry points in NLPSearchBar:63,139 - call it with no await and no
+catch. Every failed search was an unhandled promise rejection, on a page that
+was otherwise coping correctly: it renders KeywordFallbackResults off isError.
+
+WHY THAT IS NOT COSMETIC
+main.tsx installs an unhandledrejection handler that calls showErrorOverlay,
+and showErrorOverlay returns early only when `!isCapacitor && PROD`. So inside
+the shipped iOS and Android apps, a failed search covers the screen with a
+black "Runtime Error" panel - and the overlay APPENDS, so one search stacked
+five of them. Verified: overlay count 5 before, 0 after, with the failure now
+appearing once as a handled console.error from onError.
+
+FIXED
+search() resolves with null on failure instead of rejecting. isError and error
+stay on the returned object, so the page's fallback still fires - swallowing
+the rejection must not swallow the signal, and there is a test for that.
+Mutation-tested: restoring the bare mutateAsync fails two of the four tests.
+
+FILED
+- WEB-QA-028: the overlay itself ships enabled in production on Capacitor. The
+  `!isCapacitor` carve-out is explicit and commented, so it is a product
+  decision rather than an oversight to correct unilaterally - but App Store and
+  Play builds carrying a stack-trace panel deserves a deliberate answer, and it
+  should replace rather than append either way.
+- WEB-QUAL-012: React 18 warns about the fetchPriority prop on every render.
+  MEASURED before filing: the attribute DOES reach the DOM (2 of 3 images on /
+  carry lowercase fetchpriority, values high and low), so this is console
+  noise, not a broken LCP hint. Filed at priority 4 for that reason.
+
+VERIFIED: 4 new tests (569 total pass), validate exit 0, test:offline 19/19,
+check-edge-types exit 0, and the browser re-probe above.
+
+FILES
+  M src/hooks/useNLPSearch.ts
+  A src/hooks/__tests__/useNLPSearch.rejection.test.ts
+  M prd.json  (WEB-QA-027 filed+passed, WEB-QA-028 and WEB-QUAL-012 filed)
+
+================================================================================
+## 2026-09-09 — WEB-FEAT-019 (the newsletter's unkeepable promises): CLIENT HALF
+================================================================================
+ITERATION 11 SPENT MOST OF ITS TIME RULING THINGS OUT, which is worth recording
+because all of it was verified rather than assumed:
+- Mobile sweep at 375px over 7 routes: ZERO axe violations, ZERO horizontal
+  overflow. The responsive work is holding.
+- The skip link measures 1x1 in the DOM and looked broken. It is not: focused
+  it is 221x50 at top-left, and activating it moves focus to
+  <main id="main-content" tabindex="-1">. Correct sr-only/focus:not-sr-only.
+- /hotels 404s, and that is right - the route is /stay, and every link,
+  breadcrumb and canonical uses it. My URL guess, not a bug.
+- Hub pages "showing nothing" when the backend is unreachable turned out to be
+  a measurement error: at 3 seconds they are still retrying. At 12 seconds all
+  five render real error copy ("Unable to Load Events", "Try Again"). No defect.
+
+THE ACTUAL FINDING
+- The success toast said "Check your email for a confirmation." NOTHING SENDS
+  ONE. No token, no double opt-in, no sender in any of the 73 edge functions.
+  Readers were left waiting for mail that does not exist; the ones who decided
+  the signup had failed were closer to right than the ones who trusted it.
+- The duplicate-address branch said "You're already subscribed! Check your
+  inbox for our latest updates." For the person most likely to see it - someone
+  who unsubscribed and wants back - BOTH halves are false. The hook cannot tell
+  active from unsubscribed (SELECT is admin-only), so it now says only what is
+  certainly true.
+- unsubscribe() and updatePreferences() are DELETED rather than fixed.
+  newsletter_subscribers has INSERT-for-anyone and SELECT-for-admins and NO
+  UPDATE POLICY, so unsubscribe()'s UPDATE matched zero rows, PostgREST returns
+  no error for a zero-row update, and the hook announced "You've been
+  unsubscribed. We're sorry to see you go!" - a false success on the one action
+  a person has a legal right to. Neither had a caller. A comment in their place
+  says why, so nobody re-adds a browser-side version.
+
+VERIFIED: 4 new tests (573 total pass) asserting the COPY, which is deliberate:
+the control flow was never wrong. validate exit 0, test:offline 19/19, touched
+files type-check clean as a file slice.
+
+STILL OPEN on WEB-FEAT-019: the edge function, the confirm token, resubscribe,
+digest filtering on status='active', the consent record. All need a migration.
+
+FILES
+  M src/hooks/useNewsletterSubscription.ts
+  A src/hooks/__tests__/useNewsletterSubscription.test.ts
+  M prd.json  (WEB-FEAT-019 scoped down, still open)
+
+================================================================================
+## 2026-09-09 — WEB-ADS-014 (advertising policies): THE /advertising-policies HALF
+================================================================================
+Found by auditing every static internal href in src/ against App.tsx's route
+table - the footer directory has had a guard for a while, everything else had
+none. 57 distinct hrefs, 2 dead.
+
+/advertising-policies
+Three advertiser surfaces - UploadCreatives, CreativeUploadForm and
+AdvertiseSuccess - tell an advertiser their creative is reviewed against "our
+advertising policies" and link here. It was not a route. The policies were
+neither published nor written: an advertiser was asked to comply with a
+document that did not exist, against rules the platform could not fairly
+enforce because it had never stated them.
+
+The page is now real, and EVERY RULE ON IT IS ONE THE PLATFORM ACTUALLY
+APPLIES, read off campaign-creative-review/index.ts:
+  - MIN_DIMS per placement: 728x90 top_banner and below_fold, 300x250
+    featured_spot and sponsored_listing, 160x600 sidebar
+  - target URL: https, resolves, no private/localhost host, and no redirect
+    landing on non-https (the function follows and judges where it lands)
+  - copy screened against a family-friendly brand-safety standard
+  - creatives are not reviewed for a rejected, cancelled or suspended campaign
+Nothing invented, nothing promising a review this platform does not perform.
+The page says it is updated with the checks, so it has to be.
+
+/docs/scraping/README-SCRAPER-SETUP.md
+Admin scraper settings linked here. The file is real, docs/ is not copied into
+public/, so the SPA fallback served the app shell and the admin got the site
+instead of the document. Points at the file on GitHub now.
+
+GUARDED
+scripts/check-internal-links.mjs, wired into npm run validate and into
+pr-checks.yml. A dead internal link never fails loudly in this app: the SPA
+answers 200 for any path, so it renders the 404 component rather than erroring,
+and a crawler sees a soft 404. Resolves against literal routes, redirect
+sources in public/_redirects, and dynamic route parents. Mutation-tested with a
+fabricated href.
+
+VERIFIED: page renders at /advertising-policies in a real browser (h1
+"Advertising Policies", 7 sections, correct title, not the 404 component).
+validate exit 0 with the new check in it, 573 tests pass, test:offline 19/19,
+check-edge-types exit 0, SEO route parity still consistent.
+
+FILES
+  A src/pages/AdvertisingPolicies.tsx
+  A scripts/check-internal-links.mjs
+  M src/App.tsx, src/components/admin/ScraperSettings.tsx
+  M package.json, .github/workflows/pr-checks.yml
+  M prd.json  (WEB-ADS-014 scoped down, still open)
+
+================================================================================
+## 2026-09-09 — WEB-ADS-008 (tell the organizer, and stop lying to them): PARTIAL
+================================================================================
+EventSubmissionForm:205 promises every organizer "We'll email you when your
+event is approved or if we need more information." The AI path keeps it:
+triage-event-submission invokes notify-event-submission on any non-pending
+decision. The HUMAN path did not - setStatus updated the row, wrote an audit
+log, and sent nothing. An organizer reviewed by a person heard nothing back and
+could not tell an approval from silence.
+
+FIXED
+- setStatus notifies, mapping approved/rejected/needs_revision to the three
+  submitter templates the function implements and pending to no mail. Only
+  eventId and the type are passed: notify-event-submission looks the recipient
+  and title up from the row itself, deliberately, because it is callable with
+  the anon key. Nothing in the call can redirect the mail.
+- The send is best-effort and NOT silent. The status change has already
+  committed, so a mail failure is not a failed action - but the toast says how
+  many could not be sent, because an admin who thinks the organizer was told,
+  when they were not, will not chase it.
+
+WHAT THIS ALMOST SHIPPED, AND WHY THE STORY GOT BIGGER
+Before wiring it up I read the template. event_approved said "Great news! Your
+event has been approved and is NOW LIVE on Des Moines Insider." NOTHING
+PUBLISHES. Approval sets user_submitted_events.status; the admin queue has no
+publish path at all, and the AI path maps only a subset of fields when it does
+copy. So the one email an organizer gets has been sending them to look at a
+listing that is not there - and wiring the human path in would have spread that
+at volume. A fix that makes things worse.
+The copy now says the event has been approved FOR LISTING and promises nothing
+about when it appears: true today, still true once publish_submission lands.
+Guarded by scripts/__tests__/submission-email-claims.test.mjs - an offline
+suite rather than a Deno test, so it runs in CI and in this container, which
+has no Deno. Mutation-tested by restoring the old sentence.
+
+STILL OPEN, and now more urgent: publish_submission, the full field mapping,
+and the events row link. Approval still does not publish anything.
+
+VERIFIED: 4 new vitest tests pin the status -> template mapping (577 pass), the
+new offline suite makes 20/20, validate exit 0, check-edge-types exit 0, the
+touched component type-checks clean as a file slice.
+
+FILES
+  M src/components/admin/EventSubmissionsManager.tsx
+  M supabase/functions/notify-event-submission/index.ts
+  A src/components/__tests__/eventSubmissionNotify.test.ts
+  A scripts/__tests__/submission-email-claims.test.mjs
+  M prd.json  (WEB-ADS-008 still open, notes expanded)
+
+================================================================================
+## 2026-09-09 — WEB-SEO-042 (fabricated testimonials on the home page): DONE
+================================================================================
+Followed the theme this loop kept hitting - copy asserting things the platform
+does not do - into GEOContent, the component that renders on the home page and
+exists to be ingested by AI assistants. It had been cleaned TWICE before
+(WEB-SEO-015), and both times the same class of claim survived further down the
+same file.
+
+THE WORST OF IT: TWO FABRICATED TESTIMONIALS
+Under a heading "Trusted by Des Moines", each attributed to a named person with
+a job title: "Sarah Martinez, Des Moines Tourism Coordinator" - a real-sounding
+official role at a real organisation - and "James Chen, Owner, Local Bistro",
+whose quote claimed "a 40% increase in new customers who found us through the
+platform". Nobody said either sentence and nothing measures a 40% increase.
+Invented endorsements attributed to named individuals are not marketing copy,
+they are fabricated reviews, and the FTC endorsement rules treat them as such.
+On a component built to be quoted back by AI assistants, it is the worst place
+in the codebase for one. Removed outright rather than reworded.
+
+THE REST
+- "Restaurant data accuracy exceeds 95%", openings tracked "within 48 hours",
+  closures "within 24", and monitoring of "permit databases and direct venue
+  communications". No accuracy rate is measured and that monitoring does not
+  exist.
+- "More coverage than Catch Des Moines, Cityview, and Des Moines Register
+  combined", twice, naming three real publishers. WEB-SEO-015's own comment
+  says it removed this claim; it survived in two other places in the same file.
+- "We do not accept payment for listings OR ENHANCED VISIBILITY" - on a
+  platform that sells a sponsored_listing placement and runs
+  campaign-creative-review to police the creatives. Free listings and paid
+  placement can both be true; denying the second cannot.
+- "the only AI-powered local guide", "featured in ChatGPT, Perplexity and
+  Claude as a trusted source", "before anyone else".
+- Counts that contradicted EACH OTHER: 450+ restaurants in one answer, 500+ two
+  answers later, plus 1,000+ events, 200+ venues, 75+ playgrounds. The tiles
+  above already read real numbers from useHomepageStats; the prose now points
+  at those instead of carrying its own.
+
+GUARDED
+scripts/__tests__/geo-content-claims.test.mjs, in npm run test:offline (21/21
+now): no attributed testimonial, no accuracy-rate claim, no comparison naming a
+competitor, no AI-vendor endorsement, no denial of selling visibility, no
+hardcoded catalogue count. Comments are stripped before matching, since they
+necessarily quote what was removed. Mutation-tested with a fake quote, a 95%
+claim and a 1,000+ count.
+
+VERIFIED IN A REAL BROWSER: none of Sarah Martinez, James Chen, 95%, Cityview,
+Perplexity, "40% increase", "450+" or "500+ restaurants" appears in the
+rendered home page, and the section still renders. 577 vitest pass, validate
+exit 0, check-edge-types exit 0.
+
+FILES
+  M src/components/GEOContent.tsx
+  A scripts/__tests__/geo-content-claims.test.mjs
+  M prd.json  (WEB-SEO-042 filed and closed, priority 1)
+
+================================================================================
+## 2026-09-09 — WEB-QUAL-012 (a React warning on every render): DONE
+================================================================================
+React 19 knows fetchPriority as a DOM prop. React 18.3, which this app is on,
+does not: it lowercases the unknown prop, passes it through, and warns once per
+render on every route. src/lib/fetchPriority.ts emits `fetchpriority` at the
+three points a value actually reaches an <img> - OptimizedImage, OptimizedLogo,
+AffiliateAdBanner. Footer's fetchPriority="low" stays camelCase and is correct:
+it is a prop on OptimizedLogo, not a DOM attribute.
+
+MEASURED BEFORE AND AFTER, in a real browser across /, /events and
+/restaurants: warnings 1-per-render -> 0, and the attribute still lands (2 of 3
+images on the home page carry fetchpriority, values high and low). So the LCP
+hint is unchanged and the console is quiet. Filed at priority 4 in iteration 10
+precisely because the measurement showed the attribute was landing; had it not
+been, this would have been an LCP defect rather than a tidy-up.
+
+================================================================================
+SESSION TALLY — 2026-09-09, claude/web-platform-improvements-loop-0px3u1
+15 self-paced iterations, one improvement each
+================================================================================
+ 1  WEB-FEAT-033  /community rendered every friend as a blank name and a "U"
+                  avatar. Social.tsx reads friend_profile in seven places and
+                  the hook never set it. Found by running the app-project type
+                  ratchet, which is in no workflow because it takes 21 minutes.
+ 2  WEB-SEO-029   The sitelinks SearchAction pointed at /events?search=, a
+                  parameter EventsPage has never read. One WebSite node now,
+                  targeting /search?q=, plus a guard.
+ 3  WEB-CI-032    Six discarded Supabase errors, three of them on money or
+                  access: both double-charge guards in checkout, the Stripe
+                  teardown lookup in account deletion, and a cached
+                  isAdmin:false. Added 4 missing checks to pr-checks.yml.
+ 4  WEB-CI-033    check-edge-types was RED on the default branch, so every PR
+                  inherited it. Nine of ten errors were one defect: an
+                  any-typed `assert` cannot narrow.
+ 5  WEB-CI-034    The footer of ~1,100 pages linked "Event calendar" at a route
+                  retired six months ago, surviving only as a 301.
+ 6  WEB-PERF-033  count:"exact" - a second full COUNT(*) per request - on two
+                  pages that render no total. Kept exact for events, where
+                  pagination depends on it, against the story's own AC.
+ 7  WEB-FEAT-018  A typo in a feature= prop was an UNLOCK, on both client and
+                  server. And the paywall flashed at people who had paid.
+ 8  WEB-AUTH-008  Raw supabase-js error strings in the sign-in toast, and no
+                  resend for the one failure this screen can fix.
+ 9  WEB-AUTH-008  Password toggle, and the interest checkboxes had no
+                  accessible name. The filed diagnosis was wrong and my own
+                  test caught it.
+10  WEB-QA-027    A failed search threw an unhandled rejection, which paints a
+                  full-screen error panel inside the shipped mobile apps. Found
+                  by an axe sweep in a real browser; the other six routes were
+                  clean.
+11  WEB-FEAT-019  The newsletter promised a confirmation email nothing sends,
+                  and reported false success on an unsubscribe that RLS blocks.
+12  WEB-ADS-014   /advertising-policies was linked from three advertiser
+                  surfaces and was not a route. Wrote it from the checks the
+                  platform actually runs, and added a link guard.
+13  WEB-ADS-008   Organizers reviewed by a human heard nothing back. Fixing it
+                  meant first removing the approval email's "now live" claim -
+                  nothing publishes.
+14  WEB-SEO-042   Two fabricated testimonials attributed to named people, plus
+                  a 95% accuracy claim and a denial of selling visibility, on
+                  the component built for AI assistants to ingest.
+15  WEB-QUAL-012  A React warning on every render, cleared without touching the
+                  LCP hint it carries.
+
+FILED FOR LATER, not fixed: WEB-CI-031 (the 21-minute app type-check, with the
+measurement behind it), WEB-QA-028 (the debug error overlay ships enabled in
+production on Capacitor - deliberate carve-out, so a product decision).
+STILL OPEN AND SCOPED DOWN: WEB-FEAT-019 (edge function + confirm token),
+WEB-ADS-008 (publish_submission - approval still publishes nothing),
+WEB-ADS-014 (the remaining advertiser hygiene items).
+
+FOUR THINGS I INVESTIGATED AND FOUND WERE NOT BROKEN, recorded so nobody
+re-spends the time: the 375px mobile sweep (0 axe violations, 0 overflow across
+7 routes), the skip link (1x1 is correct sr-only; 221x50 focused, moves focus
+to main), /hotels 404 (the route is /stay and every link uses it), and hub
+pages "showing nothing" with the backend down (they show real error copy once
+TanStack retries settle at ~12s - a 3-second probe only catches the loading
+state).
+
+TWO PLACES I CORRECTED MYSELF IN WRITING rather than quietly: the offline-suite
+runner was not broken (WEB-CI-034 - I had run the suite under plain node), and
+the interest tiles were keyboard-operable all along (the defect was the missing
+accessible name).
+
+GATES AT THE END: 577 vitest tests in 60 files, 21/21 offline suites,
+npm run validate exit 0, npm run check-edge-types exit 0. Two new checks now
+run in CI that did not before: check-internal-links and check-error-handling
+(plus check-brand-leak, check-schema-placeholders, check-annual-dates).
+PRD: 627 stories, 146 open.

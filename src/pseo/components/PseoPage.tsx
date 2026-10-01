@@ -48,7 +48,7 @@ export function PseoPage({ page }: PseoPageProps) {
 
       <Header />
 
-      <main className="min-h-screen bg-background">
+      <div className="min-h-screen bg-background">
         {/* Breadcrumbs */}
         <div className="container mx-auto px-4 pt-4">
           <PseoBreadcrumbs items={structuredData.breadcrumb} />
@@ -72,7 +72,7 @@ export function PseoPage({ page }: PseoPageProps) {
             <PseoRelatedPages pages={relatedPages} />
           )}
         </div>
-      </main>
+      </div>
 
       <Footer />
     </>

@@ -18,6 +18,7 @@ import { scoreOutput } from "../scoreOutput.ts";
 import { sendNurtureEmail } from "../sendNurtureEmail.ts";
 import { buildTrialNotice, planAmount } from "../trialNotice.ts";
 import type { AgentRun } from "./types.ts";
+import { hasMarketingConsent } from "../marketingConsent.ts";
 
 const AGENT_KEY = "subscription-nurture";
 const TRIAL_WINDOW_DAYS = 3;
@@ -35,7 +36,7 @@ async function consented(supabase: Client, userId: string): Promise<{ email: str
   // so silently (WEB-BE-032 AC3).
   if (error) console.warn(`[subscription-nurture] consent read failed for ${userId}: ${error.message}`);
   if (!data?.email) return null;
-  return { email: data.email, allowed: (data.lifecycle_signals as { messagingAllowed?: boolean } | null)?.messagingAllowed !== false };
+  return { email: data.email, allowed: hasMarketingConsent(data.lifecycle_signals) };
 }
 
 async function cappedRecently(supabase: Client, userId: string, kind: string, gapDays: number): Promise<boolean> {

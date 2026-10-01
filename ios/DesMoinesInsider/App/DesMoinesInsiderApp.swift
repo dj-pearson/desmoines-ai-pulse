@@ -22,11 +22,20 @@ struct DesMoinesInsiderApp: App {
     @AppStorage("appLaunchCount") private var launchCount = 0
     @AppStorage("themeMode") private var themeModeRaw: String = ThemeMode.system.rawValue
     @State private var showJailbreakWarning = false
-    @State private var awaitingBiometric = false
-    /// True once the app has actually entered the background, so a return to
-    /// `.active` re-engages the biometric lock — while a transient `.inactive`
-    /// (Control Center, the Face ID system sheet, a banner) does not.
-    @State private var didEnterBackground = false
+    /// The app version whose jailbreak warning was acknowledged, so the alert
+    /// shows once per version instead of on every launch (IOS-DD-PLATFORM-15).
+    @AppStorage("jailbreakWarningAckVersion") private var jailbreakAckVersion = ""
+    /// The signed-in launch work (review prompt, push prompt) runs once per
+    /// process, after auth has settled (IOS-DD-PLATFORM-12).
+    @State private var didRunAuthedLaunchWork = false
+    /// Starts true when the user turned the lock on (the flag is only ever set
+    /// while signed in), so the lock is in place before the first
+    /// authenticated frame. It used to be set at the end of the launch .task,
+    /// after several network awaits and only if the auth listener had already
+    /// finished: either MainTabView showed first or the lock was skipped for
+    /// the whole launch (IOS-DD-ACCOUNT-05). Cleared once auth settles signed
+    /// out.
+    @State private var awaitingBiometric = BiometricAuthService.shared.isEnabled
     @State private var sessionExpiredMessage: String?
     /// Tracks in-session consent completion. ConsentService stores its state in
     /// UserDefaults via computed properties, which `@Observable` cannot track, so
@@ -64,39 +73,46 @@ struct DesMoinesInsiderApp: App {
                     OnboardingView(hasCompletedOnboarding: $hasCompletedOnboarding)
                 } else if consent.needsConsentPrompt && !consentCompleted {
                     ConsentView { consentCompleted = true }
-                } else if awaitingBiometric {
-                    BiometricLockView {
-                        awaitingBiometric = false
-                    }
+                } else if authService.isAuthenticated && authService.needsPasswordReset {
+                    // Arrived through a reset link (IOS-DD-ACCOUNT-07).
+                    locked(SetNewPasswordView())
                 } else if authService.isAuthenticated && authService.needsEmailVerification {
-                    VerifyEmailView()
+                    locked(VerifyEmailView())
                 } else {
-                    MainTabView()
-                        .safeAreaInset(edge: .top, spacing: 0) {
-                            SessionTimeoutBanner(state: sessionTimeout.sessionState) {
-                                sessionTimeout.recordActivity()
-                            }
-                        }
+                    locked(mainContent)
+                }
+            }
+            // App-switcher snapshot cover. The lock re-engages on .background,
+            // but iOS takes the snapshot while the app is still showing
+            // content, so the content is hidden whenever the scene is not
+            // active (IOS-DD-ACCOUNT-05).
+            .overlay {
+                if scenePhase != .active && biometricService.isEnabled && authService.isAuthenticated {
+                    PrivacyCoverView()
                 }
             }
             .alert("Security Warning", isPresented: $showJailbreakWarning) {
-                Button("I Understand", role: .cancel) {}
+                Button("I Understand", role: .cancel) { jailbreakAckVersion = Config.appVersion }
             } message: {
                 Text("This device may have been modified. Your data could be at risk. We recommend using an unmodified device for the best security.")
             }
             .alert(
                 "Signed Out",
+                // Also carries the cold-launch expiry, which AuthService now
+                // decides in its listener (IOS-DD-ACCOUNT-02).
                 isPresented: Binding(
-                    get: { sessionExpiredMessage != nil },
-                    set: { if !$0 { sessionExpiredMessage = nil } }
+                    get: { signedOutMessage != nil },
+                    set: { if !$0 { clearSignedOutMessage() } }
                 ),
                 actions: {
-                    Button("OK", role: .cancel) { sessionExpiredMessage = nil }
+                    Button("OK", role: .cancel) { clearSignedOutMessage() }
                 },
                 message: {
-                    Text(sessionExpiredMessage ?? "")
+                    Text(signedOutMessage ?? "")
                 }
             )
+            .onChange(of: authService.isLoading) { _, _ in settleBiometricGate() }
+            .onChange(of: authService.isAuthenticated) { _, _ in settleBiometricGate() }
             .onChange(of: sessionTimeout.sessionState) { _, newState in
                 guard case .expired = newState, authService.isAuthenticated else { return }
                 Task {
@@ -107,27 +123,35 @@ struct DesMoinesInsiderApp: App {
             .onChange(of: scenePhase) { _, newPhase in
                 switch newPhase {
                 case .background:
-                    didEnterBackground = true
+                    // Lock on the way out, so the next foreground shows the
+                    // lock rather than content (IOS-AUDIT-SEC-016,
+                    // IOS-DD-ACCOUNT-05). A transient .inactive (Control
+                    // Center, the Face ID sheet) never gets here.
+                    if biometricService.isEnabled && authService.isAuthenticated {
+                        awaitingBiometric = true
+                        // The lock is an overlay now, so MainTabView keeps its
+                        // tabs and stacks, but a sheet sits above any overlay:
+                        // close sheets so none is readable behind the lock
+                        // (IOS-DD-PLATFORM-05).
+                        TopPresenter.dismissPresented()
+                    }
                 case .active:
-                    // Re-engage the biometric lock after a real background cycle,
-                    // not just on cold launch (IOS-AUDIT-SEC-016). Ignores
-                    // transient .inactive so the Face ID sheet / Control Center
-                    // don't re-lock mid-session.
-                    if didEnterBackground {
-                        didEnterBackground = false
-                        if biometricService.isEnabled && authService.isAuthenticated {
-                            awaitingBiometric = true
-                        }
-                    }
-                    // Returning to the foreground counts as user activity.
+                    // Admin sessions: judge the time spent away before counting
+                    // the return as activity (IOS-DD-ACCOUNT-02).
                     if authService.isAuthenticated {
-                        sessionTimeout.recordActivity()
+                        sessionTimeout.noteForeground()
                     }
+                    // A long-lived process never re-ran the minimum-version
+                    // gate; at most every six hours (IOS-DD-PLATFORM-09).
+                    Task { await versionCheck.checkIfStale() }
                 default:
                     break
                 }
             }
             .onOpenURL { url in
+                // A reset link arrives as an ordinary auth callback under
+                // PKCE; note it before the SDK consumes it (IOS-DD-ACCOUNT-07).
+                authService.noteAuthCallback(url)
                 // Handle auth callbacks (email verification, OAuth redirects, etc.)
                 SupabaseService.shared.client?.handle(url)
                 // Then route content deep links (events/restaurants/attractions);
@@ -149,90 +173,164 @@ struct DesMoinesInsiderApp: App {
             }
             .task {
                 launchCount += 1
+                settleBiometricGate()
 
                 // Install crash/non-fatal capture handlers as early as possible so
                 // an early-launch crash is still recorded (IOS-AUDIT-FEAT-010).
                 CrashReportingService.shared.configure()
-                if authService.isAuthenticated, let uid = authService.currentUser?.id.uuidString {
-                    CrashReportingService.shared.setUserId(uid)
-                }
-
-                // Drain whatever the previous run recorded. Every crash since
-                // IOS-AUDIT-FEAT-010 has been captured to disk and never sent
-                // anywhere; this is the upload half (XPLAT-004 AC1). Silent on
-                // failure, and records survive a failed attempt.
-                await CrashUploader.uploadPending()
-
-                // Launch-time minimum-supported-version gate (IOS-AUDIT-REL-001).
-                // Fails open, so a backend hiccup never blocks a supported build.
-                await versionCheck.checkOnLaunch()
 
                 // One-time migration of Keychain items to the stricter
-                // WhenUnlockedThisDeviceOnly accessibility flag. Runs before
-                // any Keychain reads (BiometricAuthService, session checks).
+                // WhenUnlockedThisDeviceOnly accessibility flag. First, so it
+                // runs ahead of this task's own Keychain work; the auth
+                // listener may already have read the session.
                 KeychainService.shared.migrateAccessibilityIfNeeded()
 
-                // Prune expired cache entries on launch
-                await QueryCache.shared.pruneExpired()
+                // Housekeeping nothing on screen waits for (XPLAT-004 AC1,
+                // IOS-ADS-014). Main-actor services, so a low-priority Task
+                // rather than a detached one. It runs once this task suspends,
+                // which is inside the version check's request below.
+                Task(priority: .utility) {
+                    await CrashUploader.uploadPending()
+                    await QueryCache.shared.pruneExpired()
+                    await AdTrackingService.shared.flushPendingEvents()
+                }
 
-                // Flush any ad telemetry that queued while offline (IOS-ADS-014).
-                await AdTrackingService.shared.flushPendingEvents()
-
-                // Jailbreak check (soft warning, non-blocking)
-                if JailbreakDetector.isJailbroken {
+                // Jailbreak check (soft warning, non-blocking), once per
+                // version (IOS-DD-PLATFORM-15).
+                if Self.shouldWarnJailbreak(
+                    isJailbroken: JailbreakDetector.isJailbroken,
+                    ackVersion: jailbreakAckVersion,
+                    current: Config.appVersion
+                ) {
                     showJailbreakWarning = true
                 }
 
-                // Cold-launch session validity check: if the persisted timestamps
-                // show the session is past its idle/absolute window, sign out
-                // before any authenticated UI renders.
-                if authService.isAuthenticated, !sessionTimeout.isSessionValid() {
-                    sessionExpiredMessage = "Your session expired while the app was closed. Please sign in again."
-                    try? await authService.signOut()
-                }
+                // The cold-launch timeout check moved into AuthService's
+                // .initialSession handler, and the biometric gate is set at
+                // init (IOS-DD-ACCOUNT-02 / -05). Both raced the auth listener
+                // from here. Favorites load there too now; the signed-in
+                // launch work waits for auth below (IOS-DD-PLATFORM-12).
 
-                // Biometric auth on launch (if enabled and user has a session).
-                // The actual prompt is owned by BiometricLockView's .task so
-                // we don't fire two simultaneous evaluatePolicy calls.
-                if biometricService.isEnabled && authService.isAuthenticated {
-                    awaitingBiometric = true
-                }
-
-                if authService.isAuthenticated {
-                    await favoritesService.loadFavorites()
-
-                    // Request review after engagement thresholds
-                    await requestReviewIfEligible()
-                }
-
-                // Deliberate, one-time push-permission prompt after onboarding
-                // (IOS-AUDIT-FEAT-001) — not only when a saved-search alert is
-                // enabled. Gated on the feature flag; never re-prompts a user
-                // who already decided.
-                if Config.enablePushNotifications, hasCompletedOnboarding, authService.isAuthenticated {
-                    await PushNotificationService.shared.requestPermissionIfAppropriate()
-                }
+                // Launch-time minimum-supported-version gate (IOS-AUDIT-REL-001).
+                // Fails open, so a backend hiccup never blocks a supported build.
+                // Its request goes out before the housekeeping above runs: it
+                // used to wait behind the crash upload, so a blocked build
+                // showed the app for a while before the force-update screen
+                // (IOS-DD-PLATFORM-12). Awaited directly on the main actor; an
+                // `async let` would read the main-actor `versionCheck` from a
+                // nonisolated child task.
+                await versionCheck.checkOnLaunch()
+            }
+            .task(id: authService.isLoading) {
+                await runAuthedLaunchWorkIfReady()
             }
             } // ThemeCrossfadeContainer
         }
     }
 
+    // MARK: - Biometric lock (IOS-DD-PLATFORM-05)
+
+    private var mainContent: some View {
+        MainTabView()
+            .safeAreaInset(edge: .top, spacing: 0) {
+                SessionTimeoutBanner(state: sessionTimeout.sessionState) {
+                    sessionTimeout.recordActivity()
+                }
+            }
+    }
+
+    /// Whether the biometric lock covers the app.
+    nonisolated static func shouldShowLock(awaiting: Bool, authenticated: Bool) -> Bool {
+        awaiting && authenticated
+    }
+
+    /// The lock sits OVER the signed-in content rather than replacing it. As
+    /// its own branch it tore MainTabView down on every trip to the
+    /// background, losing open sheets, navigation stacks and view models.
+    @ViewBuilder
+    private func locked<V: View>(_ content: V) -> some View {
+        let isLocked = Self.shouldShowLock(awaiting: awaitingBiometric, authenticated: authService.isAuthenticated)
+        content
+            .allowsHitTesting(!isLocked)
+            .accessibilityHidden(isLocked)
+            .overlay {
+                if isLocked {
+                    BiometricLockView { awaitingBiometric = false }
+                        .transition(.opacity)
+                }
+            }
+    }
+
+    /// Jailbroken and not yet acknowledged for this app version.
+    nonisolated static func shouldWarnJailbreak(isJailbroken: Bool, ackVersion: String, current: String) -> Bool {
+        isJailbroken && ackVersion != current
+    }
+
+    // MARK: - Signed-out message
+
+    private var signedOutMessage: String? {
+        sessionExpiredMessage ?? authService.launchSignOutMessage
+    }
+
+    private func clearSignedOutMessage() {
+        sessionExpiredMessage = nil
+        authService.launchSignOutMessage = nil
+    }
+
+    /// Drops the launch-time lock once auth has settled signed out: there is
+    /// no session to protect, and a later in-app sign-in must not land on a
+    /// stale lock.
+    private func settleBiometricGate() {
+        if !authService.isLoading && !authService.isAuthenticated {
+            awaitingBiometric = false
+        }
+    }
+
+    // MARK: - Signed-in launch work (IOS-DD-PLATFORM-12)
+
+    /// Runs once auth has settled signed in. The launch .task read
+    /// isAuthenticated before the auth listener had answered, so on a cold
+    /// launch this usually saw "signed out" and skipped it.
+    private func runAuthedLaunchWorkIfReady() async {
+        guard !didRunAuthedLaunchWork, !authService.isLoading, authService.isAuthenticated else { return }
+        didRunAuthedLaunchWork = true
+
+        if let uid = authService.currentUser?.id.uuidString {
+            CrashReportingService.shared.setUserId(uid)
+        }
+
+        // Deliberate, one-time push-permission prompt after onboarding
+        // (IOS-AUDIT-FEAT-001) — not only when a saved-search alert is
+        // enabled. Gated on the feature flag; never re-prompts a user
+        // who already decided.
+        if Config.enablePushNotifications, hasCompletedOnboarding {
+            await PushNotificationService.shared.requestPermissionIfAppropriate()
+        }
+
+        // Request review after engagement thresholds. Favorites are loading
+        // from the auth listener; the review check sleeps two seconds before
+        // it counts them.
+        await requestReviewIfEligible()
+    }
+
     // MARK: - App Review
 
     private func requestReviewIfEligible() async {
-        // Require at least 3 launches and 1+ favorites before prompting
-        guard launchCount >= 3,
-              favoritesService.favoriteEventIds.count + favoritesService.favoriteRestaurantIds.count >= 1
-        else { return }
+        guard launchCount >= 3 else { return }
 
         // Only prompt once (AppStore rate-limits this, but we gate on our side too)
         guard !UserDefaults.standard.bool(forKey: "hasRequestedReview") else { return }
 
         // Delay slightly so the app is fully visible. Structured + cancellable
         // with the view's .task — no fire-and-forget asyncAfter on the launch
-        // path (IOS-AUDIT-PERF-013).
+        // path (IOS-AUDIT-PERF-013). Also gives the auth listener's favorites
+        // load (IOS-DD-PLATFORM-12) time to land before the check below.
         try? await Task.sleep(for: .seconds(2))
         guard !Task.isCancelled else { return }
+
+        // Require 1+ favorites before prompting
+        guard favoritesService.favoriteEventIds.count + favoritesService.favoriteRestaurantIds.count >= 1
+        else { return }
 
         // Only prompt when a foreground-active scene still exists, and only mark
         // as requested once we actually show it.
@@ -264,6 +362,28 @@ private struct LaunchScreenView: View {
                     .accessibilityLabel("Loading")
             }
         }
+        // Black background regardless of theme, so semantic colors must
+        // resolve for dark or secondary text vanishes (IOS-DD-ACCOUNT-14).
+        .environment(\.colorScheme, .dark)
+    }
+}
+
+// MARK: - Privacy cover
+
+/// Covers the app while the scene is inactive or in the background, so the
+/// app-switcher snapshot of a biometric-locked app shows no content
+/// (IOS-DD-ACCOUNT-05).
+private struct PrivacyCoverView: View {
+    var body: some View {
+        ZStack {
+            Color.black.ignoresSafeArea()
+            Image("AppLogo")
+                .resizable()
+                .scaledToFit()
+                .frame(width: 180)
+                .accessibilityLabel("Des Moines Insider")
+        }
+        .environment(\.colorScheme, .dark)
     }
 }
 
@@ -283,6 +403,11 @@ private struct BiometricLockView: View {
     @State private var isAuthenticating = false
     @State private var failedAttempts = 0
     @State private var isSigningOut = false
+    /// One automatic prompt per trip to the foreground. Without it, dismissing
+    /// the prompt (which briefly makes the scene inactive) would re-prompt on
+    /// the return to .active, forever.
+    @State private var autoPromptPending = true
+    @Environment(\.scenePhase) private var scenePhase
 
     private let maxFailedAttempts = 3
 
@@ -333,35 +458,56 @@ private struct BiometricLockView: View {
                 }
                 .disabled(isSigningOut)
                 .foregroundStyle(.white.opacity(0.85))
-                .accessibilityLabel("Sign out and use password to re-authenticate")
+                .accessibilityLabel("Sign out")
             }
         }
+        .environment(\.colorScheme, .dark)
         .task {
-            // Auto-invoke biometric prompt on first appear so the user doesn't
-            // need an extra tap. Subsequent retries go through the button.
-            if failedAttempts == 0 {
-                await attemptAuthentication()
+            // Auto-invoke the prompt so the user doesn't need an extra tap,
+            // but only while active: the lock is now set on .background, and
+            // evaluatePolicy from the background fails (IOS-DD-ACCOUNT-05).
+            await autoPromptIfNeeded()
+        }
+        .onChange(of: scenePhase) { _, phase in
+            switch phase {
+            case .background:
+                autoPromptPending = true
+            case .active:
+                Task { await autoPromptIfNeeded() }
+            default:
+                break
             }
         }
+    }
+
+    private func autoPromptIfNeeded() async {
+        guard scenePhase == .active, autoPromptPending, failedAttempts == 0, !isAuthenticating else { return }
+        autoPromptPending = false
+        await attemptAuthentication()
     }
 
     private var promptMessage: String {
         if failedAttempts >= maxFailedAttempts {
             return "Too many failed attempts. Sign out and use your password to continue."
         }
-        return "Authenticate with \(biometric.biometricName) to continue."
+        return "Unlock with \(biometric.biometricName) or your passcode"
     }
 
     private func attemptAuthentication() async {
         guard !isRetryDisabled else { return }
         isAuthenticating = true
-        let success = await biometric.authenticate()
+        // Passcode fallback included (.deviceOwnerAuthentication), and a
+        // cancel no longer counts toward the retry limit (IOS-DD-ACCOUNT-05).
+        let outcome = await biometric.evaluate()
         isAuthenticating = false
-        if success {
+        switch outcome {
+        case .success:
             failedAttempts = 0
             onUnlock()
-        } else {
-            failedAttempts += 1
+        case .cancelled, .failed, .unavailable:
+            if BiometricAuthService.countsAsFailure(outcome) {
+                failedAttempts += 1
+            }
         }
     }
 
@@ -410,5 +556,6 @@ private struct ConfigurationErrorView: View {
                     .padding(.horizontal, 32)
             }
         }
+        .environment(\.colorScheme, .dark)
     }
 }

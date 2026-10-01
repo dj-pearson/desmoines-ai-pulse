@@ -41,7 +41,16 @@ interface ShareDialogProps {
   className?: string;
   /** Callback fired when a share action is completed (any platform or copy) */
   onShare?: () => void;
+  /** What is being shared; sets the dialog and message wording. Defaults to "event". */
+  kind?: ShareKind;
 }
+
+export type ShareKind = "event" | "article";
+
+const SHARE_COPY: Record<ShareKind, { noun: string; suffix: string }> = {
+  event: { noun: "event", suffix: "Des Moines Events" },
+  article: { noun: "article", suffix: "Des Moines Insider" },
+};
 
 export default function ShareDialog({
   title,
@@ -50,13 +59,17 @@ export default function ShareDialog({
   trigger,
   className,
   onShare,
+  kind = "event",
 }: ShareDialogProps) {
   const [isOpen, setIsOpen] = useState(false);
+  const copy = SHARE_COPY[kind];
+  const noun = copy.noun;
+  const Noun = noun.charAt(0).toUpperCase() + noun.slice(1);
 
   // Create better sharing content
-  const shareTitle = `${title} - Des Moines Events`;
+  const shareTitle = `${title} - ${copy.suffix}`;
   const shareDescription = description?.slice(0, 150) + (description?.length > 150 ? '...' : '');
-  const shareText = `Check out this event: ${title}`;
+  const shareText = `Check out this ${noun}: ${title}`;
   
   const encodedTitle = encodeURIComponent(shareTitle);
   const encodedDescription = encodeURIComponent(shareDescription);
@@ -99,7 +112,7 @@ export default function ShareDialog({
     {
       name: "Email",
       icon: Mail,
-      url: `mailto:?subject=${encodedTitle}&body=${shareDescription}%0A%0AView event: ${url}`,
+      url: `mailto:?subject=${encodedTitle}&body=${shareDescription}%0A%0AView ${noun}: ${url}`,
       color: "bg-[#EA4335] hover:bg-[#D33B2C] text-white",
     },
     {
@@ -160,9 +173,9 @@ export default function ShareDialog({
       </DialogTrigger>
       <DialogContent className="sm:max-w-md">
         <DialogHeader>
-          <DialogTitle>Share Event</DialogTitle>
+          <DialogTitle>Share {Noun}</DialogTitle>
           <DialogDescription>
-            Share this event with your friends and family
+            Share this {noun} with your friends and family
           </DialogDescription>
         </DialogHeader>
         

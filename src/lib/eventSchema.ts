@@ -42,41 +42,223 @@
  *     costs a recommended field; a wrong one is bad data on a live page.
  */
 import { Event } from '@/lib/types';
-import { createEventSlugWithCentralTime } from '@/lib/timezone';
+import { centralDateOf, createEventSlugWithCentralTime, hasSpecificTime } from '@/lib/timezone';
 import { BRAND } from '@/lib/brandConfig';
-import { buildEventOffers, isEventAccessibleForFree } from '@/lib/eventOffers';
+import { isHttpUrl } from '@/lib/dashboardItems';
+import { buildEventOffers, isEventAccessibleForFree, parseEventPrice } from '@/lib/eventOffers';
+import { DEFAULT_EVENT_HOURS } from '@/lib/eventTiming';
 
-/** Assumed run time when an event has no explicit end. */
-const DEFAULT_EVENT_HOURS = 3;
+/**
+ * Affiliate redirect hosts that carry the real destination in their `u` query
+ * parameter. ticketmaster.evyy.net is Impact's tracking domain for the
+ * Ticketmaster programme; scrape-ticketmaster-events builds these links.
+ */
+export const AFFILIATE_REDIRECT_HOSTS: readonly string[] = ['ticketmaster.evyy.net'];
+
+/** The link's host without "www.", or null for a missing or non-http link. */
+export function linkHost(url: string | null | undefined): string | null {
+  if (!isHttpUrl(url)) return null;
+  try {
+    return new URL(url as string).hostname.replace(/^www\./, '').toLowerCase();
+  } catch {
+    return null;
+  }
+}
+
+/** True when the link goes through one of AFFILIATE_REDIRECT_HOSTS. */
+export function isAffiliateRedirect(url: string | null | undefined): boolean {
+  const host = linkHost(url);
+  return host !== null && AFFILIATE_REDIRECT_HOSTS.includes(host);
+}
+
+/**
+ * Where an affiliate redirect lands: the decoded `u` parameter, or null when
+ * the link is not a known redirect or `u` is missing or not http(s).
+ */
+export function affiliateTarget(url: string | null | undefined): string | null {
+  if (!isAffiliateRedirect(url)) return null;
+  try {
+    const target = new URL(url as string).searchParams.get('u');
+    return isHttpUrl(target) ? target : null;
+  } catch {
+    return null;
+  }
+}
+
+/**
+ * The event's real ticket or listing page, or null when it is missing, not
+ * http(s) (a scraped `javascript:` URL), or flagged broken by the link
+ * checker. The JSON-LD offer reads this. Rows the Ticketmaster scraper wrote
+ * before events.affiliate_url existed hold the affiliate redirect in
+ * source_url; for those this is the page the redirect lands on, so the
+ * structured data names Ticketmaster rather than a tracking domain.
+ */
+export function eventTicketUrl(event: { source_url?: string | null; source_url_broken?: boolean | null }): string | null {
+  if (event.source_url_broken) return null;
+  if (!isHttpUrl(event.source_url)) return null;
+  return affiliateTarget(event.source_url) ?? event.source_url;
+}
+
+/**
+ * Hosts that sell tickets for what they list (events-pass2 WP4 item 5): the
+ * national ticketers, plus the team and venue sites the scrapers ingest from
+ * (supabase/functions/_shared/knownVenues.ts and the firecrawl sources), which
+ * sell their own. A match is the host itself or any subdomain of it.
+ */
+export const TICKETING_HOSTS: readonly string[] = [
+  'ticketmaster.com',
+  'seatgeek.com',
+  'etix.com',
+  'eventbrite.com',
+  'axs.com',
+  'iowawild.com',
+  'theiowabarnstormers.com',
+  'milb.com',
+  'iowa.gleague.nba.com',
+];
+
+function isTicketingHost(host: string): boolean {
+  return TICKETING_HOSTS.some((h) => host === h || host.endsWith(`.${h}`));
+}
+
+export interface EventOutboundLink {
+  href: string;
+  /** "Get tickets", or "Event listing on catchdesmoines.com". */
+  label: string;
+  /** True only when the label promises tickets. */
+  sellsTickets: boolean;
+  /** True when href is an affiliate link, which needs a disclosure beside it. */
+  sponsored: boolean;
+  /** The anchor's rel; "sponsored" is added for an affiliate link. */
+  rel: string;
+}
+
+/**
+ * What the detail page's outbound button says, and where it goes. "Get
+ * tickets" is a promise that the link sells them, so it needs both a stated
+ * paid price (fixed or a range) and a ticketing host. Anything else names the
+ * host, so a reader knows they are going to a listing, not a box office. null
+ * when there is no usable link.
+ *
+ * An affiliate link (events.affiliate_url, or an old row whose source_url is
+ * the redirect) is preferred when there is one, and is judged by where it
+ * lands: the host comes from the decoded `u` parameter, so a Ticketmaster
+ * redirect reads "Get tickets" rather than "Event listing on
+ * ticketmaster.evyy.net". A row the link checker flagged broken shows no
+ * button at all, as before.
+ */
+export function eventOutboundLink(event: {
+  source_url?: string | null;
+  source_url_broken?: boolean | null;
+  affiliate_url?: string | null;
+  price?: string | null;
+}): EventOutboundLink | null {
+  if (event.source_url_broken) return null;
+  const affiliateHref = isHttpUrl(event.affiliate_url)
+    ? event.affiliate_url
+    : isAffiliateRedirect(event.source_url)
+      ? (event.source_url as string)
+      : null;
+  const href = affiliateHref ?? eventTicketUrl(event);
+  const destination = affiliateHref ? (affiliateTarget(affiliateHref) ?? affiliateHref) : href;
+  const host = linkHost(destination);
+  if (!href || !host) return null;
+  const sponsored = affiliateHref !== null;
+  const rel = sponsored ? 'sponsored noopener noreferrer' : 'noopener noreferrer';
+  const kind = parseEventPrice(event.price).kind;
+  const paid = kind === 'fixed' || kind === 'range';
+  if (paid && isTicketingHost(host)) {
+    return { href, label: 'Get tickets', sellsTickets: true, sponsored, rel };
+  }
+  return { href, label: `Event listing on ${host}`, sellsTickets: false, sponsored, rel };
+}
 
 export function eventPageUrl(event: Event): string {
   return `${BRAND.baseUrl}/events/${createEventSlugWithCentralTime(event.title, event)}`;
 }
 
+/** hasSpecificTime reads string fields, and `date` can arrive as a Date. */
+function eventHasTime(event: Event): boolean {
+  const date = typeof event.date === 'string' ? event.date : event.date?.toISOString();
+  return hasSpecificTime({ ...event, date });
+}
+
+function startInstant(event: Event): string {
+  return event.event_start_utc || (typeof event.date === 'string' ? event.date : event.date.toISOString());
+}
+
+/** The Central yyyy-MM-dd of an instant string, or null when it won't parse. */
+function centralDay(iso: string): string | null {
+  if (/^\d{4}-\d{2}-\d{2}$/.test(iso)) return iso;
+  const ms = Date.parse(iso);
+  return Number.isFinite(ms) ? centralDateOf(new Date(ms)) : null;
+}
+
 export function eventStartIso(event: Event): string {
-  return (
-    event.event_start_utc ||
-    (typeof event.date === 'string' ? event.date : event.date.toISOString())
-  );
+  const iso = startInstant(event);
+
+  // WEB-BE-038, widened by events-pass2 WP4 item 2. DATE ONLY when the source
+  // announced no start time: time_tbd, the 19:31:58 marker, or SeatGeek's
+  // 03:30 placeholder - the same test the page uses (hasSpecificTime), so the
+  // JSON-LD can't publish a showtime the page says isn't listed. schema.org
+  // accepts a bare date for startDate.
+  //
+  // The date is the CENTRAL one. iso.slice(0, 10) of a UTC string put every
+  // evening event on the next day.
+  if (!eventHasTime(event)) {
+    const day = centralDay(iso);
+    if (day) return day;
+  }
+
+  return iso;
 }
 
 /**
  * endDate, which Google's Events report names as a missing field.
  *
- * Falls back to start + 3h rather than omitting. This is the one estimated
- * field here and it is a deliberate exception to the omit-rather-than-guess
- * rule above: an Event with no endDate is treated by Google as a point in time
- * and drops out of "happening now" style surfaces, and a three-hour evening
- * event is a far better estimate than no duration at all. It is bounded, it
- * cannot mislead a reader (nothing renders it), and it is never applied over a
- * real end_date.
+ * Falls back to start + DEFAULT_EVENT_HOURS rather than omitting. This is the
+ * one estimated field here and it is a deliberate exception to the
+ * omit-rather-than-guess rule above: an Event with no endDate is treated by
+ * Google as a point in time and drops out of "happening now" style surfaces.
+ * It is bounded, nothing renders it, and it is never applied over a real
+ * end_date. eventTiming.ts uses the same constant for "is it over".
  */
-export function eventEndIso(event: Event): string {
-  if (event.end_date) return event.end_date;
-  const startMs = new Date(eventStartIso(event)).getTime();
+export function eventEndIso(event: Event): string | null {
+  const startMs = Date.parse(startInstant(event));
+  const endMs = event.end_date ? Date.parse(event.end_date) : NaN;
+  // An end before the start is bad data; treat it as absent.
+  const realEnd =
+    event.end_date && (!Number.isFinite(startMs) || !Number.isFinite(endMs) || endMs >= startMs)
+      ? event.end_date
+      : null;
+
+  if (!eventHasTime(event)) {
+    // WEB-BE-038. NO ESTIMATE WHEN THERE IS NO START TIME: three hours after
+    // a placeholder is a made-up hour. A real end_date is kept, as a Central
+    // date so it matches the date-only startDate.
+    return realEnd ? centralDay(realEnd) : null;
+  }
+
+  if (realEnd) return realEnd;
   if (!Number.isFinite(startMs)) return eventStartIso(event);
   return new Date(startMs + DEFAULT_EVENT_HOURS * 60 * 60 * 1000).toISOString();
 }
+
+/**
+ * Cut at a word boundary with "..." (events-pass2 WP4 item 18). List pages
+ * carried 30-50 full descriptions each in their ItemList.
+ */
+function clipDescription(text: string, max: number): string {
+  const t = text.trim().replace(/\s+/g, ' ');
+  if (t.length <= max) return t;
+  const cut = t.slice(0, max - 3);
+  const lastSpace = cut.lastIndexOf(' ');
+  const base = lastSpace > (max - 3) * 0.6 ? cut.slice(0, lastSpace) : cut;
+  return `${base.replace(/[\s,;:.-]+$/, '')}...`;
+}
+
+/** Characters of description per Event node inside an ItemList. */
+export const LIST_DESCRIPTION_MAX = 300;
 
 /** The Place node, with the locality rules described in this file's header. */
 export function buildEventLocation(event: Event) {
@@ -108,23 +290,36 @@ export function buildEventLocation(event: Event) {
  * One Event node. `withContext` adds @context for a standalone block; leave it
  * off inside an ItemList, where the wrapper already carries it.
  */
-export function buildEventJsonLd(event: Event, opts: { withContext?: boolean } = {}) {
+export function buildEventJsonLd(
+  event: Event,
+  opts: { withContext?: boolean; descriptionMax?: number } = {},
+) {
   const url = eventPageUrl(event);
+  const endDate = eventEndIso(event);
+  const fullDescription =
+    event.enhanced_description ||
+    event.original_description ||
+    `${event.title} in ${event.city?.trim() || BRAND.city}, ${BRAND.state}`;
   const offers = buildEventOffers(event.price);
   const accessibleForFree = isEventAccessibleForFree(event.price);
-  const city = event.city?.trim();
 
   return {
     ...(opts.withContext ? { '@context': 'https://schema.org' } : {}),
     '@type': 'Event' as const,
-    '@id': url,
+    // A fragment, not the bare URL. The detail page also emits a WebPage whose
+    // @id is the URL (the Speakable node, and this node's own
+    // mainEntityOfPage), and a graph parser merges nodes that share an @id -
+    // so the Event and its page were read as one thing that was both.
+    '@id': `${url}#event`,
     name: event.title,
-    description:
-      event.enhanced_description ||
-      event.original_description ||
-      `${event.title} in ${city || BRAND.city}, ${BRAND.state}`,
+    // The detail page keeps the full text; lists pass descriptionMax.
+    description: opts.descriptionMax
+      ? clipDescription(fullDescription, opts.descriptionMax)
+      : fullDescription,
     startDate: eventStartIso(event),
-    endDate: eventEndIso(event),
+    // Omitted rather than estimated when there is no announced start time
+    // (WEB-BE-038); see eventEndIso.
+    ...(endDate ? { endDate } : {}),
     eventStatus: 'https://schema.org/EventScheduled',
     eventAttendanceMode: 'https://schema.org/OfflineEventAttendanceMode',
     location: buildEventLocation(event),
@@ -134,7 +329,9 @@ export function buildEventJsonLd(event: Event, opts: { withContext?: boolean } =
       ? {
           offers: {
             ...offers,
-            url: event.source_url || url,
+            // A source_url the link checker flagged, or one that is not
+            // http(s), is not a ticket page (events plan WP8 item 5).
+            url: eventTicketUrl(event) ?? url,
             validFrom: event.created_at || new Date().toISOString(),
           },
         }
@@ -161,7 +358,7 @@ export function buildEventItemList(
       '@type': 'ListItem' as const,
       position: index + 1,
       url: eventPageUrl(event),
-      item: buildEventJsonLd(event),
+      item: buildEventJsonLd(event, { descriptionMax: LIST_DESCRIPTION_MAX }),
     })),
   };
 }

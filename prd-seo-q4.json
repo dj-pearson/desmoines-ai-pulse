@@ -554,6 +554,23 @@
         "Fix the generator so a JSON or placeholder body can never be published (a check on publish or a CI check over the articles table).",
         "Regenerate scripts/prerender-priority.json and sitemap-articles.xml. Record per-article outcome in notes."
       ],
+      "notes": "DONE IN PRODUCTION 2026-10-01, merged to claude/seo-q4-loop (acee85dc); passes stays FALSE until the 7 new 301s are confirmed live after deploy. Rewritten in place as markdown with sources and a 'What changed' note (published_at kept): patio 13 kept/5 dropped (Juniper Moon, Star Bar closed; no patio confirmed at Up-Down, Harbinger, RoCA), soups 11/9 (Django, Ritual, Malo closed/closing; 6 with no named soup on current menu), coffee crawl 14/9 (5 never existed), Highland Park 6/3, Drake 7/5, Valley Junction 12 real shops (all 15 invented makers dropped), hidden history 10 sites (speakeasy/Green Hat Club claims dropped), budget 12 (zoo over $15 dropped; Botanical Garden price and Neal Smith trail length corrected). Archived + 301 (zero impressions): beaverdale, date-night, indoor farmers markets, air-conditioned, oktoberfest-2023, last-call farmers market, summer-saturday. 15 rows backed up in scripts/content-backups/seo-058/; content in scripts/seo-058-rewrite-and-retire-articles.sql; webhook definition read and confirmed it only fires on transition to published. GUARD: supabase/migrations/20261016000001_articles_publishable_body_guard.sql (additive function + BEFORE trigger, APPLIED TO PRODUCTION, ledger row written) rejects JSON/HTML/placeholder bodies on publish or body change; tested in rolled-back transactions (JSON publish rejected, view-count update allowed); all 12 published articles pass. sitemap-articles 18->12, prerender-priority regenerated. validate 0 errors; check-sitemap-redirects and check-seo-route-parity pass. OPEN: some 'open' evidence is directory listings (search quota ran out); slugs still carry old counts ('20-must-try'), rename needs 301 (low value, leave); prerender-priority.json still lists 9 archived URLs (built from GSC); the AI article pipeline does not handle the guard's error, so a blocked publish fails silently -> SEO-059; restaurants table lists closed places as open (jethros-bbq, ritual-cafe) -> SEO-059."
+    },
+    {
+      "id": "SEO-059",
+      "title": "Closed restaurants are still listed as open, and the article pipeline ignores the publish guard's error",
+      "priority": 1,
+      "phase": 1,
+      "branch": "claude/seo-q4-loop",
+      "passes": false,
+      "description": "Found by SEO-058 while verifying venues: restaurants rows for places that have closed (jethros-bbq Forest Ave burned in 2022, ritual-cafe, Django, Malo, Juniper Moon, Star Bar and others) still render as open restaurant pages. A guide that sends someone to a closed restaurant is the fastest way to lose a local reader, and these pages carry Restaurant schema claiming a live business. Separately, the new articles_publishable_body guard makes a bad publish fail, but the AI pipeline does not check the error, so it fails silently.",
+      "acceptanceCriteria": [
+        "List every restaurant SEO-058 found closed, then check the top 150 restaurants by GSC impressions for closure (Google Places business_status if a key exists, else the business site/listings fetched this session). Record evidence per row.",
+        "Mark closed rows with the existing status/closed column if one exists, else an additive column; closed pages show 'Permanently closed' clearly, drop Restaurant schema openingHours, leave the sitemap (noindex) or 301 to a relevant hub, per CLAUDE.md redirect rules. Back up first.",
+        "Exclude closed restaurants from hubs, open-now, pSEO lists and nearby-restaurant links.",
+        "Make the article publish path check and surface the guard error (log via errorHandler, mark the queue item failed).",
+        "Tests for the closed state rendering and list filtering."
+      ],
       "notes": ""
     }
   ]

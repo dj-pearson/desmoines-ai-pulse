@@ -2,6 +2,7 @@ import { readFileSync } from 'node:fs';
 import { dirname, join } from 'node:path';
 import { fileURLToPath } from 'node:url';
 import { test, expect, type Page } from '@playwright/test';
+import { fixtureEvents, installFixtureBackend } from './support/fixtureBackend';
 
 /**
  * WEB-QA-001 / WEB-QA-002 / WEB-QA-003 — production regressions found in the
@@ -36,7 +37,21 @@ async function expectNoErrorBoundary(page: Page) {
 test.describe('Route smoke: monetization / B2B pages mount (WEB-QA-001)', () => {
   // React error #130 (undefined component) took /advertise down entirely. Audit
   // the sibling revenue routes reachable from the footer at the same time.
-  const routes = ['/advertise', '/business-partnership'];
+  // The Business plan (docs/page-plans/business.md WP5 item 2) adds the rest of
+  // the way businesses and organizers pay or contribute: event supply comes in
+  // through /submit-event, a paid campaign lands on /advertise/success (here
+  // with no session_id, the state a refresh or a shared link produces), and
+  // /business is the claimed-listing workspace. /campaigns is behind
+  // ProtectedRoute, so for a signed-out visitor this proves the redirect to
+  // /auth mounts; the block at the end of this file checks where it lands.
+  const routes = [
+    '/advertise',
+    '/business-partnership',
+    '/submit-event',
+    '/campaigns',
+    '/business',
+    '/advertise/success',
+  ];
 
   for (const route of routes) {
     test(`${route} mounts without hitting the error boundary`, async ({ page }) => {
@@ -225,12 +240,46 @@ test.describe('Every public route in App.tsx mounts (WEB-QA-023)', () => {
 
 test.describe('Listed events resolve to a detail page (WEB-QA-002)', () => {
   test('a sample of event cards from the listing all render a detail page', async ({ page }) => {
+    // The lane builds with placeholder VITE_SUPABASE_*, so without fixtures
+    // the hub lists nothing and the title-link locator below skips the test.
+    // The old bare locator never skipped only because it sampled the hub's
+    // own landing links; with rows served, it samples real cards.
+    await installFixtureBackend(page);
+    // The shared backend ignores filters on purpose, so a detail page's
+    // `.eq("id", ...).maybeSingle()` would get all twelve rows and fail with
+    // PGRST116. An id lookup is identity, not a filter under test: answer it
+    // with the row it names. Registered after the backend, so it wins.
+    await page.route('**/rest/v1/events?**', (route) => {
+      const id = new URL(route.request().url()).searchParams.get('id');
+      if (route.request().method() !== 'GET' || !id?.startsWith('eq.')) return route.fallback();
+      const rows = fixtureEvents().filter((r) => `eq.${r.id}` === id);
+      return route.fulfill({
+        status: 200,
+        contentType: 'application/json',
+        headers: {
+          'access-control-allow-origin': '*',
+          'content-range': rows.length ? `0-${rows.length - 1}/${rows.length}` : '*/0',
+        },
+        body: JSON.stringify(rows),
+      });
+    });
     await page.goto('/events');
     await page.waitForLoadState('networkidle');
 
     // Event cards link to /events/<slug>. Sample the first few rather than every
     // card, to keep this fast while still catching a systemic list/detail split.
-    const links = page.locator('a[href^="/events/"]');
+    //
+    // Scoped to a card's title link (events-pass2 WP6 item 7). The bare
+    // a[href^="/events/"] matched the hub's own chips and directory first -
+    // /events/today, /events/this-weekend, /events/september-2026 - so the
+    // "sample of event cards" could be a sample of landing pages that never
+    // opened a single event. The plan named the event-card-link test id, but
+    // vite.config.ts strips data-testid from every build
+    // (babel-plugin-react-remove-properties), so on this lane's production
+    // build that locator matches nothing and the test skips itself forever.
+    // SocialEventCard puts its link directly inside the h3/h4 title, which is
+    // the same selector the events-* specs use.
+    const links = page.locator('h3 > a[href^="/events/"], h4 > a[href^="/events/"]');
     const count = await links.count();
     test.skip(count === 0, 'No events currently listed — nothing to verify.');
 
@@ -254,4 +303,263 @@ test.describe('Listed events resolve to a detail page (WEB-QA-002)', () => {
       await expectNoErrorBoundary(page);
     }
   });
+});
+
+test.describe('Sponsored listings render on the restaurants hub (WEB-ADS-001)', () => {
+  // The purchase path writes sponsored_listing_links and activation (the
+  // activate_campaign RPC via the campaigns status trigger) flags the listing
+  // row. This is the render end of that contract: a restaurant row carrying
+  // is_sponsored = true with a future sponsored_until must show the
+  // FTC "Sponsored" label on /restaurants. The rotation RPC is mocked so the
+  // assertion does not depend on a paid campaign existing in the database.
+  test('an active sponsored restaurant carries the Sponsored label', async ({ page }) => {
+    const sponsoredUntil = new Date(Date.now() + 7 * 24 * 60 * 60 * 1000).toISOString();
+    const restaurant = {
+      id: '11111111-1111-4111-8111-111111111111',
+      name: 'Smoke Test Sponsored Bistro',
+      slug: 'smoke-test-sponsored-bistro',
+      cuisine: 'American',
+      city: 'Des Moines',
+      address: '100 Locust St',
+      price_range: '$$',
+      rating: 4.6,
+      review_count: 12,
+      popularity_score: 90,
+      image_url: null,
+      description: 'Fixture row for the sponsored-label smoke test.',
+      is_featured: false,
+      is_sponsored: true,
+      sponsored_until: sponsoredUntil,
+      status: 'open',
+      created_at: '2026-01-01T00:00:00Z',
+    };
+
+    await page.route('**/rest/v1/rpc/get_rotated_restaurants*', (route) =>
+      route.fulfill({
+        status: 200,
+        contentType: 'application/json',
+        body: JSON.stringify([{ restaurant_data: restaurant, total_count: 1 }]),
+      })
+    );
+
+    await page.goto('/restaurants');
+    await expectNoErrorBoundary(page);
+
+    // RestaurantCard is an <article> whose only link is the name in its <h3>
+    // (stretched-link pattern, eat-drink plan WP3 item 7). The label is plain
+    // visible text - SponsoredBadge carries no aria-label - so a screen reader
+    // and a sighted reader get the same "Sponsored" disclosure.
+    const card = page
+      .locator('article')
+      .filter({ has: page.getByRole('link', { name: 'Smoke Test Sponsored Bistro', exact: true }) })
+      .first();
+    await expect(card).toBeVisible({ timeout: 30_000 });
+    await expect(card.getByText('Sponsored', { exact: true }).first()).toBeVisible();
+  });
+});
+
+test.describe('Password reset leads to a form that changes the password (WEB-AUTH-001)', () => {
+  // Before this route existed the reset email pointed at /auth?reset=true,
+  // nothing read that parameter, and the link signed the user in and dropped
+  // them on the homepage with the old password intact. These assertions are
+  // about the shape of the recovery flow, not about a real Supabase session,
+  // so the auth calls are route-mocked.
+
+  test('/auth/reset-password offers a resend when there is no recovery session', async ({ page }) => {
+    const consoleErrors = captureConsoleErrors(page);
+
+    const response = await page.goto('/auth/reset-password');
+    expect(response?.status()).toBeLessThan(400);
+    await page.waitForLoadState('networkidle');
+    await expectNoErrorBoundary(page);
+
+    // An anonymous visitor has no recovery session, so the page must offer a
+    // new link rather than an unusable form or a blank screen.
+    await expect(page.getByRole('button', { name: /send again/i })).toBeVisible({ timeout: 30_000 });
+    // ANCHORED, for the same reason as the sign-in link below: the footer's
+    // newsletter input is labelled "Email address for newsletter" and is on
+    // every page, so /email address/i resolved to two elements and failed
+    // strict mode without ever asserting anything about this form.
+    await expect(page.getByLabel(/^email address$/i)).toBeVisible();
+
+    const invariantErrors = consoleErrors.filter((e) => /Minified React error #130|Element type is invalid/i.test(e));
+    expect(invariantErrors, `React #130 on /auth/reset-password: ${invariantErrors.join('\n')}`).toHaveLength(0);
+  });
+
+  test('an expired link is reported as expired, not celebrated', async ({ page }) => {
+    await page.goto('/auth/reset-password?error=access_denied&error_code=otp_expired&error_description=Email+link+is+invalid+or+has+expired');
+    await page.waitForLoadState('networkidle');
+    await expectNoErrorBoundary(page);
+
+    await expect(page.getByText(/this link has expired/i)).toBeVisible({ timeout: 30_000 });
+    await expect(page.getByRole('button', { name: /send again/i })).toBeVisible();
+  });
+
+  test('the old ?reset=true link still reaches the reset page', async ({ page }) => {
+    // Emails sent before this shipped point at /auth?reset=true and stay valid
+    // for an hour, so that parameter has to keep working.
+    await page.goto('/auth?reset=true');
+    await page.waitForLoadState('networkidle');
+    await expectNoErrorBoundary(page);
+
+    await expect(page).toHaveURL(/\/auth\/reset-password/, { timeout: 30_000 });
+  });
+});
+
+test.describe('Ad impressions are recorded server-side (WEB-ADS-002)', () => {
+  // The browser used to INSERT into ad_impressions directly. That table has no
+  // INSERT policy in any migration, so RLS refused every write and every
+  // advertiser dashboard read zero. The write now goes through an edge
+  // function. This asserts the browser takes that route and never the old one.
+  test('the homepage writes no ad rows directly from the browser', async ({ page }) => {
+    const directAdWrites: string[] = [];
+    page.on('request', (req) => {
+      const url = req.url();
+      if (req.method() === 'POST' && /\/rest\/v1\/(ad_impressions|ad_clicks)/.test(url)) {
+        directAdWrites.push(url);
+      }
+    });
+
+    await page.goto('/');
+    await page.waitForLoadState('networkidle');
+    await expectNoErrorBoundary(page);
+
+    expect(
+      directAdWrites,
+      `the browser must not insert ad rows directly: ${directAdWrites.join('\n')}`
+    ).toHaveLength(0);
+  });
+});
+
+test.describe('Landing pages do not open a websocket per card (WEB-PERF-030)', () => {
+  // SocialEventCard fell back to useEventSocial(event.id) when a page passed no
+  // batch data, and that fallback opened three postgres_changes channels per
+  // card. FreeEvents fetches up to 100 events, so one anonymous visit could
+  // open three hundred subscriptions for a preview nobody signed out can use.
+  test('/events/free opens at most a handful of websockets', async ({ page }) => {
+    const sockets: string[] = [];
+    page.on('websocket', (ws) => sockets.push(ws.url()));
+
+    await page.goto('/events/free');
+    await page.waitForLoadState('networkidle');
+    await expectNoErrorBoundary(page);
+
+    // Supabase multiplexes channels over one realtime connection, so the count
+    // here is connections rather than channels. Anonymous visitors should need
+    // none; the ceiling leaves room for one shared connection plus noise.
+    expect(
+      sockets.length,
+      `too many websocket connections on /events/free: ${sockets.join('\n')}`
+    ).toBeLessThanOrEqual(3);
+  });
+});
+
+/**
+ * The heading AuthVerified renders on the error branch.
+ *
+ * This was /could not confirm your email/i and matched nothing: the page says
+ * "We couldn't confirm your email" (AuthVerified.tsx:112), and the contraction
+ * is not the two words. Both forms are accepted here because
+ * src/lib/authCallbackError.ts writes "We could not confirm your email with
+ * that link" into the DESCRIPTION for one of the error codes, and the
+ * apostrophe class covers a typographic one if the copy is ever re-typed.
+ */
+const CONFIRM_FAILED_HEADING = /(could not|couldn['\u2019]t) confirm your email/i;
+
+test.describe('Email confirmation failures are explained, not celebrated (WEB-AUTH-005)', () => {
+  // /auth/verified rendered "Email Verified! 🎉" no matter what brought the
+  // reader there. It read no error parameter, so an expired link, a reused link
+  // and a cross-device confirmation all produced a celebration and a
+  // ten-second countdown to the homepage, with the reader still logged out.
+
+  test('an expired link shows the reason, not the celebration', async ({ page }) => {
+    await page.goto('/auth/verified?error_code=otp_expired');
+    await expectNoErrorBoundary(page);
+
+    await expect(page.getByText(CONFIRM_FAILED_HEADING)).toBeVisible();
+    await expect(page.getByText(/expired/i).first()).toBeVisible();
+    await expect(page.getByText(/Email Verified/i)).toHaveCount(0);
+  });
+
+  test('the error branch offers a new link and a way to sign in', async ({ page }) => {
+    await page.goto('/auth/verified?error_code=otp_expired');
+    await expect(page.getByRole('button', { name: /send a new confirmation link/i })).toBeVisible();
+    // ANCHORED. /sign in/i also matches the Header's "Sign in to your account",
+    // which is on every page - so this resolved to two elements and failed
+    // strict mode while asserting nothing about the error branch. The card's
+    // own link is exactly "Sign in".
+    await expect(page.getByRole('link', { name: /^sign in$/i })).toBeVisible();
+  });
+
+  test('a fragment error is read too, which is where email links put it', async ({ page }) => {
+    // The half the old page could not have seen even if it had looked: a
+    // fragment never reaches a server and useSearchParams does not expose it.
+    await page.goto('/auth/verified#error=access_denied&error_code=otp_expired');
+    await expectNoErrorBoundary(page);
+    await expect(page.getByText(CONFIRM_FAILED_HEADING)).toBeVisible();
+  });
+
+  test('the error branch does not bounce the reader to the homepage', async ({ page }) => {
+    // The countdown would take away the one screen explaining what happened.
+    await page.goto('/auth/verified?error_code=otp_expired');
+    await expect(page.getByText(/Redirecting automatically/i)).toHaveCount(0);
+    await page.waitForTimeout(2000);
+    expect(new URL(page.url()).pathname).toBe('/auth/verified');
+  });
+});
+
+test.describe('Sign-in details can be changed from /profile (WEB-AUTH-012)', () => {
+  // /profile edited first name, last name and phone. updateUser({ email })
+  // appeared nowhere in src and nothing called AuthContext.updatePassword, so a
+  // user whose password had leaked could only sign out and use "forgot
+  // password", and a user whose email had changed had no route at all.
+  //
+  // /profile is behind ProtectedRoute, so an anonymous visit lands on /auth.
+  // That is what these assert without a session: the route is guarded, and the
+  // panel is not reachable to an anonymous visitor.
+
+  test('/profile requires a session', async ({ page }) => {
+    await page.goto('/profile');
+    await expectNoErrorBoundary(page);
+    await page.waitForURL(/\/auth|\/profile/);
+    // Either the guard redirected, or the page rendered a sign-in prompt.
+    const onAuth = new URL(page.url()).pathname.startsWith('/auth');
+    if (!onAuth) {
+      await expect(page.getByText(/sign in|log in/i).first()).toBeVisible();
+    }
+  });
+
+  test('the credentials panel is not reachable without signing in', async ({ page }) => {
+    await page.goto('/profile');
+    await expectNoErrorBoundary(page);
+    await expect(page.locator('#current-password')).toHaveCount(0);
+    await expect(page.locator('#new-email')).toHaveCount(0);
+  });
+});
+
+test.describe('Account routes send a signed-out visitor to /auth and remember where they were', () => {
+  // docs/page-plans/account.md WP6 item 2. Only /profile was covered above.
+  // /dashboard and /my-events both sit behind ProtectedRoute, which builds
+  // /auth?redirect=<path+search+hash>. /my-events used to hand-roll its own
+  // branch that navigated to /login and dropped the return path, and a query
+  // string on /dashboard (?tab=events) is exactly what a new account would
+  // otherwise lose.
+  const CASES: Array<{ from: string; redirect: string }> = [
+    { from: '/dashboard', redirect: '/dashboard' },
+    { from: '/dashboard?tab=events', redirect: '/dashboard?tab=events' },
+    { from: '/my-events', redirect: '/my-events' },
+    // docs/page-plans/business.md WP5 item 2: an advertiser who follows a
+    // campaign email while signed out must come back to their campaigns.
+    { from: '/campaigns', redirect: '/campaigns' },
+  ];
+
+  for (const { from, redirect } of CASES) {
+    test(`anonymous ${from} lands on /auth with the redirect kept`, async ({ page }) => {
+      await page.goto(from);
+      await page.waitForURL((url) => url.pathname === '/auth', { timeout: 30_000 });
+      await expectNoErrorBoundary(page);
+      const url = new URL(page.url());
+      expect(url.searchParams.get('redirect'), `${from} lost its return path`).toBe(redirect);
+    });
+  }
 });

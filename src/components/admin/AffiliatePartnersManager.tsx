@@ -1,14 +1,8 @@
-import { useState } from 'react';
-import { AFFILIATE_PARTNERS, type AffiliatePartner } from '@/lib/affiliateAds';
+import { AFFILIATE_PARTNERS } from '@/lib/affiliateAds';
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card';
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from '@/components/ui/table';
 import { Badge } from '@/components/ui/badge';
-import { Switch } from '@/components/ui/switch';
 import { ExternalLink, ImageIcon, Hotel } from 'lucide-react';
-import { storage } from '@/lib/safeStorage';
-import { useToast } from '@/hooks/use-toast';
-
-const OVERRIDES_KEY = 'affiliate_partner_overrides';
 
 /** Inactive placeholder brands that don't have assets yet */
 const PLACEHOLDER_BRANDS = [
@@ -16,24 +10,20 @@ const PLACEHOLDER_BRANDS = [
   { id: 'hilton', name: 'Hilton' },
 ];
 
+/**
+ * The affiliate banner partners, read-only (plan WP6).
+ *
+ * This had an "Active" switch that wrote the ADMIN'S OWN localStorage
+ * (affiliate_partner_overrides) and nothing ever read it: getActiveAffiliatePartners
+ * filters on the static isActive flag, so switching a partner off changed
+ * nothing for any visitor while the toast said it had. The switch is gone
+ * rather than moved to a server table: a server-backed flag would cost a
+ * Supabase request on every page that carries an ad slot, including the home
+ * page's first view (tests/home-request-budget.spec.ts caps it at 4), for a
+ * setting that changes when a partnership does. The status column now says
+ * where the switch really is.
+ */
 export function AffiliatePartnersManager() {
-  const { toast } = useToast();
-  const [overrides, setOverrides] = useState<Record<string, boolean>>(() =>
-    storage.get<Record<string, boolean>>(OVERRIDES_KEY, {}) ?? {}
-  );
-
-  const isActive = (partner: AffiliatePartner) =>
-    overrides[partner.id] !== undefined ? overrides[partner.id] : partner.isActive;
-
-  const handleToggle = (partnerId: string, checked: boolean) => {
-    const next = { ...overrides, [partnerId]: checked };
-    setOverrides(next);
-    storage.set(OVERRIDES_KEY, next);
-    toast({
-      title: checked ? 'Partner Enabled' : 'Partner Disabled',
-      description: `Affiliate partner has been ${checked ? 'enabled' : 'disabled'}. Changes take effect on next page load.`,
-    });
-  };
 
   return (
     <Card>
@@ -45,7 +35,9 @@ export function AffiliatePartnersManager() {
         <CardDescription>
           Manage affiliate ad partners. When no paid campaign fills a slot, an affiliate ad from
           one of these partners is shown to free-tier users. All slots on a page show the same
-          brand, rotating every 30 minutes.
+          brand, rotating every 30 minutes. To turn a partner on or off, change its{' '}
+          <code>isActive</code> flag in <code>src/lib/affiliateAds.ts</code> and deploy; there is no
+          switch here because nothing on the site would read one.
         </CardDescription>
       </CardHeader>
       <CardContent>
@@ -56,7 +48,7 @@ export function AffiliatePartnersManager() {
               <TableHead>Affiliate URL</TableHead>
               <TableHead>Assets</TableHead>
               <TableHead>Preview</TableHead>
-              <TableHead>Active</TableHead>
+              <TableHead>Status</TableHead>
             </TableRow>
           </TableHeader>
           <TableBody>
@@ -91,11 +83,9 @@ export function AffiliatePartnersManager() {
                   />
                 </TableCell>
                 <TableCell>
-                  <Switch
-                    checked={isActive(partner)}
-                    onCheckedChange={(checked) => handleToggle(partner.id, checked)}
-                    aria-label={`Toggle ${partner.name} affiliate ads`}
-                  />
+                  <Badge variant={partner.isActive ? 'default' : 'outline'}>
+                    {partner.isActive ? 'Live' : 'Off'}
+                  </Badge>
                 </TableCell>
               </TableRow>
             ))}
@@ -112,9 +102,7 @@ export function AffiliatePartnersManager() {
                   </Badge>
                 </TableCell>
                 <TableCell className="text-sm text-muted-foreground">—</TableCell>
-                <TableCell>
-                  <Switch disabled aria-label={`${brand.name} not available`} />
-                </TableCell>
+                <TableCell className="text-sm text-muted-foreground">Off</TableCell>
               </TableRow>
             ))}
           </TableBody>

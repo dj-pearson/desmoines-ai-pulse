@@ -30,7 +30,8 @@ final class DealsTests: XCTestCase {
         let deal = try JSONDecoder().decode(Deal.self, from: json)
         XCTAssertEqual(deal.businessName, "El Bait Shop")
         XCTAssertTrue(deal.isRecurring)
-        XCTAssertTrue(deal.isSponsored)
+        XCTAssertTrue(deal.isFeaturedDeal)
+        XCTAssertFalse(deal.isSponsored) // featured is editorial, not paid (IOS-DD-GUIDES-13)
         XCTAssertEqual(deal.valueLabel, "50% Off")
         XCTAssertEqual(deal.dealTypeLabel, "% Off")
     }
@@ -77,6 +78,22 @@ final class DealsTests: XCTestCase {
         XCTAssertTrue(deal.isActiveNow(date(2026, 6, 3, 16), calendar: calendar))  // Wed 4pm → in window
         XCTAssertFalse(deal.isActiveNow(date(2026, 6, 3, 19), calendar: calendar)) // Wed 7pm → after
         XCTAssertFalse(deal.isActiveNow(date(2026, 6, 6, 16), calendar: calendar)) // Sat → wrong day
+    }
+
+    /// A 21:00-02:00 window belongs to the day it starts on, so its end minute is
+    /// smaller than its start minute. Comparing both against one day made every
+    /// late-night deal permanently inactive.
+    func testActiveNowHandlesOvernightWindow() {
+        var deal = Deal.preview
+        deal.daysOfWeek = ["fri"]
+        deal.startTime = "21:00:00"
+        deal.endTime = "02:00:00"
+        // 2026-06-05 is a Friday, 2026-06-06 a Saturday.
+        XCTAssertTrue(deal.isActiveNow(date(2026, 6, 5, 22), calendar: calendar))   // Fri 10pm
+        XCTAssertTrue(deal.isActiveNow(date(2026, 6, 6, 1), calendar: calendar))    // Sat 1am, still Friday's deal
+        XCTAssertFalse(deal.isActiveNow(date(2026, 6, 6, 3), calendar: calendar))   // Sat 3am, closed
+        XCTAssertFalse(deal.isActiveNow(date(2026, 6, 5, 20), calendar: calendar))  // Fri 8pm, not open yet
+        XCTAssertFalse(deal.isActiveNow(date(2026, 6, 7, 1), calendar: calendar))   // Sun 1am, Saturday isn't scheduled
     }
 
     func testNonRecurringActiveWithinDateWindow() {
@@ -164,5 +181,48 @@ final class DealsTests: XCTestCase {
 
         vm.activeNowOnly = false
         XCTAssertEqual(vm.filteredDeals.map(\.id), vm.matchingDeals.map(\.id))
+    }
+
+    // MARK: Des Moines time (IOS-DD-GUIDES-11)
+
+    /// Mon 2026-03-02 17:30 in Des Moines (CST, UTC-6) is 23:30 UTC and 18:30
+    /// in New York. A Mon-Fri 15:00-18:00 deal is live in Des Moines and not
+    /// by a New York clock, so the default must be Central, not the device.
+    func testActiveNowUsesDesMoinesTimeByDefault() {
+        let instant = ISO8601DateFormatter().date(from: "2026-03-02T23:30:00Z")!
+        let deal = Deal.preview
+        XCTAssertTrue(deal.isActiveNow(instant))
+        XCTAssertEqual(deal.isActiveNow(instant), deal.isActiveNow(instant, calendar: DesMoinesTime.calendar))
+
+        var ny = Calendar(identifier: .gregorian)
+        ny.timeZone = TimeZone(identifier: "America/New_York")!
+        XCTAssertFalse(deal.isActiveNow(instant, calendar: ny))
+    }
+
+    // MARK: Ends text (IOS-DD-GUIDES-12)
+
+    private let mondayEvening = ISO8601DateFormatter().date(from: "2026-03-02T23:30:00Z")!
+
+    func testEndsTextWithin24Hours() {
+        var deal = Deal.preview
+        deal.endDate = "2026-03-03T04:30:00Z"
+        XCTAssertEqual(deal.endsText(now: mondayEvening), "Ends in 5h")
+    }
+
+    func testEndsTextWithinWeekUsesWeekday() {
+        var deal = Deal.preview
+        deal.endDate = "2026-03-05T23:30:00Z" // Thu 17:30 CT
+        XCTAssertEqual(deal.endsText(now: mondayEvening), "Ends Thu")
+
+        deal.endDate = "2026-04-20T17:00:00Z"
+        XCTAssertEqual(deal.endsText(now: mondayEvening), "Ends Apr 20")
+    }
+
+    func testEndsTextNilWithoutEndDate() {
+        var deal = Deal.preview
+        deal.endDate = nil
+        XCTAssertNil(deal.endsText(now: mondayEvening))
+        deal.endDate = "2026-03-01T00:00:00Z" // already over
+        XCTAssertNil(deal.endsText(now: mondayEvening))
     }
 }

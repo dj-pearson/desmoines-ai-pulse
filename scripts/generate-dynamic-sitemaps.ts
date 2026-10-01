@@ -1,5 +1,8 @@
 /**
- * Generate dynamic sitemaps for events, restaurants, attractions, playgrounds, articles, and guides.
+ * Generate dynamic sitemaps for events, restaurants, attractions, playgrounds,
+ * articles, hotels, music venues, trails, teams, curated itineraries,
+ * Best-Of voting categories, guides
+ * and pSEO pages.
  * Run before build to populate individual sitemap XML files.
  *
  * Requires: VITE_SUPABASE_URL, VITE_SUPABASE_ANON_KEY
@@ -10,16 +13,21 @@ import { createClient } from '@supabase/supabase-js';
 import { readFileSync, existsSync, writeFileSync } from 'fs';
 import { join } from 'path';
 import { computePseoShippable } from './lib/pseoShippable';
-// Slug shapes live in one place so the freshness check cannot build a URL the
-// generator would not have written. See scripts/lib/sitemapSlugs.ts.
-import { createSlug, createEventSlug } from './lib/sitemapSlugs';
+import { childLastmod } from './lib/sitemapLastmod';
+import { isInMetro } from '../src/lib/geo';
+// The month floor, the range and the Central-month rule are the month page's
+// own (src/lib/monthPages.ts has no `@/` imports so it loads under tsx here).
 import {
+  centralMonthOf,
   LEAD_WINDOW_DAYS,
-  MONTH_NAMES,
+  monthSlug,
+  MIN_EVENTS_PER_MONTH,
   selectSitemapMonths,
   type MonthTally,
 } from '../src/lib/monthPages';
-import { eventCentralDate } from '../src/lib/eventTime';
+// Slug shapes live in one place so the freshness check cannot build a URL the
+// generator would not have written. See scripts/lib/sitemapSlugs.ts.
+import { createSlug, createEventSlug } from './lib/sitemapSlugs';
 
 // Load .env for local development (Cloudflare Pages / Infisical set env vars at build time)
 function loadEnvFile(filePath: string): void {
@@ -187,13 +195,23 @@ async function generateEventsSitemap(): Promise<number | null> {
   // `.limit(5000)` was silently truncated — the generator quietly dropped rows
   // and reported success. Page explicitly so the cap cannot hide data again.
   const PAGE = 1000;
-  const eventList: Array<{ title: string; date: string | null; event_start_utc: string | null; updated_at: string | null }> = [];
+  const eventList: Array<{
+    title: string;
+    date: string | null;
+    end_date: string | null;
+    event_start_utc: string | null;
+    updated_at: string | null;
+  }> = [];
 
   for (let from = 0; ; from += PAGE) {
     const { data, error } = await supabase
       .from('events')
-      .select('title, date, event_start_utc, updated_at')
-      .gte('date', cutoff)
+      .select('title, date, end_date, event_start_utc, updated_at')
+      // A run that started before the cutoff and is still on (an exhibit, a
+      // festival week, a show's run) is live and must stay in the sitemap.
+      // Filtering on `date` alone dropped it once its first day was more than
+      // GRACE_DAYS ago (events-pass2 WP6 item 2).
+      .or(`date.gte.${cutoff},end_date.gte.${cutoff}`)
       // THE SITEMAP MUST NOT ADVERTISE A URL THE APP REFUSES TO RENDER.
       // useEventBySlug.ts:53-54 filters both of these, so a merged or hidden
       // event resolves to nothing on its own detail page - while this query
@@ -213,6 +231,8 @@ async function generateEventsSitemap(): Promise<number | null> {
       // WEB-AUTO-006 hides stale past-dated rows.
       .neq('is_merged', true)
       .neq('is_hidden', true)
+      // WEB-BE-034: archived_at is the other unpublish switch.
+      .is('archived_at', null)
       .order('date', { ascending: false })
       .order('id')
       .range(from, from + PAGE - 1);
@@ -233,7 +253,7 @@ async function generateEventsSitemap(): Promise<number | null> {
     }
   }
 
-  console.log(`   ${eventList.length} event(s) dated on or after ${cutoff} (grace: ${GRACE_DAYS}d)`);
+  console.log(`   ${eventList.length} event(s) starting or still running on or after ${cutoff} (grace: ${GRACE_DAYS}d)`);
 
   if (eventList.length === 0) {
     console.warn('⚠️ No events found in database - check RLS policies or add events');
@@ -272,29 +292,30 @@ async function generateEventsSitemap(): Promise<number | null> {
   //
   // MIN_EVENTS_PER_MONTH is a floor on top of that. One event in a month is not
   // a listing page, it is a detail page with a heading, and it would compete
-  // with the event's own URL.
+  // with the event's own URL. It is imported from src/lib/monthPages.ts, the
+  // same rule MonthlyEventsPage uses to decide noindex, and the month must
+  // also be in the page's range (last month to twelve ahead): a sitemap entry
+  // for a page that renders noindex is a contradiction Search Console reports.
   //
-  // SEO-033 RELAXES THE FLOOR FOR THE NEXT FEW MONTHS, and only for them. The
-  // floor kept a month out of the sitemap until venues had announced enough
-  // dates, so a month page was submitted at roughly the moment people started
-  // searching it rather than weeks before. /events/october-2026 converts at
-  // 30.4% CTR from position 3.1; it can only do that once indexed. Months whose
-  // first day is within LEAD_WINDOW_DAYS are published at any count, because
-  // the page now carries a seasonal intro and prev/next links and is not a bare
-  // heading over an empty grid. Months beyond the window still need the floor,
-  // and archived months are never listed. The rule lives in
-  // src/lib/monthPages.ts so it can be tested without a database.
-  const MIN_EVENTS_PER_MONTH = 3;
-
+  // SEO-033 RELAXES THE FLOOR FOR THE NEXT FEW MONTHS, and only for them.
+  // Months whose first day is within LEAD_WINDOW_DAYS are published at any
+  // count, because the page carries a seasonal intro and month links and is
+  // not a bare heading over an empty grid. selectSitemapMonths lists exactly
+  // the months isIndexableMonth calls indexable.
+  //
+  // Months are CENTRAL months. getUTCMonth put an 8 PM CDT Sep 30 event
+  // (01:00Z Oct 1) in October, so a month's count could differ from what its
+  // own page lists. centralMonthOf is pinned at exactly that instant by
+  // src/hooks/__tests__/landingQueries.test.ts.
   const perMonth = new Map<string, MonthTally>();
   for (const event of eventList) {
-    // SEO-055: the Central month, matching the page, which bounds its query in
-    // Central time (SEO-033). The UTC month filed every Halloween-evening event
-    // under November.
-    const local = eventCentralDate(event);
-    if (!local) continue;
-    const [y, m] = local.split('-').map(Number);
-    const slug = `${MONTH_NAMES[m - 1]}-${y}`;
+    // Prefer the UTC start, matching what the page itself queries on.
+    const raw = event.event_start_utc || event.date;
+    if (!raw) continue;
+    const d = new Date(raw);
+    if (!Number.isFinite(d.getTime())) continue;
+    const ref = centralMonthOf(d);
+    const slug = monthSlug(ref);
     const lastmod = event.updated_at ? event.updated_at.split('T')[0] : currentDate;
     const seen = perMonth.get(slug);
     if (!seen) perMonth.set(slug, { count: 1, lastmod });
@@ -305,10 +326,7 @@ async function generateEventsSitemap(): Promise<number | null> {
     }
   }
 
-  const selectedMonths = selectSitemapMonths(perMonth, new Date(), {
-    minEvents: MIN_EVENTS_PER_MONTH,
-    today: currentDate,
-  });
+  const selectedMonths = selectSitemapMonths(perMonth, new Date(), { today: currentDate });
   const monthUrls = selectedMonths.map(({ slug, lastmod }) => ({
     loc: `${baseUrl}/events/${slug}`,
     lastmod,
@@ -321,7 +339,7 @@ async function generateEventsSitemap(): Promise<number | null> {
   console.log(
     `   ${monthUrls.length} month page(s): >= ${MIN_EVENTS_PER_MONTH} events, or within ${LEAD_WINDOW_DAYS}d` +
       (forced.length > 0 ? `; under the floor but published ahead: ${forced.join(', ')}` : '') +
-      (skipped.length > 0 ? `; ${skipped.length} month(s) skipped as too thin` : ''),
+      (skipped.length > 0 ? `; ${skipped.length} month(s) skipped as too thin or out of range` : ''),
   );
   urls.push(...monthUrls);
 
@@ -350,6 +368,12 @@ async function generateRestaurantsSitemap(): Promise<number | null> {
     // sitemapping one submits a URL the listing will not show. 0 of 478
     // restaurants are merged today and none is NULL, so this is inert now.
     .neq('is_merged', true)
+    // A closed restaurant's page is noindex (the React page and the edge
+    // shell both say so), so submitting it asks Google to crawl a page we've
+    // told it not to index. status is nullable and a bare neq would also drop
+    // the NULL rows, so "not closed" is an OR that keeps them
+    // (useBreweryTrail.ts uses the same filter).
+    .or('status.is.null,status.neq.closed')
     .order('name')
     .order('id')
     .limit(5000);
@@ -383,9 +407,14 @@ async function generateRestaurantsSitemap(): Promise<number | null> {
 async function generateAttractionsSitemap(): Promise<number | null> {
   console.log('📍 Generating attractions sitemap...');
 
+  // is_active, because the HUB filters it and this did not (WEB-SEO-037 AC2).
+  // useAttractions and functions/_middleware.ts both drop inactive rows, so a
+  // sitemap that lists them submits URLs the site itself will not show - and
+  // the detail page resolved them anyway, which is the other half of the fix.
   const { data: attractions, error } = await supabase
     .from('attractions')
     .select('id, name, updated_at')
+    .eq('is_active', true)
     .order('name')
     .order('id');
 
@@ -417,9 +446,17 @@ async function generateAttractionsSitemap(): Promise<number | null> {
 async function generatePlaygroundsSitemap(): Promise<number | null> {
   console.log('🎮 Generating playgrounds sitemap...');
 
+  // WEB-SEO-037 AC3. 21 of the 69 rows are in Oregon, Washington, Colorado and
+  // Missouri - a Google Places import that went wide - so a third of this
+  // sitemap pointed at parks a Des Moines reader cannot visit, on the module
+  // SEO-014 records as the site's best performing. Filtered in TypeScript
+  // rather than in the query because a row with no coordinates counts as
+  // inside (see isInMetro), and expressing "in the box OR null" as a PostgREST
+  // or(...) is less legible than the predicate it is imitating. The table is
+  // 69 rows.
   const { data: playgrounds, error } = await supabase
     .from('playgrounds')
-    .select('id, name, updated_at')
+    .select('id, name, updated_at, latitude, longitude')
     .order('name')
     .order('id');
 
@@ -428,7 +465,13 @@ async function generatePlaygroundsSitemap(): Promise<number | null> {
     return null;
   }
 
-  const urls = playgrounds.map(playground => {
+  const inMetro = playgrounds.filter((p) => isInMetro(p.latitude, p.longitude));
+  const dropped = playgrounds.length - inMetro.length;
+  if (dropped > 0) {
+    console.log(`   ${dropped} playground(s) outside the Des Moines metro box, not submitted`);
+  }
+
+  const urls = inMetro.map(playground => {
     const slug = createSlug(playground.name);
     const lastmod = playground.updated_at ? playground.updated_at.split('T')[0] : currentDate;
     return {
@@ -447,6 +490,235 @@ async function generatePlaygroundsSitemap(): Promise<number | null> {
   console.log(`✅ Playgrounds sitemap generated: ${written} URLs`);
   return written;
 }
+
+/**
+ * Hotels (WEB-SEO-034).
+ *
+ * /stay/:slug had no generator at all, so not one hotel page was ever
+ * submitted -- the module shipped with a route, a detail page and schema and no
+ * way for a crawler to find any of it except by following an internal link.
+ *
+ * Uses the `slug` COLUMN, not createSlug(name). /stay/:slug is resolved by
+ * useHotel against that column, so a generated slug that disagreed with it
+ * would submit URLs the app answers with Hotel Not Found -- which is worse than
+ * submitting nothing.
+ */
+async function generateHotelsSitemap(): Promise<number | null> {
+  console.log('🏨 Generating hotels sitemap...');
+
+  const { data: hotels, error } = await supabase
+    .from('hotels')
+    .select('id, slug, updated_at')
+    // Only rows the detail page will actually render. useHotel filters on
+    // is_active too, so an inactive hotel resolves to nothing.
+    .eq('is_active', true)
+    .not('slug', 'is', null)
+    .order('updated_at', { ascending: false })
+    .order('id');
+
+  if (error) {
+    console.error('❌ Error fetching hotels:', error);
+    return null;
+  }
+
+  const urls = (hotels ?? [])
+    .filter((hotel) => !!hotel.slug)
+    .map((hotel) => ({
+      loc: `${baseUrl}/stay/${hotel.slug}`,
+      lastmod: hotel.updated_at ? hotel.updated_at.split('T')[0] : currentDate,
+      changefreq: 'weekly',
+      priority: '0.6',
+    }));
+
+  // The hub only as the empty-set fallback, as for venues/trails/teams below:
+  // /stay is already in sitemap-static.xml, and a URL in two sitemaps fails
+  // check-sitemap-duplicates. An empty urlset would be a Search Console warning.
+  if (urls.length === 0) {
+    urls.push({ loc: `${baseUrl}/stay`, lastmod: currentDate, changefreq: 'weekly', priority: '0.8' });
+  }
+
+  const written = writeSitemap('sitemap-hotels.xml', urls, 'hotels');
+  console.log(`✅ Hotels sitemap generated: ${written} URLs`);
+  return written;
+}
+
+/**
+ * Music venues, trails, teams and curated itineraries (WEB-SEO-035).
+ *
+ * Four route families with a detail page, a hook and a hub, and no generator -
+ * so /music/venues/:slug, /outdoors/:slug, /sports/:slug and
+ * /itineraries/:slug were reachable only by following an internal link. A
+ * crawler that does not execute JavaScript never saw one.
+ *
+ * ALL FOUR USE THE `slug` COLUMN, not createSlug(name), for the reason the
+ * hotels generator gives above: useVenue, useTrail, useTeam and useItinerary
+ * each resolve with `.eq('slug', slug)`, so a derived slug that disagreed with
+ * the stored one would submit URLs the app answers with a not-found state.
+ * That is worse than submitting nothing.
+ *
+ * NO HUB URL IS UNSHIFTED. /music, /outdoors, /sports and /itineraries are
+ * already in sitemap-static.xml, and a URL in two sitemaps is a URL reported
+ * twice. The hub is used only as the empty-set fallback, matching the articles
+ * generator, because an empty urlset is a Search Console warning.
+ */
+async function generateVenuesSitemap(): Promise<number | null> {
+  console.log('🎵 Generating music venues sitemap...');
+
+  const { data: venues, error } = await supabase
+    .from('venues')
+    .select('id, slug, updated_at')
+    .not('slug', 'is', null)
+    .order('updated_at', { ascending: false })
+    .order('id');
+
+  if (error) {
+    console.error('❌ Error fetching venues:', error);
+    return null;
+  }
+
+  const urls = (venues ?? [])
+    .filter((venue) => !!venue.slug)
+    .map((venue) => ({
+      loc: `${baseUrl}/music/venues/${venue.slug}`,
+      lastmod: venue.updated_at ? venue.updated_at.split('T')[0] : currentDate,
+      changefreq: 'monthly',
+      priority: '0.6',
+    }));
+
+  if (urls.length === 0) {
+    urls.push({ loc: `${baseUrl}/music`, lastmod: currentDate, changefreq: 'weekly', priority: '0.7' });
+  }
+
+  const written = writeSitemap('sitemap-venues.xml', urls, 'venues');
+  console.log(`✅ Music venues sitemap generated: ${written} URLs`);
+  return written;
+}
+
+/**
+ * Trails. `trails` has NO updated_at column - created_at is the only date it
+ * carries - so lastmod is the creation date rather than a stale guess at a
+ * modification date.
+ */
+async function generateTrailsSitemap(): Promise<number | null> {
+  console.log('🥾 Generating trails sitemap...');
+
+  const { data: trails, error } = await supabase
+    .from('trails')
+    .select('id, slug, created_at')
+    .not('slug', 'is', null)
+    .order('created_at', { ascending: false })
+    .order('id');
+
+  if (error) {
+    console.error('❌ Error fetching trails:', error);
+    return null;
+  }
+
+  const urls = (trails ?? [])
+    .filter((trail) => !!trail.slug)
+    .map((trail) => ({
+      loc: `${baseUrl}/outdoors/${trail.slug}`,
+      lastmod: trail.created_at ? trail.created_at.split('T')[0] : currentDate,
+      changefreq: 'monthly',
+      priority: '0.6',
+    }));
+
+  if (urls.length === 0) {
+    urls.push({ loc: `${baseUrl}/outdoors`, lastmod: currentDate, changefreq: 'weekly', priority: '0.7' });
+  }
+
+  const written = writeSitemap('sitemap-trails.xml', urls, 'trails');
+  console.log(`✅ Trails sitemap generated: ${written} URLs`);
+  return written;
+}
+
+/** Teams. Same shape as trails: no updated_at on the table. */
+async function generateTeamsSitemap(): Promise<number | null> {
+  console.log('🏟️ Generating teams sitemap...');
+
+  const { data: teams, error } = await supabase
+    .from('teams')
+    .select('id, slug, created_at')
+    .not('slug', 'is', null)
+    .order('created_at', { ascending: false })
+    .order('id');
+
+  if (error) {
+    console.error('❌ Error fetching teams:', error);
+    return null;
+  }
+
+  const urls = (teams ?? [])
+    .filter((team) => !!team.slug)
+    .map((team) => ({
+      loc: `${baseUrl}/sports/${team.slug}`,
+      lastmod: team.created_at ? team.created_at.split('T')[0] : currentDate,
+      changefreq: 'monthly',
+      priority: '0.6',
+    }));
+
+  if (urls.length === 0) {
+    urls.push({ loc: `${baseUrl}/sports`, lastmod: currentDate, changefreq: 'weekly', priority: '0.7' });
+  }
+
+  const written = writeSitemap('sitemap-teams.xml', urls, 'teams');
+  console.log(`✅ Teams sitemap generated: ${written} URLs`);
+  return written;
+}
+
+/**
+ * Curated itineraries. GATED ON is_published, because useItinerary filters on
+ * it - an unpublished itinerary resolves to nothing, so submitting its URL
+ * would submit a not-found page.
+ */
+async function generateItinerariesSitemap(): Promise<number | null> {
+  console.log('🗺️ Generating itineraries sitemap...');
+
+  const { data: itineraries, error } = await supabase
+    .from('curated_itineraries')
+    .select('id, slug, updated_at')
+    .eq('is_published', true)
+    .not('slug', 'is', null)
+    .order('updated_at', { ascending: false })
+    .order('id');
+
+  if (error) {
+    console.error('❌ Error fetching itineraries:', error);
+    return null;
+  }
+
+  const urls = (itineraries ?? [])
+    .filter((itinerary) => !!itinerary.slug)
+    .map((itinerary) => ({
+      loc: `${baseUrl}/itineraries/${itinerary.slug}`,
+      lastmod: itinerary.updated_at ? itinerary.updated_at.split('T')[0] : currentDate,
+      changefreq: 'monthly',
+      priority: '0.7',
+    }));
+
+  if (urls.length === 0) {
+    urls.push({ loc: `${baseUrl}/itineraries`, lastmod: currentDate, changefreq: 'weekly', priority: '0.7' });
+  }
+
+  const written = writeSitemap('sitemap-itineraries.xml', urls, 'itineraries');
+  console.log(`✅ Itineraries sitemap generated: ${written} URLs`);
+  return written;
+}
+
+/*
+ * TWO FAMILIES DELIBERATELY EXCLUDED (WEB-SEO-035 AC3 and AC4).
+ *
+ * /best-of/:category (voting_categories). BestOfCategory.tsx has a Helmet
+ * title and description and NO RouteCanonical, so every category page would be
+ * submitted with the SPA fallback's canonical - which is what WEB-SEO-006
+ * describes as every page declaring itself a duplicate of the homepage.
+ * Submitting them in that state makes the problem measurable rather than
+ * fixing it. Add RouteCanonical and a schema first, then a generator.
+ *
+ * /neighborhoods/:neighborhood. Excluded by AC4 until WEB-SEO-036 gives those
+ * pages data - they are currently mock arrays, already prerendered and already
+ * sitemapped, which is the opposite problem.
+ */
 
 async function generateArticlesSitemap(): Promise<number | null> {
   console.log('📰 Generating articles sitemap...');
@@ -476,6 +748,28 @@ async function generateArticlesSitemap(): Promise<number | null> {
   const written = writeSitemap('sitemap-articles.xml', urls, 'articles');
   console.log(`✅ Articles sitemap generated: ${written} URLs`);
   return written;
+}
+
+/**
+ * pSEO paths with measured Search Console impressions (SEO-029), committed by
+ * scripts/generate-pseo-demand-routes.mjs because the build host cannot read
+ * gsc_page_performance. Missing or unreadable is loud, not fatal: the sitemap
+ * falls back to the shippable set alone, which is what it was before.
+ */
+function readPseoDemandRoutes(): string[] {
+  const file = join(process.cwd(), 'scripts', 'pseo-demand-routes.json');
+  try {
+    const parsed = JSON.parse(readFileSync(file, 'utf8')) as { routes?: Record<string, unknown> };
+    const routes = Object.keys(parsed.routes ?? {}).filter((p) => /^(\/[a-z0-9-]+){1,2}$/.test(p));
+    if (routes.length === 0) throw new Error('no routes in the file');
+    return routes.sort();
+  } catch (error) {
+    console.warn(
+      `⚠️ scripts/pseo-demand-routes.json unusable (${(error as Error).message}). pSEO pages with ` +
+        'impressions outside the shippable set will be left out of sitemap-pseo.xml and keep serving the homepage.'
+    );
+    return [];
+  }
 }
 
 /**
@@ -558,7 +852,7 @@ async function generatePseoSitemap(): Promise<number | null> {
   // reads as full coverage.
   if (excluded > 0) {
     console.warn(
-      `⚠️ ${excluded} published pSEO page(s) excluded: below AC5's inventory floor, ` +
+      `⚠️ ${excluded} published pSEO page(s) outside the shippable set: below AC5's inventory floor, ` +
         `or a duplicate of another URL's listing (${shippable.shadowed.length} duplicates). ` +
         'Run `npm run check-pseo-inventory` for the per-page verdict.'
     );
@@ -572,7 +866,28 @@ async function generatePseoSitemap(): Promise<number | null> {
     );
   }
 
-  const urls = shippable.canonical.map((slug: string) => {
+  // SEO-029: plus every published page Search Console has already shown to
+  // searchers. Measured 2026-09-30 as Googlebot, 74 of 87 such URLs returned
+  // the homepage's title and H1: each had a published row, none was in this
+  // sitemap, so the prerender never reached it and Cloudflare served the SPA
+  // fallback (the prerendered homepage). Keeping an indexed, ranking page out of
+  // the sitemap does not un-index it; it only keeps it broken. The doorway
+  // filter above still governs every page nobody has found yet.
+  const demandRoutes = readPseoDemandRoutes();
+  const demandAdded = demandRoutes.filter((slug) => bySlug.has(slug) && !shippable.canonical.includes(slug));
+  const demandUnpublished = demandRoutes.filter((slug) => !bySlug.has(slug));
+  if (demandUnpublished.length > 0) {
+    console.warn(
+      `⚠️ ${demandUnpublished.length} pSEO path(s) with measured impressions have no published row, so they ` +
+        `are not submitted and will 404: ${demandUnpublished.slice(0, 10).join(', ')}`
+    );
+  }
+  console.log(
+    `🧩 pSEO sitemap: ${shippable.canonical.length} shippable + ${demandAdded.length} published with measured impressions ` +
+      `(scripts/pseo-demand-routes.json)`
+  );
+
+  const urls = [...shippable.canonical, ...demandAdded].map((slug: string) => {
     const page = bySlug.get(slug) as { updated_at?: string; published_at?: string } | undefined;
     return {
       loc: `${baseUrl}${slug.startsWith('/') ? slug : `/${slug}`}`,
@@ -588,6 +903,59 @@ async function generatePseoSitemap(): Promise<number | null> {
 
   const written = writeSitemap('sitemap-pseo.xml', urls, 'pseo');
   console.log(`✅ pSEO sitemap generated: ${written} URLs (of ${published} published)`);
+  return written;
+}
+
+/**
+ * Best-Of voting categories (WEB-SEO-035 AC3).
+ *
+ * HELD OUT OF THE FIRST PASS ON PURPOSE, and this is what changed. AC3 says to
+ * include a family only once its detail page carries SEO metadata and schema.
+ * BestOfCategory.tsx had a Helmet title and description and NO CANONICAL AT
+ * ALL, so every category page would have been submitted carrying the SPA
+ * shell's canonical - each one declaring itself a duplicate of the home page,
+ * which is precisely the WEB-SEO-006 failure. It now renders RouteCanonical
+ * and an ItemList of the ranked winners, so it is submittable.
+ *
+ * GATED ON is_active, matching useVotingCategories. An inactive category still
+ * has a row and a slug; the hub does not link it and submitting it would point
+ * a crawler at a page the site does not consider live.
+ *
+ * `slug` is the COLUMN, as useCategoryResults resolves with .eq('slug', slug).
+ * voting_categories has no updated_at, so lastmod is created_at - the same
+ * decision the trails generator documents.
+ */
+async function generateVotingCategoriesSitemap(): Promise<number | null> {
+  console.log('\ud83c\udfc6 Generating Best-Of categories sitemap...');
+
+  const { data: categories, error } = await supabase
+    .from('voting_categories')
+    .select('id, slug, created_at')
+    .eq('is_active', true)
+    .not('slug', 'is', null)
+    .order('created_at', { ascending: false })
+    .order('id');
+
+  if (error) {
+    console.error('\u274c Error fetching voting categories:', error);
+    return null;
+  }
+
+  const urls = (categories ?? [])
+    .filter((category) => !!category.slug)
+    .map((category) => ({
+      loc: `${baseUrl}/best-of/${category.slug}`,
+      lastmod: category.created_at ? category.created_at.split('T')[0] : currentDate,
+      changefreq: 'weekly',
+      priority: '0.6',
+    }));
+
+  if (urls.length === 0) {
+    urls.push({ loc: `${baseUrl}/best-of`, lastmod: currentDate, changefreq: 'weekly', priority: '0.7' });
+  }
+
+  const written = writeSitemap('sitemap-best-of.xml', urls, 'voting categories');
+  console.log(`\u2705 Best-Of categories sitemap generated: ${written} URLs`);
   return written;
 }
 
@@ -660,48 +1028,58 @@ async function main(): Promise<void> {
       generateAttractionsSitemap(),
       generatePlaygroundsSitemap(),
       generateArticlesSitemap(),
+      generateHotelsSitemap(),
+      generateVenuesSitemap(),
+      generateTrailsSitemap(),
+      generateTeamsSitemap(),
+      generateItinerariesSitemap(),
+      generateVotingCategoriesSitemap(),
       generateGuidesSitemap(),
       generatePseoSitemap()
     ]);
 
     const totalUrls = results.filter((r): r is number => r !== null).reduce((sum, count) => sum + count, 0);
 
-    // Update sitemap.xml index lastmod date
+    // THE INDEX'S lastmod IS EACH CHILD'S OWN, NOT TODAY'S (WEB-SEO-038 AC3).
+    //
+    // Every child used to be stamped with currentDate on every build, so the
+    // index told a crawler that all thirteen sitemaps had changed every day -
+    // including sitemap-static.xml, which is a committed file that changes a
+    // few times a year. A lastmod that is always "now" carries no signal, and
+    // Google's own guidance is that it will stop trusting the value rather
+    // than re-crawl on it.
+    //
+    // Read back off the files just written rather than threaded through
+    // thirteen generator return types: the index is describing those files, so
+    // deriving its stamps from them is both the smallest change and the one
+    // that cannot disagree with what shipped. A child that does not exist yet
+    // (a generator that failed, or one whose table is empty on a fresh
+    // project) falls back to today, which is the old behaviour for that one
+    // file only.
+    const CHILD_SITEMAPS = [
+      'sitemap-static.xml',
+      'sitemap-events.xml',
+      'sitemap-restaurants.xml',
+      'sitemap-attractions.xml',
+      'sitemap-playgrounds.xml',
+      'sitemap-articles.xml',
+      'sitemap-hotels.xml',
+      'sitemap-venues.xml',
+      'sitemap-trails.xml',
+      'sitemap-teams.xml',
+      'sitemap-best-of.xml',
+      'sitemap-itineraries.xml',
+      'sitemap-guides.xml',
+      'sitemap-pseo.xml',
+    ];
+
     const sitemapIndexPath = join(process.cwd(), 'public', 'sitemap.xml');
     const sitemapIndex = `<?xml version="1.0" encoding="UTF-8"?>
 <sitemapindex xmlns="http://www.sitemaps.org/schemas/sitemap/0.9">
-  <sitemap>
-    <loc>${baseUrl}/sitemap-static.xml</loc>
-    <lastmod>${currentDate}</lastmod>
-  </sitemap>
-  <sitemap>
-    <loc>${baseUrl}/sitemap-events.xml</loc>
-    <lastmod>${currentDate}</lastmod>
-  </sitemap>
-  <sitemap>
-    <loc>${baseUrl}/sitemap-restaurants.xml</loc>
-    <lastmod>${currentDate}</lastmod>
-  </sitemap>
-  <sitemap>
-    <loc>${baseUrl}/sitemap-attractions.xml</loc>
-    <lastmod>${currentDate}</lastmod>
-  </sitemap>
-  <sitemap>
-    <loc>${baseUrl}/sitemap-playgrounds.xml</loc>
-    <lastmod>${currentDate}</lastmod>
-  </sitemap>
-  <sitemap>
-    <loc>${baseUrl}/sitemap-articles.xml</loc>
-    <lastmod>${currentDate}</lastmod>
-  </sitemap>
-  <sitemap>
-    <loc>${baseUrl}/sitemap-guides.xml</loc>
-    <lastmod>${currentDate}</lastmod>
-  </sitemap>
-  <sitemap>
-    <loc>${baseUrl}/sitemap-pseo.xml</loc>
-    <lastmod>${currentDate}</lastmod>
-  </sitemap>
+${CHILD_SITEMAPS.map((file) => `  <sitemap>
+    <loc>${baseUrl}/${file}</loc>
+    <lastmod>${childLastmod(join(process.cwd(), 'public', file), currentDate)}</lastmod>
+  </sitemap>`).join('\n')}
 </sitemapindex>`;
     writeFileSync(sitemapIndexPath, sitemapIndex);
 

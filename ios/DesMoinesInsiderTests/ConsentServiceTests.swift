@@ -1,4 +1,5 @@
 import XCTest
+import Observation
 @testable import DesMoinesInsider
 
 /// IOS-AUDIT-TEST-004 AC2 -- the consent state every telemetry gate reads.
@@ -70,6 +71,25 @@ final class ConsentServiceTests: XCTestCase {
         XCTAssertTrue(service.emailConsent)
         XCTAssertTrue(service.analyticsConsent)
         XCTAssertTrue(service.hasCompletedConsent)
+    }
+
+    // MARK: - Observation (IOS-DD-ACCOUNT-11)
+
+    /// Settings binds its toggles to these properties. They are computed over
+    /// UserDefaults, which @Observable cannot see on its own, so a tap did not
+    /// redraw the switch. The access/withMutation hooks make a write notify.
+    func testSettingConsentNotifiesObservers() {
+        // onChange is @Sendable, so it cannot mutate a captured local.
+        final class Flag: @unchecked Sendable { var fired = false }
+        let flag = Flag()
+        service.analyticsConsent = true
+        withObservationTracking {
+            _ = service.analyticsConsent
+        } onChange: {
+            flag.fired = true
+        }
+        service.analyticsConsent = false
+        XCTAssertTrue(flag.fired)
     }
 
     // MARK: - Revocation

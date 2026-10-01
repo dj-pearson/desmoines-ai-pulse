@@ -1,4 +1,5 @@
 import React from 'react';
+import { fetchPriorityAttr } from '@/lib/fetchPriority';
 
 interface OptimizedLogoProps {
   /** Logo variant to use */
@@ -24,6 +25,14 @@ const LOGO_ASPECT_RATIOS: Record<string, { width: number; height: number }> = {
   text: { width: 300, height: 60 },       // DMI-Logo-Text (wide)
   icon: { width: 64, height: 64 },        // DMI-Icon (square)
   logo2: { width: 600, height: 593 },     // DMI-Logo2 (nearly square)
+};
+
+/**
+ * Pre-generated width variants (public/<file>-<w>w.{webp,png}). Regenerate
+ * them from the source PNG with sharp if the logo changes.
+ */
+const RESPONSIVE_WIDTHS: Partial<Record<string, readonly number[]>> = {
+  logo2: [40, 80, 120],
 };
 
 /**
@@ -78,17 +87,32 @@ export function OptimizedLogo({
   const displayWidth = width ?? aspectRatio?.width;
   const displayHeight = height ?? aspectRatio?.height;
 
+  // Width-described variants exist only where they have been generated. The
+  // full-size DMI-Logo2.webp is 78KB (bigger than its own PNG) for an image the
+  // header draws at 40px, so without these the browser fetched ~50KB it could
+  // not use on every page.
+  const widths = RESPONSIVE_WIDTHS[variant];
+  const sizes = widths && displayWidth ? `${displayWidth}px` : undefined;
+  const webpSrcSet = widths
+    ? widths.map((w) => `/${fileName}-${w}w.webp ${w}w`).join(', ')
+    : `/${fileName}.webp`;
+  const pngSrcSet = widths
+    ? widths.map((w) => `/${fileName}-${w}w.png ${w}w`).join(', ')
+    : undefined;
+
   return (
     <picture>
-      <source srcSet={`/${fileName}.webp`} type="image/webp" />
+      <source srcSet={webpSrcSet} sizes={sizes} type="image/webp" />
       <img
         src={`/${fileName}.png`}
+        srcSet={pngSrcSet}
+        sizes={sizes}
         alt={alt}
         className={className}
         width={displayWidth}
         height={displayHeight}
         loading={loading}
-        fetchPriority={fetchPriority}
+        {...fetchPriorityAttr(fetchPriority)}
         decoding="async"
       />
     </picture>

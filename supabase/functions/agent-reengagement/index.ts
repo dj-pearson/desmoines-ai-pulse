@@ -22,6 +22,7 @@ import { runAgent } from "../_shared/agentRun.ts";
 import { scoreOutput } from "../_shared/scoreOutput.ts";
 import { sendNurtureEmail } from "../_shared/sendNurtureEmail.ts";
 import { recentlyMessaged, shouldAgeOut } from "../_shared/nurtureCoordination.ts";
+import { hasMarketingConsent } from "../_shared/marketingConsent.ts";
 
 const AGENT_KEY = "dormant-reengagement";
 const KIND = "reengagement";
@@ -87,7 +88,7 @@ Deno.serve(async (req) => {
 
     // Upcoming highlights (fetched once) for "what you missed / what's next".
     const { data: evs, error: evsError } = await supabase
-      .from("events").select("id, title, date, city").gte("date", new Date(now).toISOString()).is("archived_at", null).order("date", { ascending: true }).limit(5);
+      .from("events").select("id, title, date, city").gte("date", new Date(now).toISOString()).is("archived_at", null).neq("is_hidden", true).order("date", { ascending: true }).limit(5);
     // Best-effort: the email falls back to a generic "see what is happening"
     // link when there are no highlights, so a failed read costs personalisation
     // and not the send (WEB-BE-032 AC3).
@@ -110,7 +111,7 @@ Deno.serve(async (req) => {
     let sent = 0, coordSkipped = 0, capped = 0, agedOut = 0, gated = 0, noConsent = 0;
 
     for (const p of rows) {
-      if (p.lifecycle_signals?.messagingAllowed === false) { noConsent++; continue; }
+      if (!hasMarketingConsent(p.lifecycle_signals)) { noConsent++; continue; }
 
       // Age-out repeatedly-unresponsive users.
       if (await shouldAgeOut(supabase, p.user_id, KIND, MAX_ATTEMPTS)) {

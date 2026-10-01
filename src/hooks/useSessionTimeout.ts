@@ -1,5 +1,5 @@
 import { useEffect, useRef, useState, useCallback } from 'react';
-import { useQuery, useMutation } from '@tanstack/react-query';
+import { useQuery } from '@tanstack/react-query';
 import { useAuth } from '@/hooks/useAuth';
 import { useToast } from '@/hooks/use-toast';
 import { supabase } from '@/integrations/supabase/client';
@@ -20,22 +20,6 @@ interface SessionPolicy {
   allow_remember_me: boolean;
   remember_me_days: number;
   is_active: boolean;
-}
-
-/**
- * Active Session Info
- */
-interface ActiveSession {
-  id: string;
-  session_id: string;
-  last_activity: string;
-  idle_timeout_at: string | null;
-  expires_at: string | null;
-  device_info: Record<string, unknown>;
-  ip_address: string | null;
-  user_agent: string | null;
-  is_active: boolean;
-  remember_me: boolean;
 }
 
 /**
@@ -103,7 +87,7 @@ export function useSessionTimeout(config: SessionTimeoutConfig = {}) {
     useDatabasePolicy = true,
   } = config;
 
-  const { isAuthenticated, logout, getSessionExpiresAt, user } = useAuth();
+  const { isAuthenticated, logout, getSessionExpiresAt, getSessionStartedAt, user } = useAuth();
   const { toast } = useToast();
 
   const [isWarning, setIsWarning] = useState(false);
@@ -130,77 +114,19 @@ export function useSessionTimeout(config: SessionTimeoutConfig = {}) {
         return null;
       }
     },
-    enabled: !!user && useDatabasePolicy,
+    // WP5 item 8: `enabled` gates the read too. SessionManager enables this
+    // hook for admins only, but the query ran for every signed-in visitor
+    // regardless, against an RPC production doesn't have.
+    enabled: enabled && !!user && useDatabasePolicy,
     staleTime: 5 * 60 * 1000,
   });
 
-  // Fetch active sessions
-  const { data: activeSessions, refetch: refetchSessions } = useQuery<ActiveSession[]>({
-    queryKey: ['user-sessions', user?.id],
-    queryFn: async () => {
-      if (!user) return [];
-      const { data, error } = await supabase
-        .from('user_sessions')
-        .select('*')
-        .eq('user_id', user.id)
-        .eq('is_active', true)
-        .order('last_activity', { ascending: false });
-      if (error) {
-        logger.error('activeSessions', 'Error fetching sessions', { error });
-        return [];
-      }
-      return data as ActiveSession[];
-    },
-    enabled: !!user,
-    refetchInterval: 60000,
-  });
-
-  // Update session activity mutation
-  const updateActivityMutation = useMutation({
-    mutationFn: async (rememberMe: boolean = false) => {
-      if (!user) throw new Error('Not authenticated');
-      const session = await supabase.auth.getSession();
-      const sessionId = session.data.session?.access_token?.substring(0, 32) || 'unknown';
-      const { data, error } = await supabase
-        .rpc('update_session_with_timeout', {
-          p_user_id: user.id,
-          p_session_id: sessionId,
-          p_remember_me: rememberMe,
-          p_ip_address: null,
-          p_user_agent: navigator.userAgent,
-        });
-      if (error) throw error;
-      return data;
-    },
-    onSuccess: () => {
-      lastActivityRef.current = Date.now();
-      refetchSessions();
-    },
-  });
-
-  // Revoke session mutation
-  const revokeSessionMutation = useMutation({
-    mutationFn: async (sessionId: string) => {
-      const { data, error } = await supabase
-        .rpc('revoke_session', { p_session_id: sessionId });
-      if (error) throw error;
-      return data;
-    },
-    onSuccess: () => refetchSessions(),
-  });
-
-  // Revoke all other sessions mutation
-  const revokeOtherSessionsMutation = useMutation({
-    mutationFn: async () => {
-      const session = await supabase.auth.getSession();
-      const currentSessionId = session.data.session?.access_token?.substring(0, 32) || 'unknown';
-      const { data, error } = await supabase
-        .rpc('revoke_all_other_sessions', { p_current_session_id: currentSessionId });
-      if (error) throw error;
-      return data;
-    },
-    onSuccess: () => refetchSessions(),
-  });
+  // The user_sessions poll (every 60 seconds, for every signed-in user) and
+  // the revoke_session / revoke_all_other_sessions / update_session_with_timeout
+  // mutations are gone (account plan WP5 item 8). None of those objects exist
+  // in production (scripts/db-snapshot.json) and nothing rendered what they
+  // returned. SecurityCheckup's "Sign out of other devices" is the real
+  // control; a device list waits for deferred D11.
 
   // Use database policy values if available, otherwise fall back to config
   const idleTimeout = useDatabasePolicy && sessionPolicy?.idle_timeout_minutes
@@ -244,7 +170,11 @@ export function useSessionTimeout(config: SessionTimeoutConfig = {}) {
       variant: 'destructive',
     });
 
-    await logout();
+    // WEB-AUTH-007. LOCAL, not global. A timeout is not a security event on
+    // the account, it is a stale tab: signing the person out of every device
+    // they own because one desktop tab sat idle is a bug that looks like a
+    // policy. A deliberate Log Out still revokes everything.
+    await logout({ scope: 'local' });
   }, [clearAllTimers, toast, logout]);
 
   /**
@@ -288,8 +218,23 @@ export function useSessionTimeout(config: SessionTimeoutConfig = {}) {
     clearAllTimers();
     setIsWarning(false);
 
-    // Check if max session duration exceeded
-    const sessionDuration = Date.now() - sessionStartRef.current;
+    // WEB-AUTH-007. MEASURED FROM THE SESSION, NOT FROM PAGE LOAD.
+    //
+    // sessionStartRef was Date.now() at mount, which is page-load age and has
+    // nothing to do with session age. A tab opened at 09:00 and reloaded at
+    // 16:55 started its eight hours over at 16:55; a tab left open since 09:00
+    // was logged out at 17:00 even when the session behind it was minutes old.
+    // The cap measured the wrong thing in both directions.
+    //
+    // sessionStartedAt reads user.last_sign_in_at, which does NOT move on a
+    // token refresh -- `iat` does, and using it would reset the cap every hour
+    // and make an 8-hour maximum unreachable.
+    //
+    // NULL means the start cannot be told. The mount time is used only then,
+    // and only because falling back to "no cap at all" would be a bigger
+    // surprise than the behaviour that already shipped.
+    const startedAt = getSessionStartedAt() ?? sessionStartRef.current;
+    const sessionDuration = Date.now() - startedAt;
     const maxSessionMs = maxSessionDuration * 60 * 60 * 1000;
 
     if (sessionDuration >= maxSessionMs) {
@@ -298,7 +243,7 @@ export function useSessionTimeout(config: SessionTimeoutConfig = {}) {
         description: `You have been logged out after ${maxSessionDuration} hours. Please log in again.`,
         variant: 'destructive',
       });
-      logout();
+      logout({ scope: 'local' });
       return;
     }
 
@@ -319,6 +264,7 @@ export function useSessionTimeout(config: SessionTimeoutConfig = {}) {
   }, [
     enabled,
     isAuthenticated,
+    getSessionStartedAt,
     idleTimeout,
     warningTime,
     maxSessionDuration,
@@ -449,32 +395,5 @@ export function useSessionTimeout(config: SessionTimeoutConfig = {}) {
      * Session policy from database (if using database policies)
      */
     sessionPolicy,
-
-    /**
-     * List of active sessions for the current user
-     */
-    activeSessions: activeSessions || [],
-
-    /**
-     * Revoke a specific session by ID
-     */
-    revokeSession: revokeSessionMutation.mutateAsync,
-
-    /**
-     * Revoke all sessions except the current one
-     */
-    revokeAllOtherSessions: revokeOtherSessionsMutation.mutateAsync,
-
-    /**
-     * Update session activity (extends timeout)
-     */
-    updateSessionActivity: () => updateActivityMutation.mutate(false),
-
-    /**
-     * Whether session management operations are in progress
-     */
-    isSessionLoading: updateActivityMutation.isPending ||
-      revokeSessionMutation.isPending ||
-      revokeOtherSessionsMutation.isPending,
   };
 }

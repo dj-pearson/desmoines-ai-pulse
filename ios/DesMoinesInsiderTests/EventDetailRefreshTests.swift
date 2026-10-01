@@ -133,4 +133,46 @@ final class EventDetailRefreshTests: XCTestCase {
         XCTAssertFalse(vm.isLoading)
         XCTAssertFalse(vm.isRefreshing, "should be cleared once the refresh settles")
     }
+
+    // MARK: - No longer available (IOS-DD-EVENTS-02)
+
+    /// PostgREST's "0 rows" answer to a `.single()`, shaped like PostgrestError.
+    private struct NotFound: Error {
+        let code: String? = "PGRST116"
+        let message = "JSON object requested, multiple (or no) rows returned"
+    }
+
+    func testANotFoundRefreshMarksTheEventUnavailable() async {
+        let fake = FakeEvents()
+        fake.error = NotFound()
+        let vm = EventDetailViewModel(service: fake)
+
+        await vm.loadEvent(event(title: "Jazz Night"))
+
+        XCTAssertTrue(vm.isUnavailable)
+        XCTAssertNotNil(vm.event, "the prefetched content stays on screen")
+    }
+
+    func testAnOfflineRefreshDoesNotMarkItUnavailable() async {
+        let fake = FakeEvents()
+        fake.error = FakeError.offline
+        let vm = EventDetailViewModel(service: fake)
+
+        await vm.loadEvent(event(title: "Jazz Night"))
+
+        XCTAssertFalse(vm.isUnavailable)
+    }
+
+    // MARK: - Share (IOS-DD-EVENTS-15)
+
+    func testTheShareLinkIsTheEventsPage() async {
+        let fake = FakeEvents()
+        fake.error = FakeError.offline
+        let vm = EventDetailViewModel(service: fake)
+
+        await vm.loadEvent(event(id: "abc-123", title: "Jazz Night"))
+
+        XCTAssertEqual(vm.shareURL?.absoluteString, "https://desmoinesinsider.com/events/abc-123")
+        XCTAssertTrue(vm.shareText.hasPrefix("Want to go? Jazz Night"))
+    }
 }

@@ -18,6 +18,7 @@ import TrendingContent from "@/components/TrendingContent";
 import { UserPlus, Star, Heart, MessageSquare, Camera, Plus } from "lucide-react";
 import { useToast } from "@/hooks/use-toast";
 import { SpriteIcon } from "@/components/ui/SpriteIcon";
+import { ErrorState } from "@/components/ui/error-state";
 
 export default function Social() {
   const { isAuthenticated } = useAuth();
@@ -27,26 +28,44 @@ export default function Social() {
   const [groupName, setGroupName] = useState("");
   const [selectedGroupId, setSelectedGroupId] = useState<string | null>(null);
 
-  const { friends, friendGroups, sendFriendRequest, acceptFriendRequest } =
-    useSocialFeatures();
+  const {
+    friends,
+    friendGroups,
+    groupsAvailable,
+    sendFriendRequest,
+    error: friendsError,
+    fetchFriends,
+  } = useSocialFeatures();
 
   const handleSendFriendRequest = async () => {
     if (!searchEmail.trim()) return;
 
-    try {
-      await sendFriendRequest(searchEmail);
+    // WEB-FEAT-028: this used to announce "Friend Request Sent!" unconditionally,
+    // which was accurate only because the hook behind it never wrote anything
+    // and never threw. The hook now reports what actually happened.
+    const outcome = await sendFriendRequest(searchEmail);
+
+    if (outcome === "sent") {
       setSearchEmail("");
       toast({
-        title: "Friend Request Sent!",
-        description: `Friend request sent to ${searchEmail}`,
+        title: "Friend Request Sent",
+        description: `Request sent to ${searchEmail}`,
       });
-    } catch (error) {
-      toast({
-        title: "Failed to Send Request",
-        description: "Could not send friend request. Please try again.",
-        variant: "destructive",
-      });
+      return;
     }
+
+    const messages: Record<string, string> = {
+      not_found: `No account found for ${searchEmail}`,
+      already_connected: "You are already connected, or a request is pending",
+      self: "That is your own address",
+      error: "Could not send the request. Please try again.",
+    };
+
+    toast({
+      title: "Request Not Sent",
+      description: messages[outcome] ?? messages.error,
+      variant: "destructive",
+    });
   };
 
   if (!isAuthenticated) {
@@ -163,6 +182,14 @@ export default function Social() {
                       </div>
                     ))}
                   </div>
+                ) : friendsError ? (
+                  // WEB-QA-031: telling someone with friends to go and make
+                  // some is worse than saying nothing.
+                  <ErrorState
+                    error={friendsError}
+                    compact
+                    onRetry={() => void fetchFriends()}
+                  />
                 ) : (
                   <p className="text-muted-foreground text-center py-8">
                     No friends yet. Start by sending some friend requests!
@@ -204,9 +231,14 @@ export default function Social() {
                     ))}
                   </div>
                 ) : (
+                  // WEB-FEAT-028: this used to read "No groups yet. Join a
+                  // group..." which implies groups exist and the reader simply
+                  // has none. Nothing stores a group, so that invitation led
+                  // nowhere. `groupsAvailable` says which of the two it is.
                   <p className="text-muted-foreground text-center py-8">
-                    No groups yet. Join a group to start planning events with
-                    friends!
+                    {groupsAvailable
+                      ? "No groups yet. Join a group to start planning events with friends!"
+                      : "Group planning is not available yet. Friends and the community forums are, and both work today."}
                   </p>
                 )}
               </CardContent>

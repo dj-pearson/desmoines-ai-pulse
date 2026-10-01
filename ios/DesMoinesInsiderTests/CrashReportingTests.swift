@@ -86,4 +86,44 @@ final class CrashReportingTests: XCTestCase {
         }
         return service.pendingRecords()
     }
+
+    // MARK: - MetricKit crash summary (IOS-DD-PLATFORM-17)
+    //
+    // The "no second record for the SIGABRT after an NSException" path needs a
+    // real crash and is not unit-testable.
+
+    func testMetricKitSummaryFindsTheNestedAppFrame() {
+        let json = """
+        {"callStackPerThread": true, "callStacks": [{"threadAttributed": true, "callStackRootFrames": [
+          {"binaryName": "libswiftCore.dylib", "offsetIntoBinaryTextSegment": 123, "subFrames": [
+            {"binaryName": "DesMoinesInsider", "offsetIntoBinaryTextSegment": 4096, "sampleCount": 1}
+          ]}
+        ]}]}
+        """
+        let summary = MetricKitSubscriber.summary(
+            exceptionType: 6, signal: 5, terminationReason: "Namespace SIGNAL, Code 5",
+            callStackJSON: Data(json.utf8)
+        )
+        XCTAssertTrue(summary.contains("DesMoinesInsider+0x1000"), summary)
+        XCTAssertTrue(summary.contains("sig=5"), summary)
+        XCTAssertTrue(summary.contains("exc=6"), summary)
+    }
+
+    func testMetricKitSummaryWithoutAnAppFrameStillCarriesTheSignal() {
+        let json = """
+        {"callStacks": [{"callStackRootFrames": [{"binaryName": "UIKitCore", "offsetIntoBinaryTextSegment": 1}]}]}
+        """
+        let summary = MetricKitSubscriber.summary(
+            exceptionType: 1, signal: 11, terminationReason: nil, callStackJSON: Data(json.utf8)
+        )
+        XCTAssertEqual(summary, "exc=1 sig=11")
+    }
+
+    func testMetricKitSummaryCapsTheTerminationReason() {
+        let summary = MetricKitSubscriber.summary(
+            exceptionType: nil, signal: nil, terminationReason: String(repeating: "x", count: 500),
+            callStackJSON: Data()
+        )
+        XCTAssertEqual(summary, "exc=? sig=? " + String(repeating: "x", count: 200))
+    }
 }

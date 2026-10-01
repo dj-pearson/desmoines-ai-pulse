@@ -97,55 +97,54 @@ export function hashIpAddress(ip: string): string {
  * Log an ad impression
  * Uses IntersectionObserver to track viewability (50% visible for 1 second)
  */
+/**
+ * Record that an ad was seen.
+ *
+ * WEB-ADS-002. This used to INSERT into ad_impressions from the browser. That
+ * table has no INSERT policy in any migration, so RLS refused every write and
+ * every advertiser dashboard showed zero for the life of the feature. The
+ * insert now happens in the track-ad-event edge function on the service role,
+ * which also drops crawler traffic and refuses to bill an inactive campaign.
+ *
+ * client_event_id makes a retry a no-op: without it a flaky network turned one
+ * impression into several billable ones.
+ */
 export async function logImpression(
   campaignId: string,
   creativeId: string,
   placementType: string
 ): Promise<{ success: boolean; impressionId?: string; error?: string }> {
   try {
-    const sessionId = getOrCreateSessionId();
-    const deviceType = getDeviceType();
-    const browser = getBrowser();
-
-    // Get current user if authenticated
-    const { data: { user } } = await supabase.auth.getUser();
-
-    const { data, error } = await supabase
-      .from('ad_impressions')
-      .insert({
+    const { data, error } = await supabase.functions.invoke('track-ad-event', {
+      body: {
+        kind: 'impression',
         campaign_id: campaignId,
         creative_id: creativeId,
-        placement_type: placementType as any,
-        user_id: user?.id || null,
-        session_id: sessionId,
-        user_agent: navigator.userAgent,
-        page_url: window.location.href,
-        referrer_url: document.referrer || null,
-        device_type: deviceType,
-        browser: browser,
-        date: new Date().toISOString().split('T')[0]!,
-      })
-      .select('id')
-      .single();
+        placement_type: placementType,
+        session_id: getOrCreateSessionId(),
+        client_event_id: crypto.randomUUID(),
+        page_url: typeof window !== 'undefined' ? window.location.href : null,
+        referrer_url: typeof document !== 'undefined' ? document.referrer || null : null,
+      },
+    });
 
     if (error) {
       logger.error('logImpression', 'Error logging impression', { error: error.message });
       return { success: false, error: error.message };
     }
 
-    return { success: true, impressionId: data.id };
+    const result = data as { recorded?: boolean; id?: string | null } | null;
+    return { success: !!result?.recorded, impressionId: result?.id ?? undefined };
   } catch (err) {
-    logger.error('logImpression', 'Error logging impression', { error: err instanceof Error ? err.message : String(err) });
-    return {
-      success: false,
-      error: err instanceof Error ? err.message : 'Unknown error'
-    };
+    const message = err instanceof Error ? err.message : String(err);
+    logger.error('logImpression', 'Error logging impression', { error: message });
+    return { success: false, error: message };
   }
 }
 
 /**
- * Log an ad click
- * Links to the most recent impression from this session
+ * Record that an ad was clicked. Server-side for the same reasons as
+ * logImpression above (WEB-ADS-002).
  */
 export async function logClick(
   campaignId: string,
@@ -153,107 +152,43 @@ export async function logClick(
   impressionId?: string
 ): Promise<{ success: boolean; error?: string }> {
   try {
-    // If no impression ID provided, try to find the most recent impression
-    let linkedImpressionId = impressionId;
-
-    if (!linkedImpressionId) {
-      const sessionId = getOrCreateSessionId();
-      const { data: impressions } = await supabase
-        .from('ad_impressions')
-        .select('id')
-        .eq('campaign_id', campaignId)
-        .eq('creative_id', creativeId)
-        .eq('session_id', sessionId)
-        .order('timestamp', { ascending: false })
-        .limit(1);
-
-      if (impressions && impressions.length > 0) {
-        linkedImpressionId = impressions[0]!.id;
-      }
-    }
-
-    const { error } = await supabase
-      .from('ad_clicks')
-      .insert({
-        impression_id: linkedImpressionId || null,
+    const { data, error } = await supabase.functions.invoke('track-ad-event', {
+      body: {
+        kind: 'click',
         campaign_id: campaignId,
         creative_id: creativeId,
-        date: new Date().toISOString().split('T')[0],
-      });
+        session_id: getOrCreateSessionId(),
+        client_event_id: crypto.randomUUID(),
+        impression_id: impressionId ?? null,
+      },
+    });
 
     if (error) {
       logger.error('logClick', 'Error logging click', { error: error.message });
       return { success: false, error: error.message };
     }
 
-    return { success: true };
+    return { success: !!(data as { recorded?: boolean } | null)?.recorded };
   } catch (err) {
-    logger.error('logClick', 'Error logging click', { error: err instanceof Error ? err.message : String(err) });
-    return {
-      success: false,
-      error: err instanceof Error ? err.message : 'Unknown error'
-    };
+    const message = err instanceof Error ? err.message : String(err);
+    logger.error('logClick', 'Error logging click', { error: message });
+    return { success: false, error: message };
   }
 }
 
-/**
- * Check if ad should be shown based on frequency capping
- * This is a client-side check, server-side filtering also applies
+/*
+ * shouldShowAd() lived here and is deleted (WEB-ADS-002).
+ *
+ * It SELECTed ad_impressions to count how often a campaign had been shown, and
+ * that table has no policy in any migration, so the query returned nothing and
+ * the function returned true every time. It capped nothing. Worse, it read as a
+ * working control, which is why the real one was left switched off: useActiveAds
+ * passed p_session_id: null and get_active_ads therefore skipped its own cap.
+ *
+ * The cap now lives in get_active_ads, which is where it can see every session's
+ * impressions rather than the ones RLS happens to show the current visitor.
+ * useActiveAds passes the session id, so it applies.
  */
-export async function shouldShowAd(
-  campaignId: string,
-  sessionId: string,
-  userId?: string
-): Promise<boolean> {
-  try {
-    // Check session-based frequency cap (max 3 per session within 5 minutes)
-    const fiveMinutesAgo = new Date(Date.now() - 5 * 60 * 1000).toISOString();
-
-    const { data: sessionImpressions, error: sessionError } = await supabase
-      .from('ad_impressions')
-      .select('id')
-      .eq('campaign_id', campaignId)
-      .eq('session_id', sessionId)
-      .gte('timestamp', fiveMinutesAgo)
-      .limit(3);
-
-    if (sessionError) {
-      logger.error('shouldShowAd', 'Error checking session frequency', { error: sessionError.message });
-      return true; // Allow ad on error
-    }
-
-    if (sessionImpressions && sessionImpressions.length >= 3) {
-      return false; // Too many impressions in this session
-    }
-
-    // Check user-based frequency cap (max 10 per day)
-    if (userId) {
-      const today = new Date().toISOString().split('T')[0]!;
-
-      const { data: userImpressions, error: userError } = await supabase
-        .from('ad_impressions')
-        .select('id')
-        .eq('campaign_id', campaignId)
-        .eq('user_id', userId)
-        .eq('date', today)
-        .limit(10);
-
-      if (userError) {
-        logger.error('shouldShowAd', 'Error checking user frequency', { error: userError.message });
-        return true; // Allow ad on error
-      }
-
-      if (userImpressions && userImpressions.length >= 10) {
-        return false; // Too many impressions for this user today
-      }
-    }
-
-    return true; // Ad can be shown
-  } catch (err) {
-    logger.error('shouldShowAd', 'Error checking frequency cap', { error: err instanceof Error ? err.message : String(err) });
-    return true; // Allow ad on error
-  }
-}
 
 /**
  * Track ad viewability using IntersectionObserver
@@ -310,6 +245,7 @@ export function createViewabilityObserver(
  * Get analytics summary for a campaign
  * Aggregates impression and click data
  */
+
 export async function getCampaignAnalytics(
   campaignId: string,
   startDate?: string,

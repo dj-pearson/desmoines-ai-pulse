@@ -61,9 +61,13 @@ interface Friend {
   id: string;
   user_id: string;
   friend_id: string;
-  status: 'pending' | 'accepted' | 'declined' | 'blocked';
-  requested_by?: string;
+  // 'declined' is not in the table's CHECK constraint, which allows only
+  // pending/accepted/blocked - narrowed to match (WEB-FEAT-030).
+  status: 'pending' | 'accepted' | 'blocked';
+  // No `requested_by` field: the column does not exist, and declaring it here
+  // is what made writing it look correct. The requester IS user_id.
   created_at: string;
+  accepted_at?: string | null;
   friend_profile?: {
     first_name?: string;
     last_name?: string;
@@ -332,10 +336,16 @@ export function useCommunityFeatures() {
     if (!user) return [];
 
     try {
+      // BOTH DIRECTIONS. A friendship is ONE row, owned by whoever sent the
+      // request, so filtering on user_id alone hid every friendship this user
+      // did not initiate. EnhancedGroupPlanner reads this list and told such a
+      // user "No friends to invite. Add some friends first!" while they had
+      // accepted friends (WEB-FEAT-030). The SELECT policy already permits both
+      // directions: auth.uid() = user_id OR auth.uid() = friend_id.
       const { data, error } = await supabase
         .from('user_friends')
         .select('*')
-        .eq('user_id', user.id)
+        .or(`user_id.eq.${user.id},friend_id.eq.${user.id}`)
         .eq('status', 'accepted');
 
       if (error) throw error;
@@ -365,32 +375,44 @@ export function useCommunityFeatures() {
 
       const friendId = profileData.user_id;
 
-      // Check if friendship already exists
+      // Check if friendship already exists. maybeSingle, not single: single
+      // raises PGRST116 on zero rows, which is the normal case here, and the
+      // error was being discarded to make that look fine.
       const { data: existingFriend } = await supabase
         .from('user_friends')
         .select('id')
         .or(`and(user_id.eq.${user.id},friend_id.eq.${friendId}),and(user_id.eq.${friendId},friend_id.eq.${user.id})`)
-        .single();
+        .maybeSingle();
 
       if (existingFriend) {
         toast.error('Friend request already exists or you are already friends');
         return false;
       }
 
-      // Create friend request
+      // ONE row, owned by the requester (WEB-FEAT-030). Two defects were here,
+      // and each one alone made this call fail every time:
+      //
+      //   1. `requested_by` is not a column on user_friends. Migration
+      //      20250816041658 declared it, but with CREATE TABLE IF NOT EXISTS
+      //      against a table 20250802043023 had already created - so that
+      //      migration was a no-op and the column never existed. Verified
+      //      against scripts/db-snapshot.json, types.ts, and by running the
+      //      insert on a scratch Postgres: 42703.
+      //
+      //   2. The reciprocal second row set user_id to the OTHER person, which
+      //      the INSERT policy forbids - WITH CHECK (auth.uid() = user_id) -
+      //      so the whole multi-row statement was rejected. Also verified on
+      //      the scratch database against the real policies.
+      //
+      // One row is what the policies are shaped for: the recipient can still
+      // SELECT it and UPDATE it to accepted, because both of those policies
+      // match on friend_id as well.
       const { error } = await supabase
         .from('user_friends')
         .insert([
           {
             user_id: user.id,
             friend_id: friendId,
-            requested_by: user.id,
-            status: 'pending'
-          },
-          {
-            user_id: friendId,
-            friend_id: user.id,
-            requested_by: user.id,
             status: 'pending'
           }
         ]);

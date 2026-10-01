@@ -61,6 +61,12 @@ const published = existsSync(sitemapPath)
       .map((m) => m[1].replace(/^https?:\/\/[^/]+/, ''))
   : [];
 
+// Paths with measured Search Console impressions (scripts/pseo-demand-routes.json).
+const demandPath = join(ROOT, 'scripts', 'pseo-demand-routes.json');
+const measured = new Set(
+  existsSync(demandPath) ? Object.keys(JSON.parse(readFileSync(demandPath, 'utf8')).routes ?? {}) : []
+);
+
 // --- assertions -------------------------------------------------------------
 const problems = [];
 
@@ -80,7 +86,11 @@ for (const slug of excluded) {
   } else if (ranked.get(slug) !== 0) {
     problems.push(`${slug}: excluded while measuring ${ranked.get(slug)} monthly - exclude only measured zeros`);
   }
-  const live = published.filter((p) => p.split('/').includes(slug));
+  // SEO-029: a page Search Console already measures is the evidence this list
+  // was waiting for (see the header of measuredDemand.ts), so it is not the
+  // generation waste this assertion guards against. Planner said zero for
+  // valley-junction; GSC shows /festivals/valley-junction at 119 impressions.
+  const live = published.filter((p) => p.split('/').includes(slug) && !measured.has(p));
   for (const p of live) {
     problems.push(`${slug}: deprioritised yet published at ${p}`);
   }
@@ -98,6 +108,6 @@ const order = [...ranked.entries()]
   .sort((a, b) => b[1] - a[1]);
 console.log(
   `[pseo-demand] OK ${taxonomyLocations.size} taxonomy locations, all ranked; ` +
-  `${excluded.size} deprioritised on a measured zero and none published; ` +
+  `${excluded.size} deprioritised on a measured zero and none published without Search Console demand; ` +
   `next up ${order.slice(0, 3).map(([s, v]) => `${s} (${v.toLocaleString()})`).join(', ')}.`
 );

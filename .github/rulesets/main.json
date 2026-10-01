@@ -60,6 +60,14 @@
           {
             "context": "Accessibility (axe, required)",
             "integration_id": 15368
+          },
+          {
+            "context": "Migration Safety",
+            "integration_id": 15368
+          },
+          {
+            "context": "App project type ratchet",
+            "integration_id": 15368
           }
         ]
       }

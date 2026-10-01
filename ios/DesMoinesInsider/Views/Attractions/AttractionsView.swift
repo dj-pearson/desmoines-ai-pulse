@@ -1,125 +1,162 @@
 import SwiftUI
 
 /// Browse screen for attractions. Mirrors RestaurantsView: search bar,
-/// horizontal type chips, featured toggle, rating floor, sort menu,
-/// paginated LazyVStack with skeleton + empty states.
+/// horizontal type chips, featured / free / kids / rainy-day toggles, rating
+/// floor, sort menu, paginated LazyVStack with skeleton + empty states.
+///
+/// Standalone it owns a NavigationStack; pushed from Home it borrows Home's
+/// (IOS-DD-BROWSE-08). It used to nest a second stack inside Home's path
+/// stack, which is unsupported and doubled the navigation bar.
 struct AttractionsView: View {
+    var ownsNavigationStack: Bool = true
+
     @Environment(\.accessibilityReduceMotion) private var reduceMotion
     @State private var viewModel = AttractionsViewModel()
     @State private var showScrollToTop = false
     @State private var favoritesService = FavoritesService.shared
-    @State private var favoriteToast: String?
+    @State private var toast: ToastMessage?
 
     var body: some View {
-        NavigationStack {
-            ScrollViewReader { proxy in
-                ScrollView {
-                    VStack(spacing: 14) {
-                        Color.clear.frame(height: 0).id("top")
-
-                        // Stale-data error note (we have data but a refresh failed).
-                        if let error = viewModel.errorMessage, !viewModel.attractions.isEmpty {
-                            errorBanner(error)
-                        }
-
-                        if viewModel.isLoading && viewModel.attractions.isEmpty {
-                            ForEach(0..<4, id: \.self) { _ in AttractionCardSkeleton() }
-                        } else if let error = viewModel.errorMessage, viewModel.attractions.isEmpty {
-                            ErrorStateView(message: error) {
-                                Task { await viewModel.refresh() }
-                            }
-                            .padding(.top, 40)
-                        } else if viewModel.attractions.isEmpty {
-                            EmptyStateView(
-                                icon: "star.circle",
-                                title: "No Attractions Found",
-                                message: "Try adjusting your filters to see more places.",
-                                actionTitle: viewModel.activeFilterCount > 0 ? "Clear Filters" : nil,
-                                action: { viewModel.clearFilters() }
-                            )
-                            .padding(.top, 40)
-                        } else {
-                            LazyVStack(spacing: 12) {
-                                ForEach(Array(viewModel.attractions.enumerated()), id: \.element.id) { index, attraction in
-                                    NavigationLink(value: attraction) {
-                                        BrowseAttractionCardView(
-                                            attraction: attraction,
-                                            isFavorite: favoritesService.isAttractionFavorited(attraction.id),
-                                            onToggleFavorite: { toggleFavorite(attraction) }
-                                        )
-                                    }
-                                    .buttonStyle(.pressableCard)
-                                    .entranceAnimation(index: index)
-                                    .task {
-                                        await viewModel.loadMoreIfNeeded(currentItem: attraction)
-                                    }
-                                }
-
-                                if viewModel.isLoadingMore {
-                                    ProgressView()
-                                        .frame(maxWidth: .infinity)
-                                        .padding()
-                                }
-                            }
-                        }
+        if ownsNavigationStack {
+            NavigationStack {
+                content
+                    // Only when this view owns the stack: Home already
+                    // registers Attraction, and a second registration on the
+                    // same path is a runtime warning.
+                    .navigationDestination(for: Attraction.self) { attraction in
+                        AttractionDetailView(attraction: attraction)
                     }
-                    .padding(.horizontal)
-                    .trackScrollOffset(showScrollToTop: $showScrollToTop)
+            }
+        } else {
+            content
+        }
+    }
+
+    private var content: some View {
+        ScrollViewReader { proxy in
+            ScrollView {
+                VStack(spacing: 14) {
+                    Color.clear.frame(height: 0).id("top")
+                    listContent
                 }
-                .scrollOffsetCoordinateSpace()
-                .overlay(alignment: .bottomTrailing) {
-                    ScrollToTopButton(isVisible: showScrollToTop) {
-                        withAnimation(reduceMotion ? nil : .default) { proxy.scrollTo("top") }
+                .padding(.horizontal)
+                .trackScrollOffset(showScrollToTop: $showScrollToTop)
+            }
+            .scrollOffsetCoordinateSpace()
+            .overlay(alignment: .bottomTrailing) {
+                ScrollToTopButton(isVisible: showScrollToTop) {
+                    withAnimation(reduceMotion ? nil : .default) { proxy.scrollTo("top") }
+                }
+            }
+            // Sticky type chips + toggles + active chips pinned under the nav
+            // title (IOS-IA-004).
+            .safeAreaInset(edge: .top, spacing: 0) {
+                StickyFilterBar {
+                    typeChips.padding(.horizontal, 14)
+                    togglesRow.padding(.horizontal, 14)
+                    if viewModel.activeFilterCount > 0 {
+                        activeChips.padding(.horizontal, 14)
                     }
-                }
-                // Sticky type chips + featured/rating + active chips pinned
-                // under the nav title (IOS-IA-004).
-                .safeAreaInset(edge: .top, spacing: 0) {
-                    StickyFilterBar {
-                        typeChips.padding(.horizontal, 14)
-                        featuredAndRatingRow.padding(.horizontal, 14)
-                        if viewModel.activeFilterCount > 0 {
-                            activeChips.padding(.horizontal, 14)
-                        }
-                    }
-                }
-            }
-            .refreshable {
-                await viewModel.refresh()
-                // Reflect the real outcome instead of always firing success (UX-005).
-                UINotificationFeedbackGenerator()
-                    .notificationOccurred(viewModel.errorMessage == nil ? .success : .error)
-            }
-            .navigationTitle("Explore")
-            .searchable(
-                text: $viewModel.searchText,
-                placement: .navigationBarDrawer(displayMode: .always),
-                prompt: "Search museums, parks, places…"
-            )
-            .toolbar {
-                if viewModel.activeFilterCount > 0 {
-                    ToolbarItem(placement: .topBarTrailing) { filterToolbarButton }
-                }
-                ToolbarItem(placement: .topBarTrailing) { sortMenu }
-            }
-            .navigationDestination(for: Attraction.self) { attraction in
-                AttractionDetailView(attraction: attraction)
-            }
-            .task {
-                await viewModel.loadInitialData()
-            }
-            .overlay(alignment: .bottom) {
-                if let msg = favoriteToast {
-                    Text(msg)
-                        .font(.footnote.weight(.semibold))
-                        .padding(.horizontal, 16)
-                        .padding(.vertical, 10)
-                        .background(.ultraThinMaterial, in: Capsule())
-                        .padding(.bottom, 24)
-                        .transition(.opacity.combined(with: .move(edge: .bottom)))
                 }
             }
         }
+        .refreshable {
+            await viewModel.refresh()
+            // Reflect the real outcome instead of always firing success (UX-005).
+            UINotificationFeedbackGenerator()
+                .notificationOccurred(viewModel.errorMessage == nil ? .success : .error)
+        }
+        .navigationTitle("Attractions")
+        .searchable(
+            text: $viewModel.searchText,
+            placement: .navigationBarDrawer(displayMode: .always),
+            prompt: "Search museums, parks, places…"
+        )
+        .toolbar {
+            if viewModel.activeFilterCount > 0 {
+                ToolbarItem(placement: .topBarTrailing) { filterMenu }
+            }
+            ToolbarItem(placement: .topBarTrailing) { sortMenu }
+        }
+        .task {
+            await viewModel.loadInitialData()
+        }
+        .toastOverlay(message: $toast)
+    }
+
+    // MARK: - List
+
+    @ViewBuilder
+    private var listContent: some View {
+        // Stale-data error note (we have data but a refresh failed).
+        if let error = viewModel.errorMessage, !viewModel.attractions.isEmpty {
+            errorBanner(error)
+        }
+
+        if (viewModel.isLoading || !viewModel.hasLoadedOnce) && viewModel.attractions.isEmpty {
+            ForEach(0..<4, id: \.self) { _ in AttractionCardSkeleton() }
+        } else if let error = viewModel.errorMessage, viewModel.attractions.isEmpty {
+            ErrorStateView(message: error) {
+                Task { await viewModel.refresh() }
+            }
+            .padding(.top, 40)
+        } else if viewModel.attractions.isEmpty {
+            EmptyStateView(
+                icon: "star.circle",
+                title: "No Attractions Found",
+                message: "Try adjusting your filters to see more places.",
+                actionTitle: viewModel.activeFilterCount > 0 ? "Clear Filters" : nil,
+                action: { viewModel.clearFilters() }
+            )
+            .padding(.top, 40)
+        } else {
+            rows
+        }
+    }
+
+    private var rows: some View {
+        LazyVStack(spacing: 12) {
+            ForEach(Array(viewModel.attractions.enumerated()), id: \.element.id) { index, attraction in
+                NavigationLink(value: attraction) {
+                    BrowseAttractionCardView(
+                        attraction: attraction,
+                        isFavorite: favoritesService.isAttractionFavorited(attraction.id),
+                        onToggleFavorite: { toggleFavorite(attraction) }
+                    )
+                }
+                .buttonStyle(.pressableCard)
+                .entranceAnimation(index: index)
+                // onAppear, not .task: a row scrolling away cancelled its
+                // .task and with it the page request, which then ended
+                // pagination for good (IOS-DD-BROWSE-14).
+                .onAppear {
+                    Task { await viewModel.loadMoreIfNeeded(currentItem: attraction) }
+                }
+            }
+
+            if viewModel.isLoadingMore {
+                ProgressView()
+                    .frame(maxWidth: .infinity)
+                    .padding()
+            } else if viewModel.loadMoreFailed {
+                loadMoreRetryRow
+            }
+        }
+    }
+
+    private var loadMoreRetryRow: some View {
+        Button {
+            Task { await viewModel.retryLoadMore() }
+        } label: {
+            HStack(spacing: 6) {
+                Image(systemName: "arrow.clockwise")
+                Text("Couldn't load more - Retry")
+            }
+            .font(.subheadline.weight(.semibold))
+            .frame(maxWidth: .infinity)
+        }
+        .minHitTarget()
+        .padding(.vertical, 8)
     }
 
     // MARK: - Type Chips
@@ -147,6 +184,9 @@ struct AttractionsView: View {
                         .padding(.vertical, 7)
                         .foregroundStyle(selected ? .white : .primary)
                         .background(selected ? Color.accentColor : Color(.systemGray6), in: Capsule())
+                        // 44pt target around the visual capsule (IOS-DD-BROWSE-15).
+                        .frame(minHeight: 44)
+                        .contentShape(Capsule())
                     }
                     .buttonStyle(.plain)
                     // Use the .isSelected trait instead of an embedded English
@@ -160,71 +200,108 @@ struct AttractionsView: View {
         }
     }
 
-    // MARK: - Featured & Rating
+    // MARK: - Toggles & Rating
 
-    private var featuredAndRatingRow: some View {
-        HStack(spacing: 10) {
-            Toggle(isOn: $viewModel.featuredOnly) {
-                Label("Featured", systemImage: "sparkles")
-                    .font(.caption.weight(.medium))
+    private var togglesRow: some View {
+        ScrollView(.horizontal, showsIndicators: false) {
+            HStack(spacing: 10) {
+                toggleChip("Featured", icon: "sparkles", isOn: $viewModel.featuredOnly)
+                // IOS-DD-BROWSE-16: the columns the web filters on.
+                toggleChip("Free", icon: "gift", isOn: $viewModel.freeOnly)
+                toggleChip("Kids", icon: "figure.and.child.holdinghands", isOn: $viewModel.kidFriendlyOnly)
+                toggleChip("Rainy day", icon: "umbrella", isOn: $viewModel.indoorOnly)
+                ratingMenu
             }
-            .toggleStyle(.button)
-            .tint(.orange)
-
-            Menu {
-                ForEach([0.0, 3.0, 3.5, 4.0, 4.5], id: \.self) { r in
-                    Button {
-                        UIImpactFeedbackGenerator(style: .light).impactOccurred()
-                        viewModel.minRating = r
-                    } label: {
-                        if viewModel.minRating == r {
-                            Label(ratingLabel(r), systemImage: "checkmark")
-                        } else {
-                            Text(ratingLabel(r))
-                        }
-                    }
-                }
-            } label: {
-                HStack(spacing: 4) {
-                    Image(systemName: "star.fill")
-                        .font(.caption)
-                        .foregroundStyle(.yellow)
-                    Text(viewModel.minRating > 0 ? ratingLabel(viewModel.minRating) : "Any rating")
-                        .font(.caption.weight(.medium))
-                }
-                .padding(.horizontal, 12)
-                .padding(.vertical, 7)
-                .background(Color(.systemGray6), in: Capsule())
-            }
-            .accessibilityLabel("Minimum rating filter")
-
-            Spacer()
         }
     }
 
-    // MARK: - Active Chips
+    private func toggleChip(_ title: String, icon: String, isOn: Binding<Bool>) -> some View {
+        Toggle(isOn: isOn) {
+            Label(title, systemImage: icon)
+                .font(.caption.weight(.medium))
+        }
+        .toggleStyle(.button)
+        .tint(.orange)
+        .minHitTarget()
+    }
+
+    private var ratingMenu: some View {
+        Menu {
+            ForEach([0.0, 3.0, 3.5, 4.0, 4.5], id: \.self) { r in
+                Button {
+                    UIImpactFeedbackGenerator(style: .light).impactOccurred()
+                    viewModel.minRating = r
+                } label: {
+                    if viewModel.minRating == r {
+                        Label(ratingLabel(r), systemImage: "checkmark")
+                    } else {
+                        Text(ratingLabel(r))
+                    }
+                }
+            }
+        } label: {
+            HStack(spacing: 4) {
+                Image(systemName: "star.fill")
+                    .font(.caption)
+                    .foregroundStyle(.yellow)
+                Text(viewModel.minRating > 0 ? ratingLabel(viewModel.minRating) : "Any rating")
+                    .font(.caption.weight(.medium))
+            }
+            .padding(.horizontal, 12)
+            .padding(.vertical, 7)
+            .background(Color(.systemGray6), in: Capsule())
+            .frame(minHeight: 44)
+            .contentShape(Capsule())
+        }
+        .accessibilityLabel("Minimum rating filter")
+    }
+
+    // MARK: - Active Filters
+
+    /// One active filter: its chip, and its entry in the toolbar menu.
+    private struct ActiveFilter: Identifiable {
+        let id: String
+        let title: String
+        let icon: String
+        let tint: Color
+        let remove: () -> Void
+    }
+
+    private var activeFilters: [ActiveFilter] {
+        var out: [ActiveFilter] = []
+        if viewModel.featuredOnly {
+            out.append(ActiveFilter(id: "featured", title: "Featured", icon: "sparkles", tint: .orange) { viewModel.featuredOnly = false })
+        }
+        if viewModel.freeOnly {
+            out.append(ActiveFilter(id: "free", title: "Free", icon: "gift", tint: .orange) { viewModel.freeOnly = false })
+        }
+        if viewModel.kidFriendlyOnly {
+            out.append(ActiveFilter(id: "kids", title: "Kids", icon: "figure.and.child.holdinghands", tint: .orange) { viewModel.kidFriendlyOnly = false })
+        }
+        if viewModel.indoorOnly {
+            out.append(ActiveFilter(id: "indoor", title: "Rainy day", icon: "umbrella", tint: .orange) { viewModel.indoorOnly = false })
+        }
+        if viewModel.minRating > 0 {
+            out.append(ActiveFilter(id: "rating", title: ratingLabel(viewModel.minRating), icon: "star.fill", tint: .yellow) { viewModel.minRating = 0 })
+        }
+        for type in viewModel.selectedTypes.sorted(by: { $0.displayName < $1.displayName }) {
+            out.append(ActiveFilter(id: "type-\(type.rawValue)", title: type.displayName, icon: type.icon, tint: .accentColor) {
+                viewModel.selectedTypes.remove(type)
+            })
+        }
+        return out
+    }
 
     private var activeChips: some View {
         ScrollView(.horizontal, showsIndicators: false) {
             HStack(spacing: 6) {
-                Text("\(viewModel.attractions.count) results")
+                // The server's count, not the rows loaded so far (IOS-DD-BROWSE-14).
+                Text("\(viewModel.totalCount) \(viewModel.totalCount == 1 ? "result" : "results")")
                     .font(.caption.weight(.medium))
                     .foregroundStyle(.secondary)
 
-                if viewModel.featuredOnly {
-                    FilterChipView(text: "Featured", icon: "sparkles", tint: .orange) {
-                        viewModel.featuredOnly = false
-                    }
-                }
-                if viewModel.minRating > 0 {
-                    FilterChipView(text: ratingLabel(viewModel.minRating), icon: "star.fill", tint: .yellow) {
-                        viewModel.minRating = 0
-                    }
-                }
-                ForEach(Array(viewModel.selectedTypes).sorted(by: { $0.displayName < $1.displayName })) { type in
-                    FilterChipView(text: type.displayName, icon: type.icon) {
-                        viewModel.selectedTypes.remove(type)
-                    }
+                ForEach(activeFilters) { filter in
+                    FilterChipView(text: filter.title, icon: filter.icon, tint: filter.tint, onRemove: filter.remove)
                 }
 
                 Button("Clear all") {
@@ -239,15 +316,27 @@ struct AttractionsView: View {
         }
     }
 
-    // MARK: - Filter Entry Point (IOS-AUDIT-UX-007)
+    // MARK: - Filter Entry Point (IOS-AUDIT-UX-007, IOS-DD-BROWSE-15)
 
-    /// Filter glyph in the toolbar with a count badge so the number of active
-    /// filters is visible without scanning the sticky chip row. Tapping clears
-    /// all filters (mirrors the "Clear all" chip affordance).
-    private var filterToolbarButton: some View {
-        Button {
-            UIImpactFeedbackGenerator(style: .light).impactOccurred()
-            viewModel.clearFilters()
+    /// Filter glyph in the toolbar with a count badge. It opens a menu of the
+    /// active filters, each removable, with a destructive "Clear all" at the
+    /// end. It used to clear everything, the search text included, on one
+    /// tap of what looked like a "show filters" button.
+    private var filterMenu: some View {
+        Menu {
+            ForEach(activeFilters) { filter in
+                Button {
+                    UIImpactFeedbackGenerator(style: .light).impactOccurred()
+                    filter.remove()
+                } label: {
+                    Label("Remove \(filter.title)", systemImage: "xmark")
+                }
+            }
+            Divider()
+            Button("Clear all filters", role: .destructive) {
+                UIImpactFeedbackGenerator(style: .light).impactOccurred()
+                viewModel.clearFilters()
+            }
         } label: {
             Image(systemName: "line.3.horizontal.decrease.circle")
                 .overlay(alignment: .topTrailing) {
@@ -255,6 +344,7 @@ struct AttractionsView: View {
                 }
         }
         .accessibilityLabel("Filters, \(viewModel.activeFilterCount) active")
+        .accessibilityHint("Shows active filters")
     }
 
     // MARK: - Sort Menu
@@ -310,27 +400,22 @@ struct AttractionsView: View {
 
     // MARK: - Favorites
 
+    /// Toasts go through `.toastOverlay`, which announces to VoiceOver; the
+    /// hand-rolled capsule it replaces was silent (IOS-DD-BROWSE-15).
     private func toggleFavorite(_ attraction: Attraction) {
         UIImpactFeedbackGenerator(style: .medium).impactOccurred()
         Task {
             do {
                 let nowFavorited = try await favoritesService.toggleFavoriteAttraction(attractionId: attraction.id)
-                showToast(nowFavorited ? "Saved \(attraction.name)" : "Removed from saved")
+                toast = nowFavorited ? .success("Saved \(attraction.name)") : .info("Removed from saved")
             } catch let error as FavoritesService.FavoritesError {
                 // Favorites cap presents the upsell paywall app-wide
                 // (IOS-SUB-011) — don't double up with a toast.
-                if case .limitReached = error {} else { showToast(error.localizedDescription) }
+                if case .limitReached = error { return }
+                toast = .error(error.localizedDescription)
             } catch {
-                showToast("Couldn't update favorite")
+                toast = .error("Couldn't update favorite")
             }
-        }
-    }
-
-    private func showToast(_ message: String) {
-        withAnimation { favoriteToast = message }
-        Task {
-            try? await Task.sleep(for: .seconds(2))
-            withAnimation { favoriteToast = nil }
         }
     }
 

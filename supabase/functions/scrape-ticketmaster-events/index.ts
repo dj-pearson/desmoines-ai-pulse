@@ -4,9 +4,8 @@ import { serve } from "https://deno.land/std@0.168.0/http/server.ts";
 import { createClient } from "https://esm.sh/@supabase/supabase-js@2";
 import { scrapeUrl, getScraperConfig } from "../_shared/scraper.ts";
 import { requireAdminOrApiKey } from "../_shared/apiKeyAuth.ts";
+import { ticketmasterPatch, toAffiliateLink } from "./links.ts";
 
-const AFFILIATE_BASE =
-  "https://ticketmaster.evyy.net/c/6430290/264167/4272?u=";
 const VIBRANT_URL = "https://www.vibrantmusichall.com/shows";
 
 const corsHeaders = {
@@ -29,41 +28,6 @@ interface UpdateResult {
   affiliateUrl: string;
   updated: boolean;
   reason: string;
-}
-
-/**
- * Strip tracking parameters from Ticketmaster URLs for cleaner affiliate links.
- */
-function cleanTicketmasterUrl(rawUrl: string): string {
-  try {
-    const url = new URL(rawUrl);
-    const trackingParams = [
-      "_gl",
-      "utm_source",
-      "utm_medium",
-      "utm_campaign",
-      "utm_content",
-      "utm_term",
-    ];
-    trackingParams.forEach((param) => url.searchParams.delete(param));
-    // Remove _ga* params (Google Analytics)
-    for (const key of [...url.searchParams.keys()]) {
-      if (key.startsWith("_ga")) {
-        url.searchParams.delete(key);
-      }
-    }
-    return url.toString();
-  } catch {
-    return rawUrl;
-  }
-}
-
-/**
- * Convert a Ticketmaster URL to an affiliate link.
- */
-function toAffiliateLink(ticketmasterUrl: string): string {
-  const cleanUrl = cleanTicketmasterUrl(ticketmasterUrl);
-  return AFFILIATE_BASE + encodeURIComponent(cleanUrl);
 }
 
 /**
@@ -633,7 +597,7 @@ serve(async (req) => {
 
     console.log(`📊 ${allDbEvents.length} events to match against`);
 
-    // Step 4: Match shows to database events and update source_url
+    // Step 4: Match shows to database events and record the affiliate link
     const results: UpdateResult[] = [];
     let updatedCount = 0;
 
@@ -643,6 +607,7 @@ serve(async (req) => {
       let bestMatch: {
         id: string;
         title: string;
+        sourceUrl: string | null;
         similarity: number;
       } | null = null;
 
@@ -656,6 +621,7 @@ serve(async (req) => {
           bestMatch = {
             id: dbEvent.id,
             title: dbEvent.title,
+            sourceUrl: dbEvent.source_url,
             similarity,
           };
         }
@@ -670,7 +636,7 @@ serve(async (req) => {
         if (!dryRun) {
           const { error: updateError } = await supabase
             .from("events")
-            .update({ source_url: show.affiliateUrl })
+            .update(ticketmasterPatch(show, bestMatch.sourceUrl))
             .eq("id", bestMatch.id);
 
           if (updateError) {

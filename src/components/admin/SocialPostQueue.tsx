@@ -59,6 +59,7 @@ import {
 import { supabase } from "@/integrations/supabase/client";
 import type { Database } from "@/integrations/supabase/types";
 import { handleError } from "@/lib/errorHandler";
+import { createEventSlugWithCentralTime } from "@/lib/timezone";
 import { cn } from "@/lib/utils";
 import { toast } from "sonner";
 
@@ -120,16 +121,30 @@ function StatusBadge({ post }: { post: Post }) {
   );
 }
 
-function ContentTypeLink({ post }: { post: Post }) {
+interface ContentTypeLinkProps {
+  post: Post;
+  /**
+   * The event's dated slug, looked up by content_id after the page loads.
+   * Undefined while the lookup runs, or when the event is gone.
+   */
+  eventSlug?: string;
+}
+
+function ContentTypeLink({ post, eventSlug }: ContentTypeLinkProps) {
   if (!post.content_type || post.content_type === "general") {
     return <span className="text-muted-foreground">—</span>;
   }
   if (!post.content_id) {
     return <span>{post.content_type}</span>;
   }
+  // Events link by their Central dated slug, the URL the detail page
+  // canonicalises to, not by id (events-pass2 WP6 item 6; the ratchet is
+  // scripts/__tests__/event-id-links.test.mjs).
   const target =
     post.content_type === "event"
-      ? `/events/${post.content_id}`
+      ? eventSlug
+        ? `/events/${eventSlug}`
+        : null
       : post.content_type === "restaurant"
         ? `/restaurants/${post.content_id}`
         : null;
@@ -158,6 +173,7 @@ export default function SocialPostQueue() {
   const [reschedTarget, setReschedTarget] = useState<Post | null>(null);
   const [reschedAt, setReschedAt] = useState("");
   const [busyId, setBusyId] = useState<string | null>(null);
+  const [eventSlugs, setEventSlugs] = useState<Record<string, string>>({});
 
   async function load() {
     setLoading(true);
@@ -188,6 +204,7 @@ export default function SocialPostQueue() {
       if (error) throw error;
       setPosts(data ?? []);
       setTotalCount(count ?? 0);
+      void loadEventSlugs(data ?? []);
     } catch (err) {
       handleError(err, {
         component: "SocialPostQueue",
@@ -196,6 +213,35 @@ export default function SocialPostQueue() {
       toast.error("Failed to load post queue");
     } finally {
       setLoading(false);
+    }
+  }
+
+  /** One query for the page's event posts; a failure only costs the links. */
+  async function loadEventSlugs(rows: Post[]) {
+    const ids = [
+      ...new Set(
+        rows
+          .filter((r) => r.content_type === "event" && r.content_id)
+          .map((r) => r.content_id as string),
+      ),
+    ];
+    if (ids.length === 0) {
+      setEventSlugs({});
+      return;
+    }
+    try {
+      const { data, error } = await supabase
+        .from("events")
+        .select("id, title, date, event_start_utc")
+        .in("id", ids);
+      if (error) throw error;
+      const next: Record<string, string> = {};
+      for (const ev of data ?? []) {
+        next[ev.id] = createEventSlugWithCentralTime(ev.title, ev);
+      }
+      setEventSlugs(next);
+    } catch (err) {
+      handleError(err, { component: "SocialPostQueue", action: "loadEventSlugs" });
     }
   }
 
@@ -441,7 +487,10 @@ export default function SocialPostQueue() {
                         )}
                       </TableCell>
                       <TableCell className="hidden lg:table-cell">
-                        <ContentTypeLink post={p} />
+                        <ContentTypeLink
+                          post={p}
+                          eventSlug={p.content_id ? eventSlugs[p.content_id] : undefined}
+                        />
                       </TableCell>
                       <TableCell>
                         <StatusBadge post={p} />

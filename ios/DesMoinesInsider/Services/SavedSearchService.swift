@@ -52,11 +52,23 @@ actor SavedSearchService {
     /// top-level columns too. Only Events-tab searches map to the event pipeline;
     /// other tabs stay 'advanced' (no alert pipeline exists for them yet).
     static func searchType(for tab: String?) -> String {
-        tab == "Events" ? "event_list" : "advanced"
+        searchType(tab: tab, hadEventResults: false)
+    }
+
+    /// A search saved from another tab still matches events when it found
+    /// some ("jazz" saved from Restaurants), so it is an event search for the
+    /// alert job too (IOS-DD-SEARCH-10).
+    static func searchType(tab: String?, hadEventResults: Bool) -> String {
+        tab == "Events" || hadEventResults ? "event_list" : "advanced"
     }
 
     @discardableResult
-    func createSavedSearch(userId: String, name: String, filters: SavedSearchFilters) async throws -> SavedSearch {
+    func createSavedSearch(
+        userId: String,
+        name: String,
+        filters: SavedSearchFilters,
+        searchType: String
+    ) async throws -> SavedSearch {
         let client = try db()
         struct InsertRow: Encodable {
             let user_id: String
@@ -71,7 +83,7 @@ actor SavedSearchService {
                 user_id: userId,
                 name: name,
                 filters: filters,
-                search_type: Self.searchType(for: filters.tab),
+                search_type: searchType,
                 alerts_enabled: filters.alertsEnabled
             ))
             .select()
@@ -81,29 +93,71 @@ actor SavedSearchService {
         return created
     }
 
-    /// Persist a new filters payload (used to toggle the alert flag). Mirrors the
-    /// alert flag and search type into the top-level columns the nightly job
-    /// reads, self-healing rows written before IOS-AUDIT-FEAT-024.
-    func updateFilters(id: String, filters: SavedSearchFilters) async throws {
+    /// Turn a search's alerts on or off (IOS-DD-SEARCH-09). Returns the number
+    /// of rows written; 0 means the row is gone or not this user's.
+    ///
+    /// This replaced `updateFilters`, which overwrote `filters` with
+    /// `{query, tab, alerts_enabled}` and set `search_type` from the tab. On a
+    /// row the web wrote that destroyed its `q`/`category`/`preset` and moved
+    /// it from 'event_list' to 'advanced', which the job never reads: one tap
+    /// on the bell deleted the search's meaning and stopped its email. Now the
+    /// caller passes the row's own filters with only `alerts_enabled` changed,
+    /// and `search_type` is only ever promoted to 'event_list', never
+    /// downgraded.
+    func setAlerts(
+        id: String,
+        userId: String,
+        enabled: Bool,
+        mergedFilters: [String: SavedSearchJSON],
+        promoteToEventList: Bool
+    ) async throws -> Int {
         let client = try db()
         struct UpdateRow: Encodable {
-            let filters: SavedSearchFilters
-            let search_type: String
             let alerts_enabled: Bool
+            let filters: [String: SavedSearchJSON]
+            let search_type: String?
+
+            enum CodingKeys: String, CodingKey { case alerts_enabled, filters, search_type }
+
+            // search_type is left out entirely unless it is being promoted, so
+            // the update never writes it as null.
+            func encode(to encoder: Encoder) throws {
+                var c = encoder.container(keyedBy: CodingKeys.self)
+                try c.encode(alerts_enabled, forKey: .alerts_enabled)
+                try c.encode(filters, forKey: .filters)
+                try c.encodeIfPresent(search_type, forKey: .search_type)
+            }
         }
-        try await client
+        struct IdRow: Decodable { let id: String }
+        let rows: [IdRow] = try await client
             .from("saved_searches")
             .update(UpdateRow(
-                filters: filters,
-                search_type: Self.searchType(for: filters.tab),
-                alerts_enabled: filters.alertsEnabled
+                alerts_enabled: enabled,
+                filters: mergedFilters,
+                search_type: promoteToEventList ? "event_list" : nil
             ))
             .eq("id", value: id)
+            .eq("user_id", value: userId)
+            .select("id")
             .execute()
+            .value
+        return rows.count
     }
 
-    func deleteSavedSearch(id: String) async throws {
+    /// Delete one of the user's saved searches. Returns the number of rows
+    /// deleted; RLS turns a delete of someone else's row into 0 rows rather
+    /// than an error, so the caller treats 0 as a failure (IOS-DD-SEARCH-12).
+    func deleteSavedSearch(id: String, userId: String) async throws -> Int {
         let client = try db()
-        try await client.from("saved_searches").delete().eq("id", value: id).execute()
+        struct IdRow: Decodable { let id: String }
+        let rows: [IdRow] = try await client
+            .from("saved_searches")
+            .delete()
+            .eq("id", value: id)
+            .eq("user_id", value: userId)
+            .select("id")
+            .execute()
+            .value
+        return rows.count
     }
 }

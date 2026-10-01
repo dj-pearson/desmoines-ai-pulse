@@ -21,6 +21,12 @@
 /restaurants/daves-hot-chicken   /restaurants/daves-hot-chicken-2   301
 /restaurants/outback-steakhouse  /restaurants/outback-steakhouse-2  301
 
+# The other direction: bonchon-2 was the duplicate removed, and it had ranked -
+# 617 impressions at 5.35% CTR in the 12 months to 2026-09-23 - so it 404'd
+# with history behind it. There is one Bonchon in the metro (EP True Pkwy, West
+# Des Moines) and its row is the clean slug.
+/restaurants/bonchon-2           /restaurants/bonchon               301
+
 # SEO-005: NO REDIRECT HERE, DELIBERATELY, and this note is the point of the
 # entry. Both remaining -2 pairs on this site are TWO REAL RESTAURANTS:
 #
@@ -64,6 +70,42 @@
 /articles/halloweekend-in-des-moines-your-ultimate-guide-to-spooky-events-family-fun-2023  /articles/haunted-houses-near-des-moines  301
 /articles/fall-colors-cider-the-ultimate-guide-to-des-moines-apple-orchards-pumpkin-patches-des-moines-guide  /articles/best-pumpkin-patches-in-the-des-moines-area-your-complete-fall-guide  301
 
+# SEO-058: seven more 2025 articles were raw generator JSON naming closed
+# businesses and wrong towns, and none had a search impression in the three
+# months to 2026-09-30. Archived, not deleted (backups in
+# scripts/content-backups/seo-058/); each URL goes to the closest live hub.
+# Keep these for at least one release cycle.
+/articles/beaverdales-best-a-locals-guide-to-des-moines-most-charming-brick-streets-des-moines-guide  /things-to-do  301
+/articles/7-unexpected-date-night-ideas-in-des-moines-under-50-des-moines-guide  /events/date-night  301
+/articles/des-moines-indoor-farmers-markets-2023-24-complete-winter-shopping-guide-des-moines-guide  /things-to-do/winter  301
+/articles/des-moines-best-air-conditioned-adventures-indoor-activities-for-scorching-days-des-moines-guide  /things-to-do  301
+/articles/oktoberfest-in-des-moines-complete-guide-to-2023-beer-gardens-german-events-des-moines-guide  /guides/fall-festivals  301
+/articles/last-call-for-farmers-market-your-september-shopping-cooking-guide-des-moines-guide  /things-to-do/downtown  301
+/articles/morning-to-midnight-the-perfect-summer-saturday-in-downtown-des-moines-des-moines-guide  /things-to-do/downtown  301
+
+# WEB-FEAT-027: /calendar rendered a permanently empty calendar. Its hook,
+# useSmartCalendar, was commented "Mock functions since tables don't exist yet"
+# and every fetch set empty state, so the route was prerendered, sitemapped and
+# linked from the user menu while being incapable of showing anything. The
+# route and its components are removed; this keeps the URL alive per the
+# Backward Compatibility rules in CLAUDE.md, since it was public and indexed.
+/calendar  /events  301
+
+# WEB-SEO-038: public/sitemap-index.xml was a HAND COPY of the generated
+# sitemap.xml, deployed with a lastmod frozen at 2026-03-16 and missing
+# sitemap-hotels.xml for weeks. Nothing in the repo pointed at it - robots.txt
+# submits /sitemap.xml - but an external reference cannot be ruled out from
+# inside the repo, and a sitemap index a crawler already knows about is exactly
+# the URL not to 404. Deleted, with this 301 for at least one release cycle,
+# per the Backward Compatibility rules in CLAUDE.md.
+/sitemap-index.xml  /sitemap.xml  301
+
+# Eat & Drink pass 2 WP4.7: /real-time was a second "what's open" page (a
+# "Live Updates" badge over the top 24 by popularity, no open/closed filter,
+# two buttons with no handler). /restaurants/open-now answers the same
+# question from listed hours. App.tsx carries the same redirect for in-app
+# navigation. Keep for at least one release cycle.
+/real-time  /restaurants/open-now  301
 # SEO-055: the Slaughterhouse row said Thu Oct 1; it opens Fri Oct 2 (HauntPay,
 # fetched 2026-10-01). Moving the row moved its date-suffixed URL. Keep this
 # for at least one release cycle (CLAUDE.md, Backward Compatibility).

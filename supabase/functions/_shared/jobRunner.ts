@@ -13,7 +13,7 @@
  * The wrapper never throws — a job-infra failure must not crash the function.
  */
 import { createClient } from 'https://esm.sh/@supabase/supabase-js@2';
-import { fetchWithTimeout } from './fetchWithTimeout.ts';
+import { adminAlertEmail, sendEmail } from './email.ts';
 import { agentPaused } from './agentGuards.ts';
 
 export interface JobContext {
@@ -213,28 +213,26 @@ export async function runJob<T>(
 }
 
 /**
- * Best-effort admin alert email via Resend. Shared by runJob (terminal failure)
- * and the missed-run watchdog.
+ * Best-effort admin alert email through _shared/email.ts. Shared by runJob
+ * (terminal failure) and the missed-run watchdog.
  */
 export async function sendJobAlert(jobName: string, message: string, alertEmail?: string): Promise<void> {
   try {
-    const to =
-      alertEmail || Deno.env.get('ADMIN_ALERT_EMAIL') || Deno.env.get('ALERT_EMAIL');
-    const resendKey = Deno.env.get('RESEND_API_KEY');
-    if (!to || !resendKey) {
-      console.warn(`[jobRunner] alert not sent for "${jobName}" (missing ADMIN_ALERT_EMAIL or RESEND_API_KEY): ${message}`);
+    const to = alertEmail || adminAlertEmail();
+    if (!to) {
+      console.warn(`[jobRunner] alert not sent for "${jobName}" (no ADMIN_ALERT_EMAIL): ${message}`);
       return;
     }
-    await fetchWithTimeout('https://api.resend.com/emails', {
-      method: 'POST',
-      headers: { 'Content-Type': 'application/json', Authorization: `Bearer ${resendKey}` },
-      body: JSON.stringify({
-        from: 'Des Moines Insider Automation <automation@desmoinesinsider.com>',
-        to: [to],
-        subject: `⚠️ Automation alert: ${jobName}`,
-        text: `${message}\n\nSee the Admin → Job Health panel for details.`,
-      }),
+    const res = await sendEmail({
+      to,
+      from: 'Des Moines Insider Automation <automation@desmoinesinsider.com>',
+      subject: `Automation alert: ${jobName}`,
+      text: `${message}\n\nSee the Admin > Job Health panel for details.`,
+      category: 'transactional',
+      template: 'job_alert',
+      ref: { type: 'job', id: jobName },
     });
+    if (!res.ok) console.warn(`[jobRunner] alert for "${jobName}" not delivered: ${res.error}`);
   } catch (err) {
     console.error(`[jobRunner] failed to send alert for "${jobName}":`, err);
   }

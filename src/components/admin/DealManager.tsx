@@ -66,6 +66,11 @@ import { Textarea } from "@/components/ui/textarea";
 import { useDebounce } from "@/hooks/useDebounce";
 import { supabase } from "@/integrations/supabase/client";
 import { handleError } from "@/lib/errorHandler";
+import {
+  fromCentralInput,
+  nowCentralInput,
+  toCentralInput,
+} from "@/lib/dealFormTime";
 import { cn } from "@/lib/utils";
 import { toast } from "sonner";
 import { MoreVertical } from "lucide-react";
@@ -130,6 +135,32 @@ const ENTITY_TYPES = ["restaurant", "attraction", "hotel", "event", "activity"];
 const DEAL_TYPES = ["percentage", "dollar_off", "bogo", "free_item", "package"];
 const PAGE_SIZE = 25;
 
+/**
+ * Entity types whose deals can point at a venue page (explore pass 2 WP6
+ * item 2). useDealVenueLinks resolves entity_id against the same three
+ * tables, so a deal linked here gets a venue link on /deals.
+ */
+const VENUE_SOURCES: Record<
+  string,
+  { table: "restaurants" | "attractions" | "hotels"; place: string; label: string }
+> = {
+  restaurant: { table: "restaurants", place: "location", label: "restaurant" },
+  attraction: { table: "attractions", place: "location", label: "attraction" },
+  hotel: { table: "hotels", place: "city", label: "hotel" },
+};
+const LINKABLE_TYPES = Object.keys(VENUE_SOURCES);
+
+interface VenueOption {
+  id: string;
+  name: string;
+  place: string | null;
+}
+
+/** % and _ are ilike wildcards; a venue name like "100% Pure" should match itself. */
+function escapeIlike(term: string): string {
+  return term.replace(/[\\%_]/g, (c) => `\\${c}`);
+}
+
 function statusOf(deal: Deal): "active" | "upcoming" | "expired" {
   const now = new Date();
   const start = new Date(deal.start_date);
@@ -171,12 +202,18 @@ interface FormState {
   description: string;
   business_name: string;
   entity_type: string;
+  /** The linked restaurant, attraction or hotel; null when none is picked. */
+  entity_id: string | null;
   deal_type: string;
   discount_value: string;
   code: string;
   terms: string;
+  /** datetime-local values in Des Moines time (src/lib/dealFormTime.ts). */
   start_date: string;
   end_date: string;
+  /** The stored values the inputs were filled from, so an untouched save writes them back unchanged. */
+  original_start_date: string | null;
+  original_end_date: string | null;
   image_url: string;
   is_verified: boolean;
   is_featured: boolean;
@@ -186,18 +223,20 @@ interface FormState {
 }
 
 function emptyForm(): FormState {
-  const today = new Date().toISOString().slice(0, 16);
   return {
     title: "",
     description: "",
     business_name: "",
     entity_type: "restaurant",
+    entity_id: null,
     deal_type: "percentage",
     discount_value: "",
     code: "",
     terms: "",
-    start_date: today,
+    start_date: nowCentralInput(),
     end_date: "",
+    original_start_date: null,
+    original_end_date: null,
     image_url: "",
     is_verified: false,
     is_featured: false,
@@ -214,16 +253,17 @@ function fromDeal(d: Deal): FormState {
     description: d.description ?? "",
     business_name: d.business_name,
     entity_type: d.entity_type,
+    entity_id: d.entity_id,
     deal_type: d.deal_type,
     discount_value: d.discount_value ?? "",
     code: d.code ?? "",
     terms: d.terms ?? "",
-    start_date: d.start_date
-      ? new Date(d.start_date).toISOString().slice(0, 16)
-      : "",
-    end_date: d.end_date
-      ? new Date(d.end_date).toISOString().slice(0, 16)
-      : "",
+    // These used to be UTC wall time read back as browser-local time, which
+    // moved both dates 5-6 hours on every save.
+    start_date: toCentralInput(d.start_date),
+    end_date: toCentralInput(d.end_date),
+    original_start_date: d.start_date,
+    original_end_date: d.end_date,
     image_url: d.image_url ?? "",
     is_verified: d.is_verified,
     is_featured: d.is_featured,
@@ -231,6 +271,159 @@ function fromDeal(d: Deal): FormState {
     start_time: d.start_time ? d.start_time.slice(0, 5) : "",
     end_time: d.end_time ? d.end_time.slice(0, 5) : "",
   };
+}
+
+interface VenuePickerProps {
+  entityType: string;
+  entityId: string | null;
+  /** Called with the picked venue, or null when the link is cleared. */
+  onPick: (venue: VenueOption | null) => void;
+}
+
+/**
+ * Search the entity type's table by name and link one row. Before this the
+ * form had no way to set entity_id, so no deal saved from the admin ever got
+ * a venue link on /deals.
+ */
+function VenuePicker({ entityType, entityId, onPick }: VenuePickerProps) {
+  const source = VENUE_SOURCES[entityType];
+  const [term, setTerm] = useState("");
+  const debounced = useDebounce(term, 250);
+  const [options, setOptions] = useState<VenueOption[]>([]);
+  const [searching, setSearching] = useState(false);
+  const [linked, setLinked] = useState<VenueOption | null>(null);
+
+  // Name of the venue already linked, for an existing deal.
+  useEffect(() => {
+    if (!source || !entityId) {
+      setLinked(null);
+      return;
+    }
+    if (linked?.id === entityId) return;
+    let cancelled = false;
+    (async () => {
+      try {
+        const { data, error } = await supabase
+          .from(source.table)
+          .select(`id, name, ${source.place}`)
+          .eq("id", entityId)
+          .maybeSingle();
+        if (error) throw error;
+        if (cancelled) return;
+        const row = data as unknown as Record<string, string | null> | null;
+        setLinked(
+          row
+            ? { id: entityId, name: row.name ?? entityId, place: row[source.place] ?? null }
+            : { id: entityId, name: "Linked row not found", place: null },
+        );
+      } catch (err) {
+        handleError(err, { component: "DealManager", action: "loadLinkedVenue" });
+      }
+    })();
+    return () => {
+      cancelled = true;
+    };
+  }, [source, entityId, linked?.id]);
+
+  useEffect(() => {
+    const q = debounced.trim();
+    if (!source || q.length < 2) {
+      setOptions([]);
+      return;
+    }
+    let cancelled = false;
+    setSearching(true);
+    (async () => {
+      try {
+        const { data, error } = await supabase
+          .from(source.table)
+          .select(`id, name, ${source.place}`)
+          .ilike("name", `%${escapeIlike(q)}%`)
+          .order("name")
+          .limit(8);
+        if (error) throw error;
+        if (cancelled) return;
+        const rows = (data ?? []) as unknown as Array<Record<string, string | null>>;
+        setOptions(
+          rows
+            .filter((r) => r.id && r.name)
+            .map((r) => ({ id: r.id as string, name: r.name as string, place: r[source.place] ?? null })),
+        );
+      } catch (err) {
+        handleError(err, { component: "DealManager", action: "searchVenues" });
+      } finally {
+        if (!cancelled) setSearching(false);
+      }
+    })();
+    return () => {
+      cancelled = true;
+    };
+  }, [source, debounced]);
+
+  if (!source) {
+    return (
+      <p className="text-xs text-muted-foreground">
+        Venue links cover restaurants, attractions and hotels. A {entityType} deal shows its business name without a link.
+      </p>
+    );
+  }
+
+  return (
+    <div className="space-y-2">
+      <Label htmlFor="d-venue">Linked {source.label}</Label>
+      {entityId ? (
+        <div className="flex items-center justify-between gap-2 rounded-md border px-3 py-2 text-sm">
+          <span className="truncate">
+            {linked ? linked.name : "Loading..."}
+            {linked?.place ? (
+              <span className="text-muted-foreground"> - {linked.place}</span>
+            ) : null}
+          </span>
+          <Button type="button" size="sm" variant="ghost" onClick={() => onPick(null)}>
+            Unlink
+          </Button>
+        </div>
+      ) : (
+        <p className="text-xs text-muted-foreground">
+          No venue linked. The deal will show the business name as plain text.
+        </p>
+      )}
+      <Input
+        id="d-venue"
+        value={term}
+        onChange={(e) => setTerm(e.target.value)}
+        placeholder={`Search ${source.table} by name`}
+        autoComplete="off"
+      />
+      {term.trim().length >= 2 && (
+        <ul className="max-h-48 overflow-y-auto rounded-md border text-sm" aria-label={`Matching ${source.table}`}>
+          {searching && options.length === 0 ? (
+            <li className="px-3 py-2 text-muted-foreground">Searching...</li>
+          ) : options.length === 0 ? (
+            <li className="px-3 py-2 text-muted-foreground">No {source.table} match that name.</li>
+          ) : (
+            options.map((o) => (
+              <li key={o.id}>
+                <button
+                  type="button"
+                  className="w-full px-3 py-2 text-left hover:bg-accent"
+                  onClick={() => {
+                    setLinked(o);
+                    setTerm("");
+                    setOptions([]);
+                    onPick(o);
+                  }}
+                >
+                  {o.name}
+                  {o.place ? <span className="text-muted-foreground"> - {o.place}</span> : null}
+                </button>
+              </li>
+            ))
+          )}
+        </ul>
+      )}
+    </div>
+  );
 }
 
 export default function DealManager() {
@@ -249,6 +442,27 @@ export default function DealManager() {
   const [deleting, setDeleting] = useState<Deal | null>(null);
   const [pruneOpen, setPruneOpen] = useState(false);
   const [busy, setBusy] = useState(false);
+  const [unlinkedCount, setUnlinkedCount] = useState<number | null>(null);
+
+  /**
+   * Live deals of a linkable type with no entity_id: these render the
+   * business name without a venue link on /deals.
+   */
+  async function loadUnlinkedCount() {
+    try {
+      const nowIso = new Date().toISOString();
+      const { count, error } = await supabase
+        .from("deals")
+        .select("id", { count: "exact", head: true })
+        .in("entity_type", LINKABLE_TYPES)
+        .is("entity_id", null)
+        .or(`end_date.is.null,end_date.gte.${nowIso}`);
+      if (error) throw error;
+      setUnlinkedCount(count ?? 0);
+    } catch (err) {
+      handleError(err, { component: "DealManager", action: "loadUnlinkedCount" });
+    }
+  }
 
   async function load() {
     setLoading(true);
@@ -297,6 +511,10 @@ export default function DealManager() {
     load();
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [search, entity, statusFilter, dealTypeFilter, featuredOnly, page]);
+
+  useEffect(() => {
+    loadUnlinkedCount();
+  }, []);
 
   const totalPages = useMemo(
     () => Math.max(1, Math.ceil(totalCount / PAGE_SIZE)),
@@ -404,10 +622,11 @@ export default function DealManager() {
         discount_value: form.discount_value.trim() || null,
         code: form.code.trim() || null,
         terms: form.terms.trim() || null,
-        start_date: form.start_date
-          ? new Date(form.start_date).toISOString()
-          : new Date().toISOString(),
-        end_date: form.end_date ? new Date(form.end_date).toISOString() : null,
+        entity_id: form.entity_id,
+        start_date:
+          fromCentralInput(form.start_date, form.original_start_date) ??
+          new Date().toISOString(),
+        end_date: fromCentralInput(form.end_date, form.original_end_date),
         image_url: form.image_url.trim() || null,
         is_verified: form.is_verified,
         is_featured: form.is_featured,
@@ -429,7 +648,7 @@ export default function DealManager() {
         toast.success("Deal created");
       }
       setEditing(null);
-      await load();
+      await Promise.all([load(), loadUnlinkedCount()]);
     } catch (err) {
       handleError(err, { component: "DealManager", action: "saveForm" });
       toast.error("Save failed");
@@ -450,6 +669,14 @@ export default function DealManager() {
             <CardDescription>
               {totalCount.toLocaleString()} total · {selectedIds.length}{" "}
               selected
+              {unlinkedCount !== null && unlinkedCount > 0 && (
+                <>
+                  {" "}
+                  &middot; {unlinkedCount.toLocaleString()} current or upcoming
+                  restaurant, attraction or hotel deal
+                  {unlinkedCount === 1 ? "" : "s"} with no venue linked
+                </>
+              )}
             </CardDescription>
           </div>
           <div className="flex gap-2">
@@ -671,6 +898,9 @@ export default function DealManager() {
                         {d.business_name}
                         <div className="text-xs text-muted-foreground">
                           {d.entity_type}
+                          {!d.entity_id && LINKABLE_TYPES.includes(d.entity_type)
+                            ? " \u00b7 No venue linked"
+                            : ""}
                         </div>
                       </TableCell>
                       <TableCell className="hidden md:table-cell text-xs">
@@ -801,7 +1031,12 @@ export default function DealManager() {
                   <Select
                     value={editing.entity_type}
                     onValueChange={(v) =>
-                      setEditing({ ...editing, entity_type: v })
+                      // A restaurant id means nothing to the hotels table.
+                      setEditing({
+                        ...editing,
+                        entity_type: v,
+                        entity_id: v === editing.entity_type ? editing.entity_id : null,
+                      })
                     }
                   >
                     <SelectTrigger>
@@ -858,7 +1093,7 @@ export default function DealManager() {
                   />
                 </div>
                 <div>
-                  <Label htmlFor="d-start">Starts *</Label>
+                  <Label htmlFor="d-start">Starts * (Des Moines time)</Label>
                   <Input
                     id="d-start"
                     type="datetime-local"
@@ -869,13 +1104,27 @@ export default function DealManager() {
                   />
                 </div>
                 <div>
-                  <Label htmlFor="d-end">Ends</Label>
+                  <Label htmlFor="d-end">Ends (Des Moines time)</Label>
                   <Input
                     id="d-end"
                     type="datetime-local"
                     value={editing.end_date}
                     onChange={(e) =>
                       setEditing({ ...editing, end_date: e.target.value })
+                    }
+                  />
+                </div>
+                <div className="md:col-span-2">
+                  <VenuePicker
+                    entityType={editing.entity_type}
+                    entityId={editing.entity_id}
+                    onPick={(venue) =>
+                      setEditing({
+                        ...editing,
+                        entity_id: venue?.id ?? null,
+                        // Prefill from the picked row; the field stays editable.
+                        business_name: venue ? venue.name : editing.business_name,
+                      })
                     }
                   />
                 </div>

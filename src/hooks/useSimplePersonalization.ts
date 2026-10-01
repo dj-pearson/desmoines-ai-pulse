@@ -1,18 +1,40 @@
-import { useState, useEffect, useCallback } from 'react';
+import { useState, useEffect } from 'react';
 import { supabase } from '@/integrations/supabase/client';
 import { useAuth } from './useAuth';
 import { handleError } from '@/lib/errorHandler';
+import {
+  ANALYTICS_SCAN_LIMIT,
+  fetchRecentVisibleContent,
+  fetchVisibleContent,
+  isTrendingContentType,
+  type TrendingContentType,
+} from '@/lib/trendingContent';
 
 interface SimpleRecommendation {
   id: string;
-  contentType: 'event' | 'restaurant' | 'attraction' | 'playground';
-  content: any;
+  contentType: TrendingContentType;
+  content: Record<string, unknown>;
   score: number;
   reason: string;
 }
 
+interface ScoredItem {
+  content_type: TrendingContentType;
+  content_id: string;
+  score: number;
+}
+
+interface SearchPreferences {
+  preferredCategories: string[];
+  preferredLocations: string[];
+  preferredPriceRanges: string[];
+  searchCount: number;
+}
+
+const EVENT_WEIGHTS: Record<string, number> = { view: 1, click: 2, share: 5, bookmark: 3 };
+
 interface RecommendationOptions {
-  contentType?: 'event' | 'restaurant' | 'attraction' | 'playground';
+  contentType?: TrendingContentType;
   limit?: number;
   context?: 'homepage' | 'search' | 'detail' | 'category';
 }
@@ -43,19 +65,12 @@ export function useSimplePersonalization(options: RecommendationOptions = {}) {
       // Get trending content
       const trendingContent = await getTrendingContent();
       
-      // Get user's recent activity
-      const recentActivity = await getUserRecentActivity();
-      
       // Combine and score recommendations
-      const scoredRecommendations = await combineAndScoreRecommendations(
-        userPreferences,
-        trendingContent,
-        recentActivity
-      );
+      const scoredRecommendations = await combineAndScoreRecommendations(userPreferences, trendingContent);
 
       setRecommendations(scoredRecommendations);
     } catch (error) {
-      console.error('Error generating recommendations:', error);
+      handleError(error, { component: 'useSimplePersonalization', action: 'generateRecommendations' });
       // Fallback to popular content
       const fallbackRecommendations = await getFallbackRecommendations();
       setRecommendations(fallbackRecommendations);
@@ -64,7 +79,7 @@ export function useSimplePersonalization(options: RecommendationOptions = {}) {
     }
   };
 
-  const getUserPreferencesFromSearch = async () => {
+  const getUserPreferencesFromSearch = async (): Promise<SearchPreferences | null> => {
     if (!user?.id) return null;
 
     try {
@@ -100,14 +115,18 @@ export function useSimplePersonalization(options: RecommendationOptions = {}) {
     }
   };
 
-  const getTrendingContent = async () => {
+  const getTrendingContent = async (): Promise<ScoredItem[]> => {
     try {
       const timeThreshold = new Date(Date.now() - 24 * 60 * 60 * 1000).toISOString();
 
+      // Newest rows first, bounded. This pulled every row in the window with no
+      // limit and scored them in the browser.
       let query = supabase
         .from('user_analytics')
         .select('content_type, content_id, event_type')
-        .gte('created_at', timeThreshold);
+        .gte('created_at', timeThreshold)
+        .order('created_at', { ascending: false })
+        .limit(ANALYTICS_SCAN_LIMIT);
 
       if (contentType) {
         query = query.eq('content_type', contentType);
@@ -119,93 +138,51 @@ export function useSimplePersonalization(options: RecommendationOptions = {}) {
       if (error) return [];
       if (!analytics) return [];
 
-      // Calculate trending scores
-      const contentScores: { [key: string]: any } = {};
-
-      analytics.forEach(item => {
+      const contentScores = new Map<string, ScoredItem>();
+      for (const item of analytics) {
+        if (!item.content_type || !item.content_id || !isTrendingContentType(item.content_type)) continue;
         const key = `${item.content_type}:${item.content_id}`;
-        if (!contentScores[key]) {
-          contentScores[key] = {
-            content_type: item.content_type,
-            content_id: item.content_id,
-            score: 0,
-            reason: 'trending'
-          };
-        }
+        const entry = contentScores.get(key) ?? { content_type: item.content_type, content_id: item.content_id, score: 0 };
+        entry.score += EVENT_WEIGHTS[item.event_type as string] ?? 0;
+        contentScores.set(key, entry);
+      }
 
-        switch (item.event_type) {
-          case 'view': contentScores[key].score += 1; break;
-          case 'click': contentScores[key].score += 2; break;
-          case 'share': contentScores[key].score += 5; break;
-          case 'bookmark': contentScores[key].score += 3; break;
-        }
-      });
-
-      return Object.values(contentScores)
-        .sort((a: any, b: any) => b.score - a.score)
-        .slice(0, 20);
-
+      return [...contentScores.values()].sort((a, b) => b.score - a.score).slice(0, 20);
     } catch (error) {
       handleError(error, { component: 'useSimplePersonalization', action: 'getTrendingContent' });
       return [];
     }
   };
 
-  const getUserRecentActivity = async () => {
-    if (!user?.id) return [];
-
-    try {
-      const { data: recentViews, error } = await supabase
-        .from('user_analytics')
-        .select('content_type, content_id, event_type, created_at')
-        .eq('user_id', user.id)
-        .order('created_at', { ascending: false })
-        .limit(10);
-
-      // Silently handle permission errors
-      if (error) return [];
-      return recentViews || [];
-    } catch (error) {
-      handleError(error, { component: 'useSimplePersonalization', action: 'getUserRecentActivity' });
-      return [];
-    }
-  };
-
   const combineAndScoreRecommendations = async (
-    preferences: any,
-    trending: any[],
-    activity: any[]
+    preferences: SearchPreferences | null,
+    trending: ScoredItem[],
   ): Promise<SimpleRecommendation[]> => {
     const recommendations: SimpleRecommendation[] = [];
     const seenContentIds = new Set<string>();
 
     // Candidate trending items (dedup, preserve order/score).
-    const candidates: any[] = [];
+    const candidates: ScoredItem[] = [];
     for (const item of trending.slice(0, limit * 2)) {
       if (seenContentIds.has(item.content_id)) continue;
       seenContentIds.add(item.content_id);
       candidates.push(item);
     }
 
-    // Batch-fetch the actual content by content_type (.in) instead of one
-    // round-trip per item — same rows, ~N fewer requests. Parallel per type.
-    const idsByType = new Map<string, string[]>();
+    // One visible-rows read per type. Rows that are past, hidden, merged or
+    // inactive come back absent and drop out below, where they used to be
+    // fetched with select('*') and shown as "trending".
+    const idsByType = new Map<TrendingContentType, string[]>();
     for (const item of candidates) {
-      const arr = idsByType.get(item.content_type) ?? [];
-      arr.push(item.content_id);
-      idsByType.set(item.content_type, arr);
+      idsByType.set(item.content_type, [...(idsByType.get(item.content_type) ?? []), item.content_id]);
     }
-    const contentById = new Map<string, any>();
+    const contentById = new Map<string, Record<string, unknown>>();
     await Promise.all(
-      Array.from(idsByType.entries()).map(async ([type, ids]) => {
+      [...idsByType.entries()].map(async ([type, ids]) => {
         try {
-          const { data } = await supabase
-            .from(getTableName(type) as any)
-            .select('*')
-            .in('id', ids);
-          (data ?? []).forEach((row: any) => contentById.set(`${type}:${row.id}`, row));
-        } catch {
-          console.log(`Could not batch-fetch content for ${type}`);
+          for (const [key, row] of await fetchVisibleContent(type, ids)) contentById.set(key, row);
+        } catch (error) {
+          handleError(error, { component: 'useSimplePersonalization', action: 'fetchVisibleContent' });
         }
       }),
     );
@@ -245,38 +222,34 @@ export function useSimplePersonalization(options: RecommendationOptions = {}) {
 
   const getPopularContent = async (needed: number, excludeIds: Set<string>): Promise<SimpleRecommendation[]> => {
     const popular: SimpleRecommendation[] = [];
-    
-    try {
-      const tables = contentType ? [getTableName(contentType)] : ['events', 'restaurants', 'attractions', 'playgrounds'];
+    const types: TrendingContentType[] = contentType ? [contentType] : ['event', 'restaurant', 'attraction', 'playground'];
 
-      // Fetch the candidate tables in parallel instead of one after another;
-      // then fill in the same table-priority order to preserve behavior.
-      const perTable = await Promise.all(
-        tables.map(async (table) => {
-          const { data } = await supabase
-            .from(table as any)
-            .select('*')
-            .order('created_at', { ascending: false })
-            .limit(needed);
-          return { table, rows: data ?? [] };
-        }),
-      );
+    // Parallel reads, then filled in type-priority order. Same visibility rules
+    // as the trending path: this fallback used select('*') ordered by
+    // created_at with no filter, so a long-past event could lead the list.
+    const perType = await Promise.all(
+      types.map(async (type) => {
+        try {
+          return { type, rows: await fetchRecentVisibleContent(type, needed) };
+        } catch (error) {
+          handleError(error, { component: 'useSimplePersonalization', action: 'getPopularContent' });
+          return { type, rows: [] as Array<Record<string, unknown>> };
+        }
+      }),
+    );
 
-      for (const { table, rows } of perTable) {
-        rows.forEach((item: any) => {
-          if (!excludeIds.has(item.id) && popular.length < needed) {
-            popular.push({
-              id: `pop-${item.id}`,
-              contentType: getContentTypeFromTable(table),
-              content: item,
-              score: 10, // Base score for popular content
-              reason: 'Recently added'
-            });
-          }
+    for (const { type, rows } of perType) {
+      for (const item of rows) {
+        if (popular.length >= needed) break;
+        if (excludeIds.has(item.id as string)) continue;
+        popular.push({
+          id: `pop-${item.id as string}`,
+          contentType: type,
+          content: item,
+          score: 10, // Base score for popular content
+          reason: 'Recently added',
         });
       }
-    } catch (error) {
-      console.log('Error getting popular content:', error);
     }
 
     return popular;
@@ -286,26 +259,6 @@ export function useSimplePersonalization(options: RecommendationOptions = {}) {
     return getPopularContent(limit, new Set());
   };
 
-  const getTableName = (contentType: string): string => {
-    switch (contentType) {
-      case 'event': return 'events';
-      case 'restaurant': return 'restaurants';
-      case 'attraction': return 'attractions';
-      case 'playground': return 'playgrounds';
-      default: return 'events';
-    }
-  };
-
-  const getContentTypeFromTable = (table: string): 'event' | 'restaurant' | 'attraction' | 'playground' => {
-    switch (table) {
-      case 'events': return 'event';
-      case 'restaurants': return 'restaurant';
-      case 'attractions': return 'attraction';
-      case 'playgrounds': return 'playground';
-      default: return 'event';
-    }
-  };
-
   const trackRecommendationClick = async (recommendation: SimpleRecommendation) => {
     try {
       const { error } = await supabase.from('user_analytics').insert({
@@ -313,7 +266,7 @@ export function useSimplePersonalization(options: RecommendationOptions = {}) {
         user_id: user?.id,
         event_type: 'click',
         content_type: recommendation.contentType,
-        content_id: recommendation.content.id,
+        content_id: recommendation.content.id as string,
         device_type: getMobileDetect(),
         user_agent: navigator.userAgent,
         page_url: window.location.href

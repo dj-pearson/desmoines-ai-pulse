@@ -270,10 +270,16 @@ Deno.serve(async (req) => {
       decision = 'published';
       await supabase
         .from('articles')
+        // `review_status` IS NOT A COLUMN ON articles - not here, not anywhere
+        // in the generated types - and PostgREST rejects the WHOLE update with
+        // PGRST204 rather than the one bad key. So this write has never
+        // landed: status, published_at, is_auto_published, quality_score and
+        // pipeline_reasons all went with it, and the pipeline has never
+        // actually published an article (WEB-QUAL-015, WEB-QA-017). `status`
+        // is what records the decision.
         .update({
           status: 'published',
           published_at: new Date().toISOString(),
-          review_status: 'approved',
           is_auto_published: true,
           quality_score: score,
           pipeline_reasons: reasons.length ? reasons : null,
@@ -284,9 +290,9 @@ Deno.serve(async (req) => {
       decision = 'draft';
       await supabase
         .from('articles')
+        // Same dead column as the published branch above; same consequence.
         .update({
           status: 'draft',
-          review_status: 'pending_review',
           is_auto_published: false,
           quality_score: score,
           pipeline_reasons: reasons.length ? reasons : null,

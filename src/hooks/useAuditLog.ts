@@ -1,7 +1,7 @@
 import { useCallback } from 'react';
 import { useQuery } from '@tanstack/react-query';
 import { supabase } from '@/integrations/supabase/client';
-import { useAuth } from '@/contexts/AuthContext';
+import { recordAdminAudit } from '@/lib/adminAudit';
 import { createLogger } from '@/lib/logger';
 
 const log = createLogger('useAuditLog');
@@ -26,8 +26,9 @@ interface AuditLogEntry {
  * (delete, role change, etc.) and a query for displaying recent audit entries.
  */
 export function useAuditLog() {
-  const { user } = useAuth();
-
+  // Through record_admin_audit, which takes the actor from the session. The
+  // direct insert this replaces sent severity 'info', which the table's CHECK
+  // refuses, so none of its rows were ever stored.
   const logAdminAction = useCallback(
     async (
       action: string,
@@ -35,28 +36,13 @@ export function useAuditLog() {
       entityId: string,
       details?: Record<string, unknown>
     ) => {
-      try {
-        const { error } = await supabase
-          .from('security_audit_logs')
-          .insert({
-            event_type: 'admin_action',
-            action,
-            resource: entityType,
-            identifier: entityId,
-            severity: 'info',
-            details: details ? JSON.parse(JSON.stringify(details)) : null,
-            user_id: user?.id || null,
-            timestamp: new Date().toISOString(),
-          });
-
-        if (error) {
-          log.warn('logAdminAction', 'Failed to write audit log', { error: error.message });
-        }
-      } catch (err) {
-        log.error('logAdminAction', 'Unexpected error writing audit log', { err });
-      }
+      await recordAdminAudit({
+        action,
+        resource: `${entityType}:${entityId}`,
+        details: { ...(details ?? {}), entity_id: entityId },
+      });
     },
-    [user?.id]
+    []
   );
 
   return { logAdminAction };

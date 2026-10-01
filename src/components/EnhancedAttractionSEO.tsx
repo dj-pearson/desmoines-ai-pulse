@@ -1,6 +1,7 @@
 import { Helmet } from "react-helmet-async";
 import { BRAND } from "@/lib/brandConfig";
-import { ogImageUrl } from "@/lib/ogImage";
+import { toJsonLd } from "@/lib/jsonLd";
+import { attractionOpeningHoursSpec } from "@/lib/attractionHours";
 
 interface AttractionData {
   id?: string | null;
@@ -10,10 +11,25 @@ interface AttractionData {
   location?: string | null;
   website?: string | null;
   image_url?: string | null;
-  rating?: number | null;
   latitude?: number | null;
   longitude?: number | null;
   is_featured?: boolean | null;
+  /**
+   * WEB-SEO-024. A real column on public.attractions, and the only honest
+   * source for isAccessibleForFree -- which this component used to hard-code
+   * true, claiming free admission for every attraction including the ones that
+   * charge. Optional because the prop type is a hand-written subset and not
+   * every caller passes the whole row; the schema omits the property when it is
+   * absent rather than guessing.
+   */
+  is_free?: boolean | null;
+  /**
+   * attractions.hours JSONB. Published as openingHoursSpecification for the
+   * days it states (explore pass 2 WP3 item 4); omitted when it states none.
+   */
+  hours?: unknown;
+  /** When present, AttractionDetails renders it as .attraction-summary. */
+  geo_summary?: string | null;
 }
 
 interface EnhancedAttractionSEOProps {
@@ -27,7 +43,6 @@ export default function EnhancedAttractionSEO({
 }: EnhancedAttractionSEOProps) {
   const attractionUrl = `${BRAND.baseUrl}/attractions/${slug}`;
   // Branded dynamic OG card (WEB-FEAT-008); falls back to the item photo / default.
-  const ogImage = ogImageUrl("attraction", attraction.id) || attraction.image_url || `${BRAND.baseUrl}${BRAND.ogImage}`;
 
   const getOptimizedTitle = () => {
     const parts = [attraction.name];
@@ -36,18 +51,20 @@ export default function EnhancedAttractionSEO({
     return `${parts.join(" - ")} | Things to Do`;
   };
 
+  // Explore WP3 item 4: no "by visitors", no "popular", and no "Plan your
+  // visit today" sales line. Pass 2 item 2: no "Rated X/5" either.
+  // attractions.rating has no source anyone can check; the only rating this
+  // page shows is the review average from content_rating_aggregates.
   const getGEODescription = () => {
     const desc = attraction.description || "";
-    const location = attraction.location || `${BRAND.city}, ${BRAND.state}`;
-    const ratingText = attraction.rating
-      ? ` Rated ${attraction.rating.toFixed(1)}/5 by visitors.`
-      : "";
+    const typeText = attraction.type ? attraction.type.toLowerCase() : "attraction";
+    const locationText = attraction.location ? ` Located at ${attraction.location}.` : "";
 
     if (desc.length > 50) {
-      return `${attraction.name} is a ${attraction.type?.toLowerCase()} in ${BRAND.city}, ${BRAND.state}. ${desc.substring(0, 150).trim()}...${ratingText} Located at ${location}. Plan your visit today.`;
+      return `${attraction.name} is a ${typeText} in the ${BRAND.city} area. ${desc.substring(0, 150).trim()}...${locationText}`;
     }
 
-    return `Visit ${attraction.name}, a popular ${attraction.type?.toLowerCase()} attraction in ${BRAND.city}, ${BRAND.state}.${ratingText} Find hours, directions, and visitor information. Located at ${location}.`;
+    return `${attraction.name}, a ${typeText} in the ${BRAND.city} area. Hours, directions and visitor information.${locationText}`;
   };
 
   const getLocalKeywords = () => {
@@ -71,34 +88,62 @@ export default function EnhancedAttractionSEO({
     ].filter(Boolean);
   };
 
+  const openingHoursSpecification = attractionOpeningHoursSpec(attraction.hours);
+
   const attractionSchema = {
     "@context": "https://schema.org",
     "@type": "TouristAttraction",
-    "@id": attractionUrl,
+    // "#place", not the bare URL: the WebPage node below has the bare URL as
+    // its @id, and two nodes with one @id merge into a single entity in a
+    // parser's graph (explore pass 2 WP3 item 4).
+    "@id": `${attractionUrl}#place`,
     name: attraction.name,
     description: getGEODescription(),
     ...(attraction.image_url && { image: [attraction.image_url] }),
     ...(attraction.website && { url: attraction.website }),
+    // WEB-SEO-024. THE ADDRESS ASSERTED A CITY AND A POSTCODE NO COLUMN HOLDS.
+    //
+    // public.attractions has address, location, latitude and longitude and no
+    // city or postal_code at all. So every attraction in the set -- Ames, Ankeny,
+    // Waukee, Altoona -- was published as being in Des Moines 50309. That is the
+    // same locality bug SEO-007 fixed for events, on a different table.
+    //
+    // addressRegion and addressCountry stay: this is a Greater Des Moines site
+    // and Iowa/US is true of the whole set. A locality is not, and a postcode
+    // is a specific claim about a specific building.
     address: {
       "@type": "PostalAddress",
-      streetAddress: attraction.location || "",
-      addressLocality: BRAND.city,
+      ...(attraction.location && { streetAddress: attraction.location }),
       addressRegion: BRAND.state,
-      postalCode: "50309",
       addressCountry: BRAND.country,
     },
-    geo: {
-      "@type": "GeoCoordinates",
-      latitude: attraction.latitude || 41.5868,
-      longitude: attraction.longitude || -93.625,
-    },
+    // Coordinates fell back to 41.5868,-93.625 -- the middle of downtown Des
+    // Moines -- for any row without them. A wrong pin is worse than no pin: it
+    // puts the attraction somewhere it is not, on a map a user may drive to.
+    ...(attraction.latitude != null && attraction.longitude != null
+      ? {
+          geo: {
+            "@type": "GeoCoordinates",
+            latitude: attraction.latitude,
+            longitude: attraction.longitude,
+          },
+        }
+      : {}),
     // WEB-SEO-016: aggregateRating removed. The ratingValue was real but
     // ratingCount was invented from it (attraction.rating >= 4.5 ? ... ), and
     // Google requires the count to reflect actual reviews. No reviews table
     // exists, so there is no honest count to emit.
-    isAccessibleForFree: true,
-    publicAccess: true,
-    touristType: ["Family", "Couples", "Solo travelers", "Groups"],
+    // is_free is a real column, so this can be stated -- but only when it is
+    // set. It was hard-coded true, which claimed free admission for every
+    // attraction including the ones that charge.
+    ...(attraction.is_free != null && { isAccessibleForFree: attraction.is_free }),
+    // Only the days the row states; see attractionOpeningHoursSpec.
+    ...(openingHoursSpecification.length > 0 && { openingHoursSpecification }),
+    // publicAccess and touristType are GONE. Nothing backs either. touristType
+    // in particular listed "Family", "Couples", "Solo travelers", "Groups" for
+    // every row, which is a claim that says nothing and is false the moment one
+    // attraction is not suitable for one of them.
+
     areaServed: {
       "@type": "City",
       name: BRAND.city,
@@ -128,68 +173,37 @@ export default function EnhancedAttractionSEO({
     name: getOptimizedTitle(),
     speakable: {
       "@type": "SpeakableSpecification",
-      cssSelector: [
-        "article h1",
-        "article [itemprop='description']",
-        ".attraction-summary",
-      ],
+      // Only selectors that match something on AttractionDetails: the page
+      // has no <article>, and the summary paragraph renders only when the
+      // row has a geo_summary (Explore plan WP3 item 4).
+      cssSelector: ["h1", ...(attraction.geo_summary ? [".attraction-summary"] : [])],
     },
     url: attractionUrl,
   };
 
-  const localBusinessSchema = {
-    "@context": "https://schema.org",
-    "@type": "LocalBusiness",
-    "@id": `${BRAND.baseUrl}/#localbusiness`,
-    name: BRAND.name,
-    description: BRAND.tagline,
-    url: BRAND.baseUrl,
-    address: {
-      "@type": "PostalAddress",
-      addressLocality: BRAND.city,
-      addressRegion: BRAND.state,
-      addressCountry: BRAND.country,
-    },
-    geo: {
-      "@type": "GeoCoordinates",
-      latitude: 41.5868,
-      longitude: -93.625,
-    },
-    areaServed: {
-      "@type": "GeoCircle",
-      geoMidpoint: {
-        "@type": "GeoCoordinates",
-        latitude: 41.5868,
-        longitude: -93.625,
-      },
-      geoRadius: "50000",
-    },
-    serviceType: "Local Attraction Information",
-    knowsAbout: [
-      `${BRAND.city} attractions`,
-      `${BRAND.state} tourism`,
-      "local attractions",
-      "things to do",
-      attraction.type,
-    ],
-  };
+  // WEB-SEO-026: A SITE-WIDE LocalBusiness USED TO BE BUILT HERE, so every
+  // attraction page carried a second identity claim about US, at
+  // @id /#localbusiness, alongside the attraction it is actually about. An
+  // aggregator is not a local business, and a page about someone else's place
+  // is the worst position from which to say otherwise. SEOHead's Organization
+  // node, with a stable @id, is the one identity this site publishes.
+
 
   return (
     <Helmet>
-      <title>{getOptimizedTitle()}</title>
-      <meta name="description" content={getGEODescription()} />
-      <meta name="keywords" content={getLocalKeywords().join(", ")} />
-      <link rel="canonical" href={attractionUrl} />
-
-      {/* Geographic Meta for Local SEO */}
-      <meta name="geo.region" content={`US-${BRAND.stateAbbr}`} />
-      <meta
-        name="geo.placename"
-        content={`${BRAND.city}, ${BRAND.state}`}
-      />
-      <meta name="geo.position" content="41.5868;-93.6250" />
-      <meta name="ICBM" content="41.5868, -93.6250" />
-      <meta name="DC.title" content={getOptimizedTitle()} />
+      {/* WEB-SEO-027 -- THIS COMPONENT NO LONGER MANAGES THE HEAD.
+          It used to emit its own <title>, description, keywords, canonical,
+          robots, DC.title, the full Open Graph set and the full Twitter set,
+          alongside AttractionDetails' <SEOHead>, which emits every one of
+          those too. Two components computing a title independently means the
+          one that ships is decided by mount order rather than by anyone - and
+          the prerenderer's dedupeJsonLd kept the LAST block of each @type, so
+          the static HTML looked settled while the live DOM was not.
+          SEOHead is the single head manager for this page now. What stays here
+          is what SEOHead has no notion of: the place:* meta for AI parsers, and
+          the three typed schema blocks. Nothing observable changed when these
+          were removed - SEOHead mounts second and was already winning every one
+          of them. */}
 
       {/* Place-Specific Meta for AI Parsers */}
       <meta name="place:name" content={attraction.name} />
@@ -200,60 +214,20 @@ export default function EnhancedAttractionSEO({
           attraction.location || `${BRAND.city}, ${BRAND.state}`
         }
       />
-      <meta name="place:city" content={BRAND.city} />
+      {/* No place:city. The table has no city column, and the set includes
+          Ankeny, Altoona and Waukee (see the address note above). */}
       <meta name="place:state" content={BRAND.state} />
       <meta name="place:country" content="United States" />
       {attraction.image_url && (
         <meta name="place:image" content={attraction.image_url} />
       )}
-      {attraction.rating && (
-        <meta
-          name="place:rating"
-          content={attraction.rating.toFixed(1)}
-        />
-      )}
-
-      {/* AI Search Engine Optimization Meta */}
-      <meta
-        name="robots"
-        content="index, follow, max-snippet:-1, max-image-preview:large, max-video-preview:-1"
-      />
-      <meta name="googlebot" content="index, follow" />
-      <meta name="bingbot" content="index, follow" />
-
-      {/* Open Graph */}
-      <meta property="og:type" content="place" />
-      <meta property="og:title" content={getOptimizedTitle()} />
-      <meta property="og:description" content={getGEODescription()} />
-      <meta property="og:locality" content={BRAND.city} />
-      <meta property="og:region" content={BRAND.state} />
-      <meta property="og:country-name" content="United States" />
-      <meta property="og:image" content={ogImage} />
-      <meta property="og:image:width" content="1200" />
-      <meta property="og:image:height" content="630" />
-      <meta
-        property="og:image:alt"
-        content={`${attraction.name} - ${attraction.type} in ${BRAND.city}`}
-      />
-      <meta property="og:url" content={attractionUrl} />
-      <meta property="og:site_name" content={BRAND.name} />
-
-      {/* Twitter Cards */}
-      <meta name="twitter:card" content="summary_large_image" />
-      <meta name="twitter:title" content={getOptimizedTitle()} />
-      <meta name="twitter:description" content={getGEODescription()} />
-      <meta name="twitter:image" content={ogImage} />
-      <meta name="twitter:site" content={BRAND.twitter} />
 
       {/* Structured Data */}
       <script type="application/ld+json">
-        {JSON.stringify(attractionSchema)}
+        {toJsonLd(attractionSchema)}
       </script>
       <script type="application/ld+json">
-        {JSON.stringify(speakableSchema)}
-      </script>
-      <script type="application/ld+json">
-        {JSON.stringify(localBusinessSchema)}
+        {toJsonLd(speakableSchema)}
       </script>
     </Helmet>
   );

@@ -1,4 +1,13 @@
 import Foundation
+import Supabase
+
+/// Whether Group Session is offered (IOS-DD-DISCOVER-01). Hosting and joining
+/// work, but nothing ties the swipe deck to a session yet: swipes are never
+/// written with a session_id and no screen reads matches, so a group would
+/// swipe and never see one. Flip this when that ships (D7-DEF-01).
+enum GroupSessionFeature {
+    static let isEnabled = false
+}
 
 /// Manages shared swipe sessions for group decision mode.
 /// IOS-DISCOVER-2026-006.
@@ -17,11 +26,14 @@ final class SwipeSessionService {
         let status: String
         let expiresAt: String?
         let endedAt: String?
+        /// Optional so a select that leaves it out still decodes.
+        var hostUserId: UUID? = nil
 
         enum CodingKeys: String, CodingKey {
             case id, code, mode, status
             case expiresAt = "expires_at"
             case endedAt = "ended_at"
+            case hostUserId = "host_user_id"
         }
     }
 
@@ -77,6 +89,35 @@ final class SwipeSessionService {
         return new
     }
 
+    // MARK: - Decoding
+
+    private struct CodeRow: Decodable { let code: String }
+
+    /// The generated code from the RPC body: a bare JSON string (what a
+    /// scalar function returns), or a `[{"code": ...}]` row set as a fallback.
+    nonisolated static func decodeSessionCode(_ data: Data) throws -> String {
+        let decoder = JSONDecoder()
+        if let code = try? decoder.decode(String.self, from: data), isValidCode(code) {
+            return code
+        }
+        if let rows = try? decoder.decode([CodeRow].self, from: data),
+           let code = rows.first?.code, isValidCode(code) {
+            return code
+        }
+        throw SessionError.codeGenerationFailed
+    }
+
+    nonisolated static func isValidCode(_ code: String) -> Bool {
+        code.range(of: "^DSM-[A-Z0-9]{4}$", options: .regularExpression) != nil
+    }
+
+    /// The participant row already exists (unique index on session and
+    /// identity): joining twice is fine. FavoritesService.errorCode reads the
+    /// code structurally, so a test can throw a stub.
+    nonisolated static func isAlreadyJoined(_ error: Error) -> Bool {
+        FavoritesService.errorCode(error) == "23505"
+    }
+
     // MARK: - Host
 
     /// Create a new session as the host (must be signed in).
@@ -88,15 +129,15 @@ final class SwipeSessionService {
         let session = try await client.auth.session
         let userId = session.user.id
 
-        // Generate a code via RPC so collisions are checked server-side.
-        struct CodeRow: Decodable { let code: String }
-        let codeRows: [CodeRow] = try await client
+        // Generate a code via RPC so collisions are checked server-side. The
+        // function RETURNS TEXT, which PostgREST sends as a bare JSON string;
+        // decoding it as [CodeRow] threw on every call, so Host never worked
+        // (IOS-DD-DISCOVER-01).
+        let data = try await client
             .rpc("generate_swipe_session_code")
             .execute()
-            .value
-        guard let code = codeRows.first?.code else {
-            throw SessionError.codeGenerationFailed
-        }
+            .data
+        let code = try Self.decodeSessionCode(data)
 
         struct InsertRow: Encodable {
             let code: String
@@ -145,6 +186,10 @@ final class SwipeSessionService {
             .select()
             .eq("code", value: normalized)
             .eq("status", value: "active")
+            // Nothing ends a session at expires_at, so an expired code still
+            // matched here and the join then failed the RLS check
+            // (IOS-DD-DISCOVER-01).
+            .gt("expires_at", value: ISO8601DateFormatter().string(from: Date()))
             .limit(1)
             .execute()
             .value
@@ -172,21 +217,27 @@ final class SwipeSessionService {
                 user_id: authSession.user.id,
                 display_name: displayName,
             )
-            // Upsert pattern via insert-then-ignore-conflict
-            _ = try? await client
-                .from("swipe_session_participants")
-                .insert(row)
-                .execute()
+            // A duplicate (already joined) is fine. Anything else is a real
+            // failure: `try?` used to report RLS and network errors as a
+            // successful join (IOS-DD-DISCOVER-01).
+            do {
+                try await client
+                    .from("swipe_session_participants")
+                    .insert(row)
+                    .execute()
+            } catch let error where Self.isAlreadyJoined(error) {}
         } else {
             let row = AnonRow(
                 session_id: session.id,
                 anon_id: deviceAnonId,
                 display_name: displayName ?? "Guest",
             )
-            _ = try? await client
-                .from("swipe_session_participants")
-                .insert(row)
-                .execute()
+            do {
+                try await client
+                    .from("swipe_session_participants")
+                    .insert(row)
+                    .execute()
+            } catch let error where Self.isAlreadyJoined(error) {}
         }
         activeSession = session
     }

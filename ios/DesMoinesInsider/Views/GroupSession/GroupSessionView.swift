@@ -50,6 +50,9 @@ struct GroupSessionView: View {
             .scrollDismissesKeyboard(.interactively)
             .navigationTitle("Group Session")
             .navigationBarTitleDisplayMode(.inline)
+            // The lobby was view state, so closing the sheet lost the code.
+            // The service still holds the live session (IOS-DD-DISCOVER-01).
+            .onAppear { restoreHostedSession() }
             .toolbar {
                 ToolbarItem(placement: .topBarLeading) {
                     Button("Close") { dismiss() }
@@ -222,6 +225,14 @@ struct GroupSessionView: View {
             errorMessage = error.localizedDescription
             UINotificationFeedbackGenerator().notificationOccurred(.error)
         }
+    }
+
+    private func restoreHostedSession() {
+        guard hostedSession == nil,
+              let session = service.activeSession,
+              let hostId = session.hostUserId,
+              hostId == auth.currentUser?.id else { return }
+        hostedSession = session
     }
 
     private func endHosting(_ session: SwipeSessionService.Session) async {

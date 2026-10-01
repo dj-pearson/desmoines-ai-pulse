@@ -1,5 +1,6 @@
 import { useParams, Link } from 'react-router-dom';
 import { RouteCanonical } from "@/components/RouteCanonical";
+import { ErrorState } from "@/components/ui/error-state";
 import Header from '@/components/Header';
 import Footer from '@/components/Footer';
 import { Helmet } from 'react-helmet-async';
@@ -12,7 +13,7 @@ import { BRAND } from '@/lib/brandConfig';
 
 export default function SeasonalGuide() {
   const { slug } = useParams<{ slug: string }>();
-  const { data: guide, isLoading } = useSeasonalGuide(slug || '');
+  const { data: guide, isLoading, error, refetch } = useSeasonalGuide(slug || '');
 
   if (isLoading) {
     return (
@@ -24,6 +25,29 @@ export default function SeasonalGuide() {
           <Skeleton className="h-8 w-64 mb-4" />
           <Skeleton className="h-48 w-full mb-4" />
           <Skeleton className="h-32 w-full" />
+        </div>
+        <Footer />
+      </div>
+    );
+  }
+
+  /**
+   * WEB-SEO-040. A FAILED LOAD AND A MISSING ROW ARE DIFFERENT ANSWERS.
+   * This used to fall straight through to the not-found branch below, which
+   * renders "not found" AND a noindex - so Googlebot arriving during a
+   * PostgREST blip was told a real page should not be indexed. No query here
+   * sets throwOnError, so RouteErrorBoundary never sees these either.
+   *
+   * The retry state carries NO robots meta: the page is fine, the fetch was
+   * not, and saying nothing leaves whatever is already indexed alone.
+   */
+  if (error) {
+    return (
+      <div className="min-h-screen bg-background">
+        <RouteCanonical path={`/guides/${slug}`} />
+        <Header />
+        <div className="container mx-auto px-4 py-16">
+          <ErrorState error={error} onRetry={() => refetch()} />
         </div>
         <Footer />
       </div>

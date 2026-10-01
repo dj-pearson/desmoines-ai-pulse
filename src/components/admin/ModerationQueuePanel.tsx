@@ -35,6 +35,9 @@ function statusBadge(s: Status) {
     case "flagged":
       return <Badge className="bg-amber-500 hover:bg-amber-500">Flagged</Badge>;
     case "error":
+      // slate is the neutral member of a set that also uses amber and
+      // destructive, so it stays (WEB-UX-034 AC2). variant="secondary" is
+      // already taken by Pending below.
       return <Badge className="bg-slate-500 hover:bg-slate-500">Needs review</Badge>;
     default:
       return <Badge variant="secondary">Pending</Badge>;

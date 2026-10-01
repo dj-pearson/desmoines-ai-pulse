@@ -46,13 +46,27 @@ struct VotingCategory: Identifiable, Codable, Hashable {
     }
 
     /// Whether voting is currently open (within the start/end window).
-    var isVotingOpen: Bool {
-        let now = Date()
-        if let endStr = votingEnd, let end = Article.parseTimestamp(endStr), now > end {
-            return false
-        }
+    var isVotingOpen: Bool { isVotingOpen(at: Date()) }
+
+    /// The same window votes_guard (20261015000002) enforces: active, on or
+    /// after voting_start, before voting_end. voting_start used to be ignored,
+    /// so a scheduled round showed an open booth whose votes the server
+    /// refused (IOS-DD-GUIDES-07).
+    func isVotingOpen(at now: Date) -> Bool {
+        if let start = Article.parseTimestamp(votingStart), now < start { return false }
+        if let end = closesAt, now >= end { return false }
         return isActive ?? true
     }
+
+    /// "Best Pizza" -> "pizza", for "be the first to pick the best pizza".
+    var subjectName: String {
+        let trimmed = name.trimmingCharacters(in: .whitespaces)
+        let stripped = trimmed.lowercased().hasPrefix("best ") ? String(trimmed.dropFirst(5)) : trimmed
+        return stripped.isEmpty ? "spot" : stripped.lowercased()
+    }
+
+    /// When the round ends, if it has an end.
+    var closesAt: Date? { Article.parseTimestamp(votingEnd) }
 }
 
 /// The current user's vote in a category (mirrors a row of the `votes` table).
@@ -132,6 +146,14 @@ extension VoteResult {
             }
         }
         return Array(map.values).sorted { $0.voteCount > $1.voteCount }
+    }
+}
+
+extension VoteResult {
+    /// The leaderboard rows to render: the top `cap`, or all of them once the
+    /// user asks (IOS-DD-GUIDES-09).
+    static func visible(_ results: [VoteResult], showAll: Bool, cap: Int = 10) -> [VoteResult] {
+        showAll ? results : Array(results.prefix(cap))
     }
 }
 

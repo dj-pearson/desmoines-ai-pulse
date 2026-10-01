@@ -1,5 +1,9 @@
 const https = require('https');
 
+if (!process.env.VITE_SUPABASE_ANON_KEY) {
+  throw new Error('VITE_SUPABASE_ANON_KEY is not set');
+}
+
 // Get radius_meters from command-line arguments, default to 5000 if not provided
 //node invoke-populate-playgrounds.cjs 5000
 const radius_meters = process.argv[2] ? parseInt(process.argv[2], 10) : 5000;
@@ -19,7 +23,8 @@ const options = {
   path: '/functions/v1/populate-playgrounds',
   method: 'POST',
   headers: {
-    'Authorization': 'Bearer eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6Ind0a2hmcXBtY2VnemNibmdyb3VpIiwicm9sZSI6ImFub24iLCJpYXQiOjE3NTM1Mzc5NzcsImV4cCI6MjA2OTExMzk3N30.a-qKhaxy7l72IyT0eLq7kYuxm-wypuMxgycDy95r1aE',
+    // WEB-SEC-032: read from the environment, never committed.
+    'Authorization': `Bearer ${process.env.VITE_SUPABASE_ANON_KEY}`,
     'Content-Type': 'application/json',
     'Content-Length': Buffer.byteLength(postData)
   }

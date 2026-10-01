@@ -1,9 +1,9 @@
 {
   "_comment": "Edge functions that build a service-role client and verify no caller. TRIAGE, not a vulnerability list - some are public by design. Each needs its callers enumerated before being guarded. This list must only ever shrink. See scripts/check-edge-auth.mjs.",
-  "generated": "2026-08-28",
+  "generated": "2026-09-18",
   "unguarded": [
-    "check-login-attempt",
     "log-content-metrics",
+    "newsletter-subscribe",
     "notify-event-submission",
     "oauth-callback",
     "og-image"
@@ -13,6 +13,7 @@
     "log-content-metrics": "DO NOT GUARD. Public by design - anonymous visitors report Core Web Vitals, so a guard deletes the feature. Its own header explains this and it is bounded by a rate limit instead.",
     "notify-event-submission": "DO NOT GUARD as admin. Called from src/hooks/useUserSubmittedEvents.ts - public users submitting an event - and server-to-server by triage-event-submission. Now bounded by checkRateLimit (max 20 / 15 min) and, more importantly, it no longer trusts the body: recipient and title are read from user_submitted_events by eventId. It used to take the `to:` address from the request body, which made it an open mail relay.",
     "og-image": "DO NOT GUARD. Renders the social card that any crawler or unfurler fetches; the middleware points og:image straight at it.",
-    "oauth-callback": "DO NOT GUARD. Its caller is an external OAuth provider redirecting a browser here; there is no bearer to check. Deliberately NOT rate-limited either: callers share NAT addresses and a limit here would break sign-in for a whole network. It neither sends mail nor spends money - verify the state/code handling instead if this needs attention."
+    "oauth-callback": "DO NOT GUARD. Its caller is an external OAuth provider redirecting a browser here; there is no bearer to check. Deliberately NOT rate-limited either: callers share NAT addresses and a limit here would break sign-in for a whole network. It neither sends mail nor spends money - verify the state/code handling instead if this needs attention.",
+    "newsletter-subscribe": "DO NOT GUARD. Public by design (WEB-FEAT-019): the caller is an anonymous visitor typing their own address into the signup form, so there is no bearer to check and an admin gate deletes the feature. It needs the service role for two writes a browser cannot be trusted with - setting status='pending' with a confirm token the client must never see, and upserting on email so a previously unsubscribed address can come back (the table has no UPDATE policy for any role, which is why resubscribing was impossible before). Bounded by checkRateLimit (5 / 15 min) like check-login-attempt, which is the same shape: public, sends mail via Resend, rate-limited rather than role-checked. It answers one identical sentence for every outcome, so it is not a subscription oracle, and it never resets an already-active row - doing so would let anyone unsubscribe a stranger by typing their address."
   }
 }

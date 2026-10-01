@@ -21,6 +21,8 @@ import { runAgent } from "../_shared/agentRun.ts";
 import { createAgentTask } from "../_shared/agentTasks.ts";
 import { getAIConfig, getAnthropicApiKey } from "../_shared/aiConfig.ts";
 import { fetchWithTimeout } from "../_shared/fetchWithTimeout.ts";
+import { priorityForTier } from "../_shared/supportPriority.ts";
+import { resolveEntitledTiers } from "../_shared/entitlements.ts";
 
 const AGENT_KEY = "ticket-classifier";
 const BATCH = 20;
@@ -110,7 +112,7 @@ Deno.serve(async (req) => {
     // ── 1) Classify unclassified tickets ─────────────────────────────────
     const { data: unclassified, error: unclassifiedError } = await supabase
       .from("support_tickets")
-      .select("id, subject, body")
+      .select("id, subject, body, user_id")
       .is("classified_at", null)
       .not("status", "in", "(resolved,closed)")
       .order("created_at", { ascending: true })
@@ -119,11 +121,15 @@ Deno.serve(async (req) => {
     // reported success, indistinguishable from an empty queue.
     if (unclassifiedError) throw new Error(`ticket-classifier: unclassified read failed: ${unclassifiedError.message}`);
 
-    for (const t of (unclassified ?? []) as { id: string; subject: string | null; body: string }[]) {
+    const rows = (unclassified ?? []) as { id: string; subject: string | null; body: string; user_id: string | null }[];
+    // VIP tickets move up one step (WP7). One batched tier lookup per run.
+    const tiers = await resolveEntitledTiers(supabase, [...new Set(rows.map((r) => r.user_id).filter((id): id is string => !!id))])
+      .catch(() => new Map<string, string>()); // no bump beats no classification
+    for (const t of rows) {
       const result = await classify(supabaseUrl, supabaseKey, t.subject ?? "", t.body);
       if (!result) continue;
       cost += result.costUsd;
-      const priority = derivePriority(result.c);
+      const priority = priorityForTier(derivePriority(result.c), t.user_id ? tiers.get(t.user_id) : null);
       const slaHours = SLA_HOURS[priority] ?? 24;
       const slaDueAt = new Date(nowMs + slaHours * 60 * 60 * 1000).toISOString();
       await supabase

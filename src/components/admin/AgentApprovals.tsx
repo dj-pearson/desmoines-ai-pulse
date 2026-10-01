@@ -125,7 +125,7 @@ export default function AgentApprovals() {
 
       <CardContent>
         {isLoading ? (
-          <div className="space-y-2" aria-busy="true" aria-label="Loading approvals">
+          <div className="space-y-2" role="status" aria-busy="true" aria-label="Loading approvals">
             {[0, 1].map((i) => <Skeleton key={i} className="h-20 w-full" />)}
           </div>
         ) : isError ? (

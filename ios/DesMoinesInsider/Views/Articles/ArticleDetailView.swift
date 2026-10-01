@@ -9,6 +9,12 @@ struct ArticleDetailView: View {
     @State private var favorites = FavoritesService.shared
     @State private var related: [Article] = []
     @State private var browseTarget: AdTarget?
+    /// A site link in the body opened as its native screen (IOS-DD-GUIDES-21).
+    @State private var nativeTarget: MainTabView.DeepLinkPresentation?
+    /// A third-party link in the body, in SafariView so the reader sees the
+    /// real address; it used to load in WebViewPage titled with the article
+    /// category (IOS-DD-PLATFORM-11).
+    @State private var externalTarget: AdTarget?
     @State private var showShareSheet = false
     @State private var toast: String?
 
@@ -47,6 +53,10 @@ struct ArticleDetailView: View {
                         relatedRail
                     }
                 }
+                // A readable measure on iPad and in landscape rather than
+                // full-width lines (IOS-DD-GUIDES-23).
+                .frame(maxWidth: 680, alignment: .leading)
+                .frame(maxWidth: .infinity)
                 .padding(.horizontal)
             }
             .padding(.bottom, 32)
@@ -66,6 +76,8 @@ struct ArticleDetailView: View {
                     }
             }
         }
+        .sheet(item: $nativeTarget) { DeepLinkResolverView(presentation: $0) }
+        .sheet(item: $externalTarget) { SafariView(url: $0.url).ignoresSafeArea() }
         .sheet(isPresented: $showShareSheet) {
             ShareSheet(items: [shareText, article.webURL])
         }
@@ -96,10 +108,8 @@ struct ArticleDetailView: View {
             // the view's .task, so leaving the article cancels them, and the
             // related fetch below still runs alongside rather than behind them.
             async let indexed: Void = SpotlightService.shared.indexArticles([article])
-            async let counted: Void = service.incrementViewCount(
-                id: article.id,
-                current: article.viewCount
-            )
+            // Server-side counter, by slug (IOS-DD-GUIDES-20).
+            async let counted: Void = service.recordView(slug: article.slug)
 
             related = await service.fetchRelated(category: article.category, excludingId: article.id)
             _ = await (indexed, counted)
@@ -117,7 +127,11 @@ struct ArticleDetailView: View {
                     .foregroundStyle(.blue.opacity(0.3))
             }
         }
-        .frame(maxWidth: .infinity, minHeight: 240, maxHeight: 240)
+        // 16:9 up to 420pt instead of a fixed 240pt crop, so wide screens
+        // don't slice the photo into a strip (IOS-DD-GUIDES-23).
+        .frame(maxWidth: .infinity)
+        .aspectRatio(16 / 9, contentMode: .fill)
+        .frame(maxHeight: 420)
         .clipped()
         .accessibilityHidden(true)
     }
@@ -138,8 +152,10 @@ struct ArticleDetailView: View {
 
             // Article.webURL already builds this and is covered by a test, so
             // there is no second place for the /articles/<slug> shape to drift.
+            // Straight to the browser: routed through openLink, the site URL
+            // would reopen this same native article (IOS-DD-GUIDES-21).
             Button {
-                openLink(article.webURL)
+                browseTarget = AdTarget(url: article.webURL)
             } label: {
                 Label("Read on the web", systemImage: "safari")
             }
@@ -221,13 +237,38 @@ struct ArticleDetailView: View {
     // MARK: - Actions
 
     private func openLink(_ url: URL) {
-        // Article body links are content-supplied — only open safe web schemes
-        // in the in-app browser; drop and log anything else (IOS-AUDIT-SEC-002).
-        guard url.isSafeWebLink else {
+        // Article body links are content-supplied. Site links open the native
+        // listing when the app has one (IOS-DD-GUIDES-21); other web links
+        // open in the in-app browser; anything else is dropped and logged
+        // (IOS-AUDIT-SEC-002).
+        switch ArticleLinkRoute.classify(url) {
+        case .site(let siteURL):
+            if let presentation = Self.nativePresentation(for: DeepLinkHandler.shared.destination(for: siteURL)) {
+                nativeTarget = presentation
+            } else {
+                browseTarget = AdTarget(url: siteURL)
+            }
+        case .external(let externalURL):
+            externalTarget = AdTarget(url: externalURL)
+        case .drop:
             AppLogger.nav.warning("Dropped unsafe article link (scheme: \(url.scheme ?? "nil"))")
-            return
         }
-        browseTarget = AdTarget(url: url)
+    }
+
+    /// The native screen for a site link, or nil to fall back to the web page
+    /// (tabs, and paths the app has no route for).
+    nonisolated static func nativePresentation(for destination: DeepLinkHandler.Destination?) -> MainTabView.DeepLinkPresentation? {
+        guard let destination else { return nil }
+        switch destination {
+        case .event(let id): return .event(id)
+        case .restaurant(let id): return .restaurant(id)
+        case .attraction(let id): return .attraction(id)
+        case .hotel(let id): return .hotel(id)
+        case .article(let id): return .article(id)
+        case .discover(let d): return .discover(d)
+        // The reader's own browse fallback handles these (IOS-DD-PLATFORM-02).
+        case .tab, .search, .web: return nil
+        }
     }
 
     private func toggleSave() {

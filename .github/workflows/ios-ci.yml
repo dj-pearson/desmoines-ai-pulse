@@ -36,8 +36,11 @@ on:
       - '.github/workflows/ios-ci.yml'
       - '!ios/README.md'
       - '!ios/fastlane/metadata/**'
+  # develop and release/** too: feature work lands on develop first, so a
+  # Swift change was first compiled after release -> main. The version-bump
+  # job is disabled (if: false), so PR runs cannot bump anything.
   pull_request:
-    branches: [main]
+    branches: [main, develop, "release/**"]
     paths:
       - 'ios/**'
       - '.github/workflows/ios-ci.yml'

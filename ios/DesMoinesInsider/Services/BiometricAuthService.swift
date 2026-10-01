@@ -74,7 +74,12 @@ final class BiometricAuthService {
     func enable() async -> Bool {
         guard isAvailable else { return false }
 
-        let success = await authenticate(reason: "Verify your identity to enable \(biometricName)")
+        // Biometrics only here: enabling Face ID should prove Face ID works,
+        // not that the passcode does.
+        let success = await evaluate(
+            reason: "Verify your identity to enable \(biometricName)",
+            policy: .deviceOwnerAuthenticationWithBiometrics
+        ) == .success
         if success {
             isEnabled = true
             KeychainService.shared.saveString(key: Self.keychainKey, value: "true")
@@ -92,47 +97,73 @@ final class BiometricAuthService {
 
     // MARK: - Authenticate
 
-    /// Prompts the user for biometric authentication.
-    /// Returns `true` if authentication succeeded, `false` otherwise.
-    func authenticate(reason: String? = nil) async -> Bool {
-        guard isAvailable else { return false }
+    /// How an evaluation ended (IOS-DD-ACCOUNT-05). The lock screen used to
+    /// count every `false` as a failed attempt, so dismissing the prompt twice
+    /// and then failing once disabled the retry button.
+    enum Outcome: Equatable {
+        case success
+        /// The user (or the system) dismissed the prompt.
+        case cancelled
+        /// A real failed match, or a lockout.
+        case failed
+        /// No biometrics and no passcode to fall back on.
+        case unavailable
+    }
 
+    /// Only a real failed match counts toward the lock screen's retry limit.
+    nonisolated static func countsAsFailure(_ outcome: Outcome) -> Bool {
+        outcome == .failed
+    }
+
+    /// Evaluates `policy`. The default, `.deviceOwnerAuthentication`, falls
+    /// back to the device passcode when Face ID fails or is locked out, so a
+    /// user is never stranded behind a sensor that stopped recognising them.
+    /// The old "Use Password" cancel button led nowhere: the app has no
+    /// password prompt on the lock screen.
+    func evaluate(reason: String? = nil, policy: LAPolicy = .deviceOwnerAuthentication) async -> Outcome {
         let context = LAContext()
-        context.localizedCancelTitle = "Use Password"
+        var probeError: NSError?
+        guard context.canEvaluatePolicy(policy, error: &probeError) else {
+            AppLogger.auth.debug("Device owner auth not available: \(probeError?.code ?? 0)")
+            return .unavailable
+        }
 
-        let authReason = reason ?? "Sign in to Des Moines Insider"
+        let authReason = reason ?? "Unlock Des Moines Insider"
 
         do {
-            let success = try await context.evaluatePolicy(
-                .deviceOwnerAuthenticationWithBiometrics,
-                localizedReason: authReason
-            )
+            let success = try await context.evaluatePolicy(policy, localizedReason: authReason)
             if success {
-                AppLogger.auth.info("Biometric authentication succeeded")
+                AppLogger.auth.info("Device owner authentication succeeded")
             }
-            return success
+            return success ? .success : .failed
         } catch let error as LAError {
             switch error.code {
             case .userCancel, .appCancel, .systemCancel:
                 AppLogger.auth.debug("Biometric auth cancelled by user/system")
-            case .biometryNotAvailable:
-                AppLogger.auth.warning("Biometric hardware not available")
-                isAvailable = false
-            case .biometryNotEnrolled:
-                AppLogger.auth.warning("No biometric data enrolled on device")
-                isAvailable = false
+                return .cancelled
+            case .biometryNotAvailable, .biometryNotEnrolled, .passcodeNotSet:
+                AppLogger.auth.warning("Device owner auth unavailable: \(error.code.rawValue)")
+                checkAvailability()
+                return .unavailable
             case .biometryLockout:
                 AppLogger.auth.warning("Biometric auth locked out due to too many failed attempts")
+                return .failed
             case .authenticationFailed:
                 AppLogger.auth.warning("Biometric authentication failed")
+                return .failed
             default:
-                AppLogger.auth.error("Biometric auth error: \(error.localizedDescription)")
+                AppLogger.auth.error("Biometric auth error: \(error.code.rawValue)")
+                return .failed
             }
-            return false
         } catch {
-            AppLogger.auth.error("Unexpected biometric auth error: \(error.localizedDescription)")
-            return false
+            AppLogger.auth.error("Unexpected biometric auth error")
+            return .failed
         }
+    }
+
+    /// Prompts the user. `true` only on success.
+    func authenticate(reason: String? = nil) async -> Bool {
+        await evaluate(reason: reason) == .success
     }
 
     // MARK: - Cleanup

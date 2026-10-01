@@ -1,123 +1,98 @@
 import SwiftUI
 
-/// Horizontal time slider with snap stops (Now, 6pm, 8pm, 10pm, this Sat,
-/// next Sat). Drives MapViewModel.mapTime so events filter to ±2h of the
-/// slider time and restaurants filter to those open at that time.
+/// Row of time chips (Anytime, Now, Tonight, 6/8/10 PM while ahead, Sat
+/// night) that drives MapViewModel.timeChip, plus a pill saying what the
+/// selected time shows.
 ///
-/// IOS-DISCOVER-2026-004.
+/// IOS-DISCOVER-2026-004, rebuilt in Central time for IOS-DD-MAP-07; the chip
+/// rules live in MapTimeChip. The row scrolls and each chip is a 44pt target
+/// (IOS-DD-MAP-14): it was a fixed HStack of ~28pt capsules.
 struct MapTimeSlider: View {
-    @Binding var mapTime: Date?
+    @Binding var chip: MapTimeChip
     let eventCount: Int
-    let restaurantCount: Int
+    let restaurantOpenCount: Int
+    let restaurantUnknownCount: Int
 
     // Honor Reduce Motion like the rest of the app (IOS-AUDIT-UX-047).
     @Environment(\.accessibilityReduceMotion) private var reduceMotion
 
     var body: some View {
+        let now = Date()
         VStack(spacing: 8) {
-            // Top pill — count summary for the current slider position
-            if mapTime != nil {
-                Text(countPillText)
+            if chip != .anytime {
+                let text = Self.pillText(
+                    chip: chip, now: now, eventCount: eventCount,
+                    openCount: restaurantOpenCount, unknownCount: restaurantUnknownCount
+                )
+                Text(text)
                     .font(.caption.weight(.semibold))
+                    .lineLimit(2)
+                    .fixedSize(horizontal: false, vertical: true)
+                    .multilineTextAlignment(.center)
                     .padding(.horizontal, 10)
                     .padding(.vertical, 4)
                     .background(.thinMaterial, in: Capsule())
-                    .accessibilityLabel(countPillText)
             }
+            chipRow(now: now)
+        }
+    }
 
-            // Stops row — Now, 6pm, 8pm, 10pm, Sat, next Sat
+    private func chipRow(now: Date) -> some View {
+        ScrollView(.horizontal, showsIndicators: false) {
             HStack(spacing: 6) {
-                ForEach(MapTimeSliderStop.stops()) { stop in
-                    Button {
-                        UIImpactFeedbackGenerator(style: .light).impactOccurred()
-                        withAnimation(reduceMotion ? nil : .easeInOut(duration: 0.2)) {
-                            mapTime = stop.date
-                        }
-                    } label: {
-                        Text(stop.label)
-                            .font(.footnote.weight(isActive(stop) ? .bold : .medium))
-                            .padding(.horizontal, 10)
-                            .padding(.vertical, 6)
-                            .background(
-                                Capsule()
-                                    .fill(isActive(stop) ? Color.accentColor : Color.secondary.opacity(0.15)),
-                            )
-                            .foregroundStyle(isActive(stop) ? .white : .primary)
-                    }
-                    .accessibilityLabel("Show map at \(stop.label)")
-                    .accessibilityAddTraits(isActive(stop) ? .isSelected : [])
+                ForEach(MapTimeChip.available(now: now)) { option in
+                    chipButton(option, now: now)
                 }
             }
             .padding(.horizontal, 10)
-            .padding(.vertical, 6)
-            .background(.regularMaterial, in: RoundedRectangle(cornerRadius: 18))
         }
+        .background(.regularMaterial, in: RoundedRectangle(cornerRadius: 18))
+        .accessibilityElement(children: .contain)
+        .accessibilityLabel("Time filter")
     }
 
-    /// Cached formatter — `countPillText` recomputes on every render while the
-    /// slider is dragged, so avoid re-allocating a DateFormatter each time.
-    private static let pillTimeFormatter: DateFormatter = {
-        let f = DateFormatter()
-        f.dateFormat = "h:mm a EEEE"
-        return f
-    }()
-
-    private var countPillText: String {
-        guard let mapTime else { return "" }
-        // Events are filtered to a window around the slider time (not opening
-        // hours), so don't claim they're "open at" it (IOS-AUDIT-UX-027).
-        let time = Self.pillTimeFormatter.string(from: mapTime)
-        return "\(eventCount) events near \(time) · \(restaurantCount) restaurants open"
-    }
-
-    private func isActive(_ stop: MapTimeSliderStop) -> Bool {
-        if stop.date == nil { return mapTime == nil }
-        guard let stopDate = stop.date, let current = mapTime else { return false }
-        return abs(stopDate.timeIntervalSince(current)) < 60 * 30
-    }
-}
-
-struct MapTimeSliderStop: Identifiable {
-    let id: String
-    let label: String
-    let date: Date?
-
-    static func stops(now: Date = .now) -> [MapTimeSliderStop] {
-        var out: [MapTimeSliderStop] = [
-            .init(id: "now", label: "Now", date: nil),
-        ]
-        let calendar = Calendar.current
-        let today = calendar.startOfDay(for: now)
-
-        for hour in [18, 20, 22] {
-            if let target = calendar.date(byAdding: .hour, value: hour, to: today),
-               target > now
-            {
-                let label: String
-                switch hour {
-                case 18: label = "6pm"
-                case 20: label = "8pm"
-                case 22: label = "10pm"
-                default: label = "\(hour)"
-                }
-                out.append(.init(id: "today-\(hour)", label: label, date: target))
+    private func chipButton(_ option: MapTimeChip, now: Date) -> some View {
+        let isActive = option == chip
+        let label = option.label(now: now)
+        let spoken: String = option == .anytime ? "Any time" : "Show places at \(label)"
+        // The selection haptic and the VoiceOver count announcement come from
+        // EventMapView's filter-change handler, once for every filter.
+        return Button {
+            withAnimation(reduceMotion ? nil : .easeInOut(duration: 0.2)) {
+                chip = option
             }
+        } label: {
+            Text(label)
+                .font(.footnote.weight(isActive ? .bold : .medium))
+                .lineLimit(1)
+                .padding(.horizontal, 12)
+                .padding(.vertical, 6)
+                .background(
+                    Capsule().fill(isActive ? Color.accentColor : Color.secondary.opacity(0.15))
+                )
+                .foregroundStyle(isActive ? Color.white : Color.primary)
+                .minHitTarget()
         }
+        .buttonStyle(.plain)
+        .accessibilityLabel(Text(spoken))
+        .accessibilityAddTraits(isActive ? .isSelected : [])
+    }
 
-        // Find this Saturday + next Saturday at 8pm
-        let weekday = calendar.component(.weekday, from: now) // 1=Sun,7=Sat
-        let daysToThisSat = (7 - weekday + 7) % 7 // wraps to 7 if today is Sat
-        if let thisSat = calendar.date(byAdding: .day, value: daysToThisSat == 0 ? 7 : daysToThisSat, to: today),
-           let thisSatEvening = calendar.date(byAdding: .hour, value: 20, to: thisSat)
-        {
-            out.append(.init(id: "this-sat", label: "this Sat", date: thisSatEvening))
-        }
-        if let nextSat = calendar.date(byAdding: .day, value: (daysToThisSat == 0 ? 7 : daysToThisSat) + 7, to: today),
-           let nextSatEvening = calendar.date(byAdding: .hour, value: 20, to: nextSat)
-        {
-            out.append(.init(id: "next-sat", label: "next Sat", date: nextSatEvening))
-        }
+    private static let pillStyle = DesMoinesTime.style(.dateTime.hour().minute().weekday(.wide))
 
-        return out
+    /// "8:00 PM Friday: 12 events · 8 restaurants open · 30 with hours unknown
+    /// hidden". Events are filtered by overlap with a window, not by opening
+    /// hours, so they are not called "open" (IOS-AUDIT-UX-027).
+    static func pillText(chip: MapTimeChip, now: Date, eventCount: Int, openCount: Int, unknownCount: Int) -> String {
+        let when = chip.probeTime(now: now).map { $0.formatted(pillStyle) + DesMoinesTime.zoneSuffix(at: $0) }
+            ?? chip.label(now: now)
+        var parts = [
+            "\(eventCount) \(eventCount == 1 ? "event" : "events")",
+            "\(openCount) \(openCount == 1 ? "restaurant" : "restaurants") open",
+        ]
+        if unknownCount > 0 {
+            parts.append("\(unknownCount) with hours unknown hidden")
+        }
+        return "\(when): " + parts.joined(separator: " · ")
     }
 }

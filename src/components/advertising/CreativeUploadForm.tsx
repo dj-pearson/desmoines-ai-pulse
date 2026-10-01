@@ -12,8 +12,61 @@ import { supabase } from "@/integrations/supabase/client";
 import { useToast } from "@/hooks/use-toast";
 import { createLogger } from '@/lib/logger';
 import { notifyAdmins } from "@/hooks/useCampaignNotifications";
+import { describeAutoReview } from "@/lib/creativeReviewVerdict";
+import { openExternalUrl, toSafeExternalUrl } from "@/lib/capacitorUtils";
 
 const log = createLogger('CreativeUploadForm');
+
+/**
+ * The campaign statuses a creative may be uploaded from (WEB-ADS-014 AC3).
+ *
+ * pending_payment is NOT one of them. Payment is what moves a campaign to
+ * pending_creative, and only two things are allowed to make that move:
+ * stripe-webhook and verify-campaign-payment, both server-side, both after
+ * Stripe says the money arrived.
+ *
+ * This form used to make it itself, updating the campaign row straight to
+ * pending_creative whenever it found one still awaiting payment. That let an
+ * unpaid advertiser promote their own campaign by uploading a file, and left
+ * verify-campaign-payment reconciling a state machine that had already moved
+ * without it.
+ */
+const UPLOADABLE_STATUSES = ["pending_creative", "pending_review", "active"] as const;
+
+/**
+ * How long to wait for the auto-review's verdict before saying it is queued
+ * (WEB-ADS-006 AC3).
+ *
+ * The verdict is written by an AFTER INSERT trigger calling
+ * campaign-creative-review, so it arrives out of band and usually within a
+ * couple of seconds. Six seconds is the ceiling on making somebody watch a
+ * spinner for it; past that the honest answer is "queued", which is also the
+ * permanently correct answer while the function is undeployed. Nothing here
+ * fails if the verdict never comes.
+ */
+const REVIEW_POLL_ATTEMPTS = 6;
+const REVIEW_POLL_INTERVAL_MS = 1000;
+
+/** The row's review columns, or null if it cannot be read. Never throws. */
+async function pollAutoReview(creativeId: string) {
+  for (let attempt = 0; attempt < REVIEW_POLL_ATTEMPTS; attempt++) {
+    await new Promise((resolve) => setTimeout(resolve, REVIEW_POLL_INTERVAL_MS));
+    const { data, error } = await supabase
+      .from('campaign_creatives')
+      .select('auto_reviewed, is_approved, auto_review_reasons, rejection_reason')
+      .eq('id', creativeId)
+      .maybeSingle();
+    // Logged rather than swallowed: the upload already succeeded, so this must
+    // not surface as a failure, but a read that is failing every time is not
+    // the same thing as a review that has not finished yet.
+    if (error) {
+      log.warn('autoReview', 'Could not read the review verdict', { data: error });
+      return null;
+    }
+    if (data?.auto_reviewed) return data;
+  }
+  return null;
+}
 
 interface CreativeUploadFormProps {
   campaignId: string;
@@ -65,15 +118,12 @@ export function CreativeUploadForm({
 
     if (!formData.linkUrl.trim()) {
       newErrors.linkUrl = "Destination URL is required";
-    } else {
-      try {
-        const url = new URL(formData.linkUrl);
-        if (url.protocol !== 'https:' && url.protocol !== 'http:') {
-          newErrors.linkUrl = "URL must use HTTP or HTTPS protocol";
-        }
-      } catch {
-        newErrors.linkUrl = "Please enter a valid URL";
-      }
+    } else if (!toSafeExternalUrl(formData.linkUrl)) {
+      // Same rule AdBanner applies when it renders the creative, so a URL this
+      // form accepts is one the ad will actually open. The database refuses
+      // anything else too (campaign_creatives_link_url_http, 20261003000004);
+      // AdBanner's render-time guard covers rows older than that CHECK.
+      newErrors.linkUrl = "Enter a full web address starting with https:// or http://";
     }
 
     if (!formData.ctaText.trim()) {
@@ -140,12 +190,37 @@ export function CreativeUploadForm({
     setIsUploading(true);
 
     try {
+      // Checked BEFORE the file leaves the browser: an upload from an unpaid
+      // campaign should not put an object in the review bucket at all.
+      const { data: campaignRow, error: statusError } = await supabase
+        .from('campaigns')
+        .select('status')
+        .eq('id', campaignId)
+        .single();
+
+      if (statusError) throw statusError;
+
+      const status = campaignRow?.status as string | undefined;
+      if (!status || !UPLOADABLE_STATUSES.includes(status as (typeof UPLOADABLE_STATUSES)[number])) {
+        toast({
+          title: status === 'pending_payment' ? "Payment not received yet" : "This campaign cannot accept creatives",
+          description:
+            status === 'pending_payment'
+              ? "Your creative can be uploaded as soon as the payment clears. You will get an email when it does."
+              : `A campaign with status "${status ?? 'unknown'}" is not accepting creative uploads.`,
+          variant: "destructive",
+        });
+        setIsUploading(false);
+        return;
+      }
+
       // Upload to the private review bucket. image_url stays null until an
       // admin approves and the object is copied into the public bucket.
       const reviewPath = await uploadToStorage(uploadedFile!);
 
-      // Create creative record
-      const { error: createError } = await supabase
+      // Create creative record. The id comes back so the verdict the AFTER
+      // INSERT trigger's review writes onto this row can be read below.
+      const { data: created, error: createError } = await supabase
         .from('campaign_creatives')
         .insert({
           campaign_id: campaignId,
@@ -154,23 +229,22 @@ export function CreativeUploadForm({
           description: formData.description,
           image_url: null,
           review_path: reviewPath,
-          link_url: formData.linkUrl,
+          // validateForm has already refused a non-http(s) value.
+          link_url: formData.linkUrl.trim(),
           cta_text: formData.ctaText,
           is_approved: false,
           file_size: uploadedFile!.size,
           file_type: uploadedFile!.type,
           dimensions_width: imageMetadata?.width,
           dimensions_height: imageMetadata?.height,
-        });
+        })
+        .select('id')
+        .single();
 
       if (createError) throw createError;
 
-      // Update campaign status to pending_creative if it's still in pending_payment
-      await supabase
-        .from('campaigns')
-        .update({ status: 'pending_creative' })
-        .eq('id', campaignId)
-        .eq('status', 'pending_payment');
+      // No status change here. See UPLOADABLE_STATUSES above: payment is what
+      // advances a campaign, and only the server decides that.
 
       // Fetch campaign name for notification
       const { data: campaignData } = await supabase
@@ -187,9 +261,14 @@ export function CreativeUploadForm({
         { placementType }
       );
 
+      // The seconds-later verdict the upload flow promises. Falls back to
+      // "queued" when the review has not answered, which is the honest message
+      // and the permanent one while campaign-creative-review is undeployed.
+      const verdict = describeAutoReview(created?.id ? await pollAutoReview(created.id) : null);
       toast({
-        title: "Creative uploaded successfully!",
-        description: "Your ad creative has been submitted for review. You'll be notified when it's approved.",
+        title: verdict.title,
+        description: verdict.description,
+        variant: verdict.variant === 'destructive' ? 'destructive' : undefined,
       });
 
       if (onSuccess) {
@@ -303,7 +382,8 @@ export function CreativeUploadForm({
                   type="button"
                   variant="outline"
                   size="icon"
-                  onClick={() => window.open(formData.linkUrl, '_blank')}
+                  disabled={!toSafeExternalUrl(formData.linkUrl)}
+                  onClick={() => void openExternalUrl(formData.linkUrl)}
                   aria-label="Open link in new tab"
                 >
                   <ExternalLink className="h-4 w-4" />

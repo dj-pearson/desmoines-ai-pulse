@@ -27,13 +27,45 @@ supabase/migrations/20250831045616_*.sql
 
 **Rotate the Supabase API keys (see §Supabase below).** Until rotated, anyone
 with the repo history has full service-role DB access. These paths are
-allowlisted in `.gitleaks.toml` only so CI gates *new* leaks — the allowlist is
-not a fix. (Several old debug scripts also embed the **anon** key; that key is
-public by design — shipped in the browser bundle — so it is lower priority, but
-ideally remove those too.)
-
 Editing the migration files does **not** remove the value from git history;
 rotation is the only real remediation.
+
+### What changed on 2026-09-02 (WEB-SEC-032)
+
+Three things were done, and none of them is rotation.
+
+1. **The key is out of the working tree.** All eleven migrations now read
+   `public.app_secret('service_role_key')`. They are applied history and are
+   never re-run, so this changes no database — it stops the tree carrying a live
+   credential. The four debug scripts and the two docs that carried the **anon**
+   key read `VITE_SUPABASE_ANON_KEY` instead, and refuse to run without it.
+
+2. **The key is out of the DATABASE**, which nobody had noticed it was in. The
+   eleven migrations wrote it inside `CREATE OR REPLACE FUNCTION` bodies —
+   `trigger_due_scraping_jobs`, `run_scraping_jobs_simple`,
+   `run_social_media_automation`, `run_social_media_publishing`,
+   `trigger_article_webhook` — and no later migration replaced any of them, so
+   the value was readable through `pg_get_functiondef` by anyone who could
+   connect. `supabase/migrations/20260902000015_purge_embedded_service_key.sql`
+   rewrites whatever is actually installed, without naming the value.
+
+3. **The gitleaks allowlist lost fifteen entries.** It had been configured not
+   to look at exactly the files that had the problem. An allowlist that grows is
+   a scanner that reports less every quarter.
+
+**Still outstanding, and only the owner can do it:**
+
+- [ ] Confirm whether the `service_role` key was rotated after the first
+      exposure. If it was, record the date here. If it was not, rotate it now —
+      the value is in git history and always will be.
+- [ ] Set the Vault secret `service_role_key` if it is not already set. Until
+      it is, the rewritten functions send unauthenticated requests and pg_cron
+      still records SUCCESS, because enqueueing worked (WEB-OPS-007). The
+      migration raises a warning saying so at apply time.
+- [ ] `android/app/google-services.json` is no longer tracked. CI must provide
+      it from a secret before the next Android build (AND-AUDIT-010).
+
+**Rotation date:** _not recorded — owner to fill in_
 
 ---
 
