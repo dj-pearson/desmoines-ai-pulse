@@ -1,6 +1,7 @@
 import { useQuery } from '@tanstack/react-query';
 import { STALE_TIME, GC_TIME, shouldRetry } from '@/lib/queryConfig';
 import { supabase } from '@/integrations/supabase/client';
+import { NOT_CLOSED_RESTAURANT_FILTER } from '@/lib/restaurantHours';
 import {
   EVENT_LIST_COLUMNS,
   RESTAURANT_LIST_COLUMNS,
@@ -179,6 +180,8 @@ export function useTrending(options: FallbackConfig = {}) {
               .select(RESTAURANT_LIST_COLUMNS)
               .in('id', idsByType.restaurant)
               .neq('is_merged', true)
+              // A closed place can still carry views, but it is not trending (SEO-059)
+              .or(NOT_CLOSED_RESTAURANT_FILTER)
           : null,
         idsByType.attraction.length
           ? supabase

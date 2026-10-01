@@ -13,6 +13,7 @@ import { RelatedLinks } from "@/components/seo/InternalLinks";
 import { supabase } from "@/integrations/supabase/client";
 import { BRAND, getCanonicalUrl } from "@/lib/brandConfig";
 import { RESTAURANT_LIST_COLUMNS } from "@/lib/listColumns";
+import { NOT_CLOSED_RESTAURANT_FILTER } from "@/lib/restaurantHours";
 import { STALE_TIME } from "@/lib/queryConfig";
 import { toJsonLd } from "@/lib/jsonLd";
 import { isPrerender } from "@/lib/isPrerender";
@@ -115,6 +116,8 @@ export default function NewRestaurants() {
         .select(RESTAURANT_LIST_COLUMNS)
         .neq("is_merged", true)
         .or(`status.in.(newly_opened,opening_soon,announced),opening_date.gte.${since}`)
+        // SEO-059: a recent opening date does not make a closed place new.
+        .or(NOT_CLOSED_RESTAURANT_FILTER)
         // Without an order the 120-row cap cut an arbitrary slice. Newest date
         // first keeps the recent openings; undated rows go last.
         .order("opening_date", { ascending: false, nullsFirst: false })

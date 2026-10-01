@@ -374,6 +374,10 @@ async function generateRestaurantsSitemap(): Promise<number | null> {
     // the NULL rows, so "not closed" is an OR that keeps them
     // (useBreweryTrail.ts uses the same filter).
     .or('status.is.null,status.neq.closed')
+    // SEO-059: the page is also noindex when Google's business_status says
+    // CLOSED_PERMANENTLY, so that row leaves the sitemap too. A second `or`
+    // param is ANDed with the first by PostgREST.
+    .or('business_status.is.null,business_status.neq.CLOSED_PERMANENTLY')
     .order('name')
     .order('id')
     .limit(5000);

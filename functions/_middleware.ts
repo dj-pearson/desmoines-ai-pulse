@@ -10,7 +10,11 @@ import {
   isStaleOpeningCopy,
   type RestaurantMetaInput,
 } from "../src/lib/restaurantMeta";
-import { hoursDisplayLine, resolveOpeningHoursSpecification } from "../src/lib/restaurantHours";
+import {
+  hoursDisplayLine,
+  isPermanentlyClosedRestaurant,
+  resolveOpeningHoursSpecification,
+} from "../src/lib/restaurantHours";
 import { safeHttpUrl } from "../src/lib/safeUrl";
 
 /**
@@ -131,7 +135,7 @@ const UUID_RE = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/
 // types.ts is not proof a column exists - so a failed select falls back to the
 // minimal one below instead of turning a real page into a 404.
 const RESTAURANT_SHELL_COLUMNS =
-  "id,name,slug,city,location,cuisine,price_range,phone,website,menu_url,image_url,hours_json,seo_title,latitude,longitude,opening,seo_description,description,status,is_merged,merged_into";
+  "id,name,slug,city,location,cuisine,price_range,phone,website,menu_url,image_url,hours_json,seo_title,latitude,longitude,opening,seo_description,description,status,business_status,is_merged,merged_into";
 const RESTAURANT_MINIMAL_COLUMNS = "id,name,seo_description,description";
 const EVENT_SHELL_COLUMNS =
   "id,title,date,event_start_utc,end_date,seo_description,geo_summary,location,venue,city,price,enhanced_description,original_description";
@@ -507,7 +511,8 @@ export function detailResponsePlan(
  */
 export function restaurantShellRobots(row: Record<string, any> | undefined): string | null {
   if (!row) return null;
-  if (row.status === "closed") return "noindex, follow";
+  // Our status or Google's business_status (SEO-059), the rule the React page uses.
+  if (isPermanentlyClosedRestaurant(row)) return "noindex, follow";
   if (row.is_merged) return "noindex, follow";
   return null;
 }
@@ -607,7 +612,9 @@ function breadcrumb(hubHref: string, hubLabel: string, name: string): string {
  * the hours it plans to keep; neither is a schedule a visitor can use.
  */
 function showsHours(row: Record<string, any>): boolean {
-  return row.status !== "closed" && row.status !== "opening_soon" && row.status !== "announced";
+  if (isPermanentlyClosedRestaurant(row)) return false;
+  if (String(row.business_status ?? "").toUpperCase() === "CLOSED_TEMPORARILY") return false;
+  return row.status !== "opening_soon" && row.status !== "announced";
 }
 
 export function restaurantShellNode(row: Record<string, any>, pageUrl: string): Record<string, unknown> {
@@ -649,7 +656,7 @@ export function restaurantShellBody(row: Record<string, any>): string {
   const loc = restaurantLocality(row) || "Des Moines";
   const kind = row.cuisine ? `${row.cuisine} restaurant` : "Restaurant";
   const facts: string[] = [];
-  const closed = row.status === "closed";
+  const closed = isPermanentlyClosedRestaurant(row);
   // A javascript: or relative value renders no link at all, the same answer
   // the React page gives (reservations.safeWebUrl delegates to safeHttpUrl).
   const menu = safeHttpUrl(row.menu_url);

@@ -1,0 +1,181 @@
+{
+    "note": "Full rows (minus search_vector and geom, which triggers rebuild) for every restaurant SEO-059 changes. SEO-059 writes only status (open -> closed) and updated_at.",
+    "rows": [
+        {
+            "id": "55d3963f-8d43-4d92-8185-9cf25a44113f",
+            "city": null,
+            "name": "Bistro Nomad",
+            "slug": "bistro-nomad",
+            "phone": "(515) 282-6622",
+            "rating": 4.3,
+            "seo_h1": "Bistro Nomad - Mediterranean Cuisine in Downtown Des Moines",
+            "status": "open",
+            "cuisine": "Mediterranean",
+            "geo_faq": [
+                {
+                    "answer": "Bistro Nomad serves authentic Mediterranean cuisine, featuring signature dishes like seafood paella, fresh seafood preparations, and Mediterranean-inspired entrees alongside craft cocktails and house-made desserts.",
+                    "question": "What type of cuisine does Bistro Nomad serve?"
+                },
+                {
+                    "answer": "Bistro Nomad is located in downtown Des Moines, Iowa, conveniently situated near the Pappajohn Sculpture Park, making it an ideal dining destination for arts and culture enthusiasts.",
+                    "question": "Where is Bistro Nomad located in Des Moines?"
+                },
+                {
+                    "answer": "Bistro Nomad offers moderate pricing ($$), providing excellent value for authentic Mediterranean cuisine, craft cocktails, and desserts in downtown Des Moines.",
+                    "question": "What is the price range at Bistro Nomad?"
+                },
+                {
+                    "answer": "Bistro Nomad is open Tuesday through Sunday for both lunch and dinner service, closed Mondays. Hours vary by day; check their website or call for specific times.",
+                    "question": "What are Bistro Nomad's hours of operation?"
+                },
+                {
+                    "answer": "As a popular downtown Des Moines restaurant, Bistro Nomad welcomes reservations for groups and special occasions. Contact the restaurant directly to secure your table.",
+                    "question": "Does Bistro Nomad offer reservations?"
+                }
+            ],
+            "opening": null,
+            "website": null,
+            "enhanced": "completed",
+            "latitude": null,
+            "location": "1430 Locust St, Des Moines, IA 50309, USA",
+            "menu_url": null,
+            "image_url": null,
+            "is_merged": false,
+            "longitude": null,
+            "merged_at": null,
+            "seo_title": "Bistro Nomad Des Moines: Reviews",
+            "ai_writeup": null,
+            "created_at": "2026-02-27T21:31:02.524+00:00",
+            "hours_json": null,
+            "is_brewery": false,
+            "reservable": null,
+            "source_url": null,
+            "updated_at": "2026-10-01T05:48:33.730014+00:00",
+            "view_count": 0,
+            "description": null,
+            "geo_summary": "Bistro Nomad is an authentic Mediterranean restaurant located in downtown Des Moines, Iowa, near the Pappajohn Sculpture Park. Since opening in early 2019, the restaurant has been serving signature dishes including seafood paella, complemented by an impressive selection of craft cocktails and house-made desserts. Open Tuesday through Sunday for both lunch and dinner service.",
+            "is_featured": false,
+            "merged_into": null,
+            "price_range": "$$",
+            "is_sponsored": false,
+            "opening_date": null,
+            "seo_keywords": [
+                "Mediterranean restaurant Des Moines",
+                "seafood paella Des Moines",
+                "downtown Des Moines dining",
+                "craft cocktails Des Moines",
+                "Pappajohn Sculpture Park restaurants"
+            ],
+            "geo_key_facts": [
+                "Opened in early 2019 in downtown Des Moines",
+                "Specializes in Mediterranean cuisine with fresh seafood paella",
+                "Located near Pappajohn Sculpture Park in Des Moines",
+                "Features craft cocktails and artisanal desserts; moderate pricing ($$)"
+            ],
+            "heal_attempts": 3,
+            "business_status": "CLOSED_PERMANENTLY",
+            "google_maps_uri": "https://maps.google.com/?cid=7051929186089031218&g_mp=CiVnb29nbGUubWFwcy5wbGFjZXMudjEuUGxhY2VzLkdldFBsYWNlEAIYBCAA",
+            "google_place_id": "ChIJtY2U8x2Z7ocRMtYLZjt83WE",
+            "reservation_url": null,
+            "seo_description": "Bistro Nomad is a Mediterranean restaurant in Des Moines, Iowa. $$ on Google. Directions.",
+            "sponsored_until": null,
+            "image_checked_at": null,
+            "popularity_score": 0,
+            "opening_timeframe": null,
+            "places_photo_name": "places/ChIJtY2U8x2Z7ocRMtYLZjt83WE/photos/Aa-ngMY7zA-olYLE1ThG--HZflOi-B6wCd4NERn_reI_bBkncfblXQBfIg2I-Ftn9SiNMohTp8WyF00yYiGreHfYuu9XtM4cnDisgIXgwOI5Re41qnqk_tOT89sj1-1mdW_BdB-IaSz5SyEMQZ6YT2rH8MuQnRU5HM3VAwhSglhAQiV5xCtoi4wnQOTR0HTF13weIUA34rSenM01IOwGkA_x3D5HMciHTEseOqPunwHHQBbe7nUtHzzqtuQqN-Q7iUqQGSkMPig4_FVh25as0x9WNW9qksxHREkaZ1RfD9msRwAMWRwUo47wvMNJ2df7kHENlVGDkZrld4CGytanvg7Tc2vlVBLuP4VX85kCeWa_nHnu02iKNgU4T8iJn5hfbfSbFRdReG8vJJOq_BEfEv2XsKOKn2Jm6_0",
+            "data_quality_score": 35,
+            "menu_scrape_enabled": true,
+            "writeup_prompt_used": null,
+            "places_photo_seen_at": "2026-10-01T05:33:39.838+00:00",
+            "reservation_provider": null,
+            "writeup_generated_at": null,
+            "places_photo_attribution": "Jessi Goodvin",
+            "needs_manual_verification": true
+        },
+        {
+            "id": "8fe3c25e-4ebe-4fa7-9ea4-4fb41526e27a",
+            "city": null,
+            "name": "Ritual Café",
+            "slug": "ritual-cafe",
+            "phone": null,
+            "rating": null,
+            "seo_h1": "Ritual Café - Premium Coffee in Des Moines, Iowa",
+            "status": "open",
+            "cuisine": "Coffee/Café",
+            "geo_faq": [
+                {
+                    "answer": "Ritual Café specializes in premium coffee and café beverages, offering quality drinks at affordable prices for Des Moines customers.",
+                    "question": "What type of cuisine does Ritual Café serve?"
+                },
+                {
+                    "answer": "Ritual Café is located in Des Moines, Iowa, operating as the coffee provider for The Empire restaurant.",
+                    "question": "Where is Ritual Café located?"
+                },
+                {
+                    "answer": "Ritual Café offers budget-friendly pricing ($), making quality coffee accessible to all Des Moines residents and visitors.",
+                    "question": "What is the price range at Ritual Café?"
+                }
+            ],
+            "opening": null,
+            "website": null,
+            "enhanced": "NULL",
+            "latitude": 41.5869,
+            "location": "Des Moines, IA",
+            "menu_url": null,
+            "image_url": null,
+            "is_merged": false,
+            "longitude": -93.6249,
+            "merged_at": null,
+            "seo_title": "Ritual Café Des Moines: Reviews",
+            "ai_writeup": null,
+            "created_at": "2026-02-27T21:30:07.893+00:00",
+            "hours_json": null,
+            "is_brewery": false,
+            "reservable": null,
+            "source_url": null,
+            "updated_at": "2026-10-01T04:13:18.473998+00:00",
+            "view_count": 0,
+            "description": "Coffee provider for The Empire restaurant.",
+            "geo_summary": "Ritual Café is a dedicated coffee provider located within The Empire restaurant in Des Moines, Iowa. Offering quality café beverages at budget-friendly prices, Ritual Café serves the Des Moines community with specialty coffee and café drinks. Open and ready to serve coffee enthusiasts throughout the Des Moines area.",
+            "is_featured": false,
+            "merged_into": null,
+            "price_range": "$",
+            "is_sponsored": false,
+            "opening_date": null,
+            "seo_keywords": [
+                "coffee shop Des Moines",
+                "café near me",
+                "specialty coffee Iowa",
+                "The Empire restaurant coffee",
+                "Des Moines coffee"
+            ],
+            "geo_key_facts": [
+                "Located in Des Moines, Iowa at The Empire restaurant",
+                "Specializes in premium coffee and café beverages",
+                "Budget-friendly pricing ($)",
+                "Currently open and serving the Des Moines community"
+            ],
+            "heal_attempts": 0,
+            "business_status": null,
+            "google_maps_uri": null,
+            "google_place_id": null,
+            "reservation_url": null,
+            "seo_description": "Ritual Café is a Coffee/Café spot in Des Moines, Iowa. $ on Google. Map and directions.",
+            "sponsored_until": null,
+            "image_checked_at": null,
+            "popularity_score": 0,
+            "opening_timeframe": null,
+            "places_photo_name": null,
+            "data_quality_score": 30,
+            "menu_scrape_enabled": true,
+            "writeup_prompt_used": null,
+            "places_photo_seen_at": null,
+            "reservation_provider": null,
+            "writeup_generated_at": null,
+            "places_photo_attribution": null,
+            "needs_manual_verification": false
+        }
+    ],
+    "story": "SEO-059",
+    "taken_at": "2026-10-01T06:30:00.356162+00:00"
+}

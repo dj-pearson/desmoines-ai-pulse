@@ -783,6 +783,38 @@ export function isVisitableStatus(status: string | null | undefined): boolean {
   return !NOT_VISITABLE_STATUSES.has(status.trim().toLowerCase());
 }
 
+const PERMANENTLY_CLOSED_STATUSES: ReadonlySet<string> = new Set([
+  'closed',
+  'permanently_closed',
+  'closed_permanently',
+]);
+
+/**
+ * Has this place closed for good (SEO-059)? Our own `status` or Google's
+ * `business_status`, whichever says so. Temporarily closed and not-yet-open
+ * places are NOT permanently closed: they keep their page and their spot in
+ * lists, labelled.
+ */
+export function isPermanentlyClosedRestaurant(
+  row: { status?: string | null; business_status?: string | null } | null | undefined,
+): boolean {
+  if (!row) return false;
+  const own = row.status?.trim().toLowerCase();
+  if (own && PERMANENTLY_CLOSED_STATUSES.has(own)) return true;
+  return row.business_status?.trim().toUpperCase() === 'CLOSED_PERMANENTLY';
+}
+
+/**
+ * PostgREST `or` filter that keeps every restaurant that has not closed for
+ * good. status is nullable and `.neq('status','closed')` would also drop the
+ * NULL rows, hence the OR. Repeated `or` params are ANDed by PostgREST
+ * (checked against production 2026-10-01), so this can sit beside another
+ * `.or(...)` on the same query. Google's business_status is not in it: the
+ * SEO-059 data pass set status = 'closed' on every CLOSED_PERMANENTLY row, and
+ * isPermanentlyClosedRestaurant catches any that arrive later on the client.
+ */
+export const NOT_CLOSED_RESTAURANT_FILTER = 'status.is.null,status.neq.closed';
+
 /**
  * One short line for a card or list row, or null when there is nothing honest
  * to say: "Open until 10 PM", "Closes at 10 PM", "Open 24 hours",
