@@ -285,7 +285,7 @@
       "title": "Cuisine and occasion pages the query set asks for and the routes half-support",
       "priority": 3,
       "phase": 3,
-      "passes": false,
+      "passes": true,
       "description": "As somebody deciding where to eat, I search by cuisine and by occasion, not by restaurant name. The planner shows steakhouse, italian, mexican, brunch, breakfast, fine dining, patio, rooftop and happy hour demand in Des Moines, and the site has /asian, /bbq, /mexican, /brunch and /italian paths already picking up small impression counts with no real pages behind them.",
       "acceptanceCriteria": [
         "Build the cuisine and occasion pages with real editorial picks, not filtered grids of the same 200 restaurants.",
@@ -294,7 +294,7 @@
         "Add ItemList schema and wire into /restaurants and the neighborhood pages.",
         "Add to sitemap and prerender routes."
       ],
-      "notes": "NOT DONE 2026-08-29. Deliberately not attempted, because the story's own second criterion is the trap: 'each page needs enough distinct content to justify existing - if two pages would say the same thing about the same restaurants, build one'. Cuisine and occasion pages built from a filtered query over the same 200 restaurants ARE that duplicate, and generating the distinguishing prose is the fabricated-claim failure again. One measured detail worth keeping: 'eatery a happy hour' sits at position 4.1 with 156 impressions and ZERO clicks, which says the demand exists and the page does not."
+      "notes": "NOT DONE 2026-08-29. Deliberately not attempted, because the story's own second criterion is the trap: 'each page needs enough distinct content to justify existing - if two pages would say the same thing about the same restaurants, build one'. Cuisine and occasion pages built from a filtered query over the same 200 restaurants ARE that duplicate, and generating the distinguishing prose is the fabricated-claim failure again. One measured detail worth keeping: 'eatery a happy hour' sits at position 4.1 with 156 impressions and ZERO clicks, which says the demand exists and the page does not. CLOSED 2026-10-01: superseded by SEO-041 in prd-seo-q4.json, which publishes suburb/cuisine pSEO pages by a coded coverage rule (5+ places indexable, 3-4 noindex, <3 not generated) with copy templated from rows. Remaining neighbourhood work tracked as SEO-060."
     },
     {
       "id": "SEO-018",

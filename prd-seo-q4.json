@@ -279,7 +279,7 @@
         "Each published page prerenders with its own title (SEO-029 gate) and is in sitemap-pseo.xml.",
         "Record per-page place counts. Close SEO-025 and SEO-017 with notes."
       ],
-      "notes": "",
+      "notes": "DONE IN PRODUCTION 2026-10-01, merged to claude/seo-q4-loop (f01d58b9); passes stays FALSE until the new pages and noindex tags are confirmed live and generate-pseo-page is deployed. Counts exclude restaurants.status closed/announced/opening_soon. Indexable (5+): WDM asian 12, brunch 9, italian 9, mexican 6, pizza 5 (NEW); Ankeny asian 5, mexican 5; Waukee mexican 5 (NEW). Noindex (3-4): Ankeny brunch 4, italian 3 (set noindex). Unpublished (<3): /bbq/ankeny, /bbq/west-des-moines (now 301 to area guides). Johnston, Urbandale, Altoona, Clive: every combo 0-2; burger 0 everywhere; breakfast 0-1. Rows: 2 inserted, 4 updated (backup + SQL in backups/seo-041/ in the main checkout, untracked). Copy templated from rows (FAQ names only listed places); the LLM pipeline was not used because its prompt contains no restaurant data. Rule in code: src/pseo/coverageRule.ts, scripts/lib/pseoCoverage.ts, scripts/check-pseo-coverage.ts, scripts/write-pseo-coverage-pages.ts, supabase/functions/_shared/pseoCoverage.ts, generate-pseo-page/index.ts:122, generate-dynamic-sitemaps.ts:870, prerender.mjs:425 (noindex pages still prerender with own title), listingFilters.ts:49, _redirects:7. Verified: build (entity prerender off) exit 0, pSEO 91/91; new pages index,follow with 5 restaurant links; noindex pages noindex,follow; check-pseo-coverage/-demand/-collisions, check-sitemap-registration, check-seo-routes pass; 24/24 new tests. SEO-025 close-out: suburbs published where places exist (Waukee); Johnston/Urbandale/Altoona/Clive have <5 places for every cuisine. SEO-017 close-out: duplicate risk is a coded rule; copy from rows only. OPEN -> SEO-060: 6 older indexable pages carry LLM copy naming places not in the table (/mexican/ankeny recommends 'Tacos La Familia'); 15 downtown/East Village/Valley Junction cuisine pages list 0 places because no restaurant row records a neighbourhood; data quality (Menchie's and Cheesecake Factory count as brunch, Toasted Cone duplicated). /steakhouse/west-des-moines (7 places) is indexable but unpublished.",
       "supersedes": [
         "SEO-025",
         "SEO-017",
@@ -572,6 +572,23 @@
         "Tests for the closed state rendering and list filtering."
       ],
       "notes": "PARTIAL 2026-10-01, merged to claude/seo-q4-loop (bd321081, 559f3036); passes FALSE: 37 of the top-150 rows unchecked (web-search quota ran out) and two edge functions need deploying. Closed (existing restaurants.status='closed', backup scripts/content-backups/seo-059/restaurants-before.json, evidence in scripts/seo-059-mark-closed-restaurants.sql header): ritual-cafe (closed 2025-08-01; site redirects to a GoDaddy for-sale page), bistro-nomad (Google CLOSED_PERMANENTLY from the SEO-054 run; domain no longer resolves). NOT closed, contrary to SEO-058's list: all three jethros-bbq rows are listed on jethrosdesmoines.com/locations (the burned Forest Ave location has no row); scratch-cupcakery trades as Molly's at 215 E 3rd St. Django, Malo, Juniper Moon, Star Bar have no rows. Top 150 by impressions: 142 rows, 18 already closed, 84 open per their own sites, 37 unknown. Changes: get_rotated_restaurants excludes closed from browse (search still finds them) - migration 20261017000059 APPLIED TO PRODUCTION, browse count 477->457; useRestaurants.ts:125,:386; shared isPermanentlyClosedRestaurant / NOT_CLOSED_RESTAURANT_FILTER (restaurantHours.ts:798,:816); neighborhood, related/featured, trending, recommendations, new-openings lists filter closed (open-now, pSEO, nearby, dinner pairings already did); edge shell reads business_status, closed pages 200 + noindex + 'Permanently closed' + no openingHours (_middleware.ts:515,:615,:659); sitemaps skip Google-closed (generate-dynamic-sitemaps.ts:380). Article pipeline checks every write; a guard refusal keeps the draft, records pipeline_reasons and decision 'blocked' (ai-article-pipeline/index.ts:303); CMS shows the reason. Verified: type-check, lint, check-schema, check-sitemap-redirects, check-restaurant-seo 477/0, middleware shell tests, Deno 5/5, vitest 2155/2162 (failures in untouched files). OPEN/OWNER: recheck 37 unknowns when search quota allows; taste-of-new-york rows moved to 7450 Bridgewood Blvd (address fix); Google CLOSED_PERMANENTLY doesn't update status (client-side only); deploy bulk-update-restaurants and ai-article-pipeline."
+    },
+    {
+      "id": "SEO-060",
+      "title": "Neighborhood cuisine pages list zero restaurants, and older pSEO copy names places we don't have",
+      "priority": 1,
+      "phase": 1,
+      "branch": "claude/seo-q4-loop",
+      "passes": false,
+      "description": "Found by SEO-041: 15 published downtown, East Village and Valley Junction cuisine pages (e.g. /asian/east-village pos 9.3, /mexican/downtown, /brunch/valley-junction, /italian/east-village pos 7.5) list 0 places because no restaurant row records its neighbourhood, so they are thin pages ranking on generated copy. 6 older indexable pages carry LLM copy naming restaurants not in our table (/mexican/ankeny recommends 'Tacos La Familia'). These are among our best-ranked pSEO URLs, so fixing them beats noindexing them.",
+      "acceptanceCriteria": [
+        "Assign restaurants to neighbourhoods from lat/lng (polygons or bounding definitions in src/lib/neighborhoods.ts or a new additive column populated by script); record method and counts per neighbourhood. Back up first.",
+        "Re-run the SEO-041 coverage rule (scripts/write-pseo-coverage-pages.ts, check-pseo-coverage) for downtown, East Village and Valley Junction combos: 5+ indexable with templated copy from rows; 3-4 noindex; <3 unpublish and 301 to the neighbourhood or things-to-do page per redirect rules.",
+        "Replace LLM copy on the 6 older indexable pages with copy templated from rows; remove any place not in the table.",
+        "Fix data quality found: Menchie's and Cheesecake Factory tagged brunch, Toasted Cone duplicated (merge per existing dedupe conventions).",
+        "Decide /steakhouse/west-des-moines (7 places): publish via the rule if steakhouse is a taxonomy cuisine."
+      ],
+      "notes": ""
     }
   ]
 }
