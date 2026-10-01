@@ -1,4 +1,5 @@
 import { AIDisclosureBadge } from "@/components/AIDisclosureBadge";
+import { PlainTextBlocks } from "@/components/PlainTextBlocks";
 import { cn } from "@/lib/utils";
 
 interface AIWriteupProps {
@@ -48,9 +49,12 @@ export function AIWriteup({ writeup, generatedAt, className, headingLevel = 3 }:
         />
       </div>
       {written && <p className="text-sm text-muted-foreground">Written {written}</p>}
-      <div className="max-w-[70ch] whitespace-pre-wrap text-base leading-relaxed text-foreground/90">
-        {writeup}
-      </div>
+      {/* Most restaurant writeups open with a markdown "# Name" line, which
+          printed with its hash (SEO-057). */}
+      <PlainTextBlocks
+        text={writeup}
+        className="max-w-[70ch] text-base leading-relaxed text-foreground/90"
+      />
     </section>
   );
 }

@@ -14,6 +14,7 @@ import {
 } from '../_shared/eventDedup.ts';
 import { parseEventDateTime } from '../_shared/eventDateTime.ts';
 import { normalizeCategory } from '../_shared/eventCategories.ts';
+import { stripAiLabels } from '../_shared/aiText.ts';
 export interface IncomingItem {
   title?: string;
   date?: string;
@@ -73,8 +74,11 @@ export function validateItem(item: IncomingItem, fallbackUrl: string): { ok: tru
     ok: true,
     row: {
       title: title.substring(0, 200),
-      original_description: (item.description || "").substring(0, 500),
-      enhanced_description: (item.description || "").substring(0, 500),
+      // SEO-057: a model label ("**Enhanced Event Description:**") or a
+      // trailing "**Location:**" field is removed, never the text itself.
+      // Nothing is refused, so the endpoint accepts exactly what it did.
+      original_description: stripAiLabels(item.description).substring(0, 500),
+      enhanced_description: stripAiLabels(item.description).substring(0, 500),
       date: parsed.event_start_utc.toISOString(),
       event_start_local: parsed.event_start_local,
       event_timezone: parsed.event_timezone,

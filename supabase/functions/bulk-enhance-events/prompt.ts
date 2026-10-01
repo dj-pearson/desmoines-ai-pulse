@@ -128,6 +128,9 @@ WHAT TO WRITE INSTEAD
 
 LENGTH: 120-250 words. Shorter is correct when the source is thin.
 TONE: plain, specific, local. No marketing language, no superlatives.
+FORMAT: plain paragraphs. No markdown (no ** and no #), no title line, and no
+label such as "Description:" or "Enhanced Event Description:" - the text is
+shown as written on the event page.
 
 EVENTS:
 ${events.map(sourceBlock).join("\n")}

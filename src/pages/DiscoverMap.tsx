@@ -12,6 +12,7 @@ import { Star, Navigation, Search, ChevronUp, ChevronDown, RotateCw } from 'luci
 import { ExploreSectionLinks } from '@/components/explore/ExploreSectionLinks';
 import { applyEventVisibility } from '@/lib/eventQuery';
 import { handleError } from '@/lib/errorHandler';
+import { markdownToPlainText } from '@/lib/aiText';
 import { createLogger } from '@/lib/logger';
 import { STALE_TIME } from '@/lib/queryConfig';
 import { resolveOpenStatus, formatOpenStatusLine, type RestaurantOpenResult } from '@/lib/restaurantHours';
@@ -250,7 +251,7 @@ async function fetchEvents(bounds: MapBounds, when: When, at: number): Promise<L
         date: e.date,
         event_start_utc: e.event_start_utc,
       })}`,
-      description: (e.enhanced_description ?? e.original_description)?.slice(0, 120),
+      description: markdownToPlainText(e.enhanced_description ?? e.original_description).slice(0, 120) || undefined,
       category: e.category ?? undefined,
       date: e.date ?? undefined,
       startMs: start,
