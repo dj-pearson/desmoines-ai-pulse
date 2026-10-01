@@ -11,6 +11,7 @@
  */
 import { coverageVerdict, finalVerdicts, placeMatches } from '../../src/pseo/coverageRule.ts';
 import { evaluateCoverage, DATA_TEMPLATE_GENERATOR } from '../lib/pseoCoverage.ts';
+import { neighborhoodFor } from '../../src/lib/neighborhoodBoundaries.ts';
 
 let failures = 0;
 const check = (name, cond, detail = '') => {
@@ -52,6 +53,29 @@ check('address match counts', placeMatches({ ...base, city: null, location: '123
 check('another city does not', !placeMatches({ ...base, city: 'Clive' }, 'Waukee', 'mexican'));
 check('pizza matches "Italian/Pizza"', placeMatches({ ...base, cuisine: 'Italian/Pizza' }, 'Waukee', 'pizza'));
 check('an event category never matches', !placeMatches(base, 'Waukee', 'festivals'));
+
+console.log('placeMatches: neighbourhoods match restaurants.neighborhood (SEO-060)');
+{
+  const ev = { slug: 'east-village', name: 'East Village' };
+  const row = { ...base, city: 'Des Moines', location: '420 E Locust St, Des Moines, IA 50309, USA', neighborhood: 'east-village' };
+  check('a row in the neighbourhood counts', placeMatches(row, ev, 'mexican'));
+  check('the name alone does not: a row naming "East Village" with no column value is out', !placeMatches({ ...row, neighborhood: null, location: 'East Village' }, ev, 'mexican'));
+  check('another neighbourhood does not', !placeMatches({ ...row, neighborhood: 'downtown' }, ev, 'mexican'));
+  check('a suburb given as an area still matches as text', placeMatches(base, { slug: 'waukee', name: 'Waukee' }, 'mexican'));
+}
+
+console.log('neighborhoodFor: the polygons, on real addresses');
+{
+  check('101 E Locust St is the East Village', neighborhoodFor(41.5883, -93.6156, '101 E Locust St, Des Moines, IA 50309, USA') === 'east-village');
+  check('200 SW 2nd St, across the river, is downtown', neighborhoodFor(41.5829, -93.6185, '200 SW 2nd St, Des Moines, IA 50309, USA') === 'downtown');
+  check('1003 Locust St is downtown', neighborhoodFor(41.5858, -93.6302, '1003 Locust St, Des Moines, IA 50309, USA') === 'downtown');
+  check('644 18th St, north of Woodland, is Sherman Hill', neighborhoodFor(41.5883, -93.6416, '644 18th St, Des Moines, IA 50314, USA') === 'sherman-hill');
+  check('227 5th St, West Des Moines is Valley Junction', neighborhoodFor(41.5722, -93.7086, '227 5th St, West Des Moines, IA 50265, USA') === 'valley-junction');
+  check('103 S 11th St, west of 8th, is not', neighborhoodFor(41.5687, -93.7184, '103 S 11th St, West Des Moines, IA 50265, USA') === null);
+  check('2721 Ingersoll Ave is in no mapped neighbourhood', neighborhoodFor(41.5859, -93.654, null) === null);
+  check('a downtown point on an Ankeny address is a bad geocode, not downtown', neighborhoodFor(41.5869, -93.6249, '1975 N Ankeny Blvd, Ankeny, IA 50023, USA') === null);
+  check('no coordinates, no neighbourhood', neighborhoodFor(null, null, null) === null);
+}
 
 console.log('evaluateCoverage: published pages against the rule');
 {

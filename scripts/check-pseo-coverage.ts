@@ -34,6 +34,7 @@ import {
   MIN_PLACES_TO_PUBLISH,
 } from '../src/pseo/coverageRule';
 import { CATEGORY_FILTERS } from '../src/pseo/listingFilters';
+import { NEIGHBORHOOD_SLUGS } from '../src/lib/neighborhoodBoundaries';
 import { computePseoCoverage } from './lib/pseoCoverage';
 
 const ROOT = path.resolve(path.dirname(fileURLToPath(import.meta.url)), '..');
@@ -53,6 +54,14 @@ const edgeLocBlock = /COVERAGE_LOCATIONS[^=]*=\s*\[([\s\S]*?)\]/.exec(edge)?.[1]
 const edgeLocations = [...edgeLocBlock.matchAll(/'([a-z0-9-]+)'/g)].map((m) => m[1]).sort();
 if (edgeLocations.join(',') !== [...COVERAGE_LOCATIONS].sort().join(',')) {
   problems.push(`COVERAGE_LOCATIONS differ: edge [${edgeLocations.join(', ')}] vs src [${[...COVERAGE_LOCATIONS].sort().join(', ')}]`);
+}
+// SEO-060: which of those are neighbourhoods matched on restaurants.neighborhood.
+const edgeNbBlock = /NEIGHBORHOOD_LOCATIONS[^=]*=\s*\[([\s\S]*?)\]/.exec(edge)?.[1] ?? '';
+const edgeNeighborhoods = [...edgeNbBlock.matchAll(/'([a-z0-9-]+)'/g)].map((m) => m[1]).sort();
+if (edgeNeighborhoods.join(',') !== [...NEIGHBORHOOD_SLUGS].sort().join(',')) {
+  problems.push(
+    `NEIGHBORHOOD_LOCATIONS differ: edge [${edgeNeighborhoods.join(', ')}] vs src/lib/neighborhoodBoundaries.ts [${[...NEIGHBORHOOD_SLUGS].sort().join(', ')}]`,
+  );
 }
 const edgePatBlock = /CUISINE_PATTERNS[^=]*=\s*\{([\s\S]*?)\};/.exec(edge)?.[1] ?? '';
 const edgePatterns = new Map([...edgePatBlock.matchAll(/'?([a-z0-9-]+)'?:\s*'([^']+)'/g)].map((m) => [m[1], m[2]]));

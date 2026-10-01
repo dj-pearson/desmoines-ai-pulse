@@ -125,7 +125,7 @@ export function evaluateCoverage(pages: readonly PublishedPseoRow[], restaurants
       // The listing component filters with the NAME stored on the row, so a row
       // carrying a different spelling from the taxonomy is measured as stored.
       const locationName = page?.dimensions.find((d) => d.dimension === 'location')?.name ?? loc.name;
-      const places = matchingPlaces(restaurants, locationName, catSlug);
+      const places = matchingPlaces(restaurants, { slug: locSlug, name: locationName }, catSlug);
       measured.push({
         slug,
         category: catSlug,
@@ -203,7 +203,7 @@ export async function computePseoCoverage({ base, key }: { base: string; key: st
   if (!base || !key) throw new Error('computePseoCoverage needs a Supabase URL and anon key.');
   const [pages, restaurants] = await Promise.all([
     fetchAll<PublishedPseoRow>(base, key, 'pseo_pages', 'id,slug,page_type_id,dimensions,seo,is_published,generation_meta,sections'),
-    fetchAll<CoverageRestaurantRow>(base, key, 'restaurants', 'id,name,city,location,cuisine,status,is_merged'),
+    fetchAll<CoverageRestaurantRow>(base, key, 'restaurants', 'id,name,city,location,cuisine,status,is_merged,neighborhood'),
   ]);
   return evaluateCoverage(pages, restaurants);
 }

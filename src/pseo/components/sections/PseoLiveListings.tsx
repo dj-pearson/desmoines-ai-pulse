@@ -13,7 +13,7 @@ import { Skeleton } from '@/components/ui/skeleton';
 import { Link } from 'react-router-dom';
 import { Calendar, MapPin, DollarSign } from 'lucide-react';
 import type { PseoDimensionRef } from '../../schemas';
-import { CATEGORY_FILTERS, resolveEntityType, temporalRange } from '../../listingFilters';
+import { CATEGORY_FILTERS, resolveEntityType, restaurantLocationMatch, temporalRange } from '../../listingFilters';
 import { formatEventPart } from "@/lib/timezone";
 import { applyEventVisibility } from "@/lib/eventQuery";
 import { isVisitableStatus } from "@/lib/restaurantHours";
@@ -228,7 +228,13 @@ async function fetchListings(
       .limit(24);
 
     if (location) {
-      query = query.or(`city.ilike.%${location.name}%,location.ilike.%${location.name}%`);
+      // SEO-060: a neighbourhood matches restaurants.neighborhood; a suburb
+      // matches its name in city or the address.
+      const match = restaurantLocationMatch(location);
+      query =
+        match.kind === 'neighborhood'
+          ? query.eq('neighborhood', match.slug)
+          : query.or(`city.ilike.%${match.name}%,location.ilike.%${match.name}%`);
     }
     if (categoryFilter?.entity === 'restaurants') {
       query = query.filter(categoryFilter.column, 'imatch', categoryFilter.pattern);
